@@ -1,0 +1,143 @@
+.flex {
+  display: flex;
+}
+
+.justify-center {
+  justify-content: center;
+}
+
+.justify-end {
+  justify-content: flex-end;
+}
+
+.align-center {
+  align-items: center;
+}
+
+.align-end {
+  align-items: flex-end;
+}
+
+.flex-column {
+  flex-direction: column;
+}
+
+.flex1 {
+  flex: 1
+}
+
+.cursor_point {
+  cursor: pointer;
+}
+
+.el-popper {
+  position: absolute !important;
+}
+.el-pagination__jump {
+  display: none !important; /* 隐藏前往xx页 */
+}
+.el-pagination__sizes {
+  float: right; /* 或者使用 flex 属性来实现右侧布局 */
+}
+.el-pagination .el-pagination__sizes .el-input__inner {
+  border: none;
+  background: #eee;
+  color: #606266;
+}
+.el-pagination.is-background .el-pager li:not(.disabled).active {
+  background-color: #2b4acb !important;
+  color: #fff !important;
+  
+}
+
+.split-page-box{
+  height: 100%;
+  .left {
+    position: relative;
+    height: 100%;
+    border-right: solid #eee 1px;
+    transition: width 0.3s ease;
+    padding: 15px 15px 0 15px;
+  }
+  .right{
+    flex: 1 1 auto;
+    padding: 15px;
+    height: 100%;
+    overflow: auto;
+  }
+}
+.el-dialog__footer {
+  padding: 15px !important;
+  background: #f4f6fc;
+}
+.el-dialog__body{
+  padding: 15px !important;
+}
+.el-table {
+  border-color: #f9f9fb;
+}
+.el-table.el-table--border th{
+  border-color: #fff;
+}
+.el-table td{
+  border-color: #fff !important;
+}
+.tree_expert {
+  height: calc(100% - 72px);
+  overflow: scroll; 
+}
+.el-tree>.el-tree-node{
+  min-width: 100%;
+  display:inline-block;
+}
+.el-table th.el-table__cell.is-leaf, .el-table td.el-table__cell {
+  border-bottom: 1px solid #f9f9fb;
+}
+.el-table .table-header-row th, .el-table thead.is-group th {
+  background-color: #f2f2f8;
+}
+.el-table::before, .el-table--group::after, .el-table--border::after{
+  content: "";
+  position: absolute;
+  background-color: #f9f9fb;
+  z-index: 1;
+}
+.ellipsis-text {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.el-dialog__header{
+  border-bottom: 1px solid #eee;
+  padding: 20px !important;
+}
+.el-table--small, .el-radio-button__inner{
+  font-size: 13px !important;
+}
+.el-tooltip__popper {
+  position: absolute !important;
+}
+
+.el-button--primary.is-disabled, .el-button--primary.is-disabled:active, .el-button--primary.is-disabled:focus, .el-button--primary.is-disabled:hover {
+  opacity: 0.8;
+}
+
+
+// 滚动条样式
+.el-table__body-wrapper::-webkit-scrollbar {
+	width: 8px; 
+	height: 8px; 
+}
+//解决遮挡问题
+::-webkit-scrollbar{
+  width: 8px !important;
+  height: 8px !important;
+}
+
+.el-radio-button__orig-radio:checked + .el-radio-button__inner {
+  color: #FFFFFF;
+  background-color: #2b4acb !important;
+  border-color: #2b4acb !important;
+  -webkit-box-shadow: -1px 0 0 0 #2b4acb !important;
+  box-shadow: -1px 0 0 0 #2b4acb !important;
+}

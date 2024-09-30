@@ -1,0 +1,9 @@
+{
+  "global": {
+    "$--color-primary": "#2B4ACB"
+  },
+  "local": {
+    "$--table-header-font-color": "#31353E",
+    "$--table-font-color": "#31353E"
+  }
+}
