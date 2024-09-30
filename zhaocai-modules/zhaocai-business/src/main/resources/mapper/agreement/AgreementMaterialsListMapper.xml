@@ -1,0 +1,148 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhaocai.business.agreement.mapper.AgreementMaterialsListMapper">
+    <resultMap type="com.zhaocai.business.agreement.domain.AgreementMaterialsList" id="AgreementMaterialsListResult">
+        <result property="id" column="id"/>
+        <result property="agreementId" column="agreement_id"/>
+        <result property="materialsListId" column="materials_list_id"/>
+        <result property="biddingListQuotationId" column="bidding_list_quotation_id"/>
+        <result property="contractSplitId" column="contract_split_id"/>
+        <result property="materialsCode" column="materials_code"/>
+        <result property="materialsName" column="materials_name"/>
+        <result property="brand" column="brand"/>
+        <result property="paymentType" column="payment_type"/>
+        <result property="rentalType" column="rental_type"/>
+        <result property="rentalUnit" column="rental_unit"/>
+        <result property="rentalDuration" column="rental_duration"/>
+        <result property="workload" column="workload"/>
+        <result property="signCount" column="sign_count"/>
+        <result property="signTaxRate" column="sign_tax_rate"/>
+        <result property="signUnitPriceInclTax" column="sign_unit_price_incl_tax"/>
+        <result property="signUnitPriceExclTax" column="sign_unit_price_excl_tax"/>
+        <result property="signAmountInclTax" column="sign_amount_incl_tax"/>
+        <result property="signAmountExclTax" column="sign_amount_excl_tax"/>
+        <result property="vendorTaxRate" column="vendor_tax_rate"/>
+        <result property="vendorUnitPriceInclTax" column="vendor_unit_price_incl_tax"/>
+        <result property="vendorUnitPriceExclTax" column="vendor_unit_price_excl_tax"/>
+        <result property="vendorAmountInclTax" column="vendor_amount_incl_tax"/>
+        <result property="vendorAmountExclTax" column="vendor_amount_excl_tax"/>
+        <result property="remark" column="remark"/>
+        <result property="createBy" column="create_by"/>
+        <result property="createId" column="create_id"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateBy" column="update_by"/>
+        <result property="updateId" column="update_id"/>
+        <result property="updateTime" column="update_time"/>
+        <result property="delFlag" column="del_flag"/>
+    </resultMap>
+
+    <resultMap type="com.zhaocai.business.agreement.vo.res.AgreementMaterialsListVO" id="AgreementMaterialsListVOResult">
+        <result property="agreementId" column="agreement_id"/>
+        <result property="materialsListId" column="materials_list_id"/>
+        <result property="biddingListQuotationId" column="bidding_list_quotation_id"/>
+        <result property="materialsCode" column="materials_code"/>
+        <result property="materialsName" column="materials_name"/>
+        <result property="subjectMatterCode" column="subject_matter_code"/>
+        <result property="subjectMatterName" column="subject_matter_name"/>
+        <result property="specification" column="specification"/>
+        <result property="unitMeasurement" column="unit_measurement"/>
+        <result property="measurementRules" column="measurement_rules"/>
+        <result property="workContent" column="work_content"/>
+        <result property="costAccount" column="cost_account_name"/>
+        <result property="count" column="count"/>
+        <result property="taxUnitPrice" column="tax_unit_price"/>
+        <result property="notTaxUnitPrice" column="not_tax_unit_price"/>
+        <result property="taxPrice" column="tax_price"/>
+        <result property="notTaxPrice" column="not_tax_price"/>
+        <result property="taxRate" column="tax_rate"/>
+        <result property="billType" column="bill_type"/>
+        <result property="brand" column="brand"/>
+        <result property="paymentType" column="payment_type"/>
+        <result property="rentalUnit" column="rental_unit"/>
+        <result property="workload" column="workload"/>
+        <result property="remark" column="remark"/>
+        <result property="floatingPrice" column="floating_price"/>
+        <result property="unloadingFee" column="unloading_fee"/>
+        <result property="basePrice" column="base_price"/>
+        <result property="rentMode" column="rent_mode"/>
+        <result property="rentTime" column="rent_time"/>
+        <result property="rentQuantity" column="rent_quantity"/>
+        <result property="signCount" column="sign_count"/>
+        <result property="signUnitPriceInclTax" column="sign_unit_price_incl_tax"/>
+        <result property="signUnitPriceExclTax" column="sign_unit_price_excl_tax"/>
+        <result property="signAmountInclTax" column="sign_amount_incl_tax"/>
+        <result property="signAmountExclTax" column="sign_amount_excl_tax"/>
+        <result property="signTaxRate" column="sign_tax_rate"/>
+    </resultMap>
+
+    <select id="selectAgreementMaterialsList" resultMap="AgreementMaterialsListVOResult">
+        select taml.agreement_id,taml.materials_list_id,taml.bidding_list_quotation_id, tml.materials_code,tml.materials_name,tml.subject_matter_code,tml.subject_matter_name,
+                tml.specification,tml.unit_measurement,tml.measurement_rules,tml.work_content,tml.cost_account_name,
+                tml.count,tblq.tax_unit_price,tblq.not_tax_unit_price,tblq.tax_price,tblq.not_tax_price,tblq.tax_rate,tblq.bill_type,taml.brand,taml.payment_type,
+                taml.rental_unit,taml.workload,taml.remark,tml.floating_price,tml.unloading_fee,tml.base_price,tml.rent_mode,tml.rent_time,tml.rent_quantity,taml.sign_count,
+                taml.sign_unit_price_incl_tax,taml.sign_unit_price_excl_tax,taml.sign_amount_incl_tax,taml.sign_amount_excl_tax,taml.sign_tax_rate
+        from tb_agreement_materials_list taml
+        inner join tb_agreement ta on ta.id = taml.agreement_id
+        inner join tb_materials_list tml on tml.id = taml.materials_list_id and tml.contract_split_id = ta.contract_split_id
+        inner join tb_bidding_list_quotation tblq on tblq.id = taml.bidding_list_quotation_id and tblq.materials_id = tml.id
+        where taml.agreement_id = #{agreementId,jdbcType=BIGINT}
+    </select>
+
+    <resultMap type="com.zhaocai.business.agreement.vo.res.AgreementUnderlingMaterialsVO" id="UnderlingMaterialsListResult">
+        <result property="id" column="id"/>
+        <result property="agreementId" column="agreement_id"/>
+        <result property="materialsUniqueId" column="materials_unique_id"/>
+        <result property="materialsCode" column="materials_code"/>
+        <result property="materialsName" column="materials_name"/>
+        <result property="specification" column="specification"/>
+        <result property="unitMeasurement" column="unit_measurement"/>
+        <result property="measurementRules" column="measurement_rules"/>
+        <result property="workContent" column="work_content"/>
+        <result property="costAccountId" column="cost_account_Id"/>
+        <result property="costAccountCode" column="cost_account_code"/>
+        <result property="costAccountName" column="cost_account_name"/>
+        <result property="count" column="sign_count"/>
+        <result property="taxUnitPrice" column="sign_unit_price_incl_tax"/>
+        <result property="notTaxUnitPrice" column="sign_unit_price_excl_tax"/>
+        <result property="taxPrice" column="sign_amount_incl_tax"/>
+        <result property="notTaxPrice" column="sign_amount_excl_tax"/>
+        <result property="taxRate" column="tax_rate"/>
+        <result property="billType" column="bill_type"/>
+        <result property="brand" column="brand"/>
+        <result property="paymentType" column="payment_type"/>
+        <result property="workload" column="workload"/>
+        <result property="remark" column="remark"/>
+        <result property="floatingPrice" column="floating_price"/>
+        <result property="unloadingFee" column="unloading_fee"/>
+        <result property="basePrice" column="base_price"/>
+        <result property="rentMode" column="rent_mode"/>
+        <result property="rentalUnit" column="rental_unit"/>
+        <result property="rentTime" column="rent_time"/>
+        <result property="rentQuantity" column="rent_quantity"/>
+    </resultMap>
+
+    <select id="selectUnderlingMaterialsList" resultMap="UnderlingMaterialsListResult">
+        select taml.id ,taml.agreement_id,taml.materials_code,taml.materials_name,tml.specification ,tml.unit_measurement ,tml.measurement_rules,
+                tml.work_content,tml.cost_account_Id,tml.cost_account_code,tml.cost_account_name,taml.sign_count,taml.brand,taml.payment_type,taml.workload,
+                taml.remark,taml.sign_unit_price_incl_tax,taml.sign_unit_price_excl_tax,taml.sign_amount_incl_tax,taml.sign_amount_excl_tax,tblq.tax_rate,tblq.bill_type,tblq.floating_price,
+                tml.unloading_fee,tml.base_price,tml.rent_mode,tml.rent_time,tml.rent_quantity,taml.rental_unit,tml.materials_unique_id
+        from tb_agreement_materials_list taml
+        inner join tb_agreement ta on ta.id = taml.agreement_id
+        inner join tb_materials_list tml on tml.id = taml.materials_list_id and tml.contract_split_id = ta.contract_split_id
+        inner join tb_bidding_list_quotation tblq on tblq.id = taml.bidding_list_quotation_id and tblq.materials_id = tml.id
+        where taml.agreement_id = #{agreementId,jdbcType=BIGINT}
+    </select>
+
+    <delete id="deleteByAgreementId">
+        delete from tb_agreement_materials_list where agreement_id = #{agreementId,jdbcType=BIGINT}
+    </delete>
+
+    <select id="selectMaterialsByContractSplitId" resultMap="AgreementMaterialsListResult">
+        select tms.*
+        from tb_agreement_materials_list tms
+        inner join tb_agreement ta on tms.agreement_id = ta.id and ta.agreement_state != 2
+        where tms.contract_split_id = #{contractSplitId,jdbcType=BIGINT}
+    </select>
+</mapper>

@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhaocai.business.filez.mapper.FileZTaskMapper">
+    <resultMap type="com.zhaocai.business.filez.domain.FileZTask" id="FileZTaskResult">
+        <result property="id" column="id"/>
+        <result property="attachmentId" column="attachment_id"/>
+        <result property="businessCode" column="business_code"/>
+        <result property="businessId" column="business_id"/>
+        <result property="taskState" column="task_state"/>
+        <result property="requestTime" column="request_time"/>
+        <result property="requestTypeCode" column="request_type_code"/>
+        <result property="requestType" column="request_type"/>
+        <result property="requestUrl" column="request_url"/>
+        <result property="requestBody" column="request_body"/>
+        <result property="taskId" column="task_id"/>
+        <result property="responseTime" column="response_time"/>
+        <result property="responseCode" column="response_code"/>
+        <result property="responseBody" column="response_body"/>
+        <result property="callBackCode" column="call_back_code"/>
+        <result property="callBackTime" column="call_back_time"/>
+        <result property="callBackBody" column="call_back_body"/>
+        <result property="createBy" column="create_by"/>
+        <result property="createId" column="create_id"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateBy" column="update_by"/>
+        <result property="updateId" column="update_id"/>
+        <result property="updateTime" column="update_time"/>
+        <result property="delFlag" column="del_flag"/>
+    </resultMap>
+</mapper>

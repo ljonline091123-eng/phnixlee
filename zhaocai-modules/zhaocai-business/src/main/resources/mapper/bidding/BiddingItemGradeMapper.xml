@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhaocai.business.bidding.mapper.BiddingItemGradeMapper">
+    
+    <resultMap type="com.zhaocai.business.bidding.domain.BiddingItemGrade" id="BiddingItemGradeResult">
+        <result property="id"    column="id"    />
+        <result property="score"    column="score"    />
+        <result property="itemId"    column="item_id"    />
+        <result property="expertId"    column="expert_id"    />
+        <result property="vendorId"    column="vendor_id"    />
+        <result property="schemaId"    column="schema_id"    />
+        <result property="expertScoreId"    column="expert_score_id"    />
+        <result property="createBy"    column="create_by"    />
+        <result property="createId"    column="create_id"    />
+        <result property="createTime"    column="create_time"    />
+        <result property="updateBy"    column="update_by"    />
+        <result property="updateId"    column="update_id"    />
+        <result property="updateTime"    column="update_time"    />
+        <result property="delFlag"    column="del_flag"    />
+    </resultMap>
+
+    <sql id="selectBiddingItemGradeVo">
+        select id, score, item_id, expert_id, vendor_id, schema_id, expert_score_id, create_by, create_id, create_time, update_by, update_id, update_time, del_flag from tb_bidding_item_grade
+    </sql>
+
+    <select id="selectBiddingItemGradeList" parameterType="com.zhaocai.business.bidding.domain.BiddingItemGrade" resultMap="BiddingItemGradeResult">
+        <include refid="selectBiddingItemGradeVo"/>
+        <where>  
+            <if test="score != null "> and score = #{score}</if>
+            <if test="itemId != null "> and item_id = #{itemId}</if>
+            <if test="expertId != null "> and expert_id = #{expertId}</if>
+            <if test="vendorId != null "> and vendor_id = #{vendorId}</if>
+            <if test="schemaId != null "> and schema_id = #{schemaId}</if>
+            <if test="createId != null "> and create_id = #{createId}</if>
+            <if test="updateId != null "> and update_id = #{updateId}</if>
+        </where>
+    </select>
+    
+    <select id="selectBiddingItemGradeById" parameterType="Long" resultMap="BiddingItemGradeResult">
+        <include refid="selectBiddingItemGradeVo"/>
+        where id = #{id}
+    </select>
+        
+    <insert id="insertBiddingItemGrade" parameterType="com.zhaocai.business.bidding.domain.BiddingItemGrade" useGeneratedKeys="true" keyProperty="id">
+        insert into tb_bidding_item_grade
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="score != null">score,</if>
+            <if test="itemId != null">item_id,</if>
+            <if test="expertId != null">expert_id,</if>
+            <if test="vendorId != null">vendor_id,</if>
+            <if test="schemaId != null">schema_id,</if>
+            <if test="createBy != null">create_by,</if>
+            <if test="createId != null">create_id,</if>
+            <if test="createTime != null">create_time,</if>
+            <if test="updateBy != null">update_by,</if>
+            <if test="updateId != null">update_id,</if>
+            <if test="updateTime != null">update_time,</if>
+            <if test="delFlag != null">del_flag,</if>
+         </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="score != null">#{score},</if>
+            <if test="itemId != null">#{itemId},</if>
+            <if test="expertId != null">#{expertId},</if>
+            <if test="vendorId != null">#{vendorId},</if>
+            <if test="schemaId != null">#{schemaId},</if>
+            <if test="createBy != null">#{createBy},</if>
+            <if test="createId != null">#{createId},</if>
+            <if test="createTime != null">#{createTime},</if>
+            <if test="updateBy != null">#{updateBy},</if>
+            <if test="updateId != null">#{updateId},</if>
+            <if test="updateTime != null">#{updateTime},</if>
+            <if test="delFlag != null">#{delFlag},</if>
+         </trim>
+    </insert>
+
+    <update id="updateBiddingItemGrade" parameterType="com.zhaocai.business.bidding.domain.BiddingItemGrade">
+        update tb_bidding_item_grade
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="score != null">score = #{score},</if>
+            <if test="itemId != null">item_id = #{itemId},</if>
+            <if test="expertId != null">expert_id = #{expertId},</if>
+            <if test="vendorId != null">vendor_id = #{vendorId},</if>
+            <if test="schemaId != null">schema_id = #{schemaId},</if>
+            <if test="createBy != null">create_by = #{createBy},</if>
+            <if test="createId != null">create_id = #{createId},</if>
+            <if test="createTime != null">create_time = #{createTime},</if>
+            <if test="updateBy != null">update_by = #{updateBy},</if>
+            <if test="updateId != null">update_id = #{updateId},</if>
+            <if test="updateTime != null">update_time = #{updateTime},</if>
+            <if test="delFlag != null">del_flag = #{delFlag},</if>
+        </trim>
+        where id = #{id}
+    </update>
+
+    <delete id="deleteBiddingItemGradeById" parameterType="Long">
+        delete from tb_bidding_item_grade where id = #{id}
+    </delete>
+
+    <delete id="deleteBiddingItemGradeByIds" parameterType="String">
+        delete from tb_bidding_item_grade where id in 
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+</mapper>

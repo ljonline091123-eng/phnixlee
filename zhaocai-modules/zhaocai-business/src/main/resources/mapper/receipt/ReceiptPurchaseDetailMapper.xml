@@ -1,0 +1,252 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhaocai.business.receipt.mapper.ReceiptPurchaseDetailMapper">
+
+    <resultMap type="com.zhaocai.business.receipt.domain.ReceiptPurchaseDetail" id="PushPurchaseDetailResult">
+        <result property="id"    column="id"    />
+        <result property="brand"    column="brand"    />
+        <result property="shipmentQuantity"    column="shipment_quantity"    />
+        <result property="canOrderNumber"    column="can_order_number"    />
+        <result property="residueOrderNumber"    column="residue_order_number"    />
+        <result property="conId"    column="con_id"    />
+        <result property="contractListId"    column="contract_list_id"    />
+        <result property="contractNumber"    column="contract_number"    />
+        <result property="isAllStorage"    column="is_all_storage"    />
+        <result property="materialClassCode"    column="material_class_code"    />
+        <result property="materialCode"    column="material_code"    />
+        <result property="subjectDtlUniqueId"    column="subject_dtl_unique_id"    />
+        <result property="materialName"    column="material_name"    />
+        <result property="materialStorageNumber"    column="material_storage_number"    />
+        <result property="measurementUnit"    column="measurement_unit"    />
+        <result property="measurementUnitId"    column="measurement_unit_id"    />
+        <result property="priceType"    column="price_type"    />
+        <result property="purchaseNumber"    column="purchase_number"    />
+        <result property="specificationModel"    column="specification_model"    />
+        <result property="taxRate"    column="tax_rate"    />
+        <result property="totalIncludeTax"    column="total_include_tax"    />
+        <result property="totalNoTax"    column="total_no_tax"    />
+        <result property="totalTaxMoney"    column="total_tax_money"    />
+        <result property="unitIncludeTax"    column="unit_include_tax"    />
+        <result property="unitNoTax"    column="unit_no_tax"    />
+        <result property="parntId"    column="parnt_id"    />
+        <result property="createDept"    column="create_dept"    />
+        <result property="createBy"    column="create_by"    />
+        <result property="createId"    column="create_id"    />
+        <result property="createTime"    column="create_time"    />
+        <result property="updateBy"    column="update_by"    />
+        <result property="updateId"    column="update_id"    />
+        <result property="updateTime"    column="update_time"    />
+        <result property="delFlag"    column="del_flag"    />
+    </resultMap>
+
+
+    <resultMap type="com.zhaocai.business.receipt.vo.req.ReceiptPurchaseDetailVO" id="PushPurchaseDetailResultMap">
+        <result property="id"    column="id"    />
+        <result property="brand"    column="brand"    />
+        <result property="shipmentQuantity"    column="shipment_quantity"    />
+        <result property="canOrderNumber"    column="can_order_number"    />
+        <result property="residueOrderNumber"    column="residue_order_number"    />
+        <result property="conId"    column="con_id"    />
+        <result property="contractListId"    column="contract_list_id"    />
+        <result property="contractNumber"    column="contract_number"    />
+        <result property="isAllStorage"    column="is_all_storage"    />
+        <result property="materialClassCode"    column="material_class_code"    />
+        <result property="materialCode"    column="material_code"    />
+        <result property="subjectDtlUniqueId"    column="subject_dtl_unique_id"    />
+        <result property="materialName"    column="material_name"    />
+        <result property="materialStorageNumber"    column="material_storage_number"    />
+        <result property="measurementUnit"    column="measurement_unit"    />
+        <result property="measurementUnitId"    column="measurement_unit_id"    />
+        <result property="priceType"    column="price_type"    />
+        <result property="purchaseNumber"    column="purchase_number"    />
+        <result property="specificationModel"    column="specification_model"    />
+        <result property="taxRate"    column="tax_rate"    />
+        <result property="totalIncludeTax"    column="total_include_tax"    />
+        <result property="totalNoTax"    column="total_no_tax"    />
+        <result property="totalTaxMoney"    column="total_tax_money"    />
+        <result property="unitIncludeTax"    column="unit_include_tax"    />
+        <result property="unitNoTax"    column="unit_no_tax"    />
+        <result property="parntId"    column="parnt_id"    />
+        <result property="createDept"    column="create_dept"    />
+        <result property="createBy"    column="create_by"    />
+        <result property="createId"    column="create_id"    />
+        <result property="createTime"    column="create_time"    />
+        <result property="updateBy"    column="update_by"    />
+        <result property="updateId"    column="update_id"    />
+        <result property="updateTime"    column="update_time"    />
+        <result property="delFlag"    column="del_flag"    />
+    </resultMap>
+
+    <sql id="selectPushPurchaseDetailVo">
+        select id, brand,shipment_quantity, can_order_number,residue_order_number, con_id, contract_list_id, contract_number, is_all_storage, material_class_code, material_code,subject_dtl_unique_id, material_name, material_storage_number, measurement_unit, measurement_unit_id, price_type, purchase_number, specification_model, tax_rate, total_include_tax, total_no_tax, total_tax_money, unit_include_tax, unit_no_tax, parnt_id, create_dept, create_by, create_id, create_time, update_by, update_id, update_time, del_flag from tb_receipt_purchase_detail
+    </sql>
+
+    <select id="selectList" parameterType="com.zhaocai.business.receipt.vo.req.ReceiptPurchaseDetailVO" resultMap="PushPurchaseDetailResultMap">
+        <include refid="selectPushPurchaseDetailVo"/>
+        <where>
+            <if test="brand != null  and brand != ''"> and brand = #{brand}</if>
+            <if test="shipmentQuantity != null "> and shipment_quantity = #{shipmentQuantity}</if>
+            <if test="canOrderNumber != null "> and can_order_number = #{canOrderNumber}</if>
+            <if test="residueOrderNumber != null "> and residue_order_number = #{residueOrderNumber}</if>
+            <if test="conId != null  and conId != ''"> and con_id = #{conId}</if>
+            <if test="contractListId != null  and contractListId != ''"> and contract_list_id = #{contractListId}</if>
+            <if test="contractNumber != null "> and contract_number = #{contractNumber}</if>
+            <if test="isAllStorage != null  and isAllStorage != ''"> and is_all_storage = #{isAllStorage}</if>
+            <if test="materialClassCode != null  and materialClassCode != ''"> and material_class_code = #{materialClassCode}</if>
+            <if test="materialCode != null  and materialCode != ''"> and material_code = #{materialCode}</if>
+            <if test="subjectDtlUniqueId != null  and subjectDtlUniqueId != ''"> and subject_dtl_unique_id = #{subjectDtlUniqueId}</if>
+            <if test="materialName != null  and materialName != ''"> and material_name like concat('%', #{materialName}, '%')</if>
+            <if test="materialStorageNumber != null "> and material_storage_number = #{materialStorageNumber}</if>
+            <if test="measurementUnit != null  and measurementUnit != ''"> and measurement_unit = #{measurementUnit}</if>
+            <if test="measurementUnitId != null  and measurementUnitId != ''"> and measurement_unit_id = #{measurementUnitId}</if>
+            <if test="priceType != null  and priceType != ''"> and price_type = #{priceType}</if>
+            <if test="purchaseNumber != null "> and purchase_number = #{purchaseNumber}</if>
+            <if test="specificationModel != null  and specificationModel != ''"> and specification_model = #{specificationModel}</if>
+            <if test="taxRate != null "> and tax_rate = #{taxRate}</if>
+            <if test="totalIncludeTax != null "> and total_include_tax = #{totalIncludeTax}</if>
+            <if test="totalNoTax != null "> and total_no_tax = #{totalNoTax}</if>
+            <if test="totalTaxMoney != null "> and total_tax_money = #{totalTaxMoney}</if>
+            <if test="unitIncludeTax != null "> and unit_include_tax = #{unitIncludeTax}</if>
+            <if test="unitNoTax != null "> and unit_no_tax = #{unitNoTax}</if>
+            <if test="parntId != null  and parntId != ''"> and parnt_id = #{parntId}</if>
+            <if test="createDept != null  and createDept != ''"> and create_dept = #{createDept}</if>
+            <if test="createId != null "> and create_id = #{createId}</if>
+            <if test="updateId != null "> and update_id = #{updateId}</if>
+        </where>
+        order by create_time desc
+    </select>
+
+    <select id="selectPushPurchaseDetailById" parameterType="Long" resultMap="PushPurchaseDetailResult">
+        <include refid="selectPushPurchaseDetailVo"/>
+        where id = #{id}
+    </select>
+
+    <insert id="insertPushPurchaseDetail" parameterType="com.zhaocai.business.receipt.domain.ReceiptPurchaseDetail">
+        insert into tb_receipt_purchase_detail
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="id != null">id,</if>
+            <if test="brand != null">brand,</if>
+            <if test="shipmentQuantity != null">shipment_quantity,</if>
+            <if test="canOrderNumber != null">can_order_number,</if>
+            <if test="residueOrderNumber != null">residue_order_number,</if>
+            <if test="conId != null">con_id,</if>
+            <if test="contractListId != null">contract_list_id,</if>
+            <if test="contractNumber != null">contract_number,</if>
+            <if test="isAllStorage != null">is_all_storage,</if>
+            <if test="materialClassCode != null">material_class_code,</if>
+            <if test="materialCode != null">material_code,</if>
+            <if test="subjectDtlUniqueId != null">subject_dtl_unique_id,</if>
+            <if test="materialName != null">material_name,</if>
+            <if test="materialStorageNumber != null">material_storage_number,</if>
+            <if test="measurementUnit != null">measurement_unit,</if>
+            <if test="measurementUnitId != null">measurement_unit_id,</if>
+            <if test="priceType != null">price_type,</if>
+            <if test="purchaseNumber != null">purchase_number,</if>
+            <if test="specificationModel != null">specification_model,</if>
+            <if test="taxRate != null">tax_rate,</if>
+            <if test="totalIncludeTax != null">total_include_tax,</if>
+            <if test="totalNoTax != null">total_no_tax,</if>
+            <if test="totalTaxMoney != null">total_tax_money,</if>
+            <if test="unitIncludeTax != null">unit_include_tax,</if>
+            <if test="unitNoTax != null">unit_no_tax,</if>
+            <if test="parntId != null">parnt_id,</if>
+            <if test="createDept != null">create_dept,</if>
+            <if test="createBy != null">create_by,</if>
+            <if test="createId != null">create_id,</if>
+            <if test="createTime != null">create_time,</if>
+            <if test="updateBy != null">update_by,</if>
+            <if test="updateId != null">update_id,</if>
+            <if test="updateTime != null">update_time,</if>
+            <if test="delFlag != null">del_flag,</if>
+         </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="id != null">#{id},</if>
+            <if test="brand != null">#{brand},</if>
+            <if test="shipmentQuantity != null">#{shipmentQuantity},</if>
+            <if test="canOrderNumber != null">#{canOrderNumber},</if>
+            <if test="residueOrderNumber != null">#{residueOrderNumber},</if>
+            <if test="conId != null">#{conId},</if>
+            <if test="contractListId != null">#{contractListId},</if>
+            <if test="contractNumber != null">#{contractNumber},</if>
+            <if test="isAllStorage != null">#{isAllStorage},</if>
+            <if test="materialClassCode != null">#{materialClassCode},</if>
+            <if test="materialCode != null">#{materialCode},</if>
+            <if test="subjectDtlUniqueId != null">#{subjectDtlUniqueId},</if>
+            <if test="materialName != null">#{materialName},</if>
+            <if test="materialStorageNumber != null">#{materialStorageNumber},</if>
+            <if test="measurementUnit != null">#{measurementUnit},</if>
+            <if test="measurementUnitId != null">#{measurementUnitId},</if>
+            <if test="priceType != null">#{priceType},</if>
+            <if test="purchaseNumber != null">#{purchaseNumber},</if>
+            <if test="specificationModel != null">#{specificationModel},</if>
+            <if test="taxRate != null">#{taxRate},</if>
+            <if test="totalIncludeTax != null">#{totalIncludeTax},</if>
+            <if test="totalNoTax != null">#{totalNoTax},</if>
+            <if test="totalTaxMoney != null">#{totalTaxMoney},</if>
+            <if test="unitIncludeTax != null">#{unitIncludeTax},</if>
+            <if test="unitNoTax != null">#{unitNoTax},</if>
+            <if test="parntId != null">#{parntId},</if>
+            <if test="createDept != null">#{createDept},</if>
+            <if test="createBy != null">#{createBy},</if>
+            <if test="createId != null">#{createId},</if>
+            <if test="createTime != null">#{createTime},</if>
+            <if test="updateBy != null">#{updateBy},</if>
+            <if test="updateId != null">#{updateId},</if>
+            <if test="updateTime != null">#{updateTime},</if>
+            <if test="delFlag != null">#{delFlag},</if>
+         </trim>
+    </insert>
+
+    <update id="updatePushPurchaseDetail" parameterType="com.zhaocai.business.receipt.domain.ReceiptPurchaseDetail">
+        update tb_receipt_purchase_detail
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="brand != null">brand = #{brand},</if>
+            <if test="shipmentQuantity != null">shipment_quantity = #{shipmentQuantity},</if>
+            <if test="canOrderNumber != null">can_order_number = #{canOrderNumber},</if>
+            <if test="residueOrderNumber != null">can_order_number = #{residue_order_number},</if>
+            <if test="conId != null">con_id = #{conId},</if>
+            <if test="contractListId != null">contract_list_id = #{contractListId},</if>
+            <if test="contractNumber != null">contract_number = #{contractNumber},</if>
+            <if test="isAllStorage != null">is_all_storage = #{isAllStorage},</if>
+            <if test="materialClassCode != null">material_class_code = #{materialClassCode},</if>
+            <if test="materialCode != null">material_code = #{materialCode},</if>
+            <if test="subjectDtlUniqueId != null">subject_dtl_unique_id = #{subjectDtlUniqueId},</if>
+            <if test="materialName != null">material_name = #{materialName},</if>
+            <if test="materialStorageNumber != null">material_storage_number = #{materialStorageNumber},</if>
+            <if test="measurementUnit != null">measurement_unit = #{measurementUnit},</if>
+            <if test="measurementUnitId != null">measurement_unit_id = #{measurementUnitId},</if>
+            <if test="priceType != null">price_type = #{priceType},</if>
+            <if test="purchaseNumber != null">purchase_number = #{purchaseNumber},</if>
+            <if test="specificationModel != null">specification_model = #{specificationModel},</if>
+            <if test="taxRate != null">tax_rate = #{taxRate},</if>
+            <if test="totalIncludeTax != null">total_include_tax = #{totalIncludeTax},</if>
+            <if test="totalNoTax != null">total_no_tax = #{totalNoTax},</if>
+            <if test="totalTaxMoney != null">total_tax_money = #{totalTaxMoney},</if>
+            <if test="unitIncludeTax != null">unit_include_tax = #{unitIncludeTax},</if>
+            <if test="unitNoTax != null">unit_no_tax = #{unitNoTax},</if>
+            <if test="parntId != null">parnt_id = #{parntId},</if>
+            <if test="createDept != null">create_dept = #{createDept},</if>
+            <if test="createBy != null">create_by = #{createBy},</if>
+            <if test="createId != null">create_id = #{createId},</if>
+            <if test="createTime != null">create_time = #{createTime},</if>
+            <if test="updateBy != null">update_by = #{updateBy},</if>
+            <if test="updateId != null">update_id = #{updateId},</if>
+            <if test="updateTime != null">update_time = #{updateTime},</if>
+            <if test="delFlag != null">del_flag = #{delFlag},</if>
+        </trim>
+        where id = #{id}
+    </update>
+
+    <delete id="deletePushPurchaseDetailById" parameterType="Long">
+        delete from tb_receipt_purchase_detail where id = #{id}
+    </delete>
+
+    <delete id="deletePushPurchaseDetailByIds" parameterType="String">
+        delete from tb_receipt_purchase_detail where id in
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+</mapper>

@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhaocai.business.report.mapper.VBidCountMapper">
+    <resultMap type="com.zhaocai.business.report.vo.VBidCountVo" id="VBidCountResult">
+        <result property="minAccountFullName" column="min_account_full_name"/>
+        <result property="minAccountCode" column="min_account_code"/>
+        <result property="prjState" column="prj_state"/>
+        <result property="dutyUnit" column="duty_unit"/>
+        <result property="managementOrgId" column="management_org_id"/>
+        <result property="belongingOrgId" column="belonging_org_id"/>
+        <result property="cgNum" column="cg_num"/>
+        <result property="gkNum" column="gk_num"/>
+        <result property="yqNum" column="yq_num"/>
+        <result property="xjNum" column="xj_num"/>
+        <result property="dyNum" column="dy_num"/>
+        <result property="gkTotalNum" column="gk_total_num"/>
+        <result property="ngkTotalNum" column="ngk_total_num"/>
+        <result property="nBidTotalNum" column="n_bid_total_num"/>
+        <result property="gkRatio" column="gk_ratio"/>
+    </resultMap>
+
+    <select id="select" parameterType="com.zhaocai.business.report.vo.VBidCountVo" resultMap="VBidCountResult">
+        select * from v_bid_count vbc
+        <where>
+            <if test="minAccountFullName != null and minAccountFullName != ''">
+                AND vbc.min_account_full_name like concat('%',#{minAccountFullName},'%')
+            </if>
+            <if test="minAccountCode != null and minAccountCode != ''">
+                AND vbc.min_account_code = #{minAccountCode}
+            </if>
+            <if test="prjState != null and prjState != ''">
+                AND vbc.prj_state = #{prjState}
+            </if>
+        </where>
+    </select>
+</mapper>

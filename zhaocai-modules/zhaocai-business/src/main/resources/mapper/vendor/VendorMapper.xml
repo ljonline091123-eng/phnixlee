@@ -1,0 +1,233 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhaocai.business.vendor.mapper.VendorMapper">
+    <resultMap type="com.zhaocai.business.vendor.domain.Vendor" id="VendorResult">
+        <result property="id" column="id"/>
+        <result property="enterpriseName" column="enterprise_name"/>
+        <result property="socialCreditCode" column="social_credit_code"/>
+        <result property="registeredCapital" column="registered_capital"/>
+        <result property="currencyCode" column="currency_code"/>
+        <result property="accountBranch" column="account_branch"/>
+        <result property="bankAccount" column="bank_account"/>
+        <result property="legalRepresentative" column="legal_representative"/>
+        <result property="legalPhone" column="legal_phone"/>
+        <result property="legalIdCard" column="legal_id_card"/>
+        <result property="enterpriseType" column="enterprise_type"/>
+        <result property="taxpayerType" column="taxpayer_type"/>
+        <result property="invoiceType" column="invoice_type"/>
+        <result property="enterpriseNature" column="enterprise_nature"/>
+        <result property="enterpriseProvinceCode" column="enterprise_province_code"/>
+        <result property="enterpriseProvinceName" column="enterprise_province_name"/>
+        <result property="enterpriseCityCode" column="enterprise_city_code"/>
+        <result property="enterpriseCityName" column="enterprise_city_name"/>
+        <result property="enterpriseAddress" column="enterprise_address"/>
+        <result property="contactPhone" column="contact_phone"/>
+        <result property="businessScope" column="business_scope"/>
+        <result property="enterpriseProfile" column="enterprise_profile"/>
+        <result property="firstCooperationCompanyCode" column="first_cooperation_company_code"/>
+        <result property="firstCooperationCompanyName" column="first_cooperation_company_name"/>
+        <result property="vendorClass" column="vendor_class"/>
+        <result property="vendorLevel" column="vendor_level"/>
+        <result property="state" column="state"/>
+        <result property="signState" column="sign_state"/>
+        <result property="signAuthFailReason" column="sign_auth_fail_reason"/>
+        <result property="isBlack" column="is_black"/>
+        <result property="blackBeginDate" column="black_begin_date"/>
+        <result property="blackEndDate" column="black_end_date"/>
+        <result property="wfProcessId" column="wf_process_id"/>
+        <result property="createBy" column="create_by"/>
+        <result property="createId" column="create_id"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateBy" column="update_by"/>
+        <result property="updateId" column="update_id"/>
+        <result property="updateTime" column="update_time"/>
+        <result property="delFlag" column="del_flag"/>
+        <result property="processType" column="process_type"/>
+    </resultMap>
+
+    <resultMap id="VendorManagementList" type="com.zhaocai.business.vendor.vo.res.VendorManagementListVO">
+        <result property="id" column="id"/>
+        <result property="enterpriseName" column="enterprise_name"/>
+        <result property="socialCreditCode" column="social_credit_code"/>
+        <result property="contactName" column="contact_name"/>
+        <result property="contactPhone" column="contact_phone"/>
+        <result property="registeredCapital" column="registered_capital"/>
+        <result property="vendorLocation" column="vendor_location"/>
+        <result property="enterpriseType" column="enterprise_type"/>
+        <result property="createTime" column="create_time"/>
+        <result property="vendorClass" column="vendor_class"/>
+        <result property="isBlack" column="is_black"/>
+        <result property="state" column="state"/>
+        <result property="cooperationAmount" column="total_amount_inc_tax"/>
+        <result property="excellentNum" column="tvp_excellent_num"/>
+        <result property="processType" column="process_type"/>
+    </resultMap>
+
+    <select id="selectVendorListPage" resultMap="VendorManagementList">
+        select tv.id ,tv.enterprise_name,tv.social_credit_code,tvc.contact_name,tvc.contact_phone,tv.registered_capital,
+                concat(tv.enterprise_province_name,'-',tv.enterprise_city_name) as vendor_location,tv.enterprise_type,tv.create_time,
+                tv.is_black,tv.vendor_class,tv.state,tv.process_type,tar.total_amount_inc_tax,tvpr.tvp_excellent_num
+        from  tb_vendor tv
+        inner join tb_vendor_contact tvc on tv.id = tvc.vendor_id and tvc.is_main_contact = 1
+        left join (
+            select ta.vendor_id as ta_vendor_id ,sum(ta.total_amount_inc_tax) as total_amount_inc_tax
+            from tb_agreement ta
+            group by ta.vendor_id
+        ) tar on tar.ta_vendor_id = tv.id
+        left join (
+            select tvp.vendor_id as tvp_vendor_id,sum(tvp.excellent_num) as tvp_excellent_num
+            from tb_vendor_performance_evaluation tvp
+            group by tvp.vendor_id
+        ) tvpr on tvpr.tvp_vendor_id = tv.id
+        <where>
+            tv.del_flag = 0
+            <if test="queryVO.enterpriseName != null and queryVO.enterpriseName != ''">
+               and tv.enterprise_name like concat('%',#{queryVO.enterpriseName,jdbcType=VARCHAR},'%')
+            </if>
+            <if test="queryVO.contactName != null and queryVO.contactName != ''">
+                and tvc.contact_name like concat('%',#{queryVO.contactName,jdbcType=VARCHAR},'%')
+            </if>
+            <if test="queryVO.contactPhone != null and queryVO.contactPhone != ''">
+                and tvc.contact_phone like concat('%',#{queryVO.contactPhone,jdbcType=VARCHAR},'%')
+            </if>
+            <if  test="queryVO.classifyIds != null">
+                and (
+                    <foreach collection="queryVO.classifyIds" item="classifyId" open="(" separator=" or " close=")">
+                        find_in_set(#{classifyId}, tv.enterprise_type)
+                    </foreach>
+                )
+            </if>
+            <if  test="queryVO.registeredCapital != null">
+                and tv.registered_capital <![CDATA[>=]]> #{queryVO.registeredCapital}
+            </if>
+            <if  test="queryVO.vendorLevel != null">
+                and tv.vendor_level = #{queryVO.vendorLevel}
+            </if>
+            <if  test="queryVO.enterpriseProvinceCode != null and queryVO.enterpriseProvinceCode != ''">
+                and tv.enterprise_province_code = #{queryVO.enterpriseProvinceCode, jdbcType=VARCHAR}
+            </if>
+            <if  test="queryVO.enterpriseCityCode != null and queryVO.enterpriseCityCode != ''">
+                and tv.enterprise_city_code = #{queryVO.enterpriseCityCode, jdbcType=VARCHAR}
+            </if>
+            <if test="queryVO.vendorClass == 0" >
+                <!-- 供应商名录 -->
+                and tv.state != 1 and tv.is_black = 0
+            </if>
+            <if test="queryVO.vendorClass == 1">
+                <!-- 待审供应商 -->
+                <if test="queryVO.processType == 10">
+                    <!-- 待审供应商-供应商注册 -->
+                    and tv.state = 1 and tv.is_black = 0 and (tv.process_type = 1 or tv.process_type is null)
+                </if>
+                <if test="queryVO.processType == 2">
+                    <!-- 待审供应商-供应商修改 -->
+                    and tv.state = 1 and tv.process_type = 2
+                </if>
+                <if test="queryVO.processType == 3">
+                    <!-- 待审供应商-供应商黑名单 -->
+                    and tv.state = 1 and tv.process_type = 3
+                </if>
+                <if test="queryVO.processType == 9">
+                    <!-- 待审供应商-供应商修改等级 -->
+                    and tv.state = 1 and tv.process_type = 4
+                </if>
+            </if>
+            <if test="queryVO.vendorClass == 2">
+                <!-- 合格供应商 -->
+                and tv.vendor_class = 1 and tv.is_black = 0 and tv.state = 3
+            </if>
+            <if test="queryVO.vendorClass == 3">
+                <!--战略供应商-->
+                and tv.vendor_class = 2 and tv.is_black = 0 and tv.state = 3
+            </if>
+            <if test="queryVO.vendorClass == 4">
+                <!--黑名单 -->
+                and tv.is_black = 1 and tv.state != 1
+            </if>
+        </where>
+        order by tar.total_amount_inc_tax desc,tvpr.tvp_excellent_num desc,tv.create_time desc
+    </select>
+
+    <select id="selectVendorManagementList" resultType="com.zhaocai.business.vendor.vo.res.VendorManagementListDataVO">
+        select tv.id ,tv.enterprise_name,tv.social_credit_code,tvc.contact_name,tvc.contact_phone,tv.registered_capital,
+            concat(tv.enterprise_province_name,'-',tv.enterprise_city_name) as vendor_location,tv.enterprise_type,tv.create_time,
+            tv.is_black,tv.vendor_class,tv.state,tar.total_amount_inc_tax,tvpr.tvp_excellent_num
+        from  tb_vendor tv
+        inner join tb_vendor_contact tvc on tv.id = tvc.vendor_id and tvc.is_main_contact = 1
+        left join (
+            select ta.vendor_id as ta_vendor_id ,sum(ta.total_amount_inc_tax) as total_amount_inc_tax
+            from tb_agreement ta
+            group by ta.vendor_id
+            ) tar on tar.ta_vendor_id = tv.id
+        left join (
+            select tvp.vendor_id as tvp_vendor_id,sum(tvp.excellent_num) as tvp_excellent_num
+            from tb_vendor_performance_evaluation tvp
+            group by tvp.vendor_id
+            ) tvpr on tvpr.tvp_vendor_id = tv.id
+        <where>
+            tv.del_flag = 0
+            <if test="queryVO.enterpriseName != null and queryVO.enterpriseName != ''">
+                and tv.enterprise_name like concat('%',#{queryVO.enterpriseName,jdbcType=VARCHAR},'%')
+            </if>
+            <if test="queryVO.contactName != null and queryVO.contactName != ''">
+                and tvc.contact_name like concat('%',#{queryVO.contactName,jdbcType=VARCHAR},'%')
+            </if>
+            <if test="queryVO.contactPhone != null and queryVO.contactPhone != ''">
+                and tvc.contact_phone like concat('%',#{queryVO.contactPhone,jdbcType=VARCHAR},'%')
+            </if>
+            <if  test="queryVO.classifyIds != null">
+                and (
+                <foreach collection="queryVO.classifyIds" item="classifyId" open="(" separator=" or " close=")">
+                    find_in_set(#{classifyId}, tv.enterprise_type)
+                </foreach>
+                )
+            </if>
+            <if  test="queryVO.registeredCapital != null">
+                and tv.registered_capital <![CDATA[>=]]> #{queryVO.registeredCapital}
+            </if>
+            <if  test="queryVO.vendorLevel != null">
+                and tv.vendor_level = #{queryVO.vendorLevel}
+            </if>
+            <if  test="queryVO.enterpriseProvinceCode != null and queryVO.enterpriseProvinceCode != ''">
+                and tv.enterprise_province_code = #{queryVO.enterpriseProvinceCode, jdbcType=VARCHAR}
+            </if>
+            <if  test="queryVO.enterpriseCityCode != null and queryVO.enterpriseCityCode != ''">
+                and tv.enterprise_city_code = #{queryVO.enterpriseCityCode, jdbcType=VARCHAR}
+            </if>
+            <if test="queryVO.vendorClass == 0" >
+                <!-- 供应商名录 -->
+                and tv.state != 1 and tv.is_black = 0
+            </if>
+            <if test="queryVO.vendorClass == 1">
+                <!-- 待审供应商 -->
+                and tv.state = 1 and tv.is_black = 0
+            </if>
+            <if test="queryVO.vendorClass == 2">
+                <!-- 合格供应商 -->
+                and tv.vendor_class = 1 and tv.is_black = 0 and tv.state = 3
+            </if>
+            <if test="queryVO.vendorClass == 3">
+                <!--战略供应商-->
+                and tv.vendor_class = 2 and tv.is_black = 0 and tv.state = 3
+            </if>
+            <if test="queryVO.vendorClass == 4">
+                <!--黑名单 -->
+                and tv.is_black = 1
+            </if>
+        </where>
+        order by tar.total_amount_inc_tax desc,tvpr.tvp_excellent_num desc,tv.create_time desc
+    </select>
+
+    <select id="selectVendorJkpthtListPage" resultType="com.zhaocai.business.vendor.vo.res.VendorVO">
+        select tv.id,tv.enterprise_name
+        from tb_vendor tv
+        <where>
+            tv.state = 3
+            <if test="queryVO.enterpriseName != null and queryVO.enterpriseName != ''">
+                and tv.enterprise_name like concat('%',#{queryVO.enterpriseName,jdbcType=VARCHAR},'%')
+            </if>
+        </where>
+    </select>
+</mapper>

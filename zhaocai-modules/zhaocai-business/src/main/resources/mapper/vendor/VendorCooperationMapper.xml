@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhaocai.business.vendor.mapper.VendorCooperationMapper">
+
+    <resultMap type="com.zhaocai.business.vendor.vo.res.VendorCooperationListVO" id="VendorCooperationListResult">
+        <result property="id" column="id"/>
+        <result property="vendorName" column="enterprise_name"/>
+        <result property="socialCreditCode" column="social_credit_code"/>
+        <result property="contactName" column="contact_name"/>
+        <result property="contactPhone" column="contact_phone"/>
+        <result property="registeredCapital" column="registered_capital"/>
+        <result property="vendorAddress" column="vendor_address"/>
+        <result property="cooperationAmount" column="total_amount_inc_tax"/>
+        <result property="excellentNum" column="tvp_excellent_num"/>
+    </resultMap>
+
+    <select id="selectVendorCooperationList" resultMap="VendorCooperationListResult">
+        select tv.id,tv.enterprise_name,tv.social_credit_code,tvc.contact_name,tvc.contact_phone,tv.registered_capital,
+                concat(tv.enterprise_province_name,'-',tv.enterprise_city_name) as vendor_address,tar.total_amount_inc_tax,tvpr.tvp_excellent_num
+        from tb_vendor tv
+        left join tb_vendor_contact tvc on tv.id = tvc.vendor_id and tvc.is_main_contact = 1
+        left join (
+            select ta.vendor_id as ta_vendor_id ,sum(ta.total_amount_inc_tax) as total_amount_inc_tax
+            from tb_agreement ta
+            group by ta.vendor_id
+        ) tar on tar.ta_vendor_id = tv.id
+        left join (
+            select tvp.vendor_id as tvp_vendor_id,sum(tvp.excellent_num) as tvp_excellent_num
+            from tb_vendor_performance_evaluation tvp
+            group by tvp.vendor_id
+        ) tvpr on tvpr.tvp_vendor_id = tv.id
+        <where>
+            <if test="queryVO.enterpriseName != null and queryVO.enterpriseName != ''">
+                tv.enterprise_name like concat('%',#{queryVO.enterpriseName,jdbcType=VARCHAR},'%')
+            </if>
+            <if test="queryVO.contactName != null and queryVO.contactName != ''">
+                and tvc.contact_name like concat('%',#{queryVO.contactName,jdbcType=VARCHAR},'%')
+            </if>
+            <if test="queryVO.contactPhone != null and queryVO.contactPhone != ''">
+                and tvc.contact_phone like concat('%',#{queryVO.contactPhone,jdbcType=VARCHAR},'%')
+            </if>
+        </where>
+        order by tar.total_amount_inc_tax desc,tvpr.tvp_excellent_num desc
+    </select>
+
+    <resultMap type="com.zhaocai.business.vendor.vo.res.VendorCooperativePartnerListVO" id="VendorCooperativePartnerListResult">
+        <result property="cooperativePartnerName" column="party_a_name"/>
+        <result property="vendorName" column="enterprise_name"/>
+        <result property="agreementName" column="agreement_name"/>
+        <result property="agreementSignDate" column="agreement_sign_date"/>
+    </resultMap>
+    <select id="selectVendorCooperativePartner" resultMap="VendorCooperativePartnerListResult">
+        select ta.party_a_name,ta.agreement_name,ta.agreement_sign_date,tv.enterprise_name
+        from tb_agreement ta
+        left join tb_vendor tv on tv.id = ta.vendor_id
+        where ta.vendor_id = #{queryVO.vendorId,jdbcType=BIGINT}
+    </select>
+</mapper>

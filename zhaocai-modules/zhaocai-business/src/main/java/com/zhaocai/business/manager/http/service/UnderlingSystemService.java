@@ -1,0 +1,249 @@
+package com.zhaocai.business.manager.http.service;
+
+import cn.hutool.core.collection.CollectionUtil;
+import com.zhaocai.business.common.exception.BusinessException;
+import com.zhaocai.business.manager.http.common.config.UnderlingPlatformUrlEnum;
+import com.zhaocai.business.manager.http.dto.req.*;
+import com.zhaocai.business.manager.http.dto.res.*;
+import com.zhaocai.business.pub.vo.req.DeviceQueryVO;
+import com.zhaocai.business.pub.vo.req.MaterialsQueryVO;
+import com.zhaocai.business.pub.vo.res.*;
+import com.zhaocai.common.core.utils.StringUtils;
+import com.zhaocai.common.core.utils.bean.BeanCopierUtil;
+import org.springframework.stereotype.Service;
+
+import java.util.*;
+import java.util.stream.Collectors;
+
+@Service
+public class UnderlingSystemService {
+
+    /**
+     * 获取底层逻辑的系统字典
+     * @param type
+     * @return
+     */
+    public List<DictListVO> listDict(String type) {
+        if (StringUtils.isBlank(type)) {
+            throw new BusinessException("请传入系统字典类型");
+        }
+
+        BaseDictListRequestDTO requestDTO = new BaseDictListRequestDTO(type);
+        List<BaseDictListDTO> dictList = UnderlingRestTemplateService.listForObject(UnderlingPlatformUrlEnum.DICT_LIST_MAP,BaseDictListDTO.class,requestDTO);
+
+        List<DictListVO> resultList = Collections.emptyList();
+        if (CollectionUtil.isNotEmpty(dictList)) {
+            resultList = dictList.stream()
+                    .filter(f -> f.getEnable() && !"0".equals(f.getParentId()))
+                    .map( x -> new DictListVO(x.getDictName(),x.getDictValue(),x.getSort()))
+                    .collect(Collectors.toList());
+        }
+
+        // 排序
+        resultList.sort(Comparator.comparing(DictListVO::getSort));
+
+        return resultList;
+    }
+
+    /**
+     * 获取底层逻辑的系统字典映射
+     * @param type
+     * @return
+     */
+    public Map<String,String> listDictMap(String type) {
+        List<DictListVO> dictList = listDict(type);
+        if (CollectionUtil.isNotEmpty(dictList)) {
+            return dictList.stream()
+                    .collect(Collectors.toMap(DictListVO::getDictValue, DictListVO::getDictLabel));
+        }
+
+        return Collections.emptyMap();
+    }
+
+    /**
+     * 获取设备分类
+     * @return
+     */
+    public List<DeviceClassVO> listDeviceClass() {
+        DeviceClassRequestDTO requestDTO = new DeviceClassRequestDTO();
+
+        List<DeviceClassListResponseDTO> responseList = UnderlingRestTemplateService.listForObject(UnderlingPlatformUrlEnum.DEVICE_CLASS_LIST,DeviceClassListResponseDTO.class,requestDTO);
+
+        return convertToTree4DeviceClass(responseList);
+    }
+
+    /**
+     * 获取设备列表
+     * @param queryVO
+     * @return
+     */
+    public List<DeviceFeatureVO> deviceFeatureList(DeviceQueryVO queryVO) {
+        if (StringUtils.isBlank(queryVO.getQueryId())) {
+            return Collections.emptyList();
+        }
+
+        DeviceFeatureRequestDTO requestDTO = new DeviceFeatureRequestDTO(queryVO.getQueryId());
+
+        List<DeviceFeatureResponseDTO> resultList = UnderlingRestTemplateService.listForObject(UnderlingPlatformUrlEnum.DEVICE_FEATURE_LIST,
+                DeviceFeatureResponseDTO.class,requestDTO);
+
+        return BeanCopierUtil.copyList(resultList,DeviceFeatureVO.class);
+    }
+
+    /**
+     * 获取设备特征值列表
+     * @param queryVO
+     * @return
+     */
+    public List<DeviceFeatureValueVO> deviceFeatureValueList(DeviceQueryVO queryVO) {
+        if (StringUtils.isBlank(queryVO.getQueryId())) {
+            return Collections.emptyList();
+        }
+
+        DeviceFeatureValueRequestDTO requestDTO = new DeviceFeatureValueRequestDTO(queryVO.getQueryId());
+
+        List<DeviceFeatureValueResponseDTO> resultList = UnderlingRestTemplateService.listForObject(UnderlingPlatformUrlEnum.DEVICE_FEATURE_VALUE_LIST,
+                DeviceFeatureValueResponseDTO.class,requestDTO);
+        return BeanCopierUtil.copyList(resultList,DeviceFeatureValueVO.class);
+    }
+
+    /**
+     * 获取物料分类
+     * @return
+     */
+    public List<MaterialsClassVO> listMaterialsClass() {
+        MaterialsClassRequestDTO requestDTO = new MaterialsClassRequestDTO();
+        List<MaterialsClassResponseDTO> responseList = UnderlingRestTemplateService.listForObject(UnderlingPlatformUrlEnum.MATERIALS_CLASS_LIST,
+                MaterialsClassResponseDTO.class,requestDTO);
+
+        return convertToTree4MaterialsClass(responseList);
+    }
+
+    /**
+     * 材料特征项列表
+     * @param queryVO
+     * @return
+     */
+    public List<MaterialsFeatureVO> listMaterialsFeature(MaterialsQueryVO queryVO) {
+        if (StringUtils.isBlank(queryVO.getQueryId())) {
+            return Collections.emptyList();
+        }
+
+        MaterialsFeatureRequestDTO requestDTO = new MaterialsFeatureRequestDTO(queryVO.getQueryId());
+
+        List<MaterialsFeatureResponseDTO> resultList = UnderlingRestTemplateService.listForObject(UnderlingPlatformUrlEnum.MATERIALS_FEATURE_LIST,
+                MaterialsFeatureResponseDTO.class,requestDTO);
+
+        return BeanCopierUtil.copyList(resultList,MaterialsFeatureVO.class);
+    }
+
+    /**
+     * 获取材料特征值
+     * @param queryVO
+     * @return
+     */
+    public List<MaterialsFeatureValueVO> listMaterialsFeatureValue(MaterialsQueryVO queryVO) {
+        if (StringUtils.isBlank(queryVO.getQueryId())) {
+            return Collections.emptyList();
+        }
+
+        MaterialsFeatureValueRequestDTO requestDTO = new MaterialsFeatureValueRequestDTO(queryVO.getQueryId());
+
+        List<MaterialsFeatureValueResponseDTO> resultList = UnderlingRestTemplateService.listForObject(UnderlingPlatformUrlEnum.MATERIALS_FEATURE_VALUE_LIST,
+                MaterialsFeatureValueResponseDTO.class,requestDTO);
+
+        return BeanCopierUtil.copyList(resultList,MaterialsFeatureValueVO.class);
+    }
+
+    public String getL2OrgByOrgId(String orgId){
+        String l2Org = "2001000000000";
+        GetL2OrgByOrgIdRequestDTO reqDTO = new GetL2OrgByOrgIdRequestDTO();
+        reqDTO.setOrgId(orgId);
+        String responseStr =  UnderlingRestTemplateService.getForObject
+                (UnderlingPlatformUrlEnum.GET_L2_ORG_BY_ORGID,String.class,reqDTO);
+        if (null != responseStr){
+            l2Org = responseStr;
+        }
+        return l2Org;
+    }
+
+    /**
+     * 获取 dm071 数据
+     * @return
+     */
+    public List<DwMmAssetInfResponseDTO> listDwMmAssetInf() {
+        return UnderlingRestTemplateService.listForObject(UnderlingPlatformUrlEnum.DW_MM_ASSET_INF,DwMmAssetInfResponseDTO.class,new DwMmInfRequestDTO());
+    }
+
+    /**
+     * 获取 dm073 数据
+     * @return
+     */
+    public List<DwMmServiceInfResponseDTO> listDwMmServiceInf() {
+        return UnderlingRestTemplateService.listForObject(UnderlingPlatformUrlEnum.DW_MM_SERVICE_INF,DwMmServiceInfResponseDTO.class,new DwMmInfRequestDTO());
+    }
+
+    /**
+     *
+     * @param materialsClassList
+     * @return
+     */
+    private List<MaterialsClassVO> convertToTree4MaterialsClass(List<MaterialsClassResponseDTO> materialsClassList) {
+        Map<String,MaterialsClassVO> materialsClassMap = new HashMap<>();
+
+        for (MaterialsClassResponseDTO materialsClass : materialsClassList) {
+            MaterialsClassVO materialsClassVO = new MaterialsClassVO(materialsClass.getId(),materialsClass.getMtrClassCode(),
+                                    materialsClass.getMtrClassName(),materialsClass.getMeasureUnit());
+            materialsClassVO.setChildren(new ArrayList<>());
+            materialsClassMap.put(materialsClass.getId(),materialsClassVO);
+        }
+
+        // 构建树形结构
+        List<MaterialsClassVO> rootList = new ArrayList<>();
+        for (MaterialsClassResponseDTO materialsClass : materialsClassList) {
+            MaterialsClassVO treeVo = materialsClassMap.get(materialsClass.getId());
+            if (StringUtils.isBlank(materialsClass.getParentId()) || "0".equals(materialsClass.getParentId())) {
+                // 根节点，直接添加
+                rootList.add(treeVo);
+            } else {
+                // 非根节点，找到父节点并添加到其子节点列表中
+                MaterialsClassVO materialsClassVO = materialsClassMap.get(materialsClass.getParentId());
+                materialsClassVO.getChildren().add(treeVo);
+            }
+        }
+
+        return rootList;
+    }
+
+    /**
+     * 构建树形结构
+     * @param deviceClassList
+     * @return
+     */
+    private List<DeviceClassVO> convertToTree4DeviceClass(List<DeviceClassListResponseDTO> deviceClassList) {
+        Map<String, DeviceClassVO> deviceClassMap = new HashMap<>();
+
+        for (DeviceClassListResponseDTO deviceClass : deviceClassList) {
+            DeviceClassVO deviceClassVO = new DeviceClassVO(deviceClass.getId(), deviceClass.getDeviceClassCode(), deviceClass.getDeviceClassName());
+            deviceClassVO.setChildren(new ArrayList<>());
+            deviceClassMap.put(deviceClass.getId(), deviceClassVO);
+
+        }
+
+        // 构建树形结构
+        List<DeviceClassVO> rootList = new ArrayList<>();
+        for (DeviceClassListResponseDTO deviceClass : deviceClassList) {
+            DeviceClassVO treeVo = deviceClassMap.get(deviceClass.getId());
+            if (StringUtils.isBlank(deviceClass.getParentId()) || "0".equals(deviceClass.getParentId())) {
+                // 根节点，直接添加
+                rootList.add(treeVo);
+            } else {
+                // 非根节点，找到父节点并添加到其子节点列表中
+                DeviceClassVO deviceClassParentVO = deviceClassMap.get(deviceClass.getParentId());
+                deviceClassParentVO.getChildren().add(treeVo);
+            }
+        }
+
+        return rootList;
+    }
+}

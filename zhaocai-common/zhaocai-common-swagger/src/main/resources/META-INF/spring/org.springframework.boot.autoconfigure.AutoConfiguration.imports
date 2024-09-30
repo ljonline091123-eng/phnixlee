@@ -1,0 +1,3 @@
+# com.zhaocai.common.swagger.config.SwaggerAutoConfiguration
+# com.zhaocai.common.swagger.config.SwaggerWebConfiguration
+# com.zhaocai.common.swagger.config.SwaggerBeanPostProcessor

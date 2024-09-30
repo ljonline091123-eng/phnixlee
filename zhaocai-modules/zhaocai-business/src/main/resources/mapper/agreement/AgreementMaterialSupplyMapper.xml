@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhaocai.business.agreement.mapper.AgreementMaterialSupplyMapper">
+    <resultMap type="com.zhaocai.business.agreement.domain.AgreementMaterialSupply" id="AgreementMaterialSupplyResult">
+        <result property="id" column="id"/>
+        <result property="agreementId" column="agreement_id"/>
+        <result property="materialNameCode" column="material_name_code"/>
+        <result property="materialName" column="material_name"/>
+        <result property="specification" column="specification"/>
+        <result property="unitMeasurement" column="unit_measurement"/>
+        <result property="estimatedCount" column="estimated_count"/>
+        <result property="estimatedTaxRate" column="estimated_tax_rate"/>
+        <result property="estimatedUnitPriceExcTax" column="estimated_unit_price_exc_tax"/>
+        <result property="estimatedUnitPriceIncTax" column="estimated_unit_price_inc_tax"/>
+        <result property="estimatedAmountExcTax" column="estimated_amount_exc_tax"/>
+        <result property="estimatedAmountIncTax" column="estimated_amount_inc_tax"/>
+        <result property="estimatedTaxAmount" column="estimated_tax_amount"/>
+        <result property="createBy" column="create_by"/>
+        <result property="createId" column="create_id"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateBy" column="update_by"/>
+        <result property="updateId" column="update_id"/>
+        <result property="updateTime" column="update_time"/>
+        <result property="delFlag" column="del_flag"/>
+    </resultMap>
+
+    <delete id="deleteByAgreementId">
+        delete from tb_agreement_material_supply where agreement_id = #{agreementId,jdbcType=BIGINT}
+    </delete>
+</mapper>

@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhaocai.business.procurement.mapper.ProcurementPlanMapper">
+    <resultMap type="com.zhaocai.business.procurement.domain.ProcurementPlan" id="ProcurementPlanResult">
+        <result property="id" column="id"/>
+        <result property="procurementPlanCode" column="procurement_plan_code"/>
+        <result property="procurementPlanName" column="procurement_plan_name"/>
+        <result property="procurementPlanType" column="procurement_plan_type"/>
+        <result property="procurementType" column="procurement_type"/>
+        <result property="projectHierarchy" column="project_hierarchy"/>
+        <result property="beginDate" column="begin_date"/>
+        <result property="endDate" column="end_date"/>
+        <result property="arrivalDate" column="arrival_date"/>
+        <result property="procurementReporter" column="procurement_reporter"/>
+        <result property="procurementReporterName" column="procurement_reporter_name"/>
+        <result property="procurementOfficer" column="procurement_officer"/>
+        <result property="procurementOfficerName" column="procurement_officer_name"/>
+        <result property="subjectMatter" column="subject_matter"/>
+        <result property="subjectMatterName" column="subject_matter_name"/>
+        <result property="subjectMatterType" column="subject_matter_type"/>
+        <result property="priceType" column="price_type"/>
+        <result property="regionProvinceCode" column="region_province_code"/>
+        <result property="regionCityCode" column="region_city_code"/>
+        <result property="countingType" column="counting_type"/>
+        <result property="paymentType" column="payment_type"/>
+        <result property="guidancePrice" column="guidance_price"/>
+        <result property="state" column="state"/>
+        <result property="createBy" column="create_by"/>
+        <result property="createId" column="create_id"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateBy" column="update_by"/>
+        <result property="updateId" column="update_id"/>
+        <result property="updateTime" column="update_time"/>
+        <result property="delFlag" column="del_flag"/>
+    </resultMap>
+
+    <resultMap type="com.zhaocai.business.procurement.vo.res.ProcurementPlanListVO" id="ProcurementPlanListResult">
+        <result property="id" column="id"/>
+        <result property="procurementPlanCode" column="procurement_plan_code"/>
+        <result property="procurementPlanName" column="procurement_plan_name"/>
+        <result property="projectHierarchy" column="project_hierarchy"/>
+        <result property="beginDate" column="begin_date"/>
+        <result property="endDate" column="end_date"/>
+        <result property="arrivalDate" column="arrival_date"/>
+        <result property="procurementReporterName" column="procurement_reporter_name"/>
+        <result property="procurementOfficerName" column="procurement_officer_name"/>
+        <result property="state" column="state"/>
+        <result property="createTime" column="create_time"/>
+    </resultMap>
+
+    <select id="selectListPage" resultMap="ProcurementPlanListResult">
+        select tpp.*
+        from tb_procurement_plan tpp
+        inner join tb_contract_planning tcp on tpp.id = tcp.plan_id and tcp.project_code = #{queryVO.projectCode,jdbcType=VARCHAR}
+        <where>
+            tpp.state != 2
+            <if test="queryVO.procurementPlanCode != null and queryVO.procurementPlanCode != ''">
+                and tpp.procurement_plan_code like concat('%',#{queryVO.procurementPlanCode,jdbcType=VARCHAR},'%')
+            </if>
+            <if test="queryVO.procurementPlanName != null and queryVO.procurementPlanName != ''">
+                and tpp.procurement_plan_name like concat('%',#{queryVO.procurementPlanName,jdbcType=VARCHAR},'%')
+            </if>
+            <if test="queryVO.procurementOfficerName != null">
+                and  tpp.procurement_officer_name like concat('%',#{queryVO.procurementOfficerName,jdbcType=VARCHAR},'%')
+            </if>
+            <if test="queryVO.procurementPlanType != null">
+                and tpp.procurement_plan_type = #{queryVO.procurementPlanType,jdbcType=INTEGER}
+            </if>
+            <if test="queryVO.state != null">
+                and tpp.state = #{queryVO.state,jdbcType=INTEGER}
+            </if>
+            <if test="queryVO.bidResponsibleOrg != null and queryVO.bidResponsibleOrg != ''">
+                and tcp.bid_responsible_org = #{queryVO.bidResponsibleOrg,jdbcType=VARCHAR}
+            </if>
+        </where>
+        order by tpp.create_time desc
+    </select>
+
+    <select id="selectBySplitId" resultMap="ProcurementPlanResult">
+        select tp.*
+        from tb_procurement_plan tp
+        inner join tb_contract_planning_split tps on tps.procurement_plan_id = tp.id
+        where tps.id = #{splitId,jdbcType=BIGINT}
+    </select>
+
+    <select id="selectFirstTimeProcurementPlanByContractPlan" resultType="com.zhaocai.business.procurement.dto.ContractProcurementPlanDTO">
+        select tcp.contract_planning_id as contractPlanningId ,tpp.arrival_date as arrivalDate,tpp.procurement_plan_name as procurementPlanName
+        from tb_procurement_plan tpp
+        inner join tb_contract_planning tcp on tpp.id = tcp.plan_id
+        <where>
+            tpp.create_time = (
+                select min(tpp1.create_time)
+                from tb_procurement_plan tpp1
+                inner join tb_contract_planning tcp2  on tpp1.id = tcp2.plan_id
+                where tcp2.contract_planning_id = tcp.contract_planning_id
+            )
+            and tcp.contract_planning_id in
+            <foreach collection="contractIdList" item="contractId" open="(" separator="," close=")">
+                #{contractId,jdbcType=VARCHAR}
+            </foreach>
+        </where>
+    </select>
+</mapper>

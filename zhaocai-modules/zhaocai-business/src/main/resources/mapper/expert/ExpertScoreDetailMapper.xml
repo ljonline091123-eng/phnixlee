@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhaocai.business.expert.mapper.ExpertScoreDetailMapper">
+    
+    <resultMap type="com.zhaocai.business.expert.domain.ExpertScoreDetail" id="ExpertScoreDetailResult">
+        <result property="id"    column="id"    />
+        <result property="expertScoreId"    column="expert_score_id"    />
+        <result property="type"    column="type"    />
+        <result property="number"    column="number"    />
+        <result property="items"    column="items"    />
+        <result property="range"    column="range"    />
+        <result property="score"    column="score"    />
+        <result property="createBy"    column="create_by"    />
+        <result property="createId"    column="create_id"    />
+        <result property="createTime"    column="create_time"    />
+        <result property="updateBy"    column="update_by"    />
+        <result property="updateId"    column="update_id"    />
+        <result property="updateTime"    column="update_time"    />
+        <result property="delFlag"    column="del_flag"    />
+    </resultMap>
+
+    <sql id="selectExpertScoreDetailVo">
+        select id, expert_score_id, type, number, items, range, score, create_by, create_id, create_time, update_by, update_id, update_time, del_flag from tb_expert_score_detail
+    </sql>
+
+    <select id="selectExpertScoreDetailList" parameterType="com.zhaocai.business.expert.domain.Expert" resultMap="ExpertScoreDetailResult">
+        <include refid="selectExpertScoreDetailVo"/>
+        <where>  
+            <if test="expertScoreId != null "> and expert_score_id = #{expertScoreId}</if>
+            <if test="type != null "> and type = #{type}</if>
+            <if test="number != null "> and number = #{number}</if>
+            <if test="items != null  and items != ''"> and items = #{items}</if>
+            <if test="range != null  and range != ''"> and range = #{range}</if>
+            <if test="score != null "> and score = #{score}</if>
+            <if test="createId != null "> and create_id = #{createId}</if>
+            <if test="updateId != null "> and update_id = #{updateId}</if>
+            <if test="delFlag != null "> and del_flag = #{delFlag}</if>
+        </where>
+    </select>
+    
+    <select id="selectExpertScoreDetailById" parameterType="Long" resultMap="ExpertScoreDetailResult">
+        <include refid="selectExpertScoreDetailVo"/>
+        where id = #{id}
+    </select>
+        
+    <insert id="insertExpertScoreDetail" parameterType="com.zhaocai.business.expert.domain.Expert">
+        insert into tb_expert_score_detail
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="id != null">id,</if>
+            <if test="expertScoreId != null">expert_score_id,</if>
+            <if test="type != null">type,</if>
+            <if test="number != null">number,</if>
+            <if test="items != null">items,</if>
+            <if test="range != null">range,</if>
+            <if test="score != null">score,</if>
+            <if test="createBy != null">create_by,</if>
+            <if test="createId != null">create_id,</if>
+            <if test="createTime != null">create_time,</if>
+            <if test="updateBy != null">update_by,</if>
+            <if test="updateId != null">update_id,</if>
+            <if test="updateTime != null">update_time,</if>
+            <if test="delFlag != null">del_flag,</if>
+         </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="id != null">#{id},</if>
+            <if test="expertScoreId != null">#{expertScoreId},</if>
+            <if test="type != null">#{type},</if>
+            <if test="number != null">#{number},</if>
+            <if test="items != null">#{items},</if>
+            <if test="range != null">#{range},</if>
+            <if test="score != null">#{score},</if>
+            <if test="createBy != null">#{createBy},</if>
+            <if test="createId != null">#{createId},</if>
+            <if test="createTime != null">#{createTime},</if>
+            <if test="updateBy != null">#{updateBy},</if>
+            <if test="updateId != null">#{updateId},</if>
+            <if test="updateTime != null">#{updateTime},</if>
+            <if test="delFlag != null">#{delFlag},</if>
+         </trim>
+    </insert>
+
+    <update id="updateExpertScoreDetail" parameterType="com.zhaocai.business.expert.domain.Expert">
+        update tb_expert_score_detail
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="expertScoreId != null">expert_score_id = #{expertScoreId},</if>
+            <if test="type != null">type = #{type},</if>
+            <if test="number != null">number = #{number},</if>
+            <if test="items != null">items = #{items},</if>
+            <if test="range != null">range = #{range},</if>
+            <if test="score != null">score = #{score},</if>
+            <if test="createBy != null">create_by = #{createBy},</if>
+            <if test="createId != null">create_id = #{createId},</if>
+            <if test="createTime != null">create_time = #{createTime},</if>
+            <if test="updateBy != null">update_by = #{updateBy},</if>
+            <if test="updateId != null">update_id = #{updateId},</if>
+            <if test="updateTime != null">update_time = #{updateTime},</if>
+            <if test="delFlag != null">del_flag = #{delFlag},</if>
+        </trim>
+        where id = #{id}
+    </update>
+
+    <delete id="deleteExpertScoreDetailById" parameterType="Long">
+        delete from tb_expert_score_detail where id = #{id}
+    </delete>
+
+    <delete id="deleteExpertScoreDetailByIds" parameterType="String">
+        delete from tb_expert_score_detail where id in 
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+</mapper>

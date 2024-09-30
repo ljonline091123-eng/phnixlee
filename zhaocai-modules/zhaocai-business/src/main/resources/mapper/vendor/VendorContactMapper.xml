@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhaocai.business.vendor.mapper.VendorContactMapper">
+    <resultMap type="com.zhaocai.business.vendor.domain.VendorContact" id="VendorContactResult">
+        <result property="id" column="id"/>
+        <result property="vendorId" column="vendor_id"/>
+        <result property="contactName" column="contact_name"/>
+        <result property="contactPhone" column="contact_phone"/>
+        <result property="isManager" column="is_manager"/>
+        <result property="isLegal" column="is_legal"/>
+        <result property="state" column="state"/>
+        <result property="signState" column="sign_state"/>
+        <result property="signAuthFailReason" column="sign_auth_fail_reason"/>
+        <result property="isMainContact" column="is_main_contact"/>
+        <result property="loginUserId" column="login_user_id"/>
+        <result property="certificationId" column="certification_id"/>
+        <result property="createBy" column="create_by"/>
+        <result property="createId" column="create_id"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateBy" column="update_by"/>
+        <result property="updateId" column="update_id"/>
+        <result property="updateTime" column="update_time"/>
+        <result property="delFlag" column="del_flag"/>
+        <result property="wfProcessId" column="wf_process_id"/>
+    </resultMap>
+
+    <resultMap type="com.zhaocai.business.vendor.vo.res.VendorContactListVO" id="VendorContactManagementResult">
+        <result property="id" column="id"/>
+        <result property="userId" column="login_user_id"/>
+        <result property="contactName" column="contact_name"/>
+        <result property="contactPhone" column="contact_phone"/>
+        <result property="vendorName" column="enterprise_name"/>
+        <result property="isManager" column="is_manager"/>
+        <result property="state" column="state"/>
+        <result property="createTime" column="create_time"/>
+        <result property="effectiveBeginDate" column="effective_begin_date"/>
+        <result property="effectiveEndDate" column="effective_end_date"/>
+        <result property="wfProcessId" column="wf_process_id"/>
+    </resultMap>
+
+    <select id="selectVendorContactListPage" resultMap="VendorContactManagementResult">
+        select tvc.id,tvc.contact_name,tvc.contact_phone,tv.enterprise_name,tvc.is_manager,tvc.state,tvc.create_time,tvc.wf_process_id,
+                tvcf.effective_begin_date,tvcf.effective_end_date,tvc.login_user_id
+        from tb_vendor_contact tvc
+        inner join tb_vendor tv on tvc.vendor_id = tv.id
+        left join tb_vendor_certification tvcf on tvcf.id = tvc.certification_id
+        <where>
+            <if test="queryVO.vendorName != null and queryVO.vendorName != ''">
+                tv.enterprise_name like concat('%',#{queryVO.vendorName,jdbcType=VARCHAR},'%')
+            </if>
+            <if test="queryVO.contactName != null and queryVO.contactName != ''">
+                and tvc.contact_name like concat('%',#{queryVO.contactName,jdbcType=VARCHAR},'%')
+            </if>
+            <if test="queryVO.contactPhone != null and queryVO.contactPhone != ''">
+                and tvc.contact_phone = #{queryVO.contactPhone,jdbcType=VARCHAR}
+            </if>
+            <if test="queryVO.vendorId != null">
+                and tvc.vendor_id = #{queryVO.vendorId,jdbcType=BIGINT}
+            </if>
+            <if test="queryVO.state != null">
+                <choose>
+                    <when test="queryVO.state == 0">
+                        and tvc.state = 0
+                    </when>
+                    <when test="queryVO.state == 1">
+                        and (tvc.state = 1 or tvc.state = 2)
+                    </when>
+                </choose>
+            </if>
+            <if test="queryVO.id != null">
+                and tvc.id = #{queryVO.id,jdbcType=BIGINT}
+            </if>
+        </where>
+        order by tvc.create_time desc
+    </select>
+</mapper>

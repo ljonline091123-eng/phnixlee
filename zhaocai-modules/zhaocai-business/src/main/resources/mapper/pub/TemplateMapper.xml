@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhaocai.business.pub.mapper.TemplateMapper">
+
+    <resultMap type="com.zhaocai.business.pub.domain.Template" id="TemplateResult">
+        <result property="id" column="id"/>
+        <result property="templateName" column="template_name"/>
+        <result property="templateType" column="template_type"/>
+        <result property="usingUnitNo" column="using_unit_no"/>
+        <result property="contractType" column="contract_type"/>
+        <result property="usingUnitName" column="using_unit_name"/>
+        <result property="isEditable" column="is_editable"/>
+        <result property="attachmentId" column="attachment_id"/>
+        <result property="createBy" column="create_by"/>
+        <result property="createId" column="create_id"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateBy" column="update_by"/>
+        <result property="updateId" column="update_id"/>
+        <result property="updateTime" column="update_time"/>
+        <result property="delFlag" column="del_flag"/>
+    </resultMap>
+
+    <resultMap type="com.zhaocai.business.pub.vo.res.TemplateListVO" id="TemplateListResult">
+        <result property="id" column="id"/>
+        <result property="templateName" column="template_name"/>
+        <result property="templateType" column="template_type"/>
+        <result property="usingUnitName" column="using_unit_name"/>
+        <result property="createBy" column="create_by"/>
+        <result property="createTime" column="create_time"/>
+        <result property="fileName" column="file_name"/>
+        <result property="fileUrl" column="file_url"/>
+        <result property="attachmentId" column="attachment_id"/>
+    </resultMap>
+
+    <select id="selectList" resultMap="TemplateListResult">
+        select tt.id,tt.template_name,tt.template_type,tt.using_unit_name,tt.contract_type,tt.create_by,tt.create_time,ta.file_name,ta.file_url,tt.attachment_id
+        from tb_template tt
+        left join tb_attachment ta on tt.attachment_id = ta.id
+        <where>
+            <if test="queryVO.templateType != null">
+                tt.template_type = #{queryVO.templateType,jdbcType=INTEGER}
+            </if>
+            <if test="queryVO.templateName != null and queryVO.templateName != ''">
+                and tt.template_name like concat('%',#{queryVO.templateName,jdbcType=VARCHAR},'%')
+            </if>
+            <if test="queryVO.contractType != null">
+                and tt.contract_type = #{queryVO.contractType,jdbcType=VARCHAR}
+            </if>
+            <if test="queryVO.usingUnitNo != null and queryVO.usingUnitNo != ''">
+                and tt.using_unit_no in
+                <foreach collection="queryVO.usingUnitNo" open="(" close=")" separator="," index="index" item="item">
+                    #{item, jdbcType=VARCHAR}
+                </foreach>
+            </if>
+            and tt.del_flag = 0
+        </where>
+        order by tt.create_time desc
+    </select>
+
+
+    <select id="switchList" resultMap="TemplateListResult">
+        select tt.id,tt.template_name,tt.template_type,tt.using_unit_name,tt.contract_type,tt.create_by,tt.create_time,ta.file_name,ta.file_url,tt.attachment_id
+        from tb_template tt  left join tb_attachment ta on tt.attachment_id = ta.id
+        <where>
+            using_unit_no in
+            <foreach collection="ids" item="ids" open="(" separator="," close=")">
+                #{ids}
+            </foreach>
+            <if test="queryVO.templateType != null">
+                and tt.template_type = #{queryVO.templateType,jdbcType=INTEGER}
+            </if>
+            <if test="queryVO.templateName != null and queryVO.templateName != ''">
+                and tt.template_name like concat('%',#{queryVO.templateName,jdbcType=VARCHAR},'%')
+            </if>
+            <if test="queryVO.contractType != null">
+                and tt.contract_type = #{queryVO.contractType,jdbcType=VARCHAR}
+            </if>
+            and tt.del_flag = 0
+        </where>
+        GROUP BY tt.id
+        order by tt.create_time desc
+    </select>
+
+
+    <select id="multiplexList" resultMap="TemplateListResult">
+        SELECT
+        tt.id,
+        tt.template_name,
+        tt.template_type,
+        tt.contract_type,
+        tt.using_unit_name,
+        tt.create_by,
+        tt.create_time,
+        ta.file_name,
+        ta.file_url,
+        tt.attachment_id
+        FROM
+        tb_procurement_scheme s
+        LEFT JOIN tb_procurement_scheme_bidding b ON s.id = b.scheme_id
+        <if test="queryVO.templateType ==2 ">
+        LEFT JOIN tb_template tt ON tt.id = b.bidding_template_id
+        </if>
+        <if test="queryVO.templateType ==1 ">
+        LEFT JOIN tb_template tt ON tt.id = b.contract_template_id
+        </if>
+        left join tb_attachment ta on tt.attachment_id = ta.id
+        <where>
+            <if test="queryVO.templateType != null">
+                tt.template_type = #{queryVO.templateType,jdbcType=INTEGER}
+            </if>
+            <if test="queryVO.templateName != null and queryVO.templateName != ''">
+                and tt.template_name like concat('%',#{queryVO.templateName,jdbcType=VARCHAR},'%')
+            </if>
+            <if test="queryVO.contractType != null">
+                and tt.contract_type = #{queryVO.contractType,jdbcType=VARCHAR}
+            </if>
+            and tt.del_flag = 0
+        </where>
+        and s.state = '3'
+        GROUP BY tt.id
+        order by tt.create_time desc
+    </select>
+</mapper>

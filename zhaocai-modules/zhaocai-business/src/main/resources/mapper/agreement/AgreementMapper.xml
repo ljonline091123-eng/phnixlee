@@ -1,0 +1,167 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhaocai.business.agreement.mapper.AgreementMapper">
+    <resultMap type="com.zhaocai.business.agreement.domain.Agreement" id="AgreementResult">
+        <result property="id" column="id"/>
+        <result property="schemeId" column="scheme_id"/>
+        <result property="vendorId" column="vendor_id"/>
+        <result property="contractSplitId" column="contract_split_id"/>
+        <result property="belongOrganizationId" column="belong_organization_id"/>
+        <result property="belongOrganizationName" column="belong_organization_name"/>
+        <result property="belongAccountingItem" column="belong_accounting_item"/>
+        <result property="belongAccountingItemCode" column="belong_accounting_item_code"/>
+        <result property="agreementName" column="agreement_name"/>
+        <result property="agreementCode" column="agreement_code"/>
+        <result property="totalAmountIncTax" column="total_amount_inc_tax"/>
+        <result property="totalAmountExcTax" column="total_amount_exc_tax"/>
+        <result property="innerAgreementCode" column="inner_agreement_code"/>
+        <result property="partyAOrgId" column="party_a_org_id"/>
+        <result property="partyAName" column="party_a_name"/>
+        <result property="partyBName" column="party_b_name"/>
+        <result property="expenditureBusinessType" column="expenditure_business_type"/>
+        <result property="subjectMatterCode" column="subject_matter_code"/>
+        <result property="subjectMatterName" column="subject_matter_name"/>
+        <result property="paymentCycle" column="payment_cycle"/>
+        <result property="paymentWay" column="payment_way"/>
+        <result property="reporterName" column="reporter_name"/>
+        <result property="partyBLegalName" column="party_b_legal_name"/>
+        <result property="partyBLegalIdCard" column="party_b_legal_id_card"/>
+        <result property="partyBLegalPhone" column="party_b_legal_phone"/>
+        <result property="partyBResponsibleName" column="party_b_responsible_name"/>
+        <result property="partyBResponsibleIdCard" column="party_b_responsible_id_card"/>
+        <result property="partyBResponsiblePhone" column="party_b_responsible_phone"/>
+        <result property="agreementState" column="agreement_state"/>
+        <result property="agreementSignDate" column="agreement_sign_date"/>
+        <result property="agreementEffectiveDate" column="agreement_effective_date"/>
+        <result property="agreementPerformAddress" column="agreement_perform_address"/>
+        <result property="agreementPerformCountry" column="agreement_perform_country"/>
+        <result property="agreementPerformDistrict" column="agreement_perform_district"/>
+        <result property="rentalMethod" column="rental_method"/>
+        <result property="entryDate" column="entry_date"/>
+        <result property="finishDate" column="finish_date"/>
+        <result property="duration" column="duration"/>
+        <result property="priceForm" column="price_form"/>
+        <result property="discountRatio" column="discount_ratio"/>
+        <result property="scopeOfWork" column="scope_of_work"/>
+        <result property="contractStartDate" column="contract_start_date"/>
+        <result property="contractEndDate" column="contract_end_date"/>
+        <result property="attachmentId" column="attachment_id"/>
+        <result property="labelAttachmentId" column="label_attachment_id"/>
+        <result property="watermarkAttachmentId" column="watermark_attachment_id"/>
+        <result property="convertPdfAttachmentId" column="convert_pdf_attachment_id"/>
+        <result property="signAttachmentId" column="sign_attachment_id"/>
+        <result property="signatureUserId" column="signature_user_id"/>
+        <result property="cancelledReason" column="cancelled_reason"/>
+        <result property="createBy" column="create_by"/>
+        <result property="createId" column="create_id"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateBy" column="update_by"/>
+        <result property="updateId" column="update_id"/>
+        <result property="updateTime" column="update_time"/>
+        <result property="delFlag" column="del_flag"/>
+    </resultMap>
+
+    <resultMap type="com.zhaocai.business.agreement.vo.res.AgreementListVO" id="AgreementListResult">
+        <result property="id" column="id"/>
+        <result property="agreementName" column="agreement_name"/>
+        <result property="agreementCode" column="agreement_code"/>
+        <result property="partyAName" column="party_a_name"/>
+        <result property="partyBName" column="party_b_name"/>
+        <result property="totalAmount" column="total_amount_inc_tax"/>
+        <result property="reporterName" column="create_by"/>
+        <result property="agreementState" column="agreement_state"/>
+        <result property="expenditureBusinessType" column="expenditure_business_type"/>
+        <result property="wfProcessId" column="wf_process_id"/>
+        <result property="partyADeptId" column="dept_id"/>
+        <result property="createById" column="create_id"/>
+        <result property="signatureUserId" column="signature_user_id"/>
+    </resultMap>
+
+    <select id="selectPageList" resultMap="AgreementListResult">
+        select ta.id,ta.agreement_code,ta.agreement_name,ta.party_a_name,ta.party_b_name,ta.create_id,ta.signature_user_id,
+            ta.create_by,ta.agreement_state,total_amount_inc_tax,ta.expenditure_business_type,ta.wf_process_id,sd.dept_id
+        from tb_agreement ta
+        inner join tb_procurement_scheme tps on ta.scheme_id = tps.id and tps.project_code = #{queryVO.projectCode,jdbcType=VARCHAR}
+        left join sys_dept sd on sd.thrid_dept_id = ta.party_a_org_id
+        <where>
+            <if test="queryVO.agreementCode != null and queryVO.agreementCode != ''">
+                ta.agreement_code like concat('%',#{queryVO.agreementCode,jdbcType=VARCHAR},'%')
+            </if>
+            <if test="queryVO.agreementName != null and queryVO.agreementName != ''">
+                and ta.agreement_name like concat('%',#{queryVO.agreementName,jdbcType=VARCHAR},'%')
+            </if>
+            <if test="queryVO.agreementState != null and queryVO.agreementState != ''">
+                and ta.agreement_state = #{queryVO.agreementState,jdbcType=VARCHAR}
+            </if>
+            <if test="queryVO.vendorName != null and queryVO.vendorName != ''">
+                and ta.party_b_name like concat('%',#{queryVO.vendorName,jdbcType=VARCHAR},'%')
+            </if>
+            <if test="queryVO.expenditureBusinessType != null and queryVO.expenditureBusinessType != ''">
+                and ta.expenditure_business_type = #{queryVO.expenditureBusinessType,jdbcType=INTEGER}
+            </if>
+        </where>
+        order by ta.create_time desc
+    </select>
+
+    <resultMap type="com.zhaocai.business.vendor.vo.res.VendorAgreementListVO" id="VendorPerformanceListResult">
+        <result property="id" column="id"/>
+        <result property="agreementCode" column="agreement_code"/>
+        <result property="agreementName" column="agreement_name"/>
+        <result property="partyAName" column="party_a_name"/>
+        <result property="partyBName" column="party_b_name"/>
+        <result property="belongAccountingItem" column="belong_accounting_item"/>
+        <result property="createUser" column="create_by"/>
+        <result property="createTime" column="create_time"/>
+        <result property="totalAmountIncTax" column="total_amount_inc_tax"/>
+        <result property="contactName" column="contact"/>
+        <result property="contactPhone" column="phone"/>
+        <result property="agreementState" column="agreement_state"/>
+    </resultMap>
+    <select id="selectVendorAgreementList" resultMap="VendorPerformanceListResult">
+        select ta.id ,ta.agreement_code,ta.agreement_name,ta.belong_accounting_item,ta.party_a_name,ta.party_b_name,ta.belong_accounting_item,
+                ta.create_by,ta.create_time,ta.total_amount_inc_tax,tbi.contact,tbi.phone,ta.agreement_state
+        from tb_agreement ta
+        left join tb_tender_notice ttn on ttn.scheme_id = ta.scheme_id and ttn.notice_status = 8
+        left join tb_bidding_info tbi on  tbi.notice_id = ttn.id and ta.vendor_id = tbi.vendor_id
+        <where>
+            ta.vendor_id = #{queryVO.vendorId,jdbcType=BIGINT} and ta.agreement_state in ('6','7','8','9','10')
+            <if test="queryVO.agreementCode != null and queryVO.agreementCode != ''">
+                and ta.agreement_code like concat('%',#{queryVO.agreementCode,jdbcType=VARCHAR},'%')
+            </if>
+            <if test="queryVO.agreementName != null and queryVO.agreementName != ''">
+                and ta.agreement_name like concat('%',#{queryVO.agreementName,jdbcType=VARCHAR},'%')
+            </if>
+            <if test="queryVO.belongAccountingItem != null and queryVO.belongAccountingItem != ''">
+                and ta.belong_accounting_item like concat('%',#{queryVO.belongAccountingItem,jdbcType=VARCHAR},'%')
+            </if>
+        </where>
+        order by ta.create_time desc
+    </select>
+
+    <resultMap type="com.zhaocai.business.agreement.vo.res.AgreementJkpthtListVO" id="AgreementJkpthtListResult">
+        <result property="agreementId" column="id"/>
+        <result property="agreementName" column="agreement_name"/>
+        <result property="expenditureBusinessType" column="expenditure_business_type"/>
+        <result property="vendorId" column="vendor_id"/>
+        <result property="vendorName" column="party_b_name"/>
+        <result property="winBiddingDate" column="notifi_time"/>
+    </resultMap>
+
+    <select id="selectAgreementJkpthtList" resultMap="AgreementJkpthtListResult">
+        select ta.id,ta.agreement_name,ta.expenditure_business_type,ta.vendor_id,ta.party_b_name,tbr.notifi_time
+        from tb_agreement ta
+        left join tb_bidding_result tbr on tbr.scheme_id = ta.scheme_id and tbr.vendor_id = ta.vendor_id and tbr.bid_result = 1 and tbr.del_flag = 2
+        <where>
+            ta.agreement_state = 3
+            <if test="queryVO.agreementName != null and queryVO.agreementName != ''">
+                and ta.agreement_name like concat('%',#{queryVO.agreementName,jdbcType=VARCHAR},'%')
+            </if>
+            <if test="queryVO.belongAccountingItemCode != null and queryVO.belongAccountingItemCode != ''">
+                and ta.belong_accounting_item_code like concat('%',#{queryVO.belongAccountingItemCode,jdbcType=VARCHAR},'%')
+            </if>
+        </where>
+        order by ta.create_time desc
+    </select>
+</mapper>

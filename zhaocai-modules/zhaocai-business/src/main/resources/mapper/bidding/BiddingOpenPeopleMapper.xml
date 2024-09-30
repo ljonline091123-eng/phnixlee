@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhaocai.business.bidding.mapper.BiddingOpenPeopleMapper">
+    
+    <resultMap type="com.zhaocai.business.bidding.domain.BiddingOpenPeople" id="BiddingOpenPeopleResult">
+        <result property="id"    column="id"    />
+        <result property="noticeId"    column="notice_id"    />
+        <result property="schemeId"    column="scheme_id"    />
+        <result property="userId"    column="user_id"    />
+        <result property="userName"    column="user_name"    />
+        <result property="isOpen"    column="is_open"    />
+        <result property="createBy"    column="create_by"    />
+        <result property="createId"    column="create_id"    />
+        <result property="createTime"    column="create_time"    />
+        <result property="updateBy"    column="update_by"    />
+        <result property="updateId"    column="update_id"    />
+        <result property="updateTime"    column="update_time"    />
+        <result property="delFlag"    column="del_flag"    />
+        <result property="redirectUrl"    column="redirect_url"    />
+    </resultMap>
+
+    <sql id="selectBiddingOpenPeopleVo">
+        select id, notice_id, scheme_id, user_id, user_name, is_open, create_by, create_id, create_time, update_by, update_id, update_time, del_flag, redirect_url
+        from tb_bidding_open_people
+    </sql>
+
+</mapper>

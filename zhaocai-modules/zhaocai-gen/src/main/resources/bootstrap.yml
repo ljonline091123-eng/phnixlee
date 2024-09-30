@@ -1,0 +1,29 @@
+# Tomcat
+server:
+  port: 9202
+
+# Spring
+spring:
+  application:
+    # 应用名称
+    name: zhaocai-gen
+  profiles:
+    # 环境配置
+    active: dev
+  cloud:
+    nacos:
+      username: nacos
+      password: nacos
+      discovery:
+        # 服务注册地址
+        server-addr: 10.100.100.218:8848
+        metadata:
+          version: zs
+      config:
+        # 配置中心地址
+        server-addr: 10.100.100.218:8848
+        # 配置文件格式
+        file-extension: yml
+        # 共享配置
+        shared-configs:
+          - application-${spring.profiles.active}.${spring.cloud.nacos.config.file-extension}

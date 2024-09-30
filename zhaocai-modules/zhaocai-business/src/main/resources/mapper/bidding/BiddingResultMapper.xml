@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhaocai.business.bidding.mapper.BiddingResultMapper">
+
+    <resultMap type="com.zhaocai.business.bidding.domain.BiddingResult" id="BiddingResultResult">
+        <result property="id"    column="id"    />
+        <result property="schemeId"    column="scheme_id"    />
+        <result property="noticeId"    column="notice_id"    />
+        <result property="vendorId"    column="vendor_id"    />
+        <result property="vendorName"    column="vendor_name"    />
+        <result property="biddingInfoId"    column="bidding_info_id"    />
+        <result property="candidate"    column="candidate"    />
+        <result property="totalScore"    column="total_score"    />
+        <result property="rank"    column="rank"    />
+        <result property="publicityStartTime"    column="publicity_start_time"    />
+        <result property="publicityEndTime"    column="publicity_end_time"    />
+        <result property="bidResult"    column="bid_result"    />
+        <result property="sendNotified"    column="send_notified"    />
+        <result property="notifiContent"    column="notifi_content"    />
+        <result property="notifiTime"    column="notifi_time"    />
+        <result property="contact"    column="contact"    />
+        <result property="phone"    column="phone"    />
+        <result property="createBy"    column="create_by"    />
+        <result property="createId"    column="create_id"    />
+        <result property="createTime"    column="create_time"    />
+        <result property="updateBy"    column="update_by"    />
+        <result property="updateId"    column="update_id"    />
+        <result property="updateTime"    column="update_time"    />
+        <result property="delFlag"    column="del_flag"    />
+        <result property="sureBid"    column="sure_bid"    />
+    </resultMap>
+
+    <select id="selectBiddingVendorBySchemeId" resultMap="BiddingResultResult">
+        select *
+        from tb_bidding_result tbr
+        inner join tb_tender_notice tn on tn.id = tbr.notice_id and tn.notice_status = 8
+        where tbr.scheme_id = #{schemeId,jdbcType=BIGINT}
+    </select>
+</mapper>

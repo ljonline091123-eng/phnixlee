@@ -1,0 +1,177 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhaocai.business.procurement.mapper.ProcurementSchemeMapper">
+    <resultMap type="com.zhaocai.business.procurement.domain.ProcurementScheme" id="ProcurementSchemeResult">
+        <result property="id" column="id"/>
+        <result property="projectCode" column="project_code"/>
+        <result property="procurementSchemeCode" column="procurement_scheme_code"/>
+        <result property="procurementSchemeName" column="procurement_scheme_name"/>
+        <result property="procurementOfficer" column="procurement_officer"/>
+        <result property="procurementOfficerName" column="procurement_officer_name"/>
+        <result property="procurementPlanType" column="procurement_plan_type"/>
+        <result property="procurementType" column="procurement_type"/>
+        <result property="ceilingPrice" column="ceiling_price"/>
+        <result property="isReceiveDeposit" column="is_receive_deposit"/>
+        <result property="securityDeposit" column="security_deposit"/>
+        <result property="financeConfirmId" column="finance_confirm_id"/>
+        <result property="financeConfirmName" column="finance_confirm_name"/>
+        <result property="countingType" column="counting_type"/>
+        <result property="paymentType" column="payment_type"/>
+        <result property="priceType" column="price_type"/>
+        <result property="subjectMatterCode" column="subject_matter_code"/>
+        <result property="subjectMatterName" column="subject_matter_name"/>
+        <result property="subjectMatterType" column="subject_matter_type"/>
+        <result property="state" column="state"/>
+        <result property="wfProcessId" column="wf_process_id"/>
+        <result property="createBy" column="create_by"/>
+        <result property="createId" column="create_id"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateBy" column="update_by"/>
+        <result property="updateId" column="update_id"/>
+        <result property="updateTime" column="update_time"/>
+        <result property="delFlag" column="del_flag"/>
+    </resultMap>
+
+    <resultMap type="com.zhaocai.business.procurement.vo.res.ProcurementSchemeListVO" id="ProcurementSchemeListResult">
+        <result property="id" column="id"/>
+        <result property="procurementSchemeCode" column="procurement_scheme_code"/>
+        <result property="procurementSchemeName" column="procurement_scheme_name"/>
+        <result property="procurementOfficerName" column="procurement_officer_name"/>
+        <result property="procurementPlanType" column="procurement_plan_type"/>
+        <result property="procurementType" column="procurement_type"/>
+        <result property="state" column="state"/>
+        <result property="createTime" column="create_time"/>
+    </resultMap>
+
+
+    <select id="selectPageList" resultMap="ProcurementSchemeListResult">
+        select tps.*
+        from tb_procurement_scheme tps
+        <where>
+            tps.project_code = #{queryVO.projectCode,jdbcType=VARCHAR}
+            <if test="queryVO.procurementSchemeCode != null and queryVO.procurementSchemeCode != ''">
+                and tps.procurement_scheme_code like concat('%',#{queryVO.procurementSchemeCode,jdbcType=VARCHAR},'%')
+            </if>
+            <if test="queryVO.procurementSchemeName != null and queryVO.procurementSchemeName != ''">
+                and  tps.procurement_scheme_name like concat('%',#{queryVO.procurementSchemeName,jdbcType=VARCHAR},'%')
+            </if>
+            <if test="queryVO.procurementPlanType != null">
+                and  tps.procurement_plan_type = #{queryVO.procurementPlanType,jdbcType=INTEGER}
+            </if>
+            <if test="queryVO.isLeader == 0">
+                and tps.create_id = #{queryVO.procurementOfficer,jdbcType=BIGINT}
+            </if>
+            <if test="queryVO.isLeader == 1 and queryVO.procurementOfficer != null">
+                and tps.procurement_officer = #{queryVO.procurementOfficer,jdbcType=BIGINT}
+            </if>
+            <if test="queryVO.state != null">
+                and tps.state = #{queryVO.state,jdbcType=INTEGER}
+            </if>
+        </where>
+        order by tps.create_time desc
+    </select>
+
+    <select id="selectBiddingSchemePageList" resultType="com.zhaocai.business.procurement.vo.res.BiddingSchemeListVO">
+        select tps.*, tn.notice_status, tn.id noticeId
+        from tb_procurement_scheme tps
+        left join tb_tender_notice tn on tn.scheme_id = tps.id and tn.del_flag = 0
+        <where>
+            tps.del_flag = 0
+            <if test="queryVO.procurementSchemeCode != null and queryVO.procurementSchemeCode != ''">
+                and  tps.procurement_scheme_code like concat('%',#{queryVO.procurementSchemeCode,jdbcType=VARCHAR},'%')
+            </if>
+            <if test="queryVO.procurementSchemeName != null and queryVO.procurementSchemeName != ''">
+                and  tps.procurement_scheme_name like concat('%',#{queryVO.procurementSchemeName,jdbcType=VARCHAR},'%')
+            </if>
+            <if test="queryVO.procurementPlanType != null">
+                and  tps.procurement_plan_type = #{queryVO.procurementPlanType,jdbcType=INTEGER}
+            </if>
+            <if test="queryVO.procurementType != null">
+                and  tps.procurement_type = #{queryVO.procurementType,jdbcType=INTEGER}
+            </if>
+            <if test="queryVO.isLeader == 0 and queryVO.procurementOfficer != null">
+                and (
+                tps.create_id = #{queryVO.procurementOfficer,jdbcType=BIGINT}
+                <if test="queryVO.financeConfirmId != null and queryVO.financeConfirmId != ''">
+                    or tps.finance_confirm_id = #{queryVO.financeConfirmId, jdbcType = VARCHAR}
+                </if>
+                )
+            </if>
+            <if test="queryVO.isLeader == 1 and queryVO.procurementOfficer != null">
+                and (
+                tps.procurement_officer = #{queryVO.procurementOfficer,jdbcType=BIGINT}
+                <if test="queryVO.financeConfirmId != null and queryVO.financeConfirmId != ''">
+                    or tps.finance_confirm_id = #{queryVO.financeConfirmId, jdbcType = VARCHAR}
+                </if>
+                )
+            </if>
+            <if test="queryVO.procurementOfficerName != null">
+                and tps.procurement_officer_name like concat('%',#{queryVO.procurementOfficerName,jdbcType=VARCHAR},'%')
+            </if>
+            <if test="queryVO.state != null">
+                and  tps.state = #{queryVO.state,jdbcType=INTEGER}
+            </if>
+            <if test="queryVO.noticeStatus != null">
+                and  tn.notice_status = #{queryVO.noticeStatus,jdbcType=INTEGER}
+            </if>
+            <if test="queryVO.projectCode != null and queryVO.projectCode != ''">
+                and tps.project_code = #{queryVO.projectCode,jdbcType=VARCHAR}
+<!--                and tps.id in (select tpspr.procurement_scheme_id from tb_procurement_plan tpp-->
+<!--                                    left join tb_procurement_scheme_plan_relate tpspr on tpp.id = tpspr.procurement_plan_id-->
+<!--                                    left join tb_contract_planning tcp on tcp.plan_id = tpspr.procurement_plan_id-->
+<!--                                    where tcp.project_code = #{queryVO.projectCode,jdbcType=INTEGER})-->
+            </if>
+            <if test="queryVO.projectCodeList != null and queryVO.projectCodeList.size() > 0">
+                and (tps.project_code in
+                <foreach item="projectCode" collection="queryVO.projectCodeList" open="(" close=")" separator=",">
+                    #{projectCode}
+                </foreach>
+                )
+            </if>
+        </where>
+        order by tps.create_time desc
+    </select>
+
+    <select id="selectProcurementPlanListByScheme" resultType="com.zhaocai.business.procurement.vo.res.ProcurementPlanListVO">
+        select tpp.id as id,tpp.procurement_plan_name as procurementPlanName,tpp.procurement_plan_code as procurementPlanCode
+        from tb_procurement_plan tpp
+        left join tb_procurement_scheme_plan_relate tpr on tpr.procurement_plan_id = tpp.id
+        where tpr.procurement_scheme_id = #{schemeId,jdbcType=BIGINT}
+        order by tpp.create_time desc
+    </select>
+
+    <select id="selectSignAgreementSchemeList" resultType="com.zhaocai.business.agreement.vo.res.AgreementSchemeListVO">
+        select tps.id as schemeId,tps.procurement_scheme_code as procurementSchemeCode,tps.procurement_scheme_name as procurementSchemeName,
+                tps.procurement_plan_type as procurementPlanType
+        from tb_procurement_scheme tps
+        inner join tb_tender_notice tn on tps.id = tn.scheme_id and tn.notice_status = 8
+        <where>
+            tps.id in (
+                select tpr.procurement_scheme_id
+                from tb_procurement_scheme_plan_relate tpr
+                inner join tb_contract_planning_split tps on tps.id = tpr.contract_split_id
+                where tps.is_use_up = 1
+            )
+            and tps.project_code = #{queryVO.projectCode,jdbcType=VARCHAR}
+            <if test="queryVO.procurementSchemeName != null and queryVO.procurementSchemeName != ''">
+                and tps.procurement_scheme_name like concat('%',#{queryVO.procurementSchemeName,jdbcType=VARCHAR},'%')
+            </if>
+            <if test="queryVO.procurementSchemeCode != null and queryVO.procurementSchemeCode != ''">
+                and tps.procurement_scheme_code like concat('%',#{queryVO.procurementSchemeCode,jdbcType=VARCHAR},'%')
+            </if>
+        </where>
+        order by tps.create_time desc
+    </select>
+
+    <select id="selectDataByScheme" resultType="com.zhaocai.business.procurement.vo.res.MinProjectDataVO">
+        select distinct tps.id, tcp.project_name minAccountFullName, tcp.project_code
+        from tb_procurement_scheme tps
+        left join tb_procurement_scheme_plan_relate tpspr on tpspr.procurement_scheme_id = tps.id
+        left join tb_contract_planning tcp on tcp.plan_id = tpspr.procurement_plan_id
+<!--        left join tb_min_project tmp on tmp.min_account_code = tcp.project_code-->
+        where tps.id = #{schemeId, jdbcType=BIGINT}
+        order by tpspr.create_time desc
+    </select>
+</mapper>

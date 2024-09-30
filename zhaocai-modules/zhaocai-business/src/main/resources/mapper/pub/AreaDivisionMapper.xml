@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhaocai.business.pub.mapper.AreaDivisionMapper">
+    <resultMap type="com.zhaocai.business.pub.domain.AreaDivision" id="AreaDivisionResult">
+        <result property="id" column="id"/>
+        <result property="areaName" column="area_name"/>
+        <result property="areaCode" column="area_code"/>
+        <result property="parentCode" column="parent_code"/>
+        <result property="parentName" column="parent_name"/>
+        <result property="areaLevel" column="area_level"/>
+        <result property="levelAlias" column="level_alias"/>
+        <result property="orderNum" column="order_num"/>
+        <result property="origin" column="origin"/>
+        <result property="delFlag" column="del_flag"/>
+        <result property="createBy" column="create_by"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateBy" column="update_by"/>
+        <result property="updateTime" column="update_time"/>
+        <result property="delFlag" column="del_flag"/>
+        <result property="remark" column="remark"/>
+    </resultMap>
+
+    <delete id="deleteSyncAreaDivision">
+        delete
+        from tb_area_division
+        where origin = 'syncthird';
+    </delete>
+
+    <select id="selectAreaDivisionListByParentCode" resultType="com.zhaocai.business.pub.vo.res.AreaDivisionVO">
+        select tad.area_code as divisionCode, tad.area_name as divisionName
+        from tb_area_division tad
+        <where>
+            tad.del_flag = 0
+            <choose>
+                <when test="parentCode != null and parentCode != ''">
+                    and tad.parent_code = #{parentCode,jdbcType=VARCHAR}
+                </when>
+                <otherwise>
+                    and (tad.parent_code = '' or tad.parent_code is null)
+                </otherwise>
+            </choose>
+        </where>
+        order by tad.area_code
+    </select>
+</mapper>

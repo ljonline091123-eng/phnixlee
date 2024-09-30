@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://maven.apache.org/POM/4.0.0"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <parent>
+        <groupId>com.zhaocai</groupId>
+        <artifactId>zhaocai</artifactId>
+        <version>3.6.4</version>
+    </parent>
+    <modelVersion>4.0.0</modelVersion>
+
+    <modules>
+        <module>zhaocai-common-log</module>
+        <module>zhaocai-common-core</module>
+        <module>zhaocai-common-redis</module>
+        <module>zhaocai-common-seata</module>
+        <module>zhaocai-common-swagger</module>
+        <module>zhaocai-common-security</module>
+        <module>zhaocai-common-sensitive</module>
+        <module>zhaocai-common-datascope</module>
+        <module>zhaocai-common-datasource</module>
+        <module>zhaocai-common-signature</module>
+        <module>zhaocai-common-gray</module>
+
+    </modules>
+
+    <artifactId>zhaocai-common</artifactId>
+    <packaging>pom</packaging>
+
+    <description>
+        zhaocai-common通用模块
+    </description>
+
+</project>

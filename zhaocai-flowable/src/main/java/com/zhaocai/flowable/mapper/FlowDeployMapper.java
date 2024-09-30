@@ -1,0 +1,50 @@
+package com.zhaocai.flowable.mapper;
+
+import com.zhaocai.flowable.domain.dto.FlowProcDefDto;
+import com.zhaocai.flowable.domain.SysProcessTitle;
+import org.apache.ibatis.annotations.Param;
+
+import java.util.List;
+
+/**
+ * 流程定义查询
+ *
+ * @author Acechegui
+ **/
+public interface FlowDeployMapper {
+
+    /**
+     * 流程定义列表
+     */
+    List<FlowProcDefDto> selectDeployList(String name);
+
+
+    /**
+     * 流程定义信息
+     */
+    FlowProcDefDto selectActReProcDef(@Param("processDefinitionId") String processDefinitionId);
+
+    /**
+     * 各个流程定义最新版本列表
+     * @param name 流程名称
+     */
+    List<FlowProcDefDto> selectDeployListLast(@Param("name") String name);
+
+    /**
+     * 流程标题信息
+     * @param procInsId 流程ID
+     */
+    SysProcessTitle selectSysProcessTitle(@Param("procInsId") String procInsId);
+
+    /**
+     * 增加流程标题
+     * @param param 参数
+     */
+    int insertSysProcessTitle(SysProcessTitle param);
+
+    /**
+     * 根据流程ID删除相关流程标题
+     * @param procInsId 流程ID
+     */
+    int deleteSysProcessTitleByProcInsId(@Param("procInsId") String procInsId);
+}

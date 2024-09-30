@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhaocai.business.agreement.mapper.AgreementPaymentListMapper">
+    <resultMap type="com.zhaocai.business.agreement.domain.AgreementPaymentList" id="AgreementPaymentListResult">
+        <result property="id" column="id"/>
+        <result property="agreementId" column="agreement_id"/>
+        <result property="paymentName" column="payment_name"/>
+        <result property="paymentBasis" column="payment_basis"/>
+        <result property="paymentRatio" column="payment_ratio"/>
+        <result property="paymentAmount" column="payment_amount"/>
+        <result property="paymentRemark" column="payment_remark"/>
+        <result property="currentPaymentPoint" column="current_payment_point"/>
+        <result property="createBy" column="create_by"/>
+        <result property="createId" column="create_id"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateBy" column="update_by"/>
+        <result property="updateId" column="update_id"/>
+        <result property="updateTime" column="update_time"/>
+        <result property="delFlag" column="del_flag"/>
+    </resultMap>
+
+    <delete id="deleteByAgreementId">
+        delete from tb_agreement_payment_list where agreement_id = #{agreementId,jdbcType=BIGINT}
+    </delete>
+</mapper>

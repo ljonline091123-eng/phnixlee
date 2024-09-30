@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhaocai.business.bidding.mapper.WinningBidRankingMapper">
+    
+    <resultMap type="com.zhaocai.business.bidding.domain.WinningBidRanking" id="WinningBidRankingResult">
+        <result property="id"    column="id"    />
+        <result property="procurementType"    column="procurement_type"    />
+        <result property="vendorId"    column="vendor_id"    />
+        <result property="vendorName"    column="vendor_name"    />
+        <result property="winningBidCount"    column="winning_bid_count"    />
+        <result property="totalAgreementAmount"    column="total_agreement_amount"    />
+        <result property="totalAgreementCount"    column="total_agreement_count"    />
+        <result property="totalSettledAmount"    column="total_settled_amount"    />
+        <result property="totalPaidAmount"    column="total_paid_amount"    />
+        <result property="totalUnpaidAmount"    column="total_unpaid_amount"    />
+        <result property="createBy"    column="create_by"    />
+        <result property="createId"    column="create_id"    />
+        <result property="createTime"    column="create_time"    />
+        <result property="updateBy"    column="update_by"    />
+        <result property="updateId"    column="update_id"    />
+        <result property="updateTime"    column="update_time"    />
+        <result property="delFlag"    column="del_flag"    />
+    </resultMap>
+
+    <sql id="selectWinningBidRankingVo">
+        select id, procurement_type, vendor_id, vendor_name, winning_bid_count, total_agreement_amount, total_agreement_count, total_settled_amount, total_paid_amount, total_unpaid_amount, create_by, create_id, create_time, update_by, update_id, update_time, del_flag from tb_winning_bid_ranking
+    </sql>
+
+    <select id="selectWinningBidRankingList" parameterType="com.zhaocai.business.bidding.domain.WinningBidRanking" resultMap="WinningBidRankingResult">
+        <include refid="selectWinningBidRankingVo"/>
+        <where>  
+            <if test="procurementType != null  and procurementType != ''"> and procurement_type = #{procurementType}</if>
+            <if test="vendorId != null "> and vendor_id = #{vendorId}</if>
+            <if test="vendorName != null  and vendorName != ''"> and vendor_name like concat('%', #{vendorName}, '%')</if>
+            <if test="winningBidCount != null "> and winning_bid_count = #{winningBidCount}</if>
+            <if test="totalAgreementAmount != null "> and total_agreement_amount = #{totalAgreementAmount}</if>
+            <if test="totalAgreementCount != null "> and total_agreement_count = #{totalAgreementCount}</if>
+            <if test="totalSettledAmount != null "> and total_settled_amount = #{totalSettledAmount}</if>
+            <if test="totalPaidAmount != null "> and total_paid_amount = #{totalPaidAmount}</if>
+            <if test="totalUnpaidAmount != null "> and total_unpaid_amount = #{totalUnpaidAmount}</if>
+            <if test="createId != null "> and create_id = #{createId}</if>
+            <if test="updateId != null "> and update_id = #{updateId}</if>
+            <if test="delFlag != null "> and del_flag = #{delFlag}</if>
+        </where>
+    </select>
+    
+    <select id="selectWinningBidRankingById" parameterType="Long" resultMap="WinningBidRankingResult">
+        <include refid="selectWinningBidRankingVo"/>
+        where id = #{id}
+    </select>
+        
+    <insert id="insertWinningBidRanking" parameterType="com.zhaocai.business.bidding.domain.WinningBidRanking">
+        insert into tb_winning_bid_ranking
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="id != null">id,</if>
+            <if test="procurementType != null">procurement_type,</if>
+            <if test="vendorId != null">vendor_id,</if>
+            <if test="vendorName != null">vendor_name,</if>
+            <if test="winningBidCount != null">winning_bid_count,</if>
+            <if test="totalAgreementAmount != null">total_agreement_amount,</if>
+            <if test="totalAgreementCount != null">total_agreement_count,</if>
+            <if test="totalSettledAmount != null">total_settled_amount,</if>
+            <if test="totalPaidAmount != null">total_paid_amount,</if>
+            <if test="totalUnpaidAmount != null">total_unpaid_amount,</if>
+            <if test="createBy != null">create_by,</if>
+            <if test="createId != null">create_id,</if>
+            <if test="createTime != null">create_time,</if>
+            <if test="updateBy != null">update_by,</if>
+            <if test="updateId != null">update_id,</if>
+            <if test="updateTime != null">update_time,</if>
+            <if test="delFlag != null">del_flag,</if>
+         </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="id != null">#{id},</if>
+            <if test="procurementType != null">#{procurementType},</if>
+            <if test="vendorId != null">#{vendorId},</if>
+            <if test="vendorName != null">#{vendorName},</if>
+            <if test="winningBidCount != null">#{winningBidCount},</if>
+            <if test="totalAgreementAmount != null">#{totalAgreementAmount},</if>
+            <if test="totalAgreementCount != null">#{totalAgreementCount},</if>
+            <if test="totalSettledAmount != null">#{totalSettledAmount},</if>
+            <if test="totalPaidAmount != null">#{totalPaidAmount},</if>
+            <if test="totalUnpaidAmount != null">#{totalUnpaidAmount},</if>
+            <if test="createBy != null">#{createBy},</if>
+            <if test="createId != null">#{createId},</if>
+            <if test="createTime != null">#{createTime},</if>
+            <if test="updateBy != null">#{updateBy},</if>
+            <if test="updateId != null">#{updateId},</if>
+            <if test="updateTime != null">#{updateTime},</if>
+            <if test="delFlag != null">#{delFlag},</if>
+         </trim>
+    </insert>
+
+    <update id="updateWinningBidRanking" parameterType="com.zhaocai.business.bidding.domain.WinningBidRanking">
+        update tb_winning_bid_ranking
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="procurementType != null">procurement_type = #{procurementType},</if>
+            <if test="vendorId != null">vendor_id = #{vendorId},</if>
+            <if test="vendorName != null">vendor_name = #{vendorName},</if>
+            <if test="winningBidCount != null">winning_bid_count = #{winningBidCount},</if>
+            <if test="totalAgreementAmount != null">total_agreement_amount = #{totalAgreementAmount},</if>
+            <if test="totalAgreementCount != null">total_agreement_count = #{totalAgreementCount},</if>
+            <if test="totalSettledAmount != null">total_settled_amount = #{totalSettledAmount},</if>
+            <if test="totalPaidAmount != null">total_paid_amount = #{totalPaidAmount},</if>
+            <if test="totalUnpaidAmount != null">total_unpaid_amount = #{totalUnpaidAmount},</if>
+            <if test="createBy != null">create_by = #{createBy},</if>
+            <if test="createId != null">create_id = #{createId},</if>
+            <if test="createTime != null">create_time = #{createTime},</if>
+            <if test="updateBy != null">update_by = #{updateBy},</if>
+            <if test="updateId != null">update_id = #{updateId},</if>
+            <if test="updateTime != null">update_time = #{updateTime},</if>
+            <if test="delFlag != null">del_flag = #{delFlag},</if>
+        </trim>
+        where id = #{id}
+    </update>
+
+    <delete id="deleteWinningBidRankingById" parameterType="Long">
+        delete from tb_winning_bid_ranking where id = #{id}
+    </delete>
+
+    <delete id="deleteWinningBidRankingByIds" parameterType="String">
+        delete from tb_winning_bid_ranking where id in 
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+</mapper>

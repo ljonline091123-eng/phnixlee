@@ -1,0 +1,134 @@
+package com.zhaocai.business.bidding.vo.res;
+
+import com.fasterxml.jackson.annotation.JsonFormat;
+import com.zhaocai.business.common.annotations.MoneyFormat;
+import com.zhaocai.business.common.base.AdviceObject;
+import com.zhaocai.business.pub.vo.res.AttachmentVO;
+import io.swagger.annotations.ApiModel;
+import io.swagger.annotations.ApiModelProperty;
+import lombok.Data;
+import lombok.EqualsAndHashCode;
+
+import javax.validation.constraints.NotNull;
+import java.io.Serializable;
+import java.math.BigDecimal;
+import java.util.Date;
+import java.util.List;
+
+/**
+ * @author ssy
+ * @date 2024/6/4 11:51
+ */
+@Data
+@EqualsAndHashCode(callSuper = false)
+@ApiModel(value = "BiddingQuotationListVO", description = "投标单信息报价列表VO")
+public class BiddingQuotationListVO extends AdviceObject implements Comparable<BiddingQuotationListVO>, Serializable {
+    private static final long serialVersionUID = 7377944452027574414L;
+
+    @ApiModelProperty(value =  "采购方案id")
+    private Long schemeId;
+
+    @ApiModelProperty(value =  "招标公告id")
+    private Long noticeId;
+
+    @ApiModelProperty(value =  "主键id")
+    private Long id;
+
+    @ApiModelProperty(value =  "供应商名称")
+    private String vendorName;
+
+    @ApiModelProperty(value =  "联系人")
+    private String contact;
+
+    @ApiModelProperty(value =  "联系电话")
+    private String phone;
+
+    @ApiModelProperty(value =  "含税总价")
+    private BigDecimal taxPrice;
+
+    @ApiModelProperty(value =  "不含税总价")
+    private BigDecimal notTaxPrice;
+
+    @MoneyFormat(filedName = "taxPrice")
+    @ApiModelProperty(value =  "含税总价(元)（千分位）")
+    private String taxPricePattern;
+
+    @MoneyFormat(filedName = "notTaxPrice")
+    @ApiModelProperty(value =  "不含税总价(元)（千分位）")
+    private String notTaxPricePattern;
+
+    @ApiModelProperty(value =  "报价排名")
+    private Integer rank;
+
+    @ApiModelProperty(value = "中标候选人")
+    private String candidate;
+
+    @ApiModelProperty(value = "确定中标（1：确定中标人 其它：不确定中标人）")
+    private Integer sureBid;
+
+    @ApiModelProperty(value =  "二次报价设置（默认0关 1开）")
+    private Integer twiceQuot;
+
+    @JsonFormat(pattern = "yyyy-MM-dd")
+    @ApiModelProperty(value =  "二次报价截止时间")
+    private Date twiceTime;
+
+    @ApiModelProperty(value =  "供应商id")
+    private Long vendorId;
+
+    @ApiModelProperty(value =  "父主键id")
+    private Long parentId;
+
+    @ApiModelProperty(value =  "投标单信息报价数据VO")
+    private List<BiddingQuotationDataVO> quotationDataVOList;
+
+    @ApiModelProperty(value =  "投标单id")
+    private Long biddingInfoId;
+
+    @ApiModelProperty(value =  "投标标书附件")
+    private List<AttachmentVO> attachments;
+
+    @ApiModelProperty(value =  "综合得分")
+    private BigDecimal score;
+
+    @ApiModelProperty(value =  "商务评分分数")
+    private BigDecimal avgBusTotalScore;
+
+    @ApiModelProperty(value =  "技术评分分数")
+    private BigDecimal avgTechTotalScore;
+
+    /* 每开启一次二次报价，就将选中范围的供应商报价 复制一份并升级版本将twiceQuot状态打开。前端通过招标对象的版本和当前版本对比和二次报价开关对比进行开放是否 供应商可以报价 */
+    /** 二次报价版本号，对应招标对象的版本号，如果对应不上就是在第*次开启报价时未选中或者是供应商未调价 管理端控制发版号 */
+    @ApiModelProperty(value =  "二次报价版本号。从1开始")
+    private Integer twiceQuotVersion;
+
+    /** 供应商调价状态(当前二次报价版本) 未被选中进行二次报价的供应商状态为 0未调价 选中的供应商报价了 状态为 1已调价 选中的未进行报价的供应商状态为 2放弃调价  */
+    @ApiModelProperty(value =  "供应商调价状态")
+    private Integer priceChangeState;
+
+    @Override
+    public int compareTo(@NotNull BiddingQuotationListVO o) {
+        BigDecimal thisScore = this.getScore() == null ? BigDecimal.ZERO : this.getScore();
+        BigDecimal oScore = o.getScore() == null ? BigDecimal.ZERO : o.getScore();
+        if (thisScore.compareTo(oScore) > 0) {
+            return -1;
+        } else if (thisScore.compareTo(oScore) < 0) {
+            return 1;
+        } else {
+            List<BiddingQuotationDataVO> dataVoList1 = this.getQuotationDataVOList();
+            BigDecimal thisNotTaxPrice = dataVoList1.get(dataVoList1.size() - 1).getNotTaxPrice();
+
+            List<BiddingQuotationDataVO> dataVoList2 = o.getQuotationDataVOList();
+            BigDecimal oNotTaxPrice = dataVoList2.get(dataVoList2.size() - 1).getNotTaxPrice();
+
+            if (thisNotTaxPrice!=null && oNotTaxPrice!=null && thisNotTaxPrice.compareTo(oNotTaxPrice) > 0){
+                return 1;
+            } else if (thisNotTaxPrice!=null && oNotTaxPrice!=null && thisNotTaxPrice.compareTo(oNotTaxPrice) < 0){
+                return -1;
+            } else {
+                return 0;
+            }
+        }
+    }
+
+}

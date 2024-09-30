@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhaocai.business.report.mapper.ContractLedgerReportMapper">
+    <resultMap type="com.zhaocai.business.report.vo.ContractLedgerReportVo" id="ContractLedgerReportResult">
+        <result property="id" column="id"/>
+        <result property="contractId" column="contract_id"/>
+        <result property="contractCode" column="contract_code"/>
+        <result property="contractName" column="contract_name"/>
+        <result property="vendorId" column="vendor_id"/>
+        <result property="schemeId" column="scheme_id"/>
+        <result property="procurementTypeCode" column="procurement_type_code"/>
+        <result property="vendorName" column="vendor_name"/>
+        <result property="vendorMainContact" column="vendor_main_contact"/>
+        <result property="vendorMainContactTel" column="vendor_main_contact_tel"/>
+        <result property="costItemCode" column="cost_item_code"/>
+        <result property="costItemName" column="cost_item_name"/>
+        <result property="costItemBrand" column="cost_item_brand"/>
+        <result property="costItemSpecification" column="cost_item_specification"/>
+        <result property="costItemUnit" column="cost_item_unit"/>
+        <result property="costItemCount" column="cost_item_count"/>
+        <result property="costItemUnitPrice" column="cost_item_unit_price"/>
+        <result property="costItemAmount" column="cost_item_amount"/>
+    </resultMap>
+    <select id="getContractLedgerReportResult" parameterType="com.zhaocai.business.report.vo.ContractLedgerReportVo" resultMap="ContractLedgerReportResult">
+        select ta.id as contract_id, ta.agreement_code as contract_code, ta.agreement_name as contract_name,ta.vendor_id,ta.scheme_id,
+            tps.procurement_plan_type as procurement_type_code,
+            tv.enterprise_name as vendor_name,tv.contact_name as vendor_main_contact,tv.contact_phone as vendor_main_contact_tel,
+            taml.id as id,taml.materials_code as cost_item_code,taml.materials_name as cost_item_name,taml.brand as cost_item_brand,taml.specification as cost_item_specification,taml.unit_measurement as cost_item_unit,taml.count as cost_item_count,
+            tbi.tax_unit_price as cost_item_unit_price,
+            tbi.tax_unit_price * taml.count as cost_item_amount
+        from tb_agreement ta
+        left join tb_procurement_scheme tps
+        on ta.scheme_id = tps.id
+        left join (select v.id,v.enterprise_name,vc.contact_name,vc.contact_phone from tb_vendor v
+            left join tb_vendor_contact vc
+            on v.id = vc.vendor_id and vc.is_main_contact = 1) tv
+        on ta.vendor_id = tv.id
+        left join (select aml.id,aml.agreement_id,aml.materials_code,aml.materials_name,aml.brand,ml.specification,ml.unit_measurement,ml.count
+            from tb_agreement_materials_list aml
+            left join tb_materials_list ml
+            on aml.materials_code = ml.materials_code) taml
+        on ta.id = taml.agreement_id
+        left join (select bi.scheme_id,bi.vendor_id,blq.materials_code,blq.tax_unit_price from tb_bidding_info bi
+            left join tb_bidding_list_quotation blq
+            on bi.id = blq.bidding_info_id) tbi
+        on ta.vendor_id = tbi.vendor_id and ta.scheme_id =tbi.scheme_id and taml.materials_code = tbi.materials_code
+        <where>
+            ta.agreement_state = '3'
+            <if test="contractCode != null and contractCode != ''">
+                AND ta.agreement_code like concat('%',#{contractCode},'%')
+            </if>
+            <if test="startTime != null and startTime != '' and endTime != null and endTime != ''">
+                AND ta.agreement_sign_date >= #{startTime} and ta.agreement_sign_date &lt;= #{endTime}
+            </if>
+        </where>
+    </select>
+</mapper>

@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhaocai.business.report.mapper.TenderingRateReportMapper">
+    <resultMap type="com.zhaocai.business.report.vo.TenderingRateReportVo" id="TenderingRateReportResult">
+        <result property="projectId" column="project_id"/>
+        <result property="projectCode" column="project_code"/>
+        <result property="projectName" column="project_name"/>
+        <result property="procurementTypeCode" column="procurement_type_code"/>
+        <result property="procurementType" column="procurement_type"/>
+        <result property="count" column="count"/>
+    </resultMap>
+    <select id="getTenderingRateReportResult" parameterType="com.zhaocai.business.report.vo.TenderingRateReportVo" resultMap="TenderingRateReportResult">
+        select a.*,count(1) as count from
+        (select tpp.id as plan_id, tcp.project_code, tcp.project_name,
+        tps.procurement_plan_type as procurement_type_code, tps.procurement_type
+        from tb_procurement_plan tpp
+        LEFT JOIN tb_contract_planning tcp on tcp.plan_id = tpp.id
+        LEFT JOIN tb_procurement_scheme_plan_relate tpspr on tpp.id = tpspr.procurement_plan_id
+        LEFT JOIN tb_procurement_scheme tps on tpspr.procurement_scheme_id = tps.id
+        LEFT JOIN tb_tender_notice ttn on tps.id = ttn.scheme_id
+        LEFT JOIN (select * from tb_bidding_result where bid_result = '1') tbr on ttn.id = tbr.notice_id
+        <where>
+            ttn.notice_status = '8'
+            <if test="startTime != null and startTime != '' and endTime != null and endTime != ''">
+                AND tbr.notifi_time  <![CDATA[>=]]> #{startTime} AND tbr.notifi_time <![CDATA[<=]]> #{endTime}
+            </if>
+        </where>
+        group by tpp.id
+        )a
+        group by a.project_code, a.plan_id, a.procurement_type_code, a.procurement_type
+    </select>
+</mapper>

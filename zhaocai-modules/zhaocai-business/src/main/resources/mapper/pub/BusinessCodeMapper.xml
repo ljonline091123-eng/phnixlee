@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhaocai.business.pub.mapper.BusinessCodeMapper">
+    <resultMap type="com.zhaocai.business.pub.domain.BusinessCode" id="BusinessCodeResult">
+        <result property="businessCode" column="business_code"/>
+        <result property="businessName" column="business_name"/>
+        <result property="nowDateType" column="now_date_type"/>
+        <result property="nowDate" column="now_date"/>
+        <result property="prefix" column="prefix"/>
+        <result property="codeNumber" column="code_number"/>
+        <result property="codeNumberLength" column="code_number_length"/>
+        <result property="createBy" column="create_by"/>
+        <result property="createId" column="create_id"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateBy" column="update_by"/>
+        <result property="updateId" column="update_id"/>
+        <result property="updateTime" column="update_time"/>
+        <result property="delFlag" column="del_flag"/>
+    </resultMap>
+
+    <update id="updateCodeNumberIncr">
+        update tb_business_code
+        set code_number = #{number,jdbcType=BIGINT} ,now_date = #{nowDate,jdbcType=VARCHAR}
+        where id = #{id,jdbcType=BIGINT}
+    </update>
+</mapper>
