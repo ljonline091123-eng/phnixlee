@@ -1,5 +1,7 @@
 package com.zhaocai.business.bidding.vo.res;
 
+import com.baomidou.mybatisplus.annotation.FieldFill;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.zhaocai.business.common.annotations.MoneyFormat;
 import com.zhaocai.business.common.base.AdviceObject;
@@ -49,6 +51,10 @@ public class BiddingInfoListVO extends AdviceObject implements Serializable {
     @ApiModelProperty(value = "创建时间（投标时间）")
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss",timezone = "GMT+8")
     private Date createTime;
+
+    @ApiModelProperty(value = "更新时间")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss",timezone = "GMT+8")
+    private Date updateTime;
 
     @ApiModelProperty(value =  "操作人ip")
     private String ipAddress;

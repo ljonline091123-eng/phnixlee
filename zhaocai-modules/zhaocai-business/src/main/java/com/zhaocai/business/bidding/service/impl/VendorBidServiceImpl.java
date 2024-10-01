@@ -194,6 +194,7 @@ public class VendorBidServiceImpl implements IVendorBidService {
             //修改投标单
             biddingInfo = biddingInfoService.getById(bidVO.getBiddingInfoId());
             biddingInfo.setIpAddress(IpUtils.getIpAddr());
+            biddingInfo.setUpdateTime(new Date());
             biddingInfo.setPriceChangeState(NumberConstant.ONE);/* 已调价 */
             biddingInfo.setBiddingStatus(BiddingInfoStatusEnum.HAVE_BACK.getState());/* 已回标 */
             biddingInfoService.updateById(biddingInfo);

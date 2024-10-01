@@ -543,14 +543,16 @@ public class TenderNoticeServiceImpl extends ServiceImpl<TenderNoticeMapper,Tend
         List<AttachmentVO> attachmentList = attachmentService.listAttachment(AttachmentTypeEnum.BIDING_NOTICE_DOC, tenderNotice.getId());
         vo.setAttachmentList(attachmentList);
 
-        /* 招标对象 */
-        vo.setTenderNotice(tenderNotice);
-        vo.setNoticeStatusText(TenderNoticeStatusEnum.getValueByCode(vo.getTenderNotice().getNoticeStatus()));
-
         TenderNoticeChangeRecord changeRecord = getNoticeTimeChange(tenderNotice.getId());
         if (!ObjectUtils.isEmpty(changeRecord)){
             vo.setBidEndTime(DateUtils.strToDate(changeRecord.getUpdateAfter(), DateUtils.YYYY_MM_DD_HH_MM));
+            /* 更新 投标截止时间 */
+            tenderNotice.setApplyTime(DateUtils.strToDate(changeRecord.getUpdateAfter(), DateUtils.YYYY_MM_DD_HH_MM_SS));
         }
+
+        /* 招标对象 */
+        vo.setTenderNotice(tenderNotice);
+        vo.setNoticeStatusText(TenderNoticeStatusEnum.getValueByCode(vo.getTenderNotice().getNoticeStatus()));
         //供应商范围TenderNoticeRange
         List<TenderNoticeRange> rangeList = tenderNoticeRangeService.list(new LambdaQueryWrapper<TenderNoticeRange>()
                 .eq(TenderNoticeRange::getNoticeId, id));

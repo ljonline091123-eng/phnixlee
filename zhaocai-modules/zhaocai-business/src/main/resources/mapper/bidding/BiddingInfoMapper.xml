@@ -71,6 +71,7 @@
                bi.collect_deposit,
                bi.bidding_status,
                bi.create_time,
+               bi.update_time,
                bi.ip_address,
                bi.tax_price,
                bi.not_tax_price
