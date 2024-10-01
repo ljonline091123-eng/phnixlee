@@ -247,6 +247,7 @@ public class VendorBidServiceImpl implements IVendorBidService {
             //保存投标单信息
             biddingInfoService.save(biddingInfo);
                 //如果第一次提交，且选择了是否收取保证金 receive=1为收取，则推送相关财务确认人员信息
+            System.out.println("版本:"+tenderNotice.getTwiceQuotVersion());
             if(tenderNotice.getTwiceQuotVersion()!=null
                     &&tenderNotice.getTwiceQuotVersion() == 1){
                 //调第三方接口，生成开标人员的待办信息
@@ -340,10 +341,12 @@ public class VendorBidServiceImpl implements IVendorBidService {
     }
 
     private void dealOpenPeopleTodoTask(ProcurementScheme procurementScheme, TenderNotice tenderNotice,  Vendor vendor) {
+        System.out.println("开始:"+procurementScheme);
         PushThirdPartyTodoTaskRequestDTO parentRequestDTO = new PushThirdPartyTodoTaskRequestDTO();
         List<PushThirdPartyTodoTaskSonRequestDTO> messageList = new ArrayList<>();
         PushThirdPartyTodoTaskSonRequestDTO requestDTO = new PushThirdPartyTodoTaskSonRequestDTO();
         MinProjectVO project = minProjectService.getMinProjectByMinAccountCode(procurementScheme.getProjectCode());
+        System.out.println("项目:"+project);
        // List<SysDictData>  dataList =  dictDataService.listDictDataLabel("procurement_type",procurementScheme.getProcurementType().toString());
         String label = "";
         switch (procurementScheme.getProcurementType()){
@@ -357,11 +360,13 @@ public class VendorBidServiceImpl implements IVendorBidService {
                 label = "单一来源";
             default:
         }
+        System.out.println("label:"+label);
         requestDTO.setTitle("财务人员待办信息");
         String  xm =procurementScheme.getFinanceConfirmName()+ "你好!" + project.getMinAccountFullName()+"项目的"+
                 procurementScheme.getProcurementSchemeName()+"、编号为"+ procurementScheme.getProcurementSchemeCode()+"、招标方式为"+ label+"于"+formatDate(tenderNotice.getCreateTime())+
                 "发布了招标文件、供应商"+vendor.getEnterpriseName()+"已经响应提交了投标文件，且需要收取投标保证金、请及时确认是否收到保证金！";
         requestDTO.setContent(xm);
+        System.out.println("xm:"+xm);
         requestDTO.setArrivalTime(formatDate(new Date()));
         requestDTO.setCreateTime(formatDate(new Date()));
         String thridUserId = SecurityUtils.getThridUserId();
@@ -383,8 +388,11 @@ public class VendorBidServiceImpl implements IVendorBidService {
         requestDTO.setCompanyType(NumberConstant.TWO);
         messageList.add(requestDTO);
         parentRequestDTO.setMessageList(messageList);
+        System.out.println("messageList:"+messageList);
+        System.out.println("推送:");
         parentRequestDTO.setAuthorization(SecurityUtils.getMasterControlToken());
         thridPartyTodoTaskService.pushTodoTask(parentRequestDTO);
+        System.out.println("推送完成:");
 
     }
 

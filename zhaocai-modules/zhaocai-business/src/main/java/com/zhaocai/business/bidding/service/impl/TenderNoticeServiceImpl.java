@@ -333,6 +333,8 @@ public class TenderNoticeServiceImpl extends ServiceImpl<TenderNoticeMapper,Tend
 //                    phoneList);
         }
         //如果第一次发布version=1，且选择了是否收取保证金 receive=1为收取，则推送相关财务确认人员信息
+       System.out.println("是否保证金:"+procurementScheme.getIsReceiveDeposit());
+        System.out.println("版本:"+tenderNotice.getTwiceQuotVersion());
         if(procurementScheme.getIsReceiveDeposit()!=null
                 &&procurementScheme.getIsReceiveDeposit()==1
                 &&tenderNotice.getTwiceQuotVersion()!=null
@@ -350,10 +352,12 @@ public class TenderNoticeServiceImpl extends ServiceImpl<TenderNoticeMapper,Tend
     }
 
     private void dealOpenPeopleTodoTask(ProcurementScheme procurementScheme, TenderNotice tenderNotice) {
+       System.out.println("开始:"+procurementScheme);
         PushThirdPartyTodoTaskRequestDTO parentRequestDTO = new PushThirdPartyTodoTaskRequestDTO();
         List<PushThirdPartyTodoTaskSonRequestDTO> messageList = new ArrayList<>();
             PushThirdPartyTodoTaskSonRequestDTO requestDTO = new PushThirdPartyTodoTaskSonRequestDTO();
         MinProjectVO project = minProjectService.getMinProjectByMinAccountCode(procurementScheme.getProjectCode());
+        System.out.println("项目:"+project);
        /* List<SysDictData>  dataList =  dictDataService.listDictDataLabel("procurement_type",procurementScheme.getProcurementType().toString());*/
         String label = "";
      switch (procurementScheme.getProcurementType()){
@@ -367,11 +371,13 @@ public class TenderNoticeServiceImpl extends ServiceImpl<TenderNoticeMapper,Tend
              label = "单一来源";
          default:
      }
-
+        System.out.println("label:"+label);
             requestDTO.setTitle("财务人员待办信息");
         String  xm =procurementScheme.getFinanceConfirmName()+ "你好!" + project.getMinAccountFullName()+"项目的"+
                 procurementScheme.getProcurementSchemeName()+"、编号为"+ procurementScheme.getProcurementSchemeCode()+"、招标方式为"+ label+"于"+formatDate(tenderNotice.getCreateTime())+
                 "发布了招标文件、开启了招标工作，需要收取投标保证金。请您及时关注投标人是否按时缴纳保证金。";
+
+           System.out.println("xm:"+xm);
             requestDTO.setContent(xm);
             requestDTO.setArrivalTime(formatDate(new Date()));
             requestDTO.setCreateTime(formatDate(new Date()));
@@ -393,9 +399,12 @@ public class TenderNoticeServiceImpl extends ServiceImpl<TenderNoticeMapper,Tend
             //推送公司类型 2晟晟
             requestDTO.setCompanyType(NumberConstant.TWO);
             messageList.add(requestDTO);
+        System.out.println("messageList:"+messageList);
         parentRequestDTO.setMessageList(messageList);
         parentRequestDTO.setAuthorization(SecurityUtils.getMasterControlToken());
+        System.out.println("推送:");
         thridPartyTodoTaskService.pushTodoTask(parentRequestDTO);
+        System.out.println("推送完成:");
     }
 
     private String formatDate(Date date){
