@@ -24,9 +24,12 @@ import com.zhaocai.business.manager.http.dto.req.PushThirdPartyTodoTaskRequestDT
 import com.zhaocai.business.manager.http.dto.req.PushThirdPartyTodoTaskSonRequestDTO;
 import com.zhaocai.business.manager.http.service.PerformanceEvaluationService;
 import com.zhaocai.business.manager.http.service.ThridPartyTodoTaskService;
+import com.zhaocai.business.procurement.domain.MinProject;
 import com.zhaocai.business.procurement.domain.ProcurementScheme;
+import com.zhaocai.business.procurement.service.IMinProjectService;
 import com.zhaocai.business.procurement.service.IProcurementSchemeService;
 import com.zhaocai.business.procurement.vo.res.MinProjectDataVO;
+import com.zhaocai.business.procurement.vo.res.MinProjectVO;
 import com.zhaocai.business.pub.domain.Attachment;
 import com.zhaocai.business.pub.service.IAttachmentService;
 import com.zhaocai.business.pub.vo.req.AttachmentRequestVO;
@@ -46,8 +49,11 @@ import com.zhaocai.common.core.exception.CheckedException;
 import com.zhaocai.common.core.utils.DateUtils;
 import com.zhaocai.common.core.utils.bean.BeanCopierUtil;
 import com.zhaocai.common.security.utils.SecurityUtils;
+import com.zhaocai.system.api.domain.SysDictData;
 import com.zhaocai.system.api.domain.SysUser;
 import com.zhaocai.system.api.system.RemoteUserService;
+import com.zhaocai.system.service.ISysDictDataService;
+import com.zhaocai.system.service.ISysDictTypeService;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
@@ -106,6 +112,11 @@ public class TenderNoticeServiceImpl extends ServiceImpl<TenderNoticeMapper,Tend
     @Autowired
     private RemoteUserService remoteuserservice;
 
+
+    @Autowired
+    private ISysDictDataService dictDataService;
+    @Autowired
+    private IMinProjectService minProjectService;
     @Autowired
     private SmsSenderUtil smsSenderUtil = SpringUtil.getBean(SmsSenderUtil.class);
 
@@ -342,10 +353,17 @@ public class TenderNoticeServiceImpl extends ServiceImpl<TenderNoticeMapper,Tend
         PushThirdPartyTodoTaskRequestDTO parentRequestDTO = new PushThirdPartyTodoTaskRequestDTO();
         List<PushThirdPartyTodoTaskSonRequestDTO> messageList = new ArrayList<>();
             PushThirdPartyTodoTaskSonRequestDTO requestDTO = new PushThirdPartyTodoTaskSonRequestDTO();
+        MinProjectVO project = minProjectService.getMinProjectByMinAccountCode(procurementScheme.getProjectCode());
+        List<SysDictData>  dataList =  dictDataService.listDictDataLabel("procurement_type",procurementScheme.getProcurementType().toString());
+        String label = "";
+        if(dataList!=null&&dataList.size()>0){
+            label = dataList.get(0).getDictLabel();
+        }
             requestDTO.setTitle("财务人员待办信息");
-          //  String
-      //  String
-            requestDTO.setContent(String.format(ApproveFlowPromptTemplateEnum.BID_OPEN.getDesc(), procurementScheme.getProcurementSchemeName()));
+        String  xm =procurementScheme.getFinanceConfirmName()+ "你好!" + project.getMinAccountFullName()+"项目的"+
+                procurementScheme.getProcurementSchemeName()+"、编号为"+ procurementScheme.getProcurementSchemeCode()+"、招标方式为"+ label+"于"+formatDate(tenderNotice.getCreateTime())+
+                "发布了招标文件、开启了招标工作，需要收取投标保证金。请您及时关注投标人是否按时缴纳保证金。";
+            requestDTO.setContent(xm);
             requestDTO.setArrivalTime(formatDate(new Date()));
             requestDTO.setCreateTime(formatDate(new Date()));
             String thridUserId = SecurityUtils.getThridUserId();
@@ -363,7 +381,7 @@ public class TenderNoticeServiceImpl extends ServiceImpl<TenderNoticeMapper,Tend
 //            requestDTO.setUserObj(openPeople.toString());
             //推送消息类型 1工作通知
             requestDTO.setType(NumberConstant.ONE);
-            //推送公司类型 3晟晟
+            //推送公司类型 2晟晟
             requestDTO.setCompanyType(NumberConstant.TWO);
             messageList.add(requestDTO);
         parentRequestDTO.setMessageList(messageList);
