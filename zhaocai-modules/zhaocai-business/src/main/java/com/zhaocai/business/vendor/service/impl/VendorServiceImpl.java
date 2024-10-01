@@ -395,6 +395,7 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
         vendorIndexInfoVO.setApproveState(vendor.getState());
         vendorIndexInfoVO.setIsManager(vendorContact.getIsManager());
         vendorIndexInfoVO.setIsBlack(vendor.getIsBlack());
+        vendorIndexInfoVO.setContactPhone(vendorContact.getContactPhone());
 
         // 判断是否可用
         boolean isAvailable = true;

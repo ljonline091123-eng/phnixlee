@@ -12,7 +12,7 @@ import lombok.Getter;
 public enum ThirdPartyTodoFlowGroupEnum {
 
     /** 所属待办流程分组 */
-
+    XCW_BID("xcw_bid", "招标待办"),
     OPEN_BID("open_bid", "开标待办"),
     EXPERT_EVAL("expert_eval", "评标待办"),
     START_PROCUREMENT_PLAN("start_procurement_plan", "待发起采购计划待办"),

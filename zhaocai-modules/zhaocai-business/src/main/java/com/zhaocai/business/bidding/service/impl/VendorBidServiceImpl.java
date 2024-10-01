@@ -17,31 +17,48 @@ import com.zhaocai.business.common.enums.ProcurementPlanTypeEnum;
 import com.zhaocai.business.common.enums.VendorContactStateEnum;
 import com.zhaocai.business.common.exception.ParamValidateException;
 import com.zhaocai.business.common.utils.AmountCalUtil;
+import com.zhaocai.business.manager.http.common.config.ThirdPartyTodoFlowGroupEnum;
+import com.zhaocai.business.manager.http.common.config.ThirdPartyTodoFlowModuleEnum;
+import com.zhaocai.business.manager.http.dto.req.PushThirdPartyTodoTaskRequestDTO;
+import com.zhaocai.business.manager.http.dto.req.PushThirdPartyTodoTaskSonRequestDTO;
+import com.zhaocai.business.manager.http.service.ThridPartyTodoTaskService;
 import com.zhaocai.business.procurement.domain.ProcurementScheme;
+import com.zhaocai.business.procurement.service.IMinProjectService;
 import com.zhaocai.business.procurement.service.IProcurementSchemeService;
 import com.zhaocai.business.procurement.vo.res.CompContractSplitMaterialsVO;
 import com.zhaocai.business.procurement.vo.res.CompMaterialsContentVO;
 import com.zhaocai.business.procurement.vo.res.CompMaterialsVO;
+import com.zhaocai.business.procurement.vo.res.MinProjectVO;
 import com.zhaocai.business.pub.service.IAttachmentService;
 import com.zhaocai.business.vendor.domain.Vendor;
 import com.zhaocai.business.vendor.domain.VendorContact;
 import com.zhaocai.business.vendor.service.IVendorContactService;
 import com.zhaocai.business.vendor.service.IVendorService;
 import com.zhaocai.common.core.bean.PageResult;
+import com.zhaocai.common.core.constant.HttpStatus;
 import com.zhaocai.common.core.constant.NumberConstant;
+import com.zhaocai.common.core.constant.SecurityConstants;
+import com.zhaocai.common.core.domain.R;
+import com.zhaocai.common.core.exception.CheckedException;
 import com.zhaocai.common.core.utils.DateUtils;
 import com.zhaocai.common.core.utils.NumberUtil;
 import com.zhaocai.common.core.utils.bean.BeanCopierUtil;
 import com.zhaocai.common.core.utils.ip.IpUtils;
 import com.zhaocai.common.security.utils.SecurityUtils;
+import com.zhaocai.system.api.domain.SysDictData;
+import com.zhaocai.system.api.domain.SysUser;
+import com.zhaocai.system.api.system.RemoteUserService;
+import com.zhaocai.system.service.ISysDictDataService;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.ObjectUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.CollectionUtils;
 
 import java.math.BigDecimal;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
@@ -71,7 +88,15 @@ public class VendorBidServiceImpl implements IVendorBidService {
     private ITenderApplyService tenderApplyService;
 
     @Autowired
+    private RemoteUserService remoteuserservice;
+
+    @Autowired
     private IProcurementSchemeService procurementSchemeService;
+    @Autowired
+    private IMinProjectService minProjectService;
+
+    @Autowired
+    private ThridPartyTodoTaskService thridPartyTodoTaskService;
 
 
     /* 在线报名 招标状态为  11发布 12报名情况 的数据 */
@@ -224,6 +249,13 @@ public class VendorBidServiceImpl implements IVendorBidService {
 
             //保存投标单信息
             biddingInfoService.save(biddingInfo);
+                //如果第一次提交，且选择了是否收取保证金 receive=1为收取，则推送相关财务确认人员信息
+            if(tenderNotice.getTwiceQuotVersion()!=null
+                    &&tenderNotice.getTwiceQuotVersion() == 1){
+                //调第三方接口，生成开标人员的待办信息
+                dealOpenPeopleTodoTask(scheme, tenderNotice,vendor);
+
+            }
         }
 
         //保存投标标书附件
@@ -303,6 +335,71 @@ public class VendorBidServiceImpl implements IVendorBidService {
         boolean res = biddingInfoService.updateById(biddingInfo);
 
         return res;
+    }
+
+    private void dealOpenPeopleTodoTask(ProcurementScheme procurementScheme, TenderNotice tenderNotice,  Vendor vendor) {
+        PushThirdPartyTodoTaskRequestDTO parentRequestDTO = new PushThirdPartyTodoTaskRequestDTO();
+        List<PushThirdPartyTodoTaskSonRequestDTO> messageList = new ArrayList<>();
+        PushThirdPartyTodoTaskSonRequestDTO requestDTO = new PushThirdPartyTodoTaskSonRequestDTO();
+        MinProjectVO project = minProjectService.getMinProjectByMinAccountCode(procurementScheme.getProjectCode());
+       // List<SysDictData>  dataList =  dictDataService.listDictDataLabel("procurement_type",procurementScheme.getProcurementType().toString());
+        String label = "";
+        switch (procurementScheme.getProcurementType()){
+            case 1:
+                label = "公开招标";
+            case 2:
+                label = "邀请招标";
+            case 3:
+                label = "询价";
+            case 4:
+                label = "单一来源";
+            default:
+        }
+        requestDTO.setTitle("财务人员待办信息");
+        String  xm =procurementScheme.getFinanceConfirmName()+ "你好!" + project.getMinAccountFullName()+"项目的"+
+                procurementScheme.getProcurementSchemeName()+"、编号为"+ procurementScheme.getProcurementSchemeCode()+"、招标方式为"+ label+"于"+formatDate(tenderNotice.getCreateTime())+
+                "发布了招标文件、供应商"+vendor.getEnterpriseName()+"已经响应提交了投标文件，且需要收取投标保证金、请及时确认是否收到保证金！";
+        requestDTO.setContent(xm);
+        requestDTO.setArrivalTime(formatDate(new Date()));
+        requestDTO.setCreateTime(formatDate(new Date()));
+        String thridUserId = SecurityUtils.getThridUserId();
+        requestDTO.setMsgFromPerCode(StringUtils.isNotEmpty(thridUserId) ? Long.parseLong(thridUserId) : null);
+        requestDTO.setMsgFromPerName(SecurityUtils.getLoginUserNickName());
+        String findThirdUserId = findThirdUserId(procurementScheme.getFinanceConfirmId()==null?null:Long.valueOf(procurementScheme.getFinanceConfirmId()));
+        requestDTO.setMsgToPerCode(StringUtils.isNotEmpty(findThirdUserId) ? Long.parseLong(findThirdUserId) : null);
+        requestDTO.setMsgToPerName(procurementScheme.getFinanceConfirmName());
+        requestDTO.setFlowGroup(ThirdPartyTodoFlowGroupEnum.XCW_BID.getDesc());
+        requestDTO.setFlowModule(ThirdPartyTodoFlowModuleEnum.BID_MANAGE.getDesc());
+        requestDTO.setFlowName(procurementScheme.getFinanceConfirmName() + "的" + ThirdPartyTodoFlowGroupEnum.XCW_BID.getDesc());
+        requestDTO.setDetailUrl("/procurement/tendering");
+//            requestDTO.setDetailUrl("/procurement/plan-detail/IjE4MTkyODk4NDM3Njk0NzA5Nzgi");
+//            requestDTO.setUserObj("{\\\"id\\\":1111}");
+//            requestDTO.setUserObj(openPeople.toString());
+        //推送消息类型 1工作通知
+        requestDTO.setType(NumberConstant.ONE);
+        //推送公司类型 2晟晟
+        requestDTO.setCompanyType(NumberConstant.TWO);
+        messageList.add(requestDTO);
+        parentRequestDTO.setMessageList(messageList);
+        parentRequestDTO.setAuthorization(SecurityUtils.getMasterControlToken());
+        thridPartyTodoTaskService.pushTodoTask(parentRequestDTO);
+
+    }
+
+    private String formatDate(Date date){
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ");
+        return sdf.format(date);
+    }
+
+    private String findThirdUserId(Long userId){
+        R<SysUser> sysUser = remoteuserservice.selectUserInFoById(userId, SecurityConstants.INNER);
+        if(sysUser.getCode() == HttpStatus.ERROR){
+            throw new CheckedException("获取用户信息失败");
+        }
+        if (null != sysUser.getData()){
+            return sysUser.getData().getThridUserId();
+        }
+        return null;
     }
 
     /** 校验是否可以报名 */
