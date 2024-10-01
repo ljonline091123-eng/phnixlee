@@ -51,6 +51,8 @@ import org.springframework.util.ObjectUtils;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -637,21 +639,25 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
             expertVo.setExpertId(expert.getExpertId());
             expertVo.setExpertName(expert.getExpertName());
             //获取几个供应商首轮报价信息
+            Date oldDate = null;
+            try {
+                oldDate = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").parse("2024-09-29 19:00:00");
+            } catch (ParseException e) {}
+            //查询当前采购方案-招标公告 下面有多少首轮投标单信息(状态等于1的数据 已投标（对供应商端）|已回标（对采购端） 其余已撤回 已废标 未投标的 数据不显示)
+            /* 旧数据 */
             List<BiddingInfo> biddingInfos = this.list(new LambdaQueryWrapper<BiddingInfo>()
                     .eq(BiddingInfo::getNoticeId, noticeId)
                     .eq(BiddingInfo::getBiddingStatus, BiddingInfoStatusEnum.HAVE_BACK.getState())
-                    .isNull(BiddingInfo::getParentId));
+                    .eq(BiddingInfo::getSubmitStatus, 1)
+                    .eq(BiddingInfo::getParentId,null)
+                    .le(BiddingInfo::getCreateTime, oldDate));
+            TenderNotice tenderNotice = tenderNoticeService.getById(noticeId);
+            /* 新数据 */
+            List<BiddingInfo> maxPriceVersion = this.getMaxPriceVersion(noticeId,tenderNotice.getSchemeId());
+            biddingInfos.addAll(maxPriceVersion);
+
             boolean flag = true;
             for (BiddingInfo bid : biddingInfos){
-                //获取供应商最新一轮报价数据
-                //查询二次报价的数据
-                BiddingInfo newestBiddingInfo = this.getOne(new LambdaQueryWrapper<BiddingInfo>()
-                        .eq(BiddingInfo::getParentId, bid.getId())
-                        .orderByDesc(BiddingInfo::getCreateTime).last("limit 1"));
-                if (!ObjectUtils.isEmpty(newestBiddingInfo)){
-                    //换成最新一条投标单
-                    bid = newestBiddingInfo;
-                }
                 //查询专家对这条最新的投标单是否有评标数据
                 if (expertScoreService.count(new LambdaQueryWrapper<ExpertScore>()
                         .eq(ExpertScore::getBiddingInfoId, bid.getId())
