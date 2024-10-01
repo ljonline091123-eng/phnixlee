@@ -33,9 +33,6 @@ public class VendorPortalNoticeListVO extends AdviceObject {
     @ApiModelProperty(value =  "采购方案名称")
     private String procurementSchemeName;
 
-    @ApiModelProperty(value =  "采购方式")
-    private Integer procurementType;
-
     @ApiModelProperty(value =  "采购计划类别")
     private Integer procurementPlanType;
 

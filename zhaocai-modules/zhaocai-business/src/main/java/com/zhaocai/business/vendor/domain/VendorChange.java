@@ -1,6 +1,5 @@
 package com.zhaocai.business.vendor.domain;
 
-import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.zhaocai.common.core.web.domain.BaseEntity;
@@ -222,10 +221,4 @@ public class VendorChange extends BaseEntity {
      */
     @ApiModelProperty(value = "流程实例 id")
     private String wfProcessId;
-
-    /**
-     * 批语
-     */
-    @TableField(exist = false)
-    private String operateComment;
 }

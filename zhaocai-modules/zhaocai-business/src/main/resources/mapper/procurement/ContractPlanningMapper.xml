@@ -61,9 +61,7 @@
             tp.bidding_method_name,
             tp.project_code,
             tp.project_name
-            /* 合约规划对象 */
         from tb_contract_planning tp
-            /* 采购计划对象 */
         inner join tb_procurement_plan tpp on tp.plan_id = tpp.id
         where tpp.id in
         <foreach collection="planIds" item="item" open="(" separator="," close=")">

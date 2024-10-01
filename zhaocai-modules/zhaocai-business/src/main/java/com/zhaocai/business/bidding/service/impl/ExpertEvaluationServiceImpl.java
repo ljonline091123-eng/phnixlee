@@ -37,10 +37,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.ObjectUtils;
 
 import java.math.BigDecimal;
-import java.text.ParseException;
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.List;
 
 import static java.math.BigDecimal.ROUND_DOWN;
@@ -98,23 +95,12 @@ public class ExpertEvaluationServiceImpl implements IExpertEvaluationService {
 		for (EvalTaskPageListVO row : rows) {
 			List<EvalTaskContentVO> contentVOList = new ArrayList<>();
 			//查询当前采购方案-招标公告 下面有多少投标单信息(状态等于1的数据 已投标（对供应商端）|已回标（对采购端） 其余已撤回 已废标 未投标的 数据不显示)
-			Date oldDate = null;
-			try {
-				oldDate = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").parse("2024-09-29 19:00:00");
-			} catch (ParseException e) {}
-			//查询当前采购方案-招标公告 下面有多少首轮投标单信息(状态等于1的数据 已投标（对供应商端）|已回标（对采购端） 其余已撤回 已废标 未投标的 数据不显示)
-			/* 旧数据 */
 			List<BiddingInfo> biddingInfos = biddingInfoService.list(new LambdaQueryWrapper<BiddingInfo>()
 					.eq(BiddingInfo::getNoticeId, row.getNoticeId())
 					.eq(BiddingInfo::getSchemeId, row.getSchemeId())
 					.eq(BiddingInfo::getBiddingStatus, BiddingInfoStatusEnum.HAVE_BACK.getState())
 					.eq(BiddingInfo::getSubmitStatus, 1)
-					.eq(BiddingInfo::getParentId,null)
-					.le(BiddingInfo::getCreateTime, oldDate));
-			/* 新数据 */
-			List<BiddingInfo> maxPriceVersion = biddingInfoService.getMaxPriceVersion(row.getNoticeId(),row.getSchemeId());
-			biddingInfos.addAll(maxPriceVersion);
-
+					.isNull(BiddingInfo::getParentId));
 			for (BiddingInfo biddingInfo : biddingInfos){
 				//查询是否有最新的报价信息
 				BiddingInfo newestBiddingInfo = biddingInfoService.getOne(new LambdaQueryWrapper<BiddingInfo>()
@@ -172,23 +158,13 @@ public class ExpertEvaluationServiceImpl implements IExpertEvaluationService {
 		List<EvalTaskPageListVO> rows = pageResult.getRows();
 		for (EvalTaskPageListVO row : rows) {
 			List<EvalTaskContentVO> contentVOList = new ArrayList<>();
-			Date oldDate = null;
-            try {
-				oldDate = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").parse("2024-09-29 19:00:00");
-            } catch (ParseException e) {}
-            //查询当前采购方案-招标公告 下面有多少首轮投标单信息(状态等于1的数据 已投标（对供应商端）|已回标（对采购端） 其余已撤回 已废标 未投标的 数据不显示)
-			/* 旧数据 */
+			//查询当前采购方案-招标公告 下面有多少首轮投标单信息(状态等于1的数据 已投标（对供应商端）|已回标（对采购端） 其余已撤回 已废标 未投标的 数据不显示)
 			List<BiddingInfo> biddingInfos = biddingInfoService.list(new LambdaQueryWrapper<BiddingInfo>()
 					.eq(BiddingInfo::getNoticeId, row.getNoticeId())
 					.eq(BiddingInfo::getSchemeId, row.getSchemeId())
 					.eq(BiddingInfo::getBiddingStatus, BiddingInfoStatusEnum.HAVE_BACK.getState())
 					.eq(BiddingInfo::getSubmitStatus, 1)
-					.eq(BiddingInfo::getParentId,null)
-					.le(BiddingInfo::getCreateTime, oldDate));
-			/* 新数据 */
-			List<BiddingInfo> maxPriceVersion = biddingInfoService.getMaxPriceVersion(row.getNoticeId(),row.getSchemeId());
-			biddingInfos.addAll(maxPriceVersion);
-
+					.isNull(BiddingInfo::getParentId));
 			for (BiddingInfo biddingInfo : biddingInfos){
 				//查询是否有最新的报价信息
 				BiddingInfo newestBiddingInfo = biddingInfoService.getOne(new LambdaQueryWrapper<BiddingInfo>()

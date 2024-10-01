@@ -520,18 +520,4 @@ public class SysDeptServiceImpl extends ServiceImpl<SysDeptMapper, SysDept> impl
     public List<SysDept> getTwoLevelDepts() {
         return deptMapper.getTwoLevelDepts();
     }
-
-    @Override
-    public List<SysDept> getDeptByThridDeptId(String thridDeptId) {
-        List<SysDept> sysDepts = new ArrayList<>();
-        SysDept sysDept = deptMapper.selectOne(new LambdaQueryWrapper<SysDept>()
-                    .eq(SysDept::getThridDeptId, thridDeptId));
-        if (!ObjectUtils.isEmpty(sysDept)){
-            String ancestors = sysDept.getAncestors() + "," + sysDept.getDeptId();
-            sysDepts = super.list(new LambdaQueryWrapper<SysDept>()
-                    .likeRight(SysDept::getAncestors, ancestors));
-            sysDepts.add(0, sysDept);
-        }
-        return sysDepts;
-    }
 }

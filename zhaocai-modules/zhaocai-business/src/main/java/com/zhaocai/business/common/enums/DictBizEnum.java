@@ -93,7 +93,6 @@ public enum DictBizEnum {
 	UNDERLING_RENT_TYPE("RENT_TYPE","计租方式"),
 	UNDERLING_SETTLE_STATUS("SETTLE_STATUS","结算状态"),
 	UNDERLING_MTR_MACH_TYPE("MTR_MACH_TYPE","台班类型"),
-	UNDERLING_PROJECT_FORMAT("PROJECT_FORMAT","项目业态"),
 	;
 
 	private final String name;

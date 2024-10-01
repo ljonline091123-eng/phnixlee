@@ -8,7 +8,7 @@ import lombok.Setter;
 
 /**
  * 招标公告供应商范围对象 tb_tender_notice_range
- *
+ * 
  * @author WH
  * @date 2024-05-24
  */
@@ -32,7 +32,7 @@ public class TenderNoticeRange extends BaseEntity
     private String vendorName;
 
     /** 类型（0设置供应商范围 1推荐供应商） */
-    @ApiModelProperty(value =  "类型（0设置供应商范围(公开招标) 1推荐供应商）")
+    @ApiModelProperty(value =  "类型（0设置供应商范围 1推荐供应商）")
     private Integer type;
 
 }

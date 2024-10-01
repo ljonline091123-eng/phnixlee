@@ -1,6 +1,5 @@
 package com.zhaocai.business.vendor.vo.req;
 
-import com.baomidou.mybatisplus.annotation.TableField;
 import com.zhaocai.business.pub.vo.res.AttachmentVO;
 import io.swagger.annotations.ApiModelProperty;
 import lombok.Data;
@@ -62,7 +61,4 @@ public class VendorContactSaveRequestVo {
 
     @ApiModelProperty(value = "法人授权书")
     private AttachmentVO attachment;
-
-    @TableField(exist = false)
-    private String operateComment;
 }

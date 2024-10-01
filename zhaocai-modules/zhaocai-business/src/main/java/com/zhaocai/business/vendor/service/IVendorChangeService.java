@@ -48,11 +48,4 @@ public interface IVendorChangeService extends IService<VendorChange>, IProcessBu
      * @return
      */
     VendorManagementDetailVO getVendorManagementDetail(Long id);
-
-    /**
-     * 获取最新审批通过的变更id
-     * @param id 供应商id
-     * @return
-     */
-    Long getLastChangeId(Long id);
 }

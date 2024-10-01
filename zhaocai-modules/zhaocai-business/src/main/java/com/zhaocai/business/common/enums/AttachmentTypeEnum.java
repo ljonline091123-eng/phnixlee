@@ -26,7 +26,6 @@ public enum AttachmentTypeEnum {
     /** 招投标附件 */
     BIDING_DOCUMENT("biding_document","投标标书附件"),
     BIDING_ABANDON_DOCUMENT("biding_abandon_document","废标附件"),
-    BIDING_NOTICE_MSG_DOC("biding_notice_msg_doc","招标公告附件"),
     BIDING_NOTICE_DOC("biding_notice_doc","招标文件附件"),
     EVAL_DOCUMENT("eval_document","评标附件"),
     CALIBRATION_DOCUMENT("calibration_document","定标附件"),

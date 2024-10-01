@@ -254,18 +254,5 @@ public class SysDeptController extends BaseController
         return deptService.getTwoLevelDepts();
     }
 
-    /**
-     * 根据第三方部门 id 获取组织机构信息(本部门及以下部门，含项目部)
-     * @param thridDeptId
-     * @return
-     */
-    @InnerAuth
-    @GetMapping("/getDeptByThridDeptId")
-    public List<SysDept> getDeptByThridDeptId(@RequestParam String thridDeptId) {
-        if (StringUtils.isEmpty(thridDeptId)) {
-            throw new RuntimeException("第三方部门 id 不能为空");
-        }
-        return deptService.getDeptByThridDeptId(thridDeptId);
-    }
 
 }

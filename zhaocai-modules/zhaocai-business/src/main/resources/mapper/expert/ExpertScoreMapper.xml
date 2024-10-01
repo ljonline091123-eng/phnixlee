@@ -3,7 +3,7 @@
 PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
 "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.zhaocai.business.expert.mapper.ExpertScoreMapper">
-
+    
     <resultMap type="com.zhaocai.business.expert.domain.ExpertScore" id="ExpertScoreResult">
         <result property="id"    column="id"    />
         <result property="schemeId"    column="scheme_id"    />
@@ -40,15 +40,6 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         and bi.id not in (
         select es.bidding_info_id from tb_expert_score es
         where es.bidding_info_id = bi.id and es.vendor_id = bi.vendor_id and es.expert_id = #{queryDTO.expertId}
-        )
-        and bi.id in (
-            select i.id from tb_bidding_info i
-            inner join (SELECT vendor_id,
-            max(twice_quot_version) as twice_quot_version
-            FROM tb_bidding_info
-            WHERE del_flag = '0' AND notice_id = #{noticeId} AND scheme_id = #{schemeId} AND bidding_status = 1 AND submit_status = 1 AND price_change_state = 1
-            GROUP BY vendor_id) v
-            WHERE i.vendor_id = v.vendor_id and i.twice_quot_version = v.twice_quot_version
         )
         <if test="queryDTO.noticeId != null">
             and tn.id = #{queryDTO.noticeId}

@@ -1,6 +1,5 @@
 package com.zhaocai.business.vendor.vo.res;
 
-import com.baomidou.mybatisplus.annotation.TableField;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.zhaocai.business.common.annotations.DictCache;
 import com.zhaocai.business.common.annotations.MoneyFormat;
@@ -151,8 +150,4 @@ public class VendorVO extends AdviceObject {
 
     @ApiModelProperty(value = "审批状态")
     private Integer state;
-
-    /** 变更id */
-    @TableField(exist = false)
-    private Long changeId;
 }

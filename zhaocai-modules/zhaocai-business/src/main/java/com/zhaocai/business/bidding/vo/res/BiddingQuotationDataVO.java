@@ -37,10 +37,4 @@ public class BiddingQuotationDataVO extends AdviceObject implements Serializable
     @ApiModelProperty(value =  "不含税总价(元)（千分位）")
     private String notTaxPricePattern;
 
-    @ApiModelProperty(value =  "二次报价版本号。从1开始")
-    private Integer twiceQuotVersion;
-
-    @ApiModelProperty(value =  "供应商调价状态")
-    private Integer priceChangeState;
-
 }

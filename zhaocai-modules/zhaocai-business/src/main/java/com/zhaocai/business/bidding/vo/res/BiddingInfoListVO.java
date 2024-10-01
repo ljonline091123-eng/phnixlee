@@ -50,10 +50,6 @@ public class BiddingInfoListVO extends AdviceObject implements Serializable {
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss",timezone = "GMT+8")
     private Date createTime;
 
-    @ApiModelProperty(value = "更新时间")
-    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss",timezone = "GMT+8")
-    private Date updateTime;
-
     @ApiModelProperty(value =  "操作人ip")
     private String ipAddress;
 

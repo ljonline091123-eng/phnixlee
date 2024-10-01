@@ -47,9 +47,8 @@ public class ContractPlanningServiceImpl extends ServiceImpl<ContractPlanningMap
 
     @Override
     public List<ProcurementContractPlanListVO> listProcurementContractPlanByContractSplit(List<Long> contractSplitIds) {
-        /* 合约规划拆分对象 */
         List<ContractPlanningSplit> planningSplits = contractPlanningSplitService.listByIds(contractSplitIds);
-        /* 采购计划 id */
+
         List<Long> planIdList = planningSplits.stream()
                 .map(ContractPlanningSplit::getProcurementPlanId)
                 .distinct().collect(Collectors.toList());

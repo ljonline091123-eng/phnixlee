@@ -154,7 +154,7 @@ public class VendorContactServiceImpl extends ServiceImpl<VendorContactMapper,Ve
                 .eq(VendorContact::getId,contact.getId()));
 
         // 提交新增联系人流程
-        this.submitProcess(contact.getId(), requestVO.getOperateComment());
+        this.submitProcess(contact.getId());
     }
 
     @Override
@@ -316,14 +316,14 @@ public class VendorContactServiceImpl extends ServiceImpl<VendorContactMapper,Ve
         this.updateAuthorizationFile(updateAuthorizationFile);
 
         // 提交新增联系人流程
-        this.submitProcess(contact.getId(), requestVO.getOperateComment());
+        this.submitProcess(contact.getId());
     }
 
     /**
      * 提交新增联系人流程
      * @param id 联系人id
      */
-    private void submitProcess(Long id,String operateComment) {
+    private void submitProcess(Long id) {
         VendorContact contact = super.getById(id);
         Vendor vendor = vendorService.getById(contact.getVendorId());
         //接入底层逻辑平台流程
@@ -336,7 +336,6 @@ public class VendorContactServiceImpl extends ServiceImpl<VendorContactMapper,Ve
         //供应商注册时候选择审批单位，只能由选择的单位维护的供应商审核人员进行审核，如果供应商信息修改也是需要原审核单位进行审核
         String customProcessKey = ProcessKeyEnum.ZHAOCAI_VENDOR_ADDCONTACT.getIdentifying().replace("{org}",org);
         paramMap.put("customProcessKey", customProcessKey);
-        paramMap.put("operateComment", operateComment);
         processService.startProcessInstance(
                 ProcessKeyEnum.ZHAOCAI_VENDOR_ADDCONTACT.getIdentifying(),paramMap);
     }

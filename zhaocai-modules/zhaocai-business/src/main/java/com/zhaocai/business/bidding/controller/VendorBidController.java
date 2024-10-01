@@ -33,17 +33,7 @@ public class VendorBidController {
     private IVendorBidService vendorBidService;
 
     /**
-     * 在线投标报名列表-分页
-     */
-    @GetMapping("/pageNotice")
-    @ApiOperation(value = "在线投标列表-分页（投标展示招标公告列表）", notes = "传入queryDTO")
-    public ResultData<PageResult<VendorNoticeListVO>> pageNotice(VendorNoticePageQueryVO queryDTO) {
-        PageResult<VendorNoticeListVO> pages = vendorBidService.pageNotice(queryDTO);
-        return ResultData.data(pages);
-    }
-
-    /**
-     * 在线投标文件列表-分页（投标展示招标公告列表）
+     * 在线投标列表-分页（投标展示招标公告列表）
      */
     @GetMapping("/page")
     @ApiOperation(value = "在线投标列表-分页（投标展示招标公告列表）", notes = "传入queryDTO")
@@ -57,38 +47,18 @@ public class VendorBidController {
      */
     @GetMapping("/detail")
     @ApiOperation(value = "投标数据详情", notes = "传入noticeId")
-    public ResultData<TenderNoticeDetailVO> detail(@ApiParam(value = "招标公告主键id", required = true) @RequestParam("noticeId") Long noticeId) {
+    public ResultData<TenderNoticeDetailVO> detail(@ApiParam(value = "招标公告主键id", required = true) @RequestParam Long noticeId) {
         return ResultData.data(vendorBidService.detail(noticeId));
     }
 
     /**
-     * 供应商投标 招标报名 清单附件上传
-     */
-    @VendorStateCheck
-    @PostMapping("/bidNotice")
-    @ApiOperation(value = "报名", notes = "传入bidVO")
-//    @TenderNoticeHandler
-    public ResultData bidNotice(@Valid @RequestBody BidVO bidVO) {
-        return ResultData.status(vendorBidService.bidNotice(bidVO));
-    }
-
-    /**
-     * 供应商投标 清单附件上传
+     * 投标
      */
     @VendorStateCheck
     @PostMapping("/bid")
     @ApiOperation(value = "投标", notes = "传入bidVO")
 //    @TenderNoticeHandler
     public ResultData bid(@Valid @RequestBody BidVO bidVO) {
-        return ResultData.status(vendorBidService.bid(bidVO));
-    }
-
-    /**
-     * 二次报价
-     */
-    @PostMapping("/twiceBid")
-    @ApiOperation(value = "二次报价", notes = "传入bidVO")
-    public ResultData twiceBid(@Valid @RequestBody BidVO bidVO) {
         return ResultData.status(vendorBidService.bid(bidVO));
     }
 
@@ -111,6 +81,15 @@ public class VendorBidController {
 //        PageResult<TwiceBidListVO> pages = vendorBidService.twiceBidPage(queryDTO);
 //        return ResultData.data(pages);
 //    }
+
+    /**
+     * 二次报价
+     */
+    @PostMapping("/twiceBid")
+    @ApiOperation(value = "二次报价", notes = "传入bidVO")
+    public ResultData twiceBid(@Valid @RequestBody BidVO bidVO) {
+        return ResultData.status(vendorBidService.twiceBid(bidVO));
+    }
 
     /**
      * 中标通知分页列表

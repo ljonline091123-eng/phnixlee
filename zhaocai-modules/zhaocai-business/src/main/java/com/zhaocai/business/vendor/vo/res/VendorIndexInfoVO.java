@@ -32,7 +32,4 @@ public class VendorIndexInfoVO {
 
     @ApiModelProperty(value = "报错信息")
     private String message;
-
-    @ApiModelProperty(value = "联系人手机")
-    private String contactPhone;
 }

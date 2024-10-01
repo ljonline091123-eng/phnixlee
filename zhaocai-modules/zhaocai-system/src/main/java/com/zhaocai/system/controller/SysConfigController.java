@@ -129,7 +129,8 @@ public class SysConfigController extends BaseController {
      */
     @InnerAuth
     @PostMapping("/setConfigValueByKey")
-    public void setConfigValueByKey(@RequestBody SetConfigValueDTO setConfigValue) {
+    public AjaxResult setConfigValueByKey(@RequestBody SetConfigValueDTO setConfigValue) {
         configService.setConfigValueByKey(setConfigValue.getConfigKey(),setConfigValue.getConfigValue());
+        return success();
     }
 }

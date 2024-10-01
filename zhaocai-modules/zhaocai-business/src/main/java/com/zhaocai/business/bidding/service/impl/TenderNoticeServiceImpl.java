@@ -15,24 +15,17 @@ import com.zhaocai.business.bidding.vo.req.TenderNoticeVO;
 import com.zhaocai.business.bidding.vo.req.query.*;
 import com.zhaocai.business.bidding.vo.res.*;
 import com.zhaocai.business.common.cache.DictBizCache;
-import com.zhaocai.business.common.enums.*;
+import com.zhaocai.business.common.enums.AgreementStateEnum;
+import com.zhaocai.business.common.enums.AttachmentTypeEnum;
+import com.zhaocai.business.common.enums.DictBizEnum;
+import com.zhaocai.business.common.enums.VendorStateEnum;
 import com.zhaocai.business.common.exception.ParamValidateException;
 import com.zhaocai.business.common.sms.SmsSenderUtil;
-import com.zhaocai.business.manager.http.common.config.ThirdPartyTodoFlowGroupEnum;
-import com.zhaocai.business.manager.http.common.config.ThirdPartyTodoFlowModuleEnum;
-import com.zhaocai.business.manager.http.dto.req.PushThirdPartyTodoTaskRequestDTO;
-import com.zhaocai.business.manager.http.dto.req.PushThirdPartyTodoTaskSonRequestDTO;
 import com.zhaocai.business.manager.http.service.PerformanceEvaluationService;
-import com.zhaocai.business.manager.http.service.ThridPartyTodoTaskService;
-import com.zhaocai.business.procurement.domain.MinProject;
 import com.zhaocai.business.procurement.domain.ProcurementScheme;
-import com.zhaocai.business.procurement.service.IMinProjectService;
 import com.zhaocai.business.procurement.service.IProcurementSchemeService;
 import com.zhaocai.business.procurement.vo.res.MinProjectDataVO;
-import com.zhaocai.business.procurement.vo.res.MinProjectVO;
-import com.zhaocai.business.pub.domain.Attachment;
 import com.zhaocai.business.pub.service.IAttachmentService;
-import com.zhaocai.business.pub.vo.req.AttachmentRequestVO;
 import com.zhaocai.business.pub.vo.res.AttachmentVO;
 import com.zhaocai.business.vendor.domain.Vendor;
 import com.zhaocai.business.vendor.service.IVendorContactService;
@@ -41,16 +34,10 @@ import com.zhaocai.business.vendor.vo.req.VendorManagementListQueryDataVO;
 import com.zhaocai.business.vendor.vo.res.VendorMainContactVO;
 import com.zhaocai.business.vendor.vo.res.VendorManagementListDataVO;
 import com.zhaocai.common.core.bean.PageResult;
-import com.zhaocai.common.core.constant.HttpStatus;
 import com.zhaocai.common.core.constant.NumberConstant;
-import com.zhaocai.common.core.constant.SecurityConstants;
-import com.zhaocai.common.core.domain.R;
-import com.zhaocai.common.core.exception.CheckedException;
 import com.zhaocai.common.core.utils.DateUtils;
 import com.zhaocai.common.core.utils.bean.BeanCopierUtil;
 import com.zhaocai.common.security.utils.SecurityUtils;
-import com.zhaocai.system.api.domain.SysUser;
-import com.zhaocai.system.api.system.RemoteUserService;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
@@ -61,7 +48,6 @@ import org.springframework.util.CollectionUtils;
 import org.springframework.util.ObjectUtils;
 
 import java.math.BigDecimal;
-import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -85,33 +71,19 @@ public class TenderNoticeServiceImpl extends ServiceImpl<TenderNoticeMapper,Tend
     @Autowired
     private IVendorContactService vendorContactService;
     @Autowired
-    @Lazy
     private IVendorService vendorService;
     @Autowired
     private IProcurementSchemeService procurementSchemeService;
-
-    @Autowired
-    private ThridPartyTodoTaskService thridPartyTodoTaskService;
     @Lazy
     @Autowired
     private IBiddingOpenPeopleService biddingOpenPeopleService;
 
     @Autowired
     private PerformanceEvaluationService performanceEvaluationService;
-    @Autowired
-    private ITenderApplyService tenderApplyService;
 
     @Autowired
     private IAgreementService agreementService;
-    @Autowired
-    @Lazy
-    private IBiddingInfoService biddingInfoService;
-    @Autowired
-    private RemoteUserService remoteuserservice;
 
-
-    @Autowired
-    private IMinProjectService minProjectService;
     @Autowired
     private SmsSenderUtil smsSenderUtil = SpringUtil.getBean(SmsSenderUtil.class);
 
@@ -123,146 +95,9 @@ public class TenderNoticeServiceImpl extends ServiceImpl<TenderNoticeMapper,Tend
 
     @Override
     @Transactional(propagation = Propagation.REQUIRED,rollbackFor = Exception.class)
-    public boolean addNotice(TenderNoticeVO tenderNoticeVO) {
-        /* 数据验证 */
-        TenderNotice tenderNoticeVerify = this.getOne(new LambdaQueryWrapper<TenderNotice>()
-                .eq(TenderNotice::getSchemeId, tenderNoticeVO.getSchemeId())
-                .ne(TenderNotice::getNoticeStatus, TenderNoticeStatusEnum.ABANDON_BID.getState()));
-        if (!ObjectUtils.isEmpty(tenderNoticeVerify)){
-            throw new ParamValidateException("一个采购方案只允许发布一个招标文件");
-        }
-        TenderNotice tenderNotice = BeanCopierUtil.copyBean(tenderNoticeVO, TenderNotice.class);
-
-
-        /* 供应商范围 */
-        List<Long> vendorIds = tenderNoticeVO.getVendorIds();
-        /* 采购方案类型（1公开招标) */
-        if (tenderNoticeVO.getSchemeType() != null && 1 == tenderNoticeVO.getSchemeType()){
-            //如果是公开招标，那就获取到查询供应商范围的条件，由程序来获取条件内的供应商信息
-            VendorManagementListQueryDataVO vendorQueryParam = new VendorManagementListQueryDataVO();
-            if (!ObjectUtils.isEmpty(tenderNoticeVO.getVendorQueryParam())){
-                /* 供应商查询 参数 */
-                vendorQueryParam = tenderNoticeVO.getVendorQueryParam();
-            }
-            List<VendorManagementListDataVO> vendorList = vendorService.getListVendor(vendorQueryParam);
-            if (!CollectionUtils.isEmpty(vendorList)){
-                vendorIds = vendorList.stream().map(VendorManagementListDataVO::getId).collect(Collectors.toList());
-            }
-        }
-        //是否设置供应商范围表
-        boolean flag = false;
-        if (CollectionUtils.isEmpty(vendorIds)){
-            /* 不设置 */
-            tenderNotice.setVendorRange(NumberConstant.ZERO);
-        } else {
-            tenderNotice.setVendorRange(NumberConstant.ONE);
-            flag = true;
-        }
-
-        /* 公告状态 */
-        tenderNotice.setNoticeStatus(TenderNoticeStatusEnum.TENDER_NOTICE.getState());
-        //保存招标公告信息
-        boolean res = this.save(tenderNotice);
-
-        //保存招标公告文件附件
-        attachmentService.addAttachment(tenderNoticeVO.getBiddingDocAttachList(), AttachmentTypeEnum.BIDING_NOTICE_MSG_DOC,tenderNotice.getId());
-
-        //保存供应商范围表
-        if (flag) {
-            //设置范围类型（设置供应商范围|推荐供应商）
-            Integer rangeType = NumberConstant.ZERO;
-            /* 采购方案类型 1公开招标 */
-            if (tenderNoticeVO.getSchemeType() != null && 1 != tenderNoticeVO.getSchemeType()) {
-                rangeType = NumberConstant.ONE;
-            }
-            List<TenderNoticeRange> ranges = new ArrayList<>();
-            List<String> phoneList = new ArrayList<>();
-            for (Long vendorId : vendorIds) {
-                TenderNoticeRange range = new TenderNoticeRange();
-                range.setNoticeId(tenderNotice.getId());
-                range.setVendorId(vendorId);
-                range.setType(rangeType);
-                ranges.add(range);
-
-                //获取供应商的手机号
-                VendorMainContactVO contactVO = vendorContactService.getMainContact(vendorId);
-                if (!ObjectUtils.isEmpty(contactVO)) {
-                    phoneList.add(contactVO.getContactPhone());
-                }
-            }
-            tenderNoticeRangeService.saveBatch(ranges, ranges.size());
-        }
-        return res;
-    }
-
-
-    /* 保存已通过的供应商报名 */
-    @Override
-    @Transactional(propagation = Propagation.REQUIRED,rollbackFor = Exception.class)
-    public boolean registerStatus(TenderNoticeVO tenderNoticeVO) {
-        verifyParam(tenderNoticeVO);
-
-        TenderNotice tenderNoticeVerify = this.getOne(new LambdaQueryWrapper<TenderNotice>()
-                .eq(TenderNotice::getId, tenderNoticeVO.getId())
-                .ne(TenderNotice::getNoticeStatus, TenderNoticeStatusEnum.ABANDON_BID.getState()));
-
-        /* 报名情况环节 设置 审批通过的 供应商列表 */
-        if (!ObjectUtils.isEmpty(tenderNoticeVerify) && tenderNoticeVerify.getNoticeStatus().equals(TenderNoticeStatusEnum.TENDER_REGISTER.getState())){
-            List<Long> vendorApplyIds = tenderNoticeVO.getVendorApplyIds();
-            if(vendorApplyIds!=null && !vendorApplyIds.isEmpty()){
-                /* 全部设置不通过 */
-                tenderApplyService.update(new LambdaUpdateWrapper<TenderApply>()
-                        .set(TenderApply::getApproveResult, NumberConstant.ZERO)
-                        .eq(TenderApply::getNoticeId, tenderNoticeVerify.getId()));
-                /* 设置通过 */
-                for (Long vendorId : vendorApplyIds) {
-                    tenderApplyService.update(new LambdaUpdateWrapper<TenderApply>()
-                            .set(TenderApply::getApproveResult, NumberConstant.ONE)
-                            .eq(TenderApply::getVendorId, vendorId)
-                            .eq(TenderApply::getNoticeId, tenderNoticeVerify.getId()));
-                }
-            }else {
-                throw new ParamValidateException("至少需要选中一家已报名的供应商");
-            }
-            TenderNoticeSchemeInfoVO detailVO = getTenderNoticeSchemeInfo(tenderNoticeVerify.getId());
-            /* 根据招标公告流程状态 和 采购方案确定下一步流程 */
-            Integer nextNoticeStatus = nextTenderNoticeStatus(detailVO.getSchemeType(), tenderNoticeVerify.getNoticeStatus());
-            /* 报名保存 状态：报名截至 */
-            return updateStatus(tenderNoticeVerify.getId(), nextNoticeStatus);
-        }
-        return false;
-    }
-
-    /* 采购方案 和 招标公告(携带报名情况之前填的数据) 进来的招标文件，直接进入投标环节 */
-    @Override
-    @Transactional(propagation = Propagation.REQUIRED,rollbackFor = Exception.class)
     public boolean add(TenderNoticeVO tenderNoticeVO) {
         verifyParam(tenderNoticeVO);
         TenderNotice tenderNotice = BeanCopierUtil.copyBean(tenderNoticeVO, TenderNotice.class);
-
-        /* 公开招标流程 如果不用之前的公告报名情况的id校验，旧数据就不会影响 */
-        TenderNotice tenderNoticeVerify = this.getOne(new LambdaQueryWrapper<TenderNotice>()
-                .eq(TenderNotice::getSchemeId, tenderNoticeVO.getSchemeId())
-                .ne(TenderNotice::getNoticeStatus, TenderNoticeStatusEnum.ABANDON_BID.getState()));
-        /* 公开招标使用 公告的数据和报名情况的数据。 */
-        if(tenderNotice.getId()==null && tenderNoticeVerify!=null && tenderNoticeVerify.getId()!=null){
-            tenderNotice.setId(tenderNoticeVerify.getId());
-        }
-        /* 公开招标使用 公告的数据和报名情况的数据。 */
-        ProcurementScheme procurementScheme = procurementSchemeService.getById(tenderNoticeVO.getSchemeId());
-        if(procurementScheme!=null && procurementScheme.getProcurementType().equals(NumberConstant.ONE) && tenderNoticeVerify!=null && tenderNoticeVerify.getId()!=null){
-            tenderNotice.setContactNotice(tenderNoticeVerify.getContactNotice());
-            tenderNotice.setPhoneNotice(tenderNoticeVerify.getPhoneNotice());
-            tenderNotice.setEmailNotice(tenderNoticeVerify.getEmailNotice());
-            tenderNotice.setApplyTimeNotice(tenderNoticeVerify.getApplyTimeNotice());
-            tenderNotice.setAttachIdNotice(tenderNoticeVerify.getAttachIdNotice());
-            tenderNotice.setVendorRange(tenderNoticeVerify.getVendorRange());
-        }
-        /* 设置第一次的二次报价时间也是投标截至时间 */
-        tenderNotice.setTwiceTime(tenderNoticeVO.getApplyTime());
-        tenderNotice.setTwiceQuotVersion(NumberConstant.ONE);/* 第一次的二次报价版本号，后面累加上去 */
-        tenderNotice.setTwiceQuotState(NumberConstant.ONE);/* 开放报价 */
-
 
         List<Long> vendorIds = tenderNoticeVO.getVendorIds();
         if (tenderNoticeVO.getSchemeType() != null && 1 == tenderNoticeVO.getSchemeType()){
@@ -287,7 +122,7 @@ public class TenderNoticeServiceImpl extends ServiceImpl<TenderNoticeMapper,Tend
 
         tenderNotice.setNoticeStatus(TenderNoticeStatusEnum.TENDER_ISSUE.getState());
         //保存招标公告信息
-        boolean res = this.saveOrUpdate(tenderNotice);
+        boolean res = this.save(tenderNotice);
 
         //保存招标文件附件
         attachmentService.addAttachment(tenderNoticeVO.getBiddingDocAttachList(), AttachmentTypeEnum.BIDING_NOTICE_DOC,
@@ -332,109 +167,17 @@ public class TenderNoticeServiceImpl extends ServiceImpl<TenderNoticeMapper,Tend
 //                    DateUtils.parseDateToStr(DateUtils.YYYY_MM_DD_HH_MM, tenderNoticeVO.getApplyTime()),
 //                    phoneList);
         }
-        //如果第一次发布version=1，且选择了是否收取保证金 receive=1为收取，则推送相关财务确认人员信息
-       System.out.println("是否保证金:"+procurementScheme.getIsReceiveDeposit());
-        System.out.println("版本:"+tenderNotice.getTwiceQuotVersion());
-        if(procurementScheme.getIsReceiveDeposit()!=null
-                &&procurementScheme.getIsReceiveDeposit()==1
-                &&tenderNotice.getTwiceQuotVersion()!=null
-                &&tenderNotice.getTwiceQuotVersion() == 1){
-            //调第三方接口，生成开标人员的待办信息
-            try {
-                dealOpenPeopleTodoTask(procurementScheme, tenderNotice);
-            }catch (Exception e){
-                log.error(e.toString());
-            }
-
-
-        }
         return res;
-    }
-
-    private void dealOpenPeopleTodoTask(ProcurementScheme procurementScheme, TenderNotice tenderNotice) {
-       System.out.println("开始:"+procurementScheme);
-        PushThirdPartyTodoTaskRequestDTO parentRequestDTO = new PushThirdPartyTodoTaskRequestDTO();
-        List<PushThirdPartyTodoTaskSonRequestDTO> messageList = new ArrayList<>();
-            PushThirdPartyTodoTaskSonRequestDTO requestDTO = new PushThirdPartyTodoTaskSonRequestDTO();
-        MinProjectVO project = minProjectService.getMinProjectByMinAccountCode(procurementScheme.getProjectCode());
-        System.out.println("项目:"+project);
-       /* List<SysDictData>  dataList =  dictDataService.listDictDataLabel("procurement_type",procurementScheme.getProcurementType().toString());*/
-        String label = "";
-     switch (procurementScheme.getProcurementType()){
-         case 1:
-             label = "公开招标";
-         case 2:
-             label = "邀请招标";
-         case 3:
-             label = "询价";
-         case 4:
-             label = "单一来源";
-         default:
-     }
-        System.out.println("label:"+label);
-            requestDTO.setTitle("财务人员待办信息");
-        String  xm =procurementScheme.getFinanceConfirmName()+ "你好!" + project.getMinAccountFullName()+"项目的"+
-                procurementScheme.getProcurementSchemeName()+"、编号为"+ procurementScheme.getProcurementSchemeCode()+"、招标方式为"+ label+"于"+formatDate(tenderNotice.getCreateTime())+
-                "发布了招标文件、开启了招标工作，需要收取投标保证金。请您及时关注投标人是否按时缴纳保证金。";
-
-           System.out.println("xm:"+xm);
-            requestDTO.setContent(xm);
-            requestDTO.setArrivalTime(formatDate(new Date()));
-            requestDTO.setCreateTime(formatDate(new Date()));
-            String thridUserId = SecurityUtils.getThridUserId();
-            requestDTO.setMsgFromPerCode(StringUtils.isNotEmpty(thridUserId) ? Long.parseLong(thridUserId) : null);
-            requestDTO.setMsgFromPerName(SecurityUtils.getLoginUserNickName());
-            String findThirdUserId = findThirdUserId(procurementScheme.getFinanceConfirmId()==null?null:Long.valueOf(procurementScheme.getFinanceConfirmId()));
-            requestDTO.setMsgToPerCode(StringUtils.isNotEmpty(findThirdUserId) ? Long.parseLong(findThirdUserId) : null);
-            requestDTO.setMsgToPerName(procurementScheme.getFinanceConfirmName());
-            requestDTO.setFlowGroup(ThirdPartyTodoFlowGroupEnum.XCW_BID.getDesc());
-            requestDTO.setFlowModule(ThirdPartyTodoFlowModuleEnum.BID_MANAGE.getDesc());
-            requestDTO.setFlowName(procurementScheme.getFinanceConfirmName() + "的" + ThirdPartyTodoFlowGroupEnum.XCW_BID.getDesc());
-            requestDTO.setDetailUrl("/procurement/tendering");
-//            requestDTO.setDetailUrl("/procurement/plan-detail/IjE4MTkyODk4NDM3Njk0NzA5Nzgi");
-//            requestDTO.setUserObj("{\\\"id\\\":1111}");
-//            requestDTO.setUserObj(openPeople.toString());
-            //推送消息类型 1工作通知
-            requestDTO.setType(NumberConstant.ONE);
-            //推送公司类型 2晟晟
-            requestDTO.setCompanyType(NumberConstant.TWO);
-            messageList.add(requestDTO);
-        System.out.println("messageList:"+messageList);
-        parentRequestDTO.setMessageList(messageList);
-        parentRequestDTO.setAuthorization(SecurityUtils.getMasterControlToken());
-        System.out.println("推送:");
-        thridPartyTodoTaskService.pushTodoTask(parentRequestDTO);
-        System.out.println("推送完成:");
-    }
-
-    private String formatDate(Date date){
-        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ");
-        return sdf.format(date);
-    }
-
-    private String findThirdUserId(Long userId){
-        R<SysUser> sysUser = remoteuserservice.selectUserInFoById(userId, SecurityConstants.INNER);
-        if(sysUser.getCode() == HttpStatus.ERROR){
-            throw new CheckedException("获取用户信息失败");
-        }
-        if (null != sysUser.getData()){
-            return sysUser.getData().getThridUserId();
-        }
-        return null;
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public boolean aNewAdd(TenderNoticeVO tenderNoticeVO) {
-        Integer schemeType = tenderNoticeVO.getSchemeType();
         verifyNewAddParam(tenderNoticeVO);
         //删除旧招标公告数据
         this.remove(new LambdaUpdateWrapper<TenderNotice>()
                 .eq(TenderNotice::getSchemeId, tenderNoticeVO.getSchemeId()));
-        if(schemeType == NumberConstant.ONE)
-            return this.addNotice(tenderNoticeVO);
-        else
-            return this.add(tenderNoticeVO);
+        return this.add(tenderNoticeVO);
     }
 
     private void verifyNewAddParam(TenderNoticeVO tenderNoticeVO){
@@ -517,11 +260,9 @@ public class TenderNoticeServiceImpl extends ServiceImpl<TenderNoticeMapper,Tend
                 noticeId, noticeStatus, date);
     }
 
-    /** 获取投标单详情信息 */
     @Override
     public TenderNoticeDetailVO getInfo(Long schemeId, Long noticeId) {
         TenderNoticeDetailVO vo = new TenderNoticeDetailVO();
-        /* 获取公告对象 */
         TenderNotice tenderNotice = this.getOne(new LambdaQueryWrapper<TenderNotice>()
                 .eq(null != noticeId, TenderNotice::getId, noticeId)
                 .eq(TenderNotice::getSchemeId, schemeId));
@@ -530,68 +271,22 @@ public class TenderNoticeServiceImpl extends ServiceImpl<TenderNoticeMapper,Tend
         }
 
         vo.setTenderNotice(tenderNotice);
-        /* 获取 招标公告 对应 状态 */
         vo.setNoticeStatusText(TenderNoticeStatusEnum.getValueByCode(vo.getTenderNotice().getNoticeStatus()));
 
-        /* 招标公告变更记录对象 */
         TenderNoticeChangeRecord changeRecord = tenderNoticeChangeRecordService.getOne(
                 new LambdaQueryWrapper<TenderNoticeChangeRecord>()
-                .and(q -> q.eq(TenderNoticeChangeRecord::getNoticeStatus, null)
-                    .or().eq(TenderNoticeChangeRecord::getNoticeStatus, TenderNoticeStatusEnum.TENDER_ISSUE.getState()))
                 .eq(TenderNoticeChangeRecord::getNoticeId, tenderNotice.getId())
                 .eq(TenderNoticeChangeRecord::getType, NumberConstant.ONE)
                 .orderByDesc(TenderNoticeChangeRecord::getCreateTime).last("limit 1"));
         if (!ObjectUtils.isEmpty(changeRecord)){
-            /* 更新 投标截止时间 */
             vo.setBidEndTime(DateUtils.strToDate(changeRecord.getUpdateAfter(), DateUtils.YYYY_MM_DD_HH_MM_SS));
         }
-        /* 招标公告变更记录对象 */
-        TenderNoticeChangeRecord changeRecordNotice = tenderNoticeChangeRecordService.getOne(
-                new LambdaQueryWrapper<TenderNoticeChangeRecord>()
-                        .eq(TenderNoticeChangeRecord::getNoticeStatus, TenderNoticeStatusEnum.TENDER_NOTICE.getState())
-                        .eq(TenderNoticeChangeRecord::getNoticeId, tenderNotice.getId())
-                        .eq(TenderNoticeChangeRecord::getType, NumberConstant.ONE)
-                        .orderByDesc(TenderNoticeChangeRecord::getCreateTime).last("limit 1"));
-        if (!ObjectUtils.isEmpty(changeRecordNotice)){
-            /* 更新 报名截止时间 */
-            vo.setApplyTimeNotice(DateUtils.strToDate(changeRecordNotice.getUpdateAfter(), DateUtils.YYYY_MM_DD_HH_MM_SS));
-            vo.getTenderNotice().setApplyTimeNotice(DateUtils.strToDate(changeRecordNotice.getUpdateAfter(), DateUtils.YYYY_MM_DD_HH_MM_SS));
-        }
-        /* 获取 招标文件附件信息 */
         List<AttachmentVO> attachmentList = attachmentService.listAttachment(AttachmentTypeEnum.BIDING_NOTICE_DOC, tenderNotice.getId());
         vo.setAttachmentList(attachmentList);
 
-        /* 招标文件公告附件 */
-        Attachment attachmentNoticeData = attachmentService.getById(vo.getTenderNotice().getAttachIdNotice());
-        if (attachmentNoticeData!=null) {
-            AttachmentVO attachmentNotice = BeanCopierUtil.copyBean(attachmentNoticeData, AttachmentVO.class);
-            vo.setAttachmentNotice(attachmentNotice);
-        }
-
-        /* 获取 定标附件 */
         List<AttachmentVO> calibrationAttachmentList = attachmentService.listAttachment(AttachmentTypeEnum.CALIBRATION_DOCUMENT, tenderNotice.getId());
         vo.setCalibrationAttachmentList(calibrationAttachmentList);
 
-        /* 获取供应商报名列表 */
-        List<TenderApply> tenderApplyList = tenderApplyService.list(new LambdaQueryWrapper<TenderApply>()
-                .eq(TenderApply::getNoticeId, noticeId));
-        if (!ObjectUtils.isEmpty(tenderApplyList)) {
-            vo.setTenderApplyList(tenderApplyList);
-        }
-
-        //* 获取供应商范围报名列表 *//*
-        List<TenderNoticeRange> rangeList = tenderNoticeRangeService.list(new LambdaQueryWrapper<TenderNoticeRange>()
-                .eq(TenderNoticeRange::getNoticeId, noticeId));
-        for (TenderNoticeRange range : rangeList) {
-            Vendor vendor = vendorService.getById(range.getVendorId());
-            if(vendor!=null){
-                range.setVendorName(vendor.getEnterpriseName());
-            }
-        }
-        if (!ObjectUtils.isEmpty(rangeList)) {
-            vo.setRangeList(rangeList);
-        }
-        /* 设置 人员角色状态  */
         confirmInfo(vo, schemeId, noticeId);
         return vo;
     }
@@ -618,12 +313,8 @@ public class TenderNoticeServiceImpl extends ServiceImpl<TenderNoticeMapper,Tend
                 openTodoUserVal = Boolean.TRUE;
             }
         }
-        /* 是否为采购经办人 */
         vo.setPurchaseOfficer(purchaseOfficerVal);
-        /* 是否为财务确认人员 */
         vo.setFinanceConfirmUser(confirmUserVal);
-        /* 是否为开标待办人员 */
-        vo.setOpenTodoUser(openTodoUserVal);
         vo.setOpenTodoUser(openTodoUserVal);
     }
 
@@ -636,58 +327,21 @@ public class TenderNoticeServiceImpl extends ServiceImpl<TenderNoticeMapper,Tend
         }
         TenderNotice tenderNotice = BeanCopierUtil.copyBean(tenderNoticeSchemeInfo, TenderNotice.class);
 
-
-
-        /* 采购方案类型（1公开招标 2邀请招标 3询价采购 4单一来源） */
-        vo.setSchemeType(tenderNoticeSchemeInfo.getSchemeType());
-        /* 招标公告变更记录对象 */
-        TenderNoticeChangeRecord changeRecordNotice = tenderNoticeChangeRecordService.getOne(
-                new LambdaQueryWrapper<TenderNoticeChangeRecord>()
-                        .eq(TenderNoticeChangeRecord::getNoticeStatus, TenderNoticeStatusEnum.TENDER_NOTICE.getState())
-                        .eq(TenderNoticeChangeRecord::getNoticeId, id)
-                        .eq(TenderNoticeChangeRecord::getType, NumberConstant.ONE)
-                        .orderByDesc(TenderNoticeChangeRecord::getCreateTime).last("limit 1"));
-        if (!ObjectUtils.isEmpty(changeRecordNotice)){
-            /* 更新 报名截止时间 */
-            tenderNotice.setApplyTimeNotice(DateUtils.strToDate(changeRecordNotice.getUpdateAfter(), DateUtils.YYYY_MM_DD_HH_MM_SS));
-        }
-
-        /* 招标公告附件 */
-        Attachment attachmentNoticeData = attachmentService.getOne(new LambdaQueryWrapper<Attachment>()
-                .eq(Attachment::getId, tenderNotice.getAttachIdNotice()));
-        if (attachmentNoticeData!=null) {
-            AttachmentVO attachmentNotice = BeanCopierUtil.copyBean(attachmentNoticeData, AttachmentVO.class);
-            vo.setAttachmentNotice(attachmentNotice);
-        }
-
-        /* 招标文件附件 */
         List<AttachmentVO> attachmentList = attachmentService.listAttachment(AttachmentTypeEnum.BIDING_NOTICE_DOC, tenderNotice.getId());
         vo.setAttachmentList(attachmentList);
+
+        vo.setSchemeType(tenderNoticeSchemeInfo.getSchemeType());
+        vo.setTenderNotice(tenderNotice);
+        vo.setNoticeStatusText(TenderNoticeStatusEnum.getValueByCode(vo.getTenderNotice().getNoticeStatus()));
 
         TenderNoticeChangeRecord changeRecord = getNoticeTimeChange(tenderNotice.getId());
         if (!ObjectUtils.isEmpty(changeRecord)){
             vo.setBidEndTime(DateUtils.strToDate(changeRecord.getUpdateAfter(), DateUtils.YYYY_MM_DD_HH_MM));
-            /* 更新 投标截止时间 */
-            tenderNotice.setApplyTime(DateUtils.strToDate(changeRecord.getUpdateAfter(), DateUtils.YYYY_MM_DD_HH_MM_SS));
         }
-        /* 招标对象 */
-        vo.setTenderNotice(tenderNotice);
-        vo.setNoticeStatusText(TenderNoticeStatusEnum.getValueByCode(vo.getTenderNotice().getNoticeStatus()));
-
         //供应商范围TenderNoticeRange
         List<TenderNoticeRange> rangeList = tenderNoticeRangeService.list(new LambdaQueryWrapper<TenderNoticeRange>()
                 .eq(TenderNoticeRange::getNoticeId, id));
         vo.setRangeList(rangeList);
-
-        Vendor vendor = vendorService.getByLoginUser(SecurityUtils.getUserId());
-        long openCount = tenderApplyService.count(new LambdaQueryWrapper<TenderApply>()
-                .eq(TenderApply::getVendorId, vendor.getId())
-                .eq(TenderApply::getNoticeId, tenderNotice.getId()));
-        if(openCount > 0){
-            vo.setApplyStatus("已报名");
-        }else {
-            vo.setApplyStatus("未报名");
-        }
         return vo;
     }
 
@@ -709,87 +363,11 @@ public class TenderNoticeServiceImpl extends ServiceImpl<TenderNoticeMapper,Tend
     }
 
     @Override
-    public PageResult<VendorNoticeListVO> selectVendorNoticePageNotice(VendorNoticePageQueryVO queryDTO) {
-        IPage<VendorNoticeListVO> iPage = baseMapper.findVendorNoticePageNotice(queryDTO.toMybatisPage(), queryDTO);
-        iPage.getRecords().forEach(item -> {
-            item.setNoticeStatusText(TenderNoticeStatusEnum.getValueByCode(item.getNoticeStatus()));
-
-            /* 获取 {项目简称（最小核算项目名称）} */
-            item.setMinProjectName(getMinProjectName(item.getSchemeId()));
-            /* 招标公告变更记录对象 */
-            TenderNoticeChangeRecord changeRecordNotice = tenderNoticeChangeRecordService.getOne(
-                    new LambdaQueryWrapper<TenderNoticeChangeRecord>()
-                            .eq(TenderNoticeChangeRecord::getNoticeStatus, TenderNoticeStatusEnum.TENDER_NOTICE.getState())
-                            .eq(TenderNoticeChangeRecord::getNoticeId, item.getNoticeId())
-                            .eq(TenderNoticeChangeRecord::getType, NumberConstant.ONE)
-                            .orderByDesc(TenderNoticeChangeRecord::getCreateTime).last("limit 1"));
-            if (!ObjectUtils.isEmpty(changeRecordNotice)){
-                /* 更新 报名截止时间 */
-                item.setApplyTimeNotice(DateUtils.strToDate(changeRecordNotice.getUpdateAfter(), DateUtils.YYYY_MM_DD_HH_MM_SS));
-            }
-
-            /* 招标公告附件 */
-            Attachment attachmentNoticeData = attachmentService.getById(item.getAttachIdNotice());
-            if (attachmentNoticeData!=null) {
-                AttachmentVO attachmentNotice = BeanCopierUtil.copyBean(attachmentNoticeData, AttachmentVO.class);
-                item.setAttachmentNotice(attachmentNotice);
-            }
-
-        });
-
-        return new PageResult<>(iPage);
-    }
-
-    @Override
     public PageResult<VendorNoticeListVO> selectVendorNoticePage(VendorNoticePageQueryVO queryDTO) {
         IPage<VendorNoticeListVO> iPage = baseMapper.findVendorNoticePage(queryDTO.toMybatisPage(), queryDTO);
-        Vendor vendor = vendorService.getByLoginUser(SecurityUtils.getUserId());
         iPage.getRecords().forEach(item -> {
             item.setNoticeStatusText(TenderNoticeStatusEnum.getValueByCode(item.getNoticeStatus()));
 
-
-            BiddingInfo biddingInfo = biddingInfoService.getOne(new LambdaQueryWrapper<BiddingInfo>()
-                    .eq(BiddingInfo::getNoticeId, item.getNoticeId())
-                    .eq(BiddingInfo::getVendorId, vendor.getId())
-                    .orderByDesc(BiddingInfo::getTwiceQuotVersion).last("limit 1"));
-            if(biddingInfo!=null){
-                item.setBiddingInfoId(biddingInfo.getId());
-                item.setTwiceQuot(biddingInfo.getTwiceQuot());
-                item.setBidStatus("已投标");
-            }else{
-                item.setBidStatus("未投标");
-            }
-
-            /* 招标公告变更记录对象 */
-            TenderNoticeChangeRecord changeRecord = tenderNoticeChangeRecordService.getOne(
-                    new LambdaQueryWrapper<TenderNoticeChangeRecord>()
-                            .and(q -> q.eq(TenderNoticeChangeRecord::getNoticeStatus, null)
-                                    .or().eq(TenderNoticeChangeRecord::getNoticeStatus, TenderNoticeStatusEnum.TENDER_ISSUE.getState()))
-                            .eq(TenderNoticeChangeRecord::getNoticeId, item.getNoticeId())
-                            .eq(TenderNoticeChangeRecord::getType, NumberConstant.ONE)
-                            .orderByDesc(TenderNoticeChangeRecord::getCreateTime).last("limit 1"));
-            if (!ObjectUtils.isEmpty(changeRecord)){
-                /* 更新 投标截止时间 */
-                item.setApplyTime(DateUtils.strToDate(changeRecord.getUpdateAfter(), DateUtils.YYYY_MM_DD_HH_MM_SS));
-            }
-            /* 招标公告变更记录对象 */
-            TenderNoticeChangeRecord changeRecordNotice = tenderNoticeChangeRecordService.getOne(
-                    new LambdaQueryWrapper<TenderNoticeChangeRecord>()
-                            .eq(TenderNoticeChangeRecord::getNoticeStatus, TenderNoticeStatusEnum.TENDER_NOTICE.getState())
-                            .eq(TenderNoticeChangeRecord::getNoticeId, item.getNoticeId())
-                            .eq(TenderNoticeChangeRecord::getType, NumberConstant.ONE)
-                            .orderByDesc(TenderNoticeChangeRecord::getCreateTime).last("limit 1"));
-            if (!ObjectUtils.isEmpty(changeRecordNotice)){
-                /* 更新 报名截止时间 */
-                item.setApplyTimeNotice(DateUtils.strToDate(changeRecordNotice.getUpdateAfter(), DateUtils.YYYY_MM_DD_HH_MM_SS));
-            }
-
-            /* 招标公告附件 */
-            Attachment attachmentNoticeData = attachmentService.getById(item.getAttachIdNotice());
-            if (attachmentNoticeData!=null) {
-                AttachmentVO attachmentNotice = BeanCopierUtil.copyBean(attachmentNoticeData, AttachmentVO.class);
-                item.setAttachmentNotice(attachmentNotice);
-            }
             item.setMinProjectName(getMinProjectName(item.getSchemeId()));
         });
 
@@ -878,7 +456,7 @@ public class TenderNoticeServiceImpl extends ServiceImpl<TenderNoticeMapper,Tend
     @Override
     public Integer nextTenderNoticeStatus(Integer schemeType, Integer noticeStatus){
         Integer nextNoticeStatus = null;
-        if (schemeType == NumberConstant.ONE){/* 公开招标 */
+        if (schemeType == NumberConstant.ONE){
             TenderFlowPublicService publicService = new TenderFlowPublicService();
             nextNoticeStatus = publicService.nextFlow(TenderFlowPublicService.statusEnumList, noticeStatus);
         } else if (schemeType == NumberConstant.TWO){
@@ -925,46 +503,20 @@ public class TenderNoticeServiceImpl extends ServiceImpl<TenderNoticeMapper,Tend
                 throw new ParamValidateException("单一来源只能推荐1家供应商");
             }
         }
-        ProcurementScheme scheme = procurementSchemeService.getById(tenderNoticeVO.getSchemeId());
-        /* 采购方案 1公开招标 进入到这个 招标文件环节的需要验证 */
-        if (scheme.getProcurementType() == NumberConstant.ONE){
-//            TenderNotice tenderNoticeVerify = this.getOne(new LambdaQueryWrapper<TenderNotice>()
-//                    .eq(TenderNotice::getId, tenderNoticeVO.getId())
-//                    .ne(TenderNotice::getNoticeStatus, TenderNoticeStatusEnum.ABANDON_BID.getState()));
-            /* 如果不用id校验，旧数据就不会影响 */
-            TenderNotice tenderNoticeVerify = this.getOne(new LambdaQueryWrapper<TenderNotice>()
-                    .eq(TenderNotice::getSchemeId, tenderNoticeVO.getSchemeId())
-                    .ne(TenderNotice::getNoticeStatus, TenderNoticeStatusEnum.ABANDON_BID.getState()));
-            if (ObjectUtils.isEmpty(tenderNoticeVerify)){
-                throw new ParamValidateException("未获取到招标文件");
-            }
-        }else {
-            /* 直接进入到招标文件环节 */
-            TenderNotice tenderNotice = this.getOne(new LambdaQueryWrapper<TenderNotice>()
-                    .eq(TenderNotice::getSchemeId, tenderNoticeVO.getSchemeId())
-                    .ne(TenderNotice::getNoticeStatus, TenderNoticeStatusEnum.ABANDON_BID.getState()));
-            if (!ObjectUtils.isEmpty(tenderNotice)){
-                throw new ParamValidateException("一个采购方案只允许发布一个招标文件");
-            }
+
+        TenderNotice tenderNotice = this.getOne(new LambdaQueryWrapper<TenderNotice>()
+                .eq(TenderNotice::getSchemeId, tenderNoticeVO.getSchemeId())
+                .ne(TenderNotice::getNoticeStatus, TenderNoticeStatusEnum.ABANDON_BID.getState()));
+        if (!ObjectUtils.isEmpty(tenderNotice)){
+            throw new ParamValidateException("一个采购方案只允许发布一个招标文件");
         }
+
     }
 
 
-    /** 获取公告文件最新一条时间更改记录 */
+    /** 获取公告最新一条时间更改记录 */
     private TenderNoticeChangeRecord getNoticeTimeChange(Long noticeId){
         return tenderNoticeChangeRecordService.getOne(new LambdaQueryWrapper<TenderNoticeChangeRecord>()
-                .and(q -> q.eq(TenderNoticeChangeRecord::getNoticeStatus, null)
-                        .or().eq(TenderNoticeChangeRecord::getNoticeStatus, TenderNoticeStatusEnum.TENDER_ISSUE.getState()))
-                .eq(TenderNoticeChangeRecord::getNoticeId, noticeId)
-                .eq(TenderNoticeChangeRecord::getType, NumberConstant.ONE)
-                .orderByDesc(TenderNoticeChangeRecord::getCreateTime)
-                .last("limit 1"));
-    }
-
-    /** 获取公告报名最新一条时间更改记录 */
-    private TenderNoticeChangeRecord getNoticeTimeNoticeChange(Long noticeId){
-        return tenderNoticeChangeRecordService.getOne(new LambdaQueryWrapper<TenderNoticeChangeRecord>()
-                .eq(TenderNoticeChangeRecord::getNoticeStatus, TenderNoticeStatusEnum.TENDER_NOTICE.getState())
                 .eq(TenderNoticeChangeRecord::getNoticeId, noticeId)
                 .eq(TenderNoticeChangeRecord::getType, NumberConstant.ONE)
                 .orderByDesc(TenderNoticeChangeRecord::getCreateTime)

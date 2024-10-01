@@ -172,6 +172,4 @@ public interface ISysDeptService extends IService<SysDept>
     SysDept getTwoLevelDeptByDeptId(Long deptId);
 
     List<SysDept> getTwoLevelDepts();
-
-    List<SysDept> getDeptByThridDeptId(String thridDeptId);
 }

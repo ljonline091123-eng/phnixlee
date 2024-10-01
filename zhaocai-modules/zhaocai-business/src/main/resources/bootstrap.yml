@@ -12,14 +12,14 @@ spring:
     active: dev
   cloud:
     nacos:
-      username: nacos
-      password: nacos
       discovery:
         # 服务注册地址
-        server-addr: 192.168.240.17:31800
+        server-addr: 192.168.6.150:8848
+        metadata:
+          version: cm
       config:
         # 配置中心地址
-        server-addr: 192.168.240.17:31800
+        server-addr: 192.168.6.150:8848
         # 配置文件格式
         file-extension: yml
         # 共享配置

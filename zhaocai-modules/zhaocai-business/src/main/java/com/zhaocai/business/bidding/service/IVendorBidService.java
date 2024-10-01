@@ -17,15 +17,7 @@ import com.zhaocai.common.core.bean.PageResult;
 public interface IVendorBidService {
 
     /**
-     * 在线投标报名列表-分页
-     *
-     * @param queryDTO 在线投标列表查询条件
-     * @return 结果
-     */
-    PageResult<VendorNoticeListVO> pageNotice(VendorNoticePageQueryVO queryDTO);
-
-    /**
-     * 在线投标文件列表-分页（投标展示招标公告列表）
+     * 在线投标列表-分页（投标展示招标公告列表）
      *
      * @param queryDTO 在线投标列表查询条件
      * @return 结果
@@ -39,14 +31,6 @@ public interface IVendorBidService {
      * @return
      */
     TenderNoticeDetailVO detail(Long noticeId);
-
-    /**
-     * 投标报名 招标报名
-     *
-     * @param bidVO
-     * @return
-     */
-    boolean bidNotice(BidVO bidVO);
 
     /**
      * 投标
@@ -78,7 +62,7 @@ public interface IVendorBidService {
      * @param bidVO
      * @return
      */
-//    boolean twiceBid(BidVO bidVO);
+    boolean twiceBid(BidVO bidVO);
 
     PageResult<WinningNotifiListVO> winningNotifiPage(WinningNotifiPageQueryVO queryDTO);
 

@@ -1,7 +1,6 @@
 package com.zhaocai.business.bidding.vo.res;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
-import com.zhaocai.business.bidding.domain.TenderApply;
 import com.zhaocai.business.bidding.domain.TenderNotice;
 import com.zhaocai.business.bidding.domain.TenderNoticeRange;
 import com.zhaocai.business.pub.vo.res.AttachmentVO;
@@ -32,9 +31,6 @@ public class TenderNoticeDetailVO {
     @ApiModelProperty(value =  "是否投标（0未投标 1已投标）")
     private Integer bidStatus;
 
-    @ApiModelProperty(value =  "是否报名（未报名 已报名）")
-    private String applyStatus;
-
     @ApiModelProperty(value =  "是否投标时间结束（0未结束 1已结束）")
     private Integer bidEndStatus;
 
@@ -46,19 +42,8 @@ public class TenderNoticeDetailVO {
     @ApiModelProperty(value =  "投标截止时间")
     private Date bidEndTime;
 
-    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
-    @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss")
-    @ApiModelProperty(value =  "报名截止时间")
-    private Date applyTimeNotice;
-
     @ApiModelProperty(value =  "投标截止时间戳")
     private Long endTimeStamp;
-
-    @ApiModelProperty(value =  "投标公告附件")
-    private AttachmentVO attachmentNotice;
-
-    @ApiModelProperty(value =  "投标公告报名供应商列表")
-    private List<TenderApply> tenderApplyList;
 
     @ApiModelProperty(value =  "投标公告附件")
     private List<AttachmentVO> attachmentList;
@@ -66,11 +51,9 @@ public class TenderNoticeDetailVO {
     @ApiModelProperty(value =  "定标附件")
     private List<AttachmentVO> calibrationAttachmentList;
 
-    /* 弃用 */
     @ApiModelProperty(value =  "二次报价设置（默认0关 1开）")
     private Integer twiceQuot;
 
-    /* 弃用 */
     @JsonFormat(pattern = "yyyy-MM-dd")
     @ApiModelProperty(value =  "二次报价截止时间")
     private Date twiceTime;

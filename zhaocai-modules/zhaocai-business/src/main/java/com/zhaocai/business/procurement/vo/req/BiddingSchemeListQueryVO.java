@@ -1,12 +1,9 @@
 package com.zhaocai.business.procurement.vo.req;
 
-import com.baomidou.mybatisplus.annotation.TableField;
 import com.zhaocai.common.core.bean.PageRecive;
 import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;
 import lombok.Data;
-
-import java.util.List;
 
 /**
  * @author ssy
@@ -52,12 +49,4 @@ public class BiddingSchemeListQueryVO extends PageRecive {
 
     @ApiModelProperty(value = "财务确认人员id")
     private String financeConfirmId;
-
-    /** 类型 */
-    @TableField(exist = false)
-    private String type;
-
-    /** 项目编号 */
-    @TableField(exist = false)
-    private List<String> projectCodeList;
 }

@@ -1,7 +1,11 @@
 package com.zhaocai.business.bidding.controller;
 
 import com.zhaocai.business.bidding.service.IBiddingInfoService;
-import com.zhaocai.business.bidding.vo.req.*;
+import com.zhaocai.business.bidding.vo.req.AbandonBidVO;
+import com.zhaocai.business.bidding.vo.req.EvalAttachUploadVO;
+import com.zhaocai.business.bidding.vo.req.EvaluatBidVO;
+import com.zhaocai.business.bidding.vo.req.TwiceBidConfVO;
+import com.zhaocai.business.bidding.vo.req.UrgeExpertMesVO;
 import com.zhaocai.business.bidding.vo.req.query.BiddingInfoQueryVO;
 import com.zhaocai.business.bidding.vo.req.query.BiddingQuotationQueryVO;
 import com.zhaocai.business.bidding.vo.res.*;
@@ -59,7 +63,7 @@ public class BiddingInfoController extends BladeController {
     }
 
     /**
-     * 获取投标单详情信息 business/info/{id}
+     * 获取投标单详情信息
      */
     @GetMapping(value = "/{id}")
     public ResultData<BiddingInfoDetailVO> getInfo(@PathVariable(value = "id", required = false) Long id)
@@ -154,7 +158,7 @@ public class BiddingInfoController extends BladeController {
      * 结束调价
      */
     @PostMapping("/twiceBidFinish")
-    public ResultData twiceBidFinish(@RequestBody @Valid TwiceBidConOverVO twiceBidConfVO) {
+    public ResultData twiceBidFinish(@RequestBody @Valid TwiceBidConfVO twiceBidConfVO) {
         return ResultData.status(biddingInfoService.twiceBidFinish(twiceBidConfVO));
     }
 
