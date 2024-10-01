@@ -21,8 +21,9 @@
               style="width: 300px; height: 32px"
               :normalizer="normalize(item)"
               v-model="queryParams.deptId"
-              :options="item.options"
+              :options="deptOptions"
               :placeholder="`请选择${item.label}`"
+              :disabled="scopeType!='1'"
             >
               <label
                 slot="option-label"
@@ -57,7 +58,7 @@
             >
             </el-date-picker>
           </el-form-item>
-          <el-form-item :label="item.label" :prop="item.prop" v-else>
+          <el-form-item :label="item.label" :prop="item.prop"   v-if="item.type === 'input'">
             <el-input
               v-model="queryParams[item.prop]"
               :placeholder="`请输入${item.label}`"
@@ -67,6 +68,22 @@
               style="height: 34px"
             />
           </el-form-item>
+          <el-form-item :label="item.label" :prop="item.prop" v-if="item.type === 'select'">
+            <el-select
+            v-model="queryParams[item.prop]"
+            :placeholder="`请输入${item.label}`"
+            clearable
+            style="width: 180px"
+          >
+            <el-option
+              v-for="dict in dictObj"
+              :key="dict.value"
+              :label="dict.label"
+              :value="dict.value"
+            />
+          </el-select>
+          </el-form-item>
+
         </span>
         <el-form-item>
           <el-button
@@ -77,6 +94,15 @@
             >查询</el-button
           >
         </el-form-item>
+        <el-button
+          type="primary"
+          plain
+          icon="el-icon-download"
+          size="small"
+          @click="handleExport"
+          v-show="exportFlag"
+        >导出
+        </el-button>
       </el-form>
       <el-table
         :data="tableData"
@@ -138,12 +164,17 @@
 <script>
 import Treeselect from "@riophae/vue-treeselect";
 import "@riophae/vue-treeselect/dist/vue-treeselect.css";
-
+import {mapGetters} from "vuex";
+import { deptTree,  } from "@/api/reportForm/managePageReport";
+import { listUnderlingDict,  } from "@/api/procurement/contract";
 export default {
   components: { Treeselect },
   data() {
     return {
       queryParams: {},
+      dictObj: [],
+      deptOptions:[],
+      scopeType:'',
     };
   },
   props: {
@@ -166,8 +197,92 @@ export default {
       type: Boolean,
       default: false,
     },
+    // 导出
+    exportFlag: {
+      type: Boolean,
+      default: false,
+    },
+  },
+  computed:{
+    ...mapGetters(['project','org']),
+  },
+  watch:{
+      '$store.state.app.scopeType': {
+        handler(newVal, oldVal) {
+          console.log('scopeType-newVal', newVal)
+          console.log('scopeType-oldVal', oldVal)
+          if(newVal){
+            console.log('scopeType-this.$store.state.app.scopeType', this.$store.state.app.scopeType)
+            console.log('scopeType-this.project', this.project)
+            console.log('scopeType-this.org', this.org)
+            if(newVal == 1) {
+              this.queryParams.id = '';
+              this.queryParams.minAccountCode = this.project.code;
+            }else{
+              this.queryParams.id =  this.org;
+              this.queryParams.minAccountCode = '';
+            }
+            console.log('scopeType-this.queryParams', this.queryParams)
+            this.$emit("query", this.queryParams);
+          }
+        },
+        immediate: true
+      },
+      'project.id': {
+        handler(newVal){
+          console.log('project.id-newVal', newVal)
+          if(newVal) {
+            console.log('project.id-this.$store.state.app.scopeType', this.$store.state.app.scopeType)
+            console.log('project.id-this.project', this.project)
+            console.log('project.id-this.org', this.org)
+            if(this.$store.state.app.scopeType == "1"){
+              this.queryParams.id = '';
+              this.queryParams.minAccountCode = this.project.code
+            } else {
+              this.queryParams.id =  this.org;
+              this.queryParams.minAccountCode = '';
+            }
+            console.log('project.id-this.queryParams', this.queryParams)
+            this.$emit("query", this.queryParams);
+          }
+        }
+      },
+      org: {
+        handler(newVal) {
+          console.log('org-newVal', newVal)
+          if(newVal) {
+            console.log('org-this.$store.state.app.scopeType', this.$store.state.app.scopeType)
+            console.log('org-this.project', this.project)
+            console.log('org-this.org', this.org)
+            if(this.$store.state.app.scopeType == "1"){
+              this.queryParams.id = '';
+              this.queryParams.minAccountCode = this.project.code
+            } else {
+              this.queryParams.id = newVal;
+              this.queryParams.minAccountCode = '';
+            }
+            console.log('org-this.queryParams', this.queryParams)
+            this.$emit("query", this.queryParams);
+          }
+        }
+      }
+  },
+  mounted() {
+    this.scopeType=this.$store.state.app.scopeType
+    this.getListUnderlingDict('PROJECT_FORMAT');
+
   },
   methods: {
+     //获取字典
+     async getListUnderlingDict(type) {
+      const res = await listUnderlingDict(type);
+      const resMap = res.data.map((item) => ({
+        value: item.dictValue,
+        label: item.dictLabel,
+      }));
+      console.log(JSON.stringify(resMap));
+      this.dictObj = resMap;
+    },
     goDetail(row, method) {
       method(row);
     },
@@ -188,8 +303,32 @@ export default {
       };
     },
     handleQuery() {
+      console.log("showTable-scopeType-查询",this.$store.state.app.scopeType)
+      console.log("showTable-queryParams-查询",this.queryParams)
+      console.log("showTable-project-查询",this.project)
+      console.log("showTable-org-查询",this.org)
       this.$emit("query", this.queryParams);
-      console.log("handleQuery");
+    },
+    handleExport() {
+      this.$emit("export", this.queryParams);
+    },
+      /** 查询部门下拉树结构 */
+    //获取组织
+    getDeptTree(id) {
+      // this.deptTreeLoading = true;
+      deptTree({
+        thridOrgId: id,
+      })
+        .then((response) => {
+          this.deptOptions = this.handleTree(response.data, "deptId");
+          // this.deptTreeLoading = false;
+        })
+        .then(() => {
+          this.initButtons();
+        })
+        .catch(() => {
+          this.deptTreeLoading = false;
+        });
     },
   },
 };

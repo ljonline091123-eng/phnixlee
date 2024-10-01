@@ -347,26 +347,23 @@
               <el-form-item>
                 <el-button
                   type="primary"
-                  icon="el-icon-search"
                   size="small"
                   @click="handleQuery"
                   >查询</el-button
                 >
                 <el-button
                   type="primary"
-                  icon="el-icon-search"
                   size="small"
                   @click="advancedDialogVisible = true"
                 >
                   高级筛选
                 </el-button>
                 <el-button
-                  type="warning"
+                  type="primary"
                   plain
-                  icon="el-icon-upload2"
+                  icon="el-icon-download"
                   size="small"
                   @click="handleExport"
-                  v-hasPermi="['system:post:export']"
                   >导出
                 </el-button>
               </el-form-item>
@@ -382,6 +379,7 @@
               :header-cell-style="{
                 background: '#F3F2F8',
                 textAlign: 'center',
+                padding: '8px 0'
               }"
             >
               <el-table-column

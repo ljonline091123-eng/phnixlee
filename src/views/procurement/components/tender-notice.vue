@@ -6,7 +6,7 @@
         ref="form"
         :rules="rules"
         label-position="right"
-        label-width="120px"
+        label-width="140px"
         size="medium"
         @submit.native.prevent
       >
@@ -113,6 +113,13 @@
               prop="applyTimeNotice"
               class="required label-right-align"
             >
+              <template #label>
+                报名截止时间
+                <el-tooltip content="报名截止时间从当天24点开始计算至少120个小时(5天)！" placement="top">
+                  <i class="el-icon-question"></i>
+                </el-tooltip>
+              </template>
+
               <el-date-picker
                 v-model="formData.applyTimeNotice"
                 type="datetime"
@@ -172,7 +179,7 @@
             </el-form-item>
           </el-col>
           <el-col :span="12" class="grid-cell">
-            <el-form-item label=" 招标公告模板" prop="fileTemplate">
+            <el-form-item label=" 招标公告" prop="fileTemplate">
               <el-upload
                 :action="uploadFileUrl"
                 :limit="1"
@@ -186,6 +193,20 @@
             </el-form-item>
           </el-col>
         </el-row>
+        <!-- <el-row v-if="selectVendorsInfo.length">
+          <el-form-item
+            label="选择供应商"
+          >
+            <div>
+              <el-tag
+                v-for="item in selectVendorsInfo" :key="item.id" type="info" style="margin-right: 8px;"
+                :closable="!(formData.id ? true : false || isSubmit) && scheme.procurementType !== 1" @close="deleteSelectedVendor(item)"
+              >
+                <span>{{ item.enterpriseName || item.vendorName }}</span>
+              </el-tag>
+            </div>
+          </el-form-item>
+        </el-row> -->
 
         <PageTitle title="招标公告内容" marginBottom="15px"/>
         <FileModule
@@ -474,8 +495,9 @@
             type="primary"
             @click="confirmModify('modifyRef')"
             style="width: 100px"
+            :loading="isUpdate"
             size="small"
-          >确 定
+          >{{ isUpdate ? "变更中..." : "确定" }}
           </el-button
           >
           <el-button
@@ -609,8 +631,8 @@ export default {
                 callback()
               }
 
-              }
             }
+          }
         ],
         applyTimeNotice: [{required: true, message: "请选择报名截止时间", trigger: "blur"}],
         contactNotice: [{required: true, message: "请输入联系人", trigger: "blur"},{
@@ -663,6 +685,7 @@ export default {
       },
       currentContract: {},
       isSubmit: false,
+      isUpdate: false,
       indexs: [],
       updateAfterTimeOption: {
         // 设置日期时间显示格式，只显示年月日时分
@@ -736,10 +759,12 @@ export default {
       vendorLoading: false,
       vendorList: [],
       vendorTotal: 0,
-      vendors: [], //选择的供应商
+      vendors: [], //table选择的供应商
+      vendorsSelection: [], //table选择的供应商-完整信息
       addressLoading: false,
       categoryLoading: false,
       selectVendors: [],
+      selectVendorsInfo: [], //确定选择的供应商-完整信息
       QAVisible: false, //是否显示答疑弹窗
       QAForm: {},
       QAList: [],
@@ -772,7 +797,7 @@ export default {
     },
   },
   created() {
-     const {attachmentNotice} = this.noticeDetail;
+    const {attachmentNotice} = this.noticeDetail;
     // if (!this.noticeDetail.tenderNotice) {
     //   this.$set(this.formData, "applyTime", bidDeadline);
     // }
@@ -824,7 +849,7 @@ export default {
             schemeType: this.scheme.procurementType,
             vendorIds: this.selectVendors,
             biddingDocAttachList: this.formData.fileTemplate,
-            applyTime: "2024-09-30 00:00:00"
+            applyTime: this.scheme.bidDeadline
           };
 
           console.log(formData, "formData");
@@ -886,6 +911,7 @@ export default {
     },
     /** 新增文件公告修改 */
     async addUpdateNotice() {
+      this.isUpdate = true
       const {id} = this.noticeDetail.tenderNotice
         ? this.noticeDetail.tenderNotice
         : {};
@@ -901,11 +927,20 @@ export default {
       } catch (err) {
         console.log(err);
       }
+      this.isUpdate = false
       this.modifyVisible = false;
     },
     //设置供应商
     setVendor() {
       this.vendorVisible = true;
+      this.vendorList.forEach((row) => {
+        if (this.selectVendors.indexOf(row.id)>-1) {
+          // console.log("需要勾选",row.enterpriseName);
+          this.$refs.multipleTable.toggleRowSelection(row, true);
+        } else {
+          this.$refs.multipleTable.toggleRowSelection(row, false);
+        }
+      });
       this.getVendorList();
       this.listAreaDivisionTree();
       this.getVendorClassifyTree();
@@ -935,6 +970,7 @@ export default {
     /** 已选择的供应商 */
     handleSelectionVendor(selection) {
       this.vendors = selection.map((item) => item.id);
+      this.vendorsSelection = selection;
     },
     /** 确认供应商 */
     confirmVendor() {
@@ -942,7 +978,24 @@ export default {
       if (vendors.length === 0) return this.$message.error("请选择供应商");
       this.vendorVisible = false;
       this.selectVendors = vendors;
+      this.selectVendorsInfo = this.vendorsSelection;
       console.log(this.vendors, "this.vendors");
+    },
+    /** 删除供应商 */
+    deleteSelectedVendor(item) {
+      // console.log("删除供应商",item);
+      for (let i = 0; i < this.selectVendorsInfo.length; i++) {
+        if (this.selectVendorsInfo[i] == item) {
+          this.selectVendorsInfo.splice(i, 1);
+          break;
+        }
+      }
+      if (this.selectVendorsInfo.length) {
+        this.selectVendors = this.selectVendorsInfo.map((item) => item.id);
+      } else {
+        this.selectVendors = [];
+      }
+      this.vendors = this.selectVendors;
     },
     setModify() {
       this.modifyVisible = true;

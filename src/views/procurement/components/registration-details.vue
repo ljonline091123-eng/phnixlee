@@ -3,7 +3,7 @@
     <div class="context">
       <PageTitle title="报名供应商" marginBottom="15px">
         <template #leftSuffix>
-          <span style="margin-left: 16px;color: #ff0000;font-size: 13px;">{{timeDifferenceElement}}</span>
+          <span style="margin-left: 16px;color: #ff0000;font-size: 13px;" v-if="(noticeDetail.tenderNotice && noticeDetail.tenderNotice.noticeStatus === 12)">{{timeDifferenceElement}}</span>
         </template>
         <div class="page-title-right">
           <el-button

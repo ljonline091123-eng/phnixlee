@@ -1,10 +1,12 @@
 import { mapGetters } from 'vuex'
 import {listDept} from "@/api/system/dept";
+import { deptTree,  } from "@/api/reportForm/managePageReport";
 
 export  const mixin = {
   data() {
     return {
       queryParams:{},
+      deptOptions: [],
       loading:false
     }
   },
@@ -20,25 +22,28 @@ export  const mixin = {
      */
     handleQuery(params) {
       // * 拆分dateRange
+      console.log("mixin-scopeType-查询",this.$store.state.app.scopeType)
+      console.log("mixin-queryParams-查询",this.params)
+      console.log("mixin-project-查询",this.project)
+      console.log("mixin-org-查询",this.org)
       params.startTime = params.dateRange && params.dateRange[0]
       params.endTime =  params.dateRange && params.dateRange[1]
-      this.queryParams.assign({}, this.queryParams, params)
+      this.queryParams = Object.assign({}, this.queryParams, params)
       this.getList(this.queryParams)
     },
+    /**
+     * 下载
+     * @param params
+     */
+    handleExport(params) {
+      params.startTime = params.dateRange && params.dateRange[0]
+      params.endTime =  params.dateRange && params.dateRange[1]
+      this.queryParams = Object.assign({}, this.queryParams, params)
+      this.getExport(this.queryParams)
+    },
+
   },
-  computed:{
-    ...mapGetters(['project']),
-  },
-  watch:{
-    project:{
-      handler(newVal,oldVal){
-        if(oldVal === undefined || newVal.id !== oldVal.id){
-          this.queryParams.projectCode = newVal.code
-          this.getList(this.queryParams)
-        }
-      },
-      immediate: true
-    }
-  }
+
+
 
 }

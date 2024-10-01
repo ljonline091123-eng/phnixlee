@@ -2,6 +2,8 @@
   <div class="app-container">
     <BackButton path="/procurement/bindding" title="招标管理详情" />
     <el-col :span="20" :xs="24" v-loading="loadingDetail">
+      <TenderNotice v-if="currentState==='notice'" :scheme="scheme" @changeState="changeState" :noticeDetail="noticeDetail"></TenderNotice>
+      <RegistrationDetails v-if="currentState==='registrationDetails'" :scheme="scheme" @changeState="changeState" :noticeDetail="noticeDetail"></RegistrationDetails>
       <!-- 招标文件-->
       <TenderDocuments
         :noticeDetail="noticeDetail"
@@ -73,8 +75,8 @@
             >
               <template #title>
                 <a href="javascript:;" @click="goStep(item.value)">{{
-                  item.label
-                }}</a>
+                    item.label
+                  }}</a>
               </template>
             </el-step>
           </el-steps>
@@ -95,6 +97,8 @@ import DefineBid from "./components/define-bid.vue";
 import PublicityBid from "./components/publicity-bid.vue";
 import ResultBid from "./components/result-bid.vue";
 import BackButton from "@/components/BackButton/index.vue";
+import TenderNotice from "@/views/procurement/components/tender-notice.vue";
+import RegistrationDetails from "@/views/procurement/components/registration-details.vue";
 export default {
   components: {
     TenderDocuments,
@@ -104,6 +108,8 @@ export default {
     PublicityBid,
     ResultBid,
     BackButton,
+    TenderNotice,
+    RegistrationDetails
   },
   data() {
     return {
@@ -113,6 +119,8 @@ export default {
       currentState: "",
       stepList: {
         1: [
+          { label: "招标公告", value: 11 },
+          { label: "报名情况", value: 12 },
           { label: "招标文件", value: 0 },
           { label: "回标情况", value: 1 },
           { label: "评标", value: 2 },
@@ -157,7 +165,6 @@ export default {
       Base64.decode(decodeURIComponent(this.$route.params.params))
     );
     this.scheme = param;
-    console.log(this.scheme, "this.scheme.noticeStatus");
     // let status = param.noticeStatus || 0
     // let step = 0
     // if(status === 1){
@@ -166,13 +173,17 @@ export default {
     if (this.scheme.noticeStatus !== 0) {
       this.getNoticeDetail();
     } else {
-      this.goStep(0);
+      if (this.scheme.procurementType === 1) {
+        this.goStep(11);
+      } else {
+        this.goStep(0);
+      }
     }
   },
   methods: {
     async getNoticeDetail() {
       this.loadingDetail = true;
-      const { id, noticeId, procurementType, noticeStatus } = this.scheme;
+      const {id, noticeId, procurementType, noticeStatus} = this.scheme;
       try {
         const res = await getNoticeDetail(
           id,
@@ -181,8 +192,7 @@ export default {
         this.tenantId = res.data?.tenderNotice?.id;
         this.authorityId = res.data?.tenderNotice?.wfProcessId;
         this.attachmentDetails = res.data?.calibrationAttachmentList || [];
-        this.isDisabledDeposit =
-          res.data?.financeConfirmUser === true ? false : true;
+        this.isDisabledDeposit = res.data?.financeConfirmUser === true ? false : true;
         this.isShowApprovalDetails = this.authorityId ? true : false;
         if (
           res.data?.tenderNotice?.noticeStatus === 5 &&
@@ -199,13 +209,17 @@ export default {
         }
         this.noticeDetail = res.data || {};
         let status = this.noticeDetail.tenderNotice?.noticeStatus || 0;
+        // ! TODO 跳转逻辑待改
         let step = 0;
         if (status === 1) {
           step = 1;
         } else if (status === 2 || status === 3 || status === 4) {
+        // ? 2开标/3评标/4二次洽商
           step = 2;
         } else if (status === 5) {
+        // ? 5定标报告
           if (procurementType === 4) {
+        // ? 4 单一来源
             step = 2;
           } else {
             step = 3;
@@ -217,6 +231,20 @@ export default {
             step = 3;
           } else {
             step = 5;
+          }
+        }else if(status === 11) {
+          // * 代表招标公告
+          step = 11
+        }else if(status === 12) {
+          // * 代表报名情况
+          step = 12
+        }else if(status === 13) {
+          // * 代表招标文件（编制）
+          step = 0
+        }else {
+          if(procurementType === 1) {
+            // * procurementType为1的情况下进入招标公告
+            step = 11
           }
         }
         this.goStep(step);
@@ -238,17 +266,28 @@ export default {
       //noticeStatus 7  结果发布
       //noticeStatus 8  完成
       const noticeStatus = this.noticeDetail?.tenderNotice?.noticeStatus || 0;
-      const { procurementType } = this.scheme;
+      const {procurementType} = this.scheme;
       if (steps === 0) {
+        if(procurementType === 1) {
+          if(noticeStatus === 11 || noticeStatus === 12 || !noticeStatus) return;
+        }
         this.currentState = "file";
         this.currentStep = steps;
       } else if (steps === 1) {
         console.log(noticeStatus, "noticeStatus");
-        if (noticeStatus < 1) return; //noticeStatus 1 发布
+        if(procurementType === 1) {
+          if (noticeStatus < 1 || noticeStatus === 11 || noticeStatus === 12 || noticeStatus === 13) return;
+        }else {
+          if (noticeStatus < 1) return; //noticeStatus 1 发布
+        }
         this.currentState = "back";
         this.currentStep = steps;
       } else if (steps === 2) {
-        if (noticeStatus < 2) return; //noticeStatus 2 开标
+        if(procurementType === 1) {
+          if (noticeStatus < 2 || noticeStatus === 11 || noticeStatus === 12 || noticeStatus === 13) return;
+        }else {
+          if (noticeStatus < 2) return; //noticeStatus 2 开标
+        }
         if (procurementType === 4) {
           this.currentState = "define";
         } else {
@@ -257,7 +296,11 @@ export default {
         this.currentStep = steps;
       } else if (steps === 3) {
         if (procurementType === 4 && noticeStatus < 6) return;
-        if (noticeStatus < 5) return; //noticeStatus 3 评标
+        if(procurementType === 1) {
+          if (noticeStatus < 5 || noticeStatus === 11 || noticeStatus === 12 || noticeStatus === 13) return;
+        }else {
+          if (noticeStatus < 5) return; //noticeStatus 3 评标
+        }
         if (procurementType === 4) {
           this.currentState = "result";
         } else {
@@ -265,7 +308,11 @@ export default {
         }
         this.currentStep = steps;
       } else if (steps === 4) {
-        if (noticeStatus < 6) return;
+        if(procurementType === 1) {
+          if (noticeStatus < 6 || noticeStatus === 11 || noticeStatus === 12 || noticeStatus === 13) return;
+        }else {
+          if (noticeStatus < 6) return;
+        }
         if (procurementType === 2 || procurementType === 3) {
           this.currentState = "result";
         } else {
@@ -273,7 +320,11 @@ export default {
         }
         this.currentStep = steps;
       } else if (steps === 5) {
-        if (noticeStatus < 7) return;
+        if(procurementType === 1) {
+          if (noticeStatus < 7 || noticeStatus === 11 || noticeStatus === 12 || noticeStatus === 13) return;
+        }else {
+          if (noticeStatus < 7) return;
+        }
         this.currentState = "result";
         if (procurementType === 2 || procurementType === 3) {
           this.currentStep = 4;
@@ -282,6 +333,18 @@ export default {
         } else {
           this.currentStep = steps;
         }
+      } else if (steps === 11) {
+        this.currentState = "notice";
+        this.currentStep = -2;
+      }else if (steps === 12) {
+        // * 公告和废标时不能点
+        if (noticeStatus === 11 || !!!noticeStatus ) return;
+        this.currentState = "registrationDetails";
+        this.currentStep = -1;
+      }
+      // * 公开招标新加了两个步骤（招标公告和报名情况）
+      if (procurementType === 1) {
+        this.currentStep += 2
       }
     },
     changeState(step) {
@@ -310,16 +373,20 @@ export default {
   height: 400px;
   padding-left: 30px;
 }
+
 .step_item {
   font-size: 14px;
   padding-bottom: 16px;
 }
+
 ::v-deep .step_item .el-step__title.is-finish {
   color: #2b4acb !important;
 }
+
 ::v-deep .step_item .el-step__description.is-finish {
   color: #2b4acb !important;
 }
+
 ::v-deep .step_item .el-step__head.is-finish {
   color: #2b4acb;
   border-color: #2b4acb;

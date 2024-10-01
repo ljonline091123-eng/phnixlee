@@ -11,21 +11,38 @@
         @submit.native.prevent
       >
         <PageTitle title="基本信息" marginBottom="15px">
-          <div class="page-title-right">
-            <el-button
-              type="success"
-              icon="el-icon-plus"
-              @click="setVendor"
-              size="small"
-              v-if="!formData.id"
-              :disabled="
+          <div class="page-title-right" style="flex: 1;justify-content: flex-end">
+<!--          为1的时候展示这个截止时间并且需要显示时-->
+            <div v-if="noticeDetail.tenderNotice && noticeDetail.tenderNotice.noticeStatus === 1 && needTime"   style="flex: 1;display: flex;justify-content: center;margin-right: 8px;font-size: 13px;color:#ff0000;font-weight: normal">
+              <div style="margin-right: 80px">
+                <div style="margin-right: 8px">方案：{{ scheme && scheme.procurementSchemeName  }}</div>
+                <!--                noticeDetail.tenderNotice && noticeDetail.tenderNotice.applyTime-->
+                <div>当前北京时间：{{formatNowDate}}</div>
+              </div>
+
+              <div>
+                <div>投标截止时间：{{formatApplyTime}}</div>
+                <span>投标截止时间倒计时：{{timeDifferenceElement}}</span>
+              </div>
+
+            </div>
+            <div>
+              <el-button
+                type="success"
+                icon="el-icon-plus"
+                @click="setVendor"
+                size="small"
+                v-if="setVendorShow"
+                :disabled="
                 noticeDetail.purchaseOfficer === undefined
                   ? false
                   : !noticeDetail.purchaseOfficer
               "
               >设置供应商范围</el-button
-            >
-            <template v-if="updateTotal > 0 && formData.id">
+              >
+            </div>
+
+            <template v-if="updateTotal > 0 && answerAndChangeShow">
               <el-badge
                 :value="updateTotal"
                 v-if="formData.id"
@@ -44,7 +61,7 @@
                 >
               </el-badge>
             </template>
-            <div class="page-title-right-item" v-else-if="formData.id">
+            <div class="page-title-right-item" v-else-if="answerAndChangeShow">
               <el-button
                 type="primary"
                 size="small"
@@ -57,7 +74,7 @@
                 >变更</el-button
               >
             </div>
-            <template v-if="QATotal > 0 && formData.id">
+            <template v-if="QATotal > 0 && answerAndChangeShow">
               <el-badge :value="QATotal" class="page-title-right-item">
                 <el-button
                   type="primary"
@@ -72,7 +89,7 @@
                 >
               </el-badge>
             </template>
-            <div class="page-title-right-item" v-else-if="formData.id">
+            <div class="page-title-right-item" v-else-if="answerAndChangeShow">
               <el-button
                 type="primary"
                 size="small"
@@ -88,9 +105,10 @@
             <el-button
               type="primary"
               size="small"
+              style="margin-left: 8px"
               @click="submitForm('form')"
               :loading="isSubmit"
-              v-if="!formData.id || isSubmit"
+              v-if="applyButtonShow || isSubmit"
               :disabled="
                 noticeDetail.purchaseOfficer === undefined
                   ? false
@@ -100,6 +118,7 @@
             >
           </div>
         </PageTitle>
+
         <el-row :gutter="40">
           <el-col :span="8" class="grid-cell">
             <el-form-item
@@ -200,6 +219,20 @@
               />
             </el-form-item>
           </el-col>
+        </el-row>
+        <el-row v-if="selectVendorsInfo.length && scheme.procurementType != 1">
+          <el-form-item
+            label="选择供应商"
+          >
+            <div>
+              <el-tag
+                v-for="item in selectVendorsInfo" :key="item.id" type="info" style="margin-right: 8px;"
+                :closable="!(formData.id ? true : false || isSubmit)" @close="deleteSelectedVendor(item)"
+              >
+                <span>{{ item.enterpriseName || item.vendorName }}</span>
+              </el-tag>
+            </div>
+          </el-form-item>
         </el-row>
 
         <PageTitle title="招标文件内容" marginBottom="15px" />
@@ -583,7 +616,7 @@ import {
   addAnswer,
   listAreaDivisionTree,
   getVendorClassifyTree,
-  aNewAdd,
+  aNewAdd, twiceBidFinish,
 } from "@/api/procurement/manage";
 import { deptTreeSelect } from "@/api/system/user";
 import { getVendorList } from "@/api/vendor/vendor";
@@ -615,6 +648,15 @@ export default {
       }
     };
     return {
+      // * 方案名称
+      schemeName: '',
+      formatApplyTime: '',
+      formatNowDate: '',
+      needTime: true,
+      timeDifferenceElement: '',
+      setVendorShow: false,
+      answerAndChangeShow: false,
+      applyButtonShow: false,
       formData: {}, //form表单数据
       planList: [],
       inventoryList: [],
@@ -706,10 +748,12 @@ export default {
       vendorLoading: false,
       vendorList: [],
       vendorTotal: 0,
-      vendors: [], //选择的供应商
+      vendors: [], //table选择的供应商
+      vendorsSelection: [], //table选择的供应商-完整信息
       addressLoading: false,
       categoryLoading: false,
       selectVendors: [],
+      selectVendorsInfo: [], //确定选择的供应商-完整信息
       QAVisible: false, //是否显示答疑弹窗
       QAForm: {},
       QAList: [],
@@ -734,16 +778,82 @@ export default {
     FileModule,
     PageTitle,
   },
+  mounted() {
+    if(this.noticeDetail?.tenderNotice?.noticeStatus === 1 && this.needTime) {
+      if(this.noticeDetail?.tenderNotice?.applyTime) {
+        // * 投标截止时间
+        this.formatApplyTime = new Date(this.noticeDetail?.tenderNotice?.applyTime).format('yyyy年MM月dd日 HH:mm:ss')
+        this.updateTimeDifference();
+        // 每秒更新一次
+        if(this.needTime) {
+          this.timer = setInterval(this.updateTimeDifference, 1000);
+        }
+      }else {
+        this.$message.error('截止时间取值有误，请联系管理人员！')
+        this.$router.replace("/procurement/bindding");
+      }
+    }
+    if (this.noticeDetail?.rangeList) {
+      // console.warn("选择供应商",this.noticeDetail.rangeList);
+      this.selectVendorsInfo = this.noticeDetail.rangeList || [];
+    }
+
+
+  },
   created() {
-    const { bidDeadline } = this.scheme;
+    const { bidDeadline,procurementType } = this.scheme;
     if (!this.noticeDetail.tenderNotice) {
       this.$set(this.formData, "applyTime", bidDeadline);
+    }
+    // * 如果procurementType 为1 （公开招标），就要判断当前状态是否是13【处于发布文件（编辑）状态】，反之就要判断是否有id【formData.id没有则出现发布按钮】
+    if(procurementType === 1){
+      this.applyButtonShow = (this.noticeDetail.tenderNotice.noticeStatus === 13)
+      this.answerAndChangeShow = (this.noticeDetail.tenderNotice.noticeStatus !== 13 && this.formData.id)
+      this.setVendorShow = false
+    }else {
+      this.applyButtonShow = !this.formData.id
+      this.answerAndChangeShow = this.formData.id
+      this.setVendorShow = !this.formData.id
     }
     this.getDeptTree();
     this.getQAList(0);
     this.getNoticeUpdateList();
   },
   methods: {
+    async updateTimeDifference() {
+      // 投标截止时间
+      const deadline = new Date(this.noticeDetail?.tenderNotice?.applyTime);
+      const now = new Date();
+      // * 当前北京时间
+      this.formatNowDate = new Date().format('yyyy年MM月dd日')
+      // 计算时间差
+      const diff = deadline - now;
+      if(diff<=0){
+        this.needTime = false;
+        this.timeDifferenceElement = `00天00小时00分00秒`;
+        if(this.timer) {
+          clearInterval(this.timer);
+        }
+        if(this.noticeDetail?.tenderNotice?.twiceQuotState === 1){
+          const { id: noticeId } = this.noticeDetail?.tenderNotice || {};
+          try {
+            const res = await twiceBidFinish(noticeId);
+          } catch (err) {
+            console.log(err);
+          }
+        }
+        return
+      }
+
+      // 计算天数、小时数、分钟数和秒数
+      const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+      const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+      const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+      const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+
+      // 格式化并显示结果
+      this.timeDifferenceElement = `${days<10?'0'+days:days}天${hours<10?'0'+hours:hours}小时${minutes<10?'0'+minutes:minutes}分${seconds<10?'0'+seconds:seconds}秒`;
+    },
     //提交公告
     submitForm(formName) {
       const { procurementType } = this.scheme;
@@ -857,6 +967,14 @@ export default {
     //设置供应商
     setVendor() {
       this.vendorVisible = true;
+      this.vendorList.forEach((row) => {
+        if (this.selectVendors.indexOf(row.id)>-1) {
+          // console.log("需要勾选",row.enterpriseName);
+          this.$refs.multipleTable.toggleRowSelection(row, true);
+        } else {
+          this.$refs.multipleTable.toggleRowSelection(row, false);
+        }
+      });
       this.getVendorList();
       this.listAreaDivisionTree();
       this.getVendorClassifyTree();
@@ -886,6 +1004,7 @@ export default {
     /** 已选择的供应商 */
     handleSelectionVendor(selection) {
       this.vendors = selection.map((item) => item.id);
+      this.vendorsSelection = selection;
     },
     /** 确认供应商 */
     confirmVendor() {
@@ -893,7 +1012,25 @@ export default {
       if (vendors.length === 0) return this.$message.error("请选择供应商");
       this.vendorVisible = false;
       this.selectVendors = vendors;
+      this.selectVendorsInfo = this.vendorsSelection;
       console.log(this.vendors, "this.vendors");
+    },
+    /** 删除供应商 */
+    deleteSelectedVendor(item) {
+      // console.log("删除供应商",item);
+      if (!item.enterpriseName) return;
+      for (let i = 0; i < this.selectVendorsInfo.length; i++) {
+        if (this.selectVendorsInfo[i] == item) {
+          this.selectVendorsInfo.splice(i, 1);
+          break;
+        }
+      }
+      if (this.selectVendorsInfo.length) {
+        this.selectVendors = this.selectVendorsInfo.map((item) => item.id);
+      } else {
+        this.selectVendors = [];
+      }
+      this.vendors = this.selectVendors;
     },
     setModify() {
       this.modifyVisible = true;

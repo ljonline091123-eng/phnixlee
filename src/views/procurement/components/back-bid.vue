@@ -2,31 +2,47 @@
   <div class="app-container">
     <div class="context">
       <PageTitle title="投标供应商" marginBottom="15px">
-        <div class="page-title-right">
-          <el-button
-            type="primary"
-            size="small"
-            :disabled="
+        <div class="page-title-right" style="flex: 1;display: flex;justify-content: flex-end">
+          <!--          为1的时候展示这个截止时间-->
+          <div v-if="noticeDetail.tenderNotice && noticeDetail.tenderNotice.noticeStatus === 1 && needTime"   style="flex: 1;display: flex;justify-content: center;margin-right: 8px;font-size: 13px;color:#ff0000;font-weight: normal">
+            <div style="margin-right: 80px">
+              <div style="margin-right: 8px">方案：{{ scheme && scheme.procurementSchemeName  }}</div>
+              <!--                noticeDetail.tenderNotice && noticeDetail.tenderNotice.applyTime-->
+              <div>当前北京时间：{{formatNowDate}}</div>
+            </div>
+
+            <div>
+              <div>投标截止时间：{{formatApplyTime}}</div>
+              <span>投标截止时间倒计时：{{timeDifferenceElement}}</span>
+            </div>
+
+          </div>
+          <div>
+            <el-button
+              type="primary"
+              size="small"
+              :disabled="
               (noticeDetail.tenderNotice &&
                 noticeDetail.tenderNotice.noticeStatus >= 2) ||
               !noticeDetail.purchaseOfficer
             "
-            @click="next"
+              @click="next"
             >进入下一环节</el-button
-          >
-          <el-button
-            type="primary"
-            size="small"
-            :disabled="
+            >
+            <el-button
+              type="primary"
+              size="small"
+              :disabled="
               !ids.length ||
               !noticeDetail.purchaseOfficer ||
               (noticeDetail.tenderNotice &&
                 noticeDetail.tenderNotice.noticeStatus >= 2)
             "
-            @click="goAbandonBid"
-          >
-            废标
-          </el-button>
+              @click="goAbandonBid"
+            >
+              废标
+            </el-button>
+          </div>
         </div>
       </PageTitle>
       <el-table
@@ -404,7 +420,7 @@ import {
   getBackList,
   updateDeposit,
   abandonBid,
-  intoBidOpeningStage,
+  intoBidOpeningStage, twiceBidFinish,
 } from "@/api/procurement/manage";
 import { getVendorDetail } from "@/api/vendor/vendor";
 import PageTitle from "@/components/PageTitle/index.vue";
@@ -433,6 +449,12 @@ export default {
   },
   data() {
     return {
+      // * 方案名称
+      schemeName: '',
+      formatApplyTime: '',
+      formatNowDate: '',
+      needTime: true,
+      timeDifferenceElement: '',
       backBidList: [],
       abandonBidVisiable: false,
       abandonBidForm: {},
@@ -476,6 +498,24 @@ export default {
       ],
     };
   },
+  mounted() {
+    if(this.noticeDetail?.tenderNotice?.noticeStatus === 1 && this.needTime) {
+      if(this.noticeDetail?.tenderNotice?.applyTime) {
+        // * 投标截止时间
+        this.formatApplyTime = new Date(this.noticeDetail?.tenderNotice?.applyTime).format('yyyy年MM月dd日 HH:mm:ss')
+        this.updateTimeDifference();
+        // 每秒更新一次
+        if(this.needTime) {
+          this.timer = setInterval(this.updateTimeDifference, 1000);
+        }
+      }else {
+        this.$message.error('截止时间取值有误，请联系管理人员！')
+        this.$router.replace("/procurement/bindding");
+      }
+    }
+
+
+  },
   created() {
     const { procurementSchemeName } = this.scheme;
     this.abandonBidForm.procurementSchemeName = procurementSchemeName;
@@ -488,6 +528,40 @@ export default {
     },
   },
   methods: {
+    async updateTimeDifference() {
+      // 投标截止时间
+      const deadline = new Date(this.noticeDetail?.tenderNotice?.applyTime);
+      const now = new Date();
+      // * 当前北京时间
+      this.formatNowDate = new Date().format('yyyy年MM月dd日')
+      // 计算时间差
+      const diff = deadline - now;
+      if(diff<=0){
+        this.needTime = false;
+        this.timeDifferenceElement = `00天00小时00分00秒！`;
+        if(this.timer) {
+          clearInterval(this.timer);
+        }
+        if(this.noticeDetail?.tenderNotice?.twiceQuotState === 1){
+          const { id: noticeId } = this.noticeDetail?.tenderNotice || {};
+          try {
+            const res = await twiceBidFinish(noticeId);
+          } catch (err) {
+            console.log(err);
+          }
+        }
+        return
+      }
+
+      // 计算天数、小时数、分钟数和秒数
+      const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+      const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+      const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+      const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+
+      // 格式化并显示结果
+      this.timeDifferenceElement = `${days<10?'0'+days:days}天${hours<10?'0'+hours:hours}小时${minutes<10?'0'+minutes:minutes}分${seconds<10?'0'+seconds:seconds}秒`;
+    },
     /** 获取回标列表 */
     async getBackList() {
       const { id: schemeId } = this.scheme;
@@ -647,26 +721,26 @@ export default {
 };
 </script>
 <style lang="scss" scoped>
-.page-title {
-  width: 100%;
-  border-bottom: solid 1px #ccc;
-  padding: 10px;
-  position: relative;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 15px;
-  &::before {
-    content: "";
-    height: 20px;
-    width: 5px;
-    background-color: rgba(41, 65, 137, 1);
-    position: absolute;
-    left: 0;
-    top: 50%;
-    transform: translateY(-50%);
-  }
-}
+//.page-title {
+//  width: 100%;
+//  border-bottom: solid 1px #ccc;
+//  padding: 10px;
+//  position: relative;
+//  display: flex;
+//  justify-content: space-between;
+//  align-items: center;
+//  margin-bottom: 15px;
+//  &::before {
+//    content: "";
+//    height: 20px;
+//    width: 5px;
+//    background-color: rgba(41, 65, 137, 1);
+//    position: absolute;
+//    left: 0;
+//    top: 50%;
+//    transform: translateY(-50%);
+//  }
+//}
 
 .textColor {
   color: red;
