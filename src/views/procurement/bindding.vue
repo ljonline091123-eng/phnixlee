@@ -312,10 +312,7 @@ export default {
         noticeStatus: undefined,
         procurementType: "all",
         projectCode: undefined,
-        type: undefined,
-        projectCodeList: undefined,
       },
-      report:'',
       currentBid: {}, //当前选中条目
       /** 废标 */
       abandonBidVisiable: false,
@@ -333,17 +330,9 @@ export default {
   created() {
     // this.queryParams = {...this.$route.query}
     // this.getBiddingSchemeList();
-    this.queryParams.procurementType = this.$route.query.procurementType
-    this.queryParams.projectCode = this.$route.query.projectCode
-    this.queryParams.projectCodeList = this.$route.query.projectCodeList
-    this.queryParams.type = this.$route.query.type
-    this.queryParams.noticeStatus = this.$route.query.noticeStatus
     this.getDicts("plan_type").then((res) => {
       this.bindding_type = res.data;
     });
-    if(this.$route.query.report){
-      this.report=this.$route.query.report
-    }
   },
   computed: {
     ...mapGetters(["project"]),
@@ -362,17 +351,8 @@ export default {
       try {
         const res = await getBiddingSchemeList(query);
         if (res.data) {
-          //报表跳转过来时，项目请求数据不赋值
-          if(this.report=="report" && this.schemeList.length == 0){
-            this.schemeList = res.data.rows;
-            this.total = res.data.total;
-          }else if(this.report=="report" && this.schemeList.length > 0){
-            this.report=""
-          }else{
-            this.schemeList = res.data.rows;
-            this.total = res.data.total;
-          }
-        
+          this.schemeList = res.data.rows;
+          this.total = res.data.total;
         }
       } catch (err) {
         console.log(err);
@@ -493,8 +473,7 @@ export default {
             procurementType: "all",
             projectCode: newVal.code,
           };
-            this.getBiddingSchemeList();
-       
+          this.getBiddingSchemeList();
         }
       },
       immediate: true,

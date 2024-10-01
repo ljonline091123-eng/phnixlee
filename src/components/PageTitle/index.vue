@@ -1,26 +1,23 @@
 <template>
   <div class="page-title" :style="{marginBottom,marginTop}">
-    <div style="display: flex;align-items: center">
-      <span style="font-size: 13px;font-weight: bold;color: #121735">{{ title }}</span>
-      <slot name="leftSuffix"></slot>
-    </div>
+    <span>{{ title }}</span>
     <slot></slot>
   </div>
 </template>
 <script>
 export default {
-  props: {
-    title: {
-      type: String,
-      default: ''
+  props:{
+    title:{
+      type:String,
+      default:''
     },
-    marginBottom: {
-      type: String,
-      default: '0px'
+    marginBottom:{
+      type:String,
+      default:'0px'
     },
-    marginTop: {
-      type: String,
-      default: '0px'
+    marginTop:{
+      type:String,
+      default:'0px'
     }
   }
 }
@@ -35,7 +32,6 @@ export default {
   justify-content: space-between;
   align-items: center;
   padding-left: 10px;
-
   &::before {
     content: "";
     height: 15px;

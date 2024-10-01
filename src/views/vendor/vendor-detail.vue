@@ -401,26 +401,6 @@
                 <el-button size="small" type="primary">点击上传</el-button>
               </el-upload>
             </el-form-item>
-            <el-form-item
-            label="批注："
-            prop="operateComment"
-            label-width="140px"
-            >
-            <el-tag @click="setOperateComment('拟同意')"  type="info" size="mini">拟同意</el-tag>
-            <el-tag @click="setOperateComment('同意')"   style="margin-left: 5px;"  type="info" size="mini">同意</el-tag>
-            <el-tag @click="setOperateComment('请修改，再传至我处')"   style="margin-left: 5px;"  type="info" size="mini">请修改，再传至我处</el-tag>
-            <el-tag @click="setOperateComment('阅')"   style="margin-left: 5px;"  type="info" size="mini">阅</el-tag>
-            </el-form-item>
-            <el-form-item
-            label-width="140px"
-            >
-              <el-input
-                  type="textarea"
-                  :rows="5"
-                  placeholder="请输入内容"
-                  v-model="gradeForm.operateComment">
-                </el-input>
-            </el-form-item>
           </el-form>
         </el-col>
         <el-col :span="6">
@@ -522,26 +502,6 @@
             <el-button size="small" type="primary">点击上传</el-button>
           </el-upload>
         </el-form-item>
-        <el-form-item
-        label="批注："
-        prop="operateComment"
-        label-width="140px"
-        >
-        <el-tag @click="setOperateComment1('拟同意')"  type="info" size="mini">拟同意</el-tag>
-        <el-tag @click="setOperateComment1('同意')"   style="margin-left: 5px;"  type="info" size="mini">同意</el-tag>
-        <el-tag @click="setOperateComment1('请修改，再传至我处')"   style="margin-left: 5px;"  type="info" size="mini">请修改，再传至我处</el-tag>
-        <el-tag @click="setOperateComment1('阅')"   style="margin-left: 5px;"  type="info" size="mini">阅</el-tag>
-        </el-form-item>
-        <el-form-item
-        label-width="140px"
-        >
-          <el-input
-              type="textarea"
-              :rows="5"
-              placeholder="请输入内容"
-              v-model="blackForm.operateComment">
-            </el-input>
-        </el-form-item>
       </el-form>
 
       <div slot="footer" class="dialog-footer">
@@ -627,17 +587,15 @@ export default {
         vendorClass: [{ required: true, message: "请选择供应商类型" }],
         vendorLevel: [{ required: true, message: "请选择供应商等级" }],
         attachmentList: [{ required: true, message: "请上传附件" }],
-        operateComment: [{ required: true, message: "请填写批注" }],
       },
-      gradeForm: {operateComment:'请审批'},
+      gradeForm: {},
       //黑名单操作
       blackVisible: false,
-      blackForm: {operateComment:'请审批'},
+      blackForm: {},
       blackRules: {
         blackState: [{ required: true, message: "请选择操作类别" }],
         date: [{ required: true, message: "请选择限制期" }],
         attachmentList: [{ required: true, message: "请上传附件" }],
-        operateComment: [{ required: true, message: "请填写批注" }],
       },
       //履约
       performanceVisible: false,
@@ -668,13 +626,6 @@ export default {
     this.getVendorDetail();
   },
   methods: {
-    setOperateComment(type){
-      this.gradeForm.operateComment=type
-    },
-
-    setOperateComment1(type){
-      this.blackForm.operateComment=type
-    },
     openDialog(type) {
       this[type] = true;
       this[type === "gradeVisible" ? "gradeForm" : "blackForm"].operator =
@@ -752,13 +703,12 @@ export default {
         if (valid) {
           console.log(valid, "valid");
           const { id } = this.vendor;
-          const { vendorClass, vendorLevel, attachmentList,operateComment } = this.gradeForm;
+          const { vendorClass, vendorLevel, attachmentList } = this.gradeForm;
           const formData = {
             id,
             vendorClass,
             vendorLevel,
             attachmentList: [attachmentList],
-            operateComment
           };
           console.log(formData, "formData");
           try {
@@ -809,14 +759,13 @@ export default {
         if (valid) {
           this.$modal.loading("请稍候...");
           const { id } = this.vendor;
-          const { blackState, date, attachmentList, operateComment} = this.blackForm;
+          const { blackState, date, attachmentList } = this.blackForm;
           const formData = {
             id,
             blackState,
             blackBeginDate: date?.length && date[0],
             blackEndDate: date?.length && date[1],
             attachmentList: [attachmentList],
-            operateComment
           };
           try {
             // const res = await updateBlackState(formData);
@@ -898,7 +847,7 @@ export default {
         this.calibrateVisible = true;
         this.calibrateLoading = true;
         const params = {
-          //businessId: this.vendor.changeId?this.vendor.changeId:this.purchaserId,
+          //businessId: this.purchaserId,
           processId: this.exampleId,
         };
         const getProcessLogListParams = {

@@ -1,36 +1,5 @@
 <template>
   <div class="app-container">
-    <el-dialog
-      title="设置二次报价截止时间"
-      :visible.sync="dialogVisible"
-      width="25%">
-      <el-form ref="timeForm" :model="timeForm" label-width="160px">
-        <el-row>
-          <el-col :span="24">
-            <el-form-item
-              label="第二次报价截止时间"
-              prop="twiceTime"
-              class="required label-right-align"
-              :rules="[{ required: true, message: '请选择第二次报价截止时间' }]"
-            >
-              <el-date-picker
-                v-model="timeForm.twiceTime"
-                type="datetime"
-                style="width: 100%"
-                placeholder="选择日期"
-                value-format="yyyy-MM-dd HH:mm:ss"
-                :picker-options="expireTimeOption"
-                class="date_picker"
-              />
-            </el-form-item>
-          </el-col>
-        </el-row>
-      </el-form>
-      <span slot="footer" class="dialog-footer">
-        <el-button @click="dialogVisible = false">取 消</el-button>
-        <el-button type="primary" @click="twiceBidConf">确 定</el-button>
-      </span>
-    </el-dialog>
     <div class="context" style="height: calc(100vh - 116px)">
       <div class="btn-box">
         <!-- 开标状态 -->
@@ -67,9 +36,6 @@
         </template>
         <!-- 评标状态 -->
         <template v-if="activeName === 'evaluate'">
-          <div style="position:absolute;right: 0;top: -36px;font-size: 13px;color:#ff0000" v-if="noticeDetail.tenderNotice && noticeDetail.tenderNotice.twiceQuotVersion>1">
-            二次报价截止时间：{{timeDifferenceElement}}
-          </div>
           <el-button
             type="success"
             icon="el-icon-plus"
@@ -93,18 +59,16 @@
               evaluateStateList.length &&
               noticeDetail.tenderNotice &&
               noticeDetail.tenderNotice.noticeStatus === 3 &&
-              !noticeDetail.tenderNotice.isEval &&
               noticeDetail.purchaseOfficer
                 ? false
                 : true
             "
-            >{{(noticeDetail.tenderNotice && noticeDetail.tenderNotice.noticeStatus === 3)?((noticeDetail.tenderNotice && noticeDetail.tenderNotice.isEval)?'评标中':'开始评标'):'无法评标'}}</el-button
+            >开始评标</el-button
           >
-<!--          twiceBidConf-->
           <el-button
             type="primary"
             size="small"
-            @click="clickTwiceBidConfButton"
+            @click="twiceBidConf"
             :disabled="
               evaluateStateList.length &&
               noticeDetail.tenderNotice &&
@@ -268,13 +232,6 @@
               prop="phone"
             />
             <el-table-column
-              label="调价状态"
-              width="200"
-              align="center"
-              prop="priceChangeState"
-              :formatter="formatterPriceChangeState"
-            />
-            <el-table-column
               label="回标详情"
               align="center"
               prop="biddingStatusText"
@@ -290,7 +247,7 @@
             </el-table-column>
             <el-table-column label="供应商报价" align="center">
               <el-table-column
-                :label="index === 0 ? ((noticeDetail.tenderNotice && noticeDetail.tenderNotice.noticeStatus === 3)?'首轮报价':'最终轮报价'):((noticeDetail.tenderNotice && noticeDetail.tenderNotice.noticeStatus === 3)?`${index + 1}轮报价`:'最终轮报价')"
+                :label="index === 0 ? '首轮报价' : `${index + 1}轮报价`"
                 align="center"
                 v-for="(item, index) in scoreLength"
                 :key="index"
@@ -1230,7 +1187,6 @@ import PageTitle from "@/components/PageTitle/index.vue";
 import Drag from "@/components/Drag/index.vue";
 import Treeselect from "@riophae/vue-treeselect";
 import "@riophae/vue-treeselect/dist/vue-treeselect.css";
-import {PRICECHANGESTATEOPTIONS} from "@/utils/constants";
 export default {
   name: "evaluate-bid",
   dicts: [
@@ -1254,13 +1210,7 @@ export default {
     },
   },
   data() {
-    const _that = this
     return {
-      needTime: true,
-      timer: null,
-      timeForm: {},
-      dialogVisible: false,
-      timeDifferenceElement: '00天00分00秒',
       activeName: "",
       openBidVisiable: false,
       // 部门树选项
@@ -1292,23 +1242,11 @@ export default {
       evaluateList: [],
       expireTimeOption: {
         // 设置日期时间显示格式，只显示年月日时分
-        format: "yyyy-MM-dd HH:mm:ss",
+        format: "yyyy-MM-dd HH:mm",
         // 设置可选的时间范围
         selectableRange: "00:00:00 - 23:59:59",
-        // disabledDate(time) {
-        //   return time.getTime() < Date.now() - 8.64e7; // 禁用小于当前日期的日期
-        // }
         disabledDate(time) {
-
-          // 获取截止时间
-          const next = new Date(_that.noticeDetail.tenderNotice.twiceTime);
-          next.setDate(next.getDate() -1);
-
-          // 将传入的时间戳转为日期对象
-          const date = new Date(time);
-
-          // 只能选择过5天后的日期【比如今天是24号，则30号及以后可以选择】
-          return date < next;
+          return time.getTime() < Date.now() - 8.64e7; // 禁用小于当前日期的日期
         },
       },
       quoteForm: {}, //二次洽商
@@ -1398,57 +1336,7 @@ export default {
     Drag,
     Treeselect,
   },
-  mounted() {
-    if(this.noticeDetail?.tenderNotice?.twiceTime) {
-      this.updateTimeDifference();
-      // 每秒更新一次
-      if(this.needTime) {
-
-        this.timer = setInterval(this.updateTimeDifference, 1000);
-      }
-    }else {
-      this.$message.error('截止时间取值有误，请联系管理人员！')
-      this.$router.replace("/procurement/bindding");
-    }
-
-  },
   methods: {
-    formatterPriceChangeState(_row,_column,cellvalue){
-      const findObj = PRICECHANGESTATEOPTIONS.find(item => item.value === cellvalue)
-      return findObj ? findObj.label : '-'
-    },
-    async updateTimeDifference() {
-      // 投标截止时间
-      const deadline = new Date(this.noticeDetail?.tenderNotice?.twiceTime);
-      const now = new Date();
-      // 计算时间差
-      const diff = deadline - now;
-      if(diff<=0){
-        this.needTime = false;
-        this.timeDifferenceElement = `00天00小时00分00秒！`;
-        if(this.timer) {
-          clearInterval(this.timer);
-        }
-        if(this.noticeDetail?.tenderNotice?.twiceQuotState === 1){
-          const { id: noticeId } = this.noticeDetail?.tenderNotice || {};
-          try {
-            const res = await twiceBidFinish(noticeId);
-          } catch (err) {
-            console.log(err);
-          }
-        }
-        return
-      }
-
-      // 计算天数、小时数、分钟数和秒数
-      const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-      const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-      const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-      const seconds = Math.floor((diff % (1000 * 60)) / 1000);
-
-      // 格式化并显示结果
-      this.timeDifferenceElement = `${days<10?'0'+days:days}天${hours<10?'0'+hours:hours}小时${minutes<10?'0'+minutes:minutes}分${seconds<10?'0'+seconds:seconds}秒！`;
-    },
     // handleClick(event) {
     //   const { name } = event
     //   this.activeName = name
@@ -1793,40 +1681,30 @@ export default {
         } catch (err) {
           console.log(err);
         }
-
       });
-    },
-    clickTwiceBidConfButton() {
-      if (this.biddingInfoIds.length === 0){
-        return this.$message.error("请选择调价项目");
-      }
-      this.dialogVisible = true
     },
     //开始调价
     async twiceBidConf() {
-      this.$refs.timeForm.validate(valid => {
-        if (valid){
-          this.$confirm("您确定要开始调价吗？", "提示", {
-            confirmButtonText: "确定",
-            cancelButtonText: "取消",
-            type: "warning",
-          }).then(async () => {
-            try {
-              const { id: noticeId } = this.noticeDetail?.tenderNotice || {};
-              const res = await twiceBidConf(this.biddingInfoIds, noticeId,this.timeForm.twiceTime);
-              this.$message.success("已开启调价");
-              // this.getBiddingQuotationList();
-              // this.getExpertEvalStatus();
-              this.dialogVisible = false
-              this.$emit('changeState',3)
-            } catch (err) {
-              console.log(err);
-            }
-          });
-        }else {
-          return false;
+      const { biddingInfoIds } = this;
+      const { id: noticeId } = this.noticeDetail?.tenderNotice || {};
+      if (biddingInfoIds.length === 0)
+        return this.$message.error("请选择调价项目");
+      console.log(
+        biddingInfoIds,
+        "biddingInfoIds-biddingInfoIds-biddingInfoIds"
+      );
+      this.$confirm("您确定要开启调价吗？", "提示", {
+        confirmButtonText: "确定",
+        cancelButtonText: "取消",
+        type: "warning",
+      }).then(async () => {
+        try {
+          const res = await twiceBidConf(biddingInfoIds, noticeId);
+          this.$message.success("已开启调价");
+        } catch (err) {
+          console.log(err);
         }
-      })
+      });
     },
     //结束调价
     async twiceBidFinish() {
@@ -1838,10 +1716,7 @@ export default {
         const { id: noticeId } = this.noticeDetail?.tenderNotice || {};
         try {
           const res = await twiceBidFinish(noticeId);
-          // this.getBiddingQuotationList();
-          // this.getExpertEvalStatus();
           this.$message.success("已结束调价");
-          this.$emit('changeState',3)
         } catch (err) {
           console.log(err);
         }

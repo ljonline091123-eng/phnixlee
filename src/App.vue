@@ -26,15 +26,12 @@ export default {
   mounted() {
     let project = null;
     let currentOrg = "";
-    let scopeType = "";
-    console.log(' %c 🚀 ~ file:App --method:mounted --line:30 --variable:window.parent.scopeType===>', 'font-size:16px;background-color: #42b983;color:#fff;', window.parent.scopeType)
     if (
       process.env.NODE_ENV === "staging" ||
       process.env.NODE_ENV === "production"
     ) {
       project = window.$wujie?.props?.prj || {};
       currentOrg = window.localStorage.getItem("currentOrgValue") || "";
-      scopeType = window.parent.scopeType || "1";
     } else {
       // project = window.$wujie?.props?.prj || {}
       project = window.$wujie?.props.prj || {
@@ -44,13 +41,7 @@ export default {
       };
       currentOrg =
         window.localStorage.getItem("currentOrgValue") || "2013000000";
-      scopeType = window.parent.scopeType || "1";
     }
-    console.log(' %c 🚀 ~ file:App --method:mounted --line:51 --variable:scopeType===>', 'font-size:16px;background-color: #42b983;color:#fff;', scopeType)
-    if (scopeType) {
-      this.$store.dispatch('app/changeScopeType', scopeType)
-    }
-    console.log("this.$store.state.app.scopeType",this.$store.state.app.scopeType)
     if (project.id) {
       this.$store.commit("SET_PROJECT", project);
       console.log(project, "通过window.$wujie?.props.prj获取的项目");

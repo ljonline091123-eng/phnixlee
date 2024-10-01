@@ -7,15 +7,10 @@ const state = {
     hide: false
   },
   device: 'desktop',
-  size: Cookies.get('size') || 'medium',
-  scopeType: '1'
+  size: Cookies.get('size') || 'medium'
 }
 
 const mutations = {
-  CHANGE_SCOPE_TYPE: (state, type) => {
-    console.log(' %c 🚀 ~ file:app --method:CHANGE_SCOPE_TYPE --line:16 --variable:===>', 'font-size:16px;background-color: #42b983;color:#fff;', type)
-    state.scopeType = type
-  },
   TOGGLE_SIDEBAR: state => {
     if (state.sidebar.hide) {
       return false;
@@ -46,10 +41,6 @@ const mutations = {
 }
 
 const actions = {
-  changeScopeType({ commit }, type) {
-    console.log(' %c 🚀 ~ file:app --method:changeScopeType --line:49 --variable:===>', 'font-size:16px;background-color: #42b983;color:#fff;', type)
-    commit('CHANGE_SCOPE_TYPE', type)
-  },
   toggleSideBar({ commit }) {
     commit('TOGGLE_SIDEBAR')
   },

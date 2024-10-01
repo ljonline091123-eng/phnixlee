@@ -9,24 +9,6 @@ export const getBiddingSchemeList = (params) => {
   });
 };
 
-// 发布招标公告
-export const addTenderNotice = (data) => {
-  return request({
-    url: "/business/notice/addNotice",
-    method: "post",
-    data,
-  });
-};
-
-// 报名情况进入下一步
-export const applyNext = (data) => {
-  return request({
-    url: "/business/notice/registerStatus",
-    method: "post",
-    data,
-  });
-};
-
 // 发布公告
 export const addNotice = (data) => {
   return request({
@@ -95,16 +77,6 @@ export const postAuditProcess = (data) => {
   });
 };
 // 获取公告文件修改
-export const getNoticeUpdateListNotice = (noticeId) => {
-  return request({
-    url: "/business/noticeChangeRecord/getListNotice",
-    method: "post",
-    data: {
-      noticeId,
-    },
-  });
-};
-// 获取公告文件修改
 export const getNoticeUpdateList = (noticeId) => {
   return request({
     url: "/business/noticeChangeRecord/getList",
@@ -124,33 +96,12 @@ export const getSwitchPageList = (params) => {
   });
 };
 
-// 进行变更
-export const addUpdateTenderNotice = (data) => {
-  return request({
-    url: "/business/noticeChangeRecord/addNotice",
-    method: "post",
-    data,
-  });
-};
-
 // 新增公告文件修改
 export const addUpdateNotice = (data) => {
   return request({
     url: "/business/noticeChangeRecord/add",
     method: "post",
     data,
-  });
-};
-
-// 查询答疑列表
-export const getQAListNotice = (busId, answerType = "") => {
-  return request({
-    url: "/business/answer/getListNotice",
-    method: "post",
-    data: {
-      busId,
-      answerType,
-    },
   });
 };
 
@@ -163,15 +114,6 @@ export const getQAList = (busId, answerType = "") => {
       busId,
       answerType,
     },
-  });
-};
-
-// 公告答疑回复
-export const addAnswerNotice = (data) => {
-  return request({
-    url: "/business/answer/editNotice",
-    method: "post",
-    data,
   });
 };
 
@@ -398,14 +340,13 @@ export const startEvaluat = (noticeId) => {
 };
 
 /** 开启调价 */
-export const twiceBidConf = (biddingInfoIds, noticeId,twiceTime) => {
+export const twiceBidConf = (biddingInfoIds, noticeId) => {
   return request({
     url: "/business/info/twiceBidConf",
     method: "post",
     data: {
       biddingInfoIds,
       noticeId,
-      twiceTime
     },
   });
 };

@@ -24,11 +24,18 @@
         </el-col>
         <el-col :span="16">
           <el-form-item label="投标附件" class="custom-form-item">
-            <div v-if="vendorInfo.attachments">
-              <div v-for="(item,index) in vendorInfo.attachments" :key="index">
-                <a :href="item.fileUrl" target="_blank" class="link-type">{{ item.fileName }}</a>
-              </div>
-            </div>
+            <span
+              ><a
+                :href="
+                  vendorInfo.attachments && vendorInfo.attachments[0].fileUrl
+                "
+                target="_blank"
+                class="link-type"
+                >{{
+                  vendorInfo.attachments && vendorInfo.attachments[0].fileName
+                }}</a
+              ></span
+            >
           </el-form-item>
         </el-col>
       </el-row>

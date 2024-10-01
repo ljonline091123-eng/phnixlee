@@ -534,7 +534,7 @@
             />
             <el-table-column
               prop="specification"
-              label="特征描述"
+              label="特征值及特征项"
               width="150"
               show-overflow-tooltip
             />
@@ -682,7 +682,7 @@
             />
             <el-table-column
               prop="specification"
-              label="特征描述"
+              label="特征值及特征项"
               width="100"
               show-overflow-tooltip
             />
@@ -1495,7 +1495,7 @@ export default {
           },
           {
             id: 3,
-            label: "特征描述",
+            label: "特征值及特征项",
             prop: "specification",
             width: "150",
             overflow: true,
@@ -1595,7 +1595,7 @@ export default {
           },
           {
             id: 3,
-            label: "特征描述",
+            label: "特征值及特征项",
             prop: "specification",
             width: "150",
             overflow: true,
@@ -1695,7 +1695,7 @@ export default {
           },
           {
             id: 3,
-            label: "特征描述",
+            label: "特征值及特征项",
             prop: "specification",
             width: "150",
             overflow: true,
