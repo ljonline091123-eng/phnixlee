@@ -253,7 +253,12 @@ public class VendorBidServiceImpl implements IVendorBidService {
             if(tenderNotice.getTwiceQuotVersion()!=null
                     &&tenderNotice.getTwiceQuotVersion() == 1){
                 //调第三方接口，生成开标人员的待办信息
-                dealOpenPeopleTodoTask(scheme, tenderNotice,vendor);
+                try {
+                    dealOpenPeopleTodoTask(scheme, tenderNotice,vendor);
+                }catch (Exception e){
+                    log.error(e.toString());
+                }
+
 
             }
         }

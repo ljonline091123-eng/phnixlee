@@ -341,7 +341,12 @@ public class TenderNoticeServiceImpl extends ServiceImpl<TenderNoticeMapper,Tend
                 &&tenderNotice.getTwiceQuotVersion()!=null
                 &&tenderNotice.getTwiceQuotVersion() == 1){
             //调第三方接口，生成开标人员的待办信息
-            dealOpenPeopleTodoTask(procurementScheme, tenderNotice);
+            try {
+                dealOpenPeopleTodoTask(procurementScheme, tenderNotice);
+            }catch (Exception e){
+                log.error(e.toString());
+            }
+
 
         }
         return res;

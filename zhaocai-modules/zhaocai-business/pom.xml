@@ -133,12 +133,6 @@
             <artifactId>javase</artifactId>
             <version>3.4.1</version>
         </dependency>
-        <dependency>
-            <groupId>com.zhaocai</groupId>
-            <artifactId>zhaocai-modules-system</artifactId>
-            <version>3.6.4</version>
-            <scope>compile</scope>
-        </dependency>
     </dependencies>
 
     <build>
