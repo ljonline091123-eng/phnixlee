@@ -1,5 +1,6 @@
 package com.zhaocai.business.vendor.vo.req;
 
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.zhaocai.business.pub.vo.req.AttachmentRequestVO;
 import io.swagger.annotations.ApiModelProperty;
@@ -36,4 +37,7 @@ public class VendorBlackRequestVO {
 
     @ApiModelProperty(value =  "黑名单状态")
     private Integer isBlack;
+
+    @TableField(exist = false)
+    private String operateComment;
 }

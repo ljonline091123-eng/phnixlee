@@ -1,14 +1,8 @@
 package com.zhaocai.business.report.controller;
 
 import com.zhaocai.business.common.base.BladeController;
-import com.zhaocai.business.report.service.IContractLedgerReportService;
-import com.zhaocai.business.report.service.IManagePageReportService;
-import com.zhaocai.business.report.service.IPriceAnalysisReportService;
-import com.zhaocai.business.report.service.ITenderingRateReportService;
-import com.zhaocai.business.report.vo.ContractLedgerReportVo;
-import com.zhaocai.business.report.vo.ManagePageReportVo;
-import com.zhaocai.business.report.vo.PriceAnalysisReportVo;
-import com.zhaocai.business.report.vo.TenderingRateReportVo;
+import com.zhaocai.business.report.service.*;
+import com.zhaocai.business.report.vo.*;
 import com.zhaocai.common.core.utils.poi.ExcelUtil;
 import com.zhaocai.common.core.web.bean.ResultData;
 import com.zhaocai.common.core.web.domain.AjaxResult;
@@ -40,6 +34,9 @@ public class ReportController extends BladeController {
     @Autowired
     private IManagePageReportService managePageReportService;
 
+    @Autowired
+    private IVBidCountService bidCountService;
+
     /**
      * 招标率报表
      * @param tenderingRate
@@ -48,6 +45,48 @@ public class ReportController extends BladeController {
     @GetMapping("/tenderingRateReport")
     public ResultData<List<TenderingRateReportVo>> tenderingRateReport(TenderingRateReportVo tenderingRate){
         return ResultData.data(tenderingRateReportService.tenderingRateReport(tenderingRate));
+    }
+
+    /**
+     * 招标率报表
+     * @param vBidCountVo
+     * @return
+     */
+    @GetMapping("/bidCountReport")
+    public ResultData<List<VBidCountVo>> bidCountReport(VBidCountVo vBidCountVo){
+        return ResultData.data(bidCountService.bidCountReport(vBidCountVo));
+    }
+
+    /**
+     * 招标率报表(懒加载)
+     * @param vBidCountVo
+     * @return
+     */
+    @GetMapping("/bidCountReportLazy")
+    public ResultData<List<VBidCountVo>> bidCountReportLazy(VBidCountVo vBidCountVo){
+        return ResultData.data(bidCountService.bidCountReportLazy(vBidCountVo));
+    }
+
+    /**
+     * 招标率报表导出
+     * @param vBidCountVo
+     * @return
+     */
+    @PostMapping("/bidCountReportExport")
+    public AjaxResult bidCountReportExport(HttpServletResponse response,VBidCountVo vBidCountVo) {
+        List<VBidCountVo> list = bidCountService.bidCountReportExport(vBidCountVo);
+        ExcelUtil<VBidCountVo> util = new ExcelUtil<VBidCountVo>(VBidCountVo.class);
+        return util.exportExcel(response,list, "招标率报表数据");
+    }
+
+    /**
+     * 获取组织及以下所有项目编码
+     * @param id
+     * @return
+     */
+    @GetMapping("/getBidCountProjectCode")
+    public AjaxResult getBidCountProjectCode(String id){
+        return AjaxResult.success(bidCountService.getBidCountProjectCode(id));
     }
 
     /**

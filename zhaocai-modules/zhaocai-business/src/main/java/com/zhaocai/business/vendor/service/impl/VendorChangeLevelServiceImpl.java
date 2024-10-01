@@ -74,6 +74,9 @@ public class VendorChangeLevelServiceImpl extends ServiceImpl<VendorChangeMapper
                 .set(VendorChange::getVendorLevel,requestVO.getVendorLevel())
                 .eq(VendorChange::getId,vendorChange.getId()));
 
+        // 添加批注信息
+        vendorChange.setOperateComment(requestVO.getOperateComment());
+
         // 添加操作记录
         Long logId = vendorOperateLogService.addVendorOperateLog(requestVO.getId(), VendorOperateLogCodeEnum.UPDATE_VENDOR_LEVEL);
         // 添加附件
@@ -99,6 +102,7 @@ public class VendorChangeLevelServiceImpl extends ServiceImpl<VendorChangeMapper
         //供应商注册时候选择审批单位，只能由选择的单位维护的供应商审核人员进行审核，如果供应商信息修改也是需要原审核单位进行审核
         String customProcessKey = ProcessKeyEnum.ZHAOCAI_VENDOR_UPDATE_LEVEL.getIdentifying().replace("{org}",org);
         paramMap.put("customProcessKey", customProcessKey);
+        paramMap.put("operateComment", vendorChange.getOperateComment());
         processService.startProcessInstance(
                 ProcessKeyEnum.ZHAOCAI_VENDOR_UPDATE_LEVEL.getIdentifying(),paramMap);
     }
@@ -144,6 +148,7 @@ public class VendorChangeLevelServiceImpl extends ServiceImpl<VendorChangeMapper
                 .set(Vendor::getVendorClass,vendorChange.getVendorClass())
                 .set(Vendor::getVendorLevel,vendorChange.getVendorLevel())
                 .set(Vendor::getState,VendorStateEnum.APPROVE.getState())
+                .set(Vendor::getWfProcessId,vendorChange.getWfProcessId())
                 .eq(Vendor::getId,vendorChange.getVendorId()));
     }
 

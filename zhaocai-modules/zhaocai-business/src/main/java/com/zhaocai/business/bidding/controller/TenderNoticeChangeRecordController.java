@@ -32,10 +32,26 @@ public class TenderNoticeChangeRecordController extends BladeController {
     private ITenderNoticeChangeRecordService tenderNoticeChangeRecordService;
 
     @Log(title = "新增招标公告变更记录", businessType = BusinessType.INSERT)
+    @PostMapping("/addNotice")
+    @ApiOperation("新增招标公告变更记录")
+    public ResultData addNotice(@RequestBody @Validated({ValidateGroup.AddGroup.class}) TenderNoticeChangeRecordVO noticeChangeRecordVO) {
+        return ResultData.status(tenderNoticeChangeRecordService.addNotice(noticeChangeRecordVO));
+    }
+
+    @Log(title = "新增招标公告变更记录", businessType = BusinessType.INSERT)
     @PostMapping("/add")
     @ApiOperation("新增招标公告变更记录")
     public ResultData add(@RequestBody @Validated({ValidateGroup.AddGroup.class}) TenderNoticeChangeRecordVO noticeChangeRecordVO) {
         return ResultData.status(tenderNoticeChangeRecordService.add(noticeChangeRecordVO));
+    }
+
+    /**
+     * 查询招标公告变更记录
+     */
+    @PostMapping("/getListNotice")
+    public ResultData<List<TenderNoticeChangeRecordListVO>> getListNotice(@RequestBody TenderNoticeChangeRecordQueryVO queryVO) {
+        List<TenderNoticeChangeRecordListVO> list = tenderNoticeChangeRecordService.getListNotice(queryVO);
+        return ResultData.data(list);
     }
 
     /**

@@ -286,6 +286,12 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
 
             VendorStateVO vendorState = BeanCopierUtil.copyBean(vendor,VendorStateVO.class);
 
+            // 查询最新变更id
+            Long changeId = vendorChangeService.getLastChangeId(id);
+            if(null != changeId){
+                vendorVO.setChangeId(changeId);
+            }
+
             return VendorManagementDetailVO.builder()
                     .vendor(vendorVO)
                     .mainContact(mainContactVO)
@@ -389,6 +395,7 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
         vendorIndexInfoVO.setApproveState(vendor.getState());
         vendorIndexInfoVO.setIsManager(vendorContact.getIsManager());
         vendorIndexInfoVO.setIsBlack(vendor.getIsBlack());
+        vendorIndexInfoVO.setContactPhone(vendorContact.getContactPhone());
 
         // 判断是否可用
         boolean isAvailable = true;

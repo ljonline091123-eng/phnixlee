@@ -3,7 +3,7 @@
 PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
 "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.zhaocai.business.bidding.mapper.TenderNoticeMapper">
-    
+
     <resultMap type="com.zhaocai.business.bidding.domain.TenderNotice" id="TenderNoticeResult">
         <result property="id"    column="id"    />
         <result property="projectId"    column="project_id"    />
@@ -26,11 +26,14 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="updateId"    column="update_id"    />
         <result property="updateTime"    column="update_time"    />
         <result property="delFlag"    column="del_flag"    />
+        <result property="twiceTime"    column="twice_time"    />
+        <result property="twiceQuotVersion"    column="twice_quot_version"    />
+        <result property="twiceQuotState"    column="twice_quot_state"    />
     </resultMap>
 
     <sql id="selectTenderNoticeVo">
-        select id, project_id, scheme_id, apply_time, contact, phone, email, template_id, attach_id, vendor_range,
-               create_by, create_id, create_time, update_by, update_id, update_time, del_flag, notice_status, is_open_people, is_eval, wf_process_id
+        select id, project_id, scheme_id, apply_time, apply_time_notice, contact, phone, email,contact_notice, phone_notice, email_notice, template_id, attach_id,attach_id_notice, vendor_range,
+               create_by, create_id, create_time, update_by, update_id, update_time, del_flag, notice_status, is_open_people, is_eval, wf_process_id,twice_time,twice_quot_version,twice_quot_state
         from tb_tender_notice
     </sql>
 
@@ -38,25 +41,55 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         SELECT * FROM tb_tender_notice
     </select>
 
-    <select id="findVendorNoticePage" resultType="com.zhaocai.business.bidding.vo.res.VendorNoticeListVO">
+    <!-- 供应商 在线报名列表 -->
+    <select id="findVendorNoticePageNotice" resultType="com.zhaocai.business.bidding.vo.res.VendorNoticeListVO">
         SELECT ps.procurement_scheme_code, ps.procurement_scheme_name, ps.price_type, ps.subject_matter_type,
-            bi.id biddingInfoId, bi.twice_quot, su.thrid_org_name unit,
-            tn.scheme_id, tn.id noticeId , tn.create_time, tn.contact, tn.apply_time, tn.notice_status, tn.vendor_range, tn.phone,
-            CASE WHEN bi.id is null or bi.id = '' THEN '未投标'
-                ELSE '已投标' END bidStatus
-
+        ta.id tenderApplyId, null as twice_quot, su.thrid_org_name unit,tn.apply_time_notice,tn.attach_id_notice,
+        tn.scheme_id, tn.id noticeId , tn.create_time, tn.contact, tn.apply_time, tn.notice_status, tn.vendor_range, tn.phone,
+        CASE WHEN ta.id is null or ta.id = '' THEN '未报名'
+        ELSE '已报名' END tenderApplyStatus
         FROM tb_tender_notice tn
         left join tb_tender_notice_range tnr on tnr.notice_id = tn.id and tnr.del_flag = 0 and tnr.type = 1
         left join tb_procurement_scheme ps on ps.id = tn.scheme_id and ps.del_flag = 0
-        left join tb_bidding_info bi on bi.notice_id = tn.id
-        and bi.del_flag = 0 and bi.parent_id is null and bi.vendor_id = #{queryDTO.vendorId}
+        left join tb_tender_apply ta on ta.notice_id = tn.id
+        and ta.del_flag = 0 and  ta.vendor_id = #{queryDTO.vendorId}
+        left join sys_user su on su.user_id = ps.procurement_officer
+        <where>
+            /* 在线报名只能显示 公开招标的数据，状态不做控制。 */
+            tn.del_flag = 0 and tn.notice_status != 0 and ps.procurement_type = 1
+            and (
+            CASE
+            WHEN ps.procurement_type != 1 and tn.vendor_range = 1 THEN tnr.vendor_id = #{queryDTO.vendorId}
+            ELSE 1
+            END) = 1
+            <if test="queryDTO.procurementSchemeName != null and queryDTO.procurementSchemeName != ''">
+                and ps.procurement_scheme_name like CONCAT('%', #{queryDTO.procurementSchemeName}, '%')
+            </if>
+            <if test="queryDTO.procurementSchemeCode != null and queryDTO.procurementSchemeCode != ''">
+                and ps.procurement_scheme_code = #{queryDTO.procurementSchemeCode}
+            </if>
+        </where>
+        order by tn.create_time desc
+    </select>
+
+    <!-- 供应商 在线投标列表 -->
+    <select id="findVendorNoticePage" resultType="com.zhaocai.business.bidding.vo.res.VendorNoticeListVO">
+        SELECT ps.procurement_scheme_code, ps.procurement_scheme_name, ps.price_type, ps.subject_matter_type,
+        ta.id tenderApplyId, su.thrid_org_name unit,tn.apply_time_notice,tn.attach_id_notice,
+        tn.scheme_id, tn.id noticeId , tn.create_time, tn.contact, tn.apply_time, tn.notice_status, tn.vendor_range, tn.phone,
+        CASE WHEN ta.id is null or ta.id = '' THEN '未报名'
+        ELSE '已报名' END tenderApplyStatus
+        FROM tb_tender_notice tn
+        left join tb_tender_notice_range tnr on tnr.notice_id = tn.id and tnr.del_flag = 0 and tnr.type = 1
+        left join tb_tender_apply ta on ta.notice_id = tn.id and ta.del_flag = 0 and  ta.vendor_id = #{queryDTO.vendorId}
+        left join tb_procurement_scheme ps on ps.id = tn.scheme_id and ps.del_flag = 0
         left join sys_user su on su.user_id = ps.procurement_officer
         <where>
             tn.del_flag = 0 and tn.notice_status != 0
             and (
             CASE
-                WHEN ps.procurement_type != 1 and tn.vendor_range = 1 THEN tnr.vendor_id = #{queryDTO.vendorId}
-                ELSE 1
+            WHEN ps.procurement_type != 1 and tn.vendor_range = 1 THEN tnr.vendor_id = #{queryDTO.vendorId}
+            ELSE 1
             END) = 1
             <if test="queryDTO.procurementSchemeName != null and queryDTO.procurementSchemeName != ''">
                 and ps.procurement_scheme_name like CONCAT('%', #{queryDTO.procurementSchemeName}, '%')
@@ -65,25 +98,30 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                 and ps.procurement_scheme_code = #{queryDTO.procurementSchemeCode}
             </if>
             <if test="queryDTO.schemeType == 1">
-                and ps.procurement_type = 1
+                /* 公开招标 的 在线投标不显示状态 为招标报名阶段的。只显示给已报名的供应商。 */
+                and ps.procurement_type = 1 and tn.notice_status!=11 and tn.notice_status!=12 and tn.notice_status!=13 and ta.approve_result = 1
             </if>
             <if test="queryDTO.schemeType == 2">
-                and ps.procurement_type != 1
+                /* 公开招标 的 在线投标不显示状态 为招标报名阶段的。 */
+                and ps.procurement_type != 1 and tn.notice_status!=11 and tn.notice_status!=12 and tn.notice_status!=13
             </if>
         </where>
         order by tn.create_time desc
     </select>
 
+    <!-- 供应商 首页数据，已登录和未登录的区别就是 是否携带了queryDTO.schemeType 公开招标 参数之前的招标状态是写死是 1 就是 招标文件 ，现在多加了3个环节，应该都带上 11 12 13 -->
     <select id="findVendorPortalNoticePage" resultType="com.zhaocai.business.bidding.vo.res.VendorPortalNoticeListVO">
         SELECT tn.id noticeId, ps.id schemeId, ps.procurement_scheme_code, ps.procurement_scheme_name, ps.procurement_plan_type,
         ps.price_type, ps.subject_matter_type,
-        tn.create_time, tab1.applyTime, tn.notice_status, su.thrid_org_name unit
+        tn.create_time, tab1.applyTime, tn.notice_status, su.thrid_org_name unit,
+        ps.price_type, ps.subject_matter_type,ps.procurement_type,
+        tn.create_time, tab1.applyTime, tn.notice_status
         FROM tb_tender_notice tn
         LEFT JOIN tb_procurement_scheme ps ON ps.id = tn.scheme_id AND ps.del_flag = 0
         LEFT JOIN (SELECT distinct tn1.id,
-                    CASE WHEN tncr.id is null OR tncr.id = '' THEN tn1.apply_time ELSE str_to_date(tncr.update_after, '%Y-%m-%d %H:%i') END applyTime
+                    CASE WHEN tncr.id is null OR tncr.id = '' THEN tn1.apply_time_notice ELSE str_to_date(tncr.update_after, '%Y-%m-%d %H:%i') END applyTime
                     FROM tb_tender_notice tn1
-                    LEFT JOIN (select MAX(id) as id, notice_id, del_flag, update_after, type from tb_tender_notice_change_record GROUP BY notice_id)
+                    LEFT JOIN (select MAX(id) as id, notice_id, del_flag, update_after, type,notice_status from tb_tender_notice_change_record WHERE notice_status = 11 GROUP BY notice_id)
                     tncr ON tncr.notice_id = tn1.id and tncr.del_flag = 0 AND tncr.type = 1
                     ) tab1 ON tab1.id = tn.id
         left join tb_tender_notice_range tnr on tnr.notice_id = tn.id and tnr.del_flag = 0 and tnr.type = 1
@@ -92,7 +130,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
 <!--        LEFT JOIN tb_contract_planning cp ON cp.plan_id = pspr.procurement_plan_id-->
         where
             tn.del_flag = 0
-            and tn.notice_status = #{queryDTO.noticeStatus}
+            and (tn.notice_status = 11 or tn.notice_status = 12 or tn.notice_status = 13 or tn.notice_status = 1)
             and tab1.applyTime  <![CDATA[>]]> #{queryDTO.nowDate}
             <if test="queryDTO.procurementPlanType != null">
                 and ps.procurement_plan_type = #{queryDTO.procurementPlanType}

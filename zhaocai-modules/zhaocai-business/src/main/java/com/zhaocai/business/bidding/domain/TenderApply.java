@@ -7,8 +7,8 @@ import lombok.Getter;
 import lombok.Setter;
 
 /**
- * 招标报名（已弃用）对象 tb_tender_apply
- * 
+ * 招标报名对象 tb_tender_apply
+ *
  * @author WH
  * @date 2024-05-24
  */
@@ -21,6 +21,10 @@ public class TenderApply extends BaseEntity {
     /** 招标公告id */
     @ApiModelProperty(value =  "招标公告id")
     private Long noticeId;
+
+    /** 采购方案id */
+    @ApiModelProperty(value =  "采购方案id")
+    private Long schemeId;
 
     /** 联系人 */
     @ApiModelProperty(value =  "联系人")

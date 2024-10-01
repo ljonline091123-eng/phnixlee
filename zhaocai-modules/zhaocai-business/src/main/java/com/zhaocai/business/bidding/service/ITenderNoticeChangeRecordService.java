@@ -22,8 +22,24 @@ public interface ITenderNoticeChangeRecordService  extends IService<TenderNotice
      * @param noticeChangeRecordVO 新增招标公告变更记录
      * @return
      */
+    boolean addNotice(TenderNoticeChangeRecordVO noticeChangeRecordVO);
+
+
+    /**
+     * 新增招标公告变更记录
+     *
+     * @param noticeChangeRecordVO 新增招标公告变更记录
+     * @return
+     */
     boolean add(TenderNoticeChangeRecordVO noticeChangeRecordVO);
 
+    /**
+     * 查询招标公告变更记录列表
+     *
+     * @param queryVO 招标公告变更记录
+     * @return
+     */
+    List<TenderNoticeChangeRecordListVO> getListNotice(TenderNoticeChangeRecordQueryVO queryVO);
     /**
      * 查询招标公告变更记录列表
      *

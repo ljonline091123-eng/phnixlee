@@ -29,7 +29,24 @@ public interface ITenderNoticeService  extends IService<TenderNotice> {
      * @param tenderNoticeVO 招标公告
      * @return 结果
      */
-     boolean add(TenderNoticeVO tenderNoticeVO);
+    boolean addNotice(TenderNoticeVO tenderNoticeVO);
+
+    /**
+     * 保存报名情况
+     *
+     * @param tenderNoticeVO 保存报名情况
+     * @return 结果
+     */
+    boolean registerStatus(TenderNoticeVO tenderNoticeVO);
+
+
+    /**
+     * 采购方案 进来的 发布招标文件
+     *
+     * @param tenderNoticeVO 招标公告文件
+     * @return 结果
+     */
+    boolean add(TenderNoticeVO tenderNoticeVO);
 
     /**
      * 重新发布招标公告
@@ -97,6 +114,14 @@ public interface ITenderNoticeService  extends IService<TenderNotice> {
      * @return 招标公告
      */
     long getCountTenderNoticeStatus(Long id, Integer noticeStatus);
+
+    /**
+     * 展示供应商可查看的招标公告列表数据-分页
+     *
+     * @param queryDTO
+     * @return
+     */
+    PageResult<VendorNoticeListVO> selectVendorNoticePageNotice(VendorNoticePageQueryVO queryDTO);
 
     /**
      * 展示供应商可查看的招标公告列表数据-分页

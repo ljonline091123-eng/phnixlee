@@ -28,6 +28,8 @@
         <result property="updateId" column="update_id"/>
         <result property="updateTime" column="update_time"/>
         <result property="delFlag" column="del_flag"/>
+        <result property="twiceQuotVersion"    column="twice_quot_version"    />
+        <result property="priceChangeState"    column="price_change_state"    />
     </resultMap>
 
     <sql id="selectBiddingInfoVo">
@@ -54,7 +56,9 @@
                update_by,
                update_id,
                update_time,
-               del_flag
+               del_flag,
+               twice_quot_version,
+               price_change_state
         from tb_bidding_info
     </sql>
 
@@ -67,13 +71,14 @@
                bi.collect_deposit,
                bi.bidding_status,
                bi.create_time,
+                bi.update_time,
                bi.ip_address,
                bi.tax_price,
                bi.not_tax_price
         from tb_bidding_info bi
         <where>
             bi.del_flag = 0
-              and bi.parent_id is null
+              and (bi.parent_id is null and bi.twice_quot_version = 1)
             <if test="query.noticeId != null and query.noticeId != ''">
                 and bi.notice_id = #{query.noticeId}
             </if>
@@ -115,7 +120,8 @@
         </where>
     </select>
 
-    <select id="findBiddingQuotationList" resultType="com.zhaocai.business.bidding.vo.res.BiddingQuotationListVO">
+
+    <select id="findBiddingQuotationListTongJi" resultType="com.zhaocai.business.bidding.vo.res.BiddingQuotationListVO">
         select bi.id,
                bi.notice_id,
                bi.scheme_id,
@@ -127,11 +133,14 @@
                bi.twice_quot,
                bi.vendor_id,
                bi.parent_id,
-               bi.twice_time
+               bi.twice_time,
+               bi.twice_quot,
+               bi.twice_quot_version,
+               bi.price_change_state
         from tb_bidding_info bi
         <where>
             bi.del_flag = 0 and bi.bidding_status != 3
-              and bi.parent_id is null
+              and (bi.parent_id is null and (bi.twice_quot_version = 1 or bi.twice_quot_version is null))
             <if test="query.noticeId != null and query.noticeId != ''">
                 and bi.notice_id = #{query.noticeId}
             </if>
@@ -140,6 +149,37 @@
             </if>
         </where>
 <!--        order by bi.not_tax_price-->
+    </select>
+
+
+    <select id="findBiddingQuotationList" resultType="com.zhaocai.business.bidding.vo.res.BiddingQuotationListVO">
+        select bi.id,
+        bi.notice_id,
+        bi.scheme_id,
+        bi.vendor_name,
+        bi.contact,
+        bi.phone,
+        bi.tax_price,
+        bi.not_tax_price,
+        bi.twice_quot,
+        bi.vendor_id,
+        bi.parent_id,
+        bi.twice_time,
+        bi.twice_quot,
+        bi.twice_quot_version,
+        bi.price_change_state
+        from tb_bidding_info bi
+        <where>
+            bi.del_flag = 0 and bi.bidding_status != 3
+            and (bi.parent_id is null)
+            <if test="query.noticeId != null and query.noticeId != ''">
+                and bi.notice_id = #{query.noticeId}
+            </if>
+            <if test="query.schemeId != null and query.schemeId != ''">
+                and bi.scheme_id = #{query.schemeId}
+            </if>
+        </where>
+        <!--        order by bi.not_tax_price-->
     </select>
 
     <resultMap type="com.zhaocai.business.procurement.vo.res.ProcurementSchemeBiddingVendorVO" id="ProcurementSchemeBiddingVendoResult">
@@ -172,5 +212,18 @@
 
 
     </select>
+
+
+    <select id="getMaxPriceVersion" resultMap="BiddingInfoResult">
+        select i.* from tb_bidding_info i
+            inner join (SELECT vendor_id,
+                               max(twice_quot_version) as twice_quot_version
+                        FROM tb_bidding_info
+                        WHERE del_flag = '0' AND notice_id = #{noticeId} AND scheme_id = #{schemeId} AND bidding_status = 1 AND submit_status = 1 AND price_change_state = 1
+                        GROUP BY vendor_id) v
+        WHERE i.vendor_id = v.vendor_id and i.twice_quot_version = v.twice_quot_version
+    </select>
+
+
 
 </mapper>

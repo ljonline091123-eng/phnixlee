@@ -97,6 +97,15 @@ public class BiddingQuotationListVO extends AdviceObject implements Comparable<B
     @ApiModelProperty(value =  "技术评分分数")
     private BigDecimal avgTechTotalScore;
 
+    /* 每开启一次二次报价，就将选中范围的供应商报价 复制一份并升级版本将twiceQuot状态打开。前端通过招标对象的版本和当前版本对比和二次报价开关对比进行开放是否 供应商可以报价 */
+    /** 二次报价版本号，对应招标对象的版本号，如果对应不上就是在第*次开启报价时未选中或者是供应商未调价 管理端控制发版号 */
+    @ApiModelProperty(value =  "二次报价版本号。从1开始")
+    private Integer twiceQuotVersion;
+
+    /** 供应商调价状态(当前二次报价版本) 未被选中进行二次报价的供应商状态为 0未调价 选中的供应商报价了 状态为 1已调价 选中的未进行报价的供应商状态为 2放弃调价  */
+    @ApiModelProperty(value =  "供应商调价状态")
+    private Integer priceChangeState;
+
     @Override
     public int compareTo(@NotNull BiddingQuotationListVO o) {
         BigDecimal thisScore = this.getScore() == null ? BigDecimal.ZERO : this.getScore();
@@ -112,9 +121,9 @@ public class BiddingQuotationListVO extends AdviceObject implements Comparable<B
             List<BiddingQuotationDataVO> dataVoList2 = o.getQuotationDataVOList();
             BigDecimal oNotTaxPrice = dataVoList2.get(dataVoList2.size() - 1).getNotTaxPrice();
 
-            if (thisNotTaxPrice.compareTo(oNotTaxPrice) > 0){
+            if (thisNotTaxPrice!=null && oNotTaxPrice!=null && thisNotTaxPrice.compareTo(oNotTaxPrice) > 0){
                 return 1;
-            } else if (thisNotTaxPrice.compareTo(oNotTaxPrice) < 0){
+            } else if (thisNotTaxPrice!=null && oNotTaxPrice!=null && thisNotTaxPrice.compareTo(oNotTaxPrice) < 0){
                 return -1;
             } else {
                 return 0;

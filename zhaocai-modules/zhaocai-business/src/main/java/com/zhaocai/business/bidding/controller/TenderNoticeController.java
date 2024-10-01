@@ -45,6 +45,26 @@ public class TenderNoticeController extends BladeController {
      */
     @Log(title = "发布招标公告", businessType = BusinessType.INSERT)
     @ApiOperation("发布招标公告")
+    @PostMapping("/addNotice")
+    public ResultData addNotice(@RequestBody @Validated({ValidateGroup.AddGroup.class}) TenderNoticeVO tenderNoticeVO) {
+        return ResultData.status(tenderNoticeService.addNotice(tenderNoticeVO));
+    }
+
+    /**
+     * 报名情况保存
+     */
+    @Log(title = "报名情况保存", businessType = BusinessType.INSERT)
+    @ApiOperation("报名情况保存")
+    @PostMapping("/registerStatus")
+    public ResultData registerStatus(@RequestBody @Validated({ValidateGroup.AddGroup.class}) TenderNoticeVO tenderNoticeVO) {
+        return ResultData.status(tenderNoticeService.registerStatus(tenderNoticeVO));
+    }
+
+    /**
+     * 采购方案 进来的 发布招标文件
+     */
+    @Log(title = "发布招标文件", businessType = BusinessType.INSERT)
+    @ApiOperation("发布招标文件")
     @PostMapping("/add")
     public ResultData add(@RequestBody @Validated({ValidateGroup.AddGroup.class}) TenderNoticeVO tenderNoticeVO) {
         return ResultData.status(tenderNoticeService.add(tenderNoticeVO));

@@ -1,5 +1,6 @@
 package com.zhaocai.business.pub.service.impl;
 
+import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.collection.CollectionUtil;
 import cn.hutool.core.io.file.FileNameUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -23,6 +24,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.io.InputStream;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -33,7 +35,7 @@ import java.util.stream.Collectors;
  * @date 2024-05-24
  */
 @Service
-public class AttachmentServiceImpl extends ServiceImpl<AttachmentMapper,Attachment> implements IAttachmentService {
+public class AttachmentServiceImpl extends ServiceImpl<AttachmentMapper, Attachment> implements IAttachmentService {
 
     @Autowired
     private ISysFileService sysFileService;
@@ -41,28 +43,37 @@ public class AttachmentServiceImpl extends ServiceImpl<AttachmentMapper,Attachme
     @Override
     public void addAttachment(List<AttachmentRequestVO> attachmentList, AttachmentTypeEnum businessType, Long businessId) {
         if (CollectionUtil.isNotEmpty(attachmentList)) {
-            List<Attachment> list = attachmentList.stream()
-                    .map(x -> {
-                        Attachment attachment = new Attachment();
-                        attachment.setBusinessType(businessType.getType());
-                        attachment.setBusinessId(businessId);
-                        attachment.setFileUrl(x.getFileUrl());
-                        attachment.setFileName(x.getFileName());
-                        return attachment;
-                    }).collect(Collectors.toList());
-
-            super.saveBatch(list);
+            //这里先删除附件
+            List<Attachment> attachments = super.list(new LambdaQueryWrapper<Attachment>()
+                    .eq(Attachment::getBusinessType, businessType.getType())
+                    .eq(Attachment::getBusinessId, businessId)
+                    .eq(Attachment::getDelFlag, 0));
+            if (CollUtil.isNotEmpty(attachments)) {
+                List<Long> ids = attachments.stream().map(Attachment::getId).collect(Collectors.toList());
+                super.removeBatchByIds(ids);
+            }
+            //保存多个附件
+            List<Attachment> list = new ArrayList<>();
+            attachmentList.forEach(x -> {
+                Attachment attachment = new Attachment();
+                attachment.setBusinessType(businessType.getType());
+                attachment.setBusinessId(businessId);
+                attachment.setFileUrl(x.getFileUrl());
+                attachment.setFileName(x.getFileName());
+                list.add(attachment);
+            });
+            super.saveOrUpdateBatch(list);
         }
     }
 
     @Override
     public List<AttachmentVO> listAttachment(AttachmentTypeEnum businessType, Long businessId) {
         List<Attachment> attachments = super.list(new LambdaQueryWrapper<Attachment>()
-                .eq(Attachment::getBusinessType,businessType.getType())
-                .eq(Attachment::getBusinessId,businessId)
-                .eq(Attachment::getDelFlag,0));
+                .eq(Attachment::getBusinessType, businessType.getType())
+                .eq(Attachment::getBusinessId, businessId)
+                .eq(Attachment::getDelFlag, 0));
 
-        return BeanCopierUtil.copyList(attachments,AttachmentVO.class);
+        return BeanCopierUtil.copyList(attachments, AttachmentVO.class);
     }
 
     @Override
@@ -80,8 +91,8 @@ public class AttachmentServiceImpl extends ServiceImpl<AttachmentMapper,Attachme
     @Override
     public void deleteByBusinessId(AttachmentTypeEnum businessType, Long businessId) {
         super.update(new LambdaUpdateWrapper<Attachment>()
-                .set(Attachment::getDelFlag,2)
-                .eq(Attachment::getBusinessId,businessId)
+                .set(Attachment::getDelFlag, 2)
+                .eq(Attachment::getBusinessId, businessId)
                 .eq(Attachment::getBusinessType, businessType.getType()));
     }
 
@@ -103,15 +114,15 @@ public class AttachmentServiceImpl extends ServiceImpl<AttachmentMapper,Attachme
         }
 
         super.update(new LambdaUpdateWrapper<Attachment>()
-                .set(Attachment::getBusinessType,businessType.getType())
-                .set(Attachment::getBusinessId,businessId)
-                .eq(Attachment::getId,id));
+                .set(Attachment::getBusinessType, businessType.getType())
+                .set(Attachment::getBusinessId, businessId)
+                .eq(Attachment::getId, id));
     }
 
     @Override
-    public DownloadAgreementVO getAttachmentInputStream(long attachmentId,String agreementName) {
+    public DownloadAgreementVO getAttachmentInputStream(long attachmentId, String agreementName) {
         Attachment attachment = super.getById(attachmentId);
-        ValidateUtils.isNullException(attachment,"该合同附件不存在，请联系管理员");
+        ValidateUtils.isNullException(attachment, "该合同附件不存在，请联系管理员");
         if (StringUtils.isBlank(attachment.getFileUrl())) {
             throw new ParamValidateException("附件 url 地址不存在，请联系管理员");
         }

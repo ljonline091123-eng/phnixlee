@@ -242,6 +242,7 @@ public class VendorChangeServiceImpl extends ServiceImpl<VendorChangeMapper,Vend
             //供应商注册时候选择审批单位，只能由选择的单位维护的供应商审核人员进行审核，如果供应商信息修改也是需要原审核单位进行审核
             String customProcessKey = ProcessKeyEnum.ZHAOCAI_VENDOR_UPDATEINFO.getIdentifying().replace("{org}",org);
             paramMap.put("customProcessKey", customProcessKey);
+            paramMap.put("operateComment", vendorChange.getOperateComment());
             processService.startProcessInstance(
                     ProcessKeyEnum.ZHAOCAI_VENDOR_UPDATEINFO.getIdentifying(),paramMap);
         }else{
@@ -337,6 +338,20 @@ public class VendorChangeServiceImpl extends ServiceImpl<VendorChangeMapper,Vend
         } else {
             return null;
         }
+    }
+
+    @Override
+    public Long getLastChangeId(Long id) {
+        // 根据供应商id在供应商变更表中查找最后一次变更信息
+        List<VendorChange> vendorChangeList = super.list(new LambdaQueryWrapper<VendorChange>()
+                .eq(VendorChange::getVendorId, id)
+                .eq(VendorChange::getChangeStatus, VendorStateEnum.APPROVE.getState())
+                .orderByDesc(VendorChange::getVersion));
+        // 不存在变更版本时，创建一份VO版本
+        if (!CollectionUtils.isEmpty(vendorChangeList)) {
+            return vendorChangeList.get(0).getId();
+        }
+        return null;
     }
 
     /**
@@ -473,6 +488,11 @@ public class VendorChangeServiceImpl extends ServiceImpl<VendorChangeMapper,Vend
         vendor.setState(VendorStateEnum.APPROVE.getState());
         vendor.setProcessType(checkVendor.getProcessType());
         vendor.setCreateTime(checkVendor.getCreateTime());
+        vendor.setVendorClass(checkVendor.getVendorClass());
+        vendor.setVendorLevel(checkVendor.getVendorLevel());
+        vendor.setIsBlack(checkVendor.getIsBlack());
+        vendor.setBlackBeginDate(checkVendor.getBlackBeginDate());
+        vendor.setBlackEndDate(checkVendor.getBlackEndDate());
         vendorService.updateById(vendor);
         // 更新供应商资质信息
         certificationChangeService.handleApprove(vendorChange);

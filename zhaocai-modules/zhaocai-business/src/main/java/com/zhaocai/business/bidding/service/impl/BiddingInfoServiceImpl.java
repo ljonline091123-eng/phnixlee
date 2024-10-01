@@ -33,7 +33,9 @@ import com.zhaocai.business.procurement.vo.res.CompContractSplitMaterialsVO;
 import com.zhaocai.business.procurement.vo.res.CompMaterialsContentVO;
 import com.zhaocai.business.procurement.vo.res.CompMaterialsVO;
 import com.zhaocai.business.procurement.vo.res.MaterialsVO;
+import com.zhaocai.business.pub.domain.Attachment;
 import com.zhaocai.business.pub.service.IAttachmentService;
+import com.zhaocai.business.pub.vo.req.AttachmentRequestVO;
 import com.zhaocai.business.pub.vo.res.AttachmentVO;
 import com.zhaocai.common.core.constant.NumberConstant;
 import com.zhaocai.common.core.utils.DateUtils;
@@ -49,6 +51,8 @@ import org.springframework.util.ObjectUtils;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -141,33 +145,82 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
                 .eq(BiddingEvaluatExpert::getIsJoin, 1));
         //查询首轮供应商报价数据，有首轮数据才能在列表中显示（且状态不为废标）
         List<BiddingQuotationListVO> list = baseMapper.findBiddingQuotationList(queryVO);
-        for (BiddingQuotationListVO vo : list) {
-            List<BiddingQuotationDataVO> quotationDataVOList = new LinkedList<>();
-            //查询二次报价的数据
-            List<BiddingInfo> biddingInfos = this.list(new LambdaQueryWrapper<BiddingInfo>()
-                    .eq(BiddingInfo::getParentId, vo.getId())
-                    .orderByAsc(BiddingInfo::getCreateTime));
-            if (!CollectionUtils.isEmpty(biddingInfos)){
-                for (BiddingInfo biddingInfo : biddingInfos) {
-                    BiddingQuotationDataVO quotationVO = BeanCopierUtil.copyBean(biddingInfo, BiddingQuotationDataVO.class);
-//                    quotationVO.setTaxPrice(quotationVO.getTaxPrice().setScale(2, ROUND_DOWN));
-//                    quotationVO.setNotTaxPrice(quotationVO.getNotTaxPrice().setScale(2, ROUND_DOWN));
-//                    quotationVO.setTaxPricePattern(NumberUtil.decimalFormat("#,###.00", quotationVO.getTaxPrice()));
-//                    quotationVO.setNotTaxPricePattern(NumberUtil.decimalFormat("#,###.00", quotationVO.getNotTaxPrice()));
-                    quotationDataVOList.add(quotationVO);
-                }
-//                quotationDataVOList = BeanCopierUtil.copyList(biddingInfos, BiddingQuotationDataVO.class);
-            }
 
-            BiddingQuotationDataVO quotationDataVO = new BiddingQuotationDataVO();
-            quotationDataVO.setId(vo.getId());
-            quotationDataVO.setTaxPrice(vo.getTaxPrice());
-            quotationDataVO.setNotTaxPrice(vo.getNotTaxPrice());
-//            quotationDataVO.setTaxPricePattern(NumberUtil.decimalFormat("#,###.00", quotationDataVO.getTaxPrice()));
-//            quotationDataVO.setNotTaxPricePattern(NumberUtil.decimalFormat("#,###.00", quotationDataVO.getNotTaxPrice()));
-            //插入首轮报价数据
-            quotationDataVOList.add(0, quotationDataVO);
-            vo.setQuotationDataVOList(quotationDataVOList);
+        /* 按供应商分组 将招标对象 的 投标数据 分组，并按版本号排序。 */
+        Map<Long,LinkedList<BiddingQuotationListVO>> hasMap = new HashMap<>();
+        for (BiddingQuotationListVO vo : list) {
+            if(hasMap.get(vo.getVendorId())==null || hasMap.get(vo.getVendorId()).isEmpty()){
+                hasMap.put(vo.getVendorId(),new LinkedList<>(Arrays.asList(vo)));
+            }else {
+                LinkedList link = hasMap.get(vo.getVendorId());
+                link.add(vo);
+                Collections.sort(link, new VersionComparator());
+                hasMap.put(vo.getVendorId(),link);
+            }
+        }
+
+        List<BiddingQuotationListVO> listReturn = new ArrayList<>();
+        for(Long vendorId : hasMap.keySet()) {
+            /* 获取该供应商所有的投标数据 */
+            BiddingQuotationListVO vo = hasMap.get(vendorId).get((Math.max((hasMap.get(vendorId).size() - 1), 0)));
+            List<BiddingQuotationDataVO> quotationDataVOList = new ArrayList<>();
+            /* 获取该供应商所有的投标数据，处理数据后 存入数值 */
+            for (int i = 0; i < hasMap.get(vendorId).size(); i++) {
+                BiddingQuotationDataVO bidChild = new BiddingQuotationDataVO();
+                bidChild.setTwiceQuotVersion(hasMap.get(vendorId).get(i).getTwiceQuotVersion());/* 版本号 */
+                /* 当前报价版本 已经调价才显示数据，不然没有数据 */
+                if(bidChild.getTwiceQuotVersion()!=null && bidChild.getTwiceQuotVersion().equals(tenderNotice.getTwiceQuotVersion()) && tenderNotice.getTwiceQuotVersion()!=null){
+
+                    /** 当前招标文件开启调价 */
+                    if(tenderNotice.getTwiceQuotState()!=null && tenderNotice.getTwiceQuotState().equals(NumberConstant.ONE)){
+                        /* 当前已经调价 */
+                        if(hasMap.get(vendorId).get(i).getPriceChangeState()!=null && hasMap.get(vendorId).get(i).getPriceChangeState().equals(NumberConstant.ONE)){
+                            bidChild.setTaxPrice(hasMap.get(vendorId).get(i).getTaxPrice());
+                            bidChild.setNotTaxPrice(hasMap.get(vendorId).get(i).getNotTaxPrice());
+                            bidChild.setNotTaxPricePattern(hasMap.get(vendorId).get(i).getNotTaxPricePattern());
+                            bidChild.setPriceChangeState(NumberConstant.ONE);/* 已调价 */
+                            vo.setPriceChangeState(NumberConstant.ONE);/* 当前版本 已调价 */
+                        }else{
+                            /* 当前未调价 */
+                            bidChild.setId(hasMap.get(vendorId).get(i).getId());
+                            bidChild.setPriceChangeState(NumberConstant.ZERO);/* 未调价 */
+                            vo.setPriceChangeState(NumberConstant.ZERO);/* 当前版本 未调价 */
+                        }
+                        bidChild.setId(hasMap.get(vendorId).get(i).getId());
+                    }else{
+                        /** 当前招标文件 关闭了调价 */
+                        bidChild.setId(hasMap.get(vendorId).get(i).getId());
+                        bidChild.setTaxPrice(hasMap.get(vendorId).get(i).getTaxPrice());
+                        bidChild.setNotTaxPrice(hasMap.get(vendorId).get(i).getNotTaxPrice());
+                        bidChild.setNotTaxPricePattern(hasMap.get(vendorId).get(i).getNotTaxPricePattern());
+                        /* 当前已经调价 */
+                        if(hasMap.get(vendorId).get(i).getPriceChangeState()!=null && hasMap.get(vendorId).get(i).getPriceChangeState().equals(NumberConstant.ONE)){
+                            bidChild.setPriceChangeState(NumberConstant.ONE);/* 已调价 */
+                            vo.setPriceChangeState(NumberConstant.ONE);/* 当前版本 已调价 */
+                        }else{
+                            /* 当前未调价 */
+                            bidChild.setPriceChangeState(NumberConstant.TWO);/* 放弃调价 */
+                            vo.setPriceChangeState(NumberConstant.TWO);/* 当前版本 放弃调价 */
+                        }
+                    }
+                }else {
+                    /* 非当前版本 */
+                    bidChild.setId(hasMap.get(vendorId).get(i).getId());
+                    bidChild.setTaxPrice(hasMap.get(vendorId).get(i).getTaxPrice());
+                    bidChild.setNotTaxPrice(hasMap.get(vendorId).get(i).getNotTaxPrice());
+                    bidChild.setNotTaxPricePattern(hasMap.get(vendorId).get(i).getNotTaxPricePattern());
+                    /* 不是当前版本的 未调价 投标数据 就是放弃调价。 */
+                    if(hasMap.get(vendorId).get(i).getPriceChangeState()!=null && hasMap.get(vendorId).get(i).getPriceChangeState().equals(NumberConstant.ONE)){
+                        bidChild.setPriceChangeState(NumberConstant.ONE);/* 已调价 */
+                    }else{
+                        bidChild.setPriceChangeState(NumberConstant.TWO);/* 不是当前版本的 未调价 投标数据 就是放弃调价。 */
+                    }
+                }
+                quotationDataVOList.add(bidChild);
+            }
+            vo.setQuotationDataVOList(quotationDataVOList);/* N次报价数组 */
+            vo.setTwiceQuotVersion(tenderNotice.getTwiceQuotVersion());/* 当前版本 */
+
 
             //赋值最大报价次数
             if (quotationDataVOList.size() > quoteNum){
@@ -252,16 +305,19 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
             vo.setAvgBusTotalScore(avgBusTotalScore);
             vo.setAvgTechTotalScore(avgTechTotalScore);
             vo.setScore(score);
+
+            listReturn.add(vo);
         }
 
+
         //综合排名（排序）按照综合分由高到低排序，综合分一致按不含税总价排序
-        if (!CollectionUtils.isEmpty(list)){
+        if (!CollectionUtils.isEmpty(listReturn)){
             //根据综合分进行排序
-            Collections.sort(list);
+            Collections.sort(listReturn);
             //补充字段内容
-            fillFieldBid(list, isFillBiddingInfo, quoteNum);
+            fillFieldBid(listReturn, isFillBiddingInfo, quoteNum);
         }
-        return list;
+        return listReturn;
     }
 
     /** 填充列表列表信息 */
@@ -432,6 +488,7 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
                 .eq(BiddingInfo::getId, id));
     }
 
+    /* 进入下一个环节 */
     @Override
     public boolean intoBidOpeningStage(Long noticeId) {
         //查询当前公告流程状态
@@ -450,7 +507,21 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
             throw new ParamValidateException("有未收取保证金的供应商，不允许进入下一环节");
         }
 
+        /* 招标对象 关闭二次报价 */
+        tenderNoticeService.update(new LambdaUpdateWrapper<TenderNotice>()
+                .set(TenderNotice::getTwiceQuotState, NumberConstant.ZERO)
+                .eq(TenderNotice::getId, noticeId));
+
+        /* 投标对象 关闭当前版本当前招标对象的二次报价 */
+        this.update(new LambdaUpdateWrapper<BiddingInfo>()
+                .set(BiddingInfo::getTwiceQuot, NumberConstant.ZERO)
+                .eq(BiddingInfo::getNoticeId, noticeId)
+                .eq(BiddingInfo::getTwiceQuotVersion, tenderNotice.getTwiceQuotVersion()==null?1:tenderNotice.getTwiceQuotVersion())
+                .eq(BiddingInfo::getTwiceQuot, NumberConstant.ONE));
+
+        /* 获取招标公告 和 采购方案的类型/名称 */
         TenderNoticeSchemeInfoVO detailVO = tenderNoticeService.getTenderNoticeSchemeInfo(noticeId);
+        /* 根据招标公告流程状态 和 采购方案确定下一步流程 */
         Integer nextNoticeStatus = tenderNoticeService.nextTenderNoticeStatus(detailVO.getSchemeType(), tenderNotice.getNoticeStatus());
 
         //进入下一环节
@@ -568,21 +639,25 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
             expertVo.setExpertId(expert.getExpertId());
             expertVo.setExpertName(expert.getExpertName());
             //获取几个供应商首轮报价信息
+            Date oldDate = null;
+            try {
+                oldDate = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").parse("2024-09-29 19:00:00");
+            } catch (ParseException e) {}
+            //查询当前采购方案-招标公告 下面有多少首轮投标单信息(状态等于1的数据 已投标（对供应商端）|已回标（对采购端） 其余已撤回 已废标 未投标的 数据不显示)
+            /* 旧数据 */
             List<BiddingInfo> biddingInfos = this.list(new LambdaQueryWrapper<BiddingInfo>()
                     .eq(BiddingInfo::getNoticeId, noticeId)
                     .eq(BiddingInfo::getBiddingStatus, BiddingInfoStatusEnum.HAVE_BACK.getState())
-                    .isNull(BiddingInfo::getParentId));
+                    .eq(BiddingInfo::getSubmitStatus, 1)
+                    .eq(BiddingInfo::getParentId,null)
+                    .le(BiddingInfo::getCreateTime, oldDate));
+            TenderNotice tenderNotice = tenderNoticeService.getById(noticeId);
+            /* 新数据 */
+            List<BiddingInfo> maxPriceVersion = this.getMaxPriceVersion(noticeId,tenderNotice.getSchemeId());
+            biddingInfos.addAll(maxPriceVersion);
+
             boolean flag = true;
             for (BiddingInfo bid : biddingInfos){
-                //获取供应商最新一轮报价数据
-                //查询二次报价的数据
-                BiddingInfo newestBiddingInfo = this.getOne(new LambdaQueryWrapper<BiddingInfo>()
-                        .eq(BiddingInfo::getParentId, bid.getId())
-                        .orderByDesc(BiddingInfo::getCreateTime).last("limit 1"));
-                if (!ObjectUtils.isEmpty(newestBiddingInfo)){
-                    //换成最新一条投标单
-                    bid = newestBiddingInfo;
-                }
                 //查询专家对这条最新的投标单是否有评标数据
                 if (expertScoreService.count(new LambdaQueryWrapper<ExpertScore>()
                         .eq(ExpertScore::getBiddingInfoId, bid.getId())
@@ -648,36 +723,91 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
         return null;
     }
 
+    /* 管理端 二次报价  */
     @Override
     public boolean twiceBidConf(TwiceBidConfVO twiceBidConfVO) {
         if (tenderNoticeService.getCountTenderNoticeStatus(
                 twiceBidConfVO.getNoticeId(), TenderNoticeStatusEnum.EVALUATION_BID.getState()) == 0){
             throw new ParamValidateException("投标公告状态已变更，请确认当前招标公告状态");
         }
-        List<BiddingInfo> biddingInfos = new ArrayList<>();
-        BiddingInfo biddingInfo;
-        for (Long biddingInfoId : twiceBidConfVO.getBiddingInfoIds()) {
-            biddingInfo = this.getById(biddingInfoId);
-            ValidateUtils.isNullException(biddingInfo, "暂无供应商报价信息");
-
-//            biddingInfo.setTwiceTime(twiceBidConfVO.getTwiceTime());
-            biddingInfo.setTwiceQuot(NumberConstant.ONE);
-            biddingInfos.add(biddingInfo);
+        TenderNotice tenderNotice = tenderNoticeService.getOne(new LambdaQueryWrapper<TenderNotice>()
+                .eq(TenderNotice::getId, twiceBidConfVO.getNoticeId()));
+        /* 招标对象 二次报价状态 */
+        if(tenderNotice.getTwiceQuotState()!=null&&tenderNotice.getTwiceQuotState().equals(NumberConstant.ONE) && !tenderNotice.getTwiceQuotVersion().equals(NumberConstant.ONE)){
+            throw new ParamValidateException("已开启二次报价，再次开启请先结束当前的二次报价。");
         }
-        return this.updateBatchById(biddingInfos);
+        /* 获取当前版本的所有投标数据 */
+        List<BiddingInfo> biddingInfoList = this.list(new LambdaUpdateWrapper<BiddingInfo>()
+                    .eq(BiddingInfo::getNoticeId, tenderNotice.getId())
+                    .eq(BiddingInfo::getTwiceQuotVersion,( tenderNotice.getTwiceQuotVersion()==null?1: tenderNotice.getTwiceQuotVersion())));
+        /* 全部复制一份，防止后面需求变化。 */
+        /* 这个版本号是根据招标对象走的，第二次供应商未报价，第三次依然可以选中该供应商继续报价。 */
+        Date date = new Date();
+        for (BiddingInfo bidInfo : biddingInfoList) {
+//            bidInfo.setCreateTime(date);
+            bidInfo.setTwiceTime(twiceBidConfVO.getTwiceTime());/* 二次报价截至时间 */
+            bidInfo.setTwiceQuotVersion((tenderNotice.getTwiceQuotVersion()==null?1:tenderNotice.getTwiceQuotVersion())+1);/* 二次报价版本号加一 */
+            /* 选中的供应商 开启调价 */
+            if(twiceBidConfVO.getBiddingInfoIds().contains(bidInfo.getId())){
+                bidInfo.setTwiceQuot(NumberConstant.ONE);/* 开启调价 */
+                bidInfo.setPriceChangeState(NumberConstant.ZERO);/* 默认未调价 */
+            }else{
+                /* 未选中的判断之前是否放弃调价。是放弃调价就是放弃调价，不是就默认为未调价 */
+                bidInfo.setTwiceQuot(NumberConstant.ZERO);/* 关闭调价 */
+            }
+            List<AttachmentVO> attachments = attachmentService.listAttachment(AttachmentTypeEnum.BIDING_DOCUMENT, bidInfo.getId());
+            List<AttachmentRequestVO> attachmentList = new ArrayList<>();
+            for (AttachmentVO a:attachments){
+                AttachmentRequestVO av = new AttachmentRequestVO();
+                av.setFileName(a.getFileName());
+                av.setFileUrl(a.getFileUrl());
+                attachmentList.add(av);
+            }
+            bidInfo.setId(null);
+            save(bidInfo);
+            /* 复制投标标书附件 */
+            attachmentService.addAttachment(attachmentList, AttachmentTypeEnum.BIDING_DOCUMENT, bidInfo.getId());
+        }
+        tenderNoticeService.update(new LambdaUpdateWrapper<TenderNotice>()
+                .set(TenderNotice::getTwiceQuotState, NumberConstant.ONE)
+                .set(TenderNotice::getTwiceTime, twiceBidConfVO.getTwiceTime())/* 二次报价截至时间 */
+                .set(TenderNotice::getTwiceQuotVersion, (tenderNotice.getTwiceQuotVersion()==null?1:tenderNotice.getTwiceQuotVersion())+1)/* 版本号累加 */
+                .eq(TenderNotice::getId, twiceBidConfVO.getNoticeId()));
+        return true;
     }
 
+    /* 管理端结束 二次报价 */
     @Override
-    public boolean twiceBidFinish(TwiceBidConfVO twiceBidConfVO) {
+    public boolean twiceBidFinish(TwiceBidConOverVO twiceBidConfVO) {
         if (tenderNoticeService.getCountTenderNoticeStatus(
                 twiceBidConfVO.getNoticeId(), TenderNoticeStatusEnum.EVALUATION_BID.getState()) == 0){
-            throw new ParamValidateException("投标公告状态已变更，请确认当前招标公告状态");
+            return false;
         }
+        TenderNotice tenderNotice = tenderNoticeService.getById(twiceBidConfVO.getNoticeId());
+        /* 招标对象 二次报价状态 */
+        if(tenderNotice.getTwiceQuotState()!=null&&tenderNotice.getTwiceQuotState().equals(NumberConstant.ZERO)){
+            throw new ParamValidateException("当前的二次报价已经是关闭状态");
+        }
+        /* 招标对象 关闭二次报价 */
+        tenderNoticeService.update(new LambdaUpdateWrapper<TenderNotice>()
+                .set(TenderNotice::getTwiceQuotState, NumberConstant.ZERO)
+                .eq(TenderNotice::getId, twiceBidConfVO.getNoticeId()));
 
+        /* 投标对象 关闭当前版本当前招标对象 所有的投标数据 的二次报价开关 */
         this.update(new LambdaUpdateWrapper<BiddingInfo>()
                 .set(BiddingInfo::getTwiceQuot, NumberConstant.ZERO)
                 .eq(BiddingInfo::getNoticeId, twiceBidConfVO.getNoticeId())
+                .eq(BiddingInfo::getTwiceQuotVersion, tenderNotice.getTwiceQuotVersion()==null?2:tenderNotice.getTwiceQuotVersion())
                 .eq(BiddingInfo::getTwiceQuot, NumberConstant.ONE));
+        /* 投标对象 关闭当前版本当前招标对象 未调价的 二次报价 */
+        this.update(new LambdaUpdateWrapper<BiddingInfo>()
+                .set(BiddingInfo::getTwiceQuot, NumberConstant.ZERO)
+                /* 将未调价的状态改成放弃调价 */
+                .set(BiddingInfo::getPriceChangeState, NumberConstant.TWO)/* 放弃调价 */
+                .eq(BiddingInfo::getPriceChangeState, NumberConstant.ZERO)/* 未调价 */
+
+                .eq(BiddingInfo::getNoticeId, twiceBidConfVO.getNoticeId())
+                .eq(BiddingInfo::getTwiceQuotVersion, tenderNotice.getTwiceQuotVersion()==null?2:tenderNotice.getTwiceQuotVersion()));
         return true;
     }
 
@@ -795,6 +925,7 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
         return listVOList;
     }
 
+    /* 评标汇总，只显示最终一轮的 */
     @Override
     public List<BidEvaluationVo>  getBidEvaluationList(Long noticeId, int scoreType) {
         List<BidEvaluationVo> bidEvaluationVoList = new ArrayList<>();
@@ -807,7 +938,31 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
                 .eq(BiddingEvaluatExpert::getExpertType, scoreType)
                 .eq(BiddingEvaluatExpert::getIsJoin, 1));
         //查询首轮供应商报价数据，有首轮数据才能在列表中显示
-        List<BiddingQuotationListVO> list = baseMapper.findBiddingQuotationList(queryVO);
+        List<BiddingQuotationListVO> list = baseMapper.findBiddingQuotationListTongJi(queryVO);
+
+
+//        /* 按供应商分组 将招标对象 的 投标数据 分组，并按版本号排序。 */
+//        Map<Long,LinkedList<BiddingQuotationListVO>> hasMap = new HashMap<>();
+//        for (BiddingQuotationListVO vo : list) {
+//            if(hasMap.get(vo.getVendorId())==null || hasMap.get(vo.getVendorId()).isEmpty()){
+//                hasMap.put(vo.getVendorId(),new LinkedList<>(Arrays.asList(vo)));
+//            }else {
+//                LinkedList link = hasMap.get(vo.getVendorId());
+//                link.add(vo);
+//                Collections.sort(link, new VersionComparator());
+//                hasMap.put(vo.getVendorId(),link);
+//            }
+//        }
+//        List<BiddingQuotationListVO> listReturn = new ArrayList<>();
+//        for(Long vendorId : hasMap.keySet()) {
+//            /* 获取该供应商最终的投标数据 */
+//            BiddingQuotationListVO vo = hasMap.get(vendorId).get((Math.max((hasMap.get(vendorId).size() - 1), 0)));
+//
+//            listReturn.add(vo);
+//        }
+
+
+
         for (BiddingQuotationListVO vo : list) {
 
             BigDecimal busTotalScore = BigDecimal.ZERO;
@@ -876,4 +1031,18 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
         return true;
     }
 
+
+    @Override
+    public List<BiddingInfo> getMaxPriceVersion(Long noticeId, Long schemeId){
+        return baseMapper.getMaxPriceVersion(noticeId,schemeId);
+    }
+
+}
+class VersionComparator implements Comparator<BiddingQuotationListVO> {
+    @Override
+    public int compare(BiddingQuotationListVO v1, BiddingQuotationListVO v2) {
+        if(v1.getTwiceQuotVersion()!=null&&v2.getTwiceQuotVersion()!=null)
+            return v1.getTwiceQuotVersion().compareTo(v2.getTwiceQuotVersion());
+        return 0;
+    }
 }

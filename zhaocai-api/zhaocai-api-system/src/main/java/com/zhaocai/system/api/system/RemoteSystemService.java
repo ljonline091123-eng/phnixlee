@@ -50,7 +50,7 @@ public interface RemoteSystemService {
      * 设置配置参数值
      */
     @PostMapping("/config/setConfigValueByKey")
-    AjaxResult setConfigValueByKey(@RequestBody SetConfigValueDTO setConfigValue, @RequestHeader(SecurityConstants.FROM_SOURCE) String source);
+    void setConfigValueByKey(@RequestBody SetConfigValueDTO setConfigValue, @RequestHeader(SecurityConstants.FROM_SOURCE) String source);
 
     /**
      * 根据第三方部门 id 获取组织机构信息
@@ -130,6 +130,14 @@ public interface RemoteSystemService {
     @GetMapping("/dept/getTwoLevelDeptByDeptId")
     SysDept getTwoLevelDeptByDeptId(@RequestParam("deptId") Long deptId, @RequestHeader(SecurityConstants.FROM_SOURCE) String source);
 
-    @GetMapping("/dept/getTwoLevelDepts")
-    List<SysDept> getTwoLevelDepts(@RequestHeader(SecurityConstants.FROM_SOURCE) String source);
+     @GetMapping("/dept/getTwoLevelDepts")
+     List<SysDept> getTwoLevelDepts(@RequestHeader(SecurityConstants.FROM_SOURCE) String source);
+
+    /**
+     * 根据第三方部门 id 获取组织机构信息(本部门及以下部门，含项目部)
+     */
+    @GetMapping("/dept/getDeptByThridDeptId")
+    List<SysDept> getDeptByThridDeptId(@RequestParam(value = "thridDeptId") String thridDeptId, @RequestHeader(SecurityConstants.FROM_SOURCE) String source);
+
+
 }

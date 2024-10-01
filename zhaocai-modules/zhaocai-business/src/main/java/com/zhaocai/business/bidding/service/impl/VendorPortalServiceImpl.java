@@ -34,7 +34,6 @@ public class VendorPortalServiceImpl implements IVendorPortalService {
     @Override
     public PageResult<VendorPortalNoticeListVO> getNotice(VendorPortalNoticePageQueryVO queryDTO) {
         queryDTO.setNowDate(DateUtils.getNowDate());
-        queryDTO.setNoticeStatus(TenderNoticeStatusEnum.TENDER_ISSUE.getState());
         //设置只查询采购类型为公开招标的
         queryDTO.setSchemeType(1);
         PageResult<VendorPortalNoticeListVO> pageResult = tenderNoticeService.selectVendorPortalNoticePage(queryDTO);
@@ -44,7 +43,6 @@ public class VendorPortalServiceImpl implements IVendorPortalService {
     @Override
     public PageResult<VendorPortalNoticeListVO> getNoticeLogin(VendorPortalNoticePageQueryVO queryDTO) {
         queryDTO.setNowDate(DateUtils.getNowDate());
-        queryDTO.setNoticeStatus(TenderNoticeStatusEnum.TENDER_ISSUE.getState());
         queryDTO.setVendorId(getVendor(SecurityUtils.getUserId()).getId());
         PageResult<VendorPortalNoticeListVO> pageResult = tenderNoticeService.selectVendorPortalNoticePage(queryDTO);
         return pageResult;

@@ -8,6 +8,7 @@ import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
+import org.springframework.format.annotation.DateTimeFormat;
 
 import javax.validation.constraints.NotNull;
 import java.io.Serializable;
@@ -34,8 +35,8 @@ public class TenderNoticeVO implements Serializable {
     private Integer schemeType;
 
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
-    @ApiModelProperty(value =  "报名截止时间")
-    @NotNull(message = "报名截止时间不能为空", groups = {ValidateGroup.AddGroup.class})
+    @ApiModelProperty(value =  "投标截止时间")
+    @NotNull(message = "投标截止时间不能为空", groups = {ValidateGroup.AddGroup.class})
     private Date applyTime;
 
     @ApiModelProperty(value =  "联系人")
@@ -62,5 +63,40 @@ public class TenderNoticeVO implements Serializable {
 
     @ApiModelProperty(value =  "供应商查询参数")
     private VendorManagementListQueryDataVO vendorQueryParam;
+
+
+    @ApiModelProperty(value =  "招标公告id")
+    private Long id;
+
+    /** 发布公告联系人id */
+    @ApiModelProperty(value =  "发布公告联系人id")
+    private Long contactIdNotice;
+
+    /** 发布公告联系人 */
+    @ApiModelProperty(value =  "发布公告联系人")
+    private String contactNotice;
+
+    /** 发布公告联系电话 */
+    @ApiModelProperty(value =  "发布公告联系电话")
+    private String phoneNotice;
+
+    /** 发布公告联系邮箱 */
+    @ApiModelProperty(value =  "发布公告联系邮箱")
+    private String emailNotice;
+
+    /** 发布公告报名截止时间 */
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
+    @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    @ApiModelProperty(value =  "发布公告报名截止时间")
+    private Date applyTimeNotice;
+
+    /** 发布公告招标公告附件id */
+    @ApiModelProperty(value =  "发布公告招标公告附件id")
+    private Long attachIdNotice;
+
+
+    /** 通过的供应商报名列表 */
+    @ApiModelProperty(value =  "通过的供应商报名列表")
+    private List<Long> vendorApplyIds;
 
 }

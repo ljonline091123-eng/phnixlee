@@ -1,5 +1,6 @@
 package com.zhaocai.business.bidding.controller;
 
+import com.zhaocai.business.bidding.enums.TenderNoticeStatusEnum;
 import com.zhaocai.business.bidding.service.ITenderNoticeAnswerService;
 import com.zhaocai.business.bidding.vo.req.TenderNoticeAnswerVO;
 import com.zhaocai.business.bidding.vo.req.query.TenderNoticeAnswerQueryVO;
@@ -36,8 +37,18 @@ public class TenderNoticeAnswerController extends BladeController {
     /**
      * 查询招标公告答疑列表
      */
+    @PostMapping("/getListNotice")
+    public ResultData<List<TenderNoticeAnswerListVO>> getListNotice(@RequestBody TenderNoticeAnswerQueryVO queryVO) {
+        queryVO.setNoticeStatus(TenderNoticeStatusEnum.TENDER_NOTICE.getState());
+        List<TenderNoticeAnswerListVO> list = tenderNoticeAnswerService.getListNotice(queryVO);
+        return ResultData.data(list);
+    }
+    /**
+     * 查询招标公告文件答疑列表
+     */
     @PostMapping("/getList")
     public ResultData<List<TenderNoticeAnswerListVO>> getList(@RequestBody TenderNoticeAnswerQueryVO queryVO) {
+        queryVO.setNoticeStatus(TenderNoticeStatusEnum.TENDER_ISSUE.getState());
         List<TenderNoticeAnswerListVO> list = tenderNoticeAnswerService.getList(queryVO);
         return ResultData.data(list);
     }
@@ -46,6 +57,16 @@ public class TenderNoticeAnswerController extends BladeController {
      * 新增招标公告答疑
      */
     @Log(title = "新增招标公告答疑", businessType = BusinessType.INSERT)
+    @PostMapping("/addNotice")
+    @ApiOperation("新增招标公告答疑")
+    public ResultData addNotice(@RequestBody @Validated({ValidateGroup.AddGroup.class}) TenderNoticeAnswerVO tenderNoticeAnswerVO) {
+        return ResultData.status(tenderNoticeAnswerService.addNotice(tenderNoticeAnswerVO));
+    }
+
+    /**
+     * 新增招标公告答疑
+     */
+    @Log(title = "新增招标公告文件答疑", businessType = BusinessType.INSERT)
     @PostMapping("/add")
     @ApiOperation("新增招标公告答疑")
     public ResultData add(@RequestBody @Validated({ValidateGroup.AddGroup.class}) TenderNoticeAnswerVO tenderNoticeAnswerVO) {
@@ -56,8 +77,19 @@ public class TenderNoticeAnswerController extends BladeController {
      * 修改招标公告答疑
      */
     @Log(title = "修改招标公告答疑", businessType = BusinessType.UPDATE)
-    @PostMapping("/edit")
+    @PostMapping("/editNotice")
     @ApiOperation("修改招标公告答疑")
+    public ResultData editNotice(@RequestBody @Validated({ValidateGroup.UpdateGroup.class}) TenderNoticeAnswerVO tenderNoticeAnswerVO)
+    {
+        return ResultData.status(tenderNoticeAnswerService.editNotice(tenderNoticeAnswerVO));
+    }
+
+    /**
+     * 修改招标公告答疑
+     */
+    @Log(title = "修改招标公告文件答疑", businessType = BusinessType.UPDATE)
+    @PostMapping("/edit")
+    @ApiOperation("修改招标公告文件答疑")
     public ResultData edit(@RequestBody @Validated({ValidateGroup.UpdateGroup.class}) TenderNoticeAnswerVO tenderNoticeAnswerVO)
     {
         return ResultData.status(tenderNoticeAnswerService.edit(tenderNoticeAnswerVO));

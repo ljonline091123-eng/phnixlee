@@ -3,7 +3,7 @@
 PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
 "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.zhaocai.business.bidding.mapper.TenderNoticeAnswerMapper">
-    
+
     <resultMap type="com.zhaocai.business.bidding.domain.TenderNoticeAnswer" id="TenderNoticeAnswerResult">
         <result property="id"    column="id"    />
         <result property="busId"    column="bus_id"    />
@@ -14,6 +14,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="answerUser"    column="answer_user"    />
         <result property="vendorId"    column="vendor_id"    />
         <result property="vendorName"    column="vendor_name"    />
+        <result property="noticeStatus"    column="notice_status"    />
         <result property="createBy"    column="create_by"    />
         <result property="createId"    column="create_id"    />
         <result property="createTime"    column="create_time"    />
@@ -24,9 +25,9 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     </resultMap>
 
     <sql id="selectTenderNoticeAnswerVo">
-        select id, bus_id, bus_type, question, content, question_user, answer_user, vendor_id, vendor_name, create_by, create_id, create_time, update_by, update_id, update_time, del_flag
+        select id, bus_id, bus_type, question, content, question_user, answer_user,notice_status, vendor_id, vendor_name, create_by, create_id, create_time, update_by, update_id, update_time, del_flag
         from tb_tender_notice_answer
     </sql>
-    
+
 
 </mapper>

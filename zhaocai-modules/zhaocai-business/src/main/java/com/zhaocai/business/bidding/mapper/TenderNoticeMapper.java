@@ -13,7 +13,7 @@ import java.util.List;
 
 /**
  * 招标公告Mapper接口
- * 
+ *
  * @author WH
  * @date 2024-05-24
  */
@@ -28,7 +28,15 @@ public interface TenderNoticeMapper extends BaseMapper<TenderNotice> {
     IPage<TenderNoticeListVO> page(Page toMybatisPage, @Param("queryDTO") TenderNoticeQueryVO queryDTO);
 
     /**
-     * 展示供应商可查看的招标公告列表数据-分页
+     * 展示供应商可查看的招标公告列表数据-分页 招标公告
+     *
+     * @param queryDTO 查询参数
+     * @return 招标公告集合
+     */
+    IPage<VendorNoticeListVO> findVendorNoticePageNotice(Page toMybatisPage, @Param("queryDTO") VendorNoticePageQueryVO queryDTO);
+
+    /**
+     * 展示供应商可查看的招标公告列表数据-分页 招标文件
      *
      * @param queryDTO 查询参数
      * @return 招标公告集合

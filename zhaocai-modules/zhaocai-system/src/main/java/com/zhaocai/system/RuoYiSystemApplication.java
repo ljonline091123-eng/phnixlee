@@ -8,7 +8,7 @@ import com.zhaocai.common.swagger.annotation.EnableCustomSwagger2;
 
 /**
  * 系统模块
- * 
+ *
  * @author ruoyi
  */
 @EnableCustomConfig
@@ -29,6 +29,7 @@ public class RuoYiSystemApplication
                 " |  |\\ \\  |  ||   |(_,_)'         \n" +
                 " |  | \\ `'   /|   `-'  /           \n" +
                 " |  |  \\    /  \\      /           \n" +
-                " ''-'   `'-'    `-..-'              ");
+                " ''-'   `'-'    `-..-'              \n"   +
+                " 最新版本 2024-09-29 17:55            ");
     }
 }

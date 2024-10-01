@@ -123,6 +123,13 @@
 <!--                                    left join tb_contract_planning tcp on tcp.plan_id = tpspr.procurement_plan_id-->
 <!--                                    where tcp.project_code = #{queryVO.projectCode,jdbcType=INTEGER})-->
             </if>
+            <if test="queryVO.projectCodeList != null and queryVO.projectCodeList.size() > 0">
+                and (tps.project_code in
+                <foreach item="projectCode" collection="queryVO.projectCodeList" open="(" close=")" separator=",">
+                    #{projectCode}
+                </foreach>
+                )
+            </if>
         </where>
         order by tps.create_time desc
     </select>

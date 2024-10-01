@@ -2,11 +2,7 @@ package com.zhaocai.business.bidding.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.zhaocai.business.bidding.domain.BiddingInfo;
-import com.zhaocai.business.bidding.vo.req.AbandonBidVO;
-import com.zhaocai.business.bidding.vo.req.EvalAttachUploadVO;
-import com.zhaocai.business.bidding.vo.req.EvaluatBidVO;
-import com.zhaocai.business.bidding.vo.req.TwiceBidConfVO;
-import com.zhaocai.business.bidding.vo.req.UrgeExpertMesVO;
+import com.zhaocai.business.bidding.vo.req.*;
 import com.zhaocai.business.bidding.vo.req.query.BiddingInfoQueryVO;
 import com.zhaocai.business.bidding.vo.req.query.BiddingQuotationQueryVO;
 import com.zhaocai.business.bidding.vo.res.*;
@@ -128,7 +124,7 @@ public interface IBiddingInfoService  extends IService<BiddingInfo> {
      * @param twiceBidConfVO 开始调价（旧：二次洽商配置操作）参数
      * @return
      */
-    boolean twiceBidFinish(TwiceBidConfVO twiceBidConfVO);
+    boolean twiceBidFinish(TwiceBidConOverVO twiceBidConfVO);
 
     /**
      * 评标附件上传
@@ -168,4 +164,6 @@ public interface IBiddingInfoService  extends IService<BiddingInfo> {
      * @return
      */
     boolean urgeExpertMes(UrgeExpertMesVO urgeExpertMesVO);
+
+    List<BiddingInfo> getMaxPriceVersion(Long noticeId, Long schemeId);
 }

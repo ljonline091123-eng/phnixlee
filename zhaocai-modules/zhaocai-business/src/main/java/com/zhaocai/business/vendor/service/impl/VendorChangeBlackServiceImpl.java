@@ -88,6 +88,8 @@ public class VendorChangeBlackServiceImpl extends ServiceImpl<VendorChangeMapper
                 .set(VendorChange::getBlackBeginDate,requestVO.getBlackBeginDate())
                 .set(VendorChange::getBlackEndDate,requestVO.getBlackEndDate())
                 .eq(VendorChange::getId,vendorChange.getId()));
+        // 添加批注信息
+        vendorChange.setOperateComment(requestVO.getOperateComment());
         // 添加操作记录
         Long logId = vendorOperateLogService.addVendorOperateLog(requestVO.getId(), VendorOperateLogCodeEnum.REMOVE_FROM_BLACK);
         // 添加附件
@@ -112,6 +114,7 @@ public class VendorChangeBlackServiceImpl extends ServiceImpl<VendorChangeMapper
         //供应商注册时候选择审批单位，只能由选择的单位维护的供应商审核人员进行审核，如果供应商信息修改也是需要原审核单位进行审核
         String customProcessKey = ProcessKeyEnum.ZHAOCAI_VENDOR_MOVE_INOROUT_BLACK.getIdentifying().replace("{org}",org);
         paramMap.put("customProcessKey", customProcessKey);
+        paramMap.put("operateComment", vendorChange.getOperateComment());
         processService.startProcessInstance(
                 ProcessKeyEnum.ZHAOCAI_VENDOR_MOVE_INOROUT_BLACK.getIdentifying(),paramMap);
     }
@@ -129,6 +132,10 @@ public class VendorChangeBlackServiceImpl extends ServiceImpl<VendorChangeMapper
                 .set(VendorChange::getBlackBeginDate,requestVO.getBlackBeginDate())
                 .set(VendorChange::getBlackEndDate,requestVO.getBlackEndDate())
                 .eq(VendorChange::getId,vendorChange.getId()));
+
+        // 添加批注信息
+        vendorChange.setOperateComment(requestVO.getOperateComment());
+
         // 添加操作记录
         Long logId = vendorOperateLogService.addVendorOperateLog(requestVO.getId(), VendorOperateLogCodeEnum.ADD_TO_BLACK);
         // 添加附件
@@ -179,6 +186,7 @@ public class VendorChangeBlackServiceImpl extends ServiceImpl<VendorChangeMapper
                 .set(Vendor::getBlackBeginDate,vendorChange.getBlackBeginDate())
                 .set(Vendor::getBlackEndDate,vendorChange.getBlackEndDate())
                 .set(Vendor::getState,VendorStateEnum.APPROVE.getState())
+                .set(Vendor::getWfProcessId,vendorChange.getWfProcessId())
                 .eq(Vendor::getId,vendorChange.getVendorId()));
     }
 

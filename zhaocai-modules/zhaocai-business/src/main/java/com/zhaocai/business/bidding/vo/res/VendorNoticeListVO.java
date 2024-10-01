@@ -1,6 +1,7 @@
 package com.zhaocai.business.bidding.vo.res;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
+import com.zhaocai.business.pub.vo.res.AttachmentVO;
 import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;
 import lombok.Data;
@@ -46,8 +47,12 @@ public class VendorNoticeListVO {
     private Date createTime;
 
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
-    @ApiModelProperty(value =  "报名截止时间")
+    @ApiModelProperty(value =  "投标截止时间")
     private Date applyTime;
+
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    @ApiModelProperty(value =  "报名截止时间")
+    private Date applyTimeNotice;
 
     @ApiModelProperty(value =  "招标公告状态（招标阶段流程状态）1发布/2开标/3评标/4二次洽商/5定标报告/6中标公示/7结果发布")
     private Integer noticeStatus;
@@ -57,6 +62,19 @@ public class VendorNoticeListVO {
 
     @ApiModelProperty(value =  "是否投标（未投标|已投标）")
     private String bidStatus;
+
+    @ApiModelProperty(value =  "报名单id")
+    private Long tenderApplyId;
+
+    @ApiModelProperty(value =  "是否报名（未报名|已报名）")
+    private String tenderApplyStatus;
+
+    /** 发布公告招标公告附件id */
+    @ApiModelProperty(value =  "发布公告招标公告附件id")
+    private Long attachIdNotice;
+
+    @ApiModelProperty(value =  "投标公告附件")
+    private AttachmentVO attachmentNotice;
 
     @ApiModelProperty(value =  "二次报价设置（默认0关 1开）")
     private Integer twiceQuot;

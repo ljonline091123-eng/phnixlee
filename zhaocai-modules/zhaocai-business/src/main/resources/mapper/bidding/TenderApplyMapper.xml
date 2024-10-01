@@ -3,10 +3,11 @@
 PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
 "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.zhaocai.business.bidding.mapper.TenderApplyMapper">
-    
+
     <resultMap type="com.zhaocai.business.bidding.domain.TenderApply" id="TenderApplyResult">
         <result property="id"    column="id"    />
         <result property="noticeId"    column="notice_id"    />
+        <result property="schemeId"    column="scheme_id"    />
         <result property="contact"    column="contact"    />
         <result property="phone"    column="phone"    />
         <result property="attachId"    column="attach_id"    />
@@ -14,15 +15,23 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="vendorName"    column="vendor_name"    />
         <result property="ipAddress"    column="ip_address"    />
         <result property="approveResult"    column="approve_result"    />
+        <result property="createBy"    column="create_by"    />
+        <result property="createId"    column="create_id"    />
+        <result property="createTime"    column="create_time"    />
+        <result property="updateBy"    column="update_by"    />
+        <result property="updateId"    column="update_id"    />
+        <result property="updateTime"    column="update_time"    />
+        <result property="delFlag"    column="del_flag"    />
     </resultMap>
 
     <sql id="selectTenderApplyVo">
-        select id, notice_id, contact, phone, attach_id, vendor_id, vendor_name, ip_address, approve_result from tb_tender_apply
+        select id, notice_id,scheme_id, contact, phone, attach_id, vendor_id, vendor_name, ip_address, approve_result,
+            create_by, create_id, create_time, update_by, update_id, update_time, del_flag from tb_tender_apply
     </sql>
 
     <select id="selectTenderApplyList" parameterType="com.zhaocai.business.bidding.domain.TenderApply" resultMap="TenderApplyResult">
         <include refid="selectTenderApplyVo"/>
-        <where>  
+        <where>
             <if test="noticeId != null "> and notice_id = #{noticeId}</if>
             <if test="contact != null  and contact != ''"> and contact = #{contact}</if>
             <if test="phone != null  and phone != ''"> and phone = #{phone}</if>
@@ -33,12 +42,12 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             <if test="approveResult != null "> and approve_result = #{approveResult}</if>
         </where>
     </select>
-    
+
     <select id="selectTenderApplyById" parameterType="Long" resultMap="TenderApplyResult">
         <include refid="selectTenderApplyVo"/>
         where id = #{id}
     </select>
-        
+
     <insert id="insertTenderApply" parameterType="com.zhaocai.business.bidding.domain.TenderApply">
         insert into tb_tender_apply
         <trim prefix="(" suffix=")" suffixOverrides=",">
@@ -85,7 +94,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     </delete>
 
     <delete id="deleteTenderApplyByIds" parameterType="String">
-        delete from tb_tender_apply where id in 
+        delete from tb_tender_apply where id in
         <foreach item="id" collection="array" open="(" separator="," close=")">
             #{id}
         </foreach>
