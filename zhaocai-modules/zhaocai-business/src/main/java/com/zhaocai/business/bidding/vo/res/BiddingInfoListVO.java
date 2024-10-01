@@ -1,7 +1,5 @@
 package com.zhaocai.business.bidding.vo.res;
 
-import com.baomidou.mybatisplus.annotation.FieldFill;
-import com.baomidou.mybatisplus.annotation.TableField;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.zhaocai.business.common.annotations.MoneyFormat;
 import com.zhaocai.business.common.base.AdviceObject;

@@ -1030,6 +1030,12 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
         return true;
     }
 
+
+    @Override
+    public List<BiddingInfo> getMaxPriceVersion(Long noticeId, Long schemeId){
+        return baseMapper.getMaxPriceVersion(noticeId,schemeId);
+    }
+
 }
 class VersionComparator implements Comparator<BiddingQuotationListVO> {
     @Override

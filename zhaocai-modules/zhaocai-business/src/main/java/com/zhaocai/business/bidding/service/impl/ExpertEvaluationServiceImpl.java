@@ -112,15 +112,9 @@ public class ExpertEvaluationServiceImpl implements IExpertEvaluationService {
 					.eq(BiddingInfo::getParentId,null)
 					.le(BiddingInfo::getCreateTime, oldDate));
 			/* 新数据 */
-			biddingInfos.addAll(biddingInfoService.list(new LambdaQueryWrapper<BiddingInfo>()
-					.groupBy(BiddingInfo::getVendorId)
-					.eq(BiddingInfo::getNoticeId, row.getNoticeId())
-					.eq(BiddingInfo::getSchemeId, row.getSchemeId())
-					.eq(BiddingInfo::getBiddingStatus, BiddingInfoStatusEnum.HAVE_BACK.getState())
-					.eq(BiddingInfo::getSubmitStatus, 1)
-					.eq(BiddingInfo::getPriceChangeState,1)
-					.orderByDesc(BiddingInfo::getTwiceQuotVersion)
-					.last("limit 1")));
+			List<BiddingInfo> maxPriceVersion = biddingInfoService.getMaxPriceVersion(row.getNoticeId(),row.getSchemeId());
+			biddingInfos.addAll(maxPriceVersion);
+
 			for (BiddingInfo biddingInfo : biddingInfos){
 				//查询是否有最新的报价信息
 				BiddingInfo newestBiddingInfo = biddingInfoService.getOne(new LambdaQueryWrapper<BiddingInfo>()
@@ -192,16 +186,8 @@ public class ExpertEvaluationServiceImpl implements IExpertEvaluationService {
 					.eq(BiddingInfo::getParentId,null)
 					.le(BiddingInfo::getCreateTime, oldDate));
 			/* 新数据 */
-			biddingInfos.addAll(biddingInfoService.list(new LambdaQueryWrapper<BiddingInfo>()
-					.groupBy(BiddingInfo::getVendorId)
-					.eq(BiddingInfo::getNoticeId, row.getNoticeId())
-					.eq(BiddingInfo::getSchemeId, row.getSchemeId())
-					.eq(BiddingInfo::getBiddingStatus, BiddingInfoStatusEnum.HAVE_BACK.getState())
-					.eq(BiddingInfo::getSubmitStatus, 1)
-					.eq(BiddingInfo::getPriceChangeState,1)
-					.orderByDesc(BiddingInfo::getTwiceQuotVersion)
-					.last("limit 1")));
-
+			List<BiddingInfo> maxPriceVersion = biddingInfoService.getMaxPriceVersion(row.getNoticeId(),row.getSchemeId());
+			biddingInfos.addAll(maxPriceVersion);
 
 			for (BiddingInfo biddingInfo : biddingInfos){
 				//查询是否有最新的报价信息

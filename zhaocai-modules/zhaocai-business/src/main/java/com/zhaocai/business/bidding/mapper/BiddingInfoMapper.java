@@ -42,4 +42,7 @@ public interface BiddingInfoMapper extends BaseMapper<BiddingInfo> {
 
 
     List<BidEvaluationExpertScoreVo> findBidEvaluationList(@Param("noticeId") Long noticeId);
+
+    /** 查询已调价的最大的一条版本号数据 */
+    List<BiddingInfo> getMaxPriceVersion(@Param("noticeId")Long noticeId,@Param("schemeId") Long schemeId);
 }

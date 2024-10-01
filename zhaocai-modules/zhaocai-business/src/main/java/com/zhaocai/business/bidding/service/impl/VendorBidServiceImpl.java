@@ -371,15 +371,17 @@ public class VendorBidServiceImpl implements IVendorBidService {
             }
         }
 
-        if (detail.getBidEndTime() != null){
-            if (detail.getBidEndTime().before(DateUtils.getNowDate())){
-                throw new ParamValidateException("投标时间已截止，不允许投标");
+        /* 二次报价不做验证 */
+        if(tenderNotice.getTwiceQuotVersion()==null||tenderNotice.getTwiceQuotVersion()==NumberConstant.ZERO)
+            if (detail.getBidEndTime() != null){
+                if (detail.getBidEndTime().before(DateUtils.getNowDate())){
+                    throw new ParamValidateException("投标时间已截止，不允许投标");
+                }
+            } else {
+                if (tenderNotice.getApplyTime().before(DateUtils.getNowDate())){
+                    throw new ParamValidateException("投标时间已截止，不允许投标");
+                }
             }
-        } else {
-            if (tenderNotice.getApplyTime().before(DateUtils.getNowDate())){
-                throw new ParamValidateException("投标时间已截止，不允许投标");
-            }
-        }
         /* 第一次投标 */
         if(tenderNotice.getTwiceQuotVersion()!=null && tenderNotice.getTwiceQuotVersion().equals(NumberConstant.ONE)){
             if (!TenderNoticeStatusEnum.TENDER_ISSUE.getState().equals(tenderNotice.getNoticeStatus())){

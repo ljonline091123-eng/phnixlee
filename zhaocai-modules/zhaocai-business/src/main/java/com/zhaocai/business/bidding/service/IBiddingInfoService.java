@@ -164,4 +164,6 @@ public interface IBiddingInfoService  extends IService<BiddingInfo> {
      * @return
      */
     boolean urgeExpertMes(UrgeExpertMesVO urgeExpertMesVO);
+
+    List<BiddingInfo> getMaxPriceVersion(Long noticeId, Long schemeId);
 }

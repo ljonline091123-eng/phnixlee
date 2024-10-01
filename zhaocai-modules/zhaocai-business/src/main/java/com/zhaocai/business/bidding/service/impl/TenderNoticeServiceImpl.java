@@ -549,10 +549,10 @@ public class TenderNoticeServiceImpl extends ServiceImpl<TenderNoticeMapper,Tend
             /* 更新 投标截止时间 */
             tenderNotice.setApplyTime(DateUtils.strToDate(changeRecord.getUpdateAfter(), DateUtils.YYYY_MM_DD_HH_MM_SS));
         }
-
         /* 招标对象 */
         vo.setTenderNotice(tenderNotice);
         vo.setNoticeStatusText(TenderNoticeStatusEnum.getValueByCode(vo.getTenderNotice().getNoticeStatus()));
+
         //供应商范围TenderNoticeRange
         List<TenderNoticeRange> rangeList = tenderNoticeRangeService.list(new LambdaQueryWrapper<TenderNoticeRange>()
                 .eq(TenderNoticeRange::getNoticeId, id));
