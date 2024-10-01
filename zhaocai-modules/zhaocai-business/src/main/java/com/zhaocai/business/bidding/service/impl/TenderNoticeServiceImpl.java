@@ -114,8 +114,6 @@ public class TenderNoticeServiceImpl extends ServiceImpl<TenderNoticeMapper,Tend
 
 
     @Autowired
-    private ISysDictDataService dictDataService;
-    @Autowired
     private IMinProjectService minProjectService;
     @Autowired
     private SmsSenderUtil smsSenderUtil = SpringUtil.getBean(SmsSenderUtil.class);
@@ -354,11 +352,20 @@ public class TenderNoticeServiceImpl extends ServiceImpl<TenderNoticeMapper,Tend
         List<PushThirdPartyTodoTaskSonRequestDTO> messageList = new ArrayList<>();
             PushThirdPartyTodoTaskSonRequestDTO requestDTO = new PushThirdPartyTodoTaskSonRequestDTO();
         MinProjectVO project = minProjectService.getMinProjectByMinAccountCode(procurementScheme.getProjectCode());
-        List<SysDictData>  dataList =  dictDataService.listDictDataLabel("procurement_type",procurementScheme.getProcurementType().toString());
+       /* List<SysDictData>  dataList =  dictDataService.listDictDataLabel("procurement_type",procurementScheme.getProcurementType().toString());*/
         String label = "";
-        if(dataList!=null&&dataList.size()>0){
-            label = dataList.get(0).getDictLabel();
-        }
+     switch (procurementScheme.getProcurementType()){
+         case 1:
+             label = "公开招标";
+         case 2:
+             label = "邀请招标";
+         case 3:
+             label = "询价";
+         case 4:
+             label = "单一来源";
+         default:
+     }
+
             requestDTO.setTitle("财务人员待办信息");
         String  xm =procurementScheme.getFinanceConfirmName()+ "你好!" + project.getMinAccountFullName()+"项目的"+
                 procurementScheme.getProcurementSchemeName()+"、编号为"+ procurementScheme.getProcurementSchemeCode()+"、招标方式为"+ label+"于"+formatDate(tenderNotice.getCreateTime())+
