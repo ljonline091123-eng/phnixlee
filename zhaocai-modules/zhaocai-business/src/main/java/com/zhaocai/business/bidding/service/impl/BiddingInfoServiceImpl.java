@@ -695,7 +695,7 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
         for (BiddingInfo bidInfo : biddingInfoList) {
 
             BiddingInfo biddingInfoOld = this.getOne(new LambdaQueryWrapper<BiddingInfo>()
-                    .eq(BiddingInfo::getVendorId, bidInfo.getId())
+                    .eq(BiddingInfo::getVendorId, bidInfo.getVendorId())
                     .eq(BiddingInfo::getNoticeId, bidInfo.getNoticeId())
                     .isNull(BiddingInfo::getParentId));
 
