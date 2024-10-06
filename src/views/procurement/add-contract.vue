@@ -400,7 +400,9 @@
                 <template slot-scope="scope">
                   <el-form-item label-width="0" :prop="'agreementPaymentLists.' + scope.$index + '.paymentName'"
                     :rules="[{ required: true, trigger: 'blur', message: '请输入结算与付款节点' }]">
+                    <el-tooltip class="item" effect="dark" :content="scope.row.paymentName" placement="top" :disabled="!scope.row.paymentName">
                     <el-input v-model="scope.row.paymentName" type="textarea" :autosize="{maxRows: 2}" clearable />
+                    </el-tooltip>
                   </el-form-item>
                 </template>
               </el-table-column>
@@ -441,7 +443,9 @@
               <el-table-column prop="paymentRemark" label="付款说明">
                 <template slot-scope="scope">
                   <el-form-item label-width="0" :prop="'agreementPaymentLists.' + scope.$index + '.paymentRemark'">
+                    <el-tooltip class="item" effect="dark" :content="scope.row.paymentRemark" placement="top" :disabled="!scope.row.paymentRemark">
                     <el-input v-model="scope.row.paymentRemark" clearable type="textarea" :autosize="{maxRows: 2}"/>
+                    </el-tooltip>
                   </el-form-item>
                 </template>
               </el-table-column>
@@ -459,7 +463,7 @@
               </el-table-column>
               <el-table-column label="操作" align="center" width="80">
                 <template slot-scope="scope">
-                  <el-button size="mini" type="text" 
+                  <el-button size="mini" type="text"
                     @click="handleDelete('agreementPaymentLists', scope.$index)" >删除
                   </el-button>
                 </template>
@@ -492,7 +496,7 @@
               <el-table-column prop="basePriceText" label="基价(元)" v-if="priceType == 2" width="120" align="right"/>
               <el-table-column prop="floatingPriceText" label="浮动价(元)" v-if="priceType == 2" width="120" align="right"/>
               <el-table-column prop="unloadingFeeText" label="卸费(元)" v-if="priceType == 2" width="120" align="right"/>
-              
+
               <el-table-column prop="signUnitPriceExclTaxText" label="本次签订不含税单价(元)" width="180" align="right"/>
               <el-table-column prop="signUnitPriceInclTaxText" label="本次签订含税单价(元)" width="160" align="right"/>
               <el-table-column prop="signAmountExclTaxText" label="本次不含税总价(元)" width="150" align="right"/>
@@ -768,7 +772,7 @@
                 </el-table-column>
                 <el-table-column label="操作" align="center" width="80">
                   <template slot-scope="scope">
-                    <el-button size="mini" type="text"  
+                    <el-button size="mini" type="text"
                       @click="visaDel(scope.$index, 2)">删除
                     </el-button>
                   </template>
@@ -846,7 +850,7 @@
               </el-table-column>
               <el-table-column label="操作" align="center" width="80">
                 <template slot-scope="scope">
-                  <el-button size="mini" type="text"  
+                  <el-button size="mini" type="text"
                     @click="handleDelete('agreementEquipmentSupplies', scope.$index)">删除
                   </el-button>
                 </template>
@@ -921,7 +925,7 @@
               </el-table-column>
               <el-table-column label="操作" align="center" width="80">
                 <template slot-scope="scope">
-                  <el-button size="mini" type="text"  
+                  <el-button size="mini" type="text"
                     @click="handleDelete('agreementMaterialSupplies', scope.$index)">删除
                   </el-button>
                 </template>
@@ -1024,7 +1028,7 @@
               </el-table-column>
               <el-table-column label="操作" align="center" width="80">
                 <template slot-scope="scope">
-                  <el-button size="mini" type="text" 
+                  <el-button size="mini" type="text"
                     @click="handleDelete('agreementDeposits', scope.$index)" >删除
                   </el-button>
                 </template>
@@ -1253,7 +1257,7 @@ export default {
     this.mathjs.config({
       number: "BigNumber",
     });
-    
+
     //获取字典
     Object.keys(this.dictObjMap).forEach((key) => {
       this.getListUnderlingDict(key);
@@ -1584,7 +1588,7 @@ export default {
     //选择项
     async selectTerm(id){
       this.term = id;
-      
+
       const isHas = this.termValueMap[id] && this.termValueMap[id].length;
       if(!isHas){
         let res = null
@@ -1615,14 +1619,14 @@ export default {
       console.log(allHaveTrue,'allHaveTrue');
       if(allHaveTrue){
         // 提取所有符合selected的值
-        let filteredValues = Object.values(this.termValueMap).map(arr => 
+        let filteredValues = Object.values(this.termValueMap).map(arr =>
           arr.filter(item => item.selected).map(item => ({id:item.id,featureValueName:item.featureValueName}))
         );
         console.log(filteredValues,'filteredValues-------------------');
         // 生成结果
-        this.selectedList = filteredValues.length > 1? 
+        this.selectedList = filteredValues.length > 1?
         this.generateCombinations(filteredValues)
-        : 
+        :
         filteredValues[0].map(cur => ({
           id: `${cur.id}`,
           value: `${cur.featureValueName}`
@@ -1735,14 +1739,14 @@ export default {
       console.log(allHaveTrue,'allHaveTrue');
       if(allHaveTrue){
         // 提取所有符合selected的值
-        let filteredValues = Object.values(this.termValueMap).map(arr => 
+        let filteredValues = Object.values(this.termValueMap).map(arr =>
           arr.filter(item => item.selected).map(item => ({id:item.id,featureValueName:item.featureValueName}))
         );
         console.log(filteredValues,'filteredValues-------------------');
         // 生成结果
-        this.selectedList = filteredValues.length > 1? 
+        this.selectedList = filteredValues.length > 1?
         this.generateCombinations(filteredValues)
-        : 
+        :
         filteredValues[0].map(cur => ({
           id: `${cur.id}`,
           value: `${cur.featureValueName}`
@@ -1776,7 +1780,7 @@ export default {
         const taxRatePercent = divide(ratioBig, 100);
         const paymentAmount = multiply(totalAmountIncTaxBig, taxRatePercent)
         this.$set(scope.row, 'paymentAmount', paymentAmount.toFixed(2))
-      }  
+      }
     },
     changePaymentBasis(scope, value){
       console.log(scope,'scope');
@@ -1833,7 +1837,7 @@ export default {
             splitId,
             vendorId,
             agreementMaterialsList:list.agreementMaterialsList
-            
+
           }).then((res) => {
             // * 此3个字段是必传字段
             this.firstForm.agreement.schemeId = res.data.schemeId;
@@ -1934,7 +1938,7 @@ export default {
                 notation: "fixed",
                 precision: 4,
               })
-            }  
+            }
           }
 
         return formattedResult;
@@ -1970,7 +1974,7 @@ export default {
         const taxedTotal = (Math.floor(multiply(taxUnitPriceBig, countBig) * 100) / 100).toFixed(2);
 
         //计算不合税总价
-       
+
         const notTaxedTotal = (Math.floor(divide(taxedTotal, onePlusTaxRate) * 100) / 100).toFixed(2);
 
         //计算税额
@@ -1997,7 +2001,7 @@ export default {
         let formattedResult;
 
         let newRes = taxUnitPrice.toString().replace(/\.?0+$/, '')
-        
+
         if(type === 'excludingTax'){
           if(this.countDecimalPlaces(newRes) <= 2){
             formattedResult = format(result, {
@@ -2016,12 +2020,12 @@ export default {
                 notation: "fixed",
                 precision: 4,
               })
-            }  
+            }
           }
         }else{
           formattedResult = result.toString().slice(0, result.toString().indexOf('.') + 3)
         }
-        
+
 
         return formattedResult;
       };

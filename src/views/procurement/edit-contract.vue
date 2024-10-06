@@ -8,7 +8,7 @@
     <div class="context">
       <el-form ref="firstForm" :model="firstForm" label-width="210px">
       <div class="tabs-box">
-      
+
       <!-- 基本信息 / 合同附件 -->
       <el-tabs v-model="activeName">
         <el-tab-pane label="基本信息" name="first">
@@ -397,7 +397,10 @@
                 <template slot-scope="scope">
                   <el-form-item label-width="0" :prop="'agreementPaymentLists.' + scope.$index + '.paymentName'"
                     :rules="[{ required: true, trigger: 'blur', message: '请输入结算与付款节点' }]">
-                    <el-input v-model="scope.row.paymentName" type="textarea" :autosize="{maxRows: 2}" clearable />
+                    <el-tooltip class="item" effect="dark" :content="scope.row.paymentName" placement="top" :disabled="!scope.row.paymentName">
+                      <el-input v-model="scope.row.paymentName" type="textarea" :autosize="{maxRows: 2}" clearable />
+                    </el-tooltip>
+
                   </el-form-item>
                 </template>
               </el-table-column>
@@ -438,7 +441,9 @@
               <el-table-column prop="paymentRemark" label="付款说明">
                 <template slot-scope="scope">
                   <el-form-item label-width="0" :prop="'agreementPaymentLists.' + scope.$index + '.paymentRemark'">
+                    <el-tooltip class="item" effect="dark" :content="scope.row.paymentRemark" placement="top" :disabled="!scope.row.paymentRemark">
                     <el-input v-model="scope.row.paymentRemark" clearable type="textarea" :autosize="{maxRows: 2}"/>
+                    </el-tooltip>
                   </el-form-item>
                 </template>
               </el-table-column>
@@ -456,7 +461,7 @@
               </el-table-column>
               <el-table-column label="操作" align="center" width="80">
                 <template slot-scope="scope">
-                  <el-button size="mini" type="text" 
+                  <el-button size="mini" type="text"
                     @click="handleDelete('agreementPaymentLists', scope.$index)" >删除
                   </el-button>
                 </template>
@@ -859,7 +864,7 @@
                 </el-table-column>
                 <el-table-column label="操作" align="center" width="80">
                   <template slot-scope="scope">
-                    <el-button size="mini" type="text"  
+                    <el-button size="mini" type="text"
                       @click="visaDel(scope.$index, 2)">删除
                     </el-button>
                   </template>
@@ -937,7 +942,7 @@
               </el-table-column>
               <el-table-column label="操作" align="center" width="80">
                 <template slot-scope="scope">
-                  <el-button size="mini" type="text"  
+                  <el-button size="mini" type="text"
                     @click="handleDelete('agreementEquipmentSupplies', scope.$index)">删除
                   </el-button>
                 </template>
@@ -1012,7 +1017,7 @@
               </el-table-column>
               <el-table-column label="操作" align="center" width="80">
                 <template slot-scope="scope">
-                  <el-button size="mini" type="text"  
+                  <el-button size="mini" type="text"
                     @click="handleDelete('agreementMaterialSupplies', scope.$index)">删除
                   </el-button>
                 </template>
@@ -1115,7 +1120,7 @@
               </el-table-column>
               <el-table-column label="操作" align="center" width="80">
                 <template slot-scope="scope">
-                  <el-button size="mini" type="text" 
+                  <el-button size="mini" type="text"
                     @click="handleDelete('agreementDeposits', scope.$index)" >删除
                   </el-button>
                 </template>
@@ -1358,7 +1363,7 @@ export default {
         }
       }
     },
-   
+
     getAgreementDetail(){
          getAgreementDetail({
         id: this.id,
@@ -1379,7 +1384,7 @@ export default {
           this.firstForm.agreement.expenditureBusinessType=res.data.agreement.expenditureBusinessTypeText
           this.attachmentId = res.data.agreement.agreementAttachmentId;
           this.paymentWayArr=this.firstForm.agreement.paymentWay.split(",");
-       
+
           // this.getLabelAttachmentId()
        })
     },
@@ -1481,7 +1486,7 @@ export default {
           this.subForm();
           console.log(this.firstForm,'this.firstForm----------------------');
           // this.$refs.file.saveFile()
-        } 
+        }
         else {
           this.isSubmit = false;
           // this.sumitLoding.close();
@@ -1689,7 +1694,7 @@ export default {
     //选择项
     async selectTerm(id){
       this.term = id;
-      
+
       const isHas = this.termValueMap[id] && this.termValueMap[id].length;
       if(!isHas){
         let res = null
@@ -1720,14 +1725,14 @@ export default {
       console.log(allHaveTrue,'allHaveTrue');
       if(allHaveTrue){
         // 提取所有符合selected的值
-        let filteredValues = Object.values(this.termValueMap).map(arr => 
+        let filteredValues = Object.values(this.termValueMap).map(arr =>
           arr.filter(item => item.selected).map(item => ({id:item.id,featureValueName:item.featureValueName}))
         );
         console.log(filteredValues,'filteredValues-------------------');
         // 生成结果
-        this.selectedList = filteredValues.length > 1? 
+        this.selectedList = filteredValues.length > 1?
         this.generateCombinations(filteredValues)
-        : 
+        :
         filteredValues[0].map(cur => ({
           id: `${cur.id}`,
           value: `${cur.featureValueName}`
@@ -1840,14 +1845,14 @@ export default {
       console.log(allHaveTrue,'allHaveTrue');
       if(allHaveTrue){
         // 提取所有符合selected的值
-        let filteredValues = Object.values(this.termValueMap).map(arr => 
+        let filteredValues = Object.values(this.termValueMap).map(arr =>
           arr.filter(item => item.selected).map(item => ({id:item.id,featureValueName:item.featureValueName}))
         );
         console.log(filteredValues,'filteredValues-------------------');
         // 生成结果
-        this.selectedList = filteredValues.length > 1? 
+        this.selectedList = filteredValues.length > 1?
         this.generateCombinations(filteredValues)
-        : 
+        :
         filteredValues[0].map(cur => ({
           id: `${cur.id}`,
           value: `${cur.featureValueName}`
@@ -1882,7 +1887,7 @@ export default {
         const taxRatePercent = divide(ratioBig, 100);
         const paymentAmount = multiply(totalAmountIncTaxBig, taxRatePercent)
         this.$set(scope.row, 'paymentAmount', paymentAmount.toFixed(2))
-      }  
+      }
     },
     changePaymentBasis(scope, value){
       console.log(scope,'scope');
@@ -1966,7 +1971,7 @@ export default {
         const taxedTotal = (Math.floor(multiply(taxUnitPriceBig, countBig) * 100) / 100).toFixed(2);
 
         //计算不合税总价
-       
+
         const notTaxedTotal = (Math.floor(divide(taxedTotal, onePlusTaxRate) * 100) / 100).toFixed(2);
 
         //计算税额
@@ -2007,7 +2012,7 @@ export default {
               notation: "fixed",
               precision: 4,
             })
-          }  
+          }
         }
       }else{
         formattedResult = result.toString().slice(0, result.toString().indexOf('.') + 3)
@@ -2072,7 +2077,7 @@ export default {
                 notation: "fixed",
                 precision: 4,
               })
-            }  
+            }
           }
 
         return formattedResult;
@@ -2108,7 +2113,7 @@ export default {
         const taxedTotal = (Math.floor(multiply(taxUnitPriceBig, countBig) * 100) / 100).toFixed(2);
 
         //计算不合税总价
-       
+
         const notTaxedTotal = (Math.floor(divide(taxedTotal, onePlusTaxRate) * 100) / 100).toFixed(2);
 
         //计算税额
@@ -2135,7 +2140,7 @@ export default {
         let formattedResult;
 
         let newRes = taxUnitPrice.toString().replace(/\.?0+$/, '')
-        
+
         if(type === 'excludingTax'){
           if(this.countDecimalPlaces(newRes) <= 2){
             formattedResult = format(result, {
@@ -2154,12 +2159,12 @@ export default {
                 notation: "fixed",
                 precision: 4,
               })
-            }  
+            }
           }
         }else{
           formattedResult = result.toString().slice(0, result.toString().indexOf('.') + 3)
         }
-        
+
 
         return formattedResult;
       };
