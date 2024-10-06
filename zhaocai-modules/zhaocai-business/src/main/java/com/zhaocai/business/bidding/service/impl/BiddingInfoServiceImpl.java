@@ -146,33 +146,81 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
         //查询首轮供应商报价数据，有首轮数据才能在列表中显示（且状态不为废标）
         List<BiddingQuotationListVO> list = baseMapper.findBiddingQuotationList(queryVO);
 
-        for (BiddingQuotationListVO vo : list) {
-            List<BiddingQuotationDataVO> quotationDataVOList = new LinkedList<>();
-            //查询二次报价的数据
-            List<BiddingInfo> biddingInfos = this.list(new LambdaQueryWrapper<BiddingInfo>()
-                    .eq(BiddingInfo::getParentId, vo.getId())
-                    .orderByAsc(BiddingInfo::getCreateTime));
-            if (!CollectionUtils.isEmpty(biddingInfos)){
-                for (BiddingInfo biddingInfo : biddingInfos) {
-                    BiddingQuotationDataVO quotationVO = BeanCopierUtil.copyBean(biddingInfo, BiddingQuotationDataVO.class);
-//                    quotationVO.setTaxPrice(quotationVO.getTaxPrice().setScale(2, ROUND_DOWN));
-//                    quotationVO.setNotTaxPrice(quotationVO.getNotTaxPrice().setScale(2, ROUND_DOWN));
-//                    quotationVO.setTaxPricePattern(NumberUtil.decimalFormat("#,###.00", quotationVO.getTaxPrice()));
-//                    quotationVO.setNotTaxPricePattern(NumberUtil.decimalFormat("#,###.00", quotationVO.getNotTaxPrice()));
-                    quotationDataVOList.add(quotationVO);
-                }
-//                quotationDataVOList = BeanCopierUtil.copyList(biddingInfos, BiddingQuotationDataVO.class);
-            }
 
-            BiddingQuotationDataVO quotationDataVO = new BiddingQuotationDataVO();
-            quotationDataVO.setId(vo.getId());
-            quotationDataVO.setTaxPrice(vo.getTaxPrice());
-            quotationDataVO.setNotTaxPrice(vo.getNotTaxPrice());
-//            quotationDataVO.setTaxPricePattern(NumberUtil.decimalFormat("#,###.00", quotationDataVO.getTaxPrice()));
-//            quotationDataVO.setNotTaxPricePattern(NumberUtil.decimalFormat("#,###.00", quotationDataVO.getNotTaxPrice()));
-            //插入首轮报价数据
-            quotationDataVOList.add(0, quotationDataVO);
-            vo.setQuotationDataVOList(quotationDataVOList);
+        /* 按供应商分组 将招标对象 的 投标数据 分组，并按版本号排序。 */
+        Map<Long,LinkedList<BiddingQuotationListVO>> hasMap = new HashMap<>();
+        for (BiddingQuotationListVO vo : list) {
+            if(hasMap.get(vo.getVendorId())==null || hasMap.get(vo.getVendorId()).isEmpty()){
+                hasMap.put(vo.getVendorId(),new LinkedList<>(Arrays.asList(vo)));
+            }else {
+                LinkedList link = hasMap.get(vo.getVendorId());
+                link.add(vo);
+                Collections.sort(link, new VersionComparator());
+                hasMap.put(vo.getVendorId(),link);
+            }
+        }
+
+        List<BiddingQuotationListVO> listReturn = new ArrayList<>();
+        for(Long vendorId : hasMap.keySet()) {
+            /* 获取该供应商所有的投标数据 */
+            BiddingQuotationListVO vo = hasMap.get(vendorId).get((Math.max((hasMap.get(vendorId).size() - 1), 0)));
+            List<BiddingQuotationDataVO> quotationDataVOList = new ArrayList<>();
+            /* 获取该供应商所有的投标数据，处理数据后 存入数值 */
+            for (int i = 0; i < hasMap.get(vendorId).size(); i++) {
+                BiddingQuotationDataVO bidChild = new BiddingQuotationDataVO();
+                bidChild.setTwiceQuotVersion(hasMap.get(vendorId).get(i).getTwiceQuotVersion());/* 版本号 */
+                /* 当前报价版本 已经调价才显示数据，不然没有数据 */
+                if(bidChild.getTwiceQuotVersion()!=null && bidChild.getTwiceQuotVersion().equals(tenderNotice.getTwiceQuotVersion()) && tenderNotice.getTwiceQuotVersion()!=null){
+
+                    /** 当前招标文件开启调价 */
+                    if(tenderNotice.getTwiceQuotState()!=null && tenderNotice.getTwiceQuotState().equals(NumberConstant.ONE)){
+                        /* 当前已经调价 */
+                        if(hasMap.get(vendorId).get(i).getPriceChangeState()!=null && hasMap.get(vendorId).get(i).getPriceChangeState().equals(NumberConstant.ONE)){
+                            bidChild.setTaxPrice(hasMap.get(vendorId).get(i).getTaxPrice());
+                            bidChild.setNotTaxPrice(hasMap.get(vendorId).get(i).getNotTaxPrice());
+                            bidChild.setNotTaxPricePattern(hasMap.get(vendorId).get(i).getNotTaxPricePattern());
+                            bidChild.setPriceChangeState(NumberConstant.ONE);/* 已调价 */
+                            vo.setPriceChangeState(NumberConstant.ONE);/* 当前版本 已调价 */
+                        }else{
+                            /* 当前未调价 */
+                            bidChild.setId(hasMap.get(vendorId).get(i).getId());
+                            bidChild.setPriceChangeState(NumberConstant.ZERO);/* 未调价 */
+                            vo.setPriceChangeState(NumberConstant.ZERO);/* 当前版本 未调价 */
+                        }
+                        bidChild.setId(hasMap.get(vendorId).get(i).getId());
+                    }else{
+                        /** 当前招标文件 关闭了调价 */
+                        bidChild.setId(hasMap.get(vendorId).get(i).getId());
+                        bidChild.setTaxPrice(hasMap.get(vendorId).get(i).getTaxPrice());
+                        bidChild.setNotTaxPrice(hasMap.get(vendorId).get(i).getNotTaxPrice());
+                        bidChild.setNotTaxPricePattern(hasMap.get(vendorId).get(i).getNotTaxPricePattern());
+                        /* 当前已经调价 */
+                        if(hasMap.get(vendorId).get(i).getPriceChangeState()!=null && hasMap.get(vendorId).get(i).getPriceChangeState().equals(NumberConstant.ONE)){
+                            bidChild.setPriceChangeState(NumberConstant.ONE);/* 已调价 */
+                            vo.setPriceChangeState(NumberConstant.ONE);/* 当前版本 已调价 */
+                        }else{
+                            /* 当前未调价 */
+                            bidChild.setPriceChangeState(NumberConstant.TWO);/* 放弃调价 */
+                            vo.setPriceChangeState(NumberConstant.TWO);/* 当前版本 放弃调价 */
+                        }
+                    }
+                }else {
+                    /* 非当前版本 */
+                    bidChild.setId(hasMap.get(vendorId).get(i).getId());
+                    bidChild.setTaxPrice(hasMap.get(vendorId).get(i).getTaxPrice());
+                    bidChild.setNotTaxPrice(hasMap.get(vendorId).get(i).getNotTaxPrice());
+                    bidChild.setNotTaxPricePattern(hasMap.get(vendorId).get(i).getNotTaxPricePattern());
+                    /* 不是当前版本的 未调价 投标数据 就是放弃调价。 */
+                    if(hasMap.get(vendorId).get(i).getPriceChangeState()!=null && hasMap.get(vendorId).get(i).getPriceChangeState().equals(NumberConstant.ONE)){
+                        bidChild.setPriceChangeState(NumberConstant.ONE);/* 已调价 */
+                    }else{
+                        bidChild.setPriceChangeState(NumberConstant.TWO);/* 不是当前版本的 未调价 投标数据 就是放弃调价。 */
+                    }
+                }
+                quotationDataVOList.add(bidChild);
+            }
+            vo.setQuotationDataVOList(quotationDataVOList);/* N次报价数组 */
+            vo.setTwiceQuotVersion(tenderNotice.getTwiceQuotVersion());/* 当前版本 */
 
 
             //赋值最大报价次数
@@ -258,17 +306,18 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
             vo.setAvgBusTotalScore(avgBusTotalScore);
             vo.setAvgTechTotalScore(avgTechTotalScore);
             vo.setScore(score);
+            listReturn.add(vo);
         }
 
 
         //综合排名（排序）按照综合分由高到低排序，综合分一致按不含税总价排序
-        if (!CollectionUtils.isEmpty(list)){
+        if (!CollectionUtils.isEmpty(listReturn)){
             //根据综合分进行排序
-            Collections.sort(list);
+            Collections.sort(listReturn);
             //补充字段内容
-            fillFieldBid(list, isFillBiddingInfo, quoteNum);
+            fillFieldBid(listReturn, isFillBiddingInfo, quoteNum);
         }
-        return list;
+        return listReturn;
     }
 
     /** 填充列表列表信息 */
