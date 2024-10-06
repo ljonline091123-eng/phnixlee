@@ -144,7 +144,6 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
                 .eq(BiddingEvaluatExpert::getNoticeId, queryVO.getNoticeId())
                 .eq(BiddingEvaluatExpert::getIsJoin, 1));
         //查询首轮供应商报价数据，有首轮数据才能在列表中显示（且状态不为废标）
-//        List<BiddingQuotationListVO> list = baseMapper.findBiddingQuotationList(queryVO);
         List<BiddingQuotationListVO> list = baseMapper.findBiddingQuotationListTongJi(queryVO);
 
 
