@@ -78,7 +78,7 @@ public interface IVendorBidService {
      * @param bidVO
      * @return
      */
-//    boolean twiceBid(BidVO bidVO);
+    boolean twiceBid(BidVO bidVO);
 
     PageResult<WinningNotifiListVO> winningNotifiPage(WinningNotifiPageQueryVO queryDTO);
 

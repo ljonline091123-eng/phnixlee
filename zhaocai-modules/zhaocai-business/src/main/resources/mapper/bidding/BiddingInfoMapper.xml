@@ -78,7 +78,7 @@
         from tb_bidding_info bi
         <where>
             bi.del_flag = 0
-              and (bi.parent_id is null and bi.twice_quot_version = 1)
+              and (bi.parent_id is null)
             <if test="query.noticeId != null and query.noticeId != ''">
                 and bi.notice_id = #{query.noticeId}
             </if>

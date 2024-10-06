@@ -117,6 +117,8 @@ public class VendorBidServiceImpl implements IVendorBidService {
     public TenderNoticeDetailVO detail(Long noticeId) {
         TenderNoticeDetailVO detail = tenderNoticeService.detail(noticeId);
         TenderNotice tenderNotice = detail.getTenderNotice();
+//        detail.setTwiceTime(tenderNotice.getApplyTime());
+//        detail.setTwiceQuot(tenderNotice.getTwiceQuotState());
         Long biddingInfoId = null;
 
         Long vendorId = getVendor(SecurityUtils.getUserId()).getId();
@@ -159,9 +161,8 @@ public class VendorBidServiceImpl implements IVendorBidService {
             //如果在评标阶段
             //查询二次报价的数据
             BiddingInfo newestBiddingInfo = biddingInfoService.getOne(new LambdaQueryWrapper<BiddingInfo>()
-                    .eq(BiddingInfo::getNoticeId, noticeId)
-                    .eq(BiddingInfo::getVendorId, vendorId)
-                    .orderByDesc(BiddingInfo::getTwiceQuotVersion).last("limit 1"));
+                    .eq(BiddingInfo::getParentId, biddingInfo.getId())
+                    .orderByDesc(BiddingInfo::getCreateTime).last("limit 1"));
             if (ObjectUtils.isNotEmpty(newestBiddingInfo)){
                 biddingInfoId = newestBiddingInfo.getId();
             }
@@ -475,14 +476,14 @@ public class VendorBidServiceImpl implements IVendorBidService {
                     .eq(BiddingInfo::getVendorId, vendor.getId())/* 供应商id */
                     .eq(BiddingInfo::getSchemeId, bidVO.getSchemeId())/* 采购方案id */
                     .eq(BiddingInfo::getNoticeId, bidVO.getNoticeId())/* 招标对象id */
-                    .eq(BiddingInfo::getTwiceQuotVersion, tenderNotice.getTwiceQuotVersion()));/* 报价版本号 */
+                    .isNull(BiddingInfo::getParentId));
             if (count > 0){
                 throw new ParamValidateException("不允许重复投标");
             }
         }
 
         /* 二次报价不做验证 */
-        if(tenderNotice.getTwiceQuotVersion()==null||tenderNotice.getTwiceQuotVersion()==NumberConstant.ZERO)
+        if(tenderNotice.getTwiceQuotVersion()==null || tenderNotice.getTwiceQuotVersion()==NumberConstant.ONE)
             if (detail.getBidEndTime() != null){
                 if (detail.getBidEndTime().before(DateUtils.getNowDate())){
                     throw new ParamValidateException("投标时间已截止，不允许投标");
@@ -569,135 +570,150 @@ public class VendorBidServiceImpl implements IVendorBidService {
         return vendorContactService.getVendorContactByLoginUser(userId);
     }
 
-//    @Override
-//    @Transactional(rollbackFor = Exception.class)
-//    public boolean twiceBid(BidVO bidVO) {
-//        Vendor vendor = getVendor(SecurityUtils.getUserId());
-//        BiddingInfo biddingInfoOld = biddingInfoService.getOne(new LambdaQueryWrapper<BiddingInfo>()
-//                .eq(BiddingInfo::getVendorId, vendor.getId())
-//                .eq(BiddingInfo::getNoticeId, bidVO.getNoticeId())
-//                .isNull(BiddingInfo::getParentId));
-//        if (ObjectUtils.isEmpty(biddingInfoOld)){
-//            throw new ParamValidateException("请先进行首轮报价");
-//        }
-//        if (tenderNoticeService.getCountTenderNoticeStatus(
-//                bidVO.getNoticeId(), TenderNoticeStatusEnum.EVALUATION_BID.getState()) == 0){
-//            throw new ParamValidateException("投标公告状态已变更，请确认当前招标公告状态");
-//        }
-//        //增加校验报价的价格条件（只有劳务和专业分包可以高于第一次报价，其他的报价控制不能高于第一次报价）
-//        ProcurementScheme scheme = procurementSchemeService.getById(bidVO.getSchemeId());
-//        BiddingInfo biddingInfoRecent = null;
-//        if (!ProcurementPlanTypeEnum.SPECIALTY_SUBCONTRACT.getType().equals(scheme.getProcurementPlanType()) &&
-//            !ProcurementPlanTypeEnum.SERVICE_SUBCONTRACT.getType().equals(scheme.getProcurementPlanType())){
-//            //如果不是劳务分包或专业分包，那么报价不能高于最近一次报价
-//            //查询是否有最新的报价信息
-//            BiddingInfo newestBiddingInfo = biddingInfoService.getOne(new LambdaQueryWrapper<BiddingInfo>()
-//                    .eq(BiddingInfo::getParentId, biddingInfoOld.getId())
-//                    .orderByDesc(BiddingInfo::getCreateTime).last("limit 1"));
-//            if (ObjectUtils.isNotEmpty(newestBiddingInfo)){
-//                biddingInfoRecent = newestBiddingInfo;
-//            } else {
-//                biddingInfoRecent = biddingInfoOld;
-//            }
-//
-//        }
-//
-//        BiddingInfo biddingInfo = BeanCopierUtil.copyBean(bidVO, BiddingInfo.class);
-//        biddingInfo.setVendorId(vendor.getId());
-//        biddingInfo.setVendorName(vendor.getEnterpriseName());
-//        biddingInfo.setBiddingStatus(BiddingInfoStatusEnum.HAVE_BACK.getState());
-//        //不用设置保证金
-//        //设置当前请求的id地址
-//        biddingInfo.setIpAddress(IpUtils.getIpAddr());
-//        biddingInfo.setParentId(biddingInfoOld.getId());
-//        //保存投标单信息
-//        boolean res = biddingInfoService.save(biddingInfo);
-//
-//        //转化成投标清单对象
-//        List<BidQuotationVO> bidQuotationVoS = this.convMaterials2Quotation(bidVO.getMaterialsList());
-//
-//        //含税总价,不含税总价
-//        BigDecimal bidTaxPrice = BigDecimal.ZERO;
-//        BigDecimal bidNotTaxPrice = BigDecimal.ZERO;
-//        List<BiddingListQuotation> quotations = new ArrayList<>();
-//        for (BidQuotationVO quotationVO : bidQuotationVoS) {
-//            BiddingListQuotation quotation = BeanCopierUtil.copyBean(quotationVO, BiddingListQuotation.class);
-//            quotation.setBiddingInfoId(biddingInfo.getId());
-//
-//            //物料数量
-//            BigDecimal amount = quotationVO.getAmount();
-//            //税率A
-//            BigDecimal taxRateVal = quotationVO.getTaxRate() == null ? BigDecimal.ZERO : quotationVO.getTaxRate();
-//            BigDecimal taxRate = taxRateVal.divide(new BigDecimal(100));
-//
-//            BigDecimal taxPrice;
-//            BigDecimal notTaxPrice;
-//            if (PriceTypeEnum.FLOAT_PRICE.getType().equals(scheme.getPriceType())
-//                    && (scheme.getSubjectMatterType() == 1 || scheme.getSubjectMatterType() == 2)){
-//                /* 浮动价计算方式 */
-//                BigDecimal floatingPrice = quotationVO.getFloatingPrice();
-//                //卸费
-//                BigDecimal unloadingFee = quotationVO.getUnloadingFee();
-//                //基价
-//                BigDecimal basePrice = quotationVO.getBasePrice();
-//                /*//计算含税总价C（每项（基价±浮动价+运费+卸费）*每项清单数量）
-//                taxPrice = NumberUtil.multiply(amount, NumberUtil.add(5, basePrice, floatingPrice, unloadingFee),5);
-//                //计算不含税总价
-//                notTaxPrice = taxPrice.divide(BigDecimal.ONE.add(taxRate), 5, RoundingMode.HALF_UP);*/
-//                //含税单价
-//                BigDecimal taxUnitPrice = NumberUtil.add(4, basePrice, floatingPrice, unloadingFee);
-//                //计算不含税单价
-//                BigDecimal notTaxUnitPrice = AmountCalUtil.calUnitPriceExclTax(taxUnitPrice, taxRateVal);
-//                //计算含税总价C（每项（基价±浮动价+运费+卸费）*每项清单数量）
-//                taxPrice = AmountCalUtil.calTotalAmountInclTax(amount, taxUnitPrice);
-//                //计算不含税总价
-//                notTaxPrice = AmountCalUtil.calTotalAmountExclTax(taxPrice, taxRateVal);
-//                quotation.setTaxUnitPrice(taxUnitPrice);
-//                quotation.setNotTaxUnitPrice(notTaxUnitPrice);
-//            } else {
-//                /** 固定价计算方式 */
-//                //含税单价B
-//                BigDecimal taxUnitPrice = quotationVO.getTaxUnitPrice() == null ? BigDecimal.ZERO : quotationVO.getTaxUnitPrice();
-//                /*//计算不含税单价
-//                BigDecimal notTaxUnitPrice = taxUnitPrice.divide(BigDecimal.ONE.add(taxRate), 5, RoundingMode.HALF_UP);
-//                //计算含税总价C
-//                taxPrice = taxUnitPrice.multiply(amount);
-//                //计算不含税总价
-//                notTaxPrice = taxPrice.divide(BigDecimal.ONE.add(taxRate), 5, RoundingMode.HALF_UP);*/
-//                //计算不含税单价
-//                BigDecimal notTaxUnitPrice = AmountCalUtil.calUnitPriceExclTax(taxUnitPrice, taxRateVal);
-//                //计算含税总价C
-//                taxPrice = AmountCalUtil.calTotalAmountInclTax(amount, taxUnitPrice);
-//                //计算不含税总价
-//                notTaxPrice = AmountCalUtil.calTotalAmountExclTax(taxPrice, taxRateVal);
-//                quotation.setNotTaxUnitPrice(notTaxUnitPrice);
-//
-//                quotation.setNotTaxUnitPrice(notTaxUnitPrice);
-//                //校验含税单价
-//                checkTaxUnitPrice(biddingInfoRecent, quotationVO, taxUnitPrice);
-//            }
-//            quotation.setTaxPrice(taxPrice);
-//            quotation.setNotTaxPrice(notTaxPrice);
-//            quotations.add(quotation);
-//
-//            bidTaxPrice = bidTaxPrice.add(quotation.getTaxPrice());
-//            bidNotTaxPrice = bidNotTaxPrice.add(quotation.getNotTaxPrice());
-//
-//        }
-//        //保存投标标书附件
-//        attachmentService.addAttachment(bidVO.getAttachmentList(), AttachmentTypeEnum.BIDING_DOCUMENT,
-//                biddingInfo.getId());
-//
-//        //保存投标清单报价信息
-//        biddingListQuotationService.saveBatch(quotations);
-//
-//        //更新投标单数据
-//        biddingInfo.setTaxPrice(bidTaxPrice);
-//        biddingInfo.setNotTaxPrice(bidNotTaxPrice);
-//        biddingInfoService.updateById(biddingInfo);
-//
-//        return res;
-//    }
+    /** 二次报价 */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public boolean twiceBid(BidVO bidVO) {
+        Vendor vendor = getVendor(SecurityUtils.getUserId());
+        BiddingInfo biddingInfoOld = biddingInfoService.getOne(new LambdaQueryWrapper<BiddingInfo>()
+                .eq(BiddingInfo::getVendorId, vendor.getId())
+                .eq(BiddingInfo::getNoticeId, bidVO.getNoticeId())
+                .isNull(BiddingInfo::getParentId));
+        if (ObjectUtils.isEmpty(biddingInfoOld)){
+            throw new ParamValidateException("请先进行首轮报价");
+        }
+        if (tenderNoticeService.getCountTenderNoticeStatus(
+                bidVO.getNoticeId(), TenderNoticeStatusEnum.EVALUATION_BID.getState()) == 0){
+            throw new ParamValidateException("投标公告状态已变更，请确认当前招标公告状态");
+        }
+        //增加校验报价的价格条件（只有劳务和专业分包可以高于第一次报价，其他的报价控制不能高于第一次报价）
+        ProcurementScheme scheme = procurementSchemeService.getById(bidVO.getSchemeId());
+        BiddingInfo biddingInfoRecent = null;
+        if (!ProcurementPlanTypeEnum.SPECIALTY_SUBCONTRACT.getType().equals(scheme.getProcurementPlanType()) &&
+                !ProcurementPlanTypeEnum.SERVICE_SUBCONTRACT.getType().equals(scheme.getProcurementPlanType())){
+            //如果不是劳务分包或专业分包，那么报价不能高于最近一次报价
+            //查询是否有最新的报价信息
+            BiddingInfo newestBiddingInfo = biddingInfoService.getOne(new LambdaQueryWrapper<BiddingInfo>()
+                    .eq(BiddingInfo::getParentId, biddingInfoOld.getId())
+                    .orderByDesc(BiddingInfo::getCreateTime).last("limit 1"));
+            if (ObjectUtils.isNotEmpty(newestBiddingInfo)){
+                biddingInfoRecent = newestBiddingInfo;
+            } else {
+                biddingInfoRecent = biddingInfoOld;
+            }
+
+        }
+        BiddingInfo biddingInfo = BeanCopierUtil.copyBean(bidVO, BiddingInfo.class);
+
+        TenderNoticeDetailVO detail = tenderNoticeService.detail(bidVO.getNoticeId());
+        TenderNotice tenderNotice = detail.getTenderNotice();
+        //查询是否有最新的报价信息
+        BiddingInfo newestBiddingInfo = biddingInfoService.getOne(new LambdaQueryWrapper<BiddingInfo>()
+                .eq(BiddingInfo::getParentId, biddingInfoOld.getId())
+                .orderByDesc(BiddingInfo::getCreateTime).last("limit 1"));
+        /* 如果版本号一样就不再新增数据了。 */
+        if(newestBiddingInfo!=null && tenderNotice!=null && tenderNotice.getTwiceQuotVersion().equals(newestBiddingInfo.getTwiceQuotVersion())){
+            biddingInfo.setId(newestBiddingInfo.getId());
+        }
+
+        biddingInfo.setVendorId(vendor.getId());
+        biddingInfo.setVendorName(vendor.getEnterpriseName());
+        biddingInfo.setBiddingStatus(BiddingInfoStatusEnum.HAVE_BACK.getState());
+        //不用设置保证金
+        //设置当前请求的id地址
+        biddingInfo.setIpAddress(IpUtils.getIpAddr());
+        biddingInfo.setParentId(biddingInfoOld.getId());
+
+
+        //保存投标单信息
+        boolean res = biddingInfoService.save(biddingInfo);
+
+        //转化成投标清单对象
+        List<BidQuotationVO> bidQuotationVoS = this.convMaterials2Quotation(bidVO.getMaterialsList());
+
+        //含税总价,不含税总价
+        BigDecimal bidTaxPrice = BigDecimal.ZERO;
+        BigDecimal bidNotTaxPrice = BigDecimal.ZERO;
+        List<BiddingListQuotation> quotations = new ArrayList<>();
+        for (BidQuotationVO quotationVO : bidQuotationVoS) {
+            BiddingListQuotation quotation = BeanCopierUtil.copyBean(quotationVO, BiddingListQuotation.class);
+            quotation.setBiddingInfoId(biddingInfo.getId());
+
+            //物料数量
+            BigDecimal amount = quotationVO.getAmount();
+            //税率A
+            BigDecimal taxRateVal = quotationVO.getTaxRate() == null ? BigDecimal.ZERO : quotationVO.getTaxRate();
+            BigDecimal taxRate = taxRateVal.divide(new BigDecimal(100));
+
+            BigDecimal taxPrice;
+            BigDecimal notTaxPrice;
+            if (PriceTypeEnum.FLOAT_PRICE.getType().equals(scheme.getPriceType())
+                    && (scheme.getSubjectMatterType() == 1 || scheme.getSubjectMatterType() == 2)){
+                /* 浮动价计算方式 */
+                BigDecimal floatingPrice = quotationVO.getFloatingPrice();
+                //卸费
+                BigDecimal unloadingFee = quotationVO.getUnloadingFee();
+                //基价
+                BigDecimal basePrice = quotationVO.getBasePrice();
+                /*//计算含税总价C（每项（基价±浮动价+运费+卸费）*每项清单数量）
+                taxPrice = NumberUtil.multiply(amount, NumberUtil.add(5, basePrice, floatingPrice, unloadingFee),5);
+                //计算不含税总价
+                notTaxPrice = taxPrice.divide(BigDecimal.ONE.add(taxRate), 5, RoundingMode.HALF_UP);*/
+                //含税单价
+                BigDecimal taxUnitPrice = NumberUtil.add(4, basePrice, floatingPrice, unloadingFee);
+                //计算不含税单价
+                BigDecimal notTaxUnitPrice = AmountCalUtil.calUnitPriceExclTax(taxUnitPrice, taxRateVal);
+                //计算含税总价C（每项（基价±浮动价+运费+卸费）*每项清单数量）
+                taxPrice = AmountCalUtil.calTotalAmountInclTax(amount, taxUnitPrice);
+                //计算不含税总价
+                notTaxPrice = AmountCalUtil.calTotalAmountExclTax(taxPrice, taxRateVal);
+                quotation.setTaxUnitPrice(taxUnitPrice);
+                quotation.setNotTaxUnitPrice(notTaxUnitPrice);
+            } else {
+                /** 固定价计算方式 */
+                //含税单价B
+                BigDecimal taxUnitPrice = quotationVO.getTaxUnitPrice() == null ? BigDecimal.ZERO : quotationVO.getTaxUnitPrice();
+                /*//计算不含税单价
+                BigDecimal notTaxUnitPrice = taxUnitPrice.divide(BigDecimal.ONE.add(taxRate), 5, RoundingMode.HALF_UP);
+                //计算含税总价C
+                taxPrice = taxUnitPrice.multiply(amount);
+                //计算不含税总价
+                notTaxPrice = taxPrice.divide(BigDecimal.ONE.add(taxRate), 5, RoundingMode.HALF_UP);*/
+                //计算不含税单价
+                BigDecimal notTaxUnitPrice = AmountCalUtil.calUnitPriceExclTax(taxUnitPrice, taxRateVal);
+                //计算含税总价C
+                taxPrice = AmountCalUtil.calTotalAmountInclTax(amount, taxUnitPrice);
+                //计算不含税总价
+                notTaxPrice = AmountCalUtil.calTotalAmountExclTax(taxPrice, taxRateVal);
+                quotation.setNotTaxUnitPrice(notTaxUnitPrice);
+
+                quotation.setNotTaxUnitPrice(notTaxUnitPrice);
+                //校验含税单价
+                checkTaxUnitPrice(biddingInfoRecent, quotationVO, taxUnitPrice);
+            }
+            quotation.setTaxPrice(taxPrice);
+            quotation.setNotTaxPrice(notTaxPrice);
+            quotations.add(quotation);
+
+            bidTaxPrice = bidTaxPrice.add(quotation.getTaxPrice());
+            bidNotTaxPrice = bidNotTaxPrice.add(quotation.getNotTaxPrice());
+
+        }
+        //保存投标标书附件
+        attachmentService.addAttachment(bidVO.getAttachmentList(), AttachmentTypeEnum.BIDING_DOCUMENT,
+                biddingInfo.getId());
+
+        //保存投标清单报价信息
+        biddingListQuotationService.saveBatch(quotations);
+
+        //更新投标单数据
+        biddingInfo.setTaxPrice(bidTaxPrice);
+        biddingInfo.setNotTaxPrice(bidNotTaxPrice);
+        biddingInfoService.updateById(biddingInfo);
+
+        return res;
+    }
+
 
     /** 校验 含税单价不能高于最近一次报价 */
     private void checkTaxUnitPrice(BiddingInfo biddingInfoRecent, BidQuotationVO quotationVO, BigDecimal taxUnitPrice){

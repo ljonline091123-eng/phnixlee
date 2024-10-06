@@ -3,7 +3,7 @@
 PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
 "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.zhaocai.business.bidding.mapper.BiddingEvaluatExpertMapper">
-    
+
     <resultMap type="com.zhaocai.business.bidding.domain.BiddingEvaluatExpert" id="BiddingEvaluatExpertResult">
         <result property="id"    column="id"    />
         <result property="noticeId"    column="notice_id"    />
@@ -28,6 +28,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         select id, notice_id, scheme_id, expert_id, expert_name, deadline, eval_status, is_eval, expert_type, is_join, create_by, create_id, create_time, update_by, update_id, update_time, del_flag from tb_bidding_evaluat_expert
     </sql>
 
+    <!-- 查询专家是否还有评标任务 -->
     <select id="findEvalSchemaPage" resultType="com.zhaocai.business.bidding.vo.res.EvalTaskPageListVO">
         select bee.scheme_id, bee.notice_id, bee.expert_type,
         ps.procurement_scheme_code, ps.procurement_scheme_name, ps.ceiling_price, ps.procurement_type,

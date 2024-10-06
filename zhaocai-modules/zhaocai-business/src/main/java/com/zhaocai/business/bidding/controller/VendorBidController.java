@@ -84,15 +84,6 @@ public class VendorBidController {
     }
 
     /**
-     * 二次报价
-     */
-    @PostMapping("/twiceBid")
-    @ApiOperation(value = "二次报价", notes = "传入bidVO")
-    public ResultData twiceBid(@Valid @RequestBody BidVO bidVO) {
-        return ResultData.status(vendorBidService.bid(bidVO));
-    }
-
-    /**
      * 撤回投标
      */
     @PostMapping("/withdrawBid")
@@ -111,6 +102,15 @@ public class VendorBidController {
 //        PageResult<TwiceBidListVO> pages = vendorBidService.twiceBidPage(queryDTO);
 //        return ResultData.data(pages);
 //    }
+
+    /**
+     * 二次报价
+     */
+    @PostMapping("/twiceBid")
+    @ApiOperation(value = "二次报价", notes = "传入bidVO")
+    public ResultData twiceBid(@Valid @RequestBody BidVO bidVO) {
+        return ResultData.status(vendorBidService.twiceBid(bidVO));
+    }
 
     /**
      * 中标通知分页列表

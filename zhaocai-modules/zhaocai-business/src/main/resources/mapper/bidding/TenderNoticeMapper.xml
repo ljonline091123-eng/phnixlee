@@ -131,7 +131,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         where
             tn.del_flag = 0
             and (tn.notice_status = 11 or tn.notice_status = 12 or tn.notice_status = 13 or tn.notice_status = 1)
-            and tab1.applyTime  <![CDATA[>]]> #{queryDTO.nowDate}
+            and (tab1.applyTime  <![CDATA[>]]> #{queryDTO.nowDate} or tab1.applyTime is null)
             <if test="queryDTO.procurementPlanType != null">
                 and ps.procurement_plan_type = #{queryDTO.procurementPlanType}
             </if>

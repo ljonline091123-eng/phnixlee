@@ -66,12 +66,11 @@ public class TenderNoticeDetailVO {
     @ApiModelProperty(value =  "定标附件")
     private List<AttachmentVO> calibrationAttachmentList;
 
-    /* 弃用 */
     @ApiModelProperty(value =  "二次报价设置（默认0关 1开）")
     private Integer twiceQuot;
 
-    /* 弃用 */
-    @JsonFormat(pattern = "yyyy-MM-dd")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
+    @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     @ApiModelProperty(value =  "二次报价截止时间")
     private Date twiceTime;
 
