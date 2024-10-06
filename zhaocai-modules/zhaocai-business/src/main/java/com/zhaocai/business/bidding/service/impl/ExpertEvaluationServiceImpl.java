@@ -108,6 +108,7 @@ public class ExpertEvaluationServiceImpl implements IExpertEvaluationService {
 				//查询是否有最新的报价信息
 				BiddingInfo newestBiddingInfo = biddingInfoService.getOne(new LambdaQueryWrapper<BiddingInfo>()
 						.eq(BiddingInfo::getParentId, biddingInfo.getId())
+						.eq(BiddingInfo::getPriceChangeState, NumberConstant.ONE)/* 已经调价 */
 						.orderByDesc(BiddingInfo::getCreateTime).last("limit 1"));
 				if (!ObjectUtils.isEmpty(newestBiddingInfo)){
 					biddingInfo = newestBiddingInfo;
@@ -172,6 +173,7 @@ public class ExpertEvaluationServiceImpl implements IExpertEvaluationService {
 				//查询是否有最新的报价信息
 				BiddingInfo newestBiddingInfo = biddingInfoService.getOne(new LambdaQueryWrapper<BiddingInfo>()
 						.eq(BiddingInfo::getParentId, biddingInfo.getId())
+						.eq(BiddingInfo::getPriceChangeState, NumberConstant.ONE)/* 已经调价 */
 						.orderByDesc(BiddingInfo::getCreateTime).last("limit 1"));
 				if (!ObjectUtils.isEmpty(newestBiddingInfo)){
 					biddingInfo = newestBiddingInfo;
