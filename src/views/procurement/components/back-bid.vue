@@ -103,7 +103,7 @@
         <el-table-column
           label="投标时间"
           align="center"
-          prop="createTime"
+          prop="updateTime"
           width="180"
         />
         <el-table-column
