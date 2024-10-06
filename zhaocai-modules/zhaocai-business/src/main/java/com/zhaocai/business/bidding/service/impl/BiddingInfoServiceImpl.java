@@ -232,7 +232,13 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
             List<AttachmentVO> attachments = attachmentService.listAttachment(AttachmentTypeEnum.EVAL_DOCUMENT, vo.getId());
             vo.setAttachments(attachments);
             //设置需要查看的回标单id（最后一次投标单id）
-            vo.setBiddingInfoId(quotationDataVOList.get(quotationDataVOList.size() - 1).getId());
+            for (int i = quotationDataVOList.size()-1; i >= 0; i--) {
+                /* 已调价 最新版本的 */
+                if(quotationDataVOList.get(i).getPriceChangeState().equals(NumberConstant.ONE)){
+                    vo.setBiddingInfoId(quotationDataVOList.get(i).getId());
+                    break;
+                }
+            }
             //展示保留两位小数
 //            vo.setTaxPrice(vo.getTaxPrice().setScale(2, ROUND_DOWN));
 //            vo.setNotTaxPrice(vo.getNotTaxPrice().setScale(2, ROUND_DOWN));
