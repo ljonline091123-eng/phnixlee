@@ -184,8 +184,8 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
                         }else{
                             /* 当前未调价 */
                             bidChild.setId(hasMap.get(vendorId).get(i).getId());
-                            bidChild.setPriceChangeState(NumberConstant.ZERO);/* 未调价 */
-                            vo.setPriceChangeState(NumberConstant.ZERO);/* 当前版本 未调价 */
+                            bidChild.setPriceChangeState(NumberConstant.ZERO);/* 调价中 */
+                            vo.setPriceChangeState(NumberConstant.ZERO);/* 当前版本 调价中 */
                         }
                         bidChild.setId(hasMap.get(vendorId).get(i).getId());
                     }else{
@@ -198,10 +198,14 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
                         if(hasMap.get(vendorId).get(i).getPriceChangeState()!=null && hasMap.get(vendorId).get(i).getPriceChangeState().equals(NumberConstant.ONE)){
                             bidChild.setPriceChangeState(NumberConstant.ONE);/* 已调价 */
                             vo.setPriceChangeState(NumberConstant.ONE);/* 当前版本 已调价 */
-                        }else{
+                        }else if(hasMap.get(vendorId).get(i).getPriceChangeState()!=null && hasMap.get(vendorId).get(i).getPriceChangeState().equals(NumberConstant.TWO)){
                             /* 当前未调价 */
                             bidChild.setPriceChangeState(NumberConstant.TWO);/* 放弃调价 */
                             vo.setPriceChangeState(NumberConstant.TWO);/* 当前版本 放弃调价 */
+                        }else if(hasMap.get(vendorId).get(i).getPriceChangeState()!=null && hasMap.get(vendorId).get(i).getPriceChangeState().equals(NumberConstant.ZERO)){
+                            /* 当前未调价 */
+                            bidChild.setPriceChangeState(NumberConstant.ZERO);/* 未调价 */
+                            vo.setPriceChangeState(NumberConstant.ZERO);/* 未调价 */
                         }
                     }
                 }else {
@@ -210,12 +214,8 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
                     bidChild.setTaxPrice(hasMap.get(vendorId).get(i).getTaxPrice());
                     bidChild.setNotTaxPrice(hasMap.get(vendorId).get(i).getNotTaxPrice());
                     bidChild.setNotTaxPricePattern(hasMap.get(vendorId).get(i).getNotTaxPricePattern());
-                    /* 不是当前版本的 未调价 投标数据 就是放弃调价。 */
-                    if(hasMap.get(vendorId).get(i).getPriceChangeState()!=null && hasMap.get(vendorId).get(i).getPriceChangeState().equals(NumberConstant.ONE)){
-                        bidChild.setPriceChangeState(NumberConstant.ONE);/* 已调价 */
-                    }else{
-                        bidChild.setPriceChangeState(NumberConstant.TWO);/* 不是当前版本的 未调价 投标数据 就是放弃调价。 */
-                    }
+                    /* 不是当前版本的 调价。 */
+                    bidChild.setPriceChangeState(hasMap.get(vendorId).get(i).getPriceChangeState());
                 }
                 quotationDataVOList.add(bidChild);
             }
