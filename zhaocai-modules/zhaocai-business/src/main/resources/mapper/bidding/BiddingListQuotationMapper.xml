@@ -68,7 +68,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             from tb_bidding_list_quotation tbl
             inner join (
                     select tbi.id from tb_bidding_info tbi
-                    where tbi.vendor_id = #{vendorId,jdbcType=BIGINT} and tbi.scheme_id = #{schemeId,jdbcType=BIGINT}
+                    where tbi.vendor_id = #{vendorId,jdbcType=BIGINT} and tbi.scheme_id = #{schemeId,jdbcType=BIGINT}  and (tbi.price_change_state = 1 or tbi.price_change_state is null)
                     order by tbi.create_time desc limit 1
             ) tbir on tbir.id = tbl.bidding_info_id
             where tbl.split_id = #{splitId,jdbcType=BIGINT} and tbl.del_flag = 0
