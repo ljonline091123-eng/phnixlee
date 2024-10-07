@@ -358,7 +358,7 @@
               </template>
             </el-table-column> -->
             <el-table-column
-              :label="index === 0 ? '首轮报价' : `${index + 1}轮报价`"
+              :label="index === 0 ? (scoreLength<=1?'最终轮报价':'首轮报价'):((index!==scoreLength-1)?`${index + 1}轮报价`:'最终轮报价')"
               align="center"
               v-for="(item, index) in scoreLength"
               :key="index"
