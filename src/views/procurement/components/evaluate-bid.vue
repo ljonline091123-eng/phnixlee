@@ -114,7 +114,7 @@
                 ? false
                 : true
             "
-            >二次报价</el-button
+            >{{(noticeDetail.tenderNotice && noticeDetail.tenderNotice.noticeStatus === 3)?noticeDetail.tenderNotice.twiceQuotState === 1?'调价中':'二次报价':'无法调价'}}</el-button
           >
           <el-button
             type="primary"
@@ -1417,12 +1417,22 @@ export default {
 
   },
   methods: {
-    formatterPriceChangeState(_row,_column,cellvalue){
+    formatterPriceChangeState(row,_column,cellvalue){
       if(this.noticeDetail.tenderNotice?.twiceQuotVersion === 1){
         return '-'
       }
-      const findObj = PRICECHANGESTATEOPTIONS.find(item => item.value === cellvalue)
-      return findObj ? findObj.label : '-'
+      // * 区分状态，为0时区分未调价和调价中
+      if(row.priceChangeState === 0) {
+        if(row.twiceQuot === 0) {
+          return '未调价'
+        }else{
+          return '调价中'
+        }
+      }else {
+        const findObj = PRICECHANGESTATEOPTIONS.find(item => item.value === cellvalue)
+        return findObj ? findObj.label : '-'
+      }
+
     },
     async updateTimeDifference() {
       // 投标截止时间

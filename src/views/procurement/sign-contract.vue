@@ -754,14 +754,11 @@
                     },
                   ]"
                 >
-                  <el-tooltip class="item" effect="dark" :content="scope.row.signCount" placement="top" :disabled="!scope.row.signCount">
                     <el-input
                       v-model="scope.row.signCount"
                       placeholder="请输入"
                       v-thousandth
                     />
-                  </el-tooltip>
-
                 </el-form-item>
               </template>
             </el-table-column>
@@ -797,14 +794,11 @@
                     },
                   ]"
                 >
-                  <el-tooltip class="item" effect="dark" :content="scope.row.signUnitPriceInclTax" placement="top" :disabled="!
-                  scope.row.signUnitPriceInclTax">
                   <el-input
                     v-model="scope.row.signUnitPriceInclTax"
                     placeholder="请输入"
                     v-thousandth
                   />
-                  </el-tooltip>
                 </el-form-item>
               </template>
             </el-table-column>
