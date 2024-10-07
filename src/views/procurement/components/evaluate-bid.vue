@@ -291,7 +291,7 @@
             </el-table-column>
             <el-table-column label="供应商报价" align="center">
               <el-table-column
-                :label="index === 0 ? ((noticeDetail.tenderNotice && noticeDetail.tenderNotice.noticeStatus === 3)?'首轮报价':scoreLength.length<=1?'首轮报价':'最终轮报价'):((noticeDetail.tenderNotice && noticeDetail.tenderNotice.noticeStatus === 3)?`${index + 1}轮报价`:'最终轮报价')"
+                :label="index === 0 ? ((noticeDetail.tenderNotice && noticeDetail.tenderNotice.noticeStatus === 3)?'首轮报价':scoreLength.length<=1?'最终轮报价':'首轮报价'):((noticeDetail.tenderNotice && noticeDetail.tenderNotice.noticeStatus === 3)?`${index + 1}轮报价`:'最终轮报价')"
                 align="center"
                 v-for="(item, index) in scoreLength"
                 :key="index"
