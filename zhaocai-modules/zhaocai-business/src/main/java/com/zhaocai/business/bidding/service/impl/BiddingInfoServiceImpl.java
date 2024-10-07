@@ -379,8 +379,16 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
         List<MaterialsVO> materialsList = procurementSchemeService.listMaterials(
                 biddingInfo.getSchemeId());
 
+        //查询二次报价的数据
+        BiddingInfo newestBiddingInfo = this.getOne(new LambdaQueryWrapper<BiddingInfo>()
+                .eq(BiddingInfo::getNoticeId, biddingInfo.getNoticeId())
+                .eq(BiddingInfo::getVendorId, biddingInfo.getVendorId())
+                .eq(BiddingInfo::getPriceChangeState, NumberConstant.ONE)/* 已经调价 */
+                .orderByDesc(BiddingInfo::getTwiceQuotVersion).last("limit 1"));/* 获取供应商最新版本的投标数据 */
+
+        /* 用最新的已投标数据 */
         List<BiddingListQuotation> quotations = biddingListQuotationService.list(new LambdaQueryWrapper<BiddingListQuotation>()
-                .eq(BiddingListQuotation::getBiddingInfoId, id));
+                .eq(BiddingListQuotation::getBiddingInfoId, newestBiddingInfo.getId()));
         try{
             Map<String, BiddingListQuotation> quotationMap = quotations.stream().collect(Collectors.toMap(item ->
                     item.getSplitId() + "_" + item.getMaterialsId(), Function.identity()));
@@ -646,6 +654,9 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
             expertVo.setExpertId(expert.getExpertId());
             expertVo.setExpertName(expert.getExpertName());
             //获取几个供应商首轮报价信息
+
+
+
             List<BiddingInfo> biddingInfos = this.list(new LambdaQueryWrapper<BiddingInfo>()
                     .eq(BiddingInfo::getNoticeId, noticeId)
                     .eq(BiddingInfo::getBiddingStatus, BiddingInfoStatusEnum.HAVE_BACK.getState())
@@ -765,13 +776,9 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
                 bidInfo.setTwiceQuot(NumberConstant.ONE);/* 开启调价 */
                 bidInfo.setPriceChangeState(NumberConstant.ZERO);/* 默认未调价 */
             }else{
-                /* 未选中的判断之前是否放弃调价。是放弃调价就是放弃调价，不是就默认为未调价 */
+                /* 未选中的 默认为未调价 */
                 bidInfo.setTwiceQuot(NumberConstant.ZERO);/* 关闭调价 */
-                if(bidInfo.getPriceChangeState()!=null&&bidInfo.getPriceChangeState().equals(NumberConstant.ONE)){
-                    bidInfo.setPriceChangeState(NumberConstant.ONE);/* 已调价 */
-                }else {
-                    bidInfo.setPriceChangeState(NumberConstant.TWO);/* 否则 放弃调价 */
-                }
+                bidInfo.setPriceChangeState(NumberConstant.ZERO);/* 未调价 */
             }
             List<AttachmentVO> attachments = attachmentService.listAttachment(AttachmentTypeEnum.BIDING_DOCUMENT, bidInfo.getId());
             List<AttachmentRequestVO> attachmentList = new ArrayList<>();
@@ -810,21 +817,22 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
                 .set(TenderNotice::getTwiceQuotState, NumberConstant.ZERO)
                 .eq(TenderNotice::getId, twiceBidConfVO.getNoticeId()));
 
-        /* 投标对象 关闭当前版本当前招标对象 所有的投标数据 的二次报价开关 */
-        this.update(new LambdaUpdateWrapper<BiddingInfo>()
-                .set(BiddingInfo::getTwiceQuot, NumberConstant.ZERO)
-                .eq(BiddingInfo::getNoticeId, twiceBidConfVO.getNoticeId())
-                .eq(BiddingInfo::getTwiceQuotVersion, tenderNotice.getTwiceQuotVersion()==null?2:tenderNotice.getTwiceQuotVersion())
-                .eq(BiddingInfo::getTwiceQuot, NumberConstant.ONE));
         /* 投标对象 关闭当前版本当前招标对象 未调价的 二次报价 */
         this.update(new LambdaUpdateWrapper<BiddingInfo>()
-                .set(BiddingInfo::getTwiceQuot, NumberConstant.ZERO)
+                .set(BiddingInfo::getTwiceQuot, NumberConstant.ZERO)/* 关闭 未调价的 二次报价 */
                 /* 将未调价的状态改成放弃调价 */
                 .set(BiddingInfo::getPriceChangeState, NumberConstant.TWO)/* 放弃调价 */
                 .eq(BiddingInfo::getPriceChangeState, NumberConstant.ZERO)/* 未调价 */
 
                 .eq(BiddingInfo::getNoticeId, twiceBidConfVO.getNoticeId())
+                .eq(BiddingInfo::getTwiceQuot, NumberConstant.ONE)/* 当前版本 选中开启调价的 供应商列表 未调价的改成 放弃调价。 */
                 .eq(BiddingInfo::getTwiceQuotVersion, tenderNotice.getTwiceQuotVersion()==null?2:tenderNotice.getTwiceQuotVersion()));
+        /* 投标对象 关闭当前版本当前招标对象 所有的投标数据 的二次报价开关 */
+        this.update(new LambdaUpdateWrapper<BiddingInfo>()
+                .set(BiddingInfo::getTwiceQuot, NumberConstant.ZERO)/* 关闭所有 二次报价 */
+                .eq(BiddingInfo::getNoticeId, twiceBidConfVO.getNoticeId())
+                .eq(BiddingInfo::getTwiceQuotVersion, tenderNotice.getTwiceQuotVersion()==null?2:tenderNotice.getTwiceQuotVersion())
+                .eq(BiddingInfo::getTwiceQuot, NumberConstant.ONE));
         return true;
     }
 

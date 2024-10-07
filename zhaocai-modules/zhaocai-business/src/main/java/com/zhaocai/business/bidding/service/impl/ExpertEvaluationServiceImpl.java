@@ -103,7 +103,7 @@ public class ExpertEvaluationServiceImpl implements IExpertEvaluationService {
 					.eq(BiddingInfo::getSchemeId, row.getSchemeId())
 					.eq(BiddingInfo::getBiddingStatus, BiddingInfoStatusEnum.HAVE_BACK.getState())
 					.eq(BiddingInfo::getSubmitStatus, 1)
-					.isNull(BiddingInfo::getParentId));
+					.isNull(BiddingInfo::getParentId));/* 第一个版本的 */
 			for (BiddingInfo biddingInfo : biddingInfos){
 				//查询是否有最新的报价信息
 				BiddingInfo newestBiddingInfo = biddingInfoService.getOne(new LambdaQueryWrapper<BiddingInfo>()
