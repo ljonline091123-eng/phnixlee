@@ -40,11 +40,11 @@ export default {
              // http://192.168.240.17:31800/ckControl/zbcg/reportForm/tender-procurement$reportForm$buildingRate?wjSs=/zhaocai/procurement/bindding?projectCodeList=SG20012024000020-1
              //&type=buildingRate&noticeStatus=8&procurementType=all&report=report
              ///zbcg/procurement/procurement$bindding
-              window.$wujie?.bus.$emit('routeChange', { 
+              window.$wujie?.bus.$emit('routeChange', {
                 path: `/procurement/procurement$bindding`,
                 query:{projectCodeList:res.data,type:'buildingRate',noticeStatus:'8',procurementType:'all',report:'report'}
               })
-              
+
             })
           } else {
             // this.$router.push({path:'/procurement/bindding',query:{projectCode:row.id,type:'buildingRate',noticeStatus:'8',procurementType:'all',report:'report'}})
