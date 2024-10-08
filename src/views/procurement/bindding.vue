@@ -338,9 +338,12 @@ export default {
     this.queryParams.projectCodeList = this.$route.query.projectCodeList
     this.queryParams.type = this.$route.query.type
     this.queryParams.noticeStatus = this.$route.query.noticeStatus
-    this.getDicts("plan_type").then((res) => {
+    console.log("报表参数",JSON.stringify(this.$route.query))
+    console.log("当前url",JSON.stringify(window.location.href))
+    this.getDicts("plan_type").then((res) => { 
       this.bindding_type = res.data;
     });
+    console.log("this.$route.query.report",JSON.stringify(this.$route.query.report))
     if(this.$route.query.report){
       this.report=this.$route.query.report
     }

@@ -416,7 +416,7 @@ router.beforeEach((to, from, next) => {
     // wujie = window.$wujie?.props.token || "";
     wujie =
       window.$wujie?.props.token ||
-      "Bearer eyJhbGciOiJIUzUxMiJ9.eyJsb2dpbl91c2VyX2tleSI6ImZjMTJjMzc1LTQ2OTYtNDM5Ny04YjY5LTAwMTZjZGE0ZDFiY18xODE2MzY1MTczMyJ9.jX_oWsZBr7YtP5tP9eyLkGN8osJrT-7YzsXePrwYdhdmhc4h8Ua4rZJxlOaiyQP_zpzQNxDswWqER5iOgwlNJQ";
+      "Bearer eyJhbGciOiJIUzUxMiJ9.eyJsb2dpbl91c2VyX2tleSI6IjRmMGQxZTgzLWEzZjQtNGZmNS04NDkyLTEzMWE2NWJkMGVmYl8xODE2MzY1MTczMyJ9.R3MGvWuMWZTRkSWE0v2CNKBYm9PUImQgkjBQfI7fkLuP2P6XkychNCULfYYdFzca5QClWYd-vgKe4nEft8qQvQ";
   }
   console.log(window.$wujie?.props, "window.$wujie?.props");
 
