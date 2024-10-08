@@ -73,10 +73,11 @@ public class ReportController extends BladeController {
      * @return
      */
     @PostMapping("/bidCountReportExport")
-    public AjaxResult bidCountReportExport(HttpServletResponse response,VBidCountVo vBidCountVo) {
+    public void bidCountReportExport(HttpServletResponse response,VBidCountVo vBidCountVo) {
         List<VBidCountVo> list = bidCountService.bidCountReportExport(vBidCountVo);
+        String title = bidCountService.getExportTitle(vBidCountVo);
         ExcelUtil<VBidCountVo> util = new ExcelUtil<VBidCountVo>(VBidCountVo.class);
-        return util.exportExcel(response,list, "招标率报表数据");
+        util.exportExcel(response,list, "招标率报表数据",title + "招标率统计报表");
     }
 
     /**

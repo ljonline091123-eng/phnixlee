@@ -273,6 +273,26 @@ public class VBidCountServiceImpl extends ServiceImpl<VBidCountMapper, VBidCount
         return list;
     }
 
+    @Override
+    public String getExportTitle(VBidCountVo vBidCountVo) {
+        String title = "";
+        // 集团或公司端
+        if(null != vBidCountVo.getId()){
+            SysDept dept = remoteSystemService.getByThridDeptId(vBidCountVo.getId(), SecurityConstants.INNER);
+            if(null != dept && !StringUtils.isEmpty(dept.getDeptName())){
+                title = dept.getDeptName();
+            }
+        }
+        // 项目端
+        if(null != vBidCountVo.getMinAccountCode()){
+            List<VBidCountVo> bidCountList = baseMapper.select(vBidCountVo);
+            if(!CollectionUtils.isEmpty(bidCountList)){
+                title = bidCountList.get(0).getMinAccountFullName();
+            }
+        }
+        return title;
+    }
+
     /**
      * 创建组织树
      * @param resultList
