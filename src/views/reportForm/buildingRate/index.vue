@@ -41,15 +41,14 @@ export default {
              //&type=buildingRate&noticeStatus=8&procurementType=all&report=report
              ///zbcg/procurement/procurement$bindding
               window.$wujie?.bus.$emit('routeChange', {
-                path: `/procurement/procurement$bindding`,
+                path: `/zbcg/procurement/procurement$bindding`,
                 query:{projectCodeList:res.data,type:'buildingRate',noticeStatus:'8',procurementType:'all',report:'report'}
               })
-
             })
           } else {
             // this.$router.push({path:'/procurement/bindding',query:{projectCode:row.id,type:'buildingRate',noticeStatus:'8',procurementType:'all',report:'report'}})
             window.$wujie?.bus.$emit('routeChange', {
-                path: `/procurement/procurement$bindding`,
+                path: `/zbcg/procurement/procurement$bindding`,
                 query:{projectCode:row.id,type:'buildingRate',noticeStatus:'8',procurementType:'all',report:'report'}
                })
           }
