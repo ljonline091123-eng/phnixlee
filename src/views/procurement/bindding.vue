@@ -338,20 +338,54 @@ export default {
     this.queryParams.projectCodeList = this.$route.query.projectCodeList
     this.queryParams.type = this.$route.query.type
     this.queryParams.noticeStatus = this.$route.query.noticeStatus
-    console.log("报表参数",JSON.stringify(this.$route.query))
-    console.log("当前url",JSON.stringify(window.location.href))
+  
     this.getDicts("plan_type").then((res) => { 
       this.bindding_type = res.data;
     });
-    console.log("this.$route.query.report",JSON.stringify(this.$route.query.report))
+ 
     if(this.$route.query.report){
       this.report=this.$route.query.report
+    }
+    console.log("当前url",JSON.stringify(window.parent.location.href))
+   
+    if(this.$route.query.report!=undefined){
+      // const url = 'http://192.168.240.17:31800/ckControl/zbcg/procurement/procurement$bindding?projectCodeList=SG20012024000002-2&type=buildingRate&noticeStatus=8&procurementType=all&report=report&wjSs=%2Fzhaocai%2Fprocurement%2Fbindding';
+      const url =window.parent.location.href
+      const queryParams = this.parseQuery(url);
+      this.queryParams.procurementType = queryParams.procurementType
+      this.queryParams.projectCode = queryParams.projectCode
+      this.queryParams.projectCodeList = queryParams.projectCodeList
+      this.queryParams.type = queryParams.type
+      this.queryParams.noticeStatus = queryParams.noticeStatus
+      this.report=queryParams.report
+      console.log("报表参数",JSON.stringify(queryParams))
+      console.log(" this.queryParams.procurementType"+ this.queryParams.procurementType); 
+      console.log(" this.queryParams.projectCode"+ this.queryParams.projectCode); 
+      console.log(" this.queryParams.projectCodeList"+ this.queryParams.projectCodeList); 
+      console.log(" this.queryParams.type"+ this.queryParams.type); 
+      console.log(" this.queryParams.noticeStatus"+ this.queryParams.noticeStatus); 
+      console.log(" this.queryParams.report"+ this.queryParams.report); 
     }
   },
   computed: {
     ...mapGetters(["project"]),
   },
   methods: {
+    parseQuery(url) {
+      let queryParams = {};
+      // 提取URL中的查询字符串
+      let queryString = url.split('?')[1];
+      if (queryString) {
+        // 将查询字符串分割为键值对数组
+        let params = queryString.split('&');
+        params.forEach(param => {
+          let [key, value] = param.split('=');
+          queryParams[decodeURIComponent(key)] = decodeURIComponent(value);
+        });
+      }
+      return queryParams;
+    },
+
     /** 获取需求列表 */
     async getBiddingSchemeList() {
       this.loading = true;
