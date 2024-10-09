@@ -162,7 +162,8 @@ public class VendorBidServiceImpl implements IVendorBidService {
             //查询二次报价的数据
             BiddingInfo newestBiddingInfo = biddingInfoService.getOne(new LambdaQueryWrapper<BiddingInfo>()
                     .eq(BiddingInfo::getParentId, biddingInfo.getId())
-                    .eq(BiddingInfo::getPriceChangeState, NumberConstant.ONE)/* 已经调价 */
+                    .and(q -> q.eq(BiddingInfo::getPriceChangeState, NumberConstant.ONE)/* 已经调价 */
+                            .or().isNull(BiddingInfo::getPriceChangeState))/* 历史数据兼容 */
                     .orderByDesc(BiddingInfo::getCreateTime).last("limit 1"));
             if (ObjectUtils.isNotEmpty(newestBiddingInfo)){
                 biddingInfoId = newestBiddingInfo.getId();
@@ -596,7 +597,8 @@ public class VendorBidServiceImpl implements IVendorBidService {
             //查询是否有最新的报价信息
             BiddingInfo newestBiddingInfo = biddingInfoService.getOne(new LambdaQueryWrapper<BiddingInfo>()
                     .eq(BiddingInfo::getParentId, biddingInfoOld.getId())
-                    .eq(BiddingInfo::getPriceChangeState, NumberConstant.ONE)/* 已经调价 */
+                    .and(q -> q.eq(BiddingInfo::getPriceChangeState, NumberConstant.ONE)/* 已经调价 */
+                            .or().isNull(BiddingInfo::getPriceChangeState))/* 历史数据兼容 */
                     .orderByDesc(BiddingInfo::getCreateTime).last("limit 1"));
             if (ObjectUtils.isNotEmpty(newestBiddingInfo)){
                 biddingInfoRecent = newestBiddingInfo;
@@ -612,7 +614,8 @@ public class VendorBidServiceImpl implements IVendorBidService {
         //查询是否有最新的报价信息
         BiddingInfo newestBiddingInfo = biddingInfoService.getOne(new LambdaQueryWrapper<BiddingInfo>()
                 .eq(BiddingInfo::getParentId, biddingInfoOld.getId())
-                .eq(BiddingInfo::getPriceChangeState, NumberConstant.ONE)/* 已经调价 */
+                .and(q -> q.eq(BiddingInfo::getPriceChangeState, NumberConstant.ONE)/* 已经调价 */
+                        .or().isNull(BiddingInfo::getPriceChangeState))/* 历史数据兼容 */
                 .orderByDesc(BiddingInfo::getCreateTime).last("limit 1"));
         /* 如果版本号一样就不再新增数据了。 */
         if(newestBiddingInfo!=null && tenderNotice!=null && tenderNotice.getTwiceQuotVersion().equals(newestBiddingInfo.getTwiceQuotVersion())){

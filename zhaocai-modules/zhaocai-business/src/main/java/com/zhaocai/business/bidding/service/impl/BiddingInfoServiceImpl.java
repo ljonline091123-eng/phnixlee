@@ -234,10 +234,15 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
             //设置需要查看的回标单id（最后一次投标单id）
             for (int i = quotationDataVOList.size()-1; i >= 0; i--) {
                 /* 已调价 最新版本的 */
-                if(quotationDataVOList.get(i).getPriceChangeState().equals(NumberConstant.ONE)){
+                if(quotationDataVOList.get(i).getPriceChangeState()!=null&&quotationDataVOList.get(i).getPriceChangeState().equals(NumberConstant.ONE)){
                     vo.setBiddingInfoId(quotationDataVOList.get(i).getId());
                     break;
                 }
+            }
+            /* 历史数据是拿不到getPriceChangeState的 */
+            if(vo.getBiddingInfoId()==null){
+                /* 历史数据是拿不到getPriceChangeState的 ， 直接拿 设置需要查看的回标单id（最后一次投标单id） */
+                vo.setBiddingInfoId(quotationDataVOList.get(quotationDataVOList.size() - 1).getId());
             }
             //展示保留两位小数
 //            vo.setTaxPrice(vo.getTaxPrice().setScale(2, ROUND_DOWN));
@@ -383,7 +388,8 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
         BiddingInfo newestBiddingInfo = this.getOne(new LambdaQueryWrapper<BiddingInfo>()
                 .eq(BiddingInfo::getNoticeId, biddingInfo.getNoticeId())
                 .eq(BiddingInfo::getVendorId, biddingInfo.getVendorId())
-                .eq(BiddingInfo::getPriceChangeState, NumberConstant.ONE)/* 已经调价 */
+                .and(q -> q.eq(BiddingInfo::getPriceChangeState, NumberConstant.ONE)/* 已经调价 */
+                        .or().isNull(BiddingInfo::getPriceChangeState))/* 历史数据兼容 */
                 .orderByDesc(BiddingInfo::getTwiceQuotVersion).last("limit 1"));/* 获取供应商最新版本的投标数据 */
 
         /* 用最新的已投标数据 */
@@ -477,7 +483,8 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
     public List<BiddingInfoDetailVO> getBiddingHistoryRecords(Long noticeId) {
         List<BiddingInfoDetailVO> voList = new ArrayList<>();
         List<BiddingInfo> biddingInfos = this.list(new LambdaQueryWrapper<BiddingInfo>()
-                .eq(BiddingInfo::getPriceChangeState, NumberConstant.ONE)/* 已经调价 */
+                .and(q -> q.eq(BiddingInfo::getPriceChangeState, NumberConstant.ONE)/* 已经调价 */
+                        .or().isNull(BiddingInfo::getPriceChangeState))/* 历史数据兼容 */
                 .eq(BiddingInfo::getNoticeId, noticeId).orderByDesc(BiddingInfo::getCreateTime)
                 .select(BiddingInfo::getId));
         for (BiddingInfo biddingInfo : biddingInfos) {
@@ -667,7 +674,8 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
                 //查询二次报价的数据
                 BiddingInfo newestBiddingInfo = this.getOne(new LambdaQueryWrapper<BiddingInfo>()
                         .eq(BiddingInfo::getParentId, bid.getId())
-                        .eq(BiddingInfo::getPriceChangeState, NumberConstant.ONE)/* 已经调价 */
+                        .and(q -> q.eq(BiddingInfo::getPriceChangeState, NumberConstant.ONE)/* 已经调价 */
+                                .or().isNull(BiddingInfo::getPriceChangeState))/* 历史数据兼容 */
                         .orderByDesc(BiddingInfo::getCreateTime).last("limit 1"));
                 if (!ObjectUtils.isEmpty(newestBiddingInfo)){
                     //换成最新一条投标单
@@ -822,7 +830,8 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
                 .set(BiddingInfo::getTwiceQuot, NumberConstant.ZERO)/* 关闭 未调价的 二次报价 */
                 /* 将未调价的状态改成放弃调价 */
                 .set(BiddingInfo::getPriceChangeState, NumberConstant.TWO)/* 放弃调价 */
-                .eq(BiddingInfo::getPriceChangeState, NumberConstant.ZERO)/* 未调价 */
+                .and(q -> q.eq(BiddingInfo::getPriceChangeState, NumberConstant.ZERO)/* 未调价 */
+                        .or().isNull(BiddingInfo::getPriceChangeState))/* 历史数据兼容 */
 
                 .eq(BiddingInfo::getNoticeId, twiceBidConfVO.getNoticeId())
                 .eq(BiddingInfo::getTwiceQuot, NumberConstant.ONE)/* 当前版本 选中开启调价的 供应商列表 未调价的改成 放弃调价。 */
