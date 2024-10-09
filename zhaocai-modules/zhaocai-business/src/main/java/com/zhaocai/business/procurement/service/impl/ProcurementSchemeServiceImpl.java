@@ -99,10 +99,12 @@ public class ProcurementSchemeServiceImpl extends ServiceImpl<ProcurementSchemeM
     @Override
     public PageResult<BiddingSchemeListVO> biddingSchemeListPage(BiddingSchemeListQueryVO queryVO) {
         queryVO.setState(ProcurementSchemeStateEnum.APPROVE.getState());
-        //设置当前登录用户为采购经办人的查询条件
-        queryVO.setIsLeader(0);
-        queryVO.setProcurementOfficer(SecurityUtils.getUserId());
-        queryVO.setFinanceConfirmId(SecurityUtils.getUserId().toString());
+        if(null == queryVO.getType()){
+            //设置当前登录用户为采购经办人的查询条件
+            queryVO.setIsLeader(0);
+            queryVO.setProcurementOfficer(SecurityUtils.getUserId());
+            queryVO.setFinanceConfirmId(SecurityUtils.getUserId().toString());
+        }
         IPage<BiddingSchemeListVO> iPage = baseMapper.selectBiddingSchemePageList(queryVO.toMybatisPage(), queryVO);
         iPage.getRecords().forEach(item -> {
             if (item.getNoticeStatus() != null) {
