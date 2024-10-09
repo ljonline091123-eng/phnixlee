@@ -1,6 +1,7 @@
 <template>
   <div class="app-container">
     <div class="context flex flex-column">
+      <BackButton path="/reportForm/buildingRate/index" title="招标管理详情">
       <el-radio-group
         v-model="queryParams.procurementType"
         size="small"
@@ -15,7 +16,7 @@
           >{{ dict.label }}</el-radio-button
         >
       </el-radio-group>
-
+      </BackButton>
       <el-form
         :model="queryParams"
         ref="queryForm"
@@ -285,6 +286,7 @@
 import { mapGetters } from "vuex";
 import { Base64 } from "js-base64";
 import { getBiddingSchemeList, abandonBidMore } from "@/api/procurement/manage";
+import BackButton from '@/components/BackButton/index.vue'
 export default {
   name: "Bindding",
   dicts: ["procurement_type", "bindding_step"],
@@ -537,7 +539,11 @@ export default {
       immediate: true,
     },
   },
+  components: {
+    BackButton,
+  },
 };
+
 </script>
 <style scoped lang="scss">
 .tabs-box {
