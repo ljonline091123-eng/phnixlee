@@ -46,7 +46,6 @@ export default {
         window.localStorage.getItem("currentOrgValue") || "2013000000";
       scopeType = window.parent.scopeType || "1";
     }
-    console.log(' %c 🚀 ~ file:App --method:mounted --line:51 --variable:scopeType===>', 'font-size:16px;background-color: #42b983;color:#fff;', scopeType)
     if (scopeType) {
       this.$store.dispatch('app/changeScopeType', scopeType)
     }

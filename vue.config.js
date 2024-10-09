@@ -1,5 +1,6 @@
 "use strict";
 const path = require("path");
+const { codeInspectorPlugin } = require('code-inspector-plugin');
 
 function resolve(dir) {
   return path.join(__dirname, dir);
@@ -38,10 +39,14 @@ module.exports = {
         // target: `http://localhost:8080`,
         //  target: `http://192.168.77.180:8080`, //测试环境
         // target: `http://192.168.240.17:31800/dev-api`, //联调环境
-        // target: `http://10.100.100.174:8052`,
+         // target: `http://10.100.100.174:8052`,
+         //target: `http://10.100.100.174:8052`,
+          //target: `http://172.168.100.19:8052`,
+         target: `http://172.168.100.126:8052`,
         // target: `http://192.168.240.17:31800/dev-api`, //联调环境
-        // target: `http://192.168.6.150:8052`,
-        target: `http://172.168.100.19:8052`, //联调环境
+         //target: `http://192.168.6.150:8052`,
+        //target: `http://172.168.100.19:8052`, //联调环境
+        // target: `http://192.168.240.17:31800/dev-api`, //联调环境
         // target: `http://192.168.6.150:8052`,
         changeOrigin: true,
         pathRewrite: {
@@ -76,6 +81,9 @@ module.exports = {
         minRatio: 0.8, // 压缩比例，小于 80% 的文件不会被压缩
         deleteOriginalAssets: false, // 压缩后删除原文件
       }),
+      codeInspectorPlugin({
+        bundler: 'webpack',
+      })
     ],
   },
   chainWebpack(config) {
