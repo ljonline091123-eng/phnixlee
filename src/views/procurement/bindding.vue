@@ -346,7 +346,7 @@ export default {
     if(this.$route.query.report){
       this.report=this.$route.query.report
     }
-    console.log("当前url",JSON.stringify(window.parent.location.href))
+    console.log("当前url ",JSON.stringify(window.parent.location.href))
    
     if(this.$route.query.report!=undefined){
       // const url = 'http://192.168.240.17:31800/ckControl/zbcg/procurement/procurement$bindding?projectCodeList=SG20012024000002-2&type=buildingRate&noticeStatus=8&procurementType=all&report=report&wjSs=%2Fzhaocai%2Fprocurement%2Fbindding';

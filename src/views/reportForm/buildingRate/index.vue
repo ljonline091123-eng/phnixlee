@@ -32,7 +32,7 @@ export default {
       tableHeaderList: [
         {prop: 'deptName', label: '组织机构',width: 200,showOverflowTooltip: true},
         {prop: 'minAccountFullName', label: '项目名称',width: 200,showOverflowTooltip: true},
-        {prop: 'prjStateName', label: '项目业态',width: 100},
+        {prop: 'prjStateName', label: '项目业态',width: 100}, 
         {prop: 'cgNum', label: '采购次数',align: 'right',clickMethod:(row)=>{
           if (row.type === "G") {
             getProjectCode(row.id).then(res=>{
