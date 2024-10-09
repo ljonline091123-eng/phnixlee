@@ -57,6 +57,7 @@ public class BPMProcessService implements IBPMProcessService {
         requestDTO.setBusinessTitle("流程审批");
         requestDTO.setState(variables.get("detailUrl")==null? IdUtil.getSnowflakeNextId()+"" :variables.get("detailUrl").toString());
         requestDTO.setUserObj(variables.get("userObj").toString());
+        requestDTO.setUserObj(variables.get("userObj")==null?null:variables.get("userObj").toString());
         String operateComment = variables.get("operateComment")==null?null:variables.get("operateComment").toString();
         requestDTO.setOperateComment(operateComment);
         String projectCode = variables.get("projectCode")==null?null:variables.get("projectCode").toString();
