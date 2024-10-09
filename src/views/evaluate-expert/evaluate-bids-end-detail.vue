@@ -19,7 +19,11 @@
     <el-descriptions class="form-body">
       <el-descriptions-item label="供应商名称" :span="3">{{ bidInfo.vendorName }}</el-descriptions-item>
       <el-descriptions-item label="标书" :span="3">
-        <a :href="bidInfo.attachments && bidInfo.attachments.length && bidInfo.attachments[0].fileUrl" target="_blank" class="link-type">{{ bidInfo.attachments && bidInfo.attachments.length && bidInfo.attachments[0].fileName }}</a>
+        <div v-if="bidInfo.attachments && bidInfo.attachments.length>0">
+          <div v-for="(item,index) in bidInfo.attachments" :key="index">
+            <a :href="item.fileUrl" target="_blank" class="link-type">{{ item.fileName }}</a>
+          </div>
+        </div>
       </el-descriptions-item>
       <el-descriptions-item label="含税总价(元)">{{ bidInfo.taxPricePattern }}</el-descriptions-item>
       <el-descriptions-item label="不含税总价(元)">{{ bidInfo.notTaxPricePattern }}</el-descriptions-item>
@@ -148,7 +152,7 @@ export default {
       let isAccord = arr.every(item => Number(item.score) >= Number(item.lowRange) && Number(item.score) <= Number(item.highRange))
       console.log(isAccord,'isAccord-isAccord');
       if(!isAccord) return this.$message.error('评分项不在评分范围')
-      
+
       this.evaluatedata.markCategoryDatailVOList.forEach(item => {
         let count = item.markItemDetailVOList.reduce((p,r) => p + Number(r.score), 0)
         if(item.itemType === 1){

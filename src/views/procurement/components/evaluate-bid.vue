@@ -1833,8 +1833,8 @@ export default {
               const { id: noticeId } = this.noticeDetail?.tenderNotice || {};
               const res = await twiceBidConf(this.biddingInfoIds, noticeId,this.timeForm.twiceTime);
               this.$message.success("已开启调价");
-              // this.getBiddingQuotationList();
-              // this.getExpertEvalStatus();
+              this.getBiddingQuotationList();
+              this.getExpertEvalStatus();
               this.dialogVisible = false
               this.$emit('changeState',3)
             } catch (err) {
@@ -1856,8 +1856,8 @@ export default {
         const { id: noticeId } = this.noticeDetail?.tenderNotice || {};
         try {
           const res = await twiceBidFinish(noticeId);
-          // this.getBiddingQuotationList();
-          // this.getExpertEvalStatus();
+          this.getBiddingQuotationList();
+          this.getExpertEvalStatus();
           this.$message.success("已结束调价");
           this.$emit('changeState',3)
         } catch (err) {
