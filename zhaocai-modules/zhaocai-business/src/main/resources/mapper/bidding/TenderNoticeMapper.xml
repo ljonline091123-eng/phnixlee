@@ -29,11 +29,12 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="twiceTime"    column="twice_time"    />
         <result property="twiceQuotVersion"    column="twice_quot_version"    />
         <result property="twiceQuotState"    column="twice_quot_state"    />
+        <result property="paymentType"    column="payment_type"    />
     </resultMap>
 
     <sql id="selectTenderNoticeVo">
         select id, project_id, scheme_id, apply_time, apply_time_notice, contact, phone, email,contact_notice, phone_notice, email_notice, template_id, attach_id,attach_id_notice, vendor_range,
-               create_by, create_id, create_time, update_by, update_id, update_time, del_flag, notice_status, is_open_people, is_eval, wf_process_id,twice_time,twice_quot_version,twice_quot_state
+               create_by, create_id, create_time, update_by, update_id, update_time, del_flag, notice_status, is_open_people, is_eval, wf_process_id,twice_time,twice_quot_version,twice_quot_state,payment_type
         from tb_tender_notice
     </sql>
 

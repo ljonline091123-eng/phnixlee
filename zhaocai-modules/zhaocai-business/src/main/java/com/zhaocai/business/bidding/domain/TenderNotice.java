@@ -120,5 +120,13 @@ public class TenderNotice extends BaseEntity {
     @ApiModelProperty(value =  "二次报价状态")
     private Integer twiceQuotState;
 
+    /** 付款方式 [
+     { label: "现付", value: 1 },
+     { label: "旬付", value: 2 },
+     { label: "月付", value: 3 },
+     { label: "资金利息", value: 4 },
+     ], */
+    @ApiModelProperty(value =  "付款方式")
+    private Integer paymentType;
 
 }

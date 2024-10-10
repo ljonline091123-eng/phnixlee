@@ -99,4 +99,12 @@ public class TenderNoticeVO implements Serializable {
     @ApiModelProperty(value =  "通过的供应商报名列表")
     private List<Long> vendorApplyIds;
 
+    /** 付款方式 [
+     { label: "现付", value: 1 },
+     { label: "旬付", value: 2 },
+     { label: "月付", value: 3 },
+     { label: "资金利息", value: 4 },
+     ], */
+    @ApiModelProperty(value =  "付款方式")
+    private Integer paymentType;
 }

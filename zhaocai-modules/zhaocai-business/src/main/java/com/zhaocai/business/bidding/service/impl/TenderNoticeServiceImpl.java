@@ -262,6 +262,7 @@ public class TenderNoticeServiceImpl extends ServiceImpl<TenderNoticeMapper,Tend
         tenderNotice.setTwiceTime(tenderNoticeVO.getApplyTime());
         tenderNotice.setTwiceQuotVersion(NumberConstant.ONE);/* 第一次的二次报价版本号，后面累加上去 */
         tenderNotice.setTwiceQuotState(NumberConstant.ONE);/* 开放报价 */
+        tenderNotice.setPaymentType(tenderNoticeVO.getPaymentType());/* 付款方式 */
 
 
         List<Long> vendorIds = tenderNoticeVO.getVendorIds();
