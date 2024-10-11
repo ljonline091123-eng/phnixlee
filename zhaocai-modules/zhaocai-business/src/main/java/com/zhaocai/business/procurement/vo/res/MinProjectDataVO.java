@@ -22,8 +22,4 @@ public class MinProjectDataVO {
     @ApiModelProperty(value = "项目编号")
     private String projectCode;
 
-    @ApiModelProperty(value = "创建时间")
-    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss",timezone = "GMT+8")
-    private Date createTime;
-
 }
