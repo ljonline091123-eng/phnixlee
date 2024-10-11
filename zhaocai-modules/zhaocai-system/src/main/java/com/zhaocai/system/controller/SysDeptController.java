@@ -261,11 +261,12 @@ public class SysDeptController extends BaseController
      */
     @InnerAuth
     @GetMapping("/getDeptByThridDeptId")
-    public List<SysDept> getDeptByThridDeptId(@RequestParam String thridDeptId) {
-        if (StringUtils.isEmpty(thridDeptId)) {
+    public List<SysDept> getDeptByThridDeptId(@RequestParam Object thridDeptId) {
+        String thridDeptIdNew = String.valueOf(thridDeptId);
+        if (StringUtils.isEmpty(thridDeptIdNew)) {
             throw new RuntimeException("第三方部门 id 不能为空");
         }
-        return deptService.getDeptByThridDeptId(thridDeptId);
+        return deptService.getDeptByThridDeptId(thridDeptIdNew);
     }
 
 }
