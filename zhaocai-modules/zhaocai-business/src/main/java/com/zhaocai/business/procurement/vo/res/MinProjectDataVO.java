@@ -1,7 +1,10 @@
 package com.zhaocai.business.procurement.vo.res;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import io.swagger.annotations.ApiModelProperty;
 import lombok.Data;
+
+import java.util.Date;
 
 /**
  * @author ssy
@@ -18,5 +21,9 @@ public class MinProjectDataVO {
 
     @ApiModelProperty(value = "项目编号")
     private String projectCode;
+
+    @ApiModelProperty(value = "创建时间")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss",timezone = "GMT+8")
+    private Date createTime;
 
 }

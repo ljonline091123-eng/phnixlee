@@ -166,7 +166,7 @@
     </select>
 
     <select id="selectDataByScheme" resultType="com.zhaocai.business.procurement.vo.res.MinProjectDataVO">
-        select distinct tps.id, tcp.project_name minAccountFullName, tcp.project_code
+        select distinct tps.id, tcp.project_name minAccountFullName, tcp.project_code,tpspr.create_time
         from tb_procurement_scheme tps
         left join tb_procurement_scheme_plan_relate tpspr on tpspr.procurement_scheme_id = tps.id
         left join tb_contract_planning tcp on tcp.plan_id = tpspr.procurement_plan_id
