@@ -189,6 +189,7 @@
             >
               <el-select
                 style="width: 100%"
+                :disabled="formData.paymentType"
                 v-model="formData.paymentType"
                 placeholder="请选择付款方式"
               >

@@ -1,7 +1,8 @@
 <template>
   <div class="app-container">
     <div class="context flex flex-column">
-      <BackButton path="/reportForm/buildingRate/index" title="招标管理详情">
+      <BackButton v-if="report" path="/tender-procurement/reportForm/buildingRate" title="招标管理详情">
+      </BackButton>
       <el-radio-group
         v-model="queryParams.procurementType"
         size="small"
@@ -16,7 +17,7 @@
           >{{ dict.label }}</el-radio-button
         >
       </el-radio-group>
-      </BackButton>
+
       <el-form
         :model="queryParams"
         ref="queryForm"

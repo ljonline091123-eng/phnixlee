@@ -36,12 +36,12 @@ export default {
         {prop: 'cgNum', label: '采购次数',align: 'right',clickMethod:(row)=>{
           if (row.type === "G") {
             getProjectCode(row.id).then(res=>{
-              // this.$router.push({path:'/procurement/bindding',query:{projectCodeList:res.data,type:'buildingRate',noticeStatus:'8',procurementType:'all',report:'report'}})
-              window.$wujie?.bus.$emit('routeChange', {path: `/zbcg/procurement/procurement$bindding`,query:{projectCodeList:res.data,type:'buildingRate',noticeStatus:'8',procurementType:'all',report:'report'}})
+              this.$router.push({path:'/procurement/bindding',query:{projectCodeList:res.data,type:'buildingRate',noticeStatus:'8',procurementType:'all',report:'report'}})
+              // window.$wujie?.bus.$emit('routeChange', {path: `/zbcg/procurement/procurement$bindding`,query:{projectCodeList:res.data,type:'buildingRate',noticeStatus:'8',procurementType:'all',report:'report'}})
             })
           } else {
-            // this.$router.push({path:'/procurement/bindding',query:{projectCode:row.id,type:'buildingRate',noticeStatus:'8',procurementType:'all',report:'report'}})
-            window.$wujie?.bus.$emit('routeChange', { path: `/zbcg/procurement/procurement$bindding`,query:{projectCode:row.id,type:'buildingRate',noticeStatus:'8',procurementType:'all',report:'report'}})
+            this.$router.push({path:'/procurement/bindding',query:{projectCode:row.id,type:'buildingRate',noticeStatus:'8',procurementType:'all',report:'report'}})
+            // window.$wujie?.bus.$emit('routeChange', { path: `/zbcg/procurement/procurement$bindding`,query:{projectCode:row.id,type:'buildingRate',noticeStatus:'8',procurementType:'all',report:'report'}})
           }
           }},
         {prop: 'gkNum', label: '公开次数',align: 'right',clickMethod:(row)=>{
@@ -58,34 +58,34 @@ export default {
         {prop: 'yqNum', label: '邀标次数',width: 100,align: 'right',clickMethod:(row)=>{
             if (row.type === "G") {
               getProjectCode(row.id).then(res=>{
-                // this.$router.push({path:'/procurement/bindding',query:{projectCodeList:res.data,type:'buildingRate',noticeStatus:'8',procurementType:'2',report:'report'}})
-                window.$wujie?.bus.$emit('routeChange', {path: `/zbcg/procurement/procurement$bindding`,query:{projectCodeList:res.data,type:'buildingRate',noticeStatus:'8',procurementType:'2',report:'report'}})
+                this.$router.push({path:'/procurement/bindding',query:{projectCodeList:res.data,type:'buildingRate',noticeStatus:'8',procurementType:'2',report:'report'}})
+                // window.$wujie?.bus.$emit('routeChange', {path: `/zbcg/procurement/procurement$bindding`,query:{projectCodeList:res.data,type:'buildingRate',noticeStatus:'8',procurementType:'2',report:'report'}})
               })
             } else {
-              // this.$router.push({path:'/procurement/bindding',query:{projectCode:row.id,type:'buildingRate',noticeStatus:'8',procurementType:'2',report:'report'}})
-              window.$wujie?.bus.$emit('routeChange', { path: `/zbcg/procurement/procurement$bindding`,query:{projectCode:row.id,type:'buildingRate',noticeStatus:'8',procurementType:'2',report:'report'}})
+              this.$router.push({path:'/procurement/bindding',query:{projectCode:row.id,type:'buildingRate',noticeStatus:'8',procurementType:'2',report:'report'}})
+              // window.$wujie?.bus.$emit('routeChange', { path: `/zbcg/procurement/procurement$bindding`,query:{projectCode:row.id,type:'buildingRate',noticeStatus:'8',procurementType:'2',report:'report'}})
             }
           }},
         {prop: 'xjNum', label: '询价次数',width: 100,align: 'right',clickMethod:(row)=>{
             if (row.type === "G") {
               getProjectCode(row.id).then(res=>{
-                // this.$router.push({path:'/procurement/bindding',query:{projectCodeList:res.data,type:'buildingRate',noticeStatus:'8',procurementType:'3',report:'report'}})
-                window.$wujie?.bus.$emit('routeChange', {path: `/zbcg/procurement/procurement$bindding`,query:{projectCodeList:res.data,type:'buildingRate',noticeStatus:'8',procurementType:'3',report:'report'}})
+                this.$router.push({path:'/procurement/bindding',query:{projectCodeList:res.data,type:'buildingRate',noticeStatus:'8',procurementType:'3',report:'report'}})
+                // window.$wujie?.bus.$emit('routeChange', {path: `/zbcg/procurement/procurement$bindding`,query:{projectCodeList:res.data,type:'buildingRate',noticeStatus:'8',procurementType:'3',report:'report'}})
               })
             } else {
-              // this.$router.push({path:'/procurement/bindding',query:{projectCode:row.id,type:'buildingRate',noticeStatus:'8',procurementType:'3',report:'report'}})
-              window.$wujie?.bus.$emit('routeChange', { path: `/zbcg/procurement/procurement$bindding`,query:{projectCode:row.id,type:'buildingRate',noticeStatus:'8',procurementType:'3',report:'report'}})
+              this.$router.push({path:'/procurement/bindding',query:{projectCode:row.id,type:'buildingRate',noticeStatus:'8',procurementType:'3',report:'report'}})
+              // window.$wujie?.bus.$emit('routeChange', { path: `/zbcg/procurement/procurement$bindding`,query:{projectCode:row.id,type:'buildingRate',noticeStatus:'8',procurementType:'3',report:'report'}})
             }
           }},
         {prop: 'dyNum', label: '单一次数',width: 100,align: 'right',clickMethod:(row)=>{
             if (row.type === "G") {
               getProjectCode(row.id).then(res=>{
-                // this.$router.push({path:'/procurement/bindding',query:{projectCodeList:res.data,type:'buildingRate',noticeStatus:'8',procurementType:'4',report:'report'}})
-                window.$wujie?.bus.$emit('routeChange', {path: `/zbcg/procurement/procurement$bindding`,query:{projectCodeList:res.data,type:'buildingRate',noticeStatus:'8',procurementType:'4',report:'report'}})
+                this.$router.push({path:'/procurement/bindding',query:{projectCodeList:res.data,type:'buildingRate',noticeStatus:'8',procurementType:'4',report:'report'}})
+                // window.$wujie?.bus.$emit('routeChange', {path: `/zbcg/procurement/procurement$bindding`,query:{projectCodeList:res.data,type:'buildingRate',noticeStatus:'8',procurementType:'4',report:'report'}})
               })
             } else {
-              // this.$router.push({path:'/procurement/bindding',query:{projectCode:row.id,type:'buildingRate',noticeStatus:'8',procurementType:'4',report:'report'}})
-              window.$wujie?.bus.$emit('routeChange', { path: `/zbcg/procurement/procurement$bindding`,query:{projectCode:row.id,type:'buildingRate',noticeStatus:'8',procurementType:'4',report:'report'}})
+              this.$router.push({path:'/procurement/bindding',query:{projectCode:row.id,type:'buildingRate',noticeStatus:'8',procurementType:'4',report:'report'}})
+              // window.$wujie?.bus.$emit('routeChange', { path: `/zbcg/procurement/procurement$bindding`,query:{projectCode:row.id,type:'buildingRate',noticeStatus:'8',procurementType:'4',report:'report'}})
             }
           }},
         {prop: 'gkTotalNum', label: '公开总次数',width: 120,align: 'right'},
