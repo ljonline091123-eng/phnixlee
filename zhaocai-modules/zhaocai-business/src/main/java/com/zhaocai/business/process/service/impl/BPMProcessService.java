@@ -23,6 +23,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.ObjectUtils;
 
+import java.math.BigDecimal;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -70,6 +71,14 @@ public class BPMProcessService implements IBPMProcessService {
                 PropertyListRequestDTO.addPropertyToList(propertyList, "companyId", underlingSystemService.getL2OrgByOrgId(SecurityUtils.getThridOrgId()));
                 requestDTO.setPropertyList(propertyList);
             }
+        }
+        /* 合同类型 ：劳务分包 专业分包 购买材料 租赁材料 租赁机械（设备） 其他 */
+        if(variables.get("contractType")!=null){
+            requestDTO.setContractType(variables.get("contractType").toString());
+        }
+        /* 合同签订金额(含税) */
+        if(variables.get("contractMoney")!=null){
+            requestDTO.setContractMoney(new BigDecimal(variables.get("contractMoney").toString()));
         }
 
         BpmSubmitResponseDTO responseDTO = bpmService.submit(requestDTO);
