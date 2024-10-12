@@ -157,29 +157,21 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         FROM tb_tender_notice tn
         LEFT JOIN tb_procurement_scheme ps ON ps.id = tn.scheme_id AND ps.del_flag = 0
         LEFT JOIN (
-            SELECT DISTINCT tn1.id,
-                CASE WHEN ps.procurement_type = 1 THEN
-                            CASE WHEN tn1.notice_status = 1 THEN
-                                CASE WHEN tncr.id IS NULL OR tncr.id = '' THEN tn1.apply_time ELSE str_to_date(tncr.update_after, '%Y-%m-%d %H:%i') END
-                            ELSE
-                                CASE WHEN tncr.id IS NULL OR tncr.id = '' THEN tn1.apply_time_notice ELSE str_to_date(tncr.update_after, '%Y-%m-%d %H:%i') END
-                            END
-                    ELSE
-                            CASE WHEN tncr.id IS NULL OR tncr.id = '' THEN tn1.apply_time ELSE str_to_date(tncr.update_after, '%Y-%m-%d %H:%i') END
-                    END AS applyTime
-            FROM tb_tender_notice tn1
-            <if test="ps.procurement_type == 1">
+                SELECT DISTINCT tn1.id,
+                    CASE WHEN ps.procurement_type = 1 THEN
+                                CASE WHEN tn1.notice_status = 1 THEN
+                                    CASE WHEN tncr.id IS NOT NULL AND tncr.id != '' AND tncr.notice_status = 1 THEN str_to_date(tncr.update_after, '%Y-%m-%d %H:%i') ELSE tn1.apply_time END
+                                ELSE
+                                    CASE WHEN tncr.id IS NOT NULL AND tncr.id != '' AND tncr.notice_status = 11 THEN str_to_date(tncr.update_after, '%Y-%m-%d %H:%i') ELSE tn1.apply_time_notice END
+                                END
+                        ELSE
+                                CASE WHEN tncr.id IS NOT NULL AND tncr.id != '' AND tncr.notice_status = 1 THEN str_to_date(tncr.update_after, '%Y-%m-%d %H:%i') ELSE tn1.apply_time END
+                        END AS applyTime
+                FROM tb_tender_notice tn1
                 LEFT JOIN (
-                SELECT MAX(id) AS id, notice_id, del_flag, update_after, type, notice_status
-                FROM tb_tender_notice_change_record WHERE notice_status = 11 GROUP BY notice_id
+                    SELECT MAX(id) AS id, notice_id, del_flag, update_after, type, notice_status
+                    FROM tb_tender_notice_change_record GROUP BY notice_id
                 ) tncr ON tncr.notice_id = tn1.id AND tncr.del_flag = 0 AND tncr.type = 1
-            </if>
-            <if test="ps.procurement_type != 1">
-                LEFT JOIN (
-                SELECT MAX(id) AS id, notice_id, del_flag, update_after, type, notice_status
-                FROM tb_tender_notice_change_record WHERE notice_status = 1 GROUP BY notice_id
-                ) tncr ON tncr.notice_id = tn1.id AND tncr.del_flag = 0 AND tncr.type = 1
-            </if>
             ) tab1 ON tab1.id = tn.id
             LEFT JOIN tb_tender_notice_range tnr ON tnr.notice_id = tn.id AND tnr.del_flag = 0 AND tnr.type = 1
             LEFT JOIN sys_user su ON su.user_id = ps.procurement_officer
