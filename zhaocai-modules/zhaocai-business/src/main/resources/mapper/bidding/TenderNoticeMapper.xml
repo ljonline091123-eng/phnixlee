@@ -111,89 +111,52 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     </select>
 
     <!-- 供应商 首页数据，已登录和未登录的区别就是 是否携带了queryDTO.schemeType 公开招标 参数之前的招标状态是写死是 1 就是 招标文件 ，现在多加了3个环节，应该都带上 11 12 13 -->
-<!--    <select id="findVendorPortalNoticePage" resultType="com.zhaocai.business.bidding.vo.res.VendorPortalNoticeListVO">-->
-<!--        SELECT tn.id noticeId, ps.id schemeId, ps.procurement_scheme_code, ps.procurement_scheme_name, ps.procurement_plan_type,-->
-<!--        ps.price_type, ps.subject_matter_type,-->
-<!--        tn.create_time, tab1.applyTime, tn.notice_status, su.thrid_org_name unit,-->
-<!--        ps.price_type, ps.subject_matter_type,ps.procurement_type-->
-<!--        FROM tb_tender_notice tn-->
-<!--        LEFT JOIN tb_procurement_scheme ps ON ps.id = tn.scheme_id AND ps.del_flag = 0-->
-<!--        LEFT JOIN (SELECT distinct tn1.id,-->
-<!--                    CASE WHEN tncr.id is null OR tncr.id = '' THEN tn1.apply_time_notice ELSE str_to_date(tncr.update_after, '%Y-%m-%d %H:%i') END applyTime-->
-<!--                    FROM tb_tender_notice tn1-->
-<!--                    LEFT JOIN (select MAX(id) as id, notice_id, del_flag, update_after, type,notice_status from tb_tender_notice_change_record WHERE notice_status = 11 GROUP BY notice_id)-->
-<!--                    tncr ON tncr.notice_id = tn1.id and tncr.del_flag = 0 AND tncr.type = 1-->
-<!--                    ) tab1 ON tab1.id = tn.id-->
-<!--        left join tb_tender_notice_range tnr on tnr.notice_id = tn.id and tnr.del_flag = 0 and tnr.type = 1-->
-<!--        left join sys_user su on su.user_id = ps.procurement_officer-->
-<!--        where-->
-<!--            tn.del_flag = 0-->
-<!--            and (tn.notice_status = 11 or tn.notice_status = 12 or tn.notice_status = 13 or tn.notice_status = 1)-->
-<!--            and (tab1.applyTime  <![CDATA[>]]> #{queryDTO.nowDate} or tab1.applyTime is null)-->
-<!--            <if test="queryDTO.procurementPlanType != null">-->
-<!--                and ps.procurement_plan_type = #{queryDTO.procurementPlanType}-->
-<!--            </if>-->
-<!--            <if test="queryDTO.procurementSchemeName != null and queryDTO.procurementSchemeName != ''">-->
-<!--                and ps.procurement_scheme_name like CONCAT('%', #{queryDTO.procurementSchemeName}, '%')-->
-<!--            </if>-->
-<!--            <if test="queryDTO.schemeType != null">-->
-<!--                and ps.procurement_type = #{queryDTO.schemeType}-->
-<!--            </if>-->
-<!--            <if test="queryDTO.vendorId != null">-->
-<!--                and (-->
-<!--                CASE-->
-<!--                    WHEN ps.procurement_type != 1 and tn.vendor_range = 1 THEN tnr.vendor_id = #{queryDTO.vendorId}-->
-<!--                    ELSE 1-->
-<!--                END) = 1-->
-<!--            </if>-->
-<!--        order by tn.create_time desc-->
-<!--    </select>-->
-
     <select id="findVendorPortalNoticePage" resultType="com.zhaocai.business.bidding.vo.res.VendorPortalNoticeListVO">
         SELECT tn.id noticeId, ps.id schemeId, ps.procurement_scheme_code, ps.procurement_scheme_name, ps.procurement_plan_type,
-            ps.price_type, ps.subject_matter_type,
-            tn.create_time, tab1.applyTime, tn.notice_status, su.thrid_org_name unit,
-            ps.price_type, ps.subject_matter_type, ps.procurement_type
+        ps.price_type, ps.subject_matter_type,
+        tn.create_time, tab1.applyTime, tn.notice_status, su.thrid_org_name unit,
+        ps.price_type, ps.subject_matter_type,ps.procurement_type
         FROM tb_tender_notice tn
         LEFT JOIN tb_procurement_scheme ps ON ps.id = tn.scheme_id AND ps.del_flag = 0
-        LEFT JOIN (
-                SELECT DISTINCT tn1.id,
-                    CASE WHEN ps.procurement_type = 1 THEN
-                                CASE WHEN tn1.notice_status = 1 THEN
-                                    CASE WHEN tncr.id IS NOT NULL AND tncr.id != '' AND tncr.notice_status = 1 THEN str_to_date(tncr.update_after, '%Y-%m-%d %H:%i') ELSE tn1.apply_time END
-                                ELSE
-                                    CASE WHEN tncr.id IS NOT NULL AND tncr.id != '' AND tncr.notice_status = 11 THEN str_to_date(tncr.update_after, '%Y-%m-%d %H:%i') ELSE tn1.apply_time_notice END
-                                END
-                        ELSE
-                                CASE WHEN tncr.id IS NOT NULL AND tncr.id != '' AND tncr.notice_status = 1 THEN str_to_date(tncr.update_after, '%Y-%m-%d %H:%i') ELSE tn1.apply_time END
-                        END AS applyTime
-                FROM tb_tender_notice tn1
-                LEFT JOIN (
-                    SELECT MAX(id) AS id, notice_id, del_flag, update_after, type, notice_status
-                    FROM tb_tender_notice_change_record GROUP BY notice_id
-                ) tncr ON tncr.notice_id = tn1.id AND tncr.del_flag = 0 AND tncr.type = 1
-            ) tab1 ON tab1.id = tn.id
-            LEFT JOIN tb_tender_notice_range tnr ON tnr.notice_id = tn.id AND tnr.del_flag = 0 AND tnr.type = 1
-            LEFT JOIN sys_user su ON su.user_id = ps.procurement_officer
-        WHERE tn.del_flag = 0
-                AND (tn.notice_status = 11 OR tn.notice_status = 12 OR tn.notice_status = 13 OR tn.notice_status = 1)
-                AND (tab1.applyTime <![CDATA[>]]> #{queryDTO.nowDate} OR tab1.applyTime IS NULL)
-        <if test="queryDTO.procurementPlanType != null">
-            AND ps.procurement_plan_type = #{queryDTO.procurementPlanType}
-        </if>
-        <if test="queryDTO.procurementSchemeName != null AND queryDTO.procurementSchemeName != ''">
-            AND ps.procurement_scheme_name LIKE CONCAT('%', #{queryDTO.procurementSchemeName}, '%')
-        </if>
-        <if test="queryDTO.schemeType != null">
-            AND ps.procurement_type = #{queryDTO.schemeType}
-        </if>
-        <if test="queryDTO.vendorId != null">
-            AND (CASE WHEN ps.procurement_type != 1 AND tn.vendor_range = 1 THEN tnr.vendor_id = #{queryDTO.vendorId} ELSE 1 END) = 1
-        </if>
-        ORDER BY tn.create_time DESC
+        LEFT JOIN (SELECT distinct tn1.id,
+                                   CASE WHEN ps.procurement_type = 1 THEN
+                                            CASE WHEN tn1.notice_status = 1 THEN
+                                                CASE WHEN tncr.id IS NOT NULL AND tncr.id != '' AND tncr.notice_status = 1 THEN str_to_date(tncr.update_after, '%Y-%m-%d %H:%i') ELSE tn1.apply_time END
+                                            ELSE
+                                                CASE WHEN tncr.id IS NOT NULL AND tncr.id != '' AND tncr.notice_status = 11 THEN str_to_date(tncr.update_after, '%Y-%m-%d %H:%i') ELSE tn1.apply_time_notice END
+                                            END
+                                       ELSE
+                                            CASE WHEN tncr.id IS NOT NULL AND tncr.id != '' AND tncr.notice_status = 1 THEN str_to_date(tncr.update_after, '%Y-%m-%d %H:%i') ELSE tn1.apply_time END
+                                       END AS applyTime
+                    CASE WHEN tncr.id is null OR tncr.id = '' THEN tn1.apply_time_notice ELSE str_to_date(tncr.update_after, '%Y-%m-%d %H:%i') END applyTime
+                    FROM tb_tender_notice tn1
+                        LEFT JOIN (select MAX(id) as id, notice_id, del_flag, update_after, type,notice_status from tb_tender_notice_change_record GROUP BY notice_id) tncr
+                            ON tncr.notice_id = tn1.id and tncr.del_flag = 0 AND tncr.type = 1
+                    ) tab1 ON tab1.id = tn.id
+        left join tb_tender_notice_range tnr on tnr.notice_id = tn.id and tnr.del_flag = 0 and tnr.type = 1
+        left join sys_user su on su.user_id = ps.procurement_officer
+        where
+            tn.del_flag = 0
+            and (tn.notice_status = 11 or tn.notice_status = 12 or tn.notice_status = 13 or tn.notice_status = 1)
+            and (tab1.applyTime  <![CDATA[>]]> #{queryDTO.nowDate} or tab1.applyTime is null)
+            <if test="queryDTO.procurementPlanType != null">
+                and ps.procurement_plan_type = #{queryDTO.procurementPlanType}
+            </if>
+            <if test="queryDTO.procurementSchemeName != null and queryDTO.procurementSchemeName != ''">
+                and ps.procurement_scheme_name like CONCAT('%', #{queryDTO.procurementSchemeName}, '%')
+            </if>
+            <if test="queryDTO.schemeType != null">
+                and ps.procurement_type = #{queryDTO.schemeType}
+            </if>
+            <if test="queryDTO.vendorId != null">
+                and (
+                CASE
+                    WHEN ps.procurement_type != 1 and tn.vendor_range = 1 THEN tnr.vendor_id = #{queryDTO.vendorId}
+                    ELSE 1
+                END) = 1
+            </if>
+        order by tn.create_time desc
     </select>
-
-
 
 
     <select id="findVendorPortalPublicityPage" resultType="com.zhaocai.business.bidding.vo.res.VendorPortalPublicityListVO">
