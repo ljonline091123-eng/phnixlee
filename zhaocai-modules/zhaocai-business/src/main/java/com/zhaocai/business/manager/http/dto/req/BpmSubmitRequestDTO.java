@@ -4,6 +4,7 @@ package com.zhaocai.business.manager.http.dto.req;
 import io.swagger.annotations.ApiModelProperty;
 import lombok.Data;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 
@@ -82,4 +83,15 @@ public class BpmSubmitRequestDTO extends UnderlyingPlatformBaseDTO{
      * 用户自定义信息
      */
     private String userObj;
+
+    /**
+     * 合同类型 ：劳务分包 专业分包 购买材料 租赁材料 租赁机械（设备） 其他
+     */
+    private String contractType;
+
+
+    /**
+     * 合同签订金额(含税)
+     */
+    private BigDecimal contractMoney;
 }
