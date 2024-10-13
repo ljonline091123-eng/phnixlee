@@ -10,15 +10,15 @@ spring:
     name: zhaocai-monitor
   profiles:
     # 环境配置
-    active: dev
+    active: prod
   cloud:
     nacos:
       discovery:
         # 服务注册地址
-        server-addr: 192.168.6.150:8848
+        server-addr: 192.168.241.87:31755
       config:
         # 配置中心地址
-        server-addr: 192.168.6.150:8848
+        server-addr: 192.168.241.87:31755
         # 配置文件格式
         file-extension: yml
         # 共享配置
