@@ -61,7 +61,7 @@ public class TenderNotice extends BaseEntity {
     private Integer vendorRange;
 
     /** 招标公告状态（招标阶段流程状态）*/
-    @ApiModelProperty(value =  "招标公告状态（招标阶段流程状态）0废标11发布(公告)/12发布(报名情况)/1发布文件/2开标/3评标/4二次洽商/5定标报告/6中标公示/7结果发布/8完成")
+    @ApiModelProperty(value =  "招标公告状态（招标阶段流程状态）0废标11发布(公告)/12发布(报名情况)/13发布(报名截止)/1发布文件/2开标/3评标/4二次洽商/5定标报告/6中标公示/7结果发布/8完成")
     private Integer noticeStatus;
 
     /** 是否设置开标人员（0未设置 1已设置） */
