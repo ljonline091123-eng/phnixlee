@@ -1,0 +1,225 @@
+<!DOCTYPE html><html><head><meta charset=utf-8><meta http-equiv=X-UA-Compatible content="IE=edge,chrome=1"><meta name=renderer content=webkit><meta name=viewport content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"><link rel=icon href=/zhaocai/favicon.ico><title>建投招采系统</title><script src=https://ck.hncig.cn:60023/docs/static/es5/20240725125341/sdk.js></script><!--[if lt IE 11]><script>window.location.href='/html/ie.html';</script><![endif]--><style>html,
+    body,
+    #app {
+      height: 100%;
+      margin: 0px;
+      padding: 0px;
+    }
+     /* 覆盖整个屏幕的加载动画背景 */
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(255, 255, 255, 0.8); /* 背景颜色和透明度 */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+        }
+
+        /* 加载内容容器 */
+        .loading-content {
+            text-align: center;
+        }
+
+        /* SVG加载图标 */
+        .loading-icon {
+            width: 30px; /* 调整图标大小 */
+            animation: spin 1.5s linear infinite; /* 图标旋转动画 */
+        }
+
+        /* 加载文本样式 */
+        .loading-text {
+            margin-top: 10px;
+            color: #2275c4; /* 文本颜色 */
+            font-size: 14px; /* 文本大小 */
+        }
+
+        /* 旋转动画 */
+        @keyframes spin {
+            from {
+                transform: rotate(0deg);
+            }
+            to {
+                transform: rotate(360deg);
+            }
+        }
+    /* #loader-wrapper {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 999999;
+    }
+
+    #loader {
+      display: block;
+      position: relative;
+      left: 50%;
+      top: 50%;
+      width: 150px;
+      height: 150px;
+      margin: -75px 0 0 -75px;
+      border-radius: 50%;
+      border: 3px solid transparent;
+      border-top-color: #FFF;
+      -webkit-animation: spin 2s linear infinite;
+      -ms-animation: spin 2s linear infinite;
+      -moz-animation: spin 2s linear infinite;
+      -o-animation: spin 2s linear infinite;
+      animation: spin 2s linear infinite;
+      z-index: 1001;
+    }
+
+    #loader:before {
+      content: "";
+      position: absolute;
+      top: 5px;
+      left: 5px;
+      right: 5px;
+      bottom: 5px;
+      border-radius: 50%;
+      border: 3px solid transparent;
+      border-top-color: #FFF;
+      -webkit-animation: spin 3s linear infinite;
+      -moz-animation: spin 3s linear infinite;
+      -o-animation: spin 3s linear infinite;
+      -ms-animation: spin 3s linear infinite;
+      animation: spin 3s linear infinite;
+    }
+
+    #loader:after {
+      content: "";
+      position: absolute;
+      top: 15px;
+      left: 15px;
+      right: 15px;
+      bottom: 15px;
+      border-radius: 50%;
+      border: 3px solid transparent;
+      border-top-color: #FFF;
+      -moz-animation: spin 1.5s linear infinite;
+      -o-animation: spin 1.5s linear infinite;
+      -ms-animation: spin 1.5s linear infinite;
+      -webkit-animation: spin 1.5s linear infinite;
+      animation: spin 1.5s linear infinite;
+    }
+
+
+    @-webkit-keyframes spin {
+      0% {
+        -webkit-transform: rotate(0deg);
+        -ms-transform: rotate(0deg);
+        transform: rotate(0deg);
+      }
+      100% {
+        -webkit-transform: rotate(360deg);
+        -ms-transform: rotate(360deg);
+        transform: rotate(360deg);
+      }
+    }
+
+    @keyframes spin {
+      0% {
+        -webkit-transform: rotate(0deg);
+        -ms-transform: rotate(0deg);
+        transform: rotate(0deg);
+      }
+      100% {
+        -webkit-transform: rotate(360deg);
+        -ms-transform: rotate(360deg);
+        transform: rotate(360deg);
+      }
+    }
+
+
+    #loader-wrapper .loader-section {
+      position: fixed;
+      top: 0;
+      width: 51%;
+      height: 100%;
+      background: #7171C6;
+      z-index: 1000;
+      -webkit-transform: translateX(0);
+      -ms-transform: translateX(0);
+      transform: translateX(0);
+    }
+
+    #loader-wrapper .loader-section.section-left {
+      left: 0;
+    }
+
+    #loader-wrapper .loader-section.section-right {
+      right: 0;
+    }
+
+
+    .loaded #loader-wrapper .loader-section.section-left {
+      -webkit-transform: translateX(-100%);
+      -ms-transform: translateX(-100%);
+      transform: translateX(-100%);
+      -webkit-transition: all 0.7s 0.3s cubic-bezier(0.645, 0.045, 0.355, 1.000);
+      transition: all 0.7s 0.3s cubic-bezier(0.645, 0.045, 0.355, 1.000);
+    }
+
+    .loaded #loader-wrapper .loader-section.section-right {
+      -webkit-transform: translateX(100%);
+      -ms-transform: translateX(100%);
+      transform: translateX(100%);
+      -webkit-transition: all 0.7s 0.3s cubic-bezier(0.645, 0.045, 0.355, 1.000);
+      transition: all 0.7s 0.3s cubic-bezier(0.645, 0.045, 0.355, 1.000);
+    }
+
+    .loaded #loader {
+      opacity: 0;
+      -webkit-transition: all 0.3s ease-out;
+      transition: all 0.3s ease-out;
+    }
+
+    .loaded #loader-wrapper {
+      visibility: hidden;
+      -webkit-transform: translateY(-100%);
+      -ms-transform: translateY(-100%);
+      transform: translateY(-100%);
+      -webkit-transition: all 0.3s 1s ease-out;
+      transition: all 0.3s 1s ease-out;
+    } */
+
+    .no-js #loader-wrapper {
+      display: none;
+    }
+
+    .no-js h1 {
+      color: #222222;
+    }
+
+    /* #loader-wrapper .load_title {
+      font-family: 'Open Sans';
+      color: #FFF;
+      font-size: 19px;
+      width: 100%;
+      text-align: center;
+      z-index: 9999999999999;
+      position: absolute;
+      top: 60%;
+      opacity: 1;
+      line-height: 30px;
+    }
+
+    #loader-wrapper .load_title span {
+      font-weight: normal;
+      font-style: italic;
+      font-size: 13px;
+      color: #FFF;
+      opacity: 0.5;
+    } */</style><link href=/zhaocai/static/css/chunk-libs.2c79d6ea.css rel=stylesheet><link href=/zhaocai/static/css/app.0ead27b7.css rel=stylesheet></head><body><div id=app><div class=loading-overlay id=loading><div class=loading-content><img src=https://zhaocai-minio-dev.wanheng.tech/wh-hnjt/2024/08/13/el-icon-loading_20240813161513A073.png class=loading-icon alt=loading><div class=loading-text>加载中</div></div></div></div><script>function updateUrl(value){
+              window.file = {
+                  newUrl: decodeURIComponent(window.atob(
+                      value
+                  ))
+              }
+              console.log(window.file.newUrl);
+          }</script><script>(function(c){function e(e){for(var u,t,r=e[0],h=e[1],d=e[2],o=0,k=[];o<r.length;o++)t=r[o],Object.prototype.hasOwnProperty.call(f,t)&&f[t]&&k.push(f[t][0]),f[t]=0;for(u in h)Object.prototype.hasOwnProperty.call(h,u)&&(c[u]=h[u]);b&&b(e);while(k.length)k.shift()();return a.push.apply(a,d||[]),n()}function n(){for(var c,e=0;e<a.length;e++){for(var n=a[e],u=!0,t=1;t<n.length;t++){var r=n[t];0!==f[r]&&(u=!1)}u&&(a.splice(e--,1),c=h(h.s=n[0]))}return c}var u={},t={runtime:0},f={runtime:0},a=[];function r(c){return h.p+"static/js/"+({"chunk-commons":"chunk-commons"}[c]||c)+"."+{"chunk-2540291d":"bb9b9216","chunk-2727631f":"42dfa4ad","chunk-2d0b2b28":"6267aaf1","chunk-72487023":"04f549c3","chunk-2d0f012d":"ddeb06bb","chunk-46f2cf5c":"1983c5d3","chunk-68702101":"df3da90d","chunk-7c2eb7d6":"2394a2a8","chunk-2cd69746":"b8706d85","chunk-5507c3ae":"7b5bfea3","chunk-8ee3fc10":"d1e58159","chunk-a8701e96":"2111cb57","chunk-72566dd8":"7e7ae990","chunk-commons":"dcba1f01","chunk-08788c0f":"1156528f","chunk-0bc37a8c":"06c6a726","chunk-19eea078":"ae4b7ed0","chunk-4253d054":"081c7efd","chunk-4e9db0ab":"be4cbc89","chunk-22393ec9":"97fdd3ff","chunk-2d5fc6bb":"c76025c1","chunk-4b01c004":"297d5c8b","chunk-5803da70":"56012fb6","chunk-5c8807e8":"ef5feab3","chunk-6e641f5e":"b1387df1","chunk-73f83d26":"8c6fe7aa","chunk-78cca076":"d3bbc622","chunk-37898b76":"46cab15f","chunk-93fca2bc":"aca071e4","chunk-207fe4b2":"4b0e1e85","chunk-f4a5329c":"791c4b1f","chunk-6f0695a7":"0d82e2f5","chunk-7150bf3f":"d91ec887","chunk-80439bf6":"21fe868e","chunk-f3c1f532":"737bec30","chunk-abd1c48a":"6363c0cb","chunk-d19c1a98":"1e506ae5","chunk-e648d5fe":"8c874371","chunk-e8798e1c":"ef1077a4"}[c]+".js"}function h(e){if(u[e])return u[e].exports;var n=u[e]={i:e,l:!1,exports:{}};return c[e].call(n.exports,n,n.exports,h),n.l=!0,n.exports}h.e=function(c){var e=[],n={"chunk-2540291d":1,"chunk-72487023":1,"chunk-46f2cf5c":1,"chunk-7c2eb7d6":1,"chunk-72566dd8":1,"chunk-commons":1,"chunk-08788c0f":1,"chunk-0bc37a8c":1,"chunk-19eea078":1,"chunk-4253d054":1,"chunk-22393ec9":1,"chunk-2d5fc6bb":1,"chunk-4b01c004":1,"chunk-5803da70":1,"chunk-5c8807e8":1,"chunk-73f83d26":1,"chunk-78cca076":1,"chunk-37898b76":1,"chunk-93fca2bc":1,"chunk-207fe4b2":1,"chunk-f4a5329c":1,"chunk-6f0695a7":1,"chunk-7150bf3f":1,"chunk-80439bf6":1,"chunk-f3c1f532":1,"chunk-abd1c48a":1,"chunk-e648d5fe":1,"chunk-e8798e1c":1};t[c]?e.push(t[c]):0!==t[c]&&n[c]&&e.push(t[c]=new Promise((function(e,n){for(var u="static/css/"+({"chunk-commons":"chunk-commons"}[c]||c)+"."+{"chunk-2540291d":"db631dbc","chunk-2727631f":"31d6cfe0","chunk-2d0b2b28":"31d6cfe0","chunk-72487023":"6dd7c729","chunk-2d0f012d":"31d6cfe0","chunk-46f2cf5c":"17fbdb6b","chunk-68702101":"31d6cfe0","chunk-7c2eb7d6":"84f98409","chunk-2cd69746":"31d6cfe0","chunk-5507c3ae":"31d6cfe0","chunk-8ee3fc10":"31d6cfe0","chunk-a8701e96":"31d6cfe0","chunk-72566dd8":"42485abb","chunk-commons":"0d4500bf","chunk-08788c0f":"88f51241","chunk-0bc37a8c":"0f76dc4b","chunk-19eea078":"9cda5153","chunk-4253d054":"1908eb7b","chunk-4e9db0ab":"31d6cfe0","chunk-22393ec9":"bde428b4","chunk-2d5fc6bb":"d0d74e82","chunk-4b01c004":"ae7ceeed","chunk-5803da70":"764cf140","chunk-5c8807e8":"9d28b2f6","chunk-6e641f5e":"31d6cfe0","chunk-73f83d26":"6e6b7682","chunk-78cca076":"5a7549fd","chunk-37898b76":"157b1400","chunk-93fca2bc":"39fbd935","chunk-207fe4b2":"db737992","chunk-f4a5329c":"3b356a2f","chunk-6f0695a7":"24c6cfcb","chunk-7150bf3f":"3a1211e8","chunk-80439bf6":"0eb1bdbd","chunk-f3c1f532":"0e7c44fb","chunk-abd1c48a":"259327f1","chunk-d19c1a98":"31d6cfe0","chunk-e648d5fe":"bbc9fa95","chunk-e8798e1c":"e1e18a0a"}[c]+".css",f=h.p+u,a=document.getElementsByTagName("link"),r=0;r<a.length;r++){var d=a[r],o=d.getAttribute("data-href")||d.getAttribute("href");if("stylesheet"===d.rel&&(o===u||o===f))return e()}var k=document.getElementsByTagName("style");for(r=0;r<k.length;r++){d=k[r],o=d.getAttribute("data-href");if(o===u||o===f)return e()}var b=document.createElement("link");b.rel="stylesheet",b.type="text/css",b.onload=e,b.onerror=function(e){var u=e&&e.target&&e.target.src||f,a=new Error("Loading CSS chunk "+c+" failed.\n("+u+")");a.code="CSS_CHUNK_LOAD_FAILED",a.request=u,delete t[c],b.parentNode.removeChild(b),n(a)},b.href=f;var i=document.getElementsByTagName("head")[0];i.appendChild(b)})).then((function(){t[c]=0})));var u=f[c];if(0!==u)if(u)e.push(u[2]);else{var a=new Promise((function(e,n){u=f[c]=[e,n]}));e.push(u[2]=a);var d,o=document.createElement("script");o.charset="utf-8",o.timeout=120,h.nc&&o.setAttribute("nonce",h.nc),o.src=r(c);var k=new Error;d=function(e){o.onerror=o.onload=null,clearTimeout(b);var n=f[c];if(0!==n){if(n){var u=e&&("load"===e.type?"missing":e.type),t=e&&e.target&&e.target.src;k.message="Loading chunk "+c+" failed.\n("+u+": "+t+")",k.name="ChunkLoadError",k.type=u,k.request=t,n[1](k)}f[c]=void 0}};var b=setTimeout((function(){d({type:"timeout",target:o})}),12e4);o.onerror=o.onload=d,document.head.appendChild(o)}return Promise.all(e)},h.m=c,h.c=u,h.d=function(c,e,n){h.o(c,e)||Object.defineProperty(c,e,{enumerable:!0,get:n})},h.r=function(c){"undefined"!==typeof Symbol&&Symbol.toStringTag&&Object.defineProperty(c,Symbol.toStringTag,{value:"Module"}),Object.defineProperty(c,"__esModule",{value:!0})},h.t=function(c,e){if(1&e&&(c=h(c)),8&e)return c;if(4&e&&"object"===typeof c&&c&&c.__esModule)return c;var n=Object.create(null);if(h.r(n),Object.defineProperty(n,"default",{enumerable:!0,value:c}),2&e&&"string"!=typeof c)for(var u in c)h.d(n,u,function(e){return c[e]}.bind(null,u));return n},h.n=function(c){var e=c&&c.__esModule?function(){return c["default"]}:function(){return c};return h.d(e,"a",e),e},h.o=function(c,e){return Object.prototype.hasOwnProperty.call(c,e)},h.p="/zhaocai/",h.oe=function(c){throw console.error(c),c};var d=window["webpackJsonp"]=window["webpackJsonp"]||[],o=d.push.bind(d);d.push=e,d=d.slice();for(var k=0;k<d.length;k++)e(d[k]);var b=o;n()})([]);</script><script src=/zhaocai/static/js/chunk-elementUI.a9663ebc.js></script><script src=/zhaocai/static/js/chunk-libs.614b7fe5.js></script><script src=/zhaocai/static/js/app.7283f02b.js></script></body></html>
