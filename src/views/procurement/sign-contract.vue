@@ -93,6 +93,21 @@
           </template>
         </el-table-column>
         <el-table-column
+        label="招标编号"
+        min-width="200"
+        align="center"
+        prop="agreementCode"
+      >
+        <template slot-scope="scope">
+          <a
+            class="link-type"
+            @click="goDetailBid(scope.row.schemeId, scope.row.noticeId, scope.row.procurementType)"
+          >
+            {{ scope.row.procurementSchemeCode }}
+          </a>
+        </template>
+      </el-table-column>
+        <el-table-column
           label="合同名称"
           min-width="200"
           align="left"
@@ -106,6 +121,21 @@
           min-width="150"
           show-overflow-tooltip
         />
+        <el-table-column
+        label="采购方式"
+        min-width="200"
+        align="center"
+        prop="agreementCode"
+      >
+        <template slot-scope="scope">
+          <a
+            class="link-type"
+            @click="goDetailBid(scope.row.schemeId, scope.row.noticeId, scope.row.procurementType)"
+          >
+            {{ scope.row.procurementTypeText }}
+          </a>
+        </template>
+      </el-table-column>
         <el-table-column
           label="乙方"
           align="left"
@@ -951,11 +981,11 @@
           <div
             style="display: flex; justify-content: flex-end; margin-top: 20px"
           >
-            <span style="margin-right: 20px">
+            <!-- <span style="margin-right: 20px">
               本次含税总计：<span
                 style="font-weight: bold"
                 v-thousands="totalTaxPriceTotal"
-              ></span>
+              ></span> -->
             </span>
             <span>
               本次不含税总计：<span
@@ -1321,6 +1351,15 @@ export default {
       let param = Base64.encode(JSON.stringify({ id, type }));
       param = encodeURIComponent(param); //避免base64编码中出现"/"时路由404
       this.$router.push(`/procurement/contract-detail/${param}`);
+    },
+    goDetailBid(id, noticeId,procurementType) {
+      // this.$router.push({
+      //   path: "/procurement/contract-detail",
+      //   query: { getId: id, type },
+      // });
+      let param = Base64.encode(JSON.stringify({ id, noticeId,procurementType }));
+      param = encodeURIComponent(param); //避免base64编码中出现"/"时路由404
+      this.$router.push(`/procurement/tendering/${param}`);
     },
     submitFirstForm() {
       console.log(this.form, "this.form----0");
