@@ -1,6 +1,7 @@
 package com.zhaocai.business.procurement.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
+import com.zhaocai.business.agreement.dto.AgreementMaterialsInfoDTO;
 import com.zhaocai.business.procurement.domain.MaterialsList;
 import com.zhaocai.business.procurement.dto.SubjectMatterDTO;
 import com.zhaocai.business.procurement.vo.req.ContractSplitMaterialsQueryVO;

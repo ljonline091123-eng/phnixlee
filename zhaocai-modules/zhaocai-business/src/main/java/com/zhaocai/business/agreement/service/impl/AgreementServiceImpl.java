@@ -20,6 +20,7 @@ import com.zhaocai.business.agreement.service.*;
 import com.zhaocai.business.agreement.vo.req.*;
 import com.zhaocai.business.agreement.vo.res.*;
 import com.zhaocai.business.bidding.domain.BiddingListQuotation;
+import com.zhaocai.business.bidding.domain.BiddingOpenPeople;
 import com.zhaocai.business.bidding.domain.TenderNotice;
 import com.zhaocai.business.bidding.enums.TenderNoticeStatusEnum;
 import com.zhaocai.business.bidding.service.IBiddingListQuotationService;
@@ -357,13 +358,16 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
     public AgreementSaveVO saveAgreement(AgreementSaveRequestVO requestVO) {
         AgreementSaveVO agreementSave;
 
-        // 校验清单数据
-        checkSaveAgreementMaterialsList(requestVO.getAgreementMaterialsLists(),requestVO.getAgreement().getSchemeId(),requestVO.getAgreement().getContractSplitId(),
-                requestVO.getAgreement().getVendorId());
-
         if (NumberUtil.isNullOrZero(requestVO.getAgreement().getId())) {
+            // 校验清单数据
+            checkSaveAgreementMaterialsList(requestVO.getAgreementMaterialsLists(),requestVO.getAgreement().getSchemeId(),requestVO.getAgreement().getContractSplitId(),
+                    requestVO.getAgreement().getVendorId());
+            /* 插入 签订合同 */
             agreementSave = addAgreement(requestVO);
         } else {
+            // 修改使用的 校验清单数据方法，和新增校验不一样，该方法查询了该合同上一次签订的单价，校验规则还原了数据再进行校验的。
+            checkSaveAgreementMaterialsListByUpdate(requestVO.getAgreementMaterialsLists(),requestVO.getAgreement().getSchemeId(),requestVO.getAgreement().getContractSplitId(),requestVO.getAgreement().getVendorId(),requestVO.getAgreement().getId());
+            /* 修改 签订合同 */
             agreementSave = updateAgreement(requestVO);
         }
 
@@ -1203,7 +1207,7 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
         materialsListService.updateMaterialsListUsedCount(agreementMaterialsInfo.getMaterialsLists());
 
         // 判断合约拆分是否已使用完毕
-        contractPlanningSplitService.updateContractPlanningSplitUseAdd(agreement.getContractSplitId(),agreementMaterialsInfo.getMaterialsLists(),requestVO.getAgreementMaterialsLists());
+        contractPlanningSplitService.updateContractPlanningSplitUseAdd(agreement.getContractSplitId(),agreementMaterialsInfo.getMaterialsLists(),requestVO.getAgreementMaterialsLists(),null);
 
         // 接入联想文档
         agreementFileZService.setAgreementLabel(agreement, requestVO.getAgreementMaterialsLists(), requestVO.getTemplateEditFlag());
@@ -1349,6 +1353,18 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
         // 合同-甲供材料清单对象
         agreementMaterialSupplyService.updateAgreementMaterialSupply(requestVO.getAgreementMaterialSupplies(),agreement.getId());
 
+
+
+        // 更新方法 占用合同数据量
+        materialsListService.updateMaterialsListUsedCount(agreementMaterialsInfo.getMaterialsLists());
+
+        /* 获取原来的价格，累加现在的价格后再减去上次保存的价格。使更新方法数据保持一致 */
+        List<AgreementMaterialsList> agreementMaterialsLists = agreementMaterialsListService.list(new LambdaQueryWrapper<AgreementMaterialsList>().eq(AgreementMaterialsList::getAgreementId, agreement.getId()));
+        // 更新方法  合约拆分是否已使用完毕
+        contractPlanningSplitService.updateContractPlanningSplitUseAdd(agreement.getContractSplitId(),agreementMaterialsInfo.getMaterialsLists(),requestVO.getAgreementMaterialsLists(),agreementMaterialsLists);
+
+
+
         AgreementSaveVO saveVO = new AgreementSaveVO();
         saveVO.setId(agreement.getId());
         saveVO.setProcurementPlanType(procurementScheme.getProcurementPlanType());
@@ -1394,9 +1410,9 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
         List<AgreementMaterialsRequestVO> agreementMaterialsList = agreementMaterialsLists.stream()
                 .map(x -> {
                     AgreementMaterialsRequestVO requestVO = new AgreementMaterialsRequestVO();
-                    requestVO.setMaterialsListId(x.getMaterialsListId());
-                    requestVO.setSignCount(x.getSignCount());
-                    requestVO.setSignUnitPriceInclTax(x.getSignUnitPriceInclTax());
+                    requestVO.setMaterialsListId(x.getMaterialsListId());/* 物料清单id */
+                    requestVO.setSignCount(x.getSignCount());/* 签订数量 */
+                    requestVO.setSignUnitPriceInclTax(x.getSignUnitPriceInclTax());/* 签订单价（含税） */
                     return requestVO;
                 }).collect(Collectors.toList());
         checkAgreementMaterials(agreementMaterialsList,schemeId,contractSplitId,vendorId);
@@ -1410,14 +1426,15 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
      * @param vendorId
      */
     private void checkAgreementMaterials(List<AgreementMaterialsRequestVO> agreementMaterialsList,Long schemeId,Long splitId,Long vendorId) {
+        /* 物料清单id 集合 */
         Map<Long,AgreementMaterialsRequestVO> materialsRequestMap = agreementMaterialsList.stream()
                 .collect(Collectors.toMap(AgreementMaterialsRequestVO::getMaterialsListId, val -> val));
 
-        // 获取拆分清单
+        // 获取拆分清单 根据 合约采购拆分id 查询
         List<MaterialsList> materialsLists = materialsListService.listMaterialsListByContractSplitIds(CollectionUtil.newArrayList(splitId));
         // 获取供应商投标清单
         List<VendorBiddingListQuotationListVO> vendorBiddingListQuotationList = biddingListQuotationService.getVendorBiddingListQuotation(schemeId,splitId,vendorId)
-                                        .getVendorBiddingListQuotationList();
+                .getVendorBiddingListQuotationList();
         Map<Long,VendorBiddingListQuotationListVO> vendorBiddingMap = vendorBiddingListQuotationList.stream()
                 .collect(Collectors.toMap(VendorBiddingListQuotationListVO::getMaterialsListId, val -> val));
 
@@ -1453,6 +1470,113 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
         // 校验总金额
         ContractPlanningSplit contractPlanningSplit = contractPlanningSplitService.getById(splitId);
         BigDecimal totalSurplusAmount = NumberUtil.subtract(contractPlanningSplit.getTotalPlanAmount(),contractPlanningSplit.getTotalUsedAmount());
+        if (totalSurplusAmount.compareTo(requestTotalAmount) < 0) {
+            throw new ParamValidateException(String.format("输入的清单总金额[%s]大于剩余可用金额[%s]",NumberUtil.decimalFormat(requestTotalAmount,4),NumberUtil.decimalFormat(totalSurplusAmount,4)));
+        }
+    }
+
+    /**
+     * [修改时] 校验保存时清单的数据
+     *
+     * @param agreementMaterialsLists
+     * @param schemeId
+     * @param contractSplitId
+     * @param vendorId
+     */
+    private void checkSaveAgreementMaterialsListByUpdate(List<AgreementMaterialsList> agreementMaterialsLists, Long schemeId, Long contractSplitId, Long vendorId, Long id) {
+        List<AgreementMaterialsRequestVO> agreementMaterialsList = agreementMaterialsLists.stream()
+                .map(x -> {
+                    AgreementMaterialsRequestVO requestVO = new AgreementMaterialsRequestVO();
+                    requestVO.setMaterialsListId(x.getMaterialsListId());/* 物料清单id */
+                    requestVO.setSignCount(x.getSignCount());/* 签订数量 */
+                    requestVO.setSignUnitPriceInclTax(x.getSignUnitPriceInclTax());/* 签订单价（含税） */
+                    return requestVO;
+                }).collect(Collectors.toList());
+        checkAgreementMaterialsByUpdate(agreementMaterialsList,schemeId,contractSplitId,vendorId,id);
+    }
+
+    /**
+     * [修改时] 校验合同清单数据
+     * @param agreementMaterialsList
+     * @param schemeId
+     * @param splitId
+     * @param vendorId
+     */
+    private void checkAgreementMaterialsByUpdate(List<AgreementMaterialsRequestVO> agreementMaterialsList,Long schemeId,Long splitId,Long vendorId, Long id) {
+        /* 物料清单id 集合 */
+        Map<Long,AgreementMaterialsRequestVO> materialsRequestMap = agreementMaterialsList.stream()
+                .collect(Collectors.toMap(AgreementMaterialsRequestVO::getMaterialsListId, val -> val));
+
+        // 获取拆分清单 根据 合约采购拆分id 查询
+        List<MaterialsList> materialsLists = materialsListService.listMaterialsListByContractSplitIds(CollectionUtil.newArrayList(splitId));
+
+
+        /* 获取原来的价格，累加现在的价格后再减去原来的价格。使验证正常通过 */
+        List<AgreementMaterialsList> agreementMaterialsListsOld = agreementMaterialsListService.list(new LambdaQueryWrapper<AgreementMaterialsList>().eq(AgreementMaterialsList::getAgreementId, id));
+        if(agreementMaterialsListsOld!=null){
+            /* 格式化签订清单数据 */
+            AgreementMaterialsInfoDTO agreementMaterialsInfo = handleAgreementMaterials(agreementMaterialsListsOld,schemeId,splitId,vendorId,id);
+            if(agreementMaterialsInfo!=null){
+                List<MaterialsList> materialsListsOld = agreementMaterialsInfo.getMaterialsLists();
+                if(materialsListsOld!=null){
+                    for (int i = 0; i < materialsLists.size(); i++) {
+                        for (int j = 0; j < materialsListsOld.size(); j++) {
+                            /* id一样时 */
+                            if(materialsLists.get(i).getId().equals(materialsListsOld.get(j).getId())){
+                                /* 减去上次的 签订单价，得到之前的原始单价，为了过下面的校验规则。 */
+                                materialsLists.get(i).setUsedCount( NumberUtil.subtract(materialsLists.get(i).getUsedCount(),materialsListsOld.get(j).getUsedCount()));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 获取供应商投标清单
+        List<VendorBiddingListQuotationListVO> vendorBiddingListQuotationList = biddingListQuotationService.getVendorBiddingListQuotation(schemeId,splitId,vendorId)
+                .getVendorBiddingListQuotationList();
+        Map<Long,VendorBiddingListQuotationListVO> vendorBiddingMap = vendorBiddingListQuotationList.stream()
+                .collect(Collectors.toMap(VendorBiddingListQuotationListVO::getMaterialsListId, val -> val));
+
+        BigDecimal requestTotalAmount = BigDecimal.ZERO;
+        BigDecimal surplusCount;
+        AgreementMaterialsRequestVO materialsRequestVO;
+        VendorBiddingListQuotationListVO listQuotationListVO;
+        for (MaterialsList materialsList : materialsLists) {
+            // 校验剩余数量
+            materialsRequestVO = materialsRequestMap.get(materialsList.getId());
+            if (materialsRequestVO == null) {
+                throw new ParamValidateException(String.format("提交的清单中少了清单:%s,请确认",materialsList.getMaterialsName()));
+            }
+
+            surplusCount = NumberUtil.subtract(materialsList.getCount(),materialsList.getUsedCount());
+            if (NumberUtil.compare(surplusCount,materialsRequestVO.getSignCount()) < 0) {
+                throw new ParamValidateException(String.format("提交的清单[%s]数量[%s]超过剩余使用量[%s]，请重新输入",materialsList.getMaterialsName(),
+                        NumberUtil.decimalFormat(materialsRequestVO.getSignCount(),4),
+                        NumberUtil.decimalFormat(surplusCount,4)));
+            }
+
+            // 校验供应商提交的单价 与 原物料单价对比
+            listQuotationListVO = vendorBiddingMap.get(materialsList.getId());
+            if (NumberUtil.compare(materialsRequestVO.getSignUnitPriceInclTax(),listQuotationListVO.getTaxUnitPrice()) > 0) {
+                throw new ParamValidateException(String.format("提交的清单[%s]含税单价[%s]大于供应商的中标单价[%s]，请重新输入",materialsList.getMaterialsName(),
+                        NumberUtil.decimalFormat(materialsRequestVO.getSignUnitPriceInclTax(),4),
+                        NumberUtil.decimalFormat(listQuotationListVO.getTaxUnitPrice(),4)));
+            }
+
+            requestTotalAmount = NumberUtil.add(requestTotalAmount,AmountCalUtil.calTotalAmountInclTax(materialsRequestVO.getSignCount(),materialsRequestVO.getSignUnitPriceInclTax()));
+        }
+
+        // 校验总金额
+        ContractPlanningSplit contractPlanningSplit = contractPlanningSplitService.getById(splitId);
+        BigDecimal totalSurplusAmount = NumberUtil.subtract(contractPlanningSplit.getTotalPlanAmount(),contractPlanningSplit.getTotalUsedAmount());
+
+        /* 将上一次的减去 */
+        if (agreementMaterialsListsOld != null) {
+            for (AgreementMaterialsList agreementMaterials : agreementMaterialsListsOld) {
+                totalSurplusAmount = NumberUtil.subtract(totalSurplusAmount,agreementMaterials.getSignAmountInclTax());
+            }
+        }
         if (totalSurplusAmount.compareTo(requestTotalAmount) < 0) {
             throw new ParamValidateException(String.format("输入的清单总金额[%s]大于剩余可用金额[%s]",NumberUtil.decimalFormat(requestTotalAmount,4),NumberUtil.decimalFormat(totalSurplusAmount,4)));
         }

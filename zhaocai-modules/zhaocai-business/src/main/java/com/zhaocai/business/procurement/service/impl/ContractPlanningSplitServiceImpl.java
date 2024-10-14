@@ -103,7 +103,7 @@ public class ContractPlanningSplitServiceImpl extends ServiceImpl<ContractPlanni
     }
 
     @Override
-    public void updateContractPlanningSplitUseAdd(Long contractSplitId, List<MaterialsList> materialsLists, List<AgreementMaterialsList> agreementMaterialsLists) {
+    public void updateContractPlanningSplitUseAdd(Long contractSplitId, List<MaterialsList> materialsLists, List<AgreementMaterialsList> agreementMaterialsLists, List<AgreementMaterialsList> agreementMaterialsListsOld) {
         boolean isUseUp = true;
         // 判断物料是否已用完
         for (MaterialsList materialsList : materialsLists) {
@@ -122,6 +122,13 @@ public class ContractPlanningSplitServiceImpl extends ServiceImpl<ContractPlanni
         int isUseUpState = !isUseUp ? 1 : 2;
         ContractPlanningSplit contractPlanningSplit = this.getById(contractSplitId);
         totalUsedAmount = NumberUtil.add(totalUsedAmount,contractPlanningSplit.getTotalUsedAmount());
+
+        /* 将原来的减去 */
+        if (agreementMaterialsListsOld != null) {
+            for (AgreementMaterialsList agreementMaterials : agreementMaterialsListsOld) {
+                totalUsedAmount = NumberUtil.subtract(totalUsedAmount,agreementMaterials.getSignAmountInclTax());
+            }
+        }
 
         this.update(new LambdaUpdateWrapper<ContractPlanningSplit>()
                 .set(ContractPlanningSplit::getIsUseUp,isUseUpState)
