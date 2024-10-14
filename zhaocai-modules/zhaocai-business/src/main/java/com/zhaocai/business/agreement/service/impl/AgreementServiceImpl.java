@@ -1569,12 +1569,14 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
 
         // 校验总金额
         ContractPlanningSplit contractPlanningSplit = contractPlanningSplitService.getById(splitId);
+
+        /* 将这一次的减去 */
         BigDecimal totalSurplusAmount = NumberUtil.subtract(contractPlanningSplit.getTotalPlanAmount(),contractPlanningSplit.getTotalUsedAmount());
 
-        /* 将上一次的减去 */
+        /* 将上一次的加上 */
         if (agreementMaterialsListsOld != null) {
             for (AgreementMaterialsList agreementMaterials : agreementMaterialsListsOld) {
-                totalSurplusAmount = NumberUtil.subtract(totalSurplusAmount,agreementMaterials.getSignAmountInclTax());
+                totalSurplusAmount = NumberUtil.add(totalSurplusAmount,agreementMaterials.getSignAmountInclTax());
             }
         }
         if (totalSurplusAmount.compareTo(requestTotalAmount) < 0) {
