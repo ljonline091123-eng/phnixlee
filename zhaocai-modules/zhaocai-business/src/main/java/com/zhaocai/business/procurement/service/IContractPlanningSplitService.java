@@ -69,10 +69,10 @@ public interface IContractPlanningSplitService  extends IService<ContractPlannin
      * @param materialsLists
      * @param agreementMaterialsLists
      */
-    void updateContractPlanningSplitUseAdd(Long contractSplitId, List<MaterialsList> materialsLists, List<AgreementMaterialsList> agreementMaterialsLists);
+    void updateContractPlanningSplitUseAdd(Long contractSplitId, List<MaterialsList> materialsLists, List<AgreementMaterialsList> agreementMaterialsLists, List<AgreementMaterialsList> agreementMaterialsListsOld);
 
     /**
-     * 修改合约拆分使用数据-减少
+     * 修改合约拆分使用数据-减少   这个是累加 更新总价
      * @param contractSplitId
      * @param agreementMaterialsLists
      */
