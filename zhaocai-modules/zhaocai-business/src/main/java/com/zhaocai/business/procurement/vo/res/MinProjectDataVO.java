@@ -1,7 +1,10 @@
 package com.zhaocai.business.procurement.vo.res;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import io.swagger.annotations.ApiModelProperty;
 import lombok.Data;
+
+import java.util.Date;
 
 /**
  * @author ssy

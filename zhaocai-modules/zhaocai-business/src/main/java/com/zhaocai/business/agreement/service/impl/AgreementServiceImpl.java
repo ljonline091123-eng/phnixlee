@@ -7,6 +7,7 @@ import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.io.IoUtil;
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONArray;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
@@ -19,6 +20,8 @@ import com.zhaocai.business.agreement.service.*;
 import com.zhaocai.business.agreement.vo.req.*;
 import com.zhaocai.business.agreement.vo.res.*;
 import com.zhaocai.business.bidding.domain.BiddingListQuotation;
+import com.zhaocai.business.bidding.domain.TenderNotice;
+import com.zhaocai.business.bidding.enums.TenderNoticeStatusEnum;
 import com.zhaocai.business.bidding.service.IBiddingListQuotationService;
 import com.zhaocai.business.bidding.service.IBiddingResultService;
 import com.zhaocai.business.bidding.vo.res.VendorBiddingListQuotationListVO;
@@ -56,6 +59,7 @@ import com.zhaocai.business.vendor.vo.res.VendorAgreementDetailVO;
 import com.zhaocai.business.vendor.vo.res.VendorAgreementListVO;
 import com.zhaocai.business.vendor.vo.res.VendorAgreementVO;
 import com.zhaocai.common.core.bean.PageResult;
+import com.zhaocai.common.core.constant.NumberConstant;
 import com.zhaocai.common.core.constant.SecurityConstants;
 import com.zhaocai.common.core.utils.DateUtils;
 import com.zhaocai.common.core.utils.NumberUtil;
@@ -184,6 +188,8 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
 
     @Autowired
     private IAgreementSignStamperService agreementSignStamperService;
+    @Autowired
+    private IMinProjectService minProjectService;
 
 
     @Override
@@ -676,13 +682,25 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
         paramMap.put("businessId", agreement.getId());
         paramMap.put("projectCode", agreement.getBelongAccountingItemCode());
         paramMap.put("businessTitle", "合同审批");
-        paramMap.put("projectCode", agreement.getBelongAccountingItemCode());
         paramMap.put("businessContent", String.format(ApproveFlowPromptTemplateEnum.CONTRACT_APPROVE.getDesc(), agreement.getAgreementName()));
         paramMap.put("detailUrl", detailUrl);
         UserObj userObj = UserObj.builder().businessType(ProcessKeyEnum.ZHAOCAI_AGREEMENT_SIGN.name()).
                 businessId(id.toString())
                 .toDoType(ToDoTypeEnum.EXAMINE.name()).build();
         paramMap.put("userObj", JSON.toJSONString(userObj));
+
+        /** 合同类型（contractType），价格(contractMoney)，项目部（parentProjectCode），责任单位（responsibilityDeptId），公司（companyId） */
+        paramMap.put("contractType", String.valueOf(agreement.getExpenditureBusinessType()));/* 合同类型 */
+        paramMap.put("contractMoney", agreement.getTotalAmountIncTax());/* 价格 */
+
+        /* startProcessInstance方法内根据projectCode拿到了层级数据了 */
+//        MinProject minProject = minProjectService.getOne(new LambdaQueryWrapper<MinProject>().eq(MinProject::getMinAccountCode, agreement.getBelongAccountingItemCode()).eq(MinProject::getDelFlag, NumberConstant.ZERO));
+////        ValidateUtils.isNullException(minProject,"该合同最小核算项目不存在，请确认");
+//        SysDept sysDept = remoteSystemService.getByThridDeptId(agreement.getPartyAOrgId(), SecurityConstants.INNER);
+//        paramMap.put("parentProjectCode", minProject==null?null:minProject.getBelongingOrgId()==null?null:minProject.getBelongingOrgId());/* 项目部 */
+//        paramMap.put("responsibilityDeptId", minProject==null?null:minProject.getDutyUnit()==null?null:minProject.getDutyUnit());/* 责任单位 */
+//        paramMap.put("companyId", sysDept==null?null:sysDept.getThridParentId()==null?null:sysDept.getThridParentId());/* 公司 */
+
         processService.startProcessInstance(ProcessKeyEnum.ZHAOCAI_AGREEMENT_SIGN.getIdentifying(),paramMap);
     }
 

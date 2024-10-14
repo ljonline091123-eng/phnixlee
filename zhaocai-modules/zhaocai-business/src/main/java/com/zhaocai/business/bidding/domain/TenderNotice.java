@@ -61,7 +61,7 @@ public class TenderNotice extends BaseEntity {
     private Integer vendorRange;
 
     /** 招标公告状态（招标阶段流程状态）*/
-    @ApiModelProperty(value =  "招标公告状态（招标阶段流程状态）0废标11发布(公告)/12发布(报名情况)/1发布文件/2开标/3评标/4二次洽商/5定标报告/6中标公示/7结果发布/8完成")
+    @ApiModelProperty(value =  "招标公告状态（招标阶段流程状态）0废标11发布(公告)/12发布(报名情况)/13发布(报名截止)/1发布文件/2开标/3评标/4二次洽商/5定标报告/6中标公示/7结果发布/8完成")
     private Integer noticeStatus;
 
     /** 是否设置开标人员（0未设置 1已设置） */
@@ -120,5 +120,13 @@ public class TenderNotice extends BaseEntity {
     @ApiModelProperty(value =  "二次报价状态")
     private Integer twiceQuotState;
 
+    /** 付款方式 [
+     { label: "现付", value: 1 },
+     { label: "旬付", value: 2 },
+     { label: "月付", value: 3 },
+     { label: "资金利息", value: 4 },
+     ], */
+    @ApiModelProperty(value =  "付款方式")
+    private Integer paymentType;
 
 }

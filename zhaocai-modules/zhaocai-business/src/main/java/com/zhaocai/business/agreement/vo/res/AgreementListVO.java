@@ -66,4 +66,20 @@ public class AgreementListVO extends AdviceObject {
 
     @ApiModelProperty(value = "签章用户")
     private Long signatureUserId;
+
+    @ApiModelProperty(value = "采购方案招标编号")
+    private String procurementSchemeCode;
+
+    @ApiModelProperty(value = "采购方式")
+    private Integer procurementType;
+
+    @DictCache(dictBizEnum = DictBizEnum.PROCUREMENT_TYPE,filedName = "procurementType")
+    @ApiModelProperty(value = "采购方式-文本")
+    private String procurementTypeText;
+
+    @ApiModelProperty(value = "招标id")
+    private Long noticeId;
+
+    @ApiModelProperty(value = "采购方案id")
+    private Long schemeId;
 }
