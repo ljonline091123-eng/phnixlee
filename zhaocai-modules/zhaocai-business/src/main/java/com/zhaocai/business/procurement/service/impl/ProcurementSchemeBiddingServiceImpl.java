@@ -72,25 +72,40 @@ public class ProcurementSchemeBiddingServiceImpl extends ServiceImpl<Procurement
 
         // 评分模板
         BiddingMarkTemplate markTemplate = biddingMarkTemplateService.getById(schemeBidding.getEvaluationTemplateId());
-        schemeBiddingVO.setEvaluationTemplate(new ProcurementSchemeTemplateVO(markTemplate.getId(),markTemplate.getName()));
+        if(markTemplate!=null){
+            schemeBiddingVO.setEvaluationTemplate(new ProcurementSchemeTemplateVO(markTemplate.getId(),markTemplate.getName()));
+        }else{
+            schemeBiddingVO.setEvaluationTemplate(null);
+        }
 
         // 招标文件模板
         Template template = templateService.getById(schemeBidding.getBiddingTemplateId());
-        ProcurementSchemeTemplateVO schemeTemplate = new ProcurementSchemeTemplateVO(template.getId(),template.getTemplateName());
-        Attachment biddingAttachment = attachmentService.getById(schemeBidding.getBiddingAttachmentId());
-        schemeTemplate.setAttachmentId(biddingAttachment.getId());
-        schemeTemplate.setFileName(biddingAttachment.getFileName());
-        schemeTemplate.setFileUrl(biddingAttachment.getFileUrl());
-        schemeBiddingVO.setBiddingTemplate(schemeTemplate);
+        if(template!=null){
+            ProcurementSchemeTemplateVO schemeTemplate = new ProcurementSchemeTemplateVO(template.getId(),template.getTemplateName());
+            Attachment biddingAttachment = attachmentService.getById(schemeBidding.getBiddingAttachmentId());
+            if(biddingAttachment!=null){
+                schemeTemplate.setAttachmentId(biddingAttachment.getId());
+                schemeTemplate.setFileName(biddingAttachment.getFileName());
+                schemeTemplate.setFileUrl(biddingAttachment.getFileUrl());
+            }
+            schemeBiddingVO.setBiddingTemplate(schemeTemplate);
+        }else{
+            schemeBiddingVO.setBiddingTemplate(null);
+        }
 
         // 合同模板
         template = templateService.getById(schemeBidding.getContractTemplateId());
-        schemeTemplate = new ProcurementSchemeTemplateVO(template.getId(),template.getTemplateName());
-        AttachmentVO agreementAttachment = templateService.getTemplateAttachmentInfo(schemeBidding.getContractTemplateId());
-        schemeTemplate.setFileName(agreementAttachment.getFileName());
-        schemeTemplate.setFileUrl(agreementAttachment.getFileUrl());
-
-        schemeBiddingVO.setContractTemplate(schemeTemplate);
+        if(template!=null) {
+            ProcurementSchemeTemplateVO schemeTemplate = new ProcurementSchemeTemplateVO(template.getId(),template.getTemplateName());
+            AttachmentVO agreementAttachment = templateService.getTemplateAttachmentInfo(schemeBidding.getContractTemplateId());
+            if(agreementAttachment!=null){
+                schemeTemplate.setFileName(agreementAttachment.getFileName());
+                schemeTemplate.setFileUrl(agreementAttachment.getFileUrl());
+            }
+            schemeBiddingVO.setContractTemplate(schemeTemplate);
+        }else{
+            schemeBiddingVO.setContractTemplate(null);
+        }
 
         return schemeBiddingVO;
     }
