@@ -61,6 +61,7 @@ import org.springframework.util.CollectionUtils;
 import org.springframework.util.ObjectUtils;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -851,7 +852,8 @@ public class TenderNoticeServiceImpl extends ServiceImpl<TenderNoticeMapper,Tend
         List<Agreement> agreements = agreementService.list(new LambdaQueryWrapper<Agreement>()
                 .eq(Agreement::getAgreementState, AgreementStateEnum.APPROVE.getState()));
         BigDecimal transactionMoney = agreements.stream().map(Agreement::getTotalAmountIncTax).reduce(BigDecimal.ZERO, BigDecimal::add);
-
+        /* 四舍五入成万元 */
+        transactionMoney = transactionMoney.divide(new BigDecimal(10000),2, RoundingMode.HALF_UP);
         vo.setTransactionMoney(transactionMoney);
 
         return vo;
