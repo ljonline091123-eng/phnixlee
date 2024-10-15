@@ -37,6 +37,9 @@ public class ReportController extends BladeController {
     @Autowired
     private IVBidCountService bidCountService;
 
+    @Autowired
+    private IContractBaseService contractBaseService;
+
     /**
      * 招标率报表
      * @param tenderingRate
@@ -98,6 +101,39 @@ public class ReportController extends BladeController {
     @GetMapping("/contractLedgerReport")
     public ResultData<List<ContractLedgerReportVo>> contractLedgerReport(ContractLedgerReportVo contractLedger){
         return ResultData.data(contractLedgerReportService.contractLedgerReport(contractLedger));
+    }
+
+    /**
+     * 合同台账报表（来源于-支出合同）
+     * @param contractBaseReportVo
+     * @return
+     */
+    @GetMapping("/contractLedgerByConBase")
+    public ResultData<List<ContractBaseReportVo>> contractLedger(ContractBaseReportVo contractBaseReportVo){
+        return ResultData.data(contractBaseService.contractLedgerReport(contractBaseReportVo, ""));
+    }
+
+    /**
+     * 合同台账报表-详情（来源于-支出合同）
+     * @param contractId
+     * @return
+     */
+    @GetMapping("/contractLedgerDetails")
+    public ResultData<List<Object>> contractLedgerDetails(String contractId){
+        return ResultData.data(contractBaseService.contractLedgerDetails(contractId));
+    }
+
+    /**
+     * 合同台账报表（来源于-支出合同）
+     * @param contractBaseReportVo
+     * @return
+     */
+    @GetMapping("/contractLedgerExport")
+    public void contractLedgerExport(HttpServletResponse response, ContractBaseReportVo contractBaseReportVo){
+        List<ContractBaseReportVo> list = contractBaseService.contractLedgerExport(contractBaseReportVo);
+        String title = contractBaseService.getExportTitle(contractBaseReportVo);
+        ExcelUtil<ContractBaseReportVo> util = new ExcelUtil<ContractBaseReportVo>(ContractBaseReportVo.class);
+        util.exportExcel(response,list, "合同台账报表数据",title + "合同台账统计报表");
     }
 
     /**
