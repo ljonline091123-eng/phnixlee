@@ -65,8 +65,8 @@ public class VBidCountServiceImpl extends ServiceImpl<VBidCountMapper, VBidCount
                                         && i.getAncestors().contains(sysDept.getAncestors() + "," + sysDept.getDeptId()))
                                 .map(SysDept::getThridDeptId)
                                 .collect(Collectors.toList());
-                        List<VBidCountVo> list = bidCountList.stream().filter(i->ids.contains(i.getManagementOrgId())
-                                || i.getManagementOrgId().equals(sysDept.getThridDeptId()) ).collect(Collectors.toList());
+                        List<VBidCountVo> list = bidCountList.stream().filter(i->ids.contains(i.getBelongingOrgId())
+                                || i.getBelongingOrgId().equals(sysDept.getThridDeptId()) ).collect(Collectors.toList());
                         if(!CollectionUtils.isEmpty(list)){
                             VBidCountVo vo = this.getBidCount(sysDept, list);
                             resultList.add(vo);
@@ -118,8 +118,8 @@ public class VBidCountServiceImpl extends ServiceImpl<VBidCountMapper, VBidCount
                                 && i.getAncestors().contains(sysDept.getAncestors() + "," +  sysDept.getDeptId()))
                         .map(SysDept::getThridDeptId)
                         .collect(Collectors.toList());
-                List<VBidCountVo> list = bidCountList.stream().filter(i -> ids.contains(i.getManagementOrgId())
-                        || i.getManagementOrgId().equals(sysDept.getThridDeptId()) ).collect(Collectors.toList());
+                List<VBidCountVo> list = bidCountList.stream().filter(i -> ids.contains(i.getBelongingOrgId())
+                        || i.getBelongingOrgId().equals(sysDept.getThridDeptId()) ).collect(Collectors.toList());
                 if (!CollectionUtils.isEmpty(list)) {
                     VBidCountVo vo = this.getBidCount(sysDept, list);
                     resultList.add(vo);
@@ -144,8 +144,8 @@ public class VBidCountServiceImpl extends ServiceImpl<VBidCountMapper, VBidCount
                                     && i.getAncestors().contains(sysDept.getAncestors() + "," + sysDept.getDeptId()))
                             .map(SysDept::getThridDeptId)
                             .collect(Collectors.toList());
-                    List<VBidCountVo> list = bidCountList.stream().filter(i -> ids.contains(i.getManagementOrgId())
-                            || i.getManagementOrgId().equals(sysDept.getThridDeptId()) ).collect(Collectors.toList());
+                    List<VBidCountVo> list = bidCountList.stream().filter(i -> ids.contains(i.getBelongingOrgId())
+                            || i.getBelongingOrgId().equals(sysDept.getThridDeptId()) ).collect(Collectors.toList());
                     if (!CollectionUtils.isEmpty(list)) {
                         VBidCountVo vo = this.getBidCount(sysDept, list);
                         resultList.add(vo);
@@ -201,8 +201,8 @@ public class VBidCountServiceImpl extends ServiceImpl<VBidCountMapper, VBidCount
                                         && i.getAncestors().contains(sysDept.getAncestors() + "," + sysDept.getDeptId()))
                                 .map(SysDept::getThridDeptId)
                                 .collect(Collectors.toList());
-                        List<VBidCountVo> list = bidCountList.stream().filter(i->ids.contains(i.getManagementOrgId())
-                                || i.getManagementOrgId().equals(sysDept.getThridDeptId()) ).collect(Collectors.toList());
+                        List<VBidCountVo> list = bidCountList.stream().filter(i->ids.contains(i.getBelongingOrgId())
+                                || i.getBelongingOrgId().equals(sysDept.getThridDeptId()) ).collect(Collectors.toList());
                         if(!CollectionUtils.isEmpty(list)){
                             VBidCountVo vo = this.getBidCount(sysDept, list);
                             resultList.add(vo);
@@ -263,8 +263,8 @@ public class VBidCountServiceImpl extends ServiceImpl<VBidCountMapper, VBidCount
                                     && i.getAncestors().contains(sysDept.getAncestors() + "," + sysDept.getDeptId()))
                             .map(SysDept::getThridDeptId)
                             .collect(Collectors.toList());
-                    list = bidCountList.stream().filter(i -> ids.contains(i.getManagementOrgId())
-                            || i.getManagementOrgId().equals(sysDept.getThridDeptId()))
+                    list = bidCountList.stream().filter(i -> ids.contains(i.getBelongingOrgId())
+                            || i.getBelongingOrgId().equals(sysDept.getThridDeptId()))
                             .map(VBidCountVo::getMinAccountCode)
                             .collect(Collectors.toList());
                 }
