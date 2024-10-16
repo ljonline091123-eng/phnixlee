@@ -212,21 +212,27 @@ public class TenderNoticeServiceImpl extends ServiceImpl<TenderNoticeMapper,Tend
         /* 报名情况环节 设置 审批通过的 供应商列表 */
         if (!ObjectUtils.isEmpty(tenderNoticeVerify) && tenderNoticeVerify.getNoticeStatus().equals(TenderNoticeStatusEnum.TENDER_REGISTER.getState())){
             List<Long> vendorApplyIds = tenderNoticeVO.getVendorApplyIds();
-            if(vendorApplyIds!=null && !vendorApplyIds.isEmpty()){
-                /* 全部设置不通过 */
-                tenderApplyService.update(new LambdaUpdateWrapper<TenderApply>()
-                        .set(TenderApply::getApproveResult, NumberConstant.ZERO)
-                        .eq(TenderApply::getNoticeId, tenderNoticeVerify.getId()));
-                /* 设置通过 */
-                for (Long vendorId : vendorApplyIds) {
-                    tenderApplyService.update(new LambdaUpdateWrapper<TenderApply>()
-                            .set(TenderApply::getApproveResult, NumberConstant.ONE)
-                            .eq(TenderApply::getVendorId, vendorId)
-                            .eq(TenderApply::getNoticeId, tenderNoticeVerify.getId()));
-                }
-            }else {
-                throw new ParamValidateException("至少需要选中一家已报名的供应商");
-            }
+//            if(vendorApplyIds!=null && !vendorApplyIds.isEmpty()){
+//                /* 全部设置不通过 */
+//                tenderApplyService.update(new LambdaUpdateWrapper<TenderApply>()
+//                        .set(TenderApply::getApproveResult, NumberConstant.ZERO)
+//                        .eq(TenderApply::getNoticeId, tenderNoticeVerify.getId()));
+//                /* 设置通过 */
+//                for (Long vendorId : vendorApplyIds) {
+//                    tenderApplyService.update(new LambdaUpdateWrapper<TenderApply>()
+//                            .set(TenderApply::getApproveResult, NumberConstant.ONE)
+//                            .eq(TenderApply::getVendorId, vendorId)
+//                            .eq(TenderApply::getNoticeId, tenderNoticeVerify.getId()));
+//                }
+//            }else {
+//                throw new ParamValidateException("至少需要选中一家已报名的供应商");
+//            }
+
+            /* 全部设置通过 */
+            tenderApplyService.update(new LambdaUpdateWrapper<TenderApply>()
+                    .set(TenderApply::getApproveResult, NumberConstant.ONE)
+                    .eq(TenderApply::getNoticeId, tenderNoticeVerify.getId()));
+
             TenderNoticeSchemeInfoVO detailVO = getTenderNoticeSchemeInfo(tenderNoticeVerify.getId());
             /* 根据招标公告流程状态 和 采购方案确定下一步流程 */
             Integer nextNoticeStatus = nextTenderNoticeStatus(detailVO.getSchemeType(), tenderNoticeVerify.getNoticeStatus());
