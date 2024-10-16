@@ -407,9 +407,9 @@ export default {
       if (!this.backBidList.length) {
         return this.$message.error("暂不能进入下一环节");
       }
-      if (this.ids.length ===0) {
-        return this.$message.error("请选择供应商");
-      }
+      // if (this.ids.length ===0) {
+      //   return this.$message.error("请选择供应商");
+      // }
 
 
       this.$confirm("确定要进入下一环节吗?", "提示", {
