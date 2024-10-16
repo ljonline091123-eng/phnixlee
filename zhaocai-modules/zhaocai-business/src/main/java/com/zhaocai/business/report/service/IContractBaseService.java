@@ -1,6 +1,7 @@
 package com.zhaocai.business.report.service;
 
 import com.zhaocai.business.report.vo.ContractBaseReportVo;
+import com.zhaocai.business.report.vo.ContractListVo;
 
 import java.util.List;
 
@@ -11,7 +12,7 @@ public interface IContractBaseService {
 
     List<ContractBaseReportVo> contractLedgerReport(ContractBaseReportVo contractBaseReportVo, String type);
 
-    List<Object> contractLedgerDetails(String contractId);
+    List<ContractListVo> contractLedgerDetails(String contractId);
 
     List<ContractBaseReportVo> contractLedgerExport(ContractBaseReportVo contractBaseReportVo);
 

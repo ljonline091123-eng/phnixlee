@@ -7,6 +7,7 @@ import com.zhaocai.business.report.domain.ContractBase;
 import com.zhaocai.business.report.mapper.ContractBaseMapper;
 import com.zhaocai.business.report.service.*;
 import com.zhaocai.business.report.vo.ContractBaseReportVo;
+import com.zhaocai.business.report.vo.ContractListVo;
 import com.zhaocai.common.core.constant.SecurityConstants;
 import com.zhaocai.common.core.utils.StringUtils;
 import com.zhaocai.common.core.utils.bean.BeanCopierUtil;
@@ -19,6 +20,7 @@ import org.springframework.util.CollectionUtils;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -109,6 +111,7 @@ public class ContractBaseServiceImpl extends ServiceImpl<ContractBaseMapper, Con
                 }
             }
         } else if (null != contractBaseReportVo.getMinAccountCode()) { // 项目端
+            Map<String, String> contractTypeList = underlingSystemService.listDictMap(DictBizEnum.UNDERLING_CONTRACT_TYPE.getName());
             // 查询项目对应的合同
             List<ContractBaseReportVo> contractBaseList = baseMapper.contractLedgerList(contractBaseReportVo);
             if (!CollectionUtils.isEmpty(contractBaseList)) {
@@ -140,9 +143,8 @@ public class ContractBaseServiceImpl extends ServiceImpl<ContractBaseMapper, Con
                             // 创建类型汇总对象
                             ContractBaseReportVo typeVo = new ContractBaseReportVo();
                             typeVo.setId(vo.getId() + type);
-                            typeVo.setConTypeName(StringUtils.isNotEmpty(type)?
-                                    underlingSystemService.listDictMap(DictBizEnum.UNDERLING_CONTRACT_TYPE.getName()).get(type):null);
-                            typeVo.setDeptName(type);
+                            typeVo.setConTypeName(StringUtils.isNotEmpty(type)?contractTypeList.get(type):null);
+                            typeVo.setDeptName(StringUtils.isNotEmpty(type)?contractTypeList.get(type):null);
                             typeVo.setParentId(vo.getId());
                             typeVo.setType("X");
                             typeVo.setContractNumber(typeCount);
@@ -193,8 +195,8 @@ public class ContractBaseServiceImpl extends ServiceImpl<ContractBaseMapper, Con
      * @return
      */
     @Override
-    public List<Object> contractLedgerDetails(String contractId) {
-        List<Object> result = new ArrayList<>();
+    public List<ContractListVo> contractLedgerDetails(String contractId) {
+        List<ContractListVo> result = new ArrayList<>();
         ContractBase contract = baseMapper.selectById(contractId);
         if (contract.getConType().equals("A")) { // A-劳务分包
             result = laborService.getDetailsByContractId(contractId);
@@ -249,7 +251,7 @@ public class ContractBaseServiceImpl extends ServiceImpl<ContractBaseMapper, Con
      */
     private List<ContractBaseReportVo> getContractLedgerDetails(List<ContractBaseReportVo> resultList) {
         for (ContractBaseReportVo contractBaseReportVo : resultList) {
-            List<Object> list = contractLedgerDetails(contractBaseReportVo.getUniqueId());
+            List<ContractListVo> list = this.contractLedgerDetails(contractBaseReportVo.getUniqueId());
             if (!CollectionUtils.isEmpty(list)) {
                 contractBaseReportVo.setChildren(BeanCopierUtil.copyList(list, ContractBaseReportVo.class));
             }
@@ -293,6 +295,7 @@ public class ContractBaseServiceImpl extends ServiceImpl<ContractBaseMapper, Con
      * @return
      */
     private List<ContractBaseReportVo> getProject(List<ContractBaseReportVo> resultList, List<ContractBaseReportVo> list, SysDept sysDept, String callType) {
+        Map<String, String> contractTypeList = underlingSystemService.listDictMap(DictBizEnum.UNDERLING_CONTRACT_TYPE.getName());
         // 汇总项目及以下数据
         List<ContractBaseReportVo> result = list.stream()
                 .collect(Collectors.groupingBy(ContractBaseReportVo::getProjectId))
@@ -319,9 +322,8 @@ public class ContractBaseServiceImpl extends ServiceImpl<ContractBaseMapper, Con
                                 // 创建类型汇总对象
                                 ContractBaseReportVo typeVo = new ContractBaseReportVo();
                                 typeVo.setId(projectId + type);
-                                typeVo.setConTypeName(StringUtils.isNotEmpty(type)?
-                                        underlingSystemService.listDictMap(DictBizEnum.UNDERLING_CONTRACT_TYPE.getName()).get(type):null);
-                                typeVo.setDeptName(type);
+                                typeVo.setConTypeName(StringUtils.isNotEmpty(type)?contractTypeList.get(type):null);
+                                typeVo.setDeptName(StringUtils.isNotEmpty(type)?contractTypeList.get(type):null);
                                 typeVo.setParentId(projectId);
                                 typeVo.setType("X");
                                 typeVo.setContractNumber(typeCount);
@@ -377,6 +379,7 @@ public class ContractBaseServiceImpl extends ServiceImpl<ContractBaseMapper, Con
      */
     private List<ContractBaseReportVo> getProject1(List<ContractBaseReportVo> resultList, List<ContractBaseReportVo> list, SysDept sysDept, String callType) {
         ContractBaseReportVo xmb = this.getContractBase(sysDept, list, callType);
+        Map<String, String> contractTypeList = underlingSystemService.listDictMap(DictBizEnum.UNDERLING_CONTRACT_TYPE.getName());
         // 汇总项目及以下数据
         List<ContractBaseReportVo> result = list.stream()
                 .collect(Collectors.groupingBy(ContractBaseReportVo::getProjectId))
@@ -403,9 +406,8 @@ public class ContractBaseServiceImpl extends ServiceImpl<ContractBaseMapper, Con
                                 // 创建类型汇总对象
                                 ContractBaseReportVo typeVo = new ContractBaseReportVo();
                                 typeVo.setId(projectId + type);
-                                typeVo.setConTypeName(StringUtils.isNotEmpty(type)?
-                                        underlingSystemService.listDictMap(DictBizEnum.UNDERLING_CONTRACT_TYPE.getName()).get(type):null);
-                                typeVo.setDeptName(type);
+                                typeVo.setConTypeName(StringUtils.isNotEmpty(type)?contractTypeList.get(type):null);
+                                typeVo.setDeptName(StringUtils.isNotEmpty(type)?contractTypeList.get(type):null);
                                 typeVo.setParentId(projectId);
                                 typeVo.setType("X");
                                 typeVo.setContractNumber(typeCount);

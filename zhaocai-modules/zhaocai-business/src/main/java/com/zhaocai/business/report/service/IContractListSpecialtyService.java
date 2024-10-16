@@ -1,5 +1,7 @@
 package com.zhaocai.business.report.service;
 
+import com.zhaocai.business.report.vo.ContractListVo;
+
 import java.util.List;
 
 /**
@@ -7,5 +9,5 @@ import java.util.List;
  */
 public interface IContractListSpecialtyService {
 
-    List<Object> getDetailsByContractId(String contractId);
+    List<ContractListVo> getDetailsByContractId(String contractId);
 }

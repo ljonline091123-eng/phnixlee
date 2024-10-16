@@ -115,12 +115,13 @@ public class ReportController extends BladeController {
 
     /**
      * 合同台账报表-详情（来源于-支出合同）
-     * @param contractId
+     * @param id
      * @return
      */
     @GetMapping("/contractLedgerDetails")
-    public ResultData<List<Object>> contractLedgerDetails(String contractId){
-        return ResultData.data(contractBaseService.contractLedgerDetails(contractId));
+    public AjaxResult contractLedgerDetails(String id){
+        List<ContractListVo> list = contractBaseService.contractLedgerDetails(id);
+        return AjaxResult.success(list);
     }
 
     /**

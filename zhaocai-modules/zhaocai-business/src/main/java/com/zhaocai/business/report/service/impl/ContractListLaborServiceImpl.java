@@ -5,9 +5,10 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.zhaocai.business.report.domain.ContractListLabor;
 import com.zhaocai.business.report.mapper.ContractListLaborMapper;
 import com.zhaocai.business.report.service.IContractListLaborService;
+import com.zhaocai.business.report.vo.ContractListVo;
+import com.zhaocai.common.core.utils.bean.BeanCopierUtil;
 import org.springframework.stereotype.Service;
 
-import java.util.Collections;
 import java.util.List;
 
 /**
@@ -17,10 +18,10 @@ import java.util.List;
 public class ContractListLaborServiceImpl extends ServiceImpl<ContractListLaborMapper, ContractListLabor> implements IContractListLaborService {
 
     @Override
-    public List<Object> getDetailsByContractId(String contractId) {
+    public List<ContractListVo> getDetailsByContractId(String contractId) {
         List<ContractListLabor> list = super.list(new LambdaQueryWrapper<ContractListLabor>()
                 .eq(ContractListLabor::getConId, contractId)
                 .eq(ContractListLabor::getValid, 0));
-        return Collections.singletonList(list);
+        return BeanCopierUtil.copyList(list, ContractListVo.class);
     }
 }
