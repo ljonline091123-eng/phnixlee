@@ -349,26 +349,26 @@ export default {
     if(this.$route.query.report){
       this.report=this.$route.query.report
     }
-    console.log("当前url-- ",JSON.stringify(window.parent.location.href))
-   
-    if(this.$route.query.report==undefined){
-      // const url = 'http://192.168.240.17:31800/ckControl/zbcg/procurement/procurement$bindding?projectCodeList=SG20012024000002-2&type=buildingRate&noticeStatus=8&procurementType=all&report=report&wjSs=%2Fzhaocai%2Fprocurement%2Fbindding';
-      const url =window.parent.location.href
-      const queryParams = this.parseQuery(url);
-      this.queryParams.procurementType = queryParams.procurementType
-      this.queryParams.projectCode = queryParams.projectCode
-      this.queryParams.projectCodeList = queryParams.projectCodeList
-      this.queryParams.type = queryParams.type
-      this.queryParams.noticeStatus = queryParams.noticeStatus
-      this.report=queryParams.report
-      console.log("报表参数",JSON.stringify(queryParams))
-      console.log(" this.queryParams.procurementType"+ this.queryParams.procurementType); 
+     console.log(" this.queryParams.procurementType"+ this.queryParams.procurementType); 
       console.log(" this.queryParams.projectCode"+ this.queryParams.projectCode); 
       console.log(" this.queryParams.projectCodeList"+ this.queryParams.projectCodeList); 
       console.log(" this.queryParams.type"+ this.queryParams.type); 
       console.log(" this.queryParams.noticeStatus"+ this.queryParams.noticeStatus); 
       console.log(" this.queryParams.report"+ this.queryParams.report); 
-    }
+   
+    // if(this.$route.query.report==undefined){
+    //   // const url = 'http://192.168.240.17:31800/ckControl/zbcg/procurement/procurement$bindding?projectCodeList=SG20012024000002-2&type=buildingRate&noticeStatus=8&procurementType=all&report=report&wjSs=%2Fzhaocai%2Fprocurement%2Fbindding';
+    //   const url =window.parent.location.href
+    //   const queryParams = this.parseQuery(url);
+    //   this.queryParams.procurementType = queryParams.procurementType
+    //   this.queryParams.projectCode = queryParams.projectCode
+    //   this.queryParams.projectCodeList = queryParams.projectCodeList
+    //   this.queryParams.type = queryParams.type
+    //   this.queryParams.noticeStatus = queryParams.noticeStatus
+    //   this.report=queryParams.report
+    //   console.log("报表参数",JSON.stringify(queryParams))
+     
+    // }
   },
   computed: {
     ...mapGetters(["project"]),
@@ -399,6 +399,7 @@ export default {
             ? undefined
             : this.queryParams.procurementType,
       };
+      console.log("报表参数",JSON.stringify(query))
       try {
         const res = await getBiddingSchemeList(query);
         if (res.data) {
@@ -516,11 +517,13 @@ export default {
     /** 监控类型切换 */
     "queryParams.procurementType": {
       handler(val) {
+         console.log( "监控类型切换",JSON.stringify(this.queryParams));
         this.getBiddingSchemeList();
       },
     },
     project: {
       handler(newVal, oldVal) {
+        console.log("监控项目oldVal"+oldVal.id ,"newVal"+JSON.stringify(newVal.id));
         if (oldVal === undefined || newVal.id !== oldVal.id) {
           this.queryParams = {
             pageNumber: 1,
@@ -533,6 +536,7 @@ export default {
             procurementType: "all",
             projectCode: newVal.code,
           };
+          console.log( "监控项目",JSON.stringify(this.queryParams));
             this.getBiddingSchemeList();
        
         }
