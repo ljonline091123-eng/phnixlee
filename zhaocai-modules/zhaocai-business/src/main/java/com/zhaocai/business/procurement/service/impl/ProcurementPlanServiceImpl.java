@@ -4,10 +4,15 @@ import cn.hutool.core.collection.CollectionUtil;
 import cn.hutool.core.util.ObjectUtil;
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONObject;
+import com.baomidou.mybatisplus.core.conditions.Wrapper;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.zhaocai.business.bidding.domain.BiddingListQuotation;
+import com.zhaocai.business.bidding.domain.TenderNotice;
+import com.zhaocai.business.bidding.service.ITenderNoticeService;
+import com.zhaocai.business.bidding.vo.res.ContractPlanningNoticeVO;
 import com.zhaocai.business.common.enums.*;
 import com.zhaocai.business.common.exception.BusinessException;
 import com.zhaocai.business.common.exception.ParamValidateException;
@@ -15,9 +20,14 @@ import com.zhaocai.business.common.utils.AmountCalUtil;
 import com.zhaocai.business.common.utils.ValidateUtils;
 import com.zhaocai.business.manager.http.common.config.ThirdPartyTodoFlowGroupEnum;
 import com.zhaocai.business.manager.http.common.config.ThirdPartyTodoFlowModuleEnum;
+import com.zhaocai.business.manager.http.dto.req.ContractPlanMaterialListRequestDTO;
 import com.zhaocai.business.manager.http.dto.req.PushThirdPartyTodoTaskRequestDTO;
 import com.zhaocai.business.manager.http.dto.req.PushThirdPartyTodoTaskSonRequestDTO;
+import com.zhaocai.business.manager.http.dto.req.UsersRoleListRequestDTO;
+import com.zhaocai.business.manager.http.dto.res.UsersRoleContractPlanListResponseDTO;
+import com.zhaocai.business.manager.http.dto.res.UsersRoleListResponseDTO;
 import com.zhaocai.business.manager.http.service.ContractPlanService;
+import com.zhaocai.business.manager.http.service.PlatRoleService;
 import com.zhaocai.business.manager.http.service.ThridPartyTodoTaskService;
 import com.zhaocai.business.procurement.domain.*;
 import com.zhaocai.business.procurement.dto.ContractProcurementPlanDTO;
@@ -26,6 +36,7 @@ import com.zhaocai.business.procurement.mapper.ProcurementPlanMapper;
 import com.zhaocai.business.procurement.service.*;
 import com.zhaocai.business.procurement.vo.req.*;
 import com.zhaocai.business.procurement.vo.res.*;
+import com.zhaocai.business.pub.domain.Attachment;
 import com.zhaocai.business.pub.service.IAreaDivisionService;
 import com.zhaocai.business.pub.service.IBusinessCodeService;
 import com.zhaocai.common.core.bean.PageResult;
@@ -38,6 +49,7 @@ import com.zhaocai.common.core.exception.CheckedException;
 import com.zhaocai.common.core.constant.SecurityConstants;
 import com.zhaocai.common.core.utils.NumberUtil;
 import com.zhaocai.common.core.utils.bean.BeanCopierUtil;
+import com.zhaocai.common.core.web.bean.ResultData;
 import com.zhaocai.common.security.utils.SecurityUtils;
 import com.zhaocai.system.api.domain.SysUser;
 import com.zhaocai.system.api.system.RemoteUserService;
@@ -99,6 +111,12 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
 
     @Autowired
     private IContractPlanningPushRecordService contractPlanningPushRecordService;
+
+    @Autowired
+    private PlatRoleService platRoleService;
+
+    @Autowired
+    private ITenderNoticeService tenderNoticeService;
 
     @Override
     public PageResult<ProcurementPlanListVO> listPage(ProcurementPlanListQueryVO queryVO) {
@@ -353,6 +371,23 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
         savaContractPlanningPushRecord(planPushVO);
         //调第三方接口，生成采购计划的待办信息
         dealOpenPeopleTodoTask(planPushVO);
+    }
+
+    @Override
+    public UsersRoleContractPlanListResponseDTO getUsersRoleContractPlanList(ContractPlanningQueryVO requestDTO) {
+        /* 请求获取第三方用户数据 */
+        List<UsersRoleListResponseDTO> userList = platRoleService.getUsersRoleList(new UsersRoleListRequestDTO());
+        /* 根据合约规划id或者code查询对应的招标对象数据和采购方案数据 */
+        List<ContractPlanningNoticeVO> contractPlanningNoticeVOList = tenderNoticeService.getListByContractPlanningId(requestDTO);
+        /* 用来存储该方法返回对象数据 */
+        UsersRoleContractPlanListResponseDTO userContract = new UsersRoleContractPlanListResponseDTO();
+        if(userList!=null && !userList.isEmpty()){
+            userContract.setUserList(userList);
+        }
+        if(contractPlanningNoticeVOList!=null && !contractPlanningNoticeVOList.isEmpty()){
+            userContract.setContractPlanningNoticeVOList(contractPlanningNoticeVOList);
+        }
+        return userContract;
     }
 
     public void savaContractPlanningPushRecord(ProcurementPlanPushVO planPushVO){

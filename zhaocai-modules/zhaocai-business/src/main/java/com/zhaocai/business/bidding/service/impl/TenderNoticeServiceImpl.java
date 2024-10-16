@@ -28,6 +28,7 @@ import com.zhaocai.business.procurement.domain.MinProject;
 import com.zhaocai.business.procurement.domain.ProcurementScheme;
 import com.zhaocai.business.procurement.service.IMinProjectService;
 import com.zhaocai.business.procurement.service.IProcurementSchemeService;
+import com.zhaocai.business.procurement.vo.req.ContractPlanningQueryVO;
 import com.zhaocai.business.procurement.vo.res.MinProjectDataVO;
 import com.zhaocai.business.procurement.vo.res.MinProjectVO;
 import com.zhaocai.business.pub.domain.Attachment;
@@ -896,6 +897,11 @@ public class TenderNoticeServiceImpl extends ServiceImpl<TenderNoticeMapper,Tend
         }
         return nextNoticeStatus;
 
+    }
+
+    @Override
+    public List<ContractPlanningNoticeVO> getListByContractPlanningId(ContractPlanningQueryVO queryVO) {
+        return baseMapper.getListByContractPlanningId(queryVO);
     }
 
     /** 获取最小核算项目名称 */

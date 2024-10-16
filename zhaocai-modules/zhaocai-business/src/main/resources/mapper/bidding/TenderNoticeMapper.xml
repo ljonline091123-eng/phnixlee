@@ -211,6 +211,27 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         order by tn.id, br.`rank`
     </select>
 
+
+    <select id="getListByContractPlanningId" resultType="com.zhaocai.business.bidding.vo.res.ContractPlanningNoticeVO">
+        select ttn.scheme_id as schemeId,ttn.id as noticeId,tps.procurement_scheme_code ,tcp.contract_planning_code ,tcp.contract_planning_id
+            from tb_tender_notice ttn
+             /* 采购方案对象 */
+             left join tb_procurement_scheme tps on ttn.scheme_id = tps.id and tps.del_flag = 0
+            /* 采购方案-采购计划对应关系对象 */
+             left join tb_procurement_scheme_plan_relate tspr on tspr.procurement_scheme_id = ttn.scheme_id  and tspr.del_flag = 0
+            /* 采购计划对象 */
+             left join tb_procurement_plan tpp on tspr.procurement_plan_id = tpp.id and tpp.del_flag = 0
+            /* 合约规划对象 */
+             left join tb_contract_planning tcp on tcp.plan_id = tpp.id and tcp.del_flag = 0
+        where ttn.del_flag = 0 and  ttn.notice_status != 0 and tcp.contract_planning_code is not null and tcp.contract_planning_id is not null
+            <if test="queryVO.contractPlanningCode != null">
+                and tcp.contract_planning_code = #{queryVO.contractPlanningCode}
+            </if>
+            <if test="queryVO.contractPlanningId != null">
+                and tcp.contract_planning_id = #{queryVO.contractPlanningId}
+            </if>
+    </select>
+
     <select id="findWinningNotifiPage" resultType="com.zhaocai.business.bidding.vo.res.WinningNotifiListVO">
         select ps.procurement_scheme_code, ps.procurement_scheme_name, br.notifi_time, br.notifi_content, br.id biddingResultId, br.scheme_id,
         tn.id noticeId

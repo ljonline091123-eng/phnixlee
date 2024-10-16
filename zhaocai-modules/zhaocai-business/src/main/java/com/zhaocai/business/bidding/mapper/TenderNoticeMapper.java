@@ -6,6 +6,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.zhaocai.business.bidding.domain.TenderNotice;
 import com.zhaocai.business.bidding.vo.req.query.*;
 import com.zhaocai.business.bidding.vo.res.*;
+import com.zhaocai.business.procurement.vo.req.ContractPlanningQueryVO;
 import org.apache.ibatis.annotations.Param;
 
 import java.util.Date;
@@ -74,4 +75,5 @@ public interface TenderNoticeMapper extends BaseMapper<TenderNotice> {
 
     TenderNoticeSchemeInfoVO findTenderNoticeSchemeInfo(Long id);
 
+    List<ContractPlanningNoticeVO> getListByContractPlanningId(@Param("queryVO") ContractPlanningQueryVO queryVO);
 }
