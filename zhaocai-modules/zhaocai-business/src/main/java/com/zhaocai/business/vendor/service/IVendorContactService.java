@@ -142,4 +142,6 @@ public interface IVendorContactService  extends IService<VendorContact> , IProce
      * @return
      */
     VendorContact getVendorManager(Long vendorId);
+
+    VendorContact getInfo(Long id);
 }

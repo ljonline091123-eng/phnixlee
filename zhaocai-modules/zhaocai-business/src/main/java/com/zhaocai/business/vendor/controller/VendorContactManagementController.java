@@ -2,6 +2,7 @@ package com.zhaocai.business.vendor.controller;
 
 import com.zhaocai.business.common.base.BladeController;
 import com.zhaocai.business.pub.vo.res.AttachmentVO;
+import com.zhaocai.business.vendor.domain.VendorContact;
 import com.zhaocai.business.vendor.service.IVendorContactService;
 import com.zhaocai.business.vendor.vo.req.UpdateContactManagerRequestVO;
 import com.zhaocai.business.vendor.vo.req.UpdateContactStateRequestVO;
@@ -45,6 +46,15 @@ public class VendorContactManagementController extends BladeController {
     @ApiOperation(value = "获取供应商联系人授权书")
     public ResultData<AttachmentVO> getAuthorization(@RequestParam Long id) {
         return ResultData.data(vendorContactService.getAuthorization(id));
+    }
+
+    /**
+     * 获取供应商联系人
+     */
+    @GetMapping("/getInfo")
+    @ApiOperation(value = "根据联系人对象id获取供应商联系人详情")
+    public ResultData<VendorContact> getInfo(@RequestParam Long id) {
+        return ResultData.data(vendorContactService.getInfo(id));
     }
 
     /**

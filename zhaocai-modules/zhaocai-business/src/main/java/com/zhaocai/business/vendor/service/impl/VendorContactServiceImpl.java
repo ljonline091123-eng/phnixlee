@@ -391,6 +391,12 @@ public class VendorContactServiceImpl extends ServiceImpl<VendorContactMapper,Ve
                 .eq(VendorContact::getIsManager,1));
     }
 
+    @Override
+    public VendorContact getInfo(Long id) {
+        return getOne(new LambdaQueryWrapper<VendorContact>()
+                .eq(VendorContact::getId,id));
+    }
+
     /**
      * 校验联系人
      * @param contact
