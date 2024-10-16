@@ -12,6 +12,7 @@ import com.zhaocai.business.bidding.enums.TenderNoticeStatusEnum;
 import com.zhaocai.business.bidding.mapper.TenderNoticeMapper;
 import com.zhaocai.business.bidding.service.*;
 import com.zhaocai.business.bidding.vo.req.TenderNoticeVO;
+import com.zhaocai.business.bidding.vo.req.UnderlingTenderNoticeQueryVO;
 import com.zhaocai.business.bidding.vo.req.query.*;
 import com.zhaocai.business.bidding.vo.res.*;
 import com.zhaocai.business.common.cache.DictBizCache;
@@ -896,6 +897,31 @@ public class TenderNoticeServiceImpl extends ServiceImpl<TenderNoticeMapper,Tend
         }
         return nextNoticeStatus;
 
+    }
+
+    /**
+     * 获取招标公告列表-(第三方-招标公告接口)
+     * @param queryVO
+     * @return
+     */
+    @Override
+    public PageResult<TenderNoticeVO> listTenderNoticePage(UnderlingTenderNoticeQueryVO queryVO) {
+        // 获取分页数据
+        IPage<TenderNoticeVO> pages = baseMapper.listTenderNoticePage(queryVO.toMybatisPage(), queryVO);
+
+        // 设置附件数据到 TenderNoticeVO 对象中
+        for (TenderNoticeVO record : pages.getRecords()) {
+            Long attachIdNotice = record.getAttachIdNotice();
+            if (attachIdNotice != null) {
+                Attachment attachmentNoticeData = attachmentService.getById(attachIdNotice);
+                if (attachmentNoticeData != null) {
+                    AttachmentRequestVO attachmentNotice = BeanCopierUtil.copyBean(attachmentNoticeData, AttachmentRequestVO.class);
+                    record.setBiddingDocAttachList(Collections.singletonList(attachmentNotice));
+                }
+            }
+        }
+
+        return new PageResult<>(pages);
     }
 
     /** 获取最小核算项目名称 */

@@ -4,6 +4,8 @@ import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.zhaocai.business.bidding.domain.TenderNotice;
+import com.zhaocai.business.bidding.vo.req.TenderNoticeVO;
+import com.zhaocai.business.bidding.vo.req.UnderlingTenderNoticeQueryVO;
 import com.zhaocai.business.bidding.vo.req.query.*;
 import com.zhaocai.business.bidding.vo.res.*;
 import org.apache.ibatis.annotations.Param;
@@ -74,4 +76,11 @@ public interface TenderNoticeMapper extends BaseMapper<TenderNotice> {
 
     TenderNoticeSchemeInfoVO findTenderNoticeSchemeInfo(Long id);
 
+    /**
+     * 获取招标公告列表-(第三方-招标公告接口)
+     * @param page
+     * @param queryVO
+     * @return
+     */
+    IPage<TenderNoticeVO> listTenderNoticePage(@Param("page") Page<TenderNoticeVO> page, @Param("queryVO") UnderlingTenderNoticeQueryVO queryVO);
 }

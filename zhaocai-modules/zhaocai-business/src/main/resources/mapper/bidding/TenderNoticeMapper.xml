@@ -242,4 +242,25 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         where tn.id = #{id} and tn.del_flag = 0 and ps.del_flag = 0
     </select>
 
+    <select id="listTenderNoticePage" resultType="com.zhaocai.business.bidding.vo.req.TenderNoticeVO">
+        select tn.id,mp.id as project_id,ps.id as scheme_id, ps.procurement_type as scheme_type,tn.contact,
+               tn.phone,tn.email,tn.attach_id_notice,tn.apply_time_notice
+        from tb_tender_notice tn
+        inner join tb_procurement_scheme ps on ps.id = tn.scheme_id
+        inner join tb_min_project mp on mp.min_account_code = ps.project_code
+        <where>
+            tn.del_flag = 0 and ps.del_flag = 0 and tn.notice_status != 0 and ps.procurement_type = 1
+            <if test="queryVO.id != null and queryVO.id != ''">
+                and tn.id = #{queryVO.id}
+            </if>
+            <if test="queryVO.startTime != null">
+                and tn.create_time >= #{queryVO.startTime}
+            </if>
+            <if test="queryVO.endTime != null">
+                and tn.create_time &lt;= #{queryVO.endTime}
+            </if>
+        </where>
+        order by tn.create_time desc
+    </select>
+
 </mapper>
