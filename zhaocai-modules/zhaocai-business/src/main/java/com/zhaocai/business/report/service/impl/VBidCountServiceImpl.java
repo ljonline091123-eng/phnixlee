@@ -18,6 +18,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -51,26 +52,19 @@ public class VBidCountServiceImpl extends ServiceImpl<VBidCountMapper, VBidCount
             if(!CollectionUtils.isEmpty(deptList)){
                 // 将组织机构数据汇总
                 for (SysDept sysDept : deptList) {
-                    if(sysDept.getThridOrgType().equals("X")){
-                        // 项目部汇总
-                        List<VBidCountVo> list = bidCountList.stream().filter(i->i.getBelongingOrgId().equals(sysDept.getThridDeptId())).collect(Collectors.toList());
-                        if(!CollectionUtils.isEmpty(list)){
-                            VBidCountVo vo = this.getBidCount(sysDept, list);
-                            vo.setChildren(this.getProject(list, sysDept));
-                            resultList.add(vo);
+                    List<String> ids = deptList.stream().filter(i->null != i.getAncestors()
+                                    && i.getAncestors().contains(sysDept.getAncestors() + "," + sysDept.getDeptId()))
+                            .map(SysDept::getThridDeptId)
+                            .collect(Collectors.toList());
+                    List<VBidCountVo> list = bidCountList.stream().filter(i->ids.contains(i.getBelongingOrgId())
+                            || i.getBelongingOrgId().equals(sysDept.getThridDeptId()) ).collect(Collectors.toList());
+                    if(!CollectionUtils.isEmpty(list)){
+                        VBidCountVo vo = this.getBidCount(sysDept, list);
+                        List<VBidCountVo> childrenList = bidCountList.stream().filter(i->i.getBelongingOrgId().equals(sysDept.getThridDeptId())).collect(Collectors.toList());
+                        if(!CollectionUtils.isEmpty(childrenList)){
+                            vo.setChildren(this.getProject(childrenList, sysDept));
                         }
-                    } else {
-                        // 公司汇总
-                        List<String> ids = deptList.stream().filter(i->null != i.getAncestors()
-                                        && i.getAncestors().contains(sysDept.getAncestors() + "," + sysDept.getDeptId()))
-                                .map(SysDept::getThridDeptId)
-                                .collect(Collectors.toList());
-                        List<VBidCountVo> list = bidCountList.stream().filter(i->ids.contains(i.getBelongingOrgId())
-                                || i.getBelongingOrgId().equals(sysDept.getThridDeptId()) ).collect(Collectors.toList());
-                        if(!CollectionUtils.isEmpty(list)){
-                            VBidCountVo vo = this.getBidCount(sysDept, list);
-                            resultList.add(vo);
-                        }
+                        resultList.add(vo);
                     }
                 }
                 // 构建组织树
@@ -187,25 +181,18 @@ public class VBidCountServiceImpl extends ServiceImpl<VBidCountMapper, VBidCount
             if(!CollectionUtils.isEmpty(deptList)){
                 // 将组织机构数据汇总
                 for (SysDept sysDept : deptList) {
-                    if(sysDept.getThridOrgType().equals("X")){
-                        // 项目部汇总
-                        List<VBidCountVo> list = bidCountList.stream().filter(i->i.getBelongingOrgId().equals(sysDept.getThridDeptId())).collect(Collectors.toList());
-                        if(!CollectionUtils.isEmpty(list)){
-                            VBidCountVo vo = this.getBidCount(sysDept, list);
-                            resultList.add(vo);
-                            resultList.addAll(this.getProject(list, sysDept));
-                        }
-                    } else {
-                        // 公司汇总
-                        List<String> ids = deptList.stream().filter(i->null != i.getAncestors()
-                                        && i.getAncestors().contains(sysDept.getAncestors() + "," + sysDept.getDeptId()))
-                                .map(SysDept::getThridDeptId)
-                                .collect(Collectors.toList());
-                        List<VBidCountVo> list = bidCountList.stream().filter(i->ids.contains(i.getBelongingOrgId())
-                                || i.getBelongingOrgId().equals(sysDept.getThridDeptId()) ).collect(Collectors.toList());
-                        if(!CollectionUtils.isEmpty(list)){
-                            VBidCountVo vo = this.getBidCount(sysDept, list);
-                            resultList.add(vo);
+                    List<String> ids = deptList.stream().filter(i->null != i.getAncestors()
+                                    && i.getAncestors().contains(sysDept.getAncestors() + "," + sysDept.getDeptId()))
+                            .map(SysDept::getThridDeptId)
+                            .collect(Collectors.toList());
+                    List<VBidCountVo> list = bidCountList.stream().filter(i->ids.contains(i.getBelongingOrgId())
+                            || i.getBelongingOrgId().equals(sysDept.getThridDeptId()) ).collect(Collectors.toList());
+                    if(!CollectionUtils.isEmpty(list)){
+                        VBidCountVo vo = this.getBidCount(sysDept, list);
+                        resultList.add(vo);
+                        List<VBidCountVo> childrenList = bidCountList.stream().filter(i->i.getBelongingOrgId().equals(sysDept.getThridDeptId())).collect(Collectors.toList());
+                        if(!CollectionUtils.isEmpty(childrenList)){
+                            resultList.addAll(this.getProject(childrenList, sysDept));
                         }
                     }
                 }
@@ -230,10 +217,10 @@ public class VBidCountServiceImpl extends ServiceImpl<VBidCountMapper, VBidCount
      * @return
      */
     private List<VBidCountVo> handleDict(List<VBidCountVo> bidCountList) {
+        Map<String, String> projectTypeList = underlingSystemService.listDictMap(DictBizEnum.UNDERLING_PROJECT_FORMAT.getName());
         bidCountList.stream().map(i -> {
             //项目业态
-            i.setPrjStateName(StringUtils.isNotEmpty(i.getPrjState())?
-                    underlingSystemService.listDictMap(DictBizEnum.UNDERLING_PROJECT_FORMAT.getName()).get(i.getPrjState()):null);
+            i.setPrjStateName(StringUtils.isNotEmpty(i.getPrjState())?projectTypeList.get(i.getPrjState()):null);
             return i;
         }).collect(Collectors.toList());
         return bidCountList;
@@ -308,7 +295,9 @@ public class VBidCountServiceImpl extends ServiceImpl<VBidCountMapper, VBidCount
         } else {
             List<VBidCountVo> children = resultList.stream().filter(i -> i.getId().equals(thridParentId)).collect(Collectors.toList());
             if (!CollectionUtils.isEmpty(children)) {
-                return children.get(0).getChildren();
+                List<VBidCountVo> selfChildren = new ArrayList<>(children.get(0).getChildren());
+                selfChildren.addAll(childenList);
+                return selfChildren;
             }
         }
         return childenList;
