@@ -230,6 +230,13 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             <if test="queryVO.contractPlanningId != null">
                 and tcp.contract_planning_id = #{queryVO.contractPlanningId}
             </if>
+            <if test="queryVO.contractIdList != null">
+                and tcp.contract_planning_id in
+                <foreach collection="queryVO.contractIdList" item="contractId" open="(" separator="," close=")">
+                    #{contractId,jdbcType=VARCHAR}
+                </foreach>
+            </if>
+
     </select>
 
     <select id="findWinningNotifiPage" resultType="com.zhaocai.business.bidding.vo.res.WinningNotifiListVO">

@@ -18,6 +18,15 @@ public class ProcurementPlanPushVO {
     @ApiModelProperty(value = "合约规划名称")
     private String contractPlanningName;
 
+    @ApiModelProperty(value = "采购方案id")
+    private Long schemeId;
+
+    @ApiModelProperty(value = "招标id")
+    private Long noticeId;
+
+    @ApiModelProperty(value =  "采购方案编号")
+    private String procurementSchemeCode;
+
     @ApiModelProperty(value = "项目合约id")
     private String contractPlanningId;
 

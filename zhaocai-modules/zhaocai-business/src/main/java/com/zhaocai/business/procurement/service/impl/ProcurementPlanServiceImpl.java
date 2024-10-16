@@ -178,9 +178,15 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
                         .collect(Collectors.toMap(ContractProcurementPlanDTO::getContractPlanningId,val -> val));
             }
 
+            /* 查询推送记录 */
             List<ContractPlanningPushRecord> records = contractPlanningPushRecordService.getByCondition(contractIdList);
-            Map<String, ContractPlanningPushRecord> recordMap = records.stream().collect(
-                    Collectors.toMap(ContractPlanningPushRecord::getContractPlanningId, Function.identity()));
+            /* 查询单条 */
+            Map<String, ContractPlanningPushRecord> recordMap = records.stream().collect(Collectors.toMap(ContractPlanningPushRecord::getContractPlanningId, Function.identity()));
+            /* 查询招标集合 */
+            Map<String, List<ContractPlanningPushRecord>> recordMapList = records.stream().collect(Collectors.groupingBy(ContractPlanningPushRecord::getContractPlanningId));
+            /* 根据合约规划id集合查询对应的招标对象数据和采购方案数据 */
+            List<ContractPlanningNoticeVO> recordsQuery = tenderNoticeService.getListByContractPlanningId(new ContractPlanningQueryVO(contractIdList));
+            Map<String, List<ContractPlanningNoticeVO>> recordMapQuery = recordsQuery.stream().collect(Collectors.groupingBy(ContractPlanningNoticeVO::getContractPlanningId));
 
             for (ContractPlanningListVO contractPlanning :resultList) {
                 totalPlannedAmountInclTax = NumberUtil.add(totalPlannedAmountInclTax,contractPlanning.getPlannedAmountInclTax());
@@ -192,10 +198,36 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
                     contractPlanning.setEnterIntoTime(contractProcurementPlan.getArrivalDate());
                 }
 
+                /* 推送状态 细分到合约规划 */
                 ContractPlanningPushRecord contractPlanningPushRecord = recordMap.get(contractPlanning.getContractPlanningId());
                 if (ObjectUtil.isNotEmpty(contractPlanningPushRecord)){
                     contractPlanning.setPushStatus(contractPlanningPushRecord.getPushStatus());
                 }
+
+                /* 增加推送状态 细分到投标对象 */
+                if (recordMapList!=null && !recordMapList.isEmpty()){
+                    if (recordMapQuery!=null && !recordMapQuery.isEmpty()){
+                        List<ContractPlanningPushRecord> contractPlanningPushRecordList = recordMapList.get(contractPlanning.getContractPlanningId());
+                        List<ContractPlanningNoticeVO> contractPlanningPushList = recordMapQuery.get(contractPlanning.getContractPlanningId());
+                        if (contractPlanningPushRecordList!=null && !contractPlanningPushRecordList.isEmpty()){
+                            if (contractPlanningPushList!=null && !contractPlanningPushList.isEmpty()){
+                                /* 默认都是未推送 */
+                                contractPlanningPushList.forEach(obj -> obj.setPushStatus(0));
+                                /* 获取已推送的 采购方案id */
+                                Set<Long> schemeIds = contractPlanningPushRecordList.stream()
+                                        .map(ContractPlanningPushRecord::getSchemeId)
+                                        .collect(Collectors.toSet());
+                                /* 对比已推送的采购方案id,并设置值 */
+                                contractPlanningPushList.stream()
+                                        .filter(obj -> schemeIds.contains(obj.getSchemeId()))
+                                        .forEach(obj -> obj.setPushStatus(1));
+                                /* 添加到返回对象中 */
+                                contractPlanning.setContractPlanningNoticeVOList(contractPlanningPushList);
+                            }
+                        }
+                    }
+                }
+
             }
         }
 
@@ -394,6 +426,10 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
         ContractPlanningPushRecord record = new ContractPlanningPushRecord();
         record.setContractPlanningId(planPushVO.getContractPlanningId());
         record.setContractPlanningCode(planPushVO.getContractPlanningCode());
+        /* 多增加 采购方案 招标对象 记录 */
+        record.setProcurementSchemeCode(planPushVO.getProcurementSchemeCode());
+        record.setNoticeId(planPushVO.getNoticeId());
+        record.setSchemeId(planPushVO.getSchemeId());
         //JSONObject.parseArray("从数据库中取出的String类型的字段",T.class);
         record.setPushObj(JSONObject.toJSONString(planPushVO.getUserList()));
         record.setPushStatus(NumberConstant.ONE);

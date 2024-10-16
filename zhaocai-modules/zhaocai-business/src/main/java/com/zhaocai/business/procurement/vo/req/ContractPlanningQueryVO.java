@@ -6,6 +6,7 @@ import io.swagger.annotations.ApiModelProperty;
 import lombok.Data;
 
 import javax.validation.constraints.NotBlank;
+import java.util.List;
 
 /**
  * 项目合约规划
@@ -17,6 +18,9 @@ import javax.validation.constraints.NotBlank;
 @ApiModel(value = "项目合约规划")
 public class ContractPlanningQueryVO {
 
+    public ContractPlanningQueryVO(List<String> contractIdList) {
+        this.contractIdList = contractIdList;
+    }
 
     /**
      * 合约规划编码
@@ -29,5 +33,8 @@ public class ContractPlanningQueryVO {
      */
     @ApiModelProperty(value = "合约规划id")
     private String contractPlanningId;
+
+    @ApiModelProperty(value = "合约规划id")
+    private List<String> contractIdList;
 
 }

@@ -1,10 +1,12 @@
 package com.zhaocai.business.procurement.vo.res;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
+import com.zhaocai.business.bidding.vo.res.ContractPlanningNoticeVO;
 import com.zhaocai.business.common.annotations.DictCache;
 import com.zhaocai.business.common.annotations.MoneyFormat;
 import com.zhaocai.business.common.base.AdviceObject;
 import com.zhaocai.business.common.enums.DictBizEnum;
+import com.zhaocai.business.procurement.domain.ContractPlanningPushRecord;
 import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;
 import lombok.AllArgsConstructor;
@@ -13,6 +15,7 @@ import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.util.Date;
+import java.util.List;
 
 /**
  * 项目合约规划
@@ -100,5 +103,8 @@ public class ContractPlanningListVO extends AdviceObject {
 
     @ApiModelProperty("推送状态（0未推送 1已推送）")
     private Integer pushStatus;
+
+    @ApiModelProperty("招标对象推送状态")
+    private List<ContractPlanningNoticeVO> contractPlanningNoticeVOList;
 
 }
