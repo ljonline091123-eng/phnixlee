@@ -34,7 +34,7 @@ public class ContractPlanningQueryVO {
     @ApiModelProperty(value = "合约规划id")
     private String contractPlanningId;
 
-    @ApiModelProperty(value = "合约规划id")
+    @ApiModelProperty(value = "合约规划id集合")
     private List<String> contractIdList;
 
 }

@@ -56,7 +56,7 @@ public class ProcurementPlanController extends BladeController {
     }
 
     /**
-     * 项目合约规划查询
+     * 项目合约规划查询 采购总计划列表
      */
     @GetMapping("/contractPlanningList")
     @ApiOperation(value = "项目合约规划查询")

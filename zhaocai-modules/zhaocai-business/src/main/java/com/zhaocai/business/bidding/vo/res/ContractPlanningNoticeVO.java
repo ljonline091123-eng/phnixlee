@@ -18,6 +18,9 @@ public class ContractPlanningNoticeVO {
     @ApiModelProperty(value = "招标id")
     private Long noticeId;
 
+    @ApiModelProperty(value = "采购计划id")
+    private Long planId;
+
     @ApiModelProperty(value =  "采购方案编号")
     private String procurementSchemeCode;
 
