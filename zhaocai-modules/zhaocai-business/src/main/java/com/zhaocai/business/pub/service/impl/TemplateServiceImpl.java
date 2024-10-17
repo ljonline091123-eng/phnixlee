@@ -156,13 +156,13 @@ public class TemplateServiceImpl extends ServiceImpl<TemplateMapper,Template> im
         }
 
         // 处理合同模板
-        if (requestVO.getTemplateType() == 1) {
-            // 合同模板，必须要有合同签章信息
-            if (CollectionUtil.isEmpty(requestVO.getAgreementSignStamperList())) {
-                throw new BusinessException("合同签章签署位置信息不能为空");
-            }
-            agreementSignStamperService.saveAgreementSignStamper(requestVO.getId(),requestVO.getAgreementSignStamperList());
-        }
+//        if (requestVO.getTemplateType() == 1) {
+//            // 合同模板，必须要有合同签章信息
+//            if (CollectionUtil.isEmpty(requestVO.getAgreementSignStamperList())) {
+//                throw new BusinessException("合同签章签署位置信息不能为空");
+//            }
+//            agreementSignStamperService.saveAgreementSignStamper(requestVO.getId(),requestVO.getAgreementSignStamperList());
+//        }
     }
 
     @Override
