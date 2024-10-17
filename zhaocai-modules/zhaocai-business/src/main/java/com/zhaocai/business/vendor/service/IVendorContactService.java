@@ -5,6 +5,7 @@ import com.zhaocai.business.process.service.IProcessBusinessBaseService;
 import com.zhaocai.business.pub.vo.res.AttachmentVO;
 import com.zhaocai.business.vendor.domain.VendorContact;
 import com.zhaocai.business.vendor.vo.req.*;
+import com.zhaocai.business.vendor.vo.res.VendorContactInfoVO;
 import com.zhaocai.business.vendor.vo.res.VendorContactListVO;
 import com.zhaocai.business.vendor.vo.res.VendorMainContactVO;
 import com.zhaocai.common.core.bean.PageResult;
@@ -143,5 +144,5 @@ public interface IVendorContactService  extends IService<VendorContact> , IProce
      */
     VendorContact getVendorManager(Long vendorId);
 
-    VendorContact getInfo(Long id);
+    VendorContactInfoVO getInfo(Long id);
 }

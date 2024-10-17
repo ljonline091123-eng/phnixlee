@@ -24,8 +24,10 @@ import com.zhaocai.business.vendor.service.IVendorContactService;
 import com.zhaocai.business.vendor.service.IVendorOperateLogService;
 import com.zhaocai.business.vendor.service.IVendorService;
 import com.zhaocai.business.vendor.vo.req.*;
+import com.zhaocai.business.vendor.vo.res.VendorContactInfoVO;
 import com.zhaocai.business.vendor.vo.res.VendorContactListVO;
 import com.zhaocai.business.vendor.vo.res.VendorMainContactVO;
+import com.zhaocai.business.vendor.vo.res.VendorVO;
 import com.zhaocai.common.core.bean.PageResult;
 import com.zhaocai.common.core.constant.SecurityConstants;
 import com.zhaocai.common.core.domain.R;
@@ -392,9 +394,18 @@ public class VendorContactServiceImpl extends ServiceImpl<VendorContactMapper,Ve
     }
 
     @Override
-    public VendorContact getInfo(Long id) {
-        return getOne(new LambdaQueryWrapper<VendorContact>()
+    public VendorContactInfoVO getInfo(Long id) {
+        VendorContact vendorContact = getOne(new LambdaQueryWrapper<VendorContact>()
                 .eq(VendorContact::getId,id));
+        if(vendorContact!=null){
+            VendorContactInfoVO vo = BeanCopierUtil.copyBean(vendorContact, VendorContactInfoVO.class);
+            Vendor vendor = vendorService.getById(vendorContact.getVendorId());
+            VendorVO vendorVo = BeanCopierUtil.copyBean(vendor, VendorVO.class);
+            if(vendor!=null)
+                vo.setVendorVO(vendorVo);
+            return vo;
+        }
+        throw new BusinessException("该id经查询无供应商联系人数据");
     }
 
     /**
