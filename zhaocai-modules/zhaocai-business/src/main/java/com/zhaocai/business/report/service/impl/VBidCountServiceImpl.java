@@ -284,18 +284,14 @@ public class VBidCountServiceImpl extends ServiceImpl<VBidCountMapper, VBidCount
      * @return
      */
     private List<VBidCountVo> createDeptTree(List<VBidCountVo> resultList, String thridParentId) {
-        Map<String, List<VBidCountVo>> childrenMap = resultList.parallelStream()
-                .collect(Collectors.groupingBy(VBidCountVo::getParentId));
-
-        List<VBidCountVo> childenList = childrenMap.getOrDefault(thridParentId, Collections.emptyList());
-
-        if (!childenList.isEmpty()) {
+        List<VBidCountVo> childenList = resultList.stream().filter(i -> i.getParentId().equals(thridParentId)).collect(Collectors.toList());
+        if (!CollectionUtils.isEmpty(childenList)) {
             for (VBidCountVo map : childenList) {
                 map.setChildren(createDeptTree(resultList, map.getId()));
             }
         } else {
-            List<VBidCountVo> children = childrenMap.getOrDefault(thridParentId, Collections.emptyList());
-            if (!children.isEmpty()) {
+            List<VBidCountVo> children = resultList.stream().filter(i -> i.getId().equals(thridParentId)).collect(Collectors.toList());
+            if (!CollectionUtils.isEmpty(children)) {
                 List<VBidCountVo> selfChildren = new ArrayList<>(children.get(0).getChildren());
                 selfChildren.addAll(childenList);
                 return selfChildren;
