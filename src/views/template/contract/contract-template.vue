@@ -595,8 +595,8 @@ export default {
           }
           return false;
         }
-        if (!this.fileForm.agreementSignStamperList.length)
-          return this.$message.error("请先设置合同盖章位置");
+        // if (!this.fileForm.agreementSignStamperList.length)
+        //   return this.$message.error("请先设置合同盖章位置");
         if (valid) {
           const { attachmentId } = this;
           const {
