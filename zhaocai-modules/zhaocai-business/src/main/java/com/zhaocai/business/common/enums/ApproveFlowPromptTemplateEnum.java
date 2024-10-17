@@ -51,6 +51,10 @@ public enum ApproveFlowPromptTemplateEnum {
     VENDOR_CHANGE_APPROVE("vendor_change_approve", "您有供应商（%s）信息修改在审核节点的审批！"),
     VENDOR_BLACKLIST_APPROVE("vendor_blacklist_approve", "您有供应商（%s）移入移出黑名单在审核节点的审批！"),
     PROCUREMENT_PLAN_PUSH("procurement_plan_push", "您有一条（%s）合约规划，请及时发起采购计划"),
+    PROCUREMENT_PLAN_NOTICE_PUSH("procurement_plan_notice_push",
+            "%s 职务（%s），{最小核算项目=(%s)}，" +
+                    "合同类型为{%s(%s)}合同将于近期开展，请您及时关注了解，" +
+                    "采购计划如下：%s招标时间为%s，进场时间为%s、采购人为%s，区域为%s"),
 
 
     ;

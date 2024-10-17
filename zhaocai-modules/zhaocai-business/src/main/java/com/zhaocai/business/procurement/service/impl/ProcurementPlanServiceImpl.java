@@ -446,6 +446,7 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
             PushThirdPartyTodoTaskSonRequestDTO requestDTO = new PushThirdPartyTodoTaskSonRequestDTO();
             requestDTO.setTitle("采购计划待办信息");
             requestDTO.setContent(String.format(ApproveFlowPromptTemplateEnum.PROCUREMENT_PLAN_PUSH.getDesc(), planPushVO.getContractPlanningName()));
+            requestDTO.setContent(String.format(ApproveFlowPromptTemplateEnum.PROCUREMENT_PLAN_NOTICE_PUSH.getDesc(), planPushVO.getContractPlanningName()));
             requestDTO.setArrivalTime(nowTime);
             requestDTO.setCreateTime(nowTime);
             requestDTO.setMsgFromPerCode(thridUserId);
