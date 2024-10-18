@@ -213,7 +213,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
 
 
     <select id="getListByContractPlanningId" resultType="com.zhaocai.business.bidding.vo.res.ContractPlanningNoticeVO">
-        select ttn.scheme_id as schemeId,ttn.id as noticeId,tps.procurement_scheme_code ,tcp.contract_planning_code ,tcp.contract_planning_id
+        select tps.id as schemeId,ttn.id as noticeId,tpp.id as planId,tps.procurement_scheme_code ,tcp.contract_planning_code ,tcp.contract_planning_id
             from tb_tender_notice ttn
              /* 采购方案对象 */
              left join tb_procurement_scheme tps on ttn.scheme_id = tps.id and tps.del_flag = 0

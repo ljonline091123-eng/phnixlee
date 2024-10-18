@@ -51,6 +51,7 @@ import com.zhaocai.common.core.utils.NumberUtil;
 import com.zhaocai.common.core.utils.bean.BeanCopierUtil;
 import com.zhaocai.common.core.web.bean.ResultData;
 import com.zhaocai.common.security.utils.SecurityUtils;
+import com.zhaocai.common.signature.domain.AgreementSignature;
 import com.zhaocai.system.api.domain.SysUser;
 import com.zhaocai.system.api.system.RemoteUserService;
 import com.zhaocai.system.api.domain.SetConfigValueDTO;
@@ -58,6 +59,7 @@ import com.zhaocai.system.api.system.RemoteSystemService;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -436,12 +438,22 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
         contractPlanningPushRecordService.save(record);
     }
 
+    /* 推送合约规划 */
     public void dealOpenPeopleTodoTask (ProcurementPlanPushVO planPushVO){
         PushThirdPartyTodoTaskRequestDTO parentRequestDTO = new PushThirdPartyTodoTaskRequestDTO();
         List<PushThirdPartyTodoTaskSonRequestDTO> messageList = new ArrayList<>();
         String nowTime = formatDate(new Date());
         String nickName = SecurityUtils.getLoginUserNickName();
         Long thridUserId = StringUtils.isNotEmpty(SecurityUtils.getThridUserId()) ? Long.parseLong(SecurityUtils.getThridUserId()) : null;
+
+
+//        ContractPlanning contractPlanning = contractPlanningService.getOne(new LambdaQueryWrapper<ContractPlanning>()
+//                .eq(ContractPlanning::getContractPlanningId,planPushVO.getContractPlanningId()));
+//
+//        String content = String.format(ApproveFlowPromptTemplateEnum.PROCUREMENT_PLAN_NOTICE_PUSH.getDesc(),
+//                SecurityUtils.getLoginUserNickName(),
+//                SecurityUtils.getSysUser().getRoles());
+
         for (ProcurementPlanPushUserVO userData : planPushVO.getUserList()){
             PushThirdPartyTodoTaskSonRequestDTO requestDTO = new PushThirdPartyTodoTaskSonRequestDTO();
             requestDTO.setTitle("采购计划待办信息");
