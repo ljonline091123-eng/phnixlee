@@ -120,6 +120,14 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
     @Autowired
     private ITenderNoticeService tenderNoticeService;
 
+    @Lazy
+    @Autowired
+    private IMinProjectService minProjectService;
+
+    @Lazy
+    @Autowired
+    private IProcurementPlanService procurementPlanService;
+
     @Override
     public PageResult<ProcurementPlanListVO> listPage(ProcurementPlanListQueryVO queryVO) {
         IPage<ProcurementPlanListVO> iPage =  baseMapper.selectListPage(queryVO.toMybatisPage(), queryVO);
@@ -447,17 +455,33 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
         Long thridUserId = StringUtils.isNotEmpty(SecurityUtils.getThridUserId()) ? Long.parseLong(SecurityUtils.getThridUserId()) : null;
 
 
-//        ContractPlanning contractPlanning = contractPlanningService.getOne(new LambdaQueryWrapper<ContractPlanning>()
-//                .eq(ContractPlanning::getContractPlanningId,planPushVO.getContractPlanningId()));
-//
-//        String content = String.format(ApproveFlowPromptTemplateEnum.PROCUREMENT_PLAN_NOTICE_PUSH.getDesc(),
-//                SecurityUtils.getLoginUserNickName(),
-//                SecurityUtils.getSysUser().getRoles());
 
         for (ProcurementPlanPushUserVO userData : planPushVO.getUserList()){
             PushThirdPartyTodoTaskSonRequestDTO requestDTO = new PushThirdPartyTodoTaskSonRequestDTO();
             requestDTO.setTitle("采购计划待办信息");
-            requestDTO.setContent(String.format(ApproveFlowPromptTemplateEnum.PROCUREMENT_PLAN_PUSH.getDesc(), planPushVO.getContractPlanningName()));
+//            requestDTO.setContent(String.format(ApproveFlowPromptTemplateEnum.PROCUREMENT_PLAN_PUSH.getDesc(), planPushVO.getContractPlanningName()));
+
+            /* 获取已有的合约规划 */
+            ContractPlanning contractPlanning = contractPlanningService.getOne(new LambdaQueryWrapper<ContractPlanning>()
+                    .eq(ContractPlanning::getContractPlanningCode,planPushVO.getContractPlanningCode()));
+            /* 查询采购计划 */
+            ProcurementPlan procurementPlan = null;
+            if(contractPlanning!=null&&contractPlanning.getPlanId()!=null){
+                procurementPlan = procurementPlanService.getById(contractPlanning.getPlanId());
+            }
+            String content = String.format(ApproveFlowPromptTemplateEnum.PROCUREMENT_PLAN_NOTICE_PUSH.getDesc(),
+                    SecurityUtils.getLoginUserNickName(),/* 推送人 登录人 */
+                    contractPlanning==null?"":contractPlanning.getProjectName(),/* 项目名称 */
+                    contractPlanning==null?"":contractPlanning.getContractPlanningCategoryName(),/* 类型 */
+                    contractPlanning==null?"":contractPlanning.getContractPlanningName(),/* 合约规划名称 */
+                    procurementPlan==null?"":procurementPlan.getProcurementPlanName(),/* 采购计划名称 */
+                    planPushVO.getBiddingTime()==null?"":planPushVO.getBiddingTime(),/* 招标时间 */
+                    planPushVO.getEnterIntoTime()==null?"":planPushVO.getEnterIntoTime(),/* 进场时间 */
+                    procurementPlan==null?"":procurementPlan.getProcurementOfficerName(),/* 采购经办人名称 */
+                    (procurementPlan==null?"":procurementPlan.getRegionProvinceCode()) + (procurementPlan==null?"":procurementPlan.getRegionCityCode())/* 省 + 市 */
+            );
+            requestDTO.setContent(content);/* 推送内容 */
+
             requestDTO.setArrivalTime(nowTime);
             requestDTO.setCreateTime(nowTime);
             requestDTO.setMsgFromPerCode(thridUserId);

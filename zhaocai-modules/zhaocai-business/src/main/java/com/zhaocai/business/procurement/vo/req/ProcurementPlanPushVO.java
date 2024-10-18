@@ -1,8 +1,10 @@
 package com.zhaocai.business.procurement.vo.req;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import io.swagger.annotations.ApiModelProperty;
 import lombok.Data;
 
+import java.util.Date;
 import java.util.List;
 
 /**
@@ -18,6 +20,20 @@ public class ProcurementPlanPushVO {
     @ApiModelProperty(value = "合约规划名称")
     private String contractPlanningName;
 
+    @ApiModelProperty(value = "项目合约id")
+    private String contractPlanningId;
+
+    @ApiModelProperty(value = "项目合约编码")
+    private String contractPlanningCode;
+
+    @ApiModelProperty(value =  "第三方待办跳转地址")
+    private String redirectUrl;
+
+
+    /**
+     * 新增一些字段
+     * Time:2024/10/18 下午4:56
+     * */
     @ApiModelProperty(value = "采购方案id")
     private Long schemeId;
 
@@ -30,13 +46,10 @@ public class ProcurementPlanPushVO {
     @ApiModelProperty(value =  "采购方案编号")
     private String procurementSchemeCode;
 
-    @ApiModelProperty(value = "项目合约id")
-    private String contractPlanningId;
+    @ApiModelProperty(value = "招标时间")
+    private String biddingTime;
 
-    @ApiModelProperty(value = "项目合约编码")
-    private String contractPlanningCode;
-
-    @ApiModelProperty(value =  "第三方待办跳转地址")
-    private String redirectUrl;
+    @ApiModelProperty(value = "进场时间")
+    private String enterIntoTime;
 
 }

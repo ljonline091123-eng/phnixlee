@@ -35,7 +35,7 @@ public class MaterialsList extends BaseEntity {
     private Long contractSplitId;
 
     /**
-     * 物料 id
+     * 物料 id {@link com.zhaocai.business.manager.http.service.ContractPlanService#getContractMaterialsList}
      */
     @NotBlank(message = "采购清单的物料 id不能为空")
     @ApiModelProperty(value = "物料 id")
