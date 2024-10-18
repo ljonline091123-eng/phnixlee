@@ -85,6 +85,14 @@ public interface IBiddingInfoService  extends IService<BiddingInfo> {
     boolean abandonBidMore(AbandonBidVO abandonBidVO);
 
     /**
+     * 废标操作（采购方案同步废除）
+     *
+     * @param abandonBidVO 废标参数
+     * @return
+     */
+    boolean abandonBidMoreScheme(AbandonBidVO abandonBidVO);
+
+    /**
      * 开启评标
      *
      * @param noticeId 公告id

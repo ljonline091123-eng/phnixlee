@@ -631,6 +631,17 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
         return res;
     }
 
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public boolean abandonBidMoreScheme(AbandonBidVO abandonBidVO) {
+        ValidateUtils.isNullException(abandonBidVO.getSchemeId(),"采购方案ID为空必传");
+        boolean res = false;
+        res = abandonBidMore(abandonBidVO);
+        /* 废除采购方案 */
+        procurementSchemeService.cancellationProcurementScheme(abandonBidVO.getSchemeId());
+        return res;
+    }
+
     /** 校验废标参数 */
     private void verifyParam(List<AbandonMoreVO> abandonMoreVOList){
         AbandonMoreVO abandonMoreVO = abandonMoreVOList.get(0);
