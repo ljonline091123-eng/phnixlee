@@ -2,6 +2,7 @@ package com.zhaocai.business.vendor.service.impl;
 
 import cn.hutool.core.codec.Base64;
 import cn.hutool.core.collection.CollectionUtil;
+import com.alibaba.fastjson.JSON;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
@@ -11,6 +12,7 @@ import com.zhaocai.business.common.exception.BusinessException;
 import com.zhaocai.business.common.exception.NotFoundException;
 import com.zhaocai.business.common.exception.ParamValidateException;
 import com.zhaocai.business.common.utils.ValidateUtils;
+import com.zhaocai.business.manager.http.dto.req.UserObj;
 import com.zhaocai.business.manager.http.service.UnderlingSystemService;
 import com.zhaocai.business.process.service.IBPMProcessService;
 import com.zhaocai.business.pub.vo.req.AttachmentRequestVO;
@@ -337,6 +339,10 @@ public class VendorContactServiceImpl extends ServiceImpl<VendorContactMapper,Ve
         String org = underlingSystemService.getL2OrgByOrgId(vendor.getFirstCooperationCompanyCode());
         //供应商注册时候选择审批单位，只能由选择的单位维护的供应商审核人员进行审核，如果供应商信息修改也是需要原审核单位进行审核
         String customProcessKey = ProcessKeyEnum.ZHAOCAI_VENDOR_ADDCONTACT.getIdentifying().replace("{org}",org);
+        UserObj userObj = UserObj.builder().businessType(ProcessKeyEnum.ZHAOCAI_VENDOR_ADDCONTACT.name()).
+                businessId(vendor.getId().toString())
+                .toDoType(ToDoTypeEnum.EXAMINE.name()).build();
+        paramMap.put("userObj", JSON.toJSONString(userObj));
         paramMap.put("customProcessKey", customProcessKey);
         paramMap.put("operateComment", operateComment);
         processService.startProcessInstance(
