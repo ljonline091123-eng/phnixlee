@@ -8,6 +8,7 @@ import com.zhaocai.business.common.enums.ProcurementPlanTypeEnum;
 import com.zhaocai.business.common.exception.BusinessException;
 import com.zhaocai.business.common.exception.ParamValidateException;
 import com.zhaocai.business.common.utils.AmountCalUtil;
+import com.zhaocai.business.manager.http.dto.res.ContractPlanMaterialListDTO;
 import com.zhaocai.business.manager.http.service.UnderlingSystemService;
 import com.zhaocai.business.procurement.domain.MaterialsList;
 import com.zhaocai.business.procurement.dto.MaterialsListDTO;
@@ -130,6 +131,9 @@ public class MaterialsListServiceImpl extends ServiceImpl<MaterialsListMapper, M
             for (MaterialsVO materials : materialsLists) {
                 materials.setRentModeText(rentModeMap.get(materials.getRentMode()));
             }
+
+            /* 排序一下 根据 物料编码 */
+            materialsLists.stream().sorted(Comparator.comparing(MaterialsVO::getMaterialsCode).reversed()).collect(Collectors.toList());
 
             splitMaterialsVO.setMaterialsLists(materialsLists);
 
@@ -390,6 +394,9 @@ public class MaterialsListServiceImpl extends ServiceImpl<MaterialsListMapper, M
             splitMaterialsVO.setContractScope(keys[2]);
 
             List<CompMaterialsContentVO> materialsLists = BeanCopierUtil.copyList(entry.getValue(), CompMaterialsContentVO.class);
+
+            /* 排序一下 根据 物料编码 */
+            materialsLists.stream().sorted(Comparator.comparing(CompMaterialsContentVO::getMaterialsCode).reversed()).collect(Collectors.toList());
 
             splitMaterialsVO.setMaterialsLists(materialsLists);
 

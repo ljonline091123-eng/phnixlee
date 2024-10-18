@@ -95,6 +95,9 @@ public class ContractPlanService {
 
         List<ContractPlanMaterialListDTO> list = UnderlingRestTemplateService.listForObject(UnderlingPlatformUrlEnum.LIST_BY_PROJECT_CONTRACT,ContractPlanMaterialListDTO.class,requestDTO);
 
+        /* 排序一下 根据 物料编码 */
+        list.stream().sorted(Comparator.comparing(ContractPlanMaterialListDTO::getSubjectDtlCode).reversed()).collect(Collectors.toList());
+
         if (CollectionUtil.isNotEmpty(list)) {
             return list.stream()
                     .map(val -> new ContractMaterialsListVO(val,queryVO.getProcurementType()))

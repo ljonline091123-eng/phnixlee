@@ -9,6 +9,7 @@ import com.zhaocai.business.agreement.service.IAgreementMaterialsListService;
 import com.zhaocai.business.agreement.vo.req.AgreementSchemeQueryVO;
 import com.zhaocai.business.agreement.vo.res.AgreementSchemeListVO;
 import com.zhaocai.business.bidding.enums.TenderNoticeStatusEnum;
+import com.zhaocai.business.bidding.vo.res.BiddingQuotationDetailVO;
 import com.zhaocai.business.common.enums.*;
 import com.zhaocai.business.common.exception.BusinessException;
 import com.zhaocai.business.common.exception.ParamValidateException;
@@ -222,8 +223,12 @@ public class ProcurementSchemeServiceImpl extends ServiceImpl<ProcurementSchemeM
                 materialsListMap.put(materialsList.getMaterialsCode(), materialsList);
             }
         }
+        List<MaterialsVO> materialsVOList = BeanCopierUtil.copyList(new ArrayList<>(materialsListMap.values()), MaterialsVO.class);
 
-        return BeanCopierUtil.copyList(new ArrayList<>(materialsListMap.values()), MaterialsVO.class);
+        /* 排序一下 根据 物料编码 */
+        materialsVOList.stream().sorted(Comparator.comparing(MaterialsVO::getMaterialsCode).reversed()).collect(Collectors.toList());
+
+        return materialsVOList;
     }
 
     @Override

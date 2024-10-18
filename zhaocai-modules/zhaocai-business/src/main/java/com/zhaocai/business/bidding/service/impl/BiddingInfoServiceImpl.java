@@ -465,6 +465,11 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
             //todo su含税单价（超合约计划单价字体颜色变红）
             quotationDetailVOList.add(quotationVO);
         }
+
+        /* 排序一下 根据 物料编码 */
+        quotationDetailVOList.stream().sorted(Comparator.comparing(BiddingQuotationDetailVO::getMaterialsCode).reversed()).collect(Collectors.toList());
+
+
         vo.setQuotationDetailVOList(quotationDetailVOList);
 
         //查询投标标书附件
