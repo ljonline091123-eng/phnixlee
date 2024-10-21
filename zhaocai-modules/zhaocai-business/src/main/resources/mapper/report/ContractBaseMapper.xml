@@ -106,13 +106,14 @@
         <result property="partbSiteManagerPhone" column="partb_site_manager_phone"/>
         <result property="managementOrgId" column="management_org_id"/>
         <result property="belongingOrgId" column="belonging_org_id"/>
+        <result property="projectDepartmentId" column="project_department_id"/>
         <result property="projectId" column="project_id"/>
         <result property="minAccountCode" column="min_account_code"/>
         <result property="minAccountFullName" column="min_account_full_name"/>
     </resultMap>
 
     <select id="contractLedgerList" parameterType="com.zhaocai.business.report.vo.ContractBaseReportVo" resultMap="ContractBaseReportVoResult">
-        select cb.*,tmp.management_org_id,tmp.belonging_org_id,tmp.min_account_code,min_account_full_name from contract_base cb
+        select cb.*,tmp.management_org_id,tmp.belonging_org_id,tmp.min_account_code,tmp.min_account_full_name,tmp.project_department_id from contract_base cb
         left join tb_min_project tmp
         on cb.project_id = tmp.id
         <where>

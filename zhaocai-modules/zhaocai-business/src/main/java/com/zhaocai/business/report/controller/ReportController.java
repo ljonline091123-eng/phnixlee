@@ -40,6 +40,9 @@ public class ReportController extends BladeController {
     @Autowired
     private IContractBaseService contractBaseService;
 
+    @Autowired
+    private IPriceAnalysisByConReportService priceAnalysisByConReportService;
+
     /**
      * 招标率报表
      * @param tenderingRate
@@ -125,11 +128,11 @@ public class ReportController extends BladeController {
     }
 
     /**
-     * 合同台账报表（来源于-支出合同）
+     * 合同台账报表导出（来源于-支出合同）
      * @param contractBaseReportVo
      * @return
      */
-    @GetMapping("/contractLedgerExport")
+    @PostMapping("/contractLedgerExport")
     public void contractLedgerExport(HttpServletResponse response, ContractBaseReportVo contractBaseReportVo){
         List<ContractBaseReportVo> list = contractBaseService.contractLedgerExport(contractBaseReportVo);
         String title = contractBaseService.getExportTitle(contractBaseReportVo);
@@ -145,6 +148,31 @@ public class ReportController extends BladeController {
     @GetMapping("/priceAnalysisReport")
     public ResultData<List<PriceAnalysisReportVo>> priceAnalysisReport(PriceAnalysisReportVo priceAnalysis){
         return ResultData.data(priceAnalysisReportService.priceAnalysisReport(priceAnalysis));
+    }
+
+    /**
+     * 价格分析报表（来源于-支出合同）
+     * @param priceAnalysis
+     * @return
+     */
+    @GetMapping("/priceAnalysisReportByCon")
+    public ResultData<List<PriceAnalysisByConReportVo>> priceAnalysisReport(PriceAnalysisByConReportVo priceAnalysis){
+        return ResultData.data(priceAnalysisByConReportService.priceAnalysisReport(priceAnalysis));
+    }
+
+    /**
+     * 价格分析报表导出（来源于-支出合同）
+     * @param priceAnalysisByConReportVo
+     * @return
+     */
+    @PostMapping("/priceAnalysisExport")
+    public void priceAnalysisExport(HttpServletResponse response, PriceAnalysisByConReportVo priceAnalysisByConReportVo){
+        List<PriceAnalysisByConReportVo> list = priceAnalysisByConReportService.priceAnalysisExport(priceAnalysisByConReportVo);
+        Map<String, Object> title = priceAnalysisByConReportService.getExportTitle(priceAnalysisByConReportVo);
+        ExcelUtil<PriceAnalysisByConReportVo> util = new ExcelUtil<PriceAnalysisByConReportVo>(PriceAnalysisByConReportVo.class);
+        List<String> columns = (List<String>) title.get("column");
+        util.hideColumn(columns.toArray(new String[0]));
+        util.exportExcel(response,list, "合同台账报表数据",title.get("title") + "合同台账统计报表");
     }
 
     /**

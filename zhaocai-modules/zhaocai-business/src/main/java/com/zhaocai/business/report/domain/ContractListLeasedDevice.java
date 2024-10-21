@@ -62,7 +62,7 @@ public class ContractListLeasedDevice {
   private BigDecimal number;
 
   @ApiModelProperty(value = "租赁时间")
-  private BigDecimal renttime;
+  private BigDecimal rentTime;
 
   @ApiModelProperty(value = "工程量")
   private BigDecimal quantity;

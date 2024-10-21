@@ -123,12 +123,14 @@ public class ContractBaseServiceImpl extends ServiceImpl<ContractBaseMapper, Con
                 vo.setContractNumber(contractBaseList.size());
                 vo.setNtaxChangedAmount(contractBaseList.stream().map(ContractBaseReportVo::getNtaxChangedAmount).reduce(BigDecimal.ZERO, BigDecimal::add));
                 if (null != callType && callType.equals("Export")) {
-                    vo.setSettledAmount(contractBaseList.stream().map(ContractBaseReportVo::getSettledAmount).reduce(BigDecimal.ZERO, BigDecimal::add));
-                    vo.setUnsettledAmount(contractBaseList.stream().map(ContractBaseReportVo::getUnsettledAmount).reduce(BigDecimal.ZERO, BigDecimal::add));
-                    vo.setPaidAmount(contractBaseList.stream().map(ContractBaseReportVo::getPaidAmount).reduce(BigDecimal.ZERO, BigDecimal::add));
-                    vo.setUnpaidAmount(contractBaseList.stream().map(ContractBaseReportVo::getUnpaidAmount).reduce(BigDecimal.ZERO, BigDecimal::add));
+                    vo = this.computeMaterial(vo, contractBaseList);
+//                    vo.setSettledAmount(contractBaseList.stream().map(ContractBaseReportVo::getSettledAmount).reduce(BigDecimal.ZERO, BigDecimal::add));
+//                    vo.setUnsettledAmount(contractBaseList.stream().map(ContractBaseReportVo::getUnsettledAmount).reduce(BigDecimal.ZERO, BigDecimal::add));
+//                    vo.setPaidAmount(contractBaseList.stream().map(ContractBaseReportVo::getPaidAmount).reduce(BigDecimal.ZERO, BigDecimal::add));
+//                    vo.setUnpaidAmount(contractBaseList.stream().map(ContractBaseReportVo::getUnpaidAmount).reduce(BigDecimal.ZERO, BigDecimal::add));
                 }
                 // 按类型分组
+                ContractBaseReportVo finalVo = vo;
                 List<ContractBaseReportVo> typeSummaries = contractBaseList.stream()
                         .collect(Collectors.groupingBy(ContractBaseReportVo::getConType))
                         .entrySet()
@@ -136,24 +138,25 @@ public class ContractBaseServiceImpl extends ServiceImpl<ContractBaseMapper, Con
                         .map(typeEntry -> {
                             String type = typeEntry.getKey();
                             List<ContractBaseReportVo> typeContracts = typeEntry.getValue();
-                            typeContracts.forEach(i -> i.setParentId(vo.getId() + type));
+                            typeContracts.forEach(i -> i.setParentId(finalVo.getId() + type));
                             // 汇总类型级别的数量和金额
                             int typeCount = typeContracts.size();
                             BigDecimal typeAmount = typeContracts.stream().map(ContractBaseReportVo::getNtaxChangedAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
                             // 创建类型汇总对象
                             ContractBaseReportVo typeVo = new ContractBaseReportVo();
-                            typeVo.setId(vo.getId() + type);
+                            typeVo.setId(finalVo.getId() + type);
                             typeVo.setConTypeName(StringUtils.isNotEmpty(type)?contractTypeList.get(type):null);
                             typeVo.setDeptName(StringUtils.isNotEmpty(type)?contractTypeList.get(type):null);
-                            typeVo.setParentId(vo.getId());
+                            typeVo.setParentId(finalVo.getId());
                             typeVo.setType("X");
                             typeVo.setContractNumber(typeCount);
                             typeVo.setNtaxChangedAmount(typeAmount);
                             if (null != callType && callType.equals("Export")) {
-                                typeVo.setSettledAmount(typeContracts.stream().map(ContractBaseReportVo::getSettledAmount).reduce(BigDecimal.ZERO, BigDecimal::add));
-                                typeVo.setUnsettledAmount(typeContracts.stream().map(ContractBaseReportVo::getUnsettledAmount).reduce(BigDecimal.ZERO, BigDecimal::add));
-                                typeVo.setPaidAmount(typeContracts.stream().map(ContractBaseReportVo::getPaidAmount).reduce(BigDecimal.ZERO, BigDecimal::add));
-                                typeVo.setUnpaidAmount(typeContracts.stream().map(ContractBaseReportVo::getUnpaidAmount).reduce(BigDecimal.ZERO, BigDecimal::add));
+                                typeVo = this.computeMaterial(typeVo, typeContracts);
+//                                typeVo.setSettledAmount(typeContracts.stream().map(ContractBaseReportVo::getSettledAmount).reduce(BigDecimal.ZERO, BigDecimal::add));
+//                                typeVo.setUnsettledAmount(typeContracts.stream().map(ContractBaseReportVo::getUnsettledAmount).reduce(BigDecimal.ZERO, BigDecimal::add));
+//                                typeVo.setPaidAmount(typeContracts.stream().map(ContractBaseReportVo::getPaidAmount).reduce(BigDecimal.ZERO, BigDecimal::add));
+//                                typeVo.setUnpaidAmount(typeContracts.stream().map(ContractBaseReportVo::getUnpaidAmount).reduce(BigDecimal.ZERO, BigDecimal::add));
                                 typeContracts = this.getContractLedgerDetails(typeContracts);
                             }
                             typeVo.setChildren(typeContracts);
@@ -164,6 +167,38 @@ public class ContractBaseServiceImpl extends ServiceImpl<ContractBaseMapper, Con
             }
         }
         return resultList;
+    }
+
+    /**
+     * 计算物料金额汇总
+     * @param vo
+     * @param contractBaseList
+     * @return
+     */
+    private ContractBaseReportVo computeMaterial(ContractBaseReportVo vo, List<ContractBaseReportVo> contractBaseList) {
+        BigDecimal settledAmount = BigDecimal.ZERO;
+        BigDecimal unsettledAmount = BigDecimal.ZERO;
+        BigDecimal paidAmount = BigDecimal.ZERO;
+        BigDecimal unpaidAmount = BigDecimal.ZERO;
+        for (ContractBaseReportVo contractBaseReportVo : contractBaseList) {
+            if(null != contractBaseReportVo.getSettledAmount()){
+                settledAmount = settledAmount.add(contractBaseReportVo.getSettledAmount());
+            }
+            if(null != contractBaseReportVo.getUnsettledAmount()){
+                unsettledAmount = settledAmount.add(contractBaseReportVo.getUnsettledAmount());
+            }
+            if(null != contractBaseReportVo.getPaidAmount()){
+                paidAmount = settledAmount.add(contractBaseReportVo.getPaidAmount());
+            }
+            if(null != contractBaseReportVo.getUnpaidAmount()){
+                unpaidAmount = settledAmount.add(contractBaseReportVo.getUnpaidAmount());
+            }
+        }
+        vo.setSettledAmount(settledAmount);
+        vo.setUnsettledAmount(unsettledAmount);
+        vo.setPaidAmount(paidAmount);
+        vo.setUnpaidAmount(unpaidAmount);
+        return vo;
     }
 
     /**
@@ -251,11 +286,10 @@ public class ContractBaseServiceImpl extends ServiceImpl<ContractBaseMapper, Con
      */
     private List<ContractBaseReportVo> getContractLedgerDetails(List<ContractBaseReportVo> resultList) {
         for (ContractBaseReportVo contractBaseReportVo : resultList) {
-            List<ContractListVo> list = this.contractLedgerDetails(contractBaseReportVo.getUniqueId());
+            List<ContractListVo> list = this.contractLedgerDetails(contractBaseReportVo.getId());
             if (!CollectionUtils.isEmpty(list)) {
                 contractBaseReportVo.setChildren(BeanCopierUtil.copyList(list, ContractBaseReportVo.class));
             }
-            resultList.add(contractBaseReportVo);
         }
         return resultList;
     }
@@ -329,10 +363,11 @@ public class ContractBaseServiceImpl extends ServiceImpl<ContractBaseMapper, Con
                                 typeVo.setContractNumber(typeCount);
                                 typeVo.setNtaxChangedAmount(typeAmount);
                                 if (null != callType && callType.equals("Export")) {
-                                    typeVo.setSettledAmount(typeContracts.stream().map(ContractBaseReportVo::getSettledAmount).reduce(BigDecimal.ZERO, BigDecimal::add));
-                                    typeVo.setUnsettledAmount(typeContracts.stream().map(ContractBaseReportVo::getUnsettledAmount).reduce(BigDecimal.ZERO, BigDecimal::add));
-                                    typeVo.setPaidAmount(typeContracts.stream().map(ContractBaseReportVo::getPaidAmount).reduce(BigDecimal.ZERO, BigDecimal::add));
-                                    typeVo.setUnpaidAmount(typeContracts.stream().map(ContractBaseReportVo::getUnpaidAmount).reduce(BigDecimal.ZERO, BigDecimal::add));
+                                    typeVo = this.computeMaterial(typeVo, typeContracts);
+//                                    typeVo.setSettledAmount(typeContracts.stream().map(ContractBaseReportVo::getSettledAmount).reduce(BigDecimal.ZERO, BigDecimal::add));
+//                                    typeVo.setUnsettledAmount(typeContracts.stream().map(ContractBaseReportVo::getUnsettledAmount).reduce(BigDecimal.ZERO, BigDecimal::add));
+//                                    typeVo.setPaidAmount(typeContracts.stream().map(ContractBaseReportVo::getPaidAmount).reduce(BigDecimal.ZERO, BigDecimal::add));
+//                                    typeVo.setUnpaidAmount(typeContracts.stream().map(ContractBaseReportVo::getUnpaidAmount).reduce(BigDecimal.ZERO, BigDecimal::add));
                                     typeContracts = this.getContractLedgerDetails(typeContracts);
                                 }
                                 typeVo.setChildren(typeContracts);
@@ -347,10 +382,11 @@ public class ContractBaseServiceImpl extends ServiceImpl<ContractBaseMapper, Con
                     projectVo.setContractNumber(projectCount);
                     projectVo.setNtaxChangedAmount(projectAmount);
                     if (null != callType && callType.equals("Export")) {
-                        projectVo.setSettledAmount(projectContracts.stream().map(ContractBaseReportVo::getSettledAmount).reduce(BigDecimal.ZERO, BigDecimal::add));
-                        projectVo.setUnsettledAmount(projectContracts.stream().map(ContractBaseReportVo::getUnsettledAmount).reduce(BigDecimal.ZERO, BigDecimal::add));
-                        projectVo.setPaidAmount(projectContracts.stream().map(ContractBaseReportVo::getPaidAmount).reduce(BigDecimal.ZERO, BigDecimal::add));
-                        projectVo.setUnpaidAmount(projectContracts.stream().map(ContractBaseReportVo::getUnpaidAmount).reduce(BigDecimal.ZERO, BigDecimal::add));
+                        projectVo = this.computeMaterial(projectVo, projectContracts);
+//                        projectVo.setSettledAmount(projectContracts.stream().map(ContractBaseReportVo::getSettledAmount).reduce(BigDecimal.ZERO, BigDecimal::add));
+//                        projectVo.setUnsettledAmount(projectContracts.stream().map(ContractBaseReportVo::getUnsettledAmount).reduce(BigDecimal.ZERO, BigDecimal::add));
+//                        projectVo.setPaidAmount(projectContracts.stream().map(ContractBaseReportVo::getPaidAmount).reduce(BigDecimal.ZERO, BigDecimal::add));
+//                        projectVo.setUnpaidAmount(projectContracts.stream().map(ContractBaseReportVo::getUnpaidAmount).reduce(BigDecimal.ZERO, BigDecimal::add));
                     }
                     projectVo.setChildren(typeSummaries);
                     return projectVo;
@@ -413,10 +449,11 @@ public class ContractBaseServiceImpl extends ServiceImpl<ContractBaseMapper, Con
                                 typeVo.setContractNumber(typeCount);
                                 typeVo.setNtaxChangedAmount(typeAmount);
                                 if (null != callType && callType.equals("Export")) {
-                                    typeVo.setSettledAmount(typeContracts.stream().map(ContractBaseReportVo::getSettledAmount).reduce(BigDecimal.ZERO, BigDecimal::add));
-                                    typeVo.setUnsettledAmount(typeContracts.stream().map(ContractBaseReportVo::getUnsettledAmount).reduce(BigDecimal.ZERO, BigDecimal::add));
-                                    typeVo.setPaidAmount(typeContracts.stream().map(ContractBaseReportVo::getPaidAmount).reduce(BigDecimal.ZERO, BigDecimal::add));
-                                    typeVo.setUnpaidAmount(typeContracts.stream().map(ContractBaseReportVo::getUnpaidAmount).reduce(BigDecimal.ZERO, BigDecimal::add));
+                                    typeVo = this.computeMaterial(typeVo, typeContracts);
+//                                    typeVo.setSettledAmount(typeContracts.stream().map(ContractBaseReportVo::getSettledAmount).reduce(BigDecimal.ZERO, BigDecimal::add));
+//                                    typeVo.setUnsettledAmount(typeContracts.stream().map(ContractBaseReportVo::getUnsettledAmount).reduce(BigDecimal.ZERO, BigDecimal::add));
+//                                    typeVo.setPaidAmount(typeContracts.stream().map(ContractBaseReportVo::getPaidAmount).reduce(BigDecimal.ZERO, BigDecimal::add));
+//                                    typeVo.setUnpaidAmount(typeContracts.stream().map(ContractBaseReportVo::getUnpaidAmount).reduce(BigDecimal.ZERO, BigDecimal::add));
                                     typeContracts = this.getContractLedgerDetails(typeContracts);
                                 }
                                 typeVo.setChildren(typeContracts);
@@ -431,10 +468,11 @@ public class ContractBaseServiceImpl extends ServiceImpl<ContractBaseMapper, Con
                     projectVo.setContractNumber(projectCount);
                     projectVo.setNtaxChangedAmount(projectAmount);
                     if (null != callType && callType.equals("Export")) {
-                        projectVo.setSettledAmount(projectContracts.stream().map(ContractBaseReportVo::getSettledAmount).reduce(BigDecimal.ZERO, BigDecimal::add));
-                        projectVo.setUnsettledAmount(projectContracts.stream().map(ContractBaseReportVo::getUnsettledAmount).reduce(BigDecimal.ZERO, BigDecimal::add));
-                        projectVo.setPaidAmount(projectContracts.stream().map(ContractBaseReportVo::getPaidAmount).reduce(BigDecimal.ZERO, BigDecimal::add));
-                        projectVo.setUnpaidAmount(projectContracts.stream().map(ContractBaseReportVo::getUnpaidAmount).reduce(BigDecimal.ZERO, BigDecimal::add));
+                        projectVo = this.computeMaterial(projectVo, projectContracts);
+//                        projectVo.setSettledAmount(projectContracts.stream().map(ContractBaseReportVo::getSettledAmount).reduce(BigDecimal.ZERO, BigDecimal::add));
+//                        projectVo.setUnsettledAmount(projectContracts.stream().map(ContractBaseReportVo::getUnsettledAmount).reduce(BigDecimal.ZERO, BigDecimal::add));
+//                        projectVo.setPaidAmount(projectContracts.stream().map(ContractBaseReportVo::getPaidAmount).reduce(BigDecimal.ZERO, BigDecimal::add));
+//                        projectVo.setUnpaidAmount(projectContracts.stream().map(ContractBaseReportVo::getUnpaidAmount).reduce(BigDecimal.ZERO, BigDecimal::add));
                     }
                     projectVo.setChildren(typeSummaries);
                     return projectVo;
@@ -460,10 +498,11 @@ public class ContractBaseServiceImpl extends ServiceImpl<ContractBaseMapper, Con
         vo.setContractNumber(list.size());
         vo.setNtaxChangedAmount(list.stream().map(ContractBaseReportVo::getNtaxChangedAmount).reduce(BigDecimal.ZERO, BigDecimal::add));
         if (null != callType && callType.equals("Export")) {
-            vo.setSettledAmount(list.stream().map(ContractBaseReportVo::getSettledAmount).reduce(BigDecimal.ZERO, BigDecimal::add));
-            vo.setUnsettledAmount(list.stream().map(ContractBaseReportVo::getUnsettledAmount).reduce(BigDecimal.ZERO, BigDecimal::add));
-            vo.setPaidAmount(list.stream().map(ContractBaseReportVo::getPaidAmount).reduce(BigDecimal.ZERO, BigDecimal::add));
-            vo.setUnpaidAmount(list.stream().map(ContractBaseReportVo::getUnpaidAmount).reduce(BigDecimal.ZERO, BigDecimal::add));
+            vo = this.computeMaterial(vo, list);
+//            vo.setSettledAmount(list.stream().map(ContractBaseReportVo::getSettledAmount).reduce(BigDecimal.ZERO, BigDecimal::add));
+//            vo.setUnsettledAmount(list.stream().map(ContractBaseReportVo::getUnsettledAmount).reduce(BigDecimal.ZERO, BigDecimal::add));
+//            vo.setPaidAmount(list.stream().map(ContractBaseReportVo::getPaidAmount).reduce(BigDecimal.ZERO, BigDecimal::add));
+//            vo.setUnpaidAmount(list.stream().map(ContractBaseReportVo::getUnpaidAmount).reduce(BigDecimal.ZERO, BigDecimal::add));
         }
         return vo;
     }
