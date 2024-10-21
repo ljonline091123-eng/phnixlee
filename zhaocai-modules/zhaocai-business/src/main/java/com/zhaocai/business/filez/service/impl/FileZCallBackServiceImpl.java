@@ -62,7 +62,7 @@ public class FileZCallBackServiceImpl implements IFileZCallBackService {
                 return;
             }
         } else {
-            log.error("[联想文档内容回调] - fileZTaskId:{},联想任务处理失败，code:{},不做任何处理",fileZTaskId,callBackCode);
+            log.error("[联想文档内容回调] - fileZTaskId:{},联想任务处理失败，code:{},detail:{},不做任何处理",fileZTaskId,callBackCode,callBack.getDetail().toString());
             return;
         }
 
