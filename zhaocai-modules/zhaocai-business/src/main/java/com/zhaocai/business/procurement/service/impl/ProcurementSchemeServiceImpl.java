@@ -137,6 +137,7 @@ public class ProcurementSchemeServiceImpl extends ServiceImpl<ProcurementSchemeM
     @Override
     @Transactional(propagation = Propagation.REQUIRED, rollbackFor = Exception.class)
     public Long saveProcurementScheme(ProcurementSchemeRequestVO requestVO) {
+        /* 判断保证金状态 来赋值 */
         setSchemeDeposit(requestVO.getProcurementScheme());
 
         if (NumberUtil.isNullOrZero(requestVO.getProcurementScheme().getId())) {

@@ -135,7 +135,7 @@ public class ProcurementPlanController extends BladeController {
     }
 
     /**
-     * 获取采购计划和拆分合约
+     * 获取采购计划和拆分合约,过滤了存在采购方案的计划数据
      */
     @GetMapping("/listPlanContractSplit")
     @ApiOperation(value = "获取采购计划和拆分合约")
