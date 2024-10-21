@@ -407,8 +407,10 @@ public class VendorContactServiceImpl extends ServiceImpl<VendorContactMapper,Ve
             VendorContactInfoVO vo = BeanCopierUtil.copyBean(vendorContact, VendorContactInfoVO.class);
             Vendor vendor = vendorService.getById(vendorContact.getVendorId());
             VendorVO vendorVo = BeanCopierUtil.copyBean(vendor, VendorVO.class);
-            if(vendor!=null)
+            if(vendor!=null){
+                vendorVo.setCreateTime(vendor.getCreateTime());
                 vo.setVendorVO(vendorVo);
+            }
             return vo;
         }
         throw new BusinessException("该id经查询无供应商联系人数据");
