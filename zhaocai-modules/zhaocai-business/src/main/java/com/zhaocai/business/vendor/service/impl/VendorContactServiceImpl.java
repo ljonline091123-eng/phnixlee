@@ -7,6 +7,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.zhaocai.business.agreement.domain.Agreement;
 import com.zhaocai.business.common.enums.*;
 import com.zhaocai.business.common.exception.BusinessException;
 import com.zhaocai.business.common.exception.NotFoundException;
@@ -494,6 +495,18 @@ public class VendorContactServiceImpl extends ServiceImpl<VendorContactMapper,Ve
         String businessId = variables.get("businessId").toString();
         super.update(new LambdaUpdateWrapper<VendorContact>()
                 .set(VendorContact::getState,VendorContactStateEnum.APPROVAL_REJECTION.getState())
+                .eq(VendorContact::getId, businessId));
+    }
+
+    /**
+     * 审批驳回到发起人
+     * @param variables
+     */
+    @Override
+    public void processAuditFreedom(Map<String, Object> variables) {
+        String businessId = variables.get("businessId").toString();
+        super.update(new LambdaUpdateWrapper<VendorContact>()
+                .set(VendorContact::getState, VendorContactStateEnum.APPROVAL_REJECTION.getState())
                 .eq(VendorContact::getId, businessId));
     }
 }
