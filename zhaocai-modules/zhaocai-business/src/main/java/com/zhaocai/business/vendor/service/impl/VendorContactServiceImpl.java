@@ -340,7 +340,7 @@ public class VendorContactServiceImpl extends ServiceImpl<VendorContactMapper,Ve
         //供应商注册时候选择审批单位，只能由选择的单位维护的供应商审核人员进行审核，如果供应商信息修改也是需要原审核单位进行审核
         String customProcessKey = ProcessKeyEnum.ZHAOCAI_VENDOR_ADDCONTACT.getIdentifying().replace("{org}",org);
         UserObj userObj = UserObj.builder().businessType(ProcessKeyEnum.ZHAOCAI_VENDOR_ADDCONTACT.name()).
-                businessId(vendor.getId().toString())
+                businessId(contact.getId().toString())
                 .toDoType(ToDoTypeEnum.EXAMINE.name()).build();
         paramMap.put("userObj", JSON.toJSONString(userObj));
         paramMap.put("customProcessKey", customProcessKey);

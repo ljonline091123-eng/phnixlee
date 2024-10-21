@@ -221,7 +221,7 @@
     </select>
 
     <select id="selectVendorJkpthtListPage" resultType="com.zhaocai.business.vendor.vo.res.VendorVO">
-        select tv.id,tv.enterprise_name
+        select tv.id,tv.enterprise_name,tv.legal_representative,tv.legal_phone,tv.legal_id_card
         from tb_vendor tv
         <where>
             tv.state = 3
