@@ -107,4 +107,11 @@ public class ContractPlanningListVO extends AdviceObject {
     @ApiModelProperty("招标对象推送状态")
     private List<ContractPlanningNoticeVO> contractPlanningNoticeVOList;
 
+    @ApiModelProperty(value = "剩余可用量")
+    private BigDecimal surplusQuantity;
+
+    @MoneyFormat(filedName = "surplusQuantity",scale = 2)
+    @ApiModelProperty(value = "剩余可用量")
+    private String surplusQuantityText;
+
 }

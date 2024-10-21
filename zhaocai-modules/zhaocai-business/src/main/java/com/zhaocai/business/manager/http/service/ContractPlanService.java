@@ -75,6 +75,17 @@ public class ContractPlanService {
                         listVO.setBidResponsibleOrgName(dto.getBidResponsibleOrgName());
                         listVO.setBiddingTime(dto.getBidDate());
                         listVO.setBrand(dto.getBrand());
+
+                        /* 为了增加列 剩余可使用数量 */
+                        /* 组合 查询条件 查询清单列表 */
+                        ContractPlanMaterialListRequestDTO requestDTO = new ContractPlanMaterialListRequestDTO();
+                        requestDTO.setProjectId(queryVO.getProjectId());
+                        requestDTO.setConPlanId(dto.getConPlanId());
+                        List<ContractPlanMaterialListDTO> list = UnderlingRestTemplateService.listForObject(UnderlingPlatformUrlEnum.LIST_BY_PROJECT_CONTRACT,ContractPlanMaterialListDTO.class,requestDTO);
+                        /* 计算总剩余可用量 */
+                        BigDecimal surplusQuantity = list.stream().map(ContractPlanMaterialListDTO::getSurplusQuantity).reduce(BigDecimal.ZERO,BigDecimal::add);
+                        listVO.setSurplusQuantity(surplusQuantity);
+
                         return listVO;
                     }).collect(Collectors.toList());
             pageResult.setRows(resultList);
