@@ -28,6 +28,9 @@ import com.zhaocai.business.expert.service.IExpertScoreService;
 import com.zhaocai.business.expert.service.IExpertService;
 import com.zhaocai.business.procurement.domain.MaterialsList;
 import com.zhaocai.business.procurement.domain.ProcurementScheme;
+import com.zhaocai.business.procurement.domain.ProcurementSchemePlanRelate;
+import com.zhaocai.business.procurement.service.IProcurementPlanService;
+import com.zhaocai.business.procurement.service.IProcurementSchemePlanRelateService;
 import com.zhaocai.business.procurement.service.IProcurementSchemeService;
 import com.zhaocai.business.procurement.vo.res.CompContractSplitMaterialsVO;
 import com.zhaocai.business.procurement.vo.res.CompMaterialsContentVO;
@@ -44,6 +47,7 @@ import com.zhaocai.common.core.utils.bean.BeanCopierUtil;
 import com.zhaocai.common.security.utils.SecurityUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.CollectionUtils;
@@ -85,6 +89,12 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
     private IBiddingEvaluatExpertService biddingEvaluatExpertService;
     @Autowired
     private IExpertService expertService;
+    @Autowired
+    @Lazy
+    private IProcurementPlanService procurementPlanService;
+    @Autowired
+    @Lazy
+    private IProcurementSchemePlanRelateService procurementSchemePlanRelateService;
 
     @Autowired
     private SmsSenderUtil smsSenderUtil = SpringUtil.getBean(SmsSenderUtil.class);
@@ -636,10 +646,25 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
     public boolean abandonBidMoreScheme(AbandonBidVO abandonBidVO) {
         ValidateUtils.isNullException(abandonBidVO.getSchemeId(),"采购方案ID为空必传");
         boolean res = false;
+        /* 调用废除招标 */
         res = abandonBidMore(abandonBidVO);
         /* 废除采购方案 */
         procurementSchemeService.cancellationProcurementScheme(abandonBidVO.getSchemeId());
         return res;
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public boolean abandonBidMorePlan(AbandonBidVO abandonBidVO) {
+        /* 先调用废除采购方案 */
+        abandonBidMoreScheme(abandonBidVO);
+        /* 获取第一条采购方案对应的采购计划 */
+        ProcurementSchemePlanRelate procurementSchemePlanRelate = procurementSchemePlanRelateService.getOne(new LambdaQueryWrapper<ProcurementSchemePlanRelate>()
+                .eq(ProcurementSchemePlanRelate::getProcurementSchemeId,abandonBidVO.getSchemeId()).last("limit 1"));
+        ValidateUtils.isNullException(procurementSchemePlanRelate,"查询不到该采购方案对应的采购计划。");
+        /* 废除采购计划，如果存在除当前被废除的采购方案外的采购方案没有被废除就无法废除该采购计划。 */
+        procurementPlanService.cancellationProcurementPlan(procurementSchemePlanRelate.getProcurementPlanId());
+        return true;
     }
 
     /** 校验废标参数 */

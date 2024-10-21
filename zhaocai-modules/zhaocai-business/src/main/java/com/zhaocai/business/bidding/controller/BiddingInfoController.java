@@ -117,6 +117,14 @@ public class BiddingInfoController extends BladeController {
     }
 
     /**
+     * 废标操作（招标管理列表）选择废除到 采购计划
+     */
+    @PostMapping("/abandonBidMorePlan")
+    public ResultData abandonBidMorePlan(@RequestBody AbandonBidVO abandonBidVO) {
+        return ResultData.status(biddingInfoService.abandonBidMorePlan(abandonBidVO));
+    }
+
+    /**
      * 开启评标
      */
     @PostMapping("/startEvaluat")
