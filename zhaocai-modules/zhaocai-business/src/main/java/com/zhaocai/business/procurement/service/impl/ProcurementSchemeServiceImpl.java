@@ -330,6 +330,22 @@ public class ProcurementSchemeServiceImpl extends ServiceImpl<ProcurementSchemeM
     }
 
     @Override
+    public void cancellationProcurementSchemePlan(Long id) {
+        ProcurementScheme procurementScheme = super.getById(id);
+        ValidateUtils.isNullException(procurementScheme,"该采购方案不存在");
+
+        super.update(new LambdaUpdateWrapper<ProcurementScheme>()
+                .set(ProcurementScheme::getState, ProcurementSchemeStateEnum.CANCELLATION.getState())
+                .eq(ProcurementScheme::getId,id));
+        /* 获取第一条采购方案对应的采购计划 */
+        ProcurementSchemePlanRelate procurementSchemePlanRelate = procurementSchemePlanRelateService.getOne(new LambdaQueryWrapper<ProcurementSchemePlanRelate>()
+                .eq(ProcurementSchemePlanRelate::getProcurementSchemeId,procurementScheme.getId()).last("limit 1"));
+        ValidateUtils.isNullException(procurementSchemePlanRelate,"查询不到该采购方案对应的采购计划。");
+        /* 废除采购计划，如果存在除当前被废除的采购方案外的采购方案没有被废除就无法废除该采购计划。 */
+        procurementPlanService.cancellationProcurementPlan(procurementSchemePlanRelate.getProcurementPlanId());
+    }
+
+    @Override
     public void revokeProcurementScheme(Long id) {
         ProcurementScheme procurementScheme = this.getById(id);
         ValidateUtils.validateStatusNotEquals(ProcurementSchemeStateEnum.IN_APPROVAL::equalsState, procurementScheme.getState(), "非审批中的采购方案不允许撤回");

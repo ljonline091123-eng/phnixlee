@@ -169,6 +169,16 @@ public class ProcurementSchemeController extends BladeController {
     }
 
     /**
+     * 作废采购方案和采购计划
+     */
+    @PostMapping("/cancellationProcurementSchemePlan")
+    @ApiOperation(value = "作废采购方案和采购计划")
+    public ResultData<Boolean> cancellationProcurementSchemePlan(@RequestParam Long id) {
+        procurementSchemeService.cancellationProcurementSchemePlan(id);
+        return ResultData.success();
+    }
+
+    /**
      * 撤回采购方案
      */
     @ApiOperation(value = "撤回采购方案")

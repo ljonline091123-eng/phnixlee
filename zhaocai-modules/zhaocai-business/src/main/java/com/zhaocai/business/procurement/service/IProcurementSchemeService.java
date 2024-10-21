@@ -113,6 +113,12 @@ public interface IProcurementSchemeService  extends IService<ProcurementScheme>,
     void cancellationProcurementScheme(Long id);
 
     /**
+     * 作废采购方案和采购计划
+     * @param id
+     */
+    void cancellationProcurementSchemePlan(Long id);
+
+    /**
      * 撤回采购方案
      * @param id
      */
