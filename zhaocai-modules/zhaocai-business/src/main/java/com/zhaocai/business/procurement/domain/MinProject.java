@@ -63,6 +63,12 @@ public class MinProject extends BaseEntity {
     private String projectDepartment;
 
     /**
+     * 归属项目部id
+     */
+    @ApiModelProperty(value = "归属项目部id")
+    private String projectDepartmentId;
+
+    /**
      * 项目业态（房建、交通、市政、水利、新能源、其他）
      */
     @ApiModelProperty(value = "项目业态（房建、交通、市政、水利、新能源、其他）")
