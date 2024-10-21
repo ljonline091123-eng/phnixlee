@@ -55,6 +55,13 @@ public interface IProcurementSchemeService  extends IService<ProcurementScheme>,
      * @return
      */
     ProcurementSchemeDetailVO detail(Long id);
+
+    /**
+     * 获取[采购方案]对应的[采购计划]下的所有[采购方案]列表。
+     * @param id 采购方案id
+     * @return
+     */
+    List<ProcurementSchemeVO> planSchemeDetail(Long id);
     /**
      * 获取采购方案的物料清单
      * @param id

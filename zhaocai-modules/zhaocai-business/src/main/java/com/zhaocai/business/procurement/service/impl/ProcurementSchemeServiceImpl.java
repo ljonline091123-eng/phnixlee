@@ -2,6 +2,7 @@ package com.zhaocai.business.procurement.service.impl;
 
 import cn.hutool.core.collection.CollectionUtil;
 import com.alibaba.fastjson.JSON;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
@@ -10,6 +11,7 @@ import com.zhaocai.business.agreement.vo.req.AgreementSchemeQueryVO;
 import com.zhaocai.business.agreement.vo.res.AgreementSchemeListVO;
 import com.zhaocai.business.bidding.enums.TenderNoticeStatusEnum;
 import com.zhaocai.business.bidding.vo.res.BiddingQuotationDetailVO;
+import com.zhaocai.business.bidding.vo.res.BiddingVendorVO;
 import com.zhaocai.business.common.enums.*;
 import com.zhaocai.business.common.exception.BusinessException;
 import com.zhaocai.business.common.exception.ParamValidateException;
@@ -201,6 +203,29 @@ public class ProcurementSchemeServiceImpl extends ServiceImpl<ProcurementSchemeM
                 .contractPlanList(contractPlanList)
                 .contractSplitIdList(contractSplitList)
                 .build();
+    }
+
+    @Override
+    public List<ProcurementSchemeVO> planSchemeDetail(Long id) {
+        /* 获取该采购方案关联关系的采购计划 */
+        ProcurementSchemePlanRelate planRelate = procurementSchemePlanRelateService.getOne(new LambdaQueryWrapper<ProcurementSchemePlanRelate>()
+                .eq(ProcurementSchemePlanRelate::getProcurementSchemeId,id).last("limit 1"));
+        ValidateUtils.isNullException(planRelate, "查询不到该采购方案对应的采购计划数据");
+        /* 根据采购计划获取对应的采购方案关联关系 */
+        List<ProcurementSchemePlanRelate> planRelateList = procurementSchemePlanRelateService.list(new LambdaQueryWrapper<ProcurementSchemePlanRelate>()
+                .eq(ProcurementSchemePlanRelate::getProcurementPlanId,planRelate.getProcurementPlanId()));
+        ValidateUtils.isNullException(planRelateList, "属于该采购计划的采购方案列表数据查询不到");
+        /* 提取采购方案ids */
+        List<Long> schemeIds = planRelateList.stream().map(ProcurementSchemePlanRelate::getProcurementSchemeId).collect(Collectors.toList());
+        /* 获取采购方案列表 */
+        List<ProcurementScheme> procurementSchemes = list(new LambdaQueryWrapper<ProcurementScheme>()
+                .in(ProcurementScheme::getId, schemeIds).ne(ProcurementScheme::getState,ProcurementSchemeStateEnum.CANCELLATION.getState()));
+        if(procurementSchemes==null || procurementSchemes.isEmpty())
+            return Collections.emptyList();
+        /* 格式化采购方案返回对象 */
+        return procurementSchemes.stream()
+                .map(info -> BeanCopierUtil.copyBean(info, ProcurementSchemeVO.class))
+                .collect(Collectors.toList());
     }
 
     @Override

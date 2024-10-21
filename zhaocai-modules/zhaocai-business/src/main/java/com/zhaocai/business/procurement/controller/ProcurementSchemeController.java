@@ -105,6 +105,15 @@ public class ProcurementSchemeController extends BladeController {
     }
 
     /**
+     * 获取该采购方案 对应的采购计划 内所有的采购方案列表数据。
+     */
+    @GetMapping("/planSchemeDetail")
+    @ApiOperation(value = "采购方案详情")
+    public ResultData<List<ProcurementSchemeVO>> planSchemeDetail(@RequestParam Long id) {
+        return ResultData.data(procurementSchemeService.planSchemeDetail(id));
+    }
+
+    /**
      * 获取采购方案的物料清单
      */
     @GetMapping("/listMaterials")
