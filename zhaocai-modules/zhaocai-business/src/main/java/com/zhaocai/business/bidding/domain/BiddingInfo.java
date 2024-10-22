@@ -97,4 +97,8 @@ public class BiddingInfo extends BaseEntity {
     /** 供应商调价状态(当前二次报价版本) 未被选中进行二次报价的供应商状态为 0未调价 选中的供应商报价了 状态为 1已调价 选中的未进行报价的供应商状态为 2放弃调价  */
     @ApiModelProperty(value =  "供应商调价状态")
     private Integer priceChangeState;
+
+    /** 0未评标 1已评标 */
+    @ApiModelProperty(value =  "专家评标状态")
+    private Integer expertState;
 }
