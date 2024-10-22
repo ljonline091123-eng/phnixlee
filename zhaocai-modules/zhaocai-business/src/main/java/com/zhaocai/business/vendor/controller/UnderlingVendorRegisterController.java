@@ -35,7 +35,7 @@ public class UnderlingVendorRegisterController extends BladeController {
      * 易料供应商推送
      */
     @Log(title = "供应商注册",businessType = BusinessType.INSERT)
-    @PostMapping("/vendorRegister")
+    @PostMapping("/register")
     @ApiOperation("供应商注册")
     public ResultData<Boolean> register(@RequestBody @Valid VendorRegisterRequestVO requestVO) {
        String firstCooperationCompanyCode =  EnvironmentUtil.getProperty("vendor.default.firstCooperationCompanyCode");
