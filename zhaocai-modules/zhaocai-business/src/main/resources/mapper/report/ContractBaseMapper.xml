@@ -1,0 +1,196 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhaocai.business.report.mapper.ContractBaseMapper">
+    <resultMap type="com.zhaocai.business.report.domain.ContractBase" id="ContractBaseResult">
+        <result property="id" column="id"/>
+        <result property="uniqueId" column="unique_id"/>
+        <result property="introduceFlag" column="introduce_flag"/>
+        <result property="preId" column="pre_id"/>
+        <result property="version" column="version"/>
+        <result property="changeMode" column="change_mode"/>
+        <result property="changeReasonRemark" column="change_reason_remark"/>
+        <result property="lastVersionFlag" column="last_version_flag"/>
+        <result property="conCode" column="con_code"/>
+        <result property="internalCode" column="internal_code"/>
+        <result property="conName" column="con_name"/>
+        <result property="projectId" column="project_id"/>
+        <result property="transactionSubjectMatter" column="transaction_subject_matter"/>
+        <result property="programArchivesId" column="program_archives_id"/>
+        <result property="programArchivesName" column="program_archives_name"/>
+        <result property="programArchivesTaxAmount" column="program_archives_tax_amount"/>
+        <result property="programArchivesUsedAmount" column="program_archives_used_amount"/>
+        <result property="programArchivesSurplusAmount" column="program_archives_surplus_amount"/>
+        <result property="partaId" column="parta_id"/>
+        <result property="partaName" column="parta_name"/>
+        <result property="partbId" column="partb_id"/>
+        <result property="partbName" column="partb_name"/>
+        <result property="partbLegalPerson" column="partb_legal_person"/>
+        <result property="partbLegalPersonIdCard" column="partb_legal_person_id_card"/>
+        <result property="partbLegalPersonPhone" column="partb_legal_person_phone"/>
+        <result property="partbSiteManager" column="partb_site_manager"/>
+        <result property="partbSiteManagerIdCard" column="partb_site_manager_id_card"/>
+        <result property="partbSiteManagerPhone" column="partb_site_manager_phone"/>
+        <result property="conType" column="con_type"/>
+        <result property="rentType" column="rent_type"/>
+        <result property="paymentCycle" column="payment_cycle"/>
+        <result property="paymentType" column="payment_type"/>
+        <result property="startDate" column="start_date"/>
+        <result property="endDate" column="end_date"/>
+        <result property="duration" column="duration"/>
+        <result property="conStatus" column="con_status"/>
+        <result property="settleStatus" column="settle_status"/>
+        <result property="signDate" column="sign_date"/>
+        <result property="validDate" column="valid_date"/>
+        <result property="priceForm" column="price_form"/>
+        <result property="downRatio" column="down_ratio"/>
+        <result property="workScopeContent" column="work_scope_content"/>
+        <result property="taxSignAmount" column="tax_sign_amount"/>
+        <result property="ntaxSignAmount" column="ntax_sign_amount"/>
+        <result property="signTax" column="sign_tax"/>
+        <result property="taxChangeAmount" column="tax_change_amount"/>
+        <result property="taxChangedAmount" column="tax_changed_amount"/>
+        <result property="ntaxChangedAmount" column="ntax_changed_amount"/>
+        <result property="totalTaxSettleAmount" column="total_tax_settle_amount"/>
+        <result property="totalNtaxSettleAmount" column="total_ntax_settle_amount"/>
+        <result property="totalTaxOutConSettleAmount" column="total_tax_out_con_settle_amount"/>
+        <result property="totalNtaxOutConSettleAmount" column="total_ntax_out_con_settle_amount"/>
+        <result property="remainTaxConAmount" column="remain_tax_con_amount"/>
+        <result property="remainNtaxConAmount" column="remain_ntax_con_amount"/>
+        <result property="totalActualPaymentAmount" column="total_actual_payment_amount"/>
+        <result property="settleOwedAmount" column="settle_owed_amount"/>
+        <result property="whetherCompleteSettle" column="whether_complete_settle"/>
+        <result property="moneyType" column="money_type"/>
+        <result property="invoiceType" column="invoice_type"/>
+        <result property="taxRate" column="tax_rate"/>
+        <result property="imprestRatio" column="imprest_ratio"/>
+        <result property="imprestAmount" column="imprest_amount"/>
+        <result property="imprestDeductCondition" column="imprest_deduct_condition"/>
+        <result property="imprestDeductPoint" column="imprest_deduct_point"/>
+        <result property="outConSettleRatio" column="out_con_settle_ratio"/>
+        <result property="whetherAssociateSteelPrice" column="whether_associate_steel_price"/>
+        <result property="marketShortName" column="market_short_name"/>
+        <result property="steelPriceFloat" column="steel_price_float"/>
+        <result property="stagnateMachineSettleRatio" column="stagnate_machine_settle_ratio"/>
+        <result property="changeField" column="change_field"/>
+        <result property="isExceed" column="is_exceed"/>
+        <result property="procStatus" column="proc_status"/>
+        <result property="procCompleteTime" column="proc_complete_time"/>
+        <result property="lastProcApprover" column="last_proc_approver"/>
+        <result property="nextProcApprover" column="next_proc_approver"/>
+        <result property="procOrgId" column="proc_org_id"/>
+        <result property="supplierStatus" column="supplier_status"/>
+        <result property="attachBusinessId" column="attach_business_id"/>
+        <result property="valid" column="valid"/>
+        <result property="createBy" column="create_by"/>
+        <result property="createId" column="create_id"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateBy" column="update_by"/>
+        <result property="updateTime" column="update_time"/>
+        <result property="remark" column="remark"/>
+    </resultMap>
+
+    <resultMap type="com.zhaocai.business.report.vo.ContractBaseReportVo" id="ContractBaseReportVoResult">
+        <result property="id" column="id"/>
+        <result property="uniqueId" column="unique_id"/>
+        <result property="conType" column="con_type"/>
+        <result property="conCode" column="con_code"/>
+        <result property="conName" column="con_name"/>
+        <result property="ntaxSignAmount" column="ntax_sign_amount"/>
+        <result property="ntaxChangedAmount" column="ntax_changed_amount"/>
+        <result property="partbId" column="partb_id"/>
+        <result property="partbName" column="partb_name"/>
+        <result property="partbSiteManager" column="partb_site_manager"/>
+        <result property="partbSiteManagerIdCard" column="partb_site_manager_id_card"/>
+        <result property="partbSiteManagerPhone" column="partb_site_manager_phone"/>
+        <result property="managementOrgId" column="management_org_id"/>
+        <result property="belongingOrgId" column="belonging_org_id"/>
+        <result property="projectDepartmentId" column="project_department_id"/>
+        <result property="projectId" column="project_id"/>
+        <result property="minAccountCode" column="min_account_code"/>
+        <result property="minAccountFullName" column="min_account_full_name"/>
+    </resultMap>
+
+    <select id="contractLedgerList" parameterType="com.zhaocai.business.report.vo.ContractBaseReportVo" resultMap="ContractBaseReportVoResult">
+        select cb.*,tmp.management_org_id,tmp.belonging_org_id,tmp.min_account_code,tmp.min_account_full_name,tmp.project_department_id from contract_base cb
+        left join tb_min_project tmp
+        on cb.project_id = tmp.id
+        <where>
+            cb.last_version_flag =1 and cb.proc_status = 4
+            <if test="conCode != null and conCode != ''">
+                AND cb.con_code like concat('%',#{conCode},'%')
+            </if>
+            <if test="conName != null and conName != ''">
+                AND cb.con_name like concat('%',#{conName},'%')
+            </if>
+            <if test="conName != null and conName != ''">
+                AND cb.con_name like concat('%',#{conName},'%')
+            </if>
+            <if test="deptIds != null and deptIds.size() > 0">
+                and ((tmp.management_org_id in
+                <foreach item="deptId" collection="deptIds" open="(" close=")" separator=",">
+                    #{deptId}
+                </foreach>
+                ) or (tmp.belonging_org_id in
+                <foreach item="deptId" collection="deptIds" open="(" close=")" separator=",">
+                    #{deptId}
+                </foreach>))
+            </if>
+
+            <if test="startDate != null and startDate != ''">
+                AND cb.sign_date >= #{startDate}
+            </if>
+            <if test="endDate != null and endDate != ''">
+                AND cb.sign_date &lt;= #{endDate}
+            </if>
+            <if test="conType != null and conType != ''">
+                AND cb.con_type = #{conType}
+            </if>
+            <if test="minAccountCode != null and minAccountCode != ''">
+                AND tmp.min_account_code = #{minAccountCode}
+            </if>
+        </where>
+    </select>
+
+    <select id="contractLedgerExportList" parameterType="com.zhaocai.business.report.vo.ContractBaseReportVo" resultMap="ContractBaseReportVoResult">
+        select cb.*,tmp.management_org_id,tmp.belonging_org_id,tmp.min_account_code,min_account_full_name from contract_base cb
+        left join tb_min_project tmp
+        on cb.project_id = tmp.id
+        <where>
+            cb.last_version_flag =1 and cb.proc_status = 4
+            <if test="conCode != null and conCode != ''">
+                AND cb.con_code like concat('%',#{conCode},'%')
+            </if>
+            <if test="conName != null and conName != ''">
+                AND cb.con_name like concat('%',#{conName},'%')
+            </if>
+            <if test="conName != null and conName != ''">
+                AND cb.con_name like concat('%',#{conName},'%')
+            </if>
+            <if test="deptIds != null and deptIds.size() > 0">
+                and ((tmp.management_org_id in
+                <foreach item="deptId" collection="deptIds" open="(" close=")" separator=",">
+                    #{deptId}
+                </foreach>
+                ) or (tmp.belonging_org_id in
+                <foreach item="deptId" collection="deptIds" open="(" close=")" separator=",">
+                    #{deptId}
+                </foreach>))
+            </if>
+
+            <if test="startDate != null and startDate != ''">
+                AND cb.sign_date >= #{startDate}
+            </if>
+            <if test="endDate != null and endDate != ''">
+                AND cb.sign_date &lt;= #{endDate}
+            </if>
+            <if test="conType != null and conType != ''">
+                AND cb.con_type = #{conType}
+            </if>
+            <if test="minAccountCode != null and minAccountCode != ''">
+                AND tmp.min_account_code = #{minAccountCode}
+            </if>
+        </where>
+    </select>
+</mapper>

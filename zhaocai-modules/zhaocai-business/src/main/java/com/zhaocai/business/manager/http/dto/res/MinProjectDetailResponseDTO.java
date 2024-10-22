@@ -51,6 +51,11 @@ public class MinProjectDetailResponseDTO {
     private String projectDepartment;
 
     /**
+     * 归属项目部id
+     */
+    private String projectDepartmentId;
+
+    /**
      * 项目业态
      */
     private String prjState;

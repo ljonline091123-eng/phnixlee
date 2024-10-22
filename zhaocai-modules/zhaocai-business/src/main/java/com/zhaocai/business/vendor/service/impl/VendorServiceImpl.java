@@ -82,14 +82,53 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
     @Autowired
     private IVendorChangeService vendorChangeService;
 
-    @Autowired
-    private RemoteSystemService remoteSystemService;
 
     @Autowired
     private UnderlingSystemService underlingSystemService;
 
     @Autowired
     private ISystemUserService systemUserService;
+
+
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRED,rollbackFor = Exception.class)
+    public void vendorRegister(VendorRegisterRequestVO requestVO) {
+        checkVendorInfo(requestVO.getVendor());
+
+        // 保存基本信息
+        Vendor vendor = requestVO.getVendor();
+        vendor.setState(VendorStateEnum.APPROVE.getState());
+        vendor.setSignState(SignStateEnum.TO_SIGN.getState());
+        vendor.setVendorClass(1);
+        vendor.setVendorLevel(1);
+        super.save(vendor);
+
+        // 保存供应商资质
+        vendorCertificationService.addCertification(requestVO.getBusinessLicense(), CertificationTypeEnum.BUSINESS_LICENSE,vendor.getId());
+        vendorCertificationService.addCertification(requestVO.getIntegrity(), CertificationTypeEnum.INTEGRITY,vendor.getId());
+        Long legalAuthorizationId = vendorCertificationService.addCertification(requestVO.getLegalAuthorization(),CertificationTypeEnum.LEGAL_AUTHORIZATION,vendor.getId());
+        if (CollUtil.isNotEmpty(requestVO.getRelevantCertificationList())){
+            vendorCertificationService.addCertification(requestVO.getRelevantCertificationList(), CertificationTypeEnum.RELEVANT_CERTIFICATION,vendor.getId());
+        }
+
+        // 主要联系人
+        VendorContact contact = requestVO.getVendorContact();
+
+        // 新增供应商账号
+        Long longUserId = vendorContactService.addLoginUser(contact.getContactPhone(),contact.getContactName());
+        contact.setLoginUserId(longUserId);
+        contact.setCertificationId(legalAuthorizationId);
+        contact.setVendorId(vendor.getId());
+        // 注册时为默认为管理员
+        contact.setIsManager(1);
+        long contactId = vendorContactService.saveMainVendorContact(contact);
+
+        // 更新法人授权的 businessId
+        vendorCertificationService.update(new LambdaUpdateWrapper<VendorCertification>()
+                .set(VendorCertification::getBusinessId,contactId)
+                .eq(VendorCertification::getId,legalAuthorizationId));
+    }
 
 
 
@@ -150,6 +189,7 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
         processService.startProcessInstance(ProcessKeyEnum.ZHAOCAI_VENDOR_REGISTER.getIdentifying(),paramMap);
 
     }
+
 
 
 
