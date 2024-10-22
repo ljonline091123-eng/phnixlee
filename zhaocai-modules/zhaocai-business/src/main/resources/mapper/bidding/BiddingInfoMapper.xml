@@ -30,6 +30,7 @@
         <result property="delFlag" column="del_flag"/>
         <result property="twiceQuotVersion"    column="twice_quot_version"    />
         <result property="priceChangeState"    column="price_change_state"    />
+        <result property="expertState"    column="expert_state"    />
     </resultMap>
 
     <sql id="selectBiddingInfoVo">
@@ -58,7 +59,8 @@
                update_time,
                del_flag,
                twice_quot_version,
-               price_change_state
+               price_change_state,
+               expert_state
         from tb_bidding_info
     </sql>
 
