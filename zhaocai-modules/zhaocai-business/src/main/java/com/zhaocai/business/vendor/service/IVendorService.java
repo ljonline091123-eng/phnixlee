@@ -23,6 +23,12 @@ public interface IVendorService  extends IService<Vendor> , IProcessBusinessBase
      */
     void register(VendorRegisterRequestVO requestVO);
 
+    /**
+     * 易料供应商推送
+     * @param requestVO
+     */
+    void vendorRegister(VendorRegisterRequestVO requestVO);
+
 
     /**
      * 获取供应商详情
@@ -114,4 +120,6 @@ public interface IVendorService  extends IService<Vendor> , IProcessBusinessBase
      * @return
      */
     VendorSignAuthInfo getVendorSignAuthInfo();
+
+
 }
