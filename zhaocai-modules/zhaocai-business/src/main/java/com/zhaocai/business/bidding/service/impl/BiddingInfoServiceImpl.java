@@ -38,6 +38,7 @@ import com.zhaocai.business.procurement.vo.res.CompMaterialsVO;
 import com.zhaocai.business.procurement.vo.res.MaterialsVO;
 import com.zhaocai.business.pub.domain.Attachment;
 import com.zhaocai.business.pub.service.IAttachmentService;
+import com.zhaocai.business.pub.service.ISystemUserService;
 import com.zhaocai.business.pub.vo.req.AttachmentRequestVO;
 import com.zhaocai.business.pub.vo.res.AttachmentVO;
 import com.zhaocai.common.core.constant.NumberConstant;
@@ -45,6 +46,7 @@ import com.zhaocai.common.core.utils.DateUtils;
 import com.zhaocai.common.core.utils.StringUtils;
 import com.zhaocai.common.core.utils.bean.BeanCopierUtil;
 import com.zhaocai.common.security.utils.SecurityUtils;
+import com.zhaocai.system.api.domain.SysUser;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
@@ -95,6 +97,9 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
     @Autowired
     @Lazy
     private IProcurementSchemePlanRelateService procurementSchemePlanRelateService;
+    @Autowired
+    @Lazy
+    private ISystemUserService systemUserService;
 
     @Autowired
     private SmsSenderUtil smsSenderUtil = SpringUtil.getBean(SmsSenderUtil.class);
@@ -700,6 +705,9 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
         for (BiddingEvaluatExpert expert : expertList) {
             ExpertEvalStatusVO expertVo = new ExpertEvalStatusVO();
             expertVo.setExpertId(expert.getExpertId());
+            /* 执行调用查询 */
+            SysUser user = systemUserService.getUserById(expert.getExpertId());
+            expertVo.setExpert(user);
             expertVo.setExpertName(expert.getExpertName());
             //获取几个供应商首轮报价信息
 
