@@ -27,7 +27,9 @@ import com.zhaocai.business.manager.http.service.PerformanceEvaluationService;
 import com.zhaocai.business.manager.http.service.ThridPartyTodoTaskService;
 import com.zhaocai.business.procurement.domain.MinProject;
 import com.zhaocai.business.procurement.domain.ProcurementScheme;
+import com.zhaocai.business.procurement.domain.ProcurementSchemeBidding;
 import com.zhaocai.business.procurement.service.IMinProjectService;
+import com.zhaocai.business.procurement.service.IProcurementSchemeBiddingService;
 import com.zhaocai.business.procurement.service.IProcurementSchemeService;
 import com.zhaocai.business.procurement.vo.req.ContractPlanningQueryVO;
 import com.zhaocai.business.procurement.vo.res.MinProjectDataVO;
@@ -53,6 +55,7 @@ import com.zhaocai.common.core.utils.bean.BeanCopierUtil;
 import com.zhaocai.common.security.utils.SecurityUtils;
 import com.zhaocai.system.api.domain.SysUser;
 import com.zhaocai.system.api.system.RemoteUserService;
+import io.swagger.annotations.ApiModelProperty;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
@@ -109,6 +112,9 @@ public class TenderNoticeServiceImpl extends ServiceImpl<TenderNoticeMapper,Tend
     @Autowired
     @Lazy
     private IBiddingInfoService biddingInfoService;
+    @Autowired
+    @Lazy
+    private IProcurementSchemeBiddingService procurementSchemeBiddingService;
     @Autowired
     private RemoteUserService remoteuserservice;
 
@@ -361,6 +367,27 @@ public class TenderNoticeServiceImpl extends ServiceImpl<TenderNoticeMapper,Tend
         return res;
     }
 
+    /** 更新采购方案 采购方式 更新招标文件对象 , 传值了就修改，没传值不修改。 */
+    private void updateSchemeBidding(TenderNoticeVO tenderNoticeVO){
+        if(tenderNoticeVO!=null && tenderNoticeVO.getProcurementScheme()!=null && tenderNoticeVO.getProcurementScheme().getProcurementType()!=null){
+            /* 更新采购方案 采购方式 */
+            procurementSchemeService.update(new LambdaUpdateWrapper<ProcurementScheme>()
+                    .set(ProcurementScheme::getProcurementType,tenderNoticeVO.getProcurementScheme().getProcurementType())
+                    .eq(ProcurementScheme::getId,tenderNoticeVO.getSchemeId()));
+        }
+        if(tenderNoticeVO!=null && tenderNoticeVO.getProcurementSchemeBidding()!=null){
+            /* 更新招标文件对象 */
+            procurementSchemeBiddingService.update(new LambdaUpdateWrapper<ProcurementSchemeBidding>()
+                    .set(ProcurementSchemeBidding::getEvaluationTemplateId,tenderNoticeVO.getProcurementSchemeBidding().getEvaluationTemplateId())/* 评分模板id */
+                    .set(ProcurementSchemeBidding::getBiddingTemplateId,tenderNoticeVO.getProcurementSchemeBidding().getBiddingTemplateId())/* 招标文件模板id */
+                    .set(ProcurementSchemeBidding::getContractTemplateId,tenderNoticeVO.getProcurementSchemeBidding().getContractTemplateId())/* 合同模板id */
+                    .set(ProcurementSchemeBidding::getBiddingAttachmentId,tenderNoticeVO.getProcurementSchemeBidding().getBiddingAttachmentId())/* 招标文件附件id */
+                    .eq(ProcurementSchemeBidding::getSchemeId,tenderNoticeVO.getSchemeId()));
+            attachmentService.updateBusiness(tenderNoticeVO.getProcurementSchemeBidding().getBiddingAttachmentId(), AttachmentTypeEnum.SCHEME_BIDDING,tenderNoticeVO.getSchemeId());
+        }
+
+    }
+
     private void dealOpenPeopleTodoTask(ProcurementScheme procurementScheme, TenderNotice tenderNotice) {
        System.out.println("开始:"+procurementScheme);
         PushThirdPartyTodoTaskRequestDTO parentRequestDTO = new PushThirdPartyTodoTaskRequestDTO();
@@ -441,6 +468,10 @@ public class TenderNoticeServiceImpl extends ServiceImpl<TenderNoticeMapper,Tend
         //删除旧招标公告数据
         this.remove(new LambdaUpdateWrapper<TenderNotice>()
                 .eq(TenderNotice::getSchemeId, tenderNoticeVO.getSchemeId()));
+
+        /* 更新采购方案 采购方式 更新招标文件对象 */
+        updateSchemeBidding(tenderNoticeVO);
+
         if(schemeType == NumberConstant.ONE)
             return this.addNotice(tenderNoticeVO);
         else
