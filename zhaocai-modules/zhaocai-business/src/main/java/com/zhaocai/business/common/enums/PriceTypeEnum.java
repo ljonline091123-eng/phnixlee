@@ -8,7 +8,8 @@ import lombok.Getter;
 public enum PriceTypeEnum {
 
     FIXED_PRICE(1,"固定价"),
-    FLOAT_PRICE(2,"浮动价")
+    FLOAT_PRICE(2,"浮动价"),
+    FIXED_FLOAT_PRICE(3,"固定、浮动价")
     ;
 
     private final Integer type;

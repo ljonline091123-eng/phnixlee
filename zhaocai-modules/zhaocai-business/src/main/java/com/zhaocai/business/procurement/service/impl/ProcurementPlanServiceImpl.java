@@ -534,7 +534,7 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
         baseMapper.updateById(procurementPlan);
 
         // 修改合约拆分和物料信息
-        contractPlanningSplitService.updateContractPlanningSplit(requestVO.getSplitRequestList(),procurementPlan.getId(),procurementPlan.getPriceType());
+        contractPlanningSplitService.updateContractPlanningSplit(requestVO.getSplitRequestList(),procurementPlan.getId(),procurementPlan);
 
         // 重新保存合约规划
         contractPlanningService.updateContractPlanning(requestVO.getContractPlanning(),procurementPlan.getId());
@@ -554,7 +554,7 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
         baseMapper.insert(procurementPlan);
 
         // 保存合约拆分和物料信息
-        contractPlanningSplitService.saveContractPlanningSplit(requestVO.getSplitRequestList(),procurementPlan.getId(),procurementPlan.getPriceType());
+        contractPlanningSplitService.saveContractPlanningSplit(requestVO.getSplitRequestList(),procurementPlan.getId(),procurementPlan);
 
         // 保存合约规划
         contractPlanningService.addContractPlanning(requestVO.getContractPlanning(),procurementPlan.getId());

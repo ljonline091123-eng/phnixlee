@@ -162,4 +162,7 @@ public class CompMaterialsContentVO extends AdviceObject {
     @ApiModelProperty(value =  "不含税总价(元)（千分位）")
     private String notTaxPriceText;
 
+    @ApiModelProperty(value = "价格类型")
+    private Integer priceType;
+
 }

@@ -1,6 +1,7 @@
 package com.zhaocai.business.procurement.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.zhaocai.business.common.enums.DictBizEnum;
 import com.zhaocai.business.common.enums.PriceTypeEnum;
@@ -11,10 +12,12 @@ import com.zhaocai.business.common.utils.AmountCalUtil;
 import com.zhaocai.business.manager.http.dto.res.ContractPlanMaterialListDTO;
 import com.zhaocai.business.manager.http.service.UnderlingSystemService;
 import com.zhaocai.business.procurement.domain.MaterialsList;
+import com.zhaocai.business.procurement.domain.ProcurementPlan;
 import com.zhaocai.business.procurement.dto.MaterialsListDTO;
 import com.zhaocai.business.procurement.dto.SubjectMatterDTO;
 import com.zhaocai.business.procurement.mapper.MaterialsListMapper;
 import com.zhaocai.business.procurement.service.IMaterialsListService;
+import com.zhaocai.business.procurement.service.IProcurementPlanService;
 import com.zhaocai.business.procurement.vo.req.ContractSplitMaterialsQueryVO;
 import com.zhaocai.business.procurement.vo.res.CompContractSplitMaterialsVO;
 import com.zhaocai.business.procurement.vo.res.CompMaterialsContentVO;
@@ -25,11 +28,13 @@ import com.zhaocai.business.pub.domain.DwMmServiceInf;
 import com.zhaocai.business.pub.service.IDwMmAssetInfService;
 import com.zhaocai.business.pub.service.IDwMmServiceInfService;
 import com.zhaocai.common.core.constant.Constants;
+import com.zhaocai.common.core.constant.NumberConstant;
 import com.zhaocai.common.core.utils.NumberUtil;
 import com.zhaocai.common.core.utils.StringUtils;
 import com.zhaocai.common.core.utils.bean.BeanCopierUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -54,6 +59,10 @@ public class MaterialsListServiceImpl extends ServiceImpl<MaterialsListMapper, M
     @Autowired
     private IDwMmServiceInfService dwMmServiceInfService;
 
+    @Autowired
+    @Lazy
+    private IProcurementPlanService procurementPlanService;
+
     /**
      * 交易标的物为钢筋
      */
@@ -67,16 +76,32 @@ public class MaterialsListServiceImpl extends ServiceImpl<MaterialsListMapper, M
     private String subjectMatterConcreteCode;
 
     @Override
-    public void saveMaterialsList(List<MaterialsList> materialsLists, Long contractSplitId, Long planId, Integer priceType) {
+    public void saveMaterialsList(List<MaterialsList> materialsLists, Long contractSplitId, Long planId, ProcurementPlan procurementPlan) {
+        Integer[] floatCount = {0};
+        Integer[] fixedCount = {0};
         materialsLists.forEach(materials -> {
             materials.setPlanId(planId);
             materials.setContractSplitId(contractSplitId);
             materials.setUsedCount(BigDecimal.ZERO);
 
-            if (PriceTypeEnum.FLOAT_PRICE.equalsType(priceType)) {
-                // 浮动价 >>> 含税单价 = 基价 + 浮动价 + 卸费
-                BigDecimal unitPriceInclTax = AmountCalUtil.addAmount(materials.getBasePrice(),materials.getBasePrice(),materials.getFloatingPrice(),materials.getUnloadingFee());
-                materials.setUnitPriceInclTax(unitPriceInclTax);
+            /* 是否是 “购买材料” */
+            if(procurementPlan.getProcurementPlanType().equals(NumberConstant.ONE)){
+                /* 使用清单内每一条设置的 价格类型 */
+                if (PriceTypeEnum.FLOAT_PRICE.equalsType(materials.getPriceType())) {
+                    // 浮动价 >>> 含税单价 = 基价 + 浮动价 + 卸费
+                    BigDecimal unitPriceInclTax = AmountCalUtil.addAmount(materials.getBasePrice(),materials.getBasePrice(),materials.getFloatingPrice(),materials.getUnloadingFee());
+                    materials.setUnitPriceInclTax(unitPriceInclTax);
+                    floatCount[0]++;
+                }else{
+                    fixedCount[0]++;
+                }
+            }else{
+                /* 使用 采购计划 设置的 价格类型 */
+                if (PriceTypeEnum.FLOAT_PRICE.equalsType(procurementPlan.getPriceType())) {
+                    // 浮动价 >>> 含税单价 = 基价 + 浮动价 + 卸费
+                    BigDecimal unitPriceInclTax = AmountCalUtil.addAmount(materials.getBasePrice(),materials.getBasePrice(),materials.getFloatingPrice(),materials.getUnloadingFee());
+                    materials.setUnitPriceInclTax(unitPriceInclTax);
+                }
             }
 
             // 不含税单价 = 含税单价 / (1 + 税率%)
@@ -93,6 +118,24 @@ public class MaterialsListServiceImpl extends ServiceImpl<MaterialsListMapper, M
 
             baseMapper.insert(materials);
         });
+        /* 是否是 “购买材料” */
+        if(procurementPlan.getProcurementPlanType().equals(NumberConstant.ONE)){
+            if(floatCount[0]>0 && fixedCount[0]>0){
+                /* 固定、浮动价 */
+                procurementPlan.setPriceType(PriceTypeEnum.FIXED_FLOAT_PRICE.getType());
+            }else if(floatCount[0]>0){
+                /* 浮动价 */
+                procurementPlan.setPriceType(PriceTypeEnum.FLOAT_PRICE.getType());
+            }else{
+                /* 固定价 */
+                procurementPlan.setPriceType(PriceTypeEnum.FIXED_PRICE.getType());
+            }
+            /* 更新采购计划 */
+            procurementPlanService.update(new LambdaUpdateWrapper<ProcurementPlan>()
+                    .set(ProcurementPlan::getPriceType,procurementPlan.getPriceType())
+                    .eq(ProcurementPlan::getId,procurementPlan.getId()));
+        }
+
     }
 
     @Override

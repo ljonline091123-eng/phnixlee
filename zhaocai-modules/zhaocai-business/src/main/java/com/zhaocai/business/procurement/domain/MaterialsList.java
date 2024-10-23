@@ -215,4 +215,11 @@ public class MaterialsList extends BaseEntity {
      */
     @ApiModelProperty(value = "租赁数量")
     private BigDecimal rentQuantity;
+
+    /**
+     * 价格类型
+     */
+    @NotNull(message = "采购清单的价格类型不能为空")
+    @ApiModelProperty(value = "价格类型")
+    private Integer priceType;
 }

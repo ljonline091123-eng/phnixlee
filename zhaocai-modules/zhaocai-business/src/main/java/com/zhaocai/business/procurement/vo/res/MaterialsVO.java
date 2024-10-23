@@ -134,6 +134,9 @@ public class MaterialsVO extends AdviceObject {
     @MoneyFormat(filedName = "rentQuantity",scale = 2)
     @ApiModelProperty(value = "租赁数量")
     private String rentQuantityText;
+    
+    @ApiModelProperty(value = "价格类型")
+    private Integer priceType;
 
     public BigDecimal getTransferQuantity() {
         return this.getCount();
