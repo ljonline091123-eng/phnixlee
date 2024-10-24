@@ -24,7 +24,6 @@ public class MarketMaterialContractQueryVO extends PageRecive {
     @ApiModelProperty(value = "合同名称")
     private String agreementName;
 
-    @NotBlank(message = "项目编号不能为空，请先选择项目")
     @ApiModelProperty(value = "项目编号")
     private String belongAccountingItemCode;
 }

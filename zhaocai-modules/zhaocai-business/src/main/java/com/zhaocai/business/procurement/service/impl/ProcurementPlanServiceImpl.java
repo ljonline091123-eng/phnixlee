@@ -478,7 +478,7 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
      */
     private void checkMaterialProcurement(Long id) {
         List<MarketMaterialContract> contract = marketMaterialContractService.list(new LambdaQueryWrapper<MarketMaterialContract>().eq(MarketMaterialContract::getPlanId, id));
-        if (contract != null) {
+        if (!CollectionUtil.isEmpty(contract)) {
             throw new BusinessException("需要推送的采购清单已经到合同签订阶段");
         }
     }
