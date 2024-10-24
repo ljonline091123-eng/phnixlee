@@ -1,7 +1,7 @@
 <template>
   <div>
   <ShowTable :table-header-list="tableHeaderList" :table-data="tableData" :queryItemList="queryItemList"
-             @query="handleQuery" :loading="loading"></ShowTable>
+             @query="handleQuery" :loading="loading" :exportFlag=true @export="handleExport"></ShowTable>
        <!-- 选择采购计划 -->
        <el-dialog
         title="物料明细"
@@ -17,7 +17,6 @@
             size="small"
             highlight-current-row
             border
-            @selection-change="handleSelectionChange"
           >
             <el-table-column
             prop="measureUnit"
@@ -180,20 +179,30 @@ export default {
       }).catch(() => {
         this.loading = false;
       })
-    }
+    },
+    getExport(params) {
+      this.download(
+        "business/report/contractLedgerExport ",
+        {
+          ...params,
+        },
+        `report_${new Date().getTime()}.xlsx`
+      );
+    },
   },
 
-  getContractLedgerDetails(id){
-    let params={}
-    params.id =  id;
-    contractLedgerDetails(params).then(res => {
-        this.detailList = res.data
-        this.materialShow=true
-        // this.loading = false;
-      }).catch(() => {
-        // this.loading = false;
-      })
-  }
+
+  // getContractLedgerDetails(id){
+  //   let params={}
+  //   params.id =  id;
+  //   contractLedgerDetails(params).then(res => {
+  //       this.detailList = res.data
+  //       this.materialShow=true
+  //       // this.loading = false;
+  //     }).catch(() => {
+  //       // this.loading = false;
+  //     })
+  // }
 
 }
 </script>

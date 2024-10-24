@@ -166,3 +166,21 @@ export const getContractPlanSplitFlag = () => {
   })
 }
 
+// 推送易料市集采购
+export const pushMaterialProcurementList = (data) => {
+  return request({
+    url: '/business/procurementPlan/pushMaterialProcurementList',
+    method: 'post',
+    data
+  })
+}
+
+
+// 推送易料市集采购
+export const revokePushMaterialProcurementList = (data) => {
+  return request({
+    url: '/business/procurementPlan/revokePushMaterialProcurementList',
+    method: 'post',
+    data
+  })
+}

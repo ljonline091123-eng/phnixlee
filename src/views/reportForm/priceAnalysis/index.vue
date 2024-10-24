@@ -1,5 +1,20 @@
 <template>
-  <div style="width: 100%; height: 100%">
+  <div class="app-container">
+    <div class="context flex flex-column">
+    
+    <el-radio-group
+        v-model="radioType"
+        size="small"
+        style="margin-left: 15px; margin-top: 15px;"
+      >
+        <el-radio-button
+          :label="dict.value"
+          :name="dict.value" 
+          v-for="dict in radioList"
+          :key="dict.value"
+          >{{ dict.label }}</el-radio-button
+        >
+      </el-radio-group>
     <el-dialog title="选择材料" :visible.sync="dialogVisible" width="75%">
       <div class="flex">
         <div style="width: 200px">
@@ -92,32 +107,28 @@
         <el-button type="primary" @click="getCostItemCode">确 定</el-button>
       </span>
     </el-dialog>
+
     <ShowTable
       ref="showTable"
       :table-header-list="tableHeaderList"
       :table-data="tableData"
       :queryItemList="queryItemList"
+      :radioType="radioType"
       @query="handleQuery"
       :loading="loading"
+      :exportFlag=true 
+      @export="handleExport"
     >
-      <template #querySlot="scope">
-        <el-form-item label="成本子目">
-          <el-input
-            readonly
-            v-model="scope.queryParms['costItemName']"
-            :placeholder="`请选择成本子目`"
-            @click.native="clickQueryItem"
-          ></el-input>
-        </el-form-item>
-      </template>
+
     </ShowTable>
   </div>
+</div>
 </template>
 
 <script>
 import ShowTable from "@/views/reportForm/components/ShowTable.vue";
 import { mixin } from "@/views/reportForm/mixins/mixin";
-import { priceAnalysisReport } from "@/api/reportForm/priceAnalysisReport";
+import { priceAnalysisReport,getPriceAnalysisReportByCon } from "@/api/reportForm/priceAnalysisReport";
 
 export default {
   components: { ShowTable },
@@ -125,6 +136,8 @@ export default {
   data() {
     return {
       radio: "",
+       // 查询参数
+        radioType: "C",
       // * 成本子目表格数据
       childItemList: [
         {
@@ -140,6 +153,39 @@ export default {
           costItemName: "圆钢",
           costItemSpecification: "φ10以内（含10mm)",
           costItemUnit: "吨",
+        },
+      ],
+      type: "1",
+      radioList: [
+        {
+          value: 'C',
+          label: "物资采购价格",
+       
+        },
+        {
+          value: 'B',
+          label: "专业分包价格",
+       
+        },
+        {
+          value: 'A',
+          label: "劳务分包价格分",
+       
+        },
+        {
+          value: 'D',
+          label: "租赁材料价格",
+       
+        },
+        {
+          value: 'G',
+          label: "租赁设备（机械）价格",
+       
+        },
+        {
+          value: 'Z',
+          label: "其他价格",
+       
         },
       ],
       // * 成本子目form
@@ -196,84 +242,164 @@ export default {
         label: "label",
       },
       queryItemList: [
-        {
-          prop: "areaName",
-          label: "地区",
+      {
+          prop: "subjectDtlCode",
+          label: "物料/清单名称",
           type: "input",
-          placeholder: "请输入地区",
+          placeholder: "请输入物料/清单名称",
         },
         {
-          prop: "dateRange",
-          label: "时间范围",
-          type: "dateRange",
-        },
-      ],
-      tableHeaderList: [
-        {
-          prop: "costItemName",
-          label: "成本子目名称",
-          width: 240,
-          showOverflowTooltip: true,
+          prop: "specs",
+          label: "规格型号",
+          type: "input",
+          placeholder: "请输入规格型号",
         },
         {
-          prop: "costItemUnit",
-          label: "计量单位",
-          width: 80,
-          showOverflowTooltip: true,
-        },
-        {
-          prop: "costItemSpecification",
-          label: "型号",
-          width: 120,
-          showOverflowTooltip: true,
-        },
-        {
-          prop: "areaName",
-          label: "地区",
-          width: 100,
-          showOverflowTooltip: true,
+          prop: "measureUnit",
+          label: "单位",
+          type: "input",
+          placeholder: "请输入单位",
         },
         {
           prop: "deptName",
-          label: "组织机构",
-          width: 300,
-          showOverflowTooltip: true,
+          label: "组织机构名称",
+          type: "input",
+          placeholder: "请输入组织机构名称",
         },
         {
-          prop: "projectName",
-          label: "项目名称",
-          width: 300,
-          showOverflowTooltip: true,
+          prop: "areaName",
+          label: "合同签订区域",
+          type: "input",
+          placeholder: "请输入合同签订区域",
         },
         {
-          prop: "contractCode",
-          label: "合同编号",
+          prop: "dateRange",
+          label: "合同时间范围",
+          type: "dateRange",
+        },
+        
+      ],
+      tableHeaderList: [
+        {
+          prop: "subjectDtlCode",
+          label: "物资编号",
           width: 200,
           showOverflowTooltip: true,
         },
         {
-          prop: "contractTime",
-          label: "合同签约时间",
-          width: 160,
+          prop: "subjectDtlName",
+          label: "物资名称",
+          width: 200,
           showOverflowTooltip: true,
         },
         {
-          prop: "taxUnitPrice",
-          label: "签约单价(含税)",
-          width: 160,
+          prop: "specs",
+          label: "规格型号",
+          width: 120,
+          showOverflowTooltip: true,
+        },
+        {
+          prop: "measureUnit",
+          label: "单位",
+          width: 200,
+          showOverflowTooltip: true,
+        },
+        {
+          prop: "quantity",
+          label: "总量",
+          width: 100,
+          showOverflowTooltip: true,
+        },
+        {
+          prop: "ntaxPrice",
+          label: "总价(不含税)",
+          width: 100,
+          showOverflowTooltip: true,
+        },
+        {
+          prop: "lastPrice",
+          label: "最新单价(不含税)",
+          width: 100,
+          showOverflowTooltip: true,
+        },
+        {
+          prop: "minPrice",
+          label: "最低单价(不含税)",
+          width: 100,
+          showOverflowTooltip: true,
+        },
+        {
+          prop: "maxPrice",
+          label: "最高单价(不含税)",
+          width: 200,
+          align: "right",
+        },
+        {
+          prop: "avgPrice",
+          label: "平均单价(不含税)",
+          width: 200,
+          align: "right",
+        },
+
+
+        {
+          prop: "deptName",
+          label: "组织机构名称",
+          width: 200,
+          align: "right",
+        },
+        {
+          prop: "minAccountFullName",
+          label: "项目名称",
+          width: 200,
+          align: "right",
+        },
+        {
+          prop: "conName",
+          label: "合同名称",
+          width: 200,
+          align: "right",
+        },
+        {
+          prop: "signDate",
+          label: "合同签订时间",
+          width: 200,
           align: "right",
         },
         {
           prop: "notTaxUnitPrice",
-          label: "签约单价(不含税)",
+          label: "合同签订区域--",
+          width: 200,
+          align: "right",
+        },
+
+
+        {
+          prop: "initialPrice",
+          label: "成交单价(不含税)",
           width: 160,
           align: "right",
         },
+        // {
+        //   prop: "notTaxUnitPrice",
+        //   label: "供应商名称",
+        //   width: 160,
+        //   align: "right",
+        // },
       ],
       tableData: [],
     };
   },
   methods: {
+    getExport(params) {
+      this.download(
+        "business/report/priceAnalysisExport",
+        {
+          ...params,
+        },
+        `report_${new Date().getTime()}.xlsx`
+      );
+    },
     /**
      * 选择成本子目后确认
      */
@@ -320,7 +446,7 @@ export default {
     },
     getList(params) {
       this.loading = true;
-      priceAnalysisReport(params)
+      getPriceAnalysisReportByCon(params)
         .then((res) => {
           this.tableData = res.data;
           this.loading = false;

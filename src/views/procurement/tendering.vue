@@ -56,7 +56,6 @@
         @changeState="changeState"
       />
     </el-col>
-
     <el-col :span="4" :xs="24" v-if="currentState">
       <div
         class="context"

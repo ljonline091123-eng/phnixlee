@@ -140,14 +140,16 @@
 
         <PageTitle :title="currentContract.contractPlanningCategoryName">
           <div class="page-title-right">
+            <el-button type="success" size="small"  @click="pushPlan">易料市集采购</el-button>
+            <el-button type="success" size="small"  @click="revokePushPlan">撤销易料市集采购</el-button>
             <el-button type="success" size="small" :disabled="isSubmit" @click="splitVisible = true">合约拆分</el-button>
           </div>
         </PageTitle>
 
-        <el-table v-loading="loading" :data="planList" ref="tableRef"  size="small" stripe border default-expand-all>
+        <el-table v-loading="loading" :data="planList" ref="tableRef"  size="small"  border default-expand-all>
           <el-table-column type="expand" v-if="planList[0] && planList[0].children && planList[0].children.length">
             <template slot-scope="props">
-              <el-table :data="props.row.children" size="small" stripe border>
+              <el-table :data="props.row.children" size="small"  border>
                 <!-- <el-table-column type="selection"></el-table-column> -->
                 <el-table-column label="拆分合约规划名称" prop="splitContractName" width="200">
                   <template slot-scope="scope">
@@ -161,7 +163,8 @@
                 </el-table-column>
                 <el-table-column label="清单" align="center" props="inventory">
                   <template slot-scope="inventory">
-                    <el-table size="small" :data="inventory.row.children" stripe border>
+                    <el-table  size="small" :data="inventory.row.children"  border   :ref="inventory.row.planTable"  :row-class-name="tableRowClassName">
+                      <el-table-column type="selection" width="55" :reserve-selection="true"/>
                       <el-table-column label="序号" type="index" width="50" align="center" fixed/>
                       <el-table-column label="清单编码" min-width="150" prop="materialsCode" fixed show-overflow-tooltip/>
                       <el-table-column label="清单名称" min-width="150" prop="materialsName" fixed show-overflow-tooltip/>
@@ -234,8 +237,30 @@
                           <span v-else>-</span>
                         </template>
                       </el-table-column>
+                      <el-table-column type="selection" width="55" :reserve-selection="true" />
                     </el-table>
                   </template>
+                </el-table-column>
+                
+
+                <el-table-column label="易料市集清单" align="center" props="inventory" width="400">
+                  <template slot-scope="inventory">
+                    <el-table size="small" :data="inventory.row.children"  border ref="planTable"   :row-class-name="tableRowClassName">
+                      <el-table-column label="商品编码" min-width="100" prop="code" show-overflow-tooltip/>
+                        <el-table-column label="商品名称" prop="name" width="100">
+                          <template slot-scope="scope">
+                            {{ scope.row.name }}
+                          </template>
+                        </el-table-column>
+                 
+                        <el-table-column label="品牌" min-width="100" prop="name" show-overflow-tooltip/>
+                        <el-table-column label="含税单价"  width="100" prop="code" v-if="isFloat">
+                          <template slot-scope="scope">
+                            <el-input v-model="scope.row.code" disabled v-thousandth/>
+                          </template>
+                        </el-table-column>
+                      </el-table>
+                    </template>
                 </el-table-column>
               </el-table>
             </template>
@@ -331,7 +356,7 @@ import {
   getMinProject,
   getPlanDetail,
   listDwMmServiceSubjectMatter,
-  getContractPlanSplitFlag
+  getContractPlanSplitFlag,pushMaterialProcurementList,revokePushMaterialProcurementList
 } from '@/api/procurement/plan'
 import { listUnderlingDict } from "@/api/procurement/contract";
 import { listAreaDivisionTree } from '@/api/procurement/manage'
@@ -354,6 +379,10 @@ export default {
         priceType:'1'
       }, //form表单数据
       planList: [],
+      accountTable:'accountTable',
+      projectCode:'',
+      id:'',
+      materialsLists:[],
       inventoryList: [],
       // isEdit: true,
       rules: {
@@ -477,6 +506,7 @@ export default {
     PageTitle
   },
   created() {
+    console.log('param--param--param!------------------');
     this.mathjs = create(all);
     this.mathjs.config({
       number: 'BigNumber',
@@ -503,9 +533,83 @@ export default {
     }
   },
   mounted(){
-    this.queryContractPlanSplitFlag();
+      this.queryContractPlanSplitFlag();
   },
   methods: {
+    // 多选框选中数据
+    handleSelectionChange(selection, row) {
+  
+    },
+
+    pushPlan(){
+      this.$confirm("是否确定选中的清单进入易料市集进行采购？", "提示", {
+        confirmButtonText: "确定",
+        cancelButtonText: "取消",
+        type: "warning",
+      }).then(() => {
+        this.materialsLists=[]
+        for(let i = 0 ; i <  this.planList[0].children.length ; i++){
+          let children=this.planList[0].children[i]
+          const currentSelect = this.$refs[`${children.planTable}`].selection;
+          this.materialsLists = [...this.materialsLists ,...currentSelect];
+          
+        }
+        console.log(JSON.stringify(this.materialsLists))
+        this.pushMaterialProcurement();
+      });
+    },
+    revokePushPlan(){
+      this.$confirm("是否确定撤销选中的清单？", "提示", {
+        confirmButtonText: "确定",
+        cancelButtonText: "取消",
+        type: "warning",
+      }).then(() => {
+        this.materialsLists=[]
+        for(let i = 0 ; i <  this.planList[0].children.length ; i++){
+          let children=this.planList[0].children[i]
+          const currentSelect = this.$refs[`${children.planTable}`].selection;
+          this.materialsLists = [...this.materialsLists ,...currentSelect];
+          
+        }
+        console.log(JSON.stringify(this.materialsLists))
+        this.revokePushMaterialProcurement();
+      });
+    },
+    //撤销
+    async revokePushMaterialProcurement(){
+      if(!this.materialsLists.length) return this.$message({type:'error',message:"请选择进入易料市集采购清单"});
+        for(let i = 0 ; i <  this.materialsLists.length ; i++){
+            if(this.materialsLists[i].pushFlag=='N'){
+              return this.$message({type:'error',message:"请选择已推送进入易料市集采购清单"})
+            }
+          }
+      let formData = {
+        projectCode:this.projectCode,
+          id:this.id,
+          materialsLists:this.materialsLists,
+        }
+        await revokePushMaterialProcurementList(formData)
+        this.getPlanDetail()
+    },
+    //推送
+    async  pushMaterialProcurement(){
+      if(!this.materialsLists.length) return this.$message({type:'error',message:"请选择进入易料市集采购清单"});
+      let formData = {
+        projectCode:this.projectCode,
+          id:this.id,
+          materialsLists:this.materialsLists,
+        }
+        await pushMaterialProcurementList(formData)
+        this.getPlanDetail()
+    },
+    tableRowClassName({row, rowIndex}) {
+        if (row.pushFlag === 'Y') {
+          return 'already-pushed';
+        } else if (row.pushFlag === 'N') {
+          return 'not-pushed';
+        }
+        return '';
+      },
     //提交
     submitForm(formName) {
       console.log(this.planList,'ppp');
@@ -753,6 +857,8 @@ export default {
         procurementPlan.priceType = procurementPlan.priceType  + ''
         this.formData.subjectMatterText = procurementPlan.subjectMatterName;
         this.formData.region = [procurementPlan.regionProvinceCode, procurementPlan.regionCityCode]
+        this.id=procurementPlan.id
+        this.projectCode=procurementPlan.projectCode
         // this.currentContract.contractPlanningCategory = contractPlanning.contractPlanningCategory
         this.subjectMatter = procurementPlan.subjectMatterType;
         this.formData = {...this.formData, ...procurementPlan, upperLimitPrice:contractPlanning.plannedAmountInclTaxText}
@@ -765,13 +871,17 @@ export default {
         //   this.isEdit = false
         // }
 
-        console.log(splitMaterials,'splitMaterials--splitMaterials--splitMaterials')
+        
         splitMaterials.forEach((item,index) => {
           item.$index = index;
-          let children = item.materialsLists.map((child,k) => ({...child, $index:k}))
+          item.planTable='planTable'+index
+          let children = item.materialsLists.map((child,k) => ({...child, $index:k,planTable:item.planTable}))
           item.children = children;
         })
+        console.log(JSON.stringify(splitMaterials),'splitMaterials--splitMaterials--splitMaterials')
+
         this.planList[0] = {...contractPlanning, children: splitMaterials};
+        console.log(JSON.stringify(this.planList[0]),'this.planList[0]--this.planList[0]--this.planList[0]')
         // 在数据加载完成后手动展开所有行
         this.$nextTick(() => {
           this.expandAllRows();
@@ -1208,6 +1318,12 @@ export default {
 }
 ::v-deep.app-container .dialogClass .el-dialog__body {
   height: initial;
+}
+::v-deep .el-table__row .already-pushed {
+  background: #CCCCCC !important;
+}
+::v-deep  .el-table__row   .not-pushed {
+  background: #F9F9FB !important;
 }
 
 </style>

@@ -26,9 +26,15 @@ export  const mixin = {
       console.log("mixin-queryParams-查询",this.params)
       console.log("mixin-project-查询",this.project)
       console.log("mixin-org-查询",this.org)
+      console.log("mixin-org-radioType",this.radioType)
+
       params.startTime = params.dateRange && params.dateRange[0]
       params.endTime =  params.dateRange && params.dateRange[1]
       this.queryParams = Object.assign({}, this.queryParams, params)
+      if(this.radioType){
+        this.queryParams.conType=this.radioType
+      }
+    
       this.getList(this.queryParams)
     },
     /**

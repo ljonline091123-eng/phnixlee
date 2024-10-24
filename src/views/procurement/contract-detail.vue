@@ -40,7 +40,7 @@
             >撤回</el-button
           >
         </div>
-        <!--
+        
         <div v-else-if="isOperate === 1 && Number(agreementState) === 3">
           <el-button type="primary" size="mini" @click="pushToVendor()"
             >推送至供应商</el-button
@@ -64,7 +64,7 @@
             >作废签署合同</el-button
           >
         </div>
-        -->
+       
         <div class="contractApprovalButton">
           <el-button
             type="primary"

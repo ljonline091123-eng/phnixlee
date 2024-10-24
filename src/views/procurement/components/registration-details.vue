@@ -28,7 +28,7 @@
       >
         <!-- <el-table-column
           type="selection"
-          width="55"
+          width="55" 
           :selectable="disabledHandle"
         /> -->
         <el-table-column label="序号" type="index" width="50" align="center" />

@@ -149,7 +149,7 @@
         <el-radio-button label="baseInfo" name="baseInfo"
           >合同基本信息</el-radio-button
         >
-        <el-radio-button label="stamp" name="stamp"
+        <el-radio-button label="stamp" name="stamp" 
           >合同盖章位置</el-radio-button
         >
       </el-radio-group>

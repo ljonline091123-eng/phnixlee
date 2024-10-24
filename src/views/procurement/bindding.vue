@@ -243,6 +243,28 @@
           </el-col>
         </el-row>
         <el-row>
+          <el-col :span="24" class="grid-cell">
+            <el-form-item
+            label="采购计划作废"
+            label-width="150px"
+            class="label-right-align"
+          >
+            <el-checkbox v-model="checkedPlan"></el-checkbox>
+            </el-form-item>
+          </el-col>
+        </el-row>
+      <el-row>
+          <el-col :span="24" class="grid-cell">
+            <el-form-item
+            label-width="150px"
+            label="采购方案作废"
+            class="label-right-align"
+          >
+            <el-checkbox v-model="checkedScheme"></el-checkbox>
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-row>
           <el-col :span="12" class="grid-cell">
             <el-form-item
               label="附件"
@@ -287,12 +309,17 @@
 import { mapGetters } from "vuex";
 import { Base64 } from "js-base64";
 import { getBiddingSchemeList, abandonBidMore } from "@/api/procurement/manage";
+import {
+  cancellationProcurementScheme,cancellationProcurementSchemePlan,
+} from "@/api/procurement/scheme";
 import BackButton from '@/components/BackButton/index.vue'
 export default {
   name: "Bindding",
   dicts: ["procurement_type", "bindding_step"],
   data() {
     return {
+      checkedPlan:false,
+      checkedScheme:false,
       schemeList: [],
       // 遮罩层
       loading: false,
@@ -500,7 +527,14 @@ export default {
           };
           console.log(formData, "formData");
           try {
-            const res = await abandonBidMore(formData);
+            const res=null
+            if(this.checkedPlan){
+              const resPlan=await cancellationProcurementSchemePlan(id);
+              }else  if(this.checkedScheme){
+              const resScheme = await cancellationProcurementScheme(id);
+              }else{
+                const res = await abandonBidMore(formData);
+              }
             this.$message.success("废标成功");
             this.abandonBidVisiable = false;
             this.currentBid = {};

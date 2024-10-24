@@ -12,3 +12,10 @@ export function priceAnalysisReport(query) {
     params: query
   })
 }
+export function getPriceAnalysisReportByCon(query) {
+  return request({
+    url: '/business/report/priceAnalysisReportByCon',
+    method: 'get',
+    params: query
+  })
+}

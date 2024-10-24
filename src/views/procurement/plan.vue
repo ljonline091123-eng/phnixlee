@@ -651,6 +651,11 @@
               prop="planningBalanceText"
             />
             <el-table-column
+            label="可使用数量"
+            align="right"
+            prop="surplusQuantityText"
+          />
+            <el-table-column
               label="拟定招标方式"
               align="center"
               prop="biddingMethodName"
@@ -838,10 +843,15 @@ export default {
     },
     //双击选择项目合约规划
     dbClick(row) {
-      this.contractVisible = false;
-      let param = Base64.encode(JSON.stringify(row));
-      param = encodeURIComponent(param); //避免base64编码中出现"/"时路由404
-      this.$router.push(`/procurement/add-plan/${param}`);
+      if(row.surplusQuantity==0){
+        this.$message({type:'success',message:"工程量为0，不能新增采购计划"})
+      }else{
+        this.contractVisible = false;
+       let param = Base64.encode(JSON.stringify(row));
+       param = encodeURIComponent(param); //避免base64编码中出现"/"时路由404
+       this.$router.push(`/procurement/add-plan/${param}`);
+      }
+      
     },
     /** 跳转方案详情 */
     goDetail(id) {

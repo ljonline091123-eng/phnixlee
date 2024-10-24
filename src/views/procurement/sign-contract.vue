@@ -234,7 +234,7 @@
                 >撤回</el-button
               >
             </div>
-            <!--
+            
             <div
               v-else-if="
                 Number(scope.row.isOperate) === 1 &&
@@ -308,7 +308,7 @@
                 >作废签署合同</el-button
               >
             </div>
-            -->
+           
             <span v-else>-</span>
           </template>
         </el-table-column>
@@ -1116,7 +1116,7 @@
 <script>
 import { mapGetters } from "vuex";
 import { Base64 } from "js-base64";
-import { create, all } from "mathjs";
+// import { create, all } from "mathjs";
 import {
   checkAgreementCreateInfo,
   listAgreement,
@@ -1275,10 +1275,10 @@ export default {
     };
   },
   created() {
-    this.mathjs = create(all);
-    this.mathjs.config({
-      number: "BigNumber",
-    });
+    // this.mathjs = create(all);
+    // this.mathjs.config({
+    //   number: "BigNumber",
+    // });
   },
   watch: {
     "queryParams.expenditureBusinessType": {
@@ -1906,16 +1906,16 @@ export default {
       return newCount.toString().slice(0, newCount.toString().indexOf(".") + 3);
     },
     totalNotTaxPriceTotal() {
-      if (this.form.vendorBiddingListQuotationList?.length === 0) return 0.0;
-      const { add, bignumber } = this.mathjs;
-      let count = bignumber(0.0);
-      this.form.vendorBiddingListQuotationList?.forEach((item) => {
-        if (item.notTaxedTotal) {
-          count = add(count, bignumber(item.notTaxedTotal));
-        }
-      });
-      const newCount = (Math.floor(count * 100) / 100).toFixed(2);
-      return newCount.toString().slice(0, newCount.toString().indexOf(".") + 3);
+      // if (this.form.vendorBiddingListQuotationList?.length === 0) return 0.0;
+      // const { add, bignumber } = this.mathjs;
+      // let count = bignumber(0.0);
+      // this.form.vendorBiddingListQuotationList?.forEach((item) => {
+      //   if (item.notTaxedTotal) {
+      //     count = add(count, bignumber(item.notTaxedTotal));
+      //   }
+      // });
+      // const newCount = (Math.floor(count * 100) / 100).toFixed(2);
+      // return newCount.toString().slice(0, newCount.toString().indexOf(".") + 3);
     },
   },
 };
