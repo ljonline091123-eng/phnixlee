@@ -393,6 +393,7 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
         vendorIndexInfoVO.setEnterpriseName(vendor.getEnterpriseName());
         vendorIndexInfoVO.setContactName(vendorContact.getContactName());
         vendorIndexInfoVO.setApproveState(vendor.getState());
+        vendorIndexInfoVO.setApproveMsg(vendor.getOperateComment());/* 审批信息 */
         vendorIndexInfoVO.setIsManager(vendorContact.getIsManager());
         vendorIndexInfoVO.setIsBlack(vendor.getIsBlack());
         vendorIndexInfoVO.setContactPhone(vendorContact.getContactPhone());
@@ -577,6 +578,7 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
         String businessId = variables.get("businessId").toString();
         super.update(new LambdaUpdateWrapper<Vendor>()
                 .set(Vendor::getState,VendorStateEnum.REJECT.getState())
+                .set(Vendor::getOperateComment,variables.get("operateComment")==null?"":variables.get("operateComment").toString())
                 .eq(Vendor::getId, businessId));
     }
 }
