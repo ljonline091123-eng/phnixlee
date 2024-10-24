@@ -21,6 +21,9 @@ public class VendorIndexInfoVO {
     @ApiModelProperty(value = "审核状态")
     private Integer approveState;
 
+    @ApiModelProperty(value = "审核信息,批语")
+    private String approveMsg;
+
     @ApiModelProperty(value = "是否为管理员")
     private Integer isManager;
 
