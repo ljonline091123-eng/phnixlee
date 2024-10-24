@@ -12,6 +12,9 @@ import java.math.BigDecimal;
 @Data
 public class MarketProductListRequestDTO {
 
+    @ApiModelProperty(value = "清单id")
+    private String requireId;
+
     @ApiModelProperty(value = "商品编码")
     private String code;
 

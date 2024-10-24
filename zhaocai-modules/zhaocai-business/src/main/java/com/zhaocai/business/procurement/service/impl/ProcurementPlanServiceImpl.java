@@ -9,6 +9,8 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.zhaocai.business.agreement.domain.MarketMaterialContract;
+import com.zhaocai.business.agreement.service.IMarketMaterialContractService;
 import com.zhaocai.business.bidding.domain.BiddingListQuotation;
 import com.zhaocai.business.bidding.domain.TenderNotice;
 import com.zhaocai.business.bidding.service.ITenderNoticeService;
@@ -20,13 +22,11 @@ import com.zhaocai.business.common.utils.AmountCalUtil;
 import com.zhaocai.business.common.utils.ValidateUtils;
 import com.zhaocai.business.manager.http.common.config.ThirdPartyTodoFlowGroupEnum;
 import com.zhaocai.business.manager.http.common.config.ThirdPartyTodoFlowModuleEnum;
-import com.zhaocai.business.manager.http.dto.req.ContractPlanMaterialListRequestDTO;
-import com.zhaocai.business.manager.http.dto.req.PushThirdPartyTodoTaskRequestDTO;
-import com.zhaocai.business.manager.http.dto.req.PushThirdPartyTodoTaskSonRequestDTO;
-import com.zhaocai.business.manager.http.dto.req.UsersRoleListRequestDTO;
+import com.zhaocai.business.manager.http.dto.req.*;
 import com.zhaocai.business.manager.http.dto.res.UsersRoleContractPlanListResponseDTO;
 import com.zhaocai.business.manager.http.dto.res.UsersRoleListResponseDTO;
 import com.zhaocai.business.manager.http.service.ContractPlanService;
+import com.zhaocai.business.manager.http.service.MarketService;
 import com.zhaocai.business.manager.http.service.PlatRoleService;
 import com.zhaocai.business.manager.http.service.ThridPartyTodoTaskService;
 import com.zhaocai.business.procurement.domain.*;
@@ -50,6 +50,7 @@ import com.zhaocai.common.core.constant.SecurityConstants;
 import com.zhaocai.common.core.utils.NumberUtil;
 import com.zhaocai.common.core.utils.bean.BeanCopierUtil;
 import com.zhaocai.common.core.web.bean.ResultData;
+import com.zhaocai.common.core.web.domain.BaseEntity;
 import com.zhaocai.common.security.utils.SecurityUtils;
 import com.zhaocai.common.signature.domain.AgreementSignature;
 import com.zhaocai.system.api.domain.SysUser;
@@ -127,6 +128,12 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
     @Lazy
     @Autowired
     private IProcurementPlanService procurementPlanService;
+
+    @Autowired
+    private MarketService marketService;
+
+    @Autowired
+    private IMarketMaterialContractService marketMaterialContractService;
 
     @Override
     public PageResult<ProcurementPlanListVO> listPage(ProcurementPlanListQueryVO queryVO) {
@@ -430,6 +437,84 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
             userContract.setContractPlanningNoticeVOList(contractPlanningNoticeVOList);
         }
         return userContract;
+    }
+
+    /**
+     * 推送易料采购清单
+     * @param requestVO
+     * @return
+     */
+    @Override
+    public ProcurementPlanDetailVO pushMaterialProcurementList(MaterialProcurementPushRequestVO requestVO) {
+        this.checkMaterialProcurement(requestVO.getId());
+        MinProjectVO project = minProjectService.getMinProjectByMinAccountCode(requestVO.getProjectCode());
+        // 构建易料采购信息和易料采购清单信息
+        MarketMaterialListRequestDTO pushVO = new MarketMaterialListRequestDTO();
+        pushVO.setPlanId(String.valueOf(requestVO.getId()));
+        pushVO.setProjectId(requestVO.getProjectCode());
+        pushVO.setProjectName(project.getMinAccountFullName());
+        pushVO.setContractName(project.getProjectLeader());
+        pushVO.setContractPhone(project.getProjectLeaderPhone());
+        List<MaterialsList> materialsLists = requestVO.getMaterialsLists();
+        List<Long> ids = materialsLists.stream().map(BaseEntity::getId).collect(Collectors.toList());
+        List<MaterialsList> materialsPushList = materialsListService.list(new LambdaQueryWrapper<MaterialsList>()
+                .eq(MaterialsList::getPushFlag, "Y").or(wrapper -> wrapper.in(MaterialsList::getId, ids)));
+        List<MarketProductListRequestDTO> pushVOList = BeanCopierUtil.copyList(materialsPushList, MarketProductListRequestDTO.class);
+        for (int i = 0; i < pushVOList.size(); i++) {
+            pushVOList.get(i).setRequireId(String.valueOf(materialsPushList.get(i).getId()));
+        }
+        pushVO.setList(pushVOList);
+        marketService.pushMarketMaterialList(pushVO);
+        // 更新清单是否已推送
+        materialsListService.update(new LambdaUpdateWrapper<MaterialsList>()
+                .set(MaterialsList::getPushFlag, "Y")
+                .in(BaseEntity::getId, ids));
+        return this.getProcurementPlanDetail(requestVO.getId());
+    }
+
+    /**
+     * 检查推送的易料采购是否已到签订中
+     * @param id
+     */
+    private void checkMaterialProcurement(Long id) {
+        List<MarketMaterialContract> contract = marketMaterialContractService.list(new LambdaQueryWrapper<MarketMaterialContract>().eq(MarketMaterialContract::getPlanId, id));
+        if (contract == null) {
+            throw new BusinessException("需要推送的采购清单已经到合同签订阶段");
+        }
+    }
+
+    /**
+     * 撤销推送的易料采购清单
+     * @param requestVO
+     * @return
+     */
+    @Override
+    public ProcurementPlanDetailVO revokePushMaterialProcurementList(MaterialProcurementPushRequestVO requestVO) {
+        this.checkMaterialProcurement(requestVO.getId());
+        MinProjectVO project = minProjectService.getMinProjectByMinAccountCode(requestVO.getProjectCode());
+        // 构建易料采购信息和易料采购清单信息
+        MarketMaterialListRequestDTO pushVO = new MarketMaterialListRequestDTO();
+        pushVO.setPlanId(String.valueOf(requestVO.getId()));
+        pushVO.setProjectId(requestVO.getProjectCode());
+        pushVO.setProjectName(project.getMinAccountFullName());
+        pushVO.setContractName(project.getProjectLeader());
+        pushVO.setContractPhone(project.getProjectLeaderPhone());
+        List<MaterialsList> materialsLists = requestVO.getMaterialsLists();
+        List<Long> ids = materialsLists.stream().map(BaseEntity::getId).collect(Collectors.toList());
+        List<MaterialsList> materialsPushList = materialsListService.list(new LambdaQueryWrapper<MaterialsList>()
+                .eq(MaterialsList::getPushFlag, "Y")
+                .notIn(MaterialsList::getId, ids));
+        List<MarketProductListRequestDTO> pushVOList = BeanCopierUtil.copyList(materialsPushList, MarketProductListRequestDTO.class);
+        for (int i = 0; i < pushVOList.size(); i++) {
+            pushVOList.get(i).setRequireId(String.valueOf(materialsPushList.get(i).getId()));
+        }
+        pushVO.setList(pushVOList);
+        marketService.pushMarketMaterialList(pushVO);
+        // 更新撤销清单状态
+        materialsListService.update(new LambdaUpdateWrapper<MaterialsList>()
+                .set(MaterialsList::getPushFlag, "N")
+                .in(BaseEntity::getId, ids));
+        return this.getProcurementPlanDetail(requestVO.getId());
     }
 
     public void savaContractPlanningPushRecord(ProcurementPlanPushVO planPushVO){

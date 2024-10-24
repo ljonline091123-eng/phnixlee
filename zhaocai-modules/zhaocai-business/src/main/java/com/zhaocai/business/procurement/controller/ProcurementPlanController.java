@@ -178,4 +178,16 @@ public class ProcurementPlanController extends BladeController {
     public ResultData<UsersRoleContractPlanListResponseDTO> getUsersRoleContractPlanList(ContractPlanningQueryVO requestDTO) {
         return ResultData.data(procurementPlanService.getUsersRoleContractPlanList(requestDTO));
     }
+
+    @ApiOperation(value = "推送易料采购清单")
+    @PostMapping("/pushMaterialProcurementList")
+    public ResultData<ProcurementPlanDetailVO> pushMaterialProcurementList(@RequestBody MaterialProcurementPushRequestVO requestVO) {
+        return ResultData.data(procurementPlanService.pushMaterialProcurementList(requestVO));
+    }
+
+    @ApiOperation(value = "撤销推送的易料采购清单")
+    @PostMapping("/revokePushMaterialProcurementList")
+    public ResultData<ProcurementPlanDetailVO> revokePushMaterialProcurementList(@RequestBody MaterialProcurementPushRequestVO requestVO) {
+        return ResultData.data(procurementPlanService.revokePushMaterialProcurementList(requestVO));
+    }
 }
