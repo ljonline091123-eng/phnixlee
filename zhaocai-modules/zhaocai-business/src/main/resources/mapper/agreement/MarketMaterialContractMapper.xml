@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhaocai.business.agreement.mapper.MarketMaterialContractMapper">
+    <resultMap type="com.zhaocai.business.agreement.domain.MarketMaterialContract" id="MarketMaterialContractResult">
+        <result property="id" column="id"/>
+        <result property="planId" column="plan_id"/>
+        <result property="requireId" column="require_id"/>
+        <result property="belongAccountingItem" column="belong_accounting_item"/>
+        <result property="belongAccountingItemCode" column="belong_accounting_item_code"/>
+        <result property="agreementName" column="agreement_name"/>
+        <result property="agreementCode" column="agreement_code"/>
+        <result property="vendorId" column="vendor_id"/>
+        <result property="partyBName" column="party_b_name"/>
+        <result property="expenditureBusinessType" column="expenditure_business_type"/>
+        <result property="partyBLegalName" column="party_b_legal_name"/>
+        <result property="partyBLegalIdCard" column="party_b_legal_id_card"/>
+        <result property="partyBLegalPhone" column="party_b_legal_phone"/>
+        <result property="partyBResponsibleName" column="party_b_responsible_name"/>
+        <result property="partyBResponsibleIdCard" column="party_b_responsible_id_card"/>
+        <result property="partyBResponsiblePhone" column="party_b_responsible_phone"/>
+        <result property="agreementPerformAddress" column="agreement_perform_address"/>
+        <result property="agreementPerformCountry" column="agreement_perform_country"/>
+        <result property="agreementPerformDistrict" column="agreement_perform_district"/>
+    </resultMap>
+
+    <select id="listMarketMaterialContract" resultMap="MarketMaterialContractResult">
+        select tmmc.* from tb_market_material_contract tmmc
+        <where>
+            tmmc.id NOT IN (select ta.market_material_contract_id from tb_agreement ta where ta.market_material_contract_id is not null)
+            <if test="queryVO.agreementCode != null and queryVO.agreementCode != ''">
+                and tmmc.agreement_code like concat('%',#{queryVO.agreementCode,jdbcType=VARCHAR},'%')
+            </if>
+            <if test="queryVO.agreementName != null and queryVO.agreementName != ''">
+                and tmmc.agreement_name like concat('%',#{queryVO.agreementName,jdbcType=VARCHAR},'%')
+            </if>
+            <if test="queryVO.belongAccountingItemCode != null and queryVO.belongAccountingItemCode != ''">
+                and tmmc.belong_accounting_item_code like concat('%',#{queryVO.belongAccountingItemCode,jdbcType=VARCHAR},'%')
+            </if>
+        </where>
+    </select>
+
+</mapper>

@@ -116,4 +116,18 @@ public interface IProcurementPlanService  extends IService<ProcurementPlan> {
      * @return
      */
     UsersRoleContractPlanListResponseDTO getUsersRoleContractPlanList(ContractPlanningQueryVO requestDTO);
+
+    /**
+     * 推送易料采购清单
+     * @param requestVO
+     * @return
+     */
+    ProcurementPlanDetailVO pushMaterialProcurementList(MaterialProcurementPushRequestVO requestVO);
+
+    /**
+     * 撤销推送的易料采购清单
+     * @param requestVO
+     * @return
+     */
+    ProcurementPlanDetailVO revokePushMaterialProcurementList(MaterialProcurementPushRequestVO requestVO);
 }

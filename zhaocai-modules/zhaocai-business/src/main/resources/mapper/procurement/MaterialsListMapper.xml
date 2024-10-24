@@ -43,6 +43,12 @@
         <result property="updateTime" column="update_time"/>
         <result property="delFlag" column="del_flag"/>
         <result property="priceType" column="price_type"/>
+        <result property="code" column="code"/>
+        <result property="name" column="name"/>
+        <result property="category" column="category"/>
+        <result property="unitName" column="unit_name"/>
+        <result property="quantity" column="quantity"/>
+        <result property="pushFlag" column="push_flag"/>
     </resultMap>
 
     <resultMap id="materialsListVO" type="com.zhaocai.business.procurement.dto.MaterialsListDTO"
