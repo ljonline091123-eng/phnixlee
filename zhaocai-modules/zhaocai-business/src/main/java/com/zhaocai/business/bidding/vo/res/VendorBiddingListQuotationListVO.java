@@ -127,6 +127,9 @@ public class VendorBiddingListQuotationListVO extends AdviceObject {
     @ApiModelProperty(value = "品牌")
     private String brand;
 
+    @ApiModelProperty(value = "易料采购合同id")
+    private String marketMaterialContractId;
+
     @MoneyFormat(filedName = "count")
     @ApiModelProperty(value = "数量")
     private String countText;

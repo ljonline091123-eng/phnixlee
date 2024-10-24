@@ -12,8 +12,8 @@ import java.util.List;
 @Data
 public class MarketMaterialListRequestDTO extends UnderlyingPlatformBaseDTO {
 
-    @ApiModelProperty(value = "清单id")
-    private String requireId;
+    @ApiModelProperty(value = "计划id")
+    private String planId;
 
     @ApiModelProperty(value = "项目id")
     private String projectId;
@@ -28,6 +28,6 @@ public class MarketMaterialListRequestDTO extends UnderlyingPlatformBaseDTO {
     private String contractPhone;
 
     @ApiModelProperty(value = "清单列表")
-    private List<MarketProductListRequestDTO> productListRequestDTOList;
+    private List<MarketProductListRequestDTO> list;
 
 }
