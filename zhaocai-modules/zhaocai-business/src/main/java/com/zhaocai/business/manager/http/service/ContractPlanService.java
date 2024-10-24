@@ -61,7 +61,6 @@ public class ContractPlanService {
         pageResult.setTotal(pageList.getTotal());
 
         if (CollectionUtil.isNotEmpty(pageList.getRows())) {
-            List<CompletableFuture<Void>> futures = new ArrayList<>();
             // 结果集转换
             List<ContractPlanningListVO> resultList = pageList.getRows().stream()
                     .map(dto -> {
@@ -83,31 +82,20 @@ public class ContractPlanService {
 
                         /* 为了增加列 剩余可使用数量 */
                         /* 组合 查询条件 查询清单列表 */
-                        CompletableFuture<BigDecimal> future = getBigDecimal(queryVO, dto);
-                        CompletableFuture<Void> futureWithCallback = future.thenAccept(listVO::setSurplusQuantity);
-                        futures.add(futureWithCallback);
+                        ContractPlanMaterialListRequestDTO requestDTO = new ContractPlanMaterialListRequestDTO();
+                        requestDTO.setProjectId(queryVO.getProjectId());
+                        requestDTO.setConPlanId(dto.getConPlanId());
+                        List<ContractPlanMaterialListDTO> list = UnderlingRestTemplateService.listForObject(UnderlingPlatformUrlEnum.LIST_BY_PROJECT_CONTRACT,ContractPlanMaterialListDTO.class,requestDTO);
+                        /* 计算总剩余可用量 */
+                        listVO.setSurplusQuantity(list.stream().map(ContractPlanMaterialListDTO::getSurplusQuantity).reduce(BigDecimal.ZERO,BigDecimal::add));
 
                         return listVO;
                     }).collect(Collectors.toList());
-            // 等待所有异步任务完成并收集结果
-            CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
 
             pageResult.setRows(resultList);
         }
 
         return pageResult;
-    }
-
-    @Async
-    protected @NotNull CompletableFuture<BigDecimal> getBigDecimal(ContractPlanningListQueryVO queryVO, ContractPlanListDTO dto) {
-        return CompletableFuture.supplyAsync(() -> {
-            ContractPlanMaterialListRequestDTO requestDTO = new ContractPlanMaterialListRequestDTO();
-            requestDTO.setProjectId(queryVO.getProjectId());
-            requestDTO.setConPlanId(dto.getConPlanId());
-            List<ContractPlanMaterialListDTO> list = UnderlingRestTemplateService.listForObject(UnderlingPlatformUrlEnum.LIST_BY_PROJECT_CONTRACT,ContractPlanMaterialListDTO.class,requestDTO);
-            /* 计算总剩余可用量 */
-            return list.stream().map(ContractPlanMaterialListDTO::getSurplusQuantity).reduce(BigDecimal.ZERO,BigDecimal::add);
-        });
     }
 
     /**
