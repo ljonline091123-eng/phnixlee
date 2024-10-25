@@ -82,6 +82,7 @@ import com.zhaocai.system.api.domain.SysUser;
 import com.zhaocai.system.api.system.RemoteSystemService;
 import net.qiyuesuo.v3sdk.model.contract.response.ContractSignurlV3Response;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -193,6 +194,10 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
 
     @Autowired
     private IMarketMaterialContractService marketMaterialContractService;
+
+    @Lazy
+    @Autowired
+    private IProcurementPlanService procurementPlanService;
 
 
     @Override
@@ -405,14 +410,27 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
             String[] paymentWayS = agreement.getPaymentWay().split(",");
             agreementVO.setPaymentWayText(Arrays.stream(paymentWayS).map(paymentWayMap::get).collect(Collectors.joining(",")));
         }
+        Integer priceType;
+        Integer procurementPlanType;
 
-        // 获取采购方案
-        ProcurementScheme procurementScheme = procurementSchemeService.getById(agreement.getSchemeId());
-        ValidateUtils.isNullException(procurementScheme,"该合同对应的采购方案不存在，请确认");
-        agreementVO.setProcurementSchemeCode(procurementScheme.getProcurementSchemeCode());
-        agreementVO.setProcurementSchemeName(procurementScheme.getProcurementSchemeName());
+        if(StringUtils.isEmpty(agreement.getMarketMaterialContractId())){
+            // 获取采购方案
+            ProcurementScheme procurementScheme = procurementSchemeService.getById(agreement.getSchemeId());
+            ValidateUtils.isNullException(procurementScheme,"该合同对应的采购方案不存在，请确认");
+            agreementVO.setProcurementSchemeCode(procurementScheme.getProcurementSchemeCode());
+            agreementVO.setProcurementSchemeName(procurementScheme.getProcurementSchemeName());
+            priceType = procurementScheme.getPriceType();
+            procurementPlanType = procurementScheme.getProcurementType();
+        } else {
+            MarketMaterialContract contract = marketMaterialContractService.getById(agreement.getMarketMaterialContractId());
+            ValidateUtils.isNullException(contract, "该合同对应的易料采购合同为空");
+            ProcurementPlan planInfo = procurementPlanService.getById(contract.getPlanId());
+            ValidateUtils.isNullException(planInfo,"该易料采购合同对应的采购计划不存在");
+            priceType = planInfo.getPriceType();
+            procurementPlanType = Integer.valueOf(contract.getExpenditureBusinessType());
+        }
 
-        agreementVO.setPriceType(procurementScheme.getPriceType());
+        agreementVO.setPriceType(priceType);
         agreementVO.setAttachmentName(agreement.getAgreementName() + ".docx");
         agreementVO.setIsOperate(getAgreementIsOperate(agreement.getAgreementState(),agreement.getCreateId(),agreement.getSignatureUserId()));
 
@@ -431,9 +449,9 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
         List<AgreementMaterialsListVO> materialsLists = agreementMaterialsListService.listAgreementMaterials(id);
         // 设置价格类型
         // 购买材料，设置价款类型、交易标的物类型
-        if (ProcurementPlanTypeEnum.PURCHASE_MATERIALS.equalsType(procurementScheme.getProcurementType())) {
+        if (ProcurementPlanTypeEnum.PURCHASE_MATERIALS.equalsType(procurementPlanType)) {
             for (AgreementMaterialsListVO materialsListVO : materialsLists) {
-                materialsListVO.setPaymentType(procurementScheme.getPriceType() == null ? "" : procurementScheme.getPriceType().toString());
+                materialsListVO.setPaymentType(priceType == null ? "" : priceType.toString());
             }
         }
         // 合同保证金
