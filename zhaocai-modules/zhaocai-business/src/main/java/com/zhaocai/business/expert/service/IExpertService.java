@@ -31,6 +31,11 @@ public interface IExpertService  extends IService<Expert> , IProcessBusinessBase
     PageResult<ExpertListVO> page(ExpertQueryVO queryDTO);
 
     /**
+     * 分页查询专家列表
+     */
+    PageResult<ExpertListVO> pageAll(ExpertQueryVO queryDTO);
+
+    /**
      * 查询专家
      *
      * @param id 专家主键
