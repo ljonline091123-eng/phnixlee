@@ -36,6 +36,10 @@
         <result property="updateId" column="update_id"/>
         <result property="updateTime" column="update_time"/>
         <result property="delFlag" column="del_flag"/>
+        <result property="offerGoodsCode" column="offer_goods_code"/>
+        <result property="goodsName" column="goods_name"/>
+        <result property="offerBrand" column="offer_brand"/>
+        <result property="offerPrice" column="offer_price"/>
     </resultMap>
 
     <resultMap type="com.zhaocai.business.agreement.vo.res.AgreementMaterialsListVO" id="AgreementMaterialsListVOResult">

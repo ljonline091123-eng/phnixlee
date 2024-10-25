@@ -5,6 +5,7 @@ import com.zhaocai.business.agreement.vo.req.MarketMaterialContractQueryVO;
 import com.zhaocai.business.agreement.vo.res.AgreementCreateBaseInfoVO;
 import com.zhaocai.business.agreement.vo.res.MarketMaterialContractListVO;
 import com.zhaocai.business.common.base.BladeController;
+import com.zhaocai.business.pub.vo.res.AttachmentVO;
 import com.zhaocai.common.core.bean.PageResult;
 import com.zhaocai.common.core.web.bean.ResultData;
 import io.swagger.annotations.Api;
@@ -44,6 +45,15 @@ public class MarketMaterialContractController extends BladeController {
     @ApiOperation(value = "获取创建合同的基本信息")
     public ResultData<AgreementCreateBaseInfoVO> getAgreementCreateInfo(@Valid @RequestBody MarketMaterialContractQueryVO queryVO) {
         return ResultData.data(marketMaterialContractService.getAgreementCreateInfo(queryVO));
+    }
+
+    /**
+     * 获取创建合同的基本信息
+     */
+    @PostMapping("/agreementCreateAttachmentHandle")
+    @ApiOperation(value = "获取创建合同的基本信息")
+    public long agreementCreateAttachmentHandle(@Valid @RequestBody AttachmentVO attachmentVO) {
+        return marketMaterialContractService.agreementCreateAttachmentHandle(attachmentVO);
     }
 
 
