@@ -13,7 +13,10 @@ import java.util.List;
 public class MarketMaterialListQuoteRequestDTO {
 
     @ApiModelProperty(value = "合同主键ID")
-    private String Id;
+    private String id;
+
+    @ApiModelProperty(value = "计划id")
+    private String planId;
 
     @ApiModelProperty(value = "归属最小核算项目")
     private String belongAccountingItem;
