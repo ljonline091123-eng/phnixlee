@@ -61,7 +61,7 @@ public class ExpertVO implements Serializable {
 
 
     @ApiModelProperty(value =  "执业资格证")
-    private String registeredCertificate;
+    private Integer registeredCertificate;
 
     @JsonFormat(pattern = "yyyy-MM-dd", timezone = "GMT+8")
     @ApiModelProperty(value = "执业资格证取得时间")
