@@ -6,6 +6,7 @@ import com.zhaocai.business.common.base.AdviceObject;
 import com.zhaocai.business.common.enums.DictBizEnum;
 import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;
+import lombok.Builder;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
@@ -14,14 +15,17 @@ import java.util.Date;
 
 @Data
 @EqualsAndHashCode(callSuper = false)
+@Builder
 @ApiModel(value = "VendorPortalMsgListVO", description = "消息列表数据VO")
-public class VendorPortalMsgListVO extends AdviceObject {
+public class VendorPortalMsgListVO<T> extends AdviceObject {
+
+
 
     @ApiModelProperty(value =  "标题")
     private String title;
 
-    @ApiModelProperty(value =  "采购方案id")
-    private Long schemeId;
+    @ApiModelProperty(value =  "数据")
+    private T data;
 
     @ApiModelProperty(value =  "消息类别")
     private Integer msgType;
