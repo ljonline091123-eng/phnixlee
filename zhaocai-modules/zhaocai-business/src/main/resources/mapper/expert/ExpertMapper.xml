@@ -3,7 +3,7 @@
 PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
 "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.zhaocai.business.expert.mapper.ExpertMapper">
-    
+
     <resultMap type="com.zhaocai.business.expert.domain.Expert" id="ExpertResult">
         <result property="id"    column="id"    />
         <result property="expertName"    column="expert_name"    />
@@ -32,11 +32,15 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="presentUnitDept"    column="present_unit_dept"    />
         <result property="email"    column="email"    />
         <result property="professionResume"    column="profession_resume"    />
+        <result property="wfProcessId"    column="wf_process_id"    />
+        <result property="processType"    column="process_type"    />
+        <result property="state"    column="state"    />
+        <result property="operateComment"    column="operate_comment"    />
     </resultMap>
 
     <sql id="selectExpertVo">
         select id, expert_name, expert_phone, belong_organization, department, education_degree, major, business_type, expert_type, expert_state, user_id, create_by, create_id, create_time, update_by, update_id, update_time, del_flag,
-               registered_certificate, registered_certificate_date, present_job, present_job_date, technical_titles, technical_titles_date, present_unit_dept, email, profession_resume
+               registered_certificate, registered_certificate_date, present_job, present_job_date, technical_titles, technical_titles_date, present_unit_dept, email, profession_resume,wf_process_id,process_type,state,operate_comment
         from tb_expert
     </sql>
 
