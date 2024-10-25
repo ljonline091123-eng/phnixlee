@@ -78,8 +78,8 @@ public class VendorPortalServiceImpl implements IVendorPortalService {
         if(pageResult!=null && pageResult.getTotal()>0){
             for (int i = 0; i < pageResult.getRows().size(); i++) {
                 list.add(VendorPortalMsgListVO.builder()
-                                .data(pageResult.getRows().get(i))
-                                .title(pageResult.getRows().get(i).getProcurementSchemeName())
+                        .data(pageResult.getRows().get(i))
+                        .title(pageResult.getRows().get(i).getProcurementSchemeName())
                         .msgType(VendorMsgStatusEnum.TENDER.getState())
                         .msgTypeText(DictBizCache.getValue(DictBizEnum.PROCUREMENT_PLAN_TYPE,pageResult.getRows().get(i).getProcurementPlanType().toString()))
                         .build());
