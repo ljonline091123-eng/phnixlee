@@ -13,9 +13,14 @@ import com.zhaocai.business.agreement.vo.req.MarketMaterialContractQueryVO;
 import com.zhaocai.business.agreement.vo.res.AgreementCreateBaseInfoVO;
 import com.zhaocai.business.agreement.vo.res.MarketMaterialContractListVO;
 import com.zhaocai.business.bidding.vo.res.VendorBiddingListQuotationListVO;
+import com.zhaocai.business.common.cache.DictBizCache;
+import com.zhaocai.business.common.enums.AttachmentTypeEnum;
+import com.zhaocai.business.common.enums.DictBizEnum;
+import com.zhaocai.business.common.enums.FileZTaskBusinessEnum;
 import com.zhaocai.business.common.exception.ParamValidateException;
 import com.zhaocai.business.common.utils.AmountCalUtil;
 import com.zhaocai.business.common.utils.ValidateUtils;
+import com.zhaocai.business.filez.service.IFileZTaskService;
 import com.zhaocai.business.manager.http.dto.req.MarketMaterialListQuoteRequestDTO;
 import com.zhaocai.business.manager.http.dto.res.MinProjectDetailResponseDTO;
 import com.zhaocai.business.manager.http.service.ContractPlanService;
@@ -23,6 +28,9 @@ import com.zhaocai.business.procurement.domain.MaterialsList;
 import com.zhaocai.business.procurement.domain.ProcurementPlan;
 import com.zhaocai.business.procurement.service.IMaterialsListService;
 import com.zhaocai.business.procurement.service.IProcurementPlanService;
+import com.zhaocai.business.pub.service.IAttachmentService;
+import com.zhaocai.business.pub.vo.req.AttachmentRequestVO;
+import com.zhaocai.business.pub.vo.res.AttachmentVO;
 import com.zhaocai.common.core.bean.PageResult;
 import com.zhaocai.common.core.constant.SecurityConstants;
 import com.zhaocai.common.core.utils.NumberUtil;
@@ -64,6 +72,12 @@ public class MarketMaterialContractServiceImpl extends ServiceImpl<MarketMateria
     @Lazy
     @Autowired
     private IProcurementPlanService procurementPlanService;
+
+    @Autowired
+    private IAttachmentService attachmentService;
+
+    @Autowired
+    private IFileZTaskService fileZTaskService;
 
     /**
      * 接收采购清单最终报价
@@ -110,15 +124,16 @@ public class MarketMaterialContractServiceImpl extends ServiceImpl<MarketMateria
         ValidateUtils.isNullException(planInfo,"该易料采购合同对应的采购计划不存在");
 
         AgreementCreateBaseInfoVO baseInfoVO = new AgreementCreateBaseInfoVO();
+        baseInfoVO.setMarketMaterialContractId(queryVO.getId());
         baseInfoVO.setVendorId(Long.valueOf(contract.getVendorId()));
         baseInfoVO.setBelongAccountingItem(contract.getBelongAccountingItem());
         baseInfoVO.setBelongAccountingItemCode(contract.getBelongAccountingItemCode());
-        baseInfoVO.setBusinessType(planInfo.getProcurementType());
-        baseInfoVO.setExpenditureBusinessType(contract.getExpenditureBusinessType());
+        baseInfoVO.setBusinessType(planInfo.getProcurementPlanType());
+        baseInfoVO.setExpenditureBusinessType(DictBizCache.getValue(DictBizEnum.PROCUREMENT_PLAN_TYPE,String.valueOf(contract.getExpenditureBusinessType())));
         baseInfoVO.setPriceType(planInfo.getPriceType());
 
         // 查询项目详情
-        MinProjectDetailResponseDTO projectDetail = contractPlanService.getMinProjectDetail(contract.getBelongAccountingItem());
+        MinProjectDetailResponseDTO projectDetail = contractPlanService.getMinProjectDetail(contract.getBelongAccountingItemCode());
         baseInfoVO.setBelongOrganizationId(projectDetail.getBelongingOrgId());
         baseInfoVO.setBelongOrganizationName(getDeptName(projectDetail.getBelongingOrgId()));
         baseInfoVO.setAgreementPerformAddress(contract.getAgreementPerformAddress());
@@ -192,6 +207,27 @@ public class MarketMaterialContractServiceImpl extends ServiceImpl<MarketMateria
 //        baseInfoVO.setAttachmentId(attachmentId);
 
         return baseInfoVO;
+    }
+
+    /**
+     * 处理新增合同时的附件<br>
+     * 1. 为合同选定的合同模板新增一个附件
+     * 2. 为合同附件增加一个联想文档任务
+     * @param attachmentVO
+     * @return
+     */
+    @Override
+    public long agreementCreateAttachmentHandle(AttachmentVO attachmentVO) {
+        ValidateUtils.isNullException(attachmentVO,"该合同没有选择模板，请确认");
+
+        // 新增附件
+        AttachmentRequestVO attachmentRequestVO = new AttachmentRequestVO(attachmentVO.getFileName(),attachmentVO.getFileUrl());
+        long attachmentId = attachmentService.addAttachment(attachmentRequestVO, AttachmentTypeEnum.AGREEMENT_ORIGINAL,null);
+
+        // 新增任务
+        fileZTaskService.addInitialFileZTask(FileZTaskBusinessEnum.AGREEMENT_CREATE,attachmentId);
+
+        return attachmentId;
     }
 
     /**

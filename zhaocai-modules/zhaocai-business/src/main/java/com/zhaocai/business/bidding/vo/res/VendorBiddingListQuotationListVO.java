@@ -127,8 +127,17 @@ public class VendorBiddingListQuotationListVO extends AdviceObject {
     @ApiModelProperty(value = "品牌")
     private String brand;
 
-    @ApiModelProperty(value = "易料采购合同id")
-    private String marketMaterialContractId;
+    @ApiModelProperty(value = "易料市集商品编码")
+    private String offerGoodsCode;
+
+    @ApiModelProperty(value = "易料市集商品名")
+    private String goodsName;
+
+    @ApiModelProperty(value = "易料市集品牌")
+    private String offerBrand;
+
+    @ApiModelProperty(value = "易料市集含税单价")
+    private String offerPrice;
 
     @MoneyFormat(filedName = "count")
     @ApiModelProperty(value = "数量")
