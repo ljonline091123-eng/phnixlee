@@ -12,7 +12,9 @@ import com.zhaocai.business.bidding.vo.res.VendorPortalDataStatVO;
 import com.zhaocai.business.bidding.vo.res.VendorPortalMsgListVO;
 import com.zhaocai.business.bidding.vo.res.VendorPortalNoticeListVO;
 import com.zhaocai.business.bidding.vo.res.VendorPortalPublicityListVO;
+import com.zhaocai.business.common.cache.DictBizCache;
 import com.zhaocai.business.common.enums.CertificationTypeEnum;
+import com.zhaocai.business.common.enums.DictBizEnum;
 import com.zhaocai.business.vendor.domain.Vendor;
 import com.zhaocai.business.vendor.domain.VendorCertification;
 import com.zhaocai.business.vendor.service.IVendorCertificationService;
@@ -73,14 +75,16 @@ public class VendorPortalServiceImpl implements IVendorPortalService {
         queryDTO.setVendorId(getVendor(SecurityUtils.getUserId()).getId());
         PageResult<VendorPortalNoticeListVO> pageResult = tenderNoticeService.selectVendorPortalNoticePage(queryDTO);
         List<VendorPortalMsgListVO> list = new ArrayList<>();
-        pageResult.getRows().stream().map(c ->{
-            return list.add(VendorPortalMsgListVO.builder()
-                    .data(c)
-                    .title(c.getProcurementSchemeName())
-                    .msgType(VendorMsgStatusEnum.TENDER.getState())
-                    .msgTypeText(c.getProcurementPlanTypeText())
-                    .build());
-        });
+        if(pageResult!=null && pageResult.getTotal()>0){
+            for (int i = 0; i < pageResult.getRows().size(); i++) {
+                list.add(VendorPortalMsgListVO.builder()
+                                .data(pageResult.getRows().get(i))
+                                .title(pageResult.getRows().get(i).getProcurementSchemeName())
+                        .msgType(VendorMsgStatusEnum.TENDER.getState())
+                        .msgTypeText(DictBizCache.getValue(DictBizEnum.PROCUREMENT_PLAN_TYPE,pageResult.getRows().get(i).getProcurementPlanType().toString()))
+                        .build());
+            }
+        }
         /* 获取供应商信息 */
         Vendor vendor = vendorService.getByLoginUser(SecurityUtils.getUserId());
         /* 获取该企业的 法人授权书 */
@@ -90,15 +94,18 @@ public class VendorPortalServiceImpl implements IVendorPortalService {
                 .eq(VendorCertification::getDelFlag,0)/* 有效 */
                 .lt(VendorCertification::getEffectiveEndDate,date30)/* 小于30天 */
                 .eq(VendorCertification::getBusinessCode,CertificationTypeEnum.LEGAL_AUTHORIZATION.getType()));/* 法人授权书 */
-        System.out.println("attachments.size()" + (attachments!=null?attachments.size():""));
-        attachments.stream().map(c ->{
-            return list.add(VendorPortalMsgListVO.builder()
-                    .data(c)
-                    .title("法人授权书将于"+DateUtils.dateTime(c.getEffectiveEndDate())+"过期，届时不能进行投标工作")
-                    .msgType(VendorMsgStatusEnum.CERT.getState())
-                    .msgTypeText(VendorMsgStatusEnum.CERT.getDesc())
-                    .build());
-        });
+
+        if(attachments!=null && attachments.size()>0){
+            for (int i = 0; i < attachments.size(); i++) {
+                list.add(VendorPortalMsgListVO.builder()
+                        .data(attachments.get(i))
+                        .title("法人授权书将于"+DateUtils.dateTime(attachments.get(i).getEffectiveEndDate())+"过期，届时不能进行投标工作")
+                        .msgType(VendorMsgStatusEnum.CERT.getState())
+                        .msgTypeText(VendorMsgStatusEnum.CERT.getDesc())
+                        .build());
+            }
+        }
+
         return list;
     }
 
