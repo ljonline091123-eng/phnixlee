@@ -3,6 +3,7 @@ package com.zhaocai.business.agreement.domain;
 import com.baomidou.mybatisplus.annotation.TableName;
 import io.swagger.annotations.ApiModelProperty;
 import lombok.Data;
+import org.springframework.data.annotation.Id;
 
 /**
  * 易料采购合同信息对象 tb_market_material_contract
@@ -17,6 +18,7 @@ public class MarketMaterialContract {
     /**
      * 合同主键 id
      */
+    @Id
     @ApiModelProperty(value = "合同主键 id")
     private String id;
 
