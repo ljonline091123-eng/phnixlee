@@ -223,4 +223,16 @@ public class AgreementMaterialsListVO extends AdviceObject {
     @MoneyFormat(filedName = "signTaxRate")
     @ApiModelProperty(value = "签订税率")
     private String signTaxRateText;
+
+    @ApiModelProperty(value = "易料市集商品编码")
+    private String offerGoodsCode;
+
+    @ApiModelProperty(value = "易料市集商品名")
+    private String goodsName;
+
+    @ApiModelProperty(value = "易料市集品牌")
+    private String offerBrand;
+
+    @ApiModelProperty(value = "易料市集含税单价")
+    private BigDecimal offerPrice;
 }
