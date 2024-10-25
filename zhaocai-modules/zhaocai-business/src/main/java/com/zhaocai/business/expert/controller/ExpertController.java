@@ -58,13 +58,23 @@ public class ExpertController extends BladeController {
     }
 
     /**
-     * 新增专家
+     * 新增提交专家
      */
-    @Log(title = "新增专家信息", businessType = BusinessType.INSERT)
-    @PostMapping("/add")
-    @ApiOperation("新增专家信息")
-    public ResultData add(@RequestBody @Validated({ValidateGroup.AddGroup.class}) ExpertVO expertVO) {
-        return ResultData.status(expertService.add(expertVO));
+    @Log(title = "新增提交专家", businessType = BusinessType.INSERT)
+    @PostMapping("/submit")
+    @ApiOperation("新增提交专家")
+    public ResultData submit(@RequestBody @Validated({ValidateGroup.AddGroup.class}) ExpertVO expertVO) {
+        return ResultData.status(expertService.submit(expertVO));
+    }
+
+    /**
+     * 保存专家
+     */
+    @Log(title = "保存专家信息", businessType = BusinessType.INSERT)
+    @PostMapping("/save")
+    @ApiOperation("保存专家信息")
+    public ResultData save(@RequestBody @Validated({ValidateGroup.AddGroup.class}) ExpertVO expertVO) {
+        return ResultData.status(expertService.save(expertVO));
     }
 
     /**

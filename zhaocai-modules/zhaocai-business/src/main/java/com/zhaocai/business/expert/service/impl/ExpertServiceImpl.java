@@ -124,7 +124,10 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
             }
             queryDTO.setDeptIdList(deptIdList);
         }
-
+        /* 启用状态 */
+        queryDTO.setExpertState(NumberConstant.ONE);
+        /* 审批状态 */
+        queryDTO.setState(ExpertStateEnum.APPROVE.getState());
         IPage<ExpertListVO> iPage = new Page<>();
         if (ObjectUtils.isEmpty(queryDTO.getDrawVO())){
             iPage = baseMapper.page(queryDTO.toMybatisPage(), queryDTO);
@@ -183,9 +186,46 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public boolean add(ExpertVO expertVO) {
-        long count = this.count(new LambdaQueryWrapper<Expert>()
-                .eq(Expert::getUserId, expertVO.getUserId()));
+    public boolean save(ExpertVO expertVO) {
+        long count = 0;
+        if(expertVO.getId()!=null){
+            count = this.count(new LambdaQueryWrapper<Expert>()
+                            .eq(Expert::getUserId, expertVO.getUserId())
+                            .ne(Expert::getId, expertVO.getId()));
+        }else {
+            count = this.count(new LambdaQueryWrapper<Expert>()
+                    .eq(Expert::getUserId, expertVO.getUserId()));
+        }
+        //如果该用户已经是某个专家了
+        if (count > 0) {
+            throw new ParamValidateException("该用户已经成为专家，不允许重复设置");
+        }
+
+        //新增专家信息
+        Expert expert = BeanCopierUtil.copyBean(expertVO, Expert.class);
+        /* 待审批 */
+        expert.setExpertState(NumberConstant.ZERO);
+        /* 保存 */
+        expert.setState(ExpertStateEnum.SAVE.getState());
+        boolean res = this.saveOrUpdate(expert);
+
+        //保存招标文件附件
+        attachmentService.addAttachment(expertVO.getResumeAttachList(), AttachmentTypeEnum.EXPERT_RESUME, expert.getId());
+        return res;
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public boolean submit(ExpertVO expertVO) {
+        long count = 0;
+        if(expertVO.getId()!=null){
+            count = this.count(new LambdaQueryWrapper<Expert>()
+                    .eq(Expert::getUserId, expertVO.getUserId())
+                    .ne(Expert::getId, expertVO.getId()));
+        }else {
+            count = this.count(new LambdaQueryWrapper<Expert>()
+                    .eq(Expert::getUserId, expertVO.getUserId()));
+        }
         //如果该用户已经是某个专家了
         if (count > 0){
             throw new ParamValidateException("该用户已经成为专家，不允许重复设置");
@@ -195,7 +235,9 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
         Expert expert = BeanCopierUtil.copyBean(expertVO, Expert.class);
         /* 待审批 */
         expert.setExpertState(NumberConstant.ZERO);
-        boolean res = this.save(expert);
+        /* 审批中 */
+        expert.setState(ExpertStateEnum.IN_APPROVAL.getState());
+        boolean res = this.saveOrUpdate(expert);
 
         //保存招标文件附件
         attachmentService.addAttachment(expertVO.getResumeAttachList(), AttachmentTypeEnum.EXPERT_RESUME, expert.getId());

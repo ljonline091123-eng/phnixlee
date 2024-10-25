@@ -44,7 +44,15 @@ public interface IExpertService  extends IService<Expert> , IProcessBusinessBase
      * @param expertVO 专家信息
      * @return 结果
      */
-    public boolean add(ExpertVO expertVO);
+    public boolean submit(ExpertVO expertVO);
+
+    /**
+     * 保存专家
+     *
+     * @param expertVO 专家信息
+     * @return 结果
+     */
+    public boolean save(ExpertVO expertVO);
 
     /**
      * 批量删除专家
