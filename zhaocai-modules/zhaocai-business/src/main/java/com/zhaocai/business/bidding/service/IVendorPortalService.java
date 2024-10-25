@@ -22,6 +22,13 @@ public interface IVendorPortalService {
     PageResult<VendorPortalNoticeListVO> getNoticeLogin(VendorPortalNoticePageQueryVO queryDTO);
 
     /**
+     * 工作台首页 消息列表
+     * @param queryDTO
+     * @return
+     */
+    PageResult<VendorPortalNoticeListVO> msgList(VendorPortalNoticePageQueryVO queryDTO);
+
+    /**
      * 门户端-中标公示列表分页-分页
      */
     PageResult<VendorPortalPublicityListVO> getPublicity(VendorPortalPublicityPageQueryVO queryDTO);
