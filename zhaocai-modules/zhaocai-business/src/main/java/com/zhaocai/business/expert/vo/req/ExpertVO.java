@@ -24,6 +24,9 @@ import java.util.List;
 public class ExpertVO implements Serializable {
     private static final long serialVersionUID = 7489388721392949260L;
 
+    @ApiModelProperty(value =  "专家id")
+    private Long id;
+
     @ApiModelProperty(value =  "专家姓名")
     @NotBlank(message = "专家姓名不能为空", groups = {ValidateGroup.AddGroup.class})
     private String expertName;

@@ -113,6 +113,9 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             <if test="query.expertState != null">
                 and ex.expert_state = #{query.expertState}
             </if>
+            <if test="query.state != null">
+                and ex.state = #{state}
+            </if>
             <if test="query.userId != null">
                 and ex.user_id = #{query.userId}
             </if>
@@ -187,6 +190,9 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             </if>
             <if test="query.expertState != null">
                 and ex.expert_state = #{query.expertState}
+            </if>
+            <if test="query.state != null">
+                and ex.state = #{state}
             </if>
         </where>
     </select>

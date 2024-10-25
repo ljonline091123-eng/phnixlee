@@ -13,6 +13,7 @@ import lombok.Getter;
 @AllArgsConstructor
 public enum ExpertStateEnum {
 
+    SAVE(0,"保存"),
     IN_APPROVAL(1,"审批中"),
     REJECT(2,"审批拒绝"),
     APPROVE(3,"审批通过")

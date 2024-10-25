@@ -80,6 +80,9 @@ public class ExpertQueryVO extends PageRecive implements Serializable {
     @ApiModelProperty(value =  "专家状态(0账号审批中|1启用|2禁用)")
     private Integer expertState;
 
+    @ApiModelProperty(value = "审批状态")
+    private Integer state;
+
     @ApiModelProperty(value =  "对应用户id")
     private Long userId;
 
