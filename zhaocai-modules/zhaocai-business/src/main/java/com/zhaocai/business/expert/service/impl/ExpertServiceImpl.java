@@ -109,6 +109,11 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
     }
 
     @Override
+    public PageResult<ExpertListVO> pageAll(ExpertQueryVO queryDTO) {
+        return page(queryDTO);
+    }
+
+    @Override
     public PageResult<ExpertListVO> page(ExpertQueryVO queryDTO) {
         queryDTO.setWorkYearCompareDate(DateUtils.getNowDate());
         if (!CollectionUtils.isEmpty(queryDTO.getNotIncludeExpertIdList())){
@@ -124,10 +129,6 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
             }
             queryDTO.setDeptIdList(deptIdList);
         }
-        /* 启用状态 */
-        queryDTO.setExpertState(NumberConstant.ONE);
-        /* 审批状态 */
-        queryDTO.setState(ExpertStateEnum.APPROVE.getState());
         IPage<ExpertListVO> iPage = new Page<>();
         if (ObjectUtils.isEmpty(queryDTO.getDrawVO())){
             iPage = baseMapper.page(queryDTO.toMybatisPage(), queryDTO);

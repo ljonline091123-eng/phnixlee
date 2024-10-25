@@ -1,6 +1,7 @@
 package com.zhaocai.business.expert.controller;
 
 import com.zhaocai.business.common.base.BladeController;
+import com.zhaocai.business.common.enums.ExpertStateEnum;
 import com.zhaocai.business.expert.service.IExpertService;
 import com.zhaocai.business.expert.vo.req.ExpertVO;
 import com.zhaocai.business.expert.vo.req.query.ExpertQueryVO;
@@ -9,6 +10,7 @@ import com.zhaocai.business.expert.vo.res.ExpertListVO;
 import com.zhaocai.business.expert.vo.res.TPIExpertInfoVO;
 import com.zhaocai.common.core.bean.PageResult;
 import com.zhaocai.common.core.bean.ValidateGroup;
+import com.zhaocai.common.core.constant.NumberConstant;
 import com.zhaocai.common.core.web.bean.ResultData;
 import com.zhaocai.common.log.annotation.Log;
 import com.zhaocai.common.log.enums.BusinessType;
@@ -46,7 +48,20 @@ public class ExpertController extends BladeController {
     @PostMapping("/page")
     @ApiOperation("分页-根据条件查询专家列表")
     public ResultData<PageResult<ExpertListVO>> page(@RequestBody ExpertQueryVO queryDTO) {
+        /* 启用状态 */
+        queryDTO.setExpertState(NumberConstant.ONE);
+        /* 审批状态 */
+        queryDTO.setState(ExpertStateEnum.APPROVE.getState());
         return ResultData.data(expertService.page(queryDTO));
+    }
+
+    /**
+     * 分页查询专家列表
+     */
+    @PostMapping("/pageAll")
+    @ApiOperation("分页-根据条件查询专家列表")
+    public ResultData<PageResult<ExpertListVO>> pageAll(@RequestBody ExpertQueryVO queryDTO) {
+        return ResultData.data(expertService.pageAll(queryDTO));
     }
 
     /**
