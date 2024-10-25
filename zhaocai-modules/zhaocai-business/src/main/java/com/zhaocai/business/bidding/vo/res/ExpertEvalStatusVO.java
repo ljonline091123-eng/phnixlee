@@ -1,5 +1,6 @@
 package com.zhaocai.business.bidding.vo.res;
 
+import com.zhaocai.business.expert.domain.Expert;
 import com.zhaocai.system.api.domain.SysUser;
 import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;
@@ -19,7 +20,7 @@ public class ExpertEvalStatusVO {
     private Long expertId;
 
     @ApiModelProperty(value =  "专家")
-    private SysUser expert;
+    private Expert expert;
 
     @ApiModelProperty(value =  "专家名称")
     private String expertName;

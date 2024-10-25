@@ -706,8 +706,8 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
             ExpertEvalStatusVO expertVo = new ExpertEvalStatusVO();
             expertVo.setExpertId(expert.getExpertId());
             /* 执行调用查询 */
-            SysUser user = systemUserService.getUserById(expert.getExpertId());
-            expertVo.setExpert(user);
+            Expert e = expertService.getById(expert.getExpertId());
+            expertVo.setExpert(e);
             expertVo.setExpertName(expert.getExpertName());
             //获取几个供应商首轮报价信息
 
