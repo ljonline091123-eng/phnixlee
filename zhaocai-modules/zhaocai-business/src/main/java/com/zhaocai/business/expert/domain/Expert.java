@@ -11,7 +11,7 @@ import java.util.Date;
 
 /**
  * 专家对象 tb_expert
- * 
+ *
  * @author WH
  * @date 2024-05-24
  */
@@ -57,6 +57,30 @@ public class Expert extends BaseEntity
     /** 专家状态 */
     @ApiModelProperty(value =  "专家状态(0账号审批中|1启用|2禁用)")
     private Integer expertState;
+
+    /**
+     * 流程实例 id
+     */
+    @ApiModelProperty(value = "流程实例 id")
+    private String wfProcessId;
+
+    /**
+     * 流程类型
+     */
+    @ApiModelProperty(value = "流程类型")
+    private Integer processType;
+
+    /**
+     * 审批状态
+     */
+    @ApiModelProperty(value = "审批状态")
+    private Integer state;
+
+    /**
+     * 审批信息,批语
+     */
+    @ApiModelProperty(value = "审批信息")
+    private String operateComment;
 
     /** 对应用户id */
     @ApiModelProperty(value =  "对应用户id")

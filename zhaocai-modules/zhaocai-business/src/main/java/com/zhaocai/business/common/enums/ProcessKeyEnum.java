@@ -8,6 +8,7 @@ import lombok.Getter;
 public enum ProcessKeyEnum {
 
     /** 流程Key枚举 */
+    ZHAOCAI_EXPERT_ADD("jiantou-zhaocai:{org}:ZHAOCAI_EXPERT_ADD","新增专家"),
 
     ZHAOCAI_VENDOR_REGISTER("jiantou-zhaocai:{org}:ZHAOCAI_VENDOR_REGISTER","供应商注册"),
     ZHAOCAI_VENDOR_ADDCONTACT("jiantou-zhaocai:{org}:ZHAOCAI_VENDOR_ADDCONTACT","供应商-新增联系人"),
