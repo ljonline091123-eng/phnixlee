@@ -23,6 +23,7 @@ import com.zhaocai.business.common.utils.ValidateUtils;
 import com.zhaocai.business.manager.http.common.config.ThirdPartyTodoFlowGroupEnum;
 import com.zhaocai.business.manager.http.common.config.ThirdPartyTodoFlowModuleEnum;
 import com.zhaocai.business.manager.http.dto.req.*;
+import com.zhaocai.business.manager.http.dto.res.MarketQuotePriceResponseDTO;
 import com.zhaocai.business.manager.http.dto.res.UsersRoleContractPlanListResponseDTO;
 import com.zhaocai.business.manager.http.dto.res.UsersRoleListResponseDTO;
 import com.zhaocai.business.manager.http.service.ContractPlanService;
@@ -264,6 +265,8 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
     @Override
     public ContractPlanMaterialListVO listContractMaterials(ContractPlanMaterialListQueryVO queryVO) {
         List<ContractMaterialsListVO> materialsList = contractPlanService.getContractMaterialsList(queryVO);
+        // todo 根据查询的合约清单去查询易料商品信息
+        //Object marketMaterialList = this.selectMarketMaterials(materialsList, queryVO);
 
         // 计算上限价
         BigDecimal upperLimitPrice = BigDecimal.ZERO;
@@ -308,6 +311,37 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
         }
 
         return contractPlanMaterialLis;
+    }
+
+    /**
+     * 查询易料市集清单最新价格
+     * @param materialsList
+     * @return
+     */
+    private Object selectMarketMaterials(List<ContractMaterialsListVO> materialsList, ContractPlanMaterialListQueryVO queryVO) {
+        MarketQuotePriceRequestDTO dto = new MarketQuotePriceRequestDTO();
+        dto.setQuoteType(1);
+        dto.setProjectId(queryVO.getProjectId());
+        MinProject project = minProjectService.getById(queryVO.getProjectId());
+        dto.setProjectName(project.getMinAccountFullName());
+        dto.setContractName(project.getProjectLeader());
+        dto.setContractPhone(project.getProjectLeaderPhone());
+        List<MarketProductListRequestDTO> voList = new ArrayList<>();
+        for (ContractMaterialsListVO contractMaterialsListVO : materialsList) {
+            MarketProductListRequestDTO vo = new MarketProductListRequestDTO();
+            vo.setCode(contractMaterialsListVO.getMaterialsCode());
+            vo.setName(contractMaterialsListVO.getMaterialsName());
+            vo.setCategory(contractMaterialsListVO.getSpecification());
+            vo.setQuantity(contractMaterialsListVO.getQuantity());
+            vo.setUnitName(contractMaterialsListVO.getUnitMeasurement());
+            voList.add(vo);
+        }
+        dto.setProductListRequestDTOList(voList);
+        List<MarketQuotePriceResponseDTO> marketMaterialList = marketService.queryMarketQuotePrice(dto);
+        for (ContractMaterialsListVO contractMaterialsListVO : materialsList) {
+
+        }
+        return materialsList;
     }
 
     @Override

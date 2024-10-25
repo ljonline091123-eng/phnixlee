@@ -6,6 +6,7 @@ import com.zhaocai.business.agreement.vo.req.MarketMaterialContractQueryVO;
 import com.zhaocai.business.agreement.vo.res.AgreementCreateBaseInfoVO;
 import com.zhaocai.business.agreement.vo.res.MarketMaterialContractListVO;
 import com.zhaocai.business.manager.http.dto.req.MarketMaterialListQuoteRequestDTO;
+import com.zhaocai.business.pub.vo.res.AttachmentVO;
 import com.zhaocai.common.core.bean.PageResult;
 
 /**
@@ -38,4 +39,6 @@ public interface IMarketMaterialContractService extends IService<MarketMaterialC
      * @return
      */
     AgreementCreateBaseInfoVO getAgreementCreateInfo(MarketMaterialContractQueryVO queryVO);
+
+    long agreementCreateAttachmentHandle(AttachmentVO attachmentVO);
 }

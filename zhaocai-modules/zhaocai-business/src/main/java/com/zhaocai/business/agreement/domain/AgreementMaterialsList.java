@@ -162,4 +162,16 @@ public class AgreementMaterialsList extends BaseEntity {
      */
     @ApiModelProperty(value = "备注")
     private String remark;
+
+    @ApiModelProperty(value = "易料市集商品编码")
+    private String offerGoodsCode;
+
+    @ApiModelProperty(value = "易料市集商品名")
+    private String goodsName;
+
+    @ApiModelProperty(value = "易料市集品牌")
+    private String offerBrand;
+
+    @ApiModelProperty(value = "易料市集含税单价")
+    private BigDecimal offerPrice;
 }
