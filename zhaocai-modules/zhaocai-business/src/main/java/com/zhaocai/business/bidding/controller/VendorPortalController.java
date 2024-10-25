@@ -51,6 +51,16 @@ public class VendorPortalController {
     }
 
     /**
+     * 工作台首页 消息列表（已登录）
+     */
+    @GetMapping("/msgList")
+    @ApiOperation(value = "工作台首页消息列表（已登录）", notes = "传入queryDTO")
+    public ResultData<PageResult<VendorPortalNoticeListVO>> msgList(VendorPortalNoticePageQueryVO queryDTO) {
+        PageResult<VendorPortalNoticeListVO> pages = vendorPortalService.msgList(queryDTO);
+        return ResultData.data(pages);
+    }
+
+    /**
      * 中标公示列表分页
      */
     @GetMapping("/publicity")

@@ -1,5 +1,6 @@
 package com.zhaocai.business.bidding.service.impl;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.zhaocai.business.bidding.enums.TenderNoticeStatusEnum;
 import com.zhaocai.business.bidding.service.ITenderNoticeService;
 import com.zhaocai.business.bidding.service.IVendorPortalService;
@@ -9,14 +10,25 @@ import com.zhaocai.business.bidding.vo.req.query.VendorPortalPublicityPageQueryV
 import com.zhaocai.business.bidding.vo.res.VendorPortalDataStatVO;
 import com.zhaocai.business.bidding.vo.res.VendorPortalNoticeListVO;
 import com.zhaocai.business.bidding.vo.res.VendorPortalPublicityListVO;
+import com.zhaocai.business.common.enums.CertificationTypeEnum;
 import com.zhaocai.business.vendor.domain.Vendor;
+import com.zhaocai.business.vendor.domain.VendorCertification;
+import com.zhaocai.business.vendor.service.IVendorCertificationService;
+import com.zhaocai.business.vendor.service.IVendorContactService;
 import com.zhaocai.business.vendor.service.IVendorService;
+import com.zhaocai.business.vendor.vo.res.VendorCertificationListVO;
+import com.zhaocai.business.vendor.vo.res.VendorMainContactVO;
 import com.zhaocai.common.core.bean.PageResult;
 import com.zhaocai.common.core.utils.DateUtils;
+import com.zhaocai.common.core.web.bean.ResultData;
 import com.zhaocai.common.security.utils.SecurityUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+
+import java.util.Arrays;
+import java.util.Date;
+import java.util.List;
 
 /**
  * @author ssy
@@ -30,6 +42,10 @@ public class VendorPortalServiceImpl implements IVendorPortalService {
     private ITenderNoticeService tenderNoticeService;
     @Autowired
     private IVendorService vendorService;
+    @Autowired
+    private IVendorContactService vendorContactService;
+    @Autowired
+    private IVendorCertificationService vendorCertificationService;
 
     @Override
     public PageResult<VendorPortalNoticeListVO> getNotice(VendorPortalNoticePageQueryVO queryDTO) {
@@ -45,6 +61,25 @@ public class VendorPortalServiceImpl implements IVendorPortalService {
         queryDTO.setNowDate(DateUtils.getNowDate());
         queryDTO.setVendorId(getVendor(SecurityUtils.getUserId()).getId());
         PageResult<VendorPortalNoticeListVO> pageResult = tenderNoticeService.selectVendorPortalNoticePage(queryDTO);
+        return pageResult;
+    }
+
+    @Override
+    public PageResult<VendorPortalNoticeListVO> msgList(VendorPortalNoticePageQueryVO queryDTO) {
+        queryDTO.setNowDate(DateUtils.getNowDate());
+        queryDTO.setVendorId(getVendor(SecurityUtils.getUserId()).getId());
+        PageResult<VendorPortalNoticeListVO> pageResult = tenderNoticeService.selectVendorPortalNoticePage(queryDTO);
+        /* 获取供应商信息 */
+        Vendor vendor = vendorService.getByLoginUser(SecurityUtils.getUserId());
+        /* 获取该企业的 法人授权书 */
+        Date date30 = DateUtils.plusDay(new Date(),30);
+        List<VendorCertification> attachments = vendorCertificationService.list(new LambdaQueryWrapper<VendorCertification>()
+                .eq(VendorCertification::getVendorId,vendor.getId())/* 该供应商名下 */
+                .eq(VendorCertification::getDelFlag,0)/* 有效 */
+                .lt(VendorCertification::getEffectiveEndDate,date30)/* 小于30天 */
+                .eq(VendorCertification::getBusinessCode,CertificationTypeEnum.LEGAL_AUTHORIZATION.getType()));/* 法人授权书 */
+
+
         return pageResult;
     }
 
