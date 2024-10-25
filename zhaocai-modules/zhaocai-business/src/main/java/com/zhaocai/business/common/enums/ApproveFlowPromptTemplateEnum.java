@@ -48,6 +48,7 @@ public enum ApproveFlowPromptTemplateEnum {
     BID_EVAL("bid_eval", "您有一条%s评标工作待处理，请及时处理"),
     CONTRACT_APPROVE("contract_approve", "您有合同签订：%s在审核节点的审批"),
     VENDOR_REGISTER_APPROVE("vendor_register_approve", "您有供应商（%s）注册在审核节点的审批"),
+    EXPERT_ADD_APPROVE("expert_add_approve", "您有新增专家（%s）在审核节点的审批"),
     VENDOR_CHANGE_APPROVE("vendor_change_approve", "您有供应商（%s）信息修改在审核节点的审批！"),
     VENDOR_BLACKLIST_APPROVE("vendor_blacklist_approve", "您有供应商（%s）移入移出黑名单在审核节点的审批！"),
     PROCUREMENT_PLAN_PUSH("procurement_plan_push", "您有一条（%s）合约规划，请及时发起采购计划"),

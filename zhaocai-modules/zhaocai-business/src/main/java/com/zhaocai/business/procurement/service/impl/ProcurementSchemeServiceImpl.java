@@ -545,8 +545,7 @@ public class ProcurementSchemeServiceImpl extends ServiceImpl<ProcurementSchemeM
         ProcurementScheme procurementScheme = requestVO.getProcurementScheme();
         procurementScheme.setProcurementSchemeCode(getProcurementSchemeCode());
         procurementScheme.setProcurementOfficer(SecurityUtils.getUserId());
-//        procurementScheme.setProcurementOfficerName(SecurityUtils.getLoginUser().getSysUser().getNickName());
-        procurementScheme.setProcurementOfficerName("取不到姓名");
+        procurementScheme.setProcurementOfficerName(SecurityUtils.getLoginUser().getSysUser().getNickName());
         procurementScheme.setProcurementPlanType(schemeCreateVO.getProcurementPlanType());
         procurementScheme.setCeilingPrice(schemeCreateVO.getCeilingPrice());
         procurementScheme.setProjectCode(schemeCreateVO.getProjectCode());
