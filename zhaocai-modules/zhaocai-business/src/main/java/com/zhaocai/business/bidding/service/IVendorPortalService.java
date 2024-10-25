@@ -4,9 +4,12 @@ import com.zhaocai.business.bidding.vo.req.query.VendorPortalDataStatQueryVO;
 import com.zhaocai.business.bidding.vo.req.query.VendorPortalNoticePageQueryVO;
 import com.zhaocai.business.bidding.vo.req.query.VendorPortalPublicityPageQueryVO;
 import com.zhaocai.business.bidding.vo.res.VendorPortalDataStatVO;
+import com.zhaocai.business.bidding.vo.res.VendorPortalMsgListVO;
 import com.zhaocai.business.bidding.vo.res.VendorPortalNoticeListVO;
 import com.zhaocai.business.bidding.vo.res.VendorPortalPublicityListVO;
 import com.zhaocai.common.core.bean.PageResult;
+
+import java.util.List;
 
 /**
  * @author ssy
@@ -26,7 +29,7 @@ public interface IVendorPortalService {
      * @param queryDTO
      * @return
      */
-    PageResult<VendorPortalNoticeListVO> msgList(VendorPortalNoticePageQueryVO queryDTO);
+    List<VendorPortalMsgListVO> msgList(VendorPortalNoticePageQueryVO queryDTO);
 
     /**
      * 门户端-中标公示列表分页-分页
