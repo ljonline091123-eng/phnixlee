@@ -158,6 +158,21 @@ public class ContractMaterialsListVO extends AdviceObject {
     @ApiModelProperty(value = "价格类型")
     private Integer priceType;
 
+    @ApiModelProperty(value = "商品编号")
+    private String code;
+
+    @ApiModelProperty(value = "商品名称")
+    private String name;
+
+    @ApiModelProperty(value = "商品规格")
+    private String category;
+
+    @ApiModelProperty(value = "商品单位")
+    private String unitName;
+
+    @ApiModelProperty(value = "商品数量")
+    private BigDecimal goodsQuantity;
+
     public ContractMaterialsListVO(ContractPlanMaterialListDTO dto,Integer procurementType) {
         this.materialsId = dto.getId();
         this.materialsUniqueId = dto.getSubjectDtlUniqueId();
