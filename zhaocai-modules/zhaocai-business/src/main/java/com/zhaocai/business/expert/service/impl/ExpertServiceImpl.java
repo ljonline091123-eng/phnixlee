@@ -23,12 +23,14 @@ import com.zhaocai.business.manager.http.dto.req.UserObj;
 import com.zhaocai.business.manager.http.service.UnderlingSystemService;
 import com.zhaocai.business.process.service.IBPMProcessService;
 import com.zhaocai.business.pub.service.IAttachmentService;
+import com.zhaocai.business.pub.service.ISystemUserService;
 import com.zhaocai.business.pub.vo.res.AttachmentVO;
 import com.zhaocai.business.vendor.domain.Vendor;
 import com.zhaocai.common.core.bean.PageResult;
 import com.zhaocai.common.core.constant.NumberConstant;
 import com.zhaocai.common.core.utils.DateUtils;
 import com.zhaocai.common.core.utils.bean.BeanCopierUtil;
+import com.zhaocai.system.api.domain.SysUser;
 import com.zhaocai.system.api.system.RemoteUserService;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -57,6 +59,8 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
     private IBPMProcessService processService;
     @Autowired
     private UnderlingSystemService underlingSystemService;
+    @Autowired
+    private ISystemUserService systemUserService;
 
     @Override
     public List<TPIExpertInfoVO> getTPIExpertInfo() {
@@ -203,9 +207,11 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
             paramMap.put("businessId", expert.getId());
             paramMap.put("businessTitle", "供应商注册审批");
 
-//            String org = underlingSystemService.getL2OrgByOrgId(expert.getBelongOrganization());
+            SysUser sysUser = systemUserService.getUserById(expert.getUserId());
+            /* 根据组织获取对应的二级单位 */
+            String org = underlingSystemService.getL2OrgByOrgId(sysUser.getThridOrgId());
             //供应商注册时候选择审批单位，只能由选择的单位维护的供应商审核人员进行审核，如果供应商信息修改也是需要原审核单位进行审核
-            String customProcessKey = ProcessKeyEnum.ZHAOCAI_EXPERT_ADD.getIdentifying().replace("{org}",expert.getBelongOrganization());
+            String customProcessKey = ProcessKeyEnum.ZHAOCAI_EXPERT_ADD.getIdentifying().replace("{org}",org);
             paramMap.put("customProcessKey", customProcessKey);
             paramMap.put("businessContent", String.format(ApproveFlowPromptTemplateEnum.EXPERT_ADD_APPROVE.getDesc(), expert.getExpertName()));
             paramMap.put("detailUrl", "/expert/expert-detail/"+ Base64.encodeStr(("\""+expert.getId().toString()+"\"").getBytes(),true,true));
