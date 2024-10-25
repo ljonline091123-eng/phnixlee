@@ -445,8 +445,15 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
         // 结算与付款节点信息
         List<AgreementPaymentListVO> agreementPaymentLists = agreementPaymentListService.listByAgreementId(id);
 
+        List<AgreementMaterialsListVO> materialsLists;
         // 合同清单
-        List<AgreementMaterialsListVO> materialsLists = agreementMaterialsListService.listAgreementMaterials(id);
+        if (StringUtils.isEmpty(agreement.getMarketMaterialContractId())) {
+            materialsLists = agreementMaterialsListService.listAgreementMaterials(id);
+        } else {
+            List<AgreementMaterialsList> lists = agreementMaterialsListService.list(new LambdaQueryWrapper<AgreementMaterialsList>()
+                    .eq(AgreementMaterialsList::getAgreementId, id));
+            materialsLists = BeanCopierUtil.copyList(lists,AgreementMaterialsListVO.class);
+        }
         // 设置价格类型
         // 购买材料，设置价款类型、交易标的物类型
         if (ProcurementPlanTypeEnum.PURCHASE_MATERIALS.equalsType(procurementPlanType)) {
