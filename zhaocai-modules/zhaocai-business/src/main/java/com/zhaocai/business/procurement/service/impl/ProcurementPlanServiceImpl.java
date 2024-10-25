@@ -18,6 +18,7 @@ import com.zhaocai.business.bidding.vo.res.ContractPlanningNoticeVO;
 import com.zhaocai.business.common.enums.*;
 import com.zhaocai.business.common.exception.BusinessException;
 import com.zhaocai.business.common.exception.ParamValidateException;
+import com.zhaocai.business.common.utils.AesUtils;
 import com.zhaocai.business.common.utils.AmountCalUtil;
 import com.zhaocai.business.common.utils.ValidateUtils;
 import com.zhaocai.business.manager.http.common.config.ThirdPartyTodoFlowGroupEnum;
@@ -30,6 +31,7 @@ import com.zhaocai.business.manager.http.service.ContractPlanService;
 import com.zhaocai.business.manager.http.service.MarketService;
 import com.zhaocai.business.manager.http.service.PlatRoleService;
 import com.zhaocai.business.manager.http.service.ThridPartyTodoTaskService;
+import com.zhaocai.business.manager.template.config.UnderlingPlatformConfig;
 import com.zhaocai.business.procurement.domain.*;
 import com.zhaocai.business.procurement.dto.ContractProcurementPlanDTO;
 import com.zhaocai.business.procurement.dto.SubjectMatterDTO;
@@ -135,6 +137,9 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
 
     @Autowired
     private IMarketMaterialContractService marketMaterialContractService;
+
+    @Autowired
+    private UnderlingPlatformConfig underlingPlatformConfig;
 
     @Override
     public PageResult<ProcurementPlanListVO> listPage(ProcurementPlanListQueryVO queryVO) {
@@ -323,9 +328,11 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
         dto.setQuoteType(1);
         dto.setProjectId(queryVO.getProjectId());
         MinProject project = minProjectService.getById(queryVO.getProjectId());
-        dto.setProjectName(project.getMinAccountFullName());
-        dto.setContractName(project.getProjectLeader());
-        dto.setContractPhone(project.getProjectLeaderPhone());
+        if (null != project) {
+            dto.setProjectName(project.getMinAccountFullName());
+            dto.setContractName(project.getProjectLeader());
+            dto.setContractPhone(project.getProjectLeaderPhone());
+        }
         List<MarketProductListRequestDTO> voList = new ArrayList<>();
         for (ContractMaterialsListVO contractMaterialsListVO : materialsList) {
             MarketProductListRequestDTO vo = new MarketProductListRequestDTO();
@@ -470,6 +477,20 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
         savaContractPlanningPushRecord(planPushVO);
         //调第三方接口，生成采购计划的待办信息
         dealOpenPeopleTodoTask(planPushVO);
+    }
+
+    @Override
+    public String getgetYjtUrl(String type, String  code) throws Exception {
+       String acount = SecurityUtils.getLoginUser().getUsername();
+     //   String  acount = "15307487727";
+        Long time =new Date().getTime();
+        if(type ==null||type.equals("")){
+            type ="1";
+        }
+        String requestQuery = acount+","+time+","+type+","+code;
+        String aesString = underlingPlatformConfig.getYjtUrl()+"?"+"data="+AesUtils.encrypt(requestQuery,underlingPlatformConfig.getYjtKey())+"&appId="+underlingPlatformConfig.getAppId();
+        return  aesString;
+
     }
 
     @Override

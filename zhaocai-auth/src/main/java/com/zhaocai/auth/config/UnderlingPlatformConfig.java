@@ -15,6 +15,7 @@ public class UnderlingPlatformConfig {
     @Value("${underPlat.authCode}")
     private String authCode;
 
+
     public String getAuthCode() {
         return authCode;
     }

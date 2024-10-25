@@ -1,5 +1,6 @@
 package com.zhaocai.business.agreement.domain;
 
+import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import io.swagger.annotations.ApiModelProperty;
 import lombok.Data;
@@ -18,7 +19,7 @@ public class MarketMaterialContract {
     /**
      * 合同主键 id
      */
-    @Id
+    @TableId
     @ApiModelProperty(value = "合同主键 id")
     private String id;
 
