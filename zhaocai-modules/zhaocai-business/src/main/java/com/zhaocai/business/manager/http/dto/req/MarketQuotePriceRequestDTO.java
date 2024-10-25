@@ -32,4 +32,7 @@ public class MarketQuotePriceRequestDTO extends UnderlyingPlatformBaseDTO {
 
     @ApiModelProperty(value = "清单列表")
     private List<MarketProductListRequestDTO> productListRequestDTOList;
+
+    @ApiModelProperty(value = "清单列表")
+    private List<MarketProductListRequestDTO> list;
 }

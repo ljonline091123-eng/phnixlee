@@ -343,7 +343,7 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
             vo.setUnitName(contractMaterialsListVO.getUnitMeasurement());
             voList.add(vo);
         }
-        dto.setProductListRequestDTOList(voList);
+        dto.setList(voList);
         List<MarketQuotePriceResponseDTO> marketMaterialList = marketService.queryMarketQuotePrice(dto);
 
         Map<String, MarketQuotePriceResponseDTO> materialMap = new HashMap<>();

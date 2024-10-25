@@ -1,5 +1,6 @@
 package com.zhaocai.business.agreement.domain;
 
+import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import io.swagger.annotations.ApiModelProperty;
@@ -21,6 +22,7 @@ public class MarketMaterialList {
     /**
      * 清单 id
      */
+    @TableId
     @ApiModelProperty(value = "清单 id")
     private String requireId;
 

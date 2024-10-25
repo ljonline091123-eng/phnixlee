@@ -11,9 +11,9 @@ import java.util.List;
  * @date 2024/9/20 17:20
  */
 @Data
-public class MarketMaterialListQuoteRequestDTO {
+public class MarketMaterialListQuoteRequestDTO extends UnderlyingPlatformBaseDTO  {
 
-    @TableId
+    @TableId(value = "id")
     @ApiModelProperty(value = "合同主键ID")
     private String id;
 
