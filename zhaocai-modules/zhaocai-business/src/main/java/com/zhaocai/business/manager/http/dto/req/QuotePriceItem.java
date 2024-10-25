@@ -41,7 +41,7 @@ public class QuotePriceItem {
     private BigDecimal noTaxPrice;
 
     @ApiModelProperty(value = "税率")
-    private Integer taxRate;
+    private BigDecimal taxRate;
 
     @ApiModelProperty(value = "易料市集含税单价")
     private BigDecimal offerPrice;
