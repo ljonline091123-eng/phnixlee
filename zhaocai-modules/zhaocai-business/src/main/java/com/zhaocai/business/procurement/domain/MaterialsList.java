@@ -219,7 +219,7 @@ public class MaterialsList extends BaseEntity {
     /**
      * 价格类型
      */
-    @NotNull(message = "采购清单的价格类型不能为空")
+//    @NotNull(message = "采购清单的价格类型不能为空")
     @ApiModelProperty(value = "价格类型")
     private Integer priceType;
 }
