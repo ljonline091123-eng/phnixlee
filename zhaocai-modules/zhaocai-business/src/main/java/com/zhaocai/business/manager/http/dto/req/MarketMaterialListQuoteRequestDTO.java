@@ -1,5 +1,6 @@
 package com.zhaocai.business.manager.http.dto.req;
 
+import com.baomidou.mybatisplus.annotation.TableId;
 import io.swagger.annotations.ApiModelProperty;
 import lombok.Data;
 
@@ -12,6 +13,7 @@ import java.util.List;
 @Data
 public class MarketMaterialListQuoteRequestDTO {
 
+    @TableId
     @ApiModelProperty(value = "合同主键ID")
     private String id;
 

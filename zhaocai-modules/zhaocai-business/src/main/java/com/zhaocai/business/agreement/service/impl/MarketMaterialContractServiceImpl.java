@@ -162,22 +162,22 @@ public class MarketMaterialContractServiceImpl extends ServiceImpl<MarketMateria
             if (materials == null) {
                 throw new ParamValidateException(String.format("易料采购合同清单对应的采购计划清单未找到,请确认",marketMaterial.getQuoteName()));
             }
-
             VendorBiddingListQuotationListVO vo =  BeanCopierUtil.copyBean(materials, VendorBiddingListQuotationListVO.class);
             vo.setMaterialsListId(Long.valueOf(marketMaterial.getRequireId()));
-            vo.setMaterialsCode(marketMaterial.getQuoteNo());
-            vo.setMaterialsName(marketMaterial.getQuoteName());
-            vo.setSpecification(marketMaterial.getCategory());
-            vo.setUnitMeasurement(marketMaterial.getUnitName());
+            vo.setOfferGoodsCode(marketMaterial.getOfferGoodsCode());
+            vo.setGoodsName(marketMaterial.getGoodsName());
+            vo.setOfferBrand(marketMaterial.getOfferBrand());
+            vo.setOfferPrice(marketMaterial.getOfferPrice());
             vo.setCount(marketMaterial.getQuantity());
             vo.setSignCount(marketMaterial.getQuantity());
-            vo.setTaxUnitPrice(marketMaterial.getPrice());
-            vo.setSignUnitPriceInclTax(marketMaterial.getPrice());
             vo.setNotTaxUnitPrice(marketMaterial.getNoTaxPrice());
             vo.setSignUnitPriceExclTax(marketMaterial.getNoTaxPrice());
             vo.setTaxRate(marketMaterial.getTaxRate());
             vo.setSignTaxRate(marketMaterial.getTaxRate());
 
+            BigDecimal taxUnitPrice = marketMaterial.getNoTaxPrice().multiply(marketMaterial.getTaxRate().divide(BigDecimal.valueOf(100))).add(marketMaterial.getNoTaxPrice());
+            vo.setTaxUnitPrice(taxUnitPrice);
+            vo.setSignUnitPriceInclTax(taxUnitPrice);
             // 含税金额 = 含税单价 * 数量
             BigDecimal taxPrice = AmountCalUtil.calTotalAmountInclTax(vo.getCount(), vo.getTaxUnitPrice());
             vo.setTaxPrice(taxPrice);

@@ -323,9 +323,11 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
         dto.setQuoteType(1);
         dto.setProjectId(queryVO.getProjectId());
         MinProject project = minProjectService.getById(queryVO.getProjectId());
-        dto.setProjectName(project.getMinAccountFullName());
-        dto.setContractName(project.getProjectLeader());
-        dto.setContractPhone(project.getProjectLeaderPhone());
+        if (null != project) {
+            dto.setProjectName(project.getMinAccountFullName());
+            dto.setContractName(project.getProjectLeader());
+            dto.setContractPhone(project.getProjectLeaderPhone());
+        }
         List<MarketProductListRequestDTO> voList = new ArrayList<>();
         for (ContractMaterialsListVO contractMaterialsListVO : materialsList) {
             MarketProductListRequestDTO vo = new MarketProductListRequestDTO();
