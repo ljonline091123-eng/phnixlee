@@ -172,6 +172,15 @@ public class ProcurementPlanController extends BladeController {
         return ResultData.data(procurementPlanService.getContractPlanSplitFlag());
     }
 
+    /**
+     * 获取易料免登录加密接口
+     */
+    @GetMapping("/getYjtUrl")
+    @ApiOperation(value = "获取易料免登录加密接口")
+    public ResultData<String> getYjtUrl(@RequestParam String type,@RequestParam String  code) throws Exception {
+        return ResultData.data(procurementPlanService.getgetYjtUrl(type,code));
+    }
+
 
     @ApiOperation(value = "获取第三方角色用户信息接口并关联采购方案")
     @GetMapping("/getUsersRoleContractPlanList")

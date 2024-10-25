@@ -130,4 +130,6 @@ public interface IProcurementPlanService  extends IService<ProcurementPlan> {
      * @return
      */
     ProcurementPlanDetailVO revokePushMaterialProcurementList(MaterialProcurementPushRequestVO requestVO);
+
+    String getgetYjtUrl(String type, String code) throws Exception;
 }
