@@ -265,8 +265,8 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
     @Override
     public ContractPlanMaterialListVO listContractMaterials(ContractPlanMaterialListQueryVO queryVO) {
         List<ContractMaterialsListVO> materialsList = contractPlanService.getContractMaterialsList(queryVO);
-        // todo 根据查询的合约清单去查询易料商品信息
-        //Object marketMaterialList = this.selectMarketMaterials(materialsList, queryVO);
+        // 根据查询的合约清单去查询易料商品信息
+        materialsList = this.selectMarketMaterials(materialsList, queryVO);
 
         // 计算上限价
         BigDecimal upperLimitPrice = BigDecimal.ZERO;
@@ -318,7 +318,7 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
      * @param materialsList
      * @return
      */
-    private Object selectMarketMaterials(List<ContractMaterialsListVO> materialsList, ContractPlanMaterialListQueryVO queryVO) {
+    private List<ContractMaterialsListVO> selectMarketMaterials(List<ContractMaterialsListVO> materialsList, ContractPlanMaterialListQueryVO queryVO) {
         MarketQuotePriceRequestDTO dto = new MarketQuotePriceRequestDTO();
         dto.setQuoteType(1);
         dto.setProjectId(queryVO.getProjectId());
@@ -338,8 +338,24 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
         }
         dto.setProductListRequestDTOList(voList);
         List<MarketQuotePriceResponseDTO> marketMaterialList = marketService.queryMarketQuotePrice(dto);
-        for (ContractMaterialsListVO contractMaterialsListVO : materialsList) {
 
+        Map<String, MarketQuotePriceResponseDTO> materialMap = new HashMap<>();
+        for (MarketQuotePriceResponseDTO marketMaterial : marketMaterialList) {
+            String key = marketMaterial.getQuoteNo()+marketMaterial.getQuoteName();
+            materialMap.put(key, marketMaterial);
+        }
+
+        // 查找匹配的记录
+        for (ContractMaterialsListVO materials : materialsList) {
+            String key = materials.getMaterialsCode()+materials.getMaterialsName();
+            MarketQuotePriceResponseDTO matchingMaterial = materialMap.get(key);
+            if (matchingMaterial != null) {
+                materials.setCode(matchingMaterial.getOfferGoodsCode());
+                materials.setName(matchingMaterial.getGoodsName());
+                materials.setCategory(matchingMaterial.getCategory());
+                materials.setUnitName(matchingMaterial.getUnitName());
+                materials.setGoodsQuantity(matchingMaterial.getQuantity());
+            }
         }
         return materialsList;
     }
