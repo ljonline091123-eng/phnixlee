@@ -55,8 +55,14 @@ public class Expert extends BaseEntity
     private Integer expertType;
 
     /** 专家状态 */
-    @ApiModelProperty(value =  "专家状态(0账号审批中|1启用|2禁用)")
+    @ApiModelProperty(value =  "专家状态(0(审批中/保存) | 1启用 | 2禁用)")
     private Integer expertState;
+
+    /**
+     * 审批状态 {@link com.zhaocai.business.common.enums.ExpertStateEnum}
+     */
+    @ApiModelProperty(value = "审批状态(0保存|1审批中|2审批拒绝|3审批通过)")
+    private Integer state;
 
     /**
      * 流程实例 id
@@ -69,12 +75,6 @@ public class Expert extends BaseEntity
      */
     @ApiModelProperty(value = "流程类型")
     private Integer processType;
-
-    /**
-     * 审批状态
-     */
-    @ApiModelProperty(value = "审批状态")
-    private Integer state;
 
     /**
      * 审批信息,批语
