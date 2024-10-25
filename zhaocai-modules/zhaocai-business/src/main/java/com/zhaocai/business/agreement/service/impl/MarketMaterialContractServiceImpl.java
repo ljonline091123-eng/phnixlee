@@ -128,7 +128,7 @@ public class MarketMaterialContractServiceImpl extends ServiceImpl<MarketMateria
         baseInfoVO.setVendorId(Long.valueOf(contract.getVendorId()));
         baseInfoVO.setBelongAccountingItem(contract.getBelongAccountingItem());
         baseInfoVO.setBelongAccountingItemCode(contract.getBelongAccountingItemCode());
-        baseInfoVO.setBusinessType(planInfo.getProcurementPlanType());
+        baseInfoVO.setBusinessType(Integer.valueOf(contract.getExpenditureBusinessType()));
         baseInfoVO.setExpenditureBusinessType(DictBizCache.getValue(DictBizEnum.PROCUREMENT_PLAN_TYPE,String.valueOf(contract.getExpenditureBusinessType())));
         baseInfoVO.setPriceType(planInfo.getPriceType());
 
