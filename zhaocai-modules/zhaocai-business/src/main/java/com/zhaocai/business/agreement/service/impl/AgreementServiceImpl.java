@@ -375,8 +375,11 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
             /* 插入 签订合同 */
             agreementSave = addAgreement(requestVO);
         } else {
-            // 修改使用的 校验清单数据方法，和新增校验不一样，该方法查询了该合同上一次签订的单价，校验规则还原了数据再进行校验的。
-            checkSaveAgreementMaterialsListByUpdate(requestVO.getAgreementMaterialsLists(),requestVO.getAgreement().getSchemeId(),requestVO.getAgreement().getContractSplitId(),requestVO.getAgreement().getVendorId(),requestVO.getAgreement().getId());
+            // todo 为易料推送过来的合同先不进行校验
+            if (StringUtils.isEmpty(requestVO.getAgreement().getMarketMaterialContractId())) {
+                // 修改使用的 校验清单数据方法，和新增校验不一样，该方法查询了该合同上一次签订的单价，校验规则还原了数据再进行校验的。
+                checkSaveAgreementMaterialsListByUpdate(requestVO.getAgreementMaterialsLists(), requestVO.getAgreement().getSchemeId(), requestVO.getAgreement().getContractSplitId(), requestVO.getAgreement().getVendorId(), requestVO.getAgreement().getId());
+            }
             /* 修改 签订合同 */
             agreementSave = updateAgreement(requestVO);
         }
