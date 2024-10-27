@@ -1439,8 +1439,13 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
         /*
          * 重新结算合同清单数据
          */
-        AgreementMaterialsInfoDTO agreementMaterialsInfo = handleAgreementMaterials(requestVO.getAgreementMaterialsLists(),agreement.getSchemeId(),agreement.getContractSplitId(),
-                agreement.getVendorId(),agreement.getId());
+        AgreementMaterialsInfoDTO agreementMaterialsInfo;
+        if (StringUtils.isEmpty(requestVO.getAgreement().getMarketMaterialContractId())) {
+            agreementMaterialsInfo = handleAgreementMaterials(requestVO.getAgreementMaterialsLists(),agreement.getSchemeId(),agreement.getContractSplitId(),
+                    agreement.getVendorId(),agreement.getId());
+        } else {
+            agreementMaterialsInfo = handleAgreementMaterialsByMarket(requestVO.getAgreementMaterialsLists(), String.valueOf(agreement.getId()));
+        }
 
         // 合同签订总金额
         agreement.setTotalAmountIncTax(agreementMaterialsInfo.getTotalAmountInclTax());
