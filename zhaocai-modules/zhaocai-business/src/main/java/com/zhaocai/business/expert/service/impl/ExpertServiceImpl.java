@@ -267,7 +267,7 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
         //保存招标文件附件
         attachmentService.addAttachment(expertVO.getResumeAttachList(), AttachmentTypeEnum.EXPERT_RESUME, expert.getId());
 
-        if (res && (expert!=null && expert.getState()!=null && (expert.getState().equals(ExpertStateEnum.REJECT.getState()) || expert.getState().equals(ExpertStateEnum.SAVE.getState()))) ){
+        if (res && (expert!=null && expert.getState()!=null && (submitFlag || expert.getState().equals(ExpertStateEnum.REJECT.getState()) || expert.getState().equals(ExpertStateEnum.SAVE.getState()))) ){
             //提交审批信息
             //接入底层逻辑平台流程
             Map<String,Object> paramMap = new HashMap<>();
