@@ -189,6 +189,8 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
     @Transactional(rollbackFor = Exception.class)
     public boolean save(ExpertVO expertVO) {
         long count = 0;
+        /* 新增才走审批流程，修改不走 */
+        Boolean submitFlag = expertVO.getId()==null;
         if(expertVO.getId()!=null){
             count = this.count(new LambdaQueryWrapper<Expert>()
                             .eq(Expert::getUserId, expertVO.getUserId())
@@ -204,10 +206,20 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
 
         //新增专家信息
         Expert expert = BeanCopierUtil.copyBean(expertVO, Expert.class);
-        /* 待审批 */
-        expert.setExpertState(NumberConstant.ZERO);
-        /* 保存 */
-        expert.setState(ExpertStateEnum.SAVE.getState());
+        /* 新增才走审批流程，修改不走 */
+        if(submitFlag){
+            /* 待审批 */
+            expert.setExpertState(NumberConstant.ZERO);
+            /* 保存 */
+            expert.setState(ExpertStateEnum.SAVE.getState());
+        }else {
+            Expert e = getById(expertVO.getId());
+            if(e!=null){
+                if(e.getState()!=null && e.getState().equals(ExpertStateEnum.IN_APPROVAL.getState())){
+                    throw new ParamValidateException("专家正在审批中，请稍后再修改");
+                }
+            }
+        }
         boolean res = this.saveOrUpdate(expert);
 
         //保存招标文件附件
@@ -236,19 +248,26 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
 
         //新增专家信息
         Expert expert = BeanCopierUtil.copyBean(expertVO, Expert.class);
+        Expert e = getById(expertVO.getId());
         /* 新增才走审批流程，修改不走 */
         if(submitFlag){
             /* 待审批 */
             expert.setExpertState(NumberConstant.ZERO);
             /* 审批中 */
             expert.setState(ExpertStateEnum.IN_APPROVAL.getState());
+        }else {
+            if(e!=null){
+                if(e.getState()!=null && e.getState().equals(ExpertStateEnum.IN_APPROVAL.getState())){
+                    throw new ParamValidateException("专家正在审批中，请稍后再修改。");
+                }
+            }
         }
         boolean res = this.saveOrUpdate(expert);
 
         //保存招标文件附件
         attachmentService.addAttachment(expertVO.getResumeAttachList(), AttachmentTypeEnum.EXPERT_RESUME, expert.getId());
 
-        if (res && submitFlag){
+        if (res && (e!=null && e.getState()!=null && (e.getState().equals(ExpertStateEnum.REJECT.getState()) || e.getState().equals(ExpertStateEnum.SAVE.getState()))) ){
             //提交审批信息
             //接入底层逻辑平台流程
             Map<String,Object> paramMap = new HashMap<>();
