@@ -248,7 +248,7 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
             //接入底层逻辑平台流程
             Map<String,Object> paramMap = new HashMap<>();
             paramMap.put("businessId", expert.getId());
-            paramMap.put("businessTitle", "供应商注册审批");
+            paramMap.put("businessTitle", "新增专家审批");
 
             SysUser sysUser = systemUserService.getUserById(expert.getUserId());
             /* 根据组织获取对应的二级单位 */
