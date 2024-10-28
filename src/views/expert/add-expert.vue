@@ -11,6 +11,7 @@
           >取消</el-button
         >
       <el-button
+        v-if="type=='edit'"
         type="primary"
         size="mini"
         @click="saveForm('form')"
@@ -19,13 +20,25 @@
         >{{ isSubmit ? "保存中..." : "保存" }}</el-button
       >
         <el-button
+          v-if="type=='edit'"
           type="primary"
           size="mini"
           @click="submitForm('form')"
           :disabled="isSubmit"
           :loading="isSubmit"
-          >{{ isSubmit ? "提交中..." : "提交" }}</el-button
-        >
+          >{{ isSubmit ? "提交中..." : "提交" }}</el-button>
+        <el-button
+          v-if="type=='check'"
+          type="primary"
+          size="mini"
+          @click="confirmApprove()"
+          >审批</el-button>
+        <el-button
+          v-if="type=='check'"
+          type="primary"
+          size="mini"
+          @click="handelCalibrationApproval()"
+          >审批详情</el-button>
       </div>
     </BackButton>
     <div class="context">
@@ -381,16 +394,41 @@
         </div>
       </el-form>
     </div>
-
+    <!-- 审批和审批详情 -->
+    <ApprovalForm
+      :visible.sync="expertVisible"
+      :title="'新增专家审批流程'"
+      :formModel="sanctionForm"
+      :rejectNodeList="rejectNodeList"
+      @update:visible="expertVisible = $event"
+      @submit="handleSubmit"
+    />
+    <ApprovalDetailsDialog
+      :visible.sync="calibrateVisible"
+      title="新增专家审批流程详情"
+      :activeStep="calibrateActive"
+      :processInformationList="processInformationList"
+      :approveLists="approveArr"
+      :loading="calibrateLoading"
+      @update:visible="calibrateVisible = $event"
+  />
   </div>
 </template>
 
 <script>
+import ApprovalForm from "@/components/Approval/approvalForm.vue";
+import ApprovalDetailsDialog from "@/components/Approval/approvalDetailsDialog.vue";
 import { Base64 } from "js-base64";
 import { submitExpert,getInfo,saveExpert } from "@/api/expert/expert";
 import BackButton from "@/components/BackButton/index.vue";
 import PageTitle from "@/components/PageTitle/index.vue";
 import { uploadFileUrl } from "@/utils/const";
+import {
+  getPermissionButton,
+  postAuditProcess,
+  getLoadTaskDef,
+  getProcessLogList,
+} from "@/api/procurement/manage";
 export default {
   name: "add-expert",
   dicts: [
@@ -409,6 +447,20 @@ export default {
     };
     return {
       id:'',
+      type:'',
+      expertVisible:false,
+      calibrateVisible: false,
+      calibrateLoading: false,
+      calibrateActive: 1,
+      processInformationList: [],
+      approveArr: [],
+      taskPresentId: "",
+      sanctionForm: {
+        pass: true,
+        rejectTaskKey: "",
+        operateComment: "",
+      },
+      rejectNodeList: [],
       formData: {
         expertName: "",
         expertPhone: "",
@@ -418,7 +470,7 @@ export default {
         major: "",
         businessType: "",
         expertType: "",
-        registeredCertificate: 22,
+        registeredCertificate: "",
         
       }, //form表单数据
       planList: [],
@@ -477,11 +529,13 @@ export default {
     console.log(JSON.stringify(param), "pp");
     this.id=param.id
     if(param.type=='check' || param.type=='edit' ){
+      this.type=param.type
       if(param.type=='check'){
         this.isSubmit = true;
       }
       this.getInfoDetail(this.id)
     }else{
+      this.type='edit'
     const {
       nickName: expertName,
       phonenumber: expertPhone,
@@ -500,6 +554,79 @@ export default {
   }
   },
   methods: {
+    handleSubmit() {
+      this.$modal.loading("请稍候...");
+      const params = {
+        ...this.sanctionForm,
+        businessId: this.businessId,
+        processId: this.processId,
+        curTaskId: this.taskPresentId,
+        processKey: "jiantou-zhaocai:{org}:ZHAOCAI_EXPERT_ADD",
+      };
+      postAuditProcess(params).then(() => {
+        this.$message.success("提交成功");
+        this.$modal.closeLoading();
+        this.expertVisible = false;
+        this.$tab.closePage().then(() => {
+              // 执行结束的逻辑
+              this.$router.push("/tender-procurement/expert/expert");
+            });
+      });
+    },
+    async handelCalibrationApproval(row) {
+      this.businessId = this.formData.id;
+      this.processId = this.formData.wfProcessId;
+      try {
+        this.calibrateVisible = true;
+        this.calibrateLoading = true;
+        const params = {
+          businessId: this.businessId,
+          processId: this.processId,
+        };
+        if (this.businessId && this.processId) {
+          const res = await getLoadTaskDef(params);
+          this.processInformationList = res.data;
+          function getActive(nodes) {
+            let allFalse = true;
+            for (let i = 0; i < nodes.length; i++) {
+              if (!nodes[i].completed) {
+                if (i === 0) {
+                  return 0;
+                } else {
+                  return i;
+                }
+              }
+              allFalse = false;
+            }
+            return nodes.length;
+          }
+          this.calibrateActive = getActive(this.processInformationList);
+          const response = await getProcessLogList(params);
+          this.approveArr = response.data;
+        }
+      } catch (error) {}
+      this.calibrateLoading = false;
+    },
+    confirmApprove(row) {
+      this.expertVisible = true;
+      this.getPermissionButton();
+    },
+    // 审批逻辑
+    async getPermissionButton() {
+      this.businessId =this.formData.id;
+      this.processId = this.formData.wfProcessId;
+      try {
+        if (this.formData.id) {
+          const res = await getPermissionButton({
+            businessId: this.formData.id, //联系人id
+            processId: this.formData.wfProcessId, //流程id
+          });
+          this.rejectNodeList = res.data.completedTaskList;
+          this.taskPresentId = res.data.curTaskId;
+          // this.isShowButton = res.data.auditable;
+        }
+      } catch (error) {}
+    },
     //点击文件列表中已上传文件进行下载
     handlePreview(file) {
       var a = document.createElement('a');
@@ -602,6 +729,8 @@ export default {
   components: {
     BackButton,
     PageTitle,
+    ApprovalForm,
+    ApprovalDetailsDialog,
   },
 };
 </script>

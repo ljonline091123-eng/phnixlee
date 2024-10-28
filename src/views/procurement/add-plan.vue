@@ -140,8 +140,8 @@
 
         <PageTitle :title="currentContract.contractPlanningCategoryName">
           <div class="page-title-right">
-            <el-button v-if="isFloat"  type="success" size="small"  @click="pushPlan">易料市集采购</el-button>
-            <el-button v-if="isFloat"  type="success" size="small"  @click="revokePushPlan">撤销易料市集采购</el-button>
+            <el-button v-if="currentContract.contractPlanningCategory == 1"  type="success" size="small"  @click="pushPlan">易料市集采购</el-button>
+            <el-button v-if="currentContract.contractPlanningCategory == 1"  type="success" size="small"  @click="revokePushPlan">撤销易料市集采购</el-button>
             <el-button type="success" size="small" :disabled="isSubmit" @click="splitVisible = true">合约拆分</el-button>
           </div>
         </PageTitle>
@@ -243,7 +243,7 @@
                 </el-table-column>
                 
 
-                <el-table-column v-if="isFloat" label="易料市集清单" align="center" props="inventory" width="400">
+                <el-table-column label="易料市集清单" align="center" props="inventory" width="400">
                   <template slot-scope="inventory">
                     <el-table size="small" :data="inventory.row.children"  border ref="planTable"   :row-class-name="tableRowClassName">
                       <el-table-column
@@ -910,7 +910,7 @@ export default {
         this.formData.region = [procurementPlan.regionProvinceCode, procurementPlan.regionCityCode]
         this.id=procurementPlan.id
         this.projectCode=procurementPlan.projectCode
-        // this.currentContract.contractPlanningCategory = contractPlanning.contractPlanningCategory
+        this.currentContract.contractPlanningCategory = contractPlanning.contractPlanningCategory
         this.subjectMatter = procurementPlan.subjectMatterType;
         this.formData = {...this.formData, ...procurementPlan, upperLimitPrice:contractPlanning.plannedAmountInclTaxText}
         console.log(this.formData, 'this.formData');
