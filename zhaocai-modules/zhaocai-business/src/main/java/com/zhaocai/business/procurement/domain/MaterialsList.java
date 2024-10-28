@@ -253,6 +253,12 @@ public class MaterialsList extends BaseEntity {
     @ApiModelProperty(value = "商品数量")
     private BigDecimal quantity;
 
+    @ApiModelProperty(value = "易料市集含税单价")
+    private BigDecimal offerPrice;
+
+    @ApiModelProperty(value = "易料市集品牌")
+    private String offerBrand;
+
     /**
      * 是否推送 Y:推送 N:未推送
      */

@@ -348,7 +348,7 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
 
         Map<String, MarketQuotePriceResponseDTO> materialMap = new HashMap<>();
         for (MarketQuotePriceResponseDTO marketMaterial : marketMaterialList) {
-            String key = marketMaterial.getQuoteNo()+marketMaterial.getQuoteName();
+            String key = marketMaterial.getOfferGoodsCode()+marketMaterial.getGoodsName();
             materialMap.put(key, marketMaterial);
         }
 
@@ -362,6 +362,8 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
                 materials.setCategory(matchingMaterial.getCategory());
                 materials.setUnitName(matchingMaterial.getUnitName());
                 materials.setGoodsQuantity(matchingMaterial.getQuantity());
+                materials.setOfferPrice(matchingMaterial.getOfferPrice());
+                materials.setOfferBrand(matchingMaterial.getOfferBrand());
             }
         }
         return materialsList;
