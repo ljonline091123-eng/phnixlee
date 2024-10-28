@@ -116,7 +116,24 @@
         sd.dept_id,'' AS noticeId,'' AS schemeId,'' as procurement_type,'' as procurement_scheme_code,ta.create_time
         from tb_agreement ta
         left join sys_dept sd on sd.thrid_dept_id = ta.party_a_org_id
-        where ta.market_material_contract_id is not null
+        <where>
+            ta.market_material_contract_id is not null
+            <if test="queryVO.agreementCode != null and queryVO.agreementCode != ''">
+                and ta.agreement_code like concat('%',#{queryVO.agreementCode,jdbcType=VARCHAR},'%')
+            </if>
+            <if test="queryVO.agreementName != null and queryVO.agreementName != ''">
+                and ta.agreement_name like concat('%',#{queryVO.agreementName,jdbcType=VARCHAR},'%')
+            </if>
+            <if test="queryVO.agreementState != null and queryVO.agreementState != ''">
+                and ta.agreement_state = #{queryVO.agreementState,jdbcType=VARCHAR}
+            </if>
+            <if test="queryVO.vendorName != null and queryVO.vendorName != ''">
+                and ta.party_b_name like concat('%',#{queryVO.vendorName,jdbcType=VARCHAR},'%')
+            </if>
+            <if test="queryVO.expenditureBusinessType != null and queryVO.expenditureBusinessType != ''">
+                and ta.expenditure_business_type = #{queryVO.expenditureBusinessType,jdbcType=INTEGER}
+            </if>
+        </where>
         ) as combined_results
         order by combined_results.create_time desc
     </select>
@@ -166,6 +183,7 @@
     </resultMap>
 
     <select id="selectAgreementJkpthtList" resultMap="AgreementJkpthtListResult">
+        select * from (
         select ta.id,ta.agreement_name,ta.expenditure_business_type,ta.vendor_id,ta.party_b_name,tbr.notifi_time
         from tb_agreement ta
         left join tb_bidding_result tbr on tbr.scheme_id = ta.scheme_id and tbr.vendor_id = ta.vendor_id and tbr.bid_result = 1 and tbr.del_flag = 2
@@ -178,6 +196,19 @@
                 and ta.belong_accounting_item_code like concat('%',#{queryVO.belongAccountingItemCode,jdbcType=VARCHAR},'%')
             </if>
         </where>
-        order by ta.create_time desc
+        union
+        select ta.id,ta.agreement_name,ta.expenditure_business_type,ta.vendor_id,ta.party_b_name
+        from tb_agreement ta
+        <where>
+            ta.agreement_state = 3 and ta.market_material_contract_id is not null
+            <if test="queryVO.agreementName != null and queryVO.agreementName != ''">
+                and ta.agreement_name like concat('%',#{queryVO.agreementName,jdbcType=VARCHAR},'%')
+            </if>
+            <if test="queryVO.belongAccountingItemCode != null and queryVO.belongAccountingItemCode != ''">
+                and ta.belong_accounting_item_code like concat('%',#{queryVO.belongAccountingItemCode,jdbcType=VARCHAR},'%')
+            </if>
+        </where>
+        ) as combined_results
+        order by combined_results.create_time desc
     </select>
 </mapper>
