@@ -577,15 +577,21 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
         AgreementPaymentItemVO paymentItem = agreementPaymentItemService.getByAgreementId(id);
         ValidateUtils.isNullException(paymentItem,"该合同对应的付款协议不存在");
 
+        AgreementUnderlingDetailVO underlingDetailVO;
         // 获取合约规划记录
-        ContractPlanning contractPlanning = contractPlanningService.getByContractSplitId(agreement.getContractSplitId());
-        ValidateUtils.isNullException(paymentItem,"该合同对应的合约规划记录不存在");
+        if(StringUtils.isEmpty(agreement.getMarketMaterialContractId())){
+            ContractPlanning contractPlanning = contractPlanningService.getByContractSplitId(agreement.getContractSplitId());
+            ValidateUtils.isNullException(paymentItem,"该合同对应的合约规划记录不存在");
 
-        ProcurementScheme procurementScheme = procurementSchemeService.getById(agreement.getSchemeId());
-        ValidateUtils.isNullException(procurementScheme,"该合同对应的采购方案不存在");
+            ProcurementScheme procurementScheme = procurementSchemeService.getById(agreement.getSchemeId());
+            ValidateUtils.isNullException(procurementScheme,"该合同对应的采购方案不存在");
 
-        // 构建对象
-        AgreementUnderlingDetailVO underlingDetailVO = new AgreementUnderlingDetailVO(agreement,paymentItem,contractPlanning,procurementScheme);
+            // 构建对象
+            underlingDetailVO = new AgreementUnderlingDetailVO(agreement,paymentItem,contractPlanning,procurementScheme);
+        } else {
+            // 构建对象
+            underlingDetailVO = new AgreementUnderlingDetailVO(agreement,paymentItem,new ContractPlanning(),new ProcurementScheme());
+        }
 
         // 获取合同计日工信息
         List<AgreementDailyWageVO> contractDatallerList = agreementDailyWageService.listByAgreementId(id);
@@ -612,7 +618,14 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
         underlingDetailVO.setContractSupplyMaterialsList(contractSupplyMaterialsList);
 
         // 获取合同清单
-        List<AgreementUnderlingMaterialsVO> underlingMaterialsList = agreementMaterialsListService.listUnderlingMaterials(id);
+        List<AgreementUnderlingMaterialsVO> underlingMaterialsList;
+        if(StringUtils.isEmpty(agreement.getMarketMaterialContractId())) {
+            underlingMaterialsList = agreementMaterialsListService.listUnderlingMaterials(id);
+        } else {
+            List<AgreementMaterialsList> lists = agreementMaterialsListService.list(new LambdaQueryWrapper<AgreementMaterialsList>()
+                    .eq(AgreementMaterialsList::getAgreementId, id));
+            underlingMaterialsList = BeanCopierUtil.copyList(lists,AgreementUnderlingMaterialsVO.class);
+        }
         switch (agreement.getExpenditureBusinessType()) {
             case 1 :
                 // 物资采购
