@@ -351,7 +351,7 @@
                   type="textarea"
                   :rows="4"
                   placeholder="请输入内容"
-                  v-model="formData.textarea"
+                  v-model="formData.professionResume"
                 >
                 </el-input>
               </el-form-item>
@@ -371,6 +371,7 @@
                   :on-success="fileSuccess"
                   :file-list="formData.resumeAttachList"
                   :on-remove="fileRemove"
+                  :on-preview="handlePreview" 
                 >
                   <el-button size="small" type="primary">点击上传</el-button>
                 </el-upload>
@@ -380,6 +381,7 @@
         </div>
       </el-form>
     </div>
+
   </div>
 </template>
 
@@ -498,6 +500,16 @@ export default {
   }
   },
   methods: {
+    //点击文件列表中已上传文件进行下载
+    handlePreview(file) {
+      var a = document.createElement('a');
+      var event = new MouseEvent('click');
+      a.download = file.name;
+      a.href = file.fileUrl;
+      a.dispatchEvent(event);
+      console.log(file)
+    },
+
     async getInfoDetail(id) {
         const res = await getInfo(id);
         const data=res.data

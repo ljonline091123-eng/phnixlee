@@ -140,8 +140,8 @@
 
         <PageTitle :title="currentContract.contractPlanningCategoryName">
           <div class="page-title-right">
-            <el-button type="success" size="small"  @click="pushPlan">易料市集采购</el-button>
-            <el-button type="success" size="small"  @click="revokePushPlan">撤销易料市集采购</el-button>
+            <el-button v-if="isFloat"  type="success" size="small"  @click="pushPlan">易料市集采购</el-button>
+            <el-button v-if="isFloat"  type="success" size="small"  @click="revokePushPlan">撤销易料市集采购</el-button>
             <el-button type="success" size="small" :disabled="isSubmit" @click="splitVisible = true">合约拆分</el-button>
           </div>
         </PageTitle>
@@ -151,12 +151,12 @@
             <template slot-scope="props">
               <el-table :data="props.row.children" size="small"  border>
                 <!-- <el-table-column type="selection"></el-table-column> -->
-                <el-table-column label="拆分合约规划名称" prop="splitContractName" width="200">
+                <el-table-column label="拆分合约规划名称" prop="splitContractName" width="150">
                   <template slot-scope="scope">
                     <el-input v-model="scope.row.splitContractName" :disabled="isSubmit"/>
                   </template>
                 </el-table-column>
-                <el-table-column label="拟签约合同承包范围" prop="contractScope" width="200">
+                <el-table-column label="拟签约合同承包范围" prop="contractScope" width="150">
                   <template slot-scope="scope">
                     <el-input v-model="scope.row.contractScope" :disabled="isSubmit"/>
                   </template>
@@ -243,7 +243,7 @@
                 </el-table-column>
                 
 
-                <el-table-column label="易料市集清单" align="center" props="inventory" width="400">
+                <el-table-column v-if="isFloat" label="易料市集清单" align="center" props="inventory" width="400">
                   <template slot-scope="inventory">
                     <el-table size="small" :data="inventory.row.children"  border ref="planTable"   :row-class-name="tableRowClassName">
                       <el-table-column
@@ -263,10 +263,10 @@
                           </template>
                         </el-table-column>
                  
-                        <el-table-column label="品牌" min-width="100" prop="name" show-overflow-tooltip/>
-                        <el-table-column label="含税单价"  width="100" prop="code" v-if="isFloat">
+                        <el-table-column label="品牌" min-width="100" prop="offerBrand" show-overflow-tooltip/>
+                        <el-table-column label="含税单价"  width="100" prop="offerPrice" >
                           <template slot-scope="scope">
-                            <el-input v-model="scope.row.code" disabled v-thousandth/>
+                            <el-input v-model="scope.row.offerPrice" disabled v-thousandth/>
                           </template>
                         </el-table-column>
                       </el-table>

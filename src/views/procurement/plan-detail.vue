@@ -236,6 +236,44 @@
             </el-table>
           </template>
         </el-table-column>
+
+
+        <el-table-column  v-if="contractPlanning.contractPlanningCategory ==1 " label="易料市集清单" align="center"  width="400">
+          <template slot-scope="inventory">
+            <el-table size="small" style="position: absolute;top: 8px;" :data="inventory.row.materialsLists"  border ref="planTable"   >
+              <el-table-column
+              label="序号"
+              type="index"
+              width="50"
+              align="center"
+            />
+              <el-table-column
+                    label="商品编码"
+                    align="center"
+                    min-width="100" prop="code" show-overflow-tooltip
+                  >
+                    <template slot-scope="scope">
+                      <a class="link-type" @click="goDetail(scope.row.code)">
+                        {{ scope.row.code }}
+                      </a>
+                    </template>
+                  </el-table-column>
+                <el-table-column label="商品名称" prop="name" width="100">
+                  <template slot-scope="scope">
+                    {{ scope.row.name }}
+                  </template>
+                </el-table-column>
+         
+                <el-table-column label="品牌" min-width="100" prop="offerBrand" show-overflow-tooltip/>
+                <el-table-column label="含税单价" prop="offerPrice" width="100">
+                  <template slot-scope="scope">
+                    {{ scope.row.offerPrice }}
+                  </template>
+                </el-table-column>
+            
+              </el-table>
+            </template>
+        </el-table-column>
       </el-table>
     </div>
   </div>
@@ -247,7 +285,7 @@ import { Base64 } from "js-base64";
 import {
   getPlanDetail,
   submitProcurementPlan,
-  cancellationProcurementPlan,
+  cancellationProcurementPlan,getYjtUrl
 } from "@/api/procurement/plan";
 import Roam from "@/components/Roam";
 import BackButton from "@/components/BackButton/index.vue";
@@ -296,6 +334,16 @@ export default {
     this.getPlanDetail();
   },
   methods: {
+           /** 跳转方案详情 */
+           async goDetail(code) {
+      // this.dialogVisible=true
+      // console.log(JSON.stringify(code))
+     
+        const res = await getYjtUrl(code);
+        this.yjtUrl=res.data || ''
+        window.open(this.yjtUrl)
+        // console.log(JSON.stringify(res))
+      },
     async getPlanDetail() {
       try {
         const res = await getPlanDetail(this.param);
