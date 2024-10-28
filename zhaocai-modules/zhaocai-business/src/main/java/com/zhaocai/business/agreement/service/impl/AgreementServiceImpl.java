@@ -1498,8 +1498,9 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
         /* 获取原来的价格，累加现在的价格后再减去上次保存的价格。使更新方法数据保持一致 */
         List<AgreementMaterialsList> agreementMaterialsLists = agreementMaterialsListService.list(new LambdaQueryWrapper<AgreementMaterialsList>().eq(AgreementMaterialsList::getAgreementId, agreement.getId()));
         // 更新方法  合约拆分是否已使用完毕
-        contractPlanningSplitService.updateContractPlanningSplitUseAdd(agreement.getContractSplitId(),agreementMaterialsInfo.getMaterialsLists(),requestVO.getAgreementMaterialsLists(),agreementMaterialsLists);
-
+        if (StringUtils.isEmpty(requestVO.getAgreement().getMarketMaterialContractId())) {
+            contractPlanningSplitService.updateContractPlanningSplitUseAdd(agreement.getContractSplitId(),agreementMaterialsInfo.getMaterialsLists(),requestVO.getAgreementMaterialsLists(),agreementMaterialsLists);
+        }
 
 
         AgreementSaveVO saveVO = new AgreementSaveVO();
