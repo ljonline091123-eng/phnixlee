@@ -79,6 +79,10 @@
         <result property="signAmountInclTax" column="sign_amount_incl_tax"/>
         <result property="signAmountExclTax" column="sign_amount_excl_tax"/>
         <result property="signTaxRate" column="sign_tax_rate"/>
+        <result property="offerGoodsCode" column="offer_goods_code"/>
+        <result property="goodsName" column="goods_name"/>
+        <result property="offerBrand" column="offer_brand"/>
+        <result property="offerPrice" column="offer_price"/>
     </resultMap>
 
     <select id="selectAgreementMaterialsList" resultMap="AgreementMaterialsListVOResult">
@@ -155,11 +159,12 @@
                tml.specification,tml.unit_measurement,tml.measurement_rules,tml.work_content,tml.cost_account_name,
                tml.count,tmml.no_tax_price as not_tax_unit_price,tmml.tax_rate,taml.brand,taml.payment_type,
                taml.rental_unit,taml.workload,taml.remark,tml.floating_price,tml.unloading_fee,tml.base_price,tml.rent_mode,tml.rent_time,tml.rent_quantity,taml.sign_count,
-               taml.sign_unit_price_incl_tax,taml.sign_unit_price_excl_tax,taml.sign_amount_incl_tax,taml.sign_amount_excl_tax,taml.sign_tax_rate
+               taml.sign_unit_price_incl_tax,taml.sign_unit_price_excl_tax,taml.sign_amount_incl_tax,taml.sign_amount_excl_tax,taml.sign_tax_rate,
+               taml.offer_goods_code,taml.goods_name,taml.offer_brand,taml.offer_price
         from tb_agreement_materials_list taml
                  inner join tb_agreement ta on ta.id = taml.agreement_id
                  inner join tb_materials_list tml on tml.id = taml.materials_list_id
-                 inner join tb_market_material_list tmml on tmml.requireId = taml.materials_list_id
+                 inner join tb_market_material_list tmml on tmml.require_id = taml.materials_list_id
         where taml.agreement_id = #{agreementId,jdbcType=BIGINT}
     </select>
 </mapper>
