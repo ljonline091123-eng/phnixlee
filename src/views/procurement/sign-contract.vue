@@ -1579,6 +1579,7 @@ export default {
               query: {
                 id: this.selectedRowYl,
                 agreementName: this.templateRow.agreementName,
+                type:'add'
               },
             });
    

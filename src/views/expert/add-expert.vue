@@ -34,7 +34,6 @@
           @click="confirmApprove()"
           >审批</el-button>
         <el-button
-          v-if="type=='check'"
           type="primary"
           size="mini"
           @click="handelCalibrationApproval()"
@@ -525,15 +524,24 @@ export default {
     };
   },
   created() {
-    const param = JSON.parse(Base64.decode(this.$route.params.params));
-    console.log(JSON.stringify(param), "pp");
-    this.id=param.id
-    if(param.type=='check' || param.type=='edit' ){
+
+  
+   
+   
+    if(this.$route.query.id){
+      this.id = Base64.decode(this.$route.query.id);
+      this.getInfoDetail(this.id)
+      console.log(this.id);
+    }else if(this.$route.params.params){
+      const param = JSON.parse(Base64.decode(this.$route.params.params));
+      this.id=param.id
+      this.getInfoDetail(this.id)
+      console.log(JSON.stringify(param), "pp");
+      // param.type=='check' || param.type=='edit' 
       this.type=param.type
       if(param.type=='check'){
         this.isSubmit = true;
       }
-      this.getInfoDetail(this.id)
     }else{
       this.type='edit'
     const {
@@ -646,6 +654,7 @@ export default {
         this.formData.technicalTitles=data.technicalTitles+""
         this.formData.expertType=data.expertType+""
         this.formData.businessType=data.businessType+""
+        this.formData.state=data.state+""
  
       },
     //保存

@@ -510,7 +510,6 @@
               <el-table-column prop="countText" label="数量" width="120" align="right"/>
               <el-table-column prop="signTaxRate" label="本次签定税率(%)" align="right" width="150"/>
               <el-table-column prop="signCountText" label="本次签订量" width="120" align="right"/>
-
               <el-table-column prop="signUnitPriceInclTax" label="本次签订含税单价(元)"  width="120" align="right"/>
               <el-table-column prop="signUnitPriceExclTax" label="本次签订不含税单价(元)" width="120" align="right"/>
               <el-table-column prop="taxPriceText" label="本次签订含税总价(元)"  width="120" align="right"/>
@@ -530,6 +529,7 @@
               <el-table-column prop="offerGoodsCode" align="center" width="180" label="易料市集商品编码"/>
                 <el-table-column prop="goodsName" align="center" width="180" label="易料市集商品名称"/>
                   <el-table-column prop="offerBrand" align="center" width="180" label="易料市集品牌"/>
+                 <el-table-column prop="offerPrice" align="center" width="180" label="易料市集含税单价"/>
             </el-table>
             <el-table v-else  :data="firstForm.agreementMaterialsLists" style="width: 100%">
               <el-table-column prop="materialsCode" label="物资编码" width="150" show-overflow-tooltip/>
@@ -2309,7 +2309,7 @@ export default {
     "$route.query.id": {
       handler(newVal) {
         console.log("11111111")
-        if (newVal) {
+        if (newVal && this.$route.query.type=='add') {
           getAgreementCreateInfoYl(newVal).then((res) => {
             this.getContractTypeList();
            // * 此3个字段是必传字段

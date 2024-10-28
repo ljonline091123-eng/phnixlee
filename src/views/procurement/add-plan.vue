@@ -541,7 +541,7 @@ export default {
     const param = JSON.parse(Base64.decode(this.$route.params.params))
     console.log(param,'param--param--param!!!!!!!!!!!!!!!!!!!!!!!');
     this.currentContract = param;
-    console.log(this.currentContract,'获取到的params');
+    console.log(JSON.stringify(this.currentContract),'获取到的params');
     this.isUpdate = param.type === 'update'? true : false;
     console.log(this.isUpdate,'isUpdate-isUpdate');
     this.formData.projectHierarchy = param.bidResponsibleOrgName;

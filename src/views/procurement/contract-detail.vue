@@ -336,6 +336,10 @@
               align="right"
             />
             <el-table-column prop="remark" label="备注" width="120" />
+            <el-table-column prop="offerGoodsCode" align="center" width="180" label="易料市集商品编码"/>
+            <el-table-column prop="goodsName" align="center" width="180" label="易料市集商品名称"/>
+              <el-table-column prop="offerBrand" align="center" width="180" label="易料市集品牌"/>
+             <el-table-column prop="offerPrice" align="center" width="180" label="易料市集含税单价"/>
           </el-table>
           <!-- 租赁材料、租赁机械 -->
           <el-table
