@@ -26,6 +26,7 @@ import com.zhaocai.business.pub.service.IAttachmentService;
 import com.zhaocai.business.pub.service.ISystemUserService;
 import com.zhaocai.business.pub.vo.res.AttachmentVO;
 import com.zhaocai.business.vendor.domain.Vendor;
+import com.zhaocai.business.vendor.domain.VendorContact;
 import com.zhaocai.common.core.bean.PageResult;
 import com.zhaocai.common.core.constant.NumberConstant;
 import com.zhaocai.common.core.utils.DateUtils;
@@ -337,6 +338,7 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
                 .set(Expert::getExpertState,expertState)/* 启用状态 */
                 .set(Expert::getState,state)/* 审批状态 */
                 .set(Expert::getProcessType,ExpertProcessTypeEnum.EXPERT_ADD.getState())/* 流程类型 */
+                .set(Expert::getOperateComment,variables.get("operateComment")==null?"":variables.get("operateComment").toString())
                 .eq(Expert::getId,businessId));
     }
 
@@ -352,6 +354,7 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
                 .set(Expert::getWfProcessId,processId)/* 流程id */
                 .set(Expert::getExpertState,NumberConstant.ONE)/* 启用状态 */
                 .set(Expert::getState,ExpertStateEnum.APPROVE.getState())/* 审批状态 */
+                .set(Expert::getOperateComment,variables.get("operateComment")==null?"":variables.get("operateComment").toString())
                 .eq(Expert::getId,businessId));
     }
 
@@ -361,6 +364,20 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
      */
     @Override
     public void processAuditReject(Map<String, Object> variables) {
+        String businessId = variables.get("businessId").toString();
+        super.update(new LambdaUpdateWrapper<Expert>()
+                .set(Expert::getExpertState,NumberConstant.ZERO)/* 启用状态 */
+                .set(Expert::getState,ExpertStateEnum.REJECT.getState())/* 审批状态 */
+                .set(Expert::getOperateComment,variables.get("operateComment")==null?"":variables.get("operateComment").toString())
+                .eq(Expert::getId, businessId));
+    }
+
+    /**
+     * 审批驳回到发起人
+     * @param variables
+     */
+    @Override
+    public void processAuditFreedom(Map<String, Object> variables) {
         String businessId = variables.get("businessId").toString();
         super.update(new LambdaUpdateWrapper<Expert>()
                 .set(Expert::getExpertState,NumberConstant.ZERO)/* 启用状态 */
