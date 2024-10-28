@@ -374,6 +374,11 @@
               prop="expertName"
             />
             <el-table-column
+              label="联系电话"
+              align="center"
+              prop="expert.expertPhone"
+            />
+            <el-table-column
               label="是否已评"
               align="center"
               prop="evalStatusText"

@@ -184,3 +184,13 @@ export const revokePushMaterialProcurementList = (data) => {
     data
   })
 }
+// 获取url
+export const getYjtUrl = (code) => {
+  return request({
+    url: '/business/procurementPlan/getYjtUrl',
+    method: 'get',
+    params:{
+      code,type:1
+    }
+  })
+}

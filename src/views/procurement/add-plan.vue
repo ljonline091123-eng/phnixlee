@@ -246,7 +246,17 @@
                 <el-table-column label="易料市集清单" align="center" props="inventory" width="400">
                   <template slot-scope="inventory">
                     <el-table size="small" :data="inventory.row.children"  border ref="planTable"   :row-class-name="tableRowClassName">
-                      <el-table-column label="商品编码" min-width="100" prop="code" show-overflow-tooltip/>
+                      <el-table-column
+                            label="商品编码"
+                            align="center"
+                            min-width="100" prop="code" show-overflow-tooltip
+                          >
+                            <template slot-scope="scope">
+                              <a class="link-type" @click="goDetail(scope.row.code)">
+                                {{ scope.row.code }}
+                              </a>
+                            </template>
+                          </el-table-column>
                         <el-table-column label="商品名称" prop="name" width="100">
                           <template slot-scope="scope">
                             {{ scope.row.name }}
@@ -343,6 +353,19 @@
         </div>
       </el-dialog>
     </div>
+    <el-dialog
+      title="应用商城"
+      :visible.sync="dialogVisible"
+      width="80%"
+    >
+      <iframe
+        :src="yjtUrl"
+        width="100%"
+        height="500px"
+        frameborder="0"
+        allowfullscreen
+      ></iframe>
+    </el-dialog>
   </div>
 </template>
 
@@ -356,7 +379,7 @@ import {
   getMinProject,
   getPlanDetail,
   listDwMmServiceSubjectMatter,
-  getContractPlanSplitFlag,pushMaterialProcurementList,revokePushMaterialProcurementList
+  getContractPlanSplitFlag,pushMaterialProcurementList,revokePushMaterialProcurementList,getYjtUrl
 } from '@/api/procurement/plan'
 import { listUnderlingDict } from "@/api/procurement/contract";
 import { listAreaDivisionTree } from '@/api/procurement/manage'
@@ -382,6 +405,8 @@ export default {
       accountTable:'accountTable',
       projectCode:'',
       id:'',
+      yjtUrl:'',
+      dialogVisible:false,
       materialsLists:[],
       inventoryList: [],
       // isEdit: true,
@@ -540,6 +565,16 @@ export default {
     handleSelectionChange(selection, row) {
   
     },
+        /** 跳转方案详情 */
+    async goDetail(code) {
+      // this.dialogVisible=true
+      // console.log(JSON.stringify(code))
+     
+        const res = await getYjtUrl(code);
+        this.yjtUrl=res.data || ''
+        window.open(this.yjtUrl)
+        // console.log(JSON.stringify(res))
+      },
 
     pushPlan(){
       this.$confirm("是否确定选中的清单进入易料市集进行采购？", "提示", {
@@ -568,6 +603,7 @@ export default {
         for(let i = 0 ; i <  this.planList[0].children.length ; i++){
           let children=this.planList[0].children[i]
           const currentSelect = this.$refs[`${children.planTable}`].selection;
+          console.log(currentSelect.length+"currentSelect"+JSON.stringify(currentSelect))
           this.materialsLists = [...this.materialsLists ,...currentSelect];
           
         }
@@ -579,6 +615,7 @@ export default {
     async revokePushMaterialProcurement(){
       if(!this.materialsLists.length) return this.$message({type:'error',message:"请选择进入易料市集采购清单"});
         for(let i = 0 ; i <  this.materialsLists.length ; i++){
+          console.log("撤销"+JSON.stringify(this.materialsLists[i]))
             if(this.materialsLists[i].pushFlag=='N'){
               return this.$message({type:'error',message:"请选择已推送进入易料市集采购清单"})
             }
@@ -590,6 +627,13 @@ export default {
         }
         await revokePushMaterialProcurementList(formData)
         this.getPlanDetail()
+        this.materialsLists=[]
+        //清空数据
+        for(let i = 0 ; i <  this.planList[0].children.length ; i++){
+          let children=this.planList[0].children[i]
+          const currentSelect = this.$refs[`${children.planTable}`].selection;
+          this.$refs[`${children.planTable}`].clearSelection();
+        }
     },
     //推送
     async  pushMaterialProcurement(){
@@ -601,6 +645,13 @@ export default {
         }
         await pushMaterialProcurementList(formData)
         this.getPlanDetail()
+        this.materialsLists=[]
+     //清空数据
+       for(let i = 0 ; i <  this.planList[0].children.length ; i++){
+          let children=this.planList[0].children[i]
+          const currentSelect = this.$refs[`${children.planTable}`].selection;
+          this.$refs[`${children.planTable}`].clearSelection();
+        }
     },
     tableRowClassName({row, rowIndex}) {
         if (row.pushFlag === 'Y') {
