@@ -453,9 +453,7 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
         if (StringUtils.isEmpty(agreement.getMarketMaterialContractId())) {
             materialsLists = agreementMaterialsListService.listAgreementMaterials(id);
         } else {
-            List<AgreementMaterialsList> lists = agreementMaterialsListService.list(new LambdaQueryWrapper<AgreementMaterialsList>()
-                    .eq(AgreementMaterialsList::getAgreementId, id));
-            materialsLists = BeanCopierUtil.copyList(lists,AgreementMaterialsListVO.class);
+            materialsLists = agreementMaterialsListService.listAgreementMaterialsByMarket(id);
         }
         // 设置价格类型
         // 购买材料，设置价款类型、交易标的物类型

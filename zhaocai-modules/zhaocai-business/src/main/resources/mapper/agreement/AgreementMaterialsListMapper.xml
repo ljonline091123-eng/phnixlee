@@ -149,4 +149,17 @@
         inner join tb_agreement ta on tms.agreement_id = ta.id and ta.agreement_state != 2
         where tms.contract_split_id = #{contractSplitId,jdbcType=BIGINT}
     </select>
+
+    <select id="listAgreementMaterialsByMarket" resultMap="AgreementMaterialsListVOResult">
+        select taml.agreement_id,taml.materials_list_id,taml.bidding_list_quotation_id, tml.materials_code,tml.materials_name,tml.subject_matter_code,tml.subject_matter_name,
+               tml.specification,tml.unit_measurement,tml.measurement_rules,tml.work_content,tml.cost_account_name,
+               tml.count,tmml.no_tax_price as not_tax_unit_price,tmml.tax_rate,taml.brand,taml.payment_type,
+               taml.rental_unit,taml.workload,taml.remark,tml.floating_price,tml.unloading_fee,tml.base_price,tml.rent_mode,tml.rent_time,tml.rent_quantity,taml.sign_count,
+               taml.sign_unit_price_incl_tax,taml.sign_unit_price_excl_tax,taml.sign_amount_incl_tax,taml.sign_amount_excl_tax,taml.sign_tax_rate
+        from tb_agreement_materials_list taml
+                 inner join tb_agreement ta on ta.id = taml.agreement_id
+                 inner join tb_materials_list tml on tml.id = taml.materials_list_id
+                 inner join tb_market_material_list tmml on tmml.requireId = taml.materials_list_id
+        where taml.agreement_id = #{agreementId,jdbcType=BIGINT}
+    </select>
 </mapper>
