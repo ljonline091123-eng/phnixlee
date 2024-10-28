@@ -483,8 +483,8 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
 
     @Override
     public String getgetYjtUrl(String type, String  code) throws Exception {
-       String acount = SecurityUtils.getLoginUser().getUsername();
-     //   String  acount = "15307487727";
+        //String acount = SecurityUtils.getLoginUser().getUsername();
+        String  acount = "15307487727";
         Long time =new Date().getTime();
         if(type ==null||type.equals("")){
             type ="1";
@@ -531,7 +531,11 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
         List<MaterialsList> materialsLists = requestVO.getMaterialsLists();
         List<Long> ids = materialsLists.stream().map(BaseEntity::getId).collect(Collectors.toList());
         List<MaterialsList> materialsPushList = materialsListService.list(new LambdaQueryWrapper<MaterialsList>()
-                .eq(MaterialsList::getPushFlag, "Y").or(wrapper -> wrapper.in(MaterialsList::getId, ids)));
+                        .eq(MaterialsList::getPlanId, requestVO.getId())
+                .and(wrapper -> wrapper
+                        .eq(MaterialsList::getPushFlag, "Y")
+                        .or(i -> i.in(MaterialsList::getId, ids))
+                ));
         List<MarketProductListRequestDTO> pushVOList = BeanCopierUtil.copyList(materialsPushList, MarketProductListRequestDTO.class);
         for (int i = 0; i < pushVOList.size(); i++) {
             pushVOList.get(i).setRequireId(String.valueOf(materialsPushList.get(i).getId()));
@@ -575,6 +579,7 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
         List<MaterialsList> materialsLists = requestVO.getMaterialsLists();
         List<Long> ids = materialsLists.stream().map(BaseEntity::getId).collect(Collectors.toList());
         List<MaterialsList> materialsPushList = materialsListService.list(new LambdaQueryWrapper<MaterialsList>()
+                        .eq(MaterialsList::getPlanId, requestVO.getId())
                 .eq(MaterialsList::getPushFlag, "Y")
                 .notIn(MaterialsList::getId, ids));
         List<MarketProductListRequestDTO> pushVOList = BeanCopierUtil.copyList(materialsPushList, MarketProductListRequestDTO.class);
