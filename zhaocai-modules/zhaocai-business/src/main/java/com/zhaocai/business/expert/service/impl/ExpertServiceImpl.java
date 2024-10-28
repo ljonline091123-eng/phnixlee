@@ -268,6 +268,8 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
         //保存招标文件附件
         attachmentService.addAttachment(expertVO.getResumeAttachList(), AttachmentTypeEnum.EXPERT_RESUME, expert.getId());
 
+        System.out.println("[专家新增提交]"+(res && (expert!=null && expert.getState()!=null && (submitFlag || expert.getState().equals(ExpertStateEnum.REJECT.getState()) || expert.getState().equals(ExpertStateEnum.SAVE.getState()))) ));
+
         if (res && (expert!=null && expert.getState()!=null && (submitFlag || expert.getState().equals(ExpertStateEnum.REJECT.getState()) || expert.getState().equals(ExpertStateEnum.SAVE.getState()))) ){
             //提交审批信息
             //接入底层逻辑平台流程
@@ -359,7 +361,7 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
     }
 
     /**
-     * 专家审批驳回
+     * 专家审批拒绝
      * @param variables
      */
     @Override
@@ -381,7 +383,7 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
         String businessId = variables.get("businessId").toString();
         super.update(new LambdaUpdateWrapper<Expert>()
                 .set(Expert::getExpertState,NumberConstant.ZERO)/* 启用状态 */
-                .set(Expert::getState,ExpertStateEnum.REJECT.getState())/* 审批状态 */
+                .set(Expert::getState,ExpertStateEnum.SAVE.getState())/* 审批状态 */
                 .set(Expert::getOperateComment,variables.get("operateComment")==null?"":variables.get("operateComment").toString())
                 .eq(Expert::getId, businessId));
     }
