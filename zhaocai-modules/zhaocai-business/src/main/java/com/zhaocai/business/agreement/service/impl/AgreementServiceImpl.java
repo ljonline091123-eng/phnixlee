@@ -1505,7 +1505,14 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
 
         AgreementSaveVO saveVO = new AgreementSaveVO();
         saveVO.setId(agreement.getId());
-        saveVO.setProcurementPlanType(procurementScheme.getProcurementPlanType());
+        if (StringUtils.isEmpty(requestVO.getAgreement().getMarketMaterialContractId())) {
+            saveVO.setProcurementPlanType(procurementScheme.getProcurementPlanType());
+        } else {
+            MarketMaterialContract contract = marketMaterialContractService.getById(requestVO.getAgreement().getMarketMaterialContractId());
+            if(null != contract && null != contract.getExpenditureBusinessType()){
+                saveVO.setProcurementPlanType(Integer.valueOf(contract.getExpenditureBusinessType()));
+            }
+        }
         return saveVO;
     }
 
