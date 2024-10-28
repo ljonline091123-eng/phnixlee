@@ -248,7 +248,6 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
 
         //新增专家信息
         Expert expert = BeanCopierUtil.copyBean(expertVO, Expert.class);
-        Expert e = getById(expertVO.getId());
         /* 新增才走审批流程，修改不走 */
         if(submitFlag){
             /* 待审批 */
@@ -256,6 +255,7 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
             /* 审批中 */
             expert.setState(ExpertStateEnum.IN_APPROVAL.getState());
         }else {
+            Expert e = getById(expertVO.getId());
             if(e!=null){
                 if(e.getState()!=null && e.getState().equals(ExpertStateEnum.IN_APPROVAL.getState())){
                     throw new ParamValidateException("专家正在审批中，请稍后再修改。");
@@ -267,7 +267,7 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
         //保存招标文件附件
         attachmentService.addAttachment(expertVO.getResumeAttachList(), AttachmentTypeEnum.EXPERT_RESUME, expert.getId());
 
-        if (res && (e!=null && e.getState()!=null && (e.getState().equals(ExpertStateEnum.REJECT.getState()) || e.getState().equals(ExpertStateEnum.SAVE.getState()))) ){
+        if (res && (expert!=null && expert.getState()!=null && (expert.getState().equals(ExpertStateEnum.REJECT.getState()) || expert.getState().equals(ExpertStateEnum.SAVE.getState()))) ){
             //提交审批信息
             //接入底层逻辑平台流程
             Map<String,Object> paramMap = new HashMap<>();
