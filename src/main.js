@@ -46,6 +46,7 @@ import DictTag from "@/components/DictTag";
 import VueMeta from "vue-meta";
 // 字典数据组件
 import DictData from "@/components/DictData";
+import * as mathjs from 'mathjs'
 
 //引入ng-form-element表单设计器
 import NgForm from "ng-form-element";
@@ -65,6 +66,7 @@ Vue.prototype.selectDictLabel = selectDictLabel;
 Vue.prototype.selectDictLabels = selectDictLabels;
 Vue.prototype.download = download;
 Vue.prototype.handleTree = handleTree;
+Vue.prototype.mathjs = mathjs;
 
 // 全局组件挂载
 Vue.component("DictTag", DictTag);
