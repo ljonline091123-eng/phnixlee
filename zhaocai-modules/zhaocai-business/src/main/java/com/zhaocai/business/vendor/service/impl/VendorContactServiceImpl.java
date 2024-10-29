@@ -464,6 +464,11 @@ public class VendorContactServiceImpl extends ServiceImpl<VendorContactMapper,Ve
         this.handleApprove(contact);
     }
 
+
+    /**
+     * 驳回
+     * @param variables
+     */
     @Override
     public void processAuditReject(Map<String, Object> variables) {
         String businessId = variables.get("businessId").toString();

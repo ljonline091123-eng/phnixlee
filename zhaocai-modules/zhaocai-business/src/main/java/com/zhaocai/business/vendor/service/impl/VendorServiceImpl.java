@@ -577,6 +577,22 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
         String businessId = variables.get("businessId").toString();
         super.update(new LambdaUpdateWrapper<Vendor>()
                 .set(Vendor::getState,VendorStateEnum.REJECT.getState())
+                .set(Vendor::getOperateComment,variables.get("operateComment")==null?"":variables.get("operateComment").toString())
                 .eq(Vendor::getId, businessId));
     }
+
+    /**
+     * 审批驳回到提交人状态
+     * @param variables
+     */
+    @Override
+    public void processAuditFreedom(Map<String, Object> variables) {
+        String businessId = variables.get("businessId").toString();
+        super.update(new LambdaUpdateWrapper<Vendor>()
+                .set(Vendor::getState,VendorStateEnum.REJECT.getState())
+                .set(Vendor::getOperateComment,variables.get("operateComment")==null?"":variables.get("operateComment").toString())
+                .eq(Vendor::getId, businessId));
+    }
+
+
 }

@@ -112,7 +112,6 @@ public class VendorChangeServiceImpl extends ServiceImpl<VendorChangeMapper,Vend
             vendorChangeRequestVO.setVendorChange(vendorChange);
             vendorChangeRequestVO.setCertificationChangeList(certificationList);
             vendorChangeRequestVO.setContactChangeList(contactChangeList);
-
             // 如果最新版本审批通过，则返回最新版本副本
             if (null != vendorChange.getChangeStatus() && vendorChange.getChangeStatus().equals(VendorStateEnum.APPROVE.getState())) {
                 // 获取最新版本副本
