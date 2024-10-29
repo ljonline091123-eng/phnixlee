@@ -146,5 +146,7 @@ public interface SysDeptMapper extends MyBaseMapper<SysDept>
 
     List<SysDept> getTwoLevelDepts();
 
+    List<SysDept> getThreeLevelDepts();
+
 
 }

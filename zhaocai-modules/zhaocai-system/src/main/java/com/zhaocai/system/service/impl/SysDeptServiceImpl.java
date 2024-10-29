@@ -522,6 +522,11 @@ public class SysDeptServiceImpl extends ServiceImpl<SysDeptMapper, SysDept> impl
     }
 
     @Override
+    public List<SysDept> getThreeLevelDepts() {
+        return deptMapper.getThreeLevelDepts();
+    }
+
+    @Override
     public List<SysDept> getDeptByThridDeptId(String thridDeptId) {
         List<SysDept> sysDepts = new ArrayList<>();
         SysDept sysDept = deptMapper.selectOne(new LambdaQueryWrapper<SysDept>()
