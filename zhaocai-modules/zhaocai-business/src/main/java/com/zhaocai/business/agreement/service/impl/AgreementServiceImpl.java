@@ -1077,7 +1077,7 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
         Agreement agreement = super.getById(id);
         ValidateUtils.isNullException(agreement,"该合同不存在");
         return super.update(new LambdaUpdateWrapper<Agreement>()
-                .set(Agreement::getAgreementState, AgreementStateEnum.APPROVE)
+                .set(Agreement::getAgreementState, AgreementStateEnum.APPROVE.getState())
                 .eq(BaseEntity::getId, id));
     }
 

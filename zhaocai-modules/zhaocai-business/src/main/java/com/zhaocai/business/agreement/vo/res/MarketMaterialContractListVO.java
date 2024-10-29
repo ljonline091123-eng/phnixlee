@@ -28,8 +28,10 @@ public class MarketMaterialContractListVO extends AdviceObject {
     private String partyBName;
 
     @ApiModelProperty(value = "类别")
-    @DictCache(dictBizEnum = DictBizEnum.PROCUREMENT_PLAN_TYPE,filedName = "procurementPlanType")
     private String expenditureBusinessType;
 
+    @DictCache(dictBizEnum = DictBizEnum.PROCUREMENT_PLAN_TYPE,filedName = "expenditureBusinessType")
+    @ApiModelProperty(value = "类别-文本")
+    private String expenditureBusinessTypeText;
 
 }
