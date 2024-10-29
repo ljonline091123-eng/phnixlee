@@ -241,7 +241,7 @@
                 </el-form-item>
               </el-col>
             </el-row>
-            <el-row :gutter="10">
+            <el-row v-if="type=='add'" :gutter="10">
               <el-col :span="8" class="grid-cell">
                 <el-form-item label=" 合同模板：" prop="contractTemplateName">
                   <!-- <template v-if="formData.contractTemplateName">
@@ -526,7 +526,7 @@
                   </el-form-item>
                 </template>
               </el-table-column>
-              <el-table-column prop="offerGoodsCode" align="center" width="180" label="易料市集商品编码"/>
+              <el-table-column prop="skuId" align="center" width="180" label="易料市集商品编码"/>
                 <el-table-column prop="goodsName" align="center" width="180" label="易料市集商品名称"/>
                   <el-table-column prop="offerBrand" align="center" width="180" label="易料市集品牌"/>
                  <el-table-column prop="offerPrice" align="center" width="180" label="易料市集含税单价"/>

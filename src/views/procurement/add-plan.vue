@@ -161,7 +161,7 @@
                     <el-input v-model="scope.row.contractScope" :disabled="isSubmit"/>
                   </template>
                 </el-table-column>
-                <el-table-column :label="'清单'+'\xa0\xa0\xa0\xa0\xa0\xa0\xa0\xa0\xa0\xa0\xa0\xa0\xa0\xa0\xa0\xa0\xa0\xa0\xa0\xa0\xa0'+'易料市集清单'" align="center" props="inventory">
+                <el-table-column label="清单" align="center" props="inventory">
                   <template slot-scope="inventory">
                     <el-table  size="small" :data="inventory.row.children"  border   :ref="inventory.row.planTable"  :row-class-name="tableRowClassName">
                       <el-table-column type="selection" width="55" :reserve-selection="true"/>
@@ -195,7 +195,7 @@
                       </el-table-column>
                       <el-table-column label="清单数量" align="right" width="150" v-else>
                         <template slot-scope="scope">
-                          <el-input v-model="scope.row.count" :disabled="isSubmit || scope.row.belongOffer" @blur="changeCount(inventory.$index,scope,$event)" v-thousandth/>
+                          <el-input v-model="scope.row.count" :disabled="isSubmit || scope.row.belongOffer || scope.row.pushFlag === 'Y'" @blur="changeCount(inventory.$index,scope,$event)" v-thousandth/>
                         </template>
                       </el-table-column>
                       <el-table-column label="基价" align="right" width="130" prop="basePrice" v-if="isFloat">
@@ -205,7 +205,7 @@
                       </el-table-column>
                       <el-table-column label="单价(含税)" align="right" prop="unitPriceInclTax" width="180" v-else>
                         <template slot-scope="scope">
-                          <el-input v-model="scope.row.unitPriceInclTax" :disabled="isSubmit || scope.row.belongOffer" @blur="changePrice(scope.row,$event)" v-thousandth/>
+                          <el-input v-model="scope.row.unitPriceInclTax" :disabled="isSubmit || scope.row.belongOffer || scope.row.pushFlag === 'Y'" @blur="changePrice(scope.row,$event)" v-thousandth/>
                         </template>
                       </el-table-column>
                       <el-table-column label="税率(%)" align="right" prop="taxRate"/>
@@ -241,11 +241,11 @@
                       v-if="currentContract.contractPlanningCategory == 1"
                       label="易料市集商品编码"
                       align="center"
-                      min-width="150" prop="code" show-overflow-tooltip
+                      min-width="150" prop="skuId" show-overflow-tooltip
                     >
                       <template slot-scope="scope">
-                        <a class="link-type" @click="goDetail(scope.row.code)">
-                          {{ scope.row.code }}
+                        <a class="link-type" @click="goDetail(scope.row.skuId)">
+                          {{ scope.row.skuId }}
                         </a>
                       </template>
                     </el-table-column>
@@ -257,9 +257,9 @@
            
                   <el-table-column v-if="currentContract.contractPlanningCategory == 1" label="易料市集品牌" min-width="120" prop="offerBrand" show-overflow-tooltip/>
                   <el-table-column v-if="currentContract.contractPlanningCategory == 1" label="易料市集含税单价"  width="150" prop="offerPrice" >
-                    <template slot-scope="scope">
+                    <!-- <template slot-scope="scope">
                       <el-input v-model="scope.row.offerPrice" disabled v-thousandth/>
-                    </template>
+                    </template> -->
                   </el-table-column>
                     </el-table>
                   </template>
@@ -572,43 +572,44 @@ export default {
       },
 
     pushPlan(){
+      this.materialsLists=[]
+        for(let i = 0 ; i <  this.planList[0].children.length ; i++){
+          let children=this.planList[0].children[i]
+          const currentSelect = this.$refs[`${children.planTable}`].selection;
+          this.materialsLists = [...this.materialsLists ,...currentSelect];
+          
+        }
+        console.log(JSON.stringify(this.materialsLists))
+      if(!this.materialsLists.length) return this.$message({type:'error',message:"请选择易料市集采购清单"});
       this.$confirm("是否确定选中的清单进入易料市集进行采购？", "提示", {
         confirmButtonText: "确定",
         cancelButtonText: "取消",
         type: "warning",
       }).then(() => {
-        this.materialsLists=[]
-        for(let i = 0 ; i <  this.planList[0].children.length ; i++){
-          let children=this.planList[0].children[i]
-          const currentSelect = this.$refs[`${children.planTable}`].selection;
-          this.materialsLists = [...this.materialsLists ,...currentSelect];
-          
-        }
-        console.log(JSON.stringify(this.materialsLists))
         this.pushMaterialProcurement();
       });
     },
     revokePushPlan(){
-      this.$confirm("是否确定撤销选中的清单？", "提示", {
-        confirmButtonText: "确定",
-        cancelButtonText: "取消",
-        type: "warning",
-      }).then(() => {
-        this.materialsLists=[]
+      this.materialsLists=[]
         for(let i = 0 ; i <  this.planList[0].children.length ; i++){
           let children=this.planList[0].children[i]
           const currentSelect = this.$refs[`${children.planTable}`].selection;
           console.log(currentSelect.length+"currentSelect"+JSON.stringify(currentSelect))
           this.materialsLists = [...this.materialsLists ,...currentSelect];
-          
         }
         console.log(JSON.stringify(this.materialsLists))
+      if(!this.materialsLists.length) return this.$message({type:'error',message:"请选择撤销易料市集采购清单"});
+      this.$confirm("是否确定撤销选中的清单？", "提示", {
+        confirmButtonText: "确定",
+        cancelButtonText: "取消",
+        type: "warning",
+      }).then(() => {
         this.revokePushMaterialProcurement();
       });
     },
     //撤销
     async revokePushMaterialProcurement(){
-      if(!this.materialsLists.length) return this.$message({type:'error',message:"请选择进入易料市集采购清单"});
+
         for(let i = 0 ; i <  this.materialsLists.length ; i++){
           console.log("撤销"+JSON.stringify(this.materialsLists[i]))
             if(this.materialsLists[i].pushFlag=='N'){
@@ -632,7 +633,6 @@ export default {
     },
     //推送
     async  pushMaterialProcurement(){
-      if(!this.materialsLists.length) return this.$message({type:'error',message:"请选择进入易料市集采购清单"});
       let formData = {
         projectCode:this.projectCode,
           id:this.id,

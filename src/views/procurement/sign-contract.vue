@@ -1135,7 +1135,7 @@
        <el-row :gutter="10">
          <el-col :span="9" class="grid-cell">
            <el-form-item
-             label="合同编号："
+             label="单据编号："
              label-width="90px"
              prop="agreementCode"
              class="label-right-align"
@@ -1149,7 +1149,7 @@
          </el-col>
          <el-col :span="9" class="grid-cell">
           <el-form-item
-            label="合同名称："
+            label="单据名称："
             label-width="90px"
             prop="agreementName"
             class="label-right-align"
@@ -1202,15 +1202,16 @@
          align="center"
        />
        <el-table-column
+       label="单据编号"
+       prop="agreementCode"
+       show-overflow-tooltip
+     />
+       <el-table-column
          label="单据名称"
          prop="agreementName"
          show-overflow-tooltip
        />
-       <el-table-column
-          label="单据编号"
-          prop="agreementCode"
-          show-overflow-tooltip
-        />
+    
        <el-table-column label="乙方名称" prop="partyBName" />
    
        <el-table-column

@@ -128,7 +128,7 @@
           prop="contractScope"
           show-overflow-tooltip
         />
-        <el-table-column :label="'清单'+'\xa0\xa0\xa0\xa0\xa0\xa0\xa0\xa0\xa0\xa0\xa0\xa0\xa0\xa0\xa0\xa0\xa0\xa0\xa0\xa0\xa0'+'易料市集清单'"  align="center">
+        <el-table-column label="清单"  align="center">
           <template slot-scope="inventory">
             <el-table
               size="small"
@@ -237,11 +237,11 @@
               v-if="contractPlanning.contractPlanningCategory == 1"
               label="易料市集商品编码"
               align="center"
-              min-width="150" prop="code" show-overflow-tooltip
+              min-width="150" prop="skuId" show-overflow-tooltip
             >
               <template slot-scope="scope">
-                <a class="link-type" @click="goDetail(scope.row.code)">
-                  {{ scope.row.code }}
+                <a class="link-type" @click="goDetail(scope.row.skuId)">
+                  {{ scope.row.skuId }}
                 </a>
               </template>
             </el-table-column>

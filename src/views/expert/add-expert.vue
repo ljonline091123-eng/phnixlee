@@ -531,18 +531,18 @@ export default {
     if(this.$route.query.id){
       this.id = Base64.decode(this.$route.query.id);
       this.getInfoDetail(this.id)
-      console.log(this.id);
+      console.log("首页审批"+this.id);
     }else if(this.$route.params.params){
       const param = JSON.parse(Base64.decode(this.$route.params.params));
       this.id=param.id
-      this.getInfoDetail(this.id)
-      console.log(JSON.stringify(param), "pp");
-      // param.type=='check' || param.type=='edit' 
+      if(param.type=='check' || param.type=='edit' ){
+        this.getInfoDetail(this.id)
       this.type=param.type
-      if(param.type=='check'){
-        this.isSubmit = true;
-      }
-    }else{
+        if(param.type=='check'){
+          this.isSubmit = true;
+        }
+      }else{
+      console.log("新增"+this.id);
       this.type='edit'
     const {
       nickName: expertName,
@@ -560,6 +560,8 @@ export default {
       belongOrganization: thridOrgName,
     });
   }
+      
+    }
   },
   methods: {
     handleSubmit() {
