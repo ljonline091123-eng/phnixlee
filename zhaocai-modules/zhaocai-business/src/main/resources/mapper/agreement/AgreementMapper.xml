@@ -114,7 +114,7 @@
         union
         select ta.id,ta.agreement_code,ta.agreement_name,ta.party_a_name,ta.party_b_name,ta.create_id,ta.signature_user_id,
         ta.create_by,ta.agreement_state,ta.total_amount_inc_tax,ta.expenditure_business_type,ta.wf_process_id,
-        sd.dept_id,'' AS noticeId,'' AS schemeId,'' as procurement_type,'' as procurement_scheme_code,ta.create_time,ta.procurement_scheme_code,ta.market_material_contract_id
+        sd.dept_id,'' AS noticeId,'' AS schemeId,'' as procurement_type,ta.procurement_scheme_code,ta.create_time,ta.market_material_contract_id
         from tb_agreement ta
         left join sys_dept sd on sd.thrid_dept_id = ta.party_a_org_id
         <where>
