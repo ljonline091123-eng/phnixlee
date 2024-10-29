@@ -109,6 +109,9 @@ public class BPMProcessService implements IBPMProcessService {
         requestDTO.setBusinessId(variables.get("businessId").toString());
         requestDTO.setOperateComment(variables.get("operateComment").toString());
         requestDTO.setCurTaskId(variables.get("curTaskId").toString());
+        /* 下一个审批用户id */
+        if(variables.get("nextAuditUserId")!=null)
+            requestDTO.setNextAuditUserId(variables.get("nextAuditUserId")==null?null:variables.get("nextAuditUserId").toString());
         boolean pass = (boolean) variables.get("pass");
         requestDTO.setPass(pass);
         if(!pass){
