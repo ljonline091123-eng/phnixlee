@@ -1,6 +1,7 @@
 package com.zhaocai.business.agreement.service.impl;
 
 import cn.hutool.core.collection.CollectionUtil;
+import com.alibaba.fastjson.JSONArray;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
@@ -28,6 +29,8 @@ import com.zhaocai.business.procurement.domain.MaterialsList;
 import com.zhaocai.business.procurement.domain.ProcurementPlan;
 import com.zhaocai.business.procurement.service.IMaterialsListService;
 import com.zhaocai.business.procurement.service.IProcurementPlanService;
+import com.zhaocai.business.pub.domain.AreaDivision;
+import com.zhaocai.business.pub.service.IAreaDivisionService;
 import com.zhaocai.business.pub.service.IAttachmentService;
 import com.zhaocai.business.pub.vo.req.AttachmentRequestVO;
 import com.zhaocai.business.pub.vo.res.AttachmentVO;
@@ -78,6 +81,9 @@ public class MarketMaterialContractServiceImpl extends ServiceImpl<MarketMateria
 
     @Autowired
     private IFileZTaskService fileZTaskService;
+
+    @Autowired
+    private IAreaDivisionService areaDivisionService;
 
     /**
      * 接收采购清单最终报价
@@ -138,7 +144,8 @@ public class MarketMaterialContractServiceImpl extends ServiceImpl<MarketMateria
         baseInfoVO.setBelongOrganizationName(getDeptName(projectDetail.getBelongingOrgId()));
         baseInfoVO.setAgreementPerformAddress(contract.getAgreementPerformAddress());
         baseInfoVO.setAgreementPerformCountry("中国");
-        baseInfoVO.setAgreementPerformDistrict(contract.getAgreementPerformDistrict());
+        //baseInfoVO.setAgreementPerformDistrict(contract.getAgreementPerformDistrict());
+        baseInfoVO.setAgreementPerformDistrict(getAgreementPerformDistrict(contract.getAgreementPerformDistrict()));
         baseInfoVO.setPartyAOrgId(projectDetail.getManagementOrgId());
         baseInfoVO.setPartyAName(getDeptName(projectDetail.getManagementOrgId()));
 
@@ -147,6 +154,9 @@ public class MarketMaterialContractServiceImpl extends ServiceImpl<MarketMateria
         baseInfoVO.setPartyBLegalName(contract.getPartyBLegalName());
         baseInfoVO.setPartyBLegalPhone(contract.getPartyBLegalPhone());
         baseInfoVO.setPartyBLegalIdCard(contract.getPartyBLegalIdCard());
+        baseInfoVO.setPartyBResponsibleName(contract.getPartyBResponsibleName());
+        baseInfoVO.setPartyBResponsibleIdCard(contract.getPartyBResponsibleIdCard());
+        baseInfoVO.setPartyBResponsiblePhone(contract.getPartyBLegalPhone());
 
         // 物料清单
         List<MarketMaterialList> list = marketMaterialListService.list(new LambdaQueryWrapper<MarketMaterialList>().eq(MarketMaterialList::getContractId, queryVO.getId()));
@@ -242,6 +252,28 @@ public class MarketMaterialContractServiceImpl extends ServiceImpl<MarketMateria
             return Optional.ofNullable(sysDept)
                     .map(SysDept::getDeptName)
                     .orElse("");
+        }
+        return null;
+    }
+
+    /**
+     * 获取合同行政区域
+     * @param prjAddr
+     * @return
+     */
+    private String getAgreementPerformDistrict(String prjAddr) {
+        if (StringUtils.isNotBlank(prjAddr)) {
+            List<String> addrList = JSONArray.parseArray(prjAddr,String.class);
+            StringBuilder agreementPerformDistrict = new StringBuilder();
+            for(String code : addrList) {
+                AreaDivision areaDivision = areaDivisionService.getByCode(code);
+                if (areaDivision != null) {
+                    agreementPerformDistrict.append(areaDivision.getAreaName()).append("/");
+                }
+            }
+
+            return StringUtils.isNotBlank(agreementPerformDistrict.toString()) ?
+                    agreementPerformDistrict.substring(0,agreementPerformDistrict.length() - 1) : "";
         }
         return null;
     }
