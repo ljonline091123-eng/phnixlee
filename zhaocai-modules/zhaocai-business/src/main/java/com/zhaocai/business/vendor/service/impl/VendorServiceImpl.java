@@ -13,6 +13,7 @@ import com.zhaocai.business.common.exception.BusinessException;
 import com.zhaocai.business.common.exception.ParamValidateException;
 import com.zhaocai.business.common.utils.ValidateUtils;
 import com.zhaocai.business.manager.http.dto.req.UserObj;
+import com.zhaocai.business.manager.http.dto.res.ListCataLogDTO;
 import com.zhaocai.business.manager.http.service.UnderlingSystemService;
 import com.zhaocai.business.process.service.IBPMProcessService;
 import com.zhaocai.business.pub.service.IAttachmentService;
@@ -175,9 +176,36 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
         paramMap.put("businessId", vendor.getId());
         paramMap.put("businessTitle", "供应商注册审批");
 
+        /* 获取二级单位 */
         String org = underlingSystemService.getL2OrgByOrgId(vendor.getFirstCooperationCompanyCode());
+        /** 获取三级单位
+         *
+         *
+         * */
+        String orgThree = "获取三级单位"+vendor.getFirstCooperationCompanyCode();
+
         //供应商注册时候选择审批单位，只能由选择的单位维护的供应商审核人员进行审核，如果供应商信息修改也是需要原审核单位进行审核
         String customProcessKey = ProcessKeyEnum.ZHAOCAI_VENDOR_REGISTER.getIdentifying().replace("{org}",org);
+
+        /* 获取所有流程 */
+        List<ListCataLogDTO> listCataLogDTOS = underlingSystemService.listCatalog();
+        if (listCataLogDTOS != null) {
+            /* 判断二级单位流程是否存在 */
+            ListCataLogDTO cataLogDTOTwo = listCataLogDTOS.stream().filter(cateLog -> cateLog.getCatalogKey().equals(org)).findFirst().orElse(null);
+            if (cataLogDTOTwo != null) {
+                /* 赋值使用二级单位 */
+                customProcessKey = ProcessKeyEnum.ZHAOCAI_VENDOR_REGISTER.getIdentifying().replace("{org}",org);
+            }
+
+            /* 判断三级单位流程是否存在 */
+            ListCataLogDTO cataLogDTOThree = listCataLogDTOS.stream().filter(cateLog -> cateLog.getCatalogKey().equals(orgThree)).findFirst().orElse(null);
+            if (cataLogDTOThree != null) {
+                /* 赋值使用二级单位 */
+                customProcessKey = ProcessKeyEnum.ZHAOCAI_VENDOR_REGISTER.getIdentifying().replace("{org}",orgThree);
+            }
+        }
+
+
         paramMap.put("customProcessKey", customProcessKey);
         paramMap.put("businessContent",
                 String.format(ApproveFlowPromptTemplateEnum.VENDOR_REGISTER_APPROVE.getDesc(), vendor.getEnterpriseName()));
