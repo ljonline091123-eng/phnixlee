@@ -165,6 +165,9 @@ public class MaterialsVO extends AdviceObject {
     @ApiModelProperty(value = "是否推送 Y:推送 N:未推送")
     private String pushFlag;
 
+    @ApiModelProperty(value = "易料市集商品id")
+    private String skuId;
+
     public BigDecimal getTransferQuantity() {
         return this.getCount();
     }

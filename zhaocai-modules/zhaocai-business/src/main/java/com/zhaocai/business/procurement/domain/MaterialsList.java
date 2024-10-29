@@ -265,4 +265,7 @@ public class MaterialsList extends BaseEntity {
     @ApiModelProperty(value = "是否推送")
     private String pushFlag;
 
+    @ApiModelProperty(value = "易料市集商品id")
+    private String skuId;
+
 }

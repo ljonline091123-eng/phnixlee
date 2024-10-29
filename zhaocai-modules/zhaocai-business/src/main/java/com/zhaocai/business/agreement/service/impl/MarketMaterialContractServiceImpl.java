@@ -168,6 +168,7 @@ public class MarketMaterialContractServiceImpl extends ServiceImpl<MarketMateria
             vo.setGoodsName(marketMaterial.getGoodsName());
             vo.setOfferBrand(marketMaterial.getOfferBrand());
             vo.setOfferPrice(marketMaterial.getOfferPrice());
+            vo.setSkuId(marketMaterial.getSkuId());
             vo.setCount(marketMaterial.getQuantity());
             vo.setSignCount(marketMaterial.getQuantity());
             vo.setNotTaxUnitPrice(marketMaterial.getNoTaxPrice());

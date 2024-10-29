@@ -364,6 +364,7 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
                 materials.setGoodsQuantity(matchingMaterial.getQuantity());
                 materials.setOfferPrice(matchingMaterial.getOfferPrice());
                 materials.setOfferBrand(matchingMaterial.getOfferBrand());
+                materials.setSkuId(matchingMaterial.getSkuId());
             }
         }
         return materialsList;

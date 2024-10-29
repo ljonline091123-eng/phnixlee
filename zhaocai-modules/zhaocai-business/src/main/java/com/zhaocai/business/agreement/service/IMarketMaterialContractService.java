@@ -40,5 +40,10 @@ public interface IMarketMaterialContractService extends IService<MarketMaterialC
      */
     AgreementCreateBaseInfoVO getAgreementCreateInfo(MarketMaterialContractQueryVO queryVO);
 
+    /**
+     * 处理新增合同创建附件
+     * @param attachmentVO
+     * @return
+     */
     long agreementCreateAttachmentHandle(AttachmentVO attachmentVO);
 }

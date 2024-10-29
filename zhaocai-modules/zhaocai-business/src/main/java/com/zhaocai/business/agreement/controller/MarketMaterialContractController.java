@@ -48,10 +48,10 @@ public class MarketMaterialContractController extends BladeController {
     }
 
     /**
-     * 获取创建合同的基本信息
+     * 处理新增合同创建附件
      */
     @PostMapping("/agreementCreateAttachmentHandle")
-    @ApiOperation(value = "获取创建合同的基本信息")
+    @ApiOperation(value = "处理新增合同创建附件")
     public long agreementCreateAttachmentHandle(@Valid @RequestBody AttachmentVO attachmentVO) {
         return marketMaterialContractService.agreementCreateAttachmentHandle(attachmentVO);
     }

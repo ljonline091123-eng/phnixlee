@@ -235,4 +235,7 @@ public class AgreementMaterialsListVO extends AdviceObject {
 
     @ApiModelProperty(value = "易料市集含税单价")
     private BigDecimal offerPrice;
+
+    @ApiModelProperty(value = "易料市集商品id")
+    private String skuId;
 }
