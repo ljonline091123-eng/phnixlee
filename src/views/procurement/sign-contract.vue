@@ -244,7 +244,7 @@
                 >撤回</el-button
               >
             </div>
-            
+
             <div
               v-else-if="
                 Number(scope.row.isOperate) === 1 &&
@@ -318,7 +318,7 @@
                 >作废签署合同</el-button
               >
             </div>
-           
+
             <span v-else>-</span>
           </template>
         </el-table-column>
@@ -805,6 +805,7 @@
             <el-table-column
               label="本次签订含税单价(元)"
               align="center"
+              prop="signUnitPriceInclTax"
               width="150"
               :key="'signUnitPriceInclTax'"
             >
@@ -1188,7 +1189,7 @@
        @selection-change="handleSelectionChangeYl"
      >
 
-   
+
        <el-table-column label="" width="30" align="center">
         <template slot-scope="scope">
           <el-radio
@@ -1214,9 +1215,9 @@
          prop="agreementName"
          show-overflow-tooltip
        />
-    
+
        <el-table-column label="乙方名称" prop="partyBName" />
-   
+
        <el-table-column
          label="支出业务类型"
          align="center"
@@ -1224,7 +1225,7 @@
        />
 
      </el-table>
- 
+
      <pagination
         v-show="total_procurement_yl > 0"
         :total="total_procurement_yl"
@@ -1586,7 +1587,7 @@ export default {
                 type:'add'
               },
             });
-   
+
     },
     submitProcurement() {
       this.schemeId = this.selectedRow.schemeId;
@@ -1650,7 +1651,7 @@ export default {
         this.total_procurement = res?.data?.total;
       });
     },
-  
+
     /**
      * 弹出选择采购任务
      */
