@@ -173,30 +173,31 @@ public class MarketMaterialContractServiceImpl extends ServiceImpl<MarketMateria
                 throw new ParamValidateException(String.format("易料采购合同清单对应的采购计划清单未找到,请确认",marketMaterial.getQuoteName()));
             }
             VendorBiddingListQuotationListVO vo =  BeanCopierUtil.copyBean(materials, VendorBiddingListQuotationListVO.class);
+            vo.setCostAccount(materials.getCostAccountName());
             vo.setMaterialsListId(Long.valueOf(marketMaterial.getRequireId()));
             vo.setOfferGoodsCode(marketMaterial.getOfferGoodsCode());
             vo.setGoodsName(marketMaterial.getGoodsName());
             vo.setOfferBrand(marketMaterial.getOfferBrand());
             vo.setOfferPrice(marketMaterial.getOfferPrice());
             vo.setSkuId(marketMaterial.getSkuId());
-            vo.setCount(marketMaterial.getQuantity());
-            vo.setSignCount(marketMaterial.getQuantity());
-            vo.setNotTaxUnitPrice(marketMaterial.getNoTaxPrice());
-            vo.setSignUnitPriceExclTax(marketMaterial.getNoTaxPrice());
-            vo.setTaxRate(marketMaterial.getTaxRate());
-            vo.setSignTaxRate(marketMaterial.getTaxRate());
+            vo.setCount(marketMaterial.getQuantity().setScale(2, RoundingMode.HALF_UP));
+            vo.setSignCount(marketMaterial.getQuantity().setScale(2, RoundingMode.HALF_UP));
+            vo.setNotTaxUnitPrice(marketMaterial.getNoTaxPrice().setScale(2, RoundingMode.HALF_UP));
+            vo.setSignUnitPriceExclTax(marketMaterial.getNoTaxPrice().setScale(2, RoundingMode.HALF_UP));
+            vo.setTaxRate(marketMaterial.getTaxRate().setScale(2, RoundingMode.HALF_UP));
+            vo.setSignTaxRate(marketMaterial.getTaxRate().setScale(2, RoundingMode.HALF_UP));
 
             BigDecimal taxUnitPrice = marketMaterial.getNoTaxPrice().multiply(marketMaterial.getTaxRate().divide(BigDecimal.valueOf(100))).add(marketMaterial.getNoTaxPrice());
-            vo.setTaxUnitPrice(taxUnitPrice);
-            vo.setSignUnitPriceInclTax(taxUnitPrice);
+            vo.setTaxUnitPrice(taxUnitPrice.setScale(2, RoundingMode.HALF_UP));
+            vo.setSignUnitPriceInclTax(taxUnitPrice.setScale(2, RoundingMode.HALF_UP));
             // 含税金额 = 含税单价 * 数量
             BigDecimal taxPrice = AmountCalUtil.calTotalAmountInclTax(vo.getCount(), vo.getTaxUnitPrice());
-            vo.setTaxPrice(taxPrice);
-            vo.setSignAmountInclTax(taxPrice);
+            vo.setTaxPrice(taxPrice.setScale(2, RoundingMode.HALF_UP));
+            vo.setSignAmountInclTax(taxPrice.setScale(2, RoundingMode.HALF_UP));
             // 不含税金额 = 含税金额 / (1 * 税率%)
             BigDecimal notTaxPrice = AmountCalUtil.calTotalAmountExclTax(taxPrice, vo.getTaxRate());
-            vo.setNotTaxPrice(notTaxPrice);
-            vo.setSignAmountExclTax(notTaxPrice);
+            vo.setNotTaxPrice(notTaxPrice.setScale(2, RoundingMode.HALF_UP));
+            vo.setSignAmountExclTax(notTaxPrice.setScale(2, RoundingMode.HALF_UP));
             // 税额 = 含税金额 - 不含税金额
             BigDecimal taxAmount = AmountCalUtil.calTaxAmount(taxPrice, notTaxPrice);
             vo.setTaxAmount(taxAmount);
