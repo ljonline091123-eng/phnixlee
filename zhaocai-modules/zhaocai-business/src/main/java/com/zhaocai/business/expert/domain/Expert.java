@@ -116,5 +116,32 @@ public class Expert extends BaseEntity
     @ApiModelProperty(value =  "相关专业工作简历")
     private String professionResume;
 
-
+    @Override
+    public String toString() {
+        return "\nExpert{" +
+                "expertName='" + expertName + '\'' +
+                ", expertPhone='" + expertPhone + '\'' +
+                ", belongOrganization='" + belongOrganization + '\'' +
+                ", department='" + department + '\'' +
+                ", educationDegree=" + educationDegree +
+                ", major='" + major + '\'' +
+                ", businessType=" + businessType +
+                ", expertType=" + expertType +
+                ", expertState=" + expertState +
+                ", state=" + state +
+                ", wfProcessId='" + wfProcessId + '\'' +
+                ", processType=" + processType +
+                ", operateComment='" + operateComment + '\'' +
+                ", userId=" + userId +
+                ", registeredCertificate=" + registeredCertificate +
+                ", registeredCertificateDate=" + registeredCertificateDate +
+                ", presentJob='" + presentJob + '\'' +
+                ", presentJobDate=" + presentJobDate +
+                ", technicalTitles=" + technicalTitles +
+                ", technicalTitlesDate=" + technicalTitlesDate +
+                ", presentUnitDept='" + presentUnitDept + '\'' +
+                ", email='" + email + '\'' +
+                ", professionResume='" + professionResume + '\'' +
+                '}'+"\n";
+    }
 }
