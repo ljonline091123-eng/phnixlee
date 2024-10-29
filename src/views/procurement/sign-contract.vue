@@ -108,7 +108,7 @@
         <template slot-scope="scope">
           <a
             class="link-type"
-            @click="goDetailBid(scope.row.schemeId, scope.row.noticeId, scope.row.procurementType)"
+            @click="goDetailBid(scope.row.schemeId, scope.row.noticeId, scope.row.procurementType,scope.row.procurementTypeText)"
           >
             {{ scope.row.procurementSchemeCode }}
           </a>
@@ -139,7 +139,7 @@
             class="link-type"
             @click="goDetailBid(scope.row.schemeId, scope.row.noticeId, scope.row.procurementType)"
           >
-            {{ scope.row.procurementTypeText }}
+            {{ scope.row.procurementTypeText?scope.row.procurementTypeText:'易料采购' }}
           </a>
         </template>
       </el-table-column>
@@ -1217,7 +1217,7 @@
        <el-table-column
          label="支出业务类型"
          align="center"
-         prop="expenditureBusinessType"
+         prop="expenditureBusinessTypeText"
        />
 
      </el-table>
@@ -1505,14 +1505,19 @@ export default {
       param = encodeURIComponent(param); //避免base64编码中出现"/"时路由404
       this.$router.push(`/procurement/contract-detail/${param}`);
     },
-    goDetailBid(id, noticeId,procurementType) {
+    goDetailBid(id, noticeId,procurementType,procurementTypeText) {
       // this.$router.push({
       //   path: "/procurement/contract-detail",
       //   query: { getId: id, type },
       // });
-      let param = Base64.encode(JSON.stringify({ id, noticeId,procurementType }));
+      if(procurementTypeText){
+        let param = Base64.encode(JSON.stringify({ id, noticeId,procurementType }));
       param = encodeURIComponent(param); //避免base64编码中出现"/"时路由404
       this.$router.push(`/procurement/tendering/${param}`);
+      }else{
+        this.$message.warning("易料采购的合同无法通过招标编号进行透视");
+      }
+
     },
     submitFirstForm() {
       console.log(this.form, "this.form----0");

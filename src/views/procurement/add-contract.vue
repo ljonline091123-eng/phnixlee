@@ -3,8 +3,9 @@
     <BackButton path="/procurement/sign-contract" title="新增合同信息">
       <div>
         <el-button type="primary" size="mini" @click="submitForm"
-          >保存</el-button
-        >
+          >保存</el-button>
+          <el-button type="primary" size="mini" @click="avoidSubmitForm"
+          >免审提交</el-button>
       </div>
     </BackButton>
     <div class="context">
@@ -44,7 +45,7 @@
               <el-col :span="8">
                 <el-form-item label="合同名称：" prop="agreement.agreementName"
                   :rules="[{ required: true, trigger: 'blur', message: '请输入合同名称' }]">
-                  <el-input disabled v-model="firstForm.agreement.agreementName" placeholder="请输入合同名称" clearable/>
+                  <el-input  v-model="firstForm.agreement.agreementName" placeholder="请输入合同名称" clearable/>
                 </el-form-item>
               </el-col>
               <el-col :span="8">
@@ -243,7 +244,7 @@
             </el-row>
             <el-row v-if="contractType==1" :gutter="10">
               <el-col :span="8" class="grid-cell">
-                <el-form-item label=" 合同模板：" prop="contractTemplateName">
+                <el-form-item label=" 合同模板："  :rules="[{ required: true, trigger: 'blur', message: '请选择模板' }]"  prop="agreement.contractTemplateName">
                   <!-- <template v-if="formData.contractTemplateName">
                     <a href="javascript:;" @click="getBcTemplateList(1)">{{
                       formData.contractTemplateName
@@ -518,7 +519,7 @@
               <el-table-column prop="notTaxUnitPrice" label="不含税单价(元)" width="160" align="right"/>
               <el-table-column prop="taxUnitPrice" label="含税单价(元)" width="150" align="right"/>
               <el-table-column prop="taxRateText" label="税率(%)" width="100" align="right"/>
-              <el-table-column prop="taxAmountText" label="税额" width="150" align="right"/>
+              <el-table-column prop="taxAmountText" label="税额" width="150" align="right"/> 
               <el-table-column prop="remark" align="center" width="180" label="备注">
                 <template slot-scope="scope">
                   <el-form-item :prop="'agreementMaterialsLists.' + scope.$index + '.remark'" label-width="0">
@@ -526,10 +527,12 @@
                   </el-form-item>
                 </template>
               </el-table-column>
-              <el-table-column prop="offerGoodsCode" align="center" width="180" label="易料市集商品编码"/>
+              <el-table-column prop="skuId" align="center" width="180" label="易料市集商品编码"/>
                 <el-table-column prop="goodsName" align="center" width="180" label="易料市集商品名称"/>
-                  <el-table-column prop="offerBrand" align="center" width="180" label="易料市集品牌"/>
-                 <el-table-column prop="offerPrice" align="center" width="180" label="易料市集含税单价"/>
+                  <el-table-column prop="offerBrand" align="center" width="180" label="易料市集品牌"/> 
+                  <el-table-column  prop="offerPrice" align="center" width="180" label="易料市集含税单价"/>
+                  <el-table-column width="1"/>
+                
             </el-table>
             <el-table v-else  :data="firstForm.agreementMaterialsLists" style="width: 100%">
               <el-table-column prop="materialsCode" label="物资编码" width="150" show-overflow-tooltip/>
@@ -1416,7 +1419,7 @@
 import { Base64 } from "js-base64";
 import { create, all } from "mathjs";
 import commonTitle from "@/views/procurement/components/common-title.vue";
-import { getAgreementCreateInfo, saveAgreement, listUnderlingDict, listDeviceClass, listDevice, listMaterialsClass, listMaterials, deviceFeatureList, deviceFeatureValueList, listMaterialsFeature, listMaterialsFeatureValue, getAgreementCreateInfoYl,agreementCreateAttachmentHandle } from "@/api/procurement/contract";
+import { getAgreementCreateInfo, saveAgreement, listUnderlingDict, listDeviceClass, listDevice, listMaterialsClass, listMaterials, deviceFeatureList, deviceFeatureValueList, listMaterialsFeature, listMaterialsFeatureValue, getAgreementCreateInfoYl,agreementCreateAttachmentHandle,avoidSubmitByMarket } from "@/api/procurement/contract";
 import { offerService, offerRepo } from "@/utils/const"
 import { cardid, isvalidatemobile, validatenull } from "@/utils/validate"
 import BackButton from "@/components/BackButton/index.vue"
@@ -1434,6 +1437,7 @@ export default {
   data() {
     return {
       //模板
+      isAvoidSubmit:false,
       bcTemplateTitle: "",
       bcTemplateVisableLoading: false,
       generalTemplateLoading: false,
@@ -1786,6 +1790,17 @@ export default {
         })
         .catch(() => {});
     },
+    avoidSubmitForm(){
+      this.$confirm("确定免审提交", "提示", {
+        confirmButtonText: "确定",
+        cancelButtonText: "取消",
+        type: "warning",
+      }).then(() => {
+        this.isAvoidSubmit=true
+        this.submitForm();
+      });
+    },
+   
     submitForm() {
       this.$refs.firstForm.validate((valid, obj) => {
         let isNull = validatenull(obj);
@@ -1877,6 +1892,12 @@ export default {
           .then((res) => {
             if (res.success) {
               _this.$message.success("保存成功");
+              if(_this.isAvoidSubmit){
+                // this.$route.query.id
+                avoidSubmitByMarket(res?.data?.id).then((res) => {
+                    
+                })
+              }
               let param = Base64.encode(
                 JSON.stringify({
                   id: res?.data?.id,
@@ -2348,7 +2369,7 @@ export default {
               "partyBLegalPhone",
               "partyBName",
               "subjectMatterName",
-              "expenditureBusinessType",
+              "expenditureBusinessType","partyBResponsibleIdCard","partyBResponsibleName","partyBResponsiblePhone"
             ];
             agreementNeedShowList.forEach((item) => {
               this.$set(this.firstForm.agreement, item, res?.data[item]);

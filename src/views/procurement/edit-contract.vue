@@ -3,7 +3,9 @@
     <BackButton path="/procurement/sign-contract" title="修改合同信息">
       <div>
         <el-button type="primary" size="mini" @click="submitForm">保存</el-button>
+        <el-button type="primary" size="mini" @click="avoidSubmitForm">免审提交</el-button>
       </div>
+    
     </BackButton>
     <div class="context">
       <el-form ref="firstForm" :model="firstForm" label-width="210px">
@@ -43,7 +45,7 @@
               <el-col :span="8">
                 <el-form-item label="合同名称：" prop="agreement.agreementName"
                   :rules="[{ required: true, trigger: 'blur', message: '请输入合同名称' }]">
-                  <el-input disabled v-model="firstForm.agreement.agreementName" placeholder="请输入合同名称" clearable/>
+                  <el-input  v-model="firstForm.agreement.agreementName" placeholder="请输入合同名称" clearable/>
                 </el-form-item>
               </el-col>
               <el-col :span="8">
@@ -1241,7 +1243,7 @@
 import { Base64 } from "js-base64";
 import { create, all } from "mathjs"
 import commonTitle from "@/views/procurement/components/common-title.vue";
-import { getAgreementCreateInfo,getAgreementAttachmentId,getAgreementDetail,getLabelAttachmentId, saveAgreement, listUnderlingDict, listDeviceClass, listDevice, listMaterialsClass, listMaterials, deviceFeatureList, deviceFeatureValueList, listMaterialsFeature, listMaterialsFeatureValue } from "@/api/procurement/contract";
+import { getAgreementCreateInfo,getAgreementAttachmentId,getAgreementDetail,getLabelAttachmentId, saveAgreement, listUnderlingDict, listDeviceClass, listDevice, listMaterialsClass, listMaterials, deviceFeatureList, deviceFeatureValueList, listMaterialsFeature, listMaterialsFeatureValue,  avoidSubmitByMarket} from "@/api/procurement/contract";
 import { offerService, offerRepo } from "@/utils/const"
 import { cardid, isvalidatemobile, validatenull } from "@/utils/validate"
 import BackButton from "@/components/BackButton/index.vue"
@@ -1253,6 +1255,7 @@ export default {
   dicts: [ 'sys_yes_no', 'expenditureBusinessType'],
   data() {
     return {
+      isAvoidSubmit:false,
       id:null,
       contractType : 1,  // 1-物资采购类  2-物资租赁类  3-机械租赁类  4-专业分包类  5-劳务分包类  6-其它
       priceType:'',
@@ -1354,6 +1357,7 @@ export default {
     })
   },
   methods: {
+    
     async loadAgreementAttachmentId() {
       const agreementId = this.id;
       if (agreementId) {
@@ -1440,6 +1444,16 @@ export default {
       }).catch(() => {
       })
     },
+    avoidSubmitForm(){
+      this.$confirm("确定免审提交", "提示", {
+        confirmButtonText: "确定",
+        cancelButtonText: "取消",
+        type: "warning",
+      }).then(() => {
+        this.isAvoidSubmit=true
+        this.submitForm();
+      });
+    },
     submitForm() {
       this.$refs.firstForm.validate((valid, obj) => {
         let isNull = validatenull(obj)
@@ -1516,6 +1530,11 @@ export default {
         saveAgreement(params).then(res => {
           if (res.success) {
             _this.$message.success('保存成功')
+            if(_this.isAvoidSubmit){
+                avoidSubmitByMarket(res?.data?.id).then((res) => {
+                    
+                })
+              }
             let param = Base64.encode(JSON.stringify({id:res?.data?.id,type:res?.data?.procurementPlanType,agreementName:this.firstForm.agreement.agreementName}));
             param = encodeURIComponent(param); //避免base64编码中出现"/"时路由404
             _this.$router.replace(`/procurement/contract-detail/${param}`);
