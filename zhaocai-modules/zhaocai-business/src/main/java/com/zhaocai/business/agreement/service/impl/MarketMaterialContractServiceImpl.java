@@ -263,7 +263,14 @@ public class MarketMaterialContractServiceImpl extends ServiceImpl<MarketMateria
      */
     private String getAgreementPerformDistrict(String prjAddr) {
         if (StringUtils.isNotBlank(prjAddr)) {
-            List<String> addrList = JSONArray.parseArray(prjAddr,String.class);
+            List<String> addrList = new ArrayList<>();
+            try {
+                addrList = JSONArray.parseArray(prjAddr, String.class);
+            } catch (Exception e) {
+                // 处理解析异常，例如记录日志
+                e.printStackTrace();
+                addrList.add(prjAddr); // 如果解析失败，直接使用原始字符串
+            }
             StringBuilder agreementPerformDistrict = new StringBuilder();
             for(String code : addrList) {
                 AreaDivision areaDivision = areaDivisionService.getByCode(code);
