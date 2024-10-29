@@ -453,9 +453,7 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
         if (StringUtils.isEmpty(agreement.getMarketMaterialContractId())) {
             materialsLists = agreementMaterialsListService.listAgreementMaterials(id);
         } else {
-            List<AgreementMaterialsList> lists = agreementMaterialsListService.list(new LambdaQueryWrapper<AgreementMaterialsList>()
-                    .eq(AgreementMaterialsList::getAgreementId, id));
-            materialsLists = BeanCopierUtil.copyList(lists,AgreementMaterialsListVO.class);
+            materialsLists = agreementMaterialsListService.listAgreementMaterialsByMarket(id);
         }
         // 设置价格类型
         // 购买材料，设置价款类型、交易标的物类型
@@ -1500,13 +1498,21 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
         /* 获取原来的价格，累加现在的价格后再减去上次保存的价格。使更新方法数据保持一致 */
         List<AgreementMaterialsList> agreementMaterialsLists = agreementMaterialsListService.list(new LambdaQueryWrapper<AgreementMaterialsList>().eq(AgreementMaterialsList::getAgreementId, agreement.getId()));
         // 更新方法  合约拆分是否已使用完毕
-        contractPlanningSplitService.updateContractPlanningSplitUseAdd(agreement.getContractSplitId(),agreementMaterialsInfo.getMaterialsLists(),requestVO.getAgreementMaterialsLists(),agreementMaterialsLists);
-
+        if (StringUtils.isEmpty(requestVO.getAgreement().getMarketMaterialContractId())) {
+            contractPlanningSplitService.updateContractPlanningSplitUseAdd(agreement.getContractSplitId(),agreementMaterialsInfo.getMaterialsLists(),requestVO.getAgreementMaterialsLists(),agreementMaterialsLists);
+        }
 
 
         AgreementSaveVO saveVO = new AgreementSaveVO();
         saveVO.setId(agreement.getId());
-        saveVO.setProcurementPlanType(procurementScheme.getProcurementPlanType());
+        if (StringUtils.isEmpty(requestVO.getAgreement().getMarketMaterialContractId())) {
+            saveVO.setProcurementPlanType(procurementScheme.getProcurementPlanType());
+        } else {
+            MarketMaterialContract contract = marketMaterialContractService.getById(requestVO.getAgreement().getMarketMaterialContractId());
+            if(null != contract && null != contract.getExpenditureBusinessType()){
+                saveVO.setProcurementPlanType(Integer.valueOf(contract.getExpenditureBusinessType()));
+            }
+        }
         return saveVO;
     }
 

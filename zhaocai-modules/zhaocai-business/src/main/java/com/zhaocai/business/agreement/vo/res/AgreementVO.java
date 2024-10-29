@@ -226,4 +226,7 @@ public class AgreementVO extends AdviceObject {
 
     @ApiModelProperty(value ="合同标签附件Url")
     private String labelAttachmentUrl;
+
+    @ApiModelProperty(value = "易料采购合同id")
+    private String marketMaterialContractId;
 }
