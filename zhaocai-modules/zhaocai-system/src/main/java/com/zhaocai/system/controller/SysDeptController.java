@@ -254,6 +254,12 @@ public class SysDeptController extends BaseController
         return deptService.getTwoLevelDepts();
     }
 
+    @GetMapping("/getThreeLevelDepts")
+    @InnerAuth
+    public List<SysDept> getThreeLevelDepts() {
+        return deptService.getThreeLevelDepts();
+    }
+
     /**
      * 根据第三方部门 id 获取组织机构信息(本部门及以下部门，含项目部)
      * @param thridDeptId

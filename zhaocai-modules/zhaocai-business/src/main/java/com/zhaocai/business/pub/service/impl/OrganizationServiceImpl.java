@@ -71,7 +71,8 @@ public class OrganizationServiceImpl implements IOrganizationService {
 //        List<SysDept> filterList = sysDeptList.stream()
 //                .filter(x -> "syncthird".equals(x.getOrigin()) && !"X".equals(x.getThridOrgType()) && !"BM".equals(x.getThridOrgType()))
 //                .collect(Collectors.toList());
-        List<SysDept> sysDeptList = remoteSystemService.getTwoLevelDepts(SecurityConstants.INNER);
+//        List<SysDept> sysDeptList = remoteSystemService.getTwoLevelDepts(SecurityConstants.INNER);
+        List<SysDept> sysDeptList = remoteSystemService.getThreeLevelDepts(SecurityConstants.INNER);
         return buildOrganizationTree(sysDeptList);
     }
 
