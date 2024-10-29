@@ -268,9 +268,7 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
         //保存招标文件附件
         attachmentService.addAttachment(expertVO.getResumeAttachList(), AttachmentTypeEnum.EXPERT_RESUME, expert.getId());
 
-        System.out.println("[专家新增提交]"+(res && (expert!=null && expert.getState()!=null && (submitFlag || expert.getState().equals(ExpertStateEnum.REJECT.getState()) || expert.getState().equals(ExpertStateEnum.SAVE.getState()))) ));
-        System.out.println(res);
-        System.out.println(expert);
+        expert = getById(expertVO.getId());
 
         if (res && (expert!=null && expert.getState()!=null && (submitFlag || expert.getState().equals(ExpertStateEnum.REJECT.getState()) || expert.getState().equals(ExpertStateEnum.SAVE.getState()))) ){
             //提交审批信息
