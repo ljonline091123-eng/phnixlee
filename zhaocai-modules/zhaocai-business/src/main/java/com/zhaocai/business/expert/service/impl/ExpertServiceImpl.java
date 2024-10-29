@@ -384,7 +384,7 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
         String businessId = variables.get("businessId").toString();
         super.update(new LambdaUpdateWrapper<Expert>()
                 .set(Expert::getExpertState,NumberConstant.ZERO)/* 启用状态 */
-                .set(Expert::getState,ExpertStateEnum.SAVE.getState())/* 审批状态 */
+                .set(Expert::getState,ExpertStateEnum.REJECT.getState())/* 审批状态 */
                 .set(Expert::getOperateComment,variables.get("operateComment")==null?"":variables.get("operateComment").toString())
                 .eq(Expert::getId, businessId));
     }
