@@ -179,6 +179,9 @@ public class ContractMaterialsListVO extends AdviceObject {
     @ApiModelProperty(value = "易料市集品牌")
     private String offerBrand;
 
+    @ApiModelProperty(value = "易料市集商品id")
+    private String skuId;
+
     public ContractMaterialsListVO(ContractPlanMaterialListDTO dto,Integer procurementType) {
         this.materialsId = dto.getId();
         this.materialsUniqueId = dto.getSubjectDtlUniqueId();

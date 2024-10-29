@@ -136,4 +136,10 @@ public class MarketMaterialList {
     @ApiModelProperty(value = "易料市集商品名")
     private String goodsName;
 
+    /**
+     * 易料市集商品id
+     */
+    @ApiModelProperty(value = "易料市集商品id")
+    private String skuId;
+
 }

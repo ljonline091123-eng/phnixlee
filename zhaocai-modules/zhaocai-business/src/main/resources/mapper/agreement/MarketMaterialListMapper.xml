@@ -23,5 +23,6 @@
         <result property="offerSupplierName" column="offer_supplier_name"/>
         <result property="offerSupplierCode" column="offer_supplier_code"/>
         <result property="goodsName" column="goods_name"/>
+        <result property="skuId" column="sku_id"/>
     </resultMap>
 </mapper>

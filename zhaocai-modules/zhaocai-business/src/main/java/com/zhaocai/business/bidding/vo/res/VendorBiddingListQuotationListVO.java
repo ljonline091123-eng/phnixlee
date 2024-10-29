@@ -139,6 +139,9 @@ public class VendorBiddingListQuotationListVO extends AdviceObject {
     @ApiModelProperty(value = "易料市集含税单价")
     private BigDecimal offerPrice;
 
+    @ApiModelProperty(value = "易料市集商品id")
+    private String skuId;
+
     @MoneyFormat(filedName = "count")
     @ApiModelProperty(value = "数量")
     private String countText;
