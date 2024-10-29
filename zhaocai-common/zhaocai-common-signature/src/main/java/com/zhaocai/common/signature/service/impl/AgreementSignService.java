@@ -40,6 +40,8 @@ public class AgreementSignService extends ServiceImpl<AgreementSignMapper, Agree
      * @param signMessage
      */
     public void updateSignMessage(Long id, String signMessage) {
+        System.out.println("主键 signMessage for ID: " + id);
+        System.out.println("长度 signMessage length: " + signMessage.length());
         this.update(new LambdaUpdateWrapper<AgreementSign>()
                 .set(AgreementSign::getSignMessage,signMessage)
                 .set(AgreementSign::getUpdateTime,new Date())
@@ -70,7 +72,7 @@ public class AgreementSignService extends ServiceImpl<AgreementSignMapper, Agree
     }
 
     /**
-     * 修改状态
+     * 修改状态 {@link com.zhaocai.common.signature.mapper.AgreementSignMapper}
      * @param state
      * @param id
      */
