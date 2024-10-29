@@ -353,4 +353,10 @@ public class Agreement extends BaseEntity {
     @ApiModelProperty(value = "易料采购合同id")
     private String marketMaterialContractId;
 
+    /**
+     * 易料采购合同招标编码
+     */
+    @ApiModelProperty(value = "易料采购合同招标编码")
+    private String procurementSchemeCode;
+
 }

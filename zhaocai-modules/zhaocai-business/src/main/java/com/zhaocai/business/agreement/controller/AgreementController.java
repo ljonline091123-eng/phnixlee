@@ -192,4 +192,13 @@ public class AgreementController extends BladeController {
         agreementService.cancelledSignAgreement(requestVO);
         return ResultData.success();
     }
+
+    /**
+     * 易料合同免审提交
+     * @return
+     */
+    @GetMapping("/avoidSubmitByMarket")
+    public ResultData<Boolean> avoidSubmitByMarket(@RequestParam Long id) {
+        return ResultData.data(agreementService.avoidSubmitByMarket(id));
+    }
 }

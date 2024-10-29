@@ -82,4 +82,7 @@ public class AgreementListVO extends AdviceObject {
 
     @ApiModelProperty(value = "采购方案id")
     private Long schemeId;
+
+    @ApiModelProperty(value = "易料采购合同id")
+    private String marketMaterialContractId;
 }

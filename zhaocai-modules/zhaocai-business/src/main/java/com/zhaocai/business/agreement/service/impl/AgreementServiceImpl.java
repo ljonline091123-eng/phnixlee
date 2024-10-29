@@ -5,6 +5,7 @@ import cn.hutool.core.date.DateUnit;
 import cn.hutool.core.date.DateUtil;
 import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.io.IoUtil;
+import cn.hutool.core.util.StrUtil;
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONArray;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -205,6 +206,9 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
         IPage<AgreementListVO> ipage = baseMapper.selectPageList(queryVO.toMybatisPage(),queryVO);
         for (AgreementListVO agreement : ipage.getRecords()) {
             agreement.setIsOperate(getAgreementIsOperate(agreement.getAgreementState(),agreement.getCreateById(),agreement.getSignatureUserId()));
+            if (null != agreement.getMarketMaterialContractId()) {
+                agreement.setProcurementTypeText("易料采购");
+            }
         }
         return new PageResult<>(ipage);
     }
@@ -1064,6 +1068,20 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
     }
 
     /**
+     * 免审登录（易料合同）
+     * @param id
+     * @return
+     */
+    @Override
+    public boolean avoidSubmitByMarket(Long id) {
+        Agreement agreement = super.getById(id);
+        ValidateUtils.isNullException(agreement,"该合同不存在");
+        return super.update(new LambdaUpdateWrapper<Agreement>()
+                .set(Agreement::getAgreementState, AgreementStateEnum.APPROVE)
+                .eq(BaseEntity::getId, id));
+    }
+
+    /**
      * 审批驳回到发起人
      * @param variables
      */
@@ -1184,13 +1202,15 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
             ProcurementScheme procurementScheme = procurementSchemeService.getById(requestVO.getAgreement().getSchemeId());
             ValidateUtils.isNullException(procurementScheme, "该合同对应的采购计划为空");
             procurementPlanType = procurementScheme.getProcurementPlanType();
+            agreement.setAgreementCode(getAgreementCode(procurementPlanType,agreement.getBelongOrganizationId()));
         } else {
             MarketMaterialContract contract = marketMaterialContractService.getById(requestVO.getAgreement().getMarketMaterialContractId());
             ValidateUtils.isNullException(contract, "该合同对应的易料采购合同为空");
             procurementPlanType = Integer.valueOf(contract.getExpenditureBusinessType());
+            agreement.setAgreementCode(getAgreementCodeByMarket(procurementPlanType,agreement.getBelongOrganizationId()));
+            agreement.setProcurementSchemeCode(getProcurementSchemeCodeByMarket());
         }
         // 合同基本信息
-        agreement.setAgreementCode(getAgreementCode(procurementPlanType,agreement.getBelongOrganizationId()));
         agreement.setAgreementState(AgreementStateEnum.DRAFT.getState());
 
         /*
@@ -1274,6 +1294,42 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
         saveVO.setProcurementPlanType(procurementPlanType);
 
         return saveVO;
+    }
+
+    /**
+     * 获取合同招标编号(易料合同)
+     * @return
+     */
+    private String getProcurementSchemeCodeByMarket() {
+        List<Agreement> list = super.list(new LambdaQueryWrapper<Agreement>().isNotNull(Agreement::getMarketMaterialContractId).orderByDesc(BaseEntity::getCreateTime));
+        String numberCode = null;
+        if(CollectionUtil.isEmpty(list)){
+            numberCode = "000000001";
+        } else {
+            String code = list.get(0).getProcurementSchemeCode();
+            if (code != null && code.length() >= 9) {
+                String lastNineDigits = code.substring(code.length() - 9);
+                int nextNumber = Integer.parseInt(lastNineDigits) + 1;
+                numberCode = StrUtil.padPre(String.valueOf(nextNumber), 9, '0');
+            } else {
+                numberCode = "000000001";
+            }
+        }
+        return "YLCG"  + DateUtils.dateTimeNow("yyyy") + numberCode;
+    }
+
+    /**
+     * 获取合同编号(易料合同)
+     * @param expenditureBusinessType
+     * @param belongOrganizationId
+     * @return
+     */
+    private String getAgreementCodeByMarket(Integer expenditureBusinessType, String belongOrganizationId) {
+        String numberCode = businessCodeService.getBusinessCode(BusinessCodeEnum.AGREEMENT);
+        belongOrganizationId = belongOrganizationId.substring(0,4);
+//        String businessType = ProcurementPlanTypeConver.converFromProcurementPlanType(expenditureBusinessType);
+
+        return "WZ" + belongOrganizationId + "Y" + DateUtils.dateTimeNow("yyyyMM") + numberCode;
     }
 
     /**
