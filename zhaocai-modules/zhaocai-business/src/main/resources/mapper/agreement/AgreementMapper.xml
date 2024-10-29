@@ -82,13 +82,14 @@
         <result property="schemeId" column="schemeId"/>
         <result property="procurementType" column="procurement_type"/>
         <result property="procurementSchemeCode" column="procurement_scheme_code"/>
+        <result property="marketMaterialContractId" column="market_material_contract_id"/>
     </resultMap>
 
     <select id="selectPageList" resultMap="AgreementListResult">
         select * from (
         select ta.id,ta.agreement_code,ta.agreement_name,ta.party_a_name,ta.party_b_name,ta.create_id,ta.signature_user_id,
             ta.create_by,ta.agreement_state,total_amount_inc_tax,ta.expenditure_business_type,ta.wf_process_id,sd.dept_id,notice.id AS noticeId,ta.scheme_id AS schemeId,tps.procurement_type,tps.procurement_scheme_code
-            ,ta.create_time
+            ,ta.create_time,ta.market_material_contract_id
         from tb_agreement ta
         inner join tb_procurement_scheme tps on ta.scheme_id = tps.id and tps.project_code = #{queryVO.projectCode,jdbcType=VARCHAR}
         left join sys_dept sd on sd.thrid_dept_id = ta.party_a_org_id
@@ -113,7 +114,7 @@
         union
         select ta.id,ta.agreement_code,ta.agreement_name,ta.party_a_name,ta.party_b_name,ta.create_id,ta.signature_user_id,
         ta.create_by,ta.agreement_state,ta.total_amount_inc_tax,ta.expenditure_business_type,ta.wf_process_id,
-        sd.dept_id,'' AS noticeId,'' AS schemeId,'' as procurement_type,'' as procurement_scheme_code,ta.create_time
+        sd.dept_id,'' AS noticeId,'' AS schemeId,'' as procurement_type,'' as procurement_scheme_code,ta.create_time,ta.procurement_scheme_code,ta.market_material_contract_id
         from tb_agreement ta
         left join sys_dept sd on sd.thrid_dept_id = ta.party_a_org_id
         <where>

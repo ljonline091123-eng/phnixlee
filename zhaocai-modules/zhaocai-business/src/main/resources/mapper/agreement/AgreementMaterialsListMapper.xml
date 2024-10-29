@@ -162,7 +162,7 @@
                tml.count,tmml.no_tax_price as not_tax_unit_price,tmml.tax_rate,taml.brand,taml.payment_type,
                taml.rental_unit,taml.workload,taml.remark,tml.floating_price,tml.unloading_fee,tml.base_price,tml.rent_mode,tml.rent_time,tml.rent_quantity,taml.sign_count,
                taml.sign_unit_price_incl_tax,taml.sign_unit_price_excl_tax,taml.sign_amount_incl_tax,taml.sign_amount_excl_tax,taml.sign_tax_rate,
-               taml.offer_goods_code,taml.goods_name,taml.offer_brand,taml.offer_price,taml.skuId
+               taml.offer_goods_code,taml.goods_name,taml.offer_brand,taml.offer_price,taml.sku_id
         from tb_agreement_materials_list taml
                  inner join tb_agreement ta on ta.id = taml.agreement_id
                  inner join tb_materials_list tml on tml.id = taml.materials_list_id
