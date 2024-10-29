@@ -241,7 +241,7 @@
                 </el-form-item>
               </el-col>
             </el-row>
-            <el-row v-if="type=='add'" :gutter="10">
+            <el-row v-if="contractType==1" :gutter="10">
               <el-col :span="8" class="grid-cell">
                 <el-form-item label=" 合同模板：" prop="contractTemplateName">
                   <!-- <template v-if="formData.contractTemplateName">
@@ -253,7 +253,7 @@
                     size="small"
                     type="primary"
                     @click="getBcTemplateList(1)"
-                    >选择模板</el-button
+                    >{{firstForm.agreement.contractTemplateName?firstForm.agreement.contractTemplateName:'选择模板'}}</el-button
                   >
                 </el-form-item>
               </el-col>
@@ -526,7 +526,7 @@
                   </el-form-item>
                 </template>
               </el-table-column>
-              <el-table-column prop="skuId" align="center" width="180" label="易料市集商品编码"/>
+              <el-table-column prop="offerGoodsCode" align="center" width="180" label="易料市集商品编码"/>
                 <el-table-column prop="goodsName" align="center" width="180" label="易料市集商品名称"/>
                   <el-table-column prop="offerBrand" align="center" width="180" label="易料市集品牌"/>
                  <el-table-column prop="offerPrice" align="center" width="180" label="易料市集含税单价"/>
@@ -1599,6 +1599,7 @@ export default {
         this.$message.error("请先选择一个模板");
         return;
       }
+      this.firstForm.agreement.contractTemplateName=this.templateRow.templateName
       // this.attachmentId = templateId
       // this.firstForm.agreement.attachmentId = templateId;
       // this.attachmentId = this.templateRow.attachmentId;
@@ -2308,7 +2309,6 @@ export default {
     },
     "$route.query.id": {
       handler(newVal) {
-        console.log("11111111")
         if (newVal && this.$route.query.type=='add') {
           getAgreementCreateInfoYl(newVal).then((res) => {
             this.getContractTypeList();
@@ -2321,6 +2321,7 @@ export default {
               this.$route.query.agreementName;
               this.firstForm.agreement.marketMaterialContractId = res.data.marketMaterialContractId
             this.agreementFileUrl = res.data.agreementFileUrl;
+            
             this.agreementFileName = res.data.agreementFileName;
             this.firstForm.agreement.agreementNameYl =
               this.$route.query.agreementName;
