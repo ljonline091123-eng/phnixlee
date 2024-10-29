@@ -60,6 +60,9 @@ public class BPMProcessService implements IBPMProcessService {
         requestDTO.setUserObj(variables.get("userObj")==null?null:variables.get("userObj").toString());
         String operateComment = variables.get("operateComment")==null?null:variables.get("operateComment").toString();
         requestDTO.setOperateComment(operateComment);
+        /* 下一个审批用户id */
+        if(variables.get("nextAuditUserId")!=null)
+            requestDTO.setNextAuditUserId(variables.get("nextAuditUserId")==null?null:variables.get("nextAuditUserId").toString());
         String projectCode = variables.get("projectCode")==null?null:variables.get("projectCode").toString();
         if (StrUtil.isNotBlank(projectCode)) {
             MinProjectVO minProjectVO = minProjectService.getMinProjectByMinAccountCode(projectCode);
