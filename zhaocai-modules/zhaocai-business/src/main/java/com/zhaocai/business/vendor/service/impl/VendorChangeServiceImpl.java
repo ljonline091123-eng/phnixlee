@@ -81,6 +81,37 @@ public class VendorChangeServiceImpl extends ServiceImpl<VendorChangeMapper,Vend
      */
     @Override
     @Transactional(propagation = Propagation.REQUIRED,rollbackFor = Exception.class)
+    public VendorChangeRequestVO getVendorUpdateDetailNew(Long vendorId) {
+        VendorChangeRequestVO vendorChangeRequestVO;
+        // 供应商变更信息
+        VendorChange vendorChange;
+
+        // 根据供应商id在供应商变更表中查找最后一次变更信息
+        List<VendorChange> vendorChangeList = super.list(new LambdaQueryWrapper<VendorChange>()
+                .eq(VendorChange::getVendorId, vendorId)
+                .orderByDesc(VendorChange::getVersion));
+        // 不存在变更版本时，创建一份VO版本
+        if (CollectionUtils.isEmpty(vendorChangeList)) {
+            vendorChange = this.createVendorChange(vendorId);
+            // 创建最新版本副本
+            vendorChangeRequestVO = this.createCopy(vendorChange);
+        } else {
+            // 存在变更版本
+            vendorChange = vendorChangeList.get(0);
+            // 获取最新版本副本
+            vendorChangeRequestVO = this.createCopy(vendorChange);
+        }
+        // 处理返回的内容
+        return this.handleReturnInfo(vendorChangeRequestVO);
+    }
+
+    /**
+     * 获取供应商修改详情
+     * @param vendorId
+     * @return
+     */
+    @Override
+    @Transactional(propagation = Propagation.REQUIRED,rollbackFor = Exception.class)
     public VendorChangeRequestVO getVendorUpdateDetail(Long vendorId) {
         VendorChangeRequestVO vendorChangeRequestVO = new VendorChangeRequestVO();
         // 供应商变更信息
