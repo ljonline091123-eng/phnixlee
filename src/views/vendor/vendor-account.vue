@@ -183,6 +183,8 @@
       :title="'新增联系人审批流程'"
       :formModel="sanctionForm"
       :rejectNodeList="rejectNodeList"
+      :nextCandidateList="nextCandidateList"
+      :nextAppointable="nextAppointable"
       @update:visible="vendorVisible = $event"
       @submit="handleSubmit"
     />
@@ -246,6 +248,10 @@ export default {
         operateComment: "",
       },
       rejectNodeList: [],
+      /* 下一步审批人列表 */
+      nextCandidateList: [],
+      /* 下一步审批人 */
+      nextAppointable: false,
       taskPresentId: "",
       contactList: [],
       total: 0,
@@ -356,6 +362,10 @@ export default {
             processId: row.wfProcessId, //流程id
           });
           this.rejectNodeList = res.data.completedTaskList;
+          /* 下一步审批人列表 */
+          this.nextCandidateList = res.data.nextCandidateList;
+          /* 下一步审批人是否可选 */
+          this.nextAppointable = res.data.nextAppointable;
           this.taskPresentId = res.data.curTaskId;
           // this.isShowButton = res.data.auditable;
         }

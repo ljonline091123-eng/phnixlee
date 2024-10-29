@@ -137,9 +137,9 @@
                   ></el-option>
                 </el-select>
               </el-form-item>
-        
+
             </el-col>
-        
+
             <el-col :span="8" class="grid-cell">
               <el-form-item
                 label="专业"
@@ -153,7 +153,7 @@
                   :disabled="isSubmit"
                 />
               </el-form-item>
-              
+
             </el-col>
           </el-row>
           <el-row :gutter="40">
@@ -383,7 +383,7 @@
                   :on-success="fileSuccess"
                   :file-list="formData.resumeAttachList"
                   :on-remove="fileRemove"
-                  :on-preview="handlePreview" 
+                  :on-preview="handlePreview"
                 >
                   <el-button size="small" type="primary">点击上传</el-button>
                 </el-upload>
@@ -399,6 +399,8 @@
       :title="'新增专家审批流程'"
       :formModel="sanctionForm"
       :rejectNodeList="rejectNodeList"
+      :nextCandidateList="nextCandidateList"
+      :nextAppointable="nextAppointable"
       @update:visible="expertVisible = $event"
       @submit="handleSubmit"
     />
@@ -460,6 +462,10 @@ export default {
         operateComment: "",
       },
       rejectNodeList: [],
+      /* 下一步审批人列表 */
+      nextCandidateList: [],
+      /* 下一步审批人 */
+      nextAppointable: false,
       formData: {
         expertName: "",
         expertPhone: "",
@@ -470,7 +476,7 @@ export default {
         businessType: "",
         expertType: "",
         registeredCertificate: "",
-        
+
       }, //form表单数据
       planList: [],
       rules: {
@@ -525,9 +531,9 @@ export default {
   },
   created() {
 
-  
-   
-   
+
+
+
     if(this.$route.query.id){
       this.id = Base64.decode(this.$route.query.id);
       this.getInfoDetail(this.id)
@@ -560,7 +566,7 @@ export default {
       belongOrganization: thridOrgName,
     });
   }
-      
+
     }
   },
   methods: {
@@ -632,6 +638,10 @@ export default {
             processId: this.formData.wfProcessId, //流程id
           });
           this.rejectNodeList = res.data.completedTaskList;
+          /* 下一步审批人列表 */
+          this.nextCandidateList = res.data.nextCandidateList;
+          /* 下一步审批人是否可选 */
+          this.nextAppointable = res.data.nextAppointable;
           this.taskPresentId = res.data.curTaskId;
           // this.isShowButton = res.data.auditable;
         }
@@ -657,7 +667,7 @@ export default {
         this.formData.expertType=data.expertType+""
         this.formData.businessType=data.businessType+""
         this.formData.state=data.state+""
- 
+
       },
     //保存
     saveForm(formName){

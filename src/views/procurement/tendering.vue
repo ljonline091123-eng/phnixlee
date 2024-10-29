@@ -34,6 +34,8 @@
         :tenantId="tenantId"
         :authorityId="authorityId"
         :rejectNodeList="rejectNodeList"
+        :nextCandidateList="nextCandidateList"
+        :nextAppointable="nextAppointable"
         :taskPresentId="taskPresentId"
         :isShowApprovalDetails="isShowApprovalDetails"
         :attachmentDetails="attachmentDetails"
@@ -98,8 +100,10 @@ import ResultBid from "./components/result-bid.vue";
 import BackButton from "@/components/BackButton/index.vue";
 import TenderNotice from "@/views/procurement/components/tender-notice.vue";
 import RegistrationDetails from "@/views/procurement/components/registration-details.vue";
+import ApprovalForm from "@/components/Approval/approvalForm.vue";
 export default {
   components: {
+    ApprovalForm,
     TenderDocuments,
     BackBid,
     EvaluateBid,
@@ -153,6 +157,10 @@ export default {
       authorityId: "1",
       isShowButton: false,
       rejectNodeList: [],
+      /* 下一步审批人列表 */
+      nextCandidateList: [],
+      /* 下一步审批人 */
+      nextAppointable: false,
       taskPresentId: "1",
       isShowApprovalDetails: false,
       isDisabledDeposit: false,
@@ -204,6 +212,10 @@ export default {
           });
           this.isShowButton = response.data.auditable;
           this.rejectNodeList = response.data.completedTaskList;
+          /* 下一步审批人列表 */
+          this.nextCandidateList = res.data.nextCandidateList;
+          /* 下一步审批人是否可选 */
+          this.nextAppointable = res.data.nextAppointable;
           this.taskPresentId = response.data.curTaskId;
         }
         this.noticeDetail = res.data || {};

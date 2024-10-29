@@ -44,6 +44,8 @@
       :title="'采购方案审批流程'"
       :formModel="sanctionForm"
       :rejectNodeList="rejectNodeList"
+      :nextCandidateList="nextCandidateList"
+      :nextAppointable="nextAppointable"
       @update:visible="sanctionVisible = $event"
       @submit="handleSubmit"
     />
@@ -650,6 +652,10 @@ export default {
         operateComment: "",
       },
       rejectNodeList: [],
+      /* 下一步审批人列表 */
+      nextCandidateList: [],
+      /* 下一步审批人 */
+      nextAppointable: false,
       purchaserId: "",
       exampleId: "",
       taskPresentId: "",
@@ -851,6 +857,10 @@ export default {
             processId: this.exampleId, //流程id
           });
           this.rejectNodeList = res.data.completedTaskList;
+          /* 下一步审批人列表 */
+          this.nextCandidateList = res.data.nextCandidateList;
+          /* 下一步审批人是否可选 */
+          this.nextAppointable = res.data.nextAppointable;
           this.taskPresentId = res.data.curTaskId;
           this.isShowButton = res.data.auditable;
         }
