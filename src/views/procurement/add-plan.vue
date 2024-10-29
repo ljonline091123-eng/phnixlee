@@ -244,7 +244,7 @@
                       min-width="150" prop="skuId" show-overflow-tooltip
                     >
                       <template slot-scope="scope">
-                        <a class="link-type" @click="goDetail(scope.row.skuId)">
+                        <a class="link-type" @click="goDetail(scope.row.code)">
                           {{ scope.row.skuId }}
                         </a>
                       </template>
@@ -586,7 +586,7 @@ export default {
         cancelButtonText: "取消",
         type: "warning",
       }).then(() => {
-        this.pushMaterialProcurement();
+        this.submitFormPush('form');
       });
     },
     revokePushPlan(){
@@ -775,6 +775,128 @@ export default {
         }
       });
     },
+
+     //提交推送
+     submitFormPush(formName) {
+      console.log(this.planList,'ppp');
+      const { format } = this.mathjs
+      this.isSubmit = true;
+      this.$refs[formName].validate(async (valid,done) => {
+        if (valid) {
+          const { planList } = this
+          console.log(planList,'planListplanList--planListplanList-planListplanList');
+          if(!planList[0].children || !planList[0].children.length){
+            this.isSubmit = false;
+            this.$message({
+              message: '拆分合约不能为空',
+              type: 'error'
+            });
+            return false;
+          }
+
+          const isAll = planList[0]?.children.every(item => item.splitContractName && item.contractScope)
+          if(!isAll){
+            this.isSubmit = false;
+            this.$message({
+              message: '拆分合约规划名称/拟签约合同承包范围不能为空',
+              type: 'error'
+            });
+            return false;
+          }
+
+          // const isZero = planList[0]?.children.some(item => {
+          //   let isLoop = true;
+          //   if (isLoop) {
+          //     const hasZeroCount = item.children.some(child => {
+          //       if (Number(child.count) === 0) {
+          //         this.$message({
+          //           message: `拆分合规规划名称为${item.splitContractName}的清单中名称为“${child.materialsName}”的数量不能为0`,
+          //           type: 'error'
+          //         });
+          //         return true; // 结束循环
+          //       }
+          //       return false;
+          //     });
+          //     return hasZeroCount; // 终止外层循环
+          //   }
+          //   return false;
+          // });
+
+          // if(isZero) {
+          //   this.isSubmit = false;
+          //   return false;
+          // }
+
+          const loading = this.$loading({
+            lock: true,
+            text: '数据提交中...',
+            background: 'rgba(0, 0, 0, 0.7)'
+          });
+          const { procurementPlanName, beginDate, endDate, arrivalDate, procurementOfficer, procurementOfficerName,projectId,projectName,projectCode, priceType, regionProvinceCode, regionCityCode, paymentType, countingType } = this.formData;
+          const { contractPlanningCategory, biddingMethodCode, biddingMethodName, contractPlanningCategoryName, contractPlanningId, contractPlanningName, incurredPlannedAmount, incurredPlannedAmountText, plannedAmountInclTax, plannedAmountInclTaxText, planningBalance, planningBalanceText,bidResponsibleOrg, bidResponsibleOrgName, id, contractPlanningCode,brand } = this.currentContract
+          const splitRequestList = this.planList[0]?.children.map(item => {
+            return {
+              splitContractName:item.splitContractName,
+              contractScope:item.contractScope,
+              materialsLists:item.children.map(child => {
+                child.unitPriceInclTax = format(Number(child.unitPriceInclTax), { notation: 'fixed', precision: 4 }).toString().replace(/\.?0+$/, '') || '';
+                child.count = format(Number(child.count), { notation: 'fixed', precision: 4 }).toString().replace(/\.?0+$/, '') || '';
+                return child
+              })
+            }
+          })
+          const formData = {
+            procurementPlan:{
+              id: id || '',
+              procurementPlanName,
+              procurementPlanType:contractPlanningCategory,
+              procurementType:biddingMethodCode,
+              projectHierarchy:bidResponsibleOrgName,
+              beginDate,
+              endDate,
+              arrivalDate,
+              procurementOfficer,
+              procurementOfficerName,
+              priceType:priceType !== 'undefined'?priceType:'',
+              regionProvinceCode,
+              regionCityCode,
+              paymentType:paymentType !== 'undefined'?paymentType:'',
+              countingType:countingType !== 'undefined'?countingType:'',
+            },
+            splitRequestList,
+            contractPlanning:{
+              contractPlanningCategory, biddingMethodCode, biddingMethodName, contractPlanningCategoryName, contractPlanningId, contractPlanningName, incurredPlannedAmount, incurredPlannedAmountText, plannedAmountInclTax, plannedAmountInclTaxText, planningBalance, planningBalanceText,
+              projectId,projectName,projectCode,bidResponsibleOrg,bidResponsibleOrgName,subjectMatter:this.subjectMatter,contractPlanningCode,brand
+            }
+          }
+          console.log(formData,'this.formData');
+          try{
+            const res = await saveProcurementPlan(formData);
+            loading.close();
+            this.$message({
+              message: '保存成功',
+              type: 'success'
+            });
+            this.isSubmit = false;
+           this.pushMaterialProcurement();
+            // console.log(res,'r~~~~~~~~~~~~~~~~~');
+            // this.$tab.closePage().then(() => {
+            //   // 执行结束的逻辑
+            //   let param = Base64.encode(JSON.stringify(res.data))
+            //   this.$router.replace(`/procurement/plan-detail/${param}`);
+            // })
+          }catch(err){
+            console.log(err);
+            this.isSubmit = false;
+            loading.close();
+          }
+        } else {
+          this.isSubmit = false;
+          return false;
+        }
+      });
+    },
+
 
     //获取物料
     async getContractMaterials(){

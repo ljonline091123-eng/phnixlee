@@ -401,3 +401,17 @@ export const agreementCreateAttachmentHandle = (data) => {
     data,
   });
 };
+/**
+ * 免审
+ * @param params
+ * @returns {*}
+ */
+export const avoidSubmitByMarket = (id) => {
+  return request({
+    url: "/business/agreement/avoidSubmitByMarket",
+    method: "get",
+    params: {
+      id,
+    },
+  });
+};
