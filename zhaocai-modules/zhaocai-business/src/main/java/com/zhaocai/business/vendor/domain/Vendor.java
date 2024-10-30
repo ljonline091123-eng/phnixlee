@@ -1,5 +1,6 @@
 package com.zhaocai.business.vendor.domain;
 
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.zhaocai.common.core.web.domain.BaseEntity;
@@ -227,4 +228,10 @@ public class Vendor extends BaseEntity {
      */
     @ApiModelProperty(value = "供应商注册来源")
     private String supplierSourse;
+
+    /**
+     * 批语
+     */
+    @ApiModelProperty(value = "批语")
+    private String operateComment;
 }

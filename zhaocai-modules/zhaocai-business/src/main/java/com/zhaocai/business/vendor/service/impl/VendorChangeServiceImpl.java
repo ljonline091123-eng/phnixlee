@@ -67,6 +67,13 @@ public class VendorChangeServiceImpl extends ServiceImpl<VendorChangeMapper,Vend
     private IVendorOperateLogService vendorOperateLogService;
 
     @Autowired
+    private IVendorContactService vendorContactService;
+
+
+    @Autowired
+    private IVendorCertificationService vendorCertificationService;
+
+    @Autowired
     private IAttachmentService attachmentService;
 
     @Autowired
@@ -82,23 +89,40 @@ public class VendorChangeServiceImpl extends ServiceImpl<VendorChangeMapper,Vend
     public VendorChangeRequestVO getVendorUpdateDetail(Long vendorId) {
         VendorChangeRequestVO vendorChangeRequestVO = new VendorChangeRequestVO();
         // 供应商变更信息
-        VendorChange vendorChange;
+        VendorChange vendorChange = new VendorChange();
         // 供应商资质变更信息
         List<VendorCertificationChange> certificationList;
         // 供应商联系人变更信息
-        List<VendorContactChange> contactChangeList;
-
+        List<VendorContactChange> contactChangeList = new ArrayList<>();
+        VendorContactChange  contactChange  = new VendorContactChange();
         // 根据供应商id在供应商变更表中查找最后一次变更信息
         List<VendorChange> vendorChangeList = super.list(new LambdaQueryWrapper<VendorChange>()
                 .eq(VendorChange::getVendorId, vendorId)
                 .orderByDesc(VendorChange::getVersion));
+        Vendor vendor = vendorService.getById(vendorId);
         // 不存在变更版本时，创建一份VO版本
         if (CollectionUtils.isEmpty(vendorChangeList)) {
-            vendorChange = this.createVendorChange(vendorId);
+            if(vendor.getState()==VendorStateEnum.REJECT.getState()||vendor.getState()==VendorStateEnum.IN_APPROVAL.getState()){
+                BeanUtils.copyProperties(vendor, vendorChange);
+//                List<VendorContact>  contactList= vendorContactService.list(new LambdaQueryWrapper<VendorContact>()
+//                        .eq(VendorContact::getVendorId, vendorId));
+//                if(!CollectionUtils.isEmpty(contactList)){
+//                    BeanUtils.copyProperties(contactList.get(0), contactChange);
+//                    contactChangeList.add(contactChange);
+//                }
+//                certificationList  = certificationChangeService.getCertificationChange(vendorId,0);
+                vendorChangeRequestVO.setVendorChange(vendorChange);
+                return vendorChangeRequestVO;
+
+            }else{
+                vendorChange = this.createVendorChange(vendorId);
             certificationList = certificationChangeService.createCertificationChange(vendorId,0);
             contactChangeList = contactChangeService.createContactChange(vendorId, 0);
+
             // 创建最新版本副本
             vendorChangeRequestVO = this.createCopy(vendorChange);
+            }
+
         } else {
             // 存在变更版本，判断最新版本的变更是保存状态还是审批通过状态
             vendorChange = vendorChangeList.get(0);
@@ -112,7 +136,6 @@ public class VendorChangeServiceImpl extends ServiceImpl<VendorChangeMapper,Vend
             vendorChangeRequestVO.setVendorChange(vendorChange);
             vendorChangeRequestVO.setCertificationChangeList(certificationList);
             vendorChangeRequestVO.setContactChangeList(contactChangeList);
-
             // 如果最新版本审批通过，则返回最新版本副本
             if (null != vendorChange.getChangeStatus() && vendorChange.getChangeStatus().equals(VendorStateEnum.APPROVE.getState())) {
                 // 获取最新版本副本

@@ -72,6 +72,38 @@ public class VendorCertificationChangeServiceImpl extends ServiceImpl<VendorCert
     }
 
     /**
+     * 创建资质变更新版本
+     *
+     * @param vendorId
+     * @return
+     */
+    @Override
+    public List<VendorCertificationChange> getCertificationChange(Long vendorId, Integer version) {
+        // 资质类型
+        List<String> typeList = Arrays.asList(CertificationTypeEnum.BUSINESS_LICENSE.getType(),
+                CertificationTypeEnum.INTEGRITY.getType(),
+                CertificationTypeEnum.LEGAL_AUTHORIZATION.getType(),
+                CertificationTypeEnum.RELEVANT_CERTIFICATION.getType());
+        // 获取原始表中供应商资质
+        List<VendorCertification> attachments = vendorCertificationService.list(new LambdaQueryWrapper<VendorCertification>()
+                .eq(VendorCertification::getVendorId, vendorId)
+                .eq(VendorCertification::getDelFlag, 0)
+                .eq(VendorCertification::getBusinessId, vendorId)
+                .in(VendorCertification::getBusinessCode, typeList));
+        // 创建供应商资质变更
+        List<VendorCertificationChange> certificationChangeList = new ArrayList<>();
+        for (VendorCertification certification : attachments) {
+            VendorCertificationChange certificationChange = BeanCopierUtil.copyBean(certification, VendorCertificationChange.class);
+            certificationChange.setCertificationId(certification.getId());
+            certificationChange.setId(null);
+            certificationChange.setVersion(version);
+            certificationChange.setChangeStatus(0);
+            certificationChangeList.add(certificationChange);
+        }
+        return certificationChangeList;
+    }
+
+    /**
      * 审批通过后更新企业资质
      *
      * @param vendorChange
