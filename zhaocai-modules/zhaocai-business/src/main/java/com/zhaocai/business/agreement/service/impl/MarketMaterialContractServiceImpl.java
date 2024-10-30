@@ -176,10 +176,10 @@ public class MarketMaterialContractServiceImpl extends ServiceImpl<MarketMateria
             VendorBiddingListQuotationListVO vo =  BeanCopierUtil.copyBean(materials, VendorBiddingListQuotationListVO.class);
             vo.setCostAccount(materials.getCostAccountName());
             vo.setMaterialsListId(Long.valueOf(marketMaterial.getRequireId()));
-            vo.setOfferGoodsCode(marketMaterial.getOfferGoodsCode());
-            vo.setGoodsName(marketMaterial.getGoodsName());
-            vo.setOfferBrand(marketMaterial.getOfferBrand());
-            vo.setOfferPrice(marketMaterial.getOfferPrice());
+            vo.setOfferGoodsCode(materials.getCode());
+            vo.setGoodsName(materials.getName());
+            vo.setOfferBrand(materials.getOfferBrand());
+            vo.setOfferPrice(materials.getOfferPrice());
             vo.setSkuId(marketMaterial.getSkuId());
             vo.setCount(marketMaterial.getQuantity().setScale(2, RoundingMode.HALF_UP));
             vo.setSignCount(marketMaterial.getQuantity().setScale(2, RoundingMode.HALF_UP));
