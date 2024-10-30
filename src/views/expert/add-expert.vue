@@ -399,8 +399,6 @@
       :title="'新增专家审批流程'"
       :formModel="sanctionForm"
       :rejectNodeList="rejectNodeList"
-      :nextCandidateList="nextCandidateList"
-      :nextAppointable="nextAppointable"
       @update:visible="expertVisible = $event"
       @submit="handleSubmit"
     />
@@ -462,10 +460,6 @@ export default {
         operateComment: "",
       },
       rejectNodeList: [],
-      /* 下一步审批人列表 */
-      nextCandidateList: [],
-      /* 下一步审批人 */
-      nextAppointable: false,
       formData: {
         expertName: "",
         expertPhone: "",
@@ -638,10 +632,6 @@ export default {
             processId: this.formData.wfProcessId, //流程id
           });
           this.rejectNodeList = res.data.completedTaskList;
-          /* 下一步审批人列表 */
-          this.nextCandidateList = res.data.nextCandidateList;
-          /* 下一步审批人是否可选 */
-          this.nextAppointable = res.data.nextAppointable;
           this.taskPresentId = res.data.curTaskId;
           // this.isShowButton = res.data.auditable;
         }
@@ -715,7 +705,7 @@ export default {
           try {
             await submitExpert(this.formData);
             this.$message({
-              message: "保存成功",
+              message: "提交成功",
               type: "success",
             });
             this.$tab.closePage().then(() => {
