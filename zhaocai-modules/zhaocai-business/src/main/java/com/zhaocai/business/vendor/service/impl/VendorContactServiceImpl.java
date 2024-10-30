@@ -2,15 +2,18 @@ package com.zhaocai.business.vendor.service.impl;
 
 import cn.hutool.core.codec.Base64;
 import cn.hutool.core.collection.CollectionUtil;
+import com.alibaba.fastjson.JSON;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.zhaocai.business.agreement.domain.Agreement;
 import com.zhaocai.business.common.enums.*;
 import com.zhaocai.business.common.exception.BusinessException;
 import com.zhaocai.business.common.exception.NotFoundException;
 import com.zhaocai.business.common.exception.ParamValidateException;
 import com.zhaocai.business.common.utils.ValidateUtils;
+import com.zhaocai.business.manager.http.dto.req.UserObj;
 import com.zhaocai.business.manager.http.service.UnderlingSystemService;
 import com.zhaocai.business.process.service.IBPMProcessService;
 import com.zhaocai.business.pub.vo.req.AttachmentRequestVO;
@@ -24,8 +27,10 @@ import com.zhaocai.business.vendor.service.IVendorContactService;
 import com.zhaocai.business.vendor.service.IVendorOperateLogService;
 import com.zhaocai.business.vendor.service.IVendorService;
 import com.zhaocai.business.vendor.vo.req.*;
+import com.zhaocai.business.vendor.vo.res.VendorContactInfoVO;
 import com.zhaocai.business.vendor.vo.res.VendorContactListVO;
 import com.zhaocai.business.vendor.vo.res.VendorMainContactVO;
+import com.zhaocai.business.vendor.vo.res.VendorVO;
 import com.zhaocai.common.core.bean.PageResult;
 import com.zhaocai.common.core.constant.SecurityConstants;
 import com.zhaocai.common.core.domain.R;
@@ -335,6 +340,10 @@ public class VendorContactServiceImpl extends ServiceImpl<VendorContactMapper,Ve
         String org = underlingSystemService.getL2OrgByOrgId(vendor.getFirstCooperationCompanyCode());
         //供应商注册时候选择审批单位，只能由选择的单位维护的供应商审核人员进行审核，如果供应商信息修改也是需要原审核单位进行审核
         String customProcessKey = ProcessKeyEnum.ZHAOCAI_VENDOR_ADDCONTACT.getIdentifying().replace("{org}",org);
+        UserObj userObj = UserObj.builder().businessType(ProcessKeyEnum.ZHAOCAI_VENDOR_ADDCONTACT.name()).
+                businessId(contact.getId().toString())
+                .toDoType(ToDoTypeEnum.EXAMINE.name()).build();
+        paramMap.put("userObj", JSON.toJSONString(userObj));
         paramMap.put("customProcessKey", customProcessKey);
         paramMap.put("operateComment", operateComment);
         processService.startProcessInstance(
@@ -389,6 +398,23 @@ public class VendorContactServiceImpl extends ServiceImpl<VendorContactMapper,Ve
         return getOne(new LambdaQueryWrapper<VendorContact>()
                 .eq(VendorContact::getVendorId,vendorId)
                 .eq(VendorContact::getIsManager,1));
+    }
+
+    @Override
+    public VendorContactInfoVO getInfo(Long id) {
+        VendorContact vendorContact = getOne(new LambdaQueryWrapper<VendorContact>()
+                .eq(VendorContact::getId,id));
+        if(vendorContact!=null){
+            VendorContactInfoVO vo = BeanCopierUtil.copyBean(vendorContact, VendorContactInfoVO.class);
+            Vendor vendor = vendorService.getById(vendorContact.getVendorId());
+            VendorVO vendorVo = BeanCopierUtil.copyBean(vendor, VendorVO.class);
+            if(vendor!=null){
+                vendorVo.setCreateTime(vendor.getCreateTime());
+                vo.setVendorVO(vendorVo);
+            }
+            return vo;
+        }
+        throw new BusinessException("该id经查询无供应商联系人数据");
     }
 
     /**
@@ -474,6 +500,18 @@ public class VendorContactServiceImpl extends ServiceImpl<VendorContactMapper,Ve
         String businessId = variables.get("businessId").toString();
         super.update(new LambdaUpdateWrapper<VendorContact>()
                 .set(VendorContact::getState,VendorContactStateEnum.APPROVAL_REJECTION.getState())
+                .eq(VendorContact::getId, businessId));
+    }
+
+    /**
+     * 审批驳回到发起人
+     * @param variables
+     */
+    @Override
+    public void processAuditFreedom(Map<String, Object> variables) {
+        String businessId = variables.get("businessId").toString();
+        super.update(new LambdaUpdateWrapper<VendorContact>()
+                .set(VendorContact::getState, VendorContactStateEnum.APPROVAL_REJECTION.getState())
                 .eq(VendorContact::getId, businessId));
     }
 }

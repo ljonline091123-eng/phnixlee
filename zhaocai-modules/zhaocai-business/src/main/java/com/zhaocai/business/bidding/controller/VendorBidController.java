@@ -104,7 +104,7 @@ public class VendorBidController {
 //    }
 
     /**
-     * 二次报价
+     * 二次报价 (弃用)
      */
     @PostMapping("/twiceBid")
     @ApiOperation(value = "二次报价", notes = "传入bidVO")

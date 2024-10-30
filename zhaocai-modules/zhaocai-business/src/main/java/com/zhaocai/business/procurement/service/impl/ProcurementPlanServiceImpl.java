@@ -4,10 +4,15 @@ import cn.hutool.core.collection.CollectionUtil;
 import cn.hutool.core.util.ObjectUtil;
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONObject;
+import com.baomidou.mybatisplus.core.conditions.Wrapper;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.zhaocai.business.bidding.domain.BiddingListQuotation;
+import com.zhaocai.business.bidding.domain.TenderNotice;
+import com.zhaocai.business.bidding.service.ITenderNoticeService;
+import com.zhaocai.business.bidding.vo.res.ContractPlanningNoticeVO;
 import com.zhaocai.business.common.enums.*;
 import com.zhaocai.business.common.exception.BusinessException;
 import com.zhaocai.business.common.exception.ParamValidateException;
@@ -15,9 +20,14 @@ import com.zhaocai.business.common.utils.AmountCalUtil;
 import com.zhaocai.business.common.utils.ValidateUtils;
 import com.zhaocai.business.manager.http.common.config.ThirdPartyTodoFlowGroupEnum;
 import com.zhaocai.business.manager.http.common.config.ThirdPartyTodoFlowModuleEnum;
+import com.zhaocai.business.manager.http.dto.req.ContractPlanMaterialListRequestDTO;
 import com.zhaocai.business.manager.http.dto.req.PushThirdPartyTodoTaskRequestDTO;
 import com.zhaocai.business.manager.http.dto.req.PushThirdPartyTodoTaskSonRequestDTO;
+import com.zhaocai.business.manager.http.dto.req.UsersRoleListRequestDTO;
+import com.zhaocai.business.manager.http.dto.res.UsersRoleContractPlanListResponseDTO;
+import com.zhaocai.business.manager.http.dto.res.UsersRoleListResponseDTO;
 import com.zhaocai.business.manager.http.service.ContractPlanService;
+import com.zhaocai.business.manager.http.service.PlatRoleService;
 import com.zhaocai.business.manager.http.service.ThridPartyTodoTaskService;
 import com.zhaocai.business.procurement.domain.*;
 import com.zhaocai.business.procurement.dto.ContractProcurementPlanDTO;
@@ -26,6 +36,7 @@ import com.zhaocai.business.procurement.mapper.ProcurementPlanMapper;
 import com.zhaocai.business.procurement.service.*;
 import com.zhaocai.business.procurement.vo.req.*;
 import com.zhaocai.business.procurement.vo.res.*;
+import com.zhaocai.business.pub.domain.Attachment;
 import com.zhaocai.business.pub.service.IAreaDivisionService;
 import com.zhaocai.business.pub.service.IBusinessCodeService;
 import com.zhaocai.common.core.bean.PageResult;
@@ -38,7 +49,9 @@ import com.zhaocai.common.core.exception.CheckedException;
 import com.zhaocai.common.core.constant.SecurityConstants;
 import com.zhaocai.common.core.utils.NumberUtil;
 import com.zhaocai.common.core.utils.bean.BeanCopierUtil;
+import com.zhaocai.common.core.web.bean.ResultData;
 import com.zhaocai.common.security.utils.SecurityUtils;
+import com.zhaocai.common.signature.domain.AgreementSignature;
 import com.zhaocai.system.api.domain.SysUser;
 import com.zhaocai.system.api.system.RemoteUserService;
 import com.zhaocai.system.api.domain.SetConfigValueDTO;
@@ -46,6 +59,7 @@ import com.zhaocai.system.api.system.RemoteSystemService;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -99,6 +113,20 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
 
     @Autowired
     private IContractPlanningPushRecordService contractPlanningPushRecordService;
+
+    @Autowired
+    private PlatRoleService platRoleService;
+
+    @Autowired
+    private ITenderNoticeService tenderNoticeService;
+
+    @Lazy
+    @Autowired
+    private IMinProjectService minProjectService;
+
+    @Lazy
+    @Autowired
+    private IProcurementPlanService procurementPlanService;
 
     @Override
     public PageResult<ProcurementPlanListVO> listPage(ProcurementPlanListQueryVO queryVO) {
@@ -160,9 +188,15 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
                         .collect(Collectors.toMap(ContractProcurementPlanDTO::getContractPlanningId,val -> val));
             }
 
+            /* 查询推送记录 */
             List<ContractPlanningPushRecord> records = contractPlanningPushRecordService.getByCondition(contractIdList);
-            Map<String, ContractPlanningPushRecord> recordMap = records.stream().collect(
-                    Collectors.toMap(ContractPlanningPushRecord::getContractPlanningId, Function.identity()));
+            /* 查询单条 */
+            Map<String, ContractPlanningPushRecord> recordMap = records.stream().collect(Collectors.toMap(ContractPlanningPushRecord::getContractPlanningId, Function.identity()));
+            /* 查询招标集合 */
+            Map<String, List<ContractPlanningPushRecord>> recordMapList = records.stream().collect(Collectors.groupingBy(ContractPlanningPushRecord::getContractPlanningId));
+            /* 根据合约规划id集合查询对应的招标对象数据和采购方案数据 */
+            List<ContractPlanningNoticeVO> recordsQuery = tenderNoticeService.getListByContractPlanningId(new ContractPlanningQueryVO(contractIdList));
+            Map<String, List<ContractPlanningNoticeVO>> recordMapQuery = recordsQuery.stream().collect(Collectors.groupingBy(ContractPlanningNoticeVO::getContractPlanningId));
 
             for (ContractPlanningListVO contractPlanning :resultList) {
                 totalPlannedAmountInclTax = NumberUtil.add(totalPlannedAmountInclTax,contractPlanning.getPlannedAmountInclTax());
@@ -174,10 +208,36 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
                     contractPlanning.setEnterIntoTime(contractProcurementPlan.getArrivalDate());
                 }
 
+                /* 推送状态 细分到合约规划 */
                 ContractPlanningPushRecord contractPlanningPushRecord = recordMap.get(contractPlanning.getContractPlanningId());
                 if (ObjectUtil.isNotEmpty(contractPlanningPushRecord)){
                     contractPlanning.setPushStatus(contractPlanningPushRecord.getPushStatus());
                 }
+
+                /* 增加推送状态 细分到投标对象 */
+                if (recordMapList!=null && !recordMapList.isEmpty()){
+                    if (recordMapQuery!=null && !recordMapQuery.isEmpty()){
+                        List<ContractPlanningPushRecord> contractPlanningPushRecordList = recordMapList.get(contractPlanning.getContractPlanningId());
+                        List<ContractPlanningNoticeVO> contractPlanningPushList = recordMapQuery.get(contractPlanning.getContractPlanningId());
+                        if (contractPlanningPushRecordList!=null && !contractPlanningPushRecordList.isEmpty()){
+                            if (contractPlanningPushList!=null && !contractPlanningPushList.isEmpty()){
+                                /* 默认都是未推送 */
+                                contractPlanningPushList.forEach(obj -> obj.setPushStatus(0));
+                                /* 获取已推送的 采购方案id */
+                                Set<Long> schemeIds = contractPlanningPushRecordList.stream()
+                                        .map(ContractPlanningPushRecord::getSchemeId)
+                                        .collect(Collectors.toSet());
+                                /* 对比已推送的采购方案id,并设置值 */
+                                contractPlanningPushList.stream()
+                                        .filter(obj -> schemeIds.contains(obj.getSchemeId()))
+                                        .forEach(obj -> obj.setPushStatus(1));
+                                /* 添加到返回对象中 */
+                                contractPlanning.setContractPlanningNoticeVOList(contractPlanningPushList);
+                            }
+                        }
+                    }
+                }
+
             }
         }
 
@@ -355,26 +415,83 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
         dealOpenPeopleTodoTask(planPushVO);
     }
 
+    @Override
+    public UsersRoleContractPlanListResponseDTO getUsersRoleContractPlanList(ContractPlanningQueryVO requestDTO) {
+        /* 请求获取第三方用户数据 */
+        List<UsersRoleListResponseDTO> userList = platRoleService.getUsersRoleList(new UsersRoleListRequestDTO());
+        /* 根据合约规划id或者code查询对应的招标对象数据和采购方案数据 */
+        List<ContractPlanningNoticeVO> contractPlanningNoticeVOList = tenderNoticeService.getListByContractPlanningId(requestDTO);
+        /* 用来存储该方法返回对象数据 */
+        UsersRoleContractPlanListResponseDTO userContract = new UsersRoleContractPlanListResponseDTO();
+        if(userList!=null && !userList.isEmpty()){
+            userContract.setUserList(userList);
+        }
+        if(contractPlanningNoticeVOList!=null && !contractPlanningNoticeVOList.isEmpty()){
+            userContract.setContractPlanningNoticeVOList(contractPlanningNoticeVOList);
+        }
+        return userContract;
+    }
+
     public void savaContractPlanningPushRecord(ProcurementPlanPushVO planPushVO){
         ContractPlanningPushRecord record = new ContractPlanningPushRecord();
         record.setContractPlanningId(planPushVO.getContractPlanningId());
         record.setContractPlanningCode(planPushVO.getContractPlanningCode());
+        /* 多增加 采购方案 招标对象 记录 */
+        record.setProcurementSchemeCode(planPushVO.getProcurementSchemeCode());
+        record.setNoticeId(planPushVO.getNoticeId());
+        record.setSchemeId(planPushVO.getSchemeId());
         //JSONObject.parseArray("从数据库中取出的String类型的字段",T.class);
         record.setPushObj(JSONObject.toJSONString(planPushVO.getUserList()));
         record.setPushStatus(NumberConstant.ONE);
         contractPlanningPushRecordService.save(record);
     }
 
+    /* 推送合约规划 */
     public void dealOpenPeopleTodoTask (ProcurementPlanPushVO planPushVO){
         PushThirdPartyTodoTaskRequestDTO parentRequestDTO = new PushThirdPartyTodoTaskRequestDTO();
         List<PushThirdPartyTodoTaskSonRequestDTO> messageList = new ArrayList<>();
         String nowTime = formatDate(new Date());
         String nickName = SecurityUtils.getLoginUserNickName();
         Long thridUserId = StringUtils.isNotEmpty(SecurityUtils.getThridUserId()) ? Long.parseLong(SecurityUtils.getThridUserId()) : null;
+
+
+
         for (ProcurementPlanPushUserVO userData : planPushVO.getUserList()){
             PushThirdPartyTodoTaskSonRequestDTO requestDTO = new PushThirdPartyTodoTaskSonRequestDTO();
             requestDTO.setTitle("采购计划待办信息");
-            requestDTO.setContent(String.format(ApproveFlowPromptTemplateEnum.PROCUREMENT_PLAN_PUSH.getDesc(), planPushVO.getContractPlanningName()));
+//            requestDTO.setContent(String.format(ApproveFlowPromptTemplateEnum.PROCUREMENT_PLAN_PUSH.getDesc(), planPushVO.getContractPlanningName()));
+
+            /* 获取已有的合约规划 */
+            ContractPlanning contractPlanning = contractPlanningService.getOne(new LambdaQueryWrapper<ContractPlanning>()
+                    .eq(ContractPlanning::getContractPlanningCode,planPushVO.getContractPlanningCode()));
+            /* 查询采购计划 */
+            ProcurementPlan procurementPlan = null;
+            if(contractPlanning!=null&&contractPlanning.getPlanId()!=null){
+                procurementPlan = procurementPlanService.getById(contractPlanning.getPlanId());
+            }
+            String content =
+                            /* 推送人 登录人 */
+                    "发送人: "+(SecurityUtils.getLoginUserNickName())+
+                            /* 项目名称 */
+                    "，{最小核算项目=("+(contractPlanning==null?"":contractPlanning.getProjectName())+
+                            /* 类型 */
+                    ")}，合同类型为{"+(contractPlanning==null?"":contractPlanning.getContractPlanningCategoryName())+
+                            /* 合约规划名称 */
+                    " ("+(contractPlanning==null?"":contractPlanning.getContractPlanningName())+
+                            /* 采购计划名称 */
+                    ")}合同将于近期开展，请您及时关注了解，采购计划如下：\n "+(procurementPlan==null?"":procurementPlan.getProcurementPlanName())+
+                            /* 招标时间 */
+                    " 招标时间为"+(planPushVO.getBiddingTime()==null?"":planPushVO.getBiddingTime())+
+                            /* 进场时间 */
+                    "，进场时间为"+(planPushVO.getEnterIntoTime()==null?"":planPushVO.getEnterIntoTime())+
+                            /* 采购经办人名称 */
+                    "、采购人为"+(procurementPlan==null?"":procurementPlan.getProcurementOfficerName())+
+                            /* 区域（只有购买材料）：获取“购买材料”类型里边拆分的标包里边的“区域”字段 省 + 市 */
+                    ((procurementPlan==null?false:procurementPlan.getProcurementPlanType().equals(NumberConstant.ONE))?
+                            "，区域为"+((procurementPlan==null?"":procurementPlan.getRegionProvinceCode()) + (procurementPlan==null?"":procurementPlan.getRegionCityCode())):"");
+            requestDTO.setContent(content);/* 推送内容 */
+            log.info("[推送合约规划推动采购计划拆包推送内容:{}],",content);
+
             requestDTO.setArrivalTime(nowTime);
             requestDTO.setCreateTime(nowTime);
             requestDTO.setMsgFromPerCode(thridUserId);
@@ -427,7 +544,7 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
         baseMapper.updateById(procurementPlan);
 
         // 修改合约拆分和物料信息
-        contractPlanningSplitService.updateContractPlanningSplit(requestVO.getSplitRequestList(),procurementPlan.getId(),procurementPlan.getPriceType());
+        contractPlanningSplitService.updateContractPlanningSplit(requestVO.getSplitRequestList(),procurementPlan.getId(),procurementPlan);
 
         // 重新保存合约规划
         contractPlanningService.updateContractPlanning(requestVO.getContractPlanning(),procurementPlan.getId());
@@ -447,7 +564,7 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
         baseMapper.insert(procurementPlan);
 
         // 保存合约拆分和物料信息
-        contractPlanningSplitService.saveContractPlanningSplit(requestVO.getSplitRequestList(),procurementPlan.getId(),procurementPlan.getPriceType());
+        contractPlanningSplitService.saveContractPlanningSplit(requestVO.getSplitRequestList(),procurementPlan.getId(),procurementPlan);
 
         // 保存合约规划
         contractPlanningService.addContractPlanning(requestVO.getContractPlanning(),procurementPlan.getId());

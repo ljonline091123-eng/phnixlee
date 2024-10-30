@@ -22,10 +22,13 @@ import com.zhaocai.common.core.constant.Constants;
 import com.zhaocai.common.core.utils.NumberUtil;
 import com.zhaocai.common.core.utils.bean.BeanCopierUtil;
 import lombok.extern.slf4j.Slf4j;
+import org.jetbrains.annotations.NotNull;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 /**
@@ -75,8 +78,20 @@ public class ContractPlanService {
                         listVO.setBidResponsibleOrgName(dto.getBidResponsibleOrgName());
                         listVO.setBiddingTime(dto.getBidDate());
                         listVO.setBrand(dto.getBrand());
+
+
+                        /* 为了增加列 剩余可使用数量 */
+                        /* 组合 查询条件 查询清单列表 */
+                        ContractPlanMaterialListRequestDTO requestDTO = new ContractPlanMaterialListRequestDTO();
+                        requestDTO.setProjectId(queryVO.getProjectId());
+                        requestDTO.setConPlanId(dto.getConPlanId());
+                        List<ContractPlanMaterialListDTO> list = UnderlingRestTemplateService.listForObject(UnderlingPlatformUrlEnum.LIST_BY_PROJECT_CONTRACT,ContractPlanMaterialListDTO.class,requestDTO);
+                        /* 计算总剩余可用量 */
+                        listVO.setSurplusQuantity(list.stream().map(ContractPlanMaterialListDTO::getSurplusQuantity).reduce(BigDecimal.ZERO,BigDecimal::add));
+
                         return listVO;
                     }).collect(Collectors.toList());
+
             pageResult.setRows(resultList);
         }
 
@@ -94,6 +109,9 @@ public class ContractPlanService {
         ContractPlanMaterialListRequestDTO requestDTO = BeanCopierUtil.copyBean(queryVO,ContractPlanMaterialListRequestDTO.class);
 
         List<ContractPlanMaterialListDTO> list = UnderlingRestTemplateService.listForObject(UnderlingPlatformUrlEnum.LIST_BY_PROJECT_CONTRACT,ContractPlanMaterialListDTO.class,requestDTO);
+
+        /* 排序一下 根据 物料编码 */
+        list.stream().sorted(Comparator.comparing(ContractPlanMaterialListDTO::getSubjectDtlCode).reversed()).collect(Collectors.toList());
 
         if (CollectionUtil.isNotEmpty(list)) {
             return list.stream()

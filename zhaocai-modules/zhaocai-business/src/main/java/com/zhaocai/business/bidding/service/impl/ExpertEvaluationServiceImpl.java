@@ -130,7 +130,7 @@ public class ExpertEvaluationServiceImpl implements IExpertEvaluationService {
 						.eq(ExpertScore::getBiddingInfoId, biddingInfo.getId())
 						.eq(ExpertScore::getExpertId, expertId)
 						.orderByDesc(BaseEntity::getCreateTime).last("limit 1"));
-				if (!ObjectUtils.isEmpty(expertScore)){
+				if (!ObjectUtils.isEmpty(expertScore) && (biddingInfo.getExpertState() == null || biddingInfo.getExpertState().equals(NumberConstant.ONE))){
 					//已评标
 					contentVO.setIsEval(true);
 					contentVO.setBusScore(expertScore.getBusScore());
@@ -196,7 +196,7 @@ public class ExpertEvaluationServiceImpl implements IExpertEvaluationService {
 						.eq(ExpertScore::getBiddingInfoId, biddingInfo.getId())
 						.eq(ExpertScore::getExpertId, expertId)
 						.orderByDesc(BaseEntity::getCreateTime).last("limit 1"));
-				if (!ObjectUtils.isEmpty(expertScore)){
+				if (!ObjectUtils.isEmpty(expertScore) && (biddingInfo.getExpertState() == null || biddingInfo.getExpertState().equals(NumberConstant.ONE))){
 					//已评标
 					contentVO.setIsEval(true);
 					contentVO.setBusScore(expertScore.getBusScore());
@@ -341,6 +341,11 @@ public class ExpertEvaluationServiceImpl implements IExpertEvaluationService {
 					.eq(BiddingEvaluatExpert::getExpertId, expertId)
 					.eq(BiddingEvaluatExpert::getIsJoin, 1));
 		}
+		/* 更新投标对象评分开关 */
+		biddingInfoService.update(new LambdaUpdateWrapper<BiddingInfo>()
+				.set(BiddingInfo::getExpertState,NumberConstant.ONE)
+				.eq(BiddingInfo::getId,evalVO.getBiddingInfoId()));
+
 		return res;
 	}
 

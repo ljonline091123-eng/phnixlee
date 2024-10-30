@@ -9,6 +9,7 @@ import com.zhaocai.business.agreement.domain.AgreementMaterialsList;
 import com.zhaocai.business.common.utils.AmountCalUtil;
 import com.zhaocai.business.procurement.domain.ContractPlanningSplit;
 import com.zhaocai.business.procurement.domain.MaterialsList;
+import com.zhaocai.business.procurement.domain.ProcurementPlan;
 import com.zhaocai.business.procurement.mapper.ContractPlanningSplitMapper;
 import com.zhaocai.business.procurement.service.IContractPlanningSplitService;
 import com.zhaocai.business.procurement.service.IMaterialsListService;
@@ -41,7 +42,7 @@ public class ContractPlanningSplitServiceImpl extends ServiceImpl<ContractPlanni
     private IMaterialsListService materialsListService;
 
     @Override
-    public void saveContractPlanningSplit(List<ContractPlanningSplitRequestVO> splitRequestList, Long planId,Integer priceType) {
+    public void saveContractPlanningSplit(List<ContractPlanningSplitRequestVO> splitRequestList, Long planId, ProcurementPlan procurementPlan) {
         splitRequestList.forEach(split -> {
             if (CollectionUtil.isNotEmpty(split.getMaterialsLists())) {
                 // 保存合约拆分
@@ -53,7 +54,7 @@ public class ContractPlanningSplitServiceImpl extends ServiceImpl<ContractPlanni
                 baseMapper.insert(contractPlanningSplit);
 
                 // 保存合约对应的物料数据
-                materialsListService.saveMaterialsList(split.getMaterialsLists(), contractPlanningSplit.getId(),planId,priceType);
+                materialsListService.saveMaterialsList(split.getMaterialsLists(), contractPlanningSplit.getId(),planId,procurementPlan);
             } else {
                 log.warn("合约拆分[{}-{}]的清单列表为空",split.getContractScope(),split.getSplitContractName());
             }
@@ -61,7 +62,7 @@ public class ContractPlanningSplitServiceImpl extends ServiceImpl<ContractPlanni
     }
 
     @Override
-    public void updateContractPlanningSplit(List<ContractPlanningSplitRequestVO> splitRequestList, Long planId,Integer priceType) {
+    public void updateContractPlanningSplit(List<ContractPlanningSplitRequestVO> splitRequestList, Long planId,ProcurementPlan procurementPlan) {
         // 删除合约拆分记录
         baseMapper.deleteByPlanId(planId);
 
@@ -69,7 +70,7 @@ public class ContractPlanningSplitServiceImpl extends ServiceImpl<ContractPlanni
         materialsListService.deleteByPlanId(planId);
 
         // 保存信息
-        this.saveContractPlanningSplit(splitRequestList,planId,priceType);
+        this.saveContractPlanningSplit(splitRequestList,planId,procurementPlan);
     }
 
     @Override

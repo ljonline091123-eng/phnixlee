@@ -15,6 +15,13 @@ import com.zhaocai.business.vendor.vo.res.VendorManagementDetailVO;
 public interface IVendorChangeService extends IService<VendorChange>, IProcessBusinessBaseService {
 
     /**
+     * 供应商修改详情 每次提交去新增一条变更修改对象，防止业务id复用。
+     * @param vendorId 供应商id
+     * @return
+     */
+    VendorChangeRequestVO getVendorUpdateDetailNew(Long vendorId);
+
+    /**
      * 供应商修改详情
      * @param vendorId 供应商id
      * @return

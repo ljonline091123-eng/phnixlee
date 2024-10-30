@@ -1,12 +1,14 @@
 package com.zhaocai.business.expert.service.impl;
 
+import cn.hutool.core.codec.Base64;
+import com.alibaba.fastjson.JSON;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.zhaocai.business.bidding.enums.TenderNoticeStatusEnum;
-import com.zhaocai.business.common.enums.AttachmentTypeEnum;
+import com.zhaocai.business.common.enums.*;
 import com.zhaocai.business.common.exception.ParamValidateException;
 import com.zhaocai.business.expert.domain.Expert;
 import com.zhaocai.business.expert.mapper.ExpertMapper;
@@ -17,12 +19,19 @@ import com.zhaocai.business.expert.vo.req.query.ExpertRandomDrawVO;
 import com.zhaocai.business.expert.vo.res.ExpertInfoVO;
 import com.zhaocai.business.expert.vo.res.ExpertListVO;
 import com.zhaocai.business.expert.vo.res.TPIExpertInfoVO;
+import com.zhaocai.business.manager.http.dto.req.UserObj;
+import com.zhaocai.business.manager.http.service.UnderlingSystemService;
+import com.zhaocai.business.process.service.IBPMProcessService;
 import com.zhaocai.business.pub.service.IAttachmentService;
+import com.zhaocai.business.pub.service.ISystemUserService;
 import com.zhaocai.business.pub.vo.res.AttachmentVO;
+import com.zhaocai.business.vendor.domain.Vendor;
+import com.zhaocai.business.vendor.domain.VendorContact;
 import com.zhaocai.common.core.bean.PageResult;
 import com.zhaocai.common.core.constant.NumberConstant;
 import com.zhaocai.common.core.utils.DateUtils;
 import com.zhaocai.common.core.utils.bean.BeanCopierUtil;
+import com.zhaocai.system.api.domain.SysUser;
 import com.zhaocai.system.api.system.RemoteUserService;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -31,10 +40,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.ObjectUtils;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
+import java.util.*;
 import java.util.stream.Collectors;
 
 /**
@@ -50,6 +56,12 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
     private RemoteUserService remoteUserService;
     @Autowired
     private IAttachmentService attachmentService;
+    @Autowired
+    private IBPMProcessService processService;
+    @Autowired
+    private UnderlingSystemService underlingSystemService;
+    @Autowired
+    private ISystemUserService systemUserService;
 
     @Override
     public List<TPIExpertInfoVO> getTPIExpertInfo() {
@@ -98,6 +110,11 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
     }
 
     @Override
+    public PageResult<ExpertListVO> pageAll(ExpertQueryVO queryDTO) {
+        return page(queryDTO);
+    }
+
+    @Override
     public PageResult<ExpertListVO> page(ExpertQueryVO queryDTO) {
         queryDTO.setWorkYearCompareDate(DateUtils.getNowDate());
         if (!CollectionUtils.isEmpty(queryDTO.getNotIncludeExpertIdList())){
@@ -113,7 +130,6 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
             }
             queryDTO.setDeptIdList(deptIdList);
         }
-
         IPage<ExpertListVO> iPage = new Page<>();
         if (ObjectUtils.isEmpty(queryDTO.getDrawVO())){
             iPage = baseMapper.page(queryDTO.toMybatisPage(), queryDTO);
@@ -172,9 +188,60 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public boolean add(ExpertVO expertVO) {
-        long count = this.count(new LambdaQueryWrapper<Expert>()
-                .eq(Expert::getUserId, expertVO.getUserId()));
+    public boolean save(ExpertVO expertVO) {
+        long count = 0;
+        /* 新增才走审批流程，修改不走 */
+        Boolean submitFlag = expertVO.getId()==null;
+        if(expertVO.getId()!=null){
+            count = this.count(new LambdaQueryWrapper<Expert>()
+                            .eq(Expert::getUserId, expertVO.getUserId())
+                            .ne(Expert::getId, expertVO.getId()));
+        }else {
+            count = this.count(new LambdaQueryWrapper<Expert>()
+                    .eq(Expert::getUserId, expertVO.getUserId()));
+        }
+        //如果该用户已经是某个专家了
+        if (count > 0) {
+            throw new ParamValidateException("该用户已经成为专家，不允许重复设置");
+        }
+
+        //新增专家信息
+        Expert expert = BeanCopierUtil.copyBean(expertVO, Expert.class);
+        /* 新增才走审批流程，修改不走 */
+        if(submitFlag){
+            /* 待审批 */
+            expert.setExpertState(NumberConstant.ZERO);
+            /* 保存 */
+            expert.setState(ExpertStateEnum.SAVE.getState());
+        }else {
+            Expert e = getById(expertVO.getId());
+            if(e!=null){
+                if(e.getState()!=null && e.getState().equals(ExpertStateEnum.IN_APPROVAL.getState())){
+                    throw new ParamValidateException("专家正在审批中，请稍后再修改");
+                }
+            }
+        }
+        boolean res = this.saveOrUpdate(expert);
+
+        //保存招标文件附件
+        attachmentService.addAttachment(expertVO.getResumeAttachList(), AttachmentTypeEnum.EXPERT_RESUME, expert.getId());
+        return res;
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public boolean submit(ExpertVO expertVO) {
+        long count = 0;
+        /* 新增才走审批流程，修改不走 */
+        Boolean submitFlag = expertVO.getId()==null;
+        if(expertVO.getId()!=null){
+            count = this.count(new LambdaQueryWrapper<Expert>()
+                    .eq(Expert::getUserId, expertVO.getUserId())
+                    .ne(Expert::getId, expertVO.getId()));
+        }else {
+            count = this.count(new LambdaQueryWrapper<Expert>()
+                    .eq(Expert::getUserId, expertVO.getUserId()));
+        }
         //如果该用户已经是某个专家了
         if (count > 0){
             throw new ParamValidateException("该用户已经成为专家，不允许重复设置");
@@ -182,15 +249,46 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
 
         //新增专家信息
         Expert expert = BeanCopierUtil.copyBean(expertVO, Expert.class);
-        expert.setExpertState(NumberConstant.ONE);
-        boolean res = this.save(expert);
+        /* 新增才走审批流程，修改不走 */
+        if(submitFlag){
+            /* 待审批 */
+            expert.setExpertState(NumberConstant.ZERO);
+            /* 审批中 */
+            expert.setState(ExpertStateEnum.IN_APPROVAL.getState());
+        }else {
+            Expert e = getById(expertVO.getId());
+            if(e!=null){
+                if(e.getState()!=null && e.getState().equals(ExpertStateEnum.IN_APPROVAL.getState())){
+                    throw new ParamValidateException("专家正在审批中，请稍后再修改。");
+                }
+            }
+        }
+        boolean res = this.saveOrUpdate(expert);
 
         //保存招标文件附件
         attachmentService.addAttachment(expertVO.getResumeAttachList(), AttachmentTypeEnum.EXPERT_RESUME, expert.getId());
 
-        if (res){
+        expert = getById(expert.getId());
+        System.out.println("[新增专家审批]"+expert);
+
+        if (res && (expert!=null && expert.getState()!=null && (submitFlag || expert.getState().equals(ExpertStateEnum.REJECT.getState()) || expert.getState().equals(ExpertStateEnum.SAVE.getState()))) ){
             //提交审批信息
-            //folw.submit()
+            //接入底层逻辑平台流程
+            Map<String,Object> paramMap = new HashMap<>();
+            paramMap.put("businessId", expert.getId());
+            paramMap.put("businessTitle", "新增专家审批");
+
+            SysUser sysUser = systemUserService.getUserById(expert.getUserId());
+            /* 根据组织获取对应的二级单位 */
+            String org = underlingSystemService.getL2OrgByOrgId(sysUser.getThridOrgId());
+            //供应商注册时候选择审批单位，只能由选择的单位维护的供应商审核人员进行审核，如果供应商信息修改也是需要原审核单位进行审核
+            String customProcessKey = ProcessKeyEnum.ZHAOCAI_EXPERT_ADD.getIdentifying().replace("{org}",org);
+            paramMap.put("customProcessKey", customProcessKey);
+            paramMap.put("businessContent", String.format(ApproveFlowPromptTemplateEnum.EXPERT_ADD_APPROVE.getDesc(), expert.getExpertName()));
+            paramMap.put("detailUrl", "/expert/expert-detail/"+ Base64.encodeStr(("\""+expert.getId().toString()+"\"").getBytes(),true,true));
+            UserObj userObj = UserObj.builder().businessType(ProcessKeyEnum.ZHAOCAI_EXPERT_ADD.name()).businessId(expert.getId().toString()).toDoType(ToDoTypeEnum.EXAMINE.name()).build();
+            paramMap.put("userObj", JSON.toJSONString(userObj));
+            processService.startProcessInstance(ProcessKeyEnum.ZHAOCAI_EXPERT_ADD.getIdentifying(),paramMap);
         }
 
         /*//创建专家账号
@@ -222,4 +320,72 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
         return update(updateWrapper);
     }
 
+
+    /**
+     * 专家审批开始
+     * @param variables
+     */
+    @Override
+    public void processStart(Map<String, Object> variables) {
+        String processId = variables.get("processId").toString();
+        String businessId = variables.get("businessId").toString();
+        Object flagObj = variables.get("completedFlag");
+        Integer state = ExpertStateEnum.IN_APPROVAL.getState();
+        Integer expertState = NumberConstant.ZERO;
+        if (!ObjectUtils.isEmpty(flagObj) && ProcessStateEnum.COMPLETED.getDesc().equals(flagObj.toString())) {
+            state = ExpertStateEnum.APPROVE.getState();
+            expertState = NumberConstant.ONE;
+        }
+        super.update(new LambdaUpdateWrapper<Expert>()
+                .set(Expert::getWfProcessId,processId)/* 流程id */
+                .set(Expert::getExpertState,expertState)/* 启用状态 */
+                .set(Expert::getState,state)/* 审批状态 */
+                .set(Expert::getProcessType,ExpertProcessTypeEnum.EXPERT_ADD.getState())/* 流程类型 */
+                .set(Expert::getOperateComment,variables.get("operateComment")==null?"":variables.get("operateComment").toString())
+                .eq(Expert::getId,businessId));
+    }
+
+    /**
+     * 专家审批通过
+     * @param variables
+     */
+    @Override
+    public void processAuditPass(Map<String, Object> variables) {
+        String processId = variables.get("processId").toString();
+        String businessId = variables.get("businessId").toString();
+        super.update(new LambdaUpdateWrapper<Expert>()
+                .set(Expert::getWfProcessId,processId)/* 流程id */
+                .set(Expert::getExpertState,NumberConstant.ONE)/* 启用状态 */
+                .set(Expert::getState,ExpertStateEnum.APPROVE.getState())/* 审批状态 */
+                .set(Expert::getOperateComment,variables.get("operateComment")==null?"":variables.get("operateComment").toString())
+                .eq(Expert::getId,businessId));
+    }
+
+    /**
+     * 专家审批拒绝
+     * @param variables
+     */
+    @Override
+    public void processAuditReject(Map<String, Object> variables) {
+        String businessId = variables.get("businessId").toString();
+        super.update(new LambdaUpdateWrapper<Expert>()
+                .set(Expert::getExpertState,NumberConstant.ZERO)/* 启用状态 */
+                .set(Expert::getState,ExpertStateEnum.REJECT.getState())/* 审批状态 */
+                .set(Expert::getOperateComment,variables.get("operateComment")==null?"":variables.get("operateComment").toString())
+                .eq(Expert::getId, businessId));
+    }
+
+    /**
+     * 审批驳回到发起人
+     * @param variables
+     */
+    @Override
+    public void processAuditFreedom(Map<String, Object> variables) {
+        String businessId = variables.get("businessId").toString();
+        super.update(new LambdaUpdateWrapper<Expert>()
+                .set(Expert::getExpertState,NumberConstant.ZERO)/* 启用状态 */
+                .set(Expert::getState,ExpertStateEnum.REJECT.getState())/* 审批状态 */
+                .set(Expert::getOperateComment,variables.get("operateComment")==null?"":variables.get("operateComment").toString())
+                .eq(Expert::getId, businessId));
+    }
 }

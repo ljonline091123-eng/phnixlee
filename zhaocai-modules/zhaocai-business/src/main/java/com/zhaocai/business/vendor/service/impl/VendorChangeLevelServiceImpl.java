@@ -1,10 +1,13 @@
 package com.zhaocai.business.vendor.service.impl;
 
 import cn.hutool.core.codec.Base64;
+import com.alibaba.fastjson.JSON;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.zhaocai.business.common.enums.*;
+import com.zhaocai.business.common.exception.ParamValidateException;
 import com.zhaocai.business.common.utils.ValidateUtils;
+import com.zhaocai.business.manager.http.dto.req.UserObj;
 import com.zhaocai.business.manager.http.service.UnderlingSystemService;
 import com.zhaocai.business.process.service.IBPMProcessService;
 import com.zhaocai.business.pub.service.IAttachmentService;
@@ -65,9 +68,14 @@ public class VendorChangeLevelServiceImpl extends ServiceImpl<VendorChangeMapper
     public void saveVendorLevel(VendorLevelRequestVO requestVO) {
         Vendor vendor = vendorService.getById(requestVO.getId());
         ValidateUtils.isNullException(vendor,"该供应商不存在");
+        if (vendor.getState().equals(VendorStateEnum.IN_APPROVAL.getState())) {
+            throw new ParamValidateException("该供应商处于审批中，请勿修改等级信息");
+        }
 
         // 通过调用供应商变更表，获取最新版变更记录
-        VendorChangeRequestVO result = vendorChangeService.getVendorUpdateDetail(requestVO.getId());
+//        VendorChangeRequestVO result = vendorChangeService.getVendorUpdateDetail(requestVO.getId());
+        /* 创建新的修改对象和 流程用的 业务id */
+        VendorChangeRequestVO result = vendorChangeService.getVendorUpdateDetailNew(requestVO.getId());
         VendorChange vendorChange = result.getVendorChange();
         super.update(new LambdaUpdateWrapper<VendorChange>()
                 .set(VendorChange::getVendorClass,requestVO.getVendorClass())
@@ -101,6 +109,10 @@ public class VendorChangeLevelServiceImpl extends ServiceImpl<VendorChangeMapper
         String org = underlingSystemService.getL2OrgByOrgId(vendor.getFirstCooperationCompanyCode());
         //供应商注册时候选择审批单位，只能由选择的单位维护的供应商审核人员进行审核，如果供应商信息修改也是需要原审核单位进行审核
         String customProcessKey = ProcessKeyEnum.ZHAOCAI_VENDOR_UPDATE_LEVEL.getIdentifying().replace("{org}",org);
+        UserObj userObj = UserObj.builder().businessType(ProcessKeyEnum.ZHAOCAI_VENDOR_UPDATE_LEVEL.name()).
+                businessId(vendor.getId().toString())
+                .toDoType(ToDoTypeEnum.EXAMINE.name()).build();
+        paramMap.put("userObj", JSON.toJSONString(userObj));
         paramMap.put("customProcessKey", customProcessKey);
         paramMap.put("operateComment", vendorChange.getOperateComment());
         processService.startProcessInstance(

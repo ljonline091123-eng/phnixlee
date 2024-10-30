@@ -1,0 +1,224 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhaocai.business.report.mapper.PriceAnalysisByConReportMapper">
+    <resultMap type="com.zhaocai.business.report.vo.PriceAnalysisByConReportVo" id="PriceAnalysisByConReportResult">
+        <result property="uniqueId" column="unique_id"/>
+        <result property="conId" column="con_id"/>
+        <result property="subjectDtlCode" column="subject_dtl_code"/>
+        <result property="subjectDtlName" column="subject_dtl_name"/>
+        <result property="specs" column="specs"/>
+        <result property="measureUnit" column="measure_unit"/>
+        <result property="brand" column="brand"/>
+        <result property="rentMode" column="rent_mode"/>
+        <result property="rentUnit" column="rent_unit"/>
+        <result property="rentTime" column="rent_time"/>
+        <result property="number" column="number"/>
+        <result property="metrologicalRules" column="metrological_rules"/>
+        <result property="basicJob" column="basic_job"/>
+        <result property="quantity" column="quantity"/>
+        <result property="ntaxPrice" column="ntax_price"/>
+        <result property="lastPrice" column="last_price"/>
+        <result property="minPrice" column="min_price"/>
+        <result property="maxPrice" column="max_price"/>
+        <result property="avgPrice" column="avg_price"/>
+        <result property="initialPrice" column="initial_price"/>
+        <result property="createTime" column="create_time"/>
+        <result property="contractUniqueId" column="contract_unique_id"/>
+        <result property="conCode" column="con_code"/>
+        <result property="conName" column="con_name"/>
+        <result property="signDate" column="sign_date"/>
+        <result property="projectId" column="project_id"/>
+        <result property="minAccountCode" column="min_account_code"/>
+        <result property="minAccountFullName" column="min_account_full_name"/>
+        <result property="belongingOrgId" column="belonging_org_id"/>
+        <result property="projectDepartmentId" column="project_department_id"/>
+    </resultMap>
+
+    <select id="getVPriceAnalysisLabor" parameterType="com.zhaocai.business.report.vo.PriceAnalysisByConReportVo" resultMap="PriceAnalysisByConReportResult">
+        select * from v_price_analysis_labor vpal
+        <where>
+            <if test="subjectDtlName != null and subjectDtlName != ''">
+                AND vpal.subject_dtl_name like concat('%',#{subjectDtlName},'%')
+            </if>
+            <if test="specs != null and specs != ''">
+                AND vpal.specs like concat('%',#{specs},'%')
+            </if>
+            <if test="measureUnit != null and measureUnit != ''">
+                AND vpal.measure_unit like concat('%',#{measureUnit},'%')
+            </if>
+            <if test="deptIds != null and deptIds.size() > 0">
+                and (vpal.belonging_org_id in
+                <foreach item="deptId" collection="deptIds" open="(" close=")" separator=",">
+                    #{deptId}
+                </foreach>
+                )
+            </if>
+            <if test="minAccountCode != null and minAccountCode != ''">
+                AND vpal.min_account_code = #{minAccountCode}
+            </if>
+            <if test="startDate != null and startDate != ''">
+                AND vpal.sign_date >= #{startDate}
+            </if>
+            <if test="endDate != null and endDate != ''">
+                AND vpal.sign_date &lt;= #{endDate}
+            </if>
+        </where>
+    </select>
+
+    <select id="getVPriceAnalysisLeasedDevice" parameterType="com.zhaocai.business.report.vo.PriceAnalysisByConReportVo" resultMap="PriceAnalysisByConReportResult">
+        select * from v_price_analysis_leased_device vpald
+        <where>
+            <if test="subjectDtlName != null and subjectDtlName != ''">
+                AND vpald.subject_dtl_name like concat('%',#{subjectDtlName},'%')
+            </if>
+            <if test="specs != null and specs != ''">
+                AND vpald.specs like concat('%',#{specs},'%')
+            </if>
+            <if test="measureUnit != null and measureUnit != ''">
+                AND vpald.measure_unit like concat('%',#{measureUnit},'%')
+            </if>
+            <if test="deptIds != null and deptIds.size() > 0">
+                and (vpald.belonging_org_id in
+                <foreach item="deptId" collection="deptIds" open="(" close=")" separator=",">
+                    #{deptId}
+                </foreach>
+                )
+            </if>
+            <if test="minAccountCode != null and minAccountCode != ''">
+                AND vpald.min_account_code = #{minAccountCode}
+            </if>
+            <if test="startDate != null and startDate != ''">
+                AND vpald.sign_date >= #{startDate}
+            </if>
+            <if test="endDate != null and endDate != ''">
+                AND vpald.sign_date &lt;= #{endDate}
+            </if>
+        </where>
+    </select>
+
+    <select id="getVPriceAnalysisLeasedMaterials" parameterType="com.zhaocai.business.report.vo.PriceAnalysisByConReportVo" resultMap="PriceAnalysisByConReportResult">
+        select * from v_price_analysis_leased_materials vpalm
+        <where>
+            <if test="subjectDtlName != null and subjectDtlName != ''">
+                AND vpalm.subject_dtl_name like concat('%',#{subjectDtlName},'%')
+            </if>
+            <if test="specs != null and specs != ''">
+                AND vpalm.specs like concat('%',#{specs},'%')
+            </if>
+            <if test="measureUnit != null and measureUnit != ''">
+                AND vpalm.measure_unit like concat('%',#{measureUnit},'%')
+            </if>
+            <if test="deptIds != null and deptIds.size() > 0">
+                and (vpalm.belonging_org_id in
+                <foreach item="deptId" collection="deptIds" open="(" close=")" separator=",">
+                    #{deptId}
+                </foreach>
+                )
+            </if>
+            <if test="minAccountCode != null and minAccountCode != ''">
+                AND vpalm.min_account_code = #{minAccountCode}
+            </if>
+            <if test="startDate != null and startDate != ''">
+                AND vpalm.sign_date >= #{startDate}
+            </if>
+            <if test="endDate != null and endDate != ''">
+                AND vpalm.sign_date &lt;= #{endDate}
+            </if>
+        </where>
+    </select>
+
+    <select id="getVPriceAnalysisMaterials" parameterType="com.zhaocai.business.report.vo.PriceAnalysisByConReportVo" resultMap="PriceAnalysisByConReportResult">
+        select * from v_price_analysis_materials vpam
+        <where>
+            <if test="subjectDtlName != null and subjectDtlName != ''">
+                AND vpam.subject_dtl_name like concat('%',#{subjectDtlName},'%')
+            </if>
+            <if test="specs != null and specs != ''">
+                AND vpam.specs like concat('%',#{specs},'%')
+            </if>
+            <if test="measureUnit != null and measureUnit != ''">
+                AND vpam.measure_unit like concat('%',#{measureUnit},'%')
+            </if>
+            <if test="deptIds != null and deptIds.size() > 0">
+                and (vpam.belonging_org_id in
+                <foreach item="deptId" collection="deptIds" open="(" close=")" separator=",">
+                    #{deptId}
+                </foreach>
+                )
+            </if>
+            <if test="minAccountCode != null and minAccountCode != ''">
+                AND vpam.min_account_code = #{minAccountCode}
+            </if>
+            <if test="startDate != null and startDate != ''">
+                AND vpam.sign_date >= #{startDate}
+            </if>
+            <if test="endDate != null and endDate != ''">
+                AND vpam.sign_date &lt;= #{endDate}
+            </if>
+        </where>
+    </select>
+
+    <select id="getVPriceAnalysisOther" parameterType="com.zhaocai.business.report.vo.PriceAnalysisByConReportVo" resultMap="PriceAnalysisByConReportResult">
+        select * from v_price_analysis_other vpao
+        <where>
+            <if test="subjectDtlName != null and subjectDtlName != ''">
+                AND vpao.subject_dtl_name like concat('%',#{subjectDtlName},'%')
+            </if>
+            <if test="specs != null and specs != ''">
+                AND vpao.specs like concat('%',#{specs},'%')
+            </if>
+            <if test="measureUnit != null and measureUnit != ''">
+                AND vpao.measure_unit like concat('%',#{measureUnit},'%')
+            </if>
+            <if test="deptIds != null and deptIds.size() > 0">
+                and (vpao.belonging_org_id in
+                <foreach item="deptId" collection="deptIds" open="(" close=")" separator=",">
+                    #{deptId}
+                </foreach>
+                )
+            </if>
+            <if test="minAccountCode != null and minAccountCode != ''">
+                AND vpao.min_account_code = #{minAccountCode}
+            </if>
+            <if test="startDate != null and startDate != ''">
+                AND vpao.sign_date >= #{startDate}
+            </if>
+            <if test="endDate != null and endDate != ''">
+                AND vpao.sign_date &lt;= #{endDate}
+            </if>
+        </where>
+    </select>
+
+    <select id="getVPriceAnalysisSpecialty" parameterType="com.zhaocai.business.report.vo.PriceAnalysisByConReportVo" resultMap="PriceAnalysisByConReportResult">
+        select * from v_price_analysis_specialty vpas
+        <where>
+            <if test="subjectDtlName != null and subjectDtlName != ''">
+                AND vpas.subject_dtl_name like concat('%',#{subjectDtlName},'%')
+            </if>
+            <if test="specs != null and specs != ''">
+                AND vpas.specs like concat('%',#{specs},'%')
+            </if>
+            <if test="measureUnit != null and measureUnit != ''">
+                AND vpas.measure_unit like concat('%',#{measureUnit},'%')
+            </if>
+            <if test="deptIds != null and deptIds.size() > 0">
+                and (vpas.belonging_org_id in
+                <foreach item="deptId" collection="deptIds" open="(" close=")" separator=",">
+                    #{deptId}
+                </foreach>
+                )
+            </if>
+            <if test="minAccountCode != null and minAccountCode != ''">
+                AND vpas.min_account_code = #{minAccountCode}
+            </if>
+            <if test="startDate != null and startDate != ''">
+                AND vpas.sign_date >= #{startDate}
+            </if>
+            <if test="endDate != null and endDate != ''">
+                AND vpas.sign_date &lt;= #{endDate}
+            </if>
+        </where>
+    </select>
+</mapper>

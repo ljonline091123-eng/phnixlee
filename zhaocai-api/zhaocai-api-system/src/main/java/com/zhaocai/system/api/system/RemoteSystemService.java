@@ -133,6 +133,9 @@ public interface RemoteSystemService {
      @GetMapping("/dept/getTwoLevelDepts")
      List<SysDept> getTwoLevelDepts(@RequestHeader(SecurityConstants.FROM_SOURCE) String source);
 
+     @GetMapping("/dept/getThreeLevelDepts")
+     List<SysDept> getThreeLevelDepts(@RequestHeader(SecurityConstants.FROM_SOURCE) String source);
+
     /**
      * 根据第三方部门 id 获取组织机构信息(本部门及以下部门，含项目部)
      */

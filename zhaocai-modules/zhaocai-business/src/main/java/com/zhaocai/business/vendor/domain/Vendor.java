@@ -180,6 +180,12 @@ public class Vendor extends BaseEntity {
     private Integer state;
 
     /**
+     * 审批信息,批语
+     */
+    @ApiModelProperty(value = "审批信息")
+    private String operateComment;
+
+    /**
      * 签章状态
      */
     @ApiModelProperty(value = "签章状态")
@@ -228,10 +234,4 @@ public class Vendor extends BaseEntity {
      */
     @ApiModelProperty(value = "供应商注册来源")
     private String supplierSourse;
-
-    /**
-     * 批语
-     */
-    @ApiModelProperty(value = "批语")
-    private String operateComment;
 }

@@ -43,12 +43,14 @@
         <result property="procurementType" column="procurement_type"/>
         <result property="state" column="state"/>
         <result property="createTime" column="create_time"/>
+        <result property="noticeStatus" column="noticeStatus"/>
     </resultMap>
 
 
     <select id="selectPageList" resultMap="ProcurementSchemeListResult">
-        select tps.*
+        select tps.*,ttn.notice_status as noticeStatus
         from tb_procurement_scheme tps
+        left join tb_tender_notice ttn on tps.id = ttn.scheme_id
         <where>
             tps.project_code = #{queryVO.projectCode,jdbcType=VARCHAR}
             <if test="queryVO.procurementSchemeCode != null and queryVO.procurementSchemeCode != ''">
