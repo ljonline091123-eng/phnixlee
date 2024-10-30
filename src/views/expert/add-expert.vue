@@ -19,8 +19,9 @@
         :loading="isSubmit"
         >{{ isSubmit ? "保存中..." : "保存" }}</el-button
       >
+<!--   审批通过不显示提交     -->
         <el-button
-          v-if="type=='edit'"
+          v-if="type=='edit' && formData.state != 3"
           type="primary"
           size="mini"
           @click="submitForm('form')"
@@ -581,6 +582,9 @@ export default {
               // 执行结束的逻辑
               this.$router.push("/tender-procurement/expert/expert");
             });
+      }).catch(error => {
+        /* 关闭遮罩层 */
+        this.$modal.closeLoading();
       });
     },
     async handelCalibrationApproval(row) {
