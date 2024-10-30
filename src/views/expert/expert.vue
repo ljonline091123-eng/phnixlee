@@ -154,6 +154,29 @@
                 key="expertTypeText"
                 prop="expertTypeText"
               />
+              <el-table-column  width="200px" label="操作" align="center" class-name="small-padding fixed-width">
+                <template slot-scope="scope">
+                
+              <el-button
+                type="text"
+                size="small"
+                @click="checkExpert(scope.row)"
+                >查看</el-button>
+              <el-button
+              v-if="![1].includes(scope.row.state)"
+                type="text"
+                size="small"
+                @click="editExpert(scope.row)"
+                >编辑</el-button>
+                <el-button
+                v-if="[1].includes(scope.row.state)"
+                type="text"
+                size="small"
+                @click="checkExpert(scope.row)"
+                >审批</el-button
+              >
+                </template>
+              </el-table-column>
               <el-table-column
                 label="账号状态"
                 width="150"
@@ -489,6 +512,21 @@ export default {
     // });
   },
   methods: {
+      /** 查看专家 checkExpert，editExpert，confirmApprove*/
+      checkExpert(row) {
+        console.log(JSON.stringify(row))
+        row.type='check'
+      let param = Base64.encode(JSON.stringify(row));
+      param = encodeURIComponent(param); //避免base64编码中出现"/"时路由404
+      this.$router.push(`/expert/add-expert/${param}`);
+    },
+    editExpert(row) {
+        row.type='edit'
+      let param = Base64.encode(JSON.stringify(row));
+      param = encodeURIComponent(param); //避免base64编码中出现"/"时路由404
+      this.$router.push(`/expert/add-expert/${param}`);
+    },
+  
     /** 获取已入库列表 */
     async getExpertList() {
       this.loading = true;
@@ -549,6 +587,7 @@ export default {
       });
 
       this.open = false;
+      console.log(JSON.stringify(checkedItem))
       let param = Base64.encode(JSON.stringify(checkedItem));
       param = encodeURIComponent(param); //避免base64编码中出现"/"时路由404
       this.$router.push(`/expert/add-expert/${param}`);

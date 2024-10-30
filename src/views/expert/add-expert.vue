@@ -10,14 +10,34 @@
           @click="$tab.closePage()"
           >取消</el-button
         >
+      <el-button
+        v-if="type=='edit'"
+        type="primary"
+        size="mini"
+        @click="saveForm('form')"
+        :disabled="isSubmit"
+        :loading="isSubmit"
+        >{{ isSubmit ? "保存中..." : "保存" }}</el-button
+      >
         <el-button
+          v-if="type=='edit'"
           type="primary"
           size="mini"
           @click="submitForm('form')"
           :disabled="isSubmit"
           :loading="isSubmit"
-          >{{ isSubmit ? "提交中..." : "确定" }}</el-button
-        >
+          >{{ isSubmit ? "提交中..." : "提交" }}</el-button>
+        <el-button
+          v-if="type=='check'"
+          type="primary"
+          size="mini"
+          @click="confirmApprove()"
+          >审批</el-button>
+        <el-button
+          type="primary"
+          size="mini"
+          @click="handelCalibrationApproval()"
+          >审批详情</el-button>
       </div>
     </BackButton>
     <div class="context">
@@ -106,6 +126,7 @@
                   v-model="formData.educationDegree"
                   placeholder="请选择学历"
                   style="width: 100%"
+                  clearable
                   :disabled="isSubmit"
                 >
                   <el-option
@@ -116,7 +137,9 @@
                   ></el-option>
                 </el-select>
               </el-form-item>
+        
             </el-col>
+        
             <el-col :span="8" class="grid-cell">
               <el-form-item
                 label="专业"
@@ -130,10 +153,11 @@
                   :disabled="isSubmit"
                 />
               </el-form-item>
+              
             </el-col>
           </el-row>
           <el-row :gutter="40">
-            <el-col :span="8" class="grid-cell">
+            <!-- <el-col :span="8" class="grid-cell">
               <el-form-item
                 label="执业资格证"
                 prop="registeredCertificate"
@@ -145,6 +169,27 @@
                   clearable
                   :disabled="isSubmit"
                 />
+              </el-form-item>
+            </el-col> -->
+            <el-col :span="8" class="grid-cell">
+              <el-form-item
+                label="执业资格证"
+                prop="registeredCertificate"
+                class="required label-right-align"
+              >
+                <el-select
+                  v-model="formData.registeredCertificate"
+                  placeholder="请选择执业资格证"
+                  style="width: 100%"
+                  :disabled="isSubmit"
+                >
+                  <el-option
+                    v-for="dict in dict.type.registered_certificate"
+                    :key="dict.value"
+                    :label="dict.label"
+                    :value="dict.value"
+                  ></el-option>
+                </el-select>
               </el-form-item>
             </el-col>
             <el-col :span="8" class="grid-cell">
@@ -318,7 +363,7 @@
                   type="textarea"
                   :rows="4"
                   placeholder="请输入内容"
-                  v-model="formData.textarea"
+                  v-model="formData.professionResume"
                 >
                 </el-input>
               </el-form-item>
@@ -338,6 +383,7 @@
                   :on-success="fileSuccess"
                   :file-list="formData.resumeAttachList"
                   :on-remove="fileRemove"
+                  :on-preview="handlePreview" 
                 >
                   <el-button size="small" type="primary">点击上传</el-button>
                 </el-upload>
@@ -347,22 +393,48 @@
         </div>
       </el-form>
     </div>
+    <!-- 审批和审批详情 -->
+    <ApprovalForm
+      :visible.sync="expertVisible"
+      :title="'新增专家审批流程'"
+      :formModel="sanctionForm"
+      :rejectNodeList="rejectNodeList"
+      @update:visible="expertVisible = $event"
+      @submit="handleSubmit"
+    />
+    <ApprovalDetailsDialog
+      :visible.sync="calibrateVisible"
+      title="新增专家审批流程详情"
+      :activeStep="calibrateActive"
+      :processInformationList="processInformationList"
+      :approveLists="approveArr"
+      :loading="calibrateLoading"
+      @update:visible="calibrateVisible = $event"
+  />
   </div>
 </template>
 
 <script>
+import ApprovalForm from "@/components/Approval/approvalForm.vue";
+import ApprovalDetailsDialog from "@/components/Approval/approvalDetailsDialog.vue";
 import { Base64 } from "js-base64";
-import { addExpert } from "@/api/expert/expert";
+import { submitExpert,getInfo,saveExpert } from "@/api/expert/expert";
 import BackButton from "@/components/BackButton/index.vue";
 import PageTitle from "@/components/PageTitle/index.vue";
 import { uploadFileUrl } from "@/utils/const";
+import {
+  getPermissionButton,
+  postAuditProcess,
+  getLoadTaskDef,
+  getProcessLogList,
+} from "@/api/procurement/manage";
 export default {
   name: "add-expert",
   dicts: [
     "education_degree",
     "expert_business_type",
     "expert_type",
-    "technical_titles",
+    "technical_titles","registered_certificate"
   ],
   data() {
     let checkNum = (rule, value, callback) => {
@@ -373,6 +445,21 @@ export default {
       }
     };
     return {
+      id:'',
+      type:'',
+      expertVisible:false,
+      calibrateVisible: false,
+      calibrateLoading: false,
+      calibrateActive: 1,
+      processInformationList: [],
+      approveArr: [],
+      taskPresentId: "",
+      sanctionForm: {
+        pass: true,
+        rejectTaskKey: "",
+        operateComment: "",
+      },
+      rejectNodeList: [],
       formData: {
         expertName: "",
         expertPhone: "",
@@ -382,7 +469,8 @@ export default {
         major: "",
         businessType: "",
         expertType: "",
-        belongOrganization: "",
+        registeredCertificate: "",
+        
       }, //form表单数据
       planList: [],
       rules: {
@@ -436,8 +524,26 @@ export default {
     };
   },
   created() {
-    const param = JSON.parse(Base64.decode(this.$route.params.params));
-    console.log(param, "pp");
+
+  
+   
+   
+    if(this.$route.query.id){
+      this.id = Base64.decode(this.$route.query.id);
+      this.getInfoDetail(this.id)
+      console.log("首页审批"+this.id);
+    }else if(this.$route.params.params){
+      const param = JSON.parse(Base64.decode(this.$route.params.params));
+      this.id=param.id
+      if(param.type=='check' || param.type=='edit' ){
+        this.getInfoDetail(this.id)
+      this.type=param.type
+        if(param.type=='check'){
+          this.isSubmit = true;
+        }
+      }else{
+      console.log("新增"+this.id);
+      this.type='edit'
     const {
       nickName: expertName,
       phonenumber: expertPhone,
@@ -445,6 +551,7 @@ export default {
       userId,
       thridOrgName,
     } = param;
+    console.log(JSON.stringify(param), "p---p");
     Object.assign(this.formData, {
       expertName,
       expertPhone,
@@ -452,9 +559,138 @@ export default {
       userId,
       belongOrganization: thridOrgName,
     });
-    console.log(this.formData, "(this.formData");
+  }
+      
+    }
   },
   methods: {
+    handleSubmit() {
+      this.$modal.loading("请稍候...");
+      const params = {
+        ...this.sanctionForm,
+        businessId: this.businessId,
+        processId: this.processId,
+        curTaskId: this.taskPresentId,
+        processKey: "jiantou-zhaocai:{org}:ZHAOCAI_EXPERT_ADD",
+      };
+      postAuditProcess(params).then(() => {
+        this.$message.success("提交成功");
+        this.$modal.closeLoading();
+        this.expertVisible = false;
+        this.$tab.closePage().then(() => {
+              // 执行结束的逻辑
+              this.$router.push("/tender-procurement/expert/expert");
+            });
+      });
+    },
+    async handelCalibrationApproval(row) {
+      this.businessId = this.formData.id;
+      this.processId = this.formData.wfProcessId;
+      try {
+        this.calibrateVisible = true;
+        this.calibrateLoading = true;
+        const params = {
+          businessId: this.businessId,
+          processId: this.processId,
+        };
+        if (this.businessId && this.processId) {
+          const res = await getLoadTaskDef(params);
+          this.processInformationList = res.data;
+          function getActive(nodes) {
+            let allFalse = true;
+            for (let i = 0; i < nodes.length; i++) {
+              if (!nodes[i].completed) {
+                if (i === 0) {
+                  return 0;
+                } else {
+                  return i;
+                }
+              }
+              allFalse = false;
+            }
+            return nodes.length;
+          }
+          this.calibrateActive = getActive(this.processInformationList);
+          const response = await getProcessLogList(params);
+          this.approveArr = response.data;
+        }
+      } catch (error) {}
+      this.calibrateLoading = false;
+    },
+    confirmApprove(row) {
+      this.expertVisible = true;
+      this.getPermissionButton();
+    },
+    // 审批逻辑
+    async getPermissionButton() {
+      this.businessId =this.formData.id;
+      this.processId = this.formData.wfProcessId;
+      try {
+        if (this.formData.id) {
+          const res = await getPermissionButton({
+            businessId: this.formData.id, //联系人id
+            processId: this.formData.wfProcessId, //流程id
+          });
+          this.rejectNodeList = res.data.completedTaskList;
+          this.taskPresentId = res.data.curTaskId;
+          // this.isShowButton = res.data.auditable;
+        }
+      } catch (error) {}
+    },
+    //点击文件列表中已上传文件进行下载
+    handlePreview(file) {
+      var a = document.createElement('a');
+      var event = new MouseEvent('click');
+      a.download = file.name;
+      a.href = file.fileUrl;
+      a.dispatchEvent(event);
+      console.log(file)
+    },
+
+    async getInfoDetail(id) {
+        const res = await getInfo(id);
+        const data=res.data
+        this.formData=data
+        this.formData.educationDegree=this.formData.educationDegree+""
+        this.formData.registeredCertificate=data.registeredCertificate+""
+        this.formData.technicalTitles=data.technicalTitles+""
+        this.formData.expertType=data.expertType+""
+        this.formData.businessType=data.businessType+""
+        this.formData.state=data.state+""
+ 
+      },
+    //保存
+    saveForm(formName){
+      this.isSubmit = true;
+      this.$refs[formName].validate(async (valid) => {
+        if (valid) {
+          console.log(this.formData, "this.formData");
+          const loading = this.$loading({
+            lock: true,
+            text: "数据提交中...",
+            background: "rgba(0, 0, 0, 0.7)",
+          });
+          try {
+            await saveExpert(this.formData);
+            this.$message({
+              message: "保存成功",
+              type: "success",
+            });
+            this.$tab.closePage().then(() => {
+              // 执行结束的逻辑
+              this.$router.push("/tender-procurement/expert/expert");
+            });
+          } catch (err) {
+            console.log(err);
+          }
+          loading.close();
+          this.isSubmit = false;
+        } else {
+          this.isSubmit = false;
+          return false;
+        }
+      });
+    },
     //提交
     submitForm(formName) {
       this.isSubmit = true;
@@ -467,9 +703,9 @@ export default {
             background: "rgba(0, 0, 0, 0.7)",
           });
           try {
-            await addExpert(this.formData);
+            await submitExpert(this.formData);
             this.$message({
-              message: "保存成功",
+              message: "提交成功",
               type: "success",
             });
             this.$tab.closePage().then(() => {
@@ -504,6 +740,8 @@ export default {
   components: {
     BackButton,
     PageTitle,
+    ApprovalForm,
+    ApprovalDetailsDialog,
   },
 };
 </script>

@@ -3,7 +3,7 @@ import request from '@/utils/request'
 // 获取专家列表
 export const getExpertList = (data) => {
   return request({
-    url: '/business/expert/page',
+    url: '/business/expert/pageAll',
     method: 'post',
     data
   })
@@ -19,10 +19,28 @@ export const getTPIExpertInfo = (params) => {
 }
 
 /** 新增专家 */
-export const addExpert = (data) => {
+export const submitExpert = (data) => {
   return request({
-    url: '/business/expert/add',
+    url: '/business/expert/submit',
     method: 'post',
     data
+  })
+}
+export const saveExpert = (data) => {
+  return request({
+    url: '/business/expert/save',
+    method: 'post',
+    data
+  })
+}
+
+//getInfo?id=
+export const getInfo = (id) => {
+  return request({
+    url: '/business/expert/getInfo',
+    method: 'get',
+    params:{
+      id
+    }
   })
 }
