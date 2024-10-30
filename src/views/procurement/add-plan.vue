@@ -573,8 +573,10 @@ export default {
 
     pushPlan(){
       this.materialsLists=[]
+      if(!this.planList[0].children) return this.$message({type:'error',message:"您还没有可选择的采购清单"});
         for(let i = 0 ; i <  this.planList[0].children.length ; i++){
           let children=this.planList[0].children[i]
+          console.log(JSON.stringify(children)+"采购清单")
           const currentSelect = this.$refs[`${children.planTable}`].selection;
           this.materialsLists = [...this.materialsLists ,...currentSelect];
           
@@ -590,6 +592,7 @@ export default {
       });
     },
     revokePushPlan(){
+      if(!this.planList[0].children) return this.$message({type:'error',message:"您还没有可选择的采购清单"});
       this.materialsLists=[]
         for(let i = 0 ; i <  this.planList[0].children.length ; i++){
           let children=this.planList[0].children[i]
@@ -971,11 +974,13 @@ export default {
             // })
             children.push({
               index,
+              planTable:'planTable'+index,
               children: this.inventoryList.map(item => ({
                 ...item,
                 count: index === 0 ? item.count : 0.00,
                 rentTime: index === 0 ? item.rentTime : '',
-                rentQuantity:index === 0 ? item.rentQuantity : ''
+                rentQuantity:index === 0 ? item.rentQuantity : '',
+               
               }))
             })
           });
@@ -1489,6 +1494,10 @@ export default {
 }
 ::v-deep .el-table__row .already-pushed {
   background: #CCCCCC !important;
+}
+
+::v-deep .el-table__body tr:hover > td.el-table__cell {
+  background: initial !important;
 }
 ::v-deep  .el-table__row   .not-pushed {
   background: #F9F9FB !important;

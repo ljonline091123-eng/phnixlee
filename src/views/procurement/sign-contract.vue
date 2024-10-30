@@ -106,12 +106,13 @@
         prop="agreementCode"
       >
         <template slot-scope="scope">
-          <a
+          <a v-if="scope.row.procurementTypeText"
             class="link-type"
-            @click="goDetailBid(scope.row.schemeId, scope.row.noticeId, scope.row.procurementType,scope.row.procurementTypeText)"
+            @click="goDetailBid(scope.row.schemeId, scope.row.noticeId, scope.row.procurementType)"
           >
             {{ scope.row.procurementSchemeCode }}
           </a>
+          <span v-else>{{ scope.row.procurementSchemeCode }}</span>
         </template>
       </el-table-column>
         <el-table-column
@@ -135,12 +136,13 @@
         prop="agreementCode"
       >
         <template slot-scope="scope">
-          <a
+          <a v-if="scope.row.procurementTypeText"
             class="link-type"
             @click="goDetailBid(scope.row.schemeId, scope.row.noticeId, scope.row.procurementType)"
           >
             {{ scope.row.procurementTypeText?scope.row.procurementTypeText:'易料采购' }}
           </a>
+          <span v-else>{{ scope.row.procurementTypeText?scope.row.procurementTypeText:'易料采购' }}</span>
         </template>
       </el-table-column>
         <el-table-column
@@ -188,7 +190,8 @@
                   goEdit(
                     scope.row.id,
                     scope.row.agreementName,
-                    scope.row.expenditureBusinessType
+                    scope.row.expenditureBusinessType,
+                    scope.row.procurementTypeText
                   )
                 "
                 icon="el-icon-s-promotion"
@@ -241,7 +244,7 @@
                 >撤回</el-button
               >
             </div>
-
+            
             <div
               v-else-if="
                 Number(scope.row.isOperate) === 1 &&
@@ -315,7 +318,7 @@
                 >作废签署合同</el-button
               >
             </div>
-
+           
             <span v-else>-</span>
           </template>
         </el-table-column>
@@ -802,7 +805,6 @@
             <el-table-column
               label="本次签订含税单价(元)"
               align="center"
-              prop="signUnitPriceInclTax"
               width="150"
               :key="'signUnitPriceInclTax'"
             >
@@ -1186,7 +1188,7 @@
        @selection-change="handleSelectionChangeYl"
      >
 
-
+   
        <el-table-column label="" width="30" align="center">
         <template slot-scope="scope">
           <el-radio
@@ -1212,9 +1214,9 @@
          prop="agreementName"
          show-overflow-tooltip
        />
-
+    
        <el-table-column label="乙方名称" prop="partyBName" />
-
+   
        <el-table-column
          label="支出业务类型"
          align="center"
@@ -1222,7 +1224,7 @@
        />
 
      </el-table>
-
+ 
      <pagination
         v-show="total_procurement_yl > 0"
         :total="total_procurement_yl"
@@ -1511,14 +1513,9 @@ export default {
       //   path: "/procurement/contract-detail",
       //   query: { getId: id, type },
       // });
-      if(procurementTypeText){
         let param = Base64.encode(JSON.stringify({ id, noticeId,procurementType }));
       param = encodeURIComponent(param); //避免base64编码中出现"/"时路由404
       this.$router.push(`/procurement/tendering/${param}`);
-      }else{
-        this.$message.warning("易料采购的合同无法通过招标编号进行透视");
-      }
-
     },
     submitFirstForm() {
       console.log(this.form, "this.form----0");
@@ -1589,7 +1586,7 @@ export default {
                 type:'add'
               },
             });
-
+   
     },
     submitProcurement() {
       this.schemeId = this.selectedRow.schemeId;
@@ -1653,7 +1650,7 @@ export default {
         this.total_procurement = res?.data?.total;
       });
     },
-
+  
     /**
      * 弹出选择采购任务
      */
@@ -2007,7 +2004,8 @@ export default {
         if (!isNumber(taxUnitPrice) || !isNumber(count) || !isNumber(taxRate))
           return "0.00";
 
-        const { add, divide, multiply, bignumber, format, subtract } = this.mathjs;
+        const { add, divide, multiply, bignumber, format, subtract } =
+          this.mathjs;
 
         const taxUnitPriceBig = bignumber(taxUnitPrice);
         const taxRateBig = bignumber(taxRate);

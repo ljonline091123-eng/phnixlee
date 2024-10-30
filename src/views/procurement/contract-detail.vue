@@ -40,7 +40,7 @@
             >撤回</el-button
           >
         </div>
-
+        
         <div v-else-if="isOperate === 1 && Number(agreementState) === 3">
           <el-button type="primary" size="mini" @click="pushToVendor()"
             >推送至供应商</el-button
@@ -64,7 +64,7 @@
             >作废签署合同</el-button
           >
         </div>
-
+       
         <div class="contractApprovalButton">
           <el-button
             type="primary"
@@ -336,10 +336,10 @@
               align="right"
             />
             <el-table-column prop="remark" label="备注" width="120" />
-            <el-table-column prop="skuId" align="center" width="180" label="易料市集商品编码"/>
+            <!-- <el-table-column prop="skuId" align="center" width="180" label="易料市集商品编码"/>
             <el-table-column prop="goodsName" align="center" width="180" label="易料市集商品名称"/>
               <el-table-column prop="offerBrand" align="center" width="180" label="易料市集品牌"/>
-             <el-table-column prop="offerPrice" align="center" width="180" label="易料市集含税单价"/>
+             <el-table-column prop="offerPrice" align="center" width="180" label="易料市集含税单价"/> -->
           </el-table>
           <!-- 租赁材料、租赁机械 -->
           <el-table
@@ -920,8 +920,6 @@
       :title="'合同签订审批流程'"
       :formModel="sanctionForm"
       :rejectNodeList="rejectNodeList"
-      :nextCandidateList="nextCandidateList"
-      :nextAppointable="nextAppointable"
       @update:visible="sanctionVisible = $event"
       @submit="handleSubmit"
     />
@@ -1130,10 +1128,6 @@ export default {
         operateComment: "",
       },
       rejectNodeList: [],
-      /* 下一步审批人列表 */
-      nextCandidateList: [],
-      /* 下一步审批人 */
-      nextAppointable: false,
       purchaserId: "",
       exampleId: "",
       taskPresentId: "",
@@ -3349,10 +3343,6 @@ export default {
             processId: this.exampleId,
           });
           this.rejectNodeList = res.data.completedTaskList;
-          /* 下一步审批人列表 */
-          this.nextCandidateList = res.data.nextCandidateList;
-          /* 下一步审批人是否可选 */
-          this.nextAppointable = res.data.nextAppointable;
           this.taskPresentId = res.data.curTaskId;
           this.isShowButton = res.data.auditable;
         }

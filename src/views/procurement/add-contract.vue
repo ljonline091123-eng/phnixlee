@@ -4,8 +4,8 @@
       <div>
         <el-button type="primary" size="mini" @click="submitForm"
           >保存</el-button>
-          <el-button type="primary" size="mini" @click="avoidSubmitForm"
-          >免审提交</el-button>
+          <el-button type="primary" v-if="typeContract=='add'"  size="mini" @click="avoidSubmitForm"
+          >{{typeContract}}</el-button>
       </div>
     </BackButton>
     <div class="context">
@@ -242,7 +242,7 @@
                 </el-form-item>
               </el-col>
             </el-row>
-            <el-row v-if="contractType==1" :gutter="10">
+            <el-row v-if="typeContract=='add'" :gutter="10">
               <el-col :span="8" class="grid-cell">
                 <el-form-item label=" 合同模板："  :rules="[{ required: true, trigger: 'blur', message: '请选择模板' }]"  prop="agreement.contractTemplateName">
                   <!-- <template v-if="formData.contractTemplateName">
@@ -527,11 +527,11 @@
                   </el-form-item>
                 </template>
               </el-table-column>
-              <el-table-column prop="skuId" align="center" width="180" label="易料市集商品编码"/>
+              <!-- <el-table-column prop="skuId" align="center" width="180" label="易料市集商品编码"/>
                 <el-table-column prop="goodsName" align="center" width="180" label="易料市集商品名称"/>
                   <el-table-column prop="offerBrand" align="center" width="180" label="易料市集品牌"/> 
-                  <el-table-column  prop="offerPrice" align="center" width="180" label="易料市集含税单价"/>
-                  <el-table-column width="1"/>
+                  <el-table-column  prop="offerPrice" align="center" width="180" label="易料市集含税单价"/> -->
+                  <!-- <el-table-column width="1"/> -->
                 
             </el-table>
             <el-table v-else  :data="firstForm.agreementMaterialsLists" style="width: 100%">
@@ -1468,7 +1468,7 @@ export default {
         switchTemplateType: "",
         contractType: "",
       },
-
+      typeContract:'',
       contractType: 1, // 1-物资采购类  2-物资租赁类  3-机械租赁类  4-专业分包类  5-劳务分包类  6-其它
       priceType: "",
       subjectMatter: "",
@@ -2342,7 +2342,7 @@ export default {
               this.$route.query.agreementName;
               this.firstForm.agreement.marketMaterialContractId = res.data.marketMaterialContractId
             this.agreementFileUrl = res.data.agreementFileUrl;
-            
+            this.typeContract= this.$route.query.type;
             this.agreementFileName = res.data.agreementFileName;
             this.firstForm.agreement.agreementNameYl =
               this.$route.query.agreementName;

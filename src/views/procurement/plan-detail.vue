@@ -252,11 +252,8 @@
           </el-table-column>
    
           <el-table-column v-if="contractPlanning.contractPlanningCategory == 1" label="易料市集品牌" min-width="120" prop="offerBrand" show-overflow-tooltip/>
-          <el-table-column v-if="contractPlanning.contractPlanningCategory == 1" label="易料市集含税单价"  width="150" prop="offerPrice" >
-            <template slot-scope="scope">
-              <el-input v-model="scope.row.offerPrice" disabled v-thousandth/>
-            </template>
-          </el-table-column>
+          <el-table-column v-if="contractPlanning.contractPlanningCategory == 1" label="易料市集含税单价"  width="150" prop="offerPrice" />
+          
             </el-table>
           </template>
         </el-table-column>
