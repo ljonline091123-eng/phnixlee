@@ -60,6 +60,10 @@ public class VendorCertificationServiceImpl extends ServiceImpl<VendorCertificat
 
     @Override
     public void addCertification(List<VendorCertificationRequestVO> requestList, CertificationTypeEnum certificationType, Long vendorId) {
+        super.remove(new LambdaQueryWrapper<VendorCertification>()
+                .eq(VendorCertification::getVendorId,vendorId)
+                .eq(VendorCertification::getDelFlag,0)
+                .eq(VendorCertification::getBusinessCode,certificationType));
         List<VendorCertification> list = requestList.stream()
                 .map(x ->{
                     VendorCertification certification = new VendorCertification();

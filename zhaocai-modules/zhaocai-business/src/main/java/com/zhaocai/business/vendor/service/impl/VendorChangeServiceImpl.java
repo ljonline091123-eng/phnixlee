@@ -66,12 +66,6 @@ public class VendorChangeServiceImpl extends ServiceImpl<VendorChangeMapper,Vend
     @Autowired
     private IVendorOperateLogService vendorOperateLogService;
 
-    @Autowired
-    private IVendorContactService vendorContactService;
-
-
-    @Autowired
-    private IVendorCertificationService vendorCertificationService;
 
     @Autowired
     private IAttachmentService attachmentService;
@@ -118,7 +112,6 @@ public class VendorChangeServiceImpl extends ServiceImpl<VendorChangeMapper,Vend
                 vendorChange = this.createVendorChange(vendorId);
             certificationList = certificationChangeService.createCertificationChange(vendorId,0);
             contactChangeList = contactChangeService.createContactChange(vendorId, 0);
-
             // 创建最新版本副本
             vendorChangeRequestVO = this.createCopy(vendorChange);
             }
