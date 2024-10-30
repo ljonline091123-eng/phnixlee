@@ -19,8 +19,9 @@
         :loading="isSubmit"
         >{{ isSubmit ? "保存中..." : "保存" }}</el-button
       >
+<!--   审批通过不显示提交     -->
         <el-button
-          v-if="type=='edit'"
+          v-if="type=='edit' && formData.state != 3"
           type="primary"
           size="mini"
           @click="submitForm('form')"
@@ -137,9 +138,9 @@
                   ></el-option>
                 </el-select>
               </el-form-item>
-        
+
             </el-col>
-        
+
             <el-col :span="8" class="grid-cell">
               <el-form-item
                 label="专业"
@@ -153,7 +154,7 @@
                   :disabled="isSubmit"
                 />
               </el-form-item>
-              
+
             </el-col>
           </el-row>
           <el-row :gutter="40">
@@ -383,7 +384,7 @@
                   :on-success="fileSuccess"
                   :file-list="formData.resumeAttachList"
                   :on-remove="fileRemove"
-                  :on-preview="handlePreview" 
+                  :on-preview="handlePreview"
                 >
                   <el-button size="small" type="primary">点击上传</el-button>
                 </el-upload>
@@ -470,7 +471,7 @@ export default {
         businessType: "",
         expertType: "",
         registeredCertificate: "",
-        
+
       }, //form表单数据
       planList: [],
       rules: {
@@ -525,9 +526,9 @@ export default {
   },
   created() {
 
-  
-   
-   
+
+
+
     if(this.$route.query.id){
       this.id = Base64.decode(this.$route.query.id);
       this.getInfoDetail(this.id)
@@ -560,7 +561,7 @@ export default {
       belongOrganization: thridOrgName,
     });
   }
-      
+
     }
   },
   methods: {
@@ -581,6 +582,9 @@ export default {
               // 执行结束的逻辑
               this.$router.push("/tender-procurement/expert/expert");
             });
+      }).catch(error => {
+        /* 关闭遮罩层 */
+        this.$modal.closeLoading();
       });
     },
     async handelCalibrationApproval(row) {
@@ -657,7 +661,7 @@ export default {
         this.formData.expertType=data.expertType+""
         this.formData.businessType=data.businessType+""
         this.formData.state=data.state+""
- 
+
       },
     //保存
     saveForm(formName){

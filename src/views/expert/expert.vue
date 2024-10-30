@@ -156,7 +156,7 @@
               />
               <el-table-column  width="200px" label="操作" align="center" class-name="small-padding fixed-width">
                 <template slot-scope="scope">
-                
+
               <el-button
                 type="text"
                 size="small"
@@ -206,7 +206,7 @@
               :total="total"
               :page.sync="queryParams.pageNumber"
               :limit.sync="queryParams.pageSize"
-              @pagination="getExpertList"
+              @pagination="getExpertListAll"
             />
           </div>
         </template>
@@ -215,7 +215,7 @@
         <el-input v-model="deptName" placeholder="请输入部门名称" clearable size="small" prefix-icon="el-icon-search"
               style="margin-bottom: 12px" />
         <el-tree  :data="deptOptions" class="tree_expert" :props="defaultProps" :expand-on-click-node="false"
-        :filter-node-method="filterNode" ref="tree" node-key="id" default-expand-all highlight-current 
+        :filter-node-method="filterNode" ref="tree" node-key="id" default-expand-all highlight-current
         @node-click="handleNodeClick" />
       </div>
       <div class="right fill">
@@ -241,7 +241,7 @@
           </el-form-item>
         </el-form>
 
-        <el-table v-loading="loading" :data="expertList" @selection-change="handleSelectionChange" 
+        <el-table v-loading="loading" :data="expertList" @selection-change="handleSelectionChange"
           highlight-current-row
           border
           :header-cell-style="{background:'#F3F2F8',}">
@@ -263,7 +263,7 @@
           </el-table-column>
         </el-table>
         <pagination v-show="total > 0" :total="total" :page.sync="queryParams.pageNum"
-          :limit.sync="queryParams.pageSize" @pagination="getExpertList" />
+          :limit.sync="queryParams.pageSize" @pagination="getExpertListAll" />
       </div> -->
     </div>
     <!-- 添加专家 -->
@@ -419,7 +419,7 @@
 </template>
 
 <script>
-import { getExpertList } from "@/api/expert/expert";
+import { getExpertListAll } from "@/api/expert/expert";
 import { Base64 } from "js-base64";
 import {
   listUser,
@@ -505,7 +505,7 @@ export default {
     },
   },
   created() {
-    this.getExpertList();
+    this.getExpertListAll();
     this.getDeptTree();
     // this.getConfigKey("sys.user.initPassword").then(response => {
     //   this.initPassword = response.msg;
@@ -526,9 +526,9 @@ export default {
       param = encodeURIComponent(param); //避免base64编码中出现"/"时路由404
       this.$router.push(`/expert/add-expert/${param}`);
     },
-  
+
     /** 获取已入库列表 */
-    async getExpertList() {
+    async getExpertListAll() {
       this.loading = true;
       if (this.isFirstLoad) {
         this.queryParams.deptId =
@@ -536,7 +536,7 @@ export default {
         this.isFirstLoad = false; // 将标志位设置为 false，确保后续不再赋值
       }
       try {
-        const res = await getExpertList(this.queryParams);
+        const res = await getExpertListAll(this.queryParams);
         this.loading = false;
         this.expertList = res.data.rows;
         this.total = res.data.total;
@@ -581,7 +581,7 @@ export default {
       console.log(checkedItem, "checkedItem");
       if (!checkedItem.userId) return this.$message.error("请先选择一位专家");
       console.log(param, "param~~~~~~~~~~~~~");
-      getExpertList({ userId: checkedItem.userId }).then((res) => {
+      getExpertListAll({ userId: checkedItem.userId }).then((res) => {
         if (res.data.total > 0)
           return this.$message.error("该专家已入库，请重新选择");
       });
@@ -638,7 +638,7 @@ export default {
     /** 搜索已入库专家 */
     handleQuery() {
       this.queryParams.pageNumber = 1;
-      this.getExpertList();
+      this.getExpertListAll();
     },
     /** 搜索未入库专家 */
     notLibraryQuery() {
@@ -713,7 +713,7 @@ export default {
             type: "success",
             message: `${statusTitle}成功!`,
           });
-          this.getExpertList();
+          this.getExpertListAll();
         })
         .catch(() => {});
     },

@@ -1,7 +1,15 @@
 import request from '@/utils/request'
 
-// 获取专家列表
+// 获取审批通过专家列表
 export const getExpertList = (data) => {
+  return request({
+    url: '/business/expert/page',
+    method: 'post',
+    data
+  })
+}
+// 获取所有专家列表
+export const getExpertListAll = (data) => {
   return request({
     url: '/business/expert/pageAll',
     method: 'post',
