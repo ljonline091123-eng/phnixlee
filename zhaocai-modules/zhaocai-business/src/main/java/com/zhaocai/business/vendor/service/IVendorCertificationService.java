@@ -5,6 +5,7 @@ import com.zhaocai.business.common.enums.CertificationTypeEnum;
 import com.zhaocai.business.pub.vo.req.AttachmentRequestVO;
 import com.zhaocai.business.vendor.domain.VendorCertification;
 import com.zhaocai.business.vendor.vo.req.VendorCertificationRequestVO;
+import com.zhaocai.business.vendor.vo.req.VendorRegisterRequestVO;
 import com.zhaocai.business.vendor.vo.res.VendorCertificationListVO;
 
 import java.util.List;
@@ -40,6 +41,15 @@ public interface IVendorCertificationService extends IService<VendorCertificatio
      * @return
      */
     VendorCertificationListVO listCertification(Long vendorId,Long mainContactId);
+
+
+    /**
+     * 获取供应商认证
+     * @param vendorId
+     * @param mainContactId
+     * @return
+     */
+    VendorRegisterRequestVO listCertification(VendorRegisterRequestVO  vendorRequestVO,Long vendorId, Long mainContactId);
 
     /**
      * 删除供应商认证
