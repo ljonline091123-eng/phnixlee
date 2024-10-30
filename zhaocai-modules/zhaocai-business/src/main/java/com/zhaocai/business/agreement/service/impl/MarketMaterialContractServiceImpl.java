@@ -140,6 +140,7 @@ public class MarketMaterialContractServiceImpl extends ServiceImpl<MarketMateria
 
         // 查询项目详情
         MinProjectDetailResponseDTO projectDetail = contractPlanService.getMinProjectDetail(contract.getBelongAccountingItemCode());
+        baseInfoVO.setBelongAccountingItem(projectDetail.getMinAccountFullName());
         baseInfoVO.setBelongOrganizationId(projectDetail.getBelongingOrgId());
         baseInfoVO.setBelongOrganizationName(getDeptName(projectDetail.getBelongingOrgId()));
         baseInfoVO.setAgreementPerformAddress(contract.getAgreementPerformAddress());
