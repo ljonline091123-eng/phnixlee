@@ -102,6 +102,7 @@ public class VendorChangeServiceImpl extends ServiceImpl<VendorChangeMapper,Vend
         Vendor vendor = vendorService.getById(vendorId);
         // 不存在变更版本时，创建一份VO版本
         if (CollectionUtils.isEmpty(vendorChangeList)) {
+            //如果并未审批通过，不生成新版本
             if(vendor.getState()==VendorStateEnum.REJECT.getState()||vendor.getState()==VendorStateEnum.IN_APPROVAL.getState()){
                 BeanUtils.copyProperties(vendor, vendorChange);
 //                List<VendorContact>  contactList= vendorContactService.list(new LambdaQueryWrapper<VendorContact>()
@@ -113,7 +114,6 @@ public class VendorChangeServiceImpl extends ServiceImpl<VendorChangeMapper,Vend
 //                certificationList  = certificationChangeService.getCertificationChange(vendorId,0);
                 vendorChangeRequestVO.setVendorChange(vendorChange);
                 return vendorChangeRequestVO;
-
             }else{
                 vendorChange = this.createVendorChange(vendorId);
             certificationList = certificationChangeService.createCertificationChange(vendorId,0);
