@@ -64,8 +64,6 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
     @Autowired
     private IVendorCertificationService vendorCertificationService;
 
-
-
     @Autowired
     private IAttachmentService attachmentService;
 
@@ -84,7 +82,6 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
     @Lazy
     @Autowired
     private IVendorChangeService vendorChangeService;
-
 
     @Autowired
     private UnderlingSystemService underlingSystemService;

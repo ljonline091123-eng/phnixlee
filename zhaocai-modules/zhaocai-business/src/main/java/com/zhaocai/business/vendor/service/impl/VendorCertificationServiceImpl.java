@@ -136,11 +136,8 @@ public class VendorCertificationServiceImpl extends ServiceImpl<VendorCertificat
             }else if (CertificationTypeEnum.LEGAL_AUTHORIZATION.equalsType(certification.getBusinessCode())
                     && mainContactId.equals(certification.getBusinessId())) {
                 // 只显示主要联系人的授权书
-                VendorCertificationRequestVO list = vendorRequestVO.getLegalAuthorization();
-                if (list == null) {
-                    list = new VendorCertificationRequestVO();
-                }
                 vendorRequestVO.setLegalAuthorization(vendorCertificationVo);
+                //资质信息
             }else if (CertificationTypeEnum.RELEVANT_CERTIFICATION.equalsType(certification.getBusinessCode())) {
                 List<VendorCertificationRequestVO> list = vendorRequestVO.getRelevantCertificationList();
                 if (list == null) {
