@@ -459,38 +459,38 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
         for (ProcurementPlanPushUserVO userData : planPushVO.getUserList()){
             PushThirdPartyTodoTaskSonRequestDTO requestDTO = new PushThirdPartyTodoTaskSonRequestDTO();
             requestDTO.setTitle("采购计划待办信息");
-//            requestDTO.setContent(String.format(ApproveFlowPromptTemplateEnum.PROCUREMENT_PLAN_PUSH.getDesc(), planPushVO.getContractPlanningName()));
+            requestDTO.setContent(String.format(ApproveFlowPromptTemplateEnum.PROCUREMENT_PLAN_PUSH.getDesc(), planPushVO.getContractPlanningName()));
 
-            /* 获取已有的合约规划 */
-            ContractPlanning contractPlanning = contractPlanningService.getOne(new LambdaQueryWrapper<ContractPlanning>()
-                    .eq(ContractPlanning::getContractPlanningCode,planPushVO.getContractPlanningCode()));
-            /* 查询采购计划 */
-            ProcurementPlan procurementPlan = null;
-            if(contractPlanning!=null&&contractPlanning.getPlanId()!=null){
-                procurementPlan = procurementPlanService.getById(contractPlanning.getPlanId());
-            }
-            String content =
-                            /* 推送人 登录人 */
-                    "发送人: "+(SecurityUtils.getLoginUserNickName())+
-                            /* 项目名称 */
-                    "，{最小核算项目=("+(contractPlanning==null?"":contractPlanning.getProjectName())+
-                            /* 类型 */
-                    ")}，合同类型为{"+(contractPlanning==null?"":contractPlanning.getContractPlanningCategoryName())+
-                            /* 合约规划名称 */
-                    " ("+(contractPlanning==null?"":contractPlanning.getContractPlanningName())+
-                            /* 采购计划名称 */
-                    ")}合同将于近期开展，请您及时关注了解，采购计划如下：\n "+(procurementPlan==null?"":procurementPlan.getProcurementPlanName())+
-                            /* 招标时间 */
-                    " 招标时间为"+(planPushVO.getBiddingTime()==null?"":planPushVO.getBiddingTime())+
-                            /* 进场时间 */
-                    "，进场时间为"+(planPushVO.getEnterIntoTime()==null?"":planPushVO.getEnterIntoTime())+
-                            /* 采购经办人名称 */
-                    "、采购人为"+(procurementPlan==null?"":procurementPlan.getProcurementOfficerName())+
-                            /* 区域（只有购买材料）：获取“购买材料”类型里边拆分的标包里边的“区域”字段 省 + 市 */
-                    ((procurementPlan==null?false:procurementPlan.getProcurementPlanType().equals(NumberConstant.ONE))?
-                            "，区域为"+((procurementPlan==null?"":procurementPlan.getRegionProvinceCode()) + (procurementPlan==null?"":procurementPlan.getRegionCityCode())):"");
-            requestDTO.setContent(content);/* 推送内容 */
-            log.info("[推送合约规划推动采购计划拆包推送内容:{}],",content);
+//            /* 获取已有的合约规划 */
+//            ContractPlanning contractPlanning = contractPlanningService.getOne(new LambdaQueryWrapper<ContractPlanning>()
+//                    .eq(ContractPlanning::getContractPlanningCode,planPushVO.getContractPlanningCode()));
+//            /* 查询采购计划 */
+//            ProcurementPlan procurementPlan = null;
+//            if(contractPlanning!=null&&contractPlanning.getPlanId()!=null){
+//                procurementPlan = procurementPlanService.getById(contractPlanning.getPlanId());
+//            }
+//            String content =
+//                            /* 推送人 登录人 */
+//                    "发送人: "+(SecurityUtils.getLoginUserNickName())+
+//                            /* 项目名称 */
+//                    "，{最小核算项目=("+(contractPlanning==null?"":contractPlanning.getProjectName())+
+//                            /* 类型 */
+//                    ")}，合同类型为{"+(contractPlanning==null?"":contractPlanning.getContractPlanningCategoryName())+
+//                            /* 合约规划名称 */
+//                    " ("+(contractPlanning==null?"":contractPlanning.getContractPlanningName())+
+//                            /* 采购计划名称 */
+//                    ")}合同将于近期开展，请您及时关注了解，采购计划如下：\n "+(procurementPlan==null?"":procurementPlan.getProcurementPlanName())+
+//                            /* 招标时间 */
+//                    " 招标时间为"+(planPushVO.getBiddingTime()==null?"":planPushVO.getBiddingTime())+
+//                            /* 进场时间 */
+//                    "，进场时间为"+(planPushVO.getEnterIntoTime()==null?"":planPushVO.getEnterIntoTime())+
+//                            /* 采购经办人名称 */
+//                    "、采购人为"+(procurementPlan==null?"":procurementPlan.getProcurementOfficerName())+
+//                            /* 区域（只有购买材料）：获取“购买材料”类型里边拆分的标包里边的“区域”字段 省 + 市 */
+//                    ((procurementPlan==null?false:procurementPlan.getProcurementPlanType().equals(NumberConstant.ONE))?
+//                            "，区域为"+((procurementPlan==null?"":procurementPlan.getRegionProvinceCode()) + (procurementPlan==null?"":procurementPlan.getRegionCityCode())):"");
+//            requestDTO.setContent(content);/* 推送内容 */
+//            log.info("[推送合约规划推动采购计划拆包推送内容:{}],",content);
 
             requestDTO.setArrivalTime(nowTime);
             requestDTO.setCreateTime(nowTime);
