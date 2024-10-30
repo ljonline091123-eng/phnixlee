@@ -61,8 +61,8 @@ public class BPMProcessService implements IBPMProcessService {
         String operateComment = variables.get("operateComment")==null?null:variables.get("operateComment").toString();
         requestDTO.setOperateComment(operateComment);
         /* 下一个审批用户id */
-        if(variables.get("nextAuditUserId")!=null)
-            requestDTO.setNextAuditUserId(variables.get("nextAuditUserId")==null?null:variables.get("nextAuditUserId").toString());
+        System.out.println("[下一个审批用户id]"+variables.get("nextAuditUserId"));
+        requestDTO.setNextAuditUserId(variables.get("nextAuditUserId")==null?null:variables.get("nextAuditUserId").toString());
         String projectCode = variables.get("projectCode")==null?null:variables.get("projectCode").toString();
         if (StrUtil.isNotBlank(projectCode)) {
             MinProjectVO minProjectVO = minProjectService.getMinProjectByMinAccountCode(projectCode);
@@ -113,8 +113,8 @@ public class BPMProcessService implements IBPMProcessService {
         requestDTO.setOperateComment(variables.get("operateComment").toString());
         requestDTO.setCurTaskId(variables.get("curTaskId").toString());
         /* 下一个审批用户id */
-        if(variables.get("nextAuditUserId")!=null)
-            requestDTO.setNextAuditUserId(variables.get("nextAuditUserId")==null?null:variables.get("nextAuditUserId").toString());
+        System.out.println("[下一个审批用户id]"+variables.get("nextAuditUserId"));
+        requestDTO.setNextAuditUserId(variables.get("nextAuditUserId")==null?null:variables.get("nextAuditUserId").toString());
         boolean pass = (boolean) variables.get("pass");
         requestDTO.setPass(pass);
         if(!pass){
