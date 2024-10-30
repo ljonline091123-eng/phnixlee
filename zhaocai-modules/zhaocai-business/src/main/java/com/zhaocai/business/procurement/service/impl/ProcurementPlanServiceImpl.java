@@ -540,6 +540,7 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
         List<MarketProductListRequestDTO> pushVOList = BeanCopierUtil.copyList(materialsPushList, MarketProductListRequestDTO.class);
         for (int i = 0; i < pushVOList.size(); i++) {
             pushVOList.get(i).setRequireId(String.valueOf(materialsPushList.get(i).getId()));
+            pushVOList.get(i).setQuantity(materialsPushList.get(i).getCount());
         }
         pushVO.setList(pushVOList);
         marketService.pushMarketMaterialList(pushVO);
