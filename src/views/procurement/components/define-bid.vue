@@ -973,6 +973,9 @@ export default {
         this.$message.success("提交成功");
         this.sanctionVisible = false;
         this.$emit("submitSuccess");
+      }).catch(error => {
+        /* 关闭遮罩层 */
+        this.$modal.closeLoading();
       });
     },
   },
