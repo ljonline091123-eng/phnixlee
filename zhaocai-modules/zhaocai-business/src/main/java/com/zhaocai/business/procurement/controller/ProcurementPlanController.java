@@ -2,6 +2,10 @@ package com.zhaocai.business.procurement.controller;
 
 import com.zhaocai.business.common.annotations.RepeatSubmit;
 import com.zhaocai.business.common.base.BladeController;
+import com.zhaocai.business.manager.http.dto.req.UsersRoleListRequestDTO;
+import com.zhaocai.business.manager.http.dto.res.UsersRoleContractPlanListResponseDTO;
+import com.zhaocai.business.manager.http.dto.res.UsersRoleListResponseDTO;
+import com.zhaocai.business.manager.http.service.PlatRoleService;
 import com.zhaocai.business.procurement.service.IMaterialsListService;
 import com.zhaocai.business.procurement.service.IProcurementPlanService;
 import com.zhaocai.business.procurement.vo.req.*;
@@ -52,7 +56,7 @@ public class ProcurementPlanController extends BladeController {
     }
 
     /**
-     * 项目合约规划查询
+     * 项目合约规划查询 采购总计划列表
      */
     @GetMapping("/contractPlanningList")
     @ApiOperation(value = "项目合约规划查询")
@@ -131,7 +135,7 @@ public class ProcurementPlanController extends BladeController {
     }
 
     /**
-     * 获取采购计划和拆分合约
+     * 获取采购计划和拆分合约,过滤了存在采购方案的计划数据
      */
     @GetMapping("/listPlanContractSplit")
     @ApiOperation(value = "获取采购计划和拆分合约")
@@ -166,5 +170,12 @@ public class ProcurementPlanController extends BladeController {
     @ApiOperation(value = "获取合约是否可拆分标识")
     public ResultData<String> getContractPlanSplitFlag() {
         return ResultData.data(procurementPlanService.getContractPlanSplitFlag());
+    }
+
+
+    @ApiOperation(value = "获取第三方角色用户信息接口并关联采购方案")
+    @GetMapping("/getUsersRoleContractPlanList")
+    public ResultData<UsersRoleContractPlanListResponseDTO> getUsersRoleContractPlanList(ContractPlanningQueryVO requestDTO) {
+        return ResultData.data(procurementPlanService.getUsersRoleContractPlanList(requestDTO));
     }
 }

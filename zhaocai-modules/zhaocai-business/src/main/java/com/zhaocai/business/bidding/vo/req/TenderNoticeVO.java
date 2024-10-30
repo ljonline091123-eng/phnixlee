@@ -1,6 +1,9 @@
 package com.zhaocai.business.bidding.vo.req;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
+import com.zhaocai.business.procurement.domain.ProcurementSchemeBidding;
+import com.zhaocai.business.procurement.vo.req.ProcurementSchemeBiddingReqVO;
+import com.zhaocai.business.procurement.vo.req.ProcurementSchemeReqVO;
 import com.zhaocai.business.pub.vo.req.AttachmentRequestVO;
 import com.zhaocai.business.vendor.vo.req.VendorManagementListQueryDataVO;
 import com.zhaocai.common.core.bean.ValidateGroup;
@@ -107,4 +110,16 @@ public class TenderNoticeVO implements Serializable {
      ], */
     @ApiModelProperty(value =  "付款方式")
     private Integer paymentType;
+
+
+    /**
+     * 增加废标后操作可以 修改采购方案招标类型和招标文件
+     * Time:2024/10/23 下午2:36
+     * */
+
+    @ApiModelProperty(value = "采购方案基本信息")
+    private ProcurementSchemeReqVO procurementScheme;
+
+    @ApiModelProperty(value = "采购方案招标信息")
+    private ProcurementSchemeBiddingReqVO procurementSchemeBidding;
 }

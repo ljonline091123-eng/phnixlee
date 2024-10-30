@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.extension.service.IService;
 import com.zhaocai.business.agreement.domain.AgreementMaterialsList;
 import com.zhaocai.business.procurement.domain.ContractPlanningSplit;
 import com.zhaocai.business.procurement.domain.MaterialsList;
+import com.zhaocai.business.procurement.domain.ProcurementPlan;
 import com.zhaocai.business.procurement.vo.req.ContractPlanningSplitRequestVO;
 import com.zhaocai.business.procurement.vo.req.ProcurementPlanContractSplitQueryVO;
 import com.zhaocai.business.procurement.vo.res.ContractSplitListVO;
@@ -26,14 +27,14 @@ public interface IContractPlanningSplitService  extends IService<ContractPlannin
      * @param splitRequestList
      * @param planId
      */
-    void saveContractPlanningSplit(List<ContractPlanningSplitRequestVO> splitRequestList, Long planId,Integer priceType);
+    void saveContractPlanningSplit(List<ContractPlanningSplitRequestVO> splitRequestList, Long planId, ProcurementPlan procurementPlan);
 
     /**
      * 修改采购计划的合约拆分
      * @param splitRequestList
      * @param planId
      */
-    void updateContractPlanningSplit(List<ContractPlanningSplitRequestVO> splitRequestList, Long planId,Integer priceType);
+    void updateContractPlanningSplit(List<ContractPlanningSplitRequestVO> splitRequestList, Long planId,ProcurementPlan procurementPlan);
 
     /**
      * 获取采购计划的合约拆分记录

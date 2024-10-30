@@ -94,6 +94,7 @@ public enum DictBizEnum {
 	UNDERLING_SETTLE_STATUS("SETTLE_STATUS","结算状态"),
 	UNDERLING_MTR_MACH_TYPE("MTR_MACH_TYPE","台班类型"),
 	UNDERLING_PROJECT_FORMAT("PROJECT_FORMAT","项目业态"),
+	UNDERLING_CONTRACT_TYPE("CONTRACT_TYPE","合同/合约类型"),
 	;
 
 	private final String name;

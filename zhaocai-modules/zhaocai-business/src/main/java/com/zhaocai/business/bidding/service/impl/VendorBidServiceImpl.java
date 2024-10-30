@@ -222,6 +222,7 @@ public class VendorBidServiceImpl implements IVendorBidService {
             biddingInfo.setIpAddress(IpUtils.getIpAddr());
             biddingInfo.setUpdateTime(new Date());
             biddingInfo.setPriceChangeState(NumberConstant.ONE);/* 已调价 */
+            biddingInfo.setExpertState(NumberConstant.ZERO);/* 未评分 */
             biddingInfo.setBiddingStatus(BiddingInfoStatusEnum.HAVE_BACK.getState());/* 已回标 */
             biddingInfoService.updateById(biddingInfo);
             //删除投标标书附件
@@ -247,12 +248,15 @@ public class VendorBidServiceImpl implements IVendorBidService {
             biddingInfo.setTwiceQuot(NumberConstant.ONE);/* 开启调价 */
             biddingInfo.setTwiceQuotVersion(tenderNotice.getTwiceQuotVersion());/* 二次报价版本号同步 */
             biddingInfo.setPriceChangeState(NumberConstant.ONE);/* 已调价 */
+            biddingInfo.setExpertState(NumberConstant.ZERO);/* 未评分 */
 
             //保存投标单信息
             biddingInfoService.save(biddingInfo);
                 //如果第一次提交，且选择了是否收取保证金 receive=1为收取，则推送相关财务确认人员信息
             System.out.println("版本:"+tenderNotice.getTwiceQuotVersion());
-            if(tenderNotice.getTwiceQuotVersion()!=null
+            if(scheme.getIsReceiveDeposit()!=null
+                    &&scheme.getIsReceiveDeposit()==1
+                    &&tenderNotice.getTwiceQuotVersion()!=null
                     &&tenderNotice.getTwiceQuotVersion() == 1){
                 //调第三方接口，生成开标人员的待办信息
                 try {
@@ -572,7 +576,7 @@ public class VendorBidServiceImpl implements IVendorBidService {
         return vendorContactService.getVendorContactByLoginUser(userId);
     }
 
-    /** 二次报价 */
+    /** 二次报价 (弃用) */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public boolean twiceBid(BidVO bidVO) {

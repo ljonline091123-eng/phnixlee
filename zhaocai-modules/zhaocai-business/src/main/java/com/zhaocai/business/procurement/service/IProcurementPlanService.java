@@ -1,6 +1,9 @@
 package com.zhaocai.business.procurement.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
+import com.zhaocai.business.manager.http.dto.req.UsersRoleListRequestDTO;
+import com.zhaocai.business.manager.http.dto.res.UsersRoleContractPlanListResponseDTO;
+import com.zhaocai.business.manager.http.dto.res.UsersRoleListResponseDTO;
 import com.zhaocai.business.procurement.domain.ProcurementPlan;
 import com.zhaocai.business.procurement.vo.req.*;
 import com.zhaocai.business.procurement.vo.res.*;
@@ -107,4 +110,10 @@ public interface IProcurementPlanService  extends IService<ProcurementPlan> {
      * @param planPushVO push参数
      */
     void pushProcurementPlan(ProcurementPlanPushVO planPushVO);
+
+    /**
+     * 获取第三方角色用户信息接口并关联采购方案
+     * @return
+     */
+    UsersRoleContractPlanListResponseDTO getUsersRoleContractPlanList(ContractPlanningQueryVO requestDTO);
 }

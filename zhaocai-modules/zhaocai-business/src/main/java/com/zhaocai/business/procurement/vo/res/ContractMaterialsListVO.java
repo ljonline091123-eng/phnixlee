@@ -155,6 +155,9 @@ public class ContractMaterialsListVO extends AdviceObject {
     @ApiModelProperty(value = "基价")
     private String basePriceText;
 
+    @ApiModelProperty(value = "价格类型")
+    private Integer priceType;
+
     public ContractMaterialsListVO(ContractPlanMaterialListDTO dto,Integer procurementType) {
         this.materialsId = dto.getId();
         this.materialsUniqueId = dto.getSubjectDtlUniqueId();

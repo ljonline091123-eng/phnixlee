@@ -28,6 +28,9 @@ import com.zhaocai.business.expert.service.IExpertScoreService;
 import com.zhaocai.business.expert.service.IExpertService;
 import com.zhaocai.business.procurement.domain.MaterialsList;
 import com.zhaocai.business.procurement.domain.ProcurementScheme;
+import com.zhaocai.business.procurement.domain.ProcurementSchemePlanRelate;
+import com.zhaocai.business.procurement.service.IProcurementPlanService;
+import com.zhaocai.business.procurement.service.IProcurementSchemePlanRelateService;
 import com.zhaocai.business.procurement.service.IProcurementSchemeService;
 import com.zhaocai.business.procurement.vo.res.CompContractSplitMaterialsVO;
 import com.zhaocai.business.procurement.vo.res.CompMaterialsContentVO;
@@ -35,6 +38,7 @@ import com.zhaocai.business.procurement.vo.res.CompMaterialsVO;
 import com.zhaocai.business.procurement.vo.res.MaterialsVO;
 import com.zhaocai.business.pub.domain.Attachment;
 import com.zhaocai.business.pub.service.IAttachmentService;
+import com.zhaocai.business.pub.service.ISystemUserService;
 import com.zhaocai.business.pub.vo.req.AttachmentRequestVO;
 import com.zhaocai.business.pub.vo.res.AttachmentVO;
 import com.zhaocai.common.core.constant.NumberConstant;
@@ -42,8 +46,10 @@ import com.zhaocai.common.core.utils.DateUtils;
 import com.zhaocai.common.core.utils.StringUtils;
 import com.zhaocai.common.core.utils.bean.BeanCopierUtil;
 import com.zhaocai.common.security.utils.SecurityUtils;
+import com.zhaocai.system.api.domain.SysUser;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.CollectionUtils;
@@ -85,6 +91,15 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
     private IBiddingEvaluatExpertService biddingEvaluatExpertService;
     @Autowired
     private IExpertService expertService;
+    @Autowired
+    @Lazy
+    private IProcurementPlanService procurementPlanService;
+    @Autowired
+    @Lazy
+    private IProcurementSchemePlanRelateService procurementSchemePlanRelateService;
+    @Autowired
+    @Lazy
+    private ISystemUserService systemUserService;
 
     @Autowired
     private SmsSenderUtil smsSenderUtil = SpringUtil.getBean(SmsSenderUtil.class);
@@ -465,6 +480,11 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
             //todo su含税单价（超合约计划单价字体颜色变红）
             quotationDetailVOList.add(quotationVO);
         }
+
+        /* 排序一下 根据 物料编码 */
+        quotationDetailVOList.stream().sorted(Comparator.comparing(BiddingQuotationDetailVO::getMaterialsCode).reversed()).collect(Collectors.toList());
+
+
         vo.setQuotationDetailVOList(quotationDetailVOList);
 
         //查询投标标书附件
@@ -626,6 +646,32 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
         return res;
     }
 
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public boolean abandonBidMoreScheme(AbandonBidVO abandonBidVO) {
+        ValidateUtils.isNullException(abandonBidVO.getSchemeId(),"采购方案ID为空必传");
+        boolean res = false;
+        /* 调用废除招标 */
+        res = abandonBidMore(abandonBidVO);
+        /* 废除采购方案 */
+        procurementSchemeService.cancellationProcurementScheme(abandonBidVO.getSchemeId());
+        return res;
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public boolean abandonBidMorePlan(AbandonBidVO abandonBidVO) {
+        /* 先调用废除采购方案 */
+        abandonBidMoreScheme(abandonBidVO);
+        /* 获取第一条采购方案对应的采购计划 */
+        ProcurementSchemePlanRelate procurementSchemePlanRelate = procurementSchemePlanRelateService.getOne(new LambdaQueryWrapper<ProcurementSchemePlanRelate>()
+                .eq(ProcurementSchemePlanRelate::getProcurementSchemeId,abandonBidVO.getSchemeId()).last("limit 1"));
+        ValidateUtils.isNullException(procurementSchemePlanRelate,"查询不到该采购方案对应的采购计划。");
+        /* 废除采购计划，如果存在除当前被废除的采购方案外的采购方案没有被废除就无法废除该采购计划。 */
+        procurementPlanService.cancellationProcurementPlan(procurementSchemePlanRelate.getProcurementPlanId());
+        return true;
+    }
+
     /** 校验废标参数 */
     private void verifyParam(List<AbandonMoreVO> abandonMoreVOList){
         AbandonMoreVO abandonMoreVO = abandonMoreVOList.get(0);
@@ -659,6 +705,9 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
         for (BiddingEvaluatExpert expert : expertList) {
             ExpertEvalStatusVO expertVo = new ExpertEvalStatusVO();
             expertVo.setExpertId(expert.getExpertId());
+            /* 执行调用查询 */
+            Expert e = expertService.getById(expert.getExpertId());
+            expertVo.setExpert(e);
             expertVo.setExpertName(expert.getExpertName());
             //获取几个供应商首轮报价信息
 

@@ -88,4 +88,8 @@ public class BiddingInfoDetailVO extends AdviceObject {
     @ApiModelProperty(value =  "供应商调价状态")
     private Integer priceChangeState;
 
+    /** 1已评标 null未评标 */
+    @ApiModelProperty(value =  "专家评标状态")
+    private Integer expertState;
+
 }

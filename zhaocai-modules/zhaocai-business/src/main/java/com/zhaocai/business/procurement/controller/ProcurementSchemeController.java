@@ -105,6 +105,15 @@ public class ProcurementSchemeController extends BladeController {
     }
 
     /**
+     * 获取该采购方案 对应的采购计划 内所有的采购方案列表数据。
+     */
+    @GetMapping("/planSchemeDetail")
+    @ApiOperation(value = "获取该采购方案 对应的采购计划 内所有的采购方案列表数据。")
+    public ResultData<List<ProcurementSchemeVO>> planSchemeDetail(@RequestParam Long id) {
+        return ResultData.data(procurementSchemeService.planSchemeDetail(id));
+    }
+
+    /**
      * 获取采购方案的物料清单
      */
     @GetMapping("/listMaterials")
@@ -156,6 +165,16 @@ public class ProcurementSchemeController extends BladeController {
     @ApiOperation(value = "作废采购方案")
     public ResultData<Boolean> cancellationProcurementScheme(@RequestParam Long id) {
         procurementSchemeService.cancellationProcurementScheme(id);
+        return ResultData.success();
+    }
+
+    /**
+     * 作废采购方案和采购计划
+     */
+    @PostMapping("/cancellationProcurementSchemePlan")
+    @ApiOperation(value = "作废采购方案和采购计划")
+    public ResultData<Boolean> cancellationProcurementSchemePlan(@RequestParam Long id) {
+        procurementSchemeService.cancellationProcurementSchemePlan(id);
         return ResultData.success();
     }
 

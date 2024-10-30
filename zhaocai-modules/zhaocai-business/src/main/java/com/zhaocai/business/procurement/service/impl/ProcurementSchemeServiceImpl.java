@@ -2,6 +2,7 @@ package com.zhaocai.business.procurement.service.impl;
 
 import cn.hutool.core.collection.CollectionUtil;
 import com.alibaba.fastjson.JSON;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
@@ -9,6 +10,8 @@ import com.zhaocai.business.agreement.service.IAgreementMaterialsListService;
 import com.zhaocai.business.agreement.vo.req.AgreementSchemeQueryVO;
 import com.zhaocai.business.agreement.vo.res.AgreementSchemeListVO;
 import com.zhaocai.business.bidding.enums.TenderNoticeStatusEnum;
+import com.zhaocai.business.bidding.vo.res.BiddingQuotationDetailVO;
+import com.zhaocai.business.bidding.vo.res.BiddingVendorVO;
 import com.zhaocai.business.common.enums.*;
 import com.zhaocai.business.common.exception.BusinessException;
 import com.zhaocai.business.common.exception.ParamValidateException;
@@ -33,6 +36,7 @@ import com.zhaocai.common.core.utils.bean.BeanCopierUtil;
 import com.zhaocai.common.security.utils.SecurityUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -54,6 +58,7 @@ import java.util.stream.Collectors;
 public class ProcurementSchemeServiceImpl extends ServiceImpl<ProcurementSchemeMapper,ProcurementScheme> implements IProcurementSchemeService {
 
     @Autowired
+    @Lazy
     private IProcurementPlanService procurementPlanService;
 
     @Autowired
@@ -132,6 +137,7 @@ public class ProcurementSchemeServiceImpl extends ServiceImpl<ProcurementSchemeM
     @Override
     @Transactional(propagation = Propagation.REQUIRED, rollbackFor = Exception.class)
     public Long saveProcurementScheme(ProcurementSchemeRequestVO requestVO) {
+        /* 判断保证金状态 来赋值 */
         setSchemeDeposit(requestVO.getProcurementScheme());
 
         if (NumberUtil.isNullOrZero(requestVO.getProcurementScheme().getId())) {
@@ -201,6 +207,29 @@ public class ProcurementSchemeServiceImpl extends ServiceImpl<ProcurementSchemeM
     }
 
     @Override
+    public List<ProcurementSchemeVO> planSchemeDetail(Long id) {
+        /* 获取该采购方案关联关系的采购计划 */
+        ProcurementSchemePlanRelate planRelate = procurementSchemePlanRelateService.getOne(new LambdaQueryWrapper<ProcurementSchemePlanRelate>()
+                .eq(ProcurementSchemePlanRelate::getProcurementSchemeId,id).last("limit 1"));
+        ValidateUtils.isNullException(planRelate, "查询不到该采购方案对应的采购计划数据");
+        /* 根据采购计划获取对应的采购方案关联关系 */
+        List<ProcurementSchemePlanRelate> planRelateList = procurementSchemePlanRelateService.list(new LambdaQueryWrapper<ProcurementSchemePlanRelate>()
+                .eq(ProcurementSchemePlanRelate::getProcurementPlanId,planRelate.getProcurementPlanId()));
+        ValidateUtils.isNullException(planRelateList, "属于该采购计划的采购方案列表数据查询不到");
+        /* 提取采购方案ids */
+        List<Long> schemeIds = planRelateList.stream().map(ProcurementSchemePlanRelate::getProcurementSchemeId).collect(Collectors.toList());
+        /* 获取采购方案列表 */
+        List<ProcurementScheme> procurementSchemes = list(new LambdaQueryWrapper<ProcurementScheme>()
+                .in(ProcurementScheme::getId, schemeIds).ne(ProcurementScheme::getState,ProcurementSchemeStateEnum.CANCELLATION.getState()));
+        if(procurementSchemes==null || procurementSchemes.isEmpty())
+            return Collections.emptyList();
+        /* 格式化采购方案返回对象 */
+        return procurementSchemes.stream()
+                .map(info -> BeanCopierUtil.copyBean(info, ProcurementSchemeVO.class))
+                .collect(Collectors.toList());
+    }
+
+    @Override
     public List<MaterialsVO> listMaterials(Long id) {
         List<ProcurementSchemePlanRelate> relateList = procurementSchemePlanRelateService.listBySchemeId(id);
         List<Long> planIdList = relateList.stream()
@@ -220,8 +249,12 @@ public class ProcurementSchemeServiceImpl extends ServiceImpl<ProcurementSchemeM
                 materialsListMap.put(materialsList.getMaterialsCode(), materialsList);
             }
         }
+        List<MaterialsVO> materialsVOList = BeanCopierUtil.copyList(new ArrayList<>(materialsListMap.values()), MaterialsVO.class);
 
-        return BeanCopierUtil.copyList(new ArrayList<>(materialsListMap.values()), MaterialsVO.class);
+        /* 排序一下 根据 物料编码 */
+        materialsVOList.stream().sorted(Comparator.comparing(MaterialsVO::getMaterialsCode).reversed()).collect(Collectors.toList());
+
+        return materialsVOList;
     }
 
     @Override
@@ -295,6 +328,22 @@ public class ProcurementSchemeServiceImpl extends ServiceImpl<ProcurementSchemeM
         super.update(new LambdaUpdateWrapper<ProcurementScheme>()
                 .set(ProcurementScheme::getState, ProcurementSchemeStateEnum.CANCELLATION.getState())
                 .eq(ProcurementScheme::getId,id));
+    }
+
+    @Override
+    public void cancellationProcurementSchemePlan(Long id) {
+        ProcurementScheme procurementScheme = super.getById(id);
+        ValidateUtils.isNullException(procurementScheme,"该采购方案不存在");
+
+        super.update(new LambdaUpdateWrapper<ProcurementScheme>()
+                .set(ProcurementScheme::getState, ProcurementSchemeStateEnum.CANCELLATION.getState())
+                .eq(ProcurementScheme::getId,id));
+        /* 获取第一条采购方案对应的采购计划 */
+        ProcurementSchemePlanRelate procurementSchemePlanRelate = procurementSchemePlanRelateService.getOne(new LambdaQueryWrapper<ProcurementSchemePlanRelate>()
+                .eq(ProcurementSchemePlanRelate::getProcurementSchemeId,procurementScheme.getId()).last("limit 1"));
+        ValidateUtils.isNullException(procurementSchemePlanRelate,"查询不到该采购方案对应的采购计划。");
+        /* 废除采购计划，如果存在除当前被废除的采购方案外的采购方案没有被废除就无法废除该采购计划。 */
+        procurementPlanService.cancellationProcurementPlan(procurementSchemePlanRelate.getProcurementPlanId());
     }
 
     @Override

@@ -11,7 +11,7 @@ import java.util.Date;
 
 /**
  * 专家对象 tb_expert
- * 
+ *
  * @author WH
  * @date 2024-05-24
  */
@@ -55,8 +55,32 @@ public class Expert extends BaseEntity
     private Integer expertType;
 
     /** 专家状态 */
-    @ApiModelProperty(value =  "专家状态(0账号审批中|1启用|2禁用)")
+    @ApiModelProperty(value =  "专家状态(0(审批中/保存) | 1启用 | 2禁用)")
     private Integer expertState;
+
+    /**
+     * 审批状态 {@link com.zhaocai.business.common.enums.ExpertStateEnum}
+     */
+    @ApiModelProperty(value = "审批状态(0保存|1审批中|2审批拒绝|3审批通过)")
+    private Integer state;
+
+    /**
+     * 流程实例 id
+     */
+    @ApiModelProperty(value = "流程实例 id")
+    private String wfProcessId;
+
+    /**
+     * 流程类型
+     */
+    @ApiModelProperty(value = "流程类型")
+    private Integer processType;
+
+    /**
+     * 审批信息,批语
+     */
+    @ApiModelProperty(value = "审批信息")
+    private String operateComment;
 
     /** 对应用户id */
     @ApiModelProperty(value =  "对应用户id")
@@ -92,4 +116,32 @@ public class Expert extends BaseEntity
     @ApiModelProperty(value =  "相关专业工作简历")
     private String professionResume;
 
+    @Override
+    public String toString() {
+        return "\nExpert{" +
+                "expertName='" + expertName + '\'' +
+                ", expertPhone='" + expertPhone + '\'' +
+                ", belongOrganization='" + belongOrganization + '\'' +
+                ", department='" + department + '\'' +
+                ", educationDegree=" + educationDegree +
+                ", major='" + major + '\'' +
+                ", businessType=" + businessType +
+                ", expertType=" + expertType +
+                ", expertState=" + expertState +
+                ", state=" + state +
+                ", wfProcessId='" + wfProcessId + '\'' +
+                ", processType=" + processType +
+                ", operateComment='" + operateComment + '\'' +
+                ", userId=" + userId +
+                ", registeredCertificate=" + registeredCertificate +
+                ", registeredCertificateDate=" + registeredCertificateDate +
+                ", presentJob='" + presentJob + '\'' +
+                ", presentJobDate=" + presentJobDate +
+                ", technicalTitles=" + technicalTitles +
+                ", technicalTitlesDate=" + technicalTitlesDate +
+                ", presentUnitDept='" + presentUnitDept + '\'' +
+                ", email='" + email + '\'' +
+                ", professionResume='" + professionResume + '\'' +
+                '}'+"\n";
+    }
 }

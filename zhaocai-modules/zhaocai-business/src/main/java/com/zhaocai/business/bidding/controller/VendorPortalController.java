@@ -5,6 +5,7 @@ import com.zhaocai.business.bidding.vo.req.query.VendorPortalDataStatQueryVO;
 import com.zhaocai.business.bidding.vo.req.query.VendorPortalNoticePageQueryVO;
 import com.zhaocai.business.bidding.vo.req.query.VendorPortalPublicityPageQueryVO;
 import com.zhaocai.business.bidding.vo.res.VendorPortalDataStatVO;
+import com.zhaocai.business.bidding.vo.res.VendorPortalMsgListVO;
 import com.zhaocai.business.bidding.vo.res.VendorPortalNoticeListVO;
 import com.zhaocai.business.bidding.vo.res.VendorPortalPublicityListVO;
 import com.zhaocai.common.core.bean.PageResult;
@@ -16,6 +17,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
 
 /**
  * @author ssy
@@ -48,6 +51,16 @@ public class VendorPortalController {
     public ResultData<PageResult<VendorPortalNoticeListVO>> getNoticeLogin(VendorPortalNoticePageQueryVO queryDTO) {
         PageResult<VendorPortalNoticeListVO> pages = vendorPortalService.getNoticeLogin(queryDTO);
         return ResultData.data(pages);
+    }
+
+    /**
+     * 工作台首页 消息列表（已登录）
+     */
+    @GetMapping("/msgList")
+    @ApiOperation(value = "工作台首页消息列表（已登录）", notes = "传入queryDTO")
+    public ResultData<List<VendorPortalMsgListVO>> msgList(VendorPortalNoticePageQueryVO queryDTO) {
+        List<VendorPortalMsgListVO> voList = vendorPortalService.msgList(queryDTO);
+        return ResultData.data(voList);
     }
 
     /**

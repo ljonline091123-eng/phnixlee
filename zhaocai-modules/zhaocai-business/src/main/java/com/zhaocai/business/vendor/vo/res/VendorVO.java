@@ -26,6 +26,11 @@ public class VendorVO extends AdviceObject {
     @ApiModelProperty(value = "供应商 id")
     private Long id;
 
+    /** 创建时间 */
+    @JsonFormat(pattern = "yyyy-MM-dd",timezone = "GMT+8")
+    @ApiModelProperty(value = "创建时间")
+    private Date createTime;
+
     @ApiModelProperty(value =  "企业名称")
     private String enterpriseName;
 

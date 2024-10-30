@@ -168,6 +168,13 @@ public class UnderlingSystemService {
     }
 
     /**
+     * 获取 招采 流程分组数据 获取流程分组数据
+     * Time:2024/10/29 下午6:13
+     * */
+    public List<ListCataLogDTO> listCatalog(){
+        return UnderlingRestTemplateService.listForObject(UnderlingPlatformUrlEnum.LIST_CATA_LOG,ListCataLogDTO.class,new ListCataLogRequestDTO());
+    }
+    /**
      * 获取 dm071 数据
      * @return
      */

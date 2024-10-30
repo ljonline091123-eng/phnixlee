@@ -3,6 +3,7 @@ package com.zhaocai.business.procurement.service;
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.zhaocai.business.agreement.dto.AgreementMaterialsInfoDTO;
 import com.zhaocai.business.procurement.domain.MaterialsList;
+import com.zhaocai.business.procurement.domain.ProcurementPlan;
 import com.zhaocai.business.procurement.dto.SubjectMatterDTO;
 import com.zhaocai.business.procurement.vo.req.ContractSplitMaterialsQueryVO;
 import com.zhaocai.business.procurement.vo.res.CompContractSplitMaterialsVO;
@@ -24,7 +25,7 @@ public interface IMaterialsListService  extends IService<MaterialsList> {
      * @param contractSplitId
      * @param planId
      */
-    void saveMaterialsList(List<MaterialsList> materialsLists, Long contractSplitId, Long planId, Integer priceType);
+    void saveMaterialsList(List<MaterialsList> materialsLists, Long contractSplitId, Long planId, ProcurementPlan procurementPlan);
 
     /**
      * 删除物料清单数据

@@ -31,6 +31,7 @@
         <result property="vendorClass" column="vendor_class"/>
         <result property="vendorLevel" column="vendor_level"/>
         <result property="state" column="state"/>
+        <result property="operateComment" column="operate_comment"/>
         <result property="signState" column="sign_state"/>
         <result property="signAuthFailReason" column="sign_auth_fail_reason"/>
         <result property="isBlack" column="is_black"/>
@@ -222,7 +223,7 @@
     </select>
 
     <select id="selectVendorJkpthtListPage" resultType="com.zhaocai.business.vendor.vo.res.VendorVO">
-        select tv.id,tv.enterprise_name
+        select tv.id,tv.enterprise_name,tv.legal_representative,tv.legal_phone,tv.legal_id_card
         from tb_vendor tv
         <where>
             tv.state = 3

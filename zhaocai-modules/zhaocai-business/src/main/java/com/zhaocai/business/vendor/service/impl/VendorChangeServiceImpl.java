@@ -1,12 +1,14 @@
 package com.zhaocai.business.vendor.service.impl;
 
 import cn.hutool.core.codec.Base64;
+import com.alibaba.fastjson.JSON;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.zhaocai.business.common.enums.*;
 import com.zhaocai.business.common.exception.ParamValidateException;
 import com.zhaocai.business.common.utils.ValidateUtils;
+import com.zhaocai.business.manager.http.dto.req.UserObj;
 import com.zhaocai.business.manager.http.service.UnderlingSystemService;
 import com.zhaocai.business.process.service.IBPMProcessService;
 import com.zhaocai.business.pub.domain.Attachment;
@@ -72,6 +74,37 @@ public class VendorChangeServiceImpl extends ServiceImpl<VendorChangeMapper,Vend
 
     @Autowired
     private UnderlingSystemService underlingSystemService;
+
+    /**
+     * 获取供应商修改详情
+     * @param vendorId
+     * @return
+     */
+    @Override
+    @Transactional(propagation = Propagation.REQUIRED,rollbackFor = Exception.class)
+    public VendorChangeRequestVO getVendorUpdateDetailNew(Long vendorId) {
+        VendorChangeRequestVO vendorChangeRequestVO;
+        // 供应商变更信息
+        VendorChange vendorChange;
+
+        // 根据供应商id在供应商变更表中查找最后一次变更信息
+        List<VendorChange> vendorChangeList = super.list(new LambdaQueryWrapper<VendorChange>()
+                .eq(VendorChange::getVendorId, vendorId)
+                .orderByDesc(VendorChange::getVersion));
+        // 不存在变更版本时，创建一份VO版本
+        if (CollectionUtils.isEmpty(vendorChangeList)) {
+            vendorChange = this.createVendorChange(vendorId);
+            // 创建最新版本副本
+            vendorChangeRequestVO = this.createCopy(vendorChange);
+        } else {
+            // 存在变更版本
+            vendorChange = vendorChangeList.get(0);
+            // 获取最新版本副本
+            vendorChangeRequestVO = this.createCopy(vendorChange);
+        }
+        // 处理返回的内容
+        return this.handleReturnInfo(vendorChangeRequestVO);
+    }
 
     /**
      * 获取供应商修改详情
@@ -254,6 +287,10 @@ public class VendorChangeServiceImpl extends ServiceImpl<VendorChangeMapper,Vend
             paramMap.put("businessTitle", "供应商-修改信息审批");
             paramMap.put("businessContent", String.format(ApproveFlowPromptTemplateEnum.VENDOR_CHANGE_APPROVE.getDesc(), vendor.getEnterpriseName()));
             paramMap.put("detailUrl", "/vendor/vendor-detail/"+ Base64.encodeStr(("\""+vendor.getId().toString()+"\"").getBytes(),true,true));
+            UserObj userObj = UserObj.builder().businessType(ProcessKeyEnum.ZHAOCAI_VENDOR_UPDATEINFO.name()).
+                    businessId(vendor.getId().toString())
+                    .toDoType(ToDoTypeEnum.EXAMINE.name()).build();
+            paramMap.put("userObj", JSON.toJSONString(userObj));
             String org = underlingSystemService.getL2OrgByOrgId(vendor.getFirstCooperationCompanyCode());
             //供应商注册时候选择审批单位，只能由选择的单位维护的供应商审核人员进行审核，如果供应商信息修改也是需要原审核单位进行审核
             String customProcessKey = ProcessKeyEnum.ZHAOCAI_VENDOR_UPDATEINFO.getIdentifying().replace("{org}",org);

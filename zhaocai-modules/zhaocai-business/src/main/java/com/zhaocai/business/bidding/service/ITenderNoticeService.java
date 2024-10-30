@@ -3,8 +3,10 @@ package com.zhaocai.business.bidding.service;
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.zhaocai.business.bidding.domain.TenderNotice;
 import com.zhaocai.business.bidding.vo.req.TenderNoticeVO;
+import com.zhaocai.business.bidding.vo.req.UnderlingTenderNoticeQueryVO;
 import com.zhaocai.business.bidding.vo.req.query.*;
 import com.zhaocai.business.bidding.vo.res.*;
+import com.zhaocai.business.procurement.vo.req.ContractPlanningQueryVO;
 import com.zhaocai.common.core.bean.PageResult;
 
 import java.util.Date;
@@ -177,4 +179,16 @@ public interface ITenderNoticeService  extends IService<TenderNotice> {
 
     Integer nextTenderNoticeStatus(Integer schemeType, Integer noticeStatus);
 
+    /**
+     * 获取招标公告列表-(第三方-招标公告接口)
+     * @param queryVO
+     * @return
+     */
+    PageResult<TenderNoticeVO> listTenderNoticePage(UnderlingTenderNoticeQueryVO queryVO);
+    /**
+     * 根据 合约规划id 获取 招标对象
+     * @param requestDTO
+     * @return
+     */
+    List<ContractPlanningNoticeVO> getListByContractPlanningId(ContractPlanningQueryVO requestDTO);
 }
