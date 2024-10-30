@@ -891,6 +891,9 @@ export default {
         this.sanctionVisible = false;
         this.getPermissionButton();
         this.getVendorDetail();
+      }).catch(error => {
+        /* 关闭遮罩层 */
+        this.$modal.closeLoading();
       });
     },
     async handelCalibrationApproval() {

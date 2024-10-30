@@ -332,6 +332,9 @@ export default {
         this.$modal.closeLoading();
         this.vendorVisible = false;
         this.getVendorContactList();
+      }).catch(error => {
+        /* 关闭遮罩层 */
+        this.$modal.closeLoading();
       });
     },
     /** 搜索按钮操作 */
