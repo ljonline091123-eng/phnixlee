@@ -1796,7 +1796,7 @@ export default {
         {
           id: 4,
           label: "约定付款金额",
-          prop: "paymentRatioText",
+          prop: "paymentAmountText",
         },
         {
           id: 5,
