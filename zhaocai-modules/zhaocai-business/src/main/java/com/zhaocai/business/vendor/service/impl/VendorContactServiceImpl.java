@@ -111,6 +111,17 @@ public class VendorContactServiceImpl extends ServiceImpl<VendorContactMapper,Ve
     }
 
     @Override
+    public Long saveVendorContact(VendorContact contact) {
+        //为主要联系人
+        contact.setIsMainContact(0);
+        contact.setState(VendorContactStateEnum.VALID.getState());
+        // 校验联系人
+        checkVendorContact(contact);
+        super.saveOrUpdate(contact);
+        return contact.getId();
+    }
+
+    @Override
     public List<VendorContact> listContactByVendorId(Long vendorId) {
         return super.list(new LambdaQueryWrapper<VendorContact>()
                 .eq(VendorContact::getVendorId,vendorId));

@@ -97,10 +97,14 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
         VendorRegisterRequestVO vendorRequestVO = new VendorRegisterRequestVO();
         // 供应商联系人变更信息
         List<VendorContact> contactList;
+
+        // 供应商联系人变更信息
+        List<VendorContact> contactListMain;
         // 根据供应商id在供应商
         Vendor vendor = super.getById(vendorId);
         contactList = vendorContactService.list(new LambdaQueryWrapper<VendorContact>()
-                .eq(VendorContact::getVendorId, vendorId));
+                .eq(VendorContact::getVendorId, vendorId)
+                .eq(VendorContact::getIsMainContact, 1));
         vendorRequestVO  =  vendorCertificationService.listCertification(vendorRequestVO,vendorId,contactList.get(0).getId());
         vendorRequestVO.setVendor(vendor);
         if(contactList!=null&&contactList.size()>0){
@@ -178,13 +182,28 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
             contact.setCertificationId(legalAuthorizationId);
             contact.setVendorId(vendor.getId());
             // 注册时为默认为管理员
-            contact.setIsManager(1);
-            long contactId = vendorContactService.saveMainVendorContact(contact);
+            contact.setIsManager(0);
+            //新增法人账号(存在法人则法人为管理员，法人和主要联系人一样，则生成主要联系人信息)
+            if(!contact.getContactPhone().equals(vendor.getLegalPhone())){
+                Long longinId =vendorContactService.addLoginUser(vendor.getLegalPhone(),vendor.getLegalRepresentative());
+                VendorContact contact1 = new VendorContact();
+                contact1.setVendorId(vendor.getId());
+                contact1.setContactName(vendor.getLegalRepresentative());
+                contact1.setContactPhone(vendor.getLegalPhone());
+                contact1.setLoginUserId(longinId);
+                contact1.setContactIdCard(vendor.getLegalIdCard());
+                contact1.setIsManager(1);
+               vendorContactService.saveVendorContact(contact1);
+            }else{
+                contact.setIsManager(1);
+            }
+            long contactId=vendorContactService.saveMainVendorContact(contact);
             // 更新法人授权的 businessId
             vendorCertificationService.update(new LambdaUpdateWrapper<VendorCertification>()
                     .set(VendorCertification::getBusinessId,contactId)
                     .eq(VendorCertification::getId,legalAuthorizationId));
         }
+
         //接入底层逻辑平台流程
         Map<String,Object> paramMap = new HashMap<>();
         paramMap.put("businessId", vendor.getId());
@@ -218,8 +237,6 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
                 customProcessKey = ProcessKeyEnum.ZHAOCAI_VENDOR_REGISTER.getIdentifying().replace("{org}",orgThree);
             }
         }
-
-
         paramMap.put("customProcessKey", customProcessKey);
         paramMap.put("businessContent",
                 String.format(ApproveFlowPromptTemplateEnum.VENDOR_REGISTER_APPROVE.getDesc(), vendor.getEnterpriseName()));
@@ -484,7 +501,7 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
         String message = "账号可用";
 
         if (VendorStateEnum.IN_APPROVAL.equalsState(vendor.getState())) {
-            message = "供应商还处于审批中，请稍后重试";
+            message = "供应商还处于审批中!";
             isAvailable = false;
         } else if (VendorStateEnum.REJECT.equalsState(vendor.getState())){
             message = "审批被拒绝，请联系管理员";

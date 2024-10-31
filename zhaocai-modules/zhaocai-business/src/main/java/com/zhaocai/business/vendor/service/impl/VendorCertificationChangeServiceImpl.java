@@ -55,7 +55,6 @@ public class VendorCertificationChangeServiceImpl extends ServiceImpl<VendorCert
         List<VendorCertification> attachments = vendorCertificationService.list(new LambdaQueryWrapper<VendorCertification>()
                 .eq(VendorCertification::getVendorId, vendorId)
                 .eq(VendorCertification::getDelFlag, 0)
-                .eq(VendorCertification::getBusinessId, vendorId)
                 .in(VendorCertification::getBusinessCode, typeList));
         // 创建供应商资质变更
         List<VendorCertificationChange> certificationChangeList = new ArrayList<>();
