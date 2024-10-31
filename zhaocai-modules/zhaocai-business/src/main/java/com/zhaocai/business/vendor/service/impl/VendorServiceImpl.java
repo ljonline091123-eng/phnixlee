@@ -221,22 +221,28 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
         String customProcessKey = ProcessKeyEnum.ZHAOCAI_VENDOR_REGISTER.getIdentifying().replace("{org}",org);
 
         /* 获取所有流程 */
-        List<ListCataLogDTO> listCataLogDTOS = underlingSystemService.listCatalog();
-        if (listCataLogDTOS != null) {
-            /* 判断二级单位流程是否存在 */
-            ListCataLogDTO cataLogDTOTwo = listCataLogDTOS.stream().filter(cateLog -> cateLog.getCatalogKey().equals(org)).findFirst().orElse(null);
-            if (cataLogDTOTwo != null) {
-                /* 赋值使用二级单位 */
-                customProcessKey = ProcessKeyEnum.ZHAOCAI_VENDOR_REGISTER.getIdentifying().replace("{org}",org);
-            }
+        /**
+         * 三级单位接口和流程分组接口正式环境还未上线，先注释该接口请求逻辑
+         * Time:2024/10/31 上午10:50
+         * */
+//        List<ListCataLogDTO> listCataLogDTOS = underlingSystemService.listCatalog();
+//        if (listCataLogDTOS != null) {
+//            /* 判断二级单位流程是否存在 */
+//            ListCataLogDTO cataLogDTOTwo = listCataLogDTOS.stream().filter(cateLog -> cateLog.getCatalogKey().equals(org)).findFirst().orElse(null);
+//            if (cataLogDTOTwo != null) {
+//                /* 赋值使用二级单位 */
+//                customProcessKey = ProcessKeyEnum.ZHAOCAI_VENDOR_REGISTER.getIdentifying().replace("{org}",org);
+//            }
+//
+//            /* 判断三级单位流程是否存在 */
+//            ListCataLogDTO cataLogDTOThree = listCataLogDTOS.stream().filter(cateLog -> cateLog.getCatalogKey().equals(orgThree)).findFirst().orElse(null);
+//            if (cataLogDTOThree != null) {
+//                /* 赋值使用二级单位 */
+//                customProcessKey = ProcessKeyEnum.ZHAOCAI_VENDOR_REGISTER.getIdentifying().replace("{org}",orgThree);
+//            }
+//        }
 
-            /* 判断三级单位流程是否存在 */
-            ListCataLogDTO cataLogDTOThree = listCataLogDTOS.stream().filter(cateLog -> cateLog.getCatalogKey().equals(orgThree)).findFirst().orElse(null);
-            if (cataLogDTOThree != null) {
-                /* 赋值使用二级单位 */
-                customProcessKey = ProcessKeyEnum.ZHAOCAI_VENDOR_REGISTER.getIdentifying().replace("{org}",orgThree);
-            }
-        }
+
         paramMap.put("customProcessKey", customProcessKey);
         paramMap.put("businessContent",
                 String.format(ApproveFlowPromptTemplateEnum.VENDOR_REGISTER_APPROVE.getDesc(), vendor.getEnterpriseName()));
