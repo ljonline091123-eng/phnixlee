@@ -140,8 +140,8 @@
 
         <PageTitle :title="currentContract.contractPlanningCategoryName">
           <div class="page-title-right">
-            <el-button v-if="currentContract.contractPlanningCategory == 1"  type="success" size="small"  @click="pushPlan">易料市集采购</el-button>
-            <el-button v-if="currentContract.contractPlanningCategory == 1"  type="success" size="small"  @click="revokePushPlan">撤销易料市集采购</el-button>
+            <el-button v-if="currentContract.contractPlanningCategory == 1 && isUpdate"  type="success" size="small"  @click="pushPlan">易料市集采购</el-button>
+            <el-button v-if="currentContract.contractPlanningCategory == 1 && isUpdate"  type="success" size="small"  @click="revokePushPlan">撤销易料市集采购</el-button>
             <el-button type="success" size="small" :disabled="isSubmit" @click="splitVisible = true">合约拆分</el-button>
           </div>
         </PageTitle>
@@ -401,6 +401,7 @@ export default {
       projectCode:'',
       id:'',
       yjtUrl:'',
+      isPushRevoke:null,//区分推送和撤销
       dialogVisible:false,
       materialsLists:[],
       inventoryList: [],
@@ -572,6 +573,7 @@ export default {
       },
 
     pushPlan(){
+      this.isPushRevoke=true
       this.materialsLists=[]
       if(!this.planList[0].children) return this.$message({type:'error',message:"您还没有可选择的采购清单"});
         for(let i = 0 ; i <  this.planList[0].children.length ; i++){
@@ -592,6 +594,7 @@ export default {
       });
     },
     revokePushPlan(){
+      this.isPushRevoke=false
       if(!this.planList[0].children) return this.$message({type:'error',message:"您还没有可选择的采购清单"});
       this.materialsLists=[]
         for(let i = 0 ; i <  this.planList[0].children.length ; i++){
@@ -607,7 +610,8 @@ export default {
         cancelButtonText: "取消",
         type: "warning",
       }).then(() => {
-        this.revokePushMaterialProcurement();
+        this.submitFormPush('form');
+       
       });
     },
     //撤销
@@ -881,7 +885,13 @@ export default {
               type: 'success'
             });
             this.isSubmit = false;
-           this.pushMaterialProcurement();
+            if(this.isPushRevoke){
+              this.pushMaterialProcurement();
+            }else{
+              this.revokePushMaterialProcurement();
+            }
+           
+           
             // console.log(res,'r~~~~~~~~~~~~~~~~~');
             // this.$tab.closePage().then(() => {
             //   // 执行结束的逻辑

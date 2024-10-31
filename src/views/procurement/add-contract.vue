@@ -48,6 +48,7 @@
                   <el-input  v-model="firstForm.agreement.agreementName" placeholder="请输入合同名称" clearable/>
                 </el-form-item>
               </el-col>
+           
               <el-col :span="8">
                 <el-form-item label="合同编码：" prop="agreement.agreementCode" disabled>
                   <el-input disabled v-model="firstForm.agreement.agreementCode" placeholder="系统自动生成" clearable />
@@ -1476,7 +1477,8 @@ export default {
       options1: [],
       firstForm: {
         agreement: {
-          paymentWay:[]
+          paymentWay:[],
+          agreementName:'',
         }, // 合同基本信息
         agreementPaymentItem: {}, // 合同款项信息
         agreementPaymentLists: [], // 结算与付款节点信息
@@ -2340,8 +2342,7 @@ export default {
             this.firstForm.agreement.contractSplitId = res.data.splitId;
             this.firstForm.agreement.vendorId = res.data.vendorId;
             this.firstForm.agreement.partyAOrgId = res.data.partyAOrgId;
-            this.firstForm.agreement.agreementName =
-              this.$route.query.agreementName;
+            this.firstForm.agreement.agreementName =this.$route.query.agreementName;
               this.firstForm.agreement.marketMaterialContractId = res.data.marketMaterialContractId
             this.agreementFileUrl = res.data.agreementFileUrl;
             this.typeContract= this.$route.query.type;
@@ -2414,8 +2415,7 @@ export default {
             this.firstForm.agreement.contractSplitId = res.data.splitId;
             this.firstForm.agreement.vendorId = res.data.vendorId;
             this.firstForm.agreement.partyAOrgId = res.data.partyAOrgId;
-            this.firstForm.agreement.agreementName =
-              this.$route.query.schemeName;
+            this.firstForm.agreement.agreementName =this.$route.query.schemeName;
             this.agreementFileUrl = res.data.agreementFileUrl;
             this.agreementFileName = res.data.agreementFileName;
             this.attachmentId = res.data.attachmentId;
