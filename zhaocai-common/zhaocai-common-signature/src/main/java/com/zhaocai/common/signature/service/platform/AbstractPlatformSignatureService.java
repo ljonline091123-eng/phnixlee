@@ -27,7 +27,8 @@ public abstract class AbstractPlatformSignatureService implements PlatformSignat
     public SignatureResponse createSignDocument(SignatureCommandRequest request) {
         AgreementSign agreementSign = agreementSignService.getAgreementSignByBusiness(request.getBusinessCode(),request.getBusinessId());
         if (agreementSign != null) {
-            agreementSignService.updateSignMessage(agreementSign.getId(), JacksonUtil.toJsonString(agreementSign));
+            System.out.println("[合同签章信息对象toNodeJsonString转换前]\n"+agreementSign);
+            agreementSignService.updateSignMessage(agreementSign.getId(), JacksonUtil.toNodeJsonString(agreementSign));
         } else {
             agreementSign = agreementSignService.saveAgreementSign((CreateAgreementDocumentCommandRequest) request);
         }

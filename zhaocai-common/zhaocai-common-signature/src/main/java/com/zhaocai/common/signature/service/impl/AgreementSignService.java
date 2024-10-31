@@ -42,6 +42,8 @@ public class AgreementSignService extends ServiceImpl<AgreementSignMapper, Agree
     public void updateSignMessage(Long id, String signMessage) {
         System.out.println("主键 signMessage for ID: " + id);
         System.out.println("长度 signMessage length: " + signMessage.length());
+        System.out.println("[合同签章信息对象toNodeJsonString转换后]\n"+signMessage);
+        System.out.println("\n[合同签章信息对象toNodeJsonString转换完成]");
         this.update(new LambdaUpdateWrapper<AgreementSign>()
                 .set(AgreementSign::getSignMessage,signMessage)
                 .set(AgreementSign::getUpdateTime,new Date())
