@@ -64,6 +64,22 @@ public class JacksonUtil {
     }
 
     /**
+     * Object 转换为 JsonNode 后再转成 JsonString
+     * @param object
+     * @return
+     */
+    public static String toNodeJsonString(Object object) {
+        try {
+            object = object == null ? "" : objectMapper.writeValueAsString(object);
+            JsonNode jsonNode = objectMapper.valueToTree(object);
+            return jsonNode.toString();
+        } catch (JsonProcessingException e) {
+            log.error("[JacksonUtil] - Object 转换为 JsonNode 后再转成 String 失败,cause by:{}",e.getMessage(),e);
+            throw new RuntimeException("toJsonString - Object 转换为 JsonNode 后再转成 String 失败",e);
+        }
+    }
+
+    /**
      * String 转换为 JsonNode
      * @param jsonString
      * @return
