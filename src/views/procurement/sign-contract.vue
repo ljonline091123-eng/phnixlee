@@ -1735,13 +1735,14 @@ export default {
       this.title = "添加任务";
     },
     /** 修改 */
-    async goEdit(id, agreementName, type) {
+    async goEdit(id, agreementName, type,procurementTypeText) {
       const res = await checkAgreementUpdate(id);
       // if(res.data){
       this.$router.push({
         path: "/procurement/edit-contract",
         query: {
           id: id,
+          procurementTypeText:procurementTypeText?true:false,//编码没有值表示易料
         },
       });
       // }
