@@ -4,7 +4,7 @@
       <div>
         <el-button type="primary" size="mini" @click="submitForm"
           >保存</el-button>
-          <el-button type="primary" v-if="typeContract=='add'"  size="mini" @click="avoidSubmitForm"
+          <el-button type="primary" v-if="typeContract=='add' && parseInt(firstForm.agreementPaymentItem.totalAmountIncTax)<50000"  size="mini" @click="avoidSubmitForm"
           >免审提交</el-button>
       </div>
     </BackButton>
@@ -1794,7 +1794,7 @@ export default {
     },
     avoidSubmitForm(){
 
-      if(parseInt(this.firstForm.agreementPaymentItem.totalAmountIncTax)>50000) return this.$message({type:'error',message:"合同金额小于5万才允许免审提交"});
+      // if(parseInt(this.firstForm.agreementPaymentItem.totalAmountIncTax)>50000) return this.$message({type:'error',message:"合同金额小于5万才允许免审提交"});
       this.$confirm("确定免审提交?(合同金额小于5万才允许免审提交)", "提示", {
         confirmButtonText: "确定",
         cancelButtonText: "取消",

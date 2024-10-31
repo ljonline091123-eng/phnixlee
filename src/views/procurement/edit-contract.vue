@@ -3,7 +3,7 @@
     <BackButton path="/procurement/sign-contract" title="修改合同信息">
       <div>
         <el-button type="primary" size="mini" @click="submitForm">保存</el-button>
-        <el-button v-if="firstForm.agreement.marketMaterialContractId" type="primary" size="mini" @click="avoidSubmitForm">免审提交</el-button>
+        <el-button v-if="firstForm.agreement.marketMaterialContractId && parseInt(firstForm.agreementPaymentItem.totalAmountIncTax)<50000" type="primary" size="mini" @click="avoidSubmitForm">免审提交</el-button>
       </div>
     
     </BackButton>
