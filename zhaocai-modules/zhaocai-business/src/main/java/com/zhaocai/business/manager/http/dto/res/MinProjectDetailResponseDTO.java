@@ -264,4 +264,9 @@ public class MinProjectDetailResponseDTO {
      */
     private String state;
 
+    /**
+     * 最小核算项目id
+     */
+    private String id;
+
 }
