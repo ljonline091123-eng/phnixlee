@@ -29,6 +29,7 @@ import com.zhaocai.business.vendor.domain.Vendor;
 import com.zhaocai.business.vendor.domain.VendorContact;
 import com.zhaocai.common.core.bean.PageResult;
 import com.zhaocai.common.core.constant.NumberConstant;
+import com.zhaocai.common.core.constant.UserConstants;
 import com.zhaocai.common.core.utils.DateUtils;
 import com.zhaocai.common.core.utils.bean.BeanCopierUtil;
 import com.zhaocai.system.api.domain.SysUser;
@@ -288,6 +289,13 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
             paramMap.put("detailUrl", "/expert/expert-detail/"+ Base64.encodeStr(("\""+expert.getId().toString()+"\"").getBytes(),true,true));
             UserObj userObj = UserObj.builder().businessType(ProcessKeyEnum.ZHAOCAI_EXPERT_ADD.name()).businessId(expert.getId().toString()).toDoType(ToDoTypeEnum.EXAMINE.name()).build();
             paramMap.put("userObj", JSON.toJSONString(userObj));
+
+            /* 流程角色配置规则传参 */
+            paramMap.put("groupId", UserConstants.GROUP_DEPT_ID);/* 集团 */
+            paramMap.put("companyId", org);/* 公司 二级单位 */
+            paramMap.put("responsibilityDeptId", org);/* 责任单位 三级单位 */
+            paramMap.put("parentProjectCode", null);/* 父项目编码(项目部) */
+
             processService.startProcessInstance(ProcessKeyEnum.ZHAOCAI_EXPERT_ADD.getIdentifying(),paramMap);
         }
 

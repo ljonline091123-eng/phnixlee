@@ -19,6 +19,7 @@ import com.zhaocai.business.vendor.service.IVendorOperateLogService;
 import com.zhaocai.business.vendor.service.IVendorService;
 import com.zhaocai.business.vendor.vo.req.VendorBlackRequestVO;
 import com.zhaocai.business.vendor.vo.req.VendorChangeRequestVO;
+import com.zhaocai.common.core.constant.UserConstants;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -121,6 +122,13 @@ public class VendorChangeBlackServiceImpl extends ServiceImpl<VendorChangeMapper
         paramMap.put("userObj", JSON.toJSONString(userObj));
         paramMap.put("customProcessKey", customProcessKey);
         paramMap.put("operateComment", vendorChange.getOperateComment());
+
+        /* 流程角色配置规则传参 */
+        paramMap.put("groupId", UserConstants.GROUP_DEPT_ID);/* 集团 */
+        paramMap.put("companyId", org);/* 公司 二级单位 */
+        paramMap.put("responsibilityDeptId", org);/* 责任单位 三级单位 */
+        paramMap.put("parentProjectCode", null);/* 父项目编码(项目部) */
+
         processService.startProcessInstance(
                 ProcessKeyEnum.ZHAOCAI_VENDOR_MOVE_INOROUT_BLACK.getIdentifying(),paramMap);
     }

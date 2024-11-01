@@ -24,6 +24,7 @@ import com.zhaocai.business.vendor.service.*;
 import com.zhaocai.business.vendor.vo.req.*;
 import com.zhaocai.business.vendor.vo.res.*;
 import com.zhaocai.common.core.bean.PageResult;
+import com.zhaocai.common.core.constant.UserConstants;
 import com.zhaocai.common.core.utils.NumberUtil;
 import com.zhaocai.common.core.utils.bean.BeanCopierUtil;
 import com.zhaocai.common.security.utils.SecurityUtils;
@@ -214,6 +215,13 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
                 businessId(vendor.getId().toString())
                 .toDoType(ToDoTypeEnum.EXAMINE.name()).build();
         paramMap.put("userObj", JSON.toJSONString(userObj));
+
+        /* 流程角色配置规则传参 */
+        paramMap.put("groupId", UserConstants.GROUP_DEPT_ID);/* 集团 */
+        paramMap.put("companyId", org);/* 公司 二级单位 */
+        paramMap.put("responsibilityDeptId", org);/* 责任单位 三级单位 */
+        paramMap.put("parentProjectCode", null);/* 父项目编码(项目部) */
+
         processService.startProcessInstance(ProcessKeyEnum.ZHAOCAI_VENDOR_REGISTER.getIdentifying(),paramMap);
 
     }

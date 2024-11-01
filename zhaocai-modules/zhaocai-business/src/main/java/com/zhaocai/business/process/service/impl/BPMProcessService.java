@@ -61,27 +61,56 @@ public class BPMProcessService implements IBPMProcessService {
         String operateComment = variables.get("operateComment")==null?null:variables.get("operateComment").toString();
         requestDTO.setOperateComment(operateComment);
         /* 下一个审批用户id */
-        if(variables.get("nextAuditUserId")!=null)
-            requestDTO.setNextAuditUserId(variables.get("nextAuditUserId")==null?null:variables.get("nextAuditUserId").toString());
+        System.out.println("[下一个审批用户id]"+variables.get("nextAuditUserId"));
+        requestDTO.setNextAuditUserId(variables.get("nextAuditUserId")==null?null:variables.get("nextAuditUserId").toString());
+
+        /** propertyList:运行时属性对象：项目部（parentProjectCode），责任单位（responsibilityDeptId），公司（companyId），集团（groupId），合同类型（contractType），价格(contractMoney) */
+        /* 集团是顶级，公司是二级，责任单位是三级，项目部是四级 */
+        List<PropertyListRequestDTO<Object>> propertyList = new ArrayList<>();
+
+        /* 业务用到的 区分集团账号唯一编码 */
+        if(variables.get("groupId")!=null) {
+            PropertyListRequestDTO.addPropertyToList(propertyList, "groupId", variables.get("groupId").toString());/* 1000000000 */
+            requestDTO.setPropertyList(propertyList);
+        }
+        /* 业务用到的 责任单位（responsibilityDeptId） */
+        if(variables.get("responsibilityDeptId")!=null) {
+            PropertyListRequestDTO.addPropertyToList(propertyList, "responsibilityDeptId", variables.get("responsibilityDeptId").toString());
+            requestDTO.setPropertyList(propertyList);
+        }
+        /* 业务用到的 公司（companyId） */
+        if(variables.get("companyId")!=null) {
+            PropertyListRequestDTO.addPropertyToList(propertyList, "companyId", variables.get("companyId").toString());
+            requestDTO.setPropertyList(propertyList);
+        }
+        /* 业务用到的 项目部（parentProjectCode） */
+        if(variables.get("parentProjectCode")!=null) {
+            PropertyListRequestDTO.addPropertyToList(propertyList, "parentProjectCode", variables.get("parentProjectCode").toString());
+            requestDTO.setPropertyList(propertyList);
+        }
+        /* 合同类型 ：劳务分包 专业分包 购买材料 租赁材料 租赁机械（设备） 其他 */
+        if(variables.get("contractType")!=null){
+            PropertyListRequestDTO.addPropertyToList(propertyList, "contractType", variables.get("contractType").toString());
+            requestDTO.setPropertyList(propertyList);
+        }
+        /* 合同签订金额(含税) */
+        if(variables.get("contractMoney")!=null){
+            /** BigDecimal类型 */
+            PropertyListRequestDTO.addPropertyToList(propertyList, "contractMoney", new BigDecimal(variables.get("contractMoney").toString()));
+            requestDTO.setPropertyList(propertyList);
+        }
+        /* 最小核算项目编码 */
         String projectCode = variables.get("projectCode")==null?null:variables.get("projectCode").toString();
         if (StrUtil.isNotBlank(projectCode)) {
+            /* 最小核算项目 */
             MinProjectVO minProjectVO = minProjectService.getMinProjectByMinAccountCode(projectCode);
             if (null != minProjectVO) {
-                List<PropertyListRequestDTO> propertyList = new ArrayList<>();
                 PropertyListRequestDTO.addPropertyToList(propertyList, "parentProjectCode", minProjectVO.getParentCode());
                 PropertyListRequestDTO.addPropertyToList(propertyList, "responsibilityDeptId", minProjectVO.getDutyUnit());
                 PropertyListRequestDTO.addPropertyToList(propertyList, "groupId", UserConstants.GROUP_DEPT_ID);
                 PropertyListRequestDTO.addPropertyToList(propertyList, "companyId", underlingSystemService.getL2OrgByOrgId(SecurityUtils.getThridOrgId()));
                 requestDTO.setPropertyList(propertyList);
             }
-        }
-        /* 合同类型 ：劳务分包 专业分包 购买材料 租赁材料 租赁机械（设备） 其他 */
-        if(variables.get("contractType")!=null){
-            requestDTO.setContractType(variables.get("contractType").toString());
-        }
-        /* 合同签订金额(含税) */
-        if(variables.get("contractMoney")!=null){
-            requestDTO.setContractMoney(new BigDecimal(variables.get("contractMoney").toString()));
         }
 
         BpmSubmitResponseDTO responseDTO = bpmService.submit(requestDTO);
@@ -113,8 +142,8 @@ public class BPMProcessService implements IBPMProcessService {
         requestDTO.setOperateComment(variables.get("operateComment").toString());
         requestDTO.setCurTaskId(variables.get("curTaskId").toString());
         /* 下一个审批用户id */
-        if(variables.get("nextAuditUserId")!=null)
-            requestDTO.setNextAuditUserId(variables.get("nextAuditUserId")==null?null:variables.get("nextAuditUserId").toString());
+        System.out.println("[下一个审批用户id]"+variables.get("nextAuditUserId"));
+        requestDTO.setNextAuditUserId(variables.get("nextAuditUserId")==null?null:variables.get("nextAuditUserId").toString());
         boolean pass = (boolean) variables.get("pass");
         requestDTO.setPass(pass);
         if(!pass){
