@@ -127,7 +127,7 @@ public class VendorChangeBlackServiceImpl extends ServiceImpl<VendorChangeMapper
         paramMap.put("groupId", UserConstants.GROUP_DEPT_ID);/* 集团 */
         paramMap.put("companyId", org);/* 公司 二级单位 */
         paramMap.put("responsibilityDeptId", org);/* 责任单位 三级单位 */
-        paramMap.put("parentProjectCode", null);/* 父项目编码(项目部) */
+        paramMap.put("parentProjectCode", org);/* 父项目编码(项目部) */
 
         processService.startProcessInstance(
                 ProcessKeyEnum.ZHAOCAI_VENDOR_MOVE_INOROUT_BLACK.getIdentifying(),paramMap);
