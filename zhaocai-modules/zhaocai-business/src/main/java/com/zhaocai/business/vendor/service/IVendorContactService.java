@@ -26,6 +26,13 @@ public interface IVendorContactService  extends IService<VendorContact> , IProce
      */
     Long saveMainVendorContact(VendorContact contact);
 
+      /** 保存供应商联系人(非主要)
+     * @param contact
+     */
+    Long saveVendorContact(VendorContact contact);
+
+
+
     /**
      * 获取供应商联系人
      * @param vendorId
