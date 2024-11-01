@@ -33,6 +33,7 @@ import com.zhaocai.business.vendor.vo.res.VendorMainContactVO;
 import com.zhaocai.business.vendor.vo.res.VendorVO;
 import com.zhaocai.common.core.bean.PageResult;
 import com.zhaocai.common.core.constant.SecurityConstants;
+import com.zhaocai.common.core.constant.UserConstants;
 import com.zhaocai.common.core.domain.R;
 import com.zhaocai.common.core.enums.UserTypeEnum;
 import com.zhaocai.common.core.utils.NumberUtil;
@@ -346,6 +347,13 @@ public class VendorContactServiceImpl extends ServiceImpl<VendorContactMapper,Ve
         paramMap.put("userObj", JSON.toJSONString(userObj));
         paramMap.put("customProcessKey", customProcessKey);
         paramMap.put("operateComment", operateComment);
+
+        /* 流程角色配置规则传参 */
+        paramMap.put("groupId", UserConstants.GROUP_DEPT_ID);/* 集团 */
+        paramMap.put("companyId", org);/* 公司 二级单位 */
+        paramMap.put("responsibilityDeptId", org);/* 责任单位 三级单位 */
+        paramMap.put("parentProjectCode", null);/* 父项目编码(项目部) */
+
         processService.startProcessInstance(
                 ProcessKeyEnum.ZHAOCAI_VENDOR_ADDCONTACT.getIdentifying(),paramMap);
     }

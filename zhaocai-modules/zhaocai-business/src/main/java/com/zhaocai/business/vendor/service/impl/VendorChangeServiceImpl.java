@@ -20,6 +20,7 @@ import com.zhaocai.business.vendor.service.*;
 import com.zhaocai.business.vendor.vo.req.VendorBlackRequestVO;
 import com.zhaocai.business.vendor.vo.req.VendorChangeRequestVO;
 import com.zhaocai.business.vendor.vo.res.*;
+import com.zhaocai.common.core.constant.UserConstants;
 import com.zhaocai.common.core.utils.bean.BeanCopierUtil;
 import com.zhaocai.common.core.utils.bean.BeanUtils;
 import com.zhaocai.common.core.web.domain.BaseEntity;
@@ -296,6 +297,13 @@ public class VendorChangeServiceImpl extends ServiceImpl<VendorChangeMapper,Vend
             String customProcessKey = ProcessKeyEnum.ZHAOCAI_VENDOR_UPDATEINFO.getIdentifying().replace("{org}",org);
             paramMap.put("customProcessKey", customProcessKey);
             paramMap.put("operateComment", vendorChange.getOperateComment());
+
+            /* 流程角色配置规则传参 */
+            paramMap.put("groupId", UserConstants.GROUP_DEPT_ID);/* 集团 */
+            paramMap.put("companyId", org);/* 公司 二级单位 */
+            paramMap.put("responsibilityDeptId", org);/* 责任单位 三级单位 */
+            paramMap.put("parentProjectCode", null);/* 父项目编码(项目部) */
+
             processService.startProcessInstance(
                     ProcessKeyEnum.ZHAOCAI_VENDOR_UPDATEINFO.getIdentifying(),paramMap);
         }else{
