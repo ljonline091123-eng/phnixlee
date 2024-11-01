@@ -336,4 +336,8 @@ public class MinProject extends BaseEntity {
     @ApiModelProperty(value = "项目状态")
     private String state;
 
+    /**
+     * 最小核算项目id
+     */
+    private String minProjectId;
 }

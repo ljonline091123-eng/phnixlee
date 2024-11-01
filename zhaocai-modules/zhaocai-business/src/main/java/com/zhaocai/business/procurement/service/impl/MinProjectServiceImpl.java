@@ -47,6 +47,9 @@ public class MinProjectServiceImpl extends ServiceImpl<MinProjectMapper, MinProj
         synchronized (projectDetail.getMinAccountCode()) {
             MinProject saveMinProject = BeanCopierUtil.copyBean(projectDetail,MinProject.class);
 
+            if(null != projectDetail.getId()){
+                saveMinProject.setMinProjectId(projectDetail.getId());
+            }
             if (StringUtils.isNoneBlank(projectDetail.getPrjAddr())) {
                 List<String> list = JSONArray.parseArray(projectDetail.getPrjAddr(),String.class);
                 // TODO 省市区的需要再次确认
@@ -67,6 +70,8 @@ public class MinProjectServiceImpl extends ServiceImpl<MinProjectMapper, MinProj
                     .eq(MinProject::getMinAccountCode,projectDetail.getMinAccountCode()));
             if (minProject != null) {
                 saveMinProject.setId(minProject.getId());
+            } else {
+                saveMinProject.setId(null);
             }
 
             super.saveOrUpdate(saveMinProject);
