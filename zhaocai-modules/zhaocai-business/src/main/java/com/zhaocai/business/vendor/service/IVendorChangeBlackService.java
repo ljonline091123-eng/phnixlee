@@ -1,6 +1,7 @@
 package com.zhaocai.business.vendor.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
+import com.zhaocai.business.process.service.IPBMOverrideService;
 import com.zhaocai.business.process.service.IProcessBusinessBaseService;
 import com.zhaocai.business.vendor.domain.VendorChange;
 import com.zhaocai.business.vendor.vo.req.VendorBlackRequestVO;
@@ -11,7 +12,7 @@ import com.zhaocai.business.vendor.vo.req.VendorBlackRequestVO;
  * @author lsn
  * @date 2024-08-08
  */
-public interface IVendorChangeBlackService extends IService<VendorChange> , IProcessBusinessBaseService {
+public interface IVendorChangeBlackService extends IService<VendorChange> , IProcessBusinessBaseService, IPBMOverrideService {
 
     /**
      * 保存供应商黑名单变更信息

@@ -4,10 +4,20 @@ import com.zhaocai.business.agreement.service.impl.AgreementServiceImpl;
 import com.zhaocai.business.bidding.service.impl.BiddingResultServiceImpl;
 import com.zhaocai.business.common.enums.ProcessKeyEnum;
 import com.zhaocai.business.expert.service.impl.ExpertServiceImpl;
+import com.zhaocai.business.manager.http.dto.req.BpmAuditRequestDTO;
+import com.zhaocai.business.manager.http.dto.req.BpmInitializeRequestDTO;
+import com.zhaocai.business.manager.http.dto.req.BpmListProcessLogRequestDTO;
+import com.zhaocai.business.manager.http.dto.req.BpmLoadTaskDefRequestDTO;
+import com.zhaocai.business.manager.http.dto.res.BpmAuditResponseDTO;
+import com.zhaocai.business.manager.http.dto.res.BpmInitializeResponseDTO;
+import com.zhaocai.business.manager.http.dto.res.BpmListProcessLogResponseDTO;
+import com.zhaocai.business.manager.http.dto.res.BpmLoadTaskDefResponseDTO;
 import com.zhaocai.business.procurement.service.impl.ProcurementSchemeServiceImpl;
 import com.zhaocai.business.vendor.service.impl.*;
+import com.zhaocai.common.core.web.bean.ResultData;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -45,4 +55,23 @@ public interface IBPMProcessService {
      * 撤回流程
      * */
     String revokeProcess(String processKey, Map<String, Object> variables);
+
+
+
+    /**
+     * 初始化接口
+     */
+    ResultData<BpmInitializeResponseDTO> initialize(BpmInitializeRequestDTO requestDTO);
+    /**
+     * 流程操作日志列表接口
+     */
+    ResultData<List<BpmListProcessLogResponseDTO>> listProcessLog(BpmListProcessLogRequestDTO requestDTO);
+    /**
+     * 审批
+     */
+    ResultData<BpmAuditResponseDTO> audit(BpmAuditRequestDTO requestDTO);
+    /**
+     * 加载定义接口
+     */
+    ResultData<List<BpmLoadTaskDefResponseDTO>> loadTaskDef(BpmLoadTaskDefRequestDTO requestDTO);
 }

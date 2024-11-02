@@ -3,6 +3,8 @@ package com.zhaocai.business.manager.http.dto.req;
 
 import lombok.Data;
 
+import java.util.List;
+
 
 /**
  * 流程服务-审批接口
@@ -51,4 +53,9 @@ public class BpmAuditRequestDTO extends UnderlyingPlatformBaseDTO{
      * 驳至任务标识（审批驳回时必须）
      */
     private String rejectTaskKey;
+
+    /**
+     * 运行时属性对象
+     */
+    private List<PropertyListRequestDTO<Object>> propertyList;
 }

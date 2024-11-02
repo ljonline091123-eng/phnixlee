@@ -36,11 +36,12 @@ import com.zhaocai.business.common.interceptor.RequestParamLoggingInterceptor;
 import com.zhaocai.business.common.utils.AmountCalUtil;
 import com.zhaocai.business.common.utils.ValidateUtils;
 import com.zhaocai.business.filez.service.IFileZTaskService;
-import com.zhaocai.business.manager.http.dto.req.UserObj;
-import com.zhaocai.business.manager.http.dto.res.MinProjectDetailResponseDTO;
+import com.zhaocai.business.manager.http.dto.req.*;
+import com.zhaocai.business.manager.http.dto.res.*;
 import com.zhaocai.business.manager.http.service.ContractPlanService;
 import com.zhaocai.business.manager.http.service.UnderlingSystemService;
 import com.zhaocai.business.process.service.IBPMProcessService;
+import com.zhaocai.business.process.service.IPBMOverrideService;
 import com.zhaocai.business.procurement.domain.*;
 import com.zhaocai.business.procurement.service.*;
 import com.zhaocai.business.procurement.vo.res.ProcurementSchemeBiddingVendorVO;
@@ -65,6 +66,7 @@ import com.zhaocai.common.core.utils.DateUtils;
 import com.zhaocai.common.core.utils.NumberUtil;
 import com.zhaocai.common.core.utils.StringUtils;
 import com.zhaocai.common.core.utils.bean.BeanCopierUtil;
+import com.zhaocai.common.core.web.bean.ResultData;
 import com.zhaocai.common.core.web.domain.BaseEntity;
 import com.zhaocai.common.security.utils.SecurityUtils;
 import com.zhaocai.common.signature.common.enums.SignatureTypeEnum;
@@ -1115,6 +1117,26 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
         super.update(new LambdaUpdateWrapper<Agreement>()
                 .set(Agreement::getAgreementState, AgreementStateEnum.REVOKED.getState())
                 .eq(Agreement::getId, businessId));
+    }
+
+    @Override
+    public ResultData<BpmInitializeResponseDTO> initialize(BpmInitializeRequestDTO requestDTO) {
+        return null;
+    }
+
+    @Override
+    public ResultData<List<BpmListProcessLogResponseDTO>> listProcessLog(BpmListProcessLogRequestDTO requestDTO) {
+        return null;
+    }
+
+    @Override
+    public ResultData<BpmAuditResponseDTO> audit(BpmAuditRequestDTO requestDTO) {
+        return null;
+    }
+
+    @Override
+    public ResultData<List<BpmLoadTaskDefResponseDTO>> loadTaskDef(BpmLoadTaskDefRequestDTO requestDTO) {
+        return null;
     }
 
     /**

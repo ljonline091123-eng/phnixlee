@@ -12,13 +12,17 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+
+/**
+ * 通用接口 具体业务都是调用这里的接口，直接被前端直接调用.
+ */
 @RestController
 @RequestMapping("/bpm")
 @Api(value = "第三方流程服务", tags = "第三方流程服务")
 public class BpmController extends BladeController {
 
     @Autowired
-    private BpmService bpmService;
+    private BpmService bpmService;/* 具体业务注入了这个bpm服务拼接参数再调用这里的方法 */
 
     @ApiOperation(value = "初始化接口")
     @GetMapping ("/initialize")

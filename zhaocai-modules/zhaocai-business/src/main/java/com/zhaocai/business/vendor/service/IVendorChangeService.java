@@ -1,6 +1,7 @@
 package com.zhaocai.business.vendor.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
+import com.zhaocai.business.process.service.IPBMOverrideService;
 import com.zhaocai.business.process.service.IProcessBusinessBaseService;
 import com.zhaocai.business.vendor.domain.VendorChange;
 import com.zhaocai.business.vendor.vo.req.VendorChangeRequestVO;
@@ -12,7 +13,7 @@ import com.zhaocai.business.vendor.vo.res.VendorManagementDetailVO;
  * @author lsn
  * @date 2024-08-05
  */
-public interface IVendorChangeService extends IService<VendorChange>, IProcessBusinessBaseService {
+public interface IVendorChangeService extends IService<VendorChange>, IProcessBusinessBaseService, IPBMOverrideService {
 
     /**
      * 供应商修改详情 每次提交去新增一条变更修改对象，防止业务id复用。

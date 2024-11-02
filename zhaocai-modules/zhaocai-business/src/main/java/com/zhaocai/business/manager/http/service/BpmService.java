@@ -20,7 +20,7 @@ import java.util.List;
 
 
 /**
- * 流程服务
+ * 流程服务，具体业务都是调用这里的接口，也可以直接被前端直接调用
  */
 @Slf4j
 @Service
