@@ -3,6 +3,14 @@ package com.zhaocai.business.vendor.controller;
 import com.zhaocai.business.common.annotations.VendorStateCheck;
 import com.zhaocai.business.common.base.BladeController;
 import com.zhaocai.business.common.enums.SupplierRegistSourceEnum;
+import com.zhaocai.business.manager.http.dto.req.BpmAuditRequestDTO;
+import com.zhaocai.business.manager.http.dto.req.BpmInitializeRequestDTO;
+import com.zhaocai.business.manager.http.dto.req.BpmListProcessLogRequestDTO;
+import com.zhaocai.business.manager.http.dto.req.BpmLoadTaskDefRequestDTO;
+import com.zhaocai.business.manager.http.dto.res.BpmAuditResponseDTO;
+import com.zhaocai.business.manager.http.dto.res.BpmInitializeResponseDTO;
+import com.zhaocai.business.manager.http.dto.res.BpmListProcessLogResponseDTO;
+import com.zhaocai.business.manager.http.dto.res.BpmLoadTaskDefResponseDTO;
 import com.zhaocai.business.vendor.domain.Vendor;
 import com.zhaocai.business.vendor.service.IVendorService;
 import com.zhaocai.business.vendor.vo.req.VendorRegisterRequestVO;
@@ -20,6 +28,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
 import javax.validation.Valid;
+import java.util.List;
 
 /**
  * 供应商Controller
@@ -106,4 +115,30 @@ public class VendorController extends BladeController {
     public ResultData<VendorSignAuthInfo> getVendorSignAuthInfo() {
         return ResultData.data(vendorService.getVendorSignAuthInfo());
     }
+
+
+    @ApiOperation(value = "初始化接口")
+    @GetMapping ("/initialize")
+    public ResultData<BpmInitializeResponseDTO> initialize(BpmInitializeRequestDTO requestDTO) {
+        return vendorService.initialize(requestDTO);
+    }
+
+    @ApiOperation(value = "流程操作日志列表接口")
+    @GetMapping ("/listProcessLog")
+    public ResultData<List<BpmListProcessLogResponseDTO>> listProcessLog(BpmListProcessLogRequestDTO requestDTO) {
+        return vendorService.listProcessLog(requestDTO);
+    }
+
+    @ApiOperation(value = "审批")
+    @PostMapping ("/audit")
+    public ResultData<BpmAuditResponseDTO> audit(@RequestBody BpmAuditRequestDTO requestDTO) {
+        return vendorService.audit(requestDTO);
+    }
+
+    @ApiOperation(value = "加载定义接口")
+    @GetMapping("/loadTaskDef")
+    public ResultData<List<BpmLoadTaskDefResponseDTO>> loadTaskDef(BpmLoadTaskDefRequestDTO requestDTO) {
+        return vendorService.loadTaskDef(requestDTO);
+    }
+
 }
