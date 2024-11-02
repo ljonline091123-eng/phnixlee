@@ -16,12 +16,17 @@ import com.zhaocai.business.procurement.service.IMinProjectService;
 import com.zhaocai.business.procurement.vo.res.MinProjectVO;
 import com.zhaocai.common.core.constant.UserConstants;
 import com.zhaocai.common.core.utils.bean.BeanCopierUtil;
+import com.zhaocai.common.core.web.bean.ResultData;
 import com.zhaocai.common.security.utils.SecurityUtils;
+import io.swagger.annotations.ApiOperation;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.ObjectUtils;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 
 import java.math.BigDecimal;
 import java.util.*;
@@ -43,6 +48,12 @@ public class BPMProcessService implements IBPMProcessService {
     @Autowired
     private UnderlingSystemService underlingSystemService;
 
+    /**
+     * 发起流程
+     * @param processKey
+     * @param variables
+     * @return
+     */
     @Override
     @Transactional(propagation = Propagation.REQUIRED,rollbackFor = Exception.class)
     public String startProcessInstance(String processKey, Map<String, Object> variables) {
@@ -130,8 +141,12 @@ public class BPMProcessService implements IBPMProcessService {
     }
 
 
-
-
+    /**
+     * 审批流程
+     * @param processKey
+     * @param variables
+     * @return
+     */
     @Override
     @Transactional(propagation = Propagation.REQUIRED,rollbackFor = Exception.class)
     public String auditProcessInstance(String processKey, Map<String, Object> variables) {
@@ -177,6 +192,12 @@ public class BPMProcessService implements IBPMProcessService {
         return variables.get("processId").toString();
     }
 
+    /**
+     * 撤销流程
+     * @param processKey
+     * @param variables
+     * @return
+     */
     @Override
     public String revokedProcessInstance(String processKey, Map<String, Object> variables) {
         //1.实现调用第三方的审批接口
@@ -202,6 +223,8 @@ public class BPMProcessService implements IBPMProcessService {
         BpmLoadTaskDefRequestDTO loadTask = new BpmLoadTaskDefRequestDTO();
         loadTask.setBusinessId(variable.get("businessId").toString());
         loadTask.setProcessId(variable.get("processId").toString());
+
+
         // 获取流程定义信息
         List<BpmLoadTaskDefResponseDTO> loadTaskDefList = bpmService.loadTaskDef(loadTask);
 
@@ -254,7 +277,35 @@ public class BPMProcessService implements IBPMProcessService {
         return variable.get("processId").toString();
     }
 
+    /**
+     * 初始化接口
+     */
+    public ResultData<BpmInitializeResponseDTO> initialize(BpmInitializeRequestDTO requestDTO) {
+        return ResultData.data(bpmService.initialize(requestDTO));
+    }
+    /**
+     * 流程操作日志列表接口
+     */
+    public ResultData<List<BpmListProcessLogResponseDTO>> listProcessLog(BpmListProcessLogRequestDTO requestDTO) {
+        return ResultData.data(bpmService.listProcessLog(requestDTO));
+    }
 
+    /**
+     * 审批
+     */
+    public ResultData<BpmAuditResponseDTO> audit(BpmAuditRequestDTO requestDTO) {
+        return ResultData.data(bpmService.audit(requestDTO));
+    }
+
+    /**
+     * 加载定义接口
+     */
+    public ResultData<List<BpmLoadTaskDefResponseDTO>> loadTaskDef(BpmLoadTaskDefRequestDTO requestDTO) {
+        return ResultData.data(bpmService.loadTaskDef(requestDTO));
+    }
+
+
+    /* 业务流程实现对象 */
     private IProcessBusinessBaseService getProcessBusinessService(String processKey){
         Class<IProcessBusinessBaseService> handlerServiceClass = PROCESS_BUSINESS_MAP.get(processKey);
         if (handlerServiceClass == null) {

@@ -10,6 +10,7 @@ import com.zhaocai.business.bidding.vo.res.BidResultVO;
 import com.zhaocai.business.bidding.vo.res.BiddingResultDetailVO;
 import com.zhaocai.business.bidding.vo.res.BiddingResultListVO;
 import com.zhaocai.business.bidding.vo.res.WinningBidResultVO;
+import com.zhaocai.business.process.service.IPBMOverrideService;
 import com.zhaocai.business.process.service.IProcessBusinessBaseService;
 import com.zhaocai.business.procurement.vo.res.ProcurementSchemeBiddingVendorVO;
 
@@ -17,11 +18,11 @@ import java.util.List;
 
 /**
  * 投标结果信息Service接口
- * 
+ *
  * @author WH
  * @date 2024-05-24
  */
-public interface IBiddingResultService  extends IService<BiddingResult> , IProcessBusinessBaseService {
+public interface IBiddingResultService  extends IService<BiddingResult> , IProcessBusinessBaseService, IPBMOverrideService {
 
     /**
      * 详情

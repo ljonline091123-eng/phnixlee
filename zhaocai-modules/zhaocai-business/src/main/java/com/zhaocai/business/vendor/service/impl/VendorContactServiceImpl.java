@@ -13,9 +13,14 @@ import com.zhaocai.business.common.exception.BusinessException;
 import com.zhaocai.business.common.exception.NotFoundException;
 import com.zhaocai.business.common.exception.ParamValidateException;
 import com.zhaocai.business.common.utils.ValidateUtils;
-import com.zhaocai.business.manager.http.dto.req.UserObj;
+import com.zhaocai.business.manager.http.dto.req.*;
+import com.zhaocai.business.manager.http.dto.res.BpmAuditResponseDTO;
+import com.zhaocai.business.manager.http.dto.res.BpmInitializeResponseDTO;
+import com.zhaocai.business.manager.http.dto.res.BpmListProcessLogResponseDTO;
+import com.zhaocai.business.manager.http.dto.res.BpmLoadTaskDefResponseDTO;
 import com.zhaocai.business.manager.http.service.UnderlingSystemService;
 import com.zhaocai.business.process.service.IBPMProcessService;
+import com.zhaocai.business.process.service.IPBMOverrideService;
 import com.zhaocai.business.pub.vo.req.AttachmentRequestVO;
 import com.zhaocai.business.pub.vo.res.AttachmentVO;
 import com.zhaocai.business.vendor.domain.Vendor;
@@ -38,6 +43,7 @@ import com.zhaocai.common.core.domain.R;
 import com.zhaocai.common.core.enums.UserTypeEnum;
 import com.zhaocai.common.core.utils.NumberUtil;
 import com.zhaocai.common.core.utils.bean.BeanCopierUtil;
+import com.zhaocai.common.core.web.bean.ResultData;
 import com.zhaocai.common.core.web.domain.BaseEntity;
 import com.zhaocai.common.security.utils.SecurityUtils;
 import com.zhaocai.common.signature.dto.sign.SignatureResponse;
@@ -520,6 +526,26 @@ public class VendorContactServiceImpl extends ServiceImpl<VendorContactMapper,Ve
         super.update(new LambdaUpdateWrapper<VendorContact>()
                 .set(VendorContact::getState,VendorContactStateEnum.APPROVAL_REJECTION.getState())
                 .eq(VendorContact::getId, businessId));
+    }
+
+    @Override
+    public ResultData<BpmInitializeResponseDTO> initialize(BpmInitializeRequestDTO requestDTO) {
+        return null;
+    }
+
+    @Override
+    public ResultData<List<BpmListProcessLogResponseDTO>> listProcessLog(BpmListProcessLogRequestDTO requestDTO) {
+        return null;
+    }
+
+    @Override
+    public ResultData<BpmAuditResponseDTO> audit(BpmAuditRequestDTO requestDTO) {
+        return null;
+    }
+
+    @Override
+    public ResultData<List<BpmLoadTaskDefResponseDTO>> loadTaskDef(BpmLoadTaskDefRequestDTO requestDTO) {
+        return null;
     }
 
     /**

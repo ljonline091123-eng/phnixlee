@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.extension.service.IService;
 import com.zhaocai.business.agreement.domain.Agreement;
 import com.zhaocai.business.agreement.vo.req.*;
 import com.zhaocai.business.agreement.vo.res.*;
+import com.zhaocai.business.process.service.IPBMOverrideService;
 import com.zhaocai.business.process.service.IProcessBusinessBaseService;
 import com.zhaocai.business.vendor.vo.req.VendorAgreementListQueryVO;
 import com.zhaocai.business.vendor.vo.res.DownloadAgreementVO;
@@ -17,7 +18,7 @@ import com.zhaocai.common.core.bean.PageResult;
  * @author chenming
  * @date 2024-05-24
  */
-public interface IAgreementService  extends IService<Agreement> , IProcessBusinessBaseService {
+public interface IAgreementService  extends IService<Agreement> , IProcessBusinessBaseService, IPBMOverrideService {
 
     /**
      * 合同列表查询

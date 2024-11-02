@@ -1,6 +1,7 @@
 package com.zhaocai.business.vendor.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
+import com.zhaocai.business.process.service.IPBMOverrideService;
 import com.zhaocai.business.process.service.IProcessBusinessBaseService;
 import com.zhaocai.business.pub.vo.res.AttachmentVO;
 import com.zhaocai.business.vendor.domain.VendorContact;
@@ -18,7 +19,7 @@ import java.util.List;
  * @author WH
  * @date 2024-05-24
  */
-public interface IVendorContactService  extends IService<VendorContact> , IProcessBusinessBaseService {
+public interface IVendorContactService  extends IService<VendorContact> , IProcessBusinessBaseService, IPBMOverrideService {
 
     /**
      * 保存供应商主要联系人

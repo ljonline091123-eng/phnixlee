@@ -36,7 +36,7 @@ public class BpmInitializeRequestDTO extends UnderlyingPlatformBaseDTO{
     /**
      * 运行时属性对象
      */
-    private List<PropertyListRequestDTO> propertyList;
+    private List<PropertyListRequestDTO<Object>> propertyList;
 
     /**
      * 会话标识

@@ -19,9 +19,14 @@ import com.zhaocai.business.expert.vo.req.query.ExpertRandomDrawVO;
 import com.zhaocai.business.expert.vo.res.ExpertInfoVO;
 import com.zhaocai.business.expert.vo.res.ExpertListVO;
 import com.zhaocai.business.expert.vo.res.TPIExpertInfoVO;
-import com.zhaocai.business.manager.http.dto.req.UserObj;
+import com.zhaocai.business.manager.http.dto.req.*;
+import com.zhaocai.business.manager.http.dto.res.BpmAuditResponseDTO;
+import com.zhaocai.business.manager.http.dto.res.BpmInitializeResponseDTO;
+import com.zhaocai.business.manager.http.dto.res.BpmListProcessLogResponseDTO;
+import com.zhaocai.business.manager.http.dto.res.BpmLoadTaskDefResponseDTO;
 import com.zhaocai.business.manager.http.service.UnderlingSystemService;
 import com.zhaocai.business.process.service.IBPMProcessService;
+import com.zhaocai.business.process.service.IPBMOverrideService;
 import com.zhaocai.business.pub.service.IAttachmentService;
 import com.zhaocai.business.pub.service.ISystemUserService;
 import com.zhaocai.business.pub.vo.res.AttachmentVO;
@@ -32,6 +37,7 @@ import com.zhaocai.common.core.constant.NumberConstant;
 import com.zhaocai.common.core.constant.UserConstants;
 import com.zhaocai.common.core.utils.DateUtils;
 import com.zhaocai.common.core.utils.bean.BeanCopierUtil;
+import com.zhaocai.common.core.web.bean.ResultData;
 import com.zhaocai.system.api.domain.SysUser;
 import com.zhaocai.system.api.system.RemoteUserService;
 import org.apache.commons.lang3.StringUtils;
@@ -396,4 +402,69 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
                 .set(Expert::getOperateComment,variables.get("operateComment")==null?"":variables.get("operateComment").toString())
                 .eq(Expert::getId, businessId));
     }
+
+    @Override
+    public ResultData<BpmInitializeResponseDTO> initialize(BpmInitializeRequestDTO requestDTO) {
+        Expert expert = getById(requestDTO.getBusinessId());
+        SysUser sysUser = systemUserService.getUserById(expert.getUserId());
+        /* 根据组织获取对应的二级单位 */
+        String org = underlingSystemService.getL2OrgByOrgId(sysUser.getThridOrgId());
+        /* 流程角色配置规则传参 */
+        List<PropertyListRequestDTO<Object>> propertyList = new ArrayList<>();
+        PropertyListRequestDTO.addPropertyToList(propertyList, "groupId", UserConstants.GROUP_DEPT_ID);/* 1000000000 */
+        PropertyListRequestDTO.addPropertyToList(propertyList, "companyId", org);/* 公司 二级单位 */
+        PropertyListRequestDTO.addPropertyToList(propertyList, "responsibilityDeptId", org);/* 责任单位 三级单位 */
+        PropertyListRequestDTO.addPropertyToList(propertyList, "parentProjectCode", org);/* 父项目编码(项目部) */
+        requestDTO.setPropertyList(propertyList);
+        return processService.initialize(requestDTO);
+    }
+
+    @Override
+    public ResultData<List<BpmListProcessLogResponseDTO>> listProcessLog(BpmListProcessLogRequestDTO requestDTO) {
+        Expert expert = getById(requestDTO.getBusinessId());
+        SysUser sysUser = systemUserService.getUserById(expert.getUserId());
+        /* 根据组织获取对应的二级单位 */
+        String org = underlingSystemService.getL2OrgByOrgId(sysUser.getThridOrgId());
+        /* 流程角色配置规则传参 */
+        List<PropertyListRequestDTO<Object>> propertyList = new ArrayList<>();
+        PropertyListRequestDTO.addPropertyToList(propertyList, "groupId", UserConstants.GROUP_DEPT_ID);/* 1000000000 */
+        PropertyListRequestDTO.addPropertyToList(propertyList, "companyId", org);/* 公司 二级单位 */
+        PropertyListRequestDTO.addPropertyToList(propertyList, "responsibilityDeptId", org);/* 责任单位 三级单位 */
+        PropertyListRequestDTO.addPropertyToList(propertyList, "parentProjectCode", org);/* 父项目编码(项目部) */
+        requestDTO.setPropertyList(propertyList);
+        return processService.listProcessLog(requestDTO);
+    }
+
+    @Override
+    public ResultData<BpmAuditResponseDTO> audit(BpmAuditRequestDTO requestDTO) {
+        Expert expert = getById(requestDTO.getBusinessId());
+        SysUser sysUser = systemUserService.getUserById(expert.getUserId());
+        /* 根据组织获取对应的二级单位 */
+        String org = underlingSystemService.getL2OrgByOrgId(sysUser.getThridOrgId());
+        /* 流程角色配置规则传参 */
+        List<PropertyListRequestDTO<Object>> propertyList = new ArrayList<>();
+        PropertyListRequestDTO.addPropertyToList(propertyList, "groupId", UserConstants.GROUP_DEPT_ID);/* 1000000000 */
+        PropertyListRequestDTO.addPropertyToList(propertyList, "companyId", org);/* 公司 二级单位 */
+        PropertyListRequestDTO.addPropertyToList(propertyList, "responsibilityDeptId", org);/* 责任单位 三级单位 */
+        PropertyListRequestDTO.addPropertyToList(propertyList, "parentProjectCode", org);/* 父项目编码(项目部) */
+        requestDTO.setPropertyList(propertyList);
+        return processService.audit(requestDTO);
+    }
+
+    @Override
+    public ResultData<List<BpmLoadTaskDefResponseDTO>> loadTaskDef(BpmLoadTaskDefRequestDTO requestDTO) {
+        Expert expert = getById(requestDTO.getBusinessId());
+        SysUser sysUser = systemUserService.getUserById(expert.getUserId());
+        /* 根据组织获取对应的二级单位 */
+        String org = underlingSystemService.getL2OrgByOrgId(sysUser.getThridOrgId());
+        /* 流程角色配置规则传参 */
+        List<PropertyListRequestDTO<Object>> propertyList = new ArrayList<>();
+        PropertyListRequestDTO.addPropertyToList(propertyList, "groupId", UserConstants.GROUP_DEPT_ID);/* 1000000000 */
+        PropertyListRequestDTO.addPropertyToList(propertyList, "companyId", org);/* 公司 二级单位 */
+        PropertyListRequestDTO.addPropertyToList(propertyList, "responsibilityDeptId", org);/* 责任单位 三级单位 */
+        PropertyListRequestDTO.addPropertyToList(propertyList, "parentProjectCode", org);/* 父项目编码(项目部) */
+        requestDTO.setPropertyList(propertyList);
+        return processService.loadTaskDef(requestDTO);
+    }
+
 }

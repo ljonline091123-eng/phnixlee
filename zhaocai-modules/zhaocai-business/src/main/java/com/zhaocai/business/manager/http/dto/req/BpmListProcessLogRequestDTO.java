@@ -3,6 +3,8 @@ package com.zhaocai.business.manager.http.dto.req;
 
 import lombok.Data;
 
+import java.util.List;
+
 
 /**
  * 流程服务-撤销接口
@@ -21,6 +23,11 @@ public class BpmListProcessLogRequestDTO extends UnderlyingPlatformBaseDTO{
      * 业务ID，processId和businessId不能同时为空
      */
     private String businessId;
+
+    /**
+     * 运行时属性对象
+     */
+    private List<PropertyListRequestDTO<Object>> propertyList;
 
 
 

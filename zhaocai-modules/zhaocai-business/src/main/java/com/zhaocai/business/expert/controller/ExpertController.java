@@ -8,6 +8,14 @@ import com.zhaocai.business.expert.vo.req.query.ExpertQueryVO;
 import com.zhaocai.business.expert.vo.res.ExpertInfoVO;
 import com.zhaocai.business.expert.vo.res.ExpertListVO;
 import com.zhaocai.business.expert.vo.res.TPIExpertInfoVO;
+import com.zhaocai.business.manager.http.dto.req.BpmAuditRequestDTO;
+import com.zhaocai.business.manager.http.dto.req.BpmInitializeRequestDTO;
+import com.zhaocai.business.manager.http.dto.req.BpmListProcessLogRequestDTO;
+import com.zhaocai.business.manager.http.dto.req.BpmLoadTaskDefRequestDTO;
+import com.zhaocai.business.manager.http.dto.res.BpmAuditResponseDTO;
+import com.zhaocai.business.manager.http.dto.res.BpmInitializeResponseDTO;
+import com.zhaocai.business.manager.http.dto.res.BpmListProcessLogResponseDTO;
+import com.zhaocai.business.manager.http.dto.res.BpmLoadTaskDefResponseDTO;
 import com.zhaocai.common.core.bean.PageResult;
 import com.zhaocai.common.core.bean.ValidateGroup;
 import com.zhaocai.common.core.constant.NumberConstant;
@@ -114,6 +122,32 @@ public class ExpertController extends BladeController {
             @ApiImplicitParam(name = "state", value = "状态值（1启用|2禁用）", required = true, paramType = "path", dataType = "Integer")})
     public ResultData<Boolean> updateStatus(@PathVariable("id") Long id, @PathVariable("state") Integer state) {
         return ResultData.status(expertService.updateStatus(id, state));
+    }
+
+
+
+    @ApiOperation(value = "初始化接口")
+    @GetMapping ("/initialize")
+    public ResultData<BpmInitializeResponseDTO> initialize(BpmInitializeRequestDTO requestDTO) {
+        return expertService.initialize(requestDTO);
+    }
+
+    @ApiOperation(value = "流程操作日志列表接口")
+    @GetMapping ("/listProcessLog")
+    public ResultData<List<BpmListProcessLogResponseDTO>> listProcessLog(BpmListProcessLogRequestDTO requestDTO) {
+        return expertService.listProcessLog(requestDTO);
+    }
+
+    @ApiOperation(value = "审批")
+    @PostMapping ("/audit")
+    public ResultData<BpmAuditResponseDTO> audit(@RequestBody BpmAuditRequestDTO requestDTO) {
+        return expertService.audit(requestDTO);
+    }
+
+    @ApiOperation(value = "加载定义接口")
+    @GetMapping("/loadTaskDef")
+    public ResultData<List<BpmLoadTaskDefResponseDTO>> loadTaskDef(BpmLoadTaskDefRequestDTO requestDTO) {
+        return expertService.loadTaskDef(requestDTO);
     }
 
 }

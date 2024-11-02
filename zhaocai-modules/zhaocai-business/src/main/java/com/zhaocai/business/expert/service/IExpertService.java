@@ -7,6 +7,7 @@ import com.zhaocai.business.expert.vo.req.query.ExpertQueryVO;
 import com.zhaocai.business.expert.vo.res.ExpertInfoVO;
 import com.zhaocai.business.expert.vo.res.ExpertListVO;
 import com.zhaocai.business.expert.vo.res.TPIExpertInfoVO;
+import com.zhaocai.business.process.service.IPBMOverrideService;
 import com.zhaocai.business.process.service.IProcessBusinessBaseService;
 import com.zhaocai.common.core.bean.PageResult;
 
@@ -18,7 +19,7 @@ import java.util.List;
  * @author WH
  * @date 2024-05-24
  */
-public interface IExpertService  extends IService<Expert> , IProcessBusinessBaseService {
+public interface IExpertService  extends IService<Expert> , IProcessBusinessBaseService, IPBMOverrideService {
 
     /**
      * 获取第三方专家信息
