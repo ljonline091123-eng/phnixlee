@@ -1,10 +1,17 @@
 package com.zhaocai.business.agreement.controller;
 
+import com.alibaba.fastjson.JSONObject;
 import com.zhaocai.business.agreement.service.IAgreementService;
 import com.zhaocai.business.agreement.vo.req.*;
 import com.zhaocai.business.agreement.vo.res.*;
 import com.zhaocai.business.common.annotations.RepeatSubmit;
 import com.zhaocai.business.common.base.BladeController;
+import com.zhaocai.business.manager.http.dto.req.BpmInitializeRequestDTO;
+import com.zhaocai.business.manager.http.dto.req.BpmListProcessLogRequestDTO;
+import com.zhaocai.business.manager.http.dto.req.BpmLoadTaskDefRequestDTO;
+import com.zhaocai.business.manager.http.dto.res.BpmInitializeResponseDTO;
+import com.zhaocai.business.manager.http.dto.res.BpmListProcessLogResponseDTO;
+import com.zhaocai.business.manager.http.dto.res.BpmLoadTaskDefResponseDTO;
 import com.zhaocai.business.procurement.service.IProcurementSchemeService;
 import com.zhaocai.common.core.bean.PageResult;
 import com.zhaocai.common.core.web.bean.ResultData;
@@ -12,8 +19,10 @@ import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
+import springfox.documentation.annotations.ApiIgnore;
 
 import javax.validation.Valid;
+import java.util.List;
 
 /**
  * 合同基本信息Controller
@@ -191,5 +200,36 @@ public class AgreementController extends BladeController {
     public ResultData<Boolean> cancelledSignAgreement(@RequestBody CancelledSignAgreementRequestVO requestVO) {
         agreementService.cancelledSignAgreement(requestVO);
         return ResultData.success();
+    }
+
+
+    @ApiOperation(value = "初始化接口")
+    @GetMapping ("/initialize")
+    public ResultData<BpmInitializeResponseDTO> initialize(BpmInitializeRequestDTO requestDTO) {
+        return agreementService.initialize(requestDTO);
+    }
+
+    @ApiOperation(value = "流程操作日志列表接口")
+    @GetMapping ("/listProcessLog")
+    public ResultData<List<BpmListProcessLogResponseDTO>> listProcessLog(BpmListProcessLogRequestDTO requestDTO) {
+        return agreementService.listProcessLog(requestDTO);
+    }
+
+    @ApiOperation(value = "审批")
+    @PostMapping ("/audit")
+    public ResultData<String> audit(@ApiIgnore @RequestBody JSONObject body) {
+        String processKey = body.getString("processKey");
+        body.remove("processKey");
+        try {
+            return ResultData.data(agreementService.audit(processKey, body));
+        } catch (Exception e) {
+            return ResultData.fail(e.getLocalizedMessage());
+        }
+    }
+
+    @ApiOperation(value = "加载定义接口")
+    @GetMapping("/loadTaskDef")
+    public ResultData<List<BpmLoadTaskDefResponseDTO>> loadTaskDef(BpmLoadTaskDefRequestDTO requestDTO) {
+        return agreementService.loadTaskDef(requestDTO);
     }
 }

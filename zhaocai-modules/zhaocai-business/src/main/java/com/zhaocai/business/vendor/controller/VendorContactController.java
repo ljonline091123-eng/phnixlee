@@ -1,7 +1,14 @@
 package com.zhaocai.business.vendor.controller;
 
+import com.alibaba.fastjson.JSONObject;
 import com.zhaocai.business.common.annotations.VendorStateCheck;
 import com.zhaocai.business.common.base.BladeController;
+import com.zhaocai.business.manager.http.dto.req.BpmInitializeRequestDTO;
+import com.zhaocai.business.manager.http.dto.req.BpmListProcessLogRequestDTO;
+import com.zhaocai.business.manager.http.dto.req.BpmLoadTaskDefRequestDTO;
+import com.zhaocai.business.manager.http.dto.res.BpmInitializeResponseDTO;
+import com.zhaocai.business.manager.http.dto.res.BpmListProcessLogResponseDTO;
+import com.zhaocai.business.manager.http.dto.res.BpmLoadTaskDefResponseDTO;
 import com.zhaocai.business.pub.vo.res.AttachmentVO;
 import com.zhaocai.business.vendor.domain.Vendor;
 import com.zhaocai.business.vendor.service.IVendorContactService;
@@ -18,6 +25,7 @@ import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
+import springfox.documentation.annotations.ApiIgnore;
 
 import javax.validation.Valid;
 import java.util.List;
@@ -146,5 +154,37 @@ public class VendorContactController extends BladeController {
     @ApiOperation(value = "企业联系人认证")
     public ResultData<String> vendorContactSignAuth() {
         return ResultData.data(vendorContactService.vendorContactSignAuth());
+    }
+
+
+
+    @ApiOperation(value = "初始化接口")
+    @GetMapping("/initialize")
+    public ResultData<BpmInitializeResponseDTO> initialize(BpmInitializeRequestDTO requestDTO) {
+        return vendorContactService.initialize(requestDTO);
+    }
+
+    @ApiOperation(value = "流程操作日志列表接口")
+    @GetMapping ("/listProcessLog")
+    public ResultData<List<BpmListProcessLogResponseDTO>> listProcessLog(BpmListProcessLogRequestDTO requestDTO) {
+        return vendorContactService.listProcessLog(requestDTO);
+    }
+
+    @ApiOperation(value = "审批")
+    @PostMapping ("/audit")
+    public ResultData<String> audit(@ApiIgnore @RequestBody JSONObject body) {
+        String processKey = body.getString("processKey");
+        body.remove("processKey");
+        try {
+            return ResultData.data(vendorContactService.audit(processKey, body));
+        } catch (Exception e) {
+            return ResultData.fail(e.getLocalizedMessage());
+        }
+    }
+
+    @ApiOperation(value = "加载定义接口")
+    @GetMapping("/loadTaskDef")
+    public ResultData<List<BpmLoadTaskDefResponseDTO>> loadTaskDef(BpmLoadTaskDefRequestDTO requestDTO) {
+        return vendorContactService.loadTaskDef(requestDTO);
     }
 }

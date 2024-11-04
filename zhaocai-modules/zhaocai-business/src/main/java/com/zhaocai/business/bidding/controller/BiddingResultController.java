@@ -1,5 +1,6 @@
 package com.zhaocai.business.bidding.controller;
 
+import com.alibaba.fastjson.JSONObject;
 import com.zhaocai.business.bidding.service.IBiddingResultService;
 import com.zhaocai.business.bidding.vo.req.CalibrationEntranceVO;
 import com.zhaocai.business.bidding.vo.req.CalibrationReleaseVO;
@@ -10,12 +11,19 @@ import com.zhaocai.business.bidding.vo.res.BiddingResultDetailVO;
 import com.zhaocai.business.bidding.vo.res.BiddingResultListVO;
 import com.zhaocai.business.bidding.vo.res.WinningBidResultVO;
 import com.zhaocai.business.common.base.BladeController;
+import com.zhaocai.business.manager.http.dto.req.BpmInitializeRequestDTO;
+import com.zhaocai.business.manager.http.dto.req.BpmListProcessLogRequestDTO;
+import com.zhaocai.business.manager.http.dto.req.BpmLoadTaskDefRequestDTO;
+import com.zhaocai.business.manager.http.dto.res.BpmInitializeResponseDTO;
+import com.zhaocai.business.manager.http.dto.res.BpmListProcessLogResponseDTO;
+import com.zhaocai.business.manager.http.dto.res.BpmLoadTaskDefResponseDTO;
 import com.zhaocai.common.core.web.bean.ResultData;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
+import springfox.documentation.annotations.ApiIgnore;
 
 import javax.validation.Valid;
 import java.util.List;
@@ -96,6 +104,37 @@ public class BiddingResultController extends BladeController {
     @ApiOperation(value = "查询中标结果数据列表（招标结果）", notes = "传入tender")
     public ResultData<List<BidResultVO>> getBidResult(@RequestParam Long noticeId) {
         return ResultData.data(biddingResultService.getBidResult(noticeId));
+    }
+
+
+    @ApiOperation(value = "初始化接口")
+    @GetMapping ("/initialize")
+    public ResultData<BpmInitializeResponseDTO> initialize(BpmInitializeRequestDTO requestDTO) {
+        return biddingResultService.initialize(requestDTO);
+    }
+
+    @ApiOperation(value = "流程操作日志列表接口")
+    @GetMapping ("/listProcessLog")
+    public ResultData<List<BpmListProcessLogResponseDTO>> listProcessLog(BpmListProcessLogRequestDTO requestDTO) {
+        return biddingResultService.listProcessLog(requestDTO);
+    }
+
+    @ApiOperation(value = "审批")
+    @PostMapping ("/audit")
+    public ResultData<String> audit(@ApiIgnore @RequestBody JSONObject body) {
+        String processKey = body.getString("processKey");
+        body.remove("processKey");
+        try {
+            return ResultData.data(biddingResultService.audit(processKey, body));
+        } catch (Exception e) {
+            return ResultData.fail(e.getLocalizedMessage());
+        }
+    }
+
+    @ApiOperation(value = "加载定义接口")
+    @GetMapping("/loadTaskDef")
+    public ResultData<List<BpmLoadTaskDefResponseDTO>> loadTaskDef(BpmLoadTaskDefRequestDTO requestDTO) {
+        return biddingResultService.loadTaskDef(requestDTO);
     }
 
 }
