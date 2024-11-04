@@ -214,6 +214,12 @@ export const constantRoutes = [
         name: "add-expert",
         meta: { title: "专家信息新增", activeMenu: "/expert/expert" },
       },
+      {
+        path: "expert-detail/:params",
+        component: () => import("@/views/expert/add-expert.vue"),
+        name: "expert-detail",
+        meta: { title: "专家信息", activeMenu: "/expert/expert-detail" },
+      },
     ],
   },
   {
