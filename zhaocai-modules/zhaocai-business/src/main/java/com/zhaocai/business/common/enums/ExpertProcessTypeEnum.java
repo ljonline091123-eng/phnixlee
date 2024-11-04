@@ -14,6 +14,7 @@ import lombok.Getter;
 public enum ExpertProcessTypeEnum {
 
     EXPERT_ADD(1,"专家新增"),
+    EXPERT_CHANGE(2,"专家修改"),
 
     ;
 
