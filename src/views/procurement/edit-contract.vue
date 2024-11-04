@@ -3,7 +3,7 @@
     <BackButton path="/procurement/sign-contract" title="修改合同信息">
       <div>
         <el-button type="primary" size="mini" @click="submitForm">保存</el-button>
-        <el-button type="primary" size="mini" @click="avoidSubmitForm">免审提交</el-button>
+        <el-button v-if="firstForm.agreement.marketMaterialContractId && parseInt(firstForm.agreementPaymentItem.totalAmountIncTax)<50000" type="primary" size="mini" @click="avoidSubmitForm">免审提交</el-button>
       </div>
     
     </BackButton>
@@ -2054,6 +2054,7 @@ export default {
       handler(newVal){
         if(newVal){
           this.id= newVal
+          this.procurementTypeText=this.$route.query.procurementTypeText
           this.getAgreementDetail();
           this.intervalId = setInterval(this.loadAgreementAttachmentId, 3000);
         }

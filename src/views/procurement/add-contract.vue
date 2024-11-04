@@ -4,8 +4,8 @@
       <div>
         <el-button type="primary" size="mini" @click="submitForm"
           >保存</el-button>
-          <el-button type="primary" v-if="typeContract=='add'"  size="mini" @click="avoidSubmitForm"
-          >{{typeContract}}</el-button>
+          <el-button type="primary" v-if="typeContract=='add' && parseInt(firstForm.agreementPaymentItem.totalAmountIncTax)<50000"  size="mini" @click="avoidSubmitForm"
+          >免审提交</el-button>
       </div>
     </BackButton>
     <div class="context">
@@ -48,6 +48,7 @@
                   <el-input  v-model="firstForm.agreement.agreementName" placeholder="请输入合同名称" clearable/>
                 </el-form-item>
               </el-col>
+           
               <el-col :span="8">
                 <el-form-item label="合同编码：" prop="agreement.agreementCode" disabled>
                   <el-input disabled v-model="firstForm.agreement.agreementCode" placeholder="系统自动生成" clearable />
@@ -1476,7 +1477,8 @@ export default {
       options1: [],
       firstForm: {
         agreement: {
-          paymentWay:[]
+          paymentWay:[],
+          agreementName:'',
         }, // 合同基本信息
         agreementPaymentItem: {}, // 合同款项信息
         agreementPaymentLists: [], // 结算与付款节点信息
@@ -1791,7 +1793,9 @@ export default {
         .catch(() => {});
     },
     avoidSubmitForm(){
-      this.$confirm("确定免审提交", "提示", {
+
+      // if(parseInt(this.firstForm.agreementPaymentItem.totalAmountIncTax)>50000) return this.$message({type:'error',message:"合同金额小于5万才允许免审提交"});
+      this.$confirm("确定免审提交?(合同金额小于5万才允许免审提交)", "提示", {
         confirmButtonText: "确定",
         cancelButtonText: "取消",
         type: "warning",
@@ -2338,8 +2342,7 @@ export default {
             this.firstForm.agreement.contractSplitId = res.data.splitId;
             this.firstForm.agreement.vendorId = res.data.vendorId;
             this.firstForm.agreement.partyAOrgId = res.data.partyAOrgId;
-            this.firstForm.agreement.agreementName =
-              this.$route.query.agreementName;
+            this.firstForm.agreement.agreementName =this.$route.query.agreementName;
               this.firstForm.agreement.marketMaterialContractId = res.data.marketMaterialContractId
             this.agreementFileUrl = res.data.agreementFileUrl;
             this.typeContract= this.$route.query.type;
@@ -2375,7 +2378,7 @@ export default {
               this.$set(this.firstForm.agreement, item, res?.data[item]);
             });
             const agreementPaymentItemShowList = [
-              "totalAmountIncTaxText",
+              "totalAmountIncTaxText","totalAmountIncTax",
               "totalAmountExcTaxText",
             ];
             agreementPaymentItemShowList.forEach((item) => {
@@ -2412,8 +2415,7 @@ export default {
             this.firstForm.agreement.contractSplitId = res.data.splitId;
             this.firstForm.agreement.vendorId = res.data.vendorId;
             this.firstForm.agreement.partyAOrgId = res.data.partyAOrgId;
-            this.firstForm.agreement.agreementName =
-              this.$route.query.schemeName;
+            this.firstForm.agreement.agreementName =this.$route.query.schemeName;
             this.agreementFileUrl = res.data.agreementFileUrl;
             this.agreementFileName = res.data.agreementFileName;
             this.attachmentId = res.data.attachmentId;
