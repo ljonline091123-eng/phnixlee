@@ -36,6 +36,7 @@ import com.zhaocai.business.common.exception.ResultCode;
 import com.zhaocai.business.common.interceptor.RequestParamLoggingInterceptor;
 import com.zhaocai.business.common.utils.AmountCalUtil;
 import com.zhaocai.business.common.utils.ValidateUtils;
+import com.zhaocai.business.expert.domain.Expert;
 import com.zhaocai.business.filez.service.IFileZTaskService;
 import com.zhaocai.business.manager.http.dto.req.*;
 import com.zhaocai.business.manager.http.dto.res.*;
@@ -44,6 +45,7 @@ import com.zhaocai.business.manager.http.service.UnderlingSystemService;
 import com.zhaocai.business.process.service.IBPMProcessService;
 import com.zhaocai.business.procurement.domain.*;
 import com.zhaocai.business.procurement.service.*;
+import com.zhaocai.business.procurement.vo.res.MinProjectVO;
 import com.zhaocai.business.procurement.vo.res.ProcurementSchemeBiddingVendorVO;
 import com.zhaocai.business.pub.domain.AreaDivision;
 import com.zhaocai.business.pub.domain.Attachment;
@@ -62,6 +64,7 @@ import com.zhaocai.business.vendor.vo.res.VendorAgreementVO;
 import com.zhaocai.common.core.bean.PageResult;
 import com.zhaocai.common.core.constant.NumberConstant;
 import com.zhaocai.common.core.constant.SecurityConstants;
+import com.zhaocai.common.core.constant.UserConstants;
 import com.zhaocai.common.core.utils.DateUtils;
 import com.zhaocai.common.core.utils.NumberUtil;
 import com.zhaocai.common.core.utils.StringUtils;
@@ -90,6 +93,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.ObjectUtils;
 
 import java.io.InputStream;
+import java.io.Serializable;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.*;
@@ -1058,22 +1062,71 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
 
     @Override
     public ResultData<BpmInitializeResponseDTO> initialize(BpmInitializeRequestDTO requestDTO) {
-        return null;
+        Agreement agreement = getById(requestDTO.getBusinessId());
+        /* 流程角色配置规则传参 */
+        List<PropertyListRequestDTO<Object>> propertyList = new ArrayList<>();
+        /* 最小核算项目 */
+        MinProjectVO minProjectVO = minProjectService.getMinProjectByMinAccountCode(agreement.getBelongAccountingItemCode());
+        if (null != minProjectVO) {
+            PropertyListRequestDTO.addPropertyToList(propertyList, "groupId", UserConstants.GROUP_DEPT_ID);/* 集团 */
+            PropertyListRequestDTO.addPropertyToList(propertyList, "companyId", underlingSystemService.getL2OrgByOrgId(SecurityUtils.getThridOrgId()));/* 公司 二级单位 */
+            PropertyListRequestDTO.addPropertyToList(propertyList, "responsibilityDeptId", minProjectVO.getDutyUnit());/* 责任单位 三级单位 */
+            PropertyListRequestDTO.addPropertyToList(propertyList, "parentProjectCode", minProjectVO.getParentCode());/* 父项目编码(项目部) */
+            requestDTO.setPropertyList(propertyList);
+        }
+        requestDTO.setPropertyList(propertyList);
+        return processService.initialize(requestDTO);
     }
 
     @Override
     public ResultData<List<BpmListProcessLogResponseDTO>> listProcessLog(BpmListProcessLogRequestDTO requestDTO) {
-        return null;
+        Agreement agreement = getById(requestDTO.getBusinessId());
+        /* 流程角色配置规则传参 */
+        List<PropertyListRequestDTO<Object>> propertyList = new ArrayList<>();
+        /* 最小核算项目 */
+        MinProjectVO minProjectVO = minProjectService.getMinProjectByMinAccountCode(agreement.getBelongAccountingItemCode());
+        if (null != minProjectVO) {
+            PropertyListRequestDTO.addPropertyToList(propertyList, "groupId", UserConstants.GROUP_DEPT_ID);/* 集团 */
+            PropertyListRequestDTO.addPropertyToList(propertyList, "companyId", underlingSystemService.getL2OrgByOrgId(SecurityUtils.getThridOrgId()));/* 公司 二级单位 */
+            PropertyListRequestDTO.addPropertyToList(propertyList, "responsibilityDeptId", minProjectVO.getDutyUnit());/* 责任单位 三级单位 */
+            PropertyListRequestDTO.addPropertyToList(propertyList, "parentProjectCode", minProjectVO.getParentCode());/* 父项目编码(项目部) */
+            requestDTO.setPropertyList(propertyList);
+        }
+        requestDTO.setPropertyList(propertyList);
+        return processService.listProcessLog(requestDTO);
     }
 
     @Override
     public String audit(String processKey, Map<String, Object> variables) {
-        return null;
+        Agreement agreement = getById((Serializable) variables.get("businessId"));
+        /* 最小核算项目 */
+        MinProjectVO minProjectVO = minProjectService.getMinProjectByMinAccountCode(agreement.getBelongAccountingItemCode());
+        if (null != minProjectVO) {
+            /* 流程角色配置规则传参 */
+            variables.put("groupId", UserConstants.GROUP_DEPT_ID);/* 集团 */
+            variables.put("companyId", underlingSystemService.getL2OrgByOrgId(SecurityUtils.getThridOrgId()));/* 公司 二级单位 */
+            variables.put("responsibilityDeptId", minProjectVO.getDutyUnit());/* 责任单位 三级单位 */
+            variables.put("parentProjectCode", minProjectVO.getParentCode());/* 父项目编码(项目部) */
+        }
+        return processService.auditProcessInstance(ProcessKeyEnum.ZHAOCAI_AGREEMENT_SIGN.getIdentifying(),variables);
     }
 
     @Override
     public ResultData<List<BpmLoadTaskDefResponseDTO>> loadTaskDef(BpmLoadTaskDefRequestDTO requestDTO) {
-        return null;
+        Agreement agreement = getById(requestDTO.getBusinessId());
+        /* 流程角色配置规则传参 */
+        List<PropertyListRequestDTO<Object>> propertyList = new ArrayList<>();
+        /* 最小核算项目 */
+        MinProjectVO minProjectVO = minProjectService.getMinProjectByMinAccountCode(agreement.getBelongAccountingItemCode());
+        if (null != minProjectVO) {
+            PropertyListRequestDTO.addPropertyToList(propertyList, "groupId", UserConstants.GROUP_DEPT_ID);/* 集团 */
+            PropertyListRequestDTO.addPropertyToList(propertyList, "companyId", underlingSystemService.getL2OrgByOrgId(SecurityUtils.getThridOrgId()));/* 公司 二级单位 */
+            PropertyListRequestDTO.addPropertyToList(propertyList, "responsibilityDeptId", minProjectVO.getDutyUnit());/* 责任单位 三级单位 */
+            PropertyListRequestDTO.addPropertyToList(propertyList, "parentProjectCode", minProjectVO.getParentCode());/* 父项目编码(项目部) */
+            requestDTO.setPropertyList(propertyList);
+        }
+        requestDTO.setPropertyList(propertyList);
+        return processService.loadTaskDef(requestDTO);
     }
 
     /**

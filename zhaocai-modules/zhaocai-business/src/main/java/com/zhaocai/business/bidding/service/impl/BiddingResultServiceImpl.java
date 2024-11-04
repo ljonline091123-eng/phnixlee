@@ -4,6 +4,7 @@ import com.alibaba.fastjson.JSON;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.zhaocai.business.agreement.domain.Agreement;
 import com.zhaocai.business.bidding.domain.BiddingInfo;
 import com.zhaocai.business.bidding.domain.BiddingResult;
 import com.zhaocai.business.bidding.domain.TenderNotice;
@@ -24,16 +25,21 @@ import com.zhaocai.business.manager.http.dto.res.BpmAuditResponseDTO;
 import com.zhaocai.business.manager.http.dto.res.BpmInitializeResponseDTO;
 import com.zhaocai.business.manager.http.dto.res.BpmListProcessLogResponseDTO;
 import com.zhaocai.business.manager.http.dto.res.BpmLoadTaskDefResponseDTO;
+import com.zhaocai.business.manager.http.service.UnderlingSystemService;
 import com.zhaocai.business.process.service.IBPMProcessService;
 import com.zhaocai.business.process.service.IPBMOverrideService;
 import com.zhaocai.business.procurement.domain.ProcurementScheme;
+import com.zhaocai.business.procurement.service.IMinProjectService;
 import com.zhaocai.business.procurement.service.IProcurementSchemeService;
+import com.zhaocai.business.procurement.vo.res.MinProjectVO;
 import com.zhaocai.business.procurement.vo.res.ProcurementSchemeBiddingVendorVO;
 import com.zhaocai.business.pub.service.IAttachmentService;
 import com.zhaocai.common.core.constant.NumberConstant;
+import com.zhaocai.common.core.constant.UserConstants;
 import com.zhaocai.common.core.utils.DateUtils;
 import com.zhaocai.common.core.utils.bean.BeanCopierUtil;
 import com.zhaocai.common.core.web.bean.ResultData;
+import com.zhaocai.common.security.utils.SecurityUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
@@ -41,6 +47,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.ObjectUtils;
 
+import java.io.Serializable;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -69,6 +76,10 @@ public class BiddingResultServiceImpl extends ServiceImpl<BiddingResultMapper,Bi
 
     @Autowired
     private IAttachmentService attachmentService;
+    @Autowired
+    private IMinProjectService minProjectService;
+    @Autowired
+    private UnderlingSystemService underlingSystemService;
 
     @Override
     public BiddingResultDetailVO detail(Long id) {
@@ -336,24 +347,72 @@ public class BiddingResultServiceImpl extends ServiceImpl<BiddingResultMapper,Bi
 
     @Override
     public ResultData<BpmInitializeResponseDTO> initialize(BpmInitializeRequestDTO requestDTO) {
-        return null;
+        TenderNoticeSchemeInfoVO detailVO = tenderNoticeService.getTenderNoticeSchemeInfo(Long.valueOf(requestDTO.getBusinessId()));
+        /* 流程角色配置规则传参 */
+        List<PropertyListRequestDTO<Object>> propertyList = new ArrayList<>();
+        /* 最小核算项目 */
+        MinProjectVO minProjectVO = minProjectService.getMinProjectByMinAccountCode(detailVO.getProjectCode());
+        if (null != minProjectVO) {
+            PropertyListRequestDTO.addPropertyToList(propertyList, "groupId", UserConstants.GROUP_DEPT_ID);/* 集团 */
+            PropertyListRequestDTO.addPropertyToList(propertyList, "companyId", underlingSystemService.getL2OrgByOrgId(SecurityUtils.getThridOrgId()));/* 公司 二级单位 */
+            PropertyListRequestDTO.addPropertyToList(propertyList, "responsibilityDeptId", minProjectVO.getDutyUnit());/* 责任单位 三级单位 */
+            PropertyListRequestDTO.addPropertyToList(propertyList, "parentProjectCode", minProjectVO.getParentCode());/* 父项目编码(项目部) */
+            requestDTO.setPropertyList(propertyList);
+        }
+        requestDTO.setPropertyList(propertyList);
+        return processService.initialize(requestDTO);
     }
 
     @Override
     public ResultData<List<BpmListProcessLogResponseDTO>> listProcessLog(BpmListProcessLogRequestDTO requestDTO) {
-        return null;
+        TenderNoticeSchemeInfoVO detailVO = tenderNoticeService.getTenderNoticeSchemeInfo(Long.valueOf(requestDTO.getBusinessId()));
+        /* 流程角色配置规则传参 */
+        List<PropertyListRequestDTO<Object>> propertyList = new ArrayList<>();
+        /* 最小核算项目 */
+        MinProjectVO minProjectVO = minProjectService.getMinProjectByMinAccountCode(detailVO.getProjectCode());
+        if (null != minProjectVO) {
+            PropertyListRequestDTO.addPropertyToList(propertyList, "groupId", UserConstants.GROUP_DEPT_ID);/* 集团 */
+            PropertyListRequestDTO.addPropertyToList(propertyList, "companyId", underlingSystemService.getL2OrgByOrgId(SecurityUtils.getThridOrgId()));/* 公司 二级单位 */
+            PropertyListRequestDTO.addPropertyToList(propertyList, "responsibilityDeptId", minProjectVO.getDutyUnit());/* 责任单位 三级单位 */
+            PropertyListRequestDTO.addPropertyToList(propertyList, "parentProjectCode", minProjectVO.getParentCode());/* 父项目编码(项目部) */
+            requestDTO.setPropertyList(propertyList);
+        }
+        requestDTO.setPropertyList(propertyList);
+        return processService.listProcessLog(requestDTO);
     }
 
     @Override
     public String audit(String processKey, Map<String, Object> variables) {
-        return null;
+        TenderNoticeSchemeInfoVO detailVO = tenderNoticeService.getTenderNoticeSchemeInfo(Long.valueOf((String) variables.get("businessId")));
+        /* 最小核算项目 */
+        MinProjectVO minProjectVO = minProjectService.getMinProjectByMinAccountCode(detailVO.getProjectCode());
+        if (null != minProjectVO) {
+            /* 流程角色配置规则传参 */
+            variables.put("groupId", UserConstants.GROUP_DEPT_ID);/* 集团 */
+            variables.put("companyId", underlingSystemService.getL2OrgByOrgId(SecurityUtils.getThridOrgId()));/* 公司 二级单位 */
+            variables.put("responsibilityDeptId", minProjectVO.getDutyUnit());/* 责任单位 三级单位 */
+            variables.put("parentProjectCode", minProjectVO.getParentCode());/* 父项目编码(项目部) */
+        }
+        return processService.auditProcessInstance(ProcessKeyEnum.ZHAOCAI_TENDER_CALIBRATE.getIdentifying(),variables);
     }
 
     @Override
     public ResultData<List<BpmLoadTaskDefResponseDTO>> loadTaskDef(BpmLoadTaskDefRequestDTO requestDTO) {
-        return null;
+        TenderNoticeSchemeInfoVO detailVO = tenderNoticeService.getTenderNoticeSchemeInfo(Long.valueOf(requestDTO.getBusinessId()));
+        /* 流程角色配置规则传参 */
+        List<PropertyListRequestDTO<Object>> propertyList = new ArrayList<>();
+        /* 最小核算项目 */
+        MinProjectVO minProjectVO = minProjectService.getMinProjectByMinAccountCode(detailVO.getProjectCode());
+        if (null != minProjectVO) {
+            PropertyListRequestDTO.addPropertyToList(propertyList, "groupId", UserConstants.GROUP_DEPT_ID);/* 集团 */
+            PropertyListRequestDTO.addPropertyToList(propertyList, "companyId", underlingSystemService.getL2OrgByOrgId(SecurityUtils.getThridOrgId()));/* 公司 二级单位 */
+            PropertyListRequestDTO.addPropertyToList(propertyList, "responsibilityDeptId", minProjectVO.getDutyUnit());/* 责任单位 三级单位 */
+            PropertyListRequestDTO.addPropertyToList(propertyList, "parentProjectCode", minProjectVO.getParentCode());/* 父项目编码(项目部) */
+            requestDTO.setPropertyList(propertyList);
+        }
+        requestDTO.setPropertyList(propertyList);
+        return processService.loadTaskDef(requestDTO);
     }
-
 
     private Integer findNextTenderNoticeStatus(Long noticeId){
         TenderNoticeSchemeInfoVO detailVO = tenderNoticeService.getTenderNoticeSchemeInfo(noticeId);

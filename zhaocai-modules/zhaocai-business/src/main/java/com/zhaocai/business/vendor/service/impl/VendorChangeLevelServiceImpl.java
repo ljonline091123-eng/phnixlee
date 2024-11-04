@@ -34,6 +34,8 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.ObjectUtils;
 
+import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -212,23 +214,58 @@ public class VendorChangeLevelServiceImpl extends ServiceImpl<VendorChangeMapper
                 .eq(Vendor::getId, vendorChange.getVendorId()));
     }
 
+
     @Override
     public ResultData<BpmInitializeResponseDTO> initialize(BpmInitializeRequestDTO requestDTO) {
-        return null;
+        VendorChange vendorChange = vendorChangeService.getById(requestDTO.getBusinessId());
+        String org = underlingSystemService.getL2OrgByOrgId(vendorChange.getFirstCooperationCompanyCode());
+        /* 流程角色配置规则传参 */
+        List<PropertyListRequestDTO<Object>> propertyList = new ArrayList<>();
+        PropertyListRequestDTO.addPropertyToList(propertyList, "groupId", UserConstants.GROUP_DEPT_ID);/* 1000000000 */
+        PropertyListRequestDTO.addPropertyToList(propertyList, "companyId", org);/* 公司 二级单位 */
+        PropertyListRequestDTO.addPropertyToList(propertyList, "responsibilityDeptId", org);/* 责任单位 三级单位 */
+        PropertyListRequestDTO.addPropertyToList(propertyList, "parentProjectCode", org);/* 父项目编码(项目部) */
+        requestDTO.setPropertyList(propertyList);
+        return processService.initialize(requestDTO);
     }
 
     @Override
     public ResultData<List<BpmListProcessLogResponseDTO>> listProcessLog(BpmListProcessLogRequestDTO requestDTO) {
-        return null;
+        VendorChange vendorChange = vendorChangeService.getById(requestDTO.getBusinessId());
+        String org = underlingSystemService.getL2OrgByOrgId(vendorChange.getFirstCooperationCompanyCode());
+        /* 流程角色配置规则传参 */
+        List<PropertyListRequestDTO<Object>> propertyList = new ArrayList<>();
+        PropertyListRequestDTO.addPropertyToList(propertyList, "groupId", UserConstants.GROUP_DEPT_ID);/* 1000000000 */
+        PropertyListRequestDTO.addPropertyToList(propertyList, "companyId", org);/* 公司 二级单位 */
+        PropertyListRequestDTO.addPropertyToList(propertyList, "responsibilityDeptId", org);/* 责任单位 三级单位 */
+        PropertyListRequestDTO.addPropertyToList(propertyList, "parentProjectCode", org);/* 父项目编码(项目部) */
+        requestDTO.setPropertyList(propertyList);
+        return processService.listProcessLog(requestDTO);
     }
 
     @Override
     public String audit(String processKey, Map<String, Object> variables) {
-        return null;
+        VendorChange vendorChange = vendorChangeService.getById((Serializable) variables.get("businessId"));
+        String org = underlingSystemService.getL2OrgByOrgId(vendorChange.getFirstCooperationCompanyCode());
+        /* 流程角色配置规则传参 */
+        variables.put("groupId", UserConstants.GROUP_DEPT_ID);/* 集团 */
+        variables.put("companyId", org);/* 公司 二级单位 */
+        variables.put("responsibilityDeptId", org);/* 责任单位 三级单位 */
+        variables.put("parentProjectCode", org);/* 父项目编码(项目部) */
+        return processService.auditProcessInstance(ProcessKeyEnum.ZHAOCAI_VENDOR_UPDATE_LEVEL.getIdentifying(),variables);
     }
 
     @Override
     public ResultData<List<BpmLoadTaskDefResponseDTO>> loadTaskDef(BpmLoadTaskDefRequestDTO requestDTO) {
-        return null;
+        VendorChange vendorChange = vendorChangeService.getById(requestDTO.getBusinessId());
+        String org = underlingSystemService.getL2OrgByOrgId(vendorChange.getFirstCooperationCompanyCode());
+        /* 流程角色配置规则传参 */
+        List<PropertyListRequestDTO<Object>> propertyList = new ArrayList<>();
+        PropertyListRequestDTO.addPropertyToList(propertyList, "groupId", UserConstants.GROUP_DEPT_ID);/* 1000000000 */
+        PropertyListRequestDTO.addPropertyToList(propertyList, "companyId", org);/* 公司 二级单位 */
+        PropertyListRequestDTO.addPropertyToList(propertyList, "responsibilityDeptId", org);/* 责任单位 三级单位 */
+        PropertyListRequestDTO.addPropertyToList(propertyList, "parentProjectCode", org);/* 父项目编码(项目部) */
+        requestDTO.setPropertyList(propertyList);
+        return processService.loadTaskDef(requestDTO);
     }
 }

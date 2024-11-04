@@ -25,6 +25,7 @@ import com.zhaocai.business.pub.vo.req.AttachmentRequestVO;
 import com.zhaocai.business.pub.vo.res.AttachmentVO;
 import com.zhaocai.business.vendor.domain.Vendor;
 import com.zhaocai.business.vendor.domain.VendorCertification;
+import com.zhaocai.business.vendor.domain.VendorChange;
 import com.zhaocai.business.vendor.domain.VendorContact;
 import com.zhaocai.business.vendor.mapper.VendorContactMapper;
 import com.zhaocai.business.vendor.service.IVendorCertificationService;
@@ -62,10 +63,8 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.ObjectUtils;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.io.Serializable;
+import java.util.*;
 
 /**
  * 供应商联系人Service业务层处理
@@ -528,26 +527,65 @@ public class VendorContactServiceImpl extends ServiceImpl<VendorContactMapper,Ve
                 .eq(VendorContact::getId, businessId));
     }
 
+
+
     @Override
     public ResultData<BpmInitializeResponseDTO> initialize(BpmInitializeRequestDTO requestDTO) {
-        return null;
+        VendorContact vendorContact = getById(requestDTO.getBusinessId());
+        Vendor vendor = vendorService.getById(vendorContact.getVendorId());
+        String org = underlingSystemService.getL2OrgByOrgId(vendor.getFirstCooperationCompanyCode());
+        /* 流程角色配置规则传参 */
+        List<PropertyListRequestDTO<Object>> propertyList = new ArrayList<>();
+        PropertyListRequestDTO.addPropertyToList(propertyList, "groupId", UserConstants.GROUP_DEPT_ID);/* 1000000000 */
+        PropertyListRequestDTO.addPropertyToList(propertyList, "companyId", org);/* 公司 二级单位 */
+        PropertyListRequestDTO.addPropertyToList(propertyList, "responsibilityDeptId", org);/* 责任单位 三级单位 */
+        PropertyListRequestDTO.addPropertyToList(propertyList, "parentProjectCode", org);/* 父项目编码(项目部) */
+        requestDTO.setPropertyList(propertyList);
+        return processService.initialize(requestDTO);
     }
 
     @Override
     public ResultData<List<BpmListProcessLogResponseDTO>> listProcessLog(BpmListProcessLogRequestDTO requestDTO) {
-        return null;
+        VendorContact vendorContact = getById(requestDTO.getBusinessId());
+        Vendor vendor = vendorService.getById(vendorContact.getVendorId());
+        String org = underlingSystemService.getL2OrgByOrgId(vendor.getFirstCooperationCompanyCode());
+        /* 流程角色配置规则传参 */
+        List<PropertyListRequestDTO<Object>> propertyList = new ArrayList<>();
+        PropertyListRequestDTO.addPropertyToList(propertyList, "groupId", UserConstants.GROUP_DEPT_ID);/* 1000000000 */
+        PropertyListRequestDTO.addPropertyToList(propertyList, "companyId", org);/* 公司 二级单位 */
+        PropertyListRequestDTO.addPropertyToList(propertyList, "responsibilityDeptId", org);/* 责任单位 三级单位 */
+        PropertyListRequestDTO.addPropertyToList(propertyList, "parentProjectCode", org);/* 父项目编码(项目部) */
+        requestDTO.setPropertyList(propertyList);
+        return processService.listProcessLog(requestDTO);
     }
 
     @Override
     public String audit(String processKey, Map<String, Object> variables) {
-        return null;
+        VendorContact vendorContact = getById((Serializable) variables.get("businessId"));
+        Vendor vendor = vendorService.getById(vendorContact.getVendorId());
+        String org = underlingSystemService.getL2OrgByOrgId(vendor.getFirstCooperationCompanyCode());
+        /* 流程角色配置规则传参 */
+        variables.put("groupId", UserConstants.GROUP_DEPT_ID);/* 集团 */
+        variables.put("companyId", org);/* 公司 二级单位 */
+        variables.put("responsibilityDeptId", org);/* 责任单位 三级单位 */
+        variables.put("parentProjectCode", org);/* 父项目编码(项目部) */
+        return processService.auditProcessInstance(ProcessKeyEnum.ZHAOCAI_VENDOR_ADDCONTACT.getIdentifying(),variables);
     }
 
     @Override
     public ResultData<List<BpmLoadTaskDefResponseDTO>> loadTaskDef(BpmLoadTaskDefRequestDTO requestDTO) {
-        return null;
+        VendorContact vendorContact = getById(requestDTO.getBusinessId());
+        Vendor vendor = vendorService.getById(vendorContact.getVendorId());
+        String org = underlingSystemService.getL2OrgByOrgId(vendor.getFirstCooperationCompanyCode());
+        /* 流程角色配置规则传参 */
+        List<PropertyListRequestDTO<Object>> propertyList = new ArrayList<>();
+        PropertyListRequestDTO.addPropertyToList(propertyList, "groupId", UserConstants.GROUP_DEPT_ID);/* 1000000000 */
+        PropertyListRequestDTO.addPropertyToList(propertyList, "companyId", org);/* 公司 二级单位 */
+        PropertyListRequestDTO.addPropertyToList(propertyList, "responsibilityDeptId", org);/* 责任单位 三级单位 */
+        PropertyListRequestDTO.addPropertyToList(propertyList, "parentProjectCode", org);/* 父项目编码(项目部) */
+        requestDTO.setPropertyList(propertyList);
+        return processService.loadTaskDef(requestDTO);
     }
-
     /**
      * 审批驳回到发起人
      * @param variables
