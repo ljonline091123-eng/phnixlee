@@ -699,11 +699,10 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
         /* 根据组织获取对应的二级单位 */
         String org = underlingSystemService.getL2OrgByOrgId(vendor.getFirstCooperationCompanyCode());
         /* 流程角色配置规则传参 */
-        List<PropertyListRequestDTO<Object>> propertyList = new ArrayList<>();
-        PropertyListRequestDTO.addPropertyToList(propertyList, "groupId", UserConstants.GROUP_DEPT_ID);/* 1000000000 */
-        PropertyListRequestDTO.addPropertyToList(propertyList, "companyId", org);/* 公司 二级单位 */
-        PropertyListRequestDTO.addPropertyToList(propertyList, "responsibilityDeptId", org);/* 责任单位 三级单位 */
-        PropertyListRequestDTO.addPropertyToList(propertyList, "parentProjectCode", org);/* 父项目编码(项目部) */
+        variables.put("groupId", UserConstants.GROUP_DEPT_ID);/* 集团 */
+        variables.put("companyId", org);/* 公司 二级单位 */
+        variables.put("responsibilityDeptId", org);/* 责任单位 三级单位 */
+        variables.put("parentProjectCode", org);/* 父项目编码(项目部) */
 
         return processService.auditProcessInstance(ProcessKeyEnum.ZHAOCAI_VENDOR_REGISTER.getIdentifying(),variables);
     }
