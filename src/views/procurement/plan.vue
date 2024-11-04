@@ -692,7 +692,7 @@ import {
   getUsersRoleList,
   pushProcurementPlan,
   setContractPlanSplitFlag,
-  getContractPlanSplitFlag
+  getContractPlanSplitFlag, getUsersRoleContractPlanList
 } from "@/api/procurement/plan";
 import { mapGetters } from "vuex";
 export default {
@@ -851,7 +851,7 @@ export default {
        param = encodeURIComponent(param); //避免base64编码中出现"/"时路由404
        this.$router.push(`/procurement/add-plan/${param}`);
       }
-      
+
     },
     /** 跳转方案详情 */
     goDetail(id) {
@@ -924,97 +924,6 @@ export default {
       });
       return sums;
     },
-    //推送
-    pushState(row){
-      this.pushStateDialog = true;
-      this.currentData = row;
-      this.getUsersRoleList()
-    },
-    //搜索用户
-    searchUser() {
-      this.pushListLoading = true;
-
-      const { role, nickName } = this.pushQuery;
-      let userList = []
-      this.pushList.forEach(item => {
-        if(!role.length){
-          userList.push(...item.userList)
-        }else{
-          if(role.includes(item.roleId)){
-            userList.push(...item.userList)
-          }
-        }
-      });
-      const mapArr = Array.from(
-        new Map(userList.map(item => [item.userId, item])).values()
-      );
-      if(nickName){
-        this.pushUserList = mapArr.filter(item => item.nickName.includes(nickName))
-      }else{
-        this.pushUserList = mapArr;
-      }
-      this.pushListLoading = false;
-    },
-    //获取角色用户
-    async getUsersRoleList(){
-      this.pushListLoading = true;
-      try{
-        const res = await getUsersRoleList()
-        this.pushRoleList = res.data.map(item => ({value:item.roleId,label:item.roleName}))
-        this.pushList = res.data
-        let userList = []
-        res.data.forEach(item => {
-          userList.push(...item.userList)
-        })
-        this.pushUserList = Array.from(
-          new Map(userList.map(item => [item.userId, item])).values()
-        );
-      }catch(err){
-        console.log(err);
-      }
-      this.pushListLoading = false;
-    },
-    //选择推送用户
-    handleSelectionChange(selection){
-      this.selectPushList = selection.map(item => ({userId:item.userId,nickName:item.nickName}))
-      console.log(this.selectPushList,'选择推送用户------------------------');
-    },
-    //确定选择推送用户
-    async confirmPlan(){
-      this.confirmPushLoading = true;
-      if(!this.selectPushList.length) return this.$message({type:'error',message:"请选择推送用户"});
-      console.log(this.currentData,'currentData-~~~~~~~~~~~~~~~~~~~~');
-      try{
-        const { contractPlanningName, contractPlanningId, contractPlanningCode } = this.currentData
-        let url = Base64.encode(JSON.stringify(contractPlanningName));
-        url = encodeURIComponent(url); //避免base64编码中出现"/"时路由404
-        let formData = {
-          userList:this.selectPushList,
-          contractPlanningName,
-          contractPlanningId,
-          contractPlanningCode,
-          redirectUrl:`/procurement/plan?contractPlanningName=${url}`
-        }
-        await pushProcurementPlan(formData)
-        this.$message.success("推送成功");
-        this.pushStateDialog = false;
-        this.getMasterPlanningList();
-      }catch(err){
-        console.log(err);
-      }
-      this.confirmPushLoading = false;
-    },
-    selPushKey(row){
-      return row.userId
-    },
-    closePushStateDialog(){
-      this.selectPushList = []
-      this.pushQuery = {
-        role:undefined,
-        nickName:undefined
-      }
-      this.$refs.pushTable.clearSelection()
-    },
     async queryContractPlanSplitFlag(){
       const res = await getContractPlanSplitFlag();
       this.splitValue = res.data;
@@ -1028,7 +937,8 @@ export default {
     pushState(row){
       this.pushStateDialog = true;
       this.currentData = row;
-      this.getUsersRoleList()
+      // this.getUsersRoleList()
+      this.getUsersRoleContractPlanList()
     },
     //搜索用户
     searchUser() {
@@ -1055,7 +965,7 @@ export default {
       }
       this.pushListLoading = false;
     },
-    //获取角色用户
+    //获取角色用户 (弃用 2024.11.01)
     async getUsersRoleList(){
       this.pushListLoading = true;
       try{
@@ -1069,6 +979,26 @@ export default {
         this.pushUserList = Array.from(
           new Map(userList.map(item => [item.userId, item])).values()
         );
+      }catch(err){
+        console.log(err);
+      }
+      this.pushListLoading = false;
+    },
+    //获取角色用户根据合约拆分id和合约拆分code来查询
+    async getUsersRoleContractPlanList(){
+      this.pushListLoading = true;
+      try{
+        const res = await getUsersRoleContractPlanList(this.currentData.contractPlanningCode,this.currentData.contractPlanningId,null)
+        this.pushRoleList = res.data.userList.map(item => ({value:item.roleId,label:item.roleName}))
+        this.pushList = res.data.userList
+        let userList = []
+        res.data.userList.forEach(item => {
+          userList.push(...item.userList)
+        })
+        this.pushUserList = Array.from(
+          new Map(userList.map(item => [item.userId, item])).values()
+        );
+        console.log('%c👽', `font-size: 20px;background-color: #f00;`, this.pushUserList);
       }catch(err){
         console.log(err);
       }
