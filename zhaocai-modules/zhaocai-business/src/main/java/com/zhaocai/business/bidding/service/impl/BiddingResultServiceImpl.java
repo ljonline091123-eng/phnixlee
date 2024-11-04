@@ -345,7 +345,7 @@ public class BiddingResultServiceImpl extends ServiceImpl<BiddingResultMapper,Bi
     }
 
     @Override
-    public ResultData<BpmAuditResponseDTO> audit(BpmAuditRequestDTO requestDTO) {
+    public String audit(String processKey, Map<String, Object> variables) {
         return null;
     }
 

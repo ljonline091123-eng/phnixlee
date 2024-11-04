@@ -67,10 +67,6 @@ public interface IBPMProcessService {
      */
     ResultData<List<BpmListProcessLogResponseDTO>> listProcessLog(BpmListProcessLogRequestDTO requestDTO);
     /**
-     * 审批
-     */
-    ResultData<BpmAuditResponseDTO> audit(BpmAuditRequestDTO requestDTO);
-    /**
      * 加载定义接口
      */
     ResultData<List<BpmLoadTaskDefResponseDTO>> loadTaskDef(BpmLoadTaskDefRequestDTO requestDTO);

@@ -50,6 +50,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.ObjectUtils;
 
+import java.io.Serializable;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -739,8 +740,8 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
     }
 
     @Override
-    public ResultData<BpmAuditResponseDTO> audit(BpmAuditRequestDTO requestDTO) {
-        Vendor vendor = getById(requestDTO.getBusinessId());
+    public String audit(String processKey, Map<String, Object> variables) {
+        Vendor vendor = getById((Serializable) variables.get("businessId"));
         /* 根据组织获取对应的二级单位 */
         String org = underlingSystemService.getL2OrgByOrgId(vendor.getFirstCooperationCompanyCode());
         /* 流程角色配置规则传参 */
@@ -749,8 +750,8 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
         PropertyListRequestDTO.addPropertyToList(propertyList, "companyId", org);/* 公司 二级单位 */
         PropertyListRequestDTO.addPropertyToList(propertyList, "responsibilityDeptId", org);/* 责任单位 三级单位 */
         PropertyListRequestDTO.addPropertyToList(propertyList, "parentProjectCode", org);/* 父项目编码(项目部) */
-        requestDTO.setPropertyList(propertyList);
-        return processService.audit(requestDTO);
+
+        return processService.auditProcessInstance(ProcessKeyEnum.ZHAOCAI_VENDOR_REGISTER.getIdentifying(),variables);
     }
 
     @Override

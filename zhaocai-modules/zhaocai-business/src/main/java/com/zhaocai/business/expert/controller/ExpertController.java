@@ -1,5 +1,6 @@
 package com.zhaocai.business.expert.controller;
 
+import com.alibaba.fastjson.JSONObject;
 import com.zhaocai.business.common.base.BladeController;
 import com.zhaocai.business.common.enums.ExpertStateEnum;
 import com.zhaocai.business.expert.service.IExpertService;
@@ -26,6 +27,7 @@ import io.swagger.annotations.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
+import springfox.documentation.annotations.ApiIgnore;
 
 import java.util.List;
 
@@ -140,8 +142,14 @@ public class ExpertController extends BladeController {
 
     @ApiOperation(value = "审批")
     @PostMapping ("/audit")
-    public ResultData<BpmAuditResponseDTO> audit(@RequestBody BpmAuditRequestDTO requestDTO) {
-        return expertService.audit(requestDTO);
+    public ResultData<String> audit(@ApiIgnore @RequestBody JSONObject body) {
+        String processKey = body.getString("processKey");
+        body.remove("processKey");
+        try {
+            return ResultData.data(expertService.audit(processKey, body));
+        } catch (Exception e) {
+            return ResultData.fail(e.getLocalizedMessage());
+        }
     }
 
     @ApiOperation(value = "加载定义接口")

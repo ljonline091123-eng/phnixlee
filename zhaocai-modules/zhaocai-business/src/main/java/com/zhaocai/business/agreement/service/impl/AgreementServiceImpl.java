@@ -1056,6 +1056,26 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
                 .eq(Agreement::getId, businessId));
     }
 
+    @Override
+    public ResultData<BpmInitializeResponseDTO> initialize(BpmInitializeRequestDTO requestDTO) {
+        return null;
+    }
+
+    @Override
+    public ResultData<List<BpmListProcessLogResponseDTO>> listProcessLog(BpmListProcessLogRequestDTO requestDTO) {
+        return null;
+    }
+
+    @Override
+    public String audit(String processKey, Map<String, Object> variables) {
+        return null;
+    }
+
+    @Override
+    public ResultData<List<BpmLoadTaskDefResponseDTO>> loadTaskDef(BpmLoadTaskDefRequestDTO requestDTO) {
+        return null;
+    }
+
     /**
      * 获取机构名称
      * @param thridDeptId
@@ -1583,25 +1603,5 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
         if (totalSurplusAmount.compareTo(requestTotalAmount) < 0) {
             throw new ParamValidateException(String.format("输入的清单总金额[%s]大于剩余可用金额[%s]",NumberUtil.decimalFormat(requestTotalAmount,4),NumberUtil.decimalFormat(totalSurplusAmount,4)));
         }
-    }
-
-    @Override
-    public ResultData<BpmInitializeResponseDTO> initialize(BpmInitializeRequestDTO requestDTO) {
-        return null;
-    }
-
-    @Override
-    public ResultData<List<BpmListProcessLogResponseDTO>> listProcessLog(BpmListProcessLogRequestDTO requestDTO) {
-        return null;
-    }
-
-    @Override
-    public ResultData<BpmAuditResponseDTO> audit(BpmAuditRequestDTO requestDTO) {
-        return null;
-    }
-
-    @Override
-    public ResultData<List<BpmLoadTaskDefResponseDTO>> loadTaskDef(BpmLoadTaskDefRequestDTO requestDTO) {
-        return null;
     }
 }
