@@ -1,59 +1,72 @@
-package com.zhaocai.business.expert.vo.res;
+package com.zhaocai.business.expert.domain;
 
+import com.baomidou.mybatisplus.annotation.TableName;
 import com.fasterxml.jackson.annotation.JsonFormat;
-import com.zhaocai.business.common.annotations.DictCache;
-import com.zhaocai.business.common.base.AdviceObject;
-import com.zhaocai.business.common.enums.DictBizEnum;
-import com.zhaocai.business.pub.vo.res.AttachmentVO;
-import io.swagger.annotations.ApiModel;
+import com.zhaocai.common.core.web.domain.BaseEntity;
 import io.swagger.annotations.ApiModelProperty;
-import lombok.Data;
-import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.Setter;
 
 import java.util.Date;
-import java.util.List;
 
 /**
- * @author ssy
- * @date 2024/5/27 15:01
+ * 专家修改对象 tb_expert
+ *
+ * @author WH
+ * @date 2024-05-24
  */
-@Data
-@EqualsAndHashCode(callSuper = false)
-@ApiModel(value = "ExpertInfoVO", description = "专家详情信息VO")
-public class ExpertInfoVO extends AdviceObject {
+@Getter
+@Setter
+@TableName(value = "tb_expert_change")
+public class ExpertChange extends BaseEntity
+{
+    private static final long serialVersionUID = 1L;
 
-    @ApiModelProperty(value = "id")
-    private Long id;
-
-    @ApiModelProperty(value = "专家修改id")
+    /** 专家Id */
+    @ApiModelProperty(value =  "专家Id")
     private Long expertId;
 
+    /** 专家姓名 */
     @ApiModelProperty(value =  "专家姓名")
     private String expertName;
 
+    /** 专家手机号码 */
     @ApiModelProperty(value =  "专家手机号码")
     private String expertPhone;
 
+    /** 所属组织机构 */
     @ApiModelProperty(value =  "所属组织机构")
     private String belongOrganization;
 
+    /** 工作部门 */
     @ApiModelProperty(value =  "工作部门")
     private String department;
 
+    /** 学历 */
     @ApiModelProperty(value =  "学历")
     private Integer educationDegree;
 
+    /** 专业 */
     @ApiModelProperty(value =  "专业")
     private String major;
 
+    /** 业态 */
     @ApiModelProperty(value =  "业态")
     private Integer businessType;
 
-    @ApiModelProperty(value =  "专家类别")
+    /** 专家类别（1技术类 2经济类） */
+    @ApiModelProperty(value =  "专家类别（1技术类 2经济类）")
     private Integer expertType;
 
-    @ApiModelProperty(value =  "专家状态(0账号审批中|1启用|2禁用)")
+    /** 专家状态 */
+    @ApiModelProperty(value =  "专家状态(0(审批中/保存) | 1启用 | 2禁用)")
     private Integer expertState;
+
+    /**
+     * 审批状态 {@link com.zhaocai.business.common.enums.ExpertStateEnum}
+     */
+    @ApiModelProperty(value = "审批状态(0保存|1审批中|2审批拒绝|3审批通过)")
+    private Integer state;
 
     /**
      * 流程实例 id
@@ -68,39 +81,17 @@ public class ExpertInfoVO extends AdviceObject {
     private Integer processType;
 
     /**
-     * 审批状态
-     */
-    @ApiModelProperty(value = "审批状态")
-    private Integer state;
-
-    /**
      * 审批信息,批语
      */
     @ApiModelProperty(value = "审批信息")
     private String operateComment;
 
+    /** 对应用户id */
     @ApiModelProperty(value =  "对应用户id")
     private Long userId;
 
-    @ApiModelProperty(value =  "学历（文本）")
-    @DictCache(dictBizEnum= DictBizEnum.EDUCATION_DEGREE,filedName = "educationDegree")
-    private String educationDegreeText;
-
-    @ApiModelProperty(value =  "业态（文本）")
-    @DictCache(dictBizEnum= DictBizEnum.EXPERT_BUSINESS_TYPE,filedName = "businessType")
-    private String businessTypeText;
-
-    @ApiModelProperty(value =  "专家类别（文本）")
-    @DictCache(dictBizEnum= DictBizEnum.EXPERT_TYPE,filedName = "expertType")
-    private String expertTypeText;
-
-
-    @ApiModelProperty(value =  "执业资格证")
+    @ApiModelProperty(value =  "执业资格证（字典类）")
     private Integer registeredCertificate;
-
-    @ApiModelProperty(value =  "执业资格证（文本）")
-    @DictCache(dictBizEnum= DictBizEnum.REGISTERED_CERTIFICATE,filedName = "registeredCertificate")
-    private String registeredCertificateText;
 
     @JsonFormat(pattern = "yyyy-MM-dd", timezone = "GMT+8")
     @ApiModelProperty(value = "执业资格证取得时间")
@@ -116,10 +107,6 @@ public class ExpertInfoVO extends AdviceObject {
     @ApiModelProperty(value =  "技术职称（初级、中级、副高、正高、教授级高工、研究员）")
     private Integer technicalTitles;
 
-    @ApiModelProperty(value =  "技术职称（文本）")
-    @DictCache(dictBizEnum= DictBizEnum.TECHNICAL_TITLES,filedName = "technicalTitles")
-    private String technicalTitlesText;
-
     @JsonFormat(pattern = "yyyy-MM-dd", timezone = "GMT+8")
     @ApiModelProperty(value = "技术职称获取时间")
     private Date technicalTitlesDate;
@@ -132,8 +119,5 @@ public class ExpertInfoVO extends AdviceObject {
 
     @ApiModelProperty(value =  "相关专业工作简历")
     private String professionResume;
-
-    @ApiModelProperty(value =  "工作简历附件")
-    private List<AttachmentVO> resumeAttachList;
 
 }

@@ -1,0 +1,206 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhaocai.business.expert.mapper.ExpertChangeMapper">
+
+    <resultMap type="com.zhaocai.business.expert.domain.ExpertChange" id="ExpertResult">
+        <result property="id"    column="id"    />
+        <result property="expertId"    column="expert_id"    />
+        <result property="expertName"    column="expert_name"    />
+        <result property="expertPhone"    column="expert_phone"    />
+        <result property="belongOrganization"    column="belong_organization"    />
+        <result property="department"    column="department"    />
+        <result property="educationDegree"    column="education_degree"    />
+        <result property="major"    column="major"    />
+        <result property="businessType"    column="business_type"    />
+        <result property="expertType"    column="expert_type"    />
+        <result property="expertState"    column="expert_state"    />
+        <result property="userId"    column="user_id"    />
+        <result property="createBy"    column="create_by"    />
+        <result property="createId"    column="create_id"    />
+        <result property="createTime"    column="create_time"    />
+        <result property="updateBy"    column="update_by"    />
+        <result property="updateId"    column="update_id"    />
+        <result property="updateTime"    column="update_time"    />
+        <result property="delFlag"    column="del_flag"    />
+        <result property="registeredCertificate"    column="registered_certificate"    />
+        <result property="registeredCertificateDate"    column="registered_certificate_date"    />
+        <result property="presentJob"    column="present_job"    />
+        <result property="presentJobDate"    column="present_job_date"    />
+        <result property="technicalTitles"    column="technical_titles"    />
+        <result property="technicalTitlesDate"    column="technical_titles_date"    />
+        <result property="presentUnitDept"    column="present_unit_dept"    />
+        <result property="email"    column="email"    />
+        <result property="professionResume"    column="profession_resume"    />
+        <result property="wfProcessId"    column="wf_process_id"    />
+        <result property="processType"    column="process_type"    />
+        <result property="state"    column="state"    />
+        <result property="operateComment"    column="operate_comment"    />
+    </resultMap>
+
+    <sql id="selectExpertVo">
+        select id, expert_id, expert_name, expert_phone, belong_organization, department, education_degree, major, business_type, expert_type, expert_state, user_id, create_by, create_id, create_time, update_by, update_id, update_time, del_flag,
+               registered_certificate, registered_certificate_date, present_job, present_job_date, technical_titles, technical_titles_date, present_unit_dept, email, profession_resume,wf_process_id,process_type,state,operate_comment
+        from tb_expert_change
+    </sql>
+
+    <select id="page" resultType="com.zhaocai.business.expert.vo.res.ExpertListVO">
+        SELECT ex.*, YEAR(#{query.workYearCompareDate}) - YEAR(ex.present_job_date) AS yearDiff
+        FROM tb_expert_change ex
+        left join sys_user su on su.user_id = ex.user_id and su.del_flag = 0
+        <where>
+            ex.del_flag = 0
+            <if test="query.filterEvalExpert != null and '1' == query.filterEvalExpert ">
+                and not exists(
+                    select bee.id
+                    from tb_bidding_evaluat_expert bee
+                    inner join tb_procurement_scheme ps on ps.id = bee.scheme_id
+                    inner join tb_tender_notice tn on bee.notice_id = tn.id
+                    where bee.del_flag = 0 and ps.del_flag = 0 and tn.del_flag = 0 and bee.is_join = 1
+                        and bee.expert_id = ex.id and tn.notice_status = #{query.noticeStatus})
+            </if>
+            <if test="query.expertName != null and query.expertName != ''">
+                and ex.expert_name like CONCAT('%', #{query.expertName}, '%')
+            </if>
+            <if test="query.expertPhone != null and query.expertPhone != ''">
+                and ex.expert_phone like CONCAT('%', #{query.expertPhone}, '%')
+            </if>
+            <if test="query.belongOrganization != null and query.belongOrganization != ''">
+                and ex.belong_organization = #{query.belongOrganization}
+            </if>
+            <if test="query.expertType != null">
+                and ex.expert_type = #{query.expertType}
+            </if>
+            <if test="query.expertTypes != null and query.expertTypes != ''">
+                and find_in_set(ex.expert_type, #{query.expertTypes})
+            </if>
+            <if test="query.businessType != null ">
+                and ex.business_type = #{query.businessType}
+            </if>
+            <if test="query.businessTypes != null and query.businessTypes != ''">
+                and find_in_set(ex.business_type, #{query.businessTypes})
+            </if>
+            <if test="query.deptId != null">
+                and (su.dept_id = #{query.deptId} or su.dept_id in (
+                        select t.dept_id from sys_dept t where find_in_set(#{query.deptId}, ancestors)))
+            </if>
+            <if test="query.deptIdList != null and query.deptIdList.size() > 0">
+                and (
+                    <foreach collection="query.deptIdList" item="deptIdItem" open="(" separator=" or " close=")">
+                        (su.dept_id = #{deptIdItem} or su.dept_id in (
+                            select t.dept_id from sys_dept t where find_in_set(#{deptIdItem}, ancestors)))
+                    </foreach>
+                )
+            </if>
+            <if test="query.major != null and query.major != ''">
+                and ex.major like CONCAT('%', #{query.major}, '%')
+            </if>
+            <if test="query.technicalTitles != null">
+                and ex.technical_titles <![CDATA[>=]]> #{query.technicalTitles}
+            </if>
+            <if test="query.registeredCertificate != null and query.registeredCertificate != ''">
+                and ex.registered_certificate like CONCAT('%', #{query.registeredCertificate}, '%')
+            </if>
+            <!--<if test="query.workYear != null">
+                and ex.present_job_date <![CDATA[<=]]> #{query.workYearCompareDate}
+            </if>-->
+            <if test="query.workYear != null">
+                and (YEAR(#{query.workYearCompareDate}) - YEAR(ex.present_job_date)) <![CDATA[>=]]> #{query.workYear}
+            </if>
+            <if test="query.notIncludeExpertIds != null and query.notIncludeExpertIds != ''">
+                and not find_in_set(ex.id, #{query.notIncludeExpertIds})
+            </if>
+            <if test="query.expertState != null">
+                and ex.expert_state = #{query.expertState}
+            </if>
+            <if test="query.state != null">
+                and ex.state = #{query.state}
+            </if>
+            <if test="query.userId != null">
+                and ex.user_id = #{query.userId}
+            </if>
+        </where>
+    </select>
+
+    <select id="listExpert" resultType="com.zhaocai.business.expert.vo.res.ExpertListVO">
+        SELECT ex.*, YEAR(#{query.workYearCompareDate}) - YEAR(ex.present_job_date) AS yearDiff
+        FROM tb_expert_change ex
+        left join sys_user su on su.user_id = ex.user_id and su.del_flag = 0
+        <where>
+            ex.del_flag = 0
+            <if test="query.filterEvalExpert != null and '1' == query.filterEvalExpert ">
+                and not exists(
+                    select bee.id
+                    from tb_bidding_evaluat_expert bee
+                    inner join tb_procurement_scheme ps on ps.id = bee.scheme_id
+                    inner join tb_tender_notice tn on bee.notice_id = tn.id
+                    where bee.del_flag = 0 and ps.del_flag = 0 and tn.del_flag = 0 and bee.is_join = 1
+                        and bee.expert_id = ex.id and tn.notice_status = #{query.noticeStatus})
+            </if>
+            <if test="query.expertName != null and query.expertName != ''">
+                and ex.expert_name like CONCAT('%', #{query.expertName}, '%')
+            </if>
+            <if test="query.expertPhone != null and query.expertPhone != ''">
+                and ex.expert_phone like CONCAT('%', #{query.expertPhone}, '%')
+            </if>
+            <if test="query.belongOrganization != null and query.belongOrganization != ''">
+                and ex.belong_organization = #{query.belongOrganization}
+            </if>
+            <if test="query.expertType != null">
+                and ex.expert_type = #{query.expertType}
+            </if>
+            <if test="query.expertTypes != null and query.expertTypes != ''">
+                and find_in_set(ex.expert_type, #{query.expertTypes})
+            </if>
+            <if test="query.businessType != null ">
+                and ex.business_type = #{query.businessType}
+            </if>
+            <if test="query.businessTypes != null and query.businessTypes != ''">
+                and find_in_set(ex.business_type, #{query.businessTypes})
+            </if>
+            <if test="query.deptId != null">
+                and (su.dept_id = #{query.deptId} or su.dept_id in (
+                select t.dept_id from sys_dept t where find_in_set(#{query.deptId}, ancestors)))
+            </if>
+            <if test="query.deptIdList != null and query.deptIdList.size() > 0">
+                and (
+                <foreach collection="query.deptIdList" item="item" open="(" separator=" or " close=")">
+                    (su.dept_id = #{item} or su.dept_id in (
+                    select t.dept_id from sys_dept t where find_in_set(#{item}, ancestors)))
+                </foreach>
+                )
+            </if>
+            <if test="query.major != null and query.major != ''">
+                and ex.major like CONCAT('%', #{query.major}, '%')
+            </if>
+            <if test="query.technicalTitles != null">
+                and ex.technical_titles <![CDATA[>=]]> #{query.technicalTitles}
+            </if>
+            <if test="query.registeredCertificate != null and query.registeredCertificate != ''">
+                and ex.registered_certificate like CONCAT('%', #{query.registeredCertificate}, '%')
+            </if>
+<!--            <if test="query.workYear != null">-->
+<!--                and ex.present_job_date <![CDATA[<=]]> #{query.workYearCompareDate}-->
+<!--            </if>-->
+            <if test="query.workYear != null">
+                and (YEAR(#{query.workYearCompareDate}) - YEAR(ex.present_job_date)) <![CDATA[>=]]> #{query.workYear}
+            </if>
+            <if test="query.notIncludeExpertIds != null and query.notIncludeExpertIds != ''">
+                and not find_in_set(ex.id, #{query.notIncludeExpertIds})
+            </if>
+            <if test="query.expertState != null">
+                and ex.expert_state = #{query.expertState}
+            </if>
+            <if test="query.state != null">
+                and ex.state = #{query.state}
+            </if>
+        </where>
+    </select>
+
+    <select id="selectExpertById" parameterType="Long" resultMap="ExpertResult">
+        <include refid="selectExpertVo"/>
+        where id = #{id}
+    </select>
+
+</mapper>

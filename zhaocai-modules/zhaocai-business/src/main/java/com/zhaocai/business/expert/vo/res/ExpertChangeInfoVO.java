@@ -19,13 +19,13 @@ import java.util.List;
  */
 @Data
 @EqualsAndHashCode(callSuper = false)
-@ApiModel(value = "ExpertInfoVO", description = "专家详情信息VO")
-public class ExpertInfoVO extends AdviceObject {
+@ApiModel(value = "ExpertChangeInfoVO", description = "专家修改详情信息VO")
+public class ExpertChangeInfoVO extends AdviceObject {
 
-    @ApiModelProperty(value = "id")
+    @ApiModelProperty(value =  "专家修改id")
     private Long id;
 
-    @ApiModelProperty(value = "专家修改id")
+    @ApiModelProperty(value =  "专家id")
     private Long expertId;
 
     @ApiModelProperty(value =  "专家姓名")
