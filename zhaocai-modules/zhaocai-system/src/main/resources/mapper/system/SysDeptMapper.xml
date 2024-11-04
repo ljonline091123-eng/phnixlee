@@ -262,7 +262,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
 	<select id="getThreeLevelDepts" resultType="com.zhaocai.system.api.domain.SysDept">
 		<include refid="selectDeptVo"/>
 		WHERE
-		d.thrid_org_level IS NOT NULL or d.thrid_parent_id in (select dd.thrid_dept_id from sys_dept dd where dd.thrid_org_level IS NOT NULL)
+		(d.thrid_org_level IS NOT NULL or d.thrid_parent_id in (select dd.thrid_dept_id from sys_dept dd where dd.thrid_org_level IS NOT NULL AND dd.thrid_org_type != 'XM')) AND d.thrid_org_type != 'XM'
 		order by d.parent_id, d.order_num
 	</select>
 
