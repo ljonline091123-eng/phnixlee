@@ -1,6 +1,6 @@
 <template>
   <div class="app-container">
-    <BackButton path="/tender-procurement/expert/expert" title="专家信息新增">
+    <BackButton path="/tender-procurement/expert/expert" title="专家信息详情">
       <div>
         <el-button
           type="primary"
