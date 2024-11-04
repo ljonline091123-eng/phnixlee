@@ -216,7 +216,7 @@ export const constantRoutes = [
       },
       {
         path: "expert-detail/:params",
-        component: () => import("@/views/expert/add-expert.vue"),
+        component: () => import("@/views/expert/expert-detail.vue"),
         name: "expert-detail",
         meta: { title: "专家信息", activeMenu: "/expert/expert-detail" },
       },
@@ -422,7 +422,7 @@ router.beforeEach((to, from, next) => {
     // wujie = window.$wujie?.props.token || "";
     wujie =
       window.$wujie?.props.token ||
-      "Bearer eyJhbGciOiJIUzUxMiJ9.eyJsb2dpbl91c2VyX2tleSI6ImUzZWJhZDBjLTk3ZmUtNDgwNC1iZTgxLWE0ZTczZjFiODUwN18xODE2MzY1MTczMyJ9.h3pKJtm6e_f18FQokWcUN0KvbGh4llPL62W9gkBdTlPsw0u6KXy8rfSRXEGz9_fY8ahARUHCLFVcYioPWYEDMQ";
+      "Bearer eyJhbGciOiJIUzUxMiJ9.eyJsb2dpbl91c2VyX2tleSI6ImZmZWNlYjFiLTQ4MzMtNDY5MS04YWI0LWJlYTM3MzUwZjlmZF8xODE2MzY1MTczMyJ9.JfgfxwdVToGxouN5n0iLctjsgfO4j2LMLp8_8ZZ44Tb5ocKFf9tGZVTy3GH2nkFIEnZmWpk0O_RDFhDpN6DIOw";
   }
   console.log(window.$wujie?.props, "window.$wujie?.props");
 
