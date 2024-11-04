@@ -1,5 +1,6 @@
 package com.zhaocai.business.vendor.controller;
 
+import com.alibaba.fastjson.JSONObject;
 import com.zhaocai.business.common.annotations.VendorStateCheck;
 import com.zhaocai.business.common.base.BladeController;
 import com.zhaocai.business.common.enums.SupplierRegistSourceEnum;
@@ -26,6 +27,7 @@ import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
+import springfox.documentation.annotations.ApiIgnore;
 
 import javax.validation.Valid;
 import java.util.List;
@@ -131,10 +133,15 @@ public class VendorController extends BladeController {
 
     @ApiOperation(value = "审批")
     @PostMapping ("/audit")
-    public ResultData<BpmAuditResponseDTO> audit(@RequestBody BpmAuditRequestDTO requestDTO) {
-        return vendorService.audit(requestDTO);
+    public ResultData<String> audit(@ApiIgnore @RequestBody JSONObject body) {
+        String processKey = body.getString("processKey");
+        body.remove("processKey");
+        try {
+            return ResultData.data(vendorService.audit(processKey, body));
+        } catch (Exception e) {
+            return ResultData.fail(e.getLocalizedMessage());
+        }
     }
-
     @ApiOperation(value = "加载定义接口")
     @GetMapping("/loadTaskDef")
     public ResultData<List<BpmLoadTaskDefResponseDTO>> loadTaskDef(BpmLoadTaskDefRequestDTO requestDTO) {

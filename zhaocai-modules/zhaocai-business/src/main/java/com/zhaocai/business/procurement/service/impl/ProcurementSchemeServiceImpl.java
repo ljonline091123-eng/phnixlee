@@ -382,7 +382,7 @@ public class ProcurementSchemeServiceImpl extends ServiceImpl<ProcurementSchemeM
     }
 
     @Override
-    public ResultData<BpmAuditResponseDTO> audit(BpmAuditRequestDTO requestDTO) {
+    public String audit(String processKey, Map<String, Object> variables) {
         return null;
     }
 

@@ -223,7 +223,7 @@ public class VendorChangeLevelServiceImpl extends ServiceImpl<VendorChangeMapper
     }
 
     @Override
-    public ResultData<BpmAuditResponseDTO> audit(BpmAuditRequestDTO requestDTO) {
+    public String audit(String processKey, Map<String, Object> variables) {
         return null;
     }
 

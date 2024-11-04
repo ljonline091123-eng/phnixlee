@@ -1130,7 +1130,7 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
     }
 
     @Override
-    public ResultData<BpmAuditResponseDTO> audit(BpmAuditRequestDTO requestDTO) {
+    public String audit(String processKey, Map<String, Object> variables) {
         return null;
     }
 

@@ -47,6 +47,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.ObjectUtils;
 
+import java.io.Serializable;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -436,19 +437,21 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
     }
 
     @Override
-    public ResultData<BpmAuditResponseDTO> audit(BpmAuditRequestDTO requestDTO) {
-        Expert expert = getById(requestDTO.getBusinessId());
+    public String audit(String processKey, Map<String, Object> variables) {
+
+        Expert expert = getById((Serializable) variables.get("businessId"));
         SysUser sysUser = systemUserService.getUserById(expert.getUserId());
         /* 根据组织获取对应的二级单位 */
         String org = underlingSystemService.getL2OrgByOrgId(sysUser.getThridOrgId());
+        //供应商注册时候选择审批单位，只能由选择的单位维护的供应商审核人员进行审核，如果供应商信息修改也是需要原审核单位进行审核
+        String customProcessKey = ProcessKeyEnum.ZHAOCAI_EXPERT_ADD.getIdentifying().replace("{org}",org);
         /* 流程角色配置规则传参 */
-        List<PropertyListRequestDTO<Object>> propertyList = new ArrayList<>();
-        PropertyListRequestDTO.addPropertyToList(propertyList, "groupId", UserConstants.GROUP_DEPT_ID);/* 1000000000 */
-        PropertyListRequestDTO.addPropertyToList(propertyList, "companyId", org);/* 公司 二级单位 */
-        PropertyListRequestDTO.addPropertyToList(propertyList, "responsibilityDeptId", org);/* 责任单位 三级单位 */
-        PropertyListRequestDTO.addPropertyToList(propertyList, "parentProjectCode", org);/* 父项目编码(项目部) */
-        requestDTO.setPropertyList(propertyList);
-        return processService.audit(requestDTO);
+        variables.put("groupId", UserConstants.GROUP_DEPT_ID);/* 集团 */
+        variables.put("companyId", org);/* 公司 二级单位 */
+        variables.put("responsibilityDeptId", org);/* 责任单位 三级单位 */
+        variables.put("parentProjectCode", org);/* 父项目编码(项目部) */
+
+        return processService.auditProcessInstance(ProcessKeyEnum.ZHAOCAI_EXPERT_ADD.getIdentifying(),variables);
     }
 
     @Override

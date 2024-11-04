@@ -11,6 +11,7 @@ import com.zhaocai.business.manager.http.dto.res.BpmLoadTaskDefResponseDTO;
 import com.zhaocai.common.core.web.bean.ResultData;
 
 import java.util.List;
+import java.util.Map;
 
 
 /**
@@ -38,7 +39,7 @@ public interface IPBMOverrideService {
     /**
      * 审批
      */
-    ResultData<BpmAuditResponseDTO> audit(BpmAuditRequestDTO requestDTO);
+    String audit(String processKey, Map<String, Object> variables);
     /**
      * 加载定义接口
      */
