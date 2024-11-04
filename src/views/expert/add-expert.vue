@@ -394,7 +394,7 @@
         </div>
       </el-form>
     </div>
-    <!-- 审批和审批详情 -->
+    <!-- 审批和审批详情  -->
     <ApprovalForm
       :visible.sync="expertVisible"
       :title="'新增专家审批流程'"
@@ -426,9 +426,9 @@ import BackButton from "@/components/BackButton/index.vue";
 import PageTitle from "@/components/PageTitle/index.vue";
 import { uploadFileUrl } from "@/utils/const";
 import {
-  getPermissionButton,
-  postAuditProcess,
-  getLoadTaskDef,
+  getPermissionButton,getPermissionButtonNew,
+  postAuditProcess,postAuditProcessNew,
+  getLoadTaskDef,getLoadTaskDefNew,
   getProcessLogList,
 } from "@/api/procurement/manage";
 export default {
@@ -477,6 +477,7 @@ export default {
         businessType: "",
         expertType: "",
         registeredCertificate: "",
+        technicalTitles:""
 
       }, //form表单数据
       planList: [],
@@ -580,7 +581,7 @@ export default {
         curTaskId: this.taskPresentId,
         processKey: "jiantou-zhaocai:{org}:ZHAOCAI_EXPERT_ADD",
       };
-      postAuditProcess(params).then(() => {
+      postAuditProcessNew(params).then(() => {
         this.$message.success("提交成功");
         this.$modal.closeLoading();
         this.expertVisible = false;
@@ -604,7 +605,7 @@ export default {
           processId: this.processId,
         };
         if (this.businessId && this.processId) {
-          const res = await getLoadTaskDef(params);
+          const res = await getLoadTaskDefNew(params);
           this.processInformationList = res.data;
           function getActive(nodes) {
             let allFalse = true;
@@ -637,7 +638,7 @@ export default {
       this.processId = this.formData.wfProcessId;
       try {
         if (this.formData.id) {
-          const res = await getPermissionButton({
+          const res = await getPermissionButtonNew({
             businessId: this.formData.id, //联系人id
             processId: this.formData.wfProcessId, //流程id
           });
@@ -666,11 +667,15 @@ export default {
         const data=res.data
         this.formData=data
         this.formData.educationDegree=this.formData.educationDegree+""
-        this.formData.registeredCertificate=data.registeredCertificate+""
-        this.formData.technicalTitles=data.technicalTitles+""
         this.formData.expertType=data.expertType+""
         this.formData.businessType=data.businessType+""
         this.formData.state=data.state+""
+        if(data.registeredCertificate){
+          this.formData.registeredCertificate=data.registeredCertificate+""
+        }
+        if(data.technicalTitles){
+          this.formData.technicalTitles=data.technicalTitles+""
+        }
 
       },
     //保存

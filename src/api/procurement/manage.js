@@ -65,10 +65,44 @@ export const getPermissionButton = (params) => {
     params,
   });
 };
+
+// 获取专家责任单位审批权限
+export const getPermissionButtonNew = (params) => {
+  return request({
+    url: "/business/expert/initialize",
+    method: "get",
+    params,
+  });
+};
+
+// 获取供应商审批权限
+export const getPermissionButtonVendor = (params) => {
+  return request({
+    url: "/business/vendor/initialize",
+    method: "get",
+    params,
+  });
+};
+
 // 加载定义接口
 export const getLoadTaskDef = (params) => {
   return request({
     url: "/business/bpm/loadTaskDef",
+    method: "get",
+    params,
+  });
+};
+export const getLoadTaskDefVendor = (params) => {
+  return request({
+    url: "/business/vendor/loadTaskDef",
+    method: "get",
+    params,
+  });
+};
+// 加载责任单位定义接口
+export const getLoadTaskDefNew= (params) => {
+  return request({
+    url: "/business/expert/loadTaskDef",
     method: "get",
     params,
   });
@@ -86,10 +120,39 @@ export const getProcessLogList = (params) => {
     method: "get",
   });
 };
+
+// 流程操作日志列表
+export const getProcessLogListVendor = (params) => {
+  // 手动拼接 businessId 到 URL 中
+  let url = `/business/vendor/listProcessLog?processId=${params.processId}`;
+  // 如果 businessId 存在，即使为空字符串，也将其拼接到 URL 中
+  if (params.businessId !== undefined) {
+    url += `&businessId=${params.businessId}`;
+  }
+  return request({
+    url: url,
+    method: "get",
+  });
+};
 // 审批流程
 export const postAuditProcess = (data) => {
   return request({
     url: "/business/process/auditProcess",
+    method: "post",
+    data,
+  });
+};
+// 审批流程
+export const postAuditProcessNew = (data) => {
+  return request({
+    url: "/business/expert/audit",
+    method: "post",
+    data,
+  });
+};
+export const postAuditProcessVendor = (data) => {
+  return request({
+    url: "/business/vendor/audit",
     method: "post",
     data,
   });
