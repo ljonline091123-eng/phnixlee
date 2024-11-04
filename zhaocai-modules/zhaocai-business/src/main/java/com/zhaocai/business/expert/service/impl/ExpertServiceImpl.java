@@ -443,8 +443,6 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
         SysUser sysUser = systemUserService.getUserById(expert.getUserId());
         /* 根据组织获取对应的二级单位 */
         String org = underlingSystemService.getL2OrgByOrgId(sysUser.getThridOrgId());
-        //供应商注册时候选择审批单位，只能由选择的单位维护的供应商审核人员进行审核，如果供应商信息修改也是需要原审核单位进行审核
-        String customProcessKey = ProcessKeyEnum.ZHAOCAI_EXPERT_ADD.getIdentifying().replace("{org}",org);
         /* 流程角色配置规则传参 */
         variables.put("groupId", UserConstants.GROUP_DEPT_ID);/* 集团 */
         variables.put("companyId", org);/* 公司 二级单位 */
