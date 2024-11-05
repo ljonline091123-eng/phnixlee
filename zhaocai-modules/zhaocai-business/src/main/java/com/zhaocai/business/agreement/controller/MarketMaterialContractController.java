@@ -39,6 +39,15 @@ public class MarketMaterialContractController extends BladeController {
     }
 
     /**
+     * 校验创建合同基本信息
+     */
+    @PostMapping("/checkAgreementCreateInfo")
+    @ApiOperation(value = "校验创建合同基本信息")
+    public ResultData<Boolean> checkAgreementCreateInfo(@Valid @RequestBody MarketMaterialContractQueryVO requestVO) {
+        return ResultData.data(marketMaterialContractService.checkAgreementCreateInfo(requestVO));
+    }
+
+    /**
      * 获取创建合同的基本信息
      */
     @PostMapping("/getAgreementCreateInfo")
