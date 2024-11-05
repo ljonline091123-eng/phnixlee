@@ -40,6 +40,7 @@ import com.zhaocai.common.core.constant.NumberConstant;
 import com.zhaocai.common.core.constant.UserConstants;
 import com.zhaocai.common.core.utils.DateUtils;
 import com.zhaocai.common.core.utils.bean.BeanCopierUtil;
+import com.zhaocai.common.core.utils.bean.BeanUtils;
 import com.zhaocai.common.core.web.bean.ResultData;
 import com.zhaocai.system.api.domain.SysUser;
 import com.zhaocai.system.api.system.RemoteUserService;
@@ -453,6 +454,12 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
                     .set(ExpertChange::getProcessType,ExpertProcessTypeEnum.EXPERT_ADD.getState())/* 流程类型 */
                     .set(ExpertChange::getOperateComment,variables.get("operateComment")==null?"":variables.get("operateComment").toString())
                     .eq(ExpertChange::getId,businessId));
+            if(state == ExpertStateEnum.APPROVE.getState()){
+                Expert expert = new Expert();
+                BeanUtils.copyProperties(expertChange, expert);
+                expert.setId(expertChange.getExpertId());
+                super.updateById(expert);
+            }
             super.update(new LambdaUpdateWrapper<Expert>()
                     .set(Expert::getWfProcessId,processId)/* 流程id */
                     .set(Expert::getExpertState,expertState)/* 启用状态 */
@@ -488,6 +495,10 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
                     .set(ExpertChange::getState,ExpertStateEnum.APPROVE.getState())/* 审批状态 */
                     .set(ExpertChange::getOperateComment,variables.get("operateComment")==null?"":variables.get("operateComment").toString())
                     .eq(ExpertChange::getId,businessId));
+            Expert expert = new Expert();
+            BeanUtils.copyProperties(expertChange, expert);
+            expert.setId(expertChange.getExpertId());
+            super.updateById(expert);
             super.update(new LambdaUpdateWrapper<Expert>()
                     .set(Expert::getWfProcessId,processId)/* 流程id */
                     .set(Expert::getExpertState,NumberConstant.ONE)/* 启用状态 */
