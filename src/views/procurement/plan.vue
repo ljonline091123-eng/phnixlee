@@ -247,7 +247,7 @@
               <el-select
                 v-model="pushQuery.role"
                 placeholder="请选择"
-                style="width: 230px"
+                style="width: 220px"
                 multiple
                 clearable
                 collapse-tags
@@ -264,63 +264,82 @@
               label="姓名"
               prop="pushRoleList"
               class="label-right-align"
-              label-width="50px"
+              label-width="40px"
             >
             <el-input
                 v-model="pushQuery.nickName"
                 placeholder="请输入姓名"
                 clearable
-                style="width: 230px"
+                style="width: 150px"
                 @keyup.enter.native="searchUser"
               />
             </el-form-item>
+
+            <el-form-item
+              label="请选择合约拆分"
+              prop="contractPlanList"
+              class="label-right-align"
+              label-width="110px"
+            >
+              <el-select
+                v-model="pushQuery.cpId"
+                placeholder="请选择"
+                style="width: 200px"
+                clearable
+                @change="searchUser"
+                collapse-tags
+              >
+                <el-option
+                  v-for="dict in contractPlanList"
+                  :key="dict.cpId"
+                  :label="dict.splitContractName + (dict.pushStatus === 1?' (已推送)':'')"
+                  :value="dict.cpId"
+                  :disabled="dict.pushStatus === 1"
+                ></el-option>
+              </el-select>
+            </el-form-item>
+
             <el-form-item>
               <el-button
                 type="primary"
                 icon="el-icon-search"
                 size="small"
+                style="width: 70px"
                 @click="searchUser"
                 >查询</el-button
               >
             </el-form-item>
 
           </el-form>
-          <el-table
-            v-loading="pushListLoading"
+
+
+          <virtual-scroll
             :data="pushUserList"
-            stripe
-            size="small"
-            highlight-current-row
-            border
-            @selection-change="handleSelectionChange"
-            :row-key="selPushKey"
-            max-height="400"
-            ref="pushTable"
-          >
-            <el-table-column type="selection" width="55" reserve-selection/>
-            <el-table-column
-              label="序号"
-              type="index"
-              width="80"
-              align="center"
-            />
-            <el-table-column
-              label="用户"
-              prop="nickName"
-              show-overflow-tooltip
-              width="150"
-            />
-            <el-table-column
-              label="归属当前组织名称"
-              prop="belongCurrLvlOrg"
-              show-overflow-tooltip
-            />
-            <el-table-column
-              label="归属管理组织名称"
-              prop="belgDeptName"
-              show-overflow-tooltip
-            />
-          </el-table>
+            :item-size="62"
+            key-prop="virtualId"
+            @change="(renderData) => virtualList = renderData">
+            <el-table
+                v-loading="pushListLoading"
+                :data="virtualList"
+                stripe
+                size="small"
+                highlight-current-row
+                border
+                @selection-change="handleSelectionChange"
+                :row-key="selPushKey"
+                max-height="400"
+                ref="pushTable"
+              >
+                <el-table-column type="selection" width="50" reserve-selection/>
+                <el-table-column label="序号" prop="virtualId" show-overflow-tooltip width="80"/>
+                <el-table-column label="用户" prop="nickName" show-overflow-tooltip width="100"/>
+                <el-table-column label="归属当前组织名称" prop="belongCurrLvlOrg" show-overflow-tooltip/>
+                <el-table-column label="归属管理组织名称" prop="belgDeptName" show-overflow-tooltip/>
+                <el-table-column label="合约拆分名称" prop="splitContractName" show-overflow-tooltip/>
+                <el-table-column label="合约规划名称" prop="contractPlanningName" show-overflow-tooltip/>
+              </el-table>
+          </virtual-scroll>
+
           <div slot="footer" class="dialog-footer">
           <el-button
             @click="pushStateDialog = false"
@@ -694,12 +713,19 @@ import {
   setContractPlanSplitFlag,
   getContractPlanSplitFlag, getUsersRoleContractPlanList
 } from "@/api/procurement/plan";
+
+import VirtualScroll from 'el-table-virtual-scroll'
 import { mapGetters } from "vuex";
+import {getBiddingSchemeList} from "@/api/procurement/manage";
 export default {
   name: "Plan",
   dicts: ["procurement_plan_type","contract_bidding_method","contract_bidding_responsible_org","contract_bidding_state"],
+  components: {
+    VirtualScroll
+  },
   data() {
     return {
+      virtualList: [],
       planList: [],
       contractList: [],
       // 显示搜索条件
@@ -749,10 +775,12 @@ export default {
       confirmPushLoading:false,
       pushListLoading:false,
       pushQuery:{
+        cpId:undefined,
         role:undefined,
         nickName:undefined
       },
       pushList:[],
+      contractPlanList:[],
       pushRoleList:[],
       pushUserList:[],
       selectPushList:[],
@@ -944,20 +972,33 @@ export default {
     searchUser() {
       this.pushListLoading = true;
 
-      const { role, nickName } = this.pushQuery;
+      const { role, nickName, cpId } = this.pushQuery;
       let userList = []
       this.pushList.forEach(item => {
-        if(!role.length){
+        if(!role || !role.length){
           userList.push(...item.userList)
         }else{
-          if(role.includes(item.roleId)){
+          if(role && role.includes(item.roleId)){
             userList.push(...item.userList)
           }
         }
       });
-      const mapArr = Array.from(
+      let mapArr = Array.from(
         new Map(userList.map(item => [item.userId, item])).values()
       );
+      // 以 res.data.contractPlanningNoticeVOList 为外层循环
+      let combinedList = mapArr.flatMap(user =>
+        this.contractPlanList.filter(item => item.cpId == (cpId)).map(notice => ({
+          ...notice,
+          ...user
+        }))
+      );
+      // 为 this.pushUserList 的每一项添加 uniqueKey
+      mapArr = combinedList.map((item, index) => ({
+        ...item,
+        virtualId: index+1
+      }));
+
       if(nickName){
         this.pushUserList = mapArr.filter(item => item.nickName.includes(nickName))
       }else{
@@ -965,40 +1006,48 @@ export default {
       }
       this.pushListLoading = false;
     },
-    //获取角色用户 (弃用 2024.11.01)
-    async getUsersRoleList(){
-      this.pushListLoading = true;
-      try{
-        const res = await getUsersRoleList()
-        this.pushRoleList = res.data.map(item => ({value:item.roleId,label:item.roleName}))
-        this.pushList = res.data
-        let userList = []
-        res.data.forEach(item => {
-          userList.push(...item.userList)
-        })
-        this.pushUserList = Array.from(
-          new Map(userList.map(item => [item.userId, item])).values()
-        );
-      }catch(err){
-        console.log(err);
-      }
-      this.pushListLoading = false;
-    },
+
     //获取角色用户根据合约拆分id和合约拆分code来查询
     async getUsersRoleContractPlanList(){
       this.pushListLoading = true;
       try{
         const res = await getUsersRoleContractPlanList(this.currentData.contractPlanningCode,this.currentData.contractPlanningId,null)
         this.pushRoleList = res.data.userList.map(item => ({value:item.roleId,label:item.roleName}))
+        /* 存储原始的userList */
         this.pushList = res.data.userList
+        this.contractPlanList = res.data.contractPlanningNoticeVOList.map((item, index) => ({
+          cpId: index+1,
+          ...item
+        }));
+        /* 过滤一遍对应角色下的所有用户 */
         let userList = []
         res.data.userList.forEach(item => {
+          /* 获取该角色下的用户列表 */
           userList.push(...item.userList)
         })
         this.pushUserList = Array.from(
+          /* 获取该角色下的用户列表 去重 */
           new Map(userList.map(item => [item.userId, item])).values()
         );
-        console.log('%c👽', `font-size: 20px;background-color: #f00;`, this.pushUserList);
+
+        /* 默认选中第一个 */
+        let defaultId = this.contractPlanList.filter(item => item.pushStatus == 0)[0].cpId;
+        this.$set(this.pushQuery,'cpId',defaultId)
+
+
+        // 以 res.data.contractPlanningNoticeVOList 为外层循环
+        let combinedList = this.pushUserList.flatMap(user =>
+          this.contractPlanList.filter(item => item.cpId == (this.pushQuery.cpId)).map(notice => ({
+            ...notice,
+            ...user
+          }))
+        );
+        // 为 this.pushUserList 的每一项添加 uniqueKey
+        this.pushUserList = combinedList.map((item, index) => ({
+          ...item,
+          virtualId: index+1
+        }));
+
       }catch(err){
         console.log(err);
       }
@@ -1016,14 +1065,33 @@ export default {
       console.log(this.currentData,'currentData-~~~~~~~~~~~~~~~~~~~~');
       try{
         const { contractPlanningName, contractPlanningId, contractPlanningCode } = this.currentData
+        const { procurementSchemeCode, schemeId, noticeId } = this.contractPlanList.filter(item => item.cpId == (this.pushQuery.cpId))[0];
+
         let url = Base64.encode(JSON.stringify(contractPlanningName));
         url = encodeURIComponent(url); //避免base64编码中出现"/"时路由404
+
+        /* 查询招标列表第一条数据 */
+        let queryParams = {
+            pageNumber: 1,
+            pageSize: 1,
+            procurementSchemeCode: procurementSchemeCode,
+        }
+        /* 转编码 */
+        const res = await getBiddingSchemeList(queryParams);
+        let paramUrl = Base64.encode(JSON.stringify(res.data.rows[0]));
+        paramUrl = encodeURIComponent(paramUrl); //避免base64编码中出现"/"时路由404
+        paramUrl = `/procurement/tendering/${paramUrl}`;
+
         let formData = {
           userList:this.selectPushList,
           contractPlanningName,
           contractPlanningId,
           contractPlanningCode,
-          redirectUrl:`/procurement/plan?contractPlanningName=${url}`
+          procurementSchemeCode,
+          schemeId,
+          noticeId,
+          // redirectUrl:`/procurement/plan?contractPlanningName=${url}`
+          redirectUrl: paramUrl
         }
         await pushProcurementPlan(formData)
         this.$message.success("推送成功");
@@ -1035,11 +1103,12 @@ export default {
       this.confirmPushLoading = false;
     },
     selPushKey(row){
-      return row.userId
+      return row.virtualId
     },
     closePushStateDialog(){
       this.selectPushList = []
       this.pushQuery = {
+        cpId:undefined,
         role:undefined,
         nickName:undefined
       }
