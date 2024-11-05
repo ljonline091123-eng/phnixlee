@@ -20,10 +20,7 @@ import com.zhaocai.business.expert.vo.res.ExpertInfoVO;
 import com.zhaocai.business.expert.vo.res.ExpertListVO;
 import com.zhaocai.business.expert.vo.res.TPIExpertInfoVO;
 import com.zhaocai.business.manager.http.dto.req.*;
-import com.zhaocai.business.manager.http.dto.res.BpmAuditResponseDTO;
-import com.zhaocai.business.manager.http.dto.res.BpmInitializeResponseDTO;
-import com.zhaocai.business.manager.http.dto.res.BpmListProcessLogResponseDTO;
-import com.zhaocai.business.manager.http.dto.res.BpmLoadTaskDefResponseDTO;
+import com.zhaocai.business.manager.http.dto.res.*;
 import com.zhaocai.business.manager.http.service.UnderlingSystemService;
 import com.zhaocai.business.process.service.IBPMProcessService;
 import com.zhaocai.business.process.service.IPBMOverrideService;
@@ -291,16 +288,40 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
             String org = underlingSystemService.getL2OrgByOrgId(sysUser.getThridOrgId());
             //供应商注册时候选择审批单位，只能由选择的单位维护的供应商审核人员进行审核，如果供应商信息修改也是需要原审核单位进行审核
             String customProcessKey = ProcessKeyEnum.ZHAOCAI_EXPERT_ADD.getIdentifying().replace("{org}",org);
+            /* 获取三级单位 */
+            String orgThree = underlingSystemService.getL3OrgByOrgId(sysUser.getThridOrgId());
+            /* 获取所有流程 */
+            List<ListCataLogDTO> listCataLogDTOS = underlingSystemService.listCatalog();
+            if (listCataLogDTOS != null) {
+                /* 判断二级单位流程是否存在 */
+                ListCataLogDTO cataLogDTOTwo = listCataLogDTOS.stream().filter(cateLog -> cateLog.getCatalogKey().equals(org)).findFirst().orElse(null);
+                if (cataLogDTOTwo != null) {
+                    /* 赋值使用二级单位 */
+                    customProcessKey = ProcessKeyEnum.ZHAOCAI_EXPERT_ADD.getIdentifying().replace("{org}",org);
+                }
+                if (orgThree != null) {
+                    /* 判断三级单位流程是否存在 */
+                    String finalOrgThree = orgThree;
+                    ListCataLogDTO cataLogDTOThree = listCataLogDTOS.stream().filter(cateLog -> cateLog.getCatalogKey().equals(finalOrgThree)).findFirst().orElse(null);
+                    if (cataLogDTOThree != null) {
+                        /* 赋值使用三级单位 */
+                        customProcessKey = ProcessKeyEnum.ZHAOCAI_EXPERT_ADD.getIdentifying().replace("{org}",orgThree);
+                    }
+                }
+            }
+
             paramMap.put("customProcessKey", customProcessKey);
             paramMap.put("businessContent", String.format(ApproveFlowPromptTemplateEnum.EXPERT_ADD_APPROVE.getDesc(), expert.getExpertName()));
             paramMap.put("detailUrl", "/expert/expert-detail/"+ Base64.encodeStr(("\""+expert.getId().toString()+"\"").getBytes(),true,true));
             UserObj userObj = UserObj.builder().businessType(ProcessKeyEnum.ZHAOCAI_EXPERT_ADD.name()).businessId(expert.getId().toString()).toDoType(ToDoTypeEnum.EXAMINE.name()).build();
             paramMap.put("userObj", JSON.toJSONString(userObj));
 
+            /* 获取三级单位 */
+            if(orgThree==null)orgThree = org;
             /* 流程角色配置规则传参 */
             paramMap.put("groupId", UserConstants.GROUP_DEPT_ID);/* 集团 */
             paramMap.put("companyId", org);/* 公司 二级单位 */
-            paramMap.put("responsibilityDeptId", org);/* 责任单位 三级单位 */
+            paramMap.put("responsibilityDeptId", orgThree);/* 责任单位 三级单位 */
             paramMap.put("parentProjectCode", org);/* 父项目编码(项目部) */
 
             processService.startProcessInstance(ProcessKeyEnum.ZHAOCAI_EXPERT_ADD.getIdentifying(),paramMap);
@@ -410,11 +431,14 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
         SysUser sysUser = systemUserService.getUserById(expert.getUserId());
         /* 根据组织获取对应的二级单位 */
         String org = underlingSystemService.getL2OrgByOrgId(sysUser.getThridOrgId());
+        /* 获取三级单位 */
+        String orgThree = underlingSystemService.getL3OrgByOrgId(sysUser.getThridOrgId());
+        if(orgThree==null)orgThree = org;
         /* 流程角色配置规则传参 */
         List<PropertyListRequestDTO<Object>> propertyList = new ArrayList<>();
         PropertyListRequestDTO.addPropertyToList(propertyList, "groupId", UserConstants.GROUP_DEPT_ID);/* 1000000000 */
         PropertyListRequestDTO.addPropertyToList(propertyList, "companyId", org);/* 公司 二级单位 */
-        PropertyListRequestDTO.addPropertyToList(propertyList, "responsibilityDeptId", org);/* 责任单位 三级单位 */
+        PropertyListRequestDTO.addPropertyToList(propertyList, "responsibilityDeptId", orgThree);/* 责任单位 三级单位 */
         PropertyListRequestDTO.addPropertyToList(propertyList, "parentProjectCode", org);/* 父项目编码(项目部) */
         requestDTO.setPropertyList(propertyList);
         return processService.initialize(requestDTO);
@@ -426,11 +450,14 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
         SysUser sysUser = systemUserService.getUserById(expert.getUserId());
         /* 根据组织获取对应的二级单位 */
         String org = underlingSystemService.getL2OrgByOrgId(sysUser.getThridOrgId());
+        /* 获取三级单位 */
+        String orgThree = underlingSystemService.getL3OrgByOrgId(sysUser.getThridOrgId());
+        if(orgThree==null)orgThree = org;
         /* 流程角色配置规则传参 */
         List<PropertyListRequestDTO<Object>> propertyList = new ArrayList<>();
         PropertyListRequestDTO.addPropertyToList(propertyList, "groupId", UserConstants.GROUP_DEPT_ID);/* 1000000000 */
         PropertyListRequestDTO.addPropertyToList(propertyList, "companyId", org);/* 公司 二级单位 */
-        PropertyListRequestDTO.addPropertyToList(propertyList, "responsibilityDeptId", org);/* 责任单位 三级单位 */
+        PropertyListRequestDTO.addPropertyToList(propertyList, "responsibilityDeptId", orgThree);/* 责任单位 三级单位 */
         PropertyListRequestDTO.addPropertyToList(propertyList, "parentProjectCode", org);/* 父项目编码(项目部) */
         requestDTO.setPropertyList(propertyList);
         return processService.listProcessLog(requestDTO);
@@ -443,10 +470,13 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
         SysUser sysUser = systemUserService.getUserById(expert.getUserId());
         /* 根据组织获取对应的二级单位 */
         String org = underlingSystemService.getL2OrgByOrgId(sysUser.getThridOrgId());
+        /* 获取三级单位 */
+        String orgThree = underlingSystemService.getL3OrgByOrgId(sysUser.getThridOrgId());
+        if(orgThree==null)orgThree = org;
         /* 流程角色配置规则传参 */
         variables.put("groupId", UserConstants.GROUP_DEPT_ID);/* 集团 */
         variables.put("companyId", org);/* 公司 二级单位 */
-        variables.put("responsibilityDeptId", org);/* 责任单位 三级单位 */
+        variables.put("responsibilityDeptId", orgThree);/* 责任单位 三级单位 */
         variables.put("parentProjectCode", org);/* 父项目编码(项目部) */
 
         return processService.auditProcessInstance(ProcessKeyEnum.ZHAOCAI_EXPERT_ADD.getIdentifying(),variables);
@@ -458,11 +488,14 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
         SysUser sysUser = systemUserService.getUserById(expert.getUserId());
         /* 根据组织获取对应的二级单位 */
         String org = underlingSystemService.getL2OrgByOrgId(sysUser.getThridOrgId());
+        /* 获取三级单位 */
+        String orgThree = underlingSystemService.getL3OrgByOrgId(sysUser.getThridOrgId());
+        if(orgThree==null)orgThree = org;
         /* 流程角色配置规则传参 */
         List<PropertyListRequestDTO<Object>> propertyList = new ArrayList<>();
         PropertyListRequestDTO.addPropertyToList(propertyList, "groupId", UserConstants.GROUP_DEPT_ID);/* 1000000000 */
         PropertyListRequestDTO.addPropertyToList(propertyList, "companyId", org);/* 公司 二级单位 */
-        PropertyListRequestDTO.addPropertyToList(propertyList, "responsibilityDeptId", org);/* 责任单位 三级单位 */
+        PropertyListRequestDTO.addPropertyToList(propertyList, "responsibilityDeptId", orgThree);/* 责任单位 三级单位 */
         PropertyListRequestDTO.addPropertyToList(propertyList, "parentProjectCode", org);/* 父项目编码(项目部) */
         requestDTO.setPropertyList(propertyList);
         return processService.loadTaskDef(requestDTO);

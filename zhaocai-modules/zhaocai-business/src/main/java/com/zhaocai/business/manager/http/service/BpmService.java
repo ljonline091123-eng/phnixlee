@@ -1,6 +1,7 @@
 package com.zhaocai.business.manager.http.service;
 
 import cn.hutool.core.util.StrUtil;
+import com.zhaocai.business.common.enums.ProcessKeyEnum;
 import com.zhaocai.business.common.exception.BusinessException;
 import com.zhaocai.business.manager.http.common.config.UnderlingPlatformUrlEnum;
 import com.zhaocai.business.manager.http.dto.req.*;
@@ -135,9 +136,31 @@ public class BpmService {
 //        }
 
         String processKey = requestDTO.getProcessKey();
-        if (processKey.contains("{org}")){
+        if (processKey.contains("{org}")) {
+            /* 获取二级单位 */
             String org = underlingSystemService.getL2OrgByOrgId(SecurityUtils.getThridOrgId());
+            /* 获取三级单位 */
+            String orgThree = underlingSystemService.getL3OrgByOrgId(SecurityUtils.getThridOrgId());
             processKey = processKey.replace("{org}", org);
+            /* 获取所有流程 */
+            List<ListCataLogDTO> listCataLogDTOS = underlingSystemService.listCatalog();
+            if (listCataLogDTOS != null) {
+                /* 判断二级单位流程是否存在 */
+                ListCataLogDTO cataLogDTOTwo = listCataLogDTOS.stream().filter(cateLog -> cateLog.getCatalogKey().equals(org)).findFirst().orElse(null);
+                if (cataLogDTOTwo != null) {
+                    /* 赋值使用二级单位 */
+                    processKey = processKey.replace("{org}", org);
+                }
+                if (orgThree != null) {
+                    /* 判断三级单位流程是否存在 */
+                    String finalOrgThree = orgThree;
+                    ListCataLogDTO cataLogDTOThree = listCataLogDTOS.stream().filter(cateLog -> cateLog.getCatalogKey().equals(finalOrgThree)).findFirst().orElse(null);
+                    if (cataLogDTOThree != null) {
+                        /* 赋值使用三级单位 */
+                        processKey = processKey.replace("{org}", orgThree);
+                    }
+                }
+            }
         }
         requestDTO.setProcessKey(processKey);
         BpmSubmitResponseDTO responseDTO = UnderlingRestTemplateService.postForObject(UnderlingPlatformUrlEnum.BPM_OPERATE_SUBMIT,
