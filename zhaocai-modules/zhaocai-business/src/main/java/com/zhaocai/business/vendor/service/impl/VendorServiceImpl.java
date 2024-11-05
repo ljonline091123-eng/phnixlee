@@ -183,15 +183,10 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
 
         /* 获取二级单位 */
         String org = underlingSystemService.getL2OrgByOrgId(vendor.getFirstCooperationCompanyCode());
-        /** 获取三级单位
-         *
-         *
-         * */
-        String orgThree = "获取三级单位"+vendor.getFirstCooperationCompanyCode();
-
         //供应商注册时候选择审批单位，只能由选择的单位维护的供应商审核人员进行审核，如果供应商信息修改也是需要原审核单位进行审核
         String customProcessKey = ProcessKeyEnum.ZHAOCAI_VENDOR_REGISTER.getIdentifying().replace("{org}",org);
-
+        /* 获取三级单位 */
+        String orgThree = underlingSystemService.getL3OrgByOrgId(vendor.getFirstCooperationCompanyCode());
         /* 获取所有流程 */
         List<ListCataLogDTO> listCataLogDTOS = underlingSystemService.listCatalog();
         if (listCataLogDTOS != null) {
@@ -201,12 +196,14 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
                 /* 赋值使用二级单位 */
                 customProcessKey = ProcessKeyEnum.ZHAOCAI_VENDOR_REGISTER.getIdentifying().replace("{org}",org);
             }
-
-            /* 判断三级单位流程是否存在 */
-            ListCataLogDTO cataLogDTOThree = listCataLogDTOS.stream().filter(cateLog -> cateLog.getCatalogKey().equals(orgThree)).findFirst().orElse(null);
-            if (cataLogDTOThree != null) {
-                /* 赋值使用二级单位 */
-                customProcessKey = ProcessKeyEnum.ZHAOCAI_VENDOR_REGISTER.getIdentifying().replace("{org}",orgThree);
+            if (orgThree != null) {
+                /* 判断三级单位流程是否存在 */
+                String finalOrgThree = orgThree;
+                ListCataLogDTO cataLogDTOThree = listCataLogDTOS.stream().filter(cateLog -> cateLog.getCatalogKey().equals(finalOrgThree)).findFirst().orElse(null);
+                if (cataLogDTOThree != null) {
+                    /* 赋值使用三级单位 */
+                    customProcessKey = ProcessKeyEnum.ZHAOCAI_VENDOR_REGISTER.getIdentifying().replace("{org}",orgThree);
+                }
             }
         }
 
@@ -220,10 +217,12 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
                 .toDoType(ToDoTypeEnum.EXAMINE.name()).build();
         paramMap.put("userObj", JSON.toJSONString(userObj));
 
+        /* 获取三级单位 */
+        if(orgThree==null)orgThree = org;
         /* 流程角色配置规则传参 */
         paramMap.put("groupId", UserConstants.GROUP_DEPT_ID);/* 集团 */
         paramMap.put("companyId", org);/* 公司 二级单位 */
-        paramMap.put("responsibilityDeptId", org);/* 责任单位 三级单位 */
+        paramMap.put("responsibilityDeptId", orgThree);/* 责任单位 三级单位 */
         paramMap.put("parentProjectCode", org);/* 父项目编码(项目部) */
 
         processService.startProcessInstance(ProcessKeyEnum.ZHAOCAI_VENDOR_REGISTER.getIdentifying(),paramMap);
@@ -668,11 +667,14 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
         Vendor vendor = getById(requestDTO.getBusinessId());
         /* 根据组织获取对应的二级单位 */
         String org = underlingSystemService.getL2OrgByOrgId(vendor.getFirstCooperationCompanyCode());
+        /* 获取三级单位 */
+        String orgThree = underlingSystemService.getL3OrgByOrgId(vendor.getFirstCooperationCompanyCode());
+        if(orgThree==null)orgThree = org;
         /* 流程角色配置规则传参 */
         List<PropertyListRequestDTO<Object>> propertyList = new ArrayList<>();
         PropertyListRequestDTO.addPropertyToList(propertyList, "groupId", UserConstants.GROUP_DEPT_ID);/* 1000000000 */
         PropertyListRequestDTO.addPropertyToList(propertyList, "companyId", org);/* 公司 二级单位 */
-        PropertyListRequestDTO.addPropertyToList(propertyList, "responsibilityDeptId", org);/* 责任单位 三级单位 */
+        PropertyListRequestDTO.addPropertyToList(propertyList, "responsibilityDeptId", orgThree);/* 责任单位 三级单位 */
         PropertyListRequestDTO.addPropertyToList(propertyList, "parentProjectCode", org);/* 父项目编码(项目部) */
         requestDTO.setPropertyList(propertyList);
         return processService.initialize(requestDTO);
@@ -683,11 +685,14 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
         Vendor vendor = getById(requestDTO.getBusinessId());
         /* 根据组织获取对应的二级单位 */
         String org = underlingSystemService.getL2OrgByOrgId(vendor.getFirstCooperationCompanyCode());
+        /* 获取三级单位 */
+        String orgThree = underlingSystemService.getL3OrgByOrgId(vendor.getFirstCooperationCompanyCode());
+        if(orgThree==null)orgThree = org;
         /* 流程角色配置规则传参 */
         List<PropertyListRequestDTO<Object>> propertyList = new ArrayList<>();
         PropertyListRequestDTO.addPropertyToList(propertyList, "groupId", UserConstants.GROUP_DEPT_ID);/* 1000000000 */
         PropertyListRequestDTO.addPropertyToList(propertyList, "companyId", org);/* 公司 二级单位 */
-        PropertyListRequestDTO.addPropertyToList(propertyList, "responsibilityDeptId", org);/* 责任单位 三级单位 */
+        PropertyListRequestDTO.addPropertyToList(propertyList, "responsibilityDeptId", orgThree);/* 责任单位 三级单位 */
         PropertyListRequestDTO.addPropertyToList(propertyList, "parentProjectCode", org);/* 父项目编码(项目部) */
         requestDTO.setPropertyList(propertyList);
         return processService.listProcessLog(requestDTO);
@@ -698,10 +703,13 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
         Vendor vendor = getById((Serializable) variables.get("businessId"));
         /* 根据组织获取对应的二级单位 */
         String org = underlingSystemService.getL2OrgByOrgId(vendor.getFirstCooperationCompanyCode());
+        /* 获取三级单位 */
+        String orgThree = underlingSystemService.getL3OrgByOrgId(vendor.getFirstCooperationCompanyCode());
+        if(orgThree==null)orgThree = org;
         /* 流程角色配置规则传参 */
         variables.put("groupId", UserConstants.GROUP_DEPT_ID);/* 集团 */
         variables.put("companyId", org);/* 公司 二级单位 */
-        variables.put("responsibilityDeptId", org);/* 责任单位 三级单位 */
+        variables.put("responsibilityDeptId", orgThree);/* 责任单位 三级单位 */
         variables.put("parentProjectCode", org);/* 父项目编码(项目部) */
 
         return processService.auditProcessInstance(ProcessKeyEnum.ZHAOCAI_VENDOR_REGISTER.getIdentifying(),variables);
@@ -712,11 +720,14 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
         Vendor vendor = getById(requestDTO.getBusinessId());
         /* 根据组织获取对应的二级单位 */
         String org = underlingSystemService.getL2OrgByOrgId(vendor.getFirstCooperationCompanyCode());
+        /* 获取三级单位 */
+        String orgThree = underlingSystemService.getL3OrgByOrgId(vendor.getFirstCooperationCompanyCode());
+        if(orgThree==null)orgThree = org;
         /* 流程角色配置规则传参 */
         List<PropertyListRequestDTO<Object>> propertyList = new ArrayList<>();
         PropertyListRequestDTO.addPropertyToList(propertyList, "groupId", UserConstants.GROUP_DEPT_ID);/* 1000000000 */
         PropertyListRequestDTO.addPropertyToList(propertyList, "companyId", org);/* 公司 二级单位 */
-        PropertyListRequestDTO.addPropertyToList(propertyList, "responsibilityDeptId", org);/* 责任单位 三级单位 */
+        PropertyListRequestDTO.addPropertyToList(propertyList, "responsibilityDeptId", orgThree);/* 责任单位 三级单位 */
         PropertyListRequestDTO.addPropertyToList(propertyList, "parentProjectCode", org);/* 父项目编码(项目部) */
         requestDTO.setPropertyList(propertyList);
         return processService.loadTaskDef(requestDTO);

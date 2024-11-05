@@ -167,6 +167,18 @@ public class UnderlingSystemService {
         return l2Org;
     }
 
+    public String getL3OrgByOrgId(String orgId){
+        GetL3OrgByOrgIdRequestDTO reqDTO = new GetL3OrgByOrgIdRequestDTO();
+        reqDTO.setOrgId(orgId);
+        String responseStr =  UnderlingRestTemplateService.getForObject
+                (UnderlingPlatformUrlEnum.GET_L3_ORG_BY_ORGID,String.class,reqDTO);
+        if (null != responseStr){
+            return responseStr;
+        }else {
+            return null;
+        }
+    }
+
     /**
      * 获取 招采 流程分组数据 获取流程分组数据
      * Time:2024/10/29 下午6:13
