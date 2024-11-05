@@ -281,7 +281,7 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
         boolean res = this.saveOrUpdate(expert);
 
         //保存招标文件附件
-        if(expert.getExpertType().equals(ExpertProcessTypeEnum.EXPERT_ADD.getState())){
+        if(expert.getProcessType().equals(ExpertProcessTypeEnum.EXPERT_ADD.getState())){
             attachmentService.addAttachment(expertVO.getResumeAttachList(), AttachmentTypeEnum.EXPERT_RESUME, expert.getId());
         }
         return res;
@@ -360,7 +360,7 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
         boolean res = this.saveOrUpdate(expert);
 
         //保存招标文件附件
-        if(expert.getExpertType().equals(ExpertProcessTypeEnum.EXPERT_ADD.getState())){
+        if(expert.getProcessType().equals(ExpertProcessTypeEnum.EXPERT_ADD.getState())){
             attachmentService.addAttachment(expertVO.getResumeAttachList(), AttachmentTypeEnum.EXPERT_RESUME, expert.getId());
         }
 
@@ -371,7 +371,7 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
             //提交审批信息
             //接入底层逻辑平台流程
             Map<String,Object> paramMap = new HashMap<>();
-            if(expert.getExpertType().equals(ExpertProcessTypeEnum.EXPERT_ADD.getState())){
+            if(expert.getProcessType().equals(ExpertProcessTypeEnum.EXPERT_ADD.getState())){
                 paramMap.put("businessId", expert.getId());
                 paramMap.put("businessTitle", "新增专家审批");
                 paramMap.put("businessContent", String.format(ApproveFlowPromptTemplateEnum.EXPERT_ADD_APPROVE.getDesc(), expert.getExpertName()));
