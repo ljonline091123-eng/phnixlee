@@ -43,6 +43,7 @@
     "core-js": "3.25.3",
     "diagram-js": "^11.4.1",
     "echarts": "5.4.0",
+    "el-table-virtual-scroll": "^2.0.1",
     "element-ui": "2.15.14",
     "file-saver": "2.0.5",
     "fuse.js": "6.4.3",
@@ -66,6 +67,7 @@
     "vue-cropper": "0.5.5",
     "vue-meta": "2.4.0",
     "vue-router": "3.4.9",
+    "vue-virtual-scroller": "^1.1.2",
     "vuedraggable": "2.24.3",
     "vuex": "3.6.0"
   },
