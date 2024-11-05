@@ -250,7 +250,11 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
                         }
                     }
                 }
-
+                /* 判断拆包是否全部推送 */
+                if(contractPlanning.getContractPlanningNoticeVOList()!=null && !contractPlanning.getContractPlanningNoticeVOList().isEmpty()){
+                    long push = contractPlanning.getContractPlanningNoticeVOList().stream().filter(obj -> obj.getPushStatus().equals(0)).count();
+                    if(push>0)contractPlanning.setPushStatus(0);
+                }
             }
         }
 
@@ -508,6 +512,37 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
             userContract.setUserList(userList);
         }
         if(contractPlanningNoticeVOList!=null && !contractPlanningNoticeVOList.isEmpty()){
+
+            // 查询拆包是否推送
+            List<String> contractIdList = requestDTO.getContractIdList();
+            contractIdList = contractIdList==null?new ArrayList<>(Arrays.asList(requestDTO.getContractPlanningId())):contractIdList;
+            contractIdList.add(requestDTO.getContractPlanningId());
+            /* 查询推送记录 */
+            List<ContractPlanningPushRecord> records = contractPlanningPushRecordService.getByCondition(contractIdList);
+            /* 查询招标集合 */
+            Map<String, List<ContractPlanningPushRecord>> recordMapList = records.stream().collect(Collectors.groupingBy(ContractPlanningPushRecord::getContractPlanningId));
+            /* 根据合约规划id集合查询对应的招标对象数据和采购方案数据 */
+            List<ContractPlanningNoticeVO> recordsQuery = tenderNoticeService.getListByContractPlanningId(new ContractPlanningQueryVO(contractIdList));
+            Map<String, List<ContractPlanningNoticeVO>> recordMapQuery = recordsQuery.stream().collect(Collectors.groupingBy(ContractPlanningNoticeVO::getContractPlanningId));
+            /* 增加推送状态 细分到投标对象 */
+            if (!recordMapList.isEmpty()){
+                if (!recordMapQuery.isEmpty()){
+                    List<ContractPlanningPushRecord> contractPlanningPushRecordList = recordMapList.get(contractIdList.get(0));
+                    if (contractPlanningPushRecordList!=null && !contractPlanningPushRecordList.isEmpty()){
+                        /* 默认都是未推送 */
+                        contractPlanningNoticeVOList.forEach(obj -> obj.setPushStatus(0));
+                        /* 获取已推送的 采购方案id */
+                        Set<Long> schemeIds = contractPlanningPushRecordList.stream()
+                                .map(ContractPlanningPushRecord::getSchemeId)
+                                .collect(Collectors.toSet());
+                        /* 对比已推送的采购方案id,并设置值 */
+                        contractPlanningNoticeVOList.stream()
+                                .filter(obj -> schemeIds.contains(obj.getSchemeId()))
+                                .forEach(obj -> obj.setPushStatus(1));
+                    }
+                }
+            }
+
             userContract.setContractPlanningNoticeVOList(contractPlanningNoticeVOList);
         }
         return userContract;
@@ -624,38 +659,40 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
         for (ProcurementPlanPushUserVO userData : planPushVO.getUserList()){
             PushThirdPartyTodoTaskSonRequestDTO requestDTO = new PushThirdPartyTodoTaskSonRequestDTO();
             requestDTO.setTitle("采购计划待办信息");
-            requestDTO.setContent(String.format(ApproveFlowPromptTemplateEnum.PROCUREMENT_PLAN_PUSH.getDesc(), planPushVO.getContractPlanningName()));
+//            requestDTO.setContent(String.format(ApproveFlowPromptTemplateEnum.PROCUREMENT_PLAN_PUSH.getDesc(), planPushVO.getContractPlanningName()));
 
-//            /* 获取已有的合约规划 */
-//            ContractPlanning contractPlanning = contractPlanningService.getOne(new LambdaQueryWrapper<ContractPlanning>()
-//                    .eq(ContractPlanning::getContractPlanningCode,planPushVO.getContractPlanningCode()));
-//            /* 查询采购计划 */
-//            ProcurementPlan procurementPlan = null;
-//            if(contractPlanning!=null&&contractPlanning.getPlanId()!=null){
-//                procurementPlan = procurementPlanService.getById(contractPlanning.getPlanId());
-//            }
-//            String content =
-//                            /* 推送人 登录人 */
-//                    "发送人: "+(SecurityUtils.getLoginUserNickName())+
-//                            /* 项目名称 */
-//                    "，{最小核算项目=("+(contractPlanning==null?"":contractPlanning.getProjectName())+
-//                            /* 类型 */
-//                    ")}，合同类型为{"+(contractPlanning==null?"":contractPlanning.getContractPlanningCategoryName())+
-//                            /* 合约规划名称 */
-//                    " ("+(contractPlanning==null?"":contractPlanning.getContractPlanningName())+
-//                            /* 采购计划名称 */
-//                    ")}合同将于近期开展，请您及时关注了解，采购计划如下：\n "+(procurementPlan==null?"":procurementPlan.getProcurementPlanName())+
-//                            /* 招标时间 */
-//                    " 招标时间为"+(planPushVO.getBiddingTime()==null?"":planPushVO.getBiddingTime())+
-//                            /* 进场时间 */
-//                    "，进场时间为"+(planPushVO.getEnterIntoTime()==null?"":planPushVO.getEnterIntoTime())+
-//                            /* 采购经办人名称 */
-//                    "、采购人为"+(procurementPlan==null?"":procurementPlan.getProcurementOfficerName())+
-//                            /* 区域（只有购买材料）：获取“购买材料”类型里边拆分的标包里边的“区域”字段 省 + 市 */
-//                    ((procurementPlan==null?false:procurementPlan.getProcurementPlanType().equals(NumberConstant.ONE))?
-//                            "，区域为"+((procurementPlan==null?"":procurementPlan.getRegionProvinceCode()) + (procurementPlan==null?"":procurementPlan.getRegionCityCode())):"");
-//            requestDTO.setContent(content);/* 推送内容 */
-//            log.info("[推送合约规划推动采购计划拆包推送内容:{}],",content);
+            /* 获取已有的合约规划 */
+            ContractPlanning contractPlanning = contractPlanningService.getOne(new LambdaQueryWrapper<ContractPlanning>()
+                    .eq(ContractPlanning::getContractPlanningCode,planPushVO.getContractPlanningCode())
+                    .eq(ContractPlanning::getContractPlanningId,planPushVO.getContractPlanningId())
+                    .last("limit 1"));
+            /* 查询采购计划 */
+            ProcurementPlan procurementPlan = null;
+            if(contractPlanning!=null&&contractPlanning.getPlanId()!=null){
+                procurementPlan = procurementPlanService.getById(contractPlanning.getPlanId());
+            }
+            String content =
+                            /* 推送人 登录人 */
+                    "发送人: "+(SecurityUtils.getLoginUserNickName())+
+                            /* 项目名称 */
+                    "，{最小核算项目=("+(contractPlanning==null?"":contractPlanning.getProjectName())+
+                            /* 类型 */
+                    ")}，合同类型为{"+(contractPlanning==null?"":contractPlanning.getContractPlanningCategoryName())+
+                            /* 合约规划名称 */
+                    " ("+(contractPlanning==null?"":contractPlanning.getContractPlanningName())+
+                            /* 采购计划名称 */
+                    ")}合同将于近期开展，请您及时关注了解，采购计划如下：\n "+(procurementPlan==null?"":procurementPlan.getProcurementPlanName())+
+                            /* 招标时间 */
+                    " 招标时间为"+(planPushVO.getBiddingTime()==null?"":planPushVO.getBiddingTime())+
+                            /* 进场时间 */
+                    "，进场时间为"+(planPushVO.getEnterIntoTime()==null?"":planPushVO.getEnterIntoTime())+
+                            /* 采购经办人名称 */
+                    "、采购人为"+(procurementPlan==null?"":procurementPlan.getProcurementOfficerName())+
+                            /* 区域（只有购买材料）：获取“购买材料”类型里边拆分的标包里边的“区域”字段 省 + 市 */
+                    ((procurementPlan==null?false:procurementPlan.getProcurementPlanType().equals(NumberConstant.ONE))?
+                            "，区域为"+((procurementPlan==null?"":procurementPlan.getRegionProvinceCode()) + (procurementPlan==null?"":procurementPlan.getRegionCityCode())):"");
+            requestDTO.setContent(content);/* 推送内容 */
+            log.info("[推送合约规划推动采购计划拆包推送内容:{}],",content);
 
             requestDTO.setArrivalTime(nowTime);
             requestDTO.setCreateTime(nowTime);
