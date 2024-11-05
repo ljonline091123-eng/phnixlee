@@ -27,14 +27,14 @@ public interface IContractPlanningSplitService  extends IService<ContractPlannin
      * @param splitRequestList
      * @param planId
      */
-    void saveContractPlanningSplit(List<ContractPlanningSplitRequestVO> splitRequestList, Long planId, ProcurementPlan procurementPlan);
+    List<MaterialsList> saveContractPlanningSplit(List<ContractPlanningSplitRequestVO> splitRequestList, Long planId, ProcurementPlan procurementPlan);
 
     /**
      * 修改采购计划的合约拆分
      * @param splitRequestList
      * @param planId
      */
-    void updateContractPlanningSplit(List<ContractPlanningSplitRequestVO> splitRequestList, Long planId,ProcurementPlan procurementPlan);
+    List<MaterialsList> updateContractPlanningSplit(List<ContractPlanningSplitRequestVO> splitRequestList, Long planId,ProcurementPlan procurementPlan);
 
     /**
      * 获取采购计划的合约拆分记录

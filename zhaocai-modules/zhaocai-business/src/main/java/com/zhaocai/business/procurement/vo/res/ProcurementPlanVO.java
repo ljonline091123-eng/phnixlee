@@ -111,4 +111,7 @@ public class ProcurementPlanVO extends AdviceObject {
     @DictCache(dictBizEnum = DictBizEnum.PROCUREMENT_PAYMENT_TYPE,filedName = "paymentType")
     @ApiModelProperty(value = "付款方式")
     private String paymentTypeText;
+
+    @ApiModelProperty(value = "是否存在推送数据")
+    private String isPushData;
 }

@@ -25,7 +25,7 @@ public interface IMaterialsListService  extends IService<MaterialsList> {
      * @param contractSplitId
      * @param planId
      */
-    void saveMaterialsList(List<MaterialsList> materialsLists, Long contractSplitId, Long planId, ProcurementPlan procurementPlan);
+    List<MaterialsList> saveMaterialsList(List<MaterialsList> materialsLists, Long contractSplitId, Long planId, ProcurementPlan procurementPlan);
 
     /**
      * 删除物料清单数据

@@ -76,7 +76,7 @@ public class MaterialsListServiceImpl extends ServiceImpl<MaterialsListMapper, M
     private String subjectMatterConcreteCode;
 
     @Override
-    public void saveMaterialsList(List<MaterialsList> materialsLists, Long contractSplitId, Long planId, ProcurementPlan procurementPlan) {
+    public List<MaterialsList> saveMaterialsList(List<MaterialsList> materialsLists, Long contractSplitId, Long planId, ProcurementPlan procurementPlan) {
 //        Integer[] floatCount = {0};
 //        Integer[] fixedCount = {0};
         materialsLists.forEach(materials -> {
@@ -141,7 +141,7 @@ public class MaterialsListServiceImpl extends ServiceImpl<MaterialsListMapper, M
 //                    .set(ProcurementPlan::getPriceType,procurementPlan.getPriceType())
 //                    .eq(ProcurementPlan::getId,procurementPlan.getId()));
 //        }
-
+        return materialsLists;
     }
 
     @Override

@@ -1,5 +1,6 @@
 package com.zhaocai.business.procurement.domain;
 
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.zhaocai.common.core.web.domain.BaseEntity;
 import io.swagger.annotations.ApiModelProperty;
@@ -268,4 +269,10 @@ public class MaterialsList extends BaseEntity {
     @ApiModelProperty(value = "易料市集商品id")
     private String skuId;
 
+    /**
+     * 是否选择推送易料
+     */
+    @ApiModelProperty(hidden = true)
+    @TableField(exist = false)
+    private String isSelect;
 }
