@@ -30,6 +30,12 @@ public class ContractPlanningNoticeVO {
     @ApiModelProperty(value = "合约规划id")
     private String contractPlanningId;
 
+    @ApiModelProperty(value = "合约拆分名称")
+    private String splitContractName;
+
+    @ApiModelProperty(value = "合约规划名称")
+    private String contractPlanningName;
+
 
 
     @ApiModelProperty("推送状态（0未推送 1已推送）")

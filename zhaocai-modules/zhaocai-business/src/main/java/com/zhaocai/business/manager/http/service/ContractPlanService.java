@@ -19,8 +19,10 @@ import com.zhaocai.business.procurement.vo.res.ContractMaterialsListVO;
 import com.zhaocai.business.procurement.vo.res.ContractPlanningListVO;
 import com.zhaocai.common.core.bean.PageResult;
 import com.zhaocai.common.core.constant.Constants;
+import com.zhaocai.common.core.constant.TokenConstants;
 import com.zhaocai.common.core.utils.NumberUtil;
 import com.zhaocai.common.core.utils.bean.BeanCopierUtil;
+import com.zhaocai.common.security.utils.SecurityUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.NotNull;
 import org.springframework.scheduling.annotation.Async;
@@ -60,10 +62,13 @@ public class ContractPlanService {
         PageResult<ContractPlanningListVO> pageResult = new PageResult<>();
         pageResult.setTotal(pageList.getTotal());
 
+        // 从header获取token标识
+        String token = SecurityUtils.getMasterControlToken();
+
         if (CollectionUtil.isNotEmpty(pageList.getRows())) {
-            // 结果集转换
-            List<ContractPlanningListVO> resultList = pageList.getRows().stream()
-                    .map(dto -> {
+            // 异步处理结果集转换
+            List<CompletableFuture<ContractPlanningListVO>> futureList = pageList.getRows().stream()
+                    .map(dto -> CompletableFuture.supplyAsync(() -> {
                         ContractPlanningListVO listVO = new ContractPlanningListVO();
                         listVO.setContractPlanningId(dto.getConPlanId());
                         listVO.setContractPlanningCode(dto.getConPlanCode());
@@ -79,18 +84,33 @@ public class ContractPlanService {
                         listVO.setBiddingTime(dto.getBidDate());
                         listVO.setBrand(dto.getBrand());
 
-
-                        /* 为了增加列 剩余可使用数量 */
-                        /* 组合 查询条件 查询清单列表 */
+                        // 设置查询条件并发起异步请求
                         ContractPlanMaterialListRequestDTO requestDTO = new ContractPlanMaterialListRequestDTO();
                         requestDTO.setProjectId(queryVO.getProjectId());
                         requestDTO.setConPlanId(dto.getConPlanId());
-                        List<ContractPlanMaterialListDTO> list = UnderlingRestTemplateService.listForObject(UnderlingPlatformUrlEnum.LIST_BY_PROJECT_CONTRACT,ContractPlanMaterialListDTO.class,requestDTO);
-                        /* 计算总剩余可用量 */
-                        listVO.setSurplusQuantity(list.stream().map(ContractPlanMaterialListDTO::getSurplusQuantity).reduce(BigDecimal.ZERO,BigDecimal::add));
+                        requestDTO.setAuthorization(token);
+
+                        // 使用异步方法查询数据
+                        List<ContractPlanMaterialListDTO> list = UnderlingRestTemplateService.listForObject(
+                                UnderlingPlatformUrlEnum.LIST_BY_PROJECT_CONTRACT,
+                                ContractPlanMaterialListDTO.class,
+                                requestDTO
+                        );
+
+                        // 计算总剩余可用量
+                        listVO.setSurplusQuantity(
+                                list.stream()
+                                        .map(ContractPlanMaterialListDTO::getSurplusQuantity)
+                                        .reduce(BigDecimal.ZERO, BigDecimal::add)
+                        );
 
                         return listVO;
-                    }).collect(Collectors.toList());
+                    })).collect(Collectors.toList());
+
+            // 等待所有异步任务完成并收集结果
+            List<ContractPlanningListVO> resultList = futureList.stream()
+                    .map(CompletableFuture::join)
+                    .collect(Collectors.toList());
 
             pageResult.setRows(resultList);
         }
