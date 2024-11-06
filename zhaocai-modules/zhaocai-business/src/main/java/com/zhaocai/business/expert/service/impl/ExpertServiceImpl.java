@@ -37,6 +37,7 @@ import com.zhaocai.common.core.utils.bean.BeanCopierUtil;
 import com.zhaocai.common.core.web.bean.ResultData;
 import com.zhaocai.system.api.domain.SysUser;
 import com.zhaocai.system.api.system.RemoteUserService;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -54,6 +55,7 @@ import java.util.stream.Collectors;
  * @author WH
  * @date 2024-05-24
  */
+@Slf4j
 @Service
 public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implements IExpertService {
 
@@ -290,11 +292,14 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
             String customProcessKey = ProcessKeyEnum.ZHAOCAI_EXPERT_ADD.getIdentifying().replace("{org}",org);
             /* 获取三级单位 */
             String orgThree = underlingSystemService.getL3OrgByOrgId(sysUser.getThridOrgId());
+            log.info("[获取三级单位]{}",orgThree);
             /* 获取所有流程 */
             List<ListCataLogDTO> listCataLogDTOS = underlingSystemService.listCatalog();
+            log.info("[获取所有流程]{}",listCataLogDTOS);
             if (listCataLogDTOS != null) {
                 /* 判断二级单位流程是否存在 */
                 ListCataLogDTO cataLogDTOTwo = listCataLogDTOS.stream().filter(cateLog -> cateLog.getCatalogKey().equals(org)).findFirst().orElse(null);
+                log.info("[判断二级单位流程是否存在]{}",cataLogDTOTwo);
                 if (cataLogDTOTwo != null) {
                     /* 赋值使用二级单位 */
                     customProcessKey = ProcessKeyEnum.ZHAOCAI_EXPERT_ADD.getIdentifying().replace("{org}",org);
@@ -303,6 +308,7 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
                     /* 判断三级单位流程是否存在 */
                     String finalOrgThree = orgThree;
                     ListCataLogDTO cataLogDTOThree = listCataLogDTOS.stream().filter(cateLog -> cateLog.getCatalogKey().equals(finalOrgThree)).findFirst().orElse(null);
+                    log.info("[判断三级单位流程是否存在]{}",cataLogDTOThree);
                     if (cataLogDTOThree != null) {
                         /* 赋值使用三级单位 */
                         customProcessKey = ProcessKeyEnum.ZHAOCAI_EXPERT_ADD.getIdentifying().replace("{org}",orgThree);

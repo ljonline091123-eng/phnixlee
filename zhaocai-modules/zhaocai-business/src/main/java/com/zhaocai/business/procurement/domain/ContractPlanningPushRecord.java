@@ -38,6 +38,9 @@ public class ContractPlanningPushRecord extends BaseEntity {
     @ApiModelProperty("推送对象")
     private String pushObj;
 
+    @ApiModelProperty(value = "合约拆分id")
+    private Long splitContractId;
+
     @ApiModelProperty(value = "采购方案id")
     private Long schemeId;
 

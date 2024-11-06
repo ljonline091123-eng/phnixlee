@@ -222,7 +222,7 @@ public class UnderlingRestTemplateService {
         }
         UriComponents uriComponents = uriComponentsBuilder.build();
 
-        log.info("[调用底层逻辑平台] -[{}]，开始发送 GET 请求，url:{}", platformUrl.getDesc(), uriComponents.toUriString());
+        log.info("[调用底层逻辑平台] -[{}]，开始发送 GET 请求，url:{}，请求参数:{}", platformUrl.getDesc(), uriComponents.toUriString(),JSON.toJSONString(requestDTO));
         HttpHeaders headers = getHttpHeaders(requestDTO);
         String responseStr = RestTemplateUtils.getForObject2Header(uriComponents.toString(), String.class, headers);
 
