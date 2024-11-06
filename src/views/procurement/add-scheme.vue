@@ -951,6 +951,7 @@ import FileModule from "@/components/FileModule/index.vue";
 import { isvalidatemobile, validEmail, validatenum } from "@/utils/validate";
 import BackButton from "@/components/BackButton/index.vue";
 import { addAttachment } from "@/api/template/file";
+import {showSecretRelatedTips} from "@/utils/MyUtils";
 
 export default {
   name: "add-scheme",
@@ -1466,17 +1467,19 @@ export default {
     },
     //选择评分模板
     async getTemplateList() {
-      this.evaluateVisable = true;
-      (this.currentTab = "generalScoreTemplate"),
-        this.getGeneralScoreTemplateList();
-      try {
-        // const res = await getTemplateSwitchList(this.templateQuery);
-        // this.evaluateTemplateList = res.data.rows;
-        // this.templateTotal = res.data.total;
-        // console.log(res, "评分模板");
-      } catch (err) {
-        console.log(err);
-      }
+      showSecretRelatedTips(()=>{
+        this.evaluateVisable = true;
+        (this.currentTab = "generalScoreTemplate"),
+          this.getGeneralScoreTemplateList();
+        try {
+          // const res = await getTemplateSwitchList(this.templateQuery);
+          // this.evaluateTemplateList = res.data.rows;
+          // this.templateTotal = res.data.total;
+          // console.log(res, "评分模板");
+        } catch (err) {
+          console.log(err);
+        }
+      })
     },
     //获取经办人和上限价
     async getProcurementSchemeCreateInfo() {
@@ -1542,26 +1545,29 @@ export default {
       this.evaluateVisable = false;
     },
     async getBcTemplateList(type) {
-      this.bcTemplateTitle = type === 2 ? "选择招标文件模板" : "选择合同模板";
-      this.isScoreMOdel = type === 2 ? true : false;
-      this.activeTab = "generalTemplate";
-      this.bcTemplateVisable = true;
-      this.bcTemplatetType = type;
-      this.bcTemplateQuery.templateType = type;
-      this.bcTemplateQuery.contractType = "";
-      // 根据模板类型调用相应的方法
-      if (type === 2) {
-        this.getGeneralTemplateList();
-      } else {
-        this.getContractModelList();
-      }
-      // 设置 switchTemplateType 和 templateType
-      this.bcTemplateQuery.switchTemplateType = "1";
-      this.bcTemplateQuery.templateType = type === 2 ? "2" : "1";
+      showSecretRelatedTips(async ()=>{
+        this.bcTemplateTitle = type === 2 ? "选择招标文件模板" : "选择合同模板";
+        this.isScoreMOdel = type === 2 ? true : false;
+        this.activeTab = "generalTemplate";
+        this.bcTemplateVisable = true;
+        this.bcTemplatetType = type;
+        this.bcTemplateQuery.templateType = type;
+        this.bcTemplateQuery.contractType = "";
+        // 根据模板类型调用相应的方法
+        if (type === 2) {
+          this.getGeneralTemplateList();
+        } else {
+          this.getContractModelList();
+        }
+        // 设置 switchTemplateType 和 templateType
+        this.bcTemplateQuery.switchTemplateType = "1";
+        this.bcTemplateQuery.templateType = type === 2 ? "2" : "1";
 
-      // 获取模板列表
-      const res = await getSwitchPageList(this.bcTemplateQuery);
-      this.bcTemplateList = res.data.rows;
+        // 获取模板列表
+        const res = await getSwitchPageList(this.bcTemplateQuery);
+        this.bcTemplateList = res.data.rows;
+      })
+
     },
 
     async confirmBcTemplate() {

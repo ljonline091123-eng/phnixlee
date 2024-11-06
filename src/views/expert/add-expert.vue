@@ -375,8 +375,9 @@
               <el-form-item
                 label="附件"
                 prop="resumeAttachList"
-                class="required label-right-align"
+                class="required label-right-align uploadItem"
               >
+                <el-button size="small" type="primary" style="margin-top: 8px;" @click="showSecretTips">点击上传</el-button>
                 <el-upload
                   :action="uploadFileUrl"
                   :limit="1"
@@ -385,8 +386,8 @@
                   :file-list="formData.resumeAttachList"
                   :on-remove="fileRemove"
                   :on-preview="handlePreview"
+                  ref="upload"
                 >
-                  <el-button size="small" type="primary">点击上传</el-button>
                 </el-upload>
               </el-form-item>
             </el-col>
@@ -431,6 +432,7 @@ import {
   getLoadTaskDef,
   getProcessLogList,
 } from "@/api/procurement/manage";
+import {showSecretRelatedTips} from "@/utils/MyUtils";
 export default {
   name: "add-expert",
   dicts: [
@@ -571,6 +573,11 @@ export default {
     }
   },
   methods: {
+    showSecretTips() {
+      showSecretRelatedTips(()=>{
+        this.$refs['upload'].$refs['upload-inner'].handleClick()
+      })
+    },
     handleSubmit() {
       this.$modal.loading("请稍候...");
       const params = {
@@ -760,6 +767,11 @@ export default {
 };
 </script>
 <style lang="scss" scoped>
+::v-deep .el-form-item.uploadItem {
+  .el-form-item__content {
+    line-height: 0;
+  }
+}
 .page-title {
   width: 100%;
   border-bottom: solid 1px #ccc;

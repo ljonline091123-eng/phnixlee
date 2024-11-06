@@ -391,7 +391,9 @@
               label="附件："
               prop="attachmentList"
               label-width="140px"
+              class="uploadItem"
             >
+              <el-button size="small" type="primary" @click="showSecretTips('gradeUpload')" style="margin-top: 8px;">点击上传</el-button>
               <el-upload
                 class="upload-demo"
                 action="/dev-api/file/upload"
@@ -400,7 +402,7 @@
                 :on-success="gradeSuccess"
                 ref="gradeUpload"
               >
-                <el-button size="small" type="primary">点击上传</el-button>
+
               </el-upload>
             </el-form-item>
             <el-form-item
@@ -512,7 +514,8 @@
             disabled
           ></el-input>
         </el-form-item>
-        <el-form-item label="附件：" prop="attachmentList" label-width="140px">
+        <el-form-item label="附件：" prop="attachmentList" label-width="140px" class="uploadItem">
+          <el-button size="small" type="primary" @click="showSecretTips('blackUpload')" style="margin-top: 8px;">点击上传</el-button>
           <el-upload
             class="upload-demo"
             action="/dev-api/file/upload"
@@ -521,7 +524,7 @@
             :on-success="blackSuccess"
             ref="blackUpload"
           >
-            <el-button size="small" type="primary">点击上传</el-button>
+
           </el-upload>
         </el-form-item>
         <el-form-item
@@ -608,6 +611,7 @@ import {
 } from "@/api/procurement/manage";
 import ApprovalForm from "@/components/Approval/approvalForm.vue";
 import ApprovalDetailsDialog from "@/components/Approval/approvalDetailsDialog.vue";
+import {showSecretRelatedTips} from "@/utils/MyUtils";
 export default {
   name: "vendor-detail",
   dicts: ["vendor_class", "vendor_level"],
@@ -674,6 +678,11 @@ export default {
     this.getVendorDetail();
   },
   methods: {
+    showSecretTips(type) {
+      showSecretRelatedTips(()=>{
+        this.$refs[type].$refs['upload-inner'].handleClick()
+      })
+    },
     setOperateComment(type){
       this.gradeForm.operateComment=type
     },
@@ -951,6 +960,11 @@ export default {
 };
 </script>
 <style scoped lang="scss">
+::v-deep .el-form-item.uploadItem {
+  .el-form-item__content {
+    line-height: 0;
+  }
+}
 .img-box {
   display: flex;
   width: 200px;

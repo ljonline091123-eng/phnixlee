@@ -179,16 +179,17 @@
             </el-form-item>
           </el-col>
           <el-col :span="12" class="grid-cell">
-            <el-form-item label=" 招标公告" prop="fileTemplate">
+            <el-form-item label=" 招标公告" prop="fileTemplate" class="uploadItem">
+              <el-button size="small" type="primary" :disabled="!!(formData.id || isSubmit)" @click="showSecretTips">点击上传</el-button>
               <el-upload
                 :action="uploadFileUrl"
                 :limit="1"
                 :on-success="fileSuccess"
                 :file-list="formData.fileList"
                 :on-remove="fileRemove"
-                :disabled="!!(formData.id || isSubmit)"
+                :disabled="(!!(formData.id || isSubmit))"
+                ref="upload"
               >
-                <el-button size="small" type="primary" :disabled="!!(formData.id || isSubmit)">点击上传</el-button>
               </el-upload>
             </el-form-item>
           </el-col>
@@ -602,6 +603,7 @@ import PageTitle from "@/components/PageTitle/index.vue";
 import {offerRepo, offerService, uploadFileUrl} from "@/utils/const";
 import {isvalidatemobile, validEmail} from "@/utils/validate";
 import {addAttachment} from "@/api/template/file";
+import {showSecretRelatedTips} from "@/utils/MyUtils";
 
 export default {
   name: "tender-notice",
@@ -612,6 +614,7 @@ export default {
   dicts: ["vendor_level"],
   data() {
     return {
+      secretTipsFlag: false,
       attachmentId: '',
       offerService,
       offerRepo,
@@ -810,6 +813,11 @@ export default {
     this.getNoticeUpdateList();
   },
   methods: {
+    showSecretTips() {
+      showSecretRelatedTips(()=>{
+        this.$refs['upload'].$refs['upload-inner'].handleClick()
+      })
+    },
     fileRemove() {
       this.$set(this.formData, "fileList", []);
       this.$set(this.formData, "fileTemplate", []);
@@ -1178,6 +1186,11 @@ export default {
 };
 </script>
 <style lang="scss" scoped>
+::v-deep .el-form-item.uploadItem {
+  .el-form-item__content {
+    line-height: 0;
+  }
+}
 
 .page-title {
   width: 100%;

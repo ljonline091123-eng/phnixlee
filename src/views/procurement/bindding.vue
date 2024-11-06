@@ -270,8 +270,9 @@
               label="附件"
               label-width="110px"
               prop="attachmentList"
-              class="label-right-align"
+              class="label-right-align uploadItem"
             >
+              <el-button size="small" type="primary" style="margin-top: 4px;" @click="showSecretTips">点击上传</el-button>
               <el-upload
                 class="upload-demo"
                 action="/dev-api/file/upload"
@@ -280,7 +281,7 @@
                 :limit="1"
                 :on-success="handleSuccess"
               >
-                <el-button size="small" type="primary">点击上传</el-button>
+
               </el-upload>
             </el-form-item>
           </el-col>
@@ -313,6 +314,7 @@ import {
   cancellationProcurementScheme,cancellationProcurementSchemePlan,
 } from "@/api/procurement/scheme";
 import BackButton from '@/components/BackButton/index.vue'
+import {showSecretRelatedTips} from "@/utils/MyUtils";
 export default {
   name: "Bindding",
   dicts: ["procurement_type", "bindding_step"],
@@ -368,21 +370,21 @@ export default {
     this.queryParams.projectCodeList = this.$route.query.projectCodeList
     this.queryParams.type = this.$route.query.type
     this.queryParams.noticeStatus = this.$route.query.noticeStatus
-  
-    this.getDicts("plan_type").then((res) => { 
+
+    this.getDicts("plan_type").then((res) => {
       this.bindding_type = res.data;
     });
- 
+
     if(this.$route.query.report){
       this.report=this.$route.query.report
     }
-     console.log(" this.queryParams.procurementType"+ this.queryParams.procurementType); 
-      console.log(" this.queryParams.projectCode"+ this.queryParams.projectCode); 
-      console.log(" this.queryParams.projectCodeList"+ this.queryParams.projectCodeList); 
-      console.log(" this.queryParams.type"+ this.queryParams.type); 
-      console.log(" this.queryParams.noticeStatus"+ this.queryParams.noticeStatus); 
-      console.log(" this.queryParams.report"+ this.queryParams.report); 
-   
+     console.log(" this.queryParams.procurementType"+ this.queryParams.procurementType);
+      console.log(" this.queryParams.projectCode"+ this.queryParams.projectCode);
+      console.log(" this.queryParams.projectCodeList"+ this.queryParams.projectCodeList);
+      console.log(" this.queryParams.type"+ this.queryParams.type);
+      console.log(" this.queryParams.noticeStatus"+ this.queryParams.noticeStatus);
+      console.log(" this.queryParams.report"+ this.queryParams.report);
+
     // if(this.$route.query.report==undefined){
     //   // const url = 'http://192.168.240.17:31800/ckControl/zbcg/procurement/procurement$bindding?projectCodeList=SG20012024000002-2&type=buildingRate&noticeStatus=8&procurementType=all&report=report&wjSs=%2Fzhaocai%2Fprocurement%2Fbindding';
     //   const url =window.parent.location.href
@@ -394,13 +396,18 @@ export default {
     //   this.queryParams.noticeStatus = queryParams.noticeStatus
     //   this.report=queryParams.report
     //   console.log("报表参数",JSON.stringify(queryParams))
-     
+
     // }
   },
   computed: {
     ...mapGetters(["project"]),
   },
   methods: {
+    showSecretTips() {
+      showSecretRelatedTips(()=>{
+        this.$refs['uploadFild'].$refs['upload-inner'].handleClick()
+      })
+    },
     parseQuery(url) {
       let queryParams = {};
       // 提取URL中的查询字符串
@@ -440,7 +447,7 @@ export default {
             this.schemeList = res.data.rows;
             this.total = res.data.total;
           }
-        
+
         }
       } catch (err) {
         console.log(err);
@@ -572,7 +579,7 @@ export default {
           };
           console.log( "监控项目",JSON.stringify(this.queryParams));
             this.getBiddingSchemeList();
-       
+
         }
       },
       immediate: true,
@@ -585,6 +592,11 @@ export default {
 
 </script>
 <style scoped lang="scss">
+::v-deep .el-form-item.uploadItem {
+  .el-form-item__content {
+    line-height: 0;
+  }
+}
 .tabs-box {
   position: relative;
   .tabs-box-right {
