@@ -657,8 +657,11 @@ export default {
           materialsLists:this.materialsLists,
         }
         await pushMaterialProcurementList(formData)
-        //推送完成id赋值
-        this.currentContract.id=this.id
+        //新增推送完成时给id赋值
+        if(!this.isUpdate){
+            this.currentContract.id=this.id
+            }
+
         this.getPlanDetail()
         this.materialsLists=[]
      //清空数据
@@ -782,11 +785,12 @@ export default {
             });
             this.isSubmit = false;
             console.log(res,'r~~~~~~~~~~~~~~~~~');
-            this.$tab.closePage().then(() => {
+            this.getPlanDetail()
+            // this.$tab.closePage().then(() => {
               // 执行结束的逻辑
-              let param = Base64.encode(JSON.stringify(res.data))
-              this.$router.replace(`/procurement/plan-detail/${param}`);
-            })
+              // let param = Base64.encode(JSON.stringify(res.data))
+              // this.$router.replace(`/procurement/plan-detail/${param}`);
+            // })
           }catch(err){
             console.log(err);
             this.isSubmit = false;
