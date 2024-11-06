@@ -11,7 +11,7 @@
           >取消</el-button
         >
       <el-button
-        v-if="type=='edit'"
+        v-if="type=='edit' && formData.state != 1"
         type="primary"
         size="mini"
         @click="saveForm('form')"
@@ -21,7 +21,7 @@
       >
 <!--   审批通过不显示提交     -->
         <el-button
-          v-if="type=='edit' && formData.state != 3"
+          v-if="type=='edit' && formData.state != 1"
           type="primary"
           size="mini"
           @click="submitForm('form')"
@@ -29,7 +29,7 @@
           :loading="isSubmit"
           >{{ isSubmit ? "提交中..." : "提交" }}</el-button>
         <el-button
-          v-if="type=='check'"
+          v-if="type=='check' && formData.state == 1"
           type="primary"
           size="mini"
           @click="confirmApprove()"
