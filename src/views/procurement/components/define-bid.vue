@@ -87,7 +87,15 @@
         </el-row>
         <el-row class="custom-row">
           <el-col :span="24">
-            <el-form-item label="上传附件：" class="custom-form-item">
+            <el-form-item label="上传附件：" class="custom-form-item uploadItem">
+              <el-button
+                type="primary"
+                size="mini"
+                v-if="!scheme.calibrationAttachmentList"
+                @click="showSecretTips"
+                style="margin-top: 8px"
+              >上传</el-button
+              >
               <el-upload
                 class="upload-demo"
                 :action="uploadFileUrl"
@@ -98,15 +106,10 @@
                 list-type="text"
                 :auto-upload="true"
                 :show-file-list="false"
+                ref="upload"
               >
-                <el-button
-                  type="primary"
-                  size="mini"
-                  v-if="!scheme.calibrationAttachmentList"
-                  >上传</el-button
-                >
               </el-upload>
-              <div style="margin-top: 10px; display: flex; align-items: center">
+              <div style="display: flex; align-items: center">
                 <el-button
                   type="text"
                   v-if="uploadedFileName"
@@ -587,6 +590,7 @@ import FileModule from "@/components/FileModule/index.vue";
 import PageTitle from "@/components/PageTitle/index.vue";
 import { uploadFileUrl } from "@/utils/const";
 import BackBidDetail from "./back-bid-detail.vue";
+import {showSecretRelatedTips} from "@/utils/MyUtils";
 export default {
   name: "define-bid",
   props: {
@@ -708,6 +712,11 @@ export default {
   // },
 
   methods: {
+    showSecretTips() {
+      showSecretRelatedTips(()=>{
+        this.$refs['upload'].$refs['upload-inner'].handleClick()
+      })
+    },
     async getBiddingQuotationList() {
       this.setBidLoading = true;
       const { id: schemeId } = this.scheme;
@@ -995,6 +1004,14 @@ export default {
 };
 </script>
 <style lang="scss" scoped>
+::v-deep .el-form-item.uploadItem {
+  .el-form-item__content {
+    .upload-demo {
+      height: 0;
+    }
+    line-height: 0;
+  }
+}
 .page-title {
   width: 100%;
   border-bottom: solid 1px #ccc;

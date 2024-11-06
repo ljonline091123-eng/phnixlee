@@ -205,7 +205,8 @@
             </el-form-item>
           </el-col>
           <el-col :span="10">
-            <el-form-item label=" 模板上传：" prop="fileTemplate">
+            <el-form-item label=" 模板上传：" prop="fileTemplate" class="uploadItem">
+              <el-button size="small" type="primary" style="margin-top: 4px;" @click="showSecretTips">点击上传</el-button>
               <el-upload
                 :action="uploadFileUrl"
                 :limit="1"
@@ -213,8 +214,8 @@
                 :file-list="fileForm.fileList"
                 :accept="'.doc,.docx'"
                 :on-remove="fileRemove"
+                ref="upload"
               >
-                <el-button size="small" type="primary">点击上传</el-button>
               </el-upload>
             </el-form-item>
           </el-col>
@@ -433,6 +434,7 @@ import { uploadFileUrl, offerService, offerRepo } from "@/utils/const";
 import { validatenull } from "@/utils/validate";
 import FileModule from "@/components/FileModule/index.vue";
 import PageTitle from "@/components/PageTitle/index";
+import {showSecretRelatedTips} from "@/utils/MyUtils";
 export default {
   name: "file-template",
   dicts: ["agreement_stamper_type"],
@@ -489,6 +491,11 @@ export default {
     this.getContractTypeList();
   },
   methods: {
+    showSecretTips() {
+      showSecretRelatedTips(()=>{
+        this.$refs['upload'].$refs['upload-inner'].handleClick()
+      })
+    },
     /** 查询采购计划列表 */
     async getFileTemplate() {
       this.fileLoading = true;
@@ -746,6 +753,11 @@ export default {
 </script>
 
 <style lang="scss" scoped>
+::v-deep .el-form-item.uploadItem {
+  .el-form-item__content {
+    line-height: 0;
+  }
+}
 .view-box {
   padding: 0 20px;
   .page-title {
