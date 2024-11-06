@@ -55,7 +55,7 @@ public enum UnderlingPlatformUrlEnum {
     GET_L2_ORG_BY_USERID("/rest/ctrl/api/getL2OrgByUserId","根据人员获取所属的二级组织"),
     GET_L3_ORG_BY_USERID("/rest/ctrl/api/getL3OrgByUserId","根据人员获取所属的三级组织"),
     GET_L2_ORG_BY_ORGID("/rest/ctrl/api/getL2OrgByOrgId","根据组织获取对应的二级单位"),
-    GET_L3_ORG_BY_ORGID("rest/ctrl/api/getL3OrgByOrgId","根据组织获取对应的三级单位"),
+    GET_L3_ORG_BY_ORGID("/rest/ctrl/api/getL3OrgByOrgId","根据组织获取对应的三级单位"),
 
     LIST_CATA_LOG("/rest/bpm/catalog/listCatalog","查询流程分组"),
 
