@@ -227,6 +227,7 @@
         <el-dialog
           title="推送"
           :visible.sync="pushStateDialog"
+          v-if="pushStateDialog"
           width="50%"
           @closed="closePushStateDialog"
         >
@@ -964,7 +965,11 @@ export default {
     },
     //推送
     pushState(row){
-
+      this.$nextTick(()=>{
+        console.log('%c 🚀 ~ file:plan --method: --line:968 --variable:===>this.$refs.VirtualScroll', `font-size:16px; font-weight:bold; color:#fff; padding:4px; border-radius:4px; background:linear-gradient(90deg, ${["#ff005a", "#ff9900", "#33cc33", "#0099ff", "#ffc300"][Math.floor(Math.random() * 5)]}, ${["#ff005a", "#ff9900", "#33cc33", "#0099ff", "#ffc300"][Math.floor(Math.random() * 5)]});`,
+          this.$refs);
+        this.$refs.pushTable.clearSelection()
+      })
       this.pushStateDialog = true;
       this.currentData = row;
       // this.getUsersRoleList()
@@ -1055,7 +1060,7 @@ export default {
         console.log(err);
       }
       this.pushListLoading = false;
-      this.closePushStateDialog()
+      // this.closePushStateDialog()
     },
     //选择推送用户
     handleSelectionChange(selection){
@@ -1111,7 +1116,12 @@ export default {
         role:undefined,
         nickName:undefined
       }
-      this.$refs.pushTable.clearSelection()
+      this.$nextTick(()=>{
+        this.$refs.pushTable.clearSelection()
+      })
+
+      console.log('%c 🚀 ~ file:plan --method:closePushStateDialog --line:1115 --variable:===>', `font-size:16px; font-weight:bold; color:#fff; padding:4px; border-radius:4px; background:linear-gradient(90deg, ${["#ff005a", "#ff9900", "#33cc33", "#0099ff", "#ffc300"][Math.floor(Math.random() * 5)]}, ${["#ff005a", "#ff9900", "#33cc33", "#0099ff", "#ffc300"][Math.floor(Math.random() * 5)]});`,
+        this.$refs.pushTable);
     }
   },
   computed: {
@@ -1123,6 +1133,11 @@ export default {
     ...mapGetters(["project"]),
   },
   watch: {
+    pushStateDialog(val){
+      if(!val){
+        this.closePushStateDialog()
+      }
+    },
     /** 监控类型切换 */
     "queryParams.procurementPlanType": {
       handler(val) {
