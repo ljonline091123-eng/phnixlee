@@ -792,7 +792,7 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
         MaterialProcurementPushRequestVO vo = new MaterialProcurementPushRequestVO();
         vo.setId(procurementPlan.getId());
         vo.setProjectCode(contractPlanning.getProjectCode());
-        list = list.stream().filter(i-> i.getIsSelect().equals("Y")).collect(Collectors.toList());
+        list = list.stream().filter(i-> null != i.getIsSelect()&&i.getIsSelect().equals("Y")).collect(Collectors.toList());
         vo.setMaterialsLists(list);
         return vo;
     }
