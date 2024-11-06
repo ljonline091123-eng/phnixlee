@@ -10,24 +10,24 @@
           @click="$tab.closePage()"
           >取消</el-button
         >
-      <el-button
-        v-if="type=='edit'"
-        type="primary"
-        size="mini"
-        @click="saveForm('form')"
-        :disabled="isSubmit"
-        :loading="isSubmit"
-        >{{ isSubmit ? "保存中..." : "保存" }}</el-button
-      >
-<!--   审批通过不显示提交     -->
-        <el-button
-          v-if="type=='edit' && formData.state != 3"
-          type="primary"
-          size="mini"
-          @click="submitForm('form')"
-          :disabled="isSubmit"
-          :loading="isSubmit"
-          >{{ isSubmit ? "提交中..." : "提交" }}</el-button>
+<!--      <el-button-->
+<!--        v-if="type=='edit'"-->
+<!--        type="primary"-->
+<!--        size="mini"-->
+<!--        @click="saveForm('form')"-->
+<!--        :disabled="isSubmit"-->
+<!--        :loading="isSubmit"-->
+<!--        >{{ isSubmit ? "保存中..." : "保存" }}</el-button-->
+<!--      >-->
+<!--&lt;!&ndash;   审批通过不显示提交     &ndash;&gt;-->
+<!--        <el-button-->
+<!--          v-if="type=='edit' && formData.state != 3"-->
+<!--          type="primary"-->
+<!--          size="mini"-->
+<!--          @click="submitForm('form')"-->
+<!--          :disabled="isSubmit"-->
+<!--          :loading="isSubmit"-->
+<!--          >{{ isSubmit ? "提交中..." : "提交" }}</el-button>-->
         <el-button
           v-if="type=='check'"
           type="primary"
