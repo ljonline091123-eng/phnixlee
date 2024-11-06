@@ -415,3 +415,17 @@ export const avoidSubmitByMarket = (id) => {
     },
   });
 };
+/**
+ *  校验创建合同的基本信息
+ * @param params
+ * @returns {*}
+ */
+export const getCheckAgreementCreateInfo = (id) => {
+  return request({
+    url: "/business/marketMaterialContract/checkAgreementCreateInfo",
+    method: "post",
+    data: {
+      id,
+    },
+  });
+};

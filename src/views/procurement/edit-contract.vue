@@ -122,13 +122,13 @@
               <el-col :span="8">
                 <el-form-item label="身份证：" prop="agreement.partyBLegalIdCard"
                   :rules="[{ required: true, trigger: 'blur', message: '请输入身份证' },{validator: isCardId, trigger: 'blur'}]">
-                  <el-input v-model="firstForm.agreement.partyBLegalIdCard" placeholder="请输入身份证" clearable />
+                  <el-input  :disabled="firstForm.agreement.marketMaterialContractId?true:false" v-model="firstForm.agreement.partyBLegalIdCard" placeholder="请输入身份证" clearable />
                 </el-form-item>
               </el-col>
               <el-col :span="8">
                 <el-form-item label="联系方式：" prop="agreement.partyBLegalPhone"
                   :rules="[{ required: true, trigger: 'blur', message: '请输入联系方式' },{validator: isMobile, trigger: 'blur'}]">
-                  <el-input v-model="firstForm.agreement.partyBLegalPhone" placeholder="请输入联系方式" clearable />
+                  <el-input  :disabled="firstForm.agreement.marketMaterialContractId?true:false" v-model="firstForm.agreement.partyBLegalPhone" placeholder="请输入联系方式" clearable />
                 </el-form-item>
               </el-col>
             </el-row>
@@ -137,20 +137,20 @@
               <el-col :span="8">
                 <el-form-item label="乙方现场实际履职负责人：" prop="agreement.partyBResponsibleName"
                   :rules="[{ required: true, trigger: 'blur', message: '请输入乙方现场实际履职负责人' }]">
-                  <el-input v-model="firstForm.agreement.partyBResponsibleName" placeholder="请输入乙方现场实际履职负责人"
+                  <el-input  :disabled="firstForm.agreement.marketMaterialContractId?true:false" v-model="firstForm.agreement.partyBResponsibleName" placeholder="请输入乙方现场实际履职负责人"
                     clearable />
                 </el-form-item>
               </el-col>
               <el-col :span="8">
                 <el-form-item label="身份证：" prop="agreement.partyBResponsibleIdCard"
                   :rules="[{ required: true, trigger: 'blur', message: '请输入身份证' },{validator: isCardId, trigger: 'blur'}]">
-                  <el-input v-model="firstForm.agreement.partyBResponsibleIdCard" placeholder="请输入身份证" clearable />
+                  <el-input  :disabled="firstForm.agreement.marketMaterialContractId?true:false" v-model="firstForm.agreement.partyBResponsibleIdCard" placeholder="请输入身份证" clearable />
                 </el-form-item>
               </el-col>
               <el-col :span="8">
                 <el-form-item label="联系方式：" prop="agreement.partyBResponsiblePhone"
                   :rules="[{ required: true, trigger: 'blur', message: '请输入联系方式' },{validator: isMobile, trigger: 'blur'}]">
-                  <el-input v-model="firstForm.agreement.partyBResponsiblePhone" placeholder="请输入联系方式" clearable />
+                  <el-input  :disabled="firstForm.agreement.marketMaterialContractId?true:false" v-model="firstForm.agreement.partyBResponsiblePhone" placeholder="请输入联系方式" clearable />
                 </el-form-item>
               </el-col>
             </el-row>
@@ -538,10 +538,10 @@
                   </el-form-item>
                 </template>
               </el-table-column>
-              <!-- <el-table-column prop="skuId" align="center" width="180" label="易料市集商品编码"/>
-              <el-table-column prop="goodsName" align="center" width="180" label="易料市集商品名称"/>
-                <el-table-column prop="offerBrand" align="center" width="180" label="易料市集品牌"/>
-               <el-table-column prop="offerPrice" align="center" width="180" label="易料市集含税单价"/> -->
+              <el-table-column prop="skuId" align="center" width="180" label="易料商品编码"/>
+              <el-table-column prop="goodsName" align="center" width="180" label="易料商品名称"/>
+                <el-table-column prop="offerBrand" align="center" width="180" label="易料品牌"/>
+               <el-table-column prop="offerPrice" align="center" width="180" label="易料初使报价"/>
             </el-table>
           </div>
           <!-- 物资租赁类 / 机械租赁类 -->

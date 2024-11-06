@@ -235,7 +235,7 @@
               />
               <el-table-column
               v-if="contractPlanning.contractPlanningCategory == 1"
-              label="易料市集商品编码"
+              label="易料商品编码"
               align="center"
               min-width="150" prop="skuId" show-overflow-tooltip
             >
@@ -245,14 +245,14 @@
                 </a>
               </template>
             </el-table-column>
-          <el-table-column v-if="contractPlanning.contractPlanningCategory == 1" label="易料市集商品名称" prop="name" width="150">
+          <el-table-column v-if="contractPlanning.contractPlanningCategory == 1" label="易料商品名称" prop="name" width="150">
             <template slot-scope="scope">
               {{ scope.row.name }}
             </template>
           </el-table-column>
    
-          <el-table-column v-if="contractPlanning.contractPlanningCategory == 1" label="易料市集品牌" min-width="120" prop="offerBrand" show-overflow-tooltip/>
-          <el-table-column v-if="contractPlanning.contractPlanningCategory == 1" label="易料市集含税单价"  width="150" prop="offerPrice" />
+          <el-table-column v-if="contractPlanning.contractPlanningCategory == 1" label="易料品牌" min-width="120" prop="offerBrand" show-overflow-tooltip/>
+          <el-table-column v-if="contractPlanning.contractPlanningCategory == 1" label="易料初使报价"  width="150" prop="offerPrice" />
           
             </el-table>
           </template>
