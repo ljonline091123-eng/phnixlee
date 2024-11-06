@@ -1,6 +1,7 @@
 package com.zhaocai.business.manager.http.service;
 
 import cn.hutool.core.collection.CollectionUtil;
+import com.alibaba.fastjson.JSON;
 import com.zhaocai.business.common.exception.BusinessException;
 import com.zhaocai.business.manager.http.common.config.UnderlingPlatformUrlEnum;
 import com.zhaocai.business.manager.http.dto.req.*;
@@ -170,11 +171,14 @@ public class UnderlingSystemService {
     public String getL3OrgByOrgId(String orgId){
         GetL3OrgByOrgIdRequestDTO reqDTO = new GetL3OrgByOrgIdRequestDTO();
         reqDTO.setOrgId(orgId);
-        String responseStr =  UnderlingRestTemplateService.getForObject
-                (UnderlingPlatformUrlEnum.GET_L3_ORG_BY_ORGID,String.class,reqDTO);
-        if (null != responseStr){
-            return responseStr;
-        }else {
+        List<String> orgThree =  UnderlingRestTemplateService.getForObject(UnderlingPlatformUrlEnum.GET_L3_ORG_BY_ORGID,List.class,reqDTO);
+        if(orgThree!=null && !orgThree.isEmpty()){
+            if(orgThree.size()==1){
+                return orgThree.get(0);
+            }else{
+                return null;
+            }
+        }else{
             return null;
         }
     }
