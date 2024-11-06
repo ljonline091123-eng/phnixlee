@@ -48,7 +48,7 @@
                   <el-input  v-model="firstForm.agreement.agreementName" placeholder="请输入合同名称" clearable/>
                 </el-form-item>
               </el-col>
-           
+
               <el-col :span="8">
                 <el-form-item label="合同编码：" prop="agreement.agreementCode" disabled>
                   <el-input disabled v-model="firstForm.agreement.agreementCode" placeholder="系统自动生成" clearable />
@@ -520,7 +520,7 @@
               <el-table-column prop="notTaxUnitPrice" label="不含税单价(元)" width="160" align="right"/>
               <el-table-column prop="taxUnitPrice" label="含税单价(元)" width="150" align="right"/>
               <el-table-column prop="taxRateText" label="税率(%)" width="100" align="right"/>
-              <el-table-column prop="taxAmountText" label="税额" width="150" align="right"/> 
+              <el-table-column prop="taxAmountText" label="税额" width="150" align="right"/>
               <el-table-column prop="remark" align="center" width="180" label="备注">
                 <template slot-scope="scope">
                   <el-form-item :prop="'agreementMaterialsLists.' + scope.$index + '.remark'" label-width="0">
@@ -530,10 +530,10 @@
               </el-table-column>
               <!-- <el-table-column prop="skuId" align="center" width="180" label="易料市集商品编码"/>
                 <el-table-column prop="goodsName" align="center" width="180" label="易料市集商品名称"/>
-                  <el-table-column prop="offerBrand" align="center" width="180" label="易料市集品牌"/> 
+                  <el-table-column prop="offerBrand" align="center" width="180" label="易料市集品牌"/>
                   <el-table-column  prop="offerPrice" align="center" width="180" label="易料市集含税单价"/> -->
                   <!-- <el-table-column width="1"/> -->
-                
+
             </el-table>
             <el-table v-else  :data="firstForm.agreementMaterialsLists" style="width: 100%">
               <el-table-column prop="materialsCode" label="物资编码" width="150" show-overflow-tooltip/>
@@ -1804,7 +1804,7 @@ export default {
         this.submitForm();
       });
     },
-   
+
     submitForm() {
       this.$refs.firstForm.validate((valid, obj) => {
         let isNull = validatenull(obj);
@@ -1899,7 +1899,7 @@ export default {
               if(_this.isAvoidSubmit){
                 // this.$route.query.id
                 avoidSubmitByMarket(res?.data?.id).then((res) => {
-                    
+
                 })
               }
               let param = Base64.encode(
@@ -1944,7 +1944,8 @@ export default {
       if (value === "" || value === undefined) {
         callback();
       } else if (!reg.test(value)) {
-        callback(new Error("请输入正确的值"));
+        // callback(new Error("请输入正确的值"));
+        callback(new Error("请输入正确的数值且小数点保留两位"));
       } else {
         callback();
       }
@@ -2287,6 +2288,8 @@ export default {
         const taxRatePercent = divide(ratioBig, 100);
         const paymentAmount = multiply(totalAmountIncTaxBig, taxRatePercent)
         this.$set(scope.row, 'paymentAmount', paymentAmount.toFixed(2))
+      } else {
+        this.$set(scope.row, 'paymentAmount', 0)
       }
     },
     changePaymentBasis(scope, value){
@@ -2349,7 +2352,7 @@ export default {
             this.agreementFileName = res.data.agreementFileName;
             this.firstForm.agreement.agreementNameYl =
               this.$route.query.agreementName;
-       
+
             this.totalAmountIncTax = res.data.totalAmountIncTax;
 
             // 合同类型

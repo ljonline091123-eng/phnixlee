@@ -5,7 +5,7 @@
         <el-button type="primary" size="mini" @click="submitForm">保存</el-button>
         <el-button v-if="firstForm.agreement.marketMaterialContractId && parseInt(firstForm.agreementPaymentItem.totalAmountIncTax)<50000" type="primary" size="mini" @click="avoidSubmitForm">免审提交</el-button>
       </div>
-    
+
     </BackButton>
     <div class="context">
       <el-form ref="firstForm" :model="firstForm" label-width="210px">
@@ -240,7 +240,7 @@
                 </el-form-item>
               </el-col>
             </el-row>
-     
+
 
             <el-row :gutter="10" v-if="[4, 5].includes(contractType)">
               <el-col :span="24">
@@ -1357,7 +1357,7 @@ export default {
     })
   },
   methods: {
-    
+
     async loadAgreementAttachmentId() {
       const agreementId = this.id;
       if (agreementId) {
@@ -1532,7 +1532,7 @@ export default {
             _this.$message.success('保存成功')
             if(_this.isAvoidSubmit){
                 avoidSubmitByMarket(res?.data?.id).then((res) => {
-                    
+
                 })
               }
             let param = Base64.encode(JSON.stringify({id:res?.data?.id,type:res?.data?.procurementPlanType,agreementName:this.firstForm.agreement.agreementName}));
@@ -1572,7 +1572,8 @@ export default {
       if (value === '' || value === undefined) {
         callback();
       }else if (!reg.test(value)) {
-        callback(new Error('请输入正确的值'))
+        // callback(new Error('请输入正确的值'))
+        callback(new Error("请输入正确的数值且小数点保留两位"));
       }else{
         callback()
       }
@@ -1911,6 +1912,8 @@ export default {
         const taxRatePercent = divide(ratioBig, 100);
         const paymentAmount = multiply(totalAmountIncTaxBig, taxRatePercent)
         this.$set(scope.row, 'paymentAmount', paymentAmount.toFixed(2))
+      } else {
+        this.$set(scope.row, 'paymentAmount', 0)
       }
     },
     changePaymentBasis(scope, value){
