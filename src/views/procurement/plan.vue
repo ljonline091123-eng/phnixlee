@@ -317,6 +317,7 @@
             :data="pushUserList"
             :item-size="62"
             key-prop="virtualId"
+            ref="virScroll"
             @change="(renderData) => virtualList = renderData">
             <el-table
                 v-loading="pushListLoading"
@@ -963,6 +964,7 @@ export default {
     },
     //推送
     pushState(row){
+
       this.pushStateDialog = true;
       this.currentData = row;
       // this.getUsersRoleList()
@@ -1035,6 +1037,7 @@ export default {
         this.$set(this.pushQuery,'cpId',defaultId)
 
 
+
         // 以 res.data.contractPlanningNoticeVOList 为外层循环
         let combinedList = this.pushUserList.flatMap(user =>
           this.contractPlanList.filter(item => item.cpId == (this.pushQuery.cpId)).map(notice => ({
@@ -1052,6 +1055,7 @@ export default {
         console.log(err);
       }
       this.pushListLoading = false;
+      this.closePushStateDialog()
     },
     //选择推送用户
     handleSelectionChange(selection){
@@ -1065,34 +1069,29 @@ export default {
       console.log(this.currentData,'currentData-~~~~~~~~~~~~~~~~~~~~');
       try{
         const { contractPlanningName, contractPlanningId, contractPlanningCode } = this.currentData
-        const { procurementSchemeCode, schemeId, noticeId } = this.contractPlanList.filter(item => item.cpId == (this.pushQuery.cpId))[0];
+        const { splitContractId, procurementSchemeCode, schemeId, noticeId, planId } = this.contractPlanList.filter(item => item.cpId == (this.pushQuery.cpId))[0];
 
         let url = Base64.encode(JSON.stringify(contractPlanningName));
         url = encodeURIComponent(url); //避免base64编码中出现"/"时路由404
 
-        /* 查询招标列表第一条数据 */
-        let queryParams = {
-            pageNumber: 1,
-            pageSize: 1,
-            procurementSchemeCode: procurementSchemeCode,
-        }
-        /* 转编码 */
-        const res = await getBiddingSchemeList(queryParams);
-        let paramUrl = Base64.encode(JSON.stringify(res.data.rows[0]));
+
+        let paramUrl = Base64.encode(JSON.stringify(planId));
         paramUrl = encodeURIComponent(paramUrl); //避免base64编码中出现"/"时路由404
-        paramUrl = `/procurement/tendering/${paramUrl}`;
+        paramUrl = `/procurement/plan-detail/${paramUrl}`;
 
         let formData = {
           userList:this.selectPushList,
-          contractPlanningName,
-          contractPlanningId,
-          contractPlanningCode,
-          procurementSchemeCode,
-          schemeId,
-          noticeId,
+          contractPlanningName,/* 这个也填吧 */
+          contractPlanningId,/* 这个必填。 */
+          contractPlanningCode,/* 这个必填。 */
+          splitContractId,/* 合约拆分id这个必填。 */
+          procurementSchemeCode,/* 采购方案code */
+          schemeId,/* 采购方案id */
+          noticeId,/* 招标id */
           // redirectUrl:`/procurement/plan?contractPlanningName=${url}`
           redirectUrl: paramUrl
         }
+        console.log('%c👽 推送参数', `font-size: 20px;background-color: #f00;`, formData);
         await pushProcurementPlan(formData)
         this.$message.success("推送成功");
         this.pushStateDialog = false;
@@ -1106,7 +1105,7 @@ export default {
       return row.virtualId
     },
     closePushStateDialog(){
-      this.selectPushList = []
+      this.selectPushList = [];
       this.pushQuery = {
         cpId:undefined,
         role:undefined,
