@@ -66,13 +66,16 @@
             v-hasPermi="['procurement:contract:add']"
             >新增</el-button
           >
-          <el-button
-            type="success"
-            icon="el-icon-plus"
-            size="small"
-            @click="openSelectYl"
-            >新增易料合同</el-button
-          >
+          <el-badge :value="total_procurement_yl" style="margin-left: 12px;margin-top: -1px;">
+              <el-button
+              type="success"
+              icon="el-icon-plus"
+              size="small"
+              @click="openSelectYl"
+              >新增易料合同</el-button
+            >
+          </el-badge>
+         
         </el-form-item>
       </el-form>
       <el-table
@@ -1255,14 +1258,14 @@
 <script>
 import { mapGetters } from "vuex";
 import { Base64 } from "js-base64";
-// import { create, all } from "mathjs";
+import { create, all } from "mathjs";
 import {
   checkAgreementCreateInfo,getAgreementCreateInfoYl,
   listAgreement,
   getAgreementSelectedProcurementInfo,
   listContractSplit,
   listSignAgreementScheme,listMarketMaterialContract,
-  listVendorBiddingListQuotation,
+  listVendorBiddingListQuotation,getCheckAgreementCreateInfo,
   cancellationAgreement,
   revokeAgreement,
   submitAgreement,
@@ -1428,10 +1431,11 @@ export default {
     };
   },
   created() {
-    // this.mathjs = create(all);
-    // this.mathjs.config({
-    //   number: "BigNumber",
-    // });
+
+    this.mathjs = create(all);
+    this.mathjs.config({
+      number: "BigNumber",
+    });
   },
   watch: {
     "queryParams.expenditureBusinessType": {
@@ -1491,6 +1495,7 @@ export default {
           this.queryParams_procurement.projectCode = newVal.code;
           this.queryParams_procurementYl.belongAccountingItemCode = newVal.code;
           this.getList();
+          this.getList_yl();
         }
       },
       immediate: true,
@@ -1578,7 +1583,10 @@ export default {
       }
     },
     submitProcurementYl(){
+   
         if(!this.selectedRowYl.length) return this.$message({type:'error',message:"请选择易料单据"});
+        getCheckAgreementCreateInfo(this.selectedRowYl).then((res) => {
+          if(res.code==200 && res.data==true){
             this.$router.push({
               path: "/procurement/add-contract",
               query: {
@@ -1587,6 +1595,9 @@ export default {
                 type:'add'
               },
             });
+          }
+        })
+           
 
     },
     submitProcurement() {
@@ -2106,16 +2117,16 @@ export default {
       return newCount.toString().slice(0, newCount.toString().indexOf(".") + 3);
     },
     totalNotTaxPriceTotal() {
-      // if (this.form.vendorBiddingListQuotationList?.length === 0) return 0.0;
-      // const { add, bignumber } = this.mathjs;
-      // let count = bignumber(0.0);
-      // this.form.vendorBiddingListQuotationList?.forEach((item) => {
-      //   if (item.notTaxedTotal) {
-      //     count = add(count, bignumber(item.notTaxedTotal));
-      //   }
-      // });
-      // const newCount = (Math.floor(count * 100) / 100).toFixed(2);
-      // return newCount.toString().slice(0, newCount.toString().indexOf(".") + 3);
+      if (this.form.vendorBiddingListQuotationList?.length === 0) return 0.0;
+      const { add, bignumber } = this.mathjs;
+      let count = bignumber(0.0);
+      this.form.vendorBiddingListQuotationList?.forEach((item) => {
+        if (item.notTaxedTotal) {
+          count = add(count, bignumber(item.notTaxedTotal));
+        }
+      });
+      const newCount = (Math.floor(count * 100) / 100).toFixed(2);
+      return newCount.toString().slice(0, newCount.toString().indexOf(".") + 3);
     },
   },
 };
