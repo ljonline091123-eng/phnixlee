@@ -85,7 +85,19 @@ public class SyncPlatformDataService {
                     sysDept.setThridOrgLevel(NumberConstant.ONE);
                 } else if (item.getDeptId().length() == 10 && item.getDeptId().startsWith("2")){
                     sysDept.setThridOrgLevel(NumberConstant.TWO);
+                }else{
+                    // 判断三级单位的编码规则
+                    if (item.getDeptId().length() == 10 &&
+                            !item.getDeptId().startsWith("000", 4) &&
+                            item.getDeptId().startsWith("000", 7)) {
+                        // 情况一：10位编码，第5-7位为非000，第8-10位为000
+                        sysDept.setThridOrgLevel(NumberConstant.THREE);
+                    } else if (item.getDeptId().length() == 13) {
+                        // 情况二：编码位数为13位
+                        sysDept.setThridOrgLevel(NumberConstant.THREE);
+                    }
                 }
+
                 sysDept.setDeptName(StringUtils.isEmpty(item.getRemark()) ? item.getDeptName() : item.getRemark());
                 sysDept.setOrderNum(Integer.valueOf(item.getOrderNum()));
                 sysDept.setPhone(item.getPhone());
