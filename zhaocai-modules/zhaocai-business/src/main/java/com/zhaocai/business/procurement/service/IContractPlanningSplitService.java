@@ -27,14 +27,14 @@ public interface IContractPlanningSplitService  extends IService<ContractPlannin
      * @param splitRequestList
      * @param planId
      */
-    void saveContractPlanningSplit(List<ContractPlanningSplitRequestVO> splitRequestList, Long planId, ProcurementPlan procurementPlan);
+    List<MaterialsList> saveContractPlanningSplit(List<ContractPlanningSplitRequestVO> splitRequestList, Long planId, ProcurementPlan procurementPlan);
 
     /**
      * 修改采购计划的合约拆分
      * @param splitRequestList
      * @param planId
      */
-    void updateContractPlanningSplit(List<ContractPlanningSplitRequestVO> splitRequestList, Long planId,ProcurementPlan procurementPlan);
+    List<MaterialsList> updateContractPlanningSplit(List<ContractPlanningSplitRequestVO> splitRequestList, Long planId,ProcurementPlan procurementPlan);
 
     /**
      * 获取采购计划的合约拆分记录
@@ -78,4 +78,17 @@ public interface IContractPlanningSplitService  extends IService<ContractPlannin
      * @param agreementMaterialsLists
      */
     void updateContractPlanningSplitUseSub(Long contractSplitId, List<AgreementMaterialsList> agreementMaterialsLists);
+
+    /**
+     * 修改合约拆分使用数据-新增(易料)
+     * @param materialsLists
+     * @param agreementMaterialsLists
+     */
+    void updateContractPlanningSplitUseAddByMarket(List<MaterialsList> materialsLists, List<AgreementMaterialsList> agreementMaterialsLists, List<AgreementMaterialsList> agreementMaterialsListsOld);
+
+    /**
+     * 修改合约拆分使用数据-减少   这个是累加 更新总价(易料)
+     * @param agreementMaterialsLists
+     */
+    void updateContractPlanningSplitUseSubByMarket(List<AgreementMaterialsList> agreementMaterialsLists);
 }

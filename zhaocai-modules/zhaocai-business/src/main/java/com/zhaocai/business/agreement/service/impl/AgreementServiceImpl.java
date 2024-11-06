@@ -376,19 +376,51 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
         AgreementSaveVO agreementSave;
 
         if (NumberUtil.isNullOrZero(requestVO.getAgreement().getId())) {
-            // todo 为易料推送过来的合同先不进行校验
             if (StringUtils.isEmpty(requestVO.getAgreement().getMarketMaterialContractId())) {
                 // 校验清单数据
                 checkSaveAgreementMaterialsList(requestVO.getAgreementMaterialsLists(),requestVO.getAgreement().getSchemeId(),requestVO.getAgreement().getContractSplitId(),
                         requestVO.getAgreement().getVendorId());
+            } else {
+                List<MarketMaterialList> list = requestVO.getAgreementMaterialsLists().stream()
+                        .map(i -> {
+                            MarketMaterialList marketMaterial = new MarketMaterialList();
+                            marketMaterial.setRequireId(String.valueOf(i.getId()));
+                            marketMaterial.setGoodsName(i.getMaterialsName());
+                            marketMaterial.setQuantity(i.getSignCount());
+                            marketMaterial.setNoTaxPrice(i.getSignUnitPriceExclTax());
+                            marketMaterial.setPrice(i.getSignUnitPriceInclTax());
+                            return marketMaterial;
+                        }).collect(Collectors.toList());
+                marketMaterialContractService.checkAgreementMaterials(list);
             }
             /* 插入 签订合同 */
             agreementSave = addAgreement(requestVO);
         } else {
-            // todo 为易料推送过来的合同先不进行校验
             if (StringUtils.isEmpty(requestVO.getAgreement().getMarketMaterialContractId())) {
                 // 修改使用的 校验清单数据方法，和新增校验不一样，该方法查询了该合同上一次签订的单价，校验规则还原了数据再进行校验的。
                 checkSaveAgreementMaterialsListByUpdate(requestVO.getAgreementMaterialsLists(), requestVO.getAgreement().getSchemeId(), requestVO.getAgreement().getContractSplitId(), requestVO.getAgreement().getVendorId(), requestVO.getAgreement().getId());
+            } else {
+                List<MarketMaterialList> list = requestVO.getAgreementMaterialsLists().stream()
+                        .map(i -> {
+                            MarketMaterialList marketMaterial = new MarketMaterialList();
+                            marketMaterial.setRequireId(String.valueOf(i.getId()));
+                            marketMaterial.setGoodsName(i.getMaterialsName());
+                            marketMaterial.setQuantity(i.getSignCount());
+                            marketMaterial.setNoTaxPrice(i.getSignUnitPriceExclTax());
+                            marketMaterial.setPrice(i.getSignUnitPriceInclTax());
+                            return marketMaterial;
+                        }).collect(Collectors.toList());
+                List<MarketMaterialList> listOld = agreementMaterialsListService.list(new LambdaQueryWrapper<AgreementMaterialsList>().eq(AgreementMaterialsList::getAgreementId, requestVO.getAgreement().getId()))
+                        .stream().map(i -> {
+                            MarketMaterialList marketMaterial = new MarketMaterialList();
+                            marketMaterial.setRequireId(String.valueOf(i.getId()));
+                            marketMaterial.setGoodsName(i.getMaterialsName());
+                            marketMaterial.setQuantity(i.getSignCount());
+                            marketMaterial.setNoTaxPrice(i.getSignUnitPriceExclTax());
+                            marketMaterial.setPrice(i.getSignUnitPriceInclTax());
+                            return marketMaterial;
+                        }).collect(Collectors.toList());
+                marketMaterialContractService.checkAgreementMaterialsByUpdate(list, listOld);
             }
             /* 修改 签订合同 */
             agreementSave = updateAgreement(requestVO);
@@ -701,7 +733,13 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
                 .collect(Collectors.toMap(AgreementMaterialsList::getMaterialsListId,val -> val));
 
         // 获取合同对应的拆分合约的物理清单数据
-        List<MaterialsList> materialsLists = materialsListService.listMaterialsListByContractSplitIds(CollectionUtil.newArrayList(agreement.getContractSplitId()));
+        List<MaterialsList> materialsLists = new ArrayList<>();
+        if(StringUtils.isEmpty(agreement.getMarketMaterialContractId())){
+            materialsLists = materialsListService.listMaterialsListByContractSplitIds(CollectionUtil.newArrayList(agreement.getContractSplitId()));
+        } else {
+            List<Long> materialsListIds = agreementMaterialsLists.stream().map(AgreementMaterialsList::getMaterialsListId).collect(Collectors.toList());
+            materialsLists = materialsListService.list(new LambdaQueryWrapper<MaterialsList>().in(BaseEntity::getId,materialsListIds));
+        }
         for (MaterialsList materialsList : materialsLists) {
             AgreementMaterialsList agreementMaterialsList = agreementMaterialsListMap.get(materialsList.getId());
             materialsList.setUsedCount(NumberUtil.subtract(materialsList.getUsedCount(),agreementMaterialsList.getSignCount()));
@@ -709,7 +747,11 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
         materialsListService.updateMaterialsListUsedCount(materialsLists);
 
         // 设置合约拆分记录为未使用完毕
-        contractPlanningSplitService.updateContractPlanningSplitUseSub(agreement.getContractSplitId(),agreementMaterialsLists);
+        if(StringUtils.isEmpty(agreement.getMarketMaterialContractId())){
+            contractPlanningSplitService.updateContractPlanningSplitUseSub(agreement.getContractSplitId(),agreementMaterialsLists);
+        } else {
+            contractPlanningSplitService.updateContractPlanningSplitUseSubByMarket(agreementMaterialsLists);
+        }
     }
 
     @Override
@@ -1282,7 +1324,8 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
             MarketMaterialContract contract = marketMaterialContractService.getById(requestVO.getAgreement().getMarketMaterialContractId());
             ValidateUtils.isNullException(contract, "该合同对应的易料采购合同为空");
             procurementPlanType = Integer.valueOf(contract.getExpenditureBusinessType());
-            agreement.setAgreementCode(getAgreementCodeByMarket(procurementPlanType,agreement.getBelongOrganizationId()));
+            //agreement.setAgreementCode(getAgreementCodeByMarket(procurementPlanType,agreement.getBelongOrganizationId()));
+            agreement.setAgreementCode(getAgreementCode(procurementPlanType,agreement.getBelongOrganizationId()));
             agreement.setProcurementSchemeCode(getProcurementSchemeCodeByMarket());
         }
         // 合同基本信息
@@ -1358,7 +1401,11 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
 
         // 判断合约拆分是否已使用完毕
         if (agreement.getEntryDate() != null && agreement.getFinishDate() != null) {
-            contractPlanningSplitService.updateContractPlanningSplitUseAdd(agreement.getContractSplitId(),agreementMaterialsInfo.getMaterialsLists(),requestVO.getAgreementMaterialsLists(),null);
+            if(StringUtils.isEmpty(requestVO.getAgreement().getMarketMaterialContractId())){
+                contractPlanningSplitService.updateContractPlanningSplitUseAdd(agreement.getContractSplitId(),agreementMaterialsInfo.getMaterialsLists(),requestVO.getAgreementMaterialsLists(),null);
+            }else {
+                contractPlanningSplitService.updateContractPlanningSplitUseAddByMarket(agreementMaterialsInfo.getMaterialsLists(),requestVO.getAgreementMaterialsLists(),null);
+            }
         }
 
         // 接入联想文档
@@ -1511,6 +1558,7 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
 //            agreementMaterialsList.setContractSplitId(contractSplitId);
 
             materialsList = materialsListMap.get(agreementMaterialsList.getMaterialsListId());
+            agreementMaterialsList.setContractSplitId(materialsList.getContractSplitId());
 //            biddingListQuotation = listQuotationMap.get(agreementMaterialsList.getMaterialsListId());
 //
 //            // 设置供应商投标金额
@@ -1621,8 +1669,6 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
         // 合同-甲供材料清单对象
         agreementMaterialSupplyService.updateAgreementMaterialSupply(requestVO.getAgreementMaterialSupplies(),agreement.getId());
 
-
-
         // 更新方法 占用合同数据量
         materialsListService.updateMaterialsListUsedCount(agreementMaterialsInfo.getMaterialsLists());
 
@@ -1631,6 +1677,8 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
         // 更新方法  合约拆分是否已使用完毕
         if (StringUtils.isEmpty(requestVO.getAgreement().getMarketMaterialContractId())) {
             contractPlanningSplitService.updateContractPlanningSplitUseAdd(agreement.getContractSplitId(),agreementMaterialsInfo.getMaterialsLists(),requestVO.getAgreementMaterialsLists(),agreementMaterialsLists);
+        } else {
+            contractPlanningSplitService.updateContractPlanningSplitUseAddByMarket(agreementMaterialsInfo.getMaterialsLists(),requestVO.getAgreementMaterialsLists(),null);
         }
 
 

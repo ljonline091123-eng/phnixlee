@@ -378,17 +378,18 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
 
     @Override
     @Transactional(propagation = Propagation.REQUIRED,rollbackFor = Exception.class)
-    public Long saveProcurementPlan(ProcurementPlanRequestVO requestVO) {
+    public MaterialProcurementPushRequestVO saveProcurementPlan(ProcurementPlanRequestVO requestVO) {
+        MaterialProcurementPushRequestVO vo = new MaterialProcurementPushRequestVO();
         checkMaterialsList(requestVO);
         if (NumberUtil.isNullOrZero(requestVO.getProcurementPlan().getId())) {
             // 新增
-            addProcurementPlan(requestVO);
+            vo = addProcurementPlan(requestVO);
         } else {
             // 修改
-            updateProcurementPlan(requestVO);
+            vo = updateProcurementPlan(requestVO);
         }
 
-        return requestVO.getProcurementPlan().getId();
+        return vo;
     }
 
     @Override
@@ -429,6 +430,15 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
         procurementPlanVO.setProjectCode(contractPlanning.getProjectCode());
         procurementPlanVO.setProjectName(contractPlanning.getProjectName());
 
+        // 判断是否存在已推送到易料的数据
+        List<MaterialsList> list = materialsListService.list(new LambdaQueryWrapper<MaterialsList>()
+                .eq(MaterialsList::getPlanId, procurementPlanVO.getId())
+                .eq(MaterialsList::getPushFlag, "Y"));
+        if (CollectionUtil.isEmpty(list)) {
+            procurementPlanVO.setIsPushData("N");
+        } else {
+            procurementPlanVO.setIsPushData("Y");
+        }
         return ProcurementPlanDetailVO.builder()
                 .procurementPlan(procurementPlanVO)
                 .splitMaterials(splitMaterials)
@@ -739,7 +749,7 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
      * 修改采购计划
      * @param requestVO
      */
-    private void updateProcurementPlan(ProcurementPlanRequestVO requestVO) {
+    private MaterialProcurementPushRequestVO updateProcurementPlan(ProcurementPlanRequestVO requestVO) {
         ProcurementPlan procurementPlan = requestVO.getProcurementPlan();
         ProcurementPlan checkPlan = baseMapper.selectById(procurementPlan.getId());
 
@@ -752,17 +762,20 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
         baseMapper.updateById(procurementPlan);
 
         // 修改合约拆分和物料信息
-        contractPlanningSplitService.updateContractPlanningSplit(requestVO.getSplitRequestList(),procurementPlan.getId(),procurementPlan);
+        List<MaterialsList> list = contractPlanningSplitService.updateContractPlanningSplit(requestVO.getSplitRequestList(), procurementPlan.getId(), procurementPlan);
 
         // 重新保存合约规划
         contractPlanningService.updateContractPlanning(requestVO.getContractPlanning(),procurementPlan.getId());
+
+        MaterialProcurementPushRequestVO vo = this.getPushMaterialInfo(procurementPlan, list, requestVO.getContractPlanning());
+        return vo;
     }
 
     /**
      * 新增采购计划
      * @param requestVO
      */
-    private void addProcurementPlan(ProcurementPlanRequestVO requestVO) {
+    private MaterialProcurementPushRequestVO addProcurementPlan(ProcurementPlanRequestVO requestVO) {
         ProcurementPlan procurementPlan = requestVO.getProcurementPlan();
         procurementPlan.setProcurementPlanCode(getProcurementPlanCode());
         procurementPlan.setProcurementReporter(SecurityUtils.getUserId());
@@ -772,10 +785,21 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
         baseMapper.insert(procurementPlan);
 
         // 保存合约拆分和物料信息
-        contractPlanningSplitService.saveContractPlanningSplit(requestVO.getSplitRequestList(),procurementPlan.getId(),procurementPlan);
+        List<MaterialsList> list = contractPlanningSplitService.saveContractPlanningSplit(requestVO.getSplitRequestList(), procurementPlan.getId(), procurementPlan);
 
         // 保存合约规划
         contractPlanningService.addContractPlanning(requestVO.getContractPlanning(),procurementPlan.getId());
+        MaterialProcurementPushRequestVO vo = this.getPushMaterialInfo(procurementPlan, list, requestVO.getContractPlanning());
+        return vo;
+    }
+
+    private MaterialProcurementPushRequestVO getPushMaterialInfo(ProcurementPlan procurementPlan, List<MaterialsList> list, ContractPlanning contractPlanning) {
+        MaterialProcurementPushRequestVO vo = new MaterialProcurementPushRequestVO();
+        vo.setId(procurementPlan.getId());
+        vo.setProjectCode(contractPlanning.getProjectCode());
+        list = list.stream().filter(i-> null != i.getIsSelect()&&i.getIsSelect().equals("Y")).collect(Collectors.toList());
+        vo.setMaterialsLists(list);
+        return vo;
     }
 
     /**

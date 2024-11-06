@@ -28,7 +28,7 @@
     <select id="listMarketMaterialContract" resultType="com.zhaocai.business.agreement.vo.res.MarketMaterialContractListVO">
         select tmmc.* from tb_market_material_contract tmmc
         <where>
-            tmmc.id NOT IN (select ta.market_material_contract_id from tb_agreement ta where ta.market_material_contract_id is not null)
+            tmmc.id NOT IN (select ta.market_material_contract_id from tb_agreement ta where ta.market_material_contract_id is not null and ta.agreement_state != 2)
             <if test="queryVO.agreementCode != null and queryVO.agreementCode != ''">
                 and tmmc.agreement_code like concat('%',#{queryVO.agreementCode,jdbcType=VARCHAR},'%')
             </if>

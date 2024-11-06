@@ -26,7 +26,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 合约规划拆分Service业务层处理
@@ -42,7 +45,8 @@ public class ContractPlanningSplitServiceImpl extends ServiceImpl<ContractPlanni
     private IMaterialsListService materialsListService;
 
     @Override
-    public void saveContractPlanningSplit(List<ContractPlanningSplitRequestVO> splitRequestList, Long planId, ProcurementPlan procurementPlan) {
+    public List<MaterialsList> saveContractPlanningSplit(List<ContractPlanningSplitRequestVO> splitRequestList, Long planId, ProcurementPlan procurementPlan) {
+        List<MaterialsList> list = new ArrayList<>();
         splitRequestList.forEach(split -> {
             if (CollectionUtil.isNotEmpty(split.getMaterialsLists())) {
                 // 保存合约拆分
@@ -54,15 +58,17 @@ public class ContractPlanningSplitServiceImpl extends ServiceImpl<ContractPlanni
                 baseMapper.insert(contractPlanningSplit);
 
                 // 保存合约对应的物料数据
-                materialsListService.saveMaterialsList(split.getMaterialsLists(), contractPlanningSplit.getId(),planId,procurementPlan);
+                List<MaterialsList> materialsLists = materialsListService.saveMaterialsList(split.getMaterialsLists(), contractPlanningSplit.getId(), planId, procurementPlan);
+                list.addAll(materialsLists);
             } else {
                 log.warn("合约拆分[{}-{}]的清单列表为空",split.getContractScope(),split.getSplitContractName());
             }
         });
+        return list;
     }
 
     @Override
-    public void updateContractPlanningSplit(List<ContractPlanningSplitRequestVO> splitRequestList, Long planId,ProcurementPlan procurementPlan) {
+    public List<MaterialsList> updateContractPlanningSplit(List<ContractPlanningSplitRequestVO> splitRequestList, Long planId,ProcurementPlan procurementPlan) {
         // 删除合约拆分记录
         baseMapper.deleteByPlanId(planId);
 
@@ -70,7 +76,8 @@ public class ContractPlanningSplitServiceImpl extends ServiceImpl<ContractPlanni
         materialsListService.deleteByPlanId(planId);
 
         // 保存信息
-        this.saveContractPlanningSplit(splitRequestList,planId,procurementPlan);
+        List<MaterialsList> list = this.saveContractPlanningSplit(splitRequestList, planId, procurementPlan);
+        return list;
     }
 
     @Override
@@ -152,6 +159,77 @@ public class ContractPlanningSplitServiceImpl extends ServiceImpl<ContractPlanni
                 .set(ContractPlanningSplit::getIsUseUp,1)
                 .set(ContractPlanningSplit::getTotalUsedAmount,totalUsedAmount)
                 .eq(ContractPlanningSplit::getId,contractSplitId));
+    }
+
+    @Override
+    public void updateContractPlanningSplitUseAddByMarket(List<MaterialsList> materialsLists, List<AgreementMaterialsList> agreementMaterialsLists, List<AgreementMaterialsList> agreementMaterialsListsOld) {
+        Map<Long, Boolean> useUp = new HashMap<>();
+        // 判断物料是否已用完
+        for (MaterialsList materialsList : materialsLists) {
+            if (NumberUtil.compare(materialsList.getCount(),materialsList.getUsedCount()) > 0) {
+                useUp.put(materialsList.getContractSplitId(),false);
+            }
+        }
+
+        // 设置使用金额
+        BigDecimal totalUsedAmount = BigDecimal.ZERO;
+        Map<Long, BigDecimal> totalAmount = new HashMap<>();
+        for (AgreementMaterialsList agreementMaterials : agreementMaterialsLists) {
+//            totalUsedAmount = NumberUtil.add(totalUsedAmount,agreementMaterials.getSignAmountInclTax());
+            if (null == totalAmount.get(agreementMaterials.getContractSplitId())) {
+                totalUsedAmount = NumberUtil.add(BigDecimal.ZERO,agreementMaterials.getSignAmountInclTax());
+            } else {
+                totalUsedAmount = NumberUtil.add(totalAmount.get(agreementMaterials.getContractSplitId()),agreementMaterials.getSignAmountInclTax());
+            }
+            totalAmount.put(agreementMaterials.getContractSplitId(), totalUsedAmount);
+        }
+        /* 将原来的减去 */
+        if (agreementMaterialsListsOld != null) {
+            for (AgreementMaterialsList agreementMaterials : agreementMaterialsListsOld) {
+//                totalUsedAmount = NumberUtil.subtract(totalUsedAmount,agreementMaterials.getSignAmountInclTax());
+                if (null == totalAmount.get(agreementMaterials.getContractSplitId())) {
+                    totalUsedAmount = NumberUtil.subtract(BigDecimal.ZERO,agreementMaterials.getSignAmountInclTax());
+                } else {
+                    totalUsedAmount = NumberUtil.subtract(totalAmount.get(agreementMaterials.getContractSplitId()),agreementMaterials.getSignAmountInclTax());
+                }
+                totalAmount.put(agreementMaterials.getContractSplitId(), totalUsedAmount);
+            }
+        }
+
+        totalAmount.forEach((contractSplitId, amount)->{
+            int isUseUpState = !useUp.get(contractSplitId) ? 1 : 2;
+            ContractPlanningSplit contractPlanningSplit = this.getById(contractSplitId);
+            BigDecimal total = NumberUtil.add(amount, contractPlanningSplit.getTotalUsedAmount());
+            this.update(new LambdaUpdateWrapper<ContractPlanningSplit>()
+                    .set(ContractPlanningSplit::getIsUseUp,isUseUpState)
+                    .set(ContractPlanningSplit::getTotalUsedAmount,total)
+                    .eq(ContractPlanningSplit::getId,contractSplitId));
+        });
+    }
+
+    @Override
+    public void updateContractPlanningSplitUseSubByMarket(List<AgreementMaterialsList> agreementMaterialsLists) {
+        // 设置使用金额
+        Map<Long, BigDecimal> totalAmount = new HashMap<>();
+        BigDecimal totalUsedAmount = BigDecimal.ZERO;
+        for (AgreementMaterialsList agreementMaterials : agreementMaterialsLists) {
+//            totalUsedAmount = NumberUtil.add(totalUsedAmount,agreementMaterials.getSignAmountInclTax());
+            if (null == totalAmount.get(agreementMaterials.getContractSplitId())) {
+                totalUsedAmount = NumberUtil.add(BigDecimal.ZERO,agreementMaterials.getSignAmountInclTax());
+            } else {
+                totalUsedAmount = NumberUtil.add(totalAmount.get(agreementMaterials.getContractSplitId()),agreementMaterials.getSignAmountInclTax());
+            }
+            totalAmount.put(agreementMaterials.getContractSplitId(), totalUsedAmount);
+        }
+        totalAmount.forEach((contractSplitId,amount)->{
+            ContractPlanningSplit contractPlanningSplit = this.getById(contractSplitId);
+            BigDecimal total = NumberUtil.subtract(contractPlanningSplit.getTotalUsedAmount(),amount);
+
+            this.update(new LambdaUpdateWrapper<ContractPlanningSplit>()
+                    .set(ContractPlanningSplit::getIsUseUp,1)
+                    .set(ContractPlanningSplit::getTotalUsedAmount,total)
+                    .eq(ContractPlanningSplit::getId,contractSplitId));
+        });
     }
 
     /**

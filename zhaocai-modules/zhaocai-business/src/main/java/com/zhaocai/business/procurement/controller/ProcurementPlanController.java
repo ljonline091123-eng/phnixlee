@@ -82,7 +82,7 @@ public class ProcurementPlanController extends BladeController {
     @PostMapping("/saveProcurementPlan")
     @ApiOperation(value = "保存采购计划")
     @RepeatSubmit(key = "#requestVO.contractPlanning.contractPlanningId")
-    public ResultData<Long> saveProcurementPlan(@RequestBody @Valid ProcurementPlanRequestVO requestVO) {
+    public ResultData<MaterialProcurementPushRequestVO> saveProcurementPlan(@RequestBody @Valid ProcurementPlanRequestVO requestVO) {
         return ResultData.data(procurementPlanService.saveProcurementPlan(requestVO));
     }
 

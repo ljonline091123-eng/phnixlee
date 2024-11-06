@@ -2,12 +2,15 @@ package com.zhaocai.business.agreement.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.zhaocai.business.agreement.domain.MarketMaterialContract;
+import com.zhaocai.business.agreement.domain.MarketMaterialList;
 import com.zhaocai.business.agreement.vo.req.MarketMaterialContractQueryVO;
 import com.zhaocai.business.agreement.vo.res.AgreementCreateBaseInfoVO;
 import com.zhaocai.business.agreement.vo.res.MarketMaterialContractListVO;
 import com.zhaocai.business.manager.http.dto.req.MarketMaterialListQuoteRequestDTO;
 import com.zhaocai.business.pub.vo.res.AttachmentVO;
 import com.zhaocai.common.core.bean.PageResult;
+
+import java.util.List;
 
 /**
  * 易料采购合同信息Service接口
@@ -46,4 +49,24 @@ public interface IMarketMaterialContractService extends IService<MarketMaterialC
      * @return
      */
     long agreementCreateAttachmentHandle(AttachmentVO attachmentVO);
+
+    /**
+     * 校验创建合同基本信息
+     * @param requestVO
+     * @return
+     */
+    Boolean checkAgreementCreateInfo(MarketMaterialContractQueryVO requestVO);
+
+    /**
+     * 校验清单数据[新增]
+     * @param list
+     */
+    void checkAgreementMaterials(List<MarketMaterialList> list);
+
+    /**
+     * 校验清单数据[修改]
+     * @param materialsList
+     * @param materialsListsOld
+     */
+    void checkAgreementMaterialsByUpdate(List<MarketMaterialList> materialsList, List<MarketMaterialList> materialsListsOld);
 }

@@ -51,7 +51,7 @@ public interface IProcurementPlanService  extends IService<ProcurementPlan> {
      * 保存采购计划
      * @param requestVO
      */
-    Long saveProcurementPlan(ProcurementPlanRequestVO requestVO);
+    MaterialProcurementPushRequestVO saveProcurementPlan(ProcurementPlanRequestVO requestVO);
 
     /**
      * 提交采购计划
