@@ -190,8 +190,9 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
 
             /* 查询推送记录 */
             List<ContractPlanningPushRecord> records = contractPlanningPushRecordService.getByCondition(contractIdList);
-            /* 查询单条 */
-            Map<String, ContractPlanningPushRecord> recordMap = records.stream().collect(Collectors.toMap(ContractPlanningPushRecord::getContractPlanningId, Function.identity()));
+            /* 查询单条,原来的是这样查询，现在是多条拆包，保留一条 */
+            Map<String, ContractPlanningPushRecord> recordMap = records.stream().collect(Collectors.toMap(ContractPlanningPushRecord::getContractPlanningId, Function.identity(),(existing, replacement) -> replacement));
+
             /* 查询招标集合 */
             Map<String, List<ContractPlanningPushRecord>> recordMapList = records.stream().collect(Collectors.groupingBy(ContractPlanningPushRecord::getContractPlanningId));
             /* 根据合约规划id集合查询对应的招标对象数据和采购方案数据 */
