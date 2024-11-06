@@ -34,6 +34,10 @@ public class ProcurementPlanPushVO {
      * 新增一些字段
      * Time:2024/10/18 下午4:56
      * */
+
+    @ApiModelProperty(value = "合约拆分id")
+    private Long splitContractId;
+
     @ApiModelProperty(value = "采购方案id")
     private Long schemeId;
 

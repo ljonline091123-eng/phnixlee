@@ -19,6 +19,7 @@ import com.zhaocai.common.core.utils.bean.BeanCopierUtil;
 import com.zhaocai.common.core.web.bean.ResultData;
 import com.zhaocai.common.security.utils.SecurityUtils;
 import io.swagger.annotations.ApiOperation;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -37,6 +38,7 @@ import java.util.stream.IntStream;
  * @author ssy
  * @date 2024/7/30 10:21
  */
+@Slf4j
 @Service
 public class BPMProcessService implements IBPMProcessService {
 
@@ -57,6 +59,8 @@ public class BPMProcessService implements IBPMProcessService {
     @Override
     @Transactional(propagation = Propagation.REQUIRED,rollbackFor = Exception.class)
     public String startProcessInstance(String processKey, Map<String, Object> variables) {
+        log.info("[发起流程startProcessInstance] processKey:{}",processKey);
+        log.info("[发起流程startProcessInstance] variables:{}",variables);
         //1.实现调用第三方的提交接口
         BpmSubmitRequestDTO requestDTO = new BpmSubmitRequestDTO();
         String customProcessKey = variables.get("customProcessKey")==null?null:variables.get("customProcessKey").toString();

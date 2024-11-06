@@ -12,6 +12,9 @@ import lombok.EqualsAndHashCode;
 @ApiModel(value = "ContractPlanningNoticeVO", description = "招标关联的合约规划对象")
 public class ContractPlanningNoticeVO {
 
+    @ApiModelProperty(value = "合约拆分id")
+    private Long splitContractId;
+
     @ApiModelProperty(value = "采购方案id")
     private Long schemeId;
 
