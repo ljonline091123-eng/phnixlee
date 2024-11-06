@@ -1553,7 +1553,7 @@ export default {
     async confirmOpenWorker() {
       const { staffIds } = this;
       if (staffIds.length < 2 || staffIds.length > 2)
-        return this.$message.error("请选择2名开标人员");
+        return this.$message.error("开标人员必须且只能选择2名");
       const { id: schemeId } = this.scheme;
       const { id: noticeId } = this.noticeDetail?.tenderNotice || {};
       let formData = this.selectedWorkerList.map((item) => ({
