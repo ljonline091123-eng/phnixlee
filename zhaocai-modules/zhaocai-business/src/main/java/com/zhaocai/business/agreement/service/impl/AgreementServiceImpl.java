@@ -384,7 +384,7 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
                 List<MarketMaterialList> list = requestVO.getAgreementMaterialsLists().stream()
                         .map(i -> {
                             MarketMaterialList marketMaterial = new MarketMaterialList();
-                            marketMaterial.setRequireId(String.valueOf(i.getId()));
+                            marketMaterial.setRequireId(String.valueOf(i.getMaterialsListId()));
                             marketMaterial.setGoodsName(i.getMaterialsName());
                             marketMaterial.setQuantity(i.getSignCount());
                             marketMaterial.setNoTaxPrice(i.getSignUnitPriceExclTax());
@@ -403,7 +403,7 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
                 List<MarketMaterialList> list = requestVO.getAgreementMaterialsLists().stream()
                         .map(i -> {
                             MarketMaterialList marketMaterial = new MarketMaterialList();
-                            marketMaterial.setRequireId(String.valueOf(i.getId()));
+                            marketMaterial.setRequireId(String.valueOf(i.getMaterialsListId()));
                             marketMaterial.setGoodsName(i.getMaterialsName());
                             marketMaterial.setQuantity(i.getSignCount());
                             marketMaterial.setNoTaxPrice(i.getSignUnitPriceExclTax());
@@ -413,7 +413,7 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
                 List<MarketMaterialList> listOld = agreementMaterialsListService.list(new LambdaQueryWrapper<AgreementMaterialsList>().eq(AgreementMaterialsList::getAgreementId, requestVO.getAgreement().getId()))
                         .stream().map(i -> {
                             MarketMaterialList marketMaterial = new MarketMaterialList();
-                            marketMaterial.setRequireId(String.valueOf(i.getId()));
+                            marketMaterial.setRequireId(String.valueOf(i.getMaterialsListId()));
                             marketMaterial.setGoodsName(i.getMaterialsName());
                             marketMaterial.setQuantity(i.getSignCount());
                             marketMaterial.setNoTaxPrice(i.getSignUnitPriceExclTax());
