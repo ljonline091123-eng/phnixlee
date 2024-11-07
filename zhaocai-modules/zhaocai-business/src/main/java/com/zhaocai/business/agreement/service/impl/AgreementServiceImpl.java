@@ -1678,7 +1678,7 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
         if (StringUtils.isEmpty(requestVO.getAgreement().getMarketMaterialContractId())) {
             contractPlanningSplitService.updateContractPlanningSplitUseAdd(agreement.getContractSplitId(),agreementMaterialsInfo.getMaterialsLists(),requestVO.getAgreementMaterialsLists(),agreementMaterialsLists);
         } else {
-            contractPlanningSplitService.updateContractPlanningSplitUseAddByMarket(agreementMaterialsInfo.getMaterialsLists(),requestVO.getAgreementMaterialsLists(),null);
+            contractPlanningSplitService.updateContractPlanningSplitUseAddByMarket(agreementMaterialsInfo.getMaterialsLists(),requestVO.getAgreementMaterialsLists(),agreementMaterialsLists);
         }
 
 
