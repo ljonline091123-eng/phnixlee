@@ -608,7 +608,8 @@ export default {
     treeSelect(value) {
       if (value.disabled) {
         this.$modal.msgError("该单位不能选择");
-        this.formData.useUnit = "";
+        // this.formData.useUnit = "";
+        this.$set(this.formData,'useUnit',"");
       } else {
         this.unitId = value.organizationId;
         this.$refs.fileFormRef.clearValidate("useUnit");
