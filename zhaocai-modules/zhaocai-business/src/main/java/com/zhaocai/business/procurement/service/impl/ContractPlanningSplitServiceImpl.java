@@ -166,11 +166,13 @@ public class ContractPlanningSplitServiceImpl extends ServiceImpl<ContractPlanni
         Map<Long, Boolean> useUp = new HashMap<>();
         // 判断物料是否已用完
         for (MaterialsList materialsList : materialsLists) {
+            if(null == useUp.get(materialsList.getContractSplitId())){
+                useUp.put(materialsList.getContractSplitId(),true);
+            }
             if (NumberUtil.compare(materialsList.getCount(),materialsList.getUsedCount()) > 0) {
                 useUp.put(materialsList.getContractSplitId(),false);
             }
         }
-
         // 设置使用金额
         BigDecimal totalUsedAmount = BigDecimal.ZERO;
         Map<Long, BigDecimal> totalAmount = new HashMap<>();
@@ -209,6 +211,7 @@ public class ContractPlanningSplitServiceImpl extends ServiceImpl<ContractPlanni
 
     @Override
     public void updateContractPlanningSplitUseSubByMarket(List<AgreementMaterialsList> agreementMaterialsLists) {
+        log.info("[撤回易料合同合约拆分（进入）]");
         // 设置使用金额
         Map<Long, BigDecimal> totalAmount = new HashMap<>();
         BigDecimal totalUsedAmount = BigDecimal.ZERO;
@@ -221,6 +224,7 @@ public class ContractPlanningSplitServiceImpl extends ServiceImpl<ContractPlanni
             }
             totalAmount.put(agreementMaterials.getContractSplitId(), totalUsedAmount);
         }
+        log.info("[撤回易料合同合约拆分（设置使用金额）]");
         totalAmount.forEach((contractSplitId,amount)->{
             ContractPlanningSplit contractPlanningSplit = this.getById(contractSplitId);
             BigDecimal total = NumberUtil.subtract(contractPlanningSplit.getTotalUsedAmount(),amount);
