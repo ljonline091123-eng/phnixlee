@@ -370,10 +370,10 @@ public class MarketMaterialContractServiceImpl extends ServiceImpl<MarketMateria
                 throw new ParamValidateException(String.format("易料合同对应的合同清单不存在对应的采购计划清单:%s,请确认",materialsVO.getGoodsName()));
             }
 
-            if (NumberUtil.compare(NumberUtil.subtract(materials.getCount(),materialsOld.getQuantity()),materialsVO.getQuantity()) < 0) {
+            if (NumberUtil.compare(materials.getCount(),materialsVO.getQuantity()) < 0) {
                 throw new ParamValidateException(String.format("易料合同对应的合同清单[%s]数量[%s]超过剩余使用量[%s]，请重新输入",materialsVO.getGoodsName(),
                         NumberUtil.decimalFormat(materialsVO.getQuantity(),4),
-                        NumberUtil.decimalFormat(NumberUtil.subtract(materials.getCount(),materialsOld.getQuantity()),4)));
+                        NumberUtil.decimalFormat(materials.getCount(),4)));
             }
 
             if (null == totalAmount.get(materials.getContractSplitId())) {
