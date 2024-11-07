@@ -400,26 +400,10 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
                 // 修改使用的 校验清单数据方法，和新增校验不一样，该方法查询了该合同上一次签订的单价，校验规则还原了数据再进行校验的。
                 checkSaveAgreementMaterialsListByUpdate(requestVO.getAgreementMaterialsLists(), requestVO.getAgreement().getSchemeId(), requestVO.getAgreement().getContractSplitId(), requestVO.getAgreement().getVendorId(), requestVO.getAgreement().getId());
             } else {
-                List<MarketMaterialList> list = requestVO.getAgreementMaterialsLists().stream()
-                        .map(i -> {
-                            MarketMaterialList marketMaterial = new MarketMaterialList();
-                            marketMaterial.setRequireId(String.valueOf(i.getMaterialsListId()));
-                            marketMaterial.setGoodsName(i.getMaterialsName());
-                            marketMaterial.setQuantity(i.getSignCount());
-                            marketMaterial.setNoTaxPrice(i.getSignUnitPriceExclTax());
-                            marketMaterial.setPrice(i.getSignUnitPriceInclTax());
-                            return marketMaterial;
-                        }).collect(Collectors.toList());
-                List<MarketMaterialList> listOld = agreementMaterialsListService.list(new LambdaQueryWrapper<AgreementMaterialsList>().eq(AgreementMaterialsList::getAgreementId, requestVO.getAgreement().getId()))
-                        .stream().map(i -> {
-                            MarketMaterialList marketMaterial = new MarketMaterialList();
-                            marketMaterial.setRequireId(String.valueOf(i.getMaterialsListId()));
-                            marketMaterial.setGoodsName(i.getMaterialsName());
-                            marketMaterial.setQuantity(i.getSignCount());
-                            marketMaterial.setNoTaxPrice(i.getSignUnitPriceExclTax());
-                            marketMaterial.setPrice(i.getSignUnitPriceInclTax());
-                            return marketMaterial;
-                        }).collect(Collectors.toList());
+                // 本次修改的合同清单
+                List<AgreementMaterialsList> list = requestVO.getAgreementMaterialsLists();
+                // 上一次的合同清单
+                List<AgreementMaterialsList> listOld = agreementMaterialsListService.list(new LambdaQueryWrapper<AgreementMaterialsList>().eq(AgreementMaterialsList::getAgreementId, requestVO.getAgreement().getId()));
                 marketMaterialContractService.checkAgreementMaterialsByUpdate(list, listOld);
             }
             /* 修改 签订合同 */
@@ -1541,6 +1525,10 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
         List<MaterialsList> materialsLists = materialsListService.list(new LambdaQueryWrapper<MaterialsList>().in(BaseEntity::getId,materialsListIds));
         Map<Long,MaterialsList> materialsListMap = materialsLists.stream()
                 .collect(Collectors.toMap(MaterialsList::getId,val -> val));
+        // 获取上一次合同清单
+        List<AgreementMaterialsList> agreementmaterialsOldLists = agreementMaterialsListService.list(new LambdaQueryWrapper<AgreementMaterialsList>().in(AgreementMaterialsList::getMaterialsListId,materialsListIds));
+        Map<Long,AgreementMaterialsList> agreementmaterialsOldMap = agreementmaterialsOldLists.stream()
+                .collect(Collectors.toMap(AgreementMaterialsList::getMaterialsListId,val -> val));
 
         // 获取供应商的投标物料清单
 //        List<BiddingListQuotation> biddingListQuotations = biddingListQuotationService.listVendorBiddingListQuotation(schemeId,contractSplitId,vendorId);
@@ -1584,6 +1572,10 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
 
             // 设置物料的使用数量
             materialsList.setUsedCount(NumberUtil.add(materialsList.getUsedCount(),agreementMaterialsList.getSignCount()));
+            if(null != agreementmaterialsOldMap && null != agreementmaterialsOldMap.get(agreementMaterialsList.getMaterialsListId())){
+                AgreementMaterialsList old = agreementmaterialsOldMap.get(agreementMaterialsList.getMaterialsListId());
+                materialsList.setUsedCount(NumberUtil.subtract(materialsList.getUsedCount(),old.getSignCount()));
+            }
         }
 
         // 计算交易标的物

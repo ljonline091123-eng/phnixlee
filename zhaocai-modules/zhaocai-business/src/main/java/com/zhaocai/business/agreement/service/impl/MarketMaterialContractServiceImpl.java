@@ -5,6 +5,7 @@ import com.alibaba.fastjson.JSONArray;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.zhaocai.business.agreement.domain.AgreementMaterialsList;
 import com.zhaocai.business.agreement.domain.MarketMaterialContract;
 import com.zhaocai.business.agreement.domain.MarketMaterialList;
 import com.zhaocai.business.agreement.mapper.MarketMaterialContractMapper;
@@ -309,6 +310,7 @@ public class MarketMaterialContractServiceImpl extends ServiceImpl<MarketMateria
     public void checkAgreementMaterials(List<MarketMaterialList> list) {
         BigDecimal requestTotalAmount = BigDecimal.ZERO;
         MaterialsList materials;
+        BigDecimal surplusCount;
         Map<Long, BigDecimal> totalAmount = new HashMap<>();
         for (MarketMaterialList materialsList : list) {
             // 校验剩余数量(和采购计划清单做对比)
@@ -317,12 +319,13 @@ public class MarketMaterialContractServiceImpl extends ServiceImpl<MarketMateria
                 throw new ParamValidateException(String.format("易料合同对应的合同清单不存在对应的采购计划清单:%s,请确认",materialsList.getGoodsName()));
             }
 
-            if (NumberUtil.compare(materials.getCount(),materialsList.getQuantity()) < 0) {
+            surplusCount = NumberUtil.subtract(materials.getCount(),materials.getUsedCount());
+            if (NumberUtil.compare(surplusCount,materialsList.getQuantity()) < 0) {
                 throw new ParamValidateException(String.format("易料合同对应的合同清单[%s]数量[%s]超过剩余使用量[%s]，请重新输入",materialsList.getGoodsName(),
                         NumberUtil.decimalFormat(materialsList.getQuantity(),4),
-                        NumberUtil.decimalFormat(materials.getCount(),4)));
+                        NumberUtil.decimalFormat(surplusCount,4)));
             }
-
+            // 汇总合约拆分金额
             if (null == totalAmount.get(materials.getContractSplitId())) {
                 requestTotalAmount = NumberUtil.add(BigDecimal.ZERO,AmountCalUtil.calTotalAmountInclTax(materialsList.getQuantity(),materialsList.getPrice()));
             } else {
@@ -342,53 +345,45 @@ public class MarketMaterialContractServiceImpl extends ServiceImpl<MarketMateria
     }
 
     @Override
-    public void checkAgreementMaterialsByUpdate(List<MarketMaterialList> materialsList, List<MarketMaterialList> materialsListsOld) {
-        Map<String,MarketMaterialList> materialsListMap = materialsListsOld.stream()
-                .collect(Collectors.toMap(MarketMaterialList::getRequireId,val -> val));
-        MaterialsList materials;
-        MarketMaterialList materialsOld;
-        // 之前金额
-        BigDecimal requestTotalAmountOld = BigDecimal.ZERO;
-        Map<Long, BigDecimal> totalAmountOld = new HashMap<>();
-        for (MarketMaterialList materialsOldVO : materialsListsOld) {
-            materials = materialsListService.getById(materialsOldVO.getRequireId());
-            if (null == totalAmountOld.get(materials.getContractSplitId())) {
-                requestTotalAmountOld = NumberUtil.add(BigDecimal.ZERO,AmountCalUtil.calTotalAmountInclTax(materialsOldVO.getQuantity(),materialsOldVO.getPrice()));
-            } else {
-                requestTotalAmountOld = NumberUtil.add(totalAmountOld.get(materials.getContractSplitId()),AmountCalUtil.calTotalAmountInclTax(materialsOldVO.getQuantity(),materialsOldVO.getPrice()));
-            }
-            totalAmountOld.put(materials.getContractSplitId(), requestTotalAmountOld);
-        }
+    public void checkAgreementMaterialsByUpdate(List<AgreementMaterialsList> materialsList, List<AgreementMaterialsList> materialsListsOld) {
+        // 上一次合同清单的列表及合约拆分汇总金额
+        Map<Long,AgreementMaterialsList> materialsOldMap = materialsListsOld.stream()
+                .collect(Collectors.toMap(AgreementMaterialsList::getMaterialsListId,val -> val));
+        Map<Long, BigDecimal> materialsAmountOldMap = materialsListsOld.stream().collect(Collectors.groupingBy(
+                AgreementMaterialsList::getContractSplitId,
+                Collectors.reducing(BigDecimal.ZERO, AgreementMaterialsList::getSignAmountInclTax, BigDecimal::add)
+                ));
+        // 本次合同清单的合约拆分汇总金额
+        Map<Long, BigDecimal> materialsAmountMap = materialsList.stream().collect(Collectors.groupingBy(
+                AgreementMaterialsList::getContractSplitId,
+                Collectors.reducing(BigDecimal.ZERO, AgreementMaterialsList::getSignAmountInclTax, BigDecimal::add)
+        ));
 
-        BigDecimal requestTotalAmount = BigDecimal.ZERO;
-        Map<Long, BigDecimal> totalAmount = new HashMap<>();
-        for (MarketMaterialList materialsVO : materialsList) {
+        // 校验数量
+        MaterialsList materials;
+        AgreementMaterialsList materialsOld;
+        BigDecimal surplusCount;
+        for (AgreementMaterialsList materialsVO : materialsList) {
             // 校验剩余数量(和采购计划清单做对比)
-            materials = materialsListService.getById(materialsVO.getRequireId());
-            materialsOld = materialsListMap.get(materialsVO.getRequireId());
+            materials = materialsListService.getById(materialsVO.getMaterialsListId());
+            materialsOld = materialsOldMap.get(materialsVO.getMaterialsListId());
             if (materials == null) {
                 throw new ParamValidateException(String.format("易料合同对应的合同清单不存在对应的采购计划清单:%s,请确认",materialsVO.getGoodsName()));
             }
-
-            if (NumberUtil.compare(materials.getCount(),materialsVO.getQuantity()) < 0) {
+            surplusCount = NumberUtil.subtract(materials.getCount(), materials.getUsedCount());
+            surplusCount = NumberUtil.add(surplusCount, materialsOld.getSignCount());
+            if (NumberUtil.compare(surplusCount,materialsVO.getSignCount()) < 0) {
                 throw new ParamValidateException(String.format("易料合同对应的合同清单[%s]数量[%s]超过剩余使用量[%s]，请重新输入",materialsVO.getGoodsName(),
-                        NumberUtil.decimalFormat(materialsVO.getQuantity(),4),
-                        NumberUtil.decimalFormat(materials.getCount(),4)));
+                        NumberUtil.decimalFormat(materialsVO.getSignCount(),4),
+                        NumberUtil.decimalFormat(surplusCount,4)));
             }
-
-            if (null == totalAmount.get(materials.getContractSplitId())) {
-                requestTotalAmount = NumberUtil.add(BigDecimal.ZERO,AmountCalUtil.calTotalAmountInclTax(materialsVO.getQuantity(),materialsVO.getPrice()));
-            } else {
-                requestTotalAmount = NumberUtil.add(totalAmount.get(materials.getContractSplitId()),AmountCalUtil.calTotalAmountInclTax(materialsVO.getQuantity(),materialsVO.getPrice()));
-            }
-            totalAmount.put(materials.getContractSplitId(), requestTotalAmount);
         }
 
         // 校验总金额（和合约规划拆分做对比）
-        totalAmount.forEach((contractSplitId, amount) -> {
+        materialsAmountMap.forEach((contractSplitId, amount) -> {
             ContractPlanningSplit contractPlanningSplit = contractPlanningSplitService.getById(contractSplitId);
             BigDecimal totalSurplusAmount = NumberUtil.subtract(contractPlanningSplit.getTotalPlanAmount(),contractPlanningSplit.getTotalUsedAmount());
-            totalSurplusAmount.add(totalAmountOld.get(contractSplitId));
+            totalSurplusAmount = NumberUtil.add(totalSurplusAmount, materialsAmountOldMap.get(contractPlanningSplit));
             if (totalSurplusAmount.compareTo(amount) < 0) {
                 throw new ParamValidateException(String.format("易料合同对应的合同清单总金额[%s]大于剩余可用金额[%s]",NumberUtil.decimalFormat(amount,4),NumberUtil.decimalFormat(totalSurplusAmount,4)));
             }
