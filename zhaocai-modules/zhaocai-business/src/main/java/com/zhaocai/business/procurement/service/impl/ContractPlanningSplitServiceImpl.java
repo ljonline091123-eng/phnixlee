@@ -163,6 +163,7 @@ public class ContractPlanningSplitServiceImpl extends ServiceImpl<ContractPlanni
 
     @Override
     public void updateContractPlanningSplitUseAddByMarket(List<MaterialsList> materialsLists, List<AgreementMaterialsList> agreementMaterialsLists, List<AgreementMaterialsList> agreementMaterialsListsOld) {
+        log.info("[易料合同合约拆分（进入）]");
         Map<Long, Boolean> useUp = new HashMap<>();
         // 判断物料是否已用完
         for (MaterialsList materialsList : materialsLists) {
@@ -170,7 +171,7 @@ public class ContractPlanningSplitServiceImpl extends ServiceImpl<ContractPlanni
                 useUp.put(materialsList.getContractSplitId(),false);
             }
         }
-
+        log.info("[易料合同合约拆分（物料是否已用完）]",useUp.toString());
         // 设置使用金额
         BigDecimal totalUsedAmount = BigDecimal.ZERO;
         Map<Long, BigDecimal> totalAmount = new HashMap<>();
@@ -183,6 +184,7 @@ public class ContractPlanningSplitServiceImpl extends ServiceImpl<ContractPlanni
             }
             totalAmount.put(agreementMaterials.getContractSplitId(), totalUsedAmount);
         }
+        log.info("[易料合同合约拆分（设置使用金额）]",totalAmount.toString());
         /* 将原来的减去 */
         if (agreementMaterialsListsOld != null) {
             for (AgreementMaterialsList agreementMaterials : agreementMaterialsListsOld) {
@@ -195,6 +197,7 @@ public class ContractPlanningSplitServiceImpl extends ServiceImpl<ContractPlanni
                 totalAmount.put(agreementMaterials.getContractSplitId(), totalUsedAmount);
             }
         }
+        log.info("[易料合同合约拆分（将原来的减去）]", totalAmount.toString());
 
         totalAmount.forEach((contractSplitId, amount)->{
             int isUseUpState = !useUp.get(contractSplitId) ? 1 : 2;
@@ -204,11 +207,13 @@ public class ContractPlanningSplitServiceImpl extends ServiceImpl<ContractPlanni
                     .set(ContractPlanningSplit::getIsUseUp,isUseUpState)
                     .set(ContractPlanningSplit::getTotalUsedAmount,total)
                     .eq(ContractPlanningSplit::getId,contractSplitId));
+            log.info("[易料合同合约拆分（修改合约拆分）]", contractSplitId);
         });
     }
 
     @Override
     public void updateContractPlanningSplitUseSubByMarket(List<AgreementMaterialsList> agreementMaterialsLists) {
+        log.info("[撤回易料合同合约拆分（进入）]");
         // 设置使用金额
         Map<Long, BigDecimal> totalAmount = new HashMap<>();
         BigDecimal totalUsedAmount = BigDecimal.ZERO;
@@ -221,6 +226,7 @@ public class ContractPlanningSplitServiceImpl extends ServiceImpl<ContractPlanni
             }
             totalAmount.put(agreementMaterials.getContractSplitId(), totalUsedAmount);
         }
+        log.info("[撤回易料合同合约拆分（设置使用金额）]");
         totalAmount.forEach((contractSplitId,amount)->{
             ContractPlanningSplit contractPlanningSplit = this.getById(contractSplitId);
             BigDecimal total = NumberUtil.subtract(contractPlanningSplit.getTotalUsedAmount(),amount);
