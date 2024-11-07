@@ -285,6 +285,8 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
         for(ContractMaterialsListVO listVO : materialsList){
             upperLimitPrice = NumberUtil.add(upperLimitPrice, AmountCalUtil.calTotalAmountInclTax(listVO.getCount(),listVO.getUnitPriceInclTax()));
 
+            log.info("[合约规划物料清单][ContractMaterialsListVO交易标的物]{}",listVO);
+
             subjectMatter = materialsListService.getSubjectMatter(queryVO.getProcurementType(),listVO.getMaterialsCode(),queryVO.getConPlanCode());
             if (subjectMatter != null) {
                 listVO.setSubjectMatterCode(subjectMatter.getSubjectMatterCode());

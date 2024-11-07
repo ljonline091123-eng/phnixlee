@@ -218,7 +218,7 @@ public class MaterialsList extends BaseEntity {
     private BigDecimal rentQuantity;
 
     /**
-     * 价格类型
+     * 价格类型 {@link com.zhaocai.business.common.enums.PriceTypeEnum}
      */
 //    @NotNull(message = "采购清单的价格类型不能为空")
     @ApiModelProperty(value = "价格类型")
