@@ -583,6 +583,9 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
         pushVO.setContractPhone(project.getProjectLeaderPhone());
         List<MaterialsList> materialsLists = requestVO.getMaterialsLists();
         List<Long> ids = materialsLists.stream().map(BaseEntity::getId).collect(Collectors.toList());
+        if(CollectionUtil.isEmpty(ids)){
+            throw new BusinessException("请勾选需要推送的易料清单");
+        }
         List<MaterialsList> materialsPushList = materialsListService.list(new LambdaQueryWrapper<MaterialsList>()
                         .eq(MaterialsList::getPlanId, requestVO.getId())
                 .and(wrapper -> wrapper
@@ -632,6 +635,9 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
         pushVO.setContractPhone(project.getProjectLeaderPhone());
         List<MaterialsList> materialsLists = requestVO.getMaterialsLists();
         List<Long> ids = materialsLists.stream().map(BaseEntity::getId).collect(Collectors.toList());
+        if(CollectionUtil.isEmpty(ids)){
+            throw new BusinessException("请勾选需要撤销推送的易料清单");
+        }
         List<MaterialsList> materialsPushList = materialsListService.list(new LambdaQueryWrapper<MaterialsList>()
                         .eq(MaterialsList::getPlanId, requestVO.getId())
                 .eq(MaterialsList::getPushFlag, "Y")
