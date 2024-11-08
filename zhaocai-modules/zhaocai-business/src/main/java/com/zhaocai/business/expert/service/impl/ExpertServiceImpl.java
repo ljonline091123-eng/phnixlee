@@ -39,6 +39,7 @@ import com.zhaocai.common.core.utils.DateUtils;
 import com.zhaocai.common.core.utils.bean.BeanCopierUtil;
 import com.zhaocai.common.core.utils.bean.BeanUtils;
 import com.zhaocai.common.core.web.bean.ResultData;
+import com.zhaocai.common.security.utils.SecurityUtils;
 import com.zhaocai.system.api.domain.SysUser;
 import com.zhaocai.system.api.system.RemoteUserService;
 import lombok.extern.slf4j.Slf4j;
@@ -213,6 +214,9 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
     @Transactional(rollbackFor = Exception.class)
     public boolean save(ExpertVO expertVO) {
         long count = 0;
+        /* getInfo拿到的是expertChange对象的id. */
+        if(expertVO.getExpertId()!=null)
+            expertVO.setId(expertVO.getExpertId());
         /* 新增才走审批流程，修改不走 */
         Boolean idIsNull = expertVO.getId()==null;
         if(expertVO.getId()!=null){
@@ -253,7 +257,11 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
                 expertChange.setState(ExpertStateEnum.SAVE.getState());
                 /* 审批类型 */
                 expertChange.setProcessType(ExpertProcessTypeEnum.EXPERT_CHANGE.getState());
+                expertChange.setId(null);
                 expertChange.setExpertId(expertVO.getId());
+                expertChange.setCreateTime(new Date());
+                expertChange.setCreateId(SecurityUtils.getUserId());
+                expertChange.setCreateBy(SecurityUtils.getLoginUserNickName());
                 expertChangeService.save(expertChange);
                 //保存招标文件附件
                 attachmentService.addAttachment(expertVO.getResumeAttachList(), AttachmentTypeEnum.EXPERT_RESUME, expertChange.getId());
@@ -290,6 +298,9 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
     @Transactional(rollbackFor = Exception.class)
     public boolean submit(ExpertVO expertVO) {
         long count = 0;
+        /* getInfo拿到的是expertChange对象的id. */
+        if(expertVO.getExpertId()!=null)
+            expertVO.setId(expertVO.getExpertId());
         /* 新增才走审批流程，修改不走 */
         Boolean idIsNull = expertVO.getId()==null;
         if(expertVO.getId()!=null){
@@ -334,6 +345,9 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
                 expertChange.setProcessType(ExpertProcessTypeEnum.EXPERT_CHANGE.getState());
                 expertChange.setId(null);
                 expertChange.setExpertId(expertVO.getId());
+                expertChange.setCreateTime(new Date());
+                expertChange.setCreateId(SecurityUtils.getUserId());
+                expertChange.setCreateBy(SecurityUtils.getLoginUserNickName());
                 expertChangeService.save(expertChange);
                 //保存招标文件附件
                 attachmentService.addAttachment(expertVO.getResumeAttachList(), AttachmentTypeEnum.EXPERT_RESUME, expertChange.getId());
@@ -479,7 +493,7 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
                     .set(ExpertChange::getWfProcessId,processId)/* 流程id */
                     .set(ExpertChange::getExpertState,expertState)/* 启用状态 */
                     .set(ExpertChange::getState,state)/* 审批状态 */
-                    .set(ExpertChange::getProcessType,ExpertProcessTypeEnum.EXPERT_ADD.getState())/* 流程类型 */
+                    .set(ExpertChange::getProcessType,ExpertProcessTypeEnum.EXPERT_CHANGE.getState())/* 流程类型 */
                     .set(ExpertChange::getOperateComment,variables.get("operateComment")==null?"":variables.get("operateComment").toString())
                     .eq(ExpertChange::getId,businessId));
             if(state == ExpertStateEnum.APPROVE.getState()){
@@ -492,7 +506,7 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
                     .set(Expert::getWfProcessId,processId)/* 流程id */
                     .set(Expert::getExpertState,expertState)/* 启用状态 */
                     .set(Expert::getState,state)/* 审批状态 */
-                    .set(Expert::getProcessType,ExpertProcessTypeEnum.EXPERT_ADD.getState())/* 流程类型 */
+                    .set(Expert::getProcessType,ExpertProcessTypeEnum.EXPERT_CHANGE.getState())/* 流程类型 */
                     .set(Expert::getOperateComment,variables.get("operateComment")==null?"":variables.get("operateComment").toString())
                     .eq(Expert::getId,expertChange.getExpertId()));
         }else{
@@ -521,6 +535,7 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
                     .set(ExpertChange::getWfProcessId,processId)/* 流程id */
                     .set(ExpertChange::getExpertState,NumberConstant.ONE)/* 启用状态 */
                     .set(ExpertChange::getState,ExpertStateEnum.APPROVE.getState())/* 审批状态 */
+                    .set(ExpertChange::getProcessType,ExpertProcessTypeEnum.EXPERT_CHANGE.getState())/* 流程类型 */
                     .set(ExpertChange::getOperateComment,variables.get("operateComment")==null?"":variables.get("operateComment").toString())
                     .eq(ExpertChange::getId,businessId));
             Expert expert = new Expert();
@@ -531,6 +546,7 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
                     .set(Expert::getWfProcessId,processId)/* 流程id */
                     .set(Expert::getExpertState,NumberConstant.ONE)/* 启用状态 */
                     .set(Expert::getState,ExpertStateEnum.APPROVE.getState())/* 审批状态 */
+                    .set(Expert::getProcessType,ExpertProcessTypeEnum.EXPERT_CHANGE.getState())/* 流程类型 */
                     .set(Expert::getOperateComment,variables.get("operateComment")==null?"":variables.get("operateComment").toString())
                     .eq(Expert::getId,expertChange.getExpertId()));
         }else{
@@ -538,6 +554,7 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
                     .set(Expert::getWfProcessId,processId)/* 流程id */
                     .set(Expert::getExpertState,NumberConstant.ONE)/* 启用状态 */
                     .set(Expert::getState,ExpertStateEnum.APPROVE.getState())/* 审批状态 */
+                    .set(Expert::getProcessType,ExpertProcessTypeEnum.EXPERT_ADD.getState())/* 流程类型 */
                     .set(Expert::getOperateComment,variables.get("operateComment")==null?"":variables.get("operateComment").toString())
                     .eq(Expert::getId,businessId));
         }
@@ -555,17 +572,20 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
             expertChangeService.update(new LambdaUpdateWrapper<ExpertChange>()
                     .set(ExpertChange::getExpertState,NumberConstant.ZERO)/* 启用状态 */
                     .set(ExpertChange::getState,ExpertStateEnum.REJECT.getState())/* 审批状态 */
+                    .set(ExpertChange::getProcessType,ExpertProcessTypeEnum.EXPERT_CHANGE.getState())/* 流程类型 */
                     .set(ExpertChange::getOperateComment,variables.get("operateComment")==null?"":variables.get("operateComment").toString())
                     .eq(ExpertChange::getId, businessId));
             super.update(new LambdaUpdateWrapper<Expert>()
                     .set(Expert::getExpertState,NumberConstant.ZERO)/* 启用状态 */
                     .set(Expert::getState,ExpertStateEnum.REJECT.getState())/* 审批状态 */
+                    .set(Expert::getProcessType,ExpertProcessTypeEnum.EXPERT_CHANGE.getState())/* 流程类型 */
                     .set(Expert::getOperateComment,variables.get("operateComment")==null?"":variables.get("operateComment").toString())
                     .eq(Expert::getId, expertChange.getExpertId()));
         }else{
             super.update(new LambdaUpdateWrapper<Expert>()
                     .set(Expert::getExpertState,NumberConstant.ZERO)/* 启用状态 */
                     .set(Expert::getState,ExpertStateEnum.REJECT.getState())/* 审批状态 */
+                    .set(Expert::getProcessType,ExpertProcessTypeEnum.EXPERT_ADD.getState())/* 流程类型 */
                     .set(Expert::getOperateComment,variables.get("operateComment")==null?"":variables.get("operateComment").toString())
                     .eq(Expert::getId, businessId));
         }
@@ -583,17 +603,20 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
             expertChangeService.update(new LambdaUpdateWrapper<ExpertChange>()
                     .set(ExpertChange::getExpertState,NumberConstant.ZERO)/* 启用状态 */
                     .set(ExpertChange::getState,ExpertStateEnum.REJECT.getState())/* 审批状态 */
+                    .set(ExpertChange::getProcessType,ExpertProcessTypeEnum.EXPERT_CHANGE.getState())/* 流程类型 */
                     .set(ExpertChange::getOperateComment,variables.get("operateComment")==null?"":variables.get("operateComment").toString())
                     .eq(ExpertChange::getId, businessId));
             super.update(new LambdaUpdateWrapper<Expert>()
                     .set(Expert::getExpertState,NumberConstant.ZERO)/* 启用状态 */
                     .set(Expert::getState,ExpertStateEnum.REJECT.getState())/* 审批状态 */
+                    .set(Expert::getProcessType,ExpertProcessTypeEnum.EXPERT_CHANGE.getState())/* 流程类型 */
                     .set(Expert::getOperateComment,variables.get("operateComment")==null?"":variables.get("operateComment").toString())
                     .eq(Expert::getId, expertChange.getExpertId()));
         }else{
             super.update(new LambdaUpdateWrapper<Expert>()
                     .set(Expert::getExpertState,NumberConstant.ZERO)/* 启用状态 */
                     .set(Expert::getState,ExpertStateEnum.REJECT.getState())/* 审批状态 */
+                    .set(Expert::getProcessType,ExpertProcessTypeEnum.EXPERT_ADD.getState())/* 流程类型 */
                     .set(Expert::getOperateComment,variables.get("operateComment")==null?"":variables.get("operateComment").toString())
                     .eq(Expert::getId, businessId));
         }
