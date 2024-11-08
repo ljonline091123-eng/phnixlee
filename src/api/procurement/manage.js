@@ -479,3 +479,27 @@ export const saveUrgeExpertMes = (data) => {
     data,
   });
 };
+// 获取专家责任单位审批权限
+export const getPermissionButtonNew = (params) => {
+  return request({
+    url: "/business/expert/initialize",
+    method: "get",
+    params,
+  });
+};
+// 审批流程
+export const postAuditProcessNew = (data) => {
+  return request({
+    url: "/business/expert/audit",
+    method: "post",
+    data,
+  });
+};
+// 加载责任单位定义接口
+export const getLoadTaskDefNew= (params) => {
+  return request({
+    url: "/business/expert/loadTaskDef",
+    method: "get",
+    params,
+  });
+};
