@@ -91,6 +91,16 @@ public class UnderlingRestTemplateService {
     }
 
     /**
+     * 发送 get 请求，获取为实体类
+     *
+     * @param platformUrl
+     * @return
+     */
+    public static JsonNode getForObject(UnderlingPlatformUrlEnum platformUrl, UnderlyingPlatformBaseDTO requestDTO) {
+        return sendForGet(platformUrl, requestDTO);
+    }
+
+    /**
      * 发送 get 请求，获取为 List
      *
      * @param platformUrl
