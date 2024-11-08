@@ -501,6 +501,9 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
 
         vendorIndexInfoVO.setIsAvailable(isAvailable);
         vendorIndexInfoVO.setMessage(message);
+        /* 加上detail参数给前端判断资质信息是否过期 */
+        VendorChangeRequestVO vendorDetailVO = vendorChangeService.getVendorUpdateDetail(vendor.getId());
+        vendorIndexInfoVO.setDetail(vendorDetailVO);
 
         return vendorIndexInfoVO;
     }
