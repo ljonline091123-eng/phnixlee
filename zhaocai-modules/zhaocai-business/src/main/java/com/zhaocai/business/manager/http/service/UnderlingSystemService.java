@@ -2,6 +2,7 @@ package com.zhaocai.business.manager.http.service;
 
 import cn.hutool.core.collection.CollectionUtil;
 import com.alibaba.fastjson.JSON;
+import com.alibaba.fastjson.JSONArray;
 import com.zhaocai.business.common.exception.BusinessException;
 import com.zhaocai.business.manager.http.common.config.UnderlingPlatformUrlEnum;
 import com.zhaocai.business.manager.http.dto.req.*;
@@ -11,11 +12,13 @@ import com.zhaocai.business.pub.vo.req.MaterialsQueryVO;
 import com.zhaocai.business.pub.vo.res.*;
 import com.zhaocai.common.core.utils.StringUtils;
 import com.zhaocai.common.core.utils.bean.BeanCopierUtil;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 public class UnderlingSystemService {
 
@@ -171,16 +174,19 @@ public class UnderlingSystemService {
     public String getL3OrgByOrgId(String orgId){
         GetL3OrgByOrgIdRequestDTO reqDTO = new GetL3OrgByOrgIdRequestDTO();
         reqDTO.setOrgId(orgId);
-        List<String> orgThree =  UnderlingRestTemplateService.getForObject(UnderlingPlatformUrlEnum.GET_L3_ORG_BY_ORGID,List.class,reqDTO);
-        if(orgThree!=null && !orgThree.isEmpty()){
-            if(orgThree.size()==1){
-                return orgThree.get(0);
-            }else{
-                return null;
-            }
-        }else{
+        Object data =  UnderlingRestTemplateService.getForObject(UnderlingPlatformUrlEnum.GET_L3_ORG_BY_ORGID,Object.class,reqDTO);
+        if(data==null)return null;
+        // 处理 data 字段,只要一个三级单位，不要三级单位的列表
+        if (data instanceof String) {
+            String dataString = (String) data;
+            log.info("[获取到的三级单位]-[getL3OrgByOrgId] param:{},response:{}",orgId,dataString);
+            return dataString;
+        } else if (data instanceof List) {
+            List<String> dataList = (List<String>) data;
+            log.info("[获取到的三级单位]-[getL3OrgByOrgId] param:{},responseList:{}",orgId,dataList);
             return null;
         }
+        return null;
     }
 
     /**
