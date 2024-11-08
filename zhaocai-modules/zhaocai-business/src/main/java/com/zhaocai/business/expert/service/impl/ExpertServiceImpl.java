@@ -601,8 +601,15 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
 
     @Override
     public ResultData<BpmInitializeResponseDTO> initialize(BpmInitializeRequestDTO requestDTO) {
-        Expert expert = getById(requestDTO.getBusinessId());
-        SysUser sysUser = systemUserService.getUserById(expert.getUserId());
+        SysUser sysUser;
+        ExpertChange expertChange = expertChangeService.getOne(new LambdaQueryWrapper<ExpertChange>()
+                .eq(ExpertChange::getId,requestDTO.getBusinessId()));
+        if(expertChange!=null){
+            sysUser = systemUserService.getUserById(expertChange.getUserId());
+        }else{
+            Expert expert = getById(requestDTO.getBusinessId());
+            sysUser = systemUserService.getUserById(expert.getUserId());
+        }
         /* 根据组织获取对应的二级单位 */
         String org = underlingSystemService.getL2OrgByOrgId(sysUser.getThridOrgId());
         /* 获取三级单位 */
@@ -620,8 +627,15 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
 
     @Override
     public ResultData<List<BpmListProcessLogResponseDTO>> listProcessLog(BpmListProcessLogRequestDTO requestDTO) {
-        Expert expert = getById(requestDTO.getBusinessId());
-        SysUser sysUser = systemUserService.getUserById(expert.getUserId());
+        SysUser sysUser;
+        ExpertChange expertChange = expertChangeService.getOne(new LambdaQueryWrapper<ExpertChange>()
+                .eq(ExpertChange::getId,requestDTO.getBusinessId()));
+        if(expertChange!=null){
+            sysUser = systemUserService.getUserById(expertChange.getUserId());
+        }else{
+            Expert expert = getById(requestDTO.getBusinessId());
+            sysUser = systemUserService.getUserById(expert.getUserId());
+        }
         /* 根据组织获取对应的二级单位 */
         String org = underlingSystemService.getL2OrgByOrgId(sysUser.getThridOrgId());
         /* 获取三级单位 */
@@ -639,9 +653,15 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
 
     @Override
     public String audit(String processKey, Map<String, Object> variables) {
-
-        Expert expert = getById((Serializable) variables.get("businessId"));
-        SysUser sysUser = systemUserService.getUserById(expert.getUserId());
+        SysUser sysUser;
+        ExpertChange expertChange = expertChangeService.getOne(new LambdaQueryWrapper<ExpertChange>()
+                .eq(ExpertChange::getId,(Serializable) variables.get("businessId")));
+        if(expertChange!=null){
+            sysUser = systemUserService.getUserById(expertChange.getUserId());
+        }else{
+            Expert expert = getById((Serializable) variables.get("businessId"));
+            sysUser = systemUserService.getUserById(expert.getUserId());
+        }
         /* 根据组织获取对应的二级单位 */
         String org = underlingSystemService.getL2OrgByOrgId(sysUser.getThridOrgId());
         /* 获取三级单位 */
@@ -658,8 +678,15 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
 
     @Override
     public ResultData<List<BpmLoadTaskDefResponseDTO>> loadTaskDef(BpmLoadTaskDefRequestDTO requestDTO) {
-        Expert expert = getById(requestDTO.getBusinessId());
-        SysUser sysUser = systemUserService.getUserById(expert.getUserId());
+        SysUser sysUser;
+        ExpertChange expertChange = expertChangeService.getOne(new LambdaQueryWrapper<ExpertChange>()
+                .eq(ExpertChange::getId,requestDTO.getBusinessId()));
+        if(expertChange!=null){
+            sysUser = systemUserService.getUserById(expertChange.getUserId());
+        }else{
+            Expert expert = getById(requestDTO.getBusinessId());
+            sysUser = systemUserService.getUserById(expert.getUserId());
+        }
         /* 根据组织获取对应的二级单位 */
         String org = underlingSystemService.getL2OrgByOrgId(sysUser.getThridOrgId());
         /* 获取三级单位 */
