@@ -1,5 +1,6 @@
 package com.zhaocai.business.vendor.vo.res;
 
+import com.zhaocai.business.vendor.vo.req.VendorChangeRequestVO;
 import io.swagger.annotations.ApiModelProperty;
 import lombok.Data;
 
@@ -38,4 +39,7 @@ public class VendorIndexInfoVO {
 
     @ApiModelProperty(value = "联系人手机")
     private String contactPhone;
+
+    @ApiModelProperty(value = "供应商详情")
+    private VendorChangeRequestVO detail;
 }
