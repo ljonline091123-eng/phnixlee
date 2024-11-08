@@ -593,8 +593,8 @@ export default {
               }
             }
         }
-        console.log(JSON.stringify(this.materialsLists))
-      if(this.isUpdate && !this.materialsLists.length) return this.$message({type:'error',message:"请选择易料市集采购清单"});
+        console.log(JSON.stringify(this.materialsLists.length))
+      if(this.materialsLists.length<=0) return this.$message({type:'error',message:"请选择易料市集采购清单"});
       this.$confirm("是否确定选中的清单进入易料市集进行采购？", "提示", {
         confirmButtonText: "确定",
         cancelButtonText: "取消",
@@ -614,13 +614,20 @@ export default {
           console.log(currentSelect.length+"currentSelect"+JSON.stringify(currentSelect))
           this.materialsLists = [...this.materialsLists ,...currentSelect];
         }
-        console.log(JSON.stringify(this.materialsLists))
-      if(!this.materialsLists.length) return this.$message({type:'error',message:"请选择撤销易料市集采购清单"});
+   
+      if(this.materialsLists.length<=0) return this.$message({type:'error',message:"请选择撤销易料市集采购清单"});
       this.$confirm("是否确定撤销选中的清单？", "提示", {
         confirmButtonText: "确定",
         cancelButtonText: "取消",
         type: "warning",
       }).then(() => {
+        for(let i = 0 ; i <  this.materialsLists.length ; i++){
+          console.log("撤销"+JSON.stringify(this.materialsLists[i]))
+            if(this.materialsLists[i].pushFlag=='N'){
+              return this.$message({type:'error',message:"请选择已推送进入易料市集采购清单"})
+            }
+          }
+          console.log(JSON.stringify(this.materialsLists))
         this.submitFormPush('form');
        
       });
@@ -628,12 +635,7 @@ export default {
     //撤销
     async revokePushMaterialProcurement(){
 
-        for(let i = 0 ; i <  this.materialsLists.length ; i++){
-          console.log("撤销"+JSON.stringify(this.materialsLists[i]))
-            if(this.materialsLists[i].pushFlag=='N'){
-              return this.$message({type:'error',message:"请选择已推送进入易料市集采购清单"})
-            }
-          }
+       
       let formData = {
         projectCode:this.projectCode,
           id:this.id,
@@ -672,8 +674,6 @@ export default {
         }
     },
     tableRowClassName({row, rowIndex}) {
-        console.log("row------77-----"+JSON.stringify(row))
-        console.log("rowIndex--55--------"+JSON.stringify(rowIndex))
         if (row.pushFlag === 'Y') {
           return 'already-pushed';
         } else if (row.pushFlag === 'N') {
@@ -900,20 +900,23 @@ export default {
             }
           }
           console.log(formData,'this.formData');
+          console.log("---"+JSON.stringify(this.materialsLists))
           try{
             const res = await saveProcurementPlan(formData);
-            if(!this.isUpdate){
+            if(!this.isUpdate && res?.data?.materialsLists.length>0){
+              console.log("-//--"+JSON.stringify(this.materialsLists))
               this.projectCode=res.data.projectCode
               this.id=res.data.id
               this.materialsLists=res.data.materialsLists
             }
-           
+            console.log("-2222--"+JSON.stringify(this.materialsLists))
             loading.close();
             this.$message({
               message: '保存成功',
               type: 'success'
             });
             this.isSubmit = false;
+        
             if(this.isPushRevoke){
               this.pushMaterialProcurement();
             }else{
