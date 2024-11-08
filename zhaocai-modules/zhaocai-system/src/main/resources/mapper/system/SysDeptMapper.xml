@@ -263,9 +263,9 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
 		<include refid="selectDeptVo"/>
 		WHERE
 		((d.thrid_parent_id in
-		(select dd.thrid_dept_id from sys_dept dd where dd.thrid_org_level IS NOT NULL AND dd.thrid_org_type != 'BM' AND dd.status = '0'))
-		and d.thrid_org_type != 'BM' AND d.status = '0')
-		or (d.thrid_org_type != 'BM' AND d.status = '0' AND d.thrid_org_level IS NOT NULL )
+		(select dd.thrid_dept_id from sys_dept dd where dd.thrid_org_level IS NOT NULL AND dd.thrid_org_type not in ('BM','D','X') AND dd.status = '0'))
+		and d.thrid_org_type not in ('BM','D','X')  AND d.status = '0')
+		or (d.thrid_org_type not in ('BM','D','X')  AND d.status = '0' AND d.thrid_org_level IS NOT NULL )
 		order by d.parent_id, d.order_num
 	</select>
 
