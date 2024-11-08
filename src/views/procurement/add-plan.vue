@@ -594,7 +594,7 @@ export default {
             }
         }
         console.log(JSON.stringify(this.materialsLists.length))
-      if(this.materialsLists.length<=0) return this.$message({type:'error',message:"请选择易料市集采购清单"});
+      if(this.isUpdate && this.materialsLists.length==0) return this.$message({type:'error',message:"请选择易料市集采购清单"});
       this.$confirm("是否确定选中的清单进入易料市集进行采购？", "提示", {
         confirmButtonText: "确定",
         cancelButtonText: "取消",
@@ -785,6 +785,7 @@ export default {
             });
             this.isSubmit = false;
             console.log(res,'r~~~~~~~~~~~~~~~~~');
+            this.currentContract.id=res.data.id
             this.getPlanDetail()
             // this.$tab.closePage().then(() => {
               // 执行结束的逻辑
