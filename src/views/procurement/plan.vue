@@ -713,7 +713,8 @@ import {
   getUsersRoleList,
   pushProcurementPlan,
   setContractPlanSplitFlag,
-  getContractPlanSplitFlag, getUsersRoleContractPlanList
+  getContractPlanSplitFlag,
+  getUsersRoleContractPlanList
 } from "@/api/procurement/plan";
 
 import VirtualScroll from 'el-table-virtual-scroll'
