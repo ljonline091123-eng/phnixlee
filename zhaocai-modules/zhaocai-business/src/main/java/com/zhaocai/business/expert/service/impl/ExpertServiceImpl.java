@@ -602,7 +602,8 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
     @Override
     public ResultData<BpmInitializeResponseDTO> initialize(BpmInitializeRequestDTO requestDTO) {
         SysUser sysUser;
-        ExpertChange expertChange = expertChangeService.getById(requestDTO.getBusinessId());
+        ExpertChange expertChange = expertChangeService.getOne(new LambdaQueryWrapper<ExpertChange>()
+                .eq(ExpertChange::getId,requestDTO.getBusinessId()));
         if(expertChange!=null){
             sysUser = systemUserService.getUserById(expertChange.getUserId());
         }else{
@@ -627,7 +628,8 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
     @Override
     public ResultData<List<BpmListProcessLogResponseDTO>> listProcessLog(BpmListProcessLogRequestDTO requestDTO) {
         SysUser sysUser;
-        ExpertChange expertChange = expertChangeService.getById(requestDTO.getBusinessId());
+        ExpertChange expertChange = expertChangeService.getOne(new LambdaQueryWrapper<ExpertChange>()
+                .eq(ExpertChange::getId,requestDTO.getBusinessId()));
         if(expertChange!=null){
             sysUser = systemUserService.getUserById(expertChange.getUserId());
         }else{
@@ -652,7 +654,8 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
     @Override
     public String audit(String processKey, Map<String, Object> variables) {
         SysUser sysUser;
-        ExpertChange expertChange = expertChangeService.getById((Serializable) variables.get("businessId"));
+        ExpertChange expertChange = expertChangeService.getOne(new LambdaQueryWrapper<ExpertChange>()
+                .eq(ExpertChange::getId,(Serializable) variables.get("businessId")));
         if(expertChange!=null){
             sysUser = systemUserService.getUserById(expertChange.getUserId());
         }else{
@@ -676,7 +679,8 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
     @Override
     public ResultData<List<BpmLoadTaskDefResponseDTO>> loadTaskDef(BpmLoadTaskDefRequestDTO requestDTO) {
         SysUser sysUser;
-        ExpertChange expertChange = expertChangeService.getById(requestDTO.getBusinessId());
+        ExpertChange expertChange = expertChangeService.getOne(new LambdaQueryWrapper<ExpertChange>()
+                .eq(ExpertChange::getId,requestDTO.getBusinessId()));
         if(expertChange!=null){
             sysUser = systemUserService.getUserById(expertChange.getUserId());
         }else{
