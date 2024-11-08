@@ -339,7 +339,7 @@
             <el-table-column prop="skuId" align="center" width="180" label="易料商品编码"/>
             <el-table-column prop="goodsName" align="center" width="180" label="易料商品名称"/>
               <el-table-column prop="offerBrand" align="center" width="180" label="易料品牌"/>
-             <el-table-column prop="offerPrice" align="center" width="180" label="易料初使报价"/>
+             <el-table-column prop="offerPrice" align="center" width="180" label="易料初始报价"/>
           </el-table>
           <!-- 租赁材料、租赁机械 -->
           <el-table

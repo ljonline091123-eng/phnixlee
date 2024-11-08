@@ -11,7 +11,7 @@
           >取消</el-button
         >
       <el-button
-        v-if="type=='edit' && formData.state != 1"
+        v-if="type=='edit'"
         type="primary"
         size="mini"
         @click="saveForm('form')"
@@ -21,7 +21,7 @@
       >
 <!--   审批通过不显示提交     -->
         <el-button
-          v-if="type=='edit' && formData.state != 1"
+          v-if="type=='edit' && formData.state != 3"
           type="primary"
           size="mini"
           @click="submitForm('form')"
@@ -29,7 +29,7 @@
           :loading="isSubmit"
           >{{ isSubmit ? "提交中..." : "提交" }}</el-button>
         <el-button
-          v-if="type=='check' && formData.state == 1"
+          v-if="type=='check'"
           type="primary"
           size="mini"
           @click="confirmApprove()"
@@ -375,9 +375,8 @@
               <el-form-item
                 label="附件"
                 prop="resumeAttachList"
-                class="required label-right-align uploadItem"
+                class="required label-right-align"
               >
-                <el-button size="small" type="primary" style="margin-top: 8px;" @click="showSecretTips">点击上传</el-button>
                 <el-upload
                   :action="uploadFileUrl"
                   :limit="1"
@@ -386,8 +385,8 @@
                   :file-list="formData.resumeAttachList"
                   :on-remove="fileRemove"
                   :on-preview="handlePreview"
-                  ref="upload"
                 >
+                  <el-button size="small" type="primary">点击上传</el-button>
                 </el-upload>
               </el-form-item>
             </el-col>
@@ -395,7 +394,7 @@
         </div>
       </el-form>
     </div>
-    <!-- 审批和审批详情 -->
+    <!-- 审批和审批详情  -->
     <ApprovalForm
       :visible.sync="expertVisible"
       :title="'新增专家审批流程'"
@@ -427,12 +426,11 @@ import BackButton from "@/components/BackButton/index.vue";
 import PageTitle from "@/components/PageTitle/index.vue";
 import { uploadFileUrl } from "@/utils/const";
 import {
-  getPermissionButton,
-  postAuditProcess,
-  getLoadTaskDef,
+  getPermissionButton,getPermissionButtonNew,
+  postAuditProcess,postAuditProcessNew,
+  getLoadTaskDef,getLoadTaskDefNew,
   getProcessLogList,
 } from "@/api/procurement/manage";
-import {showSecretRelatedTips} from "@/utils/MyUtils";
 export default {
   name: "add-expert",
   dicts: [
@@ -479,6 +477,7 @@ export default {
         businessType: "",
         expertType: "",
         registeredCertificate: "",
+        technicalTitles:""
 
       }, //form表单数据
       planList: [],
@@ -573,11 +572,6 @@ export default {
     }
   },
   methods: {
-    showSecretTips() {
-      showSecretRelatedTips(()=>{
-        this.$refs['upload'].$refs['upload-inner'].handleClick()
-      })
-    },
     handleSubmit() {
       this.$modal.loading("请稍候...");
       const params = {
@@ -587,7 +581,7 @@ export default {
         curTaskId: this.taskPresentId,
         processKey: "jiantou-zhaocai:{org}:ZHAOCAI_EXPERT_ADD",
       };
-      postAuditProcess(params).then(() => {
+      postAuditProcessNew(params).then(() => {
         this.$message.success("提交成功");
         this.$modal.closeLoading();
         this.expertVisible = false;
@@ -611,7 +605,7 @@ export default {
           processId: this.processId,
         };
         if (this.businessId && this.processId) {
-          const res = await getLoadTaskDef(params);
+          const res = await getLoadTaskDefNew(params);
           this.processInformationList = res.data;
           function getActive(nodes) {
             let allFalse = true;
@@ -644,7 +638,7 @@ export default {
       this.processId = this.formData.wfProcessId;
       try {
         if (this.formData.id) {
-          const res = await getPermissionButton({
+          const res = await getPermissionButtonNew({
             businessId: this.formData.id, //联系人id
             processId: this.formData.wfProcessId, //流程id
           });
@@ -673,11 +667,15 @@ export default {
         const data=res.data
         this.formData=data
         this.formData.educationDegree=this.formData.educationDegree+""
-        this.formData.registeredCertificate=data.registeredCertificate+""
-        this.formData.technicalTitles=data.technicalTitles+""
         this.formData.expertType=data.expertType+""
         this.formData.businessType=data.businessType+""
         this.formData.state=data.state+""
+        if(data.registeredCertificate){
+          this.formData.registeredCertificate=data.registeredCertificate+""
+        }
+        if(data.technicalTitles){
+          this.formData.technicalTitles=data.technicalTitles+""
+        }
 
       },
     //保存
@@ -767,11 +765,6 @@ export default {
 };
 </script>
 <style lang="scss" scoped>
-::v-deep .el-form-item.uploadItem {
-  .el-form-item__content {
-    line-height: 0;
-  }
-}
 .page-title {
   width: 100%;
   border-bottom: solid 1px #ccc;

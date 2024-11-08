@@ -252,7 +252,7 @@
           </el-table-column>
    
           <el-table-column v-if="contractPlanning.contractPlanningCategory == 1" label="易料品牌" min-width="120" prop="offerBrand" show-overflow-tooltip/>
-          <el-table-column v-if="contractPlanning.contractPlanningCategory == 1" label="易料初使报价"  width="150" prop="offerPrice" />
+          <el-table-column v-if="contractPlanning.contractPlanningCategory == 1" label="易料初始报价"  width="150" prop="offerPrice" />
           
             </el-table>
           </template>
