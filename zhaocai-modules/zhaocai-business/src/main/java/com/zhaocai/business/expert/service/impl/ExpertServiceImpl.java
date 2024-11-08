@@ -332,6 +332,7 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
                 expertChange.setState(ExpertStateEnum.IN_APPROVAL.getState());
                 /* 审批类型 */
                 expertChange.setProcessType(ExpertProcessTypeEnum.EXPERT_CHANGE.getState());
+                expertChange.setId(null);
                 expertChange.setExpertId(expertVO.getId());
                 expertChangeService.save(expertChange);
                 //保存招标文件附件
