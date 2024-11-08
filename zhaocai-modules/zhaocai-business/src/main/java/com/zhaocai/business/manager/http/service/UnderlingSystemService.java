@@ -3,6 +3,7 @@ package com.zhaocai.business.manager.http.service;
 import cn.hutool.core.collection.CollectionUtil;
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONArray;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.zhaocai.business.common.exception.BusinessException;
 import com.zhaocai.business.manager.http.common.config.UnderlingPlatformUrlEnum;
 import com.zhaocai.business.manager.http.dto.req.*;
@@ -174,19 +175,25 @@ public class UnderlingSystemService {
     public String getL3OrgByOrgId(String orgId){
         GetL3OrgByOrgIdRequestDTO reqDTO = new GetL3OrgByOrgIdRequestDTO();
         reqDTO.setOrgId(orgId);
-        Object data =  UnderlingRestTemplateService.getForObject(UnderlingPlatformUrlEnum.GET_L3_ORG_BY_ORGID,Object.class,reqDTO);
-        if(data==null)return null;
-        // 处理 data 字段,只要一个三级单位，不要三级单位的列表
-        if (data instanceof String) {
-            String dataString = (String) data;
+        JsonNode dataNode = UnderlingRestTemplateService.getForObject(UnderlingPlatformUrlEnum.GET_L3_ORG_BY_ORGID,reqDTO);
+        if (dataNode == null || dataNode.isNull()) {
+            log.info("[获取到的三级单位]-[getL3OrgByOrgId] param:{}, response: null", orgId);
+            return null;
+        } else if (dataNode.isTextual()) {
+            String dataString = dataNode.asText();
             log.info("[获取到的三级单位]-[getL3OrgByOrgId] param:{},response:{}",orgId,dataString);
             return dataString;
-        } else if (data instanceof List) {
-            List<String> dataList = (List<String>) data;
+        } else if (dataNode.isArray()) {
+            List<String> dataList = new ArrayList<>();
+            for (JsonNode node : dataNode) {
+                dataList.add(node.asText());
+            }
             log.info("[获取到的三级单位]-[getL3OrgByOrgId] param:{},responseList:{}",orgId,dataList);
             return null;
+        } else {
+            log.warn("[获取到的三级单位]-[getL3OrgByOrgId] param:{}, response: unexpected data type", orgId);
+            return null;
         }
-        return null;
     }
 
     /**
