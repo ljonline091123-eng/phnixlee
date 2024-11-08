@@ -11,11 +11,14 @@ import com.zhaocai.business.bidding.enums.TenderNoticeStatusEnum;
 import com.zhaocai.business.common.enums.*;
 import com.zhaocai.business.common.exception.ParamValidateException;
 import com.zhaocai.business.expert.domain.Expert;
+import com.zhaocai.business.expert.domain.ExpertChange;
 import com.zhaocai.business.expert.mapper.ExpertMapper;
+import com.zhaocai.business.expert.service.IExpertChangeService;
 import com.zhaocai.business.expert.service.IExpertService;
 import com.zhaocai.business.expert.vo.req.ExpertVO;
 import com.zhaocai.business.expert.vo.req.query.ExpertQueryVO;
 import com.zhaocai.business.expert.vo.req.query.ExpertRandomDrawVO;
+import com.zhaocai.business.expert.vo.res.ExpertChangeInfoVO;
 import com.zhaocai.business.expert.vo.res.ExpertInfoVO;
 import com.zhaocai.business.expert.vo.res.ExpertListVO;
 import com.zhaocai.business.expert.vo.res.TPIExpertInfoVO;
@@ -34,6 +37,7 @@ import com.zhaocai.common.core.constant.NumberConstant;
 import com.zhaocai.common.core.constant.UserConstants;
 import com.zhaocai.common.core.utils.DateUtils;
 import com.zhaocai.common.core.utils.bean.BeanCopierUtil;
+import com.zhaocai.common.core.utils.bean.BeanUtils;
 import com.zhaocai.common.core.web.bean.ResultData;
 import com.zhaocai.system.api.domain.SysUser;
 import com.zhaocai.system.api.system.RemoteUserService;
@@ -69,6 +73,8 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
     private UnderlingSystemService underlingSystemService;
     @Autowired
     private ISystemUserService systemUserService;
+    @Autowired
+    private IExpertChangeService expertChangeService;
 
     @Override
     public List<TPIExpertInfoVO> getTPIExpertInfo() {
@@ -187,8 +193,18 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
     public ExpertInfoVO getInfo(Long id) {
         Expert expert = this.getById(id);
         ExpertInfoVO vo = BeanCopierUtil.copyBean(expert, ExpertInfoVO.class);
-
-        List<AttachmentVO> resumeAttachList = attachmentService.listAttachment(AttachmentTypeEnum.EXPERT_RESUME, expert.getId());
+        /* 如果不是审批通过状态 */
+        if(!expert.getState().equals(ExpertStateEnum.APPROVE.getState())){
+            ExpertChange expertChange = expertChangeService.getOne(new LambdaQueryWrapper<ExpertChange>()
+                    .eq(ExpertChange::getExpertId,id).orderByDesc(ExpertChange::getCreateTime).last("limit 1"));
+            if(expertChange!=null){
+                if(expert.getProcessType().equals(ExpertProcessTypeEnum.EXPERT_CHANGE.getState())){
+                    vo = BeanCopierUtil.copyBean(expertChange, ExpertInfoVO.class);
+                    vo.setExpertId(id);
+                }
+            }
+        }
+        List<AttachmentVO> resumeAttachList = attachmentService.listAttachment(AttachmentTypeEnum.EXPERT_RESUME, vo.getId());
         vo.setResumeAttachList(resumeAttachList);
         return vo;
     }
@@ -198,7 +214,7 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
     public boolean save(ExpertVO expertVO) {
         long count = 0;
         /* 新增才走审批流程，修改不走 */
-        Boolean submitFlag = expertVO.getId()==null;
+        Boolean idIsNull = expertVO.getId()==null;
         if(expertVO.getId()!=null){
             count = this.count(new LambdaQueryWrapper<Expert>()
                             .eq(Expert::getUserId, expertVO.getUserId())
@@ -213,25 +229,60 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
         }
 
         //新增专家信息
-        Expert expert = BeanCopierUtil.copyBean(expertVO, Expert.class);
+        Expert expert;
         /* 新增才走审批流程，修改不走 */
-        if(submitFlag){
+        if(idIsNull){
+            expert = BeanCopierUtil.copyBean(expertVO, Expert.class);
             /* 待审批 */
             expert.setExpertState(NumberConstant.ZERO);
             /* 保存 */
             expert.setState(ExpertStateEnum.SAVE.getState());
+            /* 审批类型 */
+            expert.setProcessType(ExpertProcessTypeEnum.EXPERT_ADD.getState());
         }else {
             Expert e = getById(expertVO.getId());
             if(e!=null){
                 if(e.getState()!=null && e.getState().equals(ExpertStateEnum.IN_APPROVAL.getState())){
                     throw new ParamValidateException("专家正在审批中，请稍后再修改");
                 }
+
+                ExpertChange expertChange = BeanCopierUtil.copyBean(expertVO, ExpertChange.class);
+                /* 待审批 */
+                expertChange.setExpertState(NumberConstant.ZERO);
+                /* 保存 */
+                expertChange.setState(ExpertStateEnum.SAVE.getState());
+                /* 审批类型 */
+                expertChange.setProcessType(ExpertProcessTypeEnum.EXPERT_CHANGE.getState());
+                expertChange.setExpertId(expertVO.getId());
+                expertChangeService.save(expertChange);
+                //保存招标文件附件
+                attachmentService.addAttachment(expertVO.getResumeAttachList(), AttachmentTypeEnum.EXPERT_RESUME, expertChange.getId());
+
+                /* 审批通过后的修改数据库的值 */
+                expert = e;
+                /* 待审批 */
+                expert.setExpertState(NumberConstant.ZERO);
+                /* 保存 */
+                expert.setState(ExpertStateEnum.SAVE.getState());
+                /* 审批类型 */
+                expert.setProcessType(ExpertProcessTypeEnum.EXPERT_CHANGE.getState());
+            }else{
+                expert = BeanCopierUtil.copyBean(expertVO, Expert.class);
+                /* 待审批 */
+                expert.setExpertState(NumberConstant.ZERO);
+                /* 保存 */
+                expert.setState(ExpertStateEnum.SAVE.getState());
+                /* 审批类型 */
+                expert.setProcessType(ExpertProcessTypeEnum.EXPERT_ADD.getState());
             }
         }
+
         boolean res = this.saveOrUpdate(expert);
 
         //保存招标文件附件
-        attachmentService.addAttachment(expertVO.getResumeAttachList(), AttachmentTypeEnum.EXPERT_RESUME, expert.getId());
+        if(expert.getProcessType().equals(ExpertProcessTypeEnum.EXPERT_ADD.getState())){
+            attachmentService.addAttachment(expertVO.getResumeAttachList(), AttachmentTypeEnum.EXPERT_RESUME, expert.getId());
+        }
         return res;
     }
 
@@ -240,7 +291,7 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
     public boolean submit(ExpertVO expertVO) {
         long count = 0;
         /* 新增才走审批流程，修改不走 */
-        Boolean submitFlag = expertVO.getId()==null;
+        Boolean idIsNull = expertVO.getId()==null;
         if(expertVO.getId()!=null){
             count = this.count(new LambdaQueryWrapper<Expert>()
                     .eq(Expert::getUserId, expertVO.getUserId())
@@ -254,36 +305,81 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
             throw new ParamValidateException("该用户已经成为专家，不允许重复设置");
         }
 
+
         //新增专家信息
-        Expert expert = BeanCopierUtil.copyBean(expertVO, Expert.class);
+        Expert expert;
+        ExpertChange expertChange = null;
         /* 新增才走审批流程，修改不走 */
-        if(submitFlag){
+        if(idIsNull){
+            expert = BeanCopierUtil.copyBean(expertVO, Expert.class);
             /* 待审批 */
             expert.setExpertState(NumberConstant.ZERO);
-            /* 审批中 */
+            /* 保存 */
             expert.setState(ExpertStateEnum.IN_APPROVAL.getState());
+            /* 审批类型 */
+            expert.setProcessType(ExpertProcessTypeEnum.EXPERT_ADD.getState());
         }else {
             Expert e = getById(expertVO.getId());
             if(e!=null){
                 if(e.getState()!=null && e.getState().equals(ExpertStateEnum.IN_APPROVAL.getState())){
-                    throw new ParamValidateException("专家正在审批中，请稍后再修改。");
+                    throw new ParamValidateException("专家正在审批中，请稍后再修改");
                 }
+
+                expertChange = BeanCopierUtil.copyBean(expertVO, ExpertChange.class);
+                /* 待审批 */
+                expertChange.setExpertState(NumberConstant.ZERO);
+                /* 保存 */
+                expertChange.setState(ExpertStateEnum.IN_APPROVAL.getState());
+                /* 审批类型 */
+                expertChange.setProcessType(ExpertProcessTypeEnum.EXPERT_CHANGE.getState());
+                expertChange.setId(null);
+                expertChange.setExpertId(expertVO.getId());
+                expertChangeService.save(expertChange);
+                //保存招标文件附件
+                attachmentService.addAttachment(expertVO.getResumeAttachList(), AttachmentTypeEnum.EXPERT_RESUME, expertChange.getId());
+
+                /* 审批通过后的修改数据库的值 */
+                expert = e;
+                /* 待审批 */
+                expert.setExpertState(NumberConstant.ZERO);
+                /* 保存 */
+                expert.setState(ExpertStateEnum.IN_APPROVAL.getState());
+                /* 审批类型 */
+                expert.setProcessType(ExpertProcessTypeEnum.EXPERT_CHANGE.getState());
+            }else{
+                expert = BeanCopierUtil.copyBean(expertVO, Expert.class);
+                /* 待审批 */
+                expert.setExpertState(NumberConstant.ZERO);
+                /* 保存 */
+                expert.setState(ExpertStateEnum.IN_APPROVAL.getState());
+                /* 审批类型 */
+                expert.setProcessType(ExpertProcessTypeEnum.EXPERT_ADD.getState());
             }
         }
+
         boolean res = this.saveOrUpdate(expert);
 
         //保存招标文件附件
-        attachmentService.addAttachment(expertVO.getResumeAttachList(), AttachmentTypeEnum.EXPERT_RESUME, expert.getId());
+        if(expert.getProcessType().equals(ExpertProcessTypeEnum.EXPERT_ADD.getState())){
+            attachmentService.addAttachment(expertVO.getResumeAttachList(), AttachmentTypeEnum.EXPERT_RESUME, expert.getId());
+        }
 
         expert = getById(expert.getId());
         System.out.println("[新增专家审批]"+expert);
 
-        if (res && (expert!=null && expert.getState()!=null && (submitFlag || expert.getState().equals(ExpertStateEnum.REJECT.getState()) || expert.getState().equals(ExpertStateEnum.SAVE.getState()))) ){
+        if (res){
             //提交审批信息
             //接入底层逻辑平台流程
             Map<String,Object> paramMap = new HashMap<>();
-            paramMap.put("businessId", expert.getId());
-            paramMap.put("businessTitle", "新增专家审批");
+            if(expert.getProcessType().equals(ExpertProcessTypeEnum.EXPERT_ADD.getState())){
+                paramMap.put("businessId", expert.getId());
+                paramMap.put("businessTitle", "新增专家审批");
+                paramMap.put("businessContent", String.format(ApproveFlowPromptTemplateEnum.EXPERT_ADD_APPROVE.getDesc(), expert.getExpertName()));
+            }else{
+                paramMap.put("businessId", expertChange==null?null:expertChange.getId());
+                paramMap.put("businessTitle", "专家信息修改审批");
+                paramMap.put("businessContent", String.format(ApproveFlowPromptTemplateEnum.EXPERT_CHANGE_APPROVE.getDesc(), expert.getExpertName()));
+            }
 
             SysUser sysUser = systemUserService.getUserById(expert.getUserId());
             /* 根据组织获取对应的二级单位 */
@@ -317,7 +413,6 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
             }
 
             paramMap.put("customProcessKey", customProcessKey);
-            paramMap.put("businessContent", String.format(ApproveFlowPromptTemplateEnum.EXPERT_ADD_APPROVE.getDesc(), expert.getExpertName()));
             paramMap.put("detailUrl", "/expert/expert-detail/"+ Base64.encodeStr(("\""+expert.getId().toString()+"\"").getBytes(),true,true));
             UserObj userObj = UserObj.builder().businessType(ProcessKeyEnum.ZHAOCAI_EXPERT_ADD.name()).businessId(expert.getId().toString()).toDoType(ToDoTypeEnum.EXAMINE.name()).build();
             paramMap.put("userObj", JSON.toJSONString(userObj));
@@ -378,13 +473,37 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
             state = ExpertStateEnum.APPROVE.getState();
             expertState = NumberConstant.ONE;
         }
-        super.update(new LambdaUpdateWrapper<Expert>()
-                .set(Expert::getWfProcessId,processId)/* 流程id */
-                .set(Expert::getExpertState,expertState)/* 启用状态 */
-                .set(Expert::getState,state)/* 审批状态 */
-                .set(Expert::getProcessType,ExpertProcessTypeEnum.EXPERT_ADD.getState())/* 流程类型 */
-                .set(Expert::getOperateComment,variables.get("operateComment")==null?"":variables.get("operateComment").toString())
-                .eq(Expert::getId,businessId));
+        ExpertChange expertChange = expertChangeService.getById(businessId);
+        if(expertChange!=null){
+            expertChangeService.update(new LambdaUpdateWrapper<ExpertChange>()
+                    .set(ExpertChange::getWfProcessId,processId)/* 流程id */
+                    .set(ExpertChange::getExpertState,expertState)/* 启用状态 */
+                    .set(ExpertChange::getState,state)/* 审批状态 */
+                    .set(ExpertChange::getProcessType,ExpertProcessTypeEnum.EXPERT_ADD.getState())/* 流程类型 */
+                    .set(ExpertChange::getOperateComment,variables.get("operateComment")==null?"":variables.get("operateComment").toString())
+                    .eq(ExpertChange::getId,businessId));
+            if(state == ExpertStateEnum.APPROVE.getState()){
+                Expert expert = new Expert();
+                BeanUtils.copyProperties(expertChange, expert);
+                expert.setId(expertChange.getExpertId());
+                super.updateById(expert);
+            }
+            super.update(new LambdaUpdateWrapper<Expert>()
+                    .set(Expert::getWfProcessId,processId)/* 流程id */
+                    .set(Expert::getExpertState,expertState)/* 启用状态 */
+                    .set(Expert::getState,state)/* 审批状态 */
+                    .set(Expert::getProcessType,ExpertProcessTypeEnum.EXPERT_ADD.getState())/* 流程类型 */
+                    .set(Expert::getOperateComment,variables.get("operateComment")==null?"":variables.get("operateComment").toString())
+                    .eq(Expert::getId,expertChange.getExpertId()));
+        }else{
+            super.update(new LambdaUpdateWrapper<Expert>()
+                    .set(Expert::getWfProcessId,processId)/* 流程id */
+                    .set(Expert::getExpertState,expertState)/* 启用状态 */
+                    .set(Expert::getState,state)/* 审批状态 */
+                    .set(Expert::getProcessType,ExpertProcessTypeEnum.EXPERT_ADD.getState())/* 流程类型 */
+                    .set(Expert::getOperateComment,variables.get("operateComment")==null?"":variables.get("operateComment").toString())
+                    .eq(Expert::getId,businessId));
+        }
     }
 
     /**
@@ -395,12 +514,33 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
     public void processAuditPass(Map<String, Object> variables) {
         String processId = variables.get("processId").toString();
         String businessId = variables.get("businessId").toString();
-        super.update(new LambdaUpdateWrapper<Expert>()
-                .set(Expert::getWfProcessId,processId)/* 流程id */
-                .set(Expert::getExpertState,NumberConstant.ONE)/* 启用状态 */
-                .set(Expert::getState,ExpertStateEnum.APPROVE.getState())/* 审批状态 */
-                .set(Expert::getOperateComment,variables.get("operateComment")==null?"":variables.get("operateComment").toString())
-                .eq(Expert::getId,businessId));
+
+        ExpertChange expertChange = expertChangeService.getById(businessId);
+        if(expertChange!=null){
+            expertChangeService.update(new LambdaUpdateWrapper<ExpertChange>()
+                    .set(ExpertChange::getWfProcessId,processId)/* 流程id */
+                    .set(ExpertChange::getExpertState,NumberConstant.ONE)/* 启用状态 */
+                    .set(ExpertChange::getState,ExpertStateEnum.APPROVE.getState())/* 审批状态 */
+                    .set(ExpertChange::getOperateComment,variables.get("operateComment")==null?"":variables.get("operateComment").toString())
+                    .eq(ExpertChange::getId,businessId));
+            Expert expert = new Expert();
+            BeanUtils.copyProperties(expertChange, expert);
+            expert.setId(expertChange.getExpertId());
+            super.updateById(expert);
+            super.update(new LambdaUpdateWrapper<Expert>()
+                    .set(Expert::getWfProcessId,processId)/* 流程id */
+                    .set(Expert::getExpertState,NumberConstant.ONE)/* 启用状态 */
+                    .set(Expert::getState,ExpertStateEnum.APPROVE.getState())/* 审批状态 */
+                    .set(Expert::getOperateComment,variables.get("operateComment")==null?"":variables.get("operateComment").toString())
+                    .eq(Expert::getId,expertChange.getExpertId()));
+        }else{
+            super.update(new LambdaUpdateWrapper<Expert>()
+                    .set(Expert::getWfProcessId,processId)/* 流程id */
+                    .set(Expert::getExpertState,NumberConstant.ONE)/* 启用状态 */
+                    .set(Expert::getState,ExpertStateEnum.APPROVE.getState())/* 审批状态 */
+                    .set(Expert::getOperateComment,variables.get("operateComment")==null?"":variables.get("operateComment").toString())
+                    .eq(Expert::getId,businessId));
+        }
     }
 
     /**
@@ -410,11 +550,25 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
     @Override
     public void processAuditReject(Map<String, Object> variables) {
         String businessId = variables.get("businessId").toString();
-        super.update(new LambdaUpdateWrapper<Expert>()
-                .set(Expert::getExpertState,NumberConstant.ZERO)/* 启用状态 */
-                .set(Expert::getState,ExpertStateEnum.REJECT.getState())/* 审批状态 */
-                .set(Expert::getOperateComment,variables.get("operateComment")==null?"":variables.get("operateComment").toString())
-                .eq(Expert::getId, businessId));
+        ExpertChange expertChange = expertChangeService.getById(businessId);
+        if(expertChange!=null){
+            expertChangeService.update(new LambdaUpdateWrapper<ExpertChange>()
+                    .set(ExpertChange::getExpertState,NumberConstant.ZERO)/* 启用状态 */
+                    .set(ExpertChange::getState,ExpertStateEnum.REJECT.getState())/* 审批状态 */
+                    .set(ExpertChange::getOperateComment,variables.get("operateComment")==null?"":variables.get("operateComment").toString())
+                    .eq(ExpertChange::getId, businessId));
+            super.update(new LambdaUpdateWrapper<Expert>()
+                    .set(Expert::getExpertState,NumberConstant.ZERO)/* 启用状态 */
+                    .set(Expert::getState,ExpertStateEnum.REJECT.getState())/* 审批状态 */
+                    .set(Expert::getOperateComment,variables.get("operateComment")==null?"":variables.get("operateComment").toString())
+                    .eq(Expert::getId, expertChange.getExpertId()));
+        }else{
+            super.update(new LambdaUpdateWrapper<Expert>()
+                    .set(Expert::getExpertState,NumberConstant.ZERO)/* 启用状态 */
+                    .set(Expert::getState,ExpertStateEnum.REJECT.getState())/* 审批状态 */
+                    .set(Expert::getOperateComment,variables.get("operateComment")==null?"":variables.get("operateComment").toString())
+                    .eq(Expert::getId, businessId));
+        }
     }
 
     /**
@@ -424,11 +578,25 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
     @Override
     public void processAuditFreedom(Map<String, Object> variables) {
         String businessId = variables.get("businessId").toString();
-        super.update(new LambdaUpdateWrapper<Expert>()
-                .set(Expert::getExpertState,NumberConstant.ZERO)/* 启用状态 */
-                .set(Expert::getState,ExpertStateEnum.REJECT.getState())/* 审批状态 */
-                .set(Expert::getOperateComment,variables.get("operateComment")==null?"":variables.get("operateComment").toString())
-                .eq(Expert::getId, businessId));
+        ExpertChange expertChange = expertChangeService.getById(businessId);
+        if(expertChange!=null){
+            expertChangeService.update(new LambdaUpdateWrapper<ExpertChange>()
+                    .set(ExpertChange::getExpertState,NumberConstant.ZERO)/* 启用状态 */
+                    .set(ExpertChange::getState,ExpertStateEnum.REJECT.getState())/* 审批状态 */
+                    .set(ExpertChange::getOperateComment,variables.get("operateComment")==null?"":variables.get("operateComment").toString())
+                    .eq(ExpertChange::getId, businessId));
+            super.update(new LambdaUpdateWrapper<Expert>()
+                    .set(Expert::getExpertState,NumberConstant.ZERO)/* 启用状态 */
+                    .set(Expert::getState,ExpertStateEnum.REJECT.getState())/* 审批状态 */
+                    .set(Expert::getOperateComment,variables.get("operateComment")==null?"":variables.get("operateComment").toString())
+                    .eq(Expert::getId, expertChange.getExpertId()));
+        }else{
+            super.update(new LambdaUpdateWrapper<Expert>()
+                    .set(Expert::getExpertState,NumberConstant.ZERO)/* 启用状态 */
+                    .set(Expert::getState,ExpertStateEnum.REJECT.getState())/* 审批状态 */
+                    .set(Expert::getOperateComment,variables.get("operateComment")==null?"":variables.get("operateComment").toString())
+                    .eq(Expert::getId, businessId));
+        }
     }
 
     @Override
