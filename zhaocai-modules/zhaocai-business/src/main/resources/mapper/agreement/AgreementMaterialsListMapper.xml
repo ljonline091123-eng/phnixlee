@@ -85,6 +85,7 @@
         <result property="offerBrand" column="offer_brand"/>
         <result property="offerPrice" column="offer_price"/>
         <result property="skuId" column="sku_id"/>
+        <result property="contractSplitId" column="contract_split_id"/>
     </resultMap>
 
     <select id="selectAgreementMaterialsList" resultMap="AgreementMaterialsListVOResult">
@@ -92,7 +93,7 @@
                 tml.specification,tml.unit_measurement,tml.measurement_rules,tml.work_content,tml.cost_account_name,
                 tml.count,tblq.tax_unit_price,tblq.not_tax_unit_price,tblq.tax_price,tblq.not_tax_price,tblq.tax_rate,tblq.bill_type,taml.brand,taml.payment_type,
                 taml.rental_unit,taml.workload,taml.remark,tml.floating_price,tml.unloading_fee,tml.base_price,tml.rent_mode,tml.rent_time,tml.rent_quantity,taml.sign_count,
-                taml.sign_unit_price_incl_tax,taml.sign_unit_price_excl_tax,taml.sign_amount_incl_tax,taml.sign_amount_excl_tax,taml.sign_tax_rate
+                taml.sign_unit_price_incl_tax,taml.sign_unit_price_excl_tax,taml.sign_amount_incl_tax,taml.sign_amount_excl_tax,taml.sign_tax_rate,taml.contract_split_id
         from tb_agreement_materials_list taml
         inner join tb_agreement ta on ta.id = taml.agreement_id
         inner join tb_materials_list tml on tml.id = taml.materials_list_id and tml.contract_split_id = ta.contract_split_id
@@ -162,7 +163,7 @@
                tml.count,tmml.no_tax_price as not_tax_unit_price,tmml.tax_rate,taml.brand,taml.payment_type,
                taml.rental_unit,taml.workload,taml.remark,tml.floating_price,tml.unloading_fee,tml.base_price,tml.rent_mode,tml.rent_time,tml.rent_quantity,taml.sign_count,
                taml.sign_unit_price_incl_tax,taml.sign_unit_price_excl_tax,taml.sign_amount_incl_tax,taml.sign_amount_excl_tax,taml.sign_tax_rate,
-               taml.offer_goods_code,taml.goods_name,taml.offer_brand,taml.offer_price,taml.sku_id
+               taml.offer_goods_code,taml.goods_name,taml.offer_brand,taml.offer_price,taml.sku_id,taml.contract_split_id
         from tb_agreement_materials_list taml
                  inner join tb_agreement ta on ta.id = taml.agreement_id
                  inner join tb_materials_list tml on tml.id = taml.materials_list_id

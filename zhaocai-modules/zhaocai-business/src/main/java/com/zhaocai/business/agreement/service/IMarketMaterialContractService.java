@@ -1,6 +1,7 @@
 package com.zhaocai.business.agreement.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
+import com.zhaocai.business.agreement.domain.AgreementMaterialsList;
 import com.zhaocai.business.agreement.domain.MarketMaterialContract;
 import com.zhaocai.business.agreement.domain.MarketMaterialList;
 import com.zhaocai.business.agreement.vo.req.MarketMaterialContractQueryVO;
@@ -68,5 +69,5 @@ public interface IMarketMaterialContractService extends IService<MarketMaterialC
      * @param materialsList
      * @param materialsListsOld
      */
-    void checkAgreementMaterialsByUpdate(List<MarketMaterialList> materialsList, List<MarketMaterialList> materialsListsOld);
+    void checkAgreementMaterialsByUpdate(List<AgreementMaterialsList> materialsList, List<AgreementMaterialsList> materialsListsOld);
 }

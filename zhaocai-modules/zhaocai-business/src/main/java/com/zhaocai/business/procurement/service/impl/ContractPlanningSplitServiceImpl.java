@@ -30,6 +30,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * 合约规划拆分Service业务层处理
@@ -173,58 +174,42 @@ public class ContractPlanningSplitServiceImpl extends ServiceImpl<ContractPlanni
                 useUp.put(materialsList.getContractSplitId(),false);
             }
         }
-        // 设置使用金额
-        BigDecimal totalUsedAmount = BigDecimal.ZERO;
-        Map<Long, BigDecimal> totalAmount = new HashMap<>();
-        for (AgreementMaterialsList agreementMaterials : agreementMaterialsLists) {
-//            totalUsedAmount = NumberUtil.add(totalUsedAmount,agreementMaterials.getSignAmountInclTax());
-            if (null == totalAmount.get(agreementMaterials.getContractSplitId())) {
-                totalUsedAmount = NumberUtil.add(BigDecimal.ZERO,agreementMaterials.getSignAmountInclTax());
-            } else {
-                totalUsedAmount = NumberUtil.add(totalAmount.get(agreementMaterials.getContractSplitId()),agreementMaterials.getSignAmountInclTax());
-            }
-            totalAmount.put(agreementMaterials.getContractSplitId(), totalUsedAmount);
-        }
+        // 设置本次使用金额
+        Map<Long, BigDecimal> totalAmount = agreementMaterialsLists.stream().collect(Collectors.groupingBy(
+                AgreementMaterialsList::getContractSplitId,
+                Collectors.reducing(BigDecimal.ZERO, AgreementMaterialsList::getSignAmountInclTax, BigDecimal::add)
+        ));
         /* 将原来的减去 */
+        Map<Long, BigDecimal> totalAmountOld = new HashMap<>();
         if (agreementMaterialsListsOld != null) {
-            for (AgreementMaterialsList agreementMaterials : agreementMaterialsListsOld) {
-//                totalUsedAmount = NumberUtil.subtract(totalUsedAmount,agreementMaterials.getSignAmountInclTax());
-                if (null == totalAmount.get(agreementMaterials.getContractSplitId())) {
-                    totalUsedAmount = NumberUtil.subtract(BigDecimal.ZERO,agreementMaterials.getSignAmountInclTax());
-                } else {
-                    totalUsedAmount = NumberUtil.subtract(totalAmount.get(agreementMaterials.getContractSplitId()),agreementMaterials.getSignAmountInclTax());
-                }
-                totalAmount.put(agreementMaterials.getContractSplitId(), totalUsedAmount);
-            }
+            totalAmountOld = agreementMaterialsListsOld.stream().collect(Collectors.groupingBy(
+                    AgreementMaterialsList::getContractSplitId,
+                    Collectors.reducing(BigDecimal.ZERO, AgreementMaterialsList::getSignAmountInclTax, BigDecimal::add)
+            ));
         }
-
+        // 更新合同规划分割表
+        Map<Long, BigDecimal> finalTotalAmountOld = totalAmountOld;
         totalAmount.forEach((contractSplitId, amount)->{
             int isUseUpState = !useUp.get(contractSplitId) ? 1 : 2;
             ContractPlanningSplit contractPlanningSplit = this.getById(contractSplitId);
-            BigDecimal total = NumberUtil.add(amount, contractPlanningSplit.getTotalUsedAmount());
-            this.update(new LambdaUpdateWrapper<ContractPlanningSplit>()
-                    .set(ContractPlanningSplit::getIsUseUp,isUseUpState)
-                    .set(ContractPlanningSplit::getTotalUsedAmount,total)
-                    .eq(ContractPlanningSplit::getId,contractSplitId));
+            if (contractPlanningSplit != null) {
+                BigDecimal total = NumberUtil.add(amount, contractPlanningSplit.getTotalUsedAmount());
+                total = NumberUtil.subtract(total, finalTotalAmountOld.get(contractSplitId));
+                this.update(new LambdaUpdateWrapper<ContractPlanningSplit>()
+                        .set(ContractPlanningSplit::getIsUseUp,isUseUpState)
+                        .set(ContractPlanningSplit::getTotalUsedAmount,total)
+                        .eq(ContractPlanningSplit::getId,contractSplitId));
+            }
         });
     }
 
     @Override
     public void updateContractPlanningSplitUseSubByMarket(List<AgreementMaterialsList> agreementMaterialsLists) {
-        log.info("[撤回易料合同合约拆分（进入）]");
         // 设置使用金额
-        Map<Long, BigDecimal> totalAmount = new HashMap<>();
-        BigDecimal totalUsedAmount = BigDecimal.ZERO;
-        for (AgreementMaterialsList agreementMaterials : agreementMaterialsLists) {
-//            totalUsedAmount = NumberUtil.add(totalUsedAmount,agreementMaterials.getSignAmountInclTax());
-            if (null == totalAmount.get(agreementMaterials.getContractSplitId())) {
-                totalUsedAmount = NumberUtil.add(BigDecimal.ZERO,agreementMaterials.getSignAmountInclTax());
-            } else {
-                totalUsedAmount = NumberUtil.add(totalAmount.get(agreementMaterials.getContractSplitId()),agreementMaterials.getSignAmountInclTax());
-            }
-            totalAmount.put(agreementMaterials.getContractSplitId(), totalUsedAmount);
-        }
-        log.info("[撤回易料合同合约拆分（设置使用金额）]");
+        Map<Long, BigDecimal> totalAmount = agreementMaterialsLists.stream().collect(Collectors.groupingBy(
+                AgreementMaterialsList::getContractSplitId,
+                Collectors.reducing(BigDecimal.ZERO, AgreementMaterialsList::getSignAmountInclTax, BigDecimal::add)
+        ));
         totalAmount.forEach((contractSplitId,amount)->{
             ContractPlanningSplit contractPlanningSplit = this.getById(contractSplitId);
             BigDecimal total = NumberUtil.subtract(contractPlanningSplit.getTotalUsedAmount(),amount);
