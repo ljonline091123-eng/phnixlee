@@ -603,6 +603,10 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
     public ResultData<BpmInitializeResponseDTO> initialize(BpmInitializeRequestDTO requestDTO) {
         Expert expert = getById(requestDTO.getBusinessId());
         SysUser sysUser = systemUserService.getUserById(expert.getUserId());
+        ExpertChange expertChange = expertChangeService.getById(requestDTO.getBusinessId());
+        if(expertChange!=null){
+            sysUser = systemUserService.getUserById(expertChange.getUserId());
+        }
         /* 根据组织获取对应的二级单位 */
         String org = underlingSystemService.getL2OrgByOrgId(sysUser.getThridOrgId());
         /* 获取三级单位 */
@@ -622,6 +626,10 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
     public ResultData<List<BpmListProcessLogResponseDTO>> listProcessLog(BpmListProcessLogRequestDTO requestDTO) {
         Expert expert = getById(requestDTO.getBusinessId());
         SysUser sysUser = systemUserService.getUserById(expert.getUserId());
+        ExpertChange expertChange = expertChangeService.getById(requestDTO.getBusinessId());
+        if(expertChange!=null){
+            sysUser = systemUserService.getUserById(expertChange.getUserId());
+        }
         /* 根据组织获取对应的二级单位 */
         String org = underlingSystemService.getL2OrgByOrgId(sysUser.getThridOrgId());
         /* 获取三级单位 */
@@ -642,6 +650,10 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
 
         Expert expert = getById((Serializable) variables.get("businessId"));
         SysUser sysUser = systemUserService.getUserById(expert.getUserId());
+        ExpertChange expertChange = expertChangeService.getById((Serializable) variables.get("businessId"));
+        if(expertChange!=null){
+            sysUser = systemUserService.getUserById(expertChange.getUserId());
+        }
         /* 根据组织获取对应的二级单位 */
         String org = underlingSystemService.getL2OrgByOrgId(sysUser.getThridOrgId());
         /* 获取三级单位 */
@@ -660,6 +672,10 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
     public ResultData<List<BpmLoadTaskDefResponseDTO>> loadTaskDef(BpmLoadTaskDefRequestDTO requestDTO) {
         Expert expert = getById(requestDTO.getBusinessId());
         SysUser sysUser = systemUserService.getUserById(expert.getUserId());
+        ExpertChange expertChange = expertChangeService.getById(requestDTO.getBusinessId());
+        if(expertChange!=null){
+            sysUser = systemUserService.getUserById(expertChange.getUserId());
+        }
         /* 根据组织获取对应的二级单位 */
         String org = underlingSystemService.getL2OrgByOrgId(sysUser.getThridOrgId());
         /* 获取三级单位 */
