@@ -3370,6 +3370,11 @@ export default {
         curTaskId: this.taskPresentId,
         processKey: "jiantou-zhaocai:{org}:ZHAOCAI_AGREEMENT_SIGN",
       };
+      const loading = this.$loading({
+        lock: true,
+        text: "正在提交...",
+        background: "rgba(0, 0, 0, 0.7)",
+      });
       postAuditProcess(params).then(() => {
         this.$message.success("提交成功");
         this.sanctionVisible = false;
@@ -3377,6 +3382,9 @@ export default {
       }).catch(error => {
         /* 关闭遮罩层 */
         this.$modal.closeLoading();
+      }).finally(() => {
+        // 关闭加载遮罩层
+        loading.close();
       });
     },
     async handelCalibrationApproval() {

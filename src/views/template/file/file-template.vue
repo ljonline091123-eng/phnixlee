@@ -454,12 +454,15 @@ export default {
       this.attachmentId = "";
     },
     treeSelect(value) {
+      console.log("file-template---treeSelect---value",value)
       if (value.disabled) {
         this.$modal.msgError("该单位不能选择");
         // this.fileForm.usingUnitName = "";
         // this.fileForm.usingUnitNo = "";
+        console.log("file-template---treeSelect---this.fileForm1111",this.fileForm)
         this.$set(this.fileForm,'usingUnitName',"");
         this.$set(this.fileForm,'usingUnitNo',"");
+        console.log("file-template---treeSelect---this.fileForm2222",this.fileForm)
       } else {
         this.fileForm.usingUnitName = value.label;
         this.unitId = value.organizationId;
