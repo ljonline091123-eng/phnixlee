@@ -1767,7 +1767,7 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
 
             surplusCount = NumberUtil.subtract(materialsList.getCount(),materialsList.getUsedCount());
             if (NumberUtil.compare(surplusCount,materialsRequestVO.getSignCount()) < 0) {
-                throw new ParamValidateException(String.format("提交的清单[%s]数量[%s]超过剩余使用量[%s]，请重新输入",materialsList.getMaterialsName(),
+                throw new ParamValidateException(String.format("提交的清单[%s]本次签订量[%s]超过剩余可用量[%s]，请重新输入",materialsList.getMaterialsName(),
                         NumberUtil.decimalFormat(materialsRequestVO.getSignCount(),4),
                         NumberUtil.decimalFormat(surplusCount,4)));
             }
@@ -1775,7 +1775,7 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
             // 校验单价
             listQuotationListVO = vendorBiddingMap.get(materialsList.getId());
             if (NumberUtil.compare(materialsRequestVO.getSignUnitPriceInclTax(),listQuotationListVO.getTaxUnitPrice()) > 0) {
-                throw new ParamValidateException(String.format("提交的清单[%s]含税单价[%s]大于供应商的中标单价[%s]，请重新输入",materialsList.getMaterialsName(),
+                throw new ParamValidateException(String.format("提交的清单[%s]本次签订含税单价[%s]大于供应商的中标单价[%s]，请重新输入",materialsList.getMaterialsName(),
                         NumberUtil.decimalFormat(materialsRequestVO.getSignUnitPriceInclTax(),4),
                         NumberUtil.decimalFormat(listQuotationListVO.getTaxUnitPrice(),4)));
             }
@@ -1787,7 +1787,7 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
         ContractPlanningSplit contractPlanningSplit = contractPlanningSplitService.getById(splitId);
         BigDecimal totalSurplusAmount = NumberUtil.subtract(contractPlanningSplit.getTotalPlanAmount(),contractPlanningSplit.getTotalUsedAmount());
         if (totalSurplusAmount.compareTo(requestTotalAmount) < 0) {
-            throw new ParamValidateException(String.format("输入的清单总金额[%s]大于剩余可用金额[%s]",NumberUtil.decimalFormat(requestTotalAmount,4),NumberUtil.decimalFormat(totalSurplusAmount,4)));
+            throw new ParamValidateException(String.format("输入的清单本次含税总价[%s]大于剩余可用金额[%s]",NumberUtil.decimalFormat(requestTotalAmount,4),NumberUtil.decimalFormat(totalSurplusAmount,4)));
         }
     }
 
@@ -1867,7 +1867,7 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
 
             surplusCount = NumberUtil.subtract(materialsList.getCount(),materialsList.getUsedCount());
             if (NumberUtil.compare(surplusCount,materialsRequestVO.getSignCount()) < 0) {
-                throw new ParamValidateException(String.format("提交的清单[%s]数量[%s]超过剩余使用量[%s]，请重新输入",materialsList.getMaterialsName(),
+                throw new ParamValidateException(String.format("提交的清单[%s]本次签订量[%s]超过剩余可用量[%s]，请重新输入",materialsList.getMaterialsName(),
                         NumberUtil.decimalFormat(materialsRequestVO.getSignCount(),4),
                         NumberUtil.decimalFormat(surplusCount,4)));
             }
@@ -1875,7 +1875,7 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
             // 校验供应商提交的单价 与 原物料单价对比
             listQuotationListVO = vendorBiddingMap.get(materialsList.getId());
             if (NumberUtil.compare(materialsRequestVO.getSignUnitPriceInclTax(),listQuotationListVO.getTaxUnitPrice()) > 0) {
-                throw new ParamValidateException(String.format("提交的清单[%s]含税单价[%s]大于供应商的中标单价[%s]，请重新输入",materialsList.getMaterialsName(),
+                throw new ParamValidateException(String.format("提交的清单[%s]本次签订含税单价[%s]大于供应商的中标单价[%s]，请重新输入",materialsList.getMaterialsName(),
                         NumberUtil.decimalFormat(materialsRequestVO.getSignUnitPriceInclTax(),4),
                         NumberUtil.decimalFormat(listQuotationListVO.getTaxUnitPrice(),4)));
             }
