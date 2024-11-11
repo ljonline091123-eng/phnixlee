@@ -454,6 +454,7 @@ export default {
       this.attachmentId = "";
     },
     treeSelect(value) {
+      debugger
       console.log("file-template---treeSelect---value",value)
       if (value.disabled) {
         this.$modal.msgError("该单位不能选择");
