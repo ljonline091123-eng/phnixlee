@@ -73,7 +73,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             ) tbir on tbir.id = tbl.bidding_info_id
             where tbl.split_id = #{splitId,jdbcType=BIGINT} and tbl.del_flag = 0
         ) tlr  on tml.id = tlr.materials_id
-        where tml.contract_split_id =  #{splitId,jdbcType=BIGINT}
+        where tml.contract_split_id =  #{splitId,jdbcType=BIGINT} and tml.push_flag = 'N'
         order by tml.materials_code
     </select>
 
