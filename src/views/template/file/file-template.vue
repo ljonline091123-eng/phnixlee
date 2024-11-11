@@ -460,8 +460,8 @@ export default {
         this.$modal.msgError("该单位不能选择");
         // this.fileForm.usingUnitName = "";
         // this.fileForm.usingUnitNo = "";
-        this.$set(this.fileForm, "usingUnitName", "");
-        this.$set(this.fileForm, "usingUnitNo", "");
+        this.$set(this.fileForm, "usingUnitName", undefined);
+        this.$set(this.fileForm, "usingUnitNo", undefined);
       } else {
         this.fileForm.usingUnitName = value.label;
         this.unitId = value.organizationId;
@@ -471,6 +471,9 @@ export default {
     //保存模板
     confirmTemplate(formName) {
       console.log(this.fileForm);
+      if(!this.fileForm.usingUnitName) {
+        this.$set(this.fileForm, "usingUnitNo", undefined);
+      }
       this.$refs[formName].validate(async (valid) => {
         if (valid) {
           const { attachmentId } = this;

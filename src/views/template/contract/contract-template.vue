@@ -593,6 +593,9 @@ export default {
     },
     //保存模板
     confirmTemplate(formName) {
+      if(!this.fileForm.usingUnitName) {
+        this.$set(this.fileForm, "usingUnitNo", undefined);
+      }
       this.$refs[formName].validate(async (valid, obj) => {
         let isNull = validatenull(obj);
         if (!isNull) {

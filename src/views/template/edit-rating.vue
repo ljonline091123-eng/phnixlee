@@ -756,6 +756,9 @@ export default {
       }
     },
     handleSubmit() {
+      if(!this.formData.usingUnitName) {
+        this.$set(this.formData, "useUnit", undefined);
+      }
       this.$refs.form.validate((valid) => {
         if (valid) {
           let isValid = true;
