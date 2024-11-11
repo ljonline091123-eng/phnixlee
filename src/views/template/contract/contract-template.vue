@@ -735,8 +735,8 @@ export default {
         this.$modal.msgError("该单位不能选择");
         // this.fileForm.usingUnitName = "";
         // this.fileForm.usingUnitNo = "";
-        this.$set(this.fileForm,'usingUnitName',"");
-        this.$set(this.fileForm,'usingUnitNo',"");
+        this.$set(this.fileForm, "usingUnitName", "");
+        this.$set(this.fileForm, "usingUnitNo", "");
       } else {
         this.fileForm.usingUnitName = value.label;
         this.unitId = value.organizationId;

@@ -749,7 +749,7 @@ export default {
       if (value.disabled) {
         this.$modal.msgError("该单位不能选择");
         // this.formData.useUnit = "";
-        this.$set(this.formData,'useUnit',"");
+        this.$set(this.formData,"useUnit","");
       } else {
         this.unitId = value.organizationId;
         this.$refs.form.clearValidate("useUnit");

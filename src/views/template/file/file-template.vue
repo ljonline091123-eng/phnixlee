@@ -460,19 +460,12 @@ export default {
         this.$modal.msgError("该单位不能选择");
         // this.fileForm.usingUnitName = "";
         // this.fileForm.usingUnitNo = "";
-        console.log("file-template---treeSelect---this.fileForm1111",this.fileForm)
-        console.log("file-template---treeSelect---this.this.unitId1111",this.unitId)
-        this.$set(this.fileForm,'usingUnitName',"");
-        this.$set(this.fileForm,'usingUnitNo',"");
-        this.unitId = "";
-        console.log("file-template---treeSelect---this.fileForm2222",this.fileForm)
-        console.log("file-template---treeSelect---this.this.unitId2222",this.unitId)
+        this.$set(this.fileForm, "usingUnitName", "");
+        this.$set(this.fileForm, "usingUnitNo", "");
       } else {
         this.fileForm.usingUnitName = value.label;
         this.unitId = value.organizationId;
         this.$refs.fileFormRef.clearValidate("usingUnitNo");
-        console.log("file-template---treeSelect---this.fileForm3333",this.fileForm)
-        console.log("file-template---treeSelect---this.this.unitId3333",this.unitId)
       }
     },
     //保存模板
