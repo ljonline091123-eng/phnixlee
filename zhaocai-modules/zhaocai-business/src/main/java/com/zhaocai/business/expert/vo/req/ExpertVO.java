@@ -27,6 +27,9 @@ public class ExpertVO implements Serializable {
     @ApiModelProperty(value =  "专家id")
     private Long id;
 
+    @ApiModelProperty(value =  "原专家id")
+    private Long expertId;
+
     @ApiModelProperty(value =  "专家姓名")
     @NotBlank(message = "专家姓名不能为空", groups = {ValidateGroup.AddGroup.class})
     private String expertName;
