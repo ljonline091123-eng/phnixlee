@@ -249,31 +249,42 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
                 if(e.getState()!=null && e.getState().equals(ExpertStateEnum.IN_APPROVAL.getState())){
                     throw new ParamValidateException("专家正在审批中，请稍后再修改");
                 }
+                /* 审批通过后的使用新增专家修改对象 */
+                if(e.getState()!=null && e.getState().equals(ExpertStateEnum.APPROVE.getState())){
+                    ExpertChange expertChange = BeanCopierUtil.copyBean(expertVO, ExpertChange.class);
+                    /* 待审批 */
+                    expertChange.setExpertState(NumberConstant.ZERO);
+                    /* 保存 */
+                    expertChange.setState(ExpertStateEnum.SAVE.getState());
+                    /* 审批类型 */
+                    expertChange.setProcessType(ExpertProcessTypeEnum.EXPERT_CHANGE.getState());
+                    expertChange.setId(null);
+                    expertChange.setExpertId(expertVO.getId());
+                    expertChange.setCreateTime(new Date());
+                    expertChange.setCreateId(SecurityUtils.getUserId());
+                    expertChange.setCreateBy(SecurityUtils.getLoginUserNickName());
+                    expertChangeService.save(expertChange);
+                    //保存招标文件附件
+                    attachmentService.addAttachment(expertVO.getResumeAttachList(), AttachmentTypeEnum.EXPERT_RESUME, expertChange.getId());
 
-                ExpertChange expertChange = BeanCopierUtil.copyBean(expertVO, ExpertChange.class);
-                /* 待审批 */
-                expertChange.setExpertState(NumberConstant.ZERO);
-                /* 保存 */
-                expertChange.setState(ExpertStateEnum.SAVE.getState());
-                /* 审批类型 */
-                expertChange.setProcessType(ExpertProcessTypeEnum.EXPERT_CHANGE.getState());
-                expertChange.setId(null);
-                expertChange.setExpertId(expertVO.getId());
-                expertChange.setCreateTime(new Date());
-                expertChange.setCreateId(SecurityUtils.getUserId());
-                expertChange.setCreateBy(SecurityUtils.getLoginUserNickName());
-                expertChangeService.save(expertChange);
-                //保存招标文件附件
-                attachmentService.addAttachment(expertVO.getResumeAttachList(), AttachmentTypeEnum.EXPERT_RESUME, expertChange.getId());
-
-                /* 审批通过后的修改数据库的值 */
-                expert = e;
-                /* 待审批 */
-                expert.setExpertState(NumberConstant.ZERO);
-                /* 保存 */
-                expert.setState(ExpertStateEnum.SAVE.getState());
-                /* 审批类型 */
-                expert.setProcessType(ExpertProcessTypeEnum.EXPERT_CHANGE.getState());
+                    /* 审批通过后的修改数据库的值 */
+                    expert = e;
+                    /* 待审批 */
+                    expert.setExpertState(NumberConstant.ZERO);
+                    /* 保存 */
+                    expert.setState(ExpertStateEnum.SAVE.getState());
+                    /* 审批类型 */
+                    expert.setProcessType(ExpertProcessTypeEnum.EXPERT_CHANGE.getState());
+                }else{
+                    /* 审批不通过后的修改数据库的值，类型用原来的。 */
+                    expert = e;
+                    /* 待审批 */
+                    expert.setExpertState(NumberConstant.ZERO);
+                    /* 保存 */
+                    expert.setState(ExpertStateEnum.SAVE.getState());
+                    /* 审批类型，用原来的 */
+                    expert.setProcessType(e.getProcessType());
+                }
             }else{
                 expert = BeanCopierUtil.copyBean(expertVO, Expert.class);
                 /* 待审批 */
@@ -335,31 +346,43 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
                 if(e.getState()!=null && e.getState().equals(ExpertStateEnum.IN_APPROVAL.getState())){
                     throw new ParamValidateException("专家正在审批中，请稍后再修改");
                 }
+                /* 审批通过后的使用新增专家修改对象 */
+                if(e.getState()!=null && e.getState().equals(ExpertStateEnum.APPROVE.getState())){
+                    expertChange = BeanCopierUtil.copyBean(expertVO, ExpertChange.class);
+                    /* 待审批 */
+                    expertChange.setExpertState(NumberConstant.ZERO);
+                    /* 保存 */
+                    expertChange.setState(ExpertStateEnum.IN_APPROVAL.getState());
+                    /* 审批类型 */
+                    expertChange.setProcessType(ExpertProcessTypeEnum.EXPERT_CHANGE.getState());
+                    expertChange.setId(null);
+                    expertChange.setExpertId(expertVO.getId());
+                    expertChange.setCreateTime(new Date());
+                    expertChange.setCreateId(SecurityUtils.getUserId());
+                    expertChange.setCreateBy(SecurityUtils.getLoginUserNickName());
+                    expertChangeService.save(expertChange);
+                    //保存招标文件附件
+                    attachmentService.addAttachment(expertVO.getResumeAttachList(), AttachmentTypeEnum.EXPERT_RESUME, expertChange.getId());
 
-                expertChange = BeanCopierUtil.copyBean(expertVO, ExpertChange.class);
-                /* 待审批 */
-                expertChange.setExpertState(NumberConstant.ZERO);
-                /* 保存 */
-                expertChange.setState(ExpertStateEnum.IN_APPROVAL.getState());
-                /* 审批类型 */
-                expertChange.setProcessType(ExpertProcessTypeEnum.EXPERT_CHANGE.getState());
-                expertChange.setId(null);
-                expertChange.setExpertId(expertVO.getId());
-                expertChange.setCreateTime(new Date());
-                expertChange.setCreateId(SecurityUtils.getUserId());
-                expertChange.setCreateBy(SecurityUtils.getLoginUserNickName());
-                expertChangeService.save(expertChange);
-                //保存招标文件附件
-                attachmentService.addAttachment(expertVO.getResumeAttachList(), AttachmentTypeEnum.EXPERT_RESUME, expertChange.getId());
+                    /* 审批通过后的修改数据库的值 */
+                    expert = e;
+                    /* 待审批 */
+                    expert.setExpertState(NumberConstant.ZERO);
+                    /* 保存 */
+                    expert.setState(ExpertStateEnum.IN_APPROVAL.getState());
+                    /* 审批类型 */
+                    expert.setProcessType(ExpertProcessTypeEnum.EXPERT_CHANGE.getState());
+                }else{
+                    /* 审批不通过后的修改数据库的值，类型用原来的。 */
+                    expert = e;
+                    /* 待审批 */
+                    expert.setExpertState(NumberConstant.ZERO);
+                    /* 保存 */
+                    expert.setState(ExpertStateEnum.IN_APPROVAL.getState());
+                    /* 审批类型，用原来的 */
+                    expert.setProcessType(e.getProcessType());
+                }
 
-                /* 审批通过后的修改数据库的值 */
-                expert = e;
-                /* 待审批 */
-                expert.setExpertState(NumberConstant.ZERO);
-                /* 保存 */
-                expert.setState(ExpertStateEnum.IN_APPROVAL.getState());
-                /* 审批类型 */
-                expert.setProcessType(ExpertProcessTypeEnum.EXPERT_CHANGE.getState());
             }else{
                 expert = BeanCopierUtil.copyBean(expertVO, Expert.class);
                 /* 待审批 */
