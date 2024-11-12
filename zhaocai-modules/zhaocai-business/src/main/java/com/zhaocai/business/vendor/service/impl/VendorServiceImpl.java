@@ -461,7 +461,7 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
         vendorIndexInfoVO.setEnterpriseName(vendor.getEnterpriseName());
         vendorIndexInfoVO.setContactName(vendorContact.getContactName());
         vendorIndexInfoVO.setApproveState(vendor.getState());
-        vendorIndexInfoVO.setApproveMsg(vendor.getOperateComment());/* 审批信息 */
+        vendorIndexInfoVO.setApproveMsg(vendor.getOperateComment()==null?"":vendor.getOperateComment());/* 审批信息 */
         vendorIndexInfoVO.setIsManager(vendorContact.getIsManager());
         vendorIndexInfoVO.setIsBlack(vendor.getIsBlack());
         vendorIndexInfoVO.setContactPhone(vendorContact.getContactPhone());
