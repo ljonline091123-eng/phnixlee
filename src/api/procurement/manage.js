@@ -66,15 +66,6 @@ export const getPermissionButton = (params) => {
   });
 };
 
-// 获取专家责任单位审批权限
-export const getPermissionButtonNew = (params) => {
-  return request({
-    url: "/business/expert/initialize",
-    method: "get",
-    params,
-  });
-};
-
 // 获取供应商审批权限
 export const getPermissionButtonVendor = (params) => {
   return request({
@@ -95,14 +86,6 @@ export const getLoadTaskDef = (params) => {
 export const getLoadTaskDefVendor = (params) => {
   return request({
     url: "/business/vendor/loadTaskDef",
-    method: "get",
-    params,
-  });
-};
-// 加载责任单位定义接口
-export const getLoadTaskDefNew= (params) => {
-  return request({
-    url: "/business/expert/loadTaskDef",
     method: "get",
     params,
   });
@@ -138,14 +121,6 @@ export const getProcessLogListVendor = (params) => {
 export const postAuditProcess = (data) => {
   return request({
     url: "/business/process/auditProcess",
-    method: "post",
-    data,
-  });
-};
-// 审批流程
-export const postAuditProcessNew = (data) => {
-  return request({
-    url: "/business/expert/audit",
     method: "post",
     data,
   });
