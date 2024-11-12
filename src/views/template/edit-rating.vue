@@ -749,13 +749,16 @@ export default {
       if (value.disabled) {
         this.$modal.msgError("该单位不能选择");
         // this.formData.useUnit = "";
-        this.$set(this.formData,'useUnit',"");
+        this.$set(this.formData,"useUnit","");
       } else {
         this.unitId = value.organizationId;
         this.$refs.form.clearValidate("useUnit");
       }
     },
     handleSubmit() {
+      if(!this.formData.usingUnitName) {
+        this.$set(this.formData, "useUnit", undefined);
+      }
       this.$refs.form.validate((valid) => {
         if (valid) {
           let isValid = true;

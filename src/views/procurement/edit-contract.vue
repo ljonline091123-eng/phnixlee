@@ -211,8 +211,13 @@
                 </el-form-item>
               </el-col>
               <el-col :span="8">
+<!--                <el-form-item label="工期" prop="agreement.duration">-->
+<!--                  <el-input v-model="firstForm.duration" />-->
+<!--                </el-form-item>-->
                 <el-form-item label="工期" prop="agreement.duration">
-                  <el-input v-model="firstForm.duration" />
+                  <el-input :value="durationComputed(firstForm.agreement.contractStartDate, firstForm.agreement.contractEndDate)" placeholder="系统自动计算" disabled >
+                    <template #append>天</template>
+                  </el-input>
                 </el-form-item>
               </el-col>
             </el-row>
@@ -2198,8 +2203,8 @@ export default {
       };
     },
     durationComputed(){
-      return () => {
-        const { entryDate, finishDate } = this.firstForm.agreement
+      return (entryDate, finishDate) => {
+        //const { entryDate, finishDate } = this.firstForm.agreement
         // 定义开始日期和结束日期
         const startDate = new Date(entryDate);
         const endDate = new Date(finishDate);

@@ -444,7 +444,9 @@ export default {
     submitForm(formName) {
       // console.log(this.planList,'ppp');
       this.isSubmit = true;
-
+      if(!this.formData.usingUnitName) {
+        this.$set(this.formData, "useUnit", undefined);
+      }
       this.$refs[formName].validate(async (valid, done) => {
         if (valid) {
           // const { indexs } = this;
@@ -609,7 +611,7 @@ export default {
       if (value.disabled) {
         this.$modal.msgError("该单位不能选择");
         // this.formData.useUnit = "";
-        this.$set(this.formData,'useUnit',"");
+        this.$set(this.formData,"useUnit","");
       } else {
         this.unitId = value.organizationId;
         this.$refs.fileFormRef.clearValidate("useUnit");
