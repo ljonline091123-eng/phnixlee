@@ -53,14 +53,16 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="rentMode" column="rent_mode"/>
         <result property="rentTime" column="rent_time"/>
         <result property="rentQuantity" column="rent_quantity"/>
+        <result property="priceType" column="price_type"/>
     </resultMap>
 
+    <!-- 合同签订新增合同时查询获取供应商的报价清单 -->
     <select id="selectVendorBiddingListQuotation" resultMap="BiddingMaterialsListResult">
         select tml.id as materials_id, tml.materials_code,tml.materials_name,tml.subject_matter_code,tml.subject_matter_name,tml.specification,tml.unit_measurement,
                 tml.count,tml.used_count,tlr.tax_rate,
                 tlr.tax_price,tlr.tax_unit_price,tlr.not_tax_unit_price,tlr.not_tax_price,tlr.bill_type,tlr.id as bidding_list_quotation_id,
                 tml.cost_account_name,tml.measurement_rules,tml.work_content,tlr.floating_price,tml.unloading_fee,tml.base_price,tml.rent_mode,
-                tml.rent_time,tml.rent_quantity
+                tml.rent_time,tml.rent_quantity,tml.price_type
         from tb_materials_list tml
         inner join (
             select tbl.id,tbl.split_id,tbl.materials_id, tbl.materials_code,tbl.tax_rate,tbl.tax_unit_price,tbl.not_tax_unit_price,tbl.tax_price,

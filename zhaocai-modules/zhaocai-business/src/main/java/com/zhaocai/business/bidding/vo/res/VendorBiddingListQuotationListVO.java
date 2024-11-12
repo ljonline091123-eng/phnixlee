@@ -85,6 +85,12 @@ public class VendorBiddingListQuotationListVO extends AdviceObject {
     @ApiModelProperty(value = "浮动价")
     private BigDecimal floatingPrice;
 
+    /**
+     * 价格类型 {@link com.zhaocai.business.common.enums.PriceTypeEnum}
+     */
+    @ApiModelProperty(value = "价格类型")
+    private Integer priceType;
+
     @ApiModelProperty(value = "卸费")
     private BigDecimal unloadingFee;
 
