@@ -7,7 +7,7 @@
           plain
           size="mini"
           :disabled="isSubmit"
-          @click="$tab.closePage()"
+          @click="$router.push('/tender-procurement/expert/expert')"
           >取消</el-button
         >
 <!--      <el-button-->
@@ -429,7 +429,7 @@ import {
   getPermissionButton,getPermissionButtonNew,
   postAuditProcess,postAuditProcessNew,
   getLoadTaskDef,getLoadTaskDefNew,
-  getProcessLogList,
+  getProcessLogList,getProcessLogListNew,
 } from "@/api/procurement/manage";
 export default {
   name: "expert-detail",
@@ -569,6 +569,7 @@ export default {
         this.$modal.closeLoading();
       });
     },
+    /* 审批详情 */
     async handelCalibrationApproval(row) {
       this.businessId = this.formData.id;
       this.processId = this.formData.wfProcessId;
@@ -578,6 +579,10 @@ export default {
         const params = {
           businessId: this.businessId,
           processId: this.processId,
+          /* 流程类型 */
+          // EXPERT_ADD(1,"专家新增"),
+          // EXPERT_CHANGE(2,"专家修改"),
+          processType: this.formData.processType,
         };
         if (this.businessId && this.processId) {
           const res = await getLoadTaskDefNew(params);
@@ -597,7 +602,7 @@ export default {
             return nodes.length;
           }
           this.calibrateActive = getActive(this.processInformationList);
-          const response = await getProcessLogList(params);
+          const response = await getProcessLogListNew(params);
           this.approveArr = response.data;
         }
       } catch (error) {}

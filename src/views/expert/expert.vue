@@ -168,13 +168,13 @@
                 size="small"
                 @click="editExpert(scope.row)"
                 >编辑</el-button>
-                <el-button
-                v-if="[1].includes(scope.row.state)"
-                type="text"
-                size="small"
-                @click="checkExpert(scope.row)"
-                >审批</el-button
-              >
+<!--                <el-button-->
+<!--                v-if="[1].includes(scope.row.state)"-->
+<!--                type="text"-->
+<!--                size="small"-->
+<!--                @click="checkExpert(scope.row)"-->
+<!--                >审批</el-button-->
+<!--              >-->
                 </template>
               </el-table-column>
               <el-table-column

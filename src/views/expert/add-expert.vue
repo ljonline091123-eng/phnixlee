@@ -7,7 +7,7 @@
           plain
           size="mini"
           :disabled="isSubmit"
-          @click="$tab.closePage()"
+          @click="$router.push('/tender-procurement/expert/expert')"
           >取消</el-button
         >
       <el-button
@@ -29,7 +29,7 @@
           :loading="isSubmit"
           >{{ isSubmit ? "提交中..." : "提交" }}</el-button>
         <el-button
-          v-if="type=='check' && formData.state == 1"
+          v-if="auditable"
           type="primary"
           size="mini"
           @click="confirmApprove()"
@@ -427,10 +427,10 @@ import BackButton from "@/components/BackButton/index.vue";
 import PageTitle from "@/components/PageTitle/index.vue";
 import { uploadFileUrl } from "@/utils/const";
 import {
-  getPermissionButton,getPermissionButtonNew,
-  postAuditProcess,postAuditProcessNew,
-  getLoadTaskDef,getLoadTaskDefNew,
-  getProcessLogList,
+  getPermissionButton, getPermissionButtonNew,
+  postAuditProcess, postAuditProcessNew,
+  getLoadTaskDef, getLoadTaskDefNew,
+  getProcessLogList, getProcessLogListNew,
 } from "@/api/procurement/manage";
 import {showSecretRelatedTips} from "@/utils/MyUtils";
 export default {
@@ -467,6 +467,8 @@ export default {
       rejectNodeList: [],
       /* 下一步审批人列表 */
       nextCandidateList: [],
+      /* 是否可以审批 */
+      auditable: false,
       /* 下一步审批人 */
       nextAppointable: false,
       formData: {
@@ -552,24 +554,24 @@ export default {
           this.isSubmit = true;
         }
       }else{
-      console.log("新增"+this.id);
-      this.type='edit'
-    const {
-      nickName: expertName,
-      phonenumber: expertPhone,
-      dept,
-      userId,
-      thridOrgName,
-    } = param;
-    console.log(JSON.stringify(param), "p---p");
-    Object.assign(this.formData, {
-      expertName,
-      expertPhone,
-      department: dept.deptName,
-      userId,
-      belongOrganization: thridOrgName,
-    });
-  }
+          console.log("新增"+this.id);
+          this.type='edit'
+        const {
+          nickName: expertName,
+          phonenumber: expertPhone,
+          dept,
+          userId,
+          thridOrgName,
+        } = param;
+        console.log(JSON.stringify(param), "p---p");
+        Object.assign(this.formData, {
+          expertName,
+          expertPhone,
+          department: dept.deptName,
+          userId,
+          belongOrganization: thridOrgName,
+        });
+      }
 
     }
   },
@@ -601,6 +603,7 @@ export default {
         this.$modal.closeLoading();
       });
     },
+    /* 审批详情 */
     async handelCalibrationApproval(row) {
       this.businessId = this.formData.id;
       this.processId = this.formData.wfProcessId;
@@ -610,6 +613,10 @@ export default {
         const params = {
           businessId: this.businessId,
           processId: this.processId,
+          /* 流程类型 */
+          // EXPERT_ADD(1,"专家新增"),
+          // EXPERT_CHANGE(2,"专家修改"),
+          processType: this.formData.processType,
         };
         if (this.businessId && this.processId) {
           const res = await getLoadTaskDefNew(params);
@@ -629,7 +636,7 @@ export default {
             return nodes.length;
           }
           this.calibrateActive = getActive(this.processInformationList);
-          const response = await getProcessLogList(params);
+          const response = await getProcessLogListNew(params);
           this.approveArr = response.data;
         }
       } catch (error) {}
@@ -656,6 +663,8 @@ export default {
           this.nextAppointable = res.data.nextAppointable;
           this.taskPresentId = res.data.curTaskId;
           // this.isShowButton = res.data.auditable;
+          /* 当前登录人是否可以审批 */
+          this.auditable = res.data.auditable;
         }
       } catch (error) {}
     },
@@ -683,7 +692,12 @@ export default {
         if(data.technicalTitles){
           this.formData.technicalTitles=data.technicalTitles+""
         }
-
+        // SAVE(0,"保存"),
+        // IN_APPROVAL(1,"审批中"),
+        // REJECT(2,"审批拒绝"),
+        // APPROVE(3,"审批通过")
+        if(this.formData.state == '1')
+          await this.getPermissionButton()
       },
     //保存
     saveForm(formName){
