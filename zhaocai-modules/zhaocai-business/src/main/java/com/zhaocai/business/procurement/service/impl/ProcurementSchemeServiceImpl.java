@@ -543,34 +543,10 @@ public class ProcurementSchemeServiceImpl extends ServiceImpl<ProcurementSchemeM
 
             /* 获取采购计划的价格类型列表 校验价格类型 */
             List<Integer> priceTypes = extractDistinctValues(procurementPlans,ProcurementPlan::getPriceType);
-//            if (priceTypes.size() > 1) {
-//                throw new ParamValidateException("所选择的采购计划存在多种价格类型，请确认后重新选择");
-//            }
-            /* 如果包含浮动价 */
-            if(priceTypes!=null && priceTypes.contains(PriceTypeEnum.FLOAT_PRICE.getType())){
-                /* 赋值浮动价 */
-                schemeCreateVO.setPriceType(PriceTypeEnum.FLOAT_PRICE.getType());
-                /* 如果包含固定价 */
-                if(priceTypes.contains(PriceTypeEnum.FIXED_PRICE.getType())){
-                    /* 赋值固定、浮动价 */
-                    schemeCreateVO.setPriceType(PriceTypeEnum.FIXED_FLOAT_PRICE.getType());
-                }
+            if (priceTypes.size() > 1) {
+                throw new ParamValidateException("所选择的采购计划存在多种价格类型，请确认后重新选择");
             }
-            /* 如果包含固定价 */
-            if(priceTypes!=null && priceTypes.contains(PriceTypeEnum.FIXED_PRICE.getType())){
-                /* 赋值固定价 */
-                schemeCreateVO.setPriceType(PriceTypeEnum.FIXED_PRICE.getType());
-                /* 如果包含浮动价 */
-                if(priceTypes.contains(PriceTypeEnum.FLOAT_PRICE.getType())){
-                    /* 赋值固定、浮动价 */
-                    schemeCreateVO.setPriceType(PriceTypeEnum.FIXED_FLOAT_PRICE.getType());
-                }
-            }
-            /* 如果包含固定、浮动价 */
-            if(priceTypes!=null && priceTypes.contains(PriceTypeEnum.FIXED_FLOAT_PRICE.getType())){
-                /* 赋值固定、浮动价 */
-                schemeCreateVO.setPriceType(PriceTypeEnum.FIXED_FLOAT_PRICE.getType());
-            }
+            schemeCreateVO.setPriceType(priceTypes.get(0));
 
             // 计数方式
             List<Integer> countingTypes = extractDistinctValues(procurementPlans,ProcurementPlan::getCountingType);
