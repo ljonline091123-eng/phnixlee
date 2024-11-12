@@ -19,6 +19,7 @@ public class VendorIndexInfoVO {
     @ApiModelProperty(value = "联系人名称")
     private String contactName;
 
+    /** 状态 {@link com.zhaocai.business.common.enums.VendorStateEnum}  */
     @ApiModelProperty(value = "审核状态")
     private Integer approveState;
 
