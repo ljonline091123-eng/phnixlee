@@ -503,3 +503,20 @@ export const getLoadTaskDefNew= (params) => {
     params,
   });
 };
+// 流程操作日志列表
+export const getProcessLogListNew = (params) => {
+  // 手动拼接 businessId 到 URL 中
+  let url = `/business/expert/listProcessLog?processId=${params.processId}`;
+  // 如果 businessId 存在，即使为空字符串，也将其拼接到 URL 中
+  if (params.businessId !== undefined) {
+    url += `&businessId=${params.businessId}`;
+  }
+  // 如果 processType 存在，即使为空字符串，也将其拼接到 URL 中
+  if (params.processType !== undefined) {
+    url += `&processType=${params.processType}`;
+  }
+  return request({
+    url: url,
+    method: "get",
+  });
+};
