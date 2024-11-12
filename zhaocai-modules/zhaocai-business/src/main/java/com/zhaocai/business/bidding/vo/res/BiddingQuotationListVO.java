@@ -3,6 +3,7 @@ package com.zhaocai.business.bidding.vo.res;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.zhaocai.business.common.annotations.MoneyFormat;
 import com.zhaocai.business.common.base.AdviceObject;
+import com.zhaocai.business.procurement.vo.res.ProcurementSchemeDetailVO;
 import com.zhaocai.business.pub.vo.res.AttachmentVO;
 import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;
@@ -27,6 +28,9 @@ public class BiddingQuotationListVO extends AdviceObject implements Comparable<B
 
     @ApiModelProperty(value =  "采购方案id")
     private Long schemeId;
+
+    @ApiModelProperty(value =  "采购方案详情")
+    private ProcurementSchemeDetailVO scheme;
 
     @ApiModelProperty(value =  "招标公告id")
     private Long noticeId;

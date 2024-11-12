@@ -32,10 +32,7 @@ import com.zhaocai.business.procurement.domain.ProcurementSchemePlanRelate;
 import com.zhaocai.business.procurement.service.IProcurementPlanService;
 import com.zhaocai.business.procurement.service.IProcurementSchemePlanRelateService;
 import com.zhaocai.business.procurement.service.IProcurementSchemeService;
-import com.zhaocai.business.procurement.vo.res.CompContractSplitMaterialsVO;
-import com.zhaocai.business.procurement.vo.res.CompMaterialsContentVO;
-import com.zhaocai.business.procurement.vo.res.CompMaterialsVO;
-import com.zhaocai.business.procurement.vo.res.MaterialsVO;
+import com.zhaocai.business.procurement.vo.res.*;
 import com.zhaocai.business.pub.domain.Attachment;
 import com.zhaocai.business.pub.service.IAttachmentService;
 import com.zhaocai.business.pub.service.ISystemUserService;
@@ -175,10 +172,15 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
             }
         }
 
+        /* 采购方案详情 */
+        ProcurementSchemeDetailVO scheme = procurementSchemeService.detail(queryVO.getSchemeId());
+
         List<BiddingQuotationListVO> listReturn = new ArrayList<>();
         for(Long vendorId : hasMap.keySet()) {
             /* 获取该供应商所有的投标数据 */
             BiddingQuotationListVO vo = hasMap.get(vendorId).get((Math.max((hasMap.get(vendorId).size() - 1), 0)));
+            /* 采购方案详情 */
+            vo.setScheme(scheme);
             List<BiddingQuotationDataVO> quotationDataVOList = new ArrayList<>();
             /* 获取该供应商所有的投标数据，处理数据后 存入数值 */
             for (int i = 0; i < hasMap.get(vendorId).size(); i++) {
