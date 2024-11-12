@@ -716,13 +716,16 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
 
     @Override
     public ResultData<List<BpmLoadTaskDefResponseDTO>> loadTaskDef(BpmLoadTaskDefRequestDTO requestDTO) {
+        log.info("[专家流程列表loadTaskDef][BpmLoadTaskDefRequestDTO]{}",requestDTO);
         SysUser sysUser;
         ExpertChange expertChange = expertChangeService.getOne(new LambdaQueryWrapper<ExpertChange>()
                 .eq(ExpertChange::getId,requestDTO.getBusinessId()));
+        log.info("[专家流程列表loadTaskDef][expertChange]{}",expertChange);
         /* 如果流程类型是 修改就使用修改的id */
         if(requestDTO.getProcessType()!=null && requestDTO.getProcessType().equals(ExpertProcessTypeEnum.EXPERT_CHANGE.getState()+"")){
             expertChange = expertChangeService.getOne(new LambdaQueryWrapper<ExpertChange>()
                     .eq(ExpertChange::getExpertId,requestDTO.getBusinessId()).orderByDesc(ExpertChange::getCreateTime).last("limit 1"));
+            log.info("[专家流程列表loadTaskDef][expertChange = 2]{}",expertChange);
             if(expertChange!=null){
                 requestDTO.setBusinessId(expertChange.getId()+"");
                 requestDTO.setProcessId(expertChange.getWfProcessId());
@@ -732,8 +735,10 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
             sysUser = systemUserService.getUserById(expertChange.getUserId());
         }else{
             Expert expert = getById(requestDTO.getBusinessId());
+            log.info("[专家流程列表loadTaskDef][expert]{}",expert);
             sysUser = systemUserService.getUserById(expert.getUserId());
         }
+        log.info("[专家流程列表loadTaskDef][sysUser]{}",sysUser);
         /* 根据组织获取对应的二级单位 */
         String org = underlingSystemService.getL2OrgByOrgId(sysUser.getThridOrgId());
         /* 获取三级单位 */
