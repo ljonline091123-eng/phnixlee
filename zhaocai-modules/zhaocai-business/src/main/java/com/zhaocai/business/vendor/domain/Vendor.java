@@ -173,7 +173,7 @@ public class Vendor extends BaseEntity {
     private Integer vendorLevel;
 
     /**
-     * 状态
+     * 状态 {@link com.zhaocai.business.common.enums.VendorStateEnum}
      */
     @ApiModelProperty(value = "状态")
     private Integer state;

@@ -234,6 +234,7 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
 
         //新增专家信息
         Expert expert;
+        ExpertChange expertChange;
         /* 新增才走审批流程，修改不走 */
         if(idIsNull){
             expert = BeanCopierUtil.copyBean(expertVO, Expert.class);
@@ -249,7 +250,11 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
                 if(e.getState()!=null && e.getState().equals(ExpertStateEnum.IN_APPROVAL.getState())){
                     throw new ParamValidateException("专家正在审批中，请稍后再修改");
                 }
-                ExpertChange expertChange = BeanCopierUtil.copyBean(expertVO, ExpertChange.class);
+                expertChange = expertChangeService.getOne(new LambdaQueryWrapper<ExpertChange>()
+                        .eq(ExpertChange::getExpertId,expertVO.getId()).orderByDesc(ExpertChange::getCreateTime).last("limit 1"));
+                /* 只有没有被创建或者审批通过的才新增修改专家 */
+                Long expertChangeId = (expertChange==null || expertChange.getState().equals(ExpertStateEnum.APPROVE.getState()))?null:expertChange.getId();
+                expertChange = BeanCopierUtil.copyBean(expertVO, ExpertChange.class);
                 /* 待审批 */
                 expertChange.setExpertState(NumberConstant.ZERO);
                 /* 保存 */
@@ -258,7 +263,7 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
                 expertChange.setProcessType(e.getProcessType());
                 if(e.getState()!=null && e.getState().equals(ExpertStateEnum.APPROVE.getState()))
                     expertChange.setProcessType(ExpertProcessTypeEnum.EXPERT_CHANGE.getState());
-                expertChange.setId(null);
+                expertChange.setId(expertChangeId);
                 expertChange.setExpertId(expertVO.getId());
                 expertChange.setCreateTime(new Date());
                 expertChange.setCreateId(SecurityUtils.getUserId());
@@ -338,6 +343,10 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
                 if(e.getState()!=null && e.getState().equals(ExpertStateEnum.IN_APPROVAL.getState())){
                     throw new ParamValidateException("专家正在审批中，请稍后再修改");
                 }
+                expertChange = expertChangeService.getOne(new LambdaQueryWrapper<ExpertChange>()
+                        .eq(ExpertChange::getExpertId,expertVO.getId()).orderByDesc(ExpertChange::getCreateTime).last("limit 1"));
+                /* 只有没有被创建或者审批通过的才新增修改专家 */
+                Long expertChangeId = (expertChange==null || expertChange.getState().equals(ExpertStateEnum.APPROVE.getState()))?null:expertChange.getId();
                 expertChange = BeanCopierUtil.copyBean(expertVO, ExpertChange.class);
                 /* 待审批 */
                 expertChange.setExpertState(NumberConstant.ZERO);
@@ -347,7 +356,7 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
                 expertChange.setProcessType(e.getProcessType());
                 if(e.getState()!=null && e.getState().equals(ExpertStateEnum.APPROVE.getState()))
                     expertChange.setProcessType(ExpertProcessTypeEnum.EXPERT_CHANGE.getState());
-                expertChange.setId(null);
+                expertChange.setId(expertChangeId);
                 expertChange.setExpertId(expertVO.getId());
                 expertChange.setCreateTime(new Date());
                 expertChange.setCreateId(SecurityUtils.getUserId());
