@@ -45,7 +45,7 @@
     <!-- 审批和审批详情 -->
     <ApprovalForm
       :visible.sync="sanctionVisible"
-      :title="'采购方案审批流程'"
+      :title="'供应商审批流程'"
       :formModel="sanctionForm"
       :rejectNodeList="rejectNodeList"
       @update:visible="sanctionVisible = $event"
@@ -53,7 +53,7 @@
     />
     <ApprovalDetailsDialog
       :visible.sync="calibrateVisible"
-      title="采购方案审批流程详情"
+      title="供应商审批流程详情"
       :activeStep="calibrateActive"
       :processInformationList="processInformationList"
       :approveLists="approveArr"
@@ -922,7 +922,7 @@ export default {
         }else{
           this.getPermissionButton();
         }
-        
+
         this.getVendorDetail();
       }).catch(error => {
         /* 关闭遮罩层 */
