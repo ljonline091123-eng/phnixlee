@@ -1450,7 +1450,7 @@ export default {
       })
     },
     avoidSubmitForm(){
-      this.$confirm("确定免审提交", "提示", {
+      this.$confirm("确定免审提交?(合同金额小于5万才允许免审提交)", "提示", {
         confirmButtonText: "确定",
         cancelButtonText: "取消",
         type: "warning",
