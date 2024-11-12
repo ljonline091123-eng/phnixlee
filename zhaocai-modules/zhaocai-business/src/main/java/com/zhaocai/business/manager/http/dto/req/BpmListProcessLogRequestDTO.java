@@ -25,6 +25,11 @@ public class BpmListProcessLogRequestDTO extends UnderlyingPlatformBaseDTO{
     private String businessId;
 
     /**
+     * 流程类型 专家用到了-> {@link com.zhaocai.business.common.enums.ExpertProcessTypeEnum}
+     */
+    private String processType;
+
+    /**
      * 运行时属性对象
      */
     private List<PropertyListRequestDTO<Object>> propertyList;

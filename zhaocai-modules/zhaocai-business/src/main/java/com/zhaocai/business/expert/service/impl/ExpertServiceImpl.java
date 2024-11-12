@@ -659,6 +659,15 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
         SysUser sysUser;
         ExpertChange expertChange = expertChangeService.getOne(new LambdaQueryWrapper<ExpertChange>()
                 .eq(ExpertChange::getId,requestDTO.getBusinessId()));
+        /* 如果流程类型是 修改就使用修改的id */
+        if(requestDTO.getProcessType()!=null && requestDTO.getProcessType().equals(ExpertProcessTypeEnum.EXPERT_CHANGE.getState()+"")){
+            expertChange = expertChangeService.getOne(new LambdaQueryWrapper<ExpertChange>()
+                    .eq(ExpertChange::getExpertId,requestDTO.getBusinessId()).orderByDesc(ExpertChange::getCreateTime).last("limit 1"));
+            if(expertChange!=null){
+                requestDTO.setBusinessId(expertChange.getId()+"");
+                requestDTO.setProcessId(expertChange.getWfProcessId());
+            }
+        }
         if(expertChange!=null){
             sysUser = systemUserService.getUserById(expertChange.getUserId());
         }else{
@@ -676,7 +685,7 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
         PropertyListRequestDTO.addPropertyToList(propertyList, "companyId", org);/* 公司 二级单位 */
         PropertyListRequestDTO.addPropertyToList(propertyList, "responsibilityDeptId", orgThree);/* 责任单位 三级单位 */
         PropertyListRequestDTO.addPropertyToList(propertyList, "parentProjectCode", org);/* 父项目编码(项目部) */
-        requestDTO.setPropertyList(propertyList);
+//        requestDTO.setPropertyList(propertyList);
         return processService.listProcessLog(requestDTO);
     }
 
@@ -710,6 +719,15 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
         SysUser sysUser;
         ExpertChange expertChange = expertChangeService.getOne(new LambdaQueryWrapper<ExpertChange>()
                 .eq(ExpertChange::getId,requestDTO.getBusinessId()));
+        /* 如果流程类型是 修改就使用修改的id */
+        if(requestDTO.getProcessType()!=null && requestDTO.getProcessType().equals(ExpertProcessTypeEnum.EXPERT_CHANGE.getState()+"")){
+            expertChange = expertChangeService.getOne(new LambdaQueryWrapper<ExpertChange>()
+                    .eq(ExpertChange::getExpertId,requestDTO.getBusinessId()).orderByDesc(ExpertChange::getCreateTime).last("limit 1"));
+            if(expertChange!=null){
+                requestDTO.setBusinessId(expertChange.getId()+"");
+                requestDTO.setProcessId(expertChange.getWfProcessId());
+            }
+        }
         if(expertChange!=null){
             sysUser = systemUserService.getUserById(expertChange.getUserId());
         }else{

@@ -29,6 +29,11 @@ public class BpmLoadTaskDefRequestDTO extends UnderlyingPlatformBaseDTO{
     private String processKey;
 
     /**
+     * 流程类型 专家用到了-> {@link com.zhaocai.business.common.enums.ExpertProcessTypeEnum}
+     */
+    private String processType;
+
+    /**
      * 流程实例ID，processId和businessId不能同时为空
      */
     private String processId;
