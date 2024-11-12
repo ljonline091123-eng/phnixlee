@@ -22,7 +22,10 @@ import com.zhaocai.business.manager.http.common.config.ThirdPartyTodoFlowModuleE
 import com.zhaocai.business.manager.http.dto.req.PushThirdPartyTodoTaskRequestDTO;
 import com.zhaocai.business.manager.http.dto.req.PushThirdPartyTodoTaskSonRequestDTO;
 import com.zhaocai.business.manager.http.service.ThridPartyTodoTaskService;
+import com.zhaocai.business.procurement.domain.ContractPlanningPushRecord;
+import com.zhaocai.business.procurement.domain.MaterialsList;
 import com.zhaocai.business.procurement.domain.ProcurementScheme;
+import com.zhaocai.business.procurement.service.IMaterialsListService;
 import com.zhaocai.business.procurement.service.IMinProjectService;
 import com.zhaocai.business.procurement.service.IProcurementSchemeService;
 import com.zhaocai.business.procurement.vo.res.CompContractSplitMaterialsVO;
@@ -60,6 +63,8 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
@@ -95,6 +100,8 @@ public class VendorBidServiceImpl implements IVendorBidService {
 
     @Autowired
     private ThridPartyTodoTaskService thridPartyTodoTaskService;
+    @Autowired
+    private IMaterialsListService materialsListService;
 
 
     /* 在线报名 招标状态为  11发布 12报名情况 的数据 */
@@ -281,7 +288,13 @@ public class VendorBidServiceImpl implements IVendorBidService {
         BigDecimal bidNotTaxPrice = BigDecimal.ZERO;
         List<BiddingListQuotation> quotations = new ArrayList<>();
 
+        /* 根据清单确定固定价，浮动价的计算方式 */
+        List<Long> materialsIds = bidQuotationVoS.stream().map(BidQuotationVO::getMaterialsId).collect(Collectors.toList());
+        List<MaterialsList> materialsListList = materialsListService.list(new LambdaQueryWrapper<MaterialsList>().in(MaterialsList::getId, materialsIds));
+        Map<Long,MaterialsList> materialsListMap = materialsListList.stream().collect(Collectors.toMap(MaterialsList::getId, Function.identity(),(existing, replacement) -> replacement));
+
         for (BidQuotationVO quotationVO : bidQuotationVoS) {
+
             BiddingListQuotation quotation = BeanCopierUtil.copyBean(quotationVO, BiddingListQuotation.class);
             quotation.setBiddingInfoId(biddingInfo.getId());
 
@@ -293,47 +306,58 @@ public class VendorBidServiceImpl implements IVendorBidService {
 
             BigDecimal taxPrice;
             BigDecimal notTaxPrice;
-            //（subject_matter 是 1（钢筋）|| 2（砼））& price_type 浮动价
-            if (PriceTypeEnum.FLOAT_PRICE.getType().equals(scheme.getPriceType())
-                    && scheme.getSubjectMatterType()!=null&&(scheme.getSubjectMatterType() == 1 || scheme.getSubjectMatterType() == 2)){
-                //浮动价计算方式
-                BigDecimal floatingPrice = quotationVO.getFloatingPrice();
-                //卸费
-                BigDecimal unloadingFee = quotationVO.getUnloadingFee();
-                //基价
-                BigDecimal basePrice = quotationVO.getBasePrice();
-                //含税单价
-                BigDecimal taxUnitPrice = NumberUtil.add(4, basePrice, floatingPrice, unloadingFee);
-                //计算不含税单价
-                BigDecimal notTaxUnitPrice = AmountCalUtil.calUnitPriceExclTax(taxUnitPrice, taxRateVal);
-                //计算含税总价C（每项（基价±浮动价+运费+卸费）*每项清单数量）
-                taxPrice = AmountCalUtil.calTotalAmountInclTax(amount, taxUnitPrice);
-                //计算不含税总价
-                notTaxPrice = AmountCalUtil.calTotalAmountExclTax(taxPrice, taxRateVal);
-                quotation.setTaxUnitPrice(taxUnitPrice);
-                quotation.setNotTaxUnitPrice(notTaxUnitPrice);
-            } else {
-                //固定价计算方式
-                //含税单价B
-                BigDecimal taxUnitPrice = quotationVO.getTaxUnitPrice() == null ? BigDecimal.ZERO : quotationVO.getTaxUnitPrice();
-                //计算不含税单价
-                BigDecimal notTaxUnitPrice = AmountCalUtil.calUnitPriceExclTax(taxUnitPrice, taxRateVal);
-                //计算含税总价C
-                taxPrice = AmountCalUtil.calTotalAmountInclTax(amount, taxUnitPrice);
-                //计算不含税总价
-                notTaxPrice = AmountCalUtil.calTotalAmountExclTax(taxPrice, taxRateVal);
-                quotation.setNotTaxUnitPrice(notTaxUnitPrice);
+            if(materialsListMap.get(quotationVO.getMaterialsId()) != null){
+                if(materialsListMap.get(quotationVO.getMaterialsId()).getPriceType().equals(PriceTypeEnum.FLOAT_PRICE.getType())){
+                    /* 如果合约规划拆分的清单是 浮动价 */
+                    //浮动价计算方式
+                    BigDecimal floatingPrice = quotationVO.getFloatingPrice();
+                    //卸费
+                    BigDecimal unloadingFee = quotationVO.getUnloadingFee();
+                    //基价
+                    BigDecimal basePrice = quotationVO.getBasePrice();
+                    //含税单价
+                    BigDecimal taxUnitPrice = NumberUtil.add(4, basePrice, floatingPrice, unloadingFee);
+                    //计算不含税单价
+                    BigDecimal notTaxUnitPrice = AmountCalUtil.calUnitPriceExclTax(taxUnitPrice, taxRateVal);
+                    //计算含税总价C（每项（基价±浮动价+运费+卸费）*每项清单数量）
+                    taxPrice = AmountCalUtil.calTotalAmountInclTax(amount, taxUnitPrice);
+                    //计算不含税总价
+                    notTaxPrice = AmountCalUtil.calTotalAmountExclTax(taxPrice, taxRateVal);
+                    quotation.setTaxUnitPrice(taxUnitPrice);
+                    quotation.setNotTaxUnitPrice(notTaxUnitPrice);
+                    quotation.setTaxPrice(taxPrice);
+                    quotation.setNotTaxPrice(notTaxPrice);
+                    quotations.add(quotation);
+                }else if(materialsListMap.get(quotationVO.getMaterialsId()).getPriceType().equals(PriceTypeEnum.FIXED_PRICE.getType())){
+                    /* 如果合约规划拆分的清单是 固定价 */
+                    //固定价计算方式
+                    //含税单价B
+                    BigDecimal taxUnitPrice = quotationVO.getTaxUnitPrice() == null ? BigDecimal.ZERO : quotationVO.getTaxUnitPrice();
+                    //计算不含税单价
+                    BigDecimal notTaxUnitPrice = AmountCalUtil.calUnitPriceExclTax(taxUnitPrice, taxRateVal);
+                    //计算含税总价C
+                    taxPrice = AmountCalUtil.calTotalAmountInclTax(amount, taxUnitPrice);
+                    //计算不含税总价
+                    notTaxPrice = AmountCalUtil.calTotalAmountExclTax(taxPrice, taxRateVal);
+                    quotation.setNotTaxUnitPrice(notTaxUnitPrice);
 
-                //增加校验报价的价格条件（只有劳务和专业分包可以高于第一次报价，其他的报价控制不能高于第一次报价）
-                if (!ProcurementPlanTypeEnum.SPECIALTY_SUBCONTRACT.getType().equals(scheme.getProcurementPlanType()) &&
-                        !ProcurementPlanTypeEnum.SERVICE_SUBCONTRACT.getType().equals(scheme.getProcurementPlanType())){
-                    //校验含税单价
-                    checkTaxUnitPrice(biddingInfo, quotationVO, taxUnitPrice);
+                    //增加校验报价的价格条件（只有劳务和专业分包可以高于第一次报价，其他的报价控制不能高于第一次报价）
+                    if (!ProcurementPlanTypeEnum.SPECIALTY_SUBCONTRACT.getType().equals(scheme.getProcurementPlanType()) &&
+                            !ProcurementPlanTypeEnum.SERVICE_SUBCONTRACT.getType().equals(scheme.getProcurementPlanType())){
+                        //校验含税单价
+                        checkTaxUnitPrice(biddingInfo, quotationVO, taxUnitPrice);
+                    }
+                    quotation.setTaxPrice(taxPrice);
+                    quotation.setNotTaxPrice(notTaxPrice);
+                    quotations.add(quotation);
+                }else{
+                    /* 原来的浮动价固定价处理方法 */
+                    oldMethods(quotationVO, scheme, taxRateVal, amount, quotation, biddingInfo, quotations);
                 }
+            }else{
+                /* 原来的浮动价固定价处理方法 */
+                oldMethods(quotationVO, scheme, taxRateVal, amount, quotation, biddingInfo, quotations);
             }
-            quotation.setTaxPrice(taxPrice);
-            quotation.setNotTaxPrice(notTaxPrice);
-            quotations.add(quotation);
 
             bidTaxPrice = bidTaxPrice.add(quotation.getTaxPrice());
             bidNotTaxPrice = bidNotTaxPrice.add(quotation.getNotTaxPrice());
@@ -347,6 +371,55 @@ public class VendorBidServiceImpl implements IVendorBidService {
 
         return res;
     }
+
+    /* 原来的浮动价固定价处理方法 */
+    private void oldMethods(BidQuotationVO quotationVO, ProcurementScheme scheme, BigDecimal taxRateVal, BigDecimal amount, BiddingListQuotation quotation, BiddingInfo biddingInfo, List<BiddingListQuotation> quotations) {
+        BigDecimal taxPrice;
+        BigDecimal notTaxPrice;
+        //（subject_matter 是 1（钢筋）|| 2（砼））& price_type 浮动价
+        if (PriceTypeEnum.FLOAT_PRICE.getType().equals(scheme.getPriceType())
+                && scheme.getSubjectMatterType()!=null&&(scheme.getSubjectMatterType() == 1 || scheme.getSubjectMatterType() == 2)){
+            //浮动价计算方式
+            BigDecimal floatingPrice = quotationVO.getFloatingPrice();
+            //卸费
+            BigDecimal unloadingFee = quotationVO.getUnloadingFee();
+            //基价
+            BigDecimal basePrice = quotationVO.getBasePrice();
+            //含税单价
+            BigDecimal taxUnitPrice = NumberUtil.add(4, basePrice, floatingPrice, unloadingFee);
+            //计算不含税单价
+            BigDecimal notTaxUnitPrice = AmountCalUtil.calUnitPriceExclTax(taxUnitPrice, taxRateVal);
+            //计算含税总价C（每项（基价±浮动价+运费+卸费）*每项清单数量）
+            taxPrice = AmountCalUtil.calTotalAmountInclTax(amount, taxUnitPrice);
+            //计算不含税总价
+            notTaxPrice = AmountCalUtil.calTotalAmountExclTax(taxPrice, taxRateVal);
+            quotation.setTaxUnitPrice(taxUnitPrice);
+            quotation.setNotTaxUnitPrice(notTaxUnitPrice);
+        } else {
+            //固定价计算方式
+            //含税单价B
+            BigDecimal taxUnitPrice = quotationVO.getTaxUnitPrice() == null ? BigDecimal.ZERO : quotationVO.getTaxUnitPrice();
+            //计算不含税单价
+            BigDecimal notTaxUnitPrice = AmountCalUtil.calUnitPriceExclTax(taxUnitPrice, taxRateVal);
+            //计算含税总价C
+            taxPrice = AmountCalUtil.calTotalAmountInclTax(amount, taxUnitPrice);
+            //计算不含税总价
+            notTaxPrice = AmountCalUtil.calTotalAmountExclTax(taxPrice, taxRateVal);
+            quotation.setNotTaxUnitPrice(notTaxUnitPrice);
+
+            //增加校验报价的价格条件（只有劳务和专业分包可以高于第一次报价，其他的报价控制不能高于第一次报价）
+            if (!ProcurementPlanTypeEnum.SPECIALTY_SUBCONTRACT.getType().equals(scheme.getProcurementPlanType()) &&
+                    !ProcurementPlanTypeEnum.SERVICE_SUBCONTRACT.getType().equals(scheme.getProcurementPlanType())){
+                //校验含税单价
+                checkTaxUnitPrice(biddingInfo, quotationVO, taxUnitPrice);
+            }
+        }
+        quotation.setTaxPrice(taxPrice);
+        quotation.setNotTaxPrice(notTaxPrice);
+        quotations.add(quotation);
+    }
+
+
 
     private void dealOpenPeopleTodoTask(ProcurementScheme procurementScheme, TenderNotice tenderNotice,  Vendor vendor) {
         System.out.println("开始:"+procurementScheme);
