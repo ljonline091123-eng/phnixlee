@@ -662,7 +662,7 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
         /* 如果流程类型是 修改就使用修改的id */
         if(requestDTO.getProcessType()!=null && requestDTO.getProcessType().equals(ExpertProcessTypeEnum.EXPERT_CHANGE.getState()+"")){
             expertChange = expertChangeService.getOne(new LambdaQueryWrapper<ExpertChange>()
-                    .eq(ExpertChange::getExpertId,requestDTO.getBusinessId()).orderByDesc(ExpertChange::getCreateTime).last("limit 1"));
+                    .eq(ExpertChange::getExpertId,expertChange!=null?expertChange.getExpertId():requestDTO.getBusinessId()).orderByDesc(ExpertChange::getCreateTime).last("limit 1"));
             if(expertChange!=null){
                 requestDTO.setBusinessId(expertChange.getId()+"");
                 requestDTO.setProcessId(expertChange.getWfProcessId());
@@ -724,7 +724,7 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
         /* 如果流程类型是 修改就使用修改的id */
         if(requestDTO.getProcessType()!=null && requestDTO.getProcessType().equals(ExpertProcessTypeEnum.EXPERT_CHANGE.getState()+"")){
             expertChange = expertChangeService.getOne(new LambdaQueryWrapper<ExpertChange>()
-                    .eq(ExpertChange::getExpertId,requestDTO.getBusinessId()).orderByDesc(ExpertChange::getCreateTime).last("limit 1"));
+                    .eq(ExpertChange::getExpertId,expertChange!=null?expertChange.getExpertId():requestDTO.getBusinessId()).orderByDesc(ExpertChange::getCreateTime).last("limit 1"));
             log.info("[专家流程列表loadTaskDef][expertChange = 2]{}",expertChange);
             if(expertChange!=null){
                 requestDTO.setBusinessId(expertChange.getId()+"");
