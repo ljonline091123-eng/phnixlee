@@ -13,6 +13,7 @@ import com.zhaocai.business.common.exception.BusinessException;
 import com.zhaocai.business.common.exception.ParamValidateException;
 import com.zhaocai.business.common.utils.ValidateUtils;
 import com.zhaocai.business.expert.domain.Expert;
+import com.zhaocai.business.expert.domain.ExpertChange;
 import com.zhaocai.business.manager.http.dto.req.*;
 import com.zhaocai.business.manager.http.dto.res.*;
 import com.zhaocai.business.manager.http.service.UnderlingSystemService;
@@ -712,10 +713,20 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
     @Override
     public ResultData<BpmInitializeResponseDTO> initialize(BpmInitializeRequestDTO requestDTO) {
         Vendor vendor = getById(requestDTO.getBusinessId());
-        /* 根据组织获取对应的二级单位 */
-        String org = underlingSystemService.getL2OrgByOrgId(vendor.getFirstCooperationCompanyCode());
-        /* 获取三级单位 */
-        String orgThree = underlingSystemService.getL3OrgByOrgId(vendor.getFirstCooperationCompanyCode());
+        VendorChange vendorChange = vendorChangeService.getOne(new LambdaQueryWrapper<VendorChange>()
+                .eq(VendorChange::getId,requestDTO.getBusinessId()));
+        String org,orgThree;
+        if(vendorChange!=null){
+            /* 根据组织获取对应的二级单位 */
+            org = underlingSystemService.getL2OrgByOrgId(vendorChange.getFirstCooperationCompanyCode());
+            /* 获取三级单位 */
+            orgThree = underlingSystemService.getL3OrgByOrgId(vendorChange.getFirstCooperationCompanyCode());
+        }else{
+            /* 根据组织获取对应的二级单位 */
+            org = underlingSystemService.getL2OrgByOrgId(vendor.getFirstCooperationCompanyCode());
+            /* 获取三级单位 */
+            orgThree = underlingSystemService.getL3OrgByOrgId(vendor.getFirstCooperationCompanyCode());
+        }
         if(orgThree==null)orgThree = org;
         /* 流程角色配置规则传参 */
         List<PropertyListRequestDTO<Object>> propertyList = new ArrayList<>();
@@ -730,10 +741,20 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
     @Override
     public ResultData<List<BpmListProcessLogResponseDTO>> listProcessLog(BpmListProcessLogRequestDTO requestDTO) {
         Vendor vendor = getById(requestDTO.getBusinessId());
-        /* 根据组织获取对应的二级单位 */
-        String org = underlingSystemService.getL2OrgByOrgId(vendor.getFirstCooperationCompanyCode());
-        /* 获取三级单位 */
-        String orgThree = underlingSystemService.getL3OrgByOrgId(vendor.getFirstCooperationCompanyCode());
+        VendorChange vendorChange = vendorChangeService.getOne(new LambdaQueryWrapper<VendorChange>()
+                .eq(VendorChange::getId,requestDTO.getBusinessId()));
+        String org,orgThree;
+        if(vendorChange!=null){
+            /* 根据组织获取对应的二级单位 */
+            org = underlingSystemService.getL2OrgByOrgId(vendorChange.getFirstCooperationCompanyCode());
+            /* 获取三级单位 */
+            orgThree = underlingSystemService.getL3OrgByOrgId(vendorChange.getFirstCooperationCompanyCode());
+        }else{
+            /* 根据组织获取对应的二级单位 */
+            org = underlingSystemService.getL2OrgByOrgId(vendor.getFirstCooperationCompanyCode());
+            /* 获取三级单位 */
+            orgThree = underlingSystemService.getL3OrgByOrgId(vendor.getFirstCooperationCompanyCode());
+        }
         if(orgThree==null)orgThree = org;
         /* 流程角色配置规则传参 */
         List<PropertyListRequestDTO<Object>> propertyList = new ArrayList<>();
@@ -748,10 +769,20 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
     @Override
     public String audit(String processKey, Map<String, Object> variables) {
         Vendor vendor = getById((Serializable) variables.get("businessId"));
-        /* 根据组织获取对应的二级单位 */
-        String org = underlingSystemService.getL2OrgByOrgId(vendor.getFirstCooperationCompanyCode());
-        /* 获取三级单位 */
-        String orgThree = underlingSystemService.getL3OrgByOrgId(vendor.getFirstCooperationCompanyCode());
+        VendorChange vendorChange = vendorChangeService.getOne(new LambdaQueryWrapper<VendorChange>()
+                .eq(VendorChange::getId,variables.get("businessId")));
+        String org,orgThree;
+        if(vendorChange!=null){
+            /* 根据组织获取对应的二级单位 */
+            org = underlingSystemService.getL2OrgByOrgId(vendorChange.getFirstCooperationCompanyCode());
+            /* 获取三级单位 */
+            orgThree = underlingSystemService.getL3OrgByOrgId(vendorChange.getFirstCooperationCompanyCode());
+        }else{
+            /* 根据组织获取对应的二级单位 */
+            org = underlingSystemService.getL2OrgByOrgId(vendor.getFirstCooperationCompanyCode());
+            /* 获取三级单位 */
+            orgThree = underlingSystemService.getL3OrgByOrgId(vendor.getFirstCooperationCompanyCode());
+        }
         if(orgThree==null)orgThree = org;
         /* 流程角色配置规则传参 */
         variables.put("groupId", UserConstants.GROUP_DEPT_ID);/* 集团 */
@@ -765,10 +796,20 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
     @Override
     public ResultData<List<BpmLoadTaskDefResponseDTO>> loadTaskDef(BpmLoadTaskDefRequestDTO requestDTO) {
         Vendor vendor = getById(requestDTO.getBusinessId());
-        /* 根据组织获取对应的二级单位 */
-        String org = underlingSystemService.getL2OrgByOrgId(vendor.getFirstCooperationCompanyCode());
-        /* 获取三级单位 */
-        String orgThree = underlingSystemService.getL3OrgByOrgId(vendor.getFirstCooperationCompanyCode());
+        VendorChange vendorChange = vendorChangeService.getOne(new LambdaQueryWrapper<VendorChange>()
+                .eq(VendorChange::getId,requestDTO.getBusinessId()));
+        String org,orgThree;
+        if(vendorChange!=null){
+            /* 根据组织获取对应的二级单位 */
+            org = underlingSystemService.getL2OrgByOrgId(vendorChange.getFirstCooperationCompanyCode());
+            /* 获取三级单位 */
+            orgThree = underlingSystemService.getL3OrgByOrgId(vendorChange.getFirstCooperationCompanyCode());
+        }else{
+            /* 根据组织获取对应的二级单位 */
+            org = underlingSystemService.getL2OrgByOrgId(vendor.getFirstCooperationCompanyCode());
+            /* 获取三级单位 */
+            orgThree = underlingSystemService.getL3OrgByOrgId(vendor.getFirstCooperationCompanyCode());
+        }
         if(orgThree==null)orgThree = org;
         /* 流程角色配置规则传参 */
         List<PropertyListRequestDTO<Object>> propertyList = new ArrayList<>();
