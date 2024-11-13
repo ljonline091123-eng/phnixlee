@@ -140,31 +140,32 @@
 
         <PageTitle :title="currentContract.contractPlanningCategoryName">
           <div class="page-title-right">
-            <el-button  v-if="currentContract.contractPlanningCategory == 1 " type="success" size="small"  @click="pushPlan">易料市集采购</el-button>
-            <el-button v-if="currentContract.contractPlanningCategory == 1 "  type="success" size="small"  @click="revokePushPlan">撤销易料市集采购</el-button>
-            <el-button type="success" size="small" v-if="formData.isPushData!='Y'" :disabled="isSubmit" @click="splitVisible = true">合约拆分</el-button>
+            <el-button type="success" size="small" :disabled="isSubmit" @click="splitVisible = true">合约拆分</el-button>
           </div>
         </PageTitle>
 
-        <el-table v-loading="loading" :data="planList" ref="tableRef"  size="small"  border default-expand-all>
+        <el-table v-loading="loading" :data="planList" ref="tableRef"  size="small" stripe border default-expand-all>
           <el-table-column type="expand" v-if="planList[0] && planList[0].children && planList[0].children.length">
             <template slot-scope="props">
-              <el-table :data="props.row.children" size="small"  border>
+              <el-table :data="props.row.children" size="small" stripe border>
                 <!-- <el-table-column type="selection"></el-table-column> -->
-                <el-table-column label="拆分合约规划名称" prop="splitContractName" width="150">
+                <el-table-column label="拆分合约规划名称" prop="splitContractName" width="200">
                   <template slot-scope="scope">
                     <el-input v-model="scope.row.splitContractName" :disabled="isSubmit"/>
                   </template>
                 </el-table-column>
-                <el-table-column label="拟签约合同承包范围" prop="contractScope" width="150">
+                <el-table-column label="拟签约合同承包范围" prop="contractScope" width="200">
                   <template slot-scope="scope">
                     <el-input v-model="scope.row.contractScope" :disabled="isSubmit"/>
                   </template>
                 </el-table-column>
                 <el-table-column label="清单" align="center" props="inventory">
                   <template slot-scope="inventory">
-                    <el-table  size="small" :data="inventory.row.children"  border @select="handleSelect"  :ref="inventory.row.planTable"  :row-class-name="tableRowClassName">
-                      <el-table-column type="selection" width="55" :reserve-selection="true"/>
+                    <el-table size="small" :data="inventory.row.children" stripe border>
+                  <el-table-column
+                        type="selection"
+                        width="55"
+                      />
                       <el-table-column label="序号" type="index" width="50" align="center" fixed/>
                       <el-table-column label="清单编码" min-width="150" prop="materialsCode" fixed show-overflow-tooltip/>
                       <el-table-column label="清单名称" min-width="150" prop="materialsName" fixed show-overflow-tooltip/>
@@ -195,7 +196,7 @@
                       </el-table-column>
                       <el-table-column label="清单数量" align="right" width="150" v-else>
                         <template slot-scope="scope">
-                          <el-input v-model="scope.row.count" :disabled="isSubmit || scope.row.belongOffer || scope.row.pushFlag === 'Y'" @blur="changeCount(inventory.$index,scope,$event)" v-thousandth/>
+                          <el-input v-model="scope.row.count" :disabled="isSubmit || scope.row.belongOffer" @blur="changeCount(inventory.$index,scope,$event)" v-thousandth/>
                         </template>
                       </el-table-column>
                       <el-table-column label="基价" align="right" width="130" prop="basePrice" v-if="isFloat">
@@ -205,7 +206,7 @@
                       </el-table-column>
                       <el-table-column label="单价(含税)" align="right" prop="unitPriceInclTax" width="180" v-else>
                         <template slot-scope="scope">
-                          <el-input v-model="scope.row.unitPriceInclTax" :disabled="isSubmit || scope.row.belongOffer || scope.row.pushFlag === 'Y'" @blur="changePrice(scope.row,$event)" v-thousandth/>
+                          <el-input v-model="scope.row.unitPriceInclTax" :disabled="isSubmit || scope.row.belongOffer" @blur="changePrice(scope.row,$event)" v-thousandth/>
                         </template>
                       </el-table-column>
                       <el-table-column label="税率(%)" align="right" prop="taxRate"/>
@@ -237,36 +238,9 @@
                           <span v-else>-</span>
                         </template>
                       </el-table-column>
-                      <el-table-column
-                      v-if="currentContract.contractPlanningCategory == 1"
-                      label="易商品编码"
-                      align="center"
-                      min-width="150" prop="skuId" show-overflow-tooltip
-                    >
-                      <template slot-scope="scope">
-                        <a class="link-type" @click="goDetail(scope.row.code)">
-                          {{ scope.row.skuId }}
-                        </a>
-                      </template>
-                    </el-table-column>
-                  <el-table-column v-if="currentContract.contractPlanningCategory == 1" label="易料商品名称" prop="name" width="150">
-                    <template slot-scope="scope">
-                      {{ scope.row.name }}
-                    </template>
-                  </el-table-column>
-           
-                  <el-table-column v-if="currentContract.contractPlanningCategory == 1" label="易料品牌" min-width="120" prop="offerBrand" show-overflow-tooltip/>
-                  <el-table-column v-if="currentContract.contractPlanningCategory == 1" label="易料初始报价"  width="150" prop="offerPrice" >
-                    <!-- <template slot-scope="scope">
-                      <el-input v-model="scope.row.offerPrice" disabled v-thousandth/>
-                    </template> -->
-                  </el-table-column>
                     </el-table>
                   </template>
                 </el-table-column>
-                
-
-              
               </el-table>
             </template>
           </el-table-column>
@@ -348,19 +322,6 @@
         </div>
       </el-dialog>
     </div>
-    <el-dialog
-      title="应用商城"
-      :visible.sync="dialogVisible"
-      width="80%"
-    >
-      <iframe
-        :src="yjtUrl"
-        width="100%"
-        height="500px"
-        frameborder="0"
-        allowfullscreen
-      ></iframe>
-    </el-dialog>
   </div>
 </template>
 
@@ -374,7 +335,7 @@ import {
   getMinProject,
   getPlanDetail,
   listDwMmServiceSubjectMatter,
-  getContractPlanSplitFlag,pushMaterialProcurementList,revokePushMaterialProcurementList,getYjtUrl
+  getContractPlanSplitFlag
 } from '@/api/procurement/plan'
 import { listUnderlingDict } from "@/api/procurement/contract";
 import { listAreaDivisionTree } from '@/api/procurement/manage'
@@ -397,13 +358,6 @@ export default {
         priceType:'1'
       }, //form表单数据
       planList: [],
-      accountTable:'accountTable',
-      projectCode:'',
-      id:'',
-      yjtUrl:'',
-      isPushRevoke:null,//区分推送和撤销
-      dialogVisible:false,
-      materialsLists:[],
       inventoryList: [],
       // isEdit: true,
       rules: {
@@ -537,7 +491,7 @@ export default {
     const param = JSON.parse(Base64.decode(this.$route.params.params))
     console.log(param,'param--param--param!!!!!!!!!!!!!!!!!!!!!!!');
     this.currentContract = param;
-    console.log(JSON.stringify(this.currentContract),'获取到的params');
+    console.log(this.currentContract,'获取到的params');
     this.isUpdate = param.type === 'update'? true : false;
     console.log(this.isUpdate,'isUpdate-isUpdate');
     this.formData.projectHierarchy = param.bidResponsibleOrgName;
@@ -554,134 +508,10 @@ export default {
     }
   },
   mounted(){
-      this.queryContractPlanSplitFlag();
+    debugger
+    this.queryContractPlanSplitFlag();
   },
   methods: {
-    // 多选框选中数据
-    handleSelectionChange(selection, row) {
-  
-    },
-    handleSelect(selection, row){
-      console.log("selection"+JSON.stringify(selection))
-      console.log("row"+JSON.stringify(row))
-    },
-        /** 跳转方案详情 */
-    async goDetail(code) {
-      // this.dialogVisible=true
-      // console.log(JSON.stringify(code))
-     
-        const res = await getYjtUrl(code);
-        this.yjtUrl=res.data || ''
-        window.open(this.yjtUrl)
-        // console.log(JSON.stringify(res))
-      },
-
-    pushPlan(){
-      //isPushRevoke为true表示推送
-      this.isPushRevoke=true
-      this.materialsLists=[]
-      if(!this.planList[0].children) return this.$message({type:'error',message:"您还没有可选择的采购清单"});
-        for(let i = 0 ; i <  this.planList[0].children.length ; i++){
-          let children=this.planList[0].children[i]
-          console.log(JSON.stringify(children)+"采购清单")
-          const currentSelect = this.$refs[`${children.planTable}`].selection;
-          if(this.isUpdate){ //修改
-             this.materialsLists = [...this.materialsLists ,...currentSelect];
-            }else{ //新增
-              for(let j = 0 ; j <  currentSelect.length ; j++){
-               currentSelect[j].isSelect='Y'
-              }
-            }
-        }
-        console.log(JSON.stringify(this.materialsLists.length))
-      if(this.isUpdate && this.materialsLists.length==0) return this.$message({type:'error',message:"请选择易料市集采购清单"});
-      this.$confirm("是否确定选中的清单进入易料市集进行采购？", "提示", {
-        confirmButtonText: "确定",
-        cancelButtonText: "取消",
-        type: "warning",
-      }).then(() => {
-        this.submitFormPush('form');
-      });
-    },
-    revokePushPlan(){
-      //isPushRevoke为false表示撤销
-      this.isPushRevoke=false
-      if(!this.planList[0].children) return this.$message({type:'error',message:"您还没有可选择的采购清单"});
-      this.materialsLists=[]
-        for(let i = 0 ; i <  this.planList[0].children.length ; i++){
-          let children=this.planList[0].children[i]
-          const currentSelect = this.$refs[`${children.planTable}`].selection;
-          console.log(currentSelect.length+"currentSelect"+JSON.stringify(currentSelect))
-          this.materialsLists = [...this.materialsLists ,...currentSelect];
-        }
-   
-      if(this.materialsLists.length<=0) return this.$message({type:'error',message:"请选择撤销易料市集采购清单"});
-      this.$confirm("是否确定撤销选中的清单？", "提示", {
-        confirmButtonText: "确定",
-        cancelButtonText: "取消",
-        type: "warning",
-      }).then(() => {
-        for(let i = 0 ; i <  this.materialsLists.length ; i++){
-          console.log("撤销"+JSON.stringify(this.materialsLists[i]))
-            if(this.materialsLists[i].pushFlag=='N'){
-              return this.$message({type:'error',message:"请选择已推送进入易料市集采购清单"})
-            }
-          }
-          console.log(JSON.stringify(this.materialsLists))
-        this.submitFormPush('form');
-       
-      });
-    },
-    //撤销
-    async revokePushMaterialProcurement(){
-
-       
-      let formData = {
-        projectCode:this.projectCode,
-          id:this.id,
-          materialsLists:this.materialsLists,
-        }
-        await revokePushMaterialProcurementList(formData)
-        this.getPlanDetail()
-        this.materialsLists=[]
-        //清空数据
-        for(let i = 0 ; i <  this.planList[0].children.length ; i++){
-          let children=this.planList[0].children[i]
-          const currentSelect = this.$refs[`${children.planTable}`].selection;
-          this.$refs[`${children.planTable}`].clearSelection();
-        }
-    },
-    //推送
-    async  pushMaterialProcurement(){
-      let formData = {
-        projectCode:this.projectCode,
-          id:this.id,
-          materialsLists:this.materialsLists,
-        }
-        await pushMaterialProcurementList(formData)
-        //新增推送完成时给id赋值
-        if(!this.isUpdate){
-            this.currentContract.id=this.id
-            }
-
-        this.getPlanDetail()
-        this.materialsLists=[]
-     //清空数据
-       for(let i = 0 ; i <  this.planList[0].children.length ; i++){
-          let children=this.planList[0].children[i]
-          const currentSelect = this.$refs[`${children.planTable}`].selection;
-          this.$refs[`${children.planTable}`].clearSelection();
-        }
-    },
-    tableRowClassName({row, rowIndex}) {
-        if (row.pushFlag === 'Y') {
-          return 'already-pushed';
-        } else if (row.pushFlag === 'N') {
-          return 'not-pushed';
-        }
-        return '';
-      },
-
     //提交
     submitForm(formName) {
       console.log(this.planList,'ppp');
@@ -785,13 +615,11 @@ export default {
             });
             this.isSubmit = false;
             console.log(res,'r~~~~~~~~~~~~~~~~~');
-            this.currentContract.id=res.data.id
-            this.getPlanDetail()
-            // this.$tab.closePage().then(() => {
+            this.$tab.closePage().then(() => {
               // 执行结束的逻辑
-              // let param = Base64.encode(JSON.stringify(res.data))
-              // this.$router.replace(`/procurement/plan-detail/${param}`);
-            // })
+              let param = Base64.encode(JSON.stringify(res.data))
+              this.$router.replace(`/procurement/plan-detail/${param}`);
+            })
           }catch(err){
             console.log(err);
             this.isSubmit = false;
@@ -803,146 +631,6 @@ export default {
         }
       });
     },
-
-     //提交推送
-     submitFormPush(formName) {
-      console.log(this.planList,'ppp');
-      const { format } = this.mathjs
-      this.isSubmit = true;
-      this.$refs[formName].validate(async (valid,done) => {
-        if (valid) {
-          const { planList } = this
-          console.log(planList,'planListplanList--planListplanList-planListplanList');
-          if(!planList[0].children || !planList[0].children.length){
-            this.isSubmit = false;
-            this.$message({
-              message: '拆分合约不能为空',
-              type: 'error'
-            });
-            return false;
-          }
-
-          const isAll = planList[0]?.children.every(item => item.splitContractName && item.contractScope)
-          if(!isAll){
-            this.isSubmit = false;
-            this.$message({
-              message: '拆分合约规划名称/拟签约合同承包范围不能为空',
-              type: 'error'
-            });
-            return false;
-          }
-
-          // const isZero = planList[0]?.children.some(item => {
-          //   let isLoop = true;
-          //   if (isLoop) {
-          //     const hasZeroCount = item.children.some(child => {
-          //       if (Number(child.count) === 0) {
-          //         this.$message({
-          //           message: `拆分合规规划名称为${item.splitContractName}的清单中名称为“${child.materialsName}”的数量不能为0`,
-          //           type: 'error'
-          //         });
-          //         return true; // 结束循环
-          //       }
-          //       return false;
-          //     });
-          //     return hasZeroCount; // 终止外层循环
-          //   }
-          //   return false;
-          // });
-
-          // if(isZero) {
-          //   this.isSubmit = false;
-          //   return false;
-          // }
-
-          const loading = this.$loading({
-            lock: true,
-            text: '数据提交中...',
-            background: 'rgba(0, 0, 0, 0.7)'
-          });
-          const { procurementPlanName, beginDate, endDate, arrivalDate, procurementOfficer, procurementOfficerName,projectId,projectName,projectCode, priceType, regionProvinceCode, regionCityCode, paymentType, countingType } = this.formData;
-          const { contractPlanningCategory, biddingMethodCode, biddingMethodName, contractPlanningCategoryName, contractPlanningId, contractPlanningName, incurredPlannedAmount, incurredPlannedAmountText, plannedAmountInclTax, plannedAmountInclTaxText, planningBalance, planningBalanceText,bidResponsibleOrg, bidResponsibleOrgName, id, contractPlanningCode,brand } = this.currentContract
-          const splitRequestList = this.planList[0]?.children.map(item => {
-            console.log(JSON.stringify(item))
-            return {
-              
-              splitContractName:item.splitContractName,
-              contractScope:item.contractScope,
-              materialsLists:item.children.map(child => {
-                child.unitPriceInclTax = format(Number(child.unitPriceInclTax), { notation: 'fixed', precision: 4 }).toString().replace(/\.?0+$/, '') || '';
-                child.count = format(Number(child.count), { notation: 'fixed', precision: 4 }).toString().replace(/\.?0+$/, '') || '';
-                child.isSelect=this.isUpdate?'':child.isSelect;
-                return child
-              })
-            }
-          })
-          const formData = {
-            procurementPlan:{
-              id: id || '',
-              procurementPlanName,
-              procurementPlanType:contractPlanningCategory,
-              procurementType:biddingMethodCode,
-              projectHierarchy:bidResponsibleOrgName,
-              beginDate,
-              endDate,
-              arrivalDate,
-              procurementOfficer,
-              procurementOfficerName,
-              priceType:priceType !== 'undefined'?priceType:'',
-              regionProvinceCode,
-              regionCityCode,
-              paymentType:paymentType !== 'undefined'?paymentType:'',
-              countingType:countingType !== 'undefined'?countingType:'',
-            },
-            splitRequestList,
-            contractPlanning:{
-              contractPlanningCategory, biddingMethodCode, biddingMethodName, contractPlanningCategoryName, contractPlanningId, contractPlanningName, incurredPlannedAmount, incurredPlannedAmountText, plannedAmountInclTax, plannedAmountInclTaxText, planningBalance, planningBalanceText,
-              projectId,projectName,projectCode,bidResponsibleOrg,bidResponsibleOrgName,subjectMatter:this.subjectMatter,contractPlanningCode,brand
-            }
-          }
-          console.log(formData,'this.formData');
-          console.log("---"+JSON.stringify(this.materialsLists))
-          try{
-            const res = await saveProcurementPlan(formData);
-            if(!this.isUpdate && res?.data?.materialsLists.length>0){
-              console.log("-//--"+JSON.stringify(this.materialsLists))
-              this.projectCode=res.data.projectCode
-              this.id=res.data.id
-              this.materialsLists=res.data.materialsLists
-            }
-            console.log("-2222--"+JSON.stringify(this.materialsLists))
-            loading.close();
-            this.$message({
-              message: '保存成功',
-              type: 'success'
-            });
-            this.isSubmit = false;
-        
-            if(this.isPushRevoke){
-              this.pushMaterialProcurement();
-            }else{
-              this.revokePushMaterialProcurement();
-            }
-           
-           
-            // console.log(res,'r~~~~~~~~~~~~~~~~~');
-            // this.$tab.closePage().then(() => {
-            //   // 执行结束的逻辑
-            //   let param = Base64.encode(JSON.stringify(res.data))
-            //   this.$router.replace(`/procurement/plan-detail/${param}`);
-            // })
-          }catch(err){
-            console.log(err);
-            this.isSubmit = false;
-            loading.close();
-          }
-        } else {
-          this.isSubmit = false;
-          return false;
-        }
-      });
-    },
-
 
     //获取物料
     async getContractMaterials(){
@@ -1017,13 +705,11 @@ export default {
             // })
             children.push({
               index,
-              planTable:'planTable'+index,
               children: this.inventoryList.map(item => ({
                 ...item,
                 count: index === 0 ? item.count : 0.00,
                 rentTime: index === 0 ? item.rentTime : '',
-                rentQuantity:index === 0 ? item.rentQuantity : '',
-               
+                rentQuantity:index === 0 ? item.rentQuantity : ''
               }))
             })
           });
@@ -1073,9 +759,7 @@ export default {
         procurementPlan.priceType = procurementPlan.priceType  + ''
         this.formData.subjectMatterText = procurementPlan.subjectMatterName;
         this.formData.region = [procurementPlan.regionProvinceCode, procurementPlan.regionCityCode]
-        this.id=procurementPlan.id
-        this.projectCode=procurementPlan.projectCode
-        this.currentContract.contractPlanningCategory = contractPlanning.contractPlanningCategory
+        // this.currentContract.contractPlanningCategory = contractPlanning.contractPlanningCategory
         this.subjectMatter = procurementPlan.subjectMatterType;
         this.formData = {...this.formData, ...procurementPlan, upperLimitPrice:contractPlanning.plannedAmountInclTaxText}
         console.log(this.formData, 'this.formData');
@@ -1087,17 +771,13 @@ export default {
         //   this.isEdit = false
         // }
 
-        
+        console.log(splitMaterials,'splitMaterials--splitMaterials--splitMaterials')
         splitMaterials.forEach((item,index) => {
           item.$index = index;
-          item.planTable='planTable'+index
-          let children = item.materialsLists.map((child,k) => ({...child, $index:k,planTable:item.planTable}))
+          let children = item.materialsLists.map((child,k) => ({...child, $index:k}))
           item.children = children;
         })
-        console.log(JSON.stringify(splitMaterials),'splitMaterials--splitMaterials--splitMaterials')
-
         this.planList[0] = {...contractPlanning, children: splitMaterials};
-        console.log(JSON.stringify(this.planList[0]),'this.planList[0]--this.planList[0]--this.planList[0]')
         // 在数据加载完成后手动展开所有行
         this.$nextTick(() => {
           this.expandAllRows();
@@ -1534,16 +1214,6 @@ export default {
 }
 ::v-deep.app-container .dialogClass .el-dialog__body {
   height: initial;
-}
-::v-deep .el-table__row .already-pushed {
-  background: #CCCCCC !important;
-}
-
-::v-deep .el-table__body tr:hover > td.el-table__cell {
-  background: initial !important;
-}
-::v-deep  .el-table__row   .not-pushed {
-  background: #F9F9FB !important;
 }
 
 </style>

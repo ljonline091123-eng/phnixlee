@@ -748,13 +748,20 @@ export default {
     treeSelect(value) {
       if (value.disabled) {
         this.$modal.msgError("该单位不能选择");
-        this.formData.useUnit = "";
+        // this.formData.useUnit = "";
+        this.$set(this.formData,"useUnit",undefined);
+        this.unitId = undefined;
       } else {
         this.unitId = value.organizationId;
         this.$refs.form.clearValidate("useUnit");
       }
     },
     handleSubmit() {
+      console.log("保存--this.formData",this.formData);
+      console.log("保存--this.unitId",this.unitId);
+      if(!this.unitId) {
+        this.$set(this.formData, "useUnit", undefined);
+      }
       this.$refs.form.validate((valid) => {
         if (valid) {
           let isValid = true;

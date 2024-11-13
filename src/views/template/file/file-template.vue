@@ -454,10 +454,15 @@ export default {
       this.attachmentId = "";
     },
     treeSelect(value) {
+      debugger
+      console.log("file-template---treeSelect---value",value)
       if (value.disabled) {
         this.$modal.msgError("该单位不能选择");
-        this.fileForm.usingUnitName = "";
-        this.fileForm.usingUnitNo = "";
+        // this.fileForm.usingUnitName = "";
+        // this.fileForm.usingUnitNo = "";
+        this.$set(this.fileForm, "usingUnitName", undefined);
+        this.$set(this.fileForm, "usingUnitNo", undefined);
+        this.unitId = undefined;
       } else {
         this.fileForm.usingUnitName = value.label;
         this.unitId = value.organizationId;
@@ -466,7 +471,11 @@ export default {
     },
     //保存模板
     confirmTemplate(formName) {
-      console.log(this.fileForm);
+      console.log("保存--this.fileForm",this.fileForm);
+      console.log("保存--this.unitId",this.unitId);
+      if(!this.unitId) {
+        this.$set(this.fileForm, "usingUnitNo", undefined);
+      }
       this.$refs[formName].validate(async (valid) => {
         if (valid) {
           const { attachmentId } = this;

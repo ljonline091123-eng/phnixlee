@@ -339,7 +339,7 @@
             <el-table-column prop="skuId" align="center" width="180" label="易料商品编码"/>
             <el-table-column prop="goodsName" align="center" width="180" label="易料商品名称"/>
               <el-table-column prop="offerBrand" align="center" width="180" label="易料品牌"/>
-             <el-table-column prop="offerPrice" align="center" width="180" label="易料初使报价"/>
+             <el-table-column prop="offerPrice" align="center" width="180" label="易料初始报价"/>
           </el-table>
           <!-- 租赁材料、租赁机械 -->
           <el-table
@@ -3370,6 +3370,11 @@ export default {
         curTaskId: this.taskPresentId,
         processKey: "jiantou-zhaocai:{org}:ZHAOCAI_AGREEMENT_SIGN",
       };
+      const loading = this.$loading({
+        lock: true,
+        text: "正在提交...",
+        background: "rgba(0, 0, 0, 0.7)",
+      });
       postAuditProcess(params).then(() => {
         this.$message.success("提交成功");
         this.sanctionVisible = false;
@@ -3377,6 +3382,9 @@ export default {
       }).catch(error => {
         /* 关闭遮罩层 */
         this.$modal.closeLoading();
+      }).finally(() => {
+        // 关闭加载遮罩层
+        loading.close();
       });
     },
     async handelCalibrationApproval() {
