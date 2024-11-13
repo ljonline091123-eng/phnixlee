@@ -717,11 +717,15 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
                 .eq(VendorChange::getId,requestDTO.getBusinessId()));
         String org,orgThree;
         if(vendorChange!=null){
+            requestDTO.setBusinessId(vendorChange.getId()+"");
+            requestDTO.setProcessId(vendorChange.getWfProcessId());
             /* 根据组织获取对应的二级单位 */
             org = underlingSystemService.getL2OrgByOrgId(vendorChange.getFirstCooperationCompanyCode());
             /* 获取三级单位 */
             orgThree = underlingSystemService.getL3OrgByOrgId(vendorChange.getFirstCooperationCompanyCode());
         }else{
+            requestDTO.setBusinessId(vendor.getId()+"");
+            requestDTO.setProcessId(vendor.getWfProcessId());
             /* 根据组织获取对应的二级单位 */
             org = underlingSystemService.getL2OrgByOrgId(vendor.getFirstCooperationCompanyCode());
             /* 获取三级单位 */
@@ -745,11 +749,15 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
                 .eq(VendorChange::getId,requestDTO.getBusinessId()));
         String org,orgThree;
         if(vendorChange!=null){
+            requestDTO.setBusinessId(vendorChange.getId()+"");
+            requestDTO.setProcessId(vendorChange.getWfProcessId());
             /* 根据组织获取对应的二级单位 */
             org = underlingSystemService.getL2OrgByOrgId(vendorChange.getFirstCooperationCompanyCode());
             /* 获取三级单位 */
             orgThree = underlingSystemService.getL3OrgByOrgId(vendorChange.getFirstCooperationCompanyCode());
         }else{
+            requestDTO.setBusinessId(vendor.getId()+"");
+            requestDTO.setProcessId(vendor.getWfProcessId());
             /* 根据组织获取对应的二级单位 */
             org = underlingSystemService.getL2OrgByOrgId(vendor.getFirstCooperationCompanyCode());
             /* 获取三级单位 */
@@ -773,11 +781,15 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
                 .eq(VendorChange::getId,variables.get("businessId")));
         String org,orgThree;
         if(vendorChange!=null){
+            variables.put("businessId",vendorChange.getId()+"");
+            variables.put("processId",vendorChange.getWfProcessId());
             /* 根据组织获取对应的二级单位 */
             org = underlingSystemService.getL2OrgByOrgId(vendorChange.getFirstCooperationCompanyCode());
             /* 获取三级单位 */
             orgThree = underlingSystemService.getL3OrgByOrgId(vendorChange.getFirstCooperationCompanyCode());
         }else{
+            variables.put("businessId",vendor.getId()+"");
+            variables.put("processId",vendor.getWfProcessId());
             /* 根据组织获取对应的二级单位 */
             org = underlingSystemService.getL2OrgByOrgId(vendor.getFirstCooperationCompanyCode());
             /* 获取三级单位 */
@@ -800,11 +812,15 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
                 .eq(VendorChange::getId,requestDTO.getBusinessId()));
         String org,orgThree;
         if(vendorChange!=null){
+            requestDTO.setBusinessId(vendorChange.getId()+"");
+            requestDTO.setProcessId(vendorChange.getWfProcessId());
             /* 根据组织获取对应的二级单位 */
             org = underlingSystemService.getL2OrgByOrgId(vendorChange.getFirstCooperationCompanyCode());
             /* 获取三级单位 */
             orgThree = underlingSystemService.getL3OrgByOrgId(vendorChange.getFirstCooperationCompanyCode());
         }else{
+            requestDTO.setBusinessId(vendor.getId()+"");
+            requestDTO.setProcessId(vendor.getWfProcessId());
             /* 根据组织获取对应的二级单位 */
             org = underlingSystemService.getL2OrgByOrgId(vendor.getFirstCooperationCompanyCode());
             /* 获取三级单位 */
