@@ -56,4 +56,7 @@ public class ProcurementPlanPushVO {
     @ApiModelProperty(value = "进场时间")
     private String enterIntoTime;
 
+    @ApiModelProperty(value = "项目code")
+    private String projectCode;
+
 }

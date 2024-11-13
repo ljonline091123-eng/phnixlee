@@ -506,6 +506,7 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
             ContractPlanning contractPlanning = contractPlanningService.getOne(new LambdaQueryWrapper<ContractPlanning>()
                     .eq(ContractPlanning::getContractPlanningCode,planPushVO.getContractPlanningCode())
                     .eq(ContractPlanning::getContractPlanningId,planPushVO.getContractPlanningId())
+                    .eq(ContractPlanning::getProjectCode,planPushVO.getProjectCode())
                     .last("limit 1"));
             /* 查询采购计划 */
             ProcurementPlan procurementPlan = null;
@@ -541,7 +542,7 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
                             /* 采购经办人名称 */
                     "、采购人为"+(procurementPlan==null?"":procurementPlan.getProcurementOfficerName())+
                             /* 区域（只有购买材料）：获取“购买材料”类型里边拆分的标包里边的“区域”字段 省 + 市 */
-                    ((procurementPlan==null?false:procurementPlan.getProcurementPlanType().equals(ProcurementPlanTypeEnum.PURCHASE_MATERIALS.getType()))?
+                    ((procurementPlan==null?false:procurementPlan.getProcurementPlanType().equals(ProcurementPlanTypeEnum.PURCHASE_MATERIALS.getType()) && !(provinceName + cityName).isEmpty())?
                             "，区域为"+(provinceName + cityName):"");
             requestDTO.setContent(content);/* 推送内容 */
             log.info("[推送合约规划推动采购计划拆包推送内容:{}],",content);
