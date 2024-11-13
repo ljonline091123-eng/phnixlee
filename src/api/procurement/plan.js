@@ -129,15 +129,16 @@ export const getUsersRoleList = () => {
   })
 }
 
-// 获取推送角色用户 根据
-export const getUsersRoleContractPlanList = (contractPlanningCode,contractPlanningId,contractIdList) => {
+// 获取推送角色用户
+export const getUsersRoleContractPlanList = (projectCode,contractPlanningCode,contractPlanningId,contractIdList) => {
   return request({
     url: '/business/procurementPlan/getUsersRoleContractPlanList',
     method: 'get',
     params:{
-      contractPlanningCode,
-      contractPlanningId,
-      contractIdList
+      projectCode,/* 项目编码 */
+      contractPlanningCode,/* 合约规划编码 */
+      contractPlanningId,/* 合约规划id */
+      contractIdList,/* 合约规划id 集合 */
     }
   })
 }
