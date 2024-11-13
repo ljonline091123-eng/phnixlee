@@ -1097,6 +1097,7 @@ export default {
           noticeId,/* 招标id */
           enterIntoTime,
           biddingTime,
+          projectCode:this.$store.state.project.project.code,
           // redirectUrl:`/procurement/plan?contractPlanningName=${url}`
           redirectUrl: paramUrl
         }
