@@ -844,6 +844,10 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
          * 获取上限价、物料总数
          */
         Integer procurementPlanType = procurementPlan.getProcurementPlanType();
+        /**
+         * 改成按清单的价格类型计算浮动价固定价格
+         * Time:2024/11/13 下午2:55
+         * */
         Integer priceType = procurementPlan.getPriceType();
         // 上限价
         BigDecimal plannedPrice = BigDecimal.ZERO;
@@ -878,7 +882,8 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
                 materialsCountMap.put(materials.getMaterialsUniqueId(),NumberUtil.add(materialsCount,materials.getCount()));
 
                 // 上限价
-                if (PriceTypeEnum.FLOAT_PRICE.equalsType(priceType)) {
+//                if (PriceTypeEnum.FLOAT_PRICE.equalsType(priceType)) {
+                if (PriceTypeEnum.FLOAT_PRICE.equalsType(materials.getPriceType())) {
                     // 浮动价 = 清单数量 * (基价 + 浮动价 + 卸费)
                     BigDecimal floatPrice = NumberUtil.add(materials.getBasePrice(),materials.getFloatingPrice(),materials.getUnloadingFee());
                     BigDecimal floatPriceAmount = AmountCalUtil.calTotalAmountInclTax(materials.getCount(),floatPrice);
@@ -899,7 +904,8 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
                 }
 
                 // 非浮动价，将浮动价相关字段全部设置为 null
-                if (!PriceTypeEnum.FLOAT_PRICE.equalsType(priceType)) {
+//                if (!PriceTypeEnum.FLOAT_PRICE.equalsType(priceType)) {
+                if (!PriceTypeEnum.FLOAT_PRICE.equalsType(materials.getPriceType())) {
                     materials.setBasePrice(null);
                     materials.setFloatingPrice(null);
                     materials.setUnloadingFee(null);
@@ -935,6 +941,7 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
         procurementPlan.setSubjectMatter(subjectMatterCode);
         // 交易标的物类型，只有购买材料的需要计算
         if (ProcurementPlanTypeEnum.PURCHASE_MATERIALS.equalsType(procurementPlan.getProcurementPlanType())) {
+            /* 校验交易标的物是否存在多种 */
             Integer subjectMatterType = materialsListService.getSubjectMatterType(subjectMatterCode);
             procurementPlan.setSubjectMatterType(subjectMatterType);
         } else {

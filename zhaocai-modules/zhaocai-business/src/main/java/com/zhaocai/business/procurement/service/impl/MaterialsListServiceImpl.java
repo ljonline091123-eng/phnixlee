@@ -90,6 +90,7 @@ public class MaterialsListServiceImpl extends ServiceImpl<MaterialsListMapper, M
                 if (PriceTypeEnum.FLOAT_PRICE.equalsType(materials.getPriceType())) {
                     // 浮动价 >>> 含税单价 = 基价 + 浮动价 + 卸费
                     BigDecimal unitPriceInclTax = AmountCalUtil.addAmount(materials.getBasePrice(),materials.getBasePrice(),materials.getFloatingPrice(),materials.getUnloadingFee());
+                    /* 单价(含税) */
                     materials.setUnitPriceInclTax(unitPriceInclTax);
                     floatCount[0]++;
                 }else{
@@ -100,6 +101,7 @@ public class MaterialsListServiceImpl extends ServiceImpl<MaterialsListMapper, M
                 if (PriceTypeEnum.FLOAT_PRICE.equalsType(procurementPlan.getPriceType())) {
                     // 浮动价 >>> 含税单价 = 基价 + 浮动价 + 卸费
                     BigDecimal unitPriceInclTax = AmountCalUtil.addAmount(materials.getBasePrice(),materials.getBasePrice(),materials.getFloatingPrice(),materials.getUnloadingFee());
+                    /* 单价(含税) */
                     materials.setUnitPriceInclTax(unitPriceInclTax);
                 }
             }
@@ -107,6 +109,7 @@ public class MaterialsListServiceImpl extends ServiceImpl<MaterialsListMapper, M
 //            if (PriceTypeEnum.FLOAT_PRICE.equalsType(procurementPlan.getPriceType())) {
 //                // 浮动价 >>> 含税单价 = 基价 + 浮动价 + 卸费
 //                BigDecimal unitPriceInclTax = AmountCalUtil.addAmount(materials.getBasePrice(),materials.getBasePrice(),materials.getFloatingPrice(),materials.getUnloadingFee());
+//                /* 单价(含税) */
 //                materials.setUnitPriceInclTax(unitPriceInclTax);
 //            }
 
