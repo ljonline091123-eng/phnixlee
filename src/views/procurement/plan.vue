@@ -1073,9 +1073,8 @@ export default {
       if(!this.selectPushList.length) return this.$message({type:'error',message:"请选择推送用户"});
       console.log(this.currentData,'currentData-~~~~~~~~~~~~~~~~~~~~');
       try{
-        const { contractPlanningName, contractPlanningId, contractPlanningCode } = this.currentData
+        const { contractPlanningName, contractPlanningId, contractPlanningCode, enterIntoTime,biddingTime } = this.currentData
         const { splitContractId, procurementSchemeCode, schemeId, noticeId, planId } = this.contractPlanList.filter(item => item.cpId == (this.pushQuery.cpId))[0];
-
         let url = Base64.encode(JSON.stringify(contractPlanningName));
         url = encodeURIComponent(url); //避免base64编码中出现"/"时路由404
 
@@ -1083,6 +1082,8 @@ export default {
         let paramUrl = Base64.encode(JSON.stringify(planId));
         paramUrl = encodeURIComponent(paramUrl); //避免base64编码中出现"/"时路由404
         paramUrl = `/procurement/plan-detail/${paramUrl}`;
+
+
 
         let formData = {
           userList:this.selectPushList,
@@ -1093,6 +1094,8 @@ export default {
           procurementSchemeCode,/* 采购方案code */
           schemeId,/* 采购方案id */
           noticeId,/* 招标id */
+          enterIntoTime,
+          biddingTime,
           // redirectUrl:`/procurement/plan?contractPlanningName=${url}`
           redirectUrl: paramUrl
         }
@@ -1120,8 +1123,6 @@ export default {
         this.$refs.pushTable.clearSelection()
       })
 
-      console.log('%c 🚀 ~ file:plan --method:closePushStateDialog --line:1115 --variable:===>', `font-size:16px; font-weight:bold; color:#fff; padding:4px; border-radius:4px; background:linear-gradient(90deg, ${["#ff005a", "#ff9900", "#33cc33", "#0099ff", "#ffc300"][Math.floor(Math.random() * 5)]}, ${["#ff005a", "#ff9900", "#33cc33", "#0099ff", "#ffc300"][Math.floor(Math.random() * 5)]});`,
-        this.$refs.pushTable);
     }
   },
   computed: {
