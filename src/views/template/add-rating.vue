@@ -444,7 +444,9 @@ export default {
     submitForm(formName) {
       // console.log(this.planList,'ppp');
       this.isSubmit = true;
-      if(!this.formData.usingUnitName) {
+      console.log("保存--this.formData",this.formData);
+      console.log("保存--this.unitId",this.unitId);
+      if(!this.unitId) {
         this.$set(this.formData, "useUnit", undefined);
       }
       this.$refs[formName].validate(async (valid, done) => {
@@ -611,7 +613,8 @@ export default {
       if (value.disabled) {
         this.$modal.msgError("该单位不能选择");
         // this.formData.useUnit = "";
-        this.$set(this.formData,"useUnit","");
+        this.$set(this.formData,"useUnit",undefined);
+        this.unitId = undefined;
       } else {
         this.unitId = value.organizationId;
         this.$refs.fileFormRef.clearValidate("useUnit");
@@ -830,6 +833,21 @@ export default {
     },
   },
   watch: {
+    '$route': {
+      immediate: true,
+      handler(newVal) {
+        (this.formData = {
+          name: "",
+          selectedTypes: [],
+          createUser: "",
+          useUnit: null,
+          biddingMarkCategoryVOList: [],
+        }),
+          (this.isSubmit = false),
+          (this.formData.createUser = this.$store.state.user.nickname);
+        this.listOrganization4Company();
+      }
+    },
     "formData.selectedTypes": function (newVal) {
       this.updateTables(newVal);
     },
