@@ -34,6 +34,12 @@ public class ContractPlanningQueryVO {
     @ApiModelProperty(value = "合约规划id")
     private String contractPlanningId;
 
+    /**
+     * 项目
+     */
+    @ApiModelProperty(value = "项目code")
+    private String projectCode;
+
     @ApiModelProperty(value = "合约规划id集合")
     private List<String> contractIdList;
 
