@@ -501,7 +501,7 @@ export default {
     }else{
       this.getContractMaterials().then(()=>{
         // 获取合约规划清单后，默认合约拆分一份
-        this.$set(this.splitForm,"num",1);
+        // this.$set(this.splitForm,"num",1);
         this.handleSplitInit();
       })
     }
@@ -684,8 +684,9 @@ export default {
     },
     // 初始化拆分合同
     handleSplitInit(){
-      const { num } = this.splitForm;
-      if(Number(num) > 10) return this.$message.error('最多可拆分10份');
+      // const { num } = this.splitForm;
+      // if(Number(num) > 10) return this.$message.error('最多可拆分10份');
+      const num = 1
       const children = []
       Array.from({ length: num }).forEach((_, index) => {
         children.push({
