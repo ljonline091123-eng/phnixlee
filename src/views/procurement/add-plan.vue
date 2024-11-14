@@ -254,7 +254,7 @@
                       {{ scope.row.name }}
                     </template>
                   </el-table-column>
-           
+
                   <el-table-column v-if="currentContract.contractPlanningCategory == 1" label="易料品牌" min-width="120" prop="offerBrand" show-overflow-tooltip/>
                   <el-table-column v-if="currentContract.contractPlanningCategory == 1" label="易料初始报价"  width="150" prop="offerPrice" >
                     <!-- <template slot-scope="scope">
@@ -264,9 +264,9 @@
                     </el-table>
                   </template>
                 </el-table-column>
-                
 
-              
+
+
               </el-table>
             </template>
           </el-table-column>
@@ -550,7 +550,11 @@ export default {
     if(this.isUpdate){
       this.getPlanDetail()
     }else{
-      this.getContractMaterials()
+      this.getContractMaterials().then(()=>{
+        // 获取合约规划清单后，默认合约拆分一份
+        this.$set(this.splitForm,"num",1);
+        this.handleSplitInit();
+      })
     }
   },
   mounted(){
@@ -559,7 +563,7 @@ export default {
   methods: {
     // 多选框选中数据
     handleSelectionChange(selection, row) {
-  
+
     },
     handleSelect(selection, row){
       console.log("selection"+JSON.stringify(selection))
@@ -569,7 +573,7 @@ export default {
     async goDetail(code) {
       // this.dialogVisible=true
       // console.log(JSON.stringify(code))
-     
+
         const res = await getYjtUrl(code);
         this.yjtUrl=res.data || ''
         window.open(this.yjtUrl)
@@ -614,7 +618,7 @@ export default {
           console.log(currentSelect.length+"currentSelect"+JSON.stringify(currentSelect))
           this.materialsLists = [...this.materialsLists ,...currentSelect];
         }
-   
+
       if(this.materialsLists.length<=0) return this.$message({type:'error',message:"请选择撤销易料市集采购清单"});
       this.$confirm("是否确定撤销选中的清单？", "提示", {
         confirmButtonText: "确定",
@@ -629,13 +633,13 @@ export default {
           }
           console.log(JSON.stringify(this.materialsLists))
         this.submitFormPush('form');
-       
+
       });
     },
     //撤销
     async revokePushMaterialProcurement(){
 
-       
+
       let formData = {
         projectCode:this.projectCode,
           id:this.id,
@@ -865,7 +869,7 @@ export default {
           const splitRequestList = this.planList[0]?.children.map(item => {
             console.log(JSON.stringify(item))
             return {
-              
+
               splitContractName:item.splitContractName,
               contractScope:item.contractScope,
               materialsLists:item.children.map(child => {
@@ -917,14 +921,14 @@ export default {
               type: 'success'
             });
             this.isSubmit = false;
-        
+
             if(this.isPushRevoke){
               this.pushMaterialProcurement();
             }else{
               this.revokePushMaterialProcurement();
             }
-           
-           
+
+
             // console.log(res,'r~~~~~~~~~~~~~~~~~');
             // this.$tab.closePage().then(() => {
             //   // 执行结束的逻辑
@@ -996,6 +1000,26 @@ export default {
     handelInventory(id) {
       this.inventoryVisible = true;
     },
+    // 初始化拆分合同
+    handleSplitInit(){
+      const { num } = this.splitForm;
+      if(Number(num) > 10) return this.$message.error('最多可拆分10份');
+      const children = []
+      Array.from({ length: num }).forEach((_, index) => {
+        children.push({
+          index,
+          planTable:'planTable'+index,
+          children: this.inventoryList.map(item => ({
+            ...item,
+            count: index === 0 ? item.count : 0.00,
+            rentTime: index === 0 ? item.rentTime : '',
+            rentQuantity:index === 0 ? item.rentQuantity : '',
+
+          }))
+        })
+      });
+      this.$set(this.planList[0], 'children', JSON.parse(JSON.stringify(children)));
+    },
     // 拆分合同
     handleSplit() {
       this.$refs['splitFormRef'].validate((valid) => {
@@ -1023,7 +1047,7 @@ export default {
                 count: index === 0 ? item.count : 0.00,
                 rentTime: index === 0 ? item.rentTime : '',
                 rentQuantity:index === 0 ? item.rentQuantity : '',
-               
+
               }))
             })
           });
@@ -1087,7 +1111,7 @@ export default {
         //   this.isEdit = false
         // }
 
-        
+
         splitMaterials.forEach((item,index) => {
           item.$index = index;
           item.planTable='planTable'+index
