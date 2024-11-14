@@ -630,6 +630,21 @@
               </el-col>
             </el-row>
           </el-form>
+          <el-row>
+            <el-radio-group
+              v-model="contractQuery.contractType"
+              size="small"
+              style="padding-bottom: 15px"
+            >
+              <el-radio-button
+                :label="dict.value"
+                :name="dict.label"
+                v-for="dict in CONTRACTTYPE"
+                :key="dict.value"
+              >{{ dict.label }}</el-radio-button
+              >
+            </el-radio-group>
+          </el-row>
           <el-table
             v-loading="contractLoading"
             :data="contractList"
@@ -638,6 +653,7 @@
             border
             size="small"
             @row-dblclick="dbClick"
+            class="schemeClass"
           >
             <el-table-column
               label="序号"
@@ -720,6 +736,7 @@ import {
 import VirtualScroll from 'el-table-virtual-scroll'
 import { mapGetters } from "vuex";
 import {getBiddingSchemeList} from "@/api/procurement/manage";
+import {CONTRACTTYPE} from "@/utils/constants";
 export default {
   name: "Plan",
   dicts: ["procurement_plan_type","contract_bidding_method","contract_bidding_responsible_org","contract_bidding_state"],
@@ -728,6 +745,7 @@ export default {
   },
   data() {
     return {
+      CONTRACTTYPE:CONTRACTTYPE,
       virtualList: [],
       planList: [],
       contractList: [],
@@ -755,7 +773,7 @@ export default {
         pageSize: 10,
         contractName: undefined,
         projectId: undefined,
-        contractType: undefined,
+        contractType: '',
       },
       contractTotal: 1,
       planLoading: false,
@@ -846,7 +864,8 @@ export default {
     async getContractList() {
       this.contractLoading = true;
       try {
-        this.contractQuery.contractType = this.contractTypeText;
+        // this.contractQuery.contractType = this.contractTypeText;
+        // this.$set(this.contractQuery, 'contractType', (this.contractTypeText || ''))
         const res = await getContractPlanningList(this.contractQuery);
         this.contractLoading = false;
         this.contractList = res.data.rows;
@@ -870,7 +889,11 @@ export default {
     async handleAdd() {
       this.contractVisible = true;
       this.contractLoading = true;
+      this.$set(this.contractQuery, 'contractType', '')
       this.getContractList();
+    },
+    rowClick(row){
+      this.$refs.pushTable.clearSelection()
     },
     //双击选择项目合约规划
     dbClick(row) {
@@ -1136,6 +1159,12 @@ export default {
     ...mapGetters(["project"]),
   },
   watch: {
+    /** 监控类型切换 */
+    "contractQuery.contractType": {
+      handler(val) {
+        this.getContractList();
+      },
+    },
     pushStateDialog(val){
       if(!val){
         this.closePushStateDialog()
@@ -1170,3 +1199,11 @@ export default {
   },
 };
 </script>
+<style scoped lang="scss">
+::v-deep.schemeClass {
+  .el-table__body tr.current-row > td {
+    background-color: #e6742e !important;
+    color: #fff;
+  }
+}
+</style>

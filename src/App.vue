@@ -38,9 +38,9 @@ export default {
     } else {
       // project = window.$wujie?.props?.prj || {}
       project = window.$wujie?.props.prj || {
-        code: "SG20012024000002-2",
-        id: "1811573814435840000",
-        name: "华中科技大宿舍维修总包二标段",
+        code: "SG20012024000026-1",
+        id: "1834769165014523904",
+        name: "金甲小学项目",
       };
       currentOrg =
         window.localStorage.getItem("currentOrgValue") || "2013000000";

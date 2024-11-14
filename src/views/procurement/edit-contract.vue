@@ -499,7 +499,7 @@
               <el-table-column prop="countText" label="数量" width="120" align="right"/>
               <el-table-column prop="basePriceText" label="基价(元)" v-if="priceType == 2" width="120" align="right"/>
               <el-table-column prop="floatingPriceText" label="浮动价(元)" v-if="priceType == 2" width="120" align="right"/>
-              <el-table-column prop="unloadingFeeText" label="卸费(元)" v-if="priceType == 2" width="120" align="right"/>
+              <el-table-column prop="unloadingFeeText" label="装卸费(元)" v-if="priceType == 2" width="120" align="right"/>
               <el-table-column prop="signTaxRate" label="本次签订税率(%)" width="130" align="right">
                 <template slot-scope="scope">
                   <el-form-item label-width="0" :prop="'agreementMaterialsLists.' + scope.$index + '.signTaxRate'">

@@ -228,7 +228,7 @@
               />
               <el-table-column
                 width="150"
-                label="卸费"
+                label="装卸费"
                 align="right"
                 prop="unloadingFeeText"
                 v-if="isShow && procurementPlan.priceType == 2"

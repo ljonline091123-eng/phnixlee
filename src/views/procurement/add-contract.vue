@@ -555,7 +555,7 @@
               <el-table-column prop="signCountText" label="本次签订量" width="120" align="right"/>
               <el-table-column prop="basePriceText" label="基价(元)" v-if="priceType == 2" width="120" align="right"/>
               <el-table-column prop="floatingPriceText" label="浮动价(元)" v-if="priceType == 2" width="120" align="right"/>
-              <el-table-column prop="unloadingFeeText" label="卸费(元)" v-if="priceType == 2" width="120" align="right"/>
+              <el-table-column prop="unloadingFeeText" label="装卸费(元)" v-if="priceType == 2" width="120" align="right"/>
 
               <el-table-column prop="signUnitPriceExclTaxText" label="本次签订不含税单价(元)" width="180" align="right"/>
               <el-table-column prop="signUnitPriceInclTaxText" label="本次签订含税单价(元)" width="160" align="right"/>

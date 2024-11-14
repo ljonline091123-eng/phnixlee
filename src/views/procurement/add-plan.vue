@@ -219,7 +219,7 @@
                           <el-input v-model="scope.row.floatingPrice" :disabled="isSubmit" v-thousandth/>
                         </template>
                       </el-table-column>
-                      <el-table-column label="卸费" align="right" width="130" prop="unloadingFee" v-if="isFloat">
+                      <el-table-column label="装卸费" align="right" width="130" prop="unloadingFee" v-if="isFloat">
                         <template slot-scope="scope">
                           <el-input v-model="scope.row.unloadingFee" :disabled="isSubmit" v-thousandth/>
                         </template>
