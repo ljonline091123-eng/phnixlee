@@ -499,7 +499,11 @@ export default {
     if(this.isUpdate){
       this.getPlanDetail()
     }else{
-      this.getContractMaterials()
+      this.getContractMaterials().then(()=>{
+        // 获取合约规划清单后，默认合约拆分一份
+        this.$set(this.splitForm,"num",1);
+        this.handleSplitInit();
+      })
     }
   },
   mounted(){
@@ -677,6 +681,26 @@ export default {
     //查看清单
     handelInventory(id) {
       this.inventoryVisible = true;
+    },
+    // 初始化拆分合同
+    handleSplitInit(){
+      const { num } = this.splitForm;
+      if(Number(num) > 10) return this.$message.error('最多可拆分10份');
+      const children = []
+      Array.from({ length: num }).forEach((_, index) => {
+        children.push({
+          index,
+          planTable:'planTable'+index,
+          children: this.inventoryList.map(item => ({
+            ...item,
+            count: index === 0 ? item.count : 0.00,
+            rentTime: index === 0 ? item.rentTime : '',
+            rentQuantity:index === 0 ? item.rentQuantity : '',
+
+          }))
+        })
+      });
+      this.$set(this.planList[0], 'children', JSON.parse(JSON.stringify(children)));
     },
     // 拆分合同
     handleSplit() {
