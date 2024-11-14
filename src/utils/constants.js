@@ -12,3 +12,27 @@ export const PRICECHANGESTATEOPTIONS = [{
   value: 2,
   label: '放弃调价',
 }]
+
+export const CONTRACTTYPE = [{
+  value: '',
+  label: '全部'
+}, {
+  value: '5',
+  label: '劳务分包',
+},{
+  value: '4',
+  label: '专业分包',
+},{
+  value: '1',
+  label: '物质采购',
+},{
+  value: '2',
+  label: '物质租赁',
+},{
+  value: '3',
+  label: '机械租赁（设备）',
+},{
+  value: '6',
+  label: '其他',
+}]
+

@@ -541,7 +541,7 @@
                   prop="floatingPriceText"
                 />
                 <el-table-column
-                  label="卸费(元)"
+                  label="装卸费(元)"
                   v-if="formData.priceType == 2"
                   align="right"
                   prop="unloadingFeeText"
