@@ -1019,7 +1019,7 @@ export default {
     async getUsersRoleContractPlanList(){
       this.pushListLoading = true;
       try{
-        const res = await getUsersRoleContractPlanList(this.currentData.contractPlanningCode,this.currentData.contractPlanningId,null)
+        const res = await getUsersRoleContractPlanList(this.$store.state.project.project.code,this.currentData.contractPlanningCode,this.currentData.contractPlanningId,null)
         this.pushRoleList = res.data.userList.map(item => ({value:item.roleId,label:item.roleName}))
         /* 存储原始的userList */
         this.pushList = res.data.userList
@@ -1097,6 +1097,7 @@ export default {
           noticeId,/* 招标id */
           enterIntoTime,
           biddingTime,
+          projectCode:this.$store.state.project.project.code,
           // redirectUrl:`/procurement/plan?contractPlanningName=${url}`
           redirectUrl: paramUrl
         }
