@@ -1,6 +1,6 @@
 <template>
   <div class="app-container">
-    <BackButton path="/procurement/bindding" title="招标管理详情" />
+    <BackButton path="/procurement/bindding" :title="pageTitle" />
     <el-col :span="20" :xs="24" v-loading="loadingDetail">
       <TenderNotice v-if="currentState==='notice'" :scheme="scheme" @changeState="changeState" :noticeDetail="noticeDetail"></TenderNotice>
       <RegistrationDetails v-if="currentState==='registrationDetails'" :scheme="scheme" @changeState="changeState" :noticeDetail="noticeDetail"></RegistrationDetails>
@@ -114,8 +114,11 @@ export default {
     TenderNotice,
     RegistrationDetails
   },
+  dicts: ["procurement_type"],
   data() {
     return {
+      // * 页面标题
+      pageTitle: '',
       noticeDetail: {},
       scheme: {},
       currentStep: 0,
@@ -172,6 +175,13 @@ export default {
       Base64.decode(decodeURIComponent(this.$route.params.params))
     );
     this.scheme = param;
+    this.getDicts("procurement_type").then(res => {
+      const procurementType = param.procurementType;
+      const findObj = res.data.find(item=>item.dictValue == procurementType);
+      this.pageTitle= findObj?`${findObj.dictLabel}管理详情`:'招标管理详情'
+    });
+
+
     // let status = param.noticeStatus || 0
     // let step = 0
     // if(status === 1){
