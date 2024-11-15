@@ -95,7 +95,8 @@
               :key="index"
               class="custom-row"
             >
-              <el-col v-for="item in row" :key="item.id" :span="8">
+<!--              工程范围及工作内容特殊处理-->
+              <el-col v-for="item in row" :key="item.id" :span="item.prop==='scopeOfWork'?24:8">
                 <el-form-item
                   :label="item.label"
                   label-width="180px"

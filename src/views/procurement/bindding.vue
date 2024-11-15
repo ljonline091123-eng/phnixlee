@@ -507,8 +507,11 @@ export default {
     handleSuccess(res) {
       const { url, name } = res.data;
       console.log(url, name, "a");
-      this.abandonBidForm.attachmentList = [{ fileUrl: url, fileName: name }];
-      this.$refs.abandonBidRef.clearValidate("attachmentList");
+      // * 上传成功后，手动验证一次表单【'解决附件上传成功后还会显示验证信息'】
+      this.$set(this.abandonBidForm, "attachmentList", [{ fileUrl: url, fileName: name }]);
+      this.$refs.abandonBidRef.validateField('attachmentList');
+      // this.abandonBidForm.attachmentList = [{ fileUrl: url, fileName: name }];
+      // this.$refs.abandonBidRef.clearValidate("attachmentList");
     },
     /** 关闭废标弹层 */
     closeDialog(formName) {
