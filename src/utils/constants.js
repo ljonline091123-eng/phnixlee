@@ -12,3 +12,26 @@ export const PRICECHANGESTATEOPTIONS = [{
   value: 2,
   label: '放弃调价',
 }]
+
+export const PRICETYPEOPTIONS = [{
+  label: '固定价',
+  value: 1
+},{
+  label: '浮动价',
+  value: 2
+}]
+
+/**
+ * 价格类型
+ * @type {[{label: string, value: string},{label: string, value: string},{label: string, value: string}]}
+ */
+export const PRICETYPELIST = [{
+  label: '固定价',
+  value: 1
+},{
+  label: '浮动价',
+  value: 2
+},{
+  label: '固定浮动价',
+  value: 3
+}]

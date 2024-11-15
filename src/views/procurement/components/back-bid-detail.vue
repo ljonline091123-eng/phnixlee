@@ -114,6 +114,15 @@
                 show-overflow-tooltip
               />
               <el-table-column
+                label="价格类型"
+                width="200"
+                align="left"
+                prop="priceType"
+                fixed="left"
+                :formatter="formatterPriceType"
+                show-overflow-tooltip
+              />
+              <el-table-column
                 label="交易标的物"
                 width="150"
                 align="left"
@@ -279,6 +288,7 @@
 <script>
 import { getBidInfo } from "@/api/procurement/manage";
 import FileModule from "@/components/FileModule/index.vue";
+import {PRICETYPELIST} from "@/utils/constants";
 export default {
   data() {
     return {
@@ -311,6 +321,10 @@ export default {
     },
   },
   methods: {
+    formatterPriceType(_row,_column,cellValue) {
+      const findObj= PRICETYPELIST.find((item) => item.value === cellValue);
+      return findObj? findObj.label: "未知价格类型";
+    },
     // 封装枚举方法
     getInvoiceType(billType) {
       const invoice = this.invoice_type.find((item) => item.value === billType);

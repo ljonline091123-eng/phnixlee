@@ -207,6 +207,19 @@
           align="center"
           prop="phone"
         />
+        <el-table-column label="上限价(元)" width="150" align="right">
+          <template slot-scope="{ row }">
+            {{row.scheme && row.scheme.procurementScheme && row.scheme.procurementScheme.ceilingPrice}}
+          </template>
+        </el-table-column>
+        <!-- 把含税总价和上限价比-->
+        <el-table-column
+          label="是否超上限价"
+          min-width="100"
+          align="center"
+          :formatter="formatterUpProcurementScheme"
+        >
+        </el-table-column>
         <el-table-column label="含税总价(元)" width="150" align="right">
           <template slot-scope="{ row }">
             {{
@@ -712,6 +725,11 @@ export default {
   // },
 
   methods: {
+    formatterUpProcurementScheme(row) {
+      if(row.scheme && row.scheme.procurementScheme && row.scheme.procurementScheme.ceilingPrice){
+        return Number(row?.quotationDataVOList[row.quotationDataVOList.length - 1]?.taxPricePattern || 0) > Number(row.scheme?.procurementScheme?.ceilingPrice) ? "是" : "否";
+      }
+    },
     showSecretTips() {
       showSecretRelatedTips(()=>{
         this.$refs['upload'].$refs['upload-inner'].handleClick()
