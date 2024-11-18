@@ -530,10 +530,10 @@
               </el-table-column>
               <el-table-column prop="skuId" align="center" width="180" label="易料商品编码"/>
                 <el-table-column prop="goodsName" align="center" width="180" label="易料商品名称"/>
-                  <el-table-column prop="offerBrand" align="center" width="180" label="易料品牌"/> 
+                  <el-table-column prop="offerBrand" align="center" width="180" label="易料品牌"/>
                   <el-table-column  prop="offerPrice" align="center" width="180" label="易料初始报价"/>
                   <el-table-column width="1"/>
-                
+
             </el-table>
             <el-table v-else  :data="firstForm.agreementMaterialsLists" style="width: 100%">
               <el-table-column prop="materialsCode" label="物资编码" width="150" show-overflow-tooltip/>
@@ -1431,6 +1431,7 @@ import {
   getTemplateSwitchList,
 } from "@/api/procurement/scheme";
 import { getSwitchPageList } from "@/api/procurement/manage";
+import {showSecretRelatedTips} from "@/utils/MyUtils";
 export default {
   name: "add-contract",
   components: { commonTitle, BackButton, FileModule, Drag },
@@ -1728,26 +1729,29 @@ export default {
       //  this.attachmentId = row.attachmentId;
     },
     async getBcTemplateList(type) {
-      this.bcTemplateTitle = type === 2 ? "选择招标文件模板" : "选择合同模板";
-      this.isScoreMOdel = type === 2 ? true : false;
-      this.activeTab = "generalTemplate";
-      this.bcTemplateVisable = true;
-      this.bcTemplatetType = type;
-      this.bcTemplateQuery.templateType = type;
-      this.bcTemplateQuery.contractType = "";
-      // 根据模板类型调用相应的方法
-      if (type === 2) {
-        this.getGeneralTemplateList();
-      } else {
-        this.getContractModelList();
-      }
-      // 设置 switchTemplateType 和 templateType
-      this.bcTemplateQuery.switchTemplateType = "1";
-      this.bcTemplateQuery.templateType = type === 2 ? "2" : "1";
+      showSecretRelatedTips(async()=>{
+        this.bcTemplateTitle = type === 2 ? "选择招标文件模板" : "选择合同模板";
+        this.isScoreMOdel = type === 2;
+        this.activeTab = "generalTemplate";
+        this.bcTemplateVisable = true;
+        this.bcTemplatetType = type;
+        this.bcTemplateQuery.templateType = type;
+        this.bcTemplateQuery.contractType = "";
+        // 根据模板类型调用相应的方法
+        if (type === 2) {
+          this.getGeneralTemplateList();
+        } else {
+          this.getContractModelList();
+        }
+        // 设置 switchTemplateType 和 templateType
+        this.bcTemplateQuery.switchTemplateType = "1";
+        this.bcTemplateQuery.templateType = type === 2 ? "2" : "1";
 
-      // 获取模板列表
-      const res = await getSwitchPageList(this.bcTemplateQuery);
-      this.bcTemplateList = res.data.rows;
+        // 获取模板列表
+        const res = await getSwitchPageList(this.bcTemplateQuery);
+        this.bcTemplateList = res.data.rows;
+      })
+
     },
 
 

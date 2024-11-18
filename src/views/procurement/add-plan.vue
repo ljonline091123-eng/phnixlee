@@ -146,10 +146,10 @@
           </div>
         </PageTitle>
 
-        <el-table v-loading="loading" :data="planList" ref="tableRef"  size="small"  border default-expand-all>
+        <el-table v-loading="loading" :row-key="getRowKeys" :data="planList" ref="tableRef"  size="small"  border default-expand-all>
           <el-table-column type="expand" v-if="planList[0] && planList[0].children && planList[0].children.length">
             <template slot-scope="props">
-              <el-table :data="props.row.children" size="small"  border>
+              <el-table :data="props.row.children" size="small"    border>
                 <!-- <el-table-column type="selection"></el-table-column> -->
                 <el-table-column label="拆分合约规划名称" prop="splitContractName" width="150">
                   <template slot-scope="scope">
@@ -163,7 +163,7 @@
                 </el-table-column>
                 <el-table-column label="清单" align="center" props="inventory">
                   <template slot-scope="inventory">
-                    <el-table  size="small" :data="inventory.row.children"  border @select="handleSelect"  :ref="inventory.row.planTable"  :row-class-name="tableRowClassName">
+                    <el-table  size="small" :data="inventory.row.children"  border @select="handleSelect" :row-key="getRowKeys2"  :ref="inventory.row.planTable"  :row-class-name="tableRowClassName">
                       <el-table-column type="selection" width="55" :reserve-selection="true"/>
                       <el-table-column label="序号" type="index" width="50" align="center" fixed/>
                       <el-table-column label="清单编码" min-width="150" prop="materialsCode" fixed show-overflow-tooltip/>
@@ -178,6 +178,15 @@
                       </el-table-column>
                       <el-table-column label="规格型号" min-width="150" prop="specification" show-overflow-tooltip/>
                       <el-table-column label="计量单位" align="center" prop="unitMeasurement" />
+                      <el-table-column label="价格类型" align="center" prop="priceType" width="200">
+                        <template slot-scope="scope">
+                          <el-select style="width: 100%" v-model="scope.row.priceType" placeholder="请选择">
+                            <el-option v-for="dict in PRICETYPELIST" :key="dict.value" :label="dict.label"
+                              :value="dict.value">
+                            </el-option>
+                          </el-select>
+                        </template>
+                      </el-table-column>
                       <el-table-column label="租赁方式" align="center" prop="rentMode" v-if="currentContract.contractPlanningCategory == 2 || currentContract.contractPlanningCategory == 3" width="120">
                         <template slot-scope="scope">
                           <el-select style="width: 100%" v-model="scope.row.rentMode" placeholder="请选择" @change="changeRentMode(scope.row.materialsId,$event)">
@@ -198,14 +207,21 @@
                           <el-input v-model="scope.row.count" :disabled="isSubmit || scope.row.belongOffer || scope.row.pushFlag === 'Y'" @blur="changeCount(inventory.$index,scope,$event)" v-thousandth/>
                         </template>
                       </el-table-column>
-                      <el-table-column label="基价" align="right" width="130" prop="basePrice" v-if="isFloat">
+<!--                      基价由原来浮动价不可编辑，变成了可以编辑-->
+                      <el-table-column label="基价" align="right" width="130" prop="basePrice" >
                         <template slot-scope="scope">
-                          <el-input v-model="scope.row.basePriceText" disabled v-thousandth/>
+                          <span v-if="scope.row.priceType === 1">/</span>
+                          <div v-else>
+                            <el-input v-if="!scope.row.isbasePriceNotLegal"  v-model="scope.row.basePrice"  v-thousandth @blur="checkOtherPrice(scope.row,'basePrice',$event)"/>
+                            <el-input v-else  v-model="scope.row.basePrice" :disabled="isSubmit" v-thousandth  @blur="checkOtherPrice(scope.row,'basePrice',$event)" class="checkInput"/>
+                          </div>
+
                         </template>
                       </el-table-column>
-                      <el-table-column label="单价(含税)" align="right" prop="unitPriceInclTax" width="180" v-else>
+                      <el-table-column label="单价(含税)" align="right" prop="unitPriceInclTax" width="180">
                         <template slot-scope="scope">
-                          <el-input v-model="scope.row.unitPriceInclTax" :disabled="isSubmit || scope.row.belongOffer || scope.row.pushFlag === 'Y'" @blur="changePrice(scope.row,$event)" v-thousandth/>
+                          <span v-if="scope.row.priceType !== 1">/</span>
+                          <el-input v-else v-model="scope.row.unitPriceInclTax" :disabled="isSubmit || scope.row.belongOffer || scope.row.pushFlag === 'Y'" @blur="changePrice(scope.row,$event)" v-thousandth/>
                         </template>
                       </el-table-column>
                       <el-table-column label="税率(%)" align="right" prop="taxRate"/>
@@ -214,14 +230,23 @@
                           {{ scope.row.unitPriceExclTax }}
                         </template>
                       </el-table-column>
-                      <el-table-column label="浮动价" align="right" width="130" prop="floatingPrice" v-if="isFloat">
+                      <el-table-column label="浮动价" align="right" width="130" prop="floatingPrice" >
                         <template slot-scope="scope">
-                          <el-input v-model="scope.row.floatingPrice" :disabled="isSubmit" v-thousandth/>
+                          <span v-if="scope.row.priceType === 1">/</span>
+                          <div v-else>
+                            <el-input v-if="!scope.row.isfloatingPriceNotLegal"  v-model="scope.row.floatingPrice" :disabled="isSubmit" v-thousandth  @blur="checkOtherPrice(scope.row,'floatingPrice',$event)"/>
+                            <el-input v-else  v-model="scope.row.floatingPrice" :disabled="isSubmit" v-thousandth  @blur="checkOtherPrice(scope.row,'floatingPrice',$event)" class="checkInput"/>
+                          </div>
+
                         </template>
                       </el-table-column>
-                      <el-table-column label="装卸费" align="right" width="130" prop="unloadingFee" v-if="isFloat">
+                      <el-table-column label="装卸费" align="right" width="130" prop="unloadingFee" >
                         <template slot-scope="scope">
-                          <el-input v-model="scope.row.unloadingFee" :disabled="isSubmit" v-thousandth/>
+                          <span v-if="scope.row.priceType === 1">/</span>
+                          <div v-else>
+                            <el-input v-if="!scope.row.isunloadingFeeNotLegal"  v-model="scope.row.unloadingFee" :disabled="isSubmit" v-thousandth  @blur="checkOtherPrice(scope.row,'unloadingFee',$event)"/>
+                            <el-input v-else  v-model="scope.row.unloadingFee" :disabled="isSubmit" v-thousandth  @blur="checkOtherPrice(scope.row,'unloadingFee',$event)" class="checkInput"/>
+                          </div>
                         </template>
                       </el-table-column>
 
@@ -254,7 +279,7 @@
                       {{ scope.row.name }}
                     </template>
                   </el-table-column>
-           
+
                   <el-table-column v-if="currentContract.contractPlanningCategory == 1" label="易料品牌" min-width="120" prop="offerBrand" show-overflow-tooltip/>
                   <el-table-column v-if="currentContract.contractPlanningCategory == 1" label="易料初始报价"  width="150" prop="offerPrice" >
                     <!-- <template slot-scope="scope">
@@ -264,9 +289,9 @@
                     </el-table>
                   </template>
                 </el-table-column>
-                
 
-              
+
+
               </el-table>
             </template>
           </el-table-column>
@@ -381,6 +406,7 @@ import { listAreaDivisionTree } from '@/api/procurement/manage'
 import BackButton from "@/components/BackButton/index.vue"
 import { mapGetters } from "vuex"
 import PageTitle from "@/components/PageTitle/index.vue"
+import {PRICETYPEOPTIONS} from "@/utils/constants";
 export default {
   name: "add-plan",
   dicts: ['plan_type','price_type','procurement_counting_type','procurement_payment_type'],
@@ -393,8 +419,9 @@ export default {
       }
     }
     return {
+      PRICETYPELIST:PRICETYPEOPTIONS,
       formData: {
-        priceType:'1'
+        priceType:1
       }, //form表单数据
       planList: [],
       accountTable:'accountTable',
@@ -550,16 +577,75 @@ export default {
     if(this.isUpdate){
       this.getPlanDetail()
     }else{
-      this.getContractMaterials()
+      this.getContractMaterials().then(()=>{
+        // 获取合约规划清单后，默认合约拆分一份
+        // this.$set(this.splitForm,"num",1);
+        this.handleSplitInit();
+      })
     }
   },
   mounted(){
       this.queryContractPlanSplitFlag();
   },
   methods: {
+    getRowKeys2(row) {
+      return row.planTable;
+    },
+    getRowKeys(row) {
+      return row.contractPlanningId;
+    },
+    checkValidate(row,e,regexObj){
+      const {regex,text} = regexObj
+      if(regex.test(row.basePrice)){
+        e.target.style = "border: 1px solid red;"
+        this.$message.error(text);
+        return true
+      }
+      return false
+    },
+    checkIsValidate(row,e) {
+      const regexN1 = /^(?:[1-9]\d*|0)(\.\d+)?$/;
+      const regexN2 = /^\d+(\.\d{0,4})?$/
+      if(row.basePrice == ''){
+        e.target.style = "border: 1px solid red;"
+        this.$message.error("请输入基价");
+        return
+      }
+      if(!this.checkValidate(row,e,{
+        regex:regexN1,
+        text:"请输入正确的基价",
+      })){
+        return;
+      }
+      if(!this.checkValidate(row,e,{
+        regex:regexN2,
+        text:"请输入小于4位的小数",
+      })){
+        return;
+      }
+      this.checkPriceWithCeilingPrice(row)
+    },
+    checkPriceWithCeilingPrice(row) {
+      debugger
+      const { add, subtract,divide,multiply, bignumber, format } = this.mathjs;
+      const {basePrice,floatingPrice,unloadingFee} = row
+      const basePriceText_bigDecimal = bignumber(Number(basePrice||0))
+      const floatingPrice_bigDecimal = bignumber(Number(floatingPrice||0))
+      const unloadingFee_bigDecimal = bignumber(Number(unloadingFee||0))
+      // const aaa = format(add(basePriceText_bigDecimal,floatingPrice_bigDecimal))
+      // console.log('%c 🚀 ~ file:add-plan --method:checkPriceWithCeilingPrice --line:622 --variable:===>', `font-size:16px; font-weight:bold; color:#fff; padding:4px; border-radius:4px; background:linear-gradient(90deg, ${["#ff005a", "#ff9900", "#33cc33", "#0099ff", "#ffc300"][Math.floor(Math.random() * 5)]}, ${["#ff005a", "#ff9900", "#33cc33", "#0099ff", "#ffc300"][Math.floor(Math.random() * 5)]});`,
+      //   aaa);
+
+      console.log('%c 🚀 ~ file:add-plan --method:checkPriceWithCeilingPrice --line:620 --variable:===>', `font-size:16px; font-weight:bold; color:#fff; padding:4px; border-radius:4px; background:linear-gradient(90deg, ${["#ff005a", "#ff9900", "#33cc33", "#0099ff", "#ffc300"][Math.floor(Math.random() * 5)]}, ${["#ff005a", "#ff9900", "#33cc33", "#0099ff", "#ffc300"][Math.floor(Math.random() * 5)]});`,
+        basePriceText_bigDecimal,floatingPrice_bigDecimal,unloadingFee_bigDecimal);
+      // const result = divide(multiply(format(multiply(add(add(basePriceText_bigDecimal,floatingPrice_bigDecimal),unloadingFee_bigDecimal), row.count)),100),100)
+      const result = format(multiply(add(add(basePriceText_bigDecimal,floatingPrice_bigDecimal),unloadingFee_bigDecimal), row.count)).toString().replace(/([0-9]+.[0-9]{2})[0-9]*/,"$1")
+      console.log('%c 🚀 ~ file:add-plan --method:checkPriceWithCeilingPrice --line:621 --variable:===>', `font-size:16px; font-weight:bold; color:#fff; padding:4px; border-radius:4px; background:linear-gradient(90deg, ${["#ff005a", "#ff9900", "#33cc33", "#0099ff", "#ffc300"][Math.floor(Math.random() * 5)]}, ${["#ff005a", "#ff9900", "#33cc33", "#0099ff", "#ffc300"][Math.floor(Math.random() * 5)]});`,
+        result);
+    },
     // 多选框选中数据
     handleSelectionChange(selection, row) {
-  
+
     },
     handleSelect(selection, row){
       console.log("selection"+JSON.stringify(selection))
@@ -569,7 +655,7 @@ export default {
     async goDetail(code) {
       // this.dialogVisible=true
       // console.log(JSON.stringify(code))
-     
+
         const res = await getYjtUrl(code);
         this.yjtUrl=res.data || ''
         window.open(this.yjtUrl)
@@ -614,7 +700,7 @@ export default {
           console.log(currentSelect.length+"currentSelect"+JSON.stringify(currentSelect))
           this.materialsLists = [...this.materialsLists ,...currentSelect];
         }
-   
+
       if(this.materialsLists.length<=0) return this.$message({type:'error',message:"请选择撤销易料市集采购清单"});
       this.$confirm("是否确定撤销选中的清单？", "提示", {
         confirmButtonText: "确定",
@@ -629,13 +715,13 @@ export default {
           }
           console.log(JSON.stringify(this.materialsLists))
         this.submitFormPush('form');
-       
+
       });
     },
     //撤销
     async revokePushMaterialProcurement(){
 
-       
+
       let formData = {
         projectCode:this.projectCode,
           id:this.id,
@@ -685,10 +771,62 @@ export default {
     //提交
     submitForm(formName) {
       console.log(this.planList,'ppp');
-      const { format } = this.mathjs
-      this.isSubmit = true;
+      const { add, subtract,divide,multiply, bignumber, format,floor } = this.mathjs;
+      // this.isSubmit = true;
       this.$refs[formName].validate(async (valid,done) => {
         if (valid) {
+          // * 首先先判断类型为浮动价的单行是否存在数据不合法的情况
+          let amount = 0
+          if(this.planList.length>0) {
+            for(let firstItem of this.planList) {
+              for(let secondItem of firstItem.children) {
+                for(let thirdItem of secondItem.children) {
+                  if(thirdItem.priceType === 2) {
+                    if(thirdItem.isbasePriceNotLegal || thirdItem.isfloatingPriceNotLegal || thirdItem.isunloadingFeeNotLegal) {
+                      this.isSubmit = false;
+                      return this.$message({
+                        message: '请检查输入项是否输入正确',
+                        type: 'error'
+                      });
+                    }
+                    const {basePrice,floatingPrice,unloadingFee} = thirdItem
+                    const basePriceText_bigDecimal = bignumber(Number(basePrice||0))
+                    const floatingPrice_bigDecimal = bignumber(Number(floatingPrice||0))
+                    const unloadingFee_bigDecimal = bignumber(Number(unloadingFee||0))
+                    let itemAmount = format(multiply(add(add(basePriceText_bigDecimal,floatingPrice_bigDecimal),unloadingFee_bigDecimal), thirdItem.count))
+                    itemAmount = (Number(itemAmount)+'').toString().replace(/([0-9]+.[0-9]{2})[0-9]*/,"$1")
+                    console.log('%c 🚀 ~ file:add-plan --method: --line:795 --variable:===>itemAmount', `font-size:16px; font-weight:bold; color:#fff; padding:4px; border-radius:4px; background:linear-gradient(90deg, ${["#ff005a", "#ff9900", "#33cc33", "#0099ff", "#ffc300"][Math.floor(Math.random() * 5)]}, ${["#ff005a", "#ff9900", "#33cc33", "#0099ff", "#ffc300"][Math.floor(Math.random() * 5)]});`,
+                      itemAmount);
+                    amount = format(add(bignumber(amount),bignumber(Number(itemAmount))))
+                    console.log('%c 🚀 ~ file:add-plan --method: --line:795 --variable:amount2===>', `font-size:16px; font-weight:bold; color:#fff; padding:4px; border-radius:4px; background:linear-gradient(90deg, ${["#ff005a", "#ff9900", "#33cc33", "#0099ff", "#ffc300"][Math.floor(Math.random() * 5)]}, ${["#ff005a", "#ff9900", "#33cc33", "#0099ff", "#ffc300"][Math.floor(Math.random() * 5)]});`,
+                      amount);
+                  // .toString().replace(/([0-9]+.[0-9]{2})[0-9]*/,"$1")
+                  }else {
+                    console.log('%c 🚀 ~ file:add-plan --method: --line:799 --variable:bignumber(thirdItem.count),bignumber(Number(thirdItem.unitPriceInclTax||0)===>', `font-size:16px; font-weight:bold; color:#fff; padding:4px; border-radius:4px; background:linear-gradient(90deg, ${["#ff005a", "#ff9900", "#33cc33", "#0099ff", "#ffc300"][Math.floor(Math.random() * 5)]}, ${["#ff005a", "#ff9900", "#33cc33", "#0099ff", "#ffc300"][Math.floor(Math.random() * 5)]});`,
+                      amount,bignumber(thirdItem.count),bignumber(Number(thirdItem.unitPriceInclTax||0)),format(multiply(bignumber(thirdItem.count),bignumber(Number(thirdItem.unitPriceInclTax||0)))));
+                    console.log('%c 🚀 ~ file:add-plan --method: --line:798 --variable:amount1===>', `font-size:16px; font-weight:bold; color:#fff; padding:4px; border-radius:4px; background:linear-gradient(90deg, ${["#ff005a", "#ff9900", "#33cc33", "#0099ff", "#ffc300"][Math.floor(Math.random() * 5)]}, ${["#ff005a", "#ff9900", "#33cc33", "#0099ff", "#ffc300"][Math.floor(Math.random() * 5)]});`,
+                      amount);
+                    console.log('%c 🚀 ~ file:add-plan --method: --line:803 --variable:===>', `font-size:16px; font-weight:bold; color:#fff; padding:4px; border-radius:4px; background:linear-gradient(90deg, ${["#ff005a", "#ff9900", "#33cc33", "#0099ff", "#ffc300"][Math.floor(Math.random() * 5)]}, ${["#ff005a", "#ff9900", "#33cc33", "#0099ff", "#ffc300"][Math.floor(Math.random() * 5)]});`,
+                      format(add(bignumber(1.991719900414e+8),bignumber(99462))));
+                    let itemAmount = format(multiply(bignumber(thirdItem.count),bignumber(Number(thirdItem.unitPriceInclTax||0))))
+                    // * 保留两位小数（处理科学计数法截取位数有误的问题）
+                    itemAmount = (Number(itemAmount)+'').toString().replace(/([0-9]+.[0-9]{2})[0-9]*/,"$1")
+                    console.log('%c 🚀 ~ file:add-plan --method: --line:806 --variable:===>', `font-size:16px; font-weight:bold; color:#fff; padding:4px; border-radius:4px; background:linear-gradient(90deg, ${["#ff005a", "#ff9900", "#33cc33", "#0099ff", "#ffc300"][Math.floor(Math.random() * 5)]}, ${["#ff005a", "#ff9900", "#33cc33", "#0099ff", "#ffc300"][Math.floor(Math.random() * 5)]});`,
+                      itemAmount);
+                    amount = format(add(bignumber(amount), bignumber(Number(itemAmount))))
+                    console.log('%c 🚀 ~ file:add-plan --method: --line:809 --variable:result1===>', `font-size:16px; font-weight:bold; color:#fff; padding:4px; border-radius:4px; background:linear-gradient(90deg, ${["#ff005a", "#ff9900", "#33cc33", "#0099ff", "#ffc300"][Math.floor(Math.random() * 5)]}, ${["#ff005a", "#ff9900", "#33cc33", "#0099ff", "#ffc300"][Math.floor(Math.random() * 5)]});`,
+                      amount);
+                  }
+                }
+              }
+            }
+            if(Number(amount)>Number(this.planList[0].planningBalance)) {
+              return this.$message({
+                message: '拆分合约清单中的总金额不能大于规划余量',
+                type: 'error'
+              });
+            }
+          }
           const { planList } = this
           console.log(planList,'planListplanList--planListplanList-planListplanList');
           if(!planList[0].children || !planList[0].children.length){
@@ -763,7 +901,7 @@ export default {
               arrivalDate,
               procurementOfficer,
               procurementOfficerName,
-              priceType:priceType !== 'undefined'?priceType:'',
+              //priceType:priceType !== 'undefined'?priceType:'',
               regionProvinceCode,
               regionCityCode,
               paymentType:paymentType !== 'undefined'?paymentType:'',
@@ -865,7 +1003,7 @@ export default {
           const splitRequestList = this.planList[0]?.children.map(item => {
             console.log(JSON.stringify(item))
             return {
-              
+
               splitContractName:item.splitContractName,
               contractScope:item.contractScope,
               materialsLists:item.children.map(child => {
@@ -888,7 +1026,7 @@ export default {
               arrivalDate,
               procurementOfficer,
               procurementOfficerName,
-              priceType:priceType !== 'undefined'?priceType:'',
+              // priceType:priceType !== 'undefined'?priceType:'',
               regionProvinceCode,
               regionCityCode,
               paymentType:paymentType !== 'undefined'?paymentType:'',
@@ -910,21 +1048,21 @@ export default {
               this.id=res.data.id
               this.materialsLists=res.data.materialsLists
             }
-            console.log("-2222--"+JSON.stringify(this.materialsLists))
+console.log("-2222--"+JSON.stringify(this.materialsLists))
             loading.close();
             this.$message({
               message: '保存成功',
               type: 'success'
             });
             this.isSubmit = false;
-        
+
             if(this.isPushRevoke){
               this.pushMaterialProcurement();
             }else{
               this.revokePushMaterialProcurement();
             }
-           
-           
+
+
             // console.log(res,'r~~~~~~~~~~~~~~~~~');
             // this.$tab.closePage().then(() => {
             //   // 执行结束的逻辑
@@ -996,6 +1134,27 @@ export default {
     handelInventory(id) {
       this.inventoryVisible = true;
     },
+    // 初始化拆分合同
+    handleSplitInit(){
+      // const { num } = this.splitForm;
+      // if(Number(num) > 10) return this.$message.error('最多可拆分10份');
+      const num = 1
+      const children = []
+      Array.from({ length: num }).forEach((_, index) => {
+        children.push({
+          index,
+          planTable:'planTable'+index,
+          children: this.inventoryList.map(item => ({
+            ...item,
+            count: index === 0 ? item.count : 0.00,
+            rentTime: index === 0 ? item.rentTime : '',
+            rentQuantity:index === 0 ? item.rentQuantity : '',
+
+          }))
+        })
+      });
+      this.$set(this.planList[0], 'children', JSON.parse(JSON.stringify(children)));
+    },
     // 拆分合同
     handleSplit() {
       this.$refs['splitFormRef'].validate((valid) => {
@@ -1020,10 +1179,11 @@ export default {
               planTable:'planTable'+index,
               children: this.inventoryList.map(item => ({
                 ...item,
+                priceType: item.priceType || 1,
                 count: index === 0 ? item.count : 0.00,
                 rentTime: index === 0 ? item.rentTime : '',
                 rentQuantity:index === 0 ? item.rentQuantity : '',
-               
+
               }))
             })
           });
@@ -1070,7 +1230,7 @@ export default {
         const { procurementPlan, splitMaterials,contractPlanning } = res.data;
         procurementPlan.countingType = procurementPlan.countingType + ''
         procurementPlan.paymentType = procurementPlan.paymentType  + ''
-        procurementPlan.priceType = procurementPlan.priceType  + ''
+        // procurementPlan.priceType = procurementPlan.priceType  + ''
         this.formData.subjectMatterText = procurementPlan.subjectMatterName;
         this.formData.region = [procurementPlan.regionProvinceCode, procurementPlan.regionCityCode]
         this.id=procurementPlan.id
@@ -1087,7 +1247,7 @@ export default {
         //   this.isEdit = false
         // }
 
-        
+
         splitMaterials.forEach((item,index) => {
           item.$index = index;
           item.planTable='planTable'+index
@@ -1125,6 +1285,8 @@ export default {
     },
     //数量计算
     changeCount(splitIndex,scope,event){
+      console.log('%c 🚀 ~ file:add-plan --method:changeCount --line:1135 --variable:splitIndex,scope,event===>', `font-size:16px; font-weight:bold; color:#fff; padding:4px; border-radius:4px; background:linear-gradient(90deg, ${["#ff005a", "#ff9900", "#33cc33", "#0099ff", "#ffc300"][Math.floor(Math.random() * 5)]}, ${["#ff005a", "#ff9900", "#33cc33", "#0099ff", "#ffc300"][Math.floor(Math.random() * 5)]});`,
+        splitIndex,scope,event);
       console.log(event,'~~~~~~~~~~~~~~~~~~');
       const regexN1 = /^(?:[1-9]\d*|0)(\.\d+)?$/;
       const regexN2 = /^\d+(\.\d{0,4})?$/
@@ -1162,6 +1324,8 @@ export default {
       //获取总数量
       this.planList[0]?.children.forEach(item => {
         item.children.forEach(subItem => {
+          console.log('%c 🚀 ~ file:add-plan --method: --line:1207 --variable:进来了===>', `font-size:16px; font-weight:bold; color:#fff; padding:4px; border-radius:4px; background:linear-gradient(90deg, ${["#ff005a", "#ff9900", "#33cc33", "#0099ff", "#ffc300"][Math.floor(Math.random() * 5)]}, ${["#ff005a", "#ff9900", "#33cc33", "#0099ff", "#ffc300"][Math.floor(Math.random() * 5)]});`,
+            );
           count = add(count, subItem.materialsId === currentMaterialsId? format(Number(subItem.count), { notation: 'fixed', precision: 4 }) : 0)
         })
       })
@@ -1212,8 +1376,23 @@ export default {
         })
       }
     },
+    checkOtherPrice(row,key,event) {
+      const regexN1 = /^(?:[1-9]\d*|0)(\.\d+)?$/;
+      const regexN2 = /^\d+(\.\d{0,4})?$/
+      if(!regexN2.test(row[key])){
+        event.target.style = "border: 1px solid red;"
+        this.$message.error("请输入小于4位的小数");
+        this.$set(row, `is${key}NotLegal`, true)
+      }else {
+        event.target.style = "border: 1px solid #C0C4CC;"
+        this.$set(row, `is${key}NotLegal`, false)
+      }
+
+    },
     //不含税计算
     changePrice(row,event){
+      console.log('%c 🚀 ~ file:add-plan --method:changePrice --line:1226 --variable:row,event===>', `font-size:16px; font-weight:bold; color:#fff; padding:4px; border-radius:4px; background:linear-gradient(90deg, ${["#ff005a", "#ff9900", "#33cc33", "#0099ff", "#ffc300"][Math.floor(Math.random() * 5)]}, ${["#ff005a", "#ff9900", "#33cc33", "#0099ff", "#ffc300"][Math.floor(Math.random() * 5)]});`,
+        row,event);
       const { unitPriceInclTax, taxRate} = row
 
        const regexN1 = /^(?:[1-9]\d*|0)(\.\d+)?$/;
@@ -1508,6 +1687,11 @@ export default {
 };
 </script>
 <style lang="scss" scoped>
+::v-deep.checkInput {
+  .el-input__inner {
+    border: 1px solid #ff0000
+  }
+}
 .page-title {
   width: 100%;
   border-bottom: solid 1px #ccc;

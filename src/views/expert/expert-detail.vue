@@ -2,11 +2,11 @@
   <div class="app-container">
     <BackButton path="/tender-procurement/expert/expert" title="专家信息详情">
       <div>
+<!--        :disabled="isSubmit"-->
         <el-button
           type="primary"
           plain
           size="mini"
-          :disabled="isSubmit"
           @click="$router.push('/tender-procurement/expert/expert')"
           >取消</el-button
         >
