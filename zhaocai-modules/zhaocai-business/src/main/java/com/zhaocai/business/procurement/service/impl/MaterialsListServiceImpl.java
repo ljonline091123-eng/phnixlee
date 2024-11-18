@@ -76,9 +76,9 @@ public class MaterialsListServiceImpl extends ServiceImpl<MaterialsListMapper, M
     private String subjectMatterConcreteCode;
 
     @Override
-    public List<MaterialsList> saveMaterialsList(List<MaterialsList> materialsLists, Long contractSplitId, Long planId, ProcurementPlan procurementPlan) {
-        Integer[] floatCount = {0};
-        Integer[] fixedCount = {0};
+    public List<MaterialsList> saveMaterialsList(List<MaterialsList> materialsLists, Long contractSplitId, Long planId, ProcurementPlan procurementPlan,Integer[] floatCount,Integer[] fixedCount) {
+//        Integer[] floatCount = {0};
+//        Integer[] fixedCount = {0};
         materialsLists.forEach(materials -> {
             materials.setPlanId(planId);
             materials.setContractSplitId(contractSplitId);
