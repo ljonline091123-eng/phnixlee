@@ -868,7 +868,7 @@
                 </template>
               </el-table-column>
               <el-table-column
-                label="本次不含税总价(元)"
+                label="不含税总价(元)"
                 align="right"
                 width="150"
               >
