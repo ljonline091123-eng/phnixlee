@@ -1429,7 +1429,7 @@ export default {
           this.form.vendorBiddingListQuotationList =
             res.data.vendorBiddingListQuotationList.map(item=>{
               this.$set(item,'signCount',item.surplusCount)
-              this.$set(item,'signUnitPriceInclTax',item.taxUnitPrice)
+              this.$set(item,'signUnitPriceInclTax',item.taxUnitPriceText)
               return item
             });
           (this.subjectMatter = res?.data.subjectMatter),
@@ -1875,7 +1875,7 @@ export default {
 
         let formattedResult;
 
-        let newRes = taxUnitPrice.toString().replace(/\.?0+$/, "");
+        let newRes = taxUnitPrice.replace(/\.?0+$/, "");
 
         if (type === "excludingTax") {
           if (this.countDecimalPlaces(newRes) <= 2) {
