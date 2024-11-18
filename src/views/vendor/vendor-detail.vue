@@ -222,12 +222,22 @@
             <el-col :span="6">
               <div class="img-box">
                 <div class="img-title">营业执照</div>
-                <el-image
-                  style="width: 200px; height: 200px"
-                  :src="businessLicense.attachmentFileUrl"
-                  :preview-src-list="businessLicense.srcList"
-                >
-                </el-image>
+                <template v-if="businessLicense.attachmentFileType">
+                  <el-image
+                    style="width: 200px; height: 200px"
+                    :src="businessLicense.attachmentFileUrl"
+                    :preview-src-list="businessLicense.srcList"
+                  />
+                </template>
+                <template v-else>
+                  <div style="width: 200px; height: 200px; color: #0c7fe1;"><br>{{ businessLicense.attachmentFileName }}</div>
+                </template>
+<!--                <el-image-->
+<!--                  style="width: 200px; height: 200px"-->
+<!--                  :src="businessLicense.attachmentFileUrl"-->
+<!--                  :preview-src-list="businessLicense.srcList"-->
+<!--                >-->
+<!--                </el-image>-->
                 <div class="img-text">
                   有效期：{{ businessLicense.effectiveBeginDate }}-{{ businessLicense.effectiveEndDate }}
                 </div>
@@ -236,12 +246,23 @@
             <el-col :span="6">
               <div class="img-box">
                 <div class="img-title">诚信合规材料</div>
-                <el-image
-                  style="width: 200px; height: 200px"
-                  :src="integrity.attachmentFileUrl"
-                  :preview-src-list="integrity.srcList"
-                >
-                </el-image>
+                <template v-if="integrity.attachmentFileType">
+                  <el-image
+                    style="width: 200px; height: 200px"
+                    :src="integrity.attachmentFileUrl"
+                    :preview-src-list="integrity.srcList"
+                  >
+                  </el-image>
+                </template>
+                <template v-else>
+                  <div style="width: 200px; height: 200px; color: #0c7fe1;"><br>{{ integrity.attachmentFileName }}</div>
+                </template>
+<!--                <el-image-->
+<!--                  style="width: 200px; height: 200px"-->
+<!--                  :src="integrity.attachmentFileUrl"-->
+<!--                  :preview-src-list="integrity.srcList"-->
+<!--                >-->
+<!--                </el-image>-->
                 <div class="img-text">
                   有效期：{{ integrity.effectiveBeginDate }}-{{
                     integrity.effectiveEndDate
@@ -261,12 +282,23 @@
                     :key="index"
                     style="margin: 0px 60px 0px 0px"
                   >
-                    <el-image
-                      style="width: 200px; height: 200px"
-                      :src="item.attachmentFileUrl"
-                      :preview-src-list="item.srcList"
-                    >
-                    </el-image>
+                    <template v-if="item.attachmentFileType">
+                      <el-image
+                        style="width: 200px; height: 200px"
+                        :src="item.attachmentFileUrl"
+                        :preview-src-list="item.srcList"
+                      >
+                      </el-image>
+                    </template>
+                    <template v-else>
+                      <div style="width: 200px; height: 200px; color: #0c7fe1;"><br>{{ item.attachmentFileName }}</div>
+                    </template>
+<!--                    <el-image-->
+<!--                      style="width: 200px; height: 200px"-->
+<!--                      :src="item.attachmentFileUrl"-->
+<!--                      :preview-src-list="item.srcList"-->
+<!--                    >-->
+<!--                    </el-image>-->
                     <div class="img-text">
                       有效期：{{ item.effectiveBeginDate }}-{{
                         item.effectiveEndDate
@@ -287,12 +319,23 @@
                   :key="index"
                   style="margin-right: 20px"
                 >
-                  <el-image
-                    style="width: 200px; height: 200px"
-                    :src="item.attachmentFileUrl"
-                    :preview-src-list="item.srcList"
-                  >
-                  </el-image>
+                  <template v-if="item.attachmentFileType">
+                    <el-image
+                      style="width: 200px; height: 200px"
+                      :src="item.attachmentFileUrl"
+                      :preview-src-list="item.srcList"
+                    >
+                    </el-image>
+                  </template>
+                  <template v-else>
+                    <div style="width: 200px; height: 200px; color: #0c7fe1;"><br>{{ item.attachmentFileName }}</div>
+                  </template>
+<!--                  <el-image-->
+<!--                    style="width: 200px; height: 200px"-->
+<!--                    :src="item.attachmentFileUrl"-->
+<!--                    :preview-src-list="item.srcList"-->
+<!--                  >-->
+<!--                  </el-image>-->
                   <div class="img-text">
                     有效期：{{ item.effectiveBeginDate }}-{{
                       item.effectiveEndDate
@@ -678,6 +721,9 @@ export default {
     this.getVendorDetail();
   },
   methods: {
+    ifPdf(url){
+      return url.toLowerCase().endsWith(".pdf")
+    },
     showSecretTips(type) {
       showSecretRelatedTips(()=>{
         this.$refs[type].$refs['upload-inner'].handleClick()
@@ -715,6 +761,7 @@ export default {
     },
     async getVendorDetail() {
       try {
+        debugger
         const res = await getVendorDetail(this.param);
         this.purchaserId = res.data.vendor.id;
         this.exampleId = res.data.vendor.wfProcessId;
@@ -731,12 +778,14 @@ export default {
               ],
             }
           : {};
+        this.businessLicense.attachmentFileType = this.ifPdf(this.businessLicense.attachmentFileUrl) ? false : true
         this.integrity = res.data.certificationList?.integrity
           ? {
               ...res.data.certificationList.integrity,
               srcList: [res.data.certificationList.integrity.attachmentFileUrl],
             }
           : {};
+        this.integrity.attachmentFileType = this.ifPdf(this.integrity.attachmentFileUrl) ? false : true
         this.legalAuthorizationList = res.data.certificationList
           ?.legalAuthorizationList?.length
           ? res.data.certificationList.legalAuthorizationList.map((item) => ({
@@ -744,12 +793,18 @@ export default {
               srcList: [item.attachmentFileUrl],
             }))
           : [];
+        this.legalAuthorizationList.forEach((item,index)=>{
+          item.attachmentFileType = this.ifPdf(item.attachmentFileUrl) ? false : true
+        })
         this.relevantCertificationList = res.data.certificationList
           ?.relevantCertificationList?.length
           ? res.data.certificationList.relevantCertificationList.map(
               (item) => ({ ...item, srcList: [item.attachmentFileUrl] })
             )
           : [];
+        this.relevantCertificationList.forEach((item,index)=>{
+          item.attachmentFileType = this.ifPdf(item.attachmentFileUrl) ? false : true
+        })
         console.log(res, "res-res");
         if (this.vendor.state === 1) {
           this.getPermissionButton();
