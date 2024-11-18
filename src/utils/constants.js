@@ -24,13 +24,13 @@ export const CONTRACTTYPE = [{
   label: '专业分包',
 },{
   value: '1',
-  label: '物质采购',
+  label: '购买材料',
 },{
   value: '2',
-  label: '物质租赁',
+  label: '租赁材料',
 },{
   value: '3',
-  label: '机械租赁（设备）',
+  label: '租赁机械（设备）',
 },{
   value: '6',
   label: '其他',
