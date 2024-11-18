@@ -54,7 +54,7 @@ public class ProcurementScheme extends BaseEntity {
     private String procurementOfficerName;
 
     /**
-     * 采购计划类别
+     * 采购计划类别 {@link com.zhaocai.business.common.enums.ProcurementPlanTypeEnum}
      */
     @ApiModelProperty(hidden = true)
     private Integer procurementPlanType;
