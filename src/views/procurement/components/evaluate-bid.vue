@@ -1375,10 +1375,6 @@ export default {
       leftSelection: [],
       rightSelection: [],
       debouncedLoadDeptOptions: null,
-      expertQuery: {
-        deptIds: [],
-      },
-      deptOptions: [],
     };
   },
   created() {
