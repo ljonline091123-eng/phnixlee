@@ -1875,7 +1875,7 @@ export default {
 
         let formattedResult;
 
-        let newRes = taxUnitPrice.replace(/\.?0+$/, "");
+        let newRes = taxUnitPrice.toString().replace(/\.?0+$/, "");
 
         if (type === "excludingTax") {
           if (this.countDecimalPlaces(newRes) <= 2) {
