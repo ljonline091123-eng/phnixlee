@@ -297,7 +297,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     </select>
 
     <select id="listTenderNoticePage" resultType="com.zhaocai.business.bidding.vo.req.TenderNoticeVO">
-        select tn.id,mp.id as project_id,ps.id as scheme_id, ps.procurement_type as scheme_type,tn.contact,
+        select tn.id,mp.min_project_id as project_id,ps.id as scheme_id, ps.procurement_type as scheme_type,tn.contact,
                tn.phone,tn.email,tn.attach_id_notice,tn.apply_time_notice
         from tb_tender_notice tn
         inner join tb_procurement_scheme ps on ps.id = tn.scheme_id

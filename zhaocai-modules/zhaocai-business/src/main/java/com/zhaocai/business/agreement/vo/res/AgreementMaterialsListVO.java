@@ -140,6 +140,9 @@ public class AgreementMaterialsListVO extends AdviceObject {
     @ApiModelProperty(value = "签订税额")
     private BigDecimal signTaxAmount;
 
+    @ApiModelProperty(value = "合约拆分 id")
+    private Long contractSplitId;
+
     @DictCache(dictBizEnum = DictBizEnum.PRICE_TYPE,filedName = "paymentType")
     @ApiModelProperty(value = "价款类型")
     private String paymentTypeText;
@@ -223,4 +226,19 @@ public class AgreementMaterialsListVO extends AdviceObject {
     @MoneyFormat(filedName = "signTaxRate")
     @ApiModelProperty(value = "签订税率")
     private String signTaxRateText;
+
+    @ApiModelProperty(value = "易料市集商品编码")
+    private String offerGoodsCode;
+
+    @ApiModelProperty(value = "易料市集商品名")
+    private String goodsName;
+
+    @ApiModelProperty(value = "易料市集品牌")
+    private String offerBrand;
+
+    @ApiModelProperty(value = "易料市集含税单价")
+    private BigDecimal offerPrice;
+
+    @ApiModelProperty(value = "易料市集商品id")
+    private String skuId;
 }

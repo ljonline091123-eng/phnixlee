@@ -22,4 +22,16 @@ public class UnderlingPlatformConfig {
     /** 授权码 */
     @Value("${underPlat.authCode}")
     private String authCode;
+
+    /** yjt地址 */
+    @Value("${underPlat.yjtUrl}")
+    private String yjtUrl;
+
+    /** yjtappID */
+    @Value("${underPlat.appId}")
+    private String appId;
+
+    /** yjtKey */
+    @Value("${underPlat.yjtKey}")
+    private String yjtKey;
 }

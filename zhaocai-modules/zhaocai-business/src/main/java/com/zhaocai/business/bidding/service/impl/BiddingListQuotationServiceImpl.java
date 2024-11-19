@@ -36,6 +36,9 @@ public class BiddingListQuotationServiceImpl extends ServiceImpl<BiddingListQuot
     @Autowired
     private IProcurementSchemeService procurementSchemeService;
 
+    /**
+     * 获取供应商的报价清单
+     */
     @Override
     public VendorBiddingListQuotationVO getVendorBiddingListQuotation(Long schemeId,Long splitId,Long vendorId) {
         ProcurementScheme procurementScheme = procurementSchemeService.getById(schemeId);

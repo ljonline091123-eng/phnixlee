@@ -16,6 +16,9 @@ import java.math.BigDecimal;
 @Data
 public class MaterialsVO extends AdviceObject {
 
+    @ApiModelProperty(value = "id")
+    private Long id;
+
     @ApiModelProperty(value = "物料 id")
     private String materialsId;
 
@@ -137,6 +140,33 @@ public class MaterialsVO extends AdviceObject {
     
     @ApiModelProperty(value = "价格类型")
     private Integer priceType;
+
+    @ApiModelProperty(value = "商品编号")
+    private String code;
+
+    @ApiModelProperty(value = "商品名称")
+    private String name;
+
+    @ApiModelProperty(value = "商品规格")
+    private String category;
+
+    @ApiModelProperty(value = "商品单位")
+    private String unitName;
+
+    @ApiModelProperty(value = "商品数量")
+    private BigDecimal quantity;
+
+    @ApiModelProperty(value = "易料市集含税单价")
+    private BigDecimal offerPrice;
+
+    @ApiModelProperty(value = "易料市集品牌")
+    private String offerBrand;
+
+    @ApiModelProperty(value = "是否推送 Y:推送 N:未推送")
+    private String pushFlag;
+
+    @ApiModelProperty(value = "易料市集商品id")
+    private String skuId;
 
     public BigDecimal getTransferQuantity() {
         return this.getCount();

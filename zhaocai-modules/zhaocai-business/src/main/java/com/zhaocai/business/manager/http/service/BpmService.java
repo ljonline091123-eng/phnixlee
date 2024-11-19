@@ -111,6 +111,7 @@ public class BpmService {
      * @return
      */
     public BpmSubmitResponseDTO submit(BpmSubmitRequestDTO requestDTO) {
+        log.info("[流程提交参数对象]{}",requestDTO);
 
 //        String projectCode = "SG20012024000002-2";
 //        if (StrUtil.isNotBlank(projectCode)) {

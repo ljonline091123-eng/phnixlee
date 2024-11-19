@@ -201,4 +201,11 @@ public interface IAgreementService  extends IService<Agreement> , IProcessBusine
      * @param requestVO
      */
     void cancelledSignAgreement(CancelledSignAgreementRequestVO requestVO);
+
+    /**
+     * 易料合同免审提交
+     * @param id
+     * @return
+     */
+    boolean avoidSubmitByMarket(Long id);
 }

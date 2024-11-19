@@ -14,6 +14,7 @@ import com.zhaocai.business.manager.http.service.UnderlingSystemService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 
@@ -76,5 +77,32 @@ public class AgreementMaterialsListServiceImpl extends ServiceImpl<AgreementMate
     public List<AgreementMaterialsList> listByAgreementId(Long agreementId) {
         return this.list(new LambdaQueryWrapper<AgreementMaterialsList>()
                 .eq(AgreementMaterialsList::getAgreementId,agreementId));
+    }
+
+    @Override
+    public List<AgreementMaterialsListVO> listAgreementMaterialsByMarket(Long id) {
+        List<AgreementMaterialsListVO> resultList = baseMapper.listAgreementMaterialsByMarket(id);
+
+        Map<String,String> rentalTypeMap = underlingSystemService.listDictMap(DictBizEnum.UNDERLING_RENT_MODE.getName());
+        Map<String,String> rentalUnitMap = underlingSystemService.listDictMap(DictBizEnum.UNDERLING_RENT_UNIT.getName());
+        for (AgreementMaterialsListVO materials : resultList) {
+            BigDecimal taxUnitPrice = materials.getNotTaxUnitPrice().multiply(materials.getTaxRate().divide(BigDecimal.valueOf(100))).add(materials.getNotTaxUnitPrice());
+            materials.setTaxUnitPrice(taxUnitPrice);
+            materials.setSignUnitPriceInclTax(taxUnitPrice);
+            // 含税金额 = 含税单价 * 数量
+            BigDecimal taxPrice = AmountCalUtil.calTotalAmountInclTax(materials.getCount(), materials.getTaxUnitPrice());
+            materials.setTaxPrice(taxPrice);
+            materials.setSignAmountInclTax(taxPrice);
+            // 不含税金额 = 含税金额 / (1 * 税率%)
+            BigDecimal notTaxPrice = AmountCalUtil.calTotalAmountExclTax(taxPrice, materials.getTaxRate());
+            materials.setNotTaxPrice(notTaxPrice);
+            materials.setSignAmountExclTax(notTaxPrice);
+            materials.setSignTaxAmount(AmountCalUtil.calTaxAmount(materials.getSignAmountInclTax(),materials.getSignAmountExclTax()));
+            materials.setTaxAmount(AmountCalUtil.calTaxAmount(materials.getTaxPrice(),materials.getNotTaxPrice()));
+            materials.setRentModeText(rentalTypeMap.get(materials.getRentMode()));
+            materials.setRentalUnitText(rentalUnitMap.get(materials.getRentalUnit()));
+        }
+
+        return resultList;
     }
 }

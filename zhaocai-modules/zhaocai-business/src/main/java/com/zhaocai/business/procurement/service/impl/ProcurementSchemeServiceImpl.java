@@ -186,6 +186,11 @@ public class ProcurementSchemeServiceImpl extends ServiceImpl<ProcurementSchemeM
                 .toDoType(ToDoTypeEnum.EXAMINE.name()).build();
         paramMap.put("userObj", JSON.toJSONString(userObj));
         paramMap.put("operateComment", operateComment);
+
+        /** 合同类型（contractType），价格(contractMoney)，项目部（parentProjectCode），责任单位（responsibilityDeptId），公司（companyId） */
+
+        paramMap.put("contractType", ProcurementPlanTypeEnum.getProcessType(procurementScheme.getProcurementPlanType()));/* 采购方案 合同类型 */
+        paramMap.put("contractMoney", procurementScheme.getCeilingPrice());/* 采购方案上限价 价格 */
         processService.startProcessInstance(
                 ProcessKeyEnum.ZHAOCAI_PROCUREMENT_SCHEME.getIdentifying(),paramMap);
     }
@@ -541,7 +546,7 @@ public class ProcurementSchemeServiceImpl extends ServiceImpl<ProcurementSchemeM
             }
             schemeCreateVO.setSubjectMatterType(subjectMatterType.get(0));
 
-            // 校验价格类型
+            /* 获取采购计划的价格类型列表 校验价格类型 */
             List<Integer> priceTypes = extractDistinctValues(procurementPlans,ProcurementPlan::getPriceType);
             if (priceTypes.size() > 1) {
                 throw new ParamValidateException("所选择的采购计划存在多种价格类型，请确认后重新选择");

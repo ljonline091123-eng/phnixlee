@@ -19,6 +19,7 @@
         <result property="subjectMatterName" column="subject_matter_name"/>
         <result property="subjectMatterType" column="subject_matter_type"/>
         <result property="priceType" column="price_type"/>
+        <result property="basePrice" column="base_price"/>
         <result property="regionProvinceCode" column="region_province_code"/>
         <result property="regionCityCode" column="region_city_code"/>
         <result property="countingType" column="counting_type"/>

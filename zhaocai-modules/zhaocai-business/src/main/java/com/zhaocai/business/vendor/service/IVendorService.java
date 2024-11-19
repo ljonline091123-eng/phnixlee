@@ -25,11 +25,10 @@ public interface IVendorService  extends IService<Vendor> , IProcessBusinessBase
     void register(VendorRegisterRequestVO requestVO);
 
     /**
-     * 供应商修改详情
-     * @param vendorId 供应商id
-     * @return
+     * 易料供应商推送
+     * @param requestVO
      */
-    VendorRegisterRequestVO getVendorUpdateDetail(Long vendorId);
+    void vendorRegister(VendorRegisterRequestVO requestVO);
 
 
     /**

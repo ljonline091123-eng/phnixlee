@@ -44,4 +44,7 @@ public class AgreementSaveRequestVO {
 
     @ApiModelProperty(value = "合同附件编辑标识")
     private String templateEditFlag;
+
+    @ApiModelProperty(value = "易料采购合同id")
+    private String marketMaterialContractId;
 }

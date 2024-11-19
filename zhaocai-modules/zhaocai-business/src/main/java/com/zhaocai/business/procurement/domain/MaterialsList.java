@@ -1,5 +1,6 @@
 package com.zhaocai.business.procurement.domain;
 
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.zhaocai.common.core.web.domain.BaseEntity;
 import io.swagger.annotations.ApiModelProperty;
@@ -217,9 +218,61 @@ public class MaterialsList extends BaseEntity {
     private BigDecimal rentQuantity;
 
     /**
-     * 价格类型
+     * 价格类型 {@link com.zhaocai.business.common.enums.PriceTypeEnum}
      */
 //    @NotNull(message = "采购清单的价格类型不能为空")
     @ApiModelProperty(value = "价格类型")
     private Integer priceType;
+
+    /**
+     * 商品编号
+     */
+    @ApiModelProperty(value = "商品编号")
+    private String code;
+
+    /**
+     * 商品名称
+     */
+    @ApiModelProperty(value = "商品名称")
+    private String name;
+
+    /**
+     * 商品规格
+     */
+    @ApiModelProperty(value = "商品规格")
+    private String category;
+
+    /**
+     * 商品单位
+     */
+    @ApiModelProperty(value = "商品单位")
+    private String unitName;
+
+    /**
+     * 商品数量
+     */
+    @ApiModelProperty(value = "商品数量")
+    private BigDecimal quantity;
+
+    @ApiModelProperty(value = "易料市集含税单价")
+    private BigDecimal offerPrice;
+
+    @ApiModelProperty(value = "易料市集品牌")
+    private String offerBrand;
+
+    /**
+     * 是否推送 Y:推送 N:未推送
+     */
+    @ApiModelProperty(value = "是否推送")
+    private String pushFlag;
+
+    @ApiModelProperty(value = "易料市集商品id")
+    private String skuId;
+
+    /**
+     * 是否选择推送易料
+     */
+    @ApiModelProperty(hidden = true)
+    @TableField(exist = false)
+    private String isSelect;
 }

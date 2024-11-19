@@ -16,6 +16,9 @@ import com.zhaocai.business.expert.domain.Expert;
 import com.zhaocai.business.expert.domain.ExpertChange;
 import com.zhaocai.business.manager.http.dto.req.*;
 import com.zhaocai.business.manager.http.dto.res.*;
+import com.zhaocai.business.expert.domain.Expert;
+import com.zhaocai.business.manager.http.dto.req.*;
+import com.zhaocai.business.manager.http.dto.res.*;
 import com.zhaocai.business.manager.http.service.UnderlingSystemService;
 import com.zhaocai.business.process.service.IBPMProcessService;
 import com.zhaocai.business.process.service.IPBMOverrideService;
@@ -89,8 +92,6 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
     @Autowired
     private IVendorChangeService vendorChangeService;
 
-    @Autowired
-    private RemoteSystemService remoteSystemService;
 
     @Autowired
     private UnderlingSystemService underlingSystemService;
@@ -106,21 +107,47 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
         // 供应商联系人变更信息
         List<VendorContact> contactList;
 
-        // 供应商联系人变更信息
-        List<VendorContact> contactListMain;
-        // 根据供应商id在供应商
-        Vendor vendor = super.getById(vendorId);
-        contactList = vendorContactService.list(new LambdaQueryWrapper<VendorContact>()
-                .eq(VendorContact::getVendorId, vendorId)
-                .eq(VendorContact::getIsMainContact, 1));
-        vendorRequestVO  =  vendorCertificationService.listCertification(vendorRequestVO,vendorId,contactList.get(0).getId());
-        vendorRequestVO.setVendor(vendor);
-        if(contactList!=null&&contactList.size()>0){
-            vendorRequestVO.setVendorContact(contactList.get(0));
+    @Override
+    @Transactional(propagation = Propagation.REQUIRED,rollbackFor = Exception.class)
+    public void vendorRegister(VendorRegisterRequestVO requestVO) {
+        checkVendorInfo(requestVO.getVendor());
+
+        // 保存基本信息
+        Vendor vendor = requestVO.getVendor();
+        vendor.setState(VendorStateEnum.APPROVE.getState());
+        vendor.setSignState(SignStateEnum.TO_SIGN.getState());
+        vendor.setVendorClass(1);
+        vendor.setVendorLevel(1);
+        super.save(vendor);
+
+        // 保存供应商资质
+        vendorCertificationService.addCertification(requestVO.getBusinessLicense(), CertificationTypeEnum.BUSINESS_LICENSE,vendor.getId());
+        vendorCertificationService.addCertification(requestVO.getIntegrity(), CertificationTypeEnum.INTEGRITY,vendor.getId());
+        Long legalAuthorizationId = vendorCertificationService.addCertification(requestVO.getLegalAuthorization(),CertificationTypeEnum.LEGAL_AUTHORIZATION,vendor.getId());
+        if (CollUtil.isNotEmpty(requestVO.getRelevantCertificationList())){
+            vendorCertificationService.addCertification(requestVO.getRelevantCertificationList(), CertificationTypeEnum.RELEVANT_CERTIFICATION,vendor.getId());
         }
 
-        return vendorRequestVO;
+        // 主要联系人
+        VendorContact contact = requestVO.getVendorContact();
+
+        // 新增供应商账号
+        Long longUserId = vendorContactService.addLoginUser(contact.getContactPhone(),contact.getContactName());
+        contact.setLoginUserId(longUserId);
+        contact.setCertificationId(legalAuthorizationId);
+        contact.setVendorId(vendor.getId());
+        // 注册时为默认为管理员
+        contact.setIsManager(1);
+        long contactId = vendorContactService.saveMainVendorContact(contact);
+
+        // 更新法人授权的 businessId
+        vendorCertificationService.update(new LambdaUpdateWrapper<VendorCertification>()
+                .set(VendorCertification::getBusinessId,contactId)
+                .eq(VendorCertification::getId,legalAuthorizationId));
     }
+
+
+
     @Override
     @Transactional(propagation = Propagation.REQUIRED,rollbackFor = Exception.class)
     public void register(VendorRegisterRequestVO requestVO) {
@@ -216,7 +243,6 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
         Map<String,Object> paramMap = new HashMap<>();
         paramMap.put("businessId", vendor.getId());
         paramMap.put("businessTitle", "供应商注册审批");
-
         /* 获取二级单位 */
         String org = underlingSystemService.getL2OrgByOrgId(vendor.getFirstCooperationCompanyCode());
         //供应商注册时候选择审批单位，只能由选择的单位维护的供应商审核人员进行审核，如果供应商信息修改也是需要原审核单位进行审核
@@ -243,7 +269,6 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
             }
         }
 
-
         paramMap.put("customProcessKey", customProcessKey);
         paramMap.put("businessContent",
                 String.format(ApproveFlowPromptTemplateEnum.VENDOR_REGISTER_APPROVE.getDesc(), vendor.getEnterpriseName()));
@@ -264,6 +289,7 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
         processService.startProcessInstance(ProcessKeyEnum.ZHAOCAI_VENDOR_REGISTER.getIdentifying(),paramMap);
 
     }
+
 
 
 
@@ -507,7 +533,7 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
         vendorIndexInfoVO.setEnterpriseName(vendor.getEnterpriseName());
         vendorIndexInfoVO.setContactName(vendorContact.getContactName());
         vendorIndexInfoVO.setApproveState(vendor.getState());
-        vendorIndexInfoVO.setApproveMsg(vendor.getOperateComment());/* 审批信息 */
+        vendorIndexInfoVO.setApproveMsg(vendor.getOperateComment()==null?"":vendor.getOperateComment());/* 审批信息 */
         vendorIndexInfoVO.setIsManager(vendorContact.getIsManager());
         vendorIndexInfoVO.setIsBlack(vendor.getIsBlack());
         vendorIndexInfoVO.setContactPhone(vendorContact.getContactPhone());

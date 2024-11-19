@@ -99,4 +99,16 @@ public class AgreementCreateBaseInfoVO extends AdviceObject {
 
     @ApiModelProperty(value = "合同清单")
     private List<VendorBiddingListQuotationListVO> biddingListQuotation;
+
+    @ApiModelProperty(value = "易料采购合同id")
+    private String marketMaterialContractId;
+
+    @ApiModelProperty(value = "乙方现场实际履职负责人")
+    private String partyBResponsibleName;
+
+    @ApiModelProperty(value = "乙方现场实际履职负责人身份证")
+    private String partyBResponsibleIdCard;
+
+    @ApiModelProperty(value = "乙方现场实际履职负责人联系方式")
+    private String partyBResponsiblePhone;
 }

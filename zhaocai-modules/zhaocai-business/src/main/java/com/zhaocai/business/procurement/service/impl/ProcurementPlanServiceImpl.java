@@ -9,6 +9,8 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.zhaocai.business.agreement.domain.MarketMaterialContract;
+import com.zhaocai.business.agreement.service.IMarketMaterialContractService;
 import com.zhaocai.business.bidding.domain.BiddingListQuotation;
 import com.zhaocai.business.bidding.domain.TenderNotice;
 import com.zhaocai.business.bidding.service.ITenderNoticeService;
@@ -16,19 +18,20 @@ import com.zhaocai.business.bidding.vo.res.ContractPlanningNoticeVO;
 import com.zhaocai.business.common.enums.*;
 import com.zhaocai.business.common.exception.BusinessException;
 import com.zhaocai.business.common.exception.ParamValidateException;
+import com.zhaocai.business.common.utils.AesUtils;
 import com.zhaocai.business.common.utils.AmountCalUtil;
 import com.zhaocai.business.common.utils.ValidateUtils;
 import com.zhaocai.business.manager.http.common.config.ThirdPartyTodoFlowGroupEnum;
 import com.zhaocai.business.manager.http.common.config.ThirdPartyTodoFlowModuleEnum;
-import com.zhaocai.business.manager.http.dto.req.ContractPlanMaterialListRequestDTO;
-import com.zhaocai.business.manager.http.dto.req.PushThirdPartyTodoTaskRequestDTO;
-import com.zhaocai.business.manager.http.dto.req.PushThirdPartyTodoTaskSonRequestDTO;
-import com.zhaocai.business.manager.http.dto.req.UsersRoleListRequestDTO;
+import com.zhaocai.business.manager.http.dto.req.*;
+import com.zhaocai.business.manager.http.dto.res.MarketQuotePriceResponseDTO;
 import com.zhaocai.business.manager.http.dto.res.UsersRoleContractPlanListResponseDTO;
 import com.zhaocai.business.manager.http.dto.res.UsersRoleListResponseDTO;
 import com.zhaocai.business.manager.http.service.ContractPlanService;
+import com.zhaocai.business.manager.http.service.MarketService;
 import com.zhaocai.business.manager.http.service.PlatRoleService;
 import com.zhaocai.business.manager.http.service.ThridPartyTodoTaskService;
+import com.zhaocai.business.manager.template.config.UnderlingPlatformConfig;
 import com.zhaocai.business.procurement.domain.*;
 import com.zhaocai.business.procurement.dto.ContractProcurementPlanDTO;
 import com.zhaocai.business.procurement.dto.SubjectMatterDTO;
@@ -50,6 +53,7 @@ import com.zhaocai.common.core.constant.SecurityConstants;
 import com.zhaocai.common.core.utils.NumberUtil;
 import com.zhaocai.common.core.utils.bean.BeanCopierUtil;
 import com.zhaocai.common.core.web.bean.ResultData;
+import com.zhaocai.common.core.web.domain.BaseEntity;
 import com.zhaocai.common.security.utils.SecurityUtils;
 import com.zhaocai.common.signature.domain.AgreementSignature;
 import com.zhaocai.system.api.domain.SysUser;
@@ -127,6 +131,15 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
     @Lazy
     @Autowired
     private IProcurementPlanService procurementPlanService;
+
+    @Autowired
+    private MarketService marketService;
+
+    @Autowired
+    private IMarketMaterialContractService marketMaterialContractService;
+
+    @Autowired
+    private UnderlingPlatformConfig underlingPlatformConfig;
 
     @Override
     public PageResult<ProcurementPlanListVO> listPage(ProcurementPlanListQueryVO queryVO) {
@@ -263,12 +276,16 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
     @Override
     public ContractPlanMaterialListVO listContractMaterials(ContractPlanMaterialListQueryVO queryVO) {
         List<ContractMaterialsListVO> materialsList = contractPlanService.getContractMaterialsList(queryVO);
+        // 根据查询的合约清单去查询易料商品信息
+        materialsList = this.selectMarketMaterials(materialsList, queryVO);
 
         // 计算上限价
         BigDecimal upperLimitPrice = BigDecimal.ZERO;
         SubjectMatterDTO subjectMatter;
         for(ContractMaterialsListVO listVO : materialsList){
             upperLimitPrice = NumberUtil.add(upperLimitPrice, AmountCalUtil.calTotalAmountInclTax(listVO.getCount(),listVO.getUnitPriceInclTax()));
+
+            log.info("[合约规划物料清单][ContractMaterialsListVO交易标的物]{}",listVO);
 
             subjectMatter = materialsListService.getSubjectMatter(queryVO.getProcurementType(),listVO.getMaterialsCode(),queryVO.getConPlanCode());
             if (subjectMatter != null) {
@@ -309,19 +326,72 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
         return contractPlanMaterialLis;
     }
 
+    /**
+     * 查询易料市集清单最新价格
+     * @param materialsList
+     * @return
+     */
+    private List<ContractMaterialsListVO> selectMarketMaterials(List<ContractMaterialsListVO> materialsList, ContractPlanMaterialListQueryVO queryVO) {
+        MarketQuotePriceRequestDTO dto = new MarketQuotePriceRequestDTO();
+        dto.setQuoteType(1);
+        dto.setProjectId(queryVO.getProjectId());
+        MinProject project = minProjectService.getById(queryVO.getProjectId());
+        if (null != project) {
+            dto.setProjectName(project.getMinAccountFullName());
+            dto.setContractName(project.getProjectLeader());
+            dto.setContractPhone(project.getProjectLeaderPhone());
+        }
+        List<MarketProductListRequestDTO> voList = new ArrayList<>();
+        for (ContractMaterialsListVO contractMaterialsListVO : materialsList) {
+            MarketProductListRequestDTO vo = new MarketProductListRequestDTO();
+            vo.setCode(contractMaterialsListVO.getMaterialsCode());
+            vo.setName(contractMaterialsListVO.getMaterialsName());
+            vo.setCategory(contractMaterialsListVO.getSpecification());
+            vo.setQuantity(contractMaterialsListVO.getQuantity());
+            vo.setUnitName(contractMaterialsListVO.getUnitMeasurement());
+            voList.add(vo);
+        }
+        dto.setList(voList);
+        List<MarketQuotePriceResponseDTO> marketMaterialList = marketService.queryMarketQuotePrice(dto);
+
+        Map<String, MarketQuotePriceResponseDTO> materialMap = new HashMap<>();
+        for (MarketQuotePriceResponseDTO marketMaterial : marketMaterialList) {
+            String key = marketMaterial.getOfferGoodsCode()+marketMaterial.getGoodsName();
+            materialMap.put(key, marketMaterial);
+        }
+
+        // 查找匹配的记录
+        for (ContractMaterialsListVO materials : materialsList) {
+            String key = materials.getMaterialsCode()+materials.getMaterialsName();
+            MarketQuotePriceResponseDTO matchingMaterial = materialMap.get(key);
+            if (matchingMaterial != null) {
+                materials.setCode(matchingMaterial.getOfferGoodsCode());
+                materials.setName(matchingMaterial.getGoodsName());
+                materials.setCategory(matchingMaterial.getCategory());
+                materials.setUnitName(matchingMaterial.getUnitName());
+                materials.setGoodsQuantity(matchingMaterial.getQuantity());
+                materials.setOfferPrice(matchingMaterial.getOfferPrice());
+                materials.setOfferBrand(matchingMaterial.getOfferBrand());
+                materials.setSkuId(matchingMaterial.getSkuId());
+            }
+        }
+        return materialsList;
+    }
+
     @Override
     @Transactional(propagation = Propagation.REQUIRED,rollbackFor = Exception.class)
-    public Long saveProcurementPlan(ProcurementPlanRequestVO requestVO) {
+    public MaterialProcurementPushRequestVO saveProcurementPlan(ProcurementPlanRequestVO requestVO) {
+        MaterialProcurementPushRequestVO vo = new MaterialProcurementPushRequestVO();
         checkMaterialsList(requestVO);
         if (NumberUtil.isNullOrZero(requestVO.getProcurementPlan().getId())) {
             // 新增
-            addProcurementPlan(requestVO);
+            vo = addProcurementPlan(requestVO);
         } else {
             // 修改
-            updateProcurementPlan(requestVO);
+            vo = updateProcurementPlan(requestVO);
         }
 
-        return requestVO.getProcurementPlan().getId();
+        return vo;
     }
 
     @Override
@@ -362,6 +432,15 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
         procurementPlanVO.setProjectCode(contractPlanning.getProjectCode());
         procurementPlanVO.setProjectName(contractPlanning.getProjectName());
 
+        // 判断是否存在已推送到易料的数据
+        List<MaterialsList> list = materialsListService.list(new LambdaQueryWrapper<MaterialsList>()
+                .eq(MaterialsList::getPlanId, procurementPlanVO.getId())
+                .eq(MaterialsList::getPushFlag, "Y"));
+        if (CollectionUtil.isEmpty(list)) {
+            procurementPlanVO.setIsPushData("N");
+        } else {
+            procurementPlanVO.setIsPushData("Y");
+        }
         return ProcurementPlanDetailVO.builder()
                 .procurementPlan(procurementPlanVO)
                 .splitMaterials(splitMaterials)
@@ -422,6 +501,20 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
     }
 
     @Override
+    public String getgetYjtUrl(String type, String  code) throws Exception {
+        //String acount = SecurityUtils.getLoginUser().getUsername();
+        String  acount = "15307487727";
+        Long time =new Date().getTime();
+        if(type ==null||type.equals("")){
+            type ="1";
+        }
+        String requestQuery = acount+","+time+","+type+","+code;
+        String aesString = underlingPlatformConfig.getYjtUrl()+"?"+"data="+AesUtils.encrypt(requestQuery,underlingPlatformConfig.getYjtKey())+"&appId="+underlingPlatformConfig.getAppId();
+        return  aesString;
+
+    }
+
+    @Override
     public UsersRoleContractPlanListResponseDTO getUsersRoleContractPlanList(ContractPlanningQueryVO requestDTO) {
         /* 请求获取第三方用户数据 */
         List<UsersRoleListResponseDTO> userList = platRoleService.getUsersRoleList(new UsersRoleListRequestDTO());
@@ -470,6 +563,96 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
             userContract.setContractPlanningNoticeVOList(contractPlanningNoticeVOList);
         }
         return userContract;
+    }
+
+    /**
+     * 推送易料采购清单
+     * @param requestVO
+     * @return
+     */
+    @Override
+    public ProcurementPlanDetailVO pushMaterialProcurementList(MaterialProcurementPushRequestVO requestVO) {
+        this.checkMaterialProcurement(requestVO.getId());
+        MinProjectVO project = minProjectService.getMinProjectByMinAccountCode(requestVO.getProjectCode());
+        // 构建易料采购信息和易料采购清单信息
+        MarketMaterialListRequestDTO pushVO = new MarketMaterialListRequestDTO();
+        pushVO.setPlanId(String.valueOf(requestVO.getId()));
+        pushVO.setProjectId(requestVO.getProjectCode());
+        pushVO.setProjectName(project.getMinAccountFullName());
+        pushVO.setContractName(project.getProjectLeader());
+        pushVO.setContractPhone(project.getProjectLeaderPhone());
+        List<MaterialsList> materialsLists = requestVO.getMaterialsLists();
+        List<Long> ids = materialsLists.stream().map(BaseEntity::getId).collect(Collectors.toList());
+        if(CollectionUtil.isEmpty(ids)){
+            throw new BusinessException("请勾选需要推送的易料清单");
+        }
+        List<MaterialsList> materialsPushList = materialsListService.list(new LambdaQueryWrapper<MaterialsList>()
+                        .eq(MaterialsList::getPlanId, requestVO.getId())
+                .and(wrapper -> wrapper
+                        .eq(MaterialsList::getPushFlag, "Y")
+                        .or(i -> i.in(MaterialsList::getId, ids))
+                ));
+        List<MarketProductListRequestDTO> pushVOList = BeanCopierUtil.copyList(materialsPushList, MarketProductListRequestDTO.class);
+        for (int i = 0; i < pushVOList.size(); i++) {
+            pushVOList.get(i).setRequireId(String.valueOf(materialsPushList.get(i).getId()));
+            pushVOList.get(i).setQuantity(materialsPushList.get(i).getCount());
+        }
+        pushVO.setList(pushVOList);
+        marketService.pushMarketMaterialList(pushVO);
+        // 更新清单是否已推送
+        materialsListService.update(new LambdaUpdateWrapper<MaterialsList>()
+                .set(MaterialsList::getPushFlag, "Y")
+                .in(BaseEntity::getId, ids));
+        return this.getProcurementPlanDetail(requestVO.getId());
+    }
+
+    /**
+     * 检查推送的易料采购是否已到签订中
+     * @param id
+     */
+    private void checkMaterialProcurement(Long id) {
+        List<MarketMaterialContract> contract = marketMaterialContractService.list(new LambdaQueryWrapper<MarketMaterialContract>().eq(MarketMaterialContract::getPlanId, id));
+        if (!CollectionUtil.isEmpty(contract)) {
+            throw new BusinessException("需要推送的采购清单已经到合同签订阶段");
+        }
+    }
+
+    /**
+     * 撤销推送的易料采购清单
+     * @param requestVO
+     * @return
+     */
+    @Override
+    public ProcurementPlanDetailVO revokePushMaterialProcurementList(MaterialProcurementPushRequestVO requestVO) {
+        this.checkMaterialProcurement(requestVO.getId());
+        MinProjectVO project = minProjectService.getMinProjectByMinAccountCode(requestVO.getProjectCode());
+        // 构建易料采购信息和易料采购清单信息
+        MarketMaterialListRequestDTO pushVO = new MarketMaterialListRequestDTO();
+        pushVO.setPlanId(String.valueOf(requestVO.getId()));
+        pushVO.setProjectId(requestVO.getProjectCode());
+        pushVO.setProjectName(project.getMinAccountFullName());
+        pushVO.setContractName(project.getProjectLeader());
+        pushVO.setContractPhone(project.getProjectLeaderPhone());
+        List<MaterialsList> materialsLists = requestVO.getMaterialsLists();
+        List<Long> ids = materialsLists.stream().map(BaseEntity::getId).collect(Collectors.toList());
+        if(CollectionUtil.isEmpty(ids)){
+            throw new BusinessException("请勾选需要撤销推送的易料清单");
+        }
+        List<MaterialsList> materialsPushList = materialsListService.list(new LambdaQueryWrapper<MaterialsList>()
+                        .eq(MaterialsList::getPlanId, requestVO.getId())
+                .eq(MaterialsList::getPushFlag, "Y")
+                .notIn(MaterialsList::getId, ids));
+        List<MarketProductListRequestDTO> pushVOList = BeanCopierUtil.copyList(materialsPushList, MarketProductListRequestDTO.class);
+        for (int i = 0; i < pushVOList.size(); i++) {
+            pushVOList.get(i).setRequireId(String.valueOf(materialsPushList.get(i).getId()));
+        }
+        pushVO.setList(pushVOList);
+        marketService.pushMarketMaterialList(pushVO);
+        // 更新撤销清单状态
+        materialsListService.update(new LambdaUpdateWrapper<MaterialsList>()
+                .set(MaterialsList::getPushFlag, "N")
+                .in(BaseEntity::getId, ids));
+        return this.getProcurementPlanDetail(requestVO.getId());
     }
 
     public void savaContractPlanningPushRecord(ProcurementPlanPushVO planPushVO){
@@ -586,7 +769,7 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
      * 修改采购计划
      * @param requestVO
      */
-    private void updateProcurementPlan(ProcurementPlanRequestVO requestVO) {
+    private MaterialProcurementPushRequestVO updateProcurementPlan(ProcurementPlanRequestVO requestVO) {
         ProcurementPlan procurementPlan = requestVO.getProcurementPlan();
         ProcurementPlan checkPlan = baseMapper.selectById(procurementPlan.getId());
 
@@ -599,17 +782,20 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
         baseMapper.updateById(procurementPlan);
 
         // 修改合约拆分和物料信息
-        contractPlanningSplitService.updateContractPlanningSplit(requestVO.getSplitRequestList(),procurementPlan.getId(),procurementPlan);
+        List<MaterialsList> list = contractPlanningSplitService.updateContractPlanningSplit(requestVO.getSplitRequestList(), procurementPlan.getId(), procurementPlan);
 
         // 重新保存合约规划
         contractPlanningService.updateContractPlanning(requestVO.getContractPlanning(),procurementPlan.getId());
+
+        MaterialProcurementPushRequestVO vo = this.getPushMaterialInfo(procurementPlan, list, requestVO.getContractPlanning());
+        return vo;
     }
 
     /**
      * 新增采购计划
      * @param requestVO
      */
-    private void addProcurementPlan(ProcurementPlanRequestVO requestVO) {
+    private MaterialProcurementPushRequestVO addProcurementPlan(ProcurementPlanRequestVO requestVO) {
         ProcurementPlan procurementPlan = requestVO.getProcurementPlan();
         procurementPlan.setProcurementPlanCode(getProcurementPlanCode());
         procurementPlan.setProcurementReporter(SecurityUtils.getUserId());
@@ -619,10 +805,21 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
         baseMapper.insert(procurementPlan);
 
         // 保存合约拆分和物料信息
-        contractPlanningSplitService.saveContractPlanningSplit(requestVO.getSplitRequestList(),procurementPlan.getId(),procurementPlan);
+        List<MaterialsList> list = contractPlanningSplitService.saveContractPlanningSplit(requestVO.getSplitRequestList(), procurementPlan.getId(), procurementPlan);
 
         // 保存合约规划
         contractPlanningService.addContractPlanning(requestVO.getContractPlanning(),procurementPlan.getId());
+        MaterialProcurementPushRequestVO vo = this.getPushMaterialInfo(procurementPlan, list, requestVO.getContractPlanning());
+        return vo;
+    }
+
+    private MaterialProcurementPushRequestVO getPushMaterialInfo(ProcurementPlan procurementPlan, List<MaterialsList> list, ContractPlanning contractPlanning) {
+        MaterialProcurementPushRequestVO vo = new MaterialProcurementPushRequestVO();
+        vo.setId(procurementPlan.getId());
+        vo.setProjectCode(contractPlanning.getProjectCode());
+        list = list.stream().filter(i-> null != i.getIsSelect()&&i.getIsSelect().equals("Y")).collect(Collectors.toList());
+        vo.setMaterialsLists(list);
+        return vo;
     }
 
     /**
@@ -659,6 +856,10 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
          * 获取上限价、物料总数
          */
         Integer procurementPlanType = procurementPlan.getProcurementPlanType();
+        /**
+         * 改成按清单的价格类型计算浮动价固定价格
+         * Time:2024/11/13 下午2:55
+         * */
         Integer priceType = procurementPlan.getPriceType();
         // 上限价
         BigDecimal plannedPrice = BigDecimal.ZERO;
@@ -693,7 +894,8 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
                 materialsCountMap.put(materials.getMaterialsUniqueId(),NumberUtil.add(materialsCount,materials.getCount()));
 
                 // 上限价
-                if (PriceTypeEnum.FLOAT_PRICE.equalsType(priceType)) {
+//                if (PriceTypeEnum.FLOAT_PRICE.equalsType(priceType)) {
+                if (PriceTypeEnum.FLOAT_PRICE.equalsType(materials.getPriceType())) {
                     // 浮动价 = 清单数量 * (基价 + 浮动价 + 卸费)
                     BigDecimal floatPrice = NumberUtil.add(materials.getBasePrice(),materials.getFloatingPrice(),materials.getUnloadingFee());
                     BigDecimal floatPriceAmount = AmountCalUtil.calTotalAmountInclTax(materials.getCount(),floatPrice);
@@ -714,7 +916,8 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
                 }
 
                 // 非浮动价，将浮动价相关字段全部设置为 null
-                if (!PriceTypeEnum.FLOAT_PRICE.equalsType(priceType)) {
+//                if (!PriceTypeEnum.FLOAT_PRICE.equalsType(priceType)) {
+                if (!PriceTypeEnum.FLOAT_PRICE.equalsType(materials.getPriceType())) {
                     materials.setBasePrice(null);
                     materials.setFloatingPrice(null);
                     materials.setUnloadingFee(null);
@@ -750,6 +953,7 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
         procurementPlan.setSubjectMatter(subjectMatterCode);
         // 交易标的物类型，只有购买材料的需要计算
         if (ProcurementPlanTypeEnum.PURCHASE_MATERIALS.equalsType(procurementPlan.getProcurementPlanType())) {
+            /* 校验交易标的物是否存在多种 */
             Integer subjectMatterType = materialsListService.getSubjectMatterType(subjectMatterCode);
             procurementPlan.setSubjectMatterType(subjectMatterType);
         } else {

@@ -79,6 +79,10 @@ public class ProcurementPlanVO extends AdviceObject {
     @ApiModelProperty(value = "价格类型")
     private Integer priceType;
 
+    /** 基价 （前端用来统一刷新列表清单的基价使用。） */
+    @ApiModelProperty(value = "基价")
+    private BigDecimal basePrice;
+
     @ApiModelProperty(value = "区域-省")
     private String regionProvinceCode;
 
@@ -111,4 +115,7 @@ public class ProcurementPlanVO extends AdviceObject {
     @DictCache(dictBizEnum = DictBizEnum.PROCUREMENT_PAYMENT_TYPE,filedName = "paymentType")
     @ApiModelProperty(value = "付款方式")
     private String paymentTypeText;
+
+    @ApiModelProperty(value = "是否存在推送数据")
+    private String isPushData;
 }

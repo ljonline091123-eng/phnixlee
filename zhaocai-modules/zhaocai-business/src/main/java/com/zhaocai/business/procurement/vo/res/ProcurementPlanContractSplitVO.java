@@ -59,7 +59,9 @@ public class ProcurementPlanContractSplitVO extends AdviceObject {
     public String getPriceTypeText() {
         if (PriceTypeEnum.FLOAT_PRICE.equalsType(this.getPriceType())) {
             this.priceTypeText = "浮动价";
-        } else {
+        } else if (PriceTypeEnum.FIXED_FLOAT_PRICE.equalsType(this.getPriceType())) {
+            this.priceTypeText = "固定、浮动价";
+        }else{
             this.priceTypeText = "/";
         }
         return priceTypeText;

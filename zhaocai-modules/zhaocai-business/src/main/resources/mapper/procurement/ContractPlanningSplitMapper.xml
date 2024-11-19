@@ -62,6 +62,13 @@
                 from tb_procurement_scheme_plan_relate tpr
                 inner join tb_procurement_scheme tps on tps.id = tpr.procurement_scheme_id and tps.state != 2
             )
+            and
+            tps.id not in (
+                SELECT tml.contract_split_id
+                FROM tb_materials_list tml
+                GROUP BY tml.contract_split_id
+                HAVING COUNT(CASE WHEN tml.push_flag = 'Y' THEN 1 END) = COUNT(*)
+            )
             <if test="queryVO.procurementPlanName != null and queryVO.procurementPlanName != ''">
                and tpp.procurement_plan_name like concat('%',#{queryVO.procurementPlanName,jdbcType=VARCHAR},'%')
             </if>

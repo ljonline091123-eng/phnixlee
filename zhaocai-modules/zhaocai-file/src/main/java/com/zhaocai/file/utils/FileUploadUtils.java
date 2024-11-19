@@ -18,15 +18,15 @@ import com.zhaocai.common.core.utils.uuid.Seq;
 
 /**
  * 文件上传工具类
- * 
+ *
  * @author ruoyi
  */
 public class FileUploadUtils
 {
     /**
-     * 默认大小 50M
+     * 默认大小 100M
      */
-    public static final long DEFAULT_MAX_SIZE = 50 * 1024 * 1024;
+    public static final long DEFAULT_MAX_SIZE = 100 * 1024 * 1024;
 
     /**
      * 默认的文件名最大长度 100

@@ -51,7 +51,7 @@ public interface IProcurementPlanService  extends IService<ProcurementPlan> {
      * 保存采购计划
      * @param requestVO
      */
-    Long saveProcurementPlan(ProcurementPlanRequestVO requestVO);
+    MaterialProcurementPushRequestVO saveProcurementPlan(ProcurementPlanRequestVO requestVO);
 
     /**
      * 提交采购计划
@@ -116,4 +116,20 @@ public interface IProcurementPlanService  extends IService<ProcurementPlan> {
      * @return
      */
     UsersRoleContractPlanListResponseDTO getUsersRoleContractPlanList(ContractPlanningQueryVO requestDTO);
+
+    /**
+     * 推送易料采购清单
+     * @param requestVO
+     * @return
+     */
+    ProcurementPlanDetailVO pushMaterialProcurementList(MaterialProcurementPushRequestVO requestVO);
+
+    /**
+     * 撤销推送的易料采购清单
+     * @param requestVO
+     * @return
+     */
+    ProcurementPlanDetailVO revokePushMaterialProcurementList(MaterialProcurementPushRequestVO requestVO);
+
+    String getgetYjtUrl(String type, String code) throws Exception;
 }

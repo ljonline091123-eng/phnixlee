@@ -57,4 +57,11 @@ public interface IAgreementMaterialsListService  extends IService<AgreementMater
      * @return
      */
     List<AgreementMaterialsList> listByAgreementId(Long agreementId);
+
+    /**
+     * 获取合同清单（易料合同）
+     * @param id
+     * @return
+     */
+    List<AgreementMaterialsListVO> listAgreementMaterialsByMarket(Long id);
 }

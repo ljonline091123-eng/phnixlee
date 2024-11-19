@@ -93,8 +93,8 @@
         tt.using_unit_name,
         tt.create_by,
         tt.create_time,
-        ta.file_name,
-        ta.file_url,
+        max(ta.file_name) as file_name,
+        max(ta.file_url) as file_url,
         tt.attachment_id
         FROM
         tb_procurement_scheme s

@@ -46,4 +46,11 @@ public interface AgreementMaterialsListMapper extends BaseMapper<AgreementMateri
      * @return
      */
     List<AgreementMaterialsList> selectMaterialsByContractSplitId(@Param("contractSplitId") Long contractSplitId);
+
+    /**
+     * 获取合同清单（易料合同）
+     * @param id
+     * @return
+     */
+    List<AgreementMaterialsListVO> listAgreementMaterialsByMarket(Long id);
 }

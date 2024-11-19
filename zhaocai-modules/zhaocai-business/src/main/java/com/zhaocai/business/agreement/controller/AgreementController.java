@@ -202,7 +202,6 @@ public class AgreementController extends BladeController {
         return ResultData.success();
     }
 
-
     @ApiOperation(value = "初始化接口")
     @GetMapping ("/initialize")
     public ResultData<BpmInitializeResponseDTO> initialize(BpmInitializeRequestDTO requestDTO) {
@@ -231,5 +230,14 @@ public class AgreementController extends BladeController {
     @GetMapping("/loadTaskDef")
     public ResultData<List<BpmLoadTaskDefResponseDTO>> loadTaskDef(BpmLoadTaskDefRequestDTO requestDTO) {
         return agreementService.loadTaskDef(requestDTO);
+    }
+
+    /**
+     * 易料合同免审提交
+     * @return
+     */
+    @GetMapping("/avoidSubmitByMarket")
+    public ResultData<Boolean> avoidSubmitByMarket(@RequestParam Long id) {
+        return ResultData.data(agreementService.avoidSubmitByMarket(id));
     }
 }

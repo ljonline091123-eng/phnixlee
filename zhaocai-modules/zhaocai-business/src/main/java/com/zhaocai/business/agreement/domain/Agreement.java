@@ -113,7 +113,7 @@ public class Agreement extends BaseEntity {
     private String partyBName;
 
     /**
-     * 支出业务分类
+     * 支出业务分类 {@link com.zhaocai.business.common.enums.ProcurementPlanTypeEnum}
      */
     @ApiModelProperty(value = "支出业务分类")
     private Integer expenditureBusinessType;
@@ -346,5 +346,17 @@ public class Agreement extends BaseEntity {
      */
     @ApiModelProperty(hidden = true)
     private String wfProcessId;
+
+    /**
+     * 易料采购合同id
+     */
+    @ApiModelProperty(value = "易料采购合同id")
+    private String marketMaterialContractId;
+
+    /**
+     * 易料采购合同招标编码
+     */
+    @ApiModelProperty(value = "易料采购合同招标编码")
+    private String procurementSchemeCode;
 
 }

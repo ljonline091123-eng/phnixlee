@@ -82,7 +82,7 @@ public class ProcurementPlanController extends BladeController {
     @PostMapping("/saveProcurementPlan")
     @ApiOperation(value = "保存采购计划")
     @RepeatSubmit(key = "#requestVO.contractPlanning.contractPlanningId")
-    public ResultData<Long> saveProcurementPlan(@RequestBody @Valid ProcurementPlanRequestVO requestVO) {
+    public ResultData<MaterialProcurementPushRequestVO> saveProcurementPlan(@RequestBody @Valid ProcurementPlanRequestVO requestVO) {
         return ResultData.data(procurementPlanService.saveProcurementPlan(requestVO));
     }
 
@@ -172,10 +172,31 @@ public class ProcurementPlanController extends BladeController {
         return ResultData.data(procurementPlanService.getContractPlanSplitFlag());
     }
 
+    /**
+     * 获取易料免登录加密接口
+     */
+    @GetMapping("/getYjtUrl")
+    @ApiOperation(value = "获取易料免登录加密接口")
+    public ResultData<String> getYjtUrl(@RequestParam String type,@RequestParam String  code) throws Exception {
+        return ResultData.data(procurementPlanService.getgetYjtUrl(type,code));
+    }
+
 
     @ApiOperation(value = "获取第三方角色用户信息接口并关联采购方案")
     @GetMapping("/getUsersRoleContractPlanList")
     public ResultData<UsersRoleContractPlanListResponseDTO> getUsersRoleContractPlanList(ContractPlanningQueryVO requestDTO) {
         return ResultData.data(procurementPlanService.getUsersRoleContractPlanList(requestDTO));
+    }
+
+    @ApiOperation(value = "推送易料采购清单")
+    @PostMapping("/pushMaterialProcurementList")
+    public ResultData<ProcurementPlanDetailVO> pushMaterialProcurementList(@RequestBody MaterialProcurementPushRequestVO requestVO) {
+        return ResultData.data(procurementPlanService.pushMaterialProcurementList(requestVO));
+    }
+
+    @ApiOperation(value = "撤销推送的易料采购清单")
+    @PostMapping("/revokePushMaterialProcurementList")
+    public ResultData<ProcurementPlanDetailVO> revokePushMaterialProcurementList(@RequestBody MaterialProcurementPushRequestVO requestVO) {
+        return ResultData.data(procurementPlanService.revokePushMaterialProcurementList(requestVO));
     }
 }

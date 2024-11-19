@@ -61,4 +61,7 @@ public class MarketQuotePriceResponseDTO {
     @ApiModelProperty(value = "易料市集商品名")
     private String goodsName;
 
+    @ApiModelProperty(value = "易料市集商品id")
+    private String skuId;
+
 }
