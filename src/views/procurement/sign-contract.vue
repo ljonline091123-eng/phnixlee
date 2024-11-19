@@ -66,6 +66,16 @@
             v-hasPermi="['procurement:contract:add']"
             >新增</el-button
           >
+          <el-badge :value="total_procurement_yl" style="margin-left: 12px;margin-top: -1px;">
+              <el-button
+              type="success"
+              icon="el-icon-plus"
+              size="small"
+              @click="openSelectYl"
+              >新增易料合同</el-button
+            >
+          </el-badge>
+
         </el-form-item>
       </el-form>
       <el-table
@@ -99,12 +109,13 @@
         prop="agreementCode"
       >
         <template slot-scope="scope">
-          <a
+          <a v-if="scope.row.procurementTypeText"
             class="link-type"
             @click="goDetailBid(scope.row.schemeId, scope.row.noticeId, scope.row.procurementType)"
           >
             {{ scope.row.procurementSchemeCode }}
           </a>
+          <span v-else>{{ scope.row.procurementSchemeCode }}</span>
         </template>
       </el-table-column>
         <el-table-column
@@ -128,12 +139,13 @@
         prop="agreementCode"
       >
         <template slot-scope="scope">
-          <a
+          <a v-if="scope.row.procurementTypeText"
             class="link-type"
             @click="goDetailBid(scope.row.schemeId, scope.row.noticeId, scope.row.procurementType)"
           >
-            {{ scope.row.procurementTypeText }}
+            {{ scope.row.procurementTypeText?scope.row.procurementTypeText:'易料采购' }}
           </a>
+          <span v-else>{{ scope.row.procurementTypeText?scope.row.procurementTypeText:'易料采购' }}</span>
         </template>
       </el-table-column>
         <el-table-column
@@ -181,7 +193,8 @@
                   goEdit(
                     scope.row.id,
                     scope.row.agreementName,
-                    scope.row.expenditureBusinessType
+                    scope.row.expenditureBusinessType,
+                    scope.row.procurementTypeText
                   )
                 "
                 icon="el-icon-s-promotion"
@@ -234,7 +247,7 @@
                 >撤回</el-button
               >
             </div>
-            <!--
+
             <div
               v-else-if="
                 Number(scope.row.isOperate) === 1 &&
@@ -308,7 +321,7 @@
                 >作废签署合同</el-button
               >
             </div>
-            -->
+
             <span v-else>-</span>
           </template>
         </el-table-column>
@@ -800,6 +813,7 @@
               <el-table-column
                 label="签订含税单价(元)"
                 align="center"
+              prop="signUnitPriceInclTax"
                 width="150"
                 :key="'signUnitPriceInclTax'"
               >
@@ -1124,6 +1138,134 @@
         >
       </div>
     </el-dialog>
+
+     <!-- 选择易料单据 -->
+     <el-dialog
+     title="请选择易料单据"
+     :visible.sync="contractVisibleYl"
+     width="55%"
+     @closed="contractVisibleYl = false"
+   >
+     <el-form
+       :model="queryParams_procurementYl"
+       ref="planForm"
+       label-position="left"
+       size="small"
+       @submit.native.prevent
+     >
+       <el-row :gutter="10">
+         <el-col :span="9" class="grid-cell">
+           <el-form-item
+             label="单据编号："
+             label-width="90px"
+             prop="agreementCode"
+             class="label-right-align"
+           >
+             <el-input
+               v-model="queryParams_procurementYl.agreementCode"
+               type="text"
+               clearable
+             ></el-input>
+           </el-form-item>
+         </el-col>
+         <el-col :span="9" class="grid-cell">
+          <el-form-item
+            label="单据名称："
+            label-width="90px"
+            prop="agreementName"
+            class="label-right-align"
+          >
+            <el-input
+              v-model="queryParams_procurementYl.agreementName"
+              type="text"
+              clearable
+            ></el-input>
+          </el-form-item>
+        </el-col>
+         <el-col :span="6" class="grid-cell">
+           <div class="static-content-item">
+             <el-button
+               type="primary"
+               icon="el-icon-search"
+               size="small"
+               @click="searchYl"
+               >查询</el-button
+             >
+           </div>
+         </el-col>
+       </el-row>
+     </el-form>
+     <el-table
+       v-loading="loading_procurement_yl"
+       :data="procurementTableListYl"
+       stripe
+       size="small"
+       highlight-current-row
+       border
+       @row-click="selectBcTemplate"
+       @selection-change="handleSelectionChangeYl"
+     >
+
+
+       <el-table-column label="" width="30" align="center">
+        <template slot-scope="scope">
+          <el-radio
+            class="table_radio"
+            v-model="selectedRowYl"
+            :label="scope.row.id"
+          />
+        </template>
+      </el-table-column>
+       <el-table-column
+         label="序号"
+         type="index"
+         width="50"
+         align="center"
+       />
+       <el-table-column
+       label="单据编号"
+       prop="agreementCode"
+       show-overflow-tooltip
+     />
+       <el-table-column
+         label="单据名称"
+         prop="agreementName"
+         show-overflow-tooltip
+       />
+
+       <el-table-column label="乙方名称" prop="partyBName" />
+
+       <el-table-column
+         label="支出业务类型"
+         align="center"
+         prop="expenditureBusinessTypeText"
+       />
+
+     </el-table>
+
+     <pagination
+        v-show="total_procurement_yl > 0"
+        :total="total_procurement_yl"
+        :page.sync="queryParams_procurementYl.pageNumber"
+        :limit.sync="queryParams_procurementYl.pageSize"
+        @pagination="getList_yl"
+      />
+     <div slot="footer" class="dialog-footer">
+       <el-button
+         @click="contractVisibleYl = false"
+         style="width: 100px"
+         size="small"
+         >取 消</el-button
+       >
+       <el-button
+         type="primary"
+         @click="submitProcurementYl"
+         style="width: 100px"
+         size="small"
+         >确 定</el-button
+       >
+     </div>
+   </el-dialog>
   </div>
 </template>
 
@@ -1132,12 +1274,12 @@ import { mapGetters } from "vuex";
 import { Base64 } from "js-base64";
 import { create, all } from "mathjs";
 import {
-  checkAgreementCreateInfo,
+  checkAgreementCreateInfo,getAgreementCreateInfoYl,
   listAgreement,
   getAgreementSelectedProcurementInfo,
   listContractSplit,
-  listSignAgreementScheme,
-  listVendorBiddingListQuotation,
+  listSignAgreementScheme,listMarketMaterialContract,
+  listVendorBiddingListQuotation,getCheckAgreementCreateInfo,
   cancellationAgreement,
   revokeAgreement,
   submitAgreement,
@@ -1155,6 +1297,7 @@ import {
   getMinProject,
   submitProcurementPlan,
 } from "@/api/procurement/plan";
+import { getContractTypeList } from "@/api/template/file";
 
 import { validatenull } from "@/utils/validate";
 
@@ -1164,6 +1307,8 @@ export default {
 
   data() {
     return {
+      templateRow:{},
+      contractVisibleYl:false,
       revokeLoding: "",
       form: {
         vendorBiddingListQuotationList: [],
@@ -1190,10 +1335,15 @@ export default {
       priceType: "",
       schemeId: null,
       selectedRow: {},
+      selectedRowYl: '',
       radio: "",
       policyData: {},
       // * 采购合同列表
       procurementTableList: [],
+      //易料
+      procurementTableListYl: [],
+      total_procurement_yl: 0,
+      loading_procurement_yl: false,
       dialogVisible: false,
       // * 采购方案下拉
       contractSplitOptions: [],
@@ -1230,6 +1380,12 @@ export default {
         pageNumber: 1,
         pageSize: 10,
         projectCode: undefined,
+      },
+      //易料查询参数
+      queryParams_procurementYl: {
+        pageNumber: 1,
+        pageSize: 10,
+        belongAccountingItemCode: undefined,
       },
       //易料查询参数
       queryParams_market: {
@@ -1289,6 +1445,7 @@ export default {
     };
   },
   created() {
+
     this.mathjs = create(all);
     this.mathjs.config({
       number: "BigNumber",
@@ -1350,13 +1507,18 @@ export default {
         if (oldVal === undefined || newVal.id !== oldVal.id) {
           this.queryParams.projectCode = newVal.code;
           this.queryParams_procurement.projectCode = newVal.code;
+          this.queryParams_procurementYl.belongAccountingItemCode = newVal.code;
           this.getList();
+          this.getList_yl();
         }
       },
       immediate: true,
     },
   },
   methods: {
+    selectBcTemplate(row) {
+      this.templateRow=row
+    },
     goDetail(id, type) {
       // this.$router.push({
       //   path: "/procurement/contract-detail",
@@ -1366,12 +1528,12 @@ export default {
       param = encodeURIComponent(param); //避免base64编码中出现"/"时路由404
       this.$router.push(`/procurement/contract-detail/${param}`);
     },
-    goDetailBid(id, noticeId,procurementType) {
+    goDetailBid(id, noticeId,procurementType,procurementTypeText) {
       // this.$router.push({
       //   path: "/procurement/contract-detail",
       //   query: { getId: id, type },
       // });
-      let param = Base64.encode(JSON.stringify({ id, noticeId,procurementType }));
+        let param = Base64.encode(JSON.stringify({ id, noticeId,procurementType }));
       param = encodeURIComponent(param); //避免base64编码中出现"/"时路由404
       this.$router.push(`/procurement/tendering/${param}`);
     },
@@ -1438,6 +1600,24 @@ export default {
         });
       }
     },
+    submitProcurementYl(){
+
+        if(!this.selectedRowYl.length) return this.$message({type:'error',message:"请选择易料单据"});
+        getCheckAgreementCreateInfo(this.selectedRowYl).then((res) => {
+          if(res.code==200 && res.data==true){
+            this.$router.push({
+              path: "/procurement/add-contract",
+              query: {
+                id: this.selectedRowYl,
+                agreementName: this.templateRow.agreementName,
+                type:'add'
+              },
+            });
+          }
+        })
+
+
+    },
     submitProcurement() {
       this.schemeId = this.selectedRow.schemeId;
       this.form.schemeId = this.schemeId;
@@ -1486,6 +1666,10 @@ export default {
       console.log(val, "选中的");
       this.selectedRow = val;
     },
+    handleSelectionChangeYl(val) {
+      console.log(val, "选中的");
+      this.selectedRowYl = val;
+    },
     /**
      * 查询采购任务列表
      */
@@ -1496,6 +1680,7 @@ export default {
         this.total_procurement = res?.data?.total;
       });
     },
+
     /**
      * 弹出选择采购任务
      */
@@ -1507,6 +1692,27 @@ export default {
       this.dialogVisible = true;
       this.loading_procurement = true;
     },
+     /**
+     * 查询易料列表
+     */
+     getList_yl() {
+      listMarketMaterialContract(this.queryParams_procurementYl).then((res) => {
+        this.loading_procurement_yl = false;
+        this.procurementTableListYl = res?.data?.rows;
+        this.total_procurement_yl = res?.data?.total;
+      });
+    },
+    /**
+     * 弹出易料选择
+     */
+     openSelectYl() {
+      this.queryParams_procurementYl.pageNumber = 1;
+      this.queryParams_procurementYl.pageSize = 10;
+      this.getList_yl();
+      this.contractVisibleYl = true;
+      this.loading_procurement_yl = true;
+    },
+
     /** 查询定时任务列表 */
     getList() {
       this.loading = true;
@@ -1527,6 +1733,10 @@ export default {
       this.queryParams_procurement.pageNumber = 1;
       this.selectedRow = {};
       this.getList_procurement();
+    },
+    searchYl(){
+      this.queryParams_procurementYl.pageNumber = 1;
+      this.getList_yl();
     },
     /** 重置按钮操作 */
     resetQuery_procurement() {
@@ -1554,13 +1764,14 @@ export default {
       this.title = "添加任务";
     },
     /** 修改 */
-    async goEdit(id, agreementName, type) {
+    async goEdit(id, agreementName, type,procurementTypeText) {
       const res = await checkAgreementUpdate(id);
       // if(res.data){
       this.$router.push({
         path: "/procurement/edit-contract",
         query: {
           id: id,
+          procurementTypeText:procurementTypeText?true:false,//编码没有值表示易料
         },
       });
       // }

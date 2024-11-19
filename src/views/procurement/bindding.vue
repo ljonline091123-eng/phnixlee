@@ -243,6 +243,28 @@
           </el-col>
         </el-row>
         <el-row>
+          <el-col :span="24" class="grid-cell">
+            <el-form-item
+            label="采购计划作废"
+            label-width="150px"
+            class="label-right-align"
+          >
+            <el-checkbox v-model="checkedPlan"></el-checkbox>
+            </el-form-item>
+          </el-col>
+        </el-row>
+      <el-row>
+          <el-col :span="24" class="grid-cell">
+            <el-form-item
+            label-width="150px"
+            label="采购方案作废"
+            class="label-right-align"
+          >
+            <el-checkbox v-model="checkedScheme"></el-checkbox>
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-row>
           <el-col :span="12" class="grid-cell">
             <el-form-item
               label="附件"
@@ -288,6 +310,9 @@
 import { mapGetters } from "vuex";
 import { Base64 } from "js-base64";
 import { getBiddingSchemeList, abandonBidMore } from "@/api/procurement/manage";
+import {
+  cancellationProcurementScheme,cancellationProcurementSchemePlan,
+} from "@/api/procurement/scheme";
 import BackButton from '@/components/BackButton/index.vue'
 import {showSecretRelatedTips} from "@/utils/MyUtils";
 export default {
@@ -295,6 +320,8 @@ export default {
   dicts: ["procurement_type", "bindding_step"],
   data() {
     return {
+      checkedPlan:false,
+      checkedScheme:false,
       schemeList: [],
       // 遮罩层
       loading: false,
@@ -351,26 +378,26 @@ export default {
     if(this.$route.query.report){
       this.report=this.$route.query.report
     }
-    console.log("当前url-- ",JSON.stringify(window.parent.location.href))
-
-    if(this.$route.query.report==undefined){
-      // const url = 'http://192.168.240.17:31800/ckControl/zbcg/procurement/procurement$bindding?projectCodeList=SG20012024000002-2&type=buildingRate&noticeStatus=8&procurementType=all&report=report&wjSs=%2Fzhaocai%2Fprocurement%2Fbindding';
-      const url =window.parent.location.href
-      const queryParams = this.parseQuery(url);
-      this.queryParams.procurementType = queryParams.procurementType
-      this.queryParams.projectCode = queryParams.projectCode
-      this.queryParams.projectCodeList = queryParams.projectCodeList
-      this.queryParams.type = queryParams.type
-      this.queryParams.noticeStatus = queryParams.noticeStatus
-      this.report=queryParams.report
-      console.log("报表参数",JSON.stringify(queryParams))
       console.log(" this.queryParams.procurementType"+ this.queryParams.procurementType);
       console.log(" this.queryParams.projectCode"+ this.queryParams.projectCode);
       console.log(" this.queryParams.projectCodeList"+ this.queryParams.projectCodeList);
       console.log(" this.queryParams.type"+ this.queryParams.type);
       console.log(" this.queryParams.noticeStatus"+ this.queryParams.noticeStatus);
       console.log(" this.queryParams.report"+ this.queryParams.report);
-    }
+
+    // if(this.$route.query.report==undefined){
+    //   // const url = 'http://192.168.240.17:31800/ckControl/zbcg/procurement/procurement$bindding?projectCodeList=SG20012024000002-2&type=buildingRate&noticeStatus=8&procurementType=all&report=report&wjSs=%2Fzhaocai%2Fprocurement%2Fbindding';
+    //   const url =window.parent.location.href
+    //   const queryParams = this.parseQuery(url);
+    //   this.queryParams.procurementType = queryParams.procurementType
+    //   this.queryParams.projectCode = queryParams.projectCode
+    //   this.queryParams.projectCodeList = queryParams.projectCodeList
+    //   this.queryParams.type = queryParams.type
+    //   this.queryParams.noticeStatus = queryParams.noticeStatus
+    //   this.report=queryParams.report
+    //   console.log("报表参数",JSON.stringify(queryParams))
+
+    // }
   },
   computed: {
     ...mapGetters(["project"]),
@@ -406,6 +433,7 @@ export default {
             ? undefined
             : this.queryParams.procurementType,
       };
+      console.log("报表参数",JSON.stringify(query))
       try {
         const res = await getBiddingSchemeList(query);
         if (res.data) {
@@ -479,8 +507,11 @@ export default {
     handleSuccess(res) {
       const { url, name } = res.data;
       console.log(url, name, "a");
-      this.abandonBidForm.attachmentList = [{ fileUrl: url, fileName: name }];
-      this.$refs.abandonBidRef.clearValidate("attachmentList");
+      // * 上传成功后，手动验证一次表单【'解决附件上传成功后还会显示验证信息'】
+      this.$set(this.abandonBidForm, "attachmentList", [{ fileUrl: url, fileName: name }]);
+      this.$refs.abandonBidRef.validateField('attachmentList');
+      // this.abandonBidForm.attachmentList = [{ fileUrl: url, fileName: name }];
+      // this.$refs.abandonBidRef.clearValidate("attachmentList");
     },
     /** 关闭废标弹层 */
     closeDialog(formName) {
@@ -506,7 +537,14 @@ export default {
           };
           console.log(formData, "formData");
           try {
-            const res = await abandonBidMore(formData);
+            const res=null
+            if(this.checkedPlan){
+              const resPlan=await cancellationProcurementSchemePlan(id);
+              }else  if(this.checkedScheme){
+              const resScheme = await cancellationProcurementScheme(id);
+              }else{
+                const res = await abandonBidMore(formData);
+              }
             this.$message.success("废标成功");
             this.abandonBidVisiable = false;
             this.currentBid = {};
@@ -523,11 +561,13 @@ export default {
     /** 监控类型切换 */
     "queryParams.procurementType": {
       handler(val) {
+         console.log( "监控类型切换",JSON.stringify(this.queryParams));
         this.getBiddingSchemeList();
       },
     },
     project: {
       handler(newVal, oldVal) {
+        console.log("监控项目oldVal"+oldVal.id ,"newVal"+JSON.stringify(newVal.id));
         if (oldVal === undefined || newVal.id !== oldVal.id) {
           this.queryParams = {
             pageNumber: 1,
@@ -540,6 +580,7 @@ export default {
             procurementType: "all",
             projectCode: newVal.code,
           };
+          console.log( "监控项目",JSON.stringify(this.queryParams));
             this.getBiddingSchemeList();
 
         }

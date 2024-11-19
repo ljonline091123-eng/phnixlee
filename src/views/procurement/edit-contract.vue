@@ -3,7 +3,9 @@
     <BackButton path="/procurement/sign-contract" title="修改合同信息">
       <div>
         <el-button type="primary" size="mini" @click="submitForm">保存</el-button>
+        <el-button v-if="firstForm.agreement.marketMaterialContractId && parseInt(firstForm.agreementPaymentItem.totalAmountIncTax)<50000" type="primary" size="mini" @click="avoidSubmitForm">免审提交</el-button>
       </div>
+
     </BackButton>
     <div class="context">
       <el-form ref="firstForm" :model="firstForm" label-width="210px">
@@ -43,7 +45,7 @@
               <el-col :span="8">
                 <el-form-item label="合同名称：" prop="agreement.agreementName"
                   :rules="[{ required: true, trigger: 'blur', message: '请输入合同名称' }]">
-                  <el-input disabled v-model="firstForm.agreement.agreementName" placeholder="请输入合同名称" clearable/>
+                  <el-input  v-model="firstForm.agreement.agreementName" placeholder="请输入合同名称" clearable/>
                 </el-form-item>
               </el-col>
               <el-col :span="8">
@@ -120,13 +122,13 @@
               <el-col :span="8">
                 <el-form-item label="身份证：" prop="agreement.partyBLegalIdCard"
                   :rules="[{ required: true, trigger: 'blur', message: '请输入身份证' },{validator: isCardId, trigger: 'blur'}]">
-                  <el-input v-model="firstForm.agreement.partyBLegalIdCard" placeholder="请输入身份证" clearable />
+                  <el-input  :disabled="firstForm.agreement.marketMaterialContractId?true:false" v-model="firstForm.agreement.partyBLegalIdCard" placeholder="请输入身份证" clearable />
                 </el-form-item>
               </el-col>
               <el-col :span="8">
                 <el-form-item label="联系方式：" prop="agreement.partyBLegalPhone"
                   :rules="[{ required: true, trigger: 'blur', message: '请输入联系方式' },{validator: isMobile, trigger: 'blur'}]">
-                  <el-input v-model="firstForm.agreement.partyBLegalPhone" placeholder="请输入联系方式" clearable />
+                  <el-input  :disabled="firstForm.agreement.marketMaterialContractId?true:false" v-model="firstForm.agreement.partyBLegalPhone" placeholder="请输入联系方式" clearable />
                 </el-form-item>
               </el-col>
             </el-row>
@@ -135,20 +137,20 @@
               <el-col :span="8">
                 <el-form-item label="乙方现场实际履职负责人：" prop="agreement.partyBResponsibleName"
                   :rules="[{ required: true, trigger: 'blur', message: '请输入乙方现场实际履职负责人' }]">
-                  <el-input v-model="firstForm.agreement.partyBResponsibleName" placeholder="请输入乙方现场实际履职负责人"
+                  <el-input  :disabled="firstForm.agreement.marketMaterialContractId?true:false" v-model="firstForm.agreement.partyBResponsibleName" placeholder="请输入乙方现场实际履职负责人"
                     clearable />
                 </el-form-item>
               </el-col>
               <el-col :span="8">
                 <el-form-item label="身份证：" prop="agreement.partyBResponsibleIdCard"
                   :rules="[{ required: true, trigger: 'blur', message: '请输入身份证' },{validator: isCardId, trigger: 'blur'}]">
-                  <el-input v-model="firstForm.agreement.partyBResponsibleIdCard" placeholder="请输入身份证" clearable />
+                  <el-input  :disabled="firstForm.agreement.marketMaterialContractId?true:false" v-model="firstForm.agreement.partyBResponsibleIdCard" placeholder="请输入身份证" clearable />
                 </el-form-item>
               </el-col>
               <el-col :span="8">
                 <el-form-item label="联系方式：" prop="agreement.partyBResponsiblePhone"
                   :rules="[{ required: true, trigger: 'blur', message: '请输入联系方式' },{validator: isMobile, trigger: 'blur'}]">
-                  <el-input v-model="firstForm.agreement.partyBResponsiblePhone" placeholder="请输入联系方式" clearable />
+                  <el-input  :disabled="firstForm.agreement.marketMaterialContractId?true:false" v-model="firstForm.agreement.partyBResponsiblePhone" placeholder="请输入联系方式" clearable />
                 </el-form-item>
               </el-col>
             </el-row>
@@ -209,8 +211,13 @@
                 </el-form-item>
               </el-col>
               <el-col :span="8">
+<!--                <el-form-item label="工期" prop="agreement.duration">-->
+<!--                  <el-input v-model="firstForm.duration" />-->
+<!--                </el-form-item>-->
                 <el-form-item label="工期" prop="agreement.duration">
-                  <el-input v-model="firstForm.duration" />
+                  <el-input :value="durationComputed(firstForm.agreement.contractStartDate, firstForm.agreement.contractEndDate)" placeholder="系统自动计算" disabled >
+                    <template #append>天</template>
+                  </el-input>
                 </el-form-item>
               </el-col>
             </el-row>
@@ -238,6 +245,7 @@
                 </el-form-item>
               </el-col>
             </el-row>
+
 
             <el-row :gutter="10" v-if="[4, 5].includes(contractType)">
               <el-col :span="24">
@@ -535,6 +543,10 @@
                   </el-form-item>
                 </template>
               </el-table-column>
+              <el-table-column prop="skuId" align="center" width="180" label="易料商品编码"/>
+              <el-table-column prop="goodsName" align="center" width="180" label="易料商品名称"/>
+                <el-table-column prop="offerBrand" align="center" width="180" label="易料品牌"/>
+               <el-table-column prop="offerPrice" align="center" width="180" label="易料初使报价"/>
             </el-table>
           </div>
           <!-- 物资租赁类 / 机械租赁类 -->
@@ -1236,7 +1248,7 @@
 import { Base64 } from "js-base64";
 import { create, all } from "mathjs"
 import commonTitle from "@/views/procurement/components/common-title.vue";
-import { getAgreementCreateInfo,getAgreementAttachmentId,getAgreementDetail,getLabelAttachmentId, saveAgreement, listUnderlingDict, listDeviceClass, listDevice, listMaterialsClass, listMaterials, deviceFeatureList, deviceFeatureValueList, listMaterialsFeature, listMaterialsFeatureValue } from "@/api/procurement/contract";
+import { getAgreementCreateInfo,getAgreementAttachmentId,getAgreementDetail,getLabelAttachmentId, saveAgreement, listUnderlingDict, listDeviceClass, listDevice, listMaterialsClass, listMaterials, deviceFeatureList, deviceFeatureValueList, listMaterialsFeature, listMaterialsFeatureValue,  avoidSubmitByMarket} from "@/api/procurement/contract";
 import { offerService, offerRepo } from "@/utils/const"
 import { cardid, isvalidatemobile, validatenull } from "@/utils/validate"
 import BackButton from "@/components/BackButton/index.vue"
@@ -1248,6 +1260,7 @@ export default {
   dicts: [ 'sys_yes_no', 'expenditureBusinessType'],
   data() {
     return {
+      isAvoidSubmit:false,
       id:null,
       contractType : 1,  // 1-物资采购类  2-物资租赁类  3-机械租赁类  4-专业分包类  5-劳务分包类  6-其它
       priceType:'',
@@ -1349,6 +1362,7 @@ export default {
     })
   },
   methods: {
+
     async loadAgreementAttachmentId() {
       const agreementId = this.id;
       if (agreementId) {
@@ -1435,6 +1449,16 @@ export default {
       }).catch(() => {
       })
     },
+    avoidSubmitForm(){
+      this.$confirm("确定免审提交?(合同金额小于5万才允许免审提交)", "提示", {
+        confirmButtonText: "确定",
+        cancelButtonText: "取消",
+        type: "warning",
+      }).then(() => {
+        this.isAvoidSubmit=true
+        this.submitForm();
+      });
+    },
     submitForm() {
       this.$refs.firstForm.validate((valid, obj) => {
         let isNull = validatenull(obj)
@@ -1511,6 +1535,11 @@ export default {
         saveAgreement(params).then(res => {
           if (res.success) {
             _this.$message.success('保存成功')
+            if(_this.isAvoidSubmit){
+                avoidSubmitByMarket(res?.data?.id).then((res) => {
+
+                })
+              }
             let param = Base64.encode(JSON.stringify({id:res?.data?.id,type:res?.data?.procurementPlanType,agreementName:this.firstForm.agreement.agreementName}));
             param = encodeURIComponent(param); //避免base64编码中出现"/"时路由404
             _this.$router.replace(`/procurement/contract-detail/${param}`);
@@ -1548,7 +1577,8 @@ export default {
       if (value === '' || value === undefined) {
         callback();
       }else if (!reg.test(value)) {
-        callback(new Error('请输入正确的值'))
+        // callback(new Error('请输入正确的值'))
+        callback(new Error("请输入正确的数值且小数点保留两位"));
       }else{
         callback()
       }
@@ -1887,6 +1917,8 @@ export default {
         const taxRatePercent = divide(ratioBig, 100);
         const paymentAmount = multiply(totalAmountIncTaxBig, taxRatePercent)
         this.$set(scope.row, 'paymentAmount', paymentAmount.toFixed(2))
+      } else {
+        this.$set(scope.row, 'paymentAmount', 0)
       }
     },
     changePaymentBasis(scope, value){
@@ -2030,6 +2062,7 @@ export default {
       handler(newVal){
         if(newVal){
           this.id= newVal
+          this.procurementTypeText=this.$route.query.procurementTypeText
           this.getAgreementDetail();
           this.intervalId = setInterval(this.loadAgreementAttachmentId, 3000);
         }
@@ -2170,8 +2203,8 @@ export default {
       };
     },
     durationComputed(){
-      return () => {
-        const { entryDate, finishDate } = this.firstForm.agreement
+      return (entryDate, finishDate) => {
+        //const { entryDate, finishDate } = this.firstForm.agreement
         // 定义开始日期和结束日期
         const startDate = new Date(entryDate);
         const endDate = new Date(finishDate);

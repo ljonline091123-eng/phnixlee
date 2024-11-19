@@ -1,6 +1,6 @@
 <template>
   <div class="app-container">
-    <BackButton path="/procurement/bindding" title="招标管理详情" />
+    <BackButton path="/procurement/bindding" :title="pageTitle" />
     <el-col :span="20" :xs="24" v-loading="loadingDetail">
       <TenderNotice v-if="currentState==='notice'" :scheme="scheme" @changeState="changeState" :noticeDetail="noticeDetail"></TenderNotice>
       <RegistrationDetails v-if="currentState==='registrationDetails'" :scheme="scheme" @changeState="changeState" :noticeDetail="noticeDetail"></RegistrationDetails>
@@ -34,6 +34,8 @@
         :tenantId="tenantId"
         :authorityId="authorityId"
         :rejectNodeList="rejectNodeList"
+        :nextCandidateList="nextCandidateList"
+        :nextAppointable="nextAppointable"
         :taskPresentId="taskPresentId"
         :isShowApprovalDetails="isShowApprovalDetails"
         :attachmentDetails="attachmentDetails"
@@ -56,7 +58,6 @@
         @changeState="changeState"
       />
     </el-col>
-
     <el-col :span="4" :xs="24" v-if="currentState">
       <div
         class="context"
@@ -99,8 +100,10 @@ import ResultBid from "./components/result-bid.vue";
 import BackButton from "@/components/BackButton/index.vue";
 import TenderNotice from "@/views/procurement/components/tender-notice.vue";
 import RegistrationDetails from "@/views/procurement/components/registration-details.vue";
+import ApprovalForm from "@/components/Approval/approvalForm.vue";
 export default {
   components: {
+    ApprovalForm,
     TenderDocuments,
     BackBid,
     EvaluateBid,
@@ -111,8 +114,11 @@ export default {
     TenderNotice,
     RegistrationDetails
   },
+  dicts: ["procurement_type"],
   data() {
     return {
+      // * 页面标题
+      pageTitle: '',
       noticeDetail: {},
       scheme: {},
       currentStep: 0,
@@ -154,6 +160,10 @@ export default {
       authorityId: "1",
       isShowButton: false,
       rejectNodeList: [],
+      /* 下一步审批人列表 */
+      nextCandidateList: [],
+      /* 下一步审批人 */
+      nextAppointable: false,
       taskPresentId: "1",
       isShowApprovalDetails: false,
       isDisabledDeposit: false,
@@ -165,6 +175,13 @@ export default {
       Base64.decode(decodeURIComponent(this.$route.params.params))
     );
     this.scheme = param;
+    this.getDicts("procurement_type").then(res => {
+      const procurementType = param.procurementType;
+      const findObj = res.data.find(item=>item.dictValue == procurementType);
+      this.pageTitle= findObj?`${findObj.dictLabel}管理详情`:'招标管理详情'
+    });
+
+
     // let status = param.noticeStatus || 0
     // let step = 0
     // if(status === 1){
@@ -205,6 +222,10 @@ export default {
           });
           this.isShowButton = response.data.auditable;
           this.rejectNodeList = response.data.completedTaskList;
+          /* 下一步审批人列表 */
+          this.nextCandidateList = res.data.nextCandidateList;
+          /* 下一步审批人是否可选 */
+          this.nextAppointable = res.data.nextAppointable;
           this.taskPresentId = response.data.curTaskId;
         }
         this.noticeDetail = res.data || {};

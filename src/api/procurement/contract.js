@@ -362,3 +362,70 @@ export const getMarketOrder = (data) => {
     data,
   });
 };
+/**
+ * 获取易料单据
+ * @param params
+ * @returns {*}
+ */
+export const listMarketMaterialContract = (params) => {
+  return request({
+    url: "/business/marketMaterialContract/listMarketMaterialContract",
+    method: "get",
+    params,
+  });
+};
+/**
+ *  获取创建合同的基本信息
+ * @param params
+ * @returns {*}
+ */
+export const getAgreementCreateInfoYl = (id) => {
+  return request({
+    url: "/business/marketMaterialContract/getAgreementCreateInfo",
+    method: "post",
+    data: {
+      id,
+    },
+  });
+};
+
+/**
+ *  获取创建合同的基本信息
+ * @param params
+ * @returns {*}
+ */
+export const agreementCreateAttachmentHandle = (data) => {
+  return request({
+    url: "/business/marketMaterialContract/agreementCreateAttachmentHandle ",
+    method: "post",
+    data,
+  });
+};
+/**
+ * 免审
+ * @param params
+ * @returns {*}
+ */
+export const avoidSubmitByMarket = (id) => {
+  return request({
+    url: "/business/agreement/avoidSubmitByMarket",
+    method: "get",
+    params: {
+      id,
+    },
+  });
+};
+/**
+ *  校验创建合同的基本信息
+ * @param params
+ * @returns {*}
+ */
+export const getCheckAgreementCreateInfo = (id) => {
+  return request({
+    url: "/business/marketMaterialContract/checkAgreementCreateInfo",
+    method: "post",
+    data: {
+      id,
+    },
+  });
+};

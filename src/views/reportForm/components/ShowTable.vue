@@ -197,6 +197,10 @@ export default {
       type: Boolean,
       default: false,
     },
+    radioType: {
+      type: String,
+      default: "1",
+    },
     // 导出
     exportFlag: {
       type: Boolean,
@@ -228,6 +232,13 @@ export default {
         },
         immediate: true
       },
+      "radioType": {
+      handler(val) {
+        console.log('radioType', val)
+        this.queryParams.conType=val
+        this.$emit("query", this.queryParams);
+           },
+        },
       'project.id': {
         handler(newVal){
           console.log('project.id-newVal', newVal)

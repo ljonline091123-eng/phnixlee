@@ -374,6 +374,11 @@
               prop="expertName"
             />
             <el-table-column
+              label="联系电话"
+              align="center"
+              prop="expert.expertPhone"
+            />
+            <el-table-column
               label="是否已评"
               align="center"
               prop="evalStatusText"
@@ -1375,10 +1380,10 @@ export default {
       leftSelection: [],
       rightSelection: [],
       debouncedLoadDeptOptions: null,
-      expertQuery: {
-        deptIds: [],
-      },
-      deptOptions: [],
+      // expertQuery: {
+      //   deptIds: [],
+      // },
+      // deptOptions: [],
     };
   },
   created() {
@@ -1548,7 +1553,7 @@ export default {
     async confirmOpenWorker() {
       const { staffIds } = this;
       if (staffIds.length < 2 || staffIds.length > 2)
-        return this.$message.error("请选择2名开标人员");
+        return this.$message.error("开标人员必须且只能选择2名");
       const { id: schemeId } = this.scheme;
       const { id: noticeId } = this.noticeDetail?.tenderNotice || {};
       let formData = this.selectedWorkerList.map((item) => ({
@@ -1945,6 +1950,8 @@ export default {
         this.expertIds = selectedMapList;
         this.availableExperts = []; // 清空选择列表
         this.$refs.expertRef.clearSelection(); // 清除表格选择状态
+        // 刷新列表数据
+        this.getExpertList()
       }
     },
     moveToAvailable() {
@@ -1956,6 +1963,8 @@ export default {
       this.selectedExperts = [];
       // 清除表格选择状态
       this.$refs.selectedRef.clearSelection();
+      // 刷新列表数据
+      this.getExpertList()
     },
     openRandomDialog() {
       this.randomDialogVisible = true;

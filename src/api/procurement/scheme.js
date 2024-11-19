@@ -102,6 +102,16 @@ export const cancellationProcurementScheme = (id) => {
   });
 };
 
+export const cancellationProcurementSchemePlan = (id) => {
+  return request({
+    url: "/business/procurementScheme/cancellationProcurementSchemePlan",
+    method: "post",
+    params: {
+      id,
+    },
+  });
+};
+
 // 判断采购计划是否可以合并提交
 export const checkProcurementSchemeSelect = (data) => {
   return request({

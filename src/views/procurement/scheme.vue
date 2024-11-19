@@ -323,6 +323,60 @@
         @pagination="getSchemeList"
       />
     </div>
+     <!-- 废标弹出 -->
+     <el-dialog
+     title="作废"
+     :visible.sync="bidVisiable"
+     width="40%"
+     @closed="closeDialog('abandonBidRef')"
+   >
+   <el-form
+        ref="vForm"
+        label-position="left"
+        label-width="80px"
+        size="small"
+        @submit.native.prevent
+      >
+        <el-row :gutter="20">
+          <el-col :span="20" class="grid-cell">
+            <el-form-item
+            :label="procurementSchemeNameDialog"
+            label-width="430px"
+            prop="contractName"
+            class="label-right-align"
+          >
+            </el-form-item>
+        </el-col>
+        </el-row>
+          <el-row :gutter="20">
+            <el-col :span="20" class="grid-cell">
+              <el-form-item
+              label="采购计划是作废"
+              label-width="430px"
+              prop="contractName"
+              class="label-right-align"
+            >
+            <el-checkbox v-model="checked"></el-checkbox>
+          </el-form-item>
+          </el-col>
+        </el-row>
+        </el-form>
+     <div slot="footer" class="dialog-footer">
+       <el-button
+         type="primary"
+         @click="confirmCancellationBid()"
+         style="width: 100px"
+         size="small"
+         >确 定</el-button
+       >
+       <el-button
+         @click="bidVisiable = false"
+         style="width: 100px"
+         size="small"
+         >取 消</el-button
+       >
+     </div>
+   </el-dialog>
   </div>
 </template>
 
@@ -332,7 +386,7 @@ import { mapGetters } from "vuex";
 import {
   getSchemeList,
   submitProcurementScheme,
-  cancellationProcurementScheme,
+  cancellationProcurementScheme,cancellationProcurementSchemePlan,
   checkProcurementSchemeSelect,
   withdrawalPlan,
 } from "@/api/procurement/scheme";
@@ -345,6 +399,9 @@ export default {
     return {
       planVisible: false,
       schemeList: [],
+      checked:false,
+      procurementSchemeNameDialog:'',
+      id:'',
       planList: [],
       // 遮罩层
       loading: false,
@@ -352,6 +409,7 @@ export default {
       showSearch: true,
       // 总条数
       total: 0,
+      bidVisiable:false,
       // 查询参数
       queryParams: {
         pageNumber: 1,
@@ -536,17 +594,36 @@ export default {
     },
     /** 作废 **/
     goCancellation(id, procurementSchemeName) {
-      this.$confirm("确定要作废采购方案：" + procurementSchemeName, "提示", {
-        confirmButtonText: "确定",
-        cancelButtonText: "取消",
-        type: "warning",
-      }).then(async () => {
-        try {
-          await cancellationProcurementScheme(id);
-          this.$message.success("作废成功");
-          this.getSchemeList();
-        } catch (error) {}
-      });
+      this.id=id
+      this.procurementSchemeNameDialog='确定要作废采购方案：'+procurementSchemeName
+      this.bidVisiable=true
+      // this.$confirm("确定要作废采购方案：" + procurementSchemeName, "提示", {
+      //   confirmButtonText: "确定",
+      //   cancelButtonText: "取消",
+      //   type: "warning",
+      // }).then(async () => {
+      //   try {
+      //     await cancellationProcurementScheme(id);
+      //     this.$message.success("作废成功");
+      //     this.getSchemeList();
+      //   } catch (error) {}
+      // });
+    },
+
+   async confirmCancellationBid(){
+    console.log(this.checked)
+       const res=null
+        if(this.checked){
+          res=await cancellationProcurementSchemePlan(this.id);
+        }else{
+          res = await cancellationProcurementScheme(this.id);
+        }
+        if(res.code==200){
+           this.getSchemeList();
+           this.$message.success("作废成功");
+        }
+         
+          this.bidVisiable=false
     },
     //切换tab类型
     handleTypeClick(tab) {

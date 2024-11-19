@@ -175,6 +175,31 @@
           :src="authorizationUrl"
         ></el-image>
       </el-dialog>
+      <!-- 展示PDF -->
+      <el-dialog
+        :show-close="true"
+        :visible.sync="authorizationPdfVisible"
+        title="授权书"
+        modal
+        center
+        :append-to-body="false"
+        destroy-on-close
+      >
+        <!-- 直接用iframe嵌套pdf预览模式 "#toolbar=0"是为了隐藏pdf的按钮  -->
+        <div class="dialogtext">
+          <iframe width="800"  height="1200"   :src="this.authorizationPdfUrl + '#toolbar=0'" />
+        </div>
+      </el-dialog>
+      <el-dialog
+        title="授权书"
+        :visible.sync="authorizationVisible"
+        width="30%"
+      >
+        <el-image
+          style="width: 500px; height: 500px; margin: 0px auto"
+          :src="authorizationUrl"
+        ></el-image>
+      </el-dialog>
     </div>
 
     <!-- 审批和审批详情 -->
@@ -183,6 +208,8 @@
       :title="'新增联系人审批流程'"
       :formModel="sanctionForm"
       :rejectNodeList="rejectNodeList"
+      :nextCandidateList="nextCandidateList"
+      :nextAppointable="nextAppointable"
       @update:visible="vendorVisible = $event"
       @submit="handleSubmit"
     />
@@ -246,12 +273,18 @@ export default {
         operateComment: "",
       },
       rejectNodeList: [],
+      /* 下一步审批人列表 */
+      nextCandidateList: [],
+      /* 下一步审批人 */
+      nextAppointable: false,
       taskPresentId: "",
       contactList: [],
       total: 0,
       loading: false,
       authorizationVisible: false,
       authorizationUrl: "",
+      authorizationPdfVisible: false,
+      authorizationPdfUrl: "",
     };
   },
   created() {},
@@ -265,6 +298,9 @@ export default {
     this.getVendorContactList();
   },
   methods: {
+    ifPdf(url){
+      return url.toLowerCase().endsWith(".pdf")
+    },
     async handelCalibrationApproval(row) {
       this.businessId = row.id;
       this.processId = row.wfProcessId;
@@ -359,6 +395,10 @@ export default {
             processId: row.wfProcessId, //流程id
           });
           this.rejectNodeList = res.data.completedTaskList;
+          /* 下一步审批人列表 */
+          this.nextCandidateList = res.data.nextCandidateList;
+          /* 下一步审批人是否可选 */
+          this.nextAppointable = res.data.nextAppointable;
           this.taskPresentId = res.data.curTaskId;
           // this.isShowButton = res.data.auditable;
         }
@@ -391,8 +431,13 @@ export default {
       try {
         const res = await getAuthorization(id);
         if (res.data?.fileUrl) {
-          this.authorizationUrl = res.data.fileUrl;
-          this.authorizationVisible = true;
+          if(this.ifPdf(res.data.fileUrl)){
+            this.authorizationPdfUrl = res.data.fileUrl;
+            this.authorizationPdfVisible = true;
+          } else {
+            this.authorizationUrl = res.data.fileUrl;
+            this.authorizationVisible = true;
+          }
         }
       } catch (err) {
         console.log(err);

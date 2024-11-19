@@ -306,7 +306,7 @@ export default {
         { label: "注册待审", value: "10" },
         { label: "修改信息待审", value: "2" },
         { label: "修改等级", value: "9" },
-        { label: "移入移出署名单待审", value: "3" },
+        { label: "移入移出黑名单待审", value: "3" },
       ],
       contractList: [],
       // 显示搜索条件

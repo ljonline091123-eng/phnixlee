@@ -3,8 +3,9 @@
     <BackButton path="/procurement/sign-contract" title="新增合同信息">
       <div>
         <el-button type="primary" size="mini" @click="submitForm"
-          >保存</el-button
-        >
+          >保存</el-button>
+          <el-button type="primary" v-if="typeContract=='add' && parseInt(firstForm.agreementPaymentItem.totalAmountIncTax)<50000"  size="mini" @click="avoidSubmitForm"
+          >免审提交</el-button>
       </div>
     </BackButton>
     <div class="context">
@@ -20,7 +21,7 @@
               <el-col :span="8">
                 <el-form-item label="归属本级组织：" prop="agreement.belongOrganizationName"
                   :rules="[{ required: true, trigger: 'blur', message: '请输入归属本级组织' }]">
-                  <el-input disabled v-model="firstForm.agreement.belongOrganizationName" placeholder="请输入归属本级组织"
+                  <el-input disabled  v-model="firstForm.agreement.belongOrganizationName" placeholder="请输入归属本级组织"
                     clearable />
                 </el-form-item>
               </el-col>
@@ -44,9 +45,10 @@
               <el-col :span="8">
                 <el-form-item label="合同名称：" prop="agreement.agreementName"
                   :rules="[{ required: true, trigger: 'blur', message: '请输入合同名称' }]">
-                  <el-input disabled v-model="firstForm.agreement.agreementName" placeholder="请输入合同名称" clearable/>
+                  <el-input  v-model="firstForm.agreement.agreementName" placeholder="请输入合同名称" clearable/>
                 </el-form-item>
               </el-col>
+
               <el-col :span="8">
                 <el-form-item label="合同编码：" prop="agreement.agreementCode" disabled>
                   <el-input disabled v-model="firstForm.agreement.agreementCode" placeholder="系统自动生成" clearable />
@@ -115,19 +117,19 @@
               <el-col :span="8">
                 <el-form-item label="乙方法人代表：" prop="agreement.partyBLegalName"
                   :rules="[{ required: true, trigger: 'blur', message: '请输入乙方法人代表' }]">
-                  <el-input disabled v-model="firstForm.agreement.partyBLegalName" placeholder="请输入乙方法人代表" clearable />
+                  <el-input  disabled v-model="firstForm.agreement.partyBLegalName" placeholder="请输入乙方法人代表" clearable />
                 </el-form-item>
               </el-col>
               <el-col :span="8">
                 <el-form-item label="身份证：" prop="agreement.partyBLegalIdCard"
                   :rules="[{ required: true, trigger: 'blur', message: '请输入身份证' },{validator: isCardId, trigger: 'blur'}]">
-                  <el-input v-model="firstForm.agreement.partyBLegalIdCard" placeholder="请输入身份证" clearable />
+                  <el-input :disabled="typeContract=='add'?true:false" v-model="firstForm.agreement.partyBLegalIdCard" placeholder="请输入身份证" clearable />
                 </el-form-item>
               </el-col>
               <el-col :span="8">
                 <el-form-item label="联系方式：" prop="agreement.partyBLegalPhone"
                   :rules="[{ required: true, trigger: 'blur', message: '请输入联系方式' },{validator: isMobile, trigger: 'blur'}]">
-                  <el-input v-model="firstForm.agreement.partyBLegalPhone" placeholder="请输入联系方式" clearable />
+                  <el-input :disabled="typeContract=='add'?true:false" v-model="firstForm.agreement.partyBLegalPhone" placeholder="请输入联系方式" clearable />
                 </el-form-item>
               </el-col>
             </el-row>
@@ -136,20 +138,20 @@
               <el-col :span="8">
                 <el-form-item label="乙方现场实际履职负责人：" prop="agreement.partyBResponsibleName"
                   :rules="[{ required: true, trigger: 'blur', message: '请输入乙方现场实际履职负责人' }]">
-                  <el-input v-model="firstForm.agreement.partyBResponsibleName" placeholder="请输入乙方现场实际履职负责人"
+                  <el-input :disabled="typeContract=='add'?true:false" v-model="firstForm.agreement.partyBResponsibleName" placeholder="请输入乙方现场实际履职负责人"
                     clearable />
                 </el-form-item>
               </el-col>
               <el-col :span="8">
                 <el-form-item label="身份证：" prop="agreement.partyBResponsibleIdCard"
                   :rules="[{ required: true, trigger: 'blur', message: '请输入身份证' },{validator: isCardId, trigger: 'blur'}]">
-                  <el-input v-model="firstForm.agreement.partyBResponsibleIdCard" placeholder="请输入身份证" clearable />
+                  <el-input :disabled="typeContract=='add'?true:false" v-model="firstForm.agreement.partyBResponsibleIdCard" placeholder="请输入身份证" clearable />
                 </el-form-item>
               </el-col>
               <el-col :span="8">
                 <el-form-item label="联系方式：" prop="agreement.partyBResponsiblePhone"
                   :rules="[{ required: true, trigger: 'blur', message: '请输入联系方式' },{validator: isMobile, trigger: 'blur'}]">
-                  <el-input v-model="firstForm.agreement.partyBResponsiblePhone" placeholder="请输入联系方式" clearable />
+                  <el-input :disabled="typeContract=='add'?true:false" v-model="firstForm.agreement.partyBResponsiblePhone" placeholder="请输入联系方式" clearable />
                 </el-form-item>
               </el-col>
             </el-row>
@@ -238,6 +240,23 @@
                   :rules="[{ required: true, trigger: 'blur', message: '请输入行政区划代码(履行地)' }]">
                   <el-input disabled v-model="firstForm.agreement.agreementPerformDistrict" placeholder="请输入行政区划代码(履行地)"
                     clearable />
+                </el-form-item>
+              </el-col>
+            </el-row>
+            <el-row v-if="typeContract=='add'" :gutter="10">
+              <el-col :span="8" class="grid-cell">
+                <el-form-item label=" 合同模板："  :rules="[{ required: true, trigger: 'blur', message: '请选择模板' }]"  prop="agreement.contractTemplateName">
+                  <!-- <template v-if="formData.contractTemplateName">
+                    <a href="javascript:;" @click="getBcTemplateList(1)">{{
+                      formData.contractTemplateName
+                    }}</a>
+                  </template> -->
+                  <el-button
+                    size="small"
+                    type="primary"
+                    @click="getBcTemplateList(1)"
+                    >{{firstForm.agreement.contractTemplateName?firstForm.agreement.contractTemplateName:'选择模板'}}</el-button
+                  >
                 </el-form-item>
               </el-col>
             </el-row>
@@ -475,7 +494,48 @@
           <commonTitle>合同清单</commonTitle>
           <!-- 物资采购类 -->
           <div style="margin-bottom: 24px" v-if="contractType == 1">
-            <el-table :data="firstForm.agreementMaterialsLists" style="width: 100%">
+            <el-table v-if="firstForm.agreement.agreementNameYl" :data="firstForm.agreementMaterialsLists" style="width: 100%">
+              <el-table-column prop="materialsCode" label="物资编码" width="150" show-overflow-tooltip/>
+              <el-table-column prop="materialsName" label="物资名称" width="150" show-overflow-tooltip/>
+              <el-table-column prop="subjectMatterName" label="交易标的物" width="150" show-overflow-tooltip/>
+              <el-table-column prop="specification" label="规格型号" width="150" show-overflow-tooltip/>
+              <el-table-column prop="unitMeasurement" label="计量单位" width="100"/>
+              <el-table-column prop="brand" label="品牌" align="center" width="180" show-overflow-tooltip>
+                <template slot-scope="scope">
+                  <el-form-item label-width="0" :prop="'agreementMaterialsLists.' + scope.$index + '.brand'">
+                    <el-input v-model="scope.row.brand" type="textarea" :autosize="{maxRows: 2}" clearable />
+                  </el-form-item>
+                </template>
+              </el-table-column>
+              <el-table-column prop="costAccount" label="成本科目" width="150" show-overflow-tooltip/>
+              <el-table-column prop="paymentTypeText" label="价款类型" align="center" width="120"/>
+              <el-table-column prop="countText" label="数量" width="120" align="right"/>
+              <el-table-column prop="signTaxRate" label="本次签定税率(%)" align="right" width="150"/>
+              <el-table-column prop="signCountText" label="本次签订量" width="120" align="right"/>
+              <el-table-column prop="signUnitPriceInclTax" label="本次签订含税单价(元)"  width="120" align="right"/>
+              <el-table-column prop="signUnitPriceExclTax" label="本次签订不含税单价(元)" width="120" align="right"/>
+              <el-table-column prop="taxPriceText" label="本次签订含税总价(元)"  width="120" align="right"/>
+              <el-table-column prop="notTaxPriceText" label="本次签订不含税总价(元)"  width="120" align="right"/>
+              <el-table-column prop="taxAmountText" label="本次签订税额" width="180" align="right"/>
+              <el-table-column prop="notTaxUnitPrice" label="不含税单价(元)" width="160" align="right"/>
+              <el-table-column prop="taxUnitPrice" label="含税单价(元)" width="150" align="right"/>
+              <el-table-column prop="taxRateText" label="税率(%)" width="100" align="right"/>
+              <el-table-column prop="taxAmountText" label="税额" width="150" align="right"/>
+              <el-table-column prop="remark" align="center" width="180" label="备注">
+                <template slot-scope="scope">
+                  <el-form-item :prop="'agreementMaterialsLists.' + scope.$index + '.remark'" label-width="0">
+                    <el-input v-model="scope.row.remark" type="textarea" :autosize="{maxRows: 2}" clearable />
+                  </el-form-item>
+                </template>
+              </el-table-column>
+              <el-table-column prop="skuId" align="center" width="180" label="易料商品编码"/>
+                <el-table-column prop="goodsName" align="center" width="180" label="易料商品名称"/>
+                  <el-table-column prop="offerBrand" align="center" width="180" label="易料品牌"/>
+                  <el-table-column  prop="offerPrice" align="center" width="180" label="易料初始报价"/>
+                  <el-table-column width="1"/>
+
+            </el-table>
+            <el-table v-else  :data="firstForm.agreementMaterialsLists" style="width: 100%">
               <el-table-column prop="materialsCode" label="物资编码" width="150" show-overflow-tooltip/>
               <el-table-column prop="materialsName" label="物资名称" width="150" show-overflow-tooltip/>
               <el-table-column prop="subjectMatterName" label="交易标的物" width="150" show-overflow-tooltip/>
@@ -1144,24 +1204,273 @@
         >
       </div>
     </el-dialog>
+     <!-- 选择招标文件模板 -->
+     <el-dialog
+     :title="bcTemplateTitle"
+     class="dialogClass"
+     :visible.sync="bcTemplateVisable"
+     width="60%"
+   >
+     <el-tabs v-model="activeTab" @tab-click="handleTabClick">
+       <el-tab-pane label="通用模板" name="generalTemplate">
+         <el-form
+           @submit.native.prevent
+           :model="bcTemplateQuery"
+           ref="queryForm"
+           :inline="true"
+         >
+           <el-form-item
+             label="模板名称"
+             prop="templateName"
+             label-width="100px"
+           >
+             <el-input
+               v-model="bcTemplateQuery.templateName"
+               placeholder="请输入模板名称"
+             />
+           </el-form-item>
+           <el-form-item
+             v-if="!isScoreMOdel"
+             label="合同类型："
+             prop="contractType"
+           >
+             <el-select
+               style="width: 100%"
+               v-model="bcTemplateQuery.contractType"
+               placeholder="请选择"
+             >
+               <el-option
+                 v-for="dict in contractTypeList"
+                 :key="dict.value"
+                 :label="dict.label"
+                 :value="dict.value"
+               />
+             </el-select>
+           </el-form-item>
+           <el-form-item>
+             <el-button
+               type="primary"
+               icon="el-icon-search"
+               size="small"
+               @click="handleQuery"
+               >查询</el-button
+             >
+           </el-form-item>
+         </el-form>
+         <el-table
+           v-loading="bcTemplateVisableLoading"
+           :data="generalTemplateList"
+           @row-click="selectBcTemplate"
+           size="small"
+           border
+           stripe
+         >
+           <el-table-column label="" width="30" align="center">
+             <template slot-scope="scope">
+               <el-radio
+                 class="table_radio"
+                 v-model="templateId"
+                 :label="scope.row.id"
+               />
+             </template>
+           </el-table-column>
+           <el-table-column
+             label="序号"
+             type="index"
+             width="50"
+             align="center"
+           />
+           <el-table-column
+             label="模板名称"
+             prop="templateName"
+             width="200"
+           />
+           <el-table-column label="维护人" align="center" prop="createBy" />
+           <el-table-column
+             label="创建日期"
+             align="center"
+             prop="createTime"
+           />
+           <el-table-column label="使用单位" prop="usingUnitName" />
+           <el-table-column
+             v-if="!isScoreMOdel"
+             label="合同类型"
+             prop="contractName"
+           />
+         </el-table>
+         <pagination
+           v-show="generalTemplateTotal > 0"
+           :total="generalTemplateTotal"
+           :page.sync="bcTemplateQuery.pageNumber"
+           :limit.sync="bcTemplateQuery.pageSize"
+           @pagination="getGeneralTemplateList"
+         />
+       </el-tab-pane>
+
+       <el-tab-pane label="复用模板" name="reusableTemplate">
+         <el-form :model="bcTemplateQuery" ref="queryForm" :inline="true">
+           <el-form-item
+             label="模板名称"
+             prop="templateName"
+             label-width="100px"
+           >
+             <el-input
+               v-model="bcTemplateQuery.templateName"
+               placeholder="请输入模板名称"
+             />
+           </el-form-item>
+           <el-form-item
+             v-if="!isScoreMOdel"
+             label="合同类型："
+             prop="contractType"
+           >
+             <el-select
+               style="width: 100%"
+               v-model="bcTemplateQuery.contractType"
+               placeholder="请选择"
+             >
+               <el-option
+                 v-for="dict in contractTypeList"
+                 :key="dict.value"
+                 :label="dict.label"
+                 :value="dict.value"
+               />
+             </el-select>
+           </el-form-item>
+           <el-form-item>
+             <el-button
+               type="primary"
+               icon="el-icon-search"
+               size="small"
+               @click="handleQueryReusable"
+               >查询</el-button
+             >
+           </el-form-item>
+         </el-form>
+         <el-table
+           v-loading="bcTemplateVisableLoading"
+           :data="reusableTemplateList"
+           @row-click="selectBcTemplate"
+           size="small"
+           border
+           stripe
+         >
+           <el-table-column label="" width="30" align="center">
+             <template slot-scope="scope">
+               <el-radio
+                 class="table_radio"
+                 v-model="templateId"
+                 :label="scope.row.id"
+               />
+             </template>
+           </el-table-column>
+           <el-table-column
+             label="序号"
+             type="index"
+             width="50"
+             align="center"
+           />
+           <el-table-column
+             label="模板名称"
+             prop="templateName"
+             width="200"
+           />
+           <el-table-column label="维护人" align="center" prop="createBy" />
+           <el-table-column
+             label="创建日期"
+             align="center"
+             prop="createTime"
+           />
+           <el-table-column label="使用单位" prop="usingUnitName" />
+           <el-table-column
+             v-if="!isScoreMOdel"
+             label="合同类型"
+             prop="contractName"
+           />
+         </el-table>
+         <pagination
+           v-show="reusableTemplateTotal > 0"
+           :total="reusableTemplateTotal"
+           :page.sync="bcTemplateQuery.pageNumber"
+           :limit.sync="bcTemplateQuery.pageSize"
+           @pagination="getReusableTemplateList"
+         />
+       </el-tab-pane>
+     </el-tabs>
+
+     <div slot="footer" class="dialog-footer">
+       <el-button
+         @click="bcTemplateVisable = false"
+         style="width: 100px"
+         size="small"
+         >取 消</el-button
+       >
+       <el-button
+         type="primary"
+         @click="confirmBcTemplate"
+         style="width: 100px"
+         size="small"
+         >确 定</el-button
+       >
+     </div>
+   </el-dialog>
   </div>
 </template>
 <script>
 import { Base64 } from "js-base64";
 import { create, all } from "mathjs";
 import commonTitle from "@/views/procurement/components/common-title.vue";
-import { getAgreementCreateInfo, saveAgreement, listUnderlingDict, listDeviceClass, listDevice, listMaterialsClass, listMaterials, deviceFeatureList, deviceFeatureValueList, listMaterialsFeature, listMaterialsFeatureValue } from "@/api/procurement/contract";
+import { getAgreementCreateInfo, saveAgreement, listUnderlingDict, listDeviceClass, listDevice, listMaterialsClass, listMaterials, deviceFeatureList, deviceFeatureValueList, listMaterialsFeature, listMaterialsFeatureValue, getAgreementCreateInfoYl,agreementCreateAttachmentHandle,avoidSubmitByMarket } from "@/api/procurement/contract";
 import { offerService, offerRepo } from "@/utils/const"
 import { cardid, isvalidatemobile, validatenull } from "@/utils/validate"
 import BackButton from "@/components/BackButton/index.vue"
 import FileModule from '@/components/FileModule/index.vue'
 import Drag from '@/components/Drag/index.vue'
+import { getContractTypeList } from "@/api/template/file";
+import {
+  getTemplateSwitchList,
+} from "@/api/procurement/scheme";
+import { getSwitchPageList } from "@/api/procurement/manage";
+import {showSecretRelatedTips} from "@/utils/MyUtils";
 export default {
   name: "add-contract",
   components: { commonTitle, BackButton, FileModule, Drag },
   dicts: ["sys_yes_no", "expenditureBusinessType"],
   data() {
     return {
+      //模板
+      isAvoidSubmit:false,
+      bcTemplateTitle: "",
+      bcTemplateVisableLoading: false,
+      generalTemplateLoading: false,
+      bcTemplateVisable: false,
+      activeTab: "generalTemplate",
+      currentTab: "generalScoreTemplate",
+      selectedTemplateId: "",
+      isScoreMOdel: false,
+      contractTypeList: [],
+      generalTemplateList:[],
+      reusableTemplateList:[],
+      generalTemplateTotal: 0,
+      reusableTemplateTotal: 0,
+      templateId: null,
+      templateRow:{},
+      templateQuery: {
+        pageNumber: 1,
+        pageSize: 10,
+        state: 1,
+        switchTemplateType: 1,
+      },
+      bcTemplateQuery: {
+        pageNumber: 1,
+        pageSize: 10,
+        state: 1,
+        templateType: "",
+        templateName: "",
+        switchTemplateType: "",
+        contractType: "",
+      },
+      typeContract:'',
       contractType: 1, // 1-物资采购类  2-物资租赁类  3-机械租赁类  4-专业分包类  5-劳务分包类  6-其它
       priceType: "",
       subjectMatter: "",
@@ -1169,11 +1478,13 @@ export default {
       options1: [],
       firstForm: {
         agreement: {
-          paymentWay:[]
+          paymentWay:[],
+          agreementName:'',
         }, // 合同基本信息
         agreementPaymentItem: {}, // 合同款项信息
         agreementPaymentLists: [], // 结算与付款节点信息
         agreementMaterialsLists: [], // 合同清单
+        agreementMaterialsListsYl:[],// 物料合同清单
         agreementDeposits: [], // 合同保证金
         agreementDailyWageList: [], // 合同-计日工对象
         agreementMachineShifts: [], // 合同-机械台班对象
@@ -1264,6 +1575,186 @@ export default {
     });
   },
   methods: {
+    selectBcTemplate(row) {
+      this.templateId = row.templateId;
+      this.templateRow=row
+      // this.attachmentId = row.attachmentId;
+      console.log(row, "rrr");
+    },
+    async getContractModelList() {
+      // 获取通用模板列表数据
+      this.bcTemplateVisableLoading = true;
+      // API 调用获取数据
+      this.bcTemplateQuery.switchTemplateType = "1";
+      this.bcTemplateQuery.templateType = "1";
+      const res = await getSwitchPageList(this.bcTemplateQuery);
+      this.generalTemplateList = res.data.rows;
+      this.bcTemplateVisableLoading = false;
+    },
+    async getGeneralTemplateList() {
+      // 获取通用模板列表数据
+      this.bcTemplateVisableLoading = true;
+      // API 调用获取数据
+      this.bcTemplateQuery.switchTemplateType = "1";
+      const res = await getSwitchPageList(this.bcTemplateQuery);
+      this.generalTemplateList = res.data.rows;
+      this.bcTemplateVisableLoading = false;
+    },
+    async confirmBcTemplate() {
+      const templateId = this.templateId;
+      if (!templateId) {
+        this.$message.error("请先选择一个模板");
+        return;
+      }
+      this.firstForm.agreement.contractTemplateName=this.templateRow.templateName
+      // this.attachmentId = templateId
+      // this.firstForm.agreement.attachmentId = templateId;
+      // this.attachmentId = this.templateRow.attachmentId;
+      //   this.firstForm.agreement.attachmentId = this.templateRow.attachmentId;
+      //   console.log(this.templateId+"firstForm.agreement.attachmentId ")
+      agreementCreateAttachmentHandle(this.templateRow).then((res) => {
+        this.attachmentId = res
+        this.firstForm.agreement.attachmentId = res;
+        console.log(this.templateId+"firstForm.agreement.attachmentId "+JSON.stringify(this.attachmentId))
+      })
+      // const templateName = this.bcTemplateList.find(
+      //   (item) => item.id === templateId
+      // ).templateName;
+
+      // if (this.bcTemplatetType === 2) {
+      //   this.$set(this.formData, "biddingTemplateName", templateName);
+      //   this.$set(this.formData, "biddingTemplateId", templateId);
+      //   this.$refs.form.clearValidate("biddingTemplateName");
+
+      //   // 加载文件框
+      //   let fileName = this.bcTemplateList.find(
+      //     (item) => item.id === templateId
+      //   ).fileName;
+      //   const fileUrl = this.bcTemplateList.find(
+      //     (item) => item.id === templateId
+      //   ).fileUrl;
+      //   try {
+      //     const res = await addAttachment({
+      //       fileName: fileName,
+      //       fileUrl: fileUrl,
+      //     });
+      //     this.$set(this.formData, "biddingAttachmentId", res.data);
+      //     // this.viewAttachmentId = res.data;
+      //     this.attachmentId = res.data;
+      //     console.log("attachmentId"+this.attachmentId)
+      //   } catch (err) {
+      //     console.log(err);
+      //   }
+      // } else {
+      //   this.$set(this.formData, "contractTemplateName", templateName);
+      //   this.$set(this.formData, "contractTemplateId", templateId);
+
+      //   this.$refs.form.clearValidate("contractTemplateName");
+      // }
+
+      this.bcTemplateVisable = false;
+    },
+    async getReusableTemplateList() {
+      // 获取复用模板列表数据
+      this.bcTemplateVisableLoading = true;
+      // API 调用获取数据
+      this.bcTemplateQuery.switchTemplateType = "2";
+      const res = await getSwitchPageList(this.bcTemplateQuery);
+      this.reusableTemplateList = res.data.rows;
+      this.bcTemplateVisableLoading = false;
+    },
+      /** 搜索按钮操作 */
+    handleQuery() {
+      this.bcTemplateQuery.pageNum = 1;
+      this.getGeneralTemplateList();
+    },
+    handleQueryReusable() {
+      this.bcTemplateQuery.pageNum = 1;
+      this.getReusableTemplateList();
+    },
+    getContractTypeList() {
+      getContractTypeList().then((res) => {
+        this.contractTypeList = res.data;
+      });
+    },
+    handleTabClick(tab) {
+      // 处理标签页点击事件，根据标签页切换表格数据
+      this.activeTab = tab.name;
+
+      if (tab.name === "generalTemplate") {
+        this.getGeneralTemplateList();
+      } else if (tab.name === "reusableTemplate") {
+        this.getReusableTemplateList();
+      }
+    },
+    onTabClick(tab) {
+      if (tab.name === "generalScoreTemplate") {
+        this.getGeneralScoreTemplateList();
+      } else if (tab.name === "reusableScoreTemplate") {
+        this.getReusableScoreTemplateList();
+      }
+    },
+    searchGeneralTemplates() {
+      this.templateQuery.pageNum = 1;
+      this.getGeneralScoreTemplateList();
+    },
+    searchReusableTemplates() {
+      this.templateQuery.pageNum = 1;
+      this.getReusableScoreTemplateList();
+    },
+    async getGeneralScoreTemplateList() {
+      // 获取通用模板列表数据
+      this.generalTemplateLoading = true;
+      // API 调用获取数据
+      this.templateQuery.switchTemplateType = "1";
+      const res = await getTemplateSwitchList(this.templateQuery);
+      this.generalScoreTemplateList = res.data.rows;
+      this.generalTemplateLoading = false;
+    },
+    async getReusableScoreTemplateList() {
+      // 获取通用模板列表数据
+      this.generalTemplateLoading = true;
+      // API 调用获取数据
+      this.templateQuery.switchTemplateType = "2";
+      const res = await getTemplateSwitchList(this.templateQuery);
+      this.generalReuScoreTemplateList = res.data.rows;
+      this.generalTemplateLoading = false;
+    },
+    searchReusableTemplates() {
+      this.templateQuery.pageNum = 1;
+      this.getReusableScoreTemplateList();
+    },
+    onTemplateSelect(row) {
+      this.selectedTemplateId = row.id;
+      //  this.attachmentId = row.attachmentId;
+    },
+    async getBcTemplateList(type) {
+      showSecretRelatedTips(async()=>{
+        this.bcTemplateTitle = type === 2 ? "选择招标文件模板" : "选择合同模板";
+        this.isScoreMOdel = type === 2;
+        this.activeTab = "generalTemplate";
+        this.bcTemplateVisable = true;
+        this.bcTemplatetType = type;
+        this.bcTemplateQuery.templateType = type;
+        this.bcTemplateQuery.contractType = "";
+        // 根据模板类型调用相应的方法
+        if (type === 2) {
+          this.getGeneralTemplateList();
+        } else {
+          this.getContractModelList();
+        }
+        // 设置 switchTemplateType 和 templateType
+        this.bcTemplateQuery.switchTemplateType = "1";
+        this.bcTemplateQuery.templateType = type === 2 ? "2" : "1";
+
+        // 获取模板列表
+        const res = await getSwitchPageList(this.bcTemplateQuery);
+        this.bcTemplateList = res.data.rows;
+      })
+
+    },
+
+
     visaAdd(type) {
       if (type == 1) {
         this.firstForm.agreementDailyWageList.push({
@@ -1305,6 +1796,19 @@ export default {
         })
         .catch(() => {});
     },
+    avoidSubmitForm(){
+
+      // if(parseInt(this.firstForm.agreementPaymentItem.totalAmountIncTax)>50000) return this.$message({type:'error',message:"合同金额小于5万才允许免审提交"});
+      this.$confirm("确定免审提交?(合同金额小于5万才允许免审提交)", "提示", {
+        confirmButtonText: "确定",
+        cancelButtonText: "取消",
+        type: "warning",
+      }).then(() => {
+        this.isAvoidSubmit=true
+        this.submitForm();
+      });
+    },
+
     submitForm() {
       this.$refs.firstForm.validate((valid, obj) => {
         let isNull = validatenull(obj);
@@ -1389,12 +1893,19 @@ export default {
         this.firstForm.templateEditFlag = this.templateEditFlag;
         let formData = JSON.parse(JSON.stringify(this.firstForm));
         formData.agreement.paymentWay = this.firstForm.agreement.paymentWay?.join(",") || '';
+        formData.agreement.marketMaterialContractId=this.firstForm.agreement.marketMaterialContractId
         let params = JSON.parse(JSON.stringify(formData));
         console.log("提交数据===>", params);
         saveAgreement(params)
           .then((res) => {
             if (res.success) {
               _this.$message.success("保存成功");
+              if(_this.isAvoidSubmit){
+                // this.$route.query.id
+                avoidSubmitByMarket(res?.data?.id).then((res) => {
+
+                })
+              }
               let param = Base64.encode(
                 JSON.stringify({
                   id: res?.data?.id,
@@ -1437,7 +1948,8 @@ export default {
       if (value === "" || value === undefined) {
         callback();
       } else if (!reg.test(value)) {
-        callback(new Error("请输入正确的值"));
+        // callback(new Error("请输入正确的值"));
+        callback(new Error("请输入正确的数值且小数点保留两位"));
       } else {
         callback();
       }
@@ -1780,6 +2292,8 @@ export default {
         const taxRatePercent = divide(ratioBig, 100);
         const paymentAmount = multiply(totalAmountIncTaxBig, taxRatePercent)
         this.$set(scope.row, 'paymentAmount', paymentAmount.toFixed(2))
+      } else {
+        this.$set(scope.row, 'paymentAmount', 0)
       }
     },
     changePaymentBasis(scope, value){
@@ -1825,6 +2339,70 @@ export default {
     deviceName(val) {
       this.$refs.tree.filter(val);
     },
+    "$route.query.id": {
+      handler(newVal) {
+        if (newVal && this.$route.query.type=='add') {
+          getAgreementCreateInfoYl(newVal).then((res) => {
+            this.getContractTypeList();
+           // * 此3个字段是必传字段
+           this.firstForm.agreement.schemeId = res.data.schemeId;
+            this.firstForm.agreement.contractSplitId = res.data.splitId;
+            this.firstForm.agreement.vendorId = res.data.vendorId;
+            this.firstForm.agreement.partyAOrgId = res.data.partyAOrgId;
+            this.firstForm.agreement.agreementName =this.$route.query.agreementName;
+              this.firstForm.agreement.marketMaterialContractId = res.data.marketMaterialContractId
+            this.agreementFileUrl = res.data.agreementFileUrl;
+            this.typeContract= this.$route.query.type;
+            this.agreementFileName = res.data.agreementFileName;
+            this.firstForm.agreement.agreementNameYl =
+              this.$route.query.agreementName;
+
+            this.totalAmountIncTax = res.data.totalAmountIncTax;
+
+            // 合同类型
+            this.contractType = 1;
+            (this.priceType = res.data.priceType);
+            console.log("合同类型===>", this.contractType);
+
+            // * 以下字段是需要展示的字段
+            const agreementNeedShowList = [
+              "agreementPerformAddress",
+              "agreementPerformCountry",
+              "agreementPerformDistrict",
+              "belongAccountingItem",
+              "belongAccountingItemCode",
+              "belongOrganizationName",
+              "belongOrganizationId",
+              "partyAName",
+              "partyBLegalIdCard",
+              "partyBLegalName",
+              "partyBLegalPhone",
+              "partyBName",
+              "subjectMatterName",
+              "expenditureBusinessType","partyBResponsibleIdCard","partyBResponsibleName","partyBResponsiblePhone"
+            ];
+            agreementNeedShowList.forEach((item) => {
+              this.$set(this.firstForm.agreement, item, res?.data[item]);
+            });
+            const agreementPaymentItemShowList = [
+              "totalAmountIncTaxText","totalAmountIncTax",
+              "totalAmountExcTaxText",
+            ];
+            agreementPaymentItemShowList.forEach((item) => {
+              this.$set(
+                this.firstForm.agreementPaymentItem,
+                item,
+                res?.data[item]
+              );
+            });
+            this.firstForm.agreementMaterialsLists = JSON.parse(
+              JSON.stringify(res?.data["biddingListQuotation"])
+            );
+          });
+        }
+      },
+       immediate: true,
+    },
     "$route.query.schemeId": {
       handler(newVal) {
         if (newVal) {
@@ -1840,12 +2418,12 @@ export default {
 
           }).then((res) => {
             // * 此3个字段是必传字段
+            this.typeContract= '';
             this.firstForm.agreement.schemeId = res.data.schemeId;
             this.firstForm.agreement.contractSplitId = res.data.splitId;
             this.firstForm.agreement.vendorId = res.data.vendorId;
             this.firstForm.agreement.partyAOrgId = res.data.partyAOrgId;
-            this.firstForm.agreement.agreementName =
-              this.$route.query.schemeName;
+            this.firstForm.agreement.agreementName =this.$route.query.schemeName;
             this.agreementFileUrl = res.data.agreementFileUrl;
             this.agreementFileName = res.data.agreementFileName;
             this.attachmentId = res.data.attachmentId;

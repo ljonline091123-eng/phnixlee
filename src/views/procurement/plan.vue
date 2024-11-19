@@ -662,7 +662,7 @@
               align="center"
             />
             <el-table-column
-              min-width="300"
+              min-width="200"
               label="合约名称"
               align="left"
               prop="contractPlanningName"

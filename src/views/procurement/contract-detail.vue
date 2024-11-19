@@ -40,7 +40,7 @@
             >撤回</el-button
           >
         </div>
-        <!--
+
         <div v-else-if="isOperate === 1 && Number(agreementState) === 3">
           <el-button type="primary" size="mini" @click="pushToVendor()"
             >推送至供应商</el-button
@@ -64,7 +64,7 @@
             >作废签署合同</el-button
           >
         </div>
-        -->
+
         <div class="contractApprovalButton">
           <el-button
             type="primary"
@@ -95,7 +95,8 @@
               :key="index"
               class="custom-row"
             >
-              <el-col v-for="item in row" :key="item.id" :span="8">
+<!--              工程范围及工作内容特殊处理-->
+              <el-col v-for="item in row" :key="item.id" :span="item.prop==='scopeOfWork'?24:8">
                 <el-form-item
                   :label="item.label"
                   label-width="180px"
@@ -349,6 +350,10 @@
             </el-table-column>
 
             <el-table-column prop="remark" label="备注" width="120" />
+            <el-table-column prop="skuId" align="center" width="180" label="易料商品编码"/>
+            <el-table-column prop="goodsName" align="center" width="180" label="易料商品名称"/>
+              <el-table-column prop="offerBrand" align="center" width="180" label="易料品牌"/>
+             <el-table-column prop="offerPrice" align="center" width="180" label="易料初始报价"/>
           </el-table>
           <!-- 租赁材料、租赁机械 -->
           <el-table
@@ -929,6 +934,8 @@
       :title="'合同签订审批流程'"
       :formModel="sanctionForm"
       :rejectNodeList="rejectNodeList"
+      :nextCandidateList="nextCandidateList"
+      :nextAppointable="nextAppointable"
       @update:visible="sanctionVisible = $event"
       @submit="handleSubmit"
     />
@@ -1137,6 +1144,10 @@ export default {
         operateComment: "",
       },
       rejectNodeList: [],
+      /* 下一步审批人列表 */
+      nextCandidateList: [],
+      /* 下一步审批人 */
+      nextAppointable: false,
       purchaserId: "",
       exampleId: "",
       taskPresentId: "",
@@ -1799,7 +1810,7 @@ export default {
         {
           id: 4,
           label: "约定付款金额",
-          prop: "paymentRatioText",
+          prop: "paymentAmountText",
         },
         {
           id: 5,
@@ -3352,6 +3363,10 @@ export default {
             processId: this.exampleId,
           });
           this.rejectNodeList = res.data.completedTaskList;
+          /* 下一步审批人列表 */
+          this.nextCandidateList = res.data.nextCandidateList;
+          /* 下一步审批人是否可选 */
+          this.nextAppointable = res.data.nextAppointable;
           this.taskPresentId = res.data.curTaskId;
           this.isShowButton = res.data.auditable;
         }
@@ -3369,6 +3384,11 @@ export default {
         curTaskId: this.taskPresentId,
         processKey: "jiantou-zhaocai:{org}:ZHAOCAI_AGREEMENT_SIGN",
       };
+      const loading = this.$loading({
+        lock: true,
+        text: "正在提交...",
+        background: "rgba(0, 0, 0, 0.7)",
+      });
       postAuditProcess(params).then(() => {
         this.$message.success("提交成功");
         this.sanctionVisible = false;
@@ -3376,6 +3396,9 @@ export default {
       }).catch(error => {
         /* 关闭遮罩层 */
         this.$modal.closeLoading();
+      }).finally(() => {
+        // 关闭加载遮罩层
+        loading.close();
       });
     },
     async handelCalibrationApproval() {

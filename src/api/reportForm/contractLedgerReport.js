@@ -12,3 +12,18 @@ export function contractLedgerReport(query) {
     params: query
   })
 }
+export function contractLedgerByConBase(query) {
+  return request({
+    url: '/business/report/contractLedgerByConBase',
+    method: 'get',
+    params: query
+  })
+}
+export function contractLedgerDetails(id) {
+  return request({
+    url: '/business/report/contractLedgerDetails',
+    method: 'get',
+    params: {id}
+  })
+}
+
