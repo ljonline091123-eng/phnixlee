@@ -75,7 +75,7 @@
               >新增易料合同</el-button
             >
           </el-badge>
-         
+
         </el-form-item>
       </el-form>
       <el-table
@@ -583,7 +583,7 @@
         :rules="rules"
         ref="form"
         :model="form"
-        label-width="110px"
+        label-width="120px"
         label-suffix=":"
       >
         <el-row :gutter="10">
@@ -612,7 +612,7 @@
             </el-form-item>
           </el-col>
           <el-col :span="12">
-            <el-form-item label="上限价" prop="upperLimitPriceText">
+            <el-form-item label="合约规划上限价" prop="upperLimitPriceText">
               <el-input
                 v-model="planAmountInfo.upperLimitPriceText"
                 placeholder="选择采购方案后自动生成"
@@ -750,7 +750,7 @@
               fixed
             />
             <el-table-column
-              label="总数量"
+              label="投标总量"
               align="right"
               prop="countText"
               :key="'count'"
@@ -765,21 +765,26 @@
               width="150"
             />
             <el-table-column
-              label="本次签订量"
+              header-align="center"
               align="center"
-              prop="signCount"
-              width="150"
-              :key="'signCount'"
+              label="合同价"
             >
-              <template slot-scope="scope">
-                <el-form-item
-                  label-width="0"
-                  :prop="
+              <el-table-column
+                label="签订量"
+                align="center"
+                prop="signCount"
+                width="150"
+                :key="'signCount'"
+              >
+                <template slot-scope="scope">
+                  <el-form-item
+                    label-width="0"
+                    :prop="
                     'vendorBiddingListQuotationList.' +
                     scope.$index +
                     '.signCount'
                   "
-                  :rules="[
+                    :rules="[
                     {
                       required: true,
                       trigger: 'blur',
@@ -796,31 +801,31 @@
                       message: '请输入小于4位的小数',
                     },
                   ]"
-                >
+                  >
                     <el-input
                       v-model="scope.row.signCount"
                       placeholder="请输入"
                       v-thousandth
                     />
-                </el-form-item>
-              </template>
-            </el-table-column>
-            <el-table-column
-              label="本次签订含税单价(元)"
-              align="center"
+                  </el-form-item>
+                </template>
+              </el-table-column>
+              <el-table-column
+                label="签订含税单价(元)"
+                align="center"
               prop="signUnitPriceInclTax"
-              width="150"
-              :key="'signUnitPriceInclTax'"
-            >
-              <template slot-scope="scope">
-                <el-form-item
-                  label-width="0"
-                  :prop="
+                width="150"
+                :key="'signUnitPriceInclTax'"
+              >
+                <template slot-scope="scope">
+                  <el-form-item
+                    label-width="0"
+                    :prop="
                     'vendorBiddingListQuotationList.' +
                     scope.$index +
                     '.signUnitPriceInclTax'
                   "
-                  :rules="[
+                    :rules="[
                     {
                       required: true,
                       trigger: 'blur',
@@ -837,61 +842,63 @@
                       message: '请输入小于4位的小数',
                     },
                   ]"
-                >
-                  <el-input
-                    v-model="scope.row.signUnitPriceInclTax"
-                    placeholder="请输入"
-                    v-thousandth
-                  />
-                </el-form-item>
-              </template>
+                  >
+                    <el-input
+                      v-model="scope.row.signUnitPriceInclTax"
+                      placeholder="请输入"
+                      v-thousandth
+                    />
+                  </el-form-item>
+                </template>
+              </el-table-column>
+              <el-table-column
+                label="签订不含税单价(元)"
+                align="right"
+                width="170"
+              >
+                <template slot-scope="scope">
+                  {{
+                    countComputed(
+                      scope.row,
+                      scope.row.signUnitPriceInclTax,
+                      scope.row.taxRate,
+                      scope.row.signCount,
+                      "excludingTax"
+                    )
+                  }}
+                </template>
+              </el-table-column>
+              <el-table-column label="含税总价(元)" align="right" width="150">
+                <template slot-scope="scope">
+                  {{
+                    countComputed(
+                      scope.row,
+                      scope.row.signUnitPriceInclTax,
+                      scope.row.taxRate,
+                      scope.row.signCount,
+                      "taxIncludedTotal"
+                    )
+                  }}
+                </template>
+              </el-table-column>
+              <el-table-column
+                label="不含税总价(元)"
+                align="right"
+                width="150"
+              >
+                <template slot-scope="scope">
+                  {{
+                    countComputed(
+                      scope.row,
+                      scope.row.signUnitPriceInclTax,
+                      scope.row.taxRate,
+                      scope.row.signCount
+                    )
+                  }}
+                </template>
+              </el-table-column>
             </el-table-column>
-            <el-table-column
-              label="本次签订不含税单价(元)"
-              align="right"
-              width="170"
-            >
-              <template slot-scope="scope">
-                {{
-                  countComputed(
-                    scope.row,
-                    scope.row.signUnitPriceInclTax,
-                    scope.row.taxRate,
-                    scope.row.signCount,
-                    "excludingTax"
-                  )
-                }}
-              </template>
-            </el-table-column>
-            <el-table-column label="本次含税总价(元)" align="right" width="150">
-              <template slot-scope="scope">
-                {{
-                  countComputed(
-                    scope.row,
-                    scope.row.signUnitPriceInclTax,
-                    scope.row.taxRate,
-                    scope.row.signCount,
-                    "taxIncludedTotal"
-                  )
-                }}
-              </template>
-            </el-table-column>
-            <el-table-column
-              label="本次不含税总价(元)"
-              align="right"
-              width="150"
-            >
-              <template slot-scope="scope">
-                {{
-                  countComputed(
-                    scope.row,
-                    scope.row.signUnitPriceInclTax,
-                    scope.row.taxRate,
-                    scope.row.signCount
-                  )
-                }}
-              </template>
-            </el-table-column>
+
             <el-table-column
               label="租赁方式"
               align="right"
@@ -948,7 +955,7 @@
               :key="'floatingPriceText'"
             />
             <el-table-column
-              label="卸费"
+              label="装卸费"
               align="right"
               width="150"
               prop="unloadingFeeText"
@@ -956,34 +963,41 @@
               v-if="priceType == 2"
             />
             <el-table-column
-              label="含税单价(元)"
-              align="right"
-              width="150"
-              prop="taxUnitPriceText"
-              :key="'taxUnitPriceText'"
-              v-if="subjectMatter != 1 && subjectMatter != 2"
-            />
-            <el-table-column
-              label="不含税单价(元)"
-              align="right"
-              width="150"
-              prop="notTaxUnitPriceText"
-              :key="'notTaxUnitPriceText'"
-              v-if="subjectMatter != 1 && subjectMatter != 2"
-            />
-            <el-table-column
-              label="含税总价(元)"
-              align="right"
-              width="150"
-              prop="taxPriceText"
-            />
-            <el-table-column
-              label="不含税总价(元)"
-              align="right"
-              width="150"
-              prop="notTaxPriceText"
-            />
-            <el-table-column label="税率(%)" align="center" prop="taxRate" />
+              header-align="center"
+              align="center"
+              label="中标价"
+            >
+              <el-table-column
+                label="含税单价(元)"
+                align="right"
+                width="150"
+                prop="taxUnitPriceText"
+                :key="'taxUnitPriceText'"
+                v-if="subjectMatter != 1 && subjectMatter != 2"
+              />
+              <el-table-column
+                label="不含税单价(元)"
+                align="right"
+                width="150"
+                prop="notTaxUnitPriceText"
+                :key="'notTaxUnitPriceText'"
+                v-if="subjectMatter != 1 && subjectMatter != 2"
+              />
+              <el-table-column
+                label="含税总价(元)"
+                align="right"
+                width="150"
+                prop="taxPriceText"
+              />
+              <el-table-column
+                label="不含税总价(元)"
+                align="right"
+                width="150"
+                prop="notTaxPriceText"
+              />
+              <el-table-column label="税率(%)" align="center" prop="taxRate" />
+            </el-table-column>
+
             <el-table-column
               label="发票类型"
               align="center"
@@ -1575,7 +1589,11 @@ export default {
         }).then((res) => {
           this.loading_tax = false;
           this.form.vendorBiddingListQuotationList =
-            res.data.vendorBiddingListQuotationList;
+            res.data.vendorBiddingListQuotationList.map(item=>{
+              this.$set(item,'signCount',item.surplusCount)
+              this.$set(item,'signUnitPriceInclTax',item.taxUnitPriceText)
+              return item
+            });
           (this.subjectMatter = res?.data.subjectMatter),
             (this.procurementType = res?.data.procurementType),
             (this.priceType = res?.data.priceType);
@@ -1583,7 +1601,7 @@ export default {
       }
     },
     submitProcurementYl(){
-   
+
         if(!this.selectedRowYl.length) return this.$message({type:'error',message:"请选择易料单据"});
         getCheckAgreementCreateInfo(this.selectedRowYl).then((res) => {
           if(res.code==200 && res.data==true){
@@ -1597,7 +1615,7 @@ export default {
             });
           }
         })
-           
+
 
     },
     submitProcurement() {

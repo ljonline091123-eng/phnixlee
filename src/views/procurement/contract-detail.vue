@@ -231,111 +231,124 @@
             />
             <el-table-column
               prop="countText"
-              label="数量"
+              label="投标总量"
               width="100"
               align="right"
             />
             <el-table-column
-              prop="signTaxRateText"
-              label="本次签订税率(%)"
-              width="140"
-              align="right"
-            />
-            <el-table-column
-              prop="signCountText"
-              label="本次签订量"
-              width="100"
-              align="right"
-            />
-            <el-table-column
-              prop="signUnitPriceInclTaxText"
-              label="本次签订含税单价(元)"
-              width="180"
-              align="right"
-            />
-            <el-table-column
-              prop="signUnitPriceExclTaxText"
-              label="本次签订不含税单价(元)"
-              width="180"
-              align="right"
-            />
-            <el-table-column
-              prop="signAmountInclTaxText"
-              label="本次签订含税总价(元)"
-              width="180"
-              align="right"
-            />
-            <el-table-column
-              prop="signAmountExclTaxText"
-              label="本次签订不含税总价(元)"
-              width="180"
-              align="right"
-            />
-            <el-table-column
-              prop="signTaxAmountText"
-              label="本次签订税额"
-              width="140"
-              align="right"
-            />
-            <el-table-column
-              prop="notTaxUnitPriceText"
-              label="不含税单价(元)"
-              width="120"
-              align="right"
-              v-if="showInfo.priceType == 1"
-            />
-            <el-table-column
-              prop="taxUnitPriceText"
-              label="含税单价(元)"
-              width="120"
-              align="right"
-              v-if="showInfo.priceType == 1"
-            />
-            <el-table-column
-              prop="basePriceText"
-              label="基价(元)"
-              width="120"
-              align="right"
-              v-if="showInfo.priceType == 2"
-            />
-            <el-table-column
-              prop="floatingPriceText"
-              label="浮动价(元)"
-              width="120"
-              align="right"
-              v-if="showInfo.priceType == 2"
-            />
-            <el-table-column
-              prop="unloadingFeeText"
-              label="卸费"
-              width="120"
-              align="right"
-              v-if="showInfo.priceType == 2"
-            />
-            <el-table-column
-              prop="notTaxPriceText"
-              label="不含税总价(元)"
-              width="120"
-              align="right"
-            />
-            <el-table-column
-              prop="taxPriceText"
-              label="含税总价(元)"
-              width="120"
-              align="right"
-            />
-            <el-table-column
-              prop="taxRateText"
-              label="税率(%)"
-              width="100"
+              header-align="center"
               align="center"
-            />
+              label="合同价"
+            >
+              <el-table-column
+                prop="signTaxRateText"
+                label="签订税率(%)"
+                width="140"
+                align="right"
+              />
+              <el-table-column
+                prop="signCountText"
+                label="签订量"
+                width="100"
+                align="right"
+              />
+              <el-table-column
+                prop="signUnitPriceInclTaxText"
+                label="签订含税单价(元)"
+                width="180"
+                align="right"
+              />
+              <el-table-column
+                prop="signUnitPriceExclTaxText"
+                label="签订不含税单价(元)"
+                width="180"
+                align="right"
+              />
+              <el-table-column
+                prop="signAmountInclTaxText"
+                label="签订含税总价(元)"
+                width="180"
+                align="right"
+              />
+              <el-table-column
+                prop="signAmountExclTaxText"
+                label="签订不含税总价(元)"
+                width="180"
+                align="right"
+              />
+              <el-table-column
+                prop="signTaxAmountText"
+                label="签订税额"
+                width="140"
+                align="right"
+              />
+            </el-table-column>
             <el-table-column
-              prop="taxAmountText"
-              label="税额"
-              width="120"
-              align="right"
-            />
+              header-align="center"
+              align="center"
+              label="中标价"
+            >
+              <el-table-column
+                prop="notTaxUnitPriceText"
+                label="不含税单价(元)"
+                width="120"
+                align="right"
+                v-if="showInfo.priceType == 1"
+              />
+              <el-table-column
+                prop="taxUnitPriceText"
+                label="含税单价(元)"
+                width="120"
+                align="right"
+                v-if="showInfo.priceType == 1"
+              />
+              <el-table-column
+                prop="basePriceText"
+                label="基价(元)"
+                width="120"
+                align="right"
+                v-if="showInfo.priceType == 2"
+              />
+              <el-table-column
+                prop="floatingPriceText"
+                label="浮动价(元)"
+                width="120"
+                align="right"
+                v-if="showInfo.priceType == 2"
+              />
+              <el-table-column
+                prop="unloadingFeeText"
+                label="装卸费"
+                width="120"
+                align="right"
+                v-if="showInfo.priceType == 2"
+              />
+              <el-table-column
+                prop="notTaxPriceText"
+                label="不含税总价(元)"
+                width="120"
+                align="right"
+              />
+              <el-table-column
+                prop="taxPriceText"
+                label="含税总价(元)"
+                width="120"
+                align="right"
+              />
+              <el-table-column
+                prop="taxRateText"
+                label="税率(%)"
+                width="100"
+                align="center"
+              />
+              <el-table-column
+                prop="taxAmountText"
+                label="税额"
+                width="120"
+                align="right"
+              />
+            </el-table-column>
+
             <el-table-column prop="remark" label="备注" width="120" />
             <el-table-column prop="skuId" align="center" width="180" label="易料商品编码"/>
             <el-table-column prop="goodsName" align="center" width="180" label="易料商品名称"/>

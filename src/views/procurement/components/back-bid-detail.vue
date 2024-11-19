@@ -172,7 +172,7 @@
                 </template>
               </el-table-column>
               <el-table-column
-                label="卸费"
+                label="装卸费"
                 width="100"
                 align="right"
                 prop="unloadingFeeText"
