@@ -230,7 +230,17 @@
                   />
                 </template>
                 <template v-else>
-                  <div style="width: 200px; height: 200px; color: #0c7fe1;"><br>{{ businessLicense.attachmentFileName }}</div>
+                  <div style="width: 150px; height: 200px; color: #0c7fe1;">
+                        <el-button
+                        type="primary"
+                        @click="checkAttachment(businessLicense.attachmentFileUrl)"
+                      >预览</el-button>
+                    <el-button
+                        type="primary"
+                        @click="downAttachment(businessLicense.attachmentFileUrl, businessLicense.attachmentFileName)"
+                        >下载</el-button>
+                       <div >{{ businessLicense.attachmentFileName }}</div>
+                    </div>
                 </template>
 <!--                <el-image-->
 <!--                  style="width: 200px; height: 200px"-->
@@ -254,8 +264,21 @@
                   >
                   </el-image>
                 </template>
-                <template v-else>
+                <!-- <template v-else>
                   <div style="width: 200px; height: 200px; color: #0c7fe1;"><br>{{ integrity.attachmentFileName }}</div>
+                </template> -->
+                  <template v-else>
+                  <div style="width: 150px; height: 200px; color: #0c7fe1;">
+                        <el-button
+                        type="primary"
+                        @click="checkAttachment(integrity.attachmentFileUrl)"
+                      >预览</el-button>
+                    <el-button
+                        type="primary"
+                        @click="downAttachment(integrity.attachmentFileUrl, integrity.attachmentFileName)"
+                        >下载</el-button>
+                       <div >{{ integrity.attachmentFileName }}</div>
+                    </div>
                 </template>
 <!--                <el-image-->
 <!--                  style="width: 200px; height: 200px"-->
@@ -290,9 +313,22 @@
                       >
                       </el-image>
                     </template>
-                    <template v-else>
+                    <!-- <template v-else>
                       <div style="width: 200px; height: 200px; color: #0c7fe1;"><br>{{ item.attachmentFileName }}</div>
-                    </template>
+                    </template> -->
+               <template v-else>
+                  <div style="width: 150px; height: 200px; color: #0c7fe1;">
+                        <el-button
+                        type="primary"
+                        @click="checkAttachment(item.attachmentFileUrl)"
+                      >预览</el-button>
+                    <el-button
+                        type="primary"
+                        @click="downAttachment(item.attachmentFileUrl, item.attachmentFileName)"
+                        >下载</el-button>
+                       <div >{{ item.attachmentFileName }}</div>
+                    </div>
+                </template>
 <!--                    <el-image-->
 <!--                      style="width: 200px; height: 200px"-->
 <!--                      :src="item.attachmentFileUrl"-->
@@ -327,9 +363,22 @@
                     >
                     </el-image>
                   </template>
-                  <template v-else>
+                  <!-- <template v-else>
                     <div style="width: 200px; height: 200px; color: #0c7fe1;"><br>{{ item.attachmentFileName }}</div>
-                  </template>
+                  </template> -->
+                <template v-else>
+                  <div style="width: 150px; height: 200px; color: #0c7fe1;">
+                        <el-button
+                        type="primary"
+                        @click="checkAttachment(item.attachmentFileUrl)"
+                      >预览</el-button>
+                    <el-button
+                        type="primary"
+                        @click="downAttachment(item.attachmentFileUrl, item.attachmentFileName)"
+                        >下载</el-button>
+                       <div >{{ item.attachmentFileName }}</div>
+                    </div>
+                </template>
 <!--                  <el-image-->
 <!--                    style="width: 200px; height: 200px"-->
 <!--                    :src="item.attachmentFileUrl"-->
@@ -633,6 +682,22 @@
         <el-table-column label="差" align="center" prop="poorCount" />
       </el-table>
     </el-dialog>
+    <!-- 预览弹窗 -->
+    <el-dialog
+      :show-close="true"
+      :visible.sync="dialogVisible"
+      title="附件"
+      modal
+      center
+      :append-to-body="false"
+      destroy-on-close
+    >
+      <!-- 直接用iframe嵌套pdf预览模式 "#toolbar=0"是为了隐藏pdf的按钮  -->
+      <div class="dialogtext">
+        <iframe width="800"  height="1200"   :src="this.iframeUrls + '#toolbar=0'" />
+      </div>
+    </el-dialog>
+
   </div>
 </template>
 <script>
@@ -660,6 +725,8 @@ export default {
   dicts: ["vendor_class", "vendor_level"],
   data() {
     return {
+      dialogVisible:false,
+      iframeUrls:'',
       activeName: "base",
       vendor: {},
       vendorState: {},
@@ -721,6 +788,19 @@ export default {
     this.getVendorDetail();
   },
   methods: {
+     downAttachment(file,uelFileName) {
+        const a = document.createElement("a")
+        a.href = file
+        a.download = uelFileName
+        a.target = "_blank"
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+    },
+    checkAttachment(url){
+       this.iframeUrls=url,
+       this.dialogVisible=true
+    },
     ifPdf(url){
       return url.toLowerCase().endsWith(".pdf")
     },
@@ -1051,5 +1131,9 @@ export default {
 }
 .el-form-item {
   margin-bottom: 5px !important;
+}
+.dialogtext {
+  width: 100% !important;
+  height: 100% !important;
 }
 </style>

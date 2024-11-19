@@ -175,6 +175,31 @@
           :src="authorizationUrl"
         ></el-image>
       </el-dialog>
+      <!-- 展示PDF -->
+      <el-dialog
+        :show-close="true"
+        :visible.sync="authorizationPdfVisible"
+        title="授权书"
+        modal
+        center
+        :append-to-body="false"
+        destroy-on-close
+      >
+        <!-- 直接用iframe嵌套pdf预览模式 "#toolbar=0"是为了隐藏pdf的按钮  -->
+        <div class="dialogtext">
+          <iframe width="800"  height="1200"   :src="this.authorizationPdfUrl + '#toolbar=0'" />
+        </div>
+      </el-dialog>
+      <el-dialog
+        title="授权书"
+        :visible.sync="authorizationVisible"
+        width="30%"
+      >
+        <el-image
+          style="width: 500px; height: 500px; margin: 0px auto"
+          :src="authorizationUrl"
+        ></el-image>
+      </el-dialog>
     </div>
 
     <!-- 审批和审批详情 -->
@@ -258,6 +283,8 @@ export default {
       loading: false,
       authorizationVisible: false,
       authorizationUrl: "",
+      authorizationPdfVisible: false,
+      authorizationPdfUrl: "",
     };
   },
   created() {},
@@ -271,6 +298,9 @@ export default {
     this.getVendorContactList();
   },
   methods: {
+    ifPdf(url){
+      return url.toLowerCase().endsWith(".pdf")
+    },
     async handelCalibrationApproval(row) {
       this.businessId = row.id;
       this.processId = row.wfProcessId;
@@ -401,8 +431,13 @@ export default {
       try {
         const res = await getAuthorization(id);
         if (res.data?.fileUrl) {
-          this.authorizationUrl = res.data.fileUrl;
-          this.authorizationVisible = true;
+          if(this.ifPdf(res.data.fileUrl)){
+            this.authorizationPdfUrl = res.data.fileUrl;
+            this.authorizationPdfVisible = true;
+          } else {
+            this.authorizationUrl = res.data.fileUrl;
+            this.authorizationVisible = true;
+          }
         }
       } catch (err) {
         console.log(err);
