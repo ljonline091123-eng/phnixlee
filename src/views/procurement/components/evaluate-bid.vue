@@ -1950,6 +1950,8 @@ export default {
         this.expertIds = selectedMapList;
         this.availableExperts = []; // 清空选择列表
         this.$refs.expertRef.clearSelection(); // 清除表格选择状态
+        // 刷新列表数据
+        this.getExpertList()
       }
     },
     moveToAvailable() {
@@ -1961,6 +1963,8 @@ export default {
       this.selectedExperts = [];
       // 清除表格选择状态
       this.$refs.selectedRef.clearSelection();
+      // 刷新列表数据
+      this.getExpertList()
     },
     openRandomDialog() {
       this.randomDialogVisible = true;
