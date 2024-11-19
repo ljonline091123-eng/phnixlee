@@ -152,7 +152,7 @@ public class BiddingResultServiceImpl extends ServiceImpl<BiddingResultMapper,Bi
         paramMap.put("userObj", JSON.toJSONString(userObj));
 
         /** 合同类型（contractType），价格(contractMoney)，项目部（parentProjectCode），责任单位（responsibilityDeptId），公司（companyId） */
-        paramMap.put("contractType", (scheme.getProcurementPlanType()));/* 采购方案 合同类型 */
+        paramMap.put("contractType", JSON.toJSONString(scheme.getProcurementPlanType()));/* 采购方案 合同类型 */
         paramMap.put("contractMoney", scheme.getCeilingPrice());/* 定标(可能存在多个中标人，还是使用采购方案的上限价) 价格 */
 
         processService.startProcessInstance(ProcessKeyEnum.ZHAOCAI_TENDER_CALIBRATE.getIdentifying(), paramMap);
