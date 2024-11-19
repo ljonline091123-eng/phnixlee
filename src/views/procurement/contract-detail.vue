@@ -46,11 +46,11 @@
             >推送至供应商</el-button
           >
         </div>
-        <div v-else-if="isOperate === 1 && Number(agreementState) === 7">
-          <el-button type="primary" size="mini" @click="pushToSignPlatform()"
-            >推送至电子签章平台</el-button
-          >
-        </div>
+<!--        <div v-else-if="isOperate === 1 && Number(agreementState) === 7">-->
+<!--          <el-button type="primary" size="mini" @click="pushToSignPlatform()"-->
+<!--            >推送至电子签章平台</el-button-->
+<!--          >-->
+<!--        </div>-->
         <div v-else-if="isOperate === 1 && Number(agreementState) === 9">
           <el-button type="primary" size="mini" @click="toSignAgreement()"
             >签署</el-button
