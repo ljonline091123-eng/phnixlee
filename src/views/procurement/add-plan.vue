@@ -83,13 +83,13 @@
                 <el-input type="text" clearable :readonly="true" disabled v-model="formData.upperLimitPrice" />
               </el-form-item>
             </el-col>
-            <el-col :span="8" class="grid-cell" v-if="subjectMatter == 1 || subjectMatter == 2">
+            <el-col :span="8" class="grid-cell" v-if="(procurementType == 1)">
               <el-form-item label="指导价" prop="upperLimitPrice" class="required label-right-align">
                 <el-input type="text" clearable :readonly="true" disabled v-model="formData.guidance_price" placeholder="对接易料市集"/>
               </el-form-item>
             </el-col>
             <el-col :span="8" class="grid-cell">
-              <el-form-item label=" 付款方式" prop="paymentType" class="required label-right-align"  v-if="subjectMatter == 1">
+              <el-form-item label=" 付款方式" prop="paymentType" class="required label-right-align"  v-if="(procurementType == 1)">
               <el-select style="width: 100%" v-model="formData.paymentType" placeholder="请选择付款方式" clearable>
                 <el-option v-for="dict in dict.type.procurement_payment_type" :key="dict.value" :label="dict.label"
                   :value="dict.value">
@@ -98,7 +98,7 @@
             </el-form-item>
             </el-col>
             <el-col :span="8" class="grid-cell">
-              <el-form-item label="计数方式" prop="countingType" v-if="subjectMatter == 1">
+              <el-form-item label="计数方式" prop="countingType" v-if="(procurementType == 1)">
                 <el-select style="width: 100%" v-model="formData.countingType" placeholder="请选择计数方式" clearable>
                   <el-option v-for="dict in dict.type.procurement_counting_type" :key="dict.value" :label="dict.label"
                     :value="dict.value">
@@ -106,7 +106,7 @@
                 </el-select>
               </el-form-item>
             </el-col>
-            <el-col :span="8" class="grid-cell" v-if="subjectMatter == 1 || subjectMatter == 2">
+            <el-col :span="8" class="grid-cell" v-if="(procurementType == 1)">
               <el-form-item label="价格类型" prop="priceType" class="required label-right-align">
                 <el-select
                   v-model="formData.priceType"
@@ -115,7 +115,7 @@
                   style="width: 100%"
                 >
                   <el-option
-                    v-for="dict in dict.type.price_type"
+                    v-for="dict in PRICETYPELIST"
                     :key="dict.value"
                     :label="dict.label"
                     :value="dict.value"
@@ -123,7 +123,7 @@
                 </el-select>
               </el-form-item>
             </el-col>
-            <el-col :span="8" class="grid-cell" v-if="isFloat && (subjectMatter == 1 || subjectMatter == 2)">
+            <el-col :span="8" class="grid-cell" v-if="(procurementType == 1)">
               <el-form-item label="区域" prop="region">
                 <el-cascader
                   v-model="formData.region"
@@ -134,6 +134,12 @@
                   >
                 </el-cascader>
 						  </el-form-item>
+            </el-col>
+            <el-col :span="8" class="grid-cell">
+              <!--       采购计划表单基价 （前端用来统一刷新列表清单的基价使用。） watch:formData.basePrice监听      -->
+              <el-form-item label=" 基价" prop="basePrice" v-if="(isFloat)" class="label-right-align">
+                <el-input ref="basePriceInput" v-model="formData.basePrice" clearable :disabled="isSubmit"/>
+              </el-form-item>
             </el-col>
           </el-row>
         </div>
@@ -181,7 +187,7 @@
                       <el-table-column label="价格类型" align="center" prop="priceType" width="200">
                         <template slot-scope="scope">
                           <el-select style="width: 100%" v-model="scope.row.priceType" placeholder="请选择">
-                            <el-option v-for="dict in PRICETYPELIST" :key="dict.value" :label="dict.label"
+                            <el-option v-for="dict in PRICETYPEOPTIONS" :key="dict.value" :label="dict.label"
                               :value="dict.value">
                             </el-option>
                           </el-select>
@@ -406,7 +412,7 @@ import { listAreaDivisionTree } from '@/api/procurement/manage'
 import BackButton from "@/components/BackButton/index.vue"
 import { mapGetters } from "vuex"
 import PageTitle from "@/components/PageTitle/index.vue"
-import {PRICETYPEOPTIONS} from "@/utils/constants";
+import {PRICETYPELIST, PRICETYPEOPTIONS} from "@/utils/constants";
 export default {
   name: "add-plan",
   dicts: ['plan_type','price_type','procurement_counting_type','procurement_payment_type'],
@@ -419,7 +425,8 @@ export default {
       }
     }
     return {
-      PRICETYPELIST:PRICETYPEOPTIONS,
+      PRICETYPELIST:PRICETYPELIST,
+      PRICETYPEOPTIONS:PRICETYPEOPTIONS,
       formData: {
         priceType:1
       }, //form表单数据
@@ -530,11 +537,22 @@ export default {
         }
       },
       regionOptions:[],
+      /* 是否是浮动价类型，浮动价/固定、浮动价 都是true */
       isFloat:false,
       isSpecific: false,
       mathjs:null,
       rentModeOptions:[],
+      /* 交易标的物（在浮动价更新后[已弃用！]该判断逻辑了） */
       subjectMatter:"",
+      /* 采购类型 procurementType (浮动价逻辑使用了)
+        PURCHASE_MATERIALS(1, "购买材料"),
+        LEASED_MATERIAL(2, "租赁材料"),
+        RENTAL_MACHINERY(3, "租赁机械（设备）"),
+        SPECIALTY_SUBCONTRACT(4, "专业分包"),
+        SERVICE_SUBCONTRACT(5, "劳务分包"),
+        OTHER_TYPE(6, "其他"),
+      */
+      procurementType:"",
       matterVisible:false,
       matterList:[],
       defaultProps: {
@@ -546,7 +564,6 @@ export default {
       matterName:undefined,
       initCountObj:{},
       numDisable:false,
-      initCountObj:{}
     };
   },
   components:{
@@ -583,6 +600,8 @@ export default {
         this.handleSplitInit();
       })
     }
+    /* 获取省市区 */
+    this.listAreaDivisionTree()
   },
   mounted(){
       this.queryContractPlanSplitFlag();
@@ -876,7 +895,7 @@ export default {
             text: '数据提交中...',
             background: 'rgba(0, 0, 0, 0.7)'
           });
-          const { procurementPlanName, beginDate, endDate, arrivalDate, procurementOfficer, procurementOfficerName,projectId,projectName,projectCode, priceType, regionProvinceCode, regionCityCode, paymentType, countingType } = this.formData;
+          const { procurementPlanName, beginDate, endDate, arrivalDate, procurementOfficer, procurementOfficerName,projectId,projectName,projectCode, priceType,basePrice, regionProvinceCode, regionCityCode, paymentType, countingType } = this.formData;
           const { contractPlanningCategory, biddingMethodCode, biddingMethodName, contractPlanningCategoryName, contractPlanningId, contractPlanningName, incurredPlannedAmount, incurredPlannedAmountText, plannedAmountInclTax, plannedAmountInclTaxText, planningBalance, planningBalanceText,bidResponsibleOrg, bidResponsibleOrgName, id, contractPlanningCode,brand } = this.currentContract
           const splitRequestList = this.planList[0]?.children.map(item => {
             return {
@@ -903,6 +922,8 @@ export default {
               procurementOfficerName,
               //priceType:priceType !== 'undefined'?priceType:'',
               regionProvinceCode,
+              /* 基价 （前端用来统一刷新列表清单的基价使用。） */
+              basePrice,
               regionCityCode,
               paymentType:paymentType !== 'undefined'?paymentType:'',
               countingType:countingType !== 'undefined'?countingType:'',
@@ -1094,6 +1115,8 @@ console.log("-2222--"+JSON.stringify(this.materialsLists))
       this.formData.subjectMatterText = res.data.subjectMatterText || '';
       this.formData.subjectMatterCode = res.data.subjectMatterCode || '';
       this.subjectMatter = res.data.subjectMatter || '';
+      /* 采购方案类型(购买材料,劳务分包....) */
+      this.procurementType = contractPlanningCategory || '';
       /** 根据分类判断是否可拆分编辑 */
       // if([1,2,3,6].includes(contractPlanningCategory)){
       //     this.isEdit = true;
@@ -1672,13 +1695,62 @@ console.log("-2222--"+JSON.stringify(this.materialsLists))
         }
       }
     },
+    /* 表单价格类型监听，同步清单价格类型 */
     "formData.priceType":{
       handler(val){
-        if(Number(val) === 2){
-          this.isFloat = true
-          this.listAreaDivisionTree()
-        }else{
-          this.isFloat = false
+        if(Number(val) === 1 || Number(val) === 2){
+          /* 同步将清单内所有的价格类型改成一致的 */
+          this.planList.forEach((item) => {
+            if (item.children && Array.isArray(item.children)) {
+              item.children.forEach((itemChildren) => {
+                if (itemChildren.children && Array.isArray(itemChildren.children)) {
+                  itemChildren.children.forEach((children) => {
+                    this.$set(children, 'priceType', val);
+                  });
+                }
+              });
+            }
+          });
+        }
+        /* 浮动价显示基价选项 */
+        if(Number(val) === 2 || Number(val) === 3){
+          this.isFloat = true;
+        }else {
+          this.isFloat = false;
+        }
+      },
+      immediate: true
+    },
+    /* 表单基价监听 */
+    "formData.basePrice":{
+      handler(val){
+        /* 浮动价 -> 基价 */
+        if(this.isFloat){
+          const regexN2 = /^\d+(\.\d{0,4})?$/
+          const inputEl = this.$refs.basePriceInput.$el.querySelector("input");
+          if (!regexN2.test(val)) {
+            /* 更新非法状态 */
+            inputEl.style = "border: 1px solid red;"
+            this.$set(this.planList, `isBasePriceNotLegal`, true);
+            this.$message.error("基价格式不正确，请输入小于4位的小数");
+          }else {
+            /* 合法时清除错误状态 */
+            inputEl.style = "border: 1px solid #C0C4CC;"
+            this.$set(this.planList, `isBasePriceNotLegal`, false);
+
+            /* 同步将清单内所有的基价改成一致的 */
+            this.planList.forEach((item) => {
+              if (item.children && Array.isArray(item.children)) {
+                item.children.forEach((itemChildren) => {
+                  if (itemChildren.children && Array.isArray(itemChildren.children)) {
+                    itemChildren.children.forEach((children) => {
+                      this.$set(children, 'basePrice', val);
+                    });
+                  }
+                });
+              }
+            });
+          }
         }
       },
       immediate: true
