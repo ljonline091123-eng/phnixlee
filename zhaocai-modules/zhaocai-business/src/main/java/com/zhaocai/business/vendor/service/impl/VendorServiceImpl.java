@@ -100,12 +100,29 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
     private ISystemUserService systemUserService;
 
 
+
     @Override
     @Transactional(propagation = Propagation.REQUIRED,rollbackFor = Exception.class)
     public VendorRegisterRequestVO getVendorUpdateDetail(Long vendorId) {
         VendorRegisterRequestVO vendorRequestVO = new VendorRegisterRequestVO();
         // 供应商联系人变更信息
         List<VendorContact> contactList;
+
+        // 供应商联系人变更信息
+        List<VendorContact> contactListMain;
+        // 根据供应商id在供应商
+        Vendor vendor = super.getById(vendorId);
+        contactList = vendorContactService.list(new LambdaQueryWrapper<VendorContact>()
+                .eq(VendorContact::getVendorId, vendorId)
+                .eq(VendorContact::getIsMainContact, 1));
+        vendorRequestVO  =  vendorCertificationService.listCertification(vendorRequestVO,vendorId,contactList.get(0).getId());
+        vendorRequestVO.setVendor(vendor);
+        if(contactList!=null&&contactList.size()>0){
+            vendorRequestVO.setVendorContact(contactList.get(0));
+        }
+
+        return vendorRequestVO;
+    }
 
     @Override
     @Transactional(propagation = Propagation.REQUIRED,rollbackFor = Exception.class)
