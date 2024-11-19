@@ -60,6 +60,12 @@
             <artifactId>mysql-connector-j</artifactId>
         </dependency>
 
+        <dependency>
+            <groupId>org.apache.httpcomponents</groupId>
+            <artifactId>httpmime</artifactId>
+            <version>4.5.13</version> <!-- 请使用最新的稳定版本 -->
+        </dependency>
+
         <!-- RuoYi Common Core -->
         <dependency>
             <groupId>com.zhaocai</groupId>
@@ -132,6 +138,12 @@
             <groupId>com.google.zxing</groupId>
             <artifactId>javase</artifactId>
             <version>3.4.1</version>
+        </dependency>
+        <dependency>
+            <groupId>com.vaadin.external.google</groupId>
+            <artifactId>android-json</artifactId>
+            <version>0.0.20131108.vaadin1</version>
+            <scope>compile</scope>
         </dependency>
     </dependencies>
 
