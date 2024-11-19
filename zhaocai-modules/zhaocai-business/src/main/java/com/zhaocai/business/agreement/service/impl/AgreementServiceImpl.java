@@ -774,7 +774,7 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
         paramMap.put("userObj", JSON.toJSONString(userObj));
 
         /** 合同类型（contractType），价格(contractMoney)，项目部（parentProjectCode），责任单位（responsibilityDeptId），公司（companyId） */
-        paramMap.put("contractType", JSON.toJSONString(agreement.getExpenditureBusinessType()));/* 合同签订流程 合同类型 */
+        paramMap.put("contractType", ProcurementPlanTypeEnum.getProcessType(agreement.getExpenditureBusinessType()));/* 合同签订流程 合同类型 */
         paramMap.put("contractMoney", agreement.getTotalAmountIncTax());/* 合同签订流程 价格 */
 
         /* startProcessInstance方法内根据projectCode拿到了层级数据了 */
