@@ -133,6 +133,12 @@ public class ProcurementPlan extends BaseEntity {
     private Integer priceType;
 
     /**
+     * 基价 （前端用来统一刷新列表清单的基价使用。）
+     */
+    @ApiModelProperty(value = "基价")
+    private BigDecimal basePrice;
+
+    /**
      * 区域-省
      */
     @ApiModelProperty(value = "区域-省")
