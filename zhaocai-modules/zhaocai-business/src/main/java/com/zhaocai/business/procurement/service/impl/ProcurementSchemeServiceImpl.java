@@ -188,7 +188,7 @@ public class ProcurementSchemeServiceImpl extends ServiceImpl<ProcurementSchemeM
         paramMap.put("operateComment", operateComment);
 
         /** 合同类型（contractType），价格(contractMoney)，项目部（parentProjectCode），责任单位（responsibilityDeptId），公司（companyId） */
-        paramMap.put("contractType", String.valueOf(procurementScheme.getProcurementPlanType()));/* 采购方案 合同类型 */
+        paramMap.put("contractType", procurementScheme.getProcurementPlanType());/* 采购方案 合同类型 */
         paramMap.put("contractMoney", procurementScheme.getCeilingPrice());/* 采购方案上限价 价格 */
         processService.startProcessInstance(
                 ProcessKeyEnum.ZHAOCAI_PROCUREMENT_SCHEME.getIdentifying(),paramMap);
