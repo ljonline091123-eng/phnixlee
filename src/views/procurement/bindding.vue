@@ -242,17 +242,18 @@
             </el-form-item>
           </el-col>
         </el-row>
-        <el-row>
-          <el-col :span="24" class="grid-cell">
-            <el-form-item
-            label="采购计划作废"
-            label-width="150px"
-            class="label-right-align"
-          >
-            <el-checkbox v-model="checkedPlan"></el-checkbox>
-            </el-form-item>
-          </el-col>
-        </el-row>
+<!-- 隐藏该多余的功能 -->
+<!--        <el-row>-->
+<!--          <el-col :span="24" class="grid-cell">-->
+<!--            <el-form-item-->
+<!--            label="采购计划作废"-->
+<!--            label-width="150px"-->
+<!--            class="label-right-align"-->
+<!--          >-->
+<!--            <el-checkbox v-model="checkedPlan"></el-checkbox>-->
+<!--            </el-form-item>-->
+<!--          </el-col>-->
+<!--        </el-row>-->
       <el-row>
           <el-col :span="24" class="grid-cell">
             <el-form-item
