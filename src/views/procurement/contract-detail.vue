@@ -3307,7 +3307,7 @@ export default {
         id: this.param.id,
       })
         .then((res) => {
-          this.showInfo = {
+        this.showInfo = {
             ...res.data.agreement,
             ...res.data.agreementPaymentItem,
           };
