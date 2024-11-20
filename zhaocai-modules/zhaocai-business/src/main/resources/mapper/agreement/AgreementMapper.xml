@@ -198,7 +198,7 @@
             </if>
         </where>
         union
-        select ta.id,ta.agreement_name,ta.expenditure_business_type,ta.vendor_id,ta.party_b_name
+        select ta.id,ta.agreement_name,ta.expenditure_business_type,ta.vendor_id,ta.party_b_name, '' as notifi_time
         from tb_agreement ta
         <where>
             ta.agreement_state = 3 and ta.market_material_contract_id is not null
