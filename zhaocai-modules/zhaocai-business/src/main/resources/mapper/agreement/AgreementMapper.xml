@@ -158,7 +158,7 @@
                 ta.create_by,ta.create_time,ta.total_amount_inc_tax,tbi.contact,tbi.phone,ta.agreement_state
         from tb_agreement ta
         left join tb_tender_notice ttn on ttn.scheme_id = ta.scheme_id and ttn.notice_status = 8
-        left join tb_bidding_info tbi on  tbi.notice_id = ttn.id and ta.vendor_id = tbi.vendor_id
+        left join tb_bidding_info tbi on  tbi.notice_id = ttn.id and ta.vendor_id = tbi.vendor_id and ttn.parent_id is null
         <where>
             ta.vendor_id = #{queryVO.vendorId,jdbcType=BIGINT} and ta.agreement_state in ('6','7','8','9','10')
             <if test="queryVO.agreementCode != null and queryVO.agreementCode != ''">
