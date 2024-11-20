@@ -594,13 +594,17 @@ public class VendorChangeServiceImpl extends ServiceImpl<VendorChangeMapper,Vend
      */
     @Override
     public void processAuditPass(Map<String, Object> variables) {
+        System.out.println("-------------vendorChange----processAuditPass----start");
+        System.out.println("businessId-----");
         String businessId = variables.get("businessId").toString();
+        System.out.println(businessId);
         super.update(new LambdaUpdateWrapper<VendorChange>()
                 .set(VendorChange::getChangeStatus,VendorStateEnum.APPROVE.getState())
                 .eq(VendorChange::getId, businessId));
         // 审批通过
         VendorChange vendorChange = super.getById(businessId);
         this.handleApprove(vendorChange);
+        System.out.println("-------------vendorChange----processAuditPass----end");
     }
 
     /**
