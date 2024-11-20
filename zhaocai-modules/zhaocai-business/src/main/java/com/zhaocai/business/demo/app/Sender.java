@@ -19,15 +19,15 @@ public class Sender {
 	/**
 	 * 服务部署地址
 	 */
-	private static final String SERVER_URL = "http://uat.yozopoc.com:9010/apiserver";
+	private static final String SERVER_URL = "http://192.168.240.31:9010/apiserver";
 	/**
 	 * 分配的应用代码
 	 */
-	private static final String AppCode = "ahtsabigJr0q3oa9Bs";
+	private static final String AppCode = "0hzTkMdt583i9Yf66G";
 	/**
 	 * 分配的应用秘钥，请不要通过参数传递
 	 */
-	private static final String AppSecret = "GeIGZSkQRq2ISjCc3YFCqt3BD3";
+	private static final String AppSecret = "4CDWd57l7Psnw19jdUUFqaXjZU";
 
 	/**
 	 * Http请求方法，POST
