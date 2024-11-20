@@ -24,8 +24,8 @@ public class DpDemo {
 	 * @throws NoSuchAlgorithmException
 	 */
 	public static void main(String[] args) throws NoSuchAlgorithmException, IOException, JSONException {
-//		 System.out.println("*********预览Office文件******************************************");
-//		 previewOffice();
+		 System.out.println("*********预览Office文件******************************************");
+		 previewOffice();
 		// System.out.println("*********预览Office文件图片格式******************************************");
 		// previewOfficePic();
 //		 System.out.println("*********预览PDF******************************************");
@@ -36,8 +36,8 @@ public class DpDemo {
 		// previewPic();
 //		 System.out.println("*********预览压缩文件******************************************");
 //		 previewZip();
-		 System.out.println("*********处理书签******************************************");
-		 bookMarkOperate();
+//		 System.out.println("*********处理书签******************************************");
+//		 bookMarkOperate();
 //		 System.out.println("*********编辑文件******************************************");
 //		 editDocument();
 //		System.out.println("*********office转pdf******************************************");
