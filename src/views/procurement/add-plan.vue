@@ -184,9 +184,9 @@
                       </el-table-column>
                       <el-table-column label="规格型号" min-width="150" prop="specification" show-overflow-tooltip/>
                       <el-table-column label="计量单位" align="center" prop="unitMeasurement" />
-                      <el-table-column label="价格类型" align="center" prop="priceType" width="200">
+                      <el-table-column label="价格类型" align="center" prop="priceType" width="200" v-if="procurementType === 1">
                         <template slot-scope="scope">
-                          <el-select style="width: 100%" v-model="scope.row.priceType" placeholder="请选择" :disabled="procurementType !== 1">
+                          <el-select style="width: 100%" v-model="scope.row.priceType" placeholder="请选择">
                             <el-option v-for="dict in PRICETYPEOPTIONS" :key="dict.value" :label="dict.label"
                               :value="dict.value">
                             </el-option>
@@ -214,7 +214,7 @@
                         </template>
                       </el-table-column>
 <!--                      基价由原来浮动价不可编辑，变成了可以编辑-->
-                      <el-table-column label="基价" align="right" width="130" prop="basePrice" >
+                      <el-table-column label="基价" align="right" width="130" prop="basePrice"  v-if="procurementType === 1">
                         <template slot-scope="scope">
                           <span v-if="scope.row.priceType === 1">/</span>
                           <div v-else>
@@ -236,7 +236,7 @@
                           {{ scope.row.unitPriceExclTax }}
                         </template>
                       </el-table-column>
-                      <el-table-column label="浮动价" align="right" width="130" prop="floatingPrice" >
+                      <el-table-column label="浮动价" align="right" width="130" prop="floatingPrice"  v-if="procurementType === 1">
                         <template slot-scope="scope">
                           <span v-if="scope.row.priceType === 1">/</span>
                           <div v-else>
@@ -246,7 +246,7 @@
 
                         </template>
                       </el-table-column>
-                      <el-table-column label="装卸费" align="right" width="130" prop="unloadingFee" >
+                      <el-table-column label="装卸费" align="right" width="130" prop="unloadingFee"  v-if="procurementType === 1">
                         <template slot-scope="scope">
                           <span v-if="scope.row.priceType === 1">/</span>
                           <div v-else>
