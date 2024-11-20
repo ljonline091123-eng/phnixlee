@@ -15,4 +15,5 @@ public interface IProjectService  extends IService<Project> {
      * @return 结果
      */
     public boolean receiptProject();
+
 }
