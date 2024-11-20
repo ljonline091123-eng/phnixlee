@@ -476,7 +476,6 @@ export default {
         rejectTaskKey: "",
         operateComment: "",
       },
-      cities :['上海', '北京', '广州', '深圳'],
       rejectNodeList: [],
       /* 下一步审批人列表 */
       nextCandidateList: [],
