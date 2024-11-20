@@ -52,7 +52,7 @@ public class ExpertChangeVO implements Serializable {
     private String major;
 
     @ApiModelProperty(value =  "业态")
-    private Integer businessType;
+    private String businessType;
 
     @ApiModelProperty(value =  "专家类别")
     @NotNull(message = "工作部门不能为空", groups = {ValidateGroup.AddGroup.class})
