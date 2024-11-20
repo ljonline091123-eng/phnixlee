@@ -248,32 +248,33 @@
               >
             </div>
 
-            <div
-              v-else-if="
-                Number(scope.row.isOperate) === 1 &&
-                Number(scope.row.agreementState) === 3
-              "
-            >
-              <el-button
-                type="text"
-                @click="
-                  pushToVendor(
-                    scope.row.id,
-                    scope.row.agreementName,
-                    scope.row.partyBName
-                  )
-                "
-                icon="el-icon-s-promotion"
-                size="small"
-                >推送至供应商</el-button
-              >
-            </div>
-            <div
-              v-else-if="
-                Number(scope.row.isOperate) === 1 &&
-                Number(scope.row.agreementState) === 7
-              "
-            >
+<!--            -->
+<!--            <div-->
+<!--              v-else-if="-->
+<!--                Number(scope.row.isOperate) === 1 &&-->
+<!--                Number(scope.row.agreementState) === 3-->
+<!--              "-->
+<!--            >-->
+<!--              <el-button-->
+<!--                type="text"-->
+<!--                @click="-->
+<!--                  pushToVendor(-->
+<!--                    scope.row.id,-->
+<!--                    scope.row.agreementName,-->
+<!--                    scope.row.partyBName-->
+<!--                  )-->
+<!--                "-->
+<!--                icon="el-icon-s-promotion"-->
+<!--                size="small"-->
+<!--                >推送至供应商</el-button-->
+<!--              >-->
+<!--            </div>-->
+<!--            <div-->
+<!--              v-else-if="-->
+<!--                Number(scope.row.isOperate) === 1 &&-->
+<!--                Number(scope.row.agreementState) === 7-->
+<!--              "-->
+<!--            >-->
 <!--              <el-button-->
 <!--                type="text"-->
 <!--                @click="-->
@@ -287,40 +288,41 @@
 <!--                size="small"-->
 <!--                >推送至电子签章平台</el-button-->
 <!--              >-->
-            </div>
-            <div
-              v-else-if="
-                Number(scope.row.isOperate) === 1 &&
-                Number(scope.row.agreementState) === 9
-              "
-            >
-              <el-button
-                type="text"
-                @click="toSignAgreement(scope.row.id)"
-                icon="el-icon-paperclip"
-                size="small"
-                >签署</el-button
-              >
-            </div>
-            <div
-              v-else-if="
-                Number(scope.row.isOperate) === 1 &&
-                Number(scope.row.agreementState) === 10
-              "
-            >
-              <el-button
-                type="text"
-                @click="
-                  toCancelledSignAgreementDialog(
-                    scope.row.id,
-                    scope.row.agreementName
-                  )
-                "
-                icon="el-icon-delete"
-                size="small"
-                >作废签署合同</el-button
-              >
-            </div>
+<!--            </div>-->
+<!--            <div-->
+<!--              v-else-if="-->
+<!--                Number(scope.row.isOperate) === 1 &&-->
+<!--                Number(scope.row.agreementState) === 9-->
+<!--              "-->
+<!--            >-->
+<!--              <el-button-->
+<!--                type="text"-->
+<!--                @click="toSignAgreement(scope.row.id)"-->
+<!--                icon="el-icon-paperclip"-->
+<!--                size="small"-->
+<!--                >签署</el-button-->
+<!--              >-->
+<!--            </div>-->
+<!--            <div-->
+<!--              v-else-if="-->
+<!--                Number(scope.row.isOperate) === 1 &&-->
+<!--                Number(scope.row.agreementState) === 10-->
+<!--              "-->
+<!--            >-->
+<!--              <el-button-->
+<!--                type="text"-->
+<!--                @click="-->
+<!--                  toCancelledSignAgreementDialog(-->
+<!--                    scope.row.id,-->
+<!--                    scope.row.agreementName-->
+<!--                  )-->
+<!--                "-->
+<!--                icon="el-icon-delete"-->
+<!--                size="small"-->
+<!--                >作废签署合同</el-button-->
+<!--              >-->
+<!--            </div>-->
+
 
             <span v-else>-</span>
           </template>
