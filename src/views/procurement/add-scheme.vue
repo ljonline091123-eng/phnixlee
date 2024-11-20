@@ -1143,25 +1143,28 @@ export default {
         // 设置日期时间显示格式，只显示年月日时分
         format: "yyyy-MM-dd HH:mm:ss",
         // 设置可选的时间范围
-        selectableRange: "00:00:00 - 23:59:59",
-        // disabledDate(time) {
-        //   return time.getTime() < Date.now() - 8.64e7; // 禁用小于当前日期的日期
-        // }
+        // selectableRange: "00:00:00 - 23:59:59",
+        selectableRange :new Date().getHours() + ':' + (new Date().getMinutes() + 1) + ':00 - 23:59:00',
         disabledDate(time) {
-          // 获取今天的时间戳
-          const today = new Date();
-          today.setHours(0, 0, 0, 0); // 设置为当天的零点
+          console.log(new Date().getDate()+5)
+          return time.getTime() < Date.now() + (4 * 24 * 3600 * 1000); // 禁用小于当前日期的日期
+        }
 
-          // 明天的时间戳
-          const tomorrow = new Date(today);
-          tomorrow.setDate(today.getDate() + 1);
+        // disabledDate(time) {
+        //   // 获取今天的时间戳
+        //   const today = new Date();
+        //   today.setHours(0, 0, 0, 0); // 设置为当天的零点
 
-          // 将传入的时间戳转为日期对象
-          const date = new Date(time);
+        //   // 明天的时间戳
+        //   const tomorrow = new Date(today);
+        //   tomorrow.setDate(today.getDate() + 1);
 
-          // 只能选择明天及之后的日期
-          return date <= today || date < tomorrow;
-        },
+        //   // 将传入的时间戳转为日期对象
+        //   const date = new Date(time);
+
+        //   // 只能选择明天及之后的日期
+        //   return date <= today || date < tomorrow;
+        // },
       },
       activeTabs: "base",
       inventoryVisible: false,
@@ -1206,7 +1209,7 @@ export default {
     this.$set(this.formData, "procurementType", param.procurementType + "");
   },
   computed: {
-     endTimeOptions() {
+    endTimeOptions() {
       //这里判断是不是今天
       let newVal = new Date(this.formData.bidDeadline)
       let    selectableRange =new Date().getHours() + ':' + (new Date().getMinutes() + 1) + ':00 - 23:59:00'
@@ -1225,10 +1228,11 @@ export default {
         disabledDate(time) {
           // 只能选大于当前截止时间的
             return time.getTime() < Date.now() + (4 * 24 * 3600 * 1000); // 禁用小于当前日期的日期
-       
+
         }
       }
     },
+
     ...mapGetters(["project"]),
     isLease() {
       return (
@@ -1238,6 +1242,7 @@ export default {
     },
   },
   methods: {
+
     handleTabClick(tab) {
       // 处理标签页点击事件，根据标签页切换表格数据
       this.activeTab = tab.name;
