@@ -339,7 +339,7 @@
                 prop="businessType"
                 class="required label-right-align"
               >
-                <el-radio-group
+                <!-- <el-radio-group
                   v-model="formData.businessType"
                   :disabled="isSubmit"
                 >
@@ -349,7 +349,15 @@
                     :label="dict.value"
                     >{{ dict.label }}</el-radio
                   >
-                </el-radio-group>
+                </el-radio-group> -->
+                 <el-checkbox-group v-model="businessTypeList">
+                  <el-checkbox
+                    v-for="dict in dict.type.expert_business_type"
+                    :label="dict.value"
+                    :key="dict.value"
+                    >{{ dict.label }}</el-checkbox
+                  >
+                </el-checkbox-group>
               </el-form-item>
             </el-col>
           </el-row>
@@ -452,6 +460,7 @@ export default {
     return {
       id:'',
       type:'',
+        businessTypeList:[],
       expertVisible:false,
       calibrateVisible: false,
       calibrateLoading: false,
@@ -685,6 +694,7 @@ export default {
         this.formData.educationDegree=this.formData.educationDegree+""
         this.formData.expertType=data.expertType+""
         this.formData.businessType=data.businessType+""
+        this.businessTypeList=data.businessType.split(",");
         this.formData.state=data.state+""
         if(data.registeredCertificate){
           this.formData.registeredCertificate=data.registeredCertificate+""
@@ -702,6 +712,7 @@ export default {
     //保存
     saveForm(formName){
       this.isSubmit = true;
+       this.formData.businessType=this.businessTypeList.join(",");
       this.$refs[formName].validate(async (valid) => {
         if (valid) {
           console.log(this.formData, "this.formData");

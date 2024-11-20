@@ -326,7 +326,8 @@
                         type="datetime"
                         style="width: 100%"
                         placeholder="选择日期"
-                        :picker-options="expireTimeOption"
+                         popper-class="date-clear"
+                        :picker-options="endTimeOptions"
                         value-format="yyyy-MM-dd HH:mm:ss"
                       />
                     </el-form-item>
@@ -1205,6 +1206,29 @@ export default {
     this.$set(this.formData, "procurementType", param.procurementType + "");
   },
   computed: {
+     endTimeOptions() {
+      //这里判断是不是今天
+      let newVal = new Date(this.formData.bidDeadline)
+      let    selectableRange =new Date().getHours() + ':' + (new Date().getMinutes() + 1) + ':00 - 23:59:00'
+      console.log( newVal.getDate()+"---"+new Date().getDate()+5)
+      if (
+        newVal &&
+        newVal.getDate() == new Date().getDate()+5
+      ) {
+       selectableRange =new Date().getHours() + ':' + (new Date().getMinutes() + 1) + ':00 - 23:59:00'
+      }
+      else if(newVal.getDate() > new Date().getDate()+5){
+        selectableRange = '00:00:00 - 23:59:00' //默认的时间范围
+      }
+      return {
+        selectableRange,
+        disabledDate(time) {
+          // 只能选大于当前截止时间的
+            return time.getTime() < Date.now() + (4 * 24 * 3600 * 1000); // 禁用小于当前日期的日期
+       
+        }
+      }
+    },
     ...mapGetters(["project"]),
     isLease() {
       return (
