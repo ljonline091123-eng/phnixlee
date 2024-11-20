@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhaocai.business.pub.mapper.AccountMapper">
+    <resultMap type="com.zhaocai.business.pub.domain.TAccountInfo" id="AccountResult">
+        <result property="id"    column="id"    />
+        <result property="upId"    column="up_id"    />
+        <result property="bankAccount"    column="bank_account"    />
+        <result property="bipId"    column="bip_id"    />
+        <result property="updateTime"    column="update_time"    />
+        <result property="acountType"    column="acount_type"    />
+        <result property="createBy"    column="create_by"    />
+        <result property="createTime"    column="create_time"    />
+        <result property="updateBy"    column="update_by"    />
+    </resultMap>
+
+    <sql id="selectAccountVo">
+        select id, up_id, bank_account, bip_id, acount_type, update_time,create_by,create_time,update_by from t_account_info
+    </sql>
+
+    <select id="selectAccountList" parameterType="com.zhaocai.business.pub.domain.TAccountInfo" resultMap="AccountResult">
+        <include refid="selectAccountVo"/>
+        <where>
+            <if test="bankAccount != null  and bankAccount != ''"> and bank_account like concat('%', #{bankAccount}, '%')</if>
+        </where>
+    </select>
+    
+    <select id="selectAccountById" parameterType="Long" resultMap="BankResult">
+        <include refid="selectAccountVo"/>
+        where id = #{id}
+    </select>
+        
+    <insert id="insertAccount" parameterType="com.zhaocai.business.pub.domain.TAccountInfo">
+        insert into t_account_info
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="id != null">id,</if>
+            <if test="upId != null">up_id,</if>
+            <if test="bankAccount != null">bank_account,</if>
+            <if test="bipId != null">bip_id,</if>
+            <if test="acountType != null">acount_type,</if>
+            <if test="updateTime != null">update_time,</if>
+            <if test="createBy != null">create_by,</if>
+            <if test="createTime != null">create_time,</if>
+            <if test="updateBy != null">update_by,</if>
+         </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="id != null">#{id},</if>
+            <if test="upId != null">#{up_id},</if>
+            <if test="bankAccount != null">#{bank_account},</if>
+            <if test="acountType != null">#{acount_type},</if>
+            <if test="bipId != null">#{bip_id},</if>
+            <if test="updateTime != null">#{update_time},</if>
+            <if test="createBy != null">#{create_by},</if>
+            <if test="createTime != null">#{create_time},</if>
+            <if test="updateBy != null">#{update_by},</if>
+         </trim>
+    </insert>
+
+    <update id="updateAccount" parameterType="com.zhaocai.business.pub.domain.TAccountInfo">
+        update t_account_info
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="id != null">id = #{id},</if>
+            <if test="upId != null">up_id = #{upId},</if>
+            <if test="bankAccount != null">bank_account = #{bankAccount},</if>
+            <if test="bipId != null">bip_id = #{bipId},</if>
+            <if test="updateTime != null">update_time = #{updateTime},</if>
+            <if test="bankAccount != null">bank_account = #{bankAccount},</if>
+            <if test="createBy != null">create_by = #{createBy},</if>
+            <if test="createTime != null">create_time = #{createTime},</if>
+            <if test="updateBy != null">update_by = #{updateBy},</if>
+        </trim>
+        where id = #{id}
+    </update>
+
+    <delete id="deleteAccountById" parameterType="Long">
+        delete from t_account_info where id = #{id}
+    </delete>
+
+    <delete id="deleteAccountByIds" parameterType="String">
+        delete from t_account_info where id in
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+
+    <delete id="deleteSyncAccount">
+        delete from t_account_info where id is not null;
+    </delete>
+
+</mapper>

@@ -6,7 +6,9 @@ import com.zhaocai.business.manager.http.dto.PlatDept;
 import com.zhaocai.business.manager.http.dto.PlatUser;
 import com.zhaocai.business.pub.domain.AreaDivision;
 import com.zhaocai.business.pub.domain.Country;
+import com.zhaocai.business.pub.domain.DwCdBank;
 import com.zhaocai.business.pub.service.IAreaDivisionService;
+import com.zhaocai.business.pub.service.IBankService;
 import com.zhaocai.business.pub.service.ICountryService;
 import com.zhaocai.common.core.constant.Constants;
 import com.zhaocai.common.core.constant.SecurityConstants;
@@ -50,6 +52,11 @@ public class SyncPlatformBasicDataService {
     private PlatCountryService platCountryService;
     @Autowired
     private ICountryService countryService;
+
+    @Autowired
+    private IBankService bankService;
+
+
 
     @Transactional(rollbackFor = Exception.class)
     public Boolean syncDept(){
@@ -256,5 +263,10 @@ public class SyncPlatformBasicDataService {
         return true;
     }
 
-
+    @Transactional(rollbackFor = Exception.class)
+    public Boolean receiptAccount() {
+        //
+        List<DwCdBank> bankLIst = bankService.getBankList();
+        return true;
+    }
 }
