@@ -206,11 +206,16 @@ public class BPMProcessService implements IBPMProcessService {
             requestDTO.setRejectTaskKey(variables.get("rejectTaskKey").toString());
         }
         BpmAuditResponseDTO responseDTO = bpmService.audit(requestDTO);
+        System.out.println("-------------pass");
+        System.out.println(pass);
+        System.out.println("-------------responseDTO");
+        System.out.println(responseDTO);
         //流程状态
         String processStatus = responseDTO.getProcessStatus();
         if (pass){
             //完成状态
             if (ProcessStateEnum.COMPLETED.getValue().equals(processStatus)) {
+                System.out.println("-------------ProcessStateEnum.COMPLETED.getValue()");
                 getProcessBusinessService(processKey).processAuditPass(variables);
             }
         }else{
