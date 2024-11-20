@@ -1,9 +1,11 @@
 <template>
   <div class="app-container">
+  
     <div class="context flex flex-column">
       <BackButton v-if="report" path="/tender-procurement/reportForm/buildingRate" title="招标管理详情">
       </BackButton>
       <el-radio-group
+        v-if="!report" 
         v-model="queryParams.procurementType"
         size="small"
         style="padding-bottom: 15px"
@@ -438,15 +440,16 @@ export default {
         const res = await getBiddingSchemeList(query);
         if (res.data) {
           //报表跳转过来时，项目请求数据不赋值
-          if(this.report=="report" && this.schemeList.length == 0){
+          // if(this.report=="report" && this.schemeList.length == 0){
+          //   this.schemeList = res.data.rows;
+          //   this.total = res.data.total;
+          // }else 
+          // if(this.report=="report" && this.schemeList.length > 0){
+          //   this.report=""
+          // }else{
             this.schemeList = res.data.rows;
             this.total = res.data.total;
-          }else if(this.report=="report" && this.schemeList.length > 0){
-            this.report=""
-          }else{
-            this.schemeList = res.data.rows;
-            this.total = res.data.total;
-          }
+          // }
 
         }
       } catch (err) {

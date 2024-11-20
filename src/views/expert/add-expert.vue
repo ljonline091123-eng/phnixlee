@@ -339,7 +339,7 @@
                 prop="businessType"
                 class="required label-right-align"
               >
-                <el-radio-group
+                <!-- <el-radio-group
                   v-model="formData.businessType"
                   :disabled="isSubmit"
                 >
@@ -349,7 +349,20 @@
                     :label="dict.value"
                     >{{ dict.label }}</el-radio
                   >
-                </el-radio-group>
+                </el-radio-group> -->
+                 <el-checkbox-group v-model="businessTypeList">
+                  <el-checkbox
+                    v-for="dict in dict.type.expert_business_type"
+                    :label="dict.value"
+                    :key="dict.value"
+                    >{{ dict.label }}</el-checkbox
+                  >
+                </el-checkbox-group>
+                  <!-- <el-checkbox-group v-model="formData.businessType" @change="handleCheckedCitiesChange">
+                      <el-checkbox v-for="dict in dict.type.expert_business_type"
+                    :key="dict.value"
+                    :label="dict.value">{{dict.label}}</el-checkbox>
+                    </el-checkbox-group> -->
               </el-form-item>
             </el-col>
           </el-row>
@@ -450,6 +463,7 @@ export default {
     return {
       id:'',
       type:'',
+      businessTypeList:[],
       expertVisible:false,
       calibrateVisible: false,
       calibrateLoading: false,
@@ -462,6 +476,7 @@ export default {
         rejectTaskKey: "",
         operateComment: "",
       },
+      cities :['上海', '北京', '广州', '深圳'],
       rejectNodeList: [],
       /* 下一步审批人列表 */
       nextCandidateList: [],
@@ -574,6 +589,9 @@ export default {
     }
   },
   methods: {
+     handleCheckedCitiesChange(value) {
+        console.log(JSON.stringify(value))
+      },
     handleSubmit() {
       this.$modal.loading("请稍候...");
       const params = {
@@ -678,6 +696,7 @@ export default {
         this.formData.educationDegree=this.formData.educationDegree+""
         this.formData.expertType=data.expertType+""
         this.formData.businessType=data.businessType+""
+        this.businessTypeList=data.businessType.split(",");
         this.formData.state=data.state+""
         if(data.registeredCertificate){
           this.formData.registeredCertificate=data.registeredCertificate+""
@@ -695,6 +714,7 @@ export default {
     //保存
     saveForm(formName){
       this.isSubmit = true;
+         this.formData.businessType=this.businessTypeList.join(",");
       this.$refs[formName].validate(async (valid) => {
         if (valid) {
           console.log(this.formData, "this.formData");
@@ -704,6 +724,7 @@ export default {
             background: "rgba(0, 0, 0, 0.7)",
           });
           try {
+         
             await saveExpert(this.formData);
             this.$message({
               message: "保存成功",
