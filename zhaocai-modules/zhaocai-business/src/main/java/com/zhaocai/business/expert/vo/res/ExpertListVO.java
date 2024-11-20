@@ -42,7 +42,7 @@ public class ExpertListVO extends AdviceObject {
     private String major;
 
     @ApiModelProperty(value =  "业态")
-    private Integer businessType;
+    private String businessType;
 
     @ApiModelProperty(value =  "专家类别（1技术类 2经济类）")
     private Integer expertType;
@@ -82,7 +82,7 @@ public class ExpertListVO extends AdviceObject {
     private String educationDegreeText;
 
     @ApiModelProperty(value =  "业态（文本）")
-    @DictCache(dictBizEnum= DictBizEnum.EXPERT_BUSINESS_TYPE,filedName = "businessType")
+//    @DictCache(dictBizEnum= DictBizEnum.EXPERT_BUSINESS_TYPE,filedName = "businessType")
     private String businessTypeText;
 
     @ApiModelProperty(value =  "专家类别（文本）")

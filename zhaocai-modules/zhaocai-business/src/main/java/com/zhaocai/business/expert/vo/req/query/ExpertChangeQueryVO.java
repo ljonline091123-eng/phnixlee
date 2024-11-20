@@ -44,7 +44,7 @@ public class ExpertChangeQueryVO extends PageRecive implements Serializable {
     private List<Long> deptIdList;
 
     @ApiModelProperty(value =  "业态")
-    private Integer businessType;
+    private String businessType;
 
     @ApiModelProperty(value =  "业态（多）")
     private String businessTypes;
