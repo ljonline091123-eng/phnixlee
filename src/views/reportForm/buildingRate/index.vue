@@ -113,6 +113,7 @@ export default {
       //   params.minAccountCode = '';
       // }
       // console.log("paramsbuilding2",params)
+      params.minAccountCode = 'SG20012024000002-2';
       console.log("building-scopeType-查询",this.$store.state.app.scopeType)
       console.log("building-queryParams-查询",this.params)
       console.log("building-project-查询",this.project)

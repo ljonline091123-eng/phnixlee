@@ -358,6 +358,11 @@
                     >{{ dict.label }}</el-checkbox
                   >
                 </el-checkbox-group>
+                  <!-- <el-checkbox-group v-model="formData.businessType" @change="handleCheckedCitiesChange">
+                      <el-checkbox v-for="dict in dict.type.expert_business_type"
+                    :key="dict.value"
+                    :label="dict.value">{{dict.label}}</el-checkbox>
+                    </el-checkbox-group> -->
               </el-form-item>
             </el-col>
           </el-row>
@@ -473,6 +478,7 @@ export default {
         rejectTaskKey: "",
         operateComment: "",
       },
+      cities :['上海', '北京', '广州', '深圳'],
       rejectNodeList: [],
       /* 下一步审批人列表 */
       nextCandidateList: [],
@@ -722,6 +728,7 @@ export default {
             background: "rgba(0, 0, 0, 0.7)",
           });
           try {
+
             await saveExpert(this.formData);
             this.$message({
               message: "保存成功",

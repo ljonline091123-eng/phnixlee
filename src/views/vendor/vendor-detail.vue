@@ -234,16 +234,20 @@
                   />
                 </template>
                 <template v-else>
-                  <div style="width: 150px; height: 200px; color: #0c7fe1;">
+                  <div style="width: 180px; height: 200px; color: #2b4acb; border: 1px solid #999999; ">
+                    <div style="margin: 60px 0 0 15px;">
                         <el-button
+                        size="medium"
                         type="primary"
                         @click="checkAttachment(businessLicense.attachmentFileUrl)"
                       >预览</el-button>
                     <el-button
                         type="primary"
+                        size="medium"
                         @click="downAttachment(businessLicense.attachmentFileUrl, businessLicense.attachmentFileName)"
                         >下载</el-button>
-                       <div >{{ businessLicense.attachmentFileName }}</div>
+                        </div>
+                       <div style="font-size: 12px;margin: 30px 0 0 8px;">{{ businessLicense.attachmentFileName }}</div>
                     </div>
                 </template>
 <!--                <el-image-->
@@ -271,17 +275,21 @@
                 <!-- <template v-else>
                   <div style="width: 200px; height: 200px; color: #0c7fe1;"><br>{{ integrity.attachmentFileName }}</div>
                 </template> -->
-                  <template v-else>
-                  <div style="width: 150px; height: 200px; color: #0c7fe1;">
+                 <template v-else>
+                  <div style="width: 180px; height: 200px; color: #2b4acb; border: 1px solid #999999; ">
+                    <div style="margin: 60px 0 0 15px;">
                         <el-button
+                        size="medium"
                         type="primary"
                         @click="checkAttachment(integrity.attachmentFileUrl)"
                       >预览</el-button>
                     <el-button
                         type="primary"
+                        size="medium"
                         @click="downAttachment(integrity.attachmentFileUrl, integrity.attachmentFileName)"
                         >下载</el-button>
-                       <div >{{ integrity.attachmentFileName }}</div>
+                        </div>
+                       <div style="font-size: 12px;margin: 30px 0 0 8px;">{{ integrity.attachmentFileName }}</div>
                     </div>
                 </template>
 <!--                <el-image-->
@@ -320,17 +328,21 @@
                     <!-- <template v-else>
                       <div style="width: 200px; height: 200px; color: #0c7fe1;"><br>{{ item.attachmentFileName }}</div>
                     </template> -->
-               <template v-else>
-                  <div style="width: 150px; height: 200px; color: #0c7fe1;">
+                  <template v-else>
+                  <div style="width: 180px; height: 200px; color: #2b4acb; border: 1px solid #999999; ">
+                    <div style="margin: 60px 0 0 15px;">
                         <el-button
+                        size="medium"
                         type="primary"
                         @click="checkAttachment(item.attachmentFileUrl)"
                       >预览</el-button>
                     <el-button
                         type="primary"
+                        size="medium"
                         @click="downAttachment(item.attachmentFileUrl, item.attachmentFileName)"
                         >下载</el-button>
-                       <div >{{ item.attachmentFileName }}</div>
+                        </div>
+                       <div style="font-size: 12px;margin: 30px 0 0 8px;">{{ item.attachmentFileName }}</div>
                     </div>
                 </template>
 <!--                    <el-image-->
@@ -371,16 +383,20 @@
                     <div style="width: 200px; height: 200px; color: #0c7fe1;"><br>{{ item.attachmentFileName }}</div>
                   </template> -->
                 <template v-else>
-                  <div style="width: 150px; height: 200px; color: #0c7fe1;">
+                  <div style="width: 180px; height: 200px; color: #2b4acb; border: 1px solid #999999; ">
+                    <div style="margin: 60px 0 0 15px;">
                         <el-button
+                        size="medium"
                         type="primary"
                         @click="checkAttachment(item.attachmentFileUrl)"
                       >预览</el-button>
                     <el-button
                         type="primary"
+                        size="medium"
                         @click="downAttachment(item.attachmentFileUrl, item.attachmentFileName)"
                         >下载</el-button>
-                       <div >{{ item.attachmentFileName }}</div>
+                        </div>
+                       <div style="font-size: 12px;margin: 30px 0 0 8px;">{{ item.attachmentFileName }}</div>
                     </div>
                 </template>
 <!--                  <el-image-->
