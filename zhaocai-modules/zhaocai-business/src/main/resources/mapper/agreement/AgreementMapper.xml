@@ -185,7 +185,7 @@
 
     <select id="selectAgreementJkpthtList" resultMap="AgreementJkpthtListResult">
         select * from (
-        select ta.id,ta.agreement_name,ta.expenditure_business_type,ta.vendor_id,ta.party_b_name,tbr.notifi_time
+        select ta.id,ta.agreement_name,ta.expenditure_business_type,ta.vendor_id,ta.party_b_name,tbr.notifi_time,ta.create_time
         from tb_agreement ta
         left join tb_bidding_result tbr on tbr.scheme_id = ta.scheme_id and tbr.vendor_id = ta.vendor_id and tbr.bid_result = 1 and tbr.del_flag = 2
         <where>
@@ -198,7 +198,7 @@
             </if>
         </where>
         union
-        select ta.id,ta.agreement_name,ta.expenditure_business_type,ta.vendor_id,ta.party_b_name, '' as notifi_time
+        select ta.id,ta.agreement_name,ta.expenditure_business_type,ta.vendor_id,ta.party_b_name, '' as notifi_time,ta.create_time
         from tb_agreement ta
         <where>
             ta.agreement_state = 3 and ta.market_material_contract_id is not null
