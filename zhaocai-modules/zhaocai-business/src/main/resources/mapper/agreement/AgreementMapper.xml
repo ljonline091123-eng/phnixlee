@@ -118,7 +118,7 @@
         from tb_agreement ta
         left join sys_dept sd on sd.thrid_dept_id = ta.party_a_org_id
         <where>
-            ta.market_material_contract_id is not null
+            ta.market_material_contract_id is not null and ta.belong_accounting_item_code = #{queryVO.projectCode,jdbcType=VARCHAR}
             <if test="queryVO.agreementCode != null and queryVO.agreementCode != ''">
                 and ta.agreement_code like concat('%',#{queryVO.agreementCode,jdbcType=VARCHAR},'%')
             </if>
