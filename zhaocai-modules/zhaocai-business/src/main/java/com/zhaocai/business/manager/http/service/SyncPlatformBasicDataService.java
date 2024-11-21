@@ -265,8 +265,12 @@ public class SyncPlatformBasicDataService {
 
     @Transactional(rollbackFor = Exception.class)
     public Boolean receiptAccount() {
-        //
         List<DwCdBank> bankLIst = bankService.getBankList();
+        if (CollectionUtils.isEmpty(bankLIst)){
+            throw new ServiceException("获取支行信息数据不成功");
+        }
+        bankService.deleteSyncBank();
+        Boolean addRes = bankService.saveBatch(bankLIst, bankLIst.size());
         return true;
     }
 }
