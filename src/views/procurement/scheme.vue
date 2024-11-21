@@ -351,13 +351,12 @@
           <el-row :gutter="20">
             <el-col :span="20" class="grid-cell">
               <el-form-item
-              label="采购计划是作废"
-              label-width="430px"
-              prop="contractName"
-              class="label-right-align"
-            >
-            <el-checkbox v-model="checked"></el-checkbox>
-          </el-form-item>
+                label-width="110px"
+                label="作废节点"
+                class="label-right-align">
+                <el-radio v-model="selectedOption" label="reScheme">重新新建采购方案</el-radio>
+                <el-radio v-model="selectedOption" label="rePlan">返回到采购计划</el-radio>
+              </el-form-item>
           </el-col>
         </el-row>
         </el-form>
@@ -391,15 +390,16 @@ import {
   withdrawalPlan,
 } from "@/api/procurement/scheme";
 import { getPlanList, getSplitPlanList } from "@/api/procurement/plan";
+import {abandonBidMore} from "@/api/procurement/manage";
 
 export default {
   name: "Scheme",
   dicts: ["procurement_plan_type"],
   data() {
     return {
+      selectedOption:'reScheme',
       planVisible: false,
       schemeList: [],
-      checked:false,
       procurementSchemeNameDialog:'',
       id:'',
       planList: [],
@@ -596,33 +596,36 @@ export default {
     goCancellation(id, procurementSchemeName) {
       this.id=id
       this.procurementSchemeNameDialog='确定要作废采购方案：'+procurementSchemeName
-      this.bidVisiable=true
-      // this.$confirm("确定要作废采购方案：" + procurementSchemeName, "提示", {
-      //   confirmButtonText: "确定",
-      //   cancelButtonText: "取消",
-      //   type: "warning",
-      // }).then(async () => {
-      //   try {
-      //     await cancellationProcurementScheme(id);
-      //     this.$message.success("作废成功");
-      //     this.getSchemeList();
-      //   } catch (error) {}
-      // });
+      // this.bidVisiable=true
+      // /* 默认选中 重新招标 */
+      // this.selectedOption = 'reScheme';
+      this.$confirm("确定要作废采购方案：" + procurementSchemeName, "提示", {
+        confirmButtonText: "确定",
+        cancelButtonText: "取消",
+        type: "warning",
+      }).then(async () => {
+        try {
+          await cancellationProcurementScheme(id);
+          this.$message.success("作废成功");
+          this.getSchemeList();
+        } catch (error) {}
+      });
     },
 
    async confirmCancellationBid(){
-    console.log(this.checked)
        const res=null
-        if(this.checked){
-          res=await cancellationProcurementSchemePlan(this.id);
-        }else{
-          res = await cancellationProcurementScheme(this.id);
-        }
+         if(this.selectedOption === 'rePlan'){
+           /* 选择了作废到 采购计划 */
+           const resPlan = await cancellationProcurementSchemePlan(id);
+         }else{
+           /* 选择了作废到 采购方案 */
+           const resScheme = await cancellationProcurementScheme(id);
+         }
         if(res.code==200){
            this.getSchemeList();
            this.$message.success("作废成功");
         }
-         
+
           this.bidVisiable=false
     },
     //切换tab类型
@@ -683,6 +686,9 @@ export default {
         }
       },
       immediate: true,
+    },
+    selectedOption(newVal) {
+      console.log('废标选中', newVal);
     },
   },
 };
