@@ -62,4 +62,13 @@ public class PlatformBasicDataTask {
         }
     }
 
+
+
+    public void handleSyncAccount(){
+        ResultData<Boolean> res = remoteBusinessService.syncAccount(SecurityConstants.INNER);
+        if (res.getCode() == ResultCode.SUCCESS.getCode()){
+            System.out.println("定时同步第三方支行数据成功");
+        }
+    }
+
 }
