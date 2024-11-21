@@ -58,17 +58,17 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
          </trim>
         <trim prefix="values (" suffix=")" suffixOverrides=",">
             <if test="id != null">#{id},</if>
-            <if test="parentName != null">#{parent_name},</if>
+            <if test="parentName != null">#{parentName},</if>
             <if test="code != null">#{code},</if>
-            <if test="deptId != null">#{dept_id},</if>
-            <if test="orderNum != null">#{order_num},</if>
+            <if test="deptId != null">#{deptId},</if>
+            <if test="orderNum != null">#{orderNum},</if>
             <if test="remark != null">#{remark},</if>
-            <if test="updateTime != null">#{update_time},</if>
+            <if test="updateTime != null">#{updateTime},</if>
             <if test="dr != null">#{dr},</if>
-            <if test="internalId != null">#{internal_id},</if>
-            <if test="createBy != null">#{create_by},</if>
-            <if test="createTime != null">#{create_time},</if>
-            <if test="updateBy != null">#{update_by},</if>
+            <if test="internalId != null">#{internalId},</if>
+            <if test="createBy != null">#{createBy},</if>
+            <if test="createTime != null">#{createTime},</if>
+            <if test="updateBy != null">#{updateBy},</if>
             <if test="name != null">#{name},</if>
          </trim>
     </insert>
