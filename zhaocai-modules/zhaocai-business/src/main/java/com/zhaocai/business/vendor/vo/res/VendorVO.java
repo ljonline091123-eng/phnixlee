@@ -157,7 +157,15 @@ public class VendorVO extends AdviceObject {
     @ApiModelProperty(value = "审批状态")
     private Integer state;
 
+
+
     /** 变更id */
     @TableField(exist = false)
     private Long changeId;
+
+    /**
+     * 批语
+     */
+    @ApiModelProperty(value = "批语")
+    private String operateComment;
 }

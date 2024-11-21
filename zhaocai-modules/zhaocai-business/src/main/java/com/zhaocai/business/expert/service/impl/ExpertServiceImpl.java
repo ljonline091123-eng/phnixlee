@@ -286,6 +286,7 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
                 /* 保存 */
                 expertChange.setState(ExpertStateEnum.SAVE.getState());
                 /* 审批类型 */
+                if(e.getProcessType()==null)e.setProcessType(ExpertProcessTypeEnum.EXPERT_ADD.getState());
                 expertChange.setProcessType(e.getProcessType());
                 if(e.getState()!=null && e.getState().equals(ExpertStateEnum.APPROVE.getState()))
                     expertChange.setProcessType(ExpertProcessTypeEnum.EXPERT_CHANGE.getState());
@@ -380,6 +381,7 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
                 /* 保存 */
                 expertChange.setState(ExpertStateEnum.IN_APPROVAL.getState());
                 /* 审批类型 */
+                if(e.getProcessType()==null)e.setProcessType(ExpertProcessTypeEnum.EXPERT_ADD.getState());
                 expertChange.setProcessType(e.getProcessType());
                 if(e.getState()!=null && e.getState().equals(ExpertStateEnum.APPROVE.getState()))
                     expertChange.setProcessType(ExpertProcessTypeEnum.EXPERT_CHANGE.getState());
