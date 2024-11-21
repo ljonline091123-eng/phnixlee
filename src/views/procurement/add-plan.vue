@@ -184,7 +184,7 @@
                       </el-table-column>
                       <el-table-column label="规格型号" min-width="150" prop="specification" show-overflow-tooltip/>
                       <el-table-column label="计量单位" align="center" prop="unitMeasurement" />
-                      <el-table-column label="价格类型" align="center" prop="priceType" width="200">
+                      <el-table-column label="价格类型" align="center" prop="priceType" width="200" v-if="procurementType === 1">
                         <template slot-scope="scope">
                           <el-select style="width: 100%" v-model="scope.row.priceType" placeholder="请选择">
                             <el-option v-for="dict in PRICETYPEOPTIONS" :key="dict.value" :label="dict.label"
@@ -214,7 +214,7 @@
                         </template>
                       </el-table-column>
 <!--                      基价由原来浮动价不可编辑，变成了可以编辑-->
-                      <el-table-column label="基价" align="right" width="130" prop="basePrice" >
+                      <el-table-column label="基价" align="right" width="130" prop="basePrice"  v-if="procurementType === 1">
                         <template slot-scope="scope">
                           <span v-if="scope.row.priceType === 1">/</span>
                           <div v-else>
@@ -236,7 +236,7 @@
                           {{ scope.row.unitPriceExclTax }}
                         </template>
                       </el-table-column>
-                      <el-table-column label="浮动价" align="right" width="130" prop="floatingPrice" >
+                      <el-table-column label="浮动价" align="right" width="130" prop="floatingPrice"  v-if="procurementType === 1">
                         <template slot-scope="scope">
                           <span v-if="scope.row.priceType === 1">/</span>
                           <div v-else>
@@ -246,7 +246,7 @@
 
                         </template>
                       </el-table-column>
-                      <el-table-column label="装卸费" align="right" width="130" prop="unloadingFee" >
+                      <el-table-column label="装卸费" align="right" width="130" prop="unloadingFee"  v-if="procurementType === 1">
                         <template slot-scope="scope">
                           <span v-if="scope.row.priceType === 1">/</span>
                           <div v-else>
@@ -598,6 +598,8 @@ export default {
         // 获取合约规划清单后，默认合约拆分一份
         // this.$set(this.splitForm,"num",1);
         this.handleSplitInit();
+        /* 同步将清单内所有的价格类型改成一致的（固定价） */
+        this.updateMaterialsFloat(1);
       })
     }
     /* 获取省市区 */
@@ -1294,6 +1296,8 @@ console.log("-2222--"+JSON.stringify(this.materialsLists))
         const { projectId } = this.formData
         getContractMaterials(contractPlanning.contractPlanningId, projectId,contractPlanning.contractPlanningCategory,contractPlanning.contractPlanningCode).then(res => {
           this.inventoryList = res.data.contractMaterialsList;
+          /* 同步将清单内所有的价格类型改成一致的（固定价） */
+          this.updateMaterialsFloat(1);
         })
         console.log(this.planList, 'this.planList');
       } catch (err) {
@@ -1633,6 +1637,20 @@ console.log("-2222--"+JSON.stringify(this.materialsLists))
         })
       })
       console.log(this.planList[0],'0000000000000000000000000000');
+    },
+    /* 同步将清单内所有的价格类型改成一致的 */
+    updateMaterialsFloat(val){
+      this.planList.forEach((item) => {
+        if (item.children && Array.isArray(item.children)) {
+          item.children.forEach((itemChildren) => {
+            if (itemChildren.children && Array.isArray(itemChildren.children)) {
+              itemChildren.children.forEach((children) => {
+                this.$set(children, 'priceType', val);
+              });
+            }
+          });
+        }
+      });
     }
   },
   computed: {
@@ -1700,17 +1718,7 @@ console.log("-2222--"+JSON.stringify(this.materialsLists))
       handler(val){
         if(Number(val) === 1 || Number(val) === 2){
           /* 同步将清单内所有的价格类型改成一致的 */
-          this.planList.forEach((item) => {
-            if (item.children && Array.isArray(item.children)) {
-              item.children.forEach((itemChildren) => {
-                if (itemChildren.children && Array.isArray(itemChildren.children)) {
-                  itemChildren.children.forEach((children) => {
-                    this.$set(children, 'priceType', val);
-                  });
-                }
-              });
-            }
-          });
+          this.updateMaterialsFloat(val);
         }
         /* 浮动价显示基价选项 */
         if(Number(val) === 2 || Number(val) === 3){

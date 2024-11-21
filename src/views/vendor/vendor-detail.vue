@@ -24,8 +24,12 @@
           size="mini"
           v-if="isShowButton"
           @click="handelSanction"
-          >审批</el-button
-        >
+          >审批</el-button>
+        <!-- <el-button
+        type="primary"
+        size="mini"
+        @click="handelSanction"
+        >审批</el-button> -->
         <!-- <el-button
           type="primary"
           size="small"
@@ -41,7 +45,7 @@
     <!-- 审批和审批详情 -->
     <ApprovalForm
       :visible.sync="sanctionVisible"
-      :title="'采购方案审批流程'"
+      :title="'供应商审批流程'"
       :formModel="sanctionForm"
       :rejectNodeList="rejectNodeList"
       :nextCandidateList="nextCandidateList"
@@ -51,7 +55,7 @@
     />
     <ApprovalDetailsDialog
       :visible.sync="calibrateVisible"
-      title="采购方案审批流程详情"
+      title="供应商审批流程详情"
       :activeStep="calibrateActive"
       :processInformationList="processInformationList"
       :approveLists="approveArr"
@@ -728,9 +732,9 @@ import {
 import { Base64 } from "js-base64";
 import BackButton from "@/components/BackButton/index.vue";
 import {
-  getPermissionButton,
-  postAuditProcess,
-  getLoadTaskDef,
+  getPermissionButton,getPermissionButtonVendor,
+  postAuditProcess,postAuditProcessVendor,
+  getLoadTaskDef,getLoadTaskDefVendor,
   getProcessLogList,
 } from "@/api/procurement/manage";
 import ApprovalForm from "@/components/Approval/approvalForm.vue";
@@ -903,7 +907,8 @@ export default {
         })
         console.log(res, "res-res");
         if (this.vendor.state === 1) {
-          this.getPermissionButton();
+          // this.getPermissionButton();
+          this.getPermissionButtonVendor();
         }
       } catch (err) {
         console.log(err);
@@ -1017,6 +1022,20 @@ export default {
             processId: this.exampleId, //流程id
           });
           this.rejectNodeList = res.data.completedTaskList;
+          this.taskPresentId = res.data.curTaskId;
+          this.isShowButton = res.data.auditable;
+        }
+      } catch (error) {}
+    },
+        // 供应商审批逻辑
+    async getPermissionButtonVendor() {
+      try {
+        if (this.purchaserId && this.exampleId) {
+          const res = await getPermissionButtonVendor({
+            businessId: this.purchaserId, //联系人id
+            processId: this.exampleId, //流程id
+          });
+          this.rejectNodeList = res.data.completedTaskList;
           /* 下一步审批人列表 */
           this.nextCandidateList = res.data.nextCandidateList;
           /* 下一步审批人是否可选 */
@@ -1054,12 +1073,17 @@ export default {
         processKey: this.processKey,
         // processKey: "jiantou-zhaocai:{org}:ZHAOCAI_VENDOR_REGISTER",
       };
-      postAuditProcess(params).then(() => {
+      postAuditProcessVendor(params).then(() => {
         this.$message.success("提交成功");
         // this.$router.go(-1);
         this.$modal.closeLoading();
         this.sanctionVisible = false;
-        this.getPermissionButton();
+        if(this.vendor.processType == 1){
+          this.getPermissionButtonVendor()
+        }else{
+          this.getPermissionButton();
+        }
+
         this.getVendorDetail();
       }).catch(error => {
         /* 关闭遮罩层 */
@@ -1071,7 +1095,7 @@ export default {
         this.calibrateVisible = true;
         this.calibrateLoading = true;
         const params = {
-          //businessId: this.vendor.changeId?this.vendor.changeId:this.purchaserId,
+          businessId: this.vendor.changeId?this.vendor.changeId:this.purchaserId,
           processId: this.exampleId,
         };
         const getProcessLogListParams = {
@@ -1079,7 +1103,7 @@ export default {
           processId: this.exampleId,
         };
         if (this.purchaserId && this.exampleId) {
-          const res = await getLoadTaskDef(params);
+          const res = await getLoadTaskDefVendor(params);
           this.processInformationList = res.data;
           function getActive(nodes) {
             let allFalse = true;

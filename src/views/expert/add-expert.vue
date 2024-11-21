@@ -11,7 +11,7 @@
           >取消</el-button
         >
       <el-button
-        v-if="type=='edit'"
+        v-if="type=='edit' && formData.state != 1"
         type="primary"
         size="mini"
         @click="saveForm('form')"
@@ -21,7 +21,7 @@
       >
 <!--   审批通过不显示提交     -->
         <el-button
-          v-if="type=='edit' && formData.state != 3"
+          v-if="type=='edit' && formData.state != 1"
           type="primary"
           size="mini"
           @click="submitForm('form')"
@@ -388,8 +388,9 @@
               <el-form-item
                 label="附件"
                 prop="resumeAttachList"
-                class="required label-right-align"
+                class="required label-right-align uploadItem"
               >
+                <el-button size="small" type="primary" style="margin-top: 8px;" @click="showSecretTips">点击上传</el-button>
                 <el-upload
                   :action="uploadFileUrl"
                   :limit="1"
@@ -398,8 +399,8 @@
                   :file-list="formData.resumeAttachList"
                   :on-remove="fileRemove"
                   :on-preview="handlePreview"
+                  ref="upload"
                 >
-                  <el-button size="small" type="primary">点击上传</el-button>
                 </el-upload>
               </el-form-item>
             </el-col>
@@ -444,6 +445,7 @@ import {
   getLoadTaskDef, getLoadTaskDefNew,
   getProcessLogList, getProcessLogListNew,
 } from "@/api/procurement/manage";
+import {showSecretRelatedTips} from "@/utils/MyUtils";
 export default {
   name: "add-expert",
   dicts: [
@@ -589,6 +591,11 @@ export default {
     }
   },
   methods: {
+    showSecretTips() {
+      showSecretRelatedTips(()=>{
+        this.$refs['upload'].$refs['upload-inner'].handleClick()
+      })
+    },
      handleCheckedCitiesChange(value) {
         console.log(JSON.stringify(value))
       },
@@ -724,7 +731,7 @@ export default {
             background: "rgba(0, 0, 0, 0.7)",
           });
           try {
-         
+
             await saveExpert(this.formData);
             this.$message({
               message: "保存成功",
@@ -800,6 +807,11 @@ export default {
 };
 </script>
 <style lang="scss" scoped>
+::v-deep .el-form-item.uploadItem {
+  .el-form-item__content {
+    line-height: 0;
+  }
+}
 .page-title {
   width: 100%;
   border-bottom: solid 1px #ccc;

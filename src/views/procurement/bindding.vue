@@ -1,11 +1,11 @@
 <template>
   <div class="app-container">
-  
+
     <div class="context flex flex-column">
       <BackButton v-if="report" path="/tender-procurement/reportForm/buildingRate" title="招标管理详情">
       </BackButton>
       <el-radio-group
-        v-if="!report" 
+        v-if="!report"
         v-model="queryParams.procurementType"
         size="small"
         style="padding-bottom: 15px"
@@ -244,17 +244,18 @@
             </el-form-item>
           </el-col>
         </el-row>
-        <el-row>
-          <el-col :span="24" class="grid-cell">
-            <el-form-item
-            label="采购计划作废"
-            label-width="150px"
-            class="label-right-align"
-          >
-            <el-checkbox v-model="checkedPlan"></el-checkbox>
-            </el-form-item>
-          </el-col>
-        </el-row>
+<!-- 隐藏该多余的功能 -->
+<!--        <el-row>-->
+<!--          <el-col :span="24" class="grid-cell">-->
+<!--            <el-form-item-->
+<!--            label="采购计划作废"-->
+<!--            label-width="150px"-->
+<!--            class="label-right-align"-->
+<!--          >-->
+<!--            <el-checkbox v-model="checkedPlan"></el-checkbox>-->
+<!--            </el-form-item>-->
+<!--          </el-col>-->
+<!--        </el-row>-->
       <el-row>
           <el-col :span="24" class="grid-cell">
             <el-form-item
@@ -380,7 +381,7 @@ export default {
     if(this.$route.query.report){
       this.report=this.$route.query.report
     }
-     console.log(" this.queryParams.procurementType"+ this.queryParams.procurementType);
+      console.log(" this.queryParams.procurementType"+ this.queryParams.procurementType);
       console.log(" this.queryParams.projectCode"+ this.queryParams.projectCode);
       console.log(" this.queryParams.projectCodeList"+ this.queryParams.projectCodeList);
       console.log(" this.queryParams.type"+ this.queryParams.type);
@@ -443,7 +444,7 @@ export default {
           // if(this.report=="report" && this.schemeList.length == 0){
           //   this.schemeList = res.data.rows;
           //   this.total = res.data.total;
-          // }else 
+          // }else
           // if(this.report=="report" && this.schemeList.length > 0){
           //   this.report=""
           // }else{

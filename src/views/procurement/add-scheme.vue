@@ -1149,7 +1149,7 @@ export default {
           console.log(new Date().getDate()+5)
           return time.getTime() < Date.now() + (4 * 24 * 3600 * 1000); // 禁用小于当前日期的日期
         }
-        
+
         // disabledDate(time) {
         //   // 获取今天的时间戳
         //   const today = new Date();
@@ -1228,7 +1228,7 @@ export default {
         disabledDate(time) {
           // 只能选大于当前截止时间的
             return time.getTime() < Date.now() + (4 * 24 * 3600 * 1000); // 禁用小于当前日期的日期
-       
+
         }
       }
     },
@@ -1242,7 +1242,7 @@ export default {
     },
   },
   methods: {
-   
+
     handleTabClick(tab) {
       // 处理标签页点击事件，根据标签页切换表格数据
       this.activeTab = tab.name;

@@ -7,6 +7,7 @@
           type="primary"
           plain
           size="mini"
+          :disabled="isSubmit"
           @click="$router.push('/tender-procurement/expert/expert')"
           >取消</el-button
         >
