@@ -244,26 +244,15 @@
             </el-form-item>
           </el-col>
         </el-row>
-<!-- 隐藏该多余的功能 -->
-<!--        <el-row>-->
-<!--          <el-col :span="24" class="grid-cell">-->
-<!--            <el-form-item-->
-<!--            label="采购计划作废"-->
-<!--            label-width="150px"-->
-<!--            class="label-right-align"-->
-<!--          >-->
-<!--            <el-checkbox v-model="checkedPlan"></el-checkbox>-->
-<!--            </el-form-item>-->
-<!--          </el-col>-->
-<!--        </el-row>-->
-      <el-row>
-          <el-col :span="24" class="grid-cell">
+        <el-row>
+          <el-col :span="12" class="grid-cell">
             <el-form-item
-            label-width="150px"
-            label="采购方案作废"
-            class="label-right-align"
-          >
-            <el-checkbox v-model="checkedScheme"></el-checkbox>
+              label-width="110px"
+              label="作废节点"
+              class="label-right-align">
+              <el-radio v-model="selectedOption" label="reTender">重新招标</el-radio>
+              <el-radio v-model="selectedOption" label="reScheme">返回到采购方案</el-radio>
+<!--              <el-radio v-model="selectedOption" label="rePlan">返回到采购计划</el-radio>-->
             </el-form-item>
           </el-col>
         </el-row>
@@ -323,8 +312,7 @@ export default {
   dicts: ["procurement_type", "bindding_step"],
   data() {
     return {
-      checkedPlan:false,
-      checkedScheme:false,
+      selectedOption:'reTender',
       schemeList: [],
       // 遮罩层
       loading: false,
@@ -498,6 +486,8 @@ export default {
       this.abandonBidForm.operator = this.$store.state.user.nickname;
       this.abandonBidForm.procurementSchemeName = this.procurementSchemeName;
       this.abandonBidForm.noticeId = this.noticeId;
+      /* 默认选中 重新招标 */
+      this.selectedOption = 'reTender';
     },
     /** 重新招标 */
     againHandle() {
@@ -542,13 +532,16 @@ export default {
           console.log(formData, "formData");
           try {
             const res=null
-            if(this.checkedPlan){
-              const resPlan=await cancellationProcurementSchemePlan(id);
-              }else  if(this.checkedScheme){
+            if(this.selectedOption === 'rePlan'){
+              /* 选择了作废到 采购计划 */
+              const resPlan = await cancellationProcurementSchemePlan(id);
+            }else  if(this.selectedOption === 'reScheme'){
+              /* 选择了作废到 采购方案 */
               const resScheme = await cancellationProcurementScheme(id);
-              }else{
-                const res = await abandonBidMore(formData);
-              }
+            }else{
+              /* 重新招标 */
+              const res = await abandonBidMore(formData);
+            }
             this.$message.success("废标成功");
             this.abandonBidVisiable = false;
             this.currentBid = {};
@@ -590,6 +583,9 @@ export default {
         }
       },
       immediate: true,
+    },
+    selectedOption(newVal) {
+      console.log('废标选中', newVal);
     },
   },
   components: {
