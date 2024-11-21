@@ -66,14 +66,19 @@ public class SyncPlatformDataService {
             List<SysDept> sysDeptsAdd = new ArrayList<>();
             List<SysDept> sysDeptsUpdate = new ArrayList<>();
             List<String> deptIdList = platDepts.stream().map(PlatDept::getDeptId).collect(Collectors.toList());
+            /* 根据第三方部门id查询 我们自己数据库已经同步的数据 */
             List<SysDept> sysDepts = sysDeptService.getListByThridDeptId(deptIdList);
+            /* 我们的部门数据，对第三方部门id去重。 */
             Map<String, SysDept> deptMap = sysDepts.stream().collect(Collectors.toMap(SysDept::getThridDeptId, Function.identity()));
             platDepts.forEach(item -> {
                 SysDept sysDept;
+                /* 对比的是第三方的部门id */
                 if (deptMap.containsKey(item.getDeptId())){
+                    /* 赋值我们原来的数据库的值。我们的主键是dept_id和这个item.getDeptId()不一样，item.getDeptId()是第三方部门id */
                     sysDept = deptMap.get(item.getDeptId());
                     //初始化父级关系和祖级
                     sysDept.setParentId(0L);
+                    /** 这个祖级是根据部门往上查的getDeptId将他join.toString.{@link com.zhaocai.system.service.impl.SysDeptServiceImpl#insertDept} */
                     sysDept.setAncestors("");
                     sysDeptsUpdate.add(sysDept);
                 } else {
@@ -85,17 +90,19 @@ public class SyncPlatformDataService {
                     sysDept.setThridOrgLevel(NumberConstant.ONE);
                 } else if (item.getDeptId().length() == 10 && item.getDeptId().startsWith("2")){
                     sysDept.setThridOrgLevel(NumberConstant.TWO);
-                }else{
-                    // 判断三级单位的编码规则
-                    if (item.getDeptId().length() == 10 &&
-                            !item.getDeptId().startsWith("000", 4) &&
-                            item.getDeptId().startsWith("000", 7)) {
-                        // 情况一：10位编码，第5-7位为非000，第8-10位为000
-                        sysDept.setThridOrgLevel(NumberConstant.THREE);
-                    } else if (item.getDeptId().length() == 13) {
-                        // 情况二：编码位数为13位
-                        sysDept.setThridOrgLevel(NumberConstant.THREE);
-                    }
+
+                  /* 三级单位先不加，因为有的业务是直接用 *.thrid_org_level IS NOT NULL 来获取二级单位。 */
+//                }else{
+//                    // 判断三级单位的编码规则
+//                    if (item.getDeptId().length() == 10 &&
+//                            !item.getDeptId().startsWith("000", 4) &&
+//                            item.getDeptId().startsWith("000", 7)) {
+//                        // 情况一：10位编码，第5-7位为非000，第8-10位为000
+//                        sysDept.setThridOrgLevel(NumberConstant.THREE);
+//                    } else if (item.getDeptId().length() == 13) {
+//                        // 情况二：编码位数为13位
+//                        sysDept.setThridOrgLevel(NumberConstant.THREE);
+//                    }
                 }
 
                 sysDept.setDeptName(StringUtils.isEmpty(item.getRemark()) ? item.getDeptName() : item.getRemark());
