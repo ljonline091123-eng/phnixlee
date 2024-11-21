@@ -351,7 +351,26 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
         long attachmentId = agreementCreateAttachmentHandle(scheme.getId());
         baseInfoVO.setAttachmentId(attachmentId);
 
+        // 是否关联我的钢铁网价格-是否显示
+        baseInfoVO.setIsRelatedMySteelView(this.getIsRelatedMySteelCreate(baseInfoVO.getBiddingListQuotation()));
+
         return baseInfoVO;
+    }
+
+    /**
+     * 是否关联我的钢铁网价格-是否显示
+     * @param biddingListQuotation
+     * @return
+     */
+    private String getIsRelatedMySteelCreate(List<VendorBiddingListQuotationListVO> biddingListQuotation) {
+        String result = "N";
+        for (VendorBiddingListQuotationListVO vo : biddingListQuotation) {
+            if(null != vo.getSubjectMatterCode() && vo.getSubjectMatterCode().startsWith("A101")){
+                result = "Y";
+                break;
+            }
+        }
+        return result;
     }
 
     @Override
@@ -503,6 +522,9 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
         // 合同-甲供材料清单对象
         List<AgreementMaterialSupplyVO> agreementMaterialSupplies = agreementMaterialSupplyService.listByAgreementId(id);
 
+        // 是否关联我的钢铁网价格-是否显示
+        agreementVO.setIsRelatedMySteelView(this.getIsRelatedMySteelDetail(materialsLists));
+
         return AgreementDetailVO.builder()
                 .agreement(agreementVO)
                 .agreementPaymentItem(agreementPaymentItemVO)
@@ -514,6 +536,17 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
                 .agreementEquipmentSupplies(agreementEquipmentSupplies)
                 .agreementMaterialSupplies(agreementMaterialSupplies)
                 .build();
+    }
+
+    private String getIsRelatedMySteelDetail(List<AgreementMaterialsListVO> materialsLists) {
+        String result = "N";
+        for (AgreementMaterialsListVO vo : materialsLists) {
+            if(null != vo.getSubjectMatterCode() && vo.getSubjectMatterCode().startsWith("A101")){
+                result = "Y";
+                break;
+            }
+        }
+        return result;
     }
 
     @Override

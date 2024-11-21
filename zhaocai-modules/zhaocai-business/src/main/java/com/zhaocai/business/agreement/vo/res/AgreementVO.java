@@ -229,4 +229,7 @@ public class AgreementVO extends AdviceObject {
 
     @ApiModelProperty(value = "易料采购合同id")
     private String marketMaterialContractId;
+
+    @ApiModelProperty(value = "是否关联我的钢铁网价格-是否显示")
+    private String isRelatedMySteelView;
 }
