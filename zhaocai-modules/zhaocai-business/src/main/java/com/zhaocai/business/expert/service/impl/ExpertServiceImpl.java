@@ -28,8 +28,10 @@ import com.zhaocai.business.manager.http.service.UnderlingSystemService;
 import com.zhaocai.business.process.service.IBPMProcessService;
 import com.zhaocai.business.process.service.IPBMOverrideService;
 import com.zhaocai.business.pub.service.IAttachmentService;
+import com.zhaocai.business.pub.service.ISysDictDataService;
 import com.zhaocai.business.pub.service.ISystemUserService;
 import com.zhaocai.business.pub.vo.res.AttachmentVO;
+import com.zhaocai.business.pub.vo.res.DictListVO;
 import com.zhaocai.business.vendor.domain.Vendor;
 import com.zhaocai.business.vendor.domain.VendorContact;
 import com.zhaocai.common.core.bean.PageResult;
@@ -76,6 +78,8 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
     private ISystemUserService systemUserService;
     @Autowired
     private IExpertChangeService expertChangeService;
+    @Autowired
+    private ISysDictDataService dictDataService;
 
     @Override
     public List<TPIExpertInfoVO> getTPIExpertInfo() {
@@ -165,7 +169,29 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
             iPage.setTotal(expertList.size());
             iPage.setPages(expertList.size() / queryDTO.getPageSize() + 1);
         }
+        // 处理业态
+        for (ExpertListVO vo : iPage.getRecords()) {
+            if (StringUtils.isNotBlank(vo.getBusinessType())) {
+                vo.setBusinessTypeText(this.getBusinessTypeName(vo.getBusinessType()));
+            }
+        }
         return new PageResult<>(iPage);
+    }
+
+    private String getBusinessTypeName(String ids) {
+        if (StringUtils.isBlank(ids)) {
+            return null;
+        }
+        String[] arr = ids.split(",");
+        List<DictListVO> rentalTypeMap = dictDataService.listDictByType(DictBizEnum.EXPERT_BUSINESS_TYPE.getName());
+        return Arrays.stream(arr)
+                .map(id -> rentalTypeMap.stream()
+                        .filter(dict -> id.equals(dict.getDictValue()))
+                        .map(DictListVO::getDictLabel)
+                        .findFirst()
+                        .orElse(null))
+                .filter(name -> name != null && !name.isEmpty())
+                .collect(Collectors.joining(","));
     }
 
     /**
@@ -260,6 +286,7 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
                 /* 保存 */
                 expertChange.setState(ExpertStateEnum.SAVE.getState());
                 /* 审批类型 */
+                if(e.getProcessType()==null)e.setProcessType(ExpertProcessTypeEnum.EXPERT_ADD.getState());
                 expertChange.setProcessType(e.getProcessType());
                 if(e.getState()!=null && e.getState().equals(ExpertStateEnum.APPROVE.getState()))
                     expertChange.setProcessType(ExpertProcessTypeEnum.EXPERT_CHANGE.getState());
@@ -273,7 +300,8 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
                 attachmentService.addAttachment(expertVO.getResumeAttachList(), AttachmentTypeEnum.EXPERT_RESUME, expertChange.getId());
 
                 /* 审批通过后的修改数据库的值 */
-                expert = e;
+//                expert = e;
+                expert = BeanCopierUtil.copyBean(expertVO, Expert.class);
                 /* 待审批 */
                 expert.setExpertState(NumberConstant.ZERO);
                 /* 审批类型 */
@@ -353,6 +381,7 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
                 /* 保存 */
                 expertChange.setState(ExpertStateEnum.IN_APPROVAL.getState());
                 /* 审批类型 */
+                if(e.getProcessType()==null)e.setProcessType(ExpertProcessTypeEnum.EXPERT_ADD.getState());
                 expertChange.setProcessType(e.getProcessType());
                 if(e.getState()!=null && e.getState().equals(ExpertStateEnum.APPROVE.getState()))
                     expertChange.setProcessType(ExpertProcessTypeEnum.EXPERT_CHANGE.getState());

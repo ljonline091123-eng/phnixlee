@@ -689,23 +689,35 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
             ContractPlanning contractPlanning = contractPlanningService.getOne(new LambdaQueryWrapper<ContractPlanning>()
                     .eq(ContractPlanning::getContractPlanningCode,planPushVO.getContractPlanningCode())
                     .eq(ContractPlanning::getContractPlanningId,planPushVO.getContractPlanningId())
+                    .eq(ContractPlanning::getProjectCode,planPushVO.getProjectCode())
                     .last("limit 1"));
             /* 查询采购计划 */
             ProcurementPlan procurementPlan = null;
             if(contractPlanning!=null&&contractPlanning.getPlanId()!=null){
                 procurementPlan = procurementPlanService.getById(contractPlanning.getPlanId());
             }
+
+            /* 设置省、市名称 */
+            String provinceName = "";
+            String cityName = "";
+            if(procurementPlan!=null && procurementPlan.getProcurementPlanType().equals(ProcurementPlanTypeEnum.PURCHASE_MATERIALS.getType())){
+                List<String> regionCodeList = Arrays.asList(procurementPlan.getRegionProvinceCode(),procurementPlan.getRegionCityCode());
+                Map<String,String> regionMap = areaDivisionService.getAreaDivisionMap(regionCodeList);
+                provinceName = (regionMap.get(procurementPlan.getRegionProvinceCode()) == null ? "" : regionMap.get(procurementPlan.getRegionProvinceCode()));
+                cityName = (regionMap.get(procurementPlan.getRegionCityCode()) == null ? "" : regionMap.get(procurementPlan.getRegionCityCode()));
+            }
+
             String content =
                             /* 推送人 登录人 */
                     "发送人: "+(SecurityUtils.getLoginUserNickName())+
                             /* 项目名称 */
-                    "，{最小核算项目=("+(contractPlanning==null?"":contractPlanning.getProjectName())+
+                    "，最小核算项目"+(contractPlanning==null?"":contractPlanning.getProjectName())+
                             /* 类型 */
-                    ")}，合同类型为{"+(contractPlanning==null?"":contractPlanning.getContractPlanningCategoryName())+
+                    "，合同类型为"+(contractPlanning==null?"":contractPlanning.getContractPlanningCategoryName())+
                             /* 合约规划名称 */
-                    " ("+(contractPlanning==null?"":contractPlanning.getContractPlanningName())+
+                    "-"+(contractPlanning==null?"":contractPlanning.getContractPlanningName())+
                             /* 采购计划名称 */
-                    ")}合同将于近期开展，请您及时关注了解，采购计划如下：\n "+(procurementPlan==null?"":procurementPlan.getProcurementPlanName())+
+                    "合同将于近期开展，请您及时关注了解，采购计划如下：\n "+(procurementPlan==null?"":procurementPlan.getProcurementPlanName())+
                             /* 招标时间 */
                     " 招标时间为"+(planPushVO.getBiddingTime()==null?"":planPushVO.getBiddingTime())+
                             /* 进场时间 */
@@ -713,8 +725,8 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
                             /* 采购经办人名称 */
                     "、采购人为"+(procurementPlan==null?"":procurementPlan.getProcurementOfficerName())+
                             /* 区域（只有购买材料）：获取“购买材料”类型里边拆分的标包里边的“区域”字段 省 + 市 */
-                    ((procurementPlan==null?false:procurementPlan.getProcurementPlanType().equals(NumberConstant.ONE))?
-                            "，区域为"+((procurementPlan==null?"":procurementPlan.getRegionProvinceCode()) + (procurementPlan==null?"":procurementPlan.getRegionCityCode())):"");
+                    ((procurementPlan==null?false:procurementPlan.getProcurementPlanType().equals(ProcurementPlanTypeEnum.PURCHASE_MATERIALS.getType()) && !(provinceName + cityName).isEmpty())?
+                            "，区域为"+(provinceName + cityName):"");
             requestDTO.setContent(content);/* 推送内容 */
             log.info("[推送合约规划推动采购计划拆包推送内容:{}],",content);
 
@@ -844,6 +856,10 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
          * 获取上限价、物料总数
          */
         Integer procurementPlanType = procurementPlan.getProcurementPlanType();
+        /**
+         * 改成按清单的价格类型计算浮动价固定价格
+         * Time:2024/11/13 下午2:55
+         * */
         Integer priceType = procurementPlan.getPriceType();
         // 上限价
         BigDecimal plannedPrice = BigDecimal.ZERO;
@@ -878,7 +894,8 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
                 materialsCountMap.put(materials.getMaterialsUniqueId(),NumberUtil.add(materialsCount,materials.getCount()));
 
                 // 上限价
-                if (PriceTypeEnum.FLOAT_PRICE.equalsType(priceType)) {
+//                if (PriceTypeEnum.FLOAT_PRICE.equalsType(priceType)) {
+                if (PriceTypeEnum.FLOAT_PRICE.equalsType(materials.getPriceType())) {
                     // 浮动价 = 清单数量 * (基价 + 浮动价 + 卸费)
                     BigDecimal floatPrice = NumberUtil.add(materials.getBasePrice(),materials.getFloatingPrice(),materials.getUnloadingFee());
                     BigDecimal floatPriceAmount = AmountCalUtil.calTotalAmountInclTax(materials.getCount(),floatPrice);
@@ -899,7 +916,8 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
                 }
 
                 // 非浮动价，将浮动价相关字段全部设置为 null
-                if (!PriceTypeEnum.FLOAT_PRICE.equalsType(priceType)) {
+//                if (!PriceTypeEnum.FLOAT_PRICE.equalsType(priceType)) {
+                if (!PriceTypeEnum.FLOAT_PRICE.equalsType(materials.getPriceType())) {
                     materials.setBasePrice(null);
                     materials.setFloatingPrice(null);
                     materials.setUnloadingFee(null);
@@ -935,6 +953,7 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
         procurementPlan.setSubjectMatter(subjectMatterCode);
         // 交易标的物类型，只有购买材料的需要计算
         if (ProcurementPlanTypeEnum.PURCHASE_MATERIALS.equalsType(procurementPlan.getProcurementPlanType())) {
+            /* 校验交易标的物是否存在多种 */
             Integer subjectMatterType = materialsListService.getSubjectMatterType(subjectMatterCode);
             procurementPlan.setSubjectMatterType(subjectMatterType);
         } else {

@@ -12,11 +12,13 @@ spring:
     active: dev
   cloud:
     nacos:
+      username: nacos
+      password: nacos
       discovery:
         # 服务注册地址
         server-addr: 192.168.240.13:30848
         metadata:
-          version: zs
+          version: cm
       config:
         # 配置中心地址
         server-addr: 192.168.240.13:30848

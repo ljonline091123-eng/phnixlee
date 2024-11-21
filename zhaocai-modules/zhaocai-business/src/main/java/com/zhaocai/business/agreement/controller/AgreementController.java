@@ -202,7 +202,6 @@ public class AgreementController extends BladeController {
         return ResultData.success();
     }
 
-
     @ApiOperation(value = "初始化接口")
     @GetMapping ("/initialize")
     public ResultData<BpmInitializeResponseDTO> initialize(BpmInitializeRequestDTO requestDTO) {

@@ -48,6 +48,8 @@ public class ContractPlanningSplitServiceImpl extends ServiceImpl<ContractPlanni
     @Override
     public List<MaterialsList> saveContractPlanningSplit(List<ContractPlanningSplitRequestVO> splitRequestList, Long planId, ProcurementPlan procurementPlan) {
         List<MaterialsList> list = new ArrayList<>();
+        Integer[] floatCount = {0};
+        Integer[] fixedCount = {0};
         splitRequestList.forEach(split -> {
             if (CollectionUtil.isNotEmpty(split.getMaterialsLists())) {
                 // 保存合约拆分
@@ -59,7 +61,7 @@ public class ContractPlanningSplitServiceImpl extends ServiceImpl<ContractPlanni
                 baseMapper.insert(contractPlanningSplit);
 
                 // 保存合约对应的物料数据
-                List<MaterialsList> materialsLists = materialsListService.saveMaterialsList(split.getMaterialsLists(), contractPlanningSplit.getId(), planId, procurementPlan);
+                List<MaterialsList> materialsLists = materialsListService.saveMaterialsList(split.getMaterialsLists(), contractPlanningSplit.getId(), planId, procurementPlan,floatCount,fixedCount);
                 list.addAll(materialsLists);
             } else {
                 log.warn("合约拆分[{}-{}]的清单列表为空",split.getContractScope(),split.getSplitContractName());

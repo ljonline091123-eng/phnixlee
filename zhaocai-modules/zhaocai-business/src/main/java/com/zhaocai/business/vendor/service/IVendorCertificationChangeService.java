@@ -24,6 +24,15 @@ public interface IVendorCertificationChangeService extends IService<VendorCertif
     List<VendorCertificationChange> createCertificationChange(Long vendorId, Integer version);
 
     /**
+     * 创建资质变更新版本
+     * @param vendorId
+     * @return
+     */
+    List<VendorCertificationChange> getCertificationChange(Long vendorId, Integer version);
+
+
+
+    /**
      * 处理审批通过后资质信息更新
      * @param vendorChange
      */

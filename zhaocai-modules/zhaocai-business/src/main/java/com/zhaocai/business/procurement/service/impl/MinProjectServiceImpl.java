@@ -82,7 +82,7 @@ public class MinProjectServiceImpl extends ServiceImpl<MinProjectMapper, MinProj
     @Override
     public MinProjectVO getMinProjectByMinAccountCode(String projectCode) {
         if(StringUtils.isBlank(projectCode)) {
-            throw new ParamValidateException("最小核酸项目编码不能为空");
+            throw new ParamValidateException("最小核算项目编码不能为空");
         }
 
         MinProjectDetailResponseDTO detailResponseDTO = contractPlanService.getMinProjectDetail(projectCode);

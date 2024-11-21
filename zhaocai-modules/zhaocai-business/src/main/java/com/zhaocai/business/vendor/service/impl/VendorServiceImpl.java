@@ -12,6 +12,11 @@ import com.zhaocai.business.common.enums.*;
 import com.zhaocai.business.common.exception.BusinessException;
 import com.zhaocai.business.common.exception.ParamValidateException;
 import com.zhaocai.business.common.utils.ValidateUtils;
+import com.zhaocai.business.expert.domain.Expert;
+import com.zhaocai.business.expert.domain.ExpertChange;
+import com.zhaocai.business.manager.http.dto.req.*;
+import com.zhaocai.business.manager.http.dto.res.*;
+import com.zhaocai.business.expert.domain.Expert;
 import com.zhaocai.business.manager.http.dto.req.*;
 import com.zhaocai.business.manager.http.dto.res.BpmInitializeResponseDTO;
 import com.zhaocai.business.manager.http.dto.res.BpmListProcessLogResponseDTO;
@@ -99,6 +104,29 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
 
     @Override
     @Transactional(propagation = Propagation.REQUIRED,rollbackFor = Exception.class)
+    public VendorRegisterRequestVO getVendorUpdateDetail(Long vendorId) {
+        VendorRegisterRequestVO vendorRequestVO = new VendorRegisterRequestVO();
+        // 供应商联系人变更信息
+        List<VendorContact> contactList;
+
+        // 供应商联系人变更信息
+        List<VendorContact> contactListMain;
+        // 根据供应商id在供应商
+        Vendor vendor = super.getById(vendorId);
+        contactList = vendorContactService.list(new LambdaQueryWrapper<VendorContact>()
+                .eq(VendorContact::getVendorId, vendorId)
+                .eq(VendorContact::getIsMainContact, 1));
+        vendorRequestVO  =  vendorCertificationService.listCertification(vendorRequestVO,vendorId,contactList.get(0).getId());
+        vendorRequestVO.setVendor(vendor);
+        if(contactList!=null&&contactList.size()>0){
+            vendorRequestVO.setVendorContact(contactList.get(0));
+        }
+
+        return vendorRequestVO;
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRED,rollbackFor = Exception.class)
     public void vendorRegister(VendorRegisterRequestVO requestVO) {
         checkVendorInfo(requestVO.getVendor());
 
@@ -141,35 +169,94 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
     @Override
     @Transactional(propagation = Propagation.REQUIRED,rollbackFor = Exception.class)
     public void register(VendorRegisterRequestVO requestVO) {
-        checkVendorInfo(requestVO.getVendor());
-        // 保存基本信息
-        Vendor vendor = requestVO.getVendor();
-        vendor.setState(VendorStateEnum.IN_APPROVAL.getState());
-        vendor.setSignState(SignStateEnum.TO_SIGN.getState());
-        vendor.setVendorClass(1);
-        vendor.setVendorLevel(1);
-        super.save(vendor);
-        // 保存供应商资质
-        vendorCertificationService.addCertification(requestVO.getBusinessLicense(), CertificationTypeEnum.BUSINESS_LICENSE,vendor.getId());
-        vendorCertificationService.addCertification(requestVO.getIntegrity(), CertificationTypeEnum.INTEGRITY,vendor.getId());
-        Long legalAuthorizationId = vendorCertificationService.addCertification(requestVO.getLegalAuthorization(),CertificationTypeEnum.LEGAL_AUTHORIZATION,vendor.getId());
-        if (CollUtil.isNotEmpty(requestVO.getRelevantCertificationList())){
-            vendorCertificationService.addCertification(requestVO.getRelevantCertificationList(), CertificationTypeEnum.RELEVANT_CERTIFICATION,vendor.getId());
+        Boolean flag =true;
+        Vendor vendor = new Vendor();
+        //如果重新提交则走if里面的方法
+        if(requestVO.getVendor()!=null&&requestVO.getVendor().getId()!=null){
+            flag = false;
+            Long id =requestVO.getVendor().getId();
+            vendor = super.getById(requestVO.getVendor().getId());
+            if(vendor!=null){
+                // 保存基本信息
+                vendor = requestVO.getVendor();
+                vendor.setState(VendorStateEnum.IN_APPROVAL.getState());
+                vendor.setSignState(SignStateEnum.TO_SIGN.getState());
+                vendor.setVendorClass(1);
+                vendor.setVendorLevel(1);
+                super.saveOrUpdate(vendor);
+                // 保存供应商资质
+                vendorCertificationService.addCertification(requestVO.getBusinessLicense(), CertificationTypeEnum.BUSINESS_LICENSE,vendor.getId());
+                vendorCertificationService.addCertification(requestVO.getIntegrity(), CertificationTypeEnum.INTEGRITY,vendor.getId());
+                Long legalAuthorizationId = vendorCertificationService.addCertification(requestVO.getLegalAuthorization(),CertificationTypeEnum.LEGAL_AUTHORIZATION,vendor.getId());
+                if (CollUtil.isNotEmpty(requestVO.getRelevantCertificationList())){
+                    vendorCertificationService.addCertification(requestVO.getRelevantCertificationList(), CertificationTypeEnum.RELEVANT_CERTIFICATION,vendor.getId());
+                }
+                // 主要联系人
+               VendorContact contact = requestVO.getVendorContact();
+                // 新增供应商账号
+                //  Long longUserId = vendorContactService.getULoginUser(contact.getContactPhone(),contact.getContactName());
+                //  contact.setLoginUserId(longUserId);
+                contact.setCertificationId(legalAuthorizationId);
+                contact.setVendorId(vendor.getId());
+                // 注册时为默认为管理员
+                contact.setIsManager(1);
+                vendorContactService.saveOrUpdate(contact);
+                // 更新法人授权的 businessId
+                vendorCertificationService.update(new LambdaUpdateWrapper<VendorCertification>()
+                        .set(VendorCertification::getBusinessId,contact.getId())
+                        .eq(VendorCertification::getId,legalAuthorizationId));
+            }else{
+                flag = true;
+            }
+        }else{
+            flag =true;
         }
-        // 主要联系人
-        VendorContact contact = requestVO.getVendorContact();
-        // 新增供应商账号
-        Long longUserId = vendorContactService.addLoginUser(contact.getContactPhone(),contact.getContactName());
-        contact.setLoginUserId(longUserId);
-        contact.setCertificationId(legalAuthorizationId);
-        contact.setVendorId(vendor.getId());
-        // 注册时为默认为管理员
-        contact.setIsManager(1);
-        long contactId = vendorContactService.saveMainVendorContact(contact);
-        // 更新法人授权的 businessId
-        vendorCertificationService.update(new LambdaUpdateWrapper<VendorCertification>()
-                .set(VendorCertification::getBusinessId,contactId)
-                .eq(VendorCertification::getId,legalAuthorizationId));
+        if(flag){
+            checkVendorInfo(requestVO.getVendor());
+            // 保存基本信息
+            vendor = requestVO.getVendor();
+            vendor.setState(VendorStateEnum.IN_APPROVAL.getState());
+            vendor.setSignState(SignStateEnum.TO_SIGN.getState());
+            vendor.setVendorClass(1);
+            vendor.setVendorLevel(1);
+            super.save(vendor);
+            // 保存供应商资质
+            vendorCertificationService.addCertification(requestVO.getBusinessLicense(), CertificationTypeEnum.BUSINESS_LICENSE,vendor.getId());
+            vendorCertificationService.addCertification(requestVO.getIntegrity(), CertificationTypeEnum.INTEGRITY,vendor.getId());
+            Long legalAuthorizationId = vendorCertificationService.addCertification(requestVO.getLegalAuthorization(),CertificationTypeEnum.LEGAL_AUTHORIZATION,vendor.getId());
+            if (CollUtil.isNotEmpty(requestVO.getRelevantCertificationList())){
+                vendorCertificationService.addCertification(requestVO.getRelevantCertificationList(), CertificationTypeEnum.RELEVANT_CERTIFICATION,vendor.getId());
+            }
+            // 主要联系人
+            VendorContact contact = requestVO.getVendorContact();
+            // 新增供应商账号
+            Long longUserId = vendorContactService.addLoginUser(contact.getContactPhone(),contact.getContactName());
+            contact.setLoginUserId(longUserId);
+            contact.setCertificationId(legalAuthorizationId);
+            contact.setVendorId(vendor.getId());
+            // 注册时为默认为管理员
+            contact.setIsManager(0);
+            //新增法人账号(存在法人则法人为管理员，法人和主要联系人一样，则生成主要联系人信息)
+            if(!contact.getContactPhone().equals(vendor.getLegalPhone())){
+                Long longinId =vendorContactService.addLoginUser(vendor.getLegalPhone(),vendor.getLegalRepresentative());
+                VendorContact contact1 = new VendorContact();
+                contact1.setVendorId(vendor.getId());
+                contact1.setContactName(vendor.getLegalRepresentative());
+                contact1.setContactPhone(vendor.getLegalPhone());
+                contact1.setLoginUserId(longinId);
+                contact1.setContactIdCard(vendor.getLegalIdCard());
+                contact1.setIsManager(1);
+               vendorContactService.saveVendorContact(contact1);
+            }else{
+                contact.setIsManager(1);
+            }
+            long contactId=vendorContactService.saveMainVendorContact(contact);
+            // 更新法人授权的 businessId
+            vendorCertificationService.update(new LambdaUpdateWrapper<VendorCertification>()
+                    .set(VendorCertification::getBusinessId,contactId)
+                    .eq(VendorCertification::getId,legalAuthorizationId));
+        }
+
         //接入底层逻辑平台流程
         Map<String,Object> paramMap = new HashMap<>();
         paramMap.put("businessId", vendor.getId());
@@ -199,6 +286,7 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
                 }
             }
         }
+
         paramMap.put("customProcessKey", customProcessKey);
         paramMap.put("businessContent",
                 String.format(ApproveFlowPromptTemplateEnum.VENDOR_REGISTER_APPROVE.getDesc(), vendor.getEnterpriseName()));
@@ -207,6 +295,7 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
                 businessId(vendor.getId().toString())
                 .toDoType(ToDoTypeEnum.EXAMINE.name()).build();
         paramMap.put("userObj", JSON.toJSONString(userObj));
+
         /* 获取三级单位 */
         if(orgThree==null)orgThree = org;
         /* 流程角色配置规则传参 */
@@ -214,6 +303,7 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
         paramMap.put("companyId", org);/* 公司 二级单位 */
         paramMap.put("responsibilityDeptId", orgThree);/* 责任单位 三级单位 */
         paramMap.put("parentProjectCode", org);/* 父项目编码(项目部) */
+
         processService.startProcessInstance(ProcessKeyEnum.ZHAOCAI_VENDOR_REGISTER.getIdentifying(),paramMap);
 
     }
@@ -471,7 +561,7 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
         String message = "账号可用";
 
         if (VendorStateEnum.IN_APPROVAL.equalsState(vendor.getState())) {
-            message = "供应商还处于审批中，请稍后重试";
+            message = "供应商还处于审批中!";
             isAvailable = false;
         } else if (VendorStateEnum.REJECT.equalsState(vendor.getState())){
             message = "审批被拒绝，请联系管理员";
@@ -554,6 +644,16 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
             return pageResponse.getAuthurl();
         }
         throw new BusinessException(response.getMessage());
+    }
+
+    @Override
+    public String checkRegister(Long vendorId) {
+        String flag ="true";
+        Vendor vendor = super.getById(vendorId);
+        if(vendor.getState()!=null&&(vendor.getState()==VendorStateEnum.REJECT.getState()||vendor.getState()==(VendorStateEnum.IN_APPROVAL.getState()))){
+            flag ="false";
+        }
+        return flag;
     }
 
     @Override
@@ -657,10 +757,24 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
     @Override
     public ResultData<BpmInitializeResponseDTO> initialize(BpmInitializeRequestDTO requestDTO) {
         Vendor vendor = getById(requestDTO.getBusinessId());
-        /* 根据组织获取对应的二级单位 */
-        String org = underlingSystemService.getL2OrgByOrgId(vendor.getFirstCooperationCompanyCode());
-        /* 获取三级单位 */
-        String orgThree = underlingSystemService.getL3OrgByOrgId(vendor.getFirstCooperationCompanyCode());
+        VendorChange vendorChange = vendorChangeService.getOne(new LambdaQueryWrapper<VendorChange>()
+                .eq(VendorChange::getId,requestDTO.getBusinessId()));
+        String org,orgThree;
+        if(vendorChange!=null){
+            requestDTO.setBusinessId(vendorChange.getId()+"");
+            requestDTO.setProcessId(vendorChange.getWfProcessId());
+            /* 根据组织获取对应的二级单位 */
+            org = underlingSystemService.getL2OrgByOrgId(vendorChange.getFirstCooperationCompanyCode());
+            /* 获取三级单位 */
+            orgThree = underlingSystemService.getL3OrgByOrgId(vendorChange.getFirstCooperationCompanyCode());
+        }else{
+            requestDTO.setBusinessId(vendor.getId()+"");
+            requestDTO.setProcessId(vendor.getWfProcessId());
+            /* 根据组织获取对应的二级单位 */
+            org = underlingSystemService.getL2OrgByOrgId(vendor.getFirstCooperationCompanyCode());
+            /* 获取三级单位 */
+            orgThree = underlingSystemService.getL3OrgByOrgId(vendor.getFirstCooperationCompanyCode());
+        }
         if(orgThree==null)orgThree = org;
         /* 流程角色配置规则传参 */
         List<PropertyListRequestDTO<Object>> propertyList = new ArrayList<>();
@@ -675,10 +789,24 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
     @Override
     public ResultData<List<BpmListProcessLogResponseDTO>> listProcessLog(BpmListProcessLogRequestDTO requestDTO) {
         Vendor vendor = getById(requestDTO.getBusinessId());
-        /* 根据组织获取对应的二级单位 */
-        String org = underlingSystemService.getL2OrgByOrgId(vendor.getFirstCooperationCompanyCode());
-        /* 获取三级单位 */
-        String orgThree = underlingSystemService.getL3OrgByOrgId(vendor.getFirstCooperationCompanyCode());
+        VendorChange vendorChange = vendorChangeService.getOne(new LambdaQueryWrapper<VendorChange>()
+                .eq(VendorChange::getId,requestDTO.getBusinessId()));
+        String org,orgThree;
+        if(vendorChange!=null){
+            requestDTO.setBusinessId(vendorChange.getId()+"");
+            requestDTO.setProcessId(vendorChange.getWfProcessId());
+            /* 根据组织获取对应的二级单位 */
+            org = underlingSystemService.getL2OrgByOrgId(vendorChange.getFirstCooperationCompanyCode());
+            /* 获取三级单位 */
+            orgThree = underlingSystemService.getL3OrgByOrgId(vendorChange.getFirstCooperationCompanyCode());
+        }else{
+            requestDTO.setBusinessId(vendor.getId()+"");
+            requestDTO.setProcessId(vendor.getWfProcessId());
+            /* 根据组织获取对应的二级单位 */
+            org = underlingSystemService.getL2OrgByOrgId(vendor.getFirstCooperationCompanyCode());
+            /* 获取三级单位 */
+            orgThree = underlingSystemService.getL3OrgByOrgId(vendor.getFirstCooperationCompanyCode());
+        }
         if(orgThree==null)orgThree = org;
         /* 流程角色配置规则传参 */
         List<PropertyListRequestDTO<Object>> propertyList = new ArrayList<>();
@@ -693,10 +821,24 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
     @Override
     public String audit(String processKey, Map<String, Object> variables) {
         Vendor vendor = getById((Serializable) variables.get("businessId"));
-        /* 根据组织获取对应的二级单位 */
-        String org = underlingSystemService.getL2OrgByOrgId(vendor.getFirstCooperationCompanyCode());
-        /* 获取三级单位 */
-        String orgThree = underlingSystemService.getL3OrgByOrgId(vendor.getFirstCooperationCompanyCode());
+        VendorChange vendorChange = vendorChangeService.getOne(new LambdaQueryWrapper<VendorChange>()
+                .eq(VendorChange::getId,variables.get("businessId")));
+        String org,orgThree;
+        if(vendorChange!=null){
+            variables.put("businessId",vendorChange.getId()+"");
+            variables.put("processId",vendorChange.getWfProcessId());
+            /* 根据组织获取对应的二级单位 */
+            org = underlingSystemService.getL2OrgByOrgId(vendorChange.getFirstCooperationCompanyCode());
+            /* 获取三级单位 */
+            orgThree = underlingSystemService.getL3OrgByOrgId(vendorChange.getFirstCooperationCompanyCode());
+        }else{
+            variables.put("businessId",vendor.getId()+"");
+            variables.put("processId",vendor.getWfProcessId());
+            /* 根据组织获取对应的二级单位 */
+            org = underlingSystemService.getL2OrgByOrgId(vendor.getFirstCooperationCompanyCode());
+            /* 获取三级单位 */
+            orgThree = underlingSystemService.getL3OrgByOrgId(vendor.getFirstCooperationCompanyCode());
+        }
         if(orgThree==null)orgThree = org;
         /* 流程角色配置规则传参 */
         variables.put("groupId", UserConstants.GROUP_DEPT_ID);/* 集团 */
@@ -710,10 +852,24 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
     @Override
     public ResultData<List<BpmLoadTaskDefResponseDTO>> loadTaskDef(BpmLoadTaskDefRequestDTO requestDTO) {
         Vendor vendor = getById(requestDTO.getBusinessId());
-        /* 根据组织获取对应的二级单位 */
-        String org = underlingSystemService.getL2OrgByOrgId(vendor.getFirstCooperationCompanyCode());
-        /* 获取三级单位 */
-        String orgThree = underlingSystemService.getL3OrgByOrgId(vendor.getFirstCooperationCompanyCode());
+        VendorChange vendorChange = vendorChangeService.getOne(new LambdaQueryWrapper<VendorChange>()
+                .eq(VendorChange::getId,requestDTO.getBusinessId()));
+        String org,orgThree;
+        if(vendorChange!=null){
+            requestDTO.setBusinessId(vendorChange.getId()+"");
+            requestDTO.setProcessId(vendorChange.getWfProcessId());
+            /* 根据组织获取对应的二级单位 */
+            org = underlingSystemService.getL2OrgByOrgId(vendorChange.getFirstCooperationCompanyCode());
+            /* 获取三级单位 */
+            orgThree = underlingSystemService.getL3OrgByOrgId(vendorChange.getFirstCooperationCompanyCode());
+        }else{
+            requestDTO.setBusinessId(vendor.getId()+"");
+            requestDTO.setProcessId(vendor.getWfProcessId());
+            /* 根据组织获取对应的二级单位 */
+            org = underlingSystemService.getL2OrgByOrgId(vendor.getFirstCooperationCompanyCode());
+            /* 获取三级单位 */
+            orgThree = underlingSystemService.getL3OrgByOrgId(vendor.getFirstCooperationCompanyCode());
+        }
         if(orgThree==null)orgThree = org;
         /* 流程角色配置规则传参 */
         List<PropertyListRequestDTO<Object>> propertyList = new ArrayList<>();
@@ -724,5 +880,20 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
         requestDTO.setPropertyList(propertyList);
         return processService.loadTaskDef(requestDTO);
     }
+
+
+    /**
+     * 审批驳回到提交人状态
+     * @param variables
+     */
+    @Override
+    public void processAuditFreedom(Map<String, Object> variables) {
+        String businessId = variables.get("businessId").toString();
+        super.update(new LambdaUpdateWrapper<Vendor>()
+                .set(Vendor::getState,VendorStateEnum.REJECT.getState())
+                .set(Vendor::getOperateComment,variables.get("operateComment")==null?"":variables.get("operateComment").toString())
+                .eq(Vendor::getId, businessId));
+    }
+
 
 }

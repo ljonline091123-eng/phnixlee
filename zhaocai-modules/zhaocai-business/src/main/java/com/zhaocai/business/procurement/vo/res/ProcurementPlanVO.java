@@ -79,6 +79,10 @@ public class ProcurementPlanVO extends AdviceObject {
     @ApiModelProperty(value = "价格类型")
     private Integer priceType;
 
+    /** 基价 （前端用来统一刷新列表清单的基价使用。） */
+    @ApiModelProperty(value = "基价")
+    private BigDecimal basePrice;
+
     @ApiModelProperty(value = "区域-省")
     private String regionProvinceCode;
 

@@ -344,8 +344,14 @@ public class VendorBidServiceImpl implements IVendorBidService {
                     //增加校验报价的价格条件（只有劳务和专业分包可以高于第一次报价，其他的报价控制不能高于第一次报价）
                     if (!ProcurementPlanTypeEnum.SPECIALTY_SUBCONTRACT.getType().equals(scheme.getProcurementPlanType()) &&
                             !ProcurementPlanTypeEnum.SERVICE_SUBCONTRACT.getType().equals(scheme.getProcurementPlanType())){
+                        /*  查询上一次已调价对象 */
+                        BiddingInfo newestBiddingInfo = biddingInfoService.getOne(new LambdaQueryWrapper<BiddingInfo>()
+                                .eq(BiddingInfo::getParentId, biddingInfo.getId())
+                                .and(q -> q.eq(BiddingInfo::getPriceChangeState, NumberConstant.ONE)/* 已经调价 */
+                                        .or().isNull(BiddingInfo::getPriceChangeState))/* 历史数据兼容 */
+                                .orderByDesc(BiddingInfo::getCreateTime).last("limit 1"));
                         //校验含税单价
-                        checkTaxUnitPrice(biddingInfo, quotationVO, taxUnitPrice);
+                        checkTaxUnitPrice(newestBiddingInfo==null?biddingInfo:newestBiddingInfo, quotationVO, taxUnitPrice);
                     }
                     quotation.setTaxPrice(taxPrice);
                     quotation.setNotTaxPrice(notTaxPrice);
@@ -410,8 +416,14 @@ public class VendorBidServiceImpl implements IVendorBidService {
             //增加校验报价的价格条件（只有劳务和专业分包可以高于第一次报价，其他的报价控制不能高于第一次报价）
             if (!ProcurementPlanTypeEnum.SPECIALTY_SUBCONTRACT.getType().equals(scheme.getProcurementPlanType()) &&
                     !ProcurementPlanTypeEnum.SERVICE_SUBCONTRACT.getType().equals(scheme.getProcurementPlanType())){
+                /*  查询上一次已调价对象 */
+                BiddingInfo newestBiddingInfo = biddingInfoService.getOne(new LambdaQueryWrapper<BiddingInfo>()
+                        .eq(BiddingInfo::getParentId, biddingInfo.getId())
+                        .and(q -> q.eq(BiddingInfo::getPriceChangeState, NumberConstant.ONE)/* 已经调价 */
+                                .or().isNull(BiddingInfo::getPriceChangeState))/* 历史数据兼容 */
+                        .orderByDesc(BiddingInfo::getCreateTime).last("limit 1"));
                 //校验含税单价
-                checkTaxUnitPrice(biddingInfo, quotationVO, taxUnitPrice);
+                checkTaxUnitPrice(newestBiddingInfo==null?biddingInfo:newestBiddingInfo, quotationVO, taxUnitPrice);
             }
         }
         quotation.setTaxPrice(taxPrice);
@@ -600,6 +612,65 @@ public class VendorBidServiceImpl implements IVendorBidService {
                 throw new ParamValidateException("未报名，不允许投标");
             }
         }
+
+        /* 每次投标不允许高于上一次投标报价 */
+        if (null != bidVO.getBiddingInfoId()){
+            BiddingInfo biddingInfo = biddingInfoService.getById(bidVO.getBiddingInfoId());
+            //转化成投标清单对象
+            List<BidQuotationVO> bidQuotationVoS = this.convMaterials2Quotation(bidVO.getMaterialsList());
+            //含税总价,不含税总价
+            BigDecimal bidTaxPrice = BigDecimal.ZERO;
+            /* 根据清单确定固定价，浮动价的计算方式 */
+            List<Long> materialsIds = bidQuotationVoS.stream().map(BidQuotationVO::getMaterialsId).collect(Collectors.toList());
+            List<MaterialsList> materialsListList = materialsListService.list(new LambdaQueryWrapper<MaterialsList>().in(MaterialsList::getId, materialsIds));
+            Map<Long,MaterialsList> materialsListMap = materialsListList.stream().collect(Collectors.toMap(MaterialsList::getId, Function.identity(),(existing, replacement) -> replacement));
+
+            BiddingInfo newestBiddingInfo = biddingInfoService.getOne(new LambdaQueryWrapper<BiddingInfo>()
+                    .eq(BiddingInfo::getParentId, biddingInfo.getId())
+                    .and(q -> q.eq(BiddingInfo::getPriceChangeState, NumberConstant.ONE)/* 已经调价 */
+                            .or().isNull(BiddingInfo::getPriceChangeState))/* 历史数据兼容 */
+                    .orderByDesc(BiddingInfo::getCreateTime).last("limit 1"));
+            for (BidQuotationVO quotationVO : bidQuotationVoS) {
+                //物料数量
+                BigDecimal amount = quotationVO.getAmount();
+                BigDecimal taxPrice;
+                if(materialsListMap.get(quotationVO.getMaterialsId()) != null){
+                    if(materialsListMap.get(quotationVO.getMaterialsId()).getPriceType().equals(PriceTypeEnum.FLOAT_PRICE.getType())){
+                        /* 如果合约规划拆分的清单是 浮动价 */
+                        BigDecimal floatingPrice = quotationVO.getFloatingPrice();
+                        //卸费
+                        BigDecimal unloadingFee = quotationVO.getUnloadingFee();
+                        //基价
+                        BigDecimal basePrice = quotationVO.getBasePrice();
+                        //含税单价
+                        BigDecimal taxUnitPrice = NumberUtil.add(4, basePrice, floatingPrice, unloadingFee);
+                        //计算含税总价C（每项（基价±浮动价+运费+卸费）*每项清单数量）
+                        taxPrice = AmountCalUtil.calTotalAmountInclTax(amount, taxUnitPrice);
+                        bidTaxPrice = bidTaxPrice.add(taxPrice);
+                        /** 校验含税单价 */
+                        //校验含税单价
+                        checkTaxUnitPrice(newestBiddingInfo==null?biddingInfo:newestBiddingInfo, quotationVO, taxUnitPrice);
+                    }else if(materialsListMap.get(quotationVO.getMaterialsId()).getPriceType().equals(PriceTypeEnum.FIXED_PRICE.getType())){
+                        /* 如果合约规划拆分的清单是 固定价 */
+                        //含税单价B
+                        BigDecimal taxUnitPrice = quotationVO.getTaxUnitPrice() == null ? BigDecimal.ZERO : quotationVO.getTaxUnitPrice();
+                        //计算含税总价C
+                        taxPrice = AmountCalUtil.calTotalAmountInclTax(amount, taxUnitPrice);
+                        bidTaxPrice = bidTaxPrice.add(taxPrice);
+                        //增加校验报价的价格条件（只有劳务和专业分包可以高于第一次报价，其他的报价控制不能高于第一次报价）
+                        if (!ProcurementPlanTypeEnum.SPECIALTY_SUBCONTRACT.getType().equals(scheme.getProcurementPlanType()) &&
+                                !ProcurementPlanTypeEnum.SERVICE_SUBCONTRACT.getType().equals(scheme.getProcurementPlanType())){
+                            /** 校验含税单价 */
+                            //校验含税单价
+                            checkTaxUnitPrice(newestBiddingInfo==null?biddingInfo:newestBiddingInfo, quotationVO, taxUnitPrice);
+                        }
+                    }
+                }
+            }
+            if(newestBiddingInfo!=null && bidTaxPrice.compareTo(newestBiddingInfo.getTaxPrice())>0){
+                throw new ParamValidateException("清单报价的含税总价不能高于最近一次报价");
+            }
+        }
     }
 
     @Override
@@ -772,7 +843,7 @@ public class VendorBidServiceImpl implements IVendorBidService {
 
                 quotation.setNotTaxUnitPrice(notTaxUnitPrice);
                 //校验含税单价
-                checkTaxUnitPrice(biddingInfoRecent, quotationVO, taxUnitPrice);
+                checkTaxUnitPrice(newestBiddingInfo==null?biddingInfo:newestBiddingInfo, quotationVO, taxUnitPrice);
             }
             quotation.setTaxPrice(taxPrice);
             quotation.setNotTaxPrice(notTaxPrice);

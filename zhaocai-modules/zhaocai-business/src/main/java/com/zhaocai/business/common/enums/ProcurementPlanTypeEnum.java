@@ -60,6 +60,30 @@ public enum ProcurementPlanTypeEnum {
         return null;
     }
 
+
+    public String getProcessType() {
+        switch (this.type){
+            case 1:return "C";
+            case 2:return "D";
+            case 3:return "G";
+            case 4:return "B";
+            case 5:return "A";
+            case 6:return "Z";
+        }
+        return null;
+    }
+    public static String getProcessType(Integer type) {
+        switch (type){
+            case 1:return "C";
+            case 2:return "D";
+            case 3:return "G";
+            case 4:return "B";
+            case 5:return "A";
+            case 6:return "Z";
+        }
+        return null;
+    }
+
     /**
      * 是否可拆分 <br/>
      * 购买材料、租赁材料、租赁机械（设备）、其他 四类不可拆分

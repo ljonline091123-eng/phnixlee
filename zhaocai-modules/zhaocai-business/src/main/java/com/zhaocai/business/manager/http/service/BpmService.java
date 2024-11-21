@@ -111,6 +111,7 @@ public class BpmService {
      * @return
      */
     public BpmSubmitResponseDTO submit(BpmSubmitRequestDTO requestDTO) {
+        log.info("[流程提交参数对象]{}",requestDTO);
 
 //        String projectCode = "SG20012024000002-2";
 //        if (StrUtil.isNotBlank(projectCode)) {
@@ -135,13 +136,14 @@ public class BpmService {
 //            }
 //        }
 
+        String processKeyReplace = requestDTO.getProcessKey();
         String processKey = requestDTO.getProcessKey();
         if (processKey.contains("{org}")) {
             /* 获取二级单位 */
             String org = underlingSystemService.getL2OrgByOrgId(SecurityUtils.getThridOrgId());
             /* 获取三级单位 */
             String orgThree = underlingSystemService.getL3OrgByOrgId(SecurityUtils.getThridOrgId());
-            processKey = processKey.replace("{org}", org);
+            processKey = processKeyReplace.replace("{org}", org);
             /* 获取所有流程 */
             List<ListCataLogDTO> listCataLogDTOS = underlingSystemService.listCatalog();
             if (listCataLogDTOS != null) {
@@ -149,7 +151,7 @@ public class BpmService {
                 ListCataLogDTO cataLogDTOTwo = listCataLogDTOS.stream().filter(cateLog -> cateLog.getCatalogKey().equals(org)).findFirst().orElse(null);
                 if (cataLogDTOTwo != null) {
                     /* 赋值使用二级单位 */
-                    processKey = processKey.replace("{org}", org);
+                    processKey = processKeyReplace.replace("{org}", org);
                 }
                 if (orgThree != null) {
                     /* 判断三级单位流程是否存在 */
@@ -157,7 +159,7 @@ public class BpmService {
                     ListCataLogDTO cataLogDTOThree = listCataLogDTOS.stream().filter(cateLog -> cateLog.getCatalogKey().equals(finalOrgThree)).findFirst().orElse(null);
                     if (cataLogDTOThree != null) {
                         /* 赋值使用三级单位 */
-                        processKey = processKey.replace("{org}", orgThree);
+                        processKey = processKeyReplace.replace("{org}", orgThree);
                     }
                 }
             }

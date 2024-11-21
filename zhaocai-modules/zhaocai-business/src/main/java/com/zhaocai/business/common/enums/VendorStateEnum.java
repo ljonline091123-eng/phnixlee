@@ -15,9 +15,7 @@ public enum VendorStateEnum {
 
     IN_APPROVAL(1,"审批中"),
     REJECT(2,"审批拒绝"),
-    APPROVE(3,"审批通过")
-
-    ;
+    APPROVE(3,"审批通过");
 
 
     private final Integer state;
