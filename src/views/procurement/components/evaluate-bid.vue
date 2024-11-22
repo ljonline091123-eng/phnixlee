@@ -1820,8 +1820,10 @@ export default {
       });
     },
     clickTwiceBidConfButton() {
-      if (this.biddingInfoIds.length === 0){
-        return this.$message.error("请选择调价项目");
+      // 判断是否全选
+      const isAllSelected = this.biddingInfoIds.length === this.evaluateList.length;
+      if(!isAllSelected){
+        return this.$message.error("开启二次调价需要全选项目");
       }
       this.dialogVisible = true
     },
