@@ -2,6 +2,7 @@ package com.zhaocai.business.pub.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.zhaocai.business.pub.domain.DwCdBank;
+import com.zhaocai.common.core.bean.PageResult;
 
 import java.util.List;
 
@@ -27,7 +28,7 @@ public interface IBankService extends IService<DwCdBank>
      * @param dwCdBank 支行信息
      * @return 支行列表
      */
-    public List<DwCdBank> selectBankList(DwCdBank dwCdBank);
+    public PageResult<DwCdBank> selectBankList(DwCdBank dwCdBank);
 
     /**
      * 新增支行信息

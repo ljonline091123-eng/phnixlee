@@ -44,7 +44,7 @@ public class AccountServiceImpl extends ServiceImpl<AccountMapper, TAccountInfo>
     @Override
     public List<TAccountInfo> selectAccountList(TAccountInfo tAccountInfo)
     {
-        return accountMapper.selectAccountList(tAccountInfo);
+        return accountMapper.selectAccountList(tAccountInfo.toMybatisPage(),tAccountInfo);
     }
 
     /**
@@ -83,7 +83,19 @@ public class AccountServiceImpl extends ServiceImpl<AccountMapper, TAccountInfo>
         return accountMapper.deleteAccountByIds(ids);
     }
 
-    /**
+
+            /**
+             * 推送银行账户档案信息
+             *
+             * @param accountInfo 银行账户档案
+             * @return 结果
+             */
+            @Override
+            public void push(TAccountInfo accountInfo,Integer type) {
+
+            }
+
+            /**
      * 删除银行账户档案信息
      *
      * @param id 银行账户档案主键

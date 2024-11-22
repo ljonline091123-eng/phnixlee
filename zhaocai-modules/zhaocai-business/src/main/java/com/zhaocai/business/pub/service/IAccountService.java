@@ -61,4 +61,6 @@ public interface IAccountService extends IService<TAccountInfo>
     public int deleteAccountById(Long id);
 
     Boolean deleteSyncAccount();
+
+    void push(TAccountInfo accountInfo,Integer type);
 }

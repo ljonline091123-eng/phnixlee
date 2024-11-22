@@ -2,6 +2,7 @@ package com.zhaocai.business.pub.service.impl;
 
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.TypeReference;
+import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.zhaocai.business.manager.http.common.config.RestTemplateUtils;
 import com.zhaocai.business.manager.http.dto.req.UnderlyingPlatformBaseDTO;
@@ -11,6 +12,7 @@ import com.zhaocai.business.manager.template.config.UnderlingPlatformConfig;
 import com.zhaocai.business.pub.domain.DwCdBank;
 import com.zhaocai.business.pub.mapper.BankMapper;
 import com.zhaocai.business.pub.service.IBankService;
+import com.zhaocai.common.core.bean.PageResult;
 import com.zhaocai.common.core.web.bean.thrid.ThridResultCode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -93,9 +95,12 @@ public class BankServiceImpl extends ServiceImpl<BankMapper, DwCdBank> implement
      * @return 支行档案
      */
     @Override
-    public List<DwCdBank> selectBankList(DwCdBank dwCdBank)
+    public PageResult<DwCdBank> selectBankList(DwCdBank dwCdBank)
     {
-        return bankMapper.selectBankList(dwCdBank);
+
+        IPage<DwCdBank>  pagelist = (IPage<DwCdBank>) bankMapper.selectBankList(dwCdBank.toMybatisPage(),dwCdBank);
+
+        return new PageResult<>(pagelist);
     }
 
     /**

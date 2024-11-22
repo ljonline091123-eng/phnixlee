@@ -2,7 +2,10 @@ package com.zhaocai.business.pub.domain;
 
 import com.baomidou.mybatisplus.annotation.*;
 import com.fasterxml.jackson.annotation.JsonFormat;
+import com.zhaocai.business.common.annotations.DictCache;
+import com.zhaocai.business.common.enums.DictBizEnum;
 import com.zhaocai.common.core.annotation.Excel;
+import com.zhaocai.common.core.bean.PageRecive;
 import io.swagger.annotations.ApiModelProperty;
 import lombok.Data;
 
@@ -17,7 +20,7 @@ import java.util.Date;
  */
 @Data
 @TableName(value = "t_account_info")
-public class TAccountInfo implements Serializable {
+public class TAccountInfo extends PageRecive implements Serializable {
     private static final long serialVersionUID = 1L;
 
     /** $column.columnComment */
@@ -26,11 +29,23 @@ public class TAccountInfo implements Serializable {
 
     /** 商户ID */
     @Excel(name = "商户ID")
-    private String upId;
+    private Long upId;
 
     /** 银行账号 */
     @Excel(name = "银行账号")
     private String bankAccount;
+
+    /** 所属银行 */
+    @Excel(name = "所属银行")
+    private String affiliatedBank;
+
+    /** 支行 */
+    @Excel(name = "支行")
+    private String openingBranch;
+
+    /** 银联号 */
+    @Excel(name = "银联号")
+    private String interbankNumber;
 
     /** BIPID */
     @Excel(name = "BIPID")
@@ -38,7 +53,25 @@ public class TAccountInfo implements Serializable {
 
     /** 账户类型 */
     @Excel(name = "账户类型")
-    private String acountType;
+    private Integer acountType;
+
+    /** 币种 */
+    @Excel(name = "币种")
+    private Integer currency;
+
+    @DictCache(dictBizEnum= DictBizEnum.CURRENCY,filedName = "currency")
+    @ApiModelProperty(value =  "币种-文本")
+    private String currencyText;
+
+
+    @DictCache(dictBizEnum= DictBizEnum.EXTERNAL,filedName = "isExternal")
+    @ApiModelProperty(value =  "是否默认账户-文本")
+    private String statusText;
+
+
+    /** 是否默认账户 */
+    @Excel(name = "是否默认账户")
+    private Integer status;
 
     /**
      * 创建者

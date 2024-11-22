@@ -7,22 +7,26 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="id"    column="id"    />
         <result property="upId"    column="up_id"    />
         <result property="bankAccount"    column="bank_account"    />
+        <result property="currency"    column="currency"    />
         <result property="bipId"    column="bip_id"    />
         <result property="updateTime"    column="update_time"    />
         <result property="acountType"    column="acount_type"    />
         <result property="createBy"    column="create_by"    />
         <result property="createTime"    column="create_time"    />
         <result property="updateBy"    column="update_by"    />
+        <result property="openingBranch"    column="opening_branch"    />
+        <result property="affiliatedBank"    column="affiliated_bank"    />
+        <result property="interbankNumber"    column="interbank_number"    />
     </resultMap>
 
     <sql id="selectAccountVo">
-        select id, up_id, bank_account, bip_id, acount_type, update_time,create_by,create_time,update_by from t_account_info
+        select id, up_id,currency,opening_branch,affiliated_bank,interbank_number, bank_account, bip_id, acount_type, update_time,create_by,create_time,update_by from t_account_info
     </sql>
 
     <select id="selectAccountList" parameterType="com.zhaocai.business.pub.domain.TAccountInfo" resultMap="AccountResult">
         <include refid="selectAccountVo"/>
         <where>
-            <if test="bankAccount != null  and bankAccount != ''"> and bank_account like concat('%', #{bankAccount}, '%')</if>
+            <if test="tAccountInfo.bankAccount != null  and tAccountInfo.bankAccount != ''"> and t_account_info like concat('%', #{tAccountInfo.bankAccount}, '%')</if>
         </where>
     </select>
     
@@ -36,6 +40,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <trim prefix="(" suffix=")" suffixOverrides=",">
             <if test="id != null">id,</if>
             <if test="upId != null">up_id,</if>
+            <if test="currency != null">currency,</if>
             <if test="bankAccount != null">bank_account,</if>
             <if test="bipId != null">bip_id,</if>
             <if test="acountType != null">acount_type,</if>
@@ -43,17 +48,24 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             <if test="createBy != null">create_by,</if>
             <if test="createTime != null">create_time,</if>
             <if test="updateBy != null">update_by,</if>
+            <if test="openingBranch != null">opening_branch,</if>
+            <if test="affiliatedBank != null">affiliated_bank,</if>
+            <if test="interbankNumber != null">interbank_number,</if>
          </trim>
         <trim prefix="values (" suffix=")" suffixOverrides=",">
             <if test="id != null">#{id},</if>
-            <if test="upId != null">#{up_id},</if>
-            <if test="bankAccount != null">#{bank_account},</if>
-            <if test="acountType != null">#{acount_type},</if>
-            <if test="bipId != null">#{bip_id},</if>
-            <if test="updateTime != null">#{update_time},</if>
-            <if test="createBy != null">#{create_by},</if>
-            <if test="createTime != null">#{create_time},</if>
-            <if test="updateBy != null">#{update_by},</if>
+            <if test="upId != null">#{upId},</if>
+            <if test="currency != null">#{currency},</if>
+            <if test="bankAccount != null">#{bankAccount},</if>
+            <if test="acountType != null">#{acountType},</if>
+            <if test="bipId != null">#{bipId},</if>
+            <if test="updateTime != null">#{updateTime},</if>
+            <if test="createBy != null">#{createBy},</if>
+            <if test="createTime != null">#{createTime},</if>
+            <if test="updateBy != null">#{updateBy},</if>
+            <if test="openingBranch != null">#{openingBranch},</if>
+            <if test="affiliatedBank != null">#{affiliatedBank},</if>
+            <if test="interbankNumber != null">#{interbankNumber},</if>
          </trim>
     </insert>
 
@@ -62,6 +74,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <trim prefix="SET" suffixOverrides=",">
             <if test="id != null">id = #{id},</if>
             <if test="upId != null">up_id = #{upId},</if>
+            <if test="currency != null">currency = #{currency},</if>
             <if test="bankAccount != null">bank_account = #{bankAccount},</if>
             <if test="bipId != null">bip_id = #{bipId},</if>
             <if test="updateTime != null">update_time = #{updateTime},</if>
@@ -69,6 +82,9 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             <if test="createBy != null">create_by = #{createBy},</if>
             <if test="createTime != null">create_time = #{createTime},</if>
             <if test="updateBy != null">update_by = #{updateBy},</if>
+            <if test="openingBranch != null">opening_branch = #{openingBranch},</if>
+            <if test="affiliatedBank != null">affiliated_bank = #{affiliatedBank},</if>
+            <if test="interbankNumber != null">interbank_number = #{interbankNumber},</if>
         </trim>
         where id = #{id}
     </update>

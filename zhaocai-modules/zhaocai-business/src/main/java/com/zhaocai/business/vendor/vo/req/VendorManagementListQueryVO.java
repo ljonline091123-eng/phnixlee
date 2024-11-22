@@ -49,4 +49,12 @@ public class VendorManagementListQueryVO extends PageRecive {
     @ApiModelProperty(value = "流程类型")
     private Integer processType;
 
+    @ApiModelProperty(value =  "银行账号")
+    private String bankAccount;
+
+    @ApiModelProperty(value =  "统一社会信用代码")
+    private String socialCreditCode;
+
+
+
 }

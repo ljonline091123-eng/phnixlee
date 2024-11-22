@@ -46,7 +46,7 @@ public class AgreementWordUtils {
         replacements.put("$乙方纳税人识别号$",agreementWordInfo.getVendor().getSocialCreditCode());
         replacements.put("$乙方地址$",agreementWordInfo.getVendor().getEnterpriseAddress());
         replacements.put("$乙方电话$",agreementWordInfo.getVendor().getContactPhone());
-        replacements.put("$乙方开户行$",agreementWordInfo.getVendor().getAccountBranch());
+        replacements.put("$乙方开户行$",agreementWordInfo.getVendor().getAccountBranch()==null?"":agreementWordInfo.getVendor().getAccountBranch().toString());
         replacements.put("$乙方账号$",agreementWordInfo.getVendor().getBankAccount());
         replacements.put("$乙方开票金额$",agreementWordInfo.getTotalAmountExcTax().toString());
 
@@ -205,7 +205,7 @@ public class AgreementWordUtils {
         vendor.setSocialCreditCode("23442363534635443253245");
         vendor.setEnterpriseAddress("湖南省长沙市岳麓区");
         vendor.setContactPhone("13670041458");
-        vendor.setAccountBranch("长沙银行岳麓区雷锋大道支行");
+        //vendor.setAccountBranch("长沙银行岳麓区雷锋大道支行");
         vendor.setBankAccount("6224 8878 8858 7899 445");
         agreementWordInfo.setVendor(vendor);
 

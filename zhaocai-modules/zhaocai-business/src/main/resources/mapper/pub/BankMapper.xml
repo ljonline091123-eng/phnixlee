@@ -27,10 +27,10 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     <select id="selectBankList" parameterType="com.zhaocai.business.pub.domain.DwCdBank" resultMap="BankResult">
         <include refid="selectBankVo"/>
         <where>
-            <if test="parentName != null  and parentName != ''"> and parent_name like concat('%', #{parentName}, '%')</if>
-            <if test="name != null  and name != ''"> and name like concat('%', #{name}, '%')</if>
-            <if test="internalId != null  and internalId != ''"> and internal_id = #{internalId}</if>
-            <if test="code != null  and code != ''"> and code like concat('%', #{code}, '%')</if>
+            <if test="dwCdBank.parentName != null  and dwCdBank.parentName != ''"> and parent_name like concat('%', #{dwCdBank.parentName}, '%')</if>
+            <if test="dwCdBank.name != null  and dwCdBank.name != ''"> and name like concat('%', #{dwCdBank.name}, '%')</if>
+            <if test="dwCdBank.internalId != null  and dwCdBank.internalId != ''"> and internal_id = #{dwCdBank.internalId}</if>
+            <if test="dwCdBank.code != null  and dwCdBank.code != ''"> and code like concat('%', #{dwCdBank.code}, '%')</if>
         </where>
     </select>
     
