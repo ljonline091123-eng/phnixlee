@@ -793,7 +793,7 @@ export default {
     submitForm(formName) {
       console.log(this.planList,'ppp');
       const { add, subtract,divide,multiply, bignumber, format,floor } = this.mathjs;
-      // this.isSubmit = true;
+      this.isSubmit = true;
       this.$refs[formName].validate(async (valid,done) => {
         if (valid) {
           // * 首先先判断类型为浮动价的单行是否存在数据不合法的情况
