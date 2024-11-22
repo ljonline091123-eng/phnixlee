@@ -18,6 +18,12 @@ public class CompMaterialsVO extends AdviceObject {
     @ApiModelProperty(value = "采购计划id")
     private Long planId;
 
+    /**
+     * 价格类型 {@link com.zhaocai.business.common.enums.PriceTypeEnum}
+     */
+    @ApiModelProperty(value = "价格类型")
+    private Integer priceType;
+
     @ApiModelProperty(value = "合约规划名称")
     private String contractPlanningName;
 
