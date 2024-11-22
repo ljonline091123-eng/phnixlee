@@ -358,7 +358,7 @@
                   </el-input>
                 </el-form-item>
               </el-col>
-              <el-col :span="8" v-if="[1].includes(contractType)">
+              <el-col :span="8" v-if="firstForm.agreement.isRelatedMySteelView == 'Y'">
                 <el-form-item label="是否关联我的钢铁网价格：" prop="agreementPaymentItem.isRelatedMySteel"
                   :rules="[{ required: true, trigger: 'blur', message: '请选择是否关联我的钢铁网价格' }]">
                   <el-select style="width: 100%" v-model="firstForm.agreementPaymentItem.isRelatedMySteel"
@@ -372,7 +372,7 @@
             </el-row>
 
             <el-row :gutter="10">
-              <el-col :span="8" v-if="[1].includes(contractType) && firstForm.agreementPaymentItem.isRelatedMySteel == 1">
+              <el-col :span="8" v-if="firstForm.agreement.isRelatedMySteelView == 'Y' && firstForm.agreementPaymentItem.isRelatedMySteel == 1">
                 <el-form-item label="我的钢铁网价格浮动值：" prop="agreementPaymentItem.mySteelPriceFluctuation"
                   :rules="[{ required: true, trigger: 'blur', message: '请输入我的钢铁网价格浮动值' }, {validator: validateFloat, trigger: 'blur'}]">
                   <el-input v-model="firstForm.agreementPaymentItem.mySteelPriceFluctuation" placeholder="请输入我的钢铁网价格浮动值"
