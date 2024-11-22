@@ -133,6 +133,16 @@
             <artifactId>javase</artifactId>
             <version>3.4.1</version>
         </dependency>
+
+
+
+        <!--20241120新增-->
+        <!-- docx 数据填充生成 doc文件  这个是主要 -->
+        <dependency>
+            <groupId>com.deepoove</groupId>
+            <artifactId>poi-tl</artifactId>
+            <version>1.12.1</version>
+        </dependency>
     </dependencies>
 
     <build>
