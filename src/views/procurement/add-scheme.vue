@@ -329,6 +329,7 @@
                          popper-class="date-clear"
                         :picker-options="endTimeOptions"
                         value-format="yyyy-MM-dd HH:mm:ss"
+                        @change="handleChange"
                       />
                     </el-form-item>
                   </el-col>
@@ -1242,7 +1243,12 @@ export default {
     },
   },
   methods: {
-
+    handleChange(value) {
+      let newVal = new Date(value)
+      if (newVal && newVal.getDate() < new Date().getDate()+5) {
+        this.formData.bidDeadline = null; // 设置为null
+      }
+    },
     handleTabClick(tab) {
       // 处理标签页点击事件，根据标签页切换表格数据
       this.activeTab = tab.name;
