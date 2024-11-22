@@ -236,6 +236,7 @@
           v-if="scheme.procurementType !== 4"
         >
           <el-table
+            ref="tableRef"
             size="small"
             :data="evaluateList"
             border
@@ -1820,7 +1821,9 @@ export default {
       });
     },
     clickTwiceBidConfButton() {
-      // 判断是否全选
+      /* 默认自动全选 */
+      this.$refs.tableRef.toggleAllSelection();
+      /* 再判断一次是否全选 */
       const isAllSelected = this.biddingInfoIds.length === this.evaluateList.length;
       if(!isAllSelected){
         return this.$message.error("开启二次调价需要全选项目");
