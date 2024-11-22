@@ -2,8 +2,8 @@ package com.zhaocai.business.pub.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.zhaocai.business.pub.domain.TAccountInfo;
-
-import java.util.List;
+import com.zhaocai.business.pub.vo.req.TAccountInfoVo;
+import com.zhaocai.common.core.bean.PageResult;
 
 /**
  * 银行账户Service接口
@@ -26,7 +26,7 @@ public interface IAccountService extends IService<TAccountInfo>
      * @param tAccountInfo 银行账户信息
      * @return 银行账户列表
      */
-    public List<TAccountInfo> selectAccountList(TAccountInfo tAccountInfo);
+    public PageResult<TAccountInfoVo> selectAccountList(TAccountInfoVo tAccountInfo);
 
     /**
      * 新增银行账户信息

@@ -1,12 +1,14 @@
 package com.zhaocai.business.pub.service.impl;
 
+import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.zhaocai.business.pub.domain.TAccountInfo;
 import com.zhaocai.business.pub.mapper.AccountMapper;
 import com.zhaocai.business.pub.service.IAccountService;
+import com.zhaocai.business.pub.vo.req.TAccountInfoVo;
+import com.zhaocai.common.core.bean.PageResult;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import java.util.List;
 
 /**
  * 银行账户Service业务层处理
@@ -42,9 +44,11 @@ public class AccountServiceImpl extends ServiceImpl<AccountMapper, TAccountInfo>
      * @return 银行账户档案
      */
     @Override
-    public List<TAccountInfo> selectAccountList(TAccountInfo tAccountInfo)
+    public PageResult<TAccountInfoVo> selectAccountList(TAccountInfoVo tAccountInfo)
     {
-        return accountMapper.selectAccountList(tAccountInfo.toMybatisPage(),tAccountInfo);
+
+        IPage<TAccountInfoVo> list = accountMapper.selectAccountList(tAccountInfo.toMybatisPage(),tAccountInfo);
+        return new  PageResult<>(list);
     }
 
     /**

@@ -1,14 +1,16 @@
 package com.zhaocai.business.vendor.controller;
 
+import cn.hutool.core.util.IdUtil;
 import com.zhaocai.business.pub.domain.TAccountInfo;
 import com.zhaocai.business.pub.service.IAccountService;
+import com.zhaocai.business.pub.vo.req.TAccountInfoVo;
+import com.zhaocai.common.core.bean.PageResult;
+import com.zhaocai.common.core.utils.bean.BeanCopierUtil;
 import com.zhaocai.common.core.web.bean.ResultData;
 import com.zhaocai.common.core.web.controller.BaseController;
 import io.swagger.annotations.ApiOperation;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 /**
  * 银行账户信息
@@ -27,9 +29,9 @@ public class AccountController extends BaseController
      * 查询银行账户信息
      */
     @GetMapping("/list")
-    public ResultData<List<TAccountInfo>> list(TAccountInfo accountInfo)
+    public ResultData<PageResult<TAccountInfoVo>> list(TAccountInfoVo accountInfo)
     {
-        List<TAccountInfo> list = accountService.selectAccountList(accountInfo);
+        PageResult<TAccountInfoVo> list = accountService.selectAccountList(accountInfo);
         return ResultData.data(list);
     }
     /**
@@ -46,13 +48,19 @@ public class AccountController extends BaseController
      */
     @PostMapping("/save")
     @ApiOperation(value = "保存账户详情")
-    public ResultData<Boolean> save(@RequestBody TAccountInfo accountInfo) {
+    public ResultData<Boolean> save(@RequestBody TAccountInfoVo accountInfo) {
         Integer type =1;// 修改
         if(accountInfo.getId()==null){
             type =2; //新增
         }
-        accountService.saveOrUpdate(accountInfo);
-        accountService.push(accountInfo,type);
+        TAccountInfo info = new TAccountInfo();
+        info=  BeanCopierUtil.copyBean(accountInfo, TAccountInfo.class);
+        if(info!=null&&info.getId()==null) {
+           info.setId(IdUtil.getSnowflakeNextId());
+        }
+            accountService.saveOrUpdate(info);
+
+      //  accountService.push(info,type);
         return ResultData.success();
     }
     /**

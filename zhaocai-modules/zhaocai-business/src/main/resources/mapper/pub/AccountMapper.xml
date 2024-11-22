@@ -17,16 +17,18 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="openingBranch"    column="opening_branch"    />
         <result property="affiliatedBank"    column="affiliated_bank"    />
         <result property="interbankNumber"    column="interbank_number"    />
+        <result property="status"    column="status"    />
     </resultMap>
 
     <sql id="selectAccountVo">
-        select id, up_id,currency,opening_branch,affiliated_bank,interbank_number, bank_account, bip_id, acount_type, update_time,create_by,create_time,update_by from t_account_info
+        select id, up_id,currency,opening_branch,affiliated_bank,interbank_number, bank_account, bip_id, acount_type, update_time,create_by,create_time,update_by,status from t_account_info
     </sql>
 
     <select id="selectAccountList" parameterType="com.zhaocai.business.pub.domain.TAccountInfo" resultMap="AccountResult">
         <include refid="selectAccountVo"/>
         <where>
             <if test="tAccountInfo.bankAccount != null  and tAccountInfo.bankAccount != ''"> and t_account_info like concat('%', #{tAccountInfo.bankAccount}, '%')</if>
+            <if test="tAccountInfo.upId != null  and tAccountInfo.upId != ''"> and up_id =#{tAccountInfo.upId}</if>
         </where>
     </select>
     

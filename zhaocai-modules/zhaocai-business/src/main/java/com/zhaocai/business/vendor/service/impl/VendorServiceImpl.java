@@ -193,14 +193,14 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
                 super.saveOrUpdate(vendor);
                 //保存银行账户信息
                 //先删除
-                TAccountInfo acountQuery = new TAccountInfo();
-                acountQuery.setUpId(vendor.getId());
-                List<TAccountInfo> accountList = accountService.selectAccountList(acountQuery);
-                if(!accountList.isEmpty()){
-                    for (TAccountInfo info: accountList) {
-                        accountService.deleteAccountById(info.getId());
-                    }
-                }
+//                TAccountInfo acountQuery = new TAccountInfo();
+//                acountQuery.setUpId(vendor.getId());
+//                List<TAccountInfoVo> accountList = accountService.selectAccountList(acountQuery);
+//                if(!accountList.isEmpty()){
+//                    for (TAccountInfo info: accountList) {
+//                        accountService.deleteAccountById(info.getId());
+//                    }
+//                }
                 //再新增
                 TAccountInfo acount = new TAccountInfo();
                 acount.setBankAccount(vendor.getBankAccount());

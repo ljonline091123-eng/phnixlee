@@ -1,8 +1,11 @@
-package com.zhaocai.business.pub.domain;
+package com.zhaocai.business.pub.vo.req;
 
 import com.baomidou.mybatisplus.annotation.*;
 import com.fasterxml.jackson.annotation.JsonFormat;
+import com.zhaocai.business.common.annotations.DictCache;
+import com.zhaocai.business.common.enums.DictBizEnum;
 import com.zhaocai.common.core.annotation.Excel;
+import com.zhaocai.common.core.bean.PageRecive;
 import io.swagger.annotations.ApiModelProperty;
 import lombok.Data;
 
@@ -16,8 +19,7 @@ import java.util.Date;
  * @date 2024-11-20
  */
 @Data
-@TableName(value = "t_account_info")
-public class TAccountInfo implements Serializable {
+public class TAccountInfoVo extends PageRecive implements Serializable {
     private static final long serialVersionUID = 1L;
 
     /** $column.columnComment */
@@ -56,6 +58,14 @@ public class TAccountInfo implements Serializable {
     @Excel(name = "币种")
     private Integer currency;
 
+    @DictCache(dictBizEnum= DictBizEnum.CURRENCY,filedName = "currency")
+    @ApiModelProperty(value =  "币种-文本")
+    private String currencyText;
+
+
+    @DictCache(dictBizEnum= DictBizEnum.EXTERNAL,filedName = "isExternal")
+    @ApiModelProperty(value =  "是否默认账户-文本")
+    private String statusText;
 
 
     /** 是否默认账户 */
