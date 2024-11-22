@@ -846,7 +846,7 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
         variables.put("responsibilityDeptId", orgThree);/* 责任单位 三级单位 */
         variables.put("parentProjectCode", org);/* 父项目编码(项目部) */
 
-        return processService.auditProcessInstance(ProcessKeyEnum.ZHAOCAI_VENDOR_REGISTER.getIdentifying(),variables);
+        return processService.auditProcessInstance(processKey,variables);
     }
 
     @Override
