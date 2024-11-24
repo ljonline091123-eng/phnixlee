@@ -33,6 +33,9 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.*;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.*;
 
 import com.artofsolving.jodconverter.DefaultDocumentFormatRegistry;
@@ -93,7 +96,7 @@ public class examController extends BladeController {
         if (examinee != null){
             return ResultData.success("存在该身份证号的用户");
         }
-        return ResultData.fail("不存在该身份证号的用户");
+        return ResultData.fail("您输入的身份证码未在参赛人员信息名单中，请检查身份证号码是否输入错误!");
 
     }
 
@@ -165,7 +168,11 @@ public class examController extends BladeController {
                 String imgFileName = StringUtils.format("{}/{}_{}.{}", DateUtils.datePath(),
                         FilenameUtils.getBaseName(fileWithImg.getName()), Seq.getId(Seq.uploadSeqType), FileTypeUtils.getFileType(fileWithImg));
 
+                //获取文件类型
+//                Path path = Paths.get(PDFtargetPath);
+//                String contentType = Files.probeContentType(path);
                 // 将带有头像的word文档上传到MinIO
+//                String fileWithImgUrl = iSysFileService.uploadFile(fis, imgFileName,contentType);
                 String fileWithImgUrl = iSysFileService.uploadFile(fis, imgFileName);
                 return ResultData.success(fileWithImgUrl);
 
