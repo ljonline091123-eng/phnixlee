@@ -3,6 +3,7 @@ import com.deepoove.poi.XWPFTemplate;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.io.FileUtils;
 
+import org.apache.commons.io.FilenameUtils;
 import org.apache.poi.util.Units;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.apache.poi.xwpf.usermodel.XWPFParagraph;
@@ -13,6 +14,7 @@ import org.openxmlformats.schemas.drawingml.x2006.wordprocessingDrawing.CTAnchor
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTDrawing;
 import org.springframework.stereotype.Component;
 import java.io.*;
+import java.net.URL;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Random;
@@ -249,25 +251,76 @@ public final class FreeMarkUtils {
         params.put("no1","12");
         params.put("no2","01");
 
+
+//        sealInWord(outPath,
+//                "D:\\mytestWithImg.docx",
+//                "D:\\pic2.png", "参赛人员须知", 80, 100,
+//                375, -198, false);
+
+        //生成没有图片的文档
         String outPath= FreeMarkUtils.createDocx(params, "templates/2.docx","D:\\results\\");
 
-        System.out.println(outPath);
+        System.out.println("outPath  " +outPath);
 
+        String url = "http://192.168.240.21:9000/wh-hnjt/2024/08/20/仙境_20240820190921A422.png";
+        String PicturePath = FreeMarkUtils.downloadFileFromUrl(url);
 
+        //生成有头像的文档,源路径，添加图章后的路径
+        String outPutfileName = UUID.randomUUID().toString() + ".docx";
+        String sropath = "D:\\results\\" + outPutfileName;
         sealInWord(outPath,
-                "D:\\mytestWithImg.docx",
-                "D:\\gz.png", "参赛人员须知", 80, 100,
+                sropath,
+                PicturePath, "参赛人员须知", 80, 100,
                 375, -198, false);
 
 
+        //生成的带水印的pdf路径
         String pdfPath=FreeMarkUtils.convertDocx2Pdf(outPath,"D:\\results\\");
-        System.out.println(pdfPath);
+        System.out.println("pdfPath" + pdfPath);
+
+
+
+        System.out.println("loadPicturePath: " + PicturePath);
 
 
         //String fileName = UUID.randomUUID().toString() + "_001_test.pdf";
 
         //OutputStream outputStream = new FileOutputStream(fileName);
         //template.write(outputStream);
+    }
+
+    /**
+     * 下载文件到指定目录
+     *
+     * @param url URL
+     * @return 本地文件路径
+     * @throws IOException
+     */
+    public static String downloadFileFromUrl(String url) throws IOException {
+        if (url == null || url.isEmpty()) {
+            throw new IllegalArgumentException("URL不能为空");
+        }
+
+        // 获取文件扩展名
+        String extension = FilenameUtils.getExtension(url);
+        if (extension.isEmpty()) {
+            throw new IllegalArgumentException("URL中缺少文件扩展名");
+        }
+
+        // 指定目标目录
+        File targetDir = new File("D:\\results\\");
+        if (!targetDir.exists()) {
+            boolean created = targetDir.mkdirs();
+            if (!created) {
+                throw new IOException("无法创建目标目录: " + targetDir.getAbsolutePath());
+            }
+        }
+
+        // 创建临时文件
+        File tempFile = File.createTempFile("temp", "." + extension, targetDir);
+        FileUtils.copyURLToFile(new URL(url), tempFile);
+
+        return tempFile.getAbsolutePath();
     }
 
 }

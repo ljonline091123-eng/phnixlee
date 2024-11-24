@@ -134,7 +134,35 @@
             <version>3.4.1</version>
         </dependency>
 
-
+        <!--20241124新增-->
+        <!-- 以下为利用libreoffice转pdf的依赖    -->
+        <dependency>
+            <groupId>com.artofsolving</groupId>
+            <artifactId>jodconverter</artifactId>
+            <version>2.2.2</version>
+            <scope>system</scope>
+            <systemPath>${basedir}/src/main/resources/lib/jodconverter-2.2.2.jar</systemPath> <!--项目根目录下的lib文件夹下-->
+        </dependency>
+        <dependency>
+            <groupId>org.openoffice</groupId>
+            <artifactId>juh</artifactId>
+            <version>4.1.2</version>
+        </dependency>
+        <dependency>
+            <groupId>org.openoffice</groupId>
+            <artifactId>ridl</artifactId>
+            <version>4.1.2</version>
+        </dependency>
+        <dependency>
+            <groupId>org.openoffice</groupId>
+            <artifactId>unoil</artifactId>
+            <version>4.1.2</version>
+        </dependency>
+        <dependency>
+            <groupId>org.jodconverter</groupId>
+            <artifactId>jodconverter-spring-boot-starter</artifactId>
+            <version>4.2.0</version>
+        </dependency>
 
         <!--20241120新增-->
         <!-- docx 数据填充生成 doc文件  这个是主要 -->
@@ -142,6 +170,12 @@
             <groupId>com.deepoove</groupId>
             <artifactId>poi-tl</artifactId>
             <version>1.12.1</version>
+        </dependency>
+        <dependency>
+            <groupId>com.zhaocai</groupId>
+            <artifactId>zhaocai-modules-file</artifactId>
+            <version>3.6.4</version>
+            <scope>compile</scope>
         </dependency>
     </dependencies>
 
