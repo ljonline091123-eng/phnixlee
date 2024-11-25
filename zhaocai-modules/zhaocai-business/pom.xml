@@ -141,13 +141,11 @@
         </dependency>
 
         <!--20241124新增-->
-        <!-- 以下为利用libreoffice转pdf的依赖    -->
+        <!-- 以下为利用libreoffice转pdf的依赖jodconverter中央仓库无法下载，手动添加到私服或者本地maven仓库地址中。该jodconverter的jar包在\hnjiantou-zhaocai-backend\zhaocai-modules\zhaocai-business\src\main\resources\lib\jodconverter-2.2.2.jar    -->
         <dependency>
             <groupId>com.artofsolving</groupId>
             <artifactId>jodconverter</artifactId>
             <version>2.2.2</version>
-            <scope>system</scope>
-            <systemPath>${basedir}/src/main/resources/lib/jodconverter-2.2.2.jar</systemPath> <!--项目根目录下的lib文件夹下-->
         </dependency>
         <dependency>
             <groupId>org.openoffice</groupId>
@@ -166,14 +164,6 @@
         </dependency>
 
         <!--20241124新增-->
-        <!-- 以下为利用libreoffice转pdf的依赖    -->
-        <dependency>
-            <groupId>com.artofsolving</groupId>
-            <artifactId>jodconverter</artifactId>
-            <version>2.2.2</version>
-            <scope>system</scope>
-            <systemPath>${basedir}/src/main/resources/lib/jodconverter-2.2.2.jar</systemPath> <!--项目根目录下的lib文件夹下-->
-        </dependency>
         <dependency>
             <groupId>org.openoffice</groupId>
             <artifactId>juh</artifactId>

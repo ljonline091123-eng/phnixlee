@@ -16,50 +16,15 @@ spring:
       password: nacos
       discovery:
         # 服务注册地址
-        server-addr: 172.168.100.42:8848
+        server-addr: 192.168.240.13:30848
         metadata:
-          version: cs
+          version: cm
       config:
         # 配置中心地址
-        server-addr: 172.168.100.42:8848
+        server-addr: 192.168.240.13:30848
         # 配置文件格式
         file-extension: yml
         # 共享配置
         shared-configs:
           - application-${spring.profiles.active}.${spring.cloud.nacos.config.file-extension}
-# 电子签章
-signature:
-  platform: qiyuesuo-private
-  qiyuesuo:
-    private:
-      serviceUrl: http://222.244.138.211:60025
-      accessToken: Hfi3LV2d51
-      accessSecret: 4gkHFAoVWVvXA4vBdEVoLbSAO29bmu
-underPlat:
-  # base地址
-  baseUrl: http://192.168.240.17:30163/jkptht
-  # 授权码
-  authCode: 9d44f037c56046ff85685cf7fb74dc1a
-  # 易料地址
-  yjtUrl: https://lxmtest.hn-yjt.com/mall/login
-  # 易料appId
-  appId: 0c42a181e696
-  # 易料key
-  yjtKey: 88420f686b5411efbdce0c42a181e696
-http:
-  # 最大连接数
-  maxTotal: 100
-  # 并发数
-  defaultMaxPerRoute: 20
-  # 客户端创建连接超时时间
-  connectTimeout: 10000
-  # 从连接池中获取到连接的最长时间
-  connectionRequestTimeout: 500
-  # 服务端响应超时时间
-  socketTimeout: 30000
-  # 提交请求前测试连接是否可用
-  staleConnectionCheckEnabled: true
-  # 可用空闲连接过期时间,重用空闲连接时会先检查是否空闲时间超过这个时间，如果超过，释放socket重新建立
-  validateAfterInactivity: 3000000
-swagger:
-  base-package: com.zhaocai.business.bidding.controller
+
