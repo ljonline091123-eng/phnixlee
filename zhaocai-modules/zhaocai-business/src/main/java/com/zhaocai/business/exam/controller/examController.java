@@ -15,6 +15,7 @@ import com.zhaocai.common.core.web.bean.ResultData;
 import com.zhaocai.common.log.annotation.Log;
 import com.zhaocai.common.log.enums.BusinessType;
 import io.swagger.annotations.Api;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.io.FilenameUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
@@ -23,6 +24,7 @@ import java.io.*;
 import java.util.*;
 
 
+@Slf4j
 @Api("考生管理")
 @RestController
 @RequestMapping("/exam/exam")
@@ -113,11 +115,16 @@ public class examController extends BladeController {
                 String PDFfileName = UUID.randomUUID().toString() + ".pdf";
                 String PDFtargetPath = "D:\\results\\" +"examPDF"+ PDFfileName;
                 OutputStream outputStream = new FileOutputStream(PDFtargetPath);
+                log.info("[examController][repaceWord]doc{}",doc);
                 ByteArrayInputStream inputStream = LibToPdf.getNiceXWPFDocByInputStream(doc);
+                log.info("[examController][repaceWord]inputStream{}",inputStream);
                 try {
                     LibToPdf.setLibreoffceLocation("192.168.240.16");
+                    log.info("[LibToPdf.setLibreoffceLocation]{}",LibToPdf.getLibreoffceLocation());
                     LibToPdf.setLibreoffceProt(30002);
+                    log.info("[LibToPdf.setLibreoffceProt]{}",LibToPdf.getLibreoffceProt());
                     LibToPdf.doDocumentConvert(inputStream,outputStream, "docx","pdf");
+                    log.info("[LibToPdf.doDocumentConvert]");
                 } catch (Exception e) {
                     e.printStackTrace();
                     try {
@@ -132,6 +139,7 @@ public class examController extends BladeController {
 
                 //读取生成的pdf文件
                 File fileWithImg = new File(PDFtargetPath);
+                log.info("[LibToPdf.doDocumentConvert][读取生成的pdf文件]fileWithImg{}",fileWithImg);
                 if (!fileWithImg.exists()) {
                     throw new IOException("生成的带有头像图片的Word文档不存在: " + PDFtargetPath);
                 }
@@ -140,12 +148,14 @@ public class examController extends BladeController {
                 String imgFileName = StringUtils.format("{}/{}_{}.{}", DateUtils.datePath(),
                         FilenameUtils.getBaseName(fileWithImg.getName()), Seq.getId(Seq.uploadSeqType), FileTypeUtils.getFileType(fileWithImg));
 
+                log.info("[LibToPdf.doDocumentConvert][imgFileName]imgFileName{}",imgFileName);
                 //获取文件类型
 //                Path path = Paths.get(PDFtargetPath);
 //                String contentType = Files.probeContentType(path);
                 // 将带有头像的word文档上传到MinIO
 //                String fileWithImgUrl = iSysFileService.uploadFile(fis, imgFileName,contentType);
                 String fileWithImgUrl = iSysFileService.uploadFile(fis, imgFileName);
+                log.info("[LibToPdf.doDocumentConvert][imgFileName]fileWithImgUrl{}",fileWithImgUrl);
                 return ResultData.success(fileWithImgUrl);
 
             } catch (Exception e) {
