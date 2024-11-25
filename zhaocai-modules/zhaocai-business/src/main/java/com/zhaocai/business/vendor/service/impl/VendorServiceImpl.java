@@ -3,6 +3,7 @@ package com.zhaocai.business.vendor.service.impl;
 import cn.hutool.core.codec.Base64;
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.collection.CollectionUtil;
+import cn.hutool.core.util.IdUtil;
 import com.alibaba.fastjson.JSON;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
@@ -261,6 +262,7 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
             acount.setAcountType(AccountEnum.GYS_TYPE.getType());
             //默认账户
             acount.setStatus(1);
+            acount.setId(IdUtil.getSnowflakeNextId());
             accountService.save(acount);
             // 保存供应商资质
             vendorCertificationService.addCertification(requestVO.getBusinessLicense(), CertificationTypeEnum.BUSINESS_LICENSE,vendor.getId());
