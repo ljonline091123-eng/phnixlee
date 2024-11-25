@@ -282,11 +282,15 @@ public class ProcurementSchemeServiceImpl extends ServiceImpl<ProcurementSchemeM
         List<ProcurementSchemePlanRelate> relateList = procurementSchemePlanRelateService.listBySchemeId(id);
         //获取 拆分合约id
         List<Long> contractSplitList = relateList.stream().map(ProcurementSchemePlanRelate::getContractSplitId).collect(Collectors.toList());
+        //获取 采购计划id
+        List<Long> procurementPlanList = relateList.stream().map(ProcurementSchemePlanRelate::getProcurementPlanId).collect(Collectors.toList());
+        ProcurementPlan plan = procurementPlanService.getById(procurementPlanList.get(0));
         //获取合约规划信息
         List<ProcurementContractPlanListVO> contractPlanList = contractPlanningService.listProcurementContractPlanByContractSplit(contractSplitList);
         contractPlanList.forEach(item -> {
             CompMaterialsVO compMaterialsVO = new CompMaterialsVO();
             compMaterialsVO.setPlanId(item.getPlanId());
+            compMaterialsVO.setPriceType(plan.getPriceType());
             compMaterialsVO.setContractPlanningName(item.getContractPlanningName());
 
             List<CompContractSplitMaterialsVO> compVOList = new ArrayList<>();
@@ -296,6 +300,7 @@ public class ProcurementSchemeServiceImpl extends ServiceImpl<ProcurementSchemeM
             List<CompContractSplitMaterialsVO> contractSplitMaterials = materialsListService.listContractSplitMaterials4Bidding(queryVO);
             contractSplitMaterials.forEach(compVO -> {
                     compVO.setCompName("（" + item.getContractPlanningName() + "）" + compVO.getSplitContractName());
+                    compVO.setPriceType(plan.getPriceType());
                     compVOList.add(compVO);
             });
 

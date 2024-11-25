@@ -272,4 +272,10 @@ public class Vendor extends BaseEntity {
      */
     @ApiModelProperty(value = "供应商注册来源")
     private String supplierSourse;
+
+    /**
+     * 注册审批通过时间
+     */
+    @ApiModelProperty(value = "注册审批通过时间")
+    private Date registerApprovalTime;
 }

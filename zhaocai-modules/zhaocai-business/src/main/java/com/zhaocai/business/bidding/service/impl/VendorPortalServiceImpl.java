@@ -72,7 +72,11 @@ public class VendorPortalServiceImpl implements IVendorPortalService {
     @Override
     public List<VendorPortalMsgListVO>  msgList(VendorPortalNoticePageQueryVO queryDTO) {
         queryDTO.setNowDate(DateUtils.getNowDate());
-        queryDTO.setVendorId(getVendor(SecurityUtils.getUserId()).getId());
+//        queryDTO.setVendorId(getVendor(SecurityUtils.getUserId()).getId());
+        /* 获取供应商信息 */
+        Vendor vendor = getVendor(SecurityUtils.getUserId());
+        queryDTO.setVendorId(vendor.getId());
+        queryDTO.setRegisterApprovalTime(vendor.getRegisterApprovalTime());
         PageResult<VendorPortalNoticeListVO> pageResult = tenderNoticeService.selectVendorPortalNoticePage(queryDTO);
         List<VendorPortalMsgListVO> list = new ArrayList<>();
         if(pageResult!=null && pageResult.getTotal()>0){
@@ -86,7 +90,7 @@ public class VendorPortalServiceImpl implements IVendorPortalService {
             }
         }
         /* 获取供应商信息 */
-        Vendor vendor = vendorService.getByLoginUser(SecurityUtils.getUserId());
+//        Vendor vendor = vendorService.getByLoginUser(SecurityUtils.getUserId());
         /* 获取该企业的 法人授权书 */
         Date date30 = DateUtils.plusDay(new Date(),30);
         List<VendorCertification> attachments = vendorCertificationService.list(new LambdaQueryWrapper<VendorCertification>()
