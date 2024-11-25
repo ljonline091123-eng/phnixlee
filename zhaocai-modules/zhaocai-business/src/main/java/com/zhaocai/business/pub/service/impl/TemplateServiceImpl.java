@@ -78,13 +78,13 @@ public class TemplateServiceImpl extends ServiceImpl<TemplateMapper,Template> im
      */
     @Nullable
     private IPage<TemplateListVO> fanList(TemplateListQueryVO queryVO,String group) {
-
+        /* 获取当前登录人对应的第三方(主控)的部门id */
         String currUserTowLevelThridDeptId =  remoteSystemService.getTwoLevelDeptByDeptId
                 (SecurityUtils.getSysUser().getDeptId(),SecurityConstants.INNER).getThridDeptId();
-        // 获取所有二级组织及集团
+        /* 获取所有二级组织及集团 thrid_org_level IS NOT NULL */
         List<SysDept> sysDeptList = remoteSystemService.getTwoLevelDepts(SecurityConstants.INNER);
         if (!currUserTowLevelThridDeptId.equals(UserConstants.GROUP_DEPT_ID)) {
-            //通用模板
+            /** 通用模板 = 部门层级是一级单位 部门同步方法{@link com.zhaocai.system.manager.controller.SyncPlatformDataController#syncDept} */
             if (group.equals("2")) {
                 sysDeptList = sysDeptList.stream().filter(item -> item.getThridOrgLevel() == NumberConstant.ONE ||
                         item.getThridDeptId().equals(currUserTowLevelThridDeptId)).collect(Collectors.toList());
@@ -156,13 +156,13 @@ public class TemplateServiceImpl extends ServiceImpl<TemplateMapper,Template> im
         }
 
         // 处理合同模板
-        if (requestVO.getTemplateType() == 1) {
-            // 合同模板，必须要有合同签章信息
-            if (CollectionUtil.isEmpty(requestVO.getAgreementSignStamperList())) {
-                throw new BusinessException("合同签章签署位置信息不能为空");
-            }
-            agreementSignStamperService.saveAgreementSignStamper(requestVO.getId(),requestVO.getAgreementSignStamperList());
-        }
+//        if (requestVO.getTemplateType() == 1) {
+//            // 合同模板，必须要有合同签章信息
+//            if (CollectionUtil.isEmpty(requestVO.getAgreementSignStamperList())) {
+//                throw new BusinessException("合同签章签署位置信息不能为空");
+//            }
+//            agreementSignStamperService.saveAgreementSignStamper(requestVO.getId(),requestVO.getAgreementSignStamperList());
+//        }
     }
 
     @Override

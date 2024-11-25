@@ -222,8 +222,28 @@ public class MarketMaterialContractServiceImpl extends ServiceImpl<MarketMateria
 //        long attachmentId = agreementCreateAttachmentHandle(scheme.getId());
 //        baseInfoVO.setAttachmentId(attachmentId);
 
+        // 是否关联我的钢铁网价格-是否显示
+        baseInfoVO.setIsRelatedMySteelView(this.getIsRelatedMySteelView(baseInfoVO.getBiddingListQuotation()));
+
         return baseInfoVO;
     }
+
+    /**
+     * 是否关联我的钢铁网价格-是否显示
+     * @param biddingListQuotation
+     * @return
+     */
+    private String getIsRelatedMySteelView(List<VendorBiddingListQuotationListVO> biddingListQuotation) {
+        String result = "N";
+        for (VendorBiddingListQuotationListVO vo : biddingListQuotation) {
+            if(null != vo.getSubjectMatterCode() && vo.getSubjectMatterCode().startsWith("A101")){
+                result = "Y";
+                break;
+            }
+        }
+        return result;
+    }
+
 
     /**
      * 处理新增合同时的附件<br>

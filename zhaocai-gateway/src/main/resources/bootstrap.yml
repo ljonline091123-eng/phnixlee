@@ -35,7 +35,7 @@ spring:
       datasource:
         ds1:
           nacos:
-            server-addr: 192.168.6.150:8848
+            server-addr: 192.168.240.13:30848
             dataId: sentinel-zhaocai-gateway
             groupId: DEFAULT_GROUP
             data-type: json

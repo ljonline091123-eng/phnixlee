@@ -11,6 +11,7 @@ import com.zhaocai.business.vendor.domain.VendorCertification;
 import com.zhaocai.business.vendor.mapper.VendorCertificationMapper;
 import com.zhaocai.business.vendor.service.IVendorCertificationService;
 import com.zhaocai.business.vendor.vo.req.VendorCertificationRequestVO;
+import com.zhaocai.business.vendor.vo.req.VendorRegisterRequestVO;
 import com.zhaocai.business.vendor.vo.res.VendorCertificationListVO;
 import com.zhaocai.business.vendor.vo.res.VendorCertificationVO;
 import com.zhaocai.common.core.utils.NumberUtil;
@@ -34,6 +35,10 @@ public class VendorCertificationServiceImpl extends ServiceImpl<VendorCertificat
 
     @Override
     public Long addCertification(VendorCertificationRequestVO requestVO, CertificationTypeEnum certificationType, Long vendorId) {
+                super.remove(new LambdaQueryWrapper<VendorCertification>()
+                        .eq(VendorCertification::getVendorId,vendorId)
+                        .eq(VendorCertification::getDelFlag,0)
+                        .eq(VendorCertification::getBusinessCode,certificationType));
         if (requestVO != null && StringUtils.isNotBlank(requestVO.getAttachmentFileUrl()) &&
                 StringUtils.isNotBlank(requestVO.getAttachmentFileName())) {
             VendorCertification certification = new VendorCertification();
@@ -55,6 +60,10 @@ public class VendorCertificationServiceImpl extends ServiceImpl<VendorCertificat
 
     @Override
     public void addCertification(List<VendorCertificationRequestVO> requestList, CertificationTypeEnum certificationType, Long vendorId) {
+        super.remove(new LambdaQueryWrapper<VendorCertification>()
+                .eq(VendorCertification::getVendorId,vendorId)
+                .eq(VendorCertification::getDelFlag,0)
+                .eq(VendorCertification::getBusinessCode,certificationType));
         List<VendorCertification> list = requestList.stream()
                 .map(x ->{
                     VendorCertification certification = new VendorCertification();
@@ -109,6 +118,40 @@ public class VendorCertificationServiceImpl extends ServiceImpl<VendorCertificat
             }
         }
         return listVO;
+    }
+
+    @Override
+    public VendorRegisterRequestVO listCertification(VendorRegisterRequestVO vendorRequestVO, Long vendorId, Long mainContactId) {
+        List<String> typeList = Arrays.asList(CertificationTypeEnum.BUSINESS_LICENSE.getType(),
+                CertificationTypeEnum.INTEGRITY.getType(),
+                CertificationTypeEnum.LEGAL_AUTHORIZATION.getType(),
+                CertificationTypeEnum.RELEVANT_CERTIFICATION.getType());
+        // 获取该企业的授权书
+        List<VendorCertification> attachments = super.list(new LambdaQueryWrapper<VendorCertification>()
+                .eq(VendorCertification::getVendorId,vendorId)
+                .eq(VendorCertification::getDelFlag,0)
+                .in(VendorCertification::getBusinessCode,typeList));
+        for(VendorCertification certification : attachments){
+            VendorCertificationRequestVO vendorCertificationVo = BeanCopierUtil.copyBean(certification,VendorCertificationRequestVO.class);
+            if(CertificationTypeEnum.BUSINESS_LICENSE.equalsType(certification.getBusinessCode()))  {
+                vendorRequestVO.setBusinessLicense(vendorCertificationVo);
+            }  else if (CertificationTypeEnum.INTEGRITY.equalsType(certification.getBusinessCode())) {
+                vendorRequestVO.setIntegrity(vendorCertificationVo);
+            }else if (CertificationTypeEnum.LEGAL_AUTHORIZATION.equalsType(certification.getBusinessCode())
+                    && mainContactId.equals(certification.getBusinessId())) {
+                // 只显示主要联系人的授权书
+                vendorRequestVO.setLegalAuthorization(vendorCertificationVo);
+                //资质信息
+            }else if (CertificationTypeEnum.RELEVANT_CERTIFICATION.equalsType(certification.getBusinessCode())) {
+                List<VendorCertificationRequestVO> list = vendorRequestVO.getRelevantCertificationList();
+                if (list == null) {
+                    list = new ArrayList<>();
+                }
+                list.add(vendorCertificationVo);
+                vendorRequestVO.setRelevantCertificationList(list);
+            }
+        }
+        return vendorRequestVO;
     }
 
     @Override

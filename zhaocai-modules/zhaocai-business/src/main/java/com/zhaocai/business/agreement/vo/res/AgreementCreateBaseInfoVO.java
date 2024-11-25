@@ -111,4 +111,7 @@ public class AgreementCreateBaseInfoVO extends AdviceObject {
 
     @ApiModelProperty(value = "乙方现场实际履职负责人联系方式")
     private String partyBResponsiblePhone;
+
+    @ApiModelProperty(value = "是否关联我的钢铁网价格-是否显示")
+    private String isRelatedMySteelView;
 }

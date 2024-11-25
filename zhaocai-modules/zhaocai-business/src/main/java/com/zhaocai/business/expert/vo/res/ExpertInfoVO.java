@@ -47,7 +47,7 @@ public class ExpertInfoVO extends AdviceObject {
     private String major;
 
     @ApiModelProperty(value =  "业态")
-    private Integer businessType;
+    private String businessType;
 
     @ApiModelProperty(value =  "专家类别")
     private Integer expertType;

@@ -19,13 +19,10 @@ import com.zhaocai.business.procurement.vo.res.ContractMaterialsListVO;
 import com.zhaocai.business.procurement.vo.res.ContractPlanningListVO;
 import com.zhaocai.common.core.bean.PageResult;
 import com.zhaocai.common.core.constant.Constants;
-import com.zhaocai.common.core.constant.TokenConstants;
 import com.zhaocai.common.core.utils.NumberUtil;
 import com.zhaocai.common.core.utils.bean.BeanCopierUtil;
 import com.zhaocai.common.security.utils.SecurityUtils;
 import lombok.extern.slf4j.Slf4j;
-import org.jetbrains.annotations.NotNull;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -105,14 +102,28 @@ public class ContractPlanService {
                                         .map(ContractPlanMaterialListDTO::getSurplusQuantity)
                                         .reduce(BigDecimal.ZERO, BigDecimal::add)
                         );
+//                        listVO.setSurplusQuantity(BigDecimal.ONE);
 
                         return listVO;
                     })).collect(Collectors.toList());
 
             // 等待所有异步任务完成并收集结果
+//            List<ContractPlanningListVO> resultList = futureList.stream()
+//                    .map(CompletableFuture::join)
+//                    .collect(Collectors.toList());
             List<ContractPlanningListVO> resultList = futureList.stream()
-                    .map(CompletableFuture::join)
+                    .map(future -> {
+                        try {
+                            return future.join();
+                        } catch (Exception e) {
+                            // 记录日志，或者返回一个默认值
+                            log.error("Future execution failed", e);
+                            return null; // 根据需求处理失败的 future
+                        }
+                    })
+                    .filter(Objects::nonNull) // 过滤掉可能的 null 值
                     .collect(Collectors.toList());
+
 
             /* 过滤为0的 */
             resultList = resultList.stream().filter(obj -> obj.getSurplusQuantity().compareTo(BigDecimal.valueOf(0.01))>0).collect(Collectors.toList());
@@ -123,7 +134,7 @@ public class ContractPlanService {
             int totalPages = (int) Math.ceil((double) totalItems / queryVO.getPageSize());
             /* 页码超出范围 */
             if (queryVO.getPageNumber() > totalPages || queryVO.getPageNumber() < 1) {
-                pageResult.setRows(null);
+                pageResult.setRows(new ArrayList<>());
             } else {
                 int fromIndex = (queryVO.getPageNumber() - 1) * queryVO.getPageSize();
                 int toIndex = Math.min(fromIndex + queryVO.getPageSize(), totalItems);
