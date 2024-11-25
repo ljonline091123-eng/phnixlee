@@ -777,7 +777,8 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
     public void processAuditPass(Map<String, Object> variables) {
         String businessId = variables.get("businessId").toString();
         super.update(new LambdaUpdateWrapper<Vendor>()
-                .set(Vendor::getState,VendorStateEnum.APPROVE.getState())
+                .set(Vendor::getState, VendorStateEnum.APPROVE.getState())
+                .set(Vendor::getRegisterApprovalTime, new Date())
                 .eq(Vendor::getId, businessId));
         //推送供应商信息
         pushVendor(Long.parseLong(businessId),"add");

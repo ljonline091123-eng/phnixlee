@@ -63,6 +63,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             WHEN ps.procurement_type != 1 and tn.vendor_range = 1 THEN tnr.vendor_id = #{queryDTO.vendorId}
             ELSE 1
             END) = 1
+            and tn.apply_time_notice >= #{queryDTO.registerApprovalTime}
             <if test="queryDTO.procurementSchemeName != null and queryDTO.procurementSchemeName != ''">
                 and ps.procurement_scheme_name like CONCAT('%', #{queryDTO.procurementSchemeName}, '%')
             </if>
@@ -104,7 +105,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             </if>
             <if test="queryDTO.schemeType == 2">
                 /* 公开招标 的 在线投标不显示状态 为招标报名阶段的。 */
-                and ps.procurement_type != 1 and tn.notice_status!=11 and tn.notice_status!=12 and tn.notice_status!=13
+                and ps.procurement_type != 1 and tn.notice_status!=11 and tn.notice_status!=12 and tn.notice_status!=13 and tn.apply_time >= #{queryDTO.registerApprovalTime}
             </if>
         </where>
         order by tn.create_time desc
@@ -112,10 +113,11 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
 
     <!-- 供应商 首页数据，已登录和未登录的区别就是 是否携带了queryDTO.schemeType 公开招标 参数之前的招标状态是写死是 1 就是 招标文件 ，现在多加了3个环节，应该都带上 11 12 13 -->
     <select id="findVendorPortalNoticePage" resultType="com.zhaocai.business.bidding.vo.res.VendorPortalNoticeListVO">
+        select resultData.* from (
         SELECT tn.id noticeId, ps.id schemeId, ps.procurement_scheme_code, ps.procurement_scheme_name, ps.procurement_plan_type,
         ps.price_type, ps.subject_matter_type,
         tn.create_time, tn.notice_status, su.thrid_org_name unit,
-        ps.price_type, ps.subject_matter_type,ps.procurement_type,
+        ps.procurement_type,
             CASE WHEN ps.procurement_type = 1 then
                 CASE WHEN (tn.notice_status = 11 or tn.notice_status = 12 or tn.notice_status = 13) then
                     CASE WHEN (select update_after from tb_tender_notice_change_record where tn.id = notice_id and notice_status = 11 and type = 1 and del_flag = 0  order by id desc limit 1) IS NOT NULL
@@ -152,6 +154,8 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                 END) = 1
             </if>
         order by tn.create_time desc
+        ) resultData
+        where resultData.applyTime >= #{queryDTO.registerApprovalTime}
     </select>
 
 
