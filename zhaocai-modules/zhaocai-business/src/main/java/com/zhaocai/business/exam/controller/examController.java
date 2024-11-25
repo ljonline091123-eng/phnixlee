@@ -1,54 +1,26 @@
 package com.zhaocai.business.exam.controller;
 
-import com.zhaocai.business.common.annotations.VendorStateCheck;
+import com.deepoove.poi.xwpf.NiceXWPFDocument;
 import com.zhaocai.business.common.base.BladeController;
-import com.zhaocai.business.common.utils.FileUploadUtils;
 import com.zhaocai.business.common.utils.FreeMarkUtils;
 import com.zhaocai.business.common.utils.LibToPdf;
 import com.zhaocai.business.exam.domain.Examinee;
 import com.zhaocai.business.exam.service.IExamineeService;
 import com.zhaocai.business.pub.service.ISysFileService;
-import com.zhaocai.business.vendor.vo.req.VendorSaveRequestVO;
-import com.zhaocai.business.vendor.vo.res.VendorDetailVO;
 import com.zhaocai.common.core.utils.DateUtils;
 import com.zhaocai.common.core.utils.StringUtils;
 import com.zhaocai.common.core.utils.file.FileTypeUtils;
-import com.zhaocai.common.core.utils.file.MimeTypeUtils;
 import com.zhaocai.common.core.utils.uuid.Seq;
 import com.zhaocai.common.core.web.bean.ResultData;
-import com.zhaocai.common.core.web.domain.AjaxResult;
-import com.zhaocai.common.core.web.page.TableDataInfo;
+import com.zhaocai.common.log.annotation.Log;
 import com.zhaocai.common.log.enums.BusinessType;
-import com.zhaocai.system.api.model.LoginUser;
 import io.swagger.annotations.Api;
-import io.swagger.annotations.ApiOperation;
 import org.apache.commons.io.FilenameUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.multipart.MultipartFile;
-import com.zhaocai.common.log.annotation.Log;
 
-import javax.validation.Valid;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.IOException;
 import java.io.*;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.*;
-
-import com.artofsolving.jodconverter.DefaultDocumentFormatRegistry;
-import com.artofsolving.jodconverter.DocumentFormat;
-import com.artofsolving.jodconverter.openoffice.connection.SocketOpenOfficeConnection;
-import com.artofsolving.jodconverter.openoffice.converter.StreamOpenOfficeDocumentConverter;
-import com.deepoove.poi.xwpf.NiceXWPFDocument;
-import org.springframework.beans.factory.annotation.Value;
-import java.io.*;
-import java.net.ConnectException;
-import java.util.UUID;
-
-import org.apache.poi.xwpf.usermodel.XWPFDocument;
 
 
 @Api("考生管理")
@@ -143,8 +115,8 @@ public class examController extends BladeController {
                 OutputStream outputStream = new FileOutputStream(PDFtargetPath);
                 ByteArrayInputStream inputStream = LibToPdf.getNiceXWPFDocByInputStream(doc);
                 try {
-                    LibToPdf.setLibreoffceLocation("192.168.30.240");
-                    LibToPdf.setLibreoffceProt(8989);
+                    LibToPdf.setLibreoffceLocation("192.168.240.16");
+                    LibToPdf.setLibreoffceProt(30002);
                     LibToPdf.doDocumentConvert(inputStream,outputStream, "docx","pdf");
                 } catch (Exception e) {
                     e.printStackTrace();
