@@ -239,9 +239,10 @@
         select tv.id,tv.enterprise_name,tv.social_credit_code,tv.legal_representative,
         tv.legal_phone,tv.legal_id_card,
         tv.bank_account,io.affiliated_bank,io.opening_branch
-        from tb_vendor tv,t_account_info io
+        from tb_vendor tv left join t_account_info io
+          on   io.up_id=tv.id and io.status=1
         <where>
-            tv.state = 3 and io.up_id=tv.id and status=1
+            tv.state = 3
             <if test="queryVO.enterpriseName != null and queryVO.enterpriseName != ''">
                 and tv.enterprise_name like concat('%',#{queryVO.enterpriseName,jdbcType=VARCHAR},'%')
             </if>
