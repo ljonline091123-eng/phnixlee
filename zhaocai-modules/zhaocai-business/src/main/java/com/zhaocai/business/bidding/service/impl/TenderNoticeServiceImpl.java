@@ -8,6 +8,7 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.zhaocai.business.agreement.domain.Agreement;
 import com.zhaocai.business.agreement.service.IAgreementService;
 import com.zhaocai.business.bidding.domain.*;
+import com.zhaocai.business.bidding.enums.BiddingInfoStatusEnum;
 import com.zhaocai.business.bidding.enums.TenderNoticeStatusEnum;
 import com.zhaocai.business.bidding.mapper.TenderNoticeMapper;
 import com.zhaocai.business.bidding.service.*;
@@ -210,6 +211,11 @@ public class TenderNoticeServiceImpl extends ServiceImpl<TenderNoticeMapper,Tend
     @Transactional(propagation = Propagation.REQUIRED,rollbackFor = Exception.class)
     public boolean registerStatus(TenderNoticeVO tenderNoticeVO) {
         verifyParam(tenderNoticeVO);
+        long count = tenderApplyService.count(new LambdaUpdateWrapper<TenderApply>()
+                .eq(TenderApply::getNoticeId, tenderNoticeVO.getId()));
+        if (count < NumberConstant.THREE) {
+            throw new ParamValidateException("公开招标需供应商报名3家及以上");
+        }
 
         TenderNotice tenderNoticeVerify = this.getOne(new LambdaQueryWrapper<TenderNotice>()
                 .eq(TenderNotice::getId, tenderNoticeVO.getId())
