@@ -73,12 +73,12 @@ public class LibToPdf {
     }
 
     public static  void doDocumentConvert(InputStream inputStream, OutputStream outputStream, String form, String to) {
-        log.info("[LibToPdf][doDocumentConvert方法]LibToPdf.libreoffceLocation{}",LibToPdf.libreoffceLocation);
-        log.info("[LibToPdf][doDocumentConvert方法]LibToPdf.libreoffceProt{}",LibToPdf.libreoffceProt);
-        log.info("[LibToPdf][doDocumentConvert方法]inputStream{},outputStream{},form{},to{}",inputStream,outputStream,form,to);
+        log.info("[LibToPdf][doDocumentConvert方法]LibToPdf.libreoffceLocation:{}",LibToPdf.libreoffceLocation);
+        log.info("[LibToPdf][doDocumentConvert方法]LibToPdf.libreoffceProt:{}",LibToPdf.libreoffceProt);
+        log.info("[LibToPdf][doDocumentConvert方法]inputStream:{},outputStream:{},form:{},to:{}",inputStream,outputStream,form,to);
         // 建立连接，根据配置文件获取
         SocketOpenOfficeConnection connection = new SocketOpenOfficeConnection(LibToPdf.getLibreoffceLocation(), LibToPdf.getLibreoffceProt());
-        log.info("[LibToPdf][doDocumentConvert方法]connection{}",connection);
+        log.info("[LibToPdf][doDocumentConvert方法]connection:{}",connection);
         try {
             connection.connect();
             System.out.println("获取连接成功！");
@@ -88,16 +88,16 @@ public class LibToPdf {
         }
         // 转换
         StreamOpenOfficeDocumentConverter converter = new StreamOpenOfficeDocumentConverter(connection);
-        log.info("[LibToPdf][doDocumentConvert方法]converter{}",converter);
+        log.info("[LibToPdf][doDocumentConvert方法]converter:{}",converter);
         // 转换格式
         DocumentFormat docDocumentFormat = (new DefaultDocumentFormatRegistry()).getFormatByFileExtension(form);
-        log.info("[LibToPdf][doDocumentConvert方法]docDocumentFormat{}",docDocumentFormat);
+        log.info("[LibToPdf][doDocumentConvert方法]docDocumentFormat:{}",docDocumentFormat);
         DocumentFormat pdfDocumentFormat = (new DefaultDocumentFormatRegistry()).getFormatByFileExtension(to);
-        log.info("[LibToPdf][doDocumentConvert方法]pdfDocumentFormat{}",pdfDocumentFormat);
+        log.info("[LibToPdf][doDocumentConvert方法]pdfDocumentFormat:{}",pdfDocumentFormat);
 
         // 多种转换方式，文件方式，流方式
         converter.convert(inputStream,docDocumentFormat, outputStream,pdfDocumentFormat);
-        log.info("[LibToPdf][doDocumentConvert方法]converter{}",converter);
+        log.info("[LibToPdf][doDocumentConvert方法]converter:{}",converter);
         // 关闭连接
         connection.disconnect();
         log.info("[LibToPdf][doDocumentConvert方法] 关闭连接！");

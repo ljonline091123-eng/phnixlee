@@ -87,12 +87,12 @@ public class examController extends BladeController {
             params.put("no1",examinee.getExaminationRoom());
             params.put("no2",examinee.getSeatNumber());
             //创建results文件夹存生成的文件
-            File resultsDir = new File("D:\\results");
+            File resultsDir = new File("/tmp/results/");
             if (!resultsDir.exists()) {
                 resultsDir.mkdirs();
             }
             //生成没有头像的文档
-            String outPath= FreeMarkUtils.createDocx(params, "templates/2.docx","D:\\results\\");
+            String outPath= FreeMarkUtils.createDocx(params, "templates/2.docx","/tmp/results/");
             //判断图片是否存在
             String picture = examinee.getPictureUrl();
             if (Objects.isNull(picture) || picture.isEmpty()) {
@@ -103,7 +103,7 @@ public class examController extends BladeController {
             //添加头像图片到word文档中,
             try {
                 String outPutfileName = UUID.randomUUID().toString() + ".docx";
-                String wordTargetPath = "D:\\results\\" +"examFileWithPicture"+ outPutfileName;
+                String wordTargetPath = "/tmp/results/" +"examFileWithPicture"+ outPutfileName;
                 FreeMarkUtils.sealInWord(outPath,
                         wordTargetPath,
                         pictureUrl, "参赛人员须知", 80, 100,
@@ -113,16 +113,16 @@ public class examController extends BladeController {
                 InputStream input=new FileInputStream(wordTargetPath);
                 NiceXWPFDocument doc=new NiceXWPFDocument(input);
                 String PDFfileName = UUID.randomUUID().toString() + ".pdf";
-                String PDFtargetPath = "D:\\results\\" +"examPDF"+ PDFfileName;
+                String PDFtargetPath = "/tmp/results/" +"examPDF"+ PDFfileName;
                 OutputStream outputStream = new FileOutputStream(PDFtargetPath);
-                log.info("[examController][repaceWord]doc{}",doc);
+                log.info("[examController][repaceWord]doc:{}",doc);
                 ByteArrayInputStream inputStream = LibToPdf.getNiceXWPFDocByInputStream(doc);
-                log.info("[examController][repaceWord]inputStream{}",inputStream);
+                log.info("[examController][repaceWord]inputStream:{}",inputStream);
                 try {
                     LibToPdf.setLibreoffceLocation("192.168.240.16");
-                    log.info("[LibToPdf.setLibreoffceLocation]{}",LibToPdf.getLibreoffceLocation());
+                    log.info("[LibToPdf.setLibreoffceLocation]:{}",LibToPdf.getLibreoffceLocation());
                     LibToPdf.setLibreoffceProt(30002);
-                    log.info("[LibToPdf.setLibreoffceProt]{}",LibToPdf.getLibreoffceProt());
+                    log.info("[LibToPdf.setLibreoffceProt]:{}",LibToPdf.getLibreoffceProt());
                     LibToPdf.doDocumentConvert(inputStream,outputStream, "docx","pdf");
                     log.info("[LibToPdf.doDocumentConvert]");
                 } catch (Exception e) {
@@ -139,7 +139,7 @@ public class examController extends BladeController {
 
                 //读取生成的pdf文件
                 File fileWithImg = new File(PDFtargetPath);
-                log.info("[LibToPdf.doDocumentConvert][读取生成的pdf文件]fileWithImg{}",fileWithImg);
+                log.info("[LibToPdf.doDocumentConvert][读取生成的pdf文件]fileWithImg:{}",fileWithImg);
                 if (!fileWithImg.exists()) {
                     throw new IOException("生成的带有头像图片的Word文档不存在: " + PDFtargetPath);
                 }
@@ -148,14 +148,14 @@ public class examController extends BladeController {
                 String imgFileName = StringUtils.format("{}/{}_{}.{}", DateUtils.datePath(),
                         FilenameUtils.getBaseName(fileWithImg.getName()), Seq.getId(Seq.uploadSeqType), FileTypeUtils.getFileType(fileWithImg));
 
-                log.info("[LibToPdf.doDocumentConvert][imgFileName]imgFileName{}",imgFileName);
+                log.info("[LibToPdf.doDocumentConvert][imgFileName]imgFileName:{}",imgFileName);
                 //获取文件类型
 //                Path path = Paths.get(PDFtargetPath);
 //                String contentType = Files.probeContentType(path);
                 // 将带有头像的word文档上传到MinIO
 //                String fileWithImgUrl = iSysFileService.uploadFile(fis, imgFileName,contentType);
                 String fileWithImgUrl = iSysFileService.uploadFile(fis, imgFileName);
-                log.info("[LibToPdf.doDocumentConvert][imgFileName]fileWithImgUrl{}",fileWithImgUrl);
+                log.info("[LibToPdf.doDocumentConvert][imgFileName]fileWithImgUrl:{}",fileWithImgUrl);
                 return ResultData.success(fileWithImgUrl);
 
             } catch (Exception e) {
