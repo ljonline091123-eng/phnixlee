@@ -58,6 +58,25 @@ public class VendorController extends BladeController {
     }
 
     /**
+     * 注册详情查看
+     */
+    @GetMapping("/registerDetail")
+    @ApiOperation("供应商注册详情")
+    public ResultData<VendorRegisterRequestVO> registerDetail(Long vendorId) {
+        return ResultData.data(vendorService.getVendorUpdateDetail(vendorId));
+    }
+
+    /**
+     * 判断是否已经注册成功了
+     */
+    @GetMapping("/checkRegister")
+    @ApiOperation("供应商注册详情")
+    public ResultData<String> checkregister(Long vendorId) {
+        return ResultData.success(vendorService.checkRegister(vendorId));
+    }
+
+
+    /**
      * 供应商详情
      */
     @GetMapping("/detail")
@@ -74,7 +93,7 @@ public class VendorController extends BladeController {
     @Log(title = "保存供应商信息", businessType = BusinessType.UPDATE)
     @PostMapping("/saveVendor")
     @ApiOperation("保存供应商信息")
-    public ResultData<Boolean> saveVendor(@RequestBody @Valid VendorSaveRequestVO requestVO) {
+    public ResultData<String> saveVendor(@RequestBody @Valid VendorSaveRequestVO requestVO) {
         vendorService.saveVendor(requestVO);
         return ResultData.success();
     }

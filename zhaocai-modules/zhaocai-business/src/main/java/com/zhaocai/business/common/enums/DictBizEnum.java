@@ -41,6 +41,9 @@ public enum DictBizEnum {
 	PRICE_TYPE("price_type","价格类型"),
 
 	CURRENCY("currency","币种"),
+	EXTERNAL("is_external","是否外部客商"),
+	ATTRIBUTE("vendor_attribute","客商属性"),
+	VENDORSTATUS("vendor_status","客商状态"),
 	TAXPAYER_TYPE("taxpayer_type","增值税纳税人类型"),
 	INVOICE_TYPE("invoice_type","发票类型"),
 	ENTERPRISE_NATURE("enterprise_nature","企业性质"),

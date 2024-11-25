@@ -40,23 +40,40 @@ public class VendorVO extends AdviceObject {
     @ApiModelProperty(value =  "注册资金")
     private BigDecimal registeredCapital;
 
+    @ApiModelProperty(value = "企业编码")
+    private String enterpriseCode;
+
+    @ApiModelProperty(hidden = true)
+    private Integer isExternal;
+
+    @ApiModelProperty(hidden = true)
+    private Integer vendorAttribute;
+
+    @ApiModelProperty(value = "成立时间")
+    @JsonFormat(pattern = "yyyy-MM-dd", timezone = "GMT+8")
+    private Date establishDate;
+
+    @ApiModelProperty(hidden = true)
+    private Integer vendorStatus;
+
+    @ApiModelProperty(value = "创建单位")
+    private String createdUnit;
+
     @ApiModelProperty(hidden = true)
     private Integer currencyCode;
 
-    @ApiModelProperty(value =  "开户支行")
-    private String accountBranch;
+    @ApiModelProperty(value =  "开户支行Id")
+    private Long accountBranch;
+
+    @ApiModelProperty(value =  "银行名称")
+    private String affiliatedBank;
+
+    @ApiModelProperty(value =  "开户支行名称")
+    private String openingBranch;
 
     @ApiModelProperty(value =  "银行账号")
     private String bankAccount;
 
-    @ApiModelProperty(value =  "法定代表人")
-    private String legalRepresentative;
-
-    @ApiModelProperty(value = "法人联系方式")
-    private String legalPhone;
-
-    @ApiModelProperty(value = "法人身份证号码")
-    private String legalIdCard;
 
     @ApiModelProperty(hidden = true)
     private String enterpriseType;
@@ -106,6 +123,18 @@ public class VendorVO extends AdviceObject {
     @DictCache(dictBizEnum= DictBizEnum.CURRENCY,filedName = "currencyCode")
     @ApiModelProperty(value =  "币种-文本")
     private String currencyCodeText;
+
+    @DictCache(dictBizEnum= DictBizEnum.EXTERNAL,filedName = "isExternal")
+    @ApiModelProperty(value =  "是否外部客商-文本")
+    private String isExternalText;
+
+    @DictCache(dictBizEnum= DictBizEnum.ATTRIBUTE,filedName = "vendorAttribute")
+    @ApiModelProperty(value =  "客商属性-文本")
+    private String vendorAttributeText;
+
+    @DictCache(dictBizEnum= DictBizEnum.VENDORSTATUS,filedName = "vendorStatus")
+    @ApiModelProperty(value =  "客商状态-文本")
+    private String vendorStatusText;
 
     @ApiModelProperty(value =  "企业分类-文本")
     private String enterpriseTypeText;
@@ -157,7 +186,33 @@ public class VendorVO extends AdviceObject {
     @ApiModelProperty(value = "审批状态")
     private Integer state;
 
+
+
     /** 变更id */
     @TableField(exist = false)
     private Long changeId;
+
+    /**
+     * 批语
+     */
+    @ApiModelProperty(value = "批语")
+    private String operateComment;
+
+    /**
+     * 法定代表人
+     */
+    @ApiModelProperty(value = "法定代表人")
+    private String legalRepresentative;
+
+    /**
+     * 法人联系方式
+     */
+    @ApiModelProperty(value = "法人联系方式")
+    private String legalPhone;
+
+    /**
+     * 法人身份证号码
+     */
+    @ApiModelProperty(value = "法人身份证号码")
+    private String legalIdCard;
 }

@@ -137,8 +137,10 @@ public class BiddingMarkTemplateServiceImpl extends ServiceImpl<BiddingMarkTempl
                 sysDeptList = sysDeptList.stream().filter(item -> item.getThridOrgLevel() == NumberConstant.ONE ||
                         item.getThridDeptId().equals(currUserTowLevelThridDeptId)).collect(Collectors.toList());
             }else {
-                sysDeptList = sysDeptList.stream().filter(item ->
-                        item.getThridDeptId().equals(currUserTowLevelThridDeptId)).collect(Collectors.toList());
+//                sysDeptList = sysDeptList.stream().filter(item ->
+//                        item.getThridDeptId().equals(currUserTowLevelThridDeptId)).collect(Collectors.toList());
+                /* 权限控制到项目部 */
+                sysDeptList = remoteSystemService.getDeptByThridDeptId(currUserTowLevelThridDeptId,SecurityConstants.INNER);
             }
         }
         if (CollectionUtil.isNotEmpty(sysDeptList)) {

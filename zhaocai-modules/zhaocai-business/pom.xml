@@ -60,6 +60,12 @@
             <artifactId>mysql-connector-j</artifactId>
         </dependency>
 
+        <dependency>
+            <groupId>org.apache.httpcomponents</groupId>
+            <artifactId>httpmime</artifactId>
+            <version>4.5.13</version> <!-- 请使用最新的稳定版本 -->
+        </dependency>
+
         <!-- RuoYi Common Core -->
         <dependency>
             <groupId>com.zhaocai</groupId>

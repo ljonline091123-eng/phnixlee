@@ -48,7 +48,7 @@ public class Expert extends BaseEntity
 
     /** 业态 */
     @ApiModelProperty(value =  "业态")
-    private Integer businessType;
+    private String businessType;
 
     /** 专家类别（1技术类 2经济类） */
     @ApiModelProperty(value =  "专家类别（1技术类 2经济类）")

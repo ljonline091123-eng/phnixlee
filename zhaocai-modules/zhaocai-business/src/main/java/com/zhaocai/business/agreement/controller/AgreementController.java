@@ -120,8 +120,8 @@ public class AgreementController extends BladeController {
      */
     @PostMapping("/submitAgreement")
     @ApiOperation(value = "提交合同")
-    public ResultData<Boolean> submitAgreement(@RequestParam Long id, @RequestParam(required = false) String detailUrl) {
-        agreementService.submitAgreement(id, detailUrl);
+    public ResultData<Boolean> submitAgreement(@RequestParam Long id, @RequestParam(required = false) String detailUrl, @RequestParam(required = false) String operateComment) {
+        agreementService.submitAgreement(id, detailUrl,operateComment);
         return ResultData.success();
     }
 
@@ -201,7 +201,6 @@ public class AgreementController extends BladeController {
         agreementService.cancelledSignAgreement(requestVO);
         return ResultData.success();
     }
-
 
     @ApiOperation(value = "初始化接口")
     @GetMapping ("/initialize")

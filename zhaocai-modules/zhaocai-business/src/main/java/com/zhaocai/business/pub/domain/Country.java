@@ -11,7 +11,7 @@ import java.io.Serializable;
 import java.util.Date;
 
 /**
- * 国家和地区档案对象 tb_country
+ * 支行对象 tb_country
  *
  * @author WH
  * @date 2024-07-14

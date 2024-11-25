@@ -118,7 +118,7 @@
         from tb_agreement ta
         left join sys_dept sd on sd.thrid_dept_id = ta.party_a_org_id
         <where>
-            ta.market_material_contract_id is not null
+            ta.market_material_contract_id is not null and ta.belong_accounting_item_code = #{queryVO.projectCode,jdbcType=VARCHAR}
             <if test="queryVO.agreementCode != null and queryVO.agreementCode != ''">
                 and ta.agreement_code like concat('%',#{queryVO.agreementCode,jdbcType=VARCHAR},'%')
             </if>
@@ -158,7 +158,7 @@
                 ta.create_by,ta.create_time,ta.total_amount_inc_tax,tbi.contact,tbi.phone,ta.agreement_state
         from tb_agreement ta
         left join tb_tender_notice ttn on ttn.scheme_id = ta.scheme_id and ttn.notice_status = 8
-        left join tb_bidding_info tbi on  tbi.notice_id = ttn.id and ta.vendor_id = tbi.vendor_id
+        left join tb_bidding_info tbi on  tbi.notice_id = ttn.id and ta.vendor_id = tbi.vendor_id and tbi.parent_id is null
         <where>
             ta.vendor_id = #{queryVO.vendorId,jdbcType=BIGINT} and ta.agreement_state in ('6','7','8','9','10')
             <if test="queryVO.agreementCode != null and queryVO.agreementCode != ''">
@@ -185,7 +185,7 @@
 
     <select id="selectAgreementJkpthtList" resultMap="AgreementJkpthtListResult">
         select * from (
-        select ta.id,ta.agreement_name,ta.expenditure_business_type,ta.vendor_id,ta.party_b_name,tbr.notifi_time
+        select ta.id,ta.agreement_name,ta.expenditure_business_type,ta.vendor_id,ta.party_b_name,tbr.notifi_time,ta.create_time
         from tb_agreement ta
         left join tb_bidding_result tbr on tbr.scheme_id = ta.scheme_id and tbr.vendor_id = ta.vendor_id and tbr.bid_result = 1 and tbr.del_flag = 2
         <where>
@@ -198,7 +198,7 @@
             </if>
         </where>
         union
-        select ta.id,ta.agreement_name,ta.expenditure_business_type,ta.vendor_id,ta.party_b_name
+        select ta.id,ta.agreement_name,ta.expenditure_business_type,ta.vendor_id,ta.party_b_name, '' as notifi_time,ta.create_time
         from tb_agreement ta
         <where>
             ta.agreement_state = 3 and ta.market_material_contract_id is not null
