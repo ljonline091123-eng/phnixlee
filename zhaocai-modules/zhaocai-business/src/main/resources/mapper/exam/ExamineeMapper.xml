@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhaocai.business.exam.mapper.ExamineeMapper">
+    
+    <resultMap type="Examinee" id="ExamineeResult">
+        <result property="id"    column="id"    />
+        <result property="workUnit"    column="work_unit"    />
+        <result property="examineeName"    column="examinee_name"    />
+        <result property="identityCardId"    column="identity_card_id"    />
+        <result property="phone"    column="phone"    />
+        <result property="entryCardNumber"    column="entry_card_number"    />
+        <result property="examinationRoom"    column="examination_room"    />
+        <result property="seatNumber"    column="seat_number"    />
+        <result property="pictureUrl"    column="picture_url"    />
+    </resultMap>
+
+    <sql id="selectExamineeVo">
+        select id, work_unit, examinee_name, identity_card_id, phone, entry_card_number, examination_room, seat_number, picture_url from tb_examinee
+    </sql>
+
+    <select id="selectExamineeList" parameterType="Examinee" resultMap="ExamineeResult">
+        <include refid="selectExamineeVo"/>
+        <where>  
+            <if test="workUnit != null  and workUnit != ''"> and work_unit = #{workUnit}</if>
+            <if test="examineeName != null  and examineeName != ''"> and examinee_name like concat('%', #{examineeName}, '%')</if>
+            <if test="identityCardId != null  and identityCardId != ''"> and identity_card_id = #{identityCardId}</if>
+            <if test="phone != null  and phone != ''"> and phone = #{phone}</if>
+        </where>
+    </select>
+    
+    <select id="selectExamineeById" parameterType="Long" resultMap="ExamineeResult">
+        <include refid="selectExamineeVo"/>
+        where id = #{id}
+    </select>
+        
+    <insert id="insertExaminee" parameterType="Examinee">
+        insert into tb_examinee
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="id != null">id,</if>
+            <if test="workUnit != null">work_unit,</if>
+            <if test="examineeName != null">examinee_name,</if>
+            <if test="identityCardId != null">identity_card_id,</if>
+            <if test="phone != null">phone,</if>
+            <if test="entryCardNumber != null">entry_card_number,</if>
+            <if test="examinationRoom != null">examination_room,</if>
+            <if test="seatNumber != null">seat_number,</if>
+            <if test="pictureUrl != null">picture_url,</if>
+         </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="id != null">#{id},</if>
+            <if test="workUnit != null">#{workUnit},</if>
+            <if test="examineeName != null">#{examineeName},</if>
+            <if test="identityCardId != null">#{identityCardId},</if>
+            <if test="phone != null">#{phone},</if>
+            <if test="entryCardNumber != null">#{entryCardNumber},</if>
+            <if test="examinationRoom != null">#{examinationRoom},</if>
+            <if test="seatNumber != null">#{seatNumber},</if>
+            <if test="pictureUrl != null">#{pictureUrl},</if>
+         </trim>
+    </insert>
+
+    <update id="updateExaminee" parameterType="Examinee">
+        update tb_examinee
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="workUnit != null">work_unit = #{workUnit},</if>
+            <if test="examineeName != null">examinee_name = #{examineeName},</if>
+            <if test="identityCardId != null">identity_card_id = #{identityCardId},</if>
+            <if test="phone != null">phone = #{phone},</if>
+            <if test="entryCardNumber != null">entry_card_number = #{entryCardNumber},</if>
+            <if test="examinationRoom != null">examination_room = #{examinationRoom},</if>
+            <if test="seatNumber != null">seat_number = #{seatNumber},</if>
+            <if test="pictureUrl != null">picture_url = #{pictureUrl},</if>
+        </trim>
+        where id = #{id}
+    </update>
+
+    <delete id="deleteExamineeById" parameterType="Long">
+        delete from tb_examinee where id = #{id}
+    </delete>
+
+    <delete id="deleteExamineeByIds" parameterType="String">
+        delete from tb_examinee where id in 
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+</mapper>
