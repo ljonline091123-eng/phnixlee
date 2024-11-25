@@ -133,7 +133,7 @@ public class examController extends BladeController {
                 FreeMarkUtils.sealInWord(outPath,
                         wordTargetPath,
                         pictureUrl, "参赛人员须知", 80, 100,
-                        375, -198, false);
+                        370, -190, false);
 
                 //将word文档转换为pdf格式
                 InputStream input=new FileInputStream(wordTargetPath);

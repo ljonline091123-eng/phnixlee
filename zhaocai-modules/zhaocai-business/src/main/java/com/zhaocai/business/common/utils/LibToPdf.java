@@ -5,12 +5,26 @@ import com.artofsolving.jodconverter.DocumentFormat;
 import com.artofsolving.jodconverter.openoffice.connection.SocketOpenOfficeConnection;
 import com.artofsolving.jodconverter.openoffice.converter.StreamOpenOfficeDocumentConverter;
 import com.deepoove.poi.xwpf.NiceXWPFDocument;
+import com.zhaocai.business.common.config.MinioConfig;
+import com.zhaocai.common.core.utils.DateUtils;
+import com.zhaocai.common.core.utils.StringUtils;
+import com.zhaocai.common.core.utils.file.FileTypeUtils;
+import com.zhaocai.common.core.utils.uuid.Seq;
+import io.minio.GetPresignedObjectUrlArgs;
+import io.minio.MinioClient;
+import io.minio.http.Method;
+import org.apache.commons.io.FilenameUtils;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import java.io.*;
 import java.net.ConnectException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.UUID;
 
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
+import com.zhaocai.business.pub.service.ISysFileService;
 
 
 
@@ -85,6 +99,10 @@ public class LibToPdf {
 
         String outPutfileName = UUID.randomUUID().toString() + ".pdf";
         String targetPath = "E:\\results\\" +"examFileWithPicture"+ outPutfileName;
+//        File file = new File(targetPath);
+        Path path = Paths.get(targetPath);
+        String contentType = Files.probeContentType(path);
+        System.out.println(contentType);
         File resultsDir = new File("E:\\results");
         if (!resultsDir.exists()) {
             resultsDir.mkdirs();
@@ -92,8 +110,8 @@ public class LibToPdf {
         OutputStream outputStream = new FileOutputStream(targetPath);
         ByteArrayInputStream inputStream = LibToPdf.getNiceXWPFDocByInputStream(doc);
         try {
-            LibToPdf.setLibreoffceLocation("192.168.30.240");
-            LibToPdf.setLibreoffceProt(8989);
+            LibToPdf.setLibreoffceLocation("192.168.240.16");
+            LibToPdf.setLibreoffceProt(30002);
             LibToPdf.doDocumentConvert(inputStream,outputStream, "docx","pdf");
 
         } catch (Exception e) {

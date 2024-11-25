@@ -1,5 +1,6 @@
 package com.zhaocai.business.common.utils;
 import com.deepoove.poi.XWPFTemplate;
+import com.deepoove.poi.xwpf.NiceXWPFDocument;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.io.FileUtils;
 
@@ -252,17 +253,12 @@ public final class FreeMarkUtils {
         params.put("no2","01");
 
 
-//        sealInWord(outPath,
-//                "D:\\mytestWithImg.docx",
-//                "D:\\pic2.png", "参赛人员须知", 80, 100,
-//                375, -198, false);
-
         //生成没有图片的文档
         String outPath= FreeMarkUtils.createDocx(params, "templates/2.docx","D:\\results\\");
 
         System.out.println("outPath  " +outPath);
 
-        String url = "http://192.168.240.21:9000/wh-hnjt/2024/08/20/仙境_20240820190921A422.png";
+        String url = "http://192.168.240.21:9000/wh-hnjt/2024/11/23/微信图片_20241112093225_20241123182642A052.jpg";
         String PicturePath = FreeMarkUtils.downloadFileFromUrl(url);
 
         //生成有头像的文档,源路径，添加图章后的路径
@@ -270,23 +266,44 @@ public final class FreeMarkUtils {
         String sropath = "D:\\results\\" + outPutfileName;
         sealInWord(outPath,
                 sropath,
-                PicturePath, "参赛人员须知", 80, 100,
-                375, -198, false);
+                PicturePath, "参赛人员须知", 80, 110,
+                370, -215, false);
+
+        //将word文档转换为pdf格式
+        InputStream input=new FileInputStream(sropath);
+        NiceXWPFDocument doc=new NiceXWPFDocument(input);
+        String PDFfileName = UUID.randomUUID().toString() + ".pdf";
+        String PDFtargetPath = "D:\\results\\" +"examPDF"+ PDFfileName;
+        OutputStream outputStream = new FileOutputStream(PDFtargetPath);
+        ByteArrayInputStream inputStream = LibToPdf.getNiceXWPFDocByInputStream(doc);
+        try {
+            LibToPdf.setLibreoffceLocation("192.168.30.240");
+            LibToPdf.setLibreoffceProt(8989);
+            LibToPdf.doDocumentConvert(inputStream,outputStream, "docx","pdf");
+        } catch (Exception e) {
+            e.printStackTrace();
+            try {
+                if(outputStream != null){
+                    outputStream.close();
+                }
+            }catch (Exception ex){
+                ex.printStackTrace();
+            }
+        }finally {
+        }
 
 
-        //生成的带水印的pdf路径
-        String pdfPath=FreeMarkUtils.convertDocx2Pdf(outPath,"D:\\results\\");
-        System.out.println("pdfPath" + pdfPath);
+
+
+//        //生成的带水印的pdf路径
+//        String pdfPath=FreeMarkUtils.convertDocx2Pdf(outPath,"D:\\results\\");
+//        System.out.println("pdfPath" + pdfPath);
 
 
 
         System.out.println("loadPicturePath: " + PicturePath);
 
 
-        //String fileName = UUID.randomUUID().toString() + "_001_test.pdf";
-
-        //OutputStream outputStream = new FileOutputStream(fileName);
-        //template.write(outputStream);
     }
 
     /**
@@ -322,5 +339,7 @@ public final class FreeMarkUtils {
 
         return tempFile.getAbsolutePath();
     }
+
+
 
 }
