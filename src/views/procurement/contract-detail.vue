@@ -127,7 +127,7 @@
               :key="index"
               class="custom-row"
             >
-              <el-col v-for="item in row" :key="item.id" :span="8">
+              <el-col v-for="item in row" :key="item.id" :span="8" v-if="!((item.prop==='isRelatedMySteelText' || item.prop==='mySteelPriceFluctuationText') && isRelatedMySteelView === 'N')">
                 <el-form-item
                   :label="item.label"
                   label-width="220px"
@@ -2946,6 +2946,8 @@ export default {
           },
         ],
       },
+      // 是否展示款项信息中的  是否关联我的钢铁网价格
+      isRelatedMySteelView: '',
       //款项信息
       paymentItem: {
         1: [
@@ -3347,6 +3349,7 @@ export default {
             ...res.data.agreement,
             ...res.data.agreementPaymentItem,
           };
+          this.isRelatedMySteelView = res.data.agreement.isRelatedMySteelView;
           this.exampleId = res.data.agreement.wfProcessId;
           this.isShowApprovalDetails = res.data.agreement.wfProcessId
             ? true
