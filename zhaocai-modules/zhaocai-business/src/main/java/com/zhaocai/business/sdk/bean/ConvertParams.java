@@ -12,6 +12,7 @@ import org.json.JSONObject;
  * 转换参数对象
  * @author lizb
  *
+ *
  */
 public class ConvertParams {
 	/**
@@ -46,7 +47,7 @@ public class ConvertParams {
 	 * ofd文档同类型转换处理
 	 */
 	public static final String CONVERT_TYPE_CONVERT_OFD = "convert_ofd_to_ofd";
-	
+
 	private Map<String, Object> requestBody;
 	private JSONObject extraParam;
 	private BookMark bookMark;
@@ -68,7 +69,7 @@ public class ConvertParams {
 	/**
 	 * 设置文件路径，仅适用于/pms/convert/fileurl
 	 * @param fileUrl http 或 https 的网络文件路径
-	 * @throws IOException 
+	 * @throws IOException
 	 */
 	public void setFileUrl(String fileUrl) throws IOException {
 		if(fileUrl==null || "".equals(fileUrl.trim())) {
@@ -125,7 +126,7 @@ public class ConvertParams {
 	 * 设置水印
 	 * <br><b>注意：设置完成水印后，再修改WaterMark对象无效</b>
 	 * @param wm 水印对象
-	 * @throws JSONException 
+	 * @throws JSONException
 	 */
 	public void setWaterMark(WaterMark wm) throws JSONException {
 		wm.addExtraParam(extraParam);
@@ -133,7 +134,7 @@ public class ConvertParams {
 	/**
 	 * 设置书签
 	 * @param BookMark 书签操作对象
-	 * @throws JSONException 
+	 * @throws JSONException
 	 */
 	public void setWaterMark(BookMark bookMark) throws JSONException {
 		this.bookMark=bookMark;
@@ -147,7 +148,7 @@ public class ConvertParams {
 	/**
 	 * 得到要提交的带文件流的参数
 	 * @return Map对象
-	 * @throws JSONException 
+	 * @throws JSONException
 	 */
 	public Map<String, Object> getRequestBody() throws JSONException{
 		combinationExtraParam();
@@ -156,7 +157,7 @@ public class ConvertParams {
 	/**
 	 * 得到非文件流的参数数据
 	 * @return 字符串
-	 * @throws JSONException 
+	 * @throws JSONException
 	 */
 	public String  getRequestBodyString() throws JSONException {
 		combinationExtraParam();
