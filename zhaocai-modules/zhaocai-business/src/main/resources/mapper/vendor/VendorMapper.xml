@@ -54,6 +54,7 @@
         <result property="processType" column="process_type"/>
         <result property="affiliatedBank" column="affiliated_bank"/>
         <result property="openingBranch" column="opening_branch"/>
+        <result property="registerApprovalTime" column="register_approval_time"/>
     </resultMap>
 
     <resultMap id="VendorManagementList" type="com.zhaocai.business.vendor.vo.res.VendorManagementListVO">
