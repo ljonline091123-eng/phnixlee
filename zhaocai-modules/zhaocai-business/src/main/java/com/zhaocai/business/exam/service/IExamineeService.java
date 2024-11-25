@@ -25,6 +25,14 @@ public interface IExamineeService extends IService<Examinee>
     Examinee selectExamineeByIdentityCardId(String identityCardId);
 
     /**
+     * 据考场号查询考生管理列表
+     *
+     * @param examinationRoom 考生管理
+     * @return 考生管理
+     */
+    List<Examinee> selectExamineeListByExaminationRoom(String examinationRoom);
+
+    /**
      * 查询考生管理列表
      * 
      * @param examinee 考生管理

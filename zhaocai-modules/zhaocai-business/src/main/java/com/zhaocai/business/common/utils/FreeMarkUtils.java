@@ -46,6 +46,10 @@ public final class FreeMarkUtils {
         // 生成docx临时文件
         final File tempPath = new File(fileName);
         final File docxTempFile = getTempFile(docxFile);
+        if (docxTempFile == null) {
+            System.err.println("Failed to load template file: " + docxFile);
+            return null;
+        }
         XWPFTemplate template = XWPFTemplate.compile(docxTempFile).render(dataMap);
         try {
             template.write(new FileOutputStream(tempPath));
@@ -116,17 +120,32 @@ public final class FreeMarkUtils {
      * @return
      */
     public static File getTempFile(String fileName) {
-        final File tempFile = new File(fileName);
-        InputStream fontTempStream = null;
+
+        // 创建一个临时文件来存储模板内容
+        File tempFile = null;
+        InputStream templateStream = null;
         try {
-            fontTempStream = FreeMarkUtils.class.getClassLoader().getResourceAsStream(fileName);
-            FileUtils.copyInputStreamToFile(fontTempStream, tempFile);
+            // 检查文件是否存在
+            File originalFile = new File(fileName);
+            if (!originalFile.exists()) {
+                System.err.println("Original file not found: " + fileName);
+                return null;
+            }
+
+            // 创建临时文件
+            File parentDir = new File("D:\\results\\");
+            parentDir.mkdirs(); // 确保目录存在
+
+            tempFile = File.createTempFile("template", ".docx", parentDir);
+            System.out.println("Temporary file created at: " + tempFile.getAbsolutePath());
+            templateStream = new FileInputStream(originalFile);
+            FileUtils.copyInputStreamToFile(templateStream, tempFile);
         } catch (Exception e) {
             e.printStackTrace();
         } finally {
             try {
-                if (fontTempStream != null) {
-                    fontTempStream.close();
+                if (templateStream != null) {
+                    templateStream.close();
                 }
             } catch (IOException e) {
                 e.printStackTrace();
@@ -252,13 +271,12 @@ public final class FreeMarkUtils {
         params.put("no1","12");
         params.put("no2","01");
 
-
         //生成没有图片的文档
         String outPath= FreeMarkUtils.createDocx(params, "templates/2.docx","D:\\results\\");
 
         System.out.println("outPath  " +outPath);
 
-        String url = "http://192.168.240.21:9000/wh-hnjt/2024/11/23/微信图片_20241112093225_20241123182642A052.jpg";
+        String url = "http://192.168.30.42:9000/wh-hnjt/2024/11/25/微信图片_20241112093225_20241125163104A050.jpg";
         String PicturePath = FreeMarkUtils.downloadFileFromUrl(url);
 
         //生成有头像的文档,源路径，添加图章后的路径
@@ -266,8 +284,8 @@ public final class FreeMarkUtils {
         String sropath = "D:\\results\\" + outPutfileName;
         sealInWord(outPath,
                 sropath,
-                PicturePath, "参赛人员须知", 80, 110,
-                370, -215, false);
+                PicturePath, "参赛人员须知", 80, 100,
+                375, -197, false);
 
         //将word文档转换为pdf格式
         InputStream input=new FileInputStream(sropath);
@@ -291,13 +309,6 @@ public final class FreeMarkUtils {
             }
         }finally {
         }
-
-
-
-
-//        //生成的带水印的pdf路径
-//        String pdfPath=FreeMarkUtils.convertDocx2Pdf(outPath,"D:\\results\\");
-//        System.out.println("pdfPath" + pdfPath);
 
 
 

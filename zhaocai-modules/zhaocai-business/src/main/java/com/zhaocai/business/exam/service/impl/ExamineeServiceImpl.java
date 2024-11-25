@@ -51,6 +51,22 @@ public class ExamineeServiceImpl extends ServiceImpl<ExamineeMapper, Examinee> i
     }
 
     /**
+     * 据考场号查询考生管理列表
+     *
+     * @param examinationRoom 考生管理
+     * @return 考生管理
+     */
+    @Override
+    public List<Examinee> selectExamineeListByExaminationRoom(String examinationRoom)
+    {
+        List<Examinee> examineeList;
+        examineeList = super.list(new LambdaQueryWrapper<Examinee>()
+                .eq(Examinee::getExaminationRoom, examinationRoom)
+                .orderByAsc(Examinee::getSeatNumber));
+        return examineeList;
+    }
+
+    /**
      * 查询考生管理列表
      * 
      * @param examinee 考生管理

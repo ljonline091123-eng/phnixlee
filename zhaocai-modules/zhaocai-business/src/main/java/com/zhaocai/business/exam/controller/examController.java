@@ -124,7 +124,7 @@ public class examController extends BladeController {
             if (Objects.isNull(picture) || picture.isEmpty()) {
                 return ResultData.fail("请先上传头像图片");
             }
-            //下载头像头像图片到本地
+            //下载无头像图片到本地
             String pictureUrl = FreeMarkUtils.downloadFileFromUrl(examinee.getPictureUrl());
             //添加头像图片到word文档中,
             try {
@@ -133,46 +133,19 @@ public class examController extends BladeController {
                 FreeMarkUtils.sealInWord(outPath,
                         wordTargetPath,
                         pictureUrl, "参赛人员须知", 80, 100,
-                        370, -190, false);
+                        375, -197, false);
 
-                //将word文档转换为pdf格式
-                InputStream input=new FileInputStream(wordTargetPath);
-                NiceXWPFDocument doc=new NiceXWPFDocument(input);
-                String PDFfileName = UUID.randomUUID().toString() + ".pdf";
-                String PDFtargetPath = "D:\\results\\" +"examPDF"+ PDFfileName;
-                OutputStream outputStream = new FileOutputStream(PDFtargetPath);
-                ByteArrayInputStream inputStream = LibToPdf.getNiceXWPFDocByInputStream(doc);
-                try {
-                    LibToPdf.setLibreoffceLocation("192.168.30.240");
-                    LibToPdf.setLibreoffceProt(8989);
-                    LibToPdf.doDocumentConvert(inputStream,outputStream, "docx","pdf");
-                } catch (Exception e) {
-                    e.printStackTrace();
-                    try {
-                        if(outputStream != null){
-                            outputStream.close();
-                        }
-                    }catch (Exception ex){
-                        ex.printStackTrace();
-                    }
-                }finally {
-                }
-
-                //读取生成的pdf文件
-                File fileWithImg = new File(PDFtargetPath);
+                //读取生成的文件
+                File fileWithImg = new File(wordTargetPath);
                 if (!fileWithImg.exists()) {
-                    throw new IOException("生成的带有头像图片的Word文档不存在: " + PDFtargetPath);
+                    throw new IOException("生成的带有头像图片的Word文档不存在: " + wordTargetPath);
                 }
                 // 将带有头像的word文档转换为InputStream
                 FileInputStream fis = new FileInputStream(fileWithImg);
                 String imgFileName = StringUtils.format("{}/{}_{}.{}", DateUtils.datePath(),
                         FilenameUtils.getBaseName(fileWithImg.getName()), Seq.getId(Seq.uploadSeqType), FileTypeUtils.getFileType(fileWithImg));
 
-                //获取文件类型
-//                Path path = Paths.get(PDFtargetPath);
-//                String contentType = Files.probeContentType(path);
                 // 将带有头像的word文档上传到MinIO
-//                String fileWithImgUrl = iSysFileService.uploadFile(fis, imgFileName,contentType);
                 String fileWithImgUrl = iSysFileService.uploadFile(fis, imgFileName);
                 return ResultData.success(fileWithImgUrl);
 
@@ -198,9 +171,20 @@ public class examController extends BladeController {
     }
 
     /**
-     * 查询考生管理列表
+     * 据考场查询考生列表
      */
+    @GetMapping("/getlistByRoom")
+    public ResultData<List<Examinee>> getlistByexaminationRoom(@RequestParam("examinationRoom") String examinationRoom)
+    {
 
+        List<Examinee> list = examineeService.selectExamineeListByExaminationRoom(examinationRoom);
+        return ResultData.data(list);
+    }
+
+
+    /**
+     * 查询全部考生管理列表
+     */
     @GetMapping("/list")
     public ResultData<List<Examinee>> Examineerlist(Examinee examinee)
     {
