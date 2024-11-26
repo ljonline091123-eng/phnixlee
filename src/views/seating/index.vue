@@ -1,7 +1,7 @@
 <template>
 <div  class="app-container">
          <div  style=" position: absolute;right: 20px;top: 10px;">
-            <el-select style="right: 20px;" v-model="examinationroom" placeholder="请选择">
+            <el-select style="right: 20px;" @change="handleChange" v-model="examinationroom" placeholder="请选择">
                 <el-option
                 v-for="item in options"
                 :key="item.value"
@@ -24,10 +24,10 @@
         <div class="competitionTit" style="padding: 52px 0 22px 8px;">
             <div ><span style="visibility: hidden;">真真真真真真真真真真真真真真真真</span>湖南建设投资集团第二届商务成控综合技能竞赛{{examinationroomTit}}参赛人员座次表</div>
         </div>
-        <div style="display: flex;flex-wrap: wrap;width: 100%;padding: 8px 0 12px 0; " >
-            <div style="width: 8.5%;padding: 2px; border: 1px solid #000;text-align: center;color:#666666;font-size: 14px;" v-for="(item,index1) in examinationRoomList" :key="index1">
+        <div style="display: flex;flex-wrap: wrap;width: 100%;padding: 8px 0 12px 30px; " >
+            <div style="width: 9.2%;padding: 2px; border: 1px solid #000;text-align: center;color:#666666;font-size: 14px;" v-for="(item,index1) in examinationRoomList" :key="index1">
                 <div style="padding: 12px 0;">座位号：{{item.seatNumber}}号</div>
-                 <img style="padding: 6px 0;" :src="item.pictureUrl" width="90px" height="130px" class="avatar">
+                 <img style="padding: 6px 0;" :src="item.pictureUrl" width="100px" height="130px" class="avatar">
                  <div style="padding: 6px 0;">姓名：{{item.examineeName}}</div>
                  <div style="padding: 6px 0px;">签字：<span style="visibility: hidden;">姚真真</span></div>
                  <div style="padding: 6px 0;">{{item.phone}}</div>  
@@ -58,29 +58,29 @@ export default {
       name:'湖南建筑高级技工学校崇技楼六楼',
       place:'长沙市天心区古堆山巷11号北门',
       examTime:'2024-11-29 14:30-- 17:30',
-      examinationroom:'第1考场(601)',
+      examinationroom:'01',
       examinationroomTit:'第1考场(601)',
       examinationRoomList: [],
         options: [{
-          value: '第1考场(601)',
+          value: '01',
           label: '第1考场(601)'
         }, {
-          value: '第2考场(602)',
+          value: '02',
           label: '第2考场(602)'
         }, {
-          value: '第3考场(603)',
+          value: '03',
           label: '第3考场(603)'
         }, {
-          value: '第4考场(604)',
+          value: '04',
           label: '第4考场(604)'
         }, {
-          value: '第5考场(605)',
+          value: '05',
           label: '第5考场(605)'
         }, {
-          value: '第6考场(606)',
+          value: '06',
           label: '第6考场(606)'
         }, {
-          value: '第7考场(607)',
+          value: '07',
           label: '第7考场(607)'
         }],
       rules: {
@@ -115,17 +115,21 @@ export default {
       printWindow.print();
       printWindow.close();
     },
-   
+       handleChange(value) {
+      console.log('当前选中的值：', value);
+      // 在这里处理选项变化的逻辑
+    },
     
    seatingQuery(){
         this.getlistByRoomFn(this.examinationroom);
    },
     
-    //查看身份证是否存在
+    //获取座次表
     async getlistByRoomFn(id) {
         const res = await getlistByRoom(id);
         this.examinationRoomList=res.data
-        this.examinationroomTit=this.examinationroom
+        const selectedOption = this.options.find(option => option.value === this.examinationroom);
+        this.examinationroomTit=selectedOption ? selectedOption.label : '';
       },
 
 
