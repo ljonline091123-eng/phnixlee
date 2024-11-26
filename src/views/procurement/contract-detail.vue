@@ -46,11 +46,11 @@
             >推送至供应商</el-button
           >
         </div>
-<!--        <div v-else-if="isOperate === 1 && Number(agreementState) === 7">-->
-<!--          <el-button type="primary" size="mini" @click="pushToSignPlatform()"-->
-<!--            >推送至电子签章平台</el-button-->
-<!--          >-->
-<!--        </div>-->
+        <div v-else-if="isOperate === 1 && Number(agreementState) === 7">
+          <el-button type="primary" size="mini" @click="pushToSignPlatform()"
+            >推送至电子签章平台</el-button
+          >
+        </div>
         <div v-else-if="isOperate === 1 && Number(agreementState) === 9">
           <el-button type="primary" size="mini" @click="toSignAgreement()"
             >签署</el-button
@@ -127,7 +127,7 @@
               :key="index"
               class="custom-row"
             >
-              <el-col v-for="item in row" :key="item.id" :span="8">
+              <el-col v-for="item in row" :key="item.id" :span="8" v-if="!((item.prop==='isRelatedMySteelText' || item.prop==='mySteelPriceFluctuationText') && isRelatedMySteelView === 'N')">
                 <el-form-item
                   :label="item.label"
                   label-width="220px"
@@ -985,53 +985,53 @@
       @update:visible="calibrateVisible = $event"
     />
 
-<!--    <el-dialog-->
-<!--      title="推送至电子签章平台"-->
-<!--      :visible.sync="pushSignDialog"-->
-<!--      width="600px"-->
-<!--      @closed="clearPushSignFormData"-->
-<!--    >-->
-<!--      <span-->
-<!--        style="-->
-<!--          font-size: 16px;-->
-<!--          line-height: 30px;-->
-<!--          text-align: center;-->
-<!--          margin-bottom: 25px;-->
-<!--          display: block;-->
-<!--        "-->
-<!--        >{{ pushSignTitle }}</span-->
-<!--      >-->
-<!--      <el-form-->
-<!--        :model="pushSignFormData"-->
-<!--        ref="pushSignForm"-->
-<!--        :rules="pushSignFormRules"-->
-<!--      >-->
-<!--        <el-form-item label="签署人：" prop="partyAUserId">-->
-<!--          <el-select-->
-<!--            v-model="pushSignFormData.partyAUserId"-->
-<!--            placeholder="请选择"-->
-<!--            filterable-->
-<!--          >-->
-<!--            <el-option-->
-<!--              v-for="item in partyAUserList"-->
-<!--              :key="item.userId"-->
-<!--              :label="item.nickName"-->
-<!--              :value="item.userId"-->
-<!--            >-->
-<!--            </el-option>-->
-<!--          </el-select>-->
-<!--        </el-form-item>-->
-<!--      </el-form>-->
-<!--      <div slot="footer" class="dialog-footer">-->
-<!--        <el-button @click="pushSignDialog = false">取 消</el-button>-->
-<!--        <el-button-->
-<!--          type="primary"-->
-<!--          @click="toPushSignPlatform"-->
-<!--          :loading="pushSignFormSubBtn"-->
-<!--          >{{ pushSignFormSubBtn ? "推送中..." : "推 送" }}</el-button-->
-<!--        >-->
-<!--      </div>-->
-<!--    </el-dialog>-->
+    <el-dialog
+      title="推送至电子签章平台"
+      :visible.sync="pushSignDialog"
+      width="600px"
+      @closed="clearPushSignFormData"
+    >
+      <span
+        style="
+          font-size: 16px;
+          line-height: 30px;
+          text-align: center;
+          margin-bottom: 25px;
+          display: block;
+        "
+        >{{ pushSignTitle }}</span
+      >
+      <el-form
+        :model="pushSignFormData"
+        ref="pushSignForm"
+        :rules="pushSignFormRules"
+      >
+        <el-form-item label="签署人：" prop="partyAUserId">
+          <el-select
+            v-model="pushSignFormData.partyAUserId"
+            placeholder="请选择"
+            filterable
+          >
+            <el-option
+              v-for="item in partyAUserList"
+              :key="item.userId"
+              :label="item.nickName"
+              :value="item.userId"
+            >
+            </el-option>
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <div slot="footer" class="dialog-footer">
+        <el-button @click="pushSignDialog = false">取 消</el-button>
+        <el-button
+          type="primary"
+          @click="toPushSignPlatform"
+          :loading="pushSignFormSubBtn"
+          >{{ pushSignFormSubBtn ? "推送中..." : "推 送" }}</el-button
+        >
+      </div>
+    </el-dialog>
     <el-dialog
       title="签署合同"
       :visible.sync="signAgreementDialog"
@@ -2946,6 +2946,8 @@ export default {
           },
         ],
       },
+      // 是否展示款项信息中的  是否关联我的钢铁网价格
+      isRelatedMySteelView: '',
       //款项信息
       paymentItem: {
         1: [
@@ -3347,6 +3349,7 @@ export default {
             ...res.data.agreement,
             ...res.data.agreementPaymentItem,
           };
+          this.isRelatedMySteelView = res.data.agreement.isRelatedMySteelView;
           this.exampleId = res.data.agreement.wfProcessId;
           this.isShowApprovalDetails = res.data.agreement.wfProcessId
             ? true

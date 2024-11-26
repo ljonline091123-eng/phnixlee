@@ -108,6 +108,7 @@
             </el-col>
             <el-col :span="8" class="grid-cell" v-if="(procurementType == 1)">
               <el-form-item label="价格类型" prop="priceType" class="required label-right-align">
+                <!-- 价格类型，1固定价，2浮动价，2固定、浮动价。清单的列根据这个监听来判断是否显示隐藏，反之也通过监听清单的价格类型@chang=changePriceType 来判断赋值该价格类型。 -->
                 <el-select
                   v-model="formData.priceType"
                   placeholder="请选择价格类型"
@@ -186,7 +187,7 @@
                       <el-table-column label="计量单位" align="center" prop="unitMeasurement" />
                       <el-table-column label="价格类型" align="center" prop="priceType" width="200" v-if="procurementType === 1">
                         <template slot-scope="scope">
-                          <el-select style="width: 100%" v-model="scope.row.priceType" placeholder="请选择">
+                          <el-select style="width: 100%" v-model="scope.row.priceType" placeholder="请选择" @change="changePriceType(inventory.$index,scope,$event)">
                             <el-option v-for="dict in PRICETYPEOPTIONS" :key="dict.value" :label="dict.label"
                               :value="dict.value">
                             </el-option>
@@ -214,7 +215,7 @@
                         </template>
                       </el-table-column>
 <!--                      基价由原来浮动价不可编辑，变成了可以编辑-->
-                      <el-table-column label="基价" align="right" width="130" prop="basePrice"  v-if="procurementType === 1">
+                      <el-table-column label="基价" align="right" width="130" prop="basePrice"  v-if="procurementType === 1 && formData.priceType !== 1">
                         <template slot-scope="scope">
                           <span v-if="scope.row.priceType === 1">/</span>
                           <div v-else>
@@ -224,7 +225,7 @@
 
                         </template>
                       </el-table-column>
-                      <el-table-column label="单价(含税)" align="right" prop="unitPriceInclTax" width="180">
+                      <el-table-column label="单价(含税)" align="right" prop="unitPriceInclTax" width="180" v-if="formData.priceType !== 2">
                         <template slot-scope="scope">
                           <span v-if="scope.row.priceType !== 1">/</span>
                           <el-input v-else v-model="scope.row.unitPriceInclTax" :disabled="isSubmit || scope.row.belongOffer || scope.row.pushFlag === 'Y'" @blur="changePrice(scope.row,$event)" v-thousandth/>
@@ -236,7 +237,7 @@
                           {{ scope.row.unitPriceExclTax }}
                         </template>
                       </el-table-column>
-                      <el-table-column label="浮动价" align="right" width="130" prop="floatingPrice"  v-if="procurementType === 1">
+                      <el-table-column label="浮动价" align="right" width="130" prop="floatingPrice"  v-if="procurementType === 1 && formData.priceType !== 1">
                         <template slot-scope="scope">
                           <span v-if="scope.row.priceType === 1">/</span>
                           <div v-else>
@@ -246,7 +247,7 @@
 
                         </template>
                       </el-table-column>
-                      <el-table-column label="装卸费" align="right" width="130" prop="unloadingFee"  v-if="procurementType === 1">
+                      <el-table-column label="装卸费" align="right" width="130" prop="unloadingFee"  v-if="procurementType === 1 && formData.priceType !== 1">
                         <template slot-scope="scope">
                           <span v-if="scope.row.priceType === 1">/</span>
                           <div v-else>
@@ -793,7 +794,7 @@ export default {
     submitForm(formName) {
       console.log(this.planList,'ppp');
       const { add, subtract,divide,multiply, bignumber, format,floor } = this.mathjs;
-      // this.isSubmit = true;
+      this.isSubmit = true;
       this.$refs[formName].validate(async (valid,done) => {
         if (valid) {
           // * 首先先判断类型为浮动价的单行是否存在数据不合法的情况
@@ -1310,13 +1311,44 @@ console.log("-2222--"+JSON.stringify(this.materialsLists))
         this.$refs.tableRef.toggleRowExpansion(row, true);
       });
     },
+    /* 每个清单的价格类型监听，用来给采购计划的价格类型赋值，如果清单出现多种价格类型，就给采购计划赋值为=3 固定、浮动价。 */
+    changePriceType(splitIndex, scope, event) {
+      // 初始化一个 Map 来存储各类型的数量
+      const priceTypeCountMap = new Map();
+      // 遍历数据结构，统计各 priceType 的数量
+      this.planList[0]?.children.forEach(item => {
+        item.children.forEach(subItem => {
+          // 清单的价格类型
+          const priceType = subItem.priceType;
+          // 如果 Map 中还没有该 priceType，初始化数量为 0
+          if (!priceTypeCountMap.has(priceType)) {
+            priceTypeCountMap.set(priceType, 0);
+          }
+          // 增加该 priceType 的计数
+          priceTypeCountMap.set(priceType, priceTypeCountMap.get(priceType) + 1);
+        });
+      });
+
+      // 打印所有 priceType 的数量
+      console.log('清单的Price Type Counts:', priceTypeCountMap);
+
+      // 根据 priceType 的数量决定 formData.priceType 的值
+      if (priceTypeCountMap.size > 1) {
+        // 如果有多个不同的 priceType，设置为 3 固定、浮动价
+        this.$set(this.formData, 'priceType', 3);
+      } else if (priceTypeCountMap.size === 1) {
+        // 如果只有一种 priceType，设置为该 priceType 可能是 1 固定价 ，可能是 2 浮动价
+        this.$set(this.formData, 'priceType', [...priceTypeCountMap.keys()][0]);
+      }
+      // 采购计划表单的this.formData.priceType如果清单的priceType存在多种。就设置为3，只有一种就设置为那一种的priceType
+    },
     //数量计算
     changeCount(splitIndex,scope,event){
       console.log('%c 🚀 ~ file:add-plan --method:changeCount --line:1135 --variable:splitIndex,scope,event===>', `font-size:16px; font-weight:bold; color:#fff; padding:4px; border-radius:4px; background:linear-gradient(90deg, ${["#ff005a", "#ff9900", "#33cc33", "#0099ff", "#ffc300"][Math.floor(Math.random() * 5)]}, ${["#ff005a", "#ff9900", "#33cc33", "#0099ff", "#ffc300"][Math.floor(Math.random() * 5)]});`,
         splitIndex,scope,event);
       console.log(event,'~~~~~~~~~~~~~~~~~~');
-      const regexN1 = /^(?:[1-9]\d*|0)(\.\d+)?$/;
-      const regexN2 = /^\d+(\.\d{0,4})?$/
+      const regexN1 = /^-?(?:[1-9]\d*|0)(\.\d+)?$/;
+      const regexN2 = /^-?\d+(\.\d{0,4})?$/;
 
       if(scope.row.count == ''){
         event.target.style = "border: 1px solid red;"
@@ -1404,8 +1436,8 @@ console.log("-2222--"+JSON.stringify(this.materialsLists))
       }
     },
     checkOtherPrice(row,key,event) {
-      const regexN1 = /^(?:[1-9]\d*|0)(\.\d+)?$/;
-      const regexN2 = /^\d+(\.\d{0,4})?$/
+      const regexN1 = /^-?(?:[1-9]\d*|0)(\.\d+)?$/;
+      const regexN2 = /^-?\d+(\.\d{0,4})?$/;
       if(!regexN2.test(row[key])){
         event.target.style = "border: 1px solid red;"
         this.$message.error("请输入小于4位的小数");
@@ -1422,8 +1454,8 @@ console.log("-2222--"+JSON.stringify(this.materialsLists))
         row,event);
       const { unitPriceInclTax, taxRate} = row
 
-       const regexN1 = /^(?:[1-9]\d*|0)(\.\d+)?$/;
-       const regexN2 = /^\d+(\.\d{0,4})?$/
+      const regexN1 = /^-?(?:[1-9]\d*|0)(\.\d+)?$/;
+      const regexN2 = /^-?\d+(\.\d{0,4})?$/;
 
        if(unitPriceInclTax == ''){
           event.target.style = "border: 1px solid red;"
