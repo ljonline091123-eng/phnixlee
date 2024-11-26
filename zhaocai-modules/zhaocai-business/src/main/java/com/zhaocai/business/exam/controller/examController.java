@@ -45,12 +45,12 @@ public class examController extends BladeController {
     @Autowired
     private ISysFileService iSysFileService;
 
-    @Log(title = "test", businessType = BusinessType.UPDATE)
-    @GetMapping("/test")
-    public ResultData  test(@RequestBody Examinee exam)
-    {
-        return ResultData.success("1");
-    }
+//    @Log(title = "test", businessType = BusinessType.UPDATE)
+//    @GetMapping("/test")
+//    public ResultData  test(@RequestBody Examinee exam)
+//    {
+//        return ResultData.success("1");
+//    }
 
     //查询所有考场
     @Log(title = "查询所有考场", businessType = BusinessType.UPDATE)
