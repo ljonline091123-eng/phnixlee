@@ -1091,11 +1091,17 @@ export default {
       });
     },
     async handelCalibrationApproval() {
+      if(!this.vendor.changeId || this.vendor.processType == 1){
+          this.purchaserId=this.purchaserId
+          }else{
+          this.purchaserId=this.vendor.changeId
+          }
+
       try {
         this.calibrateVisible = true;
         this.calibrateLoading = true;
         const params = {
-          businessId: this.vendor.changeId?this.vendor.changeId:this.purchaserId,
+          businessId: this.purchaserId,
           processId: this.exampleId,
         };
         const getProcessLogListParams = {
