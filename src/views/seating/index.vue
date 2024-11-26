@@ -19,7 +19,7 @@
             >
              <el-button  type="primary" size="small" @click="print">打印</el-button>
            </div>
-    
+
   <div id="printMe">
         <div class="competitionTit" style="padding: 52px 0 22px 8px;">
             <div ><span style="visibility: hidden;">真真真真真真真真真真真真真真真真</span>湖南建设投资集团第二届商务成控综合技能竞赛{{examinationroomTit}}参赛人员座次表</div>
@@ -30,11 +30,11 @@
                  <img style="padding: 6px 0;" :src="item.pictureUrl" width="100px" height="130px" class="avatar">
                  <div style="padding: 6px 0;">姓名：{{item.examineeName}}</div>
                  <div style="padding: 6px 0px;">签字：<span style="visibility: hidden;">姚真真</span></div>
-                 <div style="padding: 6px 0;">{{item.phone}}</div>  
+                 <div style="padding: 6px 0;">{{item.phone}}</div>
             </div>
 
         </div>
-         
+
   </div>
 </div>
 </template>
@@ -47,7 +47,7 @@ export default {
   name: "competition-certificate",
 
   data() {
-    
+
     return {
       formData: {
         identityCardId: "",
@@ -55,33 +55,33 @@ export default {
       }, //form表单数据
       dialogVisible:false,
       iframeUrls:'',
-      name:'湖南建筑高级技工学校崇技楼六楼',
+      name:'湖南建筑高级技工学校崇知楼二楼',
       place:'长沙市天心区古堆山巷11号北门',
       examTime:'2024-11-29 14:30-- 17:30',
       examinationroom:'01',
-      examinationroomTit:'第1考场(601)',
+      examinationroomTit:'第1考场',
       examinationRoomList: [],
         options: [{
           value: '01',
-          label: '第1考场(601)'
+          label: '第1考场'
         }, {
           value: '02',
-          label: '第2考场(602)'
+          label: '第2考场'
         }, {
           value: '03',
-          label: '第3考场(603)'
+          label: '第3考场'
         }, {
           value: '04',
-          label: '第4考场(604)'
+          label: '第4考场'
         }, {
           value: '05',
-          label: '第5考场(605)'
+          label: '第5考场'
         }, {
           value: '06',
-          label: '第6考场(606)'
+          label: '第6考场'
         }, {
           value: '07',
-          label: '第7考场(607)'
+          label: '第7考场'
         }],
       rules: {
         pictureUrl: [
@@ -96,7 +96,7 @@ export default {
             message: "身份证不能为空",
           },
         ],
-       
+
       },
       isSubmit: false,
     };
@@ -119,11 +119,11 @@ export default {
       console.log('当前选中的值：', value);
       // 在这里处理选项变化的逻辑
     },
-    
+
    seatingQuery(){
         this.getlistByRoomFn(this.examinationroom);
    },
-    
+
     //获取座次表
     async getlistByRoomFn(id) {
         const res = await getlistByRoom(id);
@@ -133,8 +133,8 @@ export default {
       },
 
 
-  
- 
+
+
   },
   components: {
 
@@ -191,7 +191,7 @@ export default {
 }
 .scroll-container::-webkit-scrollbar {
   display: none; /* 对于Chrome, Safari和Opera */
- 
+
 }
 .dialogtext {
   width: 100% !important;
@@ -202,7 +202,7 @@ export default {
     width: 100%;
   }
   @media print {
-    
+
   #printMe {
     page-break-after: always;
     //  size: portrait;//纵向

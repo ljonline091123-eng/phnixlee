@@ -63,14 +63,14 @@
               </el-form-item>
             </el-col>
           </el-row>
-        
+
         </div>
       </el-form>
       <div class="competitionName" >
         <el-button style="margin-left: 70px;"   @click="saveForm('form')" type="primary">{{ isSubmit ? "生成参赛证..." : "生成参赛证" }}</el-button>
      <el-button v-if="iframeUrls" style="margin-left: 70px;"   @click="checkPdf()" type="primary">查看参赛证</el-button>
       </div>
-     
+
       <el-form>
         <div style="margin-left: 10%;">
         <el-row :gutter="40">
@@ -149,7 +149,7 @@ export default {
   name: "competition-certificate",
 
   data() {
-    
+
     return {
       formData: {
         identityCardId: "",
@@ -157,7 +157,7 @@ export default {
       }, //form表单数据
       dialogVisible:false,
       iframeUrls:'',
-      name:'湖南建筑高级技工学校崇技楼六楼',
+      name:'湖南建筑高级技工学校崇知楼二楼',
       place:'长沙市天心区古堆山巷11号北门',
       examTime:'2024-11-29 14:30-- 17:30',
       planList: [],
@@ -174,7 +174,7 @@ export default {
             message: "身份证不能为空",
           },
         ],
-       
+
       },
       isSubmit: false,
     };
@@ -193,7 +193,7 @@ export default {
         a.click()
         document.body.removeChild(a)
     },
-    
+
        //保存
     saveForm(formName){
       this.isSubmit = true;
@@ -266,7 +266,7 @@ export default {
       if (!isImg) {
       this.$message.success("上传头像图片只能是 JPG/PNG 格式！");
       }
-      return isImg 
+      return isImg
     },
      handleAvatarSuccess (res, file) {
        if (res.code == 200) {
@@ -275,8 +275,8 @@ export default {
         this.$message.error("图片插入失败");
       }
 }
-  
- 
+
+
   },
   components: {
 
