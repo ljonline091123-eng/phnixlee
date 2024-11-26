@@ -1243,9 +1243,12 @@ export default {
     },
   },
   methods: {
+    /* 计划投标截止时间监听 */
     handleChange(value) {
-      let newVal = new Date(value)
-      if (newVal && newVal.getDate() < new Date().getDate()+5) {
+      let newVal = new Date(value);
+      let currentDate = Date.now(); // 获取当前时间戳
+      // 比较当前日期是否小于5天后的日期
+      if (newVal && newVal < currentDate + 5 * 24 * 60 * 60 * 1000) {
         this.formData.bidDeadline = null; // 设置为null
       }
     },
