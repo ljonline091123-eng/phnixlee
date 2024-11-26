@@ -332,8 +332,11 @@ public class MaterialsListServiceImpl extends ServiceImpl<MaterialsListMapper, M
                     return "其他";
                 }
             }).collect(Collectors.joining(","));
-
-            throw new ParamValidateException("该合约规划的清单中存在多种交易标的物类型，有:" + message);
+            /**
+             * 清单改成浮动价，取消交易标的物验证
+             * Time:2024/11/26 上午10:37
+             * */
+//            throw new ParamValidateException("该合约规划的清单中存在多种交易标的物类型，有:" + message);
         }
         return subjectMatterValueSet.stream().findFirst().get();
     }
