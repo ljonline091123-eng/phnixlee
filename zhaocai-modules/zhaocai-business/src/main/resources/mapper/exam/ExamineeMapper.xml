@@ -14,10 +14,11 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="examinationRoom"    column="examination_room"    />
         <result property="seatNumber"    column="seat_number"    />
         <result property="pictureUrl"    column="picture_url"    />
+        <result property="examPointName"    column="exam_point_name"    />
     </resultMap>
 
     <sql id="selectExamineeVo">
-        select id, work_unit, examinee_name, identity_card_id, phone, entry_card_number, examination_room, seat_number, picture_url from tb_examinee
+        select id, work_unit, examinee_name, identity_card_id, phone, entry_card_number, examination_room, seat_number, picture_url, exam_point_name from tb_examinee
     </sql>
 
     <select id="selectExamineeList" parameterType="Examinee" resultMap="ExamineeResult">
@@ -47,6 +48,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             <if test="examinationRoom != null">examination_room,</if>
             <if test="seatNumber != null">seat_number,</if>
             <if test="pictureUrl != null">picture_url,</if>
+            <if test="ExamPointName != null">exam_point_name,</if>
          </trim>
         <trim prefix="values (" suffix=")" suffixOverrides=",">
             <if test="id != null">#{id},</if>
@@ -58,6 +60,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             <if test="examinationRoom != null">#{examinationRoom},</if>
             <if test="seatNumber != null">#{seatNumber},</if>
             <if test="pictureUrl != null">#{pictureUrl},</if>
+            <if test="ExamPointName != null">#{ExamPointName},</if>
          </trim>
     </insert>
 
@@ -72,6 +75,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             <if test="examinationRoom != null">examination_room = #{examinationRoom},</if>
             <if test="seatNumber != null">seat_number = #{seatNumber},</if>
             <if test="pictureUrl != null">picture_url = #{pictureUrl},</if>
+            <if test="ExamPointName != null">exam_point_name = #{ExamPointName}</if>
         </trim>
         where id = #{id}
     </update>

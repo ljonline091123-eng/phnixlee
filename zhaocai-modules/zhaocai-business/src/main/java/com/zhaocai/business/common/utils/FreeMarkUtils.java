@@ -132,8 +132,9 @@ public final class FreeMarkUtils {
                 return null;
             }
 
-            // 创建临时文件
-            File parentDir = new File("D:\\results\\");
+            // 创建临时文件 ，路径改为  /tmp/results/
+            File parentDir = new File("/tmp/results/");
+//            File parentDir = new File("D:\\results\\");
             parentDir.mkdirs(); // 确保目录存在
 
             tempFile = File.createTempFile("template", ".docx", parentDir);
@@ -285,7 +286,7 @@ public final class FreeMarkUtils {
         sealInWord(outPath,
                 sropath,
                 PicturePath, "参赛人员须知", 80, 100,
-                375, -197, false);
+                375, -195, false);
 
         //将word文档转换为pdf格式
         InputStream input=new FileInputStream(sropath);
@@ -309,7 +310,6 @@ public final class FreeMarkUtils {
             }
         }finally {
         }
-
 
 
         System.out.println("loadPicturePath: " + PicturePath);

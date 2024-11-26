@@ -58,5 +58,9 @@ public class Examinee extends BaseEntity
     @ApiModelProperty(value = "图片")
     private String pictureUrl;
 
+    /** 考点名称 */
+    @ApiModelProperty(value = "考场名称")
+    private String examPointName;
+
 
 }

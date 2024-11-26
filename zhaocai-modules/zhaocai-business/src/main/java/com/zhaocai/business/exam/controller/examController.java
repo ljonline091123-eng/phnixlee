@@ -1,54 +1,33 @@
 package com.zhaocai.business.exam.controller;
 
-import com.zhaocai.business.common.annotations.VendorStateCheck;
 import com.zhaocai.business.common.base.BladeController;
-import com.zhaocai.business.common.utils.FileUploadUtils;
 import com.zhaocai.business.common.utils.FreeMarkUtils;
 import com.zhaocai.business.common.utils.LibToPdf;
+import com.zhaocai.business.exam.vo.ExaminationRoomOptionVO;
 import com.zhaocai.business.exam.domain.Examinee;
 import com.zhaocai.business.exam.service.IExamineeService;
 import com.zhaocai.business.pub.service.ISysFileService;
-import com.zhaocai.business.vendor.vo.req.VendorSaveRequestVO;
-import com.zhaocai.business.vendor.vo.res.VendorDetailVO;
 import com.zhaocai.common.core.utils.DateUtils;
 import com.zhaocai.common.core.utils.StringUtils;
 import com.zhaocai.common.core.utils.file.FileTypeUtils;
-import com.zhaocai.common.core.utils.file.MimeTypeUtils;
 import com.zhaocai.common.core.utils.uuid.Seq;
 import com.zhaocai.common.core.web.bean.ResultData;
-import com.zhaocai.common.core.web.domain.AjaxResult;
-import com.zhaocai.common.core.web.page.TableDataInfo;
 import com.zhaocai.common.log.enums.BusinessType;
-import com.zhaocai.system.api.model.LoginUser;
 import io.swagger.annotations.Api;
-import io.swagger.annotations.ApiOperation;
 import org.apache.commons.io.FilenameUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.multipart.MultipartFile;
 import com.zhaocai.common.log.annotation.Log;
 
-import javax.validation.Valid;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.*;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.*;
 
-import com.artofsolving.jodconverter.DefaultDocumentFormatRegistry;
-import com.artofsolving.jodconverter.DocumentFormat;
-import com.artofsolving.jodconverter.openoffice.connection.SocketOpenOfficeConnection;
-import com.artofsolving.jodconverter.openoffice.converter.StreamOpenOfficeDocumentConverter;
 import com.deepoove.poi.xwpf.NiceXWPFDocument;
-import org.springframework.beans.factory.annotation.Value;
-import java.io.*;
-import java.net.ConnectException;
-import java.util.UUID;
 
-import org.apache.poi.xwpf.usermodel.XWPFDocument;
+import java.util.UUID;
 
 
 @Api("考生管理")
@@ -61,6 +40,21 @@ public class examController extends BladeController {
 
     @Autowired
     private ISysFileService iSysFileService;
+
+    @Log(title = "test", businessType = BusinessType.UPDATE)
+    @GetMapping("/test")
+    public ResultData  test(@RequestBody Examinee exam)
+    {
+        return ResultData.success("1");
+    }
+
+    //查询所有考场
+    @Log(title = "查询所有考场", businessType = BusinessType.UPDATE)
+    @GetMapping("/getExaminationRoomList")
+    public ResultData<List<ExaminationRoomOptionVO>>  getExaminationRoomList()
+    {
+        return ResultData.data(examineeService.getExaminationRoomList());
+    }
 
     //保存头像
     @Log(title = "保存考生头像", businessType = BusinessType.UPDATE)
@@ -112,13 +106,11 @@ public class examController extends BladeController {
             params.put("no",examinee.getEntryCardNumber());
             params.put("no1",examinee.getExaminationRoom());
             params.put("no2",examinee.getSeatNumber());
-            //创建results文件夹存生成的文件
-            File resultsDir = new File("D:\\results");
-            if (!resultsDir.exists()) {
-                resultsDir.mkdirs();
-            }
-            //生成没有头像的文档
-            String outPath= FreeMarkUtils.createDocx(params, "templates/2.docx","D:\\results\\");
+            params.put("point",examinee.getExamPointName());
+
+            //生成没有头像的文档, 路径改为  /tmp/results/
+            String outPath= FreeMarkUtils.createDocx(params, "templates/2.docx","/tmp/results/");
+//            String outPath= FreeMarkUtils.createDocx(params, "templates/2.docx","D:\\results\\");
             //判断图片是否存在
             String picture = examinee.getPictureUrl();
             if (Objects.isNull(picture) || picture.isEmpty()) {
@@ -129,23 +121,53 @@ public class examController extends BladeController {
             //添加头像图片到word文档中,
             try {
                 String outPutfileName = UUID.randomUUID().toString() + ".docx";
-                String wordTargetPath = "D:\\results\\" +"examFileWithPicture"+ outPutfileName;
+                //路径改为  /tmp/results/
+//                String wordTargetPath = "D:\\results\\" +"examFileWithPicture"+ outPutfileName;
+                String wordTargetPath = "/tmp/results/" +"examFileWithPicture"+ outPutfileName;
                 FreeMarkUtils.sealInWord(outPath,
                         wordTargetPath,
                         pictureUrl, "参赛人员须知", 80, 100,
-                        375, -197, false);
+                        375, -195, false);
 
-                //读取生成的文件
-                File fileWithImg = new File(wordTargetPath);
-                if (!fileWithImg.exists()) {
-                    throw new IOException("生成的带有头像图片的Word文档不存在: " + wordTargetPath);
+                //将word文档转换为pdf格式
+                InputStream input=new FileInputStream(wordTargetPath);
+                NiceXWPFDocument doc=new NiceXWPFDocument(input);
+                String PDFfileName = UUID.randomUUID().toString() + ".pdf";
+                //路径改为  /tmp/results/
+//                String PDFtargetPath = "D:\\results\\" +"examPDF"+ PDFfileName;
+                String PDFtargetPath = "/tmp/results/" +"examPDF"+ PDFfileName;
+                OutputStream outputStream = new FileOutputStream(PDFtargetPath);
+                ByteArrayInputStream inputStream = LibToPdf.getNiceXWPFDocByInputStream(doc);
+                try {
+                    LibToPdf.setLibreoffceLocation("192.168.240.16");
+                    LibToPdf.setLibreoffceProt(30002);
+//                    LibToPdf.setLibreoffceLocation("192.168.30.240");
+//                    LibToPdf.setLibreoffceProt(8989);
+                    LibToPdf.doDocumentConvert(inputStream,outputStream, "docx","pdf");
+                } catch (Exception e) {
+                    e.printStackTrace();
+                    try {
+                        if(outputStream != null){
+                            outputStream.close();
+                        }
+                    }catch (Exception ex){
+                        ex.printStackTrace();
+                    }
+                }finally {
                 }
-                // 将带有头像的word文档转换为InputStream
+
+
+                //读取生成的pdf文件
+                File fileWithImg = new File(PDFtargetPath);
+                if (!fileWithImg.exists()) {
+                    throw new IOException("生成的带有头像图片的Word文档不存在: " + PDFtargetPath);
+                }
+                // 将pdf转换为InputStream
                 FileInputStream fis = new FileInputStream(fileWithImg);
                 String imgFileName = StringUtils.format("{}/{}_{}.{}", DateUtils.datePath(),
                         FilenameUtils.getBaseName(fileWithImg.getName()), Seq.getId(Seq.uploadSeqType), FileTypeUtils.getFileType(fileWithImg));
 
-                // 将带有头像的word文档上传到MinIO
+                // 将文档上传到MinIO
                 String fileWithImgUrl = iSysFileService.uploadFile(fis, imgFileName);
                 return ResultData.success(fileWithImgUrl);
 
