@@ -236,6 +236,7 @@
           v-if="scheme.procurementType !== 4"
         >
           <el-table
+            ref="tableRef"
             size="small"
             :data="evaluateList"
             border
@@ -1820,8 +1821,12 @@ export default {
       });
     },
     clickTwiceBidConfButton() {
-      if (this.biddingInfoIds.length === 0){
-        return this.$message.error("请选择调价项目");
+      /* 默认自动全选 */
+      this.$refs.tableRef.toggleAllSelection();
+      /* 再判断一次是否全选 */
+      const isAllSelected = this.biddingInfoIds.length === this.evaluateList.length;
+      if(!isAllSelected){
+        return this.$message.error("开启二次调价需要全选项目");
       }
       this.dialogVisible = true
     },

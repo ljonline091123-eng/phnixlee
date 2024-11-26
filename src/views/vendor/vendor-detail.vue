@@ -215,7 +215,45 @@
                 }}</el-form-item></el-col
               >
             </el-row>
+
           </el-form>
+              <el-divider />
+                 <!-- <el-table
+                  :data="bankList"
+                  empty-text="暂无数据"
+                  height="calc(100% - 132px)"
+                  border
+
+              >
+                <el-table-column
+                    label="序号"
+                    type="index"
+                    width="80"
+                    align="center"
+                />
+                <el-table-column
+                    label="支行名称"
+                    align="center"
+                    prop="openingBranch"
+                />
+                <el-table-column
+                    label="银行名称"
+                    prop="affiliatedBank"
+                     align="center"
+                    show-overflow-tooltip
+                />
+                  <el-table-column
+                    label="银行帐号"
+                    prop="bankAccount"
+                     align="center"
+                    show-overflow-tooltip
+                />
+               <el-table-column label="是否默认账户" align="center">
+                  <template #default="{ row }">
+                    {{row.status==1?'是':'否'}}
+                  </template>
+               </el-table-column>
+          </el-table>-->
         </el-tab-pane>
         <el-tab-pane
           label="资质材料"
@@ -722,7 +760,7 @@
 </template>
 <script>
 import {
-  getVendorDetail,
+  getVendorDetail,listBankAccountContact,
   updateVendorLevel,
   saveVendorLevel,
   updateBlackState,
@@ -756,6 +794,7 @@ export default {
       businessLicense: {}, //营业执照
       integrity: {}, //诚信合规材料
       legalAuthorizationList: [], //法人授权书
+      bankList:[],
       relevantCertificationList: [], //相关资质
       //供应商等级
       gradeVisible: false,
@@ -806,6 +845,7 @@ export default {
     console.log("param613" + param);
     this.param = param;
     this.getVendorDetail();
+  //  this.listBankAccountContactFn();
   },
   methods: {
      downAttachment(file,uelFileName) {
@@ -859,6 +899,10 @@ export default {
         );
       }
     },
+    async listBankAccountContactFn() {
+          const res = await listBankAccountContact(this.param);
+           this.bankList=res.data.rows
+     },
     async getVendorDetail() {
       try {
         debugger

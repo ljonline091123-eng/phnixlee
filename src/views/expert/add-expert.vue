@@ -465,7 +465,7 @@ export default {
     return {
       id:'',
       type:'',
-        businessTypeList:[],
+      businessTypeList:[],
       expertVisible:false,
       calibrateVisible: false,
       calibrateLoading: false,
@@ -596,6 +596,9 @@ export default {
         this.$refs['upload'].$refs['upload-inner'].handleClick()
       })
     },
+     handleCheckedCitiesChange(value) {
+        console.log(JSON.stringify(value))
+      },
     handleSubmit() {
       this.$modal.loading("请稍候...");
       const params = {
@@ -718,7 +721,7 @@ export default {
     //保存
     saveForm(formName){
       this.isSubmit = true;
-       this.formData.businessType=this.businessTypeList.join(",");
+         this.formData.businessType=this.businessTypeList.join(",");
       this.$refs[formName].validate(async (valid) => {
         if (valid) {
           console.log(this.formData, "this.formData");
