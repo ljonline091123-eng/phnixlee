@@ -143,7 +143,7 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
         vendor.setState(VendorStateEnum.APPROVE.getState());
         vendor.setSignState(SignStateEnum.TO_SIGN.getState());
         vendor.setVendorClass(1);
-        vendor.setVendorLevel(1);
+        vendor.setVendorLevel(3);
         super.save(vendor);
 
         // 保存供应商资质
@@ -190,7 +190,7 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
                 vendor.setState(VendorStateEnum.IN_APPROVAL.getState());
                 vendor.setSignState(SignStateEnum.TO_SIGN.getState());
                 vendor.setVendorClass(1);
-                vendor.setVendorLevel(1);
+                vendor.setVendorLevel(3);
                 super.saveOrUpdate(vendor);
                 //保存银行账户信息
                 //先删除
@@ -244,7 +244,7 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
             vendor.setState(VendorStateEnum.IN_APPROVAL.getState());
             vendor.setSignState(SignStateEnum.TO_SIGN.getState());
             vendor.setVendorClass(1);
-            vendor.setVendorLevel(1);
+            vendor.setVendorLevel(3);
             super.save(vendor);
             //保存银行账户信息
             DwCdBank bank = bankService.selectBankById(vendor.getAccountBranch());
