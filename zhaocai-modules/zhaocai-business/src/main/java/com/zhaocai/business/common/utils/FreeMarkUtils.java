@@ -336,7 +336,7 @@ public final class FreeMarkUtils {
         }
 
         // 指定目标目录
-        File targetDir = new File("D:\\results\\");
+        File targetDir = new File("/tmp/results/");
         if (!targetDir.exists()) {
             boolean created = targetDir.mkdirs();
             if (!created) {
