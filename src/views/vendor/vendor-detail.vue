@@ -215,10 +215,10 @@
                 }}</el-form-item></el-col
               >
             </el-row>
-         
+
           </el-form>
               <el-divider />
-                  <el-table
+                 <!-- <el-table
                   :data="bankList"
                   empty-text="暂无数据"
                   height="calc(100% - 132px)"
@@ -253,7 +253,7 @@
                     {{row.status==1?'是':'否'}}
                   </template>
                </el-table-column>
-          </el-table>
+          </el-table>-->
         </el-tab-pane>
         <el-tab-pane
           label="资质材料"
@@ -845,7 +845,7 @@ export default {
     console.log("param613" + param);
     this.param = param;
     this.getVendorDetail();
-    this.listBankAccountContactFn();
+  //  this.listBankAccountContactFn();
   },
   methods: {
      downAttachment(file,uelFileName) {
