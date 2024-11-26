@@ -63,7 +63,7 @@ public class VendorVO extends AdviceObject {
     private Integer currencyCode;
 
     @ApiModelProperty(value =  "开户支行Id")
-    private Long accountBranch;
+    private String accountBranch;
 
     @ApiModelProperty(value =  "银行名称")
     private String affiliatedBank;
