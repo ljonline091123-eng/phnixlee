@@ -60,7 +60,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             <if test="examinationRoom != null">#{examinationRoom},</if>
             <if test="seatNumber != null">#{seatNumber},</if>
             <if test="pictureUrl != null">#{pictureUrl},</if>
-            <if test="ExamPointName != null">#{ExamPointName},</if>
+            <if test="examPointName != null">#{examPointName},</if>
          </trim>
     </insert>
 
@@ -75,7 +75,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             <if test="examinationRoom != null">examination_room = #{examinationRoom},</if>
             <if test="seatNumber != null">seat_number = #{seatNumber},</if>
             <if test="pictureUrl != null">picture_url = #{pictureUrl},</if>
-            <if test="examPointName != null">exam_point_name = #{ExamPointName}</if>
+            <if test="examPointName != null">exam_point_name = #{examPointName}</if>
         </trim>
         where id = #{id}
     </update>
