@@ -3,6 +3,7 @@ package com.zhaocai.business.exam.service;
 import java.util.List;
 
 import com.baomidou.mybatisplus.extension.service.IService;
+import com.zhaocai.business.exam.vo.ExaminationRoomOptionVO;
 import com.zhaocai.business.exam.domain.Examinee;
 
 /**
@@ -23,6 +24,21 @@ public interface IExamineeService extends IService<Examinee>
 
     //据身份证号查询考生
     Examinee selectExamineeByIdentityCardId(String identityCardId);
+
+    /**
+     * 查询所有考场
+     *
+     * @return 考场列表
+     */
+    List<ExaminationRoomOptionVO> getExaminationRoomList();
+
+    /**
+     * 据考场号查询考生管理列表
+     *
+     * @param examinationRoom 考生管理
+     * @return 考生管理
+     */
+    List<Examinee> selectExamineeListByExaminationRoom(String examinationRoom);
 
     /**
      * 查询考生管理列表

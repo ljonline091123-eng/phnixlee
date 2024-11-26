@@ -1,9 +1,11 @@
 package com.zhaocai.business.exam.service.impl;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.zhaocai.business.exam.vo.ExaminationRoomOptionVO;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -24,8 +26,9 @@ public class ExamineeServiceImpl extends ServiceImpl<ExamineeMapper, Examinee> i
     @Autowired
     private ExamineeMapper examineeMapper;
 
+
     /**
-     * 查询考生管理
+     * 查询考生
      * 
      * @param id 考生管理主键
      * @return 考生管理
@@ -48,6 +51,49 @@ public class ExamineeServiceImpl extends ServiceImpl<ExamineeMapper, Examinee> i
         Examinee examinee = super.getOne(new LambdaQueryWrapper<Examinee>()
                 .eq(Examinee::getIdentityCardId,identityCardId));
         return examinee;
+    }
+
+    /**
+     * 查询所有考场
+     *
+     * @return 考场列表
+     */
+    @Override
+    public List<ExaminationRoomOptionVO> getExaminationRoomList()
+    {
+        // 查询所有考试房间
+        List<Examinee> examineeList = super.list();
+
+        // 提取所有不同的考试房间
+        List<String> examinationRooms = examineeList.stream()
+                .map(Examinee::getExaminationRoom)
+                .distinct()
+                .collect(Collectors.toList());
+
+        // 转换为所需的格式
+        List<ExaminationRoomOptionVO> options = examinationRooms.stream()
+                .map(room -> new ExaminationRoomOptionVO(room, room))
+                .collect(Collectors.toList());
+
+        return options;
+
+
+    }
+
+    /**
+     * 据考场号查询考生管理列表
+     *
+     * @param examinationRoom 考生管理
+     * @return 考生管理
+     */
+    @Override
+    public List<Examinee> selectExamineeListByExaminationRoom(String examinationRoom)
+    {
+        List<Examinee> examineeList;
+        examineeList = super.list(new LambdaQueryWrapper<Examinee>()
+                .eq(Examinee::getExaminationRoom, examinationRoom)
+                .orderByAsc(Examinee::getSeatNumber));
+        return examineeList;
     }
 
     /**
