@@ -120,33 +120,17 @@ public final class FreeMarkUtils {
      * @return
      */
     public static File getTempFile(String fileName) {
-
-        // 创建一个临时文件来存储模板内容
-        File tempFile = null;
-        InputStream templateStream = null;
+        final File tempFile = new File(fileName);
+        InputStream fontTempStream = null;
         try {
-            // 检查文件是否存在
-            File originalFile = new File(fileName);
-            if (!originalFile.exists()) {
-                System.err.println("Original file not found: " + fileName);
-                return null;
-            }
-
-            // 创建临时文件 ，路径改为  /tmp/results/
-            File parentDir = new File("/tmp/results/");
-//            File parentDir = new File("D:\\results\\");
-            parentDir.mkdirs(); // 确保目录存在
-
-            tempFile = File.createTempFile("template", ".docx", parentDir);
-            System.out.println("Temporary file created at: " + tempFile.getAbsolutePath());
-            templateStream = new FileInputStream(originalFile);
-            FileUtils.copyInputStreamToFile(templateStream, tempFile);
+            fontTempStream = FreeMarkUtils.class.getClassLoader().getResourceAsStream(fileName);
+            FileUtils.copyInputStreamToFile(fontTempStream, tempFile);
         } catch (Exception e) {
             e.printStackTrace();
         } finally {
             try {
-                if (templateStream != null) {
-                    templateStream.close();
+                if (fontTempStream != null) {
+                    fontTempStream.close();
                 }
             } catch (IOException e) {
                 e.printStackTrace();
