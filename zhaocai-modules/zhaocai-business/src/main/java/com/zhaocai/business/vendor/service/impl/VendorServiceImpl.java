@@ -3,7 +3,6 @@ package com.zhaocai.business.vendor.service.impl;
 import cn.hutool.core.codec.Base64;
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.collection.CollectionUtil;
-import cn.hutool.core.util.IdUtil;
 import com.alibaba.fastjson.JSON;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
@@ -20,8 +19,6 @@ import com.zhaocai.business.manager.http.dto.res.BpmLoadTaskDefResponseDTO;
 import com.zhaocai.business.manager.http.dto.res.ListCataLogDTO;
 import com.zhaocai.business.manager.http.service.UnderlingSystemService;
 import com.zhaocai.business.process.service.IBPMProcessService;
-import com.zhaocai.business.pub.domain.DwCdBank;
-import com.zhaocai.business.pub.domain.TAccountInfo;
 import com.zhaocai.business.pub.service.IAccountService;
 import com.zhaocai.business.pub.service.IAttachmentService;
 import com.zhaocai.business.pub.service.IBankService;
@@ -202,14 +199,14 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
 //                        accountService.deleteAccountById(info.getId());
 //                    }
 //                }
-                //再新增
-                TAccountInfo acount = new TAccountInfo();
-                acount.setBankAccount(vendor.getBankAccount());
-                acount.setBipId(vendor.getAccountBranch());
-                acount.setCurrency(vendor.getCurrencyCode());
-                acount.setUpId(vendor.getId());
-                acount.setAcountType(AccountEnum.GYS_TYPE.getType());
-                accountService.save(acount);
+//                //再新增
+//                TAccountInfo acount = new TAccountInfo();
+//                acount.setBankAccount(vendor.getBankAccount());
+//                acount.setBipId(vendor.getAccountBranch());
+//                acount.setCurrency(vendor.getCurrencyCode());
+//                acount.setUpId(vendor.getId());
+//                acount.setAcountType(AccountEnum.GYS_TYPE.getType());
+//                accountService.save(acount);
                 // 保存供应商资质
                 vendorCertificationService.addCertification(requestVO.getBusinessLicense(), CertificationTypeEnum.BUSINESS_LICENSE,vendor.getId());
                 vendorCertificationService.addCertification(requestVO.getIntegrity(), CertificationTypeEnum.INTEGRITY,vendor.getId());
@@ -247,23 +244,23 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
             vendor.setVendorLevel(3);
             super.save(vendor);
             //保存银行账户信息
-            DwCdBank bank = bankService.selectBankById(vendor.getAccountBranch());
-            TAccountInfo acount = new TAccountInfo();
-            acount.setBankAccount(vendor.getBankAccount());
-            acount.setBipId(vendor.getAccountBranch());
-            acount.setCurrency(vendor.getCurrencyCode());
-            if(bank!=null){
-                acount.setInterbankNumber(bank.getCode());
-                acount.setAffiliatedBank(bank.getParentName());
-                acount.setOpeningBranch(bank.getName());
-            }
-            acount.setUpId(vendor.getId());
-            //供应商
-            acount.setAcountType(AccountEnum.GYS_TYPE.getType());
-            //默认账户
-            acount.setStatus(1);
-            acount.setId(IdUtil.getSnowflakeNextId());
-            accountService.save(acount);
+//            DwCdBank bank = bankService.selectBankById(vendor.getAccountBranch());
+//            TAccountInfo acount = new TAccountInfo();
+//            acount.setBankAccount(vendor.getBankAccount());
+//            acount.setBipId(vendor.getAccountBranch());
+//            acount.setCurrency(vendor.getCurrencyCode());
+//            if(bank!=null){
+//                acount.setInterbankNumber(bank.getCode());
+//                acount.setAffiliatedBank(bank.getParentName());
+//                acount.setOpeningBranch(bank.getName());
+//            }
+//            acount.setUpId(vendor.getId());
+//            //供应商
+//            acount.setAcountType(AccountEnum.GYS_TYPE.getType());
+//            //默认账户
+//            acount.setStatus(1);
+//            acount.setId(IdUtil.getSnowflakeNextId());
+//            accountService.save(acount);
             // 保存供应商资质
             vendorCertificationService.addCertification(requestVO.getBusinessLicense(), CertificationTypeEnum.BUSINESS_LICENSE,vendor.getId());
             vendorCertificationService.addCertification(requestVO.getIntegrity(), CertificationTypeEnum.INTEGRITY,vendor.getId());
