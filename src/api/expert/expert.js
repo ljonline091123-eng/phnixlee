@@ -86,3 +86,13 @@ export const ReportExportPDF= () => {
     type: "application/json;chartset=UTF-8"
   })
 }
+// 获取账户列表查
+export const getlistByRoom=(examinationRoom)=> {
+  return request({
+    url: "/business/exam/exam/getlistByRoom",
+    method: "get",
+    params: {
+      examinationRoom,
+    },
+  })
+}
