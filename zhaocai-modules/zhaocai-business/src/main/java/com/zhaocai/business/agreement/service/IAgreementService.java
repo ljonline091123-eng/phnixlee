@@ -106,7 +106,7 @@ public interface IAgreementService  extends IService<Agreement> , IProcessBusine
      * 提交合同
      * @param id
      */
-    void submitAgreement(Long id,String detailUrl);
+    void submitAgreement(Long id,String detailUrl,String operateComment);
 
     /**
      * 设置合同文件标签完成

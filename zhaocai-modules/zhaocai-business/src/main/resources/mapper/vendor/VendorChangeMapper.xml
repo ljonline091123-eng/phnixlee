@@ -6,6 +6,12 @@
     <resultMap type="com.zhaocai.business.vendor.domain.VendorChange" id="VendorChangeResult">
         <result property="id" column="id"/>
         <result property="enterpriseName" column="enterprise_name"/>
+        <result property="enterpriseCode" column="enterprise_code"/>
+        <result property="isExternal" column="is_external"/>
+        <result property="vendorAttribute" column="vendor_attribute"/>
+        <result property="establishDate" column="establish_date"/>
+        <result property="vendorStatus" column="vendor_status"/>
+        <result property="createdUnit" column="created_unit"/>
         <result property="socialCreditCode" column="social_credit_code"/>
         <result property="registeredCapital" column="registered_capital"/>
         <result property="currencyCode" column="currency_code"/>

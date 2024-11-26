@@ -60,6 +60,12 @@
             <artifactId>mysql-connector-j</artifactId>
         </dependency>
 
+        <dependency>
+            <groupId>org.apache.httpcomponents</groupId>
+            <artifactId>httpmime</artifactId>
+            <version>4.5.13</version> <!-- 请使用最新的稳定版本 -->
+        </dependency>
+
         <!-- RuoYi Common Core -->
         <dependency>
             <groupId>com.zhaocai</groupId>
@@ -132,6 +138,96 @@
             <groupId>com.google.zxing</groupId>
             <artifactId>javase</artifactId>
             <version>3.4.1</version>
+        </dependency>
+
+        <!--20241124新增-->
+        <!-- 以下为利用libreoffice转pdf的依赖jodconverter中央仓库无法下载，手动添加到私服或者本地maven仓库地址中。该jodconverter的jar包在\hnjiantou-zhaocai-backend\zhaocai-modules\zhaocai-business\src\main\resources\lib\jodconverter-2.2.2.jar    -->
+        <dependency>
+            <groupId>com.artofsolving</groupId>
+            <artifactId>jodconverter</artifactId>
+            <version>2.2.2</version>
+        </dependency>
+        <dependency>
+            <groupId>org.openoffice</groupId>
+            <artifactId>juh</artifactId>
+            <version>4.1.2</version>
+        </dependency>
+        <dependency>
+            <groupId>org.openoffice</groupId>
+            <artifactId>ridl</artifactId>
+            <version>4.1.2</version>
+        </dependency>
+        <dependency>
+            <groupId>org.openoffice</groupId>
+            <artifactId>unoil</artifactId>
+            <version>4.1.2</version>
+        </dependency>
+
+        <!--20241124新增-->
+        <dependency>
+            <groupId>org.openoffice</groupId>
+            <artifactId>juh</artifactId>
+            <version>4.1.2</version>
+        </dependency>
+        <dependency>
+            <groupId>org.openoffice</groupId>
+            <artifactId>ridl</artifactId>
+            <version>4.1.2</version>
+        </dependency>
+        <dependency>
+            <groupId>org.openoffice</groupId>
+            <artifactId>unoil</artifactId>
+            <version>4.1.2</version>
+        </dependency>
+        <dependency>
+            <groupId>org.jodconverter</groupId>
+            <artifactId>jodconverter-spring-boot-starter</artifactId>
+            <version>4.2.0</version>
+        </dependency>
+
+        <!--20241120新增-->
+        <!-- docx 数据填充生成 doc文件  这个是主要 -->
+        <dependency>
+            <groupId>com.deepoove</groupId>
+            <artifactId>poi-tl</artifactId>
+            <version>1.12.1</version>
+        </dependency>
+        <dependency>
+            <groupId>com.zhaocai</groupId>
+            <artifactId>zhaocai-modules-file</artifactId>
+            <version>3.6.4</version>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.jodconverter</groupId>
+            <artifactId>jodconverter-spring-boot-starter</artifactId>
+            <version>4.2.0</version>
+        </dependency>
+
+        <!--20241120新增-->
+        <!-- docx 数据填充生成 doc文件  这个是主要 -->
+        <dependency>
+            <groupId>com.deepoove</groupId>
+            <artifactId>poi-tl</artifactId>
+            <version>1.12.1</version>
+        </dependency>
+        <dependency>
+            <groupId>com.zhaocai</groupId>
+            <artifactId>zhaocai-modules-file</artifactId>
+            <version>3.6.4</version>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.vaadin.external.google</groupId>
+            <artifactId>android-json</artifactId>
+            <version>0.0.20131108.vaadin1</version>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.vaadin.external.google</groupId>
+            <artifactId>android-json</artifactId>
+            <version>0.0.20131108.vaadin1</version>
+            <scope>compile</scope>
         </dependency>
     </dependencies>
 

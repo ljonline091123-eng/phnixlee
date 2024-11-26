@@ -78,4 +78,7 @@ public interface RemoteBusinessService {
     @GetMapping("/project/receiptProject")
     public ResultData receiptProject(@RequestHeader(SecurityConstants.FROM_SOURCE) String source);
 
+
+    @GetMapping("/syncPlatformBasicData/syncAccount")
+    public ResultData<Boolean> syncAccount(@RequestHeader(SecurityConstants.FROM_SOURCE) String inner);
 }

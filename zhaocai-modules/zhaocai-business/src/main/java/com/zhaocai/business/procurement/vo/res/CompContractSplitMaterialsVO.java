@@ -25,6 +25,12 @@ public class CompContractSplitMaterialsVO extends AdviceObject {
     @ApiModelProperty(value = "拟签约合同拆包范围")
     private String contractScope;
 
+    /**
+     * 价格类型 {@link com.zhaocai.business.common.enums.PriceTypeEnum}
+     */
+    @ApiModelProperty(value = "价格类型")
+    private Integer priceType;
+
     @ApiModelProperty(value = "物料清单")
     private List<CompMaterialsContentVO> materialsLists;
 
