@@ -329,6 +329,7 @@
                          popper-class="date-clear"
                         :picker-options="endTimeOptions"
                         value-format="yyyy-MM-dd HH:mm:ss"
+                        @change="handleChange"
                       />
                     </el-form-item>
                   </el-col>
@@ -1242,7 +1243,15 @@ export default {
     },
   },
   methods: {
-
+    /* 计划投标截止时间监听 */
+    handleChange(value) {
+      let newVal = new Date(value);
+      let currentDate = Date.now(); // 获取当前时间戳
+      // 比较当前日期是否小于5天后的日期
+      if (newVal && newVal < currentDate + 5 * 24 * 60 * 60 * 1000) {
+        this.formData.bidDeadline = null; // 设置为null
+      }
+    },
     handleTabClick(tab) {
       // 处理标签页点击事件，根据标签页切换表格数据
       this.activeTab = tab.name;
