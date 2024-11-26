@@ -3,6 +3,8 @@ package com.zhaocai.business.manager.controller;
 import com.zhaocai.business.common.base.BladeController;
 import com.zhaocai.business.manager.http.service.SyncPlatformBasicDataService;
 import com.zhaocai.common.core.web.bean.ResultData;
+import com.zhaocai.common.log.annotation.Log;
+import com.zhaocai.common.log.enums.BusinessType;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -46,6 +48,13 @@ public class SyncPlatformBasicDataController extends BladeController {
     @GetMapping("/syncCountry")
     public ResultData<Boolean> syncCountry() {
         return ResultData.status(syncPlatformBasicDataService.syncCountry());
+    }
+
+
+    @GetMapping("/syncAccount")
+    @Log(title = "接收支行数据", businessType = BusinessType.INSERT)
+    public ResultData syncAccount() {
+        return ResultData.data(syncPlatformBasicDataService.receiptAccount());
     }
 
 }

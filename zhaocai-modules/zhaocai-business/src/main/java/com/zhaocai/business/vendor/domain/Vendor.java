@@ -1,6 +1,5 @@
 package com.zhaocai.business.vendor.domain;
 
-import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.zhaocai.common.core.web.domain.BaseEntity;
@@ -30,6 +29,45 @@ public class Vendor extends BaseEntity {
     private String enterpriseName;
 
     /**
+     * 企业编码
+     */
+    @ApiModelProperty(value = "企业编码")
+    private String enterpriseCode;
+
+
+    /**
+     * 是否外部客商
+     */
+    @ApiModelProperty(value = "是否外部客商")
+    private Integer isExternal;
+
+    /**
+     * 客商属性
+     */
+    @ApiModelProperty(value = "客商属性")
+    private Integer vendorAttribute;
+
+    /**
+     * 成立时间
+     */
+    @ApiModelProperty(value = "成立时间")
+    @JsonFormat(pattern = "yyyy-MM-dd", timezone = "GMT+8")
+    private Date establishDate;
+
+    /**
+     * 客商状态
+     */
+    @ApiModelProperty(value = "客商状态")
+    private Integer vendorStatus;
+
+    /**
+     * 创建单位
+     */
+    @ApiModelProperty(value = "创建单位")
+    private String createdUnit;
+
+
+    /**
      * 统一社会信用代码
      */
     @ApiModelProperty(value = "统一社会信用代码")
@@ -51,7 +89,7 @@ public class Vendor extends BaseEntity {
      * 开户支行
      */
     @ApiModelProperty(value = "开户支行")
-    private String accountBranch;
+    private Long accountBranch;
 
     /**
      * 银行账号
@@ -234,4 +272,10 @@ public class Vendor extends BaseEntity {
      */
     @ApiModelProperty(value = "供应商注册来源")
     private String supplierSourse;
+
+    /**
+     * 注册审批通过时间
+     */
+    @ApiModelProperty(value = "注册审批通过时间")
+    private Date registerApprovalTime;
 }

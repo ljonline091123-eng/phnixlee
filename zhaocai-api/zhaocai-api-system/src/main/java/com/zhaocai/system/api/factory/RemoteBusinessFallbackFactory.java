@@ -55,6 +55,11 @@ public class RemoteBusinessFallbackFactory implements FallbackFactory<RemoteBusi
                 return ResultData.fail("同步第三方项目数据失败:" + throwable.getMessage());
             }
 
+            @Override
+            public ResultData syncAccount(String source) {
+                return ResultData.fail("同步第三方支行数据失败:" + throwable.getMessage());
+            }
+
         };
     }
 

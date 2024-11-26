@@ -351,7 +351,26 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
         long attachmentId = agreementCreateAttachmentHandle(scheme.getId());
         baseInfoVO.setAttachmentId(attachmentId);
 
+        // 是否关联我的钢铁网价格-是否显示
+        baseInfoVO.setIsRelatedMySteelView(this.getIsRelatedMySteelCreate(baseInfoVO.getBiddingListQuotation()));
+
         return baseInfoVO;
+    }
+
+    /**
+     * 是否关联我的钢铁网价格-是否显示
+     * @param biddingListQuotation
+     * @return
+     */
+    private String getIsRelatedMySteelCreate(List<VendorBiddingListQuotationListVO> biddingListQuotation) {
+        String result = "N";
+        for (VendorBiddingListQuotationListVO vo : biddingListQuotation) {
+            if(null != vo.getSubjectMatterCode() && vo.getSubjectMatterCode().startsWith("A101")){
+                result = "Y";
+                break;
+            }
+        }
+        return result;
     }
 
     @Override
@@ -503,6 +522,9 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
         // 合同-甲供材料清单对象
         List<AgreementMaterialSupplyVO> agreementMaterialSupplies = agreementMaterialSupplyService.listByAgreementId(id);
 
+        // 是否关联我的钢铁网价格-是否显示
+        agreementVO.setIsRelatedMySteelView(this.getIsRelatedMySteelDetail(materialsLists));
+
         return AgreementDetailVO.builder()
                 .agreement(agreementVO)
                 .agreementPaymentItem(agreementPaymentItemVO)
@@ -514,6 +536,17 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
                 .agreementEquipmentSupplies(agreementEquipmentSupplies)
                 .agreementMaterialSupplies(agreementMaterialSupplies)
                 .build();
+    }
+
+    private String getIsRelatedMySteelDetail(List<AgreementMaterialsListVO> materialsLists) {
+        String result = "N";
+        for (AgreementMaterialsListVO vo : materialsLists) {
+            if(null != vo.getSubjectMatterCode() && vo.getSubjectMatterCode().startsWith("A101")){
+                result = "Y";
+                break;
+            }
+        }
+        return result;
     }
 
     @Override
@@ -739,7 +772,7 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
     }
 
     @Override
-    public void submitAgreement(Long id,String detailUrl) {
+    public void submitAgreement(Long id,String detailUrl,String operateComment) {
         Agreement agreement = super.getById(id);
         ValidateUtils.isNullException(agreement,"该合同不存在，请确认");
         if (!(AgreementStateEnum.DRAFT.getState().equals(agreement.getAgreementState()) || AgreementStateEnum.REVOKED.getState().equals(agreement.getAgreementState()))) {
@@ -772,7 +805,7 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
                 businessId(id.toString())
                 .toDoType(ToDoTypeEnum.EXAMINE.name()).build();
         paramMap.put("userObj", JSON.toJSONString(userObj));
-
+        paramMap.put("operateComment", operateComment);
         /** 合同类型（contractType），价格(contractMoney)，项目部（parentProjectCode），责任单位（responsibilityDeptId），公司（companyId） */
         paramMap.put("contractType", ProcurementPlanTypeEnum.getProcessType(agreement.getExpenditureBusinessType()));/* 合同签订流程 合同类型 */
         paramMap.put("contractMoney", agreement.getTotalAmountIncTax());/* 合同签订流程 价格 */

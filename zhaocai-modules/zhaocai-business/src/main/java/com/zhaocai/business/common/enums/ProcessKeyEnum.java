@@ -21,9 +21,7 @@ public enum ProcessKeyEnum {
 
     ZHAOCAI_PROCUREMENT_SCHEME("jiantou-zhaocai:{org}:ZHAOCAI_PROCUREMENT_SCHEME","采购方案"),
 
-
     ZHAOCAI_TENDER_CALIBRATE("jiantou-zhaocai:{org}:ZHAOCAI_TENDER_CALIBRATE","招标管理-定标"),
-
 
     ZHAOCAI_AGREEMENT_SIGN("jiantou-zhaocai:{org}:ZHAOCAI_AGREEMENT_SIGN","合同签订"),
 

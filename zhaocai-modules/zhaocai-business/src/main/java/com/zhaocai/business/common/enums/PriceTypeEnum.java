@@ -9,6 +9,7 @@ public enum PriceTypeEnum {
 
     FIXED_PRICE(1,"固定价"),
     FLOAT_PRICE(2,"浮动价"),
+    /* 拆分清单列表同时存在两种价格类型时，采购计划就赋值为3，采购方案保存引用时会校验价格类型是一致的合约拆分归属的采购计划价格类型，不一致不能保存成功 */
     FIXED_FLOAT_PRICE(3,"固定、浮动价")
     ;
 

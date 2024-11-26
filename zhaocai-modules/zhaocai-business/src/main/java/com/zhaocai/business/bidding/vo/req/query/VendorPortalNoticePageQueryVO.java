@@ -39,5 +39,8 @@ public class VendorPortalNoticePageQueryVO extends PageRecive implements Seriali
     @ApiModelProperty(value =  "采购方案类型（1公开招标 2邀请招标 3询价采购 4单一来源）")
     private Integer schemeType;
 
+    @ApiModelProperty(value =  "注册审批通过时间")
+    private Date registerApprovalTime;
+
 
 }
