@@ -59,29 +59,29 @@ export default {
       place:'长沙市天心区古堆山巷11号北门',
       examTime:'2024-11-29 14:30-- 17:30',
       examinationroom:'01',
-      examinationroomTit:'第1考场(601)',
+      examinationroomTit:'第1考场',
       examinationRoomList: [],
         options: [{
           value: '01',
-          label: '第1考场(601)'
+          label: '第1考场'
         }, {
           value: '02',
-          label: '第2考场(602)'
+          label: '第2考场'
         }, {
           value: '03',
-          label: '第3考场(603)'
+          label: '第3考场'
         }, {
           value: '04',
-          label: '第4考场(604)'
+          label: '第4考场'
         }, {
           value: '05',
-          label: '第5考场(605)'
+          label: '第5考场'
         }, {
           value: '06',
-          label: '第6考场(606)'
+          label: '第6考场'
         }, {
           value: '07',
-          label: '第7考场(607)'
+          label: '第7考场'
         }],
       rules: {
         pictureUrl: [
