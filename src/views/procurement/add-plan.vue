@@ -1350,7 +1350,13 @@ console.log("-2222--"+JSON.stringify(this.materialsLists))
       const regexN1 = /^-?(?:[1-9]\d*|0)(\.\d+)?$/;
       const regexN2 = /^-?\d+(\.\d{0,4})?$/;
 
-      if(scope.row.count == ''){
+      // 判断为空则默认设置为0
+      if (scope.row.count === '' || scope.row.count == null) {
+        this.$set(scope.row, 'count', 0);
+        scope.row.count = 0;  // 将其值设为0
+      }
+
+      if(scope.row.count === ''){
         event.target.style = "border: 1px solid red;"
         this.$message.error("请输入数量");
         return
