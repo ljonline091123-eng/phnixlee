@@ -91,7 +91,7 @@
               <el-button
                 type="primary"
                 size="mini"
-                v-if="!scheme.calibrationAttachmentList"
+                v-if="!scheme.calibrationAttachmentList && !shouldDisableButton"
                 @click="showSecretTips"
                 style="margin-top: 8px"
               >上传</el-button
