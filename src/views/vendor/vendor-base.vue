@@ -134,6 +134,13 @@
           prop="vendorLibraryText"
         />
         <el-table-column
+          width="180"
+          label="首次注册合作单位"
+          align="center"
+          prop="firstCooperationCompanyName"
+          show-overflow-tooltip
+        />
+        <el-table-column
           width="120"
           label="供应商合作金额"
           align="right"
