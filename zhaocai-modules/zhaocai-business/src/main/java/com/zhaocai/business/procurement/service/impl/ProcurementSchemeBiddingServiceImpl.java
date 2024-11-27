@@ -99,6 +99,7 @@ public class ProcurementSchemeBiddingServiceImpl extends ServiceImpl<Procurement
             ProcurementSchemeTemplateVO schemeTemplate = new ProcurementSchemeTemplateVO(template.getId(),template.getTemplateName());
             AttachmentVO agreementAttachment = templateService.getTemplateAttachmentInfo(schemeBidding.getContractTemplateId());
             if(agreementAttachment!=null){
+                schemeTemplate.setAttachmentId(agreementAttachment.getId());
                 schemeTemplate.setFileName(agreementAttachment.getFileName());
                 schemeTemplate.setFileUrl(agreementAttachment.getFileUrl());
             }
