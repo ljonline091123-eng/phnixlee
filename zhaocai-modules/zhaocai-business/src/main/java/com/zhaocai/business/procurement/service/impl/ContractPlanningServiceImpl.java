@@ -109,7 +109,7 @@ public class ContractPlanningServiceImpl extends ServiceImpl<ContractPlanningMap
      * @param queryVO
      */
     private ContractPlanningListVO getContractPlanningFromList(ContractPlanningListQueryVO queryVO,String contractPlanningId) {
-        PageResult<ContractPlanningListVO> pageResult = contractPlanService.getContractPlanningList(queryVO);
+        PageResult<ContractPlanningListVO> pageResult = contractPlanService.getContractPlanningList(queryVO,false);
         if (CollectionUtil.isNotEmpty(pageResult.getRows())) {
             for(ContractPlanningListVO planningListVO : pageResult.getRows()) {
                 if (planningListVO.getContractPlanningId().equals(contractPlanningId)) {
