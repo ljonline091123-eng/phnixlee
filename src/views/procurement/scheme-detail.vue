@@ -290,7 +290,7 @@
                   <a
                     class="link-type"
                     @click="
-                      showTemplate(procurementSchemeBidding.biddingTemplate)
+                      showTemplate(procurementSchemeBidding.biddingTemplate,'biddingTemplate')
                     "
                   >
                     {{
@@ -322,7 +322,7 @@
                   <a
                     class="link-type"
                     @click="
-                      showTemplate(procurementSchemeBidding.contractTemplate)
+                      showTemplate(procurementSchemeBidding.contractTemplate,'contractTemplate')
                     "
                     href="javascript:;"
                   >
@@ -688,13 +688,23 @@
       </div>
     </el-drawer>
 
+    <!--  招标文件模板联想文档预览  -->
     <el-dialog
-      :title="templateDialogTitle"
-      :visible.sync="templateDialogVisible"
+      :title="templateBiddingDialogTitle"
+      :visible.sync="templateBiddingDialogVisible"
       width="80%"
     >
-      <FileModule :attachmentId="templateAttachmentId" height="500px" />
+      <FileModule :attachmentId="templateBiddingAttachmentId" height="500px" />
     </el-dialog>
+    <!--  合同模板联想文档预览  -->
+    <el-dialog
+      :title="templateContractDialogTitle"
+      :visible.sync="templateContractDialogVisible"
+      width="80%"
+    >
+      <FileModule :attachmentId="templateContractAttachmentId" height="500px" />
+    </el-dialog>
+
     <ApprovalForm
       :visible.sync="sanctionVisible"
       title="采购方案审批流程"
@@ -768,9 +778,14 @@ export default {
         { value: "unit2", label: "单位二" },
         { value: "unit3", label: "单位三" },
       ],
-      templateDialogTitle: "",
-      templateDialogVisible: false,
-      templateAttachmentId: "",
+      /* 合同模板联想文档预览 */
+      templateContractDialogTitle: "",
+      templateContractDialogVisible: false,
+      templateContractAttachmentId: "",
+      /* 招标文件模板联想文档预览 */
+      templateBiddingDialogTitle: "",
+      templateBiddingDialogVisible: false,
+      templateBiddingAttachmentId: "",
       sanctionVisible: false,
       sanctionForm: {
         pass: true,
@@ -907,10 +922,19 @@ export default {
     handleClose() {
       console.log("已关闭");
     },
-    showTemplate(row) {
-      this.templateDialogTitle = row.fileName + "预览";
-      this.templateAttachmentId = row.attachmentId;
-      this.templateDialogVisible = true;
+    showTemplate(row,tmp) {
+      /* 合同模板 */
+      if(tmp === 'contractTemplate'){
+        this.templateContractDialogTitle = row.fileName + "预览";
+        this.templateContractAttachmentId = row.attachmentId;
+        this.templateContractDialogVisible = true;
+      }
+      /* 招标文件模板 */
+      if(tmp === 'biddingTemplate'){
+        this.templateBiddingDialogTitle = row.fileName + "预览";
+        this.templateBiddingAttachmentId = row.attachmentId;
+        this.templateBiddingDialogVisible = true;
+      }
     },
     goUpdate() {
       const { procurementType, id } = this.procurementScheme;
