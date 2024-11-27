@@ -1,6 +1,5 @@
 package com.zhaocai.business.pub.service.impl;
 
-import cn.hutool.core.collection.CollectionUtil;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.zhaocai.business.agreement.domain.AgreementSignStamper;
@@ -21,15 +20,9 @@ import com.zhaocai.business.pub.vo.res.AttachmentVO;
 import com.zhaocai.business.pub.vo.res.TemplateListVO;
 import com.zhaocai.business.pub.vo.res.TemplateVO;
 import com.zhaocai.common.core.bean.PageResult;
-import com.zhaocai.common.core.constant.NumberConstant;
-import com.zhaocai.common.core.constant.SecurityConstants;
-import com.zhaocai.common.core.constant.UserConstants;
-import com.zhaocai.common.core.text.Convert;
 import com.zhaocai.common.core.utils.NumberUtil;
 import com.zhaocai.common.core.utils.StringUtils;
 import com.zhaocai.common.core.utils.bean.BeanCopierUtil;
-import com.zhaocai.common.security.utils.SecurityUtils;
-import com.zhaocai.system.api.domain.SysDept;
 import com.zhaocai.system.api.system.RemoteSystemService;
 import org.jetbrains.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -38,7 +31,6 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
-import java.util.stream.Collectors;
 
 /**
  * 模板管理Service业务层处理
@@ -79,11 +71,12 @@ public class TemplateServiceImpl extends ServiceImpl<TemplateMapper,Template> im
     @Nullable
     private IPage<TemplateListVO> fanList(TemplateListQueryVO queryVO,String group) {
 
-        String currUserTowLevelThridDeptId =  remoteSystemService.getTwoLevelDeptByDeptId
-                (SecurityUtils.getSysUser().getDeptId(),SecurityConstants.INNER).getThridDeptId();
+      //  String currUserTowLevelThridDeptId =  remoteSystemService.getTwoLevelDeptByDeptId
+      //          (SecurityUtils.getSysUser().getDeptId(),SecurityConstants.INNER).getThridDeptId();
         // 获取所有二级组织及集团
-        List<SysDept> sysDeptList = remoteSystemService.getTwoLevelDepts(SecurityConstants.INNER);
-        if (!currUserTowLevelThridDeptId.equals(UserConstants.GROUP_DEPT_ID)) {
+    //    List<SysDept> sysDeptList = remoteSystemService.getTwoLevelDepts(SecurityConstants.INNER);
+        //陈胜
+        /*if (!currUserTowLevelThridDeptId.equals(UserConstants.GROUP_DEPT_ID)) {
             //通用模板
             if (group.equals("2")) {
                 sysDeptList = sysDeptList.stream().filter(item -> item.getThridOrgLevel() == NumberConstant.ONE ||
@@ -92,17 +85,16 @@ public class TemplateServiceImpl extends ServiceImpl<TemplateMapper,Template> im
                 sysDeptList = sysDeptList.stream().filter(item ->
                         item.getThridDeptId().equals(currUserTowLevelThridDeptId)).collect(Collectors.toList());
             }
-        }
-        if (CollectionUtil.isNotEmpty(sysDeptList)) {
-            List<String> deptIdList = sysDeptList.stream().map(dept -> dept.getDeptId()+"").collect(Collectors.toList());
-            String id=String.join(",",deptIdList);
-            String[] deptIds = Convert.toStrArray(id);
-            queryVO.setUsingUnitNo(deptIds);
+        }*/
+       // if (CollectionUtil.isNotEmpty(sysDeptList)) {
+         //   List<String> deptIdList = sysDeptList.stream().map(dept -> dept.getDeptId()+"").collect(Collectors.toList());
+//         //   String[] deptIds = Convert.toStrArray(id);
+         //   queryVO.setUsingUnitNo(deptIds);
             IPage<TemplateListVO> pages = baseMapper.selectList(queryVO.toMybatisPage(),queryVO);
             procurementPlanTypeEnumNmae(pages);
             return pages;
-        }
-        return null;
+     //   }
+    //    return null;
     }
 
     /**
