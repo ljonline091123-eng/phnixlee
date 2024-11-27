@@ -131,18 +131,18 @@ public class BiddingMarkTemplateServiceImpl extends ServiceImpl<BiddingMarkTempl
                 (SecurityUtils.getSysUser().getDeptId(),SecurityConstants.INNER).getThridDeptId();
         // 获取所有二级组织及集团
         List<SysDept> sysDeptList = remoteSystemService.getTwoLevelDepts(SecurityConstants.INNER);
-        if (!currUserTowLevelThridDeptId.equals(UserConstants.GROUP_DEPT_ID)) {
-            //通用模板
-            if (group.equals("2")) {
-                sysDeptList = sysDeptList.stream().filter(item -> item.getThridOrgLevel() == NumberConstant.ONE ||
-                        item.getThridDeptId().equals(currUserTowLevelThridDeptId)).collect(Collectors.toList());
-            }else {
-                sysDeptList = sysDeptList.stream().filter(item ->
-                        item.getThridDeptId().equals(currUserTowLevelThridDeptId)).collect(Collectors.toList());
-                /* 权限控制到项目部 */
-//                sysDeptList = remoteSystemService.getDeptByThridDeptId(currUserTowLevelThridDeptId,SecurityConstants.INNER);
-            }
-        }
+//        if (!currUserTowLevelThridDeptId.equals(UserConstants.GROUP_DEPT_ID)) {
+//            //通用模板
+//            if (group.equals("2")) {
+//                sysDeptList = sysDeptList.stream().filter(item -> item.getThridOrgLevel() == NumberConstant.ONE ||
+//                        item.getThridDeptId().equals(currUserTowLevelThridDeptId)).collect(Collectors.toList());
+//            }else {
+//                sysDeptList = sysDeptList.stream().filter(item ->
+//                        item.getThridDeptId().equals(currUserTowLevelThridDeptId)).collect(Collectors.toList());
+//                /* 权限控制到项目部 */
+////                sysDeptList = remoteSystemService.getDeptByThridDeptId(currUserTowLevelThridDeptId,SecurityConstants.INNER);
+//            }
+//        }
         if (CollectionUtil.isNotEmpty(sysDeptList)) {
             List<String> deptIdList = sysDeptList.stream().map(dept -> dept.getDeptId()+"").collect(Collectors.toList());
             String id=String.join(",",deptIdList);

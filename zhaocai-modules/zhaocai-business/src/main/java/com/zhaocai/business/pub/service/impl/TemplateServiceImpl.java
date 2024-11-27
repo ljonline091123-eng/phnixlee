@@ -83,16 +83,16 @@ public class TemplateServiceImpl extends ServiceImpl<TemplateMapper,Template> im
                 (SecurityUtils.getSysUser().getDeptId(),SecurityConstants.INNER).getThridDeptId();
         /* 获取所有二级组织及集团 thrid_org_level IS NOT NULL */
         List<SysDept> sysDeptList = remoteSystemService.getTwoLevelDepts(SecurityConstants.INNER);
-        if (!currUserTowLevelThridDeptId.equals(UserConstants.GROUP_DEPT_ID)) {
-            /** 通用模板 = 部门层级是一级单位 部门同步方法{@link com.zhaocai.system.manager.controller.SyncPlatformDataController#syncDept} */
-            if (group.equals("2")) {
-                sysDeptList = sysDeptList.stream().filter(item -> item.getThridOrgLevel() == NumberConstant.ONE ||
-                        item.getThridDeptId().equals(currUserTowLevelThridDeptId)).collect(Collectors.toList());
-            }else {
-                sysDeptList = sysDeptList.stream().filter(item ->
-                        item.getThridDeptId().equals(currUserTowLevelThridDeptId)).collect(Collectors.toList());
-            }
-        }
+//        if (!currUserTowLevelThridDeptId.equals(UserConstants.GROUP_DEPT_ID)) {
+//            /** 通用模板 = 部门层级是一级单位 部门同步方法{@link com.zhaocai.system.manager.controller.SyncPlatformDataController#syncDept} */
+//            if (group.equals("2")) {
+//                sysDeptList = sysDeptList.stream().filter(item -> item.getThridOrgLevel() == NumberConstant.ONE ||
+//                        item.getThridDeptId().equals(currUserTowLevelThridDeptId)).collect(Collectors.toList());
+//            }else {
+//                sysDeptList = sysDeptList.stream().filter(item ->
+//                        item.getThridDeptId().equals(currUserTowLevelThridDeptId)).collect(Collectors.toList());
+//            }
+//        }
         if (CollectionUtil.isNotEmpty(sysDeptList)) {
             List<String> deptIdList = sysDeptList.stream().map(dept -> dept.getDeptId()+"").collect(Collectors.toList());
             String id=String.join(",",deptIdList);
