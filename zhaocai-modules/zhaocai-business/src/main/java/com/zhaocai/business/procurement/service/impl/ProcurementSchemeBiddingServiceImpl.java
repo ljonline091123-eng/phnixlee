@@ -105,6 +105,14 @@ public class ProcurementSchemeBiddingServiceImpl extends ServiceImpl<Procurement
                 schemeTemplate.setAttachmentId(agreementAttachment.getId());
                 schemeTemplate.setFileName(agreementAttachment.getFileName());
                 schemeTemplate.setFileUrl(agreementAttachment.getFileUrl());
+            }else{
+                /* 也可以编辑使用合同模板 */
+                Attachment contractAttachment = attachmentService.getById(schemeBidding.getContractTemplateId());
+                if(contractAttachment!=null){
+                    schemeTemplate.setAttachmentId(contractAttachment.getId());
+                    schemeTemplate.setFileName(contractAttachment.getFileName());
+                    schemeTemplate.setFileUrl(contractAttachment.getFileUrl());
+                }
             }
             schemeBiddingVO.setContractTemplate(schemeTemplate);
         }else{
