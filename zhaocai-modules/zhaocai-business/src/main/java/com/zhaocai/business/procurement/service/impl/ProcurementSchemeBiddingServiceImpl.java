@@ -49,6 +49,9 @@ public class ProcurementSchemeBiddingServiceImpl extends ServiceImpl<Procurement
 
         // 更新招标文件附件
         attachmentService.updateBusiness(procurementSchemeBidding.getBiddingAttachmentId(), AttachmentTypeEnum.SCHEME_BIDDING,procurementSchemeBidding.getSchemeId());
+        // 更新合同模板附件
+        attachmentService.updateBusiness(procurementSchemeBidding.getContractTemplateId(), AttachmentTypeEnum.SCHEME_CONTRACT,procurementSchemeBidding.getSchemeId());
+
     }
 
     @Override
