@@ -24,8 +24,8 @@ public class DpDemo {
 	 * @throws NoSuchAlgorithmException
 	 */
 	public static void main(String[] args) throws NoSuchAlgorithmException, IOException, JSONException {
-		 System.out.println("*********预览Office文件******************************************");
-		 previewOffice();
+//		 System.out.println("*********预览Office文件******************************************");
+//		 previewOffice();
 		// System.out.println("*********预览Office文件图片格式******************************************");
 		// previewOfficePic();
 //		 System.out.println("*********预览PDF******************************************");
@@ -38,8 +38,8 @@ public class DpDemo {
 //		 previewZip();
 //		 System.out.println("*********处理书签******************************************");
 //		 bookMarkOperate();
-//		 System.out.println("*********编辑文件******************************************");
-//		 editDocument();
+		 System.out.println("*********编辑文件******************************************");
+		 editDocument();
 //		System.out.println("*********office转pdf******************************************");
 //		convertOfficeToPdf();
 //		System.out.println("*********office转ofd******************************************");
@@ -252,7 +252,7 @@ public class DpDemo {
 		// 组织请求参数
 		EditParams params = new EditParams();
 		params.setFilePath(DemoTestFile.getFilePath("服务合同.docx"));
-		params.setFileName("抢抓机遇期培育新动能.docx");
+		params.setFileName("测试.docx");
 		params.setUserInfo("userid1", "用户1");
 		params.setFallbackUrl("http://www.yozosoft.com");
 		params.setUserRight(EditParams.USERRIGHT_EDIT);
@@ -280,9 +280,9 @@ public class DpDemo {
 		// 设置复制粘贴剪切是否可用
 		params.setCopyPasteState(false, true, false);
 		// 设置书签时可选择的内容，暂未实现
-		params.setBookMarkListRange("甲方,乙方,金额,签订日期");
+	//	params.setBookMarkListRange("甲方,乙方,金额,签订日期");
 		// 设置水印
-		WaterMark wm = new WaterMark(WaterMark.TYPE_TXT, "DEMO-水印");
+		WaterMark wm = new WaterMark(WaterMark.TYPE_TXT, "解文静-水印");
 		// 将水印设置到参数中
 		params.setWaterMark(EditParams.WATER_MARK_TYPE_PAGE, wm);
 
