@@ -45,7 +45,7 @@ public class ContractPlanService {
      * @param queryVO
      * @return
      */
-    public PageResult<ContractPlanningListVO> getContractPlanningList(ContractPlanningListQueryVO queryVO) {
+    public PageResult<ContractPlanningListVO> getContractPlanningList(ContractPlanningListQueryVO queryVO,Boolean zeroFilter) {
         // 校验参数
         ValidationUtils.validateObject(queryVO);
 
@@ -126,7 +126,9 @@ public class ContractPlanService {
 
 
             /* 过滤为0的 */
-            resultList = resultList.stream().filter(obj -> obj.getSurplusQuantity().compareTo(BigDecimal.valueOf(0.01))>0).collect(Collectors.toList());
+            if(zeroFilter){
+                resultList = resultList.stream().filter(obj -> obj.getSurplusQuantity().compareTo(BigDecimal.valueOf(0.01))>0).collect(Collectors.toList());
+            }
 
             /* 分页逻辑 */
             pageResult.setTotal(resultList.size());
