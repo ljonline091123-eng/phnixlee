@@ -1436,6 +1436,12 @@ console.log("-2222--"+JSON.stringify(this.materialsLists))
       }
     },
     checkOtherPrice(row,key,event) {
+      // 如果为空，设置为0
+      if (!row[key]) {
+        this.$set(row, key, 0);
+        row[key] = 0;
+      }
+
       const regexN1 = /^-?(?:[1-9]\d*|0)(\.\d+)?$/;
       const regexN2 = /^-?\d+(\.\d{0,4})?$/;
       if(!regexN2.test(row[key])){
@@ -1755,6 +1761,25 @@ console.log("-2222--"+JSON.stringify(this.materialsLists))
         /* 浮动价显示基价选项 */
         if(Number(val) === 2 || Number(val) === 3){
           this.isFloat = true;
+          // 判断 'floatingPrice' 和 'unloadingFee' 浮动价，装卸费 是否为空，如果为空则设置为0
+          this.planList.forEach((item) => {
+            if (item.children && Array.isArray(item.children)) {
+              item.children.forEach((itemChildren) => {
+                if (itemChildren.children && Array.isArray(itemChildren.children)) {
+                  itemChildren.children.forEach((children) => {
+                    // 判断 'floatingPrice' 和 'unloadingFee' 浮动价，装卸费 是否为空，如果为空则设置为0
+                    if (!children.floatingPrice) {
+                      this.$set(children, 'floatingPrice', 0);
+                    }
+                    if (!children.unloadingFee) {
+                      this.$set(children, 'unloadingFee', 0);
+                    }
+                  });
+                }
+              });
+            }
+          });
+
         }else {
           this.isFloat = false;
         }
