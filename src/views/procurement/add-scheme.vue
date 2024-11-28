@@ -1857,6 +1857,8 @@ export default {
       this.$set(this.procurementSchemeTempObject.biddingTemplate, "templateName", null);
       this.$set(this.procurementSchemeTempObject.biddingTemplate, "templateId", null);
       this.$forceUpdate();
+      /* 调起联想文档 */
+      this.viewAttachmentId = null;
     },
     /* 合同模板文件手动上传成功 */
     async fileSuccessContract(res) {
@@ -1892,6 +1894,8 @@ export default {
       this.$set(this.procurementSchemeTempObject.contractTemplate, "templateName", null);
       this.$set(this.procurementSchemeTempObject.contractTemplate, "templateId", null);
       this.$forceUpdate();
+      /* 调起联想文档 */
+      this.viewAttachmentId = null;
     },
 
     handleKeydown(event) {
