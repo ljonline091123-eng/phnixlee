@@ -1845,8 +1845,6 @@ export default {
       } catch (err) {
         console.log(err);
       }
-      console.log('%c👽 this.formData', `font-size: 20px;background-color: #f00;`, this.formData);
-      console.log('%c👽 this.procurementSchemeTempObject', `font-size: 20px;background-color: #f00;`, this.procurementSchemeTempObject);
     },
     /* 招标文件手动上传文件删除 */
     fileRemoveBidding() {
@@ -1858,8 +1856,7 @@ export default {
       this.$set(this.procurementSchemeTempObject.biddingTemplate, "fileUrl", null);
       this.$set(this.procurementSchemeTempObject.biddingTemplate, "templateName", null);
       this.$set(this.procurementSchemeTempObject.biddingTemplate, "templateId", null);
-      console.log('%c👽 this.formData', `font-size: 20px;background-color: #f00;`, this.formData);
-      console.log('%c👽 this.procurementSchemeTempObject', `font-size: 20px;background-color: #f00;`, this.procurementSchemeTempObject);
+      this.$forceUpdate();
     },
     /* 合同模板文件手动上传成功 */
     async fileSuccessContract(res) {
@@ -1883,8 +1880,6 @@ export default {
       } catch (err) {
         console.log(err);
       }
-      console.log('%c👽 this.formData', `font-size: 20px;background-color: #f00;`, this.formData);
-      console.log('%c👽 this.procurementSchemeTempObject', `font-size: 20px;background-color: #f00;`, this.procurementSchemeTempObject);
     },
     /* 合同模板手动上传文件删除 */
     fileRemoveContract() {
@@ -1896,8 +1891,7 @@ export default {
       this.$set(this.procurementSchemeTempObject.contractTemplate, "fileUrl", null);
       this.$set(this.procurementSchemeTempObject.contractTemplate, "templateName", null);
       this.$set(this.procurementSchemeTempObject.contractTemplate, "templateId", null);
-      console.log('%c👽 this.formData', `font-size: 20px;background-color: #f00;`, this.formData);
-      console.log('%c👽 this.procurementSchemeTempObject', `font-size: 20px;background-color: #f00;`, this.procurementSchemeTempObject);
+      this.$forceUpdate();
     },
 
     handleKeydown(event) {
