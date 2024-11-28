@@ -653,8 +653,8 @@
               <el-table-column label="使用单位" prop="useUnitName" />
             </el-table>
             <pagination
-              v-show="templateTotal > 0"
-              :total="templateTotal"
+              v-show="generalScoreTemplateListTotal > 0"
+              :total="generalScoreTemplateListTotal"
               :page.sync="templateQuery.pageNumber"
               :limit.sync="templateQuery.pageSize"
               @pagination="getGeneralScoreTemplateList"
@@ -711,8 +711,8 @@
               <el-table-column label="使用单位" prop="useUnitName" />
             </el-table>
             <pagination
-              v-show="reusableTemplateTotal > 0"
-              :total="reusableTemplateTotal"
+              v-show="generalReuScoreTemplateListTotal > 0"
+              :total="generalReuScoreTemplateListTotal"
               :page.sync="templateQuery.pageNumber"
               :limit.sync="templateQuery.pageSize"
               @pagination="getReusableScoreTemplateList"
@@ -832,7 +832,6 @@
               />
             </el-table>
             <pagination
-              v-show="generalTemplateTotal > 0"
               :total="generalTemplateTotal"
               :page.sync="bcTemplateQuery.pageNumber"
               :limit.sync="bcTemplateQuery.pageSize"
@@ -922,7 +921,6 @@
               />
             </el-table>
             <pagination
-              v-show="reusableTemplateTotal > 0"
               :total="reusableTemplateTotal"
               :page.sync="bcTemplateQuery.pageNumber"
               :limit.sync="bcTemplateQuery.pageSize"
@@ -1207,6 +1205,8 @@ export default {
       viewAttachmentId: "", //预览ID
       isEdit: false,
       isSubmit: false,
+      generalScoreTemplateListTotal: 0,
+      generalReuScoreTemplateListTotal: 0,
       generalScoreTemplateList: [],
       generalReuScoreTemplateList: [],
       selectedTemplateId: "",
@@ -1322,6 +1322,7 @@ export default {
       this.reusableTemplateList = res.data.rows;
       this.bcTemplateVisableLoading = false;
     },
+    /* 评分模板标签页 通用 */
     async getGeneralScoreTemplateList() {
       // 获取通用模板列表数据
       this.generalTemplateLoading = true;
@@ -1329,8 +1330,10 @@ export default {
       this.templateQuery.switchTemplateType = "1";
       const res = await getTemplateSwitchList(this.templateQuery);
       this.generalScoreTemplateList = res.data.rows;
+      this.generalScoreTemplateListTotal = res.data.total;
       this.generalTemplateLoading = false;
     },
+    /* 评分模板标签页 复用 */
     async getReusableScoreTemplateList() {
       // 获取通用模板列表数据
       this.generalTemplateLoading = true;
@@ -1338,6 +1341,7 @@ export default {
       this.templateQuery.switchTemplateType = "2";
       const res = await getTemplateSwitchList(this.templateQuery);
       this.generalReuScoreTemplateList = res.data.rows;
+      this.generalReuScoreTemplateListTotal = res.data.total;
       this.generalTemplateLoading = false;
     },
     //提交
@@ -1673,6 +1677,8 @@ export default {
     /* 点击显示选择模板列表 2 招标文件模板 ，1 合同模板 */
     async getBcTemplateList(type) {
       showSecretRelatedTips(async ()=>{
+        this.bcTemplateQuery.pageNumber = 1;
+        this.bcTemplateQuery.pageSize = 10;
         this.bcTemplateTitle = type === 2 ? "选择招标文件模板" : "选择合同模板";
         this.isScoreMOdel = type === 2 ? true : false;
         this.activeTab = "generalTemplate";
@@ -1693,6 +1699,8 @@ export default {
         // 获取模板列表
         const res = await getSwitchPageList(this.bcTemplateQuery);
         this.bcTemplateList = res.data.rows;
+        /* 最后再获取分页数据，区分了通用和复用模板。 */
+        await this.activeTabListen(this.activeTab);
       })
 
     },
@@ -1865,6 +1873,21 @@ export default {
         console.log(err);
       }
     },
+    async activeTabListen(newTab) {
+      if (newTab === "generalTemplate") {
+        this.bcTemplateQuery.switchTemplateType = "1";
+      } else {
+        this.bcTemplateQuery.switchTemplateType = "2";
+      }
+      const res = await getSwitchPageList(this.bcTemplateQuery);
+      if (newTab === "generalTemplate") {
+        this.bcTemplateList = res.data.rows;
+        this.generalTemplateTotal = res.data.total;
+      } else {
+        this.bcTemplateList = res.data.rows;
+        this.reusableTemplateTotal = res.data.total;
+      }
+    },
   },
   watch: {
     project: {
@@ -1873,6 +1896,16 @@ export default {
           this.$router.replace("/procurement/scheme");
         }
       },
+    },
+    /* 招标文件合同模板弹窗显示隐藏监听 */
+    bcTemplateVisable(val) {
+      /* 如果弹窗隐藏，重置分页数据 */
+      if(!val){
+        this.bcTemplateQuery.pageNumber = 1;
+        this.bcTemplateQuery.pageSize = 10;
+        this.reusableTemplateTotal = 0;
+        this.generalTemplateTotal = 0;
+      }
     },
     async activeTab(newTab) {
       if (newTab === "generalTemplate") {
