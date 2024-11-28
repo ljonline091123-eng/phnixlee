@@ -1612,11 +1612,16 @@ export default {
       if(type === 2){
         let {attachmentId , fileName , fileUrl , templateName , templateId} = this.procurementSchemeTempObject.biddingTemplate;
         try {
-          /* 生成新的附件 */
-          const res = await addAttachment({
-            fileName: fileName,
-            fileUrl: fileUrl,
-          });
+          let res = {};
+          if(this.formData.biddingAttachmentId === this.formData.biddingTemplateId){
+            /* 生成新的附件 */
+            res = await addAttachment({
+              fileName: fileName,
+              fileUrl: fileUrl,
+            });
+          }else{
+            res.data = this.formData.biddingAttachmentId;
+          }
           /* 设置新的附件返回的附件id */
           this.$set(this.formData, "biddingAttachmentId", res.data);
           /* 同步更新页面的模板附件对象(附件修改按钮) */
@@ -1637,11 +1642,16 @@ export default {
         /* 1 合同模板 */
         let {attachmentId , fileName , fileUrl , templateName , templateId} = this.procurementSchemeTempObject.contractTemplate;
         try {
-          /* 生成新的附件 */
-          const res = await addAttachment({
-            fileName: fileName,
-            fileUrl: fileUrl,
-          });
+          let res = {};
+          if(this.formData.contractAttachmentId === this.formData.contractTemplateId){
+            /* 生成新的附件 */
+            res = await addAttachment({
+              fileName: fileName,
+              fileUrl: fileUrl,
+            });
+          }else{
+            res.data = this.formData.contractAttachmentId;
+          }
           /* 设置新的附件返回的附件id */
           this.$set(this.formData, "contractAttachmentId", res.data);
           /* 同步更新页面的模板附件对象(附件修改按钮) */
