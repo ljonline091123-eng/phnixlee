@@ -690,19 +690,11 @@
 
     <!--  招标文件模板联想文档预览  -->
     <el-dialog
-      :title="templateBiddingDialogTitle"
-      :visible.sync="templateBiddingDialogVisible"
+      :title="templateDialogTitle"
+      :visible.sync="templateDialogVisible"
       width="80%"
     >
-      <FileModule :attachmentId="templateBiddingAttachmentId" height="500px" />
-    </el-dialog>
-    <!--  合同模板联想文档预览  -->
-    <el-dialog
-      :title="templateContractDialogTitle"
-      :visible.sync="templateContractDialogVisible"
-      width="80%"
-    >
-      <FileModule :attachmentId="templateContractAttachmentId" height="500px" />
+      <FileModule :key="templateAttachmentId" :attachmentId="templateAttachmentId" height="700px" />
     </el-dialog>
 
     <ApprovalForm
@@ -779,9 +771,9 @@ export default {
         { value: "unit3", label: "单位三" },
       ],
       /* 合同模板联想文档预览 */
-      templateContractDialogTitle: "",
-      templateContractDialogVisible: false,
-      templateContractAttachmentId: "",
+      templateDialogTitle: "",
+      templateDialogVisible: false,
+      templateAttachmentId: "",
       /* 招标文件模板联想文档预览 */
       templateBiddingDialogTitle: "",
       templateBiddingDialogVisible: false,
@@ -923,18 +915,9 @@ export default {
       console.log("已关闭");
     },
     showTemplate(row,tmp) {
-      /* 合同模板 */
-      if(tmp === 'contractTemplate'){
-        this.templateContractDialogTitle = row.fileName + "预览";
-        this.templateContractAttachmentId = row.attachmentId;
-        this.templateContractDialogVisible = true;
-      }
-      /* 招标文件模板 */
-      if(tmp === 'biddingTemplate'){
-        this.templateBiddingDialogTitle = row.fileName + "预览";
-        this.templateBiddingAttachmentId = row.attachmentId;
-        this.templateBiddingDialogVisible = true;
-      }
+      this.templateDialogTitle = row.fileName + "预览";
+      this.templateAttachmentId = row.attachmentId;
+      this.templateDialogVisible = true;
     },
     goUpdate() {
       const { procurementType, id } = this.procurementScheme;
