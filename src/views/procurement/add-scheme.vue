@@ -420,6 +420,17 @@
                         @click="getBcTemplateList(2)"
                         >选择模板</el-button
                       >
+                      <!--  先选择模板后再去手动上传附件模板，优先保证系统数据能拥有tempId的值吧，然后判断审批状态是否可上传 -->
+                      <el-button size="mini" type="primary" v-show="formData.biddingTemplateName && (state === null || (state !== 1 && state !== 2 && state !== 3))" @click="uploadBiddingClick">手动上传</el-button>
+                      <el-upload
+                        :action="uploadFileUrl"
+                        :limit="1"
+                        :on-success="fileSuccessBidding"
+                        :file-list="formData.fileList"
+                        :on-remove="fileRemoveBidding"
+                        ref="uploadBidding"
+                      >
+                      </el-upload>
                     </el-form-item>
                   </el-col>
                   <el-col :span="8" class="grid-cell">
@@ -442,6 +453,17 @@
                         @click="getBcTemplateList(1)"
                         >选择模板</el-button
                       >
+                      <!--  先选择模板后再去手动上传附件模板，优先保证系统数据能拥有tempId的值吧，然后判断审批状态是否可上传 -->
+                      <el-button size="mini" type="primary" v-show="formData.contractTemplateName && (state === null || (state !== 1 && state !== 2 && state !== 3))" @click="uploadContractClick">手动上传</el-button>
+                      <el-upload
+                        :action="uploadFileUrl"
+                        :limit="1"
+                        :on-success="fileSuccessContract"
+                        :file-list="formData.fileList"
+                        :on-remove="fileRemoveContract"
+                        ref="uploadContract"
+                      >
+                      </el-upload>
                     </el-form-item>
                   </el-col>
                 </el-row>
@@ -968,6 +990,7 @@ import { isvalidatemobile, validEmail, validatenum } from "@/utils/validate";
 import BackButton from "@/components/BackButton/index.vue";
 import { addAttachment } from "@/api/template/file";
 import {showSecretRelatedTips} from "@/utils/MyUtils";
+import {offerRepo, offerService, uploadFileUrl} from "@/utils/const";
 
 export default {
   name: "add-scheme",
@@ -1013,6 +1036,18 @@ export default {
       }
     };
     return {
+      /*方案审批状态
+        DRAFT(0,"自由态"),
+        IN_APPROVAL(1,"审批中"),
+        CANCELLATION(2,"已作废"),
+        APPROVE(3,"已完成"),
+        REJECT(4,"已驳回"),
+        REVOKED(5,"已撤回"), */
+      state: null,
+      /* 文件上传 */
+      offerService,
+      offerRepo,
+      uploadFileUrl,
       /* 采购方案文件，通过getSchemeDetail方法请求procurementScheme/detail?id=获取的数据 */
       procurementSchemeTempObject: null,
       fileList: [],
@@ -1774,6 +1809,97 @@ export default {
       this.selectedTemplateId = row.id;
       //  this.attachmentId = row.attachmentId;
     },
+
+
+    /* 手动合同模板附件上传 */
+    uploadBiddingClick() {
+      showSecretRelatedTips(()=>{
+        this.$refs['uploadBidding'].$refs['upload-inner'].handleClick()
+      })
+    },
+    /* 手动合同模板附件上传 */
+    uploadContractClick() {
+      showSecretRelatedTips(()=>{
+        this.$refs['uploadContract'].$refs['upload-inner'].handleClick()
+      })
+    },
+    /* 招标文件手动上传成功 */
+    async fileSuccessBidding(res) {
+      const { url, name } = res.data;
+      try {
+        /* 保存到文件表获取返回id */
+        const res = await addAttachment({ fileName: name, fileUrl: url });
+        /* 设置新的附件返回的附件id */
+        this.$set(this.formData, "biddingAttachmentId", res.data);
+        /* 同步更新页面的模板附件对象(附件修改按钮) */
+        if (!this.procurementSchemeTempObject.biddingTemplate) {
+          this.$set(this.procurementSchemeTempObject, 'biddingTemplate', {});
+        }
+        this.$set(this.procurementSchemeTempObject.biddingTemplate, "attachmentId", res.data);
+        this.$set(this.procurementSchemeTempObject.biddingTemplate, "fileName", name);
+        this.$set(this.procurementSchemeTempObject.biddingTemplate, "fileUrl", url);
+        this.$set(this.procurementSchemeTempObject.biddingTemplate, "templateName", this.formData.biddingTemplateName);
+        this.$set(this.procurementSchemeTempObject.biddingTemplate, "templateId", this.formData.biddingTemplateId);
+        /* 调起联想文档 */
+        this.viewAttachmentId = res.data;
+      } catch (err) {
+        console.log(err);
+      }
+      console.log('%c👽 this.formData', `font-size: 20px;background-color: #f00;`, this.formData);
+      console.log('%c👽 this.procurementSchemeTempObject', `font-size: 20px;background-color: #f00;`, this.procurementSchemeTempObject);
+    },
+    /* 招标文件手动上传文件删除 */
+    fileRemoveBidding() {
+      this.$set(this.formData, "biddingAttachmentId", null);
+      this.$set(this.formData, "biddingTemplateName", null);
+      this.$set(this.formData, "biddingTemplateId", null);
+      this.$set(this.procurementSchemeTempObject.biddingTemplate, "attachmentId", null);
+      this.$set(this.procurementSchemeTempObject.biddingTemplate, "fileName", null);
+      this.$set(this.procurementSchemeTempObject.biddingTemplate, "fileUrl", null);
+      this.$set(this.procurementSchemeTempObject.biddingTemplate, "templateName", null);
+      this.$set(this.procurementSchemeTempObject.biddingTemplate, "templateId", null);
+      console.log('%c👽 this.formData', `font-size: 20px;background-color: #f00;`, this.formData);
+      console.log('%c👽 this.procurementSchemeTempObject', `font-size: 20px;background-color: #f00;`, this.procurementSchemeTempObject);
+    },
+    /* 合同模板文件手动上传成功 */
+    async fileSuccessContract(res) {
+      const { url, name } = res.data;
+      try {
+        /* 保存到文件表获取返回id */
+        const res = await addAttachment({ fileName: name, fileUrl: url });
+        /* 设置新的附件返回的附件id */
+        this.$set(this.formData, "contractAttachmentId", res.data);
+        /* 同步更新页面的模板附件对象(附件修改按钮) */
+        if (!this.procurementSchemeTempObject.contractTemplate) {
+          this.$set(this.procurementSchemeTempObject, 'contractTemplate', {});
+        }
+        this.$set(this.procurementSchemeTempObject.contractTemplate, "attachmentId", res.data);
+        this.$set(this.procurementSchemeTempObject.contractTemplate, "fileName", name);
+        this.$set(this.procurementSchemeTempObject.contractTemplate, "fileUrl", url);
+        this.$set(this.procurementSchemeTempObject.contractTemplate, "templateName", this.formData.contractTemplateName);
+        this.$set(this.procurementSchemeTempObject.contractTemplate, "templateId", this.formData.contractTemplateId);
+        /* 调起联想文档 */
+        this.viewAttachmentId = res.data;
+      } catch (err) {
+        console.log(err);
+      }
+      console.log('%c👽 this.formData', `font-size: 20px;background-color: #f00;`, this.formData);
+      console.log('%c👽 this.procurementSchemeTempObject', `font-size: 20px;background-color: #f00;`, this.procurementSchemeTempObject);
+    },
+    /* 合同模板手动上传文件删除 */
+    fileRemoveContract() {
+      this.$set(this.formData, "contractAttachmentId", null);
+      this.$set(this.formData, "contractTemplateName", null);
+      this.$set(this.formData, "contractTemplateId", null);
+      this.$set(this.procurementSchemeTempObject.contractTemplate, "attachmentId", null);
+      this.$set(this.procurementSchemeTempObject.contractTemplate, "fileName", null);
+      this.$set(this.procurementSchemeTempObject.contractTemplate, "fileUrl", null);
+      this.$set(this.procurementSchemeTempObject.contractTemplate, "templateName", null);
+      this.$set(this.procurementSchemeTempObject.contractTemplate, "templateId", null);
+      console.log('%c👽 this.formData', `font-size: 20px;background-color: #f00;`, this.formData);
+      console.log('%c👽 this.procurementSchemeTempObject', `font-size: 20px;background-color: #f00;`, this.procurementSchemeTempObject);
+    },
+
     handleKeydown(event) {
       if (event.key === "Enter") {
         this.handleQuery();
@@ -1815,7 +1941,10 @@ export default {
           priceType,
           priceTypeText,
           projectDeptId,
+          state,
         } = procurementScheme;
+        /* 本方案审批状态 */
+        this.state = state;
         const {
           bidDeadline,
           bidContactPerson,
