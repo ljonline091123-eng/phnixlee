@@ -8,6 +8,12 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.net.URL;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.security.NoSuchAlgorithmException;
 
 /**
@@ -60,10 +66,11 @@ public class DpDemo {
 	 * @throws NoSuchAlgorithmException
 	 */
 	public static void previewOffice() throws IOException, JSONException, NoSuchAlgorithmException {
+		Path  path=	downloadFile("https://zc.hncig.cn:32068/minio/wh-hnjt/2024/11/27/content_20241127160532A002.docx", createTempFilePath("抢抓机遇期培育新动能.docx"));
 		// 组织请求参数
 		PreviewParams params = new PreviewParams();
 		// 设置要预览的文件
-		params.setFilePath(DemoTestFile.getFilePath("抢抓机遇期培育新动能.docx"));
+		params.setFilePath(path.toString());
 		params.setFileName("抢抓机遇期培育新动能.docx");
 		params.setHtmlName("[html头部显示]抢抓机遇期培育新动能");
 		params.setHtmlTitle("页面标签显示内容");
@@ -92,6 +99,37 @@ public class DpDemo {
 		System.out.println(viewUrl);
 	}
 
+	/**
+	 * 根据提供的URL下载文件，并保存到给定的路径。
+	 * @param urlStr 文件的URL
+	 * @param targetPath 保存的目标路径
+	 */
+	public static Path downloadFile(String urlStr, Path targetPath) {
+		try (InputStream in = new URL(urlStr).openStream()) {
+			Files.copy(in, targetPath, StandardCopyOption.REPLACE_EXISTING);
+
+			System.out.println("文件已下载至: " + targetPath);
+
+		} catch (IOException e) {
+			System.err.println("下载文件时发生错误: " + e.getMessage());
+		}
+		return targetPath;
+	}
+
+	/**
+	 * 创建一个临时文件路径。
+	 * @param fileName 文件名
+	 * @return 临时文件路径
+	 */
+	public static Path createTempFilePath(String fileName) {
+		try {
+			Path tempDir = Paths.get("D:\\temp");
+			return tempDir.resolve(fileName);
+		} catch (Exception e) {
+			throw new RuntimeException("创建临时目录失败", e);
+
+		}
+	}
 	/**
 	 * 以图片方式预览Office（移动端采用此方式预览效果较好）
 	 * 
