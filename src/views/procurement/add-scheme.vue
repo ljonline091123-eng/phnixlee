@@ -410,7 +410,6 @@
                         v-if="formData.biddingTemplateName"
                         size="mini"
                         @click="modifyTempFile(2)"
-                        style="margin-left: 10px;"
                       >修改附件</el-button>
 
                       <el-button
@@ -420,18 +419,25 @@
                         @click="getBcTemplateList(2)"
                         >选择模板</el-button
                       >
-                      <!--  先选择模板后再去手动上传附件模板，优先保证系统数据能拥有tempId的值吧，然后判断审批状态是否可上传 -->
-                      <el-button size="mini" type="primary" v-show="formData.biddingTemplateName && (state === null || (state !== 1 && state !== 2 && state !== 3))" @click="uploadBiddingClick">手动上传</el-button>
-                      <el-upload
-                        :action="uploadFileUrl"
-                        :limit="1"
-                        :on-success="fileSuccessBidding"
-                        :file-list="formData.fileList"
-                        :on-remove="fileRemoveBidding"
-                        ref="uploadBidding"
-                      >
-                      </el-upload>
+
+                      <br>
+                      <div style="margin-left: -90px;width: 300px;">
+                        <!--  先选择模板后再去手动上传附件模板，优先保证系统数据能拥有tempId的值吧，然后判断审批状态是否可上传 -->
+                        <el-button size="mini" type="primary" v-show="formData.biddingTemplateName && (state === null || (state !== 1 && state !== 2 && state !== 3))" @click="uploadBiddingClick">手动上传</el-button>
+                        <el-upload
+                          style="margin-left: 90px;margin-top: -75px;"
+                          :action="uploadFileUrl"
+                          :limit="1"
+                          :on-success="fileSuccessBidding"
+                          :file-list="formData.fileListBidding"
+                          :on-remove="fileRemoveBidding"
+                          ref="uploadBidding"
+                        >
+                        </el-upload>
+                      </div>
                     </el-form-item>
+
+
                   </el-col>
                   <el-col :span="8" class="grid-cell">
                     <el-form-item label=" 合同模板" prop="contractTemplateName">
@@ -444,7 +450,6 @@
                         v-if="formData.contractTemplateName"
                         size="mini"
                         @click="modifyTempFile(1)"
-                        style="margin-left: 10px;"
                       >修改附件</el-button>
                       <el-button
                         v-else
@@ -453,19 +458,25 @@
                         @click="getBcTemplateList(1)"
                         >选择模板</el-button
                       >
-                      <!--  先选择模板后再去手动上传附件模板，优先保证系统数据能拥有tempId的值吧，然后判断审批状态是否可上传 -->
-                      <el-button size="mini" type="primary" v-show="formData.contractTemplateName && (state === null || (state !== 1 && state !== 2 && state !== 3))" @click="uploadContractClick">手动上传</el-button>
-                      <el-upload
-                        :action="uploadFileUrl"
-                        :limit="1"
-                        :on-success="fileSuccessContract"
-                        :file-list="formData.fileList"
-                        :on-remove="fileRemoveContract"
-                        ref="uploadContract"
-                      >
-                      </el-upload>
+                      <br>
+                      <div style="margin-left: -90px;width: 300px;">
+                        <!--  先选择模板后再去手动上传附件模板，优先保证系统数据能拥有tempId的值吧，然后判断审批状态是否可上传 -->
+                        <el-button size="mini" type="primary" v-show="formData.contractTemplateName && (state === null || (state !== 1 && state !== 2 && state !== 3))" @click="uploadContractClick">手动上传</el-button>
+                        <el-upload
+                          style="margin-left: 90px;margin-top: -75px;"
+                          :action="uploadFileUrl"
+                          :limit="1"
+                          :on-success="fileSuccessContract"
+                          :file-list="formData.fileListContract"
+                          :on-remove="fileRemoveContract"
+                          ref="uploadContract"
+                        >
+                        </el-upload>
+                      </div>
                     </el-form-item>
                   </el-col>
+
+
                 </el-row>
                 <!-- 在线预览 -->
                 <div class="previewFile">
@@ -1764,6 +1775,7 @@ export default {
 
           /* 2 招标文件模板 ，1 合同模板 */
           if (this.bcTemplatetType === 2) {
+            this.$refs.uploadBidding.clearFiles();
             this.$set(this.formData, "biddingAttachmentId", res.data);
             this.$set(this.formData, "biddingTemplateName", templateName);
             this.$set(this.formData, "biddingTemplateId", templateId);
@@ -1779,6 +1791,7 @@ export default {
             this.$set(this.procurementSchemeTempObject.biddingTemplate, "templateId", templateId);
             this.viewAttachmentId = res.data;
           } else {
+            this.$refs.uploadContract.clearFiles();
             this.$set(this.formData, "contractAttachmentId", res.data);
             this.$set(this.formData, "contractTemplateName", templateName);
             this.$set(this.formData, "contractTemplateId", templateId);
@@ -1787,11 +1800,12 @@ export default {
             if (!this.procurementSchemeTempObject.contractTemplate) {
               this.$set(this.procurementSchemeTempObject, 'contractTemplate', {});
             }
-            this.$set(this.procurementSchemeTempObject.contractTemplate, "attachmentId", templateId);
+            this.$set(this.procurementSchemeTempObject.contractTemplate, "attachmentId", res.data);
             this.$set(this.procurementSchemeTempObject.contractTemplate, "fileName", fileName);
             this.$set(this.procurementSchemeTempObject.contractTemplate, "fileUrl", fileUrl);
             this.$set(this.procurementSchemeTempObject.contractTemplate, "templateName", templateName);
             this.$set(this.procurementSchemeTempObject.contractTemplate, "templateId", templateId);
+            this.viewAttachmentId = res.data;
           }
       } catch (err) {
         console.log(err);
@@ -1969,6 +1983,19 @@ export default {
         this.$set(this.formData, "bidContactEmail", bidContactEmail);
         this.$set(this.formData, "financeConfirmId", financeConfirmId);
         this.$set(this.formData, "financeConfirmName", financeConfirmName);
+
+        this.formData.fileListBidding = [{
+          name: procurementSchemeBidding.biddingTemplate.fileName,  // 文件名
+          url: procurementSchemeBidding.biddingTemplate.fileUrl,  // 文件的 URL（如果是已上传的文件）
+          status: 'success',  // 上传状态，可以是 'success' | 'failure' | 'uploading'
+          uid: Date.now()  // 文件的唯一标识符
+        }];
+        this.formData.fileListContract = [{
+          name: procurementSchemeBidding.contractTemplate.fileName,  // 文件名
+          url: procurementSchemeBidding.contractTemplate.fileUrl,  // 文件的 URL（如果是已上传的文件）
+          status: 'success',  // 上传状态，可以是 'success' | 'failure' | 'uploading'
+          uid: Date.now()  // 文件的唯一标识符
+        }];
 
         this.formData.countingTypeText = countingTypeText;
         this.formData.procurementPlanType = procurementPlanType;
