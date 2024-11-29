@@ -417,6 +417,7 @@ export default {
     /** 获取需求列表 */
     async getBiddingSchemeList() {
       this.loading = true;
+      console.log('%c👽 getBiddingSchemeList(this.queryParams==) ', `font-size: 20px;background-color: #f00;`, this.queryParams);
       const query = {
         ...this.queryParams,
         procurementType:
@@ -424,7 +425,7 @@ export default {
             ? undefined
             : this.queryParams.procurementType,
       };
-      console.log("报表参数",JSON.stringify(query))
+      console.log('%c👽 getBiddingSchemeList(query==) ', `font-size: 20px;background-color: #f00;`, query);
       try {
         const res = await getBiddingSchemeList(query);
         if (res.data) {
@@ -558,13 +559,14 @@ export default {
     /** 监控类型切换 */
     "queryParams.procurementType": {
       handler(val) {
-         console.log( "监控类型切换",JSON.stringify(this.queryParams));
+         console.log('%c👽 监控类型切换-》JSON.stringify(this.queryParams) ', `font-size: 20px;background-color: #f00;`, JSON.stringify(val));
         this.getBiddingSchemeList();
       },
     },
     project: {
       handler(newVal, oldVal) {
-        console.log("监控项目oldVal"+oldVal.id ,"newVal"+JSON.stringify(newVal.id));
+        console.log('%c👽 handler-》oldVal ', `font-size: 20px;background-color: #f00;`, oldVal);
+        console.log('%c👽 handler-》newVal ', `font-size: 20px;background-color: #f00;`, JSON.stringify(newVal));
         if (oldVal === undefined || newVal.id !== oldVal.id) {
           this.queryParams = {
             pageNumber: 1,
@@ -577,7 +579,7 @@ export default {
             procurementType: "all",
             projectCode: newVal.code,
           };
-          console.log( "监控项目",JSON.stringify(this.queryParams));
+          console.log('%c👽 handler-》 JSON.stringify(this.queryParams) ', `font-size: 20px;background-color: #f00;`, JSON.stringify(this.queryParams));
             this.getBiddingSchemeList();
 
         }

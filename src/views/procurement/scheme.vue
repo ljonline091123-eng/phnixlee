@@ -443,6 +443,7 @@ export default {
     /** 获取需求列表 */
     async getSchemeList() {
       this.loading = true;
+      console.log('%c👽 getSchemeList(this.queryParams==) ', `font-size: 20px;background-color: #f00;`, this.queryParams);
       const query = {
         ...this.queryParams,
         procurementPlanType:
@@ -451,6 +452,7 @@ export default {
             : this.queryParams.procurementPlanType,
       };
       try {
+        console.log('%c👽 getSchemeList(query==) ', `font-size: 20px;background-color: #f00;`, query);
         const res = await getSchemeList(query);
         this.loading = false;
         if (res.data) {
@@ -666,11 +668,14 @@ export default {
     /** 监控类型切换 */
     "queryParams.procurementPlanType": {
       handler(val) {
+        console.log('%c👽 监控类型切换-》JSON.stringify(this.queryParams) ', `font-size: 20px;background-color: #f00;`, JSON.stringify(val));
         this.getSchemeList();
       },
     },
     project: {
       handler(newVal, oldVal) {
+        console.log('%c👽 handler-》oldVal ', `font-size: 20px;background-color: #f00;`, oldVal);
+        console.log('%c👽 handler-》newVal ', `font-size: 20px;background-color: #f00;`, JSON.stringify(newVal));
         if (oldVal === undefined || newVal.id !== oldVal.id) {
           this.planQuery.projectCode = newVal.code;
           this.queryParams = {
@@ -682,6 +687,7 @@ export default {
             procurementPlanType: "all",
             projectCode: newVal.code,
           };
+          console.log('%c👽 handler-》 JSON.stringify(this.queryParams) ', `font-size: 20px;background-color: #f00;`, JSON.stringify(this.queryParams));
           this.getSchemeList();
         }
       },
