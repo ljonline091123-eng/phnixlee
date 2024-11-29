@@ -683,7 +683,7 @@ public class ProcurementSchemeServiceImpl extends ServiceImpl<ProcurementSchemeM
 
         baseMapper.updateById(procurementScheme);
 
-        // 招标文件
+        // 招标文件模板附件 合同模板附件
         procurementSchemeBiddingService.updateProcurementSchemeBidding(requestVO.getProcurementSchemeBidding(), procurementScheme.getId());
     }
 

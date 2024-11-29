@@ -147,14 +147,16 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
         return new PageResult<>(iPage);
     }
 
+    /* 新增采购计划弹窗页面 */
     @Override
     public PageResult<ContractPlanningListVO> listContractPlanningPage(ContractPlanningListQueryVO queryVO) {
-        return contractPlanService.getContractPlanningList(queryVO);
+        return contractPlanService.getContractPlanningList(queryVO,true);
     }
 
+    /* 采购总计划 */
     @Override
     public ContractPlanningVO listContractPlanning(ContractPlanningListQueryVO queryVO) {
-        PageResult<ContractPlanningListVO> contractPlanningList = contractPlanService.getContractPlanningList(queryVO);
+        PageResult<ContractPlanningListVO> contractPlanningList = contractPlanService.getContractPlanningList(queryVO,false);
 
         // 1. 处理状态
         for (ContractPlanningListVO contractPlanning : contractPlanningList.getRows()) {

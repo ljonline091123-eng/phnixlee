@@ -14,6 +14,7 @@
         <result property="biddingAttachmentId" column="bidding_attachment_id"/>
         <result property="biddingTemplateId" column="bidding_template_id"/>
         <result property="contractTemplateId" column="contract_template_id"/>
+        <result property="contractAttachmentId" column="contract_attachment_id"/>
         <result property="createBy" column="create_by"/>
         <result property="createId" column="create_id"/>
         <result property="createTime" column="create_time"/>
