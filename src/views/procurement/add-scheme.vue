@@ -1781,6 +1781,9 @@ export default {
             this.$set(this.formData, "biddingTemplateId", templateId);
             this.$refs.form.clearValidate("biddingTemplateName");
             /* 同步更新页面的模板附件对象(附件修改按钮) */
+            if (!this.procurementSchemeTempObject) {
+              this.$set(this, 'procurementSchemeTempObject', {});
+            }
             if (!this.procurementSchemeTempObject.biddingTemplate) {
               this.$set(this.procurementSchemeTempObject, 'biddingTemplate', {});
             }
@@ -1797,6 +1800,9 @@ export default {
             this.$set(this.formData, "contractTemplateId", templateId);
             this.$refs.form.clearValidate("contractTemplateName");
             /* 同步更新页面的模板附件对象(附件修改按钮) */
+            if (!this.procurementSchemeTempObject) {
+              this.$set(this, 'procurementSchemeTempObject', {});
+            }
             if (!this.procurementSchemeTempObject.contractTemplate) {
               this.$set(this.procurementSchemeTempObject, 'contractTemplate', {});
             }
