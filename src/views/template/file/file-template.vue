@@ -281,11 +281,20 @@
         </div>
         <PageTitle title="模板内容" marginBottom="15px" />
         <div class="file-box">
-          <FileModule
+          <!-- <FileModule
             v-if="templateInfo.attachmentId"
             :attachmentId="templateInfo.attachmentId"
             height="500px"
-          />
+          /> -->
+          <div class="file-box">
+          <iframe
+            v-if="templateInfo.attachmentId"
+            :src= this.PreviewFileUrl
+            width="100%"
+            height="500px"
+            frameborder="0"
+          ></iframe>
+        </div>
         </div>
       </div>
     </el-drawer>
@@ -301,6 +310,7 @@ import {
   addAttachment,
   listOrganizationCall,
   getContractTypeList,
+  getPreviewFileUrl,
 } from "@/api/template/file";
 import { uploadFileUrl, offerService, offerRepo } from "@/utils/const";
 import Treeselect from "@riophae/vue-treeselect";
@@ -313,6 +323,7 @@ export default {
   data() {
     return {
       fileTemplateList: [],
+      PreviewFileUrl:"",
       // 总条数
       total: 0,
       // 查询参数
@@ -561,6 +572,10 @@ export default {
           usingUnitName,
           createBy,
         };
+        //获取模板附件预览的url
+        const res2 = await getPreviewFileUrl(id);
+        this.PreviewFileUrl = res2.data;
+
       } catch (err) {
         console.log(err);
       }

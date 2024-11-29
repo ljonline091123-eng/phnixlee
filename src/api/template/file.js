@@ -1,5 +1,17 @@
 import request from "@/utils/request";
 
+// 查询合同附件文档中台的预览url
+export function getPreviewFileUrl(id) {
+  return request({
+    url: "/business/template/PreviewFile",
+    method: "get",
+    params: {
+      id,
+    },
+  });
+}
+
+
 // 查询合同或招标模板
 export function getFileTemplate(params) {
   return request({
