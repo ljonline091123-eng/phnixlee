@@ -89,7 +89,7 @@ public class Vendor extends BaseEntity {
      * 开户支行
      */
     @ApiModelProperty(value = "开户支行")
-    private Long accountBranch;
+    private String accountBranch;
 
     /**
      * 银行账号
