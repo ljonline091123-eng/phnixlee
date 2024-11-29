@@ -31,6 +31,8 @@ public class DpDemo {
 	 */
 	public static void main(String[] args) throws NoSuchAlgorithmException, IOException, JSONException {
 //		 System.out.println("*********预览Office文件******************************************");
+//		 previewOffice();
+//		 System.out.println("*********预览Office文件******************************************");
 		 previewOffice();
 		// System.out.println("*********预览Office文件图片格式******************************************");
 		// previewOfficePic();
@@ -66,11 +68,12 @@ public class DpDemo {
 	 * @throws NoSuchAlgorithmException
 	 */
 	public static void previewOffice() throws IOException, JSONException, NoSuchAlgorithmException {
-		Path  path=	downloadFile("https://zc.hncig.cn:32068/minio/wh-hnjt/2024/11/27/content_20241127160532A002.docx", createTempFilePath("抢抓机遇期培育新动能.docx"));
+		//Path  path=	downloadFile("https://zc.hncig.cn:32068/minio/wh-hnjt/2024/11/27/content_20241127160532A002.docx", createTempFilePath("抢抓机遇期培育新动能.docx"));
 		// 组织请求参数
 		PreviewParams params = new PreviewParams();
 		// 设置要预览的文件
-		params.setFilePath(path.toString());
+		//params.setFilePath(path.toString());
+		params.setFileUrl("http://192.168.240.31:32068/minio/wh-hnjt/2024/11/27/content_20241127160532A002.docx");
 		params.setFileName("抢抓机遇期培育新动能.docx");
 		params.setHtmlName("[html头部显示]抢抓机遇期培育新动能");
 		params.setHtmlTitle("页面标签显示内容");
@@ -87,24 +90,17 @@ public class DpDemo {
 		// 只允许打开一次
 		params.setPreviewNumber(5);
 		// 设置水印
-		WaterMark wm = new WaterMark(WaterMark.TYPE_TXT, "DEMO水印");
+		//WaterMark wm = new WaterMark(WaterMark.TYPE_TXT, "DEMO水印");
 		// WaterMark wm = new WaterMark(WaterMark.TYPE_PIC,
 		// "https://www.gov.cn/images/gtrs_logo_lt.png");
 		// 将水印设置到参数中
-		params.setWaterMark(wm);
-		String response = Sender.post(PreviewParams.URL_PREVIEW, PreviewParams.CONVERT_TYPE_PREVIEW_OFFICE, params.getRequestBody());
+		//params.setWaterMark(wm);
+		String response = Sender.post(PreviewParams.URL_PREVIEW_URL, PreviewParams.CONVERT_TYPE_PREVIEW_OFFICE, params.getRequestBody());
 		System.out.println("预览Office文件响应结果：");
 		System.out.println(response);
 		String viewUrl = new JSONObject(response).optJSONObject("data").optString("viewUrl");
 		System.out.println(viewUrl);
-			if (path != null) {
-				try {
-					Files.deleteIfExists(path);
-					System.out.println("Temporary file deleted: " + path);
-				} catch (IOException e) {
-					e.printStackTrace();
-				}
-			}
+//		s
 	}
 
 	/**
@@ -131,7 +127,7 @@ public class DpDemo {
 	 */
 	public static Path createTempFilePath(String fileName) {
 		try {
-			Path tempDir = Paths.get("D:\\results");
+			Path tempDir = Paths.get("D:\\temp");
 			return tempDir.resolve(fileName);
 		} catch (Exception e) {
 			throw new RuntimeException("创建临时目录失败", e);
@@ -149,11 +145,10 @@ public class DpDemo {
 		// 组织请求参数
 		PreviewParams params = new PreviewParams();
 		// 设置要预览的文件
-		params.setFilePath(DemoTestFile.getFilePath2("抢抓机遇期培育新动能.docx"));
-//		params.setFileUrl("http://192.168.240.21:9000/wh-hnjt/2024/10/25/1-建设工程施工专业分包合同_20240827091758A105_20241025151420A036.docx");
-		params.setFileName("抢抓机遇期培育新动能1111.docx");
-		params.setHtmlName("[html头部显示]抢抓机遇期培育新动能111");
-		params.setHtmlTitle("页面标签显示内容111");
+		params.setFilePath(DemoTestFile.getFilePath("抢抓机遇期培育新动能.docx"));
+		params.setFileName("抢抓机遇期培育新动能.docx");
+		params.setHtmlName("[html头部显示]抢抓机遇期培育新动能");
+		params.setHtmlTitle("页面标签显示内容");
 		// 签批
 		params.setSignature(true, "http://www.abc.com/xxx");
 		// 是否可打印
@@ -298,10 +293,11 @@ public class DpDemo {
 	public static void editDocument() throws JSONException, IOException, NoSuchAlgorithmException {
 		// 组织请求参数
 		EditParams params = new EditParams();
-		params.setFilePath(DemoTestFile.getFilePath2("抢抓机遇期培育新动能.docx"));
+		params.setFilePath(DemoTestFile.getFilePath("服务合同.docx"));
 		params.setFileName("抢抓机遇期培育新动能.docx");
 		params.setUserInfo("userid1", "用户1");
 		params.setFallbackUrl("http://www.yozosoft.com");
+		params.setCallbackUrl("");
 		params.setUserRight(EditParams.USERRIGHT_EDIT);
 		// 自动保存
 		params.setSaveFlag(true);
