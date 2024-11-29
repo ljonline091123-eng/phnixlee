@@ -1168,6 +1168,43 @@ export default {
           this.approveArr = response.data;
         }
       } catch (error) {}
+
+      /* 修改流程数据[发起人]名称为[供应商名称] */
+      try {
+        /* 供应商审批流程类型  枚举值：Java对象：VendorProcessTypeEnum */
+        if ([1, 2, 3, 4].includes(this.vendor.processType)) {
+            function updateNodeLoadName(nodes) {
+              for (let i = 0; i < nodes.length; i++) {
+                if (nodes[i].nodeName === '发起人') {
+                  for (let j = 0; j < nodes[i].userList.length; j++) {
+                    /* 修改发起人名称为 供应商公司名称 */
+                    nodes[i].userList[j].userName = this.vendor.enterpriseName;
+                  }
+                }
+                break;
+              }
+            }
+            /* 横轴流程顺序上面数据 数据修改 */
+            updateNodeLoadName.call(this, this.processInformationList);
+
+            /* 发起人名称为 供应商公司名称 方法 */
+            function updateListNodeName(nodes) {
+              for (let i = 0; i < nodes.length; i++) {
+                if (nodes[i].taskName === '发起人') {
+                  /* 发起人名称为 供应商公司名称 */
+                  nodes[i].preHandlerName = this.vendor.enterpriseName;
+                  nodes[i].handlerName = this.vendor.enterpriseName;
+                  nodes[i].operateRemark = this.vendor.enterpriseName + ' 提交了流程.';
+                  break;
+                }
+              }
+            }
+            /* 流程列表数据 数据修改 */
+            updateListNodeName.call(this, this.approveArr);
+        }
+      } catch (error) {console.log(' [发起人名称为供应商公司名称方法] [error] ',error);}
+
+
       this.calibrateLoading = false;
     },
   },
