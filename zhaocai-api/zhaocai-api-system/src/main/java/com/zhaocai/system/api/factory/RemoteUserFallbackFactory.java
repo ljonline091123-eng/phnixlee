@@ -92,6 +92,11 @@ public class RemoteUserFallbackFactory implements FallbackFactory<RemoteUserServ
                 return null;
             }
 
+            @Override
+            public SysUser getUserInfoByUsername(String username, String source) {
+                return null;
+            }
+
         };
     }
 }
