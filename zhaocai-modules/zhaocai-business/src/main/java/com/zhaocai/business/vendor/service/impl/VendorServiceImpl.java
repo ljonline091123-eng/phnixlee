@@ -29,6 +29,7 @@ import com.zhaocai.business.vendor.service.*;
 import com.zhaocai.business.vendor.vo.req.*;
 import com.zhaocai.business.vendor.vo.res.*;
 import com.zhaocai.common.core.bean.PageResult;
+import com.zhaocai.common.core.constant.SecurityConstants;
 import com.zhaocai.common.core.constant.UserConstants;
 import com.zhaocai.common.core.utils.NumberUtil;
 import com.zhaocai.common.core.utils.bean.BeanCopierUtil;
@@ -40,6 +41,7 @@ import com.zhaocai.common.signature.dto.sign.SignatureResponse;
 import com.zhaocai.common.signature.service.SignatureCommandFactory;
 import com.zhaocai.common.signature.service.command.CompanyAuthCommand;
 import com.zhaocai.system.api.domain.SysUser;
+import com.zhaocai.system.api.system.RemoteUserService;
 import lombok.extern.slf4j.Slf4j;
 import net.qiyuesuo.v3sdk.model.company.response.CompanyauthH5pageResponse;
 import org.apache.commons.lang3.StringUtils;
@@ -104,6 +106,9 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
 
     @Autowired
     private IBankService bankService;
+
+    @Autowired
+    private RemoteUserService remoteUserService;
 
 
 
@@ -175,6 +180,7 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
     @Transactional(propagation = Propagation.REQUIRED,rollbackFor = Exception.class)
     public void register(VendorRegisterRequestVO requestVO) {
         Boolean flag =true;
+        Long legalAuthorizationId = null;
         Vendor vendor = new Vendor();
         //如果重新提交则走if里面的方法
         if(requestVO.getVendor()!=null&&requestVO.getVendor().getId()!=null){
@@ -210,7 +216,7 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
                 // 保存供应商资质
                 vendorCertificationService.addCertification(requestVO.getBusinessLicense(), CertificationTypeEnum.BUSINESS_LICENSE,vendor.getId());
                 vendorCertificationService.addCertification(requestVO.getIntegrity(), CertificationTypeEnum.INTEGRITY,vendor.getId());
-                Long legalAuthorizationId = vendorCertificationService.addCertification(requestVO.getLegalAuthorization(),CertificationTypeEnum.LEGAL_AUTHORIZATION,vendor.getId());
+                legalAuthorizationId = vendorCertificationService.addCertification(requestVO.getLegalAuthorization(),CertificationTypeEnum.LEGAL_AUTHORIZATION,vendor.getId());
                 if (CollUtil.isNotEmpty(requestVO.getRelevantCertificationList())){
                     vendorCertificationService.addCertification(requestVO.getRelevantCertificationList(), CertificationTypeEnum.RELEVANT_CERTIFICATION,vendor.getId());
                 }
@@ -236,6 +242,7 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
         }
         if(flag){
             checkVendorInfo(requestVO.getVendor());
+            checkVendorContact(requestVO.getVendor(), requestVO.getVendorContact());
             // 保存基本信息
             vendor = requestVO.getVendor();
             vendor.setState(VendorStateEnum.IN_APPROVAL.getState());
@@ -264,7 +271,7 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
             // 保存供应商资质
             vendorCertificationService.addCertification(requestVO.getBusinessLicense(), CertificationTypeEnum.BUSINESS_LICENSE,vendor.getId());
             vendorCertificationService.addCertification(requestVO.getIntegrity(), CertificationTypeEnum.INTEGRITY,vendor.getId());
-            Long legalAuthorizationId = vendorCertificationService.addCertification(requestVO.getLegalAuthorization(),CertificationTypeEnum.LEGAL_AUTHORIZATION,vendor.getId());
+            legalAuthorizationId = vendorCertificationService.addCertification(requestVO.getLegalAuthorization(),CertificationTypeEnum.LEGAL_AUTHORIZATION,vendor.getId());
             if (CollUtil.isNotEmpty(requestVO.getRelevantCertificationList())){
                 vendorCertificationService.addCertification(requestVO.getRelevantCertificationList(), CertificationTypeEnum.RELEVANT_CERTIFICATION,vendor.getId());
             }
@@ -287,7 +294,7 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
                 contact1.setLoginUserId(longinId);
                 contact1.setContactIdCard(vendor.getLegalIdCard());
                 contact1.setIsManager(1);
-               vendorContactService.saveVendorContact(contact1);
+                vendorContactService.saveVendorContact(contact1);
             }else{
                 contact.setIsManager(1);
             }
@@ -345,7 +352,22 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
         paramMap.put("responsibilityDeptId", orgThree);/* 责任单位 三级单位 */
         paramMap.put("parentProjectCode", org);/* 父项目编码(项目部) */
         processService.startProcessInstance(ProcessKeyEnum.ZHAOCAI_VENDOR_REGISTER.getIdentifying(),paramMap);
+    }
 
+    /**
+     * 校验新增用户账号是否已存在
+     * @param vendor
+     * @param vendorContact
+     */
+    private void checkVendorContact(Vendor vendor, VendorContact vendorContact) {
+        SysUser user = remoteUserService.getUserInfoByUsername(vendor.getLegalPhone(), SecurityConstants.INNER);
+        if (user != null) {
+            throw new ParamValidateException("该法人联系方式已存在");
+        }
+        user = remoteUserService.getUserInfoByUsername(vendorContact.getContactPhone(), SecurityConstants.INNER);
+        if (user != null) {
+            throw new ParamValidateException("该联系人电话已存在");
+        }
     }
 
 
