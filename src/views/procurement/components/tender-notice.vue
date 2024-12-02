@@ -210,11 +210,18 @@
         </el-row> -->
 
         <PageTitle title="招标公告内容" marginBottom="15px"/>
-        <FileModule
+        <!-- <FileModule
           :attachmentId="attachmentId"
           v-if="attachmentId"
           height="500px"
-        />
+        /> -->
+        <iframe
+            v-if="attachmentId"
+            :src= this.viewFileUrl
+            width="100%"
+            height="500px"
+            frameborder="0"
+          ></iframe>
       </el-form>
       <!-- 选择供应商 -->
       <el-dialog
@@ -602,7 +609,7 @@ import FileModule from "@/components/FileModule/index.vue";
 import PageTitle from "@/components/PageTitle/index.vue";
 import {offerRepo, offerService, uploadFileUrl} from "@/utils/const";
 import {isvalidatemobile, validEmail} from "@/utils/validate";
-import {addAttachment} from "@/api/template/file";
+import {addAttachment, getViweFileURL} from "@/api/template/file";
 import {showSecretRelatedTips} from "@/utils/MyUtils";
 
 export default {
@@ -614,6 +621,7 @@ export default {
   dicts: ["vendor_level"],
   data() {
     return {
+      viewFileUrl:"",  //预览招标公告url
       secretTipsFlag: false,
       attachmentId: '',
       offerService,
@@ -839,6 +847,18 @@ export default {
       } catch (err) {
         console.log(err);
       }
+      //上传文件成功后，获取文档中台的该文件的预览url
+      try {
+        const query1 = { fileName: name, fileUrl: url };
+        const res = await getViweFileURL(query1);
+        console.log("fileName URL:",name);
+        console.log("URL:",url);
+        this.viewFileUrl = res.data;
+        console.log("editFileUrl:",this.editFileUrl);
+      } catch (err) {
+        console.log(err);
+      }
+
     },
     //提交公告
     submitForm(formName) {

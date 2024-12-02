@@ -1100,14 +1100,22 @@
           </el-tabs>
           <!-- 合同附件 -->
           <div class="contract-box" :class="activeName !== 'second' && 'hide'">
-            <FileModule
+            <!-- <FileModule
               ref="file"
               v-if="attachmentId"
               :attachmentId="attachmentId"
               @submitFileZ="subForm"
               :isContract="true"
               type="edit"
-            />
+            /> -->
+            <iframe
+              v-if="attachmentId"
+              :src= this.editFileUrl
+              width="100%"
+              height="500px"
+              frameborder="0"
+            ></iframe>
+
           </div>
         </div>
       </el-form>
@@ -1426,7 +1434,7 @@ import { cardid, isvalidatemobile, validatenull } from "@/utils/validate"
 import BackButton from "@/components/BackButton/index.vue"
 import FileModule from '@/components/FileModule/index.vue'
 import Drag from '@/components/Drag/index.vue'
-import { getContractTypeList } from "@/api/template/file";
+import { getContractTypeList ,getEditFileUrlByID} from "@/api/template/file";
 import {
   getTemplateSwitchList,
 } from "@/api/procurement/scheme";
@@ -1438,6 +1446,7 @@ export default {
   dicts: ["sys_yes_no", "expenditureBusinessType"],
   data() {
     return {
+      editFileUrl:"", //编辑合同附件URL
       //模板
       isAvoidSubmit:false,
       bcTemplateTitle: "",
@@ -2427,6 +2436,9 @@ export default {
             this.agreementFileUrl = res.data.agreementFileUrl;
             this.agreementFileName = res.data.agreementFileName;
             this.attachmentId = res.data.attachmentId;
+            console.log("agreementFileUrl",res.data.agreementFileUrl);
+            console.log("agreementFileName",res.data.agreementFileName);
+            console.log("attachmentId:",res.data.attachmentId);
 
             this.firstForm.agreement.attachmentId = res.data.attachmentId;
             this.totalAmountIncTax = res.data.totalAmountIncTax;
@@ -2471,6 +2483,23 @@ export default {
               JSON.stringify(res?.data["biddingListQuotation"])
             );
           });
+
+          //获取合同附件的文档中台编辑URL
+          if (this.attachmentId) {
+            console.log('编辑文件的Attachment ID:', this.attachmentId);
+            //获取文档中台的文档编辑URL
+            getEditFileUrlByID({ attachmentId: this.attachmentId })
+              .then((res) => {
+                this.editFileUrl = res.data;
+                console.log("editFileUrl:", this.editFileUrl); 
+              })
+              .catch((err) => {
+                console.error('Error fetching view file URL:', err);
+              });
+          } else {
+            console.warn('attachmentId 数据未正确加载');
+          }
+
         }
       },
       immediate: true,

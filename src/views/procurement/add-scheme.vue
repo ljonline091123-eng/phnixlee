@@ -434,12 +434,20 @@
                   <div class="page-title">
                     <span>文件预览</span>
                   </div>
-                  <FileModule
+                  <!-- <FileModule
                     v-if="viewAttachmentId"
                     :attachmentId="viewAttachmentId"
                     height= "95%"
                     type="edit"
-                  />
+                  /> -->
+                  <iframe
+                    v-if="viewAttachmentId"
+                    :src= this.editFileUrl
+                    width="100%"
+                    height="500px"
+                    frameborder="0"
+                  ></iframe>
+
                 </div>
               </div>
             </el-tab-pane>
@@ -950,7 +958,7 @@ import { getContractTypeList } from "@/api/template/file";
 import FileModule from "@/components/FileModule/index.vue";
 import { isvalidatemobile, validEmail, validatenum } from "@/utils/validate";
 import BackButton from "@/components/BackButton/index.vue";
-import { addAttachment } from "@/api/template/file";
+import { addAttachment , getEditFileUrlByID} from "@/api/template/file";
 import {showSecretRelatedTips} from "@/utils/MyUtils";
 
 export default {
@@ -1188,6 +1196,7 @@ export default {
       selectedTemplateId: "",
       isScoreMOdel: false,
       contractTypeList: [],
+      editFileUrl:"", //编辑文档URL
     };
   },
   created() {
@@ -1599,8 +1608,24 @@ export default {
           });
           this.$set(this.formData, "biddingAttachmentId", res.data);
           this.viewAttachmentId = res.data;
+          console.log("viewAttachmentId:",this.viewAttachmentId);
         } catch (err) {
           console.log(err);
+        }
+
+        //据viewAttachmentId获取文件的文档中台的编辑URL
+        if (this.viewAttachmentId) {
+          console.log('Attachment ID:', this.viewAttachmentId);
+          //获取文档中台的文档编辑URL
+          try {
+            const res = await getEditFileUrlByID({ attachmentId: this.viewAttachmentId });
+            this.editFileUrl = res.data;
+            console.log("editFileUrl:",this.editFileUrl);
+          } catch (err) {
+            console.log(err);
+          }
+        } else {
+          console.warn('attachmentId 数据未正确加载');
         }
       } else {
         this.$set(this.formData, "contractTemplateName", templateName);
