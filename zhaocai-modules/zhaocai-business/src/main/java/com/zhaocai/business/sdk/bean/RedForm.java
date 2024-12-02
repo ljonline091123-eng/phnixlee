@@ -1,6 +1,6 @@
 package com.zhaocai.business.sdk.bean;
 
-import com.zhaocai.business.demo.app.Sender;
+import com.zhaocai.business.pub.utils.Sender;
 import org.json.JSONException;
 
 import java.io.IOException;
@@ -48,7 +48,7 @@ public class RedForm {
 	}
     /**
 	 * 设置套红文件的书签
-	 * @param bookMasks 要设置的 bookMasks
+	 * @param bookMark 要设置的 bookMasks
 	 */
 	public void setBookMasks(BookMark bookMark) {
 		this.bookMark = bookMark;

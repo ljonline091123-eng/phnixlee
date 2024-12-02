@@ -25,11 +25,8 @@ public class SignUtils {
 		StringBuilder preSignBuilder = new StringBuilder();
 		// app_secret + HttpMethod + URI + Date + HttpBody
 		preSignBuilder.append(appSecret).append(method).append(uri).append(dateStr).append(body == null ? "" : body);
-
-		System.out.println("1-"+preSignBuilder);
 		MessageDigest md = MessageDigest.getInstance(algorithm);
 		byte[] digest = md.digest(preSignBuilder.toString().getBytes());
-//		byte[] digest = md.digest("4CDWd57l7Psnw19jdUUFqaXjZUPOST/pms/preview/fileurl?convertType=preview_office_safe1732871633463{\"fileUrl\":\"http://192.168.241.84:32068/minio/wh-hnjt/2024/11/27/content_20241127160532A002.docx\",\"extraParam\":\"{}\"}".getBytes());
 		// 字节流转16进制字符串
 		StringBuilder sign = new StringBuilder();
 		for (byte b : digest) {

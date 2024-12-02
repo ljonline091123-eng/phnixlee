@@ -1,8 +1,5 @@
 package com.zhaocai.business.sdk.bean;
 
-import org.json.JSONException;
-import org.json.JSONObject;
-
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -10,6 +7,9 @@ import java.nio.file.Paths;
 import java.security.NoSuchAlgorithmException;
 import java.util.Base64;
 import java.util.regex.Pattern;
+
+import org.json.JSONException;
+import org.json.JSONObject;
 
 public class WaterMark {
 	/**

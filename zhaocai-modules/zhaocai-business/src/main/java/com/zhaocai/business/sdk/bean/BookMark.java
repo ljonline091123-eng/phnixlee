@@ -1,6 +1,6 @@
 package com.zhaocai.business.sdk.bean;
 
-import com.zhaocai.business.demo.app.Sender;
+import com.zhaocai.business.pub.utils.Sender;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;

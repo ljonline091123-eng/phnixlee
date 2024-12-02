@@ -1,4 +1,4 @@
-package com.zhaocai.business.pub.utils;
+package com.zhaocai.business.demo.app;
 
 import com.zhaocai.business.sdk.bean.EditParams;
 import com.zhaocai.business.sdk.util.HttpUtils;
@@ -13,23 +13,23 @@ import java.util.Map;
 
 /**
  * 接口发送类
- *
+ * 
  * @author ytlzb
  *
  */
-public class Sender {
+public class Sender1 {
 	/**
 	 * 服务部署地址
 	 */
-	private static final String SERVER_URL = "http://192.168.240.31:9010/apiserver";
+	private static final String SERVER_URL = "http://uat.yozopoc.com:9010/apiserver";
 	/**
 	 * 分配的应用代码
 	 */
-	private static final String AppCode = "0hzTkMdt583i9Yf66G";
+	private static final String AppCode = "ahtsabigJr0q3oa9Bs";
 	/**
 	 * 分配的应用秘钥，请不要通过参数传递
 	 */
-	private static final String AppSecret = "4CDWd57l7Psnw19jdUUFqaXjZU";
+	private static final String AppSecret = "GeIGZSkQRq2ISjCc3YFCqt3BD3";
 
 	/**
 	 * Http请求方法，POST
@@ -57,12 +57,12 @@ public class Sender {
 	 */
 	private static final String SIGN_METHOD_MD5 = "MD5";
 
-
+	
 
 
 	/**
 	 * 带文件流的请求
-	 *
+	 * 
 	 * @param url
 	 *            接口的URL,请传递常量，便于以后根绝业务需要修改统一的接口地址
 	 * @param convertType
@@ -73,7 +73,7 @@ public class Sender {
 	 */
 	public static String post(String url, String convertType, Map<String, Object> requestBody)
 			throws NoSuchAlgorithmException {
-		//如果是编辑，即便传错了转换类型，也强制修改为编辑
+	//如果是编辑，即便传错了转换类型，也强制修改为编辑
 		if(EditParams.URL_EDIT.equals(url)) {
 			convertType=EditParams.CONVERT_TYPE_EDIT;
 		}
@@ -104,7 +104,7 @@ public class Sender {
 
 	/**
 	 * 不带文件流的上传
-	 *
+	 * 
 	 * @param url 接口的URL,请传递常量，便于以后根绝业务需要修改统一的接口地址
 	 * @param convertType
 	 *            转换类型，请传递常量，便于以后升级统一处理
@@ -127,7 +127,7 @@ public class Sender {
 		header.put("Yozo-Date", timeStamp);
 		//签名数据
 		header.put("Yozo-Sign", "YOZO-1:" + AppCode + ":" + sign);
-
+		
 		System.out.println("请求URL：" +sendUrl);
 		System.out.println("Header请求参数：");
 		System.out.println(header);
@@ -142,7 +142,7 @@ public class Sender {
 
 	/**
 	 * 构建请求的url
-	 *
+	 * 
 	 * @param url
 	 * @param convertType
 	 * @return
@@ -171,7 +171,7 @@ public class Sender {
 
 	/**
 	 * 当前服务器时间戳
-	 *
+	 * 
 	 * @return 字符串格式的时间戳
 	 */
 	private static String nowTimeMillis() {
