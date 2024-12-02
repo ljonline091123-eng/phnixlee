@@ -12,21 +12,17 @@ import com.zhaocai.business.pub.vo.res.TemplateListVO;
 import com.zhaocai.business.pub.vo.res.TemplateVO;
 import com.zhaocai.business.sdk.bean.EditParams;
 import com.zhaocai.business.sdk.bean.PreviewParams;
-import com.zhaocai.business.sdk.bean.WaterMark;
 import com.zhaocai.common.core.bean.PageResult;
 import com.zhaocai.common.core.web.bean.ResultData;
 import com.zhaocai.common.security.utils.SecurityUtils;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiModelProperty;
 import io.swagger.annotations.ApiOperation;
-import org.json.JSONException;
 import org.json.JSONObject;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
-import java.io.IOException;
 import java.nio.file.Path;
-import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -158,7 +154,7 @@ public class TemplateController extends BladeController {
                 // 设置复制粘贴剪切是否可用
                 params.setCopyPasteState(true, true, false);
                 // 设置书签时可选择的内容，暂未实现
-                params.setBookMarkListRange("甲方,乙方,金额,签订日期");
+           //     params.setBookMarkListRange("甲方,乙方,金额,签订日期");
 
                 String response = Sender.post(EditParams.URL_EDIT, EditParams.CONVERT_TYPE_EDIT, params.getRequestBody());
                 System.out.println("编辑响应结果：");
@@ -240,6 +236,8 @@ public class TemplateController extends BladeController {
         }
         return ResultData.data(resultList);
     }
+
+
 
     /**
      * 列表查询

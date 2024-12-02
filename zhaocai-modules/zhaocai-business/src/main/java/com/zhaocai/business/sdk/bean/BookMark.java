@@ -1,15 +1,15 @@
 package com.zhaocai.business.sdk.bean;
 
+import com.zhaocai.business.demo.app.Sender;
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+
 import java.io.File;
 import java.io.IOException;
 import java.security.NoSuchAlgorithmException;
 import java.util.HashMap;
 import java.util.Map;
-
-import com.zhaocai.business.pub.utils.Sender;
-import org.json.JSONArray;
-import org.json.JSONException;
-import org.json.JSONObject;
 
 
 
@@ -58,6 +58,90 @@ public class BookMark {
 	 */
 	public void addBookMarkInfo(String name,String contentOrPath,int type,int operateType) throws JSONException, NoSuchAlgorithmException, IOException {
 		addBookMarkInfo(name, contentOrPath, type, operateType, 0, 0);
+	}
+	/**
+	 * 添加要插入文本书签的内容
+	 * @param name 书签名,书签名字必须以字母、汉字开头，不能以数字、英文符号、空格开头
+	 * @param text 书签文本内容
+	 * @param operateType 操作方式，传递内容为BOOKMARK_OTYPE_*
+	 * @throws JSONException 
+	 * @throws IOException 
+	 * @throws NoSuchAlgorithmException 
+	 */
+	public void addBookMarkText(String name,String text,int operateType) throws NoSuchAlgorithmException, JSONException, IOException {
+		addBookMarkInfo(name, text, BOOKMARK_TYPE_TXT, operateType);
+	}
+	/**
+	 * 添加要插入文本书签的内容（书签操作方式是内容替换）
+	 * @param name 书签名,书签名字必须以字母、汉字开头，不能以数字、英文符号、空格开头
+	 * @param text 书签文本内容
+	 * @throws JSONException 
+	 * @throws IOException 
+	 * @throws NoSuchAlgorithmException 
+	 */
+	public void addBookMarkText(String name,String text) throws NoSuchAlgorithmException, JSONException, IOException {
+		addBookMarkText(name, text, BOOKMARK_OTYPE_REPLACE);
+	}
+	/**
+	 * 添加要插入书签的图片内容
+	 * @param name 书签名,书签名字必须以字母、汉字开头，不能以数字、英文符号、空格开头
+	 * @param picTath 图片文件的路径（服务器上绝对路径）
+	 * @throws NoSuchAlgorithmException
+	 * @throws JSONException
+	 * @throws IOException
+	 */
+	public void addBookMarkPic(String name,String picTath) throws NoSuchAlgorithmException, JSONException, IOException {
+		addBookMarkPic(name, picTath, 0,0);
+	}
+	/**
+	 * 添加要插入书签的图片内容
+	 * @param name 书签名,书签名字必须以字母、汉字开头，不能以数字、英文符号、空格开头
+	 * @param picTath 图片文件的路径（服务器上绝对路径）
+	 * @param picWidth 图片类型的图片宽度，单位px
+	 * @param picHeight 图片类型的图片高度，单位px
+	 * @throws NoSuchAlgorithmException
+	 * @throws JSONException
+	 * @throws IOException
+	 */
+	public void addBookMarkPic(String name,String picTath,int picWidth,int picHeight) throws NoSuchAlgorithmException, JSONException, IOException {
+		addBookMarkPic(name, picTath, BOOKMARK_OTYPE_REPLACE,picWidth,picHeight);
+	}
+	/**
+	 * 添加要插入书签的图片内容
+	 * @param name 书签名,书签名字必须以字母、汉字开头，不能以数字、英文符号、空格开头
+	 * @param picTath 图片文件的路径（服务器上绝对路径）
+	 * @param operateType 操作方式，传递内容为BOOKMARK_OTYPE_*
+	 * @param picWidth 图片类型的图片宽度，单位px
+	 * @param picHeight 图片类型的图片高度，单位px
+	 * @throws NoSuchAlgorithmException
+	 * @throws JSONException
+	 * @throws IOException
+	 */
+	public void addBookMarkPic(String name,String picTath,int operateType,int picWidth,int picHeight) throws NoSuchAlgorithmException, JSONException, IOException {
+		addBookMarkInfo(name, picTath, BOOKMARK_TYPE_PIC, operateType,picWidth,picHeight);
+	}
+	/**
+	 * 添加要插入的文档
+	 * @param name 书签名,书签名字必须以字母、汉字开头，不能以数字、英文符号、空格开头
+	 * @param docPath 文档的路径（服务器上绝对路径）
+	 * @param operateType 操作方式，传递内容为BOOKMARK_OTYPE_*
+	 * @throws JSONException 
+	 * @throws IOException 
+	 * @throws NoSuchAlgorithmException 
+	 */
+	public void addBookMarkDocument(String name,String docPath,int operateType) throws JSONException, NoSuchAlgorithmException, IOException {
+		addBookMarkInfo(name, docPath, BOOKMARK_TYPE_DOCUMENT, operateType);
+	}
+	/**
+	 * 添加要插入的文档（书签操作方式是内容替换）
+	 * @param name 书签名,书签名字必须以字母、汉字开头，不能以数字、英文符号、空格开头
+	 * @param docPath 文档的路径（服务器上绝对路径）
+	 * @throws JSONException 
+	 * @throws IOException 
+	 * @throws NoSuchAlgorithmException 
+	 */
+	public void addBookMarkDocument(String name,String docPath) throws JSONException, NoSuchAlgorithmException, IOException {
+		addBookMarkDocument(name, docPath, BOOKMARK_OTYPE_REPLACE);
 	}
 	/**
 	 * 添加要插入书签的内容

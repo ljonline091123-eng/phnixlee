@@ -4,26 +4,22 @@ import com.zhaocai.business.common.base.BladeController;
 import com.zhaocai.business.fileYOZO.util.fileUtils;
 import com.zhaocai.business.pub.domain.Attachment;
 import com.zhaocai.business.pub.service.IAttachmentService;
+import com.zhaocai.business.pub.service.ISysFileService;
 import com.zhaocai.business.pub.utils.Sender;
 import com.zhaocai.business.pub.utils.YOZOfileUtils;
-import com.zhaocai.business.pub.service.ISysFileService;
 import com.zhaocai.business.pub.vo.req.AttachmentRequestVO;
+import com.zhaocai.business.pub.vo.req.FileBeanVo;
 import com.zhaocai.business.pub.vo.res.AttachmentVO;
 import com.zhaocai.business.sdk.bean.EditParams;
 import com.zhaocai.business.sdk.bean.PreviewParams;
-import com.zhaocai.business.pub.vo.req.FileBeanVo;
 import com.zhaocai.common.core.web.bean.ResultData;
 import com.zhaocai.common.security.utils.SecurityUtils;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiModelProperty;
 import io.swagger.annotations.ApiOperation;
 import org.json.JSONObject;
-import io.swagger.annotations.ApiOperation;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
-import com.zhaocai.business.pub.vo.req.FileBeanVo;
-
-import java.nio.file.Path;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -230,7 +226,7 @@ public class AttachmentController extends BladeController {
             // 设置复制粘贴剪切是否可用
             params.setCopyPasteState(true, true, false);
             // 设置书签时可选择的内容，暂未实现
-            params.setBookMarkListRange("甲方,乙方,金额,签订日期");
+          //  params.setBookMarkListRange("甲方,乙方,金额,签订日期");
 
             String response = Sender.post(EditParams.URL_EDIT, EditParams.CONVERT_TYPE_EDIT, params.getRequestBody());
             System.out.println("编辑响应结果：");

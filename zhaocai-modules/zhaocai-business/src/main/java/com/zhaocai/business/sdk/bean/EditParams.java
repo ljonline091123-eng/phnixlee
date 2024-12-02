@@ -1,12 +1,12 @@
 package com.zhaocai.business.sdk.bean;
 
+import org.json.JSONException;
+import org.json.JSONObject;
+
 import java.io.File;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
-
-import org.json.JSONException;
-import org.json.JSONObject;
 
 /**
  * 编辑的参数对象
@@ -60,7 +60,59 @@ public class EditParams {
 		}
 		requestBody.put("fileUrl", fileUrl);
 	}
-
+	/**
+	 * 编辑者
+	 */
+	public static final String ROLE_EDITER = "editor";
+	/**
+	 * 批注者
+	 */
+	public static final String ROLE_ANNOTATION = "annotation";
+	/**
+	 * 审核者
+	 */
+	public static final String ROLE_AUDIT = "audit";
+	/**
+	 * 编辑限制者
+	 */
+	public static final String ROLE_SUPER = "super";
+	/**
+	 * 阅读者
+	 */
+	public static final String ROLE_VIEW = "view";
+	
+	public void setRole(String role) throws JSONException {
+		if(role!=null) {
+			switch (role) {
+			case ROLE_EDITER:
+				//限制编辑、修订、接受、拒绝
+				setMenuHidden("yozo_WP_limitedit","yozo_WP_reviseView","yozo_WP_reviseAccept","yozo_WP_reviseRefuse");
+				trackRevisionsClose();
+				trackRevisionsHidden();
+				break;
+			case ROLE_ANNOTATION:
+				setUserRight(USERRIGHT_READONLY);
+				break;
+			case ROLE_AUDIT:
+				setMenuHidden("yozo_WP_limitedit","yozo_WP_reviseView","yozo_WP_reviseAccept","yozo_WP_reviseRefuse");
+				trackRevisionsShow();
+				trackRevisionsOpen();
+				break;
+			case ROLE_SUPER:
+				break;
+			default:
+				break;
+			}
+		}
+	}
+	/**
+	 * 隐藏限制编辑，不调用默认显示（false）
+	 * @param hidden true 隐藏，false 显示
+	 * @throws JSONException 
+	 */
+	public void hiddenLimitedit(boolean hidden) throws JSONException {
+		setMenuHidden("yozo_WP_limitedit");
+	}
 	/**
 	 * 设置文件名称
 	 * @param fileName 文件名称，例如：测试文档.docx
@@ -82,13 +134,13 @@ public class EditParams {
 	 * @param facePath 头像地址，建议不传递
 	 */
 	public void setUserInfo(String userId,String userName,String facePath)  {
-		if(userId!=null && "".equals(userId.trim())) {
+		if(userId!=null && !"".equals(userId.trim())) {
 			requestBody.put("userId", userId);
 		}
-		if(userName!=null && "".equals(userName.trim())) {
+		if(userName!=null && !"".equals(userName.trim())) {
 			requestBody.put("userName", userName);
 		}
-		if(facePath!=null && "".equals(facePath.trim())) {
+		if(facePath!=null && !"".equals(facePath.trim())) {
 			requestBody.put("userAvatar", facePath);
 		}
 	}
@@ -278,6 +330,22 @@ public class EditParams {
 		extraParam.put("Mark", 1);
 	}
 	/**
+	 * 显示插入图章菜单
+	 * @param domain 外部监听的域名或IP
+	 * @throws JSONException
+	 */
+	public void showInsPic(String domain) throws JSONException  {
+		extraParam.put("insPic", 1);
+		extraParam.put("domain",domain );
+	}
+	/**
+	 * 隐藏插入图章菜单（默认不显示）
+	 * @throws JSONException
+	 */
+	public void hiddenInsPic() throws JSONException  {
+		extraParam.put("insPic",0);
+	}
+	/**
 	 * 隐藏修订记录
 	 * @throws JSONException
 	 */
@@ -301,11 +369,24 @@ public class EditParams {
 	/**
 	 * 设置可设置的书签名称列表
 	 * @param bookMarkListRange 书签名称，多个名称之间用英文逗号分隔，例如：甲方,乙方,金额,签订日期
+	 * @param bookMarkInput 是否可以编辑书签名字，true 可以编辑，false 不可编辑
+	 * @param bookMarkAuto 是否显示自动添加书签功能，true 显示，false 隐藏
 	 * @throws JSONException
 	 */
-	public void setBookMarkListRange(String bookMarkListRange) throws JSONException  {
+	public void setBookMarkListRange(String bookMarkListRange,boolean bookMarkInput,boolean bookMarkAuto) throws JSONException  {
 		if(bookMarkListRange!=null && !"".equals(bookMarkListRange.trim())) {
 			extraParam.put("bookMarkListRange", bookMarkListRange);
+			if(bookMarkInput) {
+				extraParam.put("bookMarkInput", 1);
+			}else {
+				extraParam.put("bookMarkInput", 0);
+			}
+			if(bookMarkAuto) {
+				extraParam.put("bookMarkAuto", 1);
+			}else {
+				extraParam.put("bookMarkAuto", 0);
+			}
+			setMenuHidden("yozo_WP_bookMark");
 		}
 	}
 	/**
@@ -377,7 +458,7 @@ public class EditParams {
 		requestBody.put("extraParam", extraParam.toString());
 		//如果有权限设置，则追加至参数中
 		if(userMenuPermission.length()>0) {
-			requestBody.put("waterMark", userMenuPermission.toString());
+			requestBody.put("userMenuPermission", userMenuPermission.toString());
 		}
 	}
 	/**

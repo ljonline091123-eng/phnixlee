@@ -1,12 +1,12 @@
 package com.zhaocai.business.sdk.bean;
 
+import org.json.JSONException;
+import org.json.JSONObject;
+
 import java.io.File;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
-
-import org.json.JSONException;
-import org.json.JSONObject;
 
 /**
  * 转换参数对象
@@ -135,7 +135,7 @@ public class ConvertParams {
 	 * @param BookMark 书签操作对象
 	 * @throws JSONException 
 	 */
-	public void setWaterMark(BookMark bookMark) throws JSONException {
+	public void setBookMark(BookMark bookMark) throws JSONException {
 		this.bookMark=bookMark;
 	}
 	private void combinationExtraParam() throws JSONException  {

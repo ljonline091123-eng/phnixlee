@@ -12,11 +12,6 @@ import com.zhaocai.business.common.enums.*;
 import com.zhaocai.business.common.exception.BusinessException;
 import com.zhaocai.business.common.exception.ParamValidateException;
 import com.zhaocai.business.common.utils.ValidateUtils;
-import com.zhaocai.business.expert.domain.Expert;
-import com.zhaocai.business.expert.domain.ExpertChange;
-import com.zhaocai.business.manager.http.dto.req.*;
-import com.zhaocai.business.manager.http.dto.res.*;
-import com.zhaocai.business.expert.domain.Expert;
 import com.zhaocai.business.manager.http.dto.req.*;
 import com.zhaocai.business.manager.http.dto.res.BpmInitializeResponseDTO;
 import com.zhaocai.business.manager.http.dto.res.BpmListProcessLogResponseDTO;
@@ -236,25 +231,6 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
             contact.setVendorId(vendor.getId());
             // 注册时为默认为管理员
             contact.setIsManager(0);
-            //新增法人账号(存在法人则法人为管理员，法人和主要联系人一样，则生成主要联系人信息)
-            if(!contact.getContactPhone().equals(vendor.getLegalPhone())){
-                Long longinId =vendorContactService.addLoginUser(vendor.getLegalPhone(),vendor.getLegalRepresentative());
-                VendorContact contact1 = new VendorContact();
-                contact1.setVendorId(vendor.getId());
-                contact1.setContactName(vendor.getLegalRepresentative());
-                contact1.setContactPhone(vendor.getLegalPhone());
-                contact1.setLoginUserId(longinId);
-                contact1.setContactIdCard(vendor.getLegalIdCard());
-                contact1.setIsManager(1);
-               vendorContactService.saveVendorContact(contact1);
-            }else{
-                contact.setIsManager(1);
-            }
-            long contactId=vendorContactService.saveMainVendorContact(contact);
-            // 更新法人授权的 businessId
-            vendorCertificationService.update(new LambdaUpdateWrapper<VendorCertification>()
-                    .set(VendorCertification::getBusinessId,contactId)
-                    .eq(VendorCertification::getId,legalAuthorizationId));
         }
 
         //接入底层逻辑平台流程
@@ -305,6 +281,7 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
         paramMap.put("parentProjectCode", org);/* 父项目编码(项目部) */
 
         processService.startProcessInstance(ProcessKeyEnum.ZHAOCAI_VENDOR_REGISTER.getIdentifying(),paramMap);
+
 
     }
 

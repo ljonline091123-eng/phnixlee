@@ -89,9 +89,13 @@ public class WaterMark {
 	 */
 	float wmTransparency=-1;
 	/**
+	 * 图片水印的路径
+	 */
+	String wmPicPath;
+	/**
 	 * 图片水印的图片base64
 	 */
-	String wmPicBase64;
+	String wmImage;
 	/**
 	 * 图片水印宽度
 	 */
@@ -120,7 +124,13 @@ public class WaterMark {
 			setWmContent(contentOrPicPath);
 			break;
 		case TYPE_PIC:
-			setWmPicPath(contentOrPicPath);
+			//如果是http开头的，则是网络文件
+			String path = contentOrPicPath.toLowerCase();
+			if(path.startsWith("http://") || path.startsWith("https://")) {
+				setWmPicPath(contentOrPicPath);
+			}else {
+				setWmPicBase64(contentOrPicPath);
+			}
 			break;
 		default:
 			setWmContent(contentOrPicPath);
@@ -305,11 +315,18 @@ public class WaterMark {
 		this.wmTransparency = wmTransparency;
 	}
 	/**
-	 * 得到图片水印的base64
-	 * @return wmPicBase64 如果没有图片水印，则为null
+	 * 得到图片水印的路径
+	 * @return wmPicPath 如果没有图片水印，则为null
+	 */
+	public String getWmPicPath() {
+		return wmPicPath;
+	}
+	/**
+	 * 得到图片的base64
+	 * @return
 	 */
 	public String getWmPicBase64() {
-		return wmPicBase64;
+		return wmImage;
 	}
 	/**
 	 * 设置图片水印内容(调试中)
@@ -323,7 +340,8 @@ public class WaterMark {
 		Path filePath = Paths.get(wmPicPath);  
         byte[] fileBytes = Files.readAllBytes(filePath);
         String base64EncodedString = Base64.getEncoder().encodeToString(fileBytes);
-		this.wmPicBase64 = base64EncodedString;
+		this.wmImage = base64EncodedString;
+		this.wmPicPath=null;
 	}
 	/**
 	 * 设置图片水印内容
@@ -344,7 +362,8 @@ public class WaterMark {
 //        String inputPath =  json.optString("data");
 //        System.out.println("水印图片地址:"+inputPath);
 //        this.wmPicBase64=inputPath;
-		this.wmPicBase64=wmPicPath;
+		this.wmPicPath=wmPicPath;
+		this.wmImage =null;
 	}
 	/**
 	 * 得到图片水印的宽度，单位px
@@ -426,7 +445,10 @@ public class WaterMark {
 			extraParam.put("wmPicSize", getWidth()+","+getHeight());
 		}
 		if(getWmPicBase64()!=null) {
-			extraParam.put("wmPicPath", getWmPicBase64());
+			extraParam.put("wmImage", getWmPicBase64());
+		}
+		if(getWmPicPath()!=null) {
+			extraParam.put("wmPicPath", getWmPicPath());
 		}
 	}
 	/**
