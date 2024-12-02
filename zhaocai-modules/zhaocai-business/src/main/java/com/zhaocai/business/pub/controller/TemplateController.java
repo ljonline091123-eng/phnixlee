@@ -8,6 +8,7 @@ import com.zhaocai.business.pub.utils.YOZOfileUtils;
 import com.zhaocai.business.pub.vo.req.AttachmentRequestVO;
 import com.zhaocai.business.pub.vo.req.TemplateListQueryVO;
 import com.zhaocai.business.pub.vo.req.TemplateSaveRequestVO;
+import com.zhaocai.business.pub.vo.res.AttachmentVO;
 import com.zhaocai.business.pub.vo.res.TemplateListVO;
 import com.zhaocai.business.pub.vo.res.TemplateVO;
 import com.zhaocai.business.sdk.bean.EditParams;
@@ -42,6 +43,9 @@ public class TemplateController extends BladeController {
     @Autowired
     private ITemplateService templateService;
 
+    @Autowired
+    private YOZOfileUtils yozOfileUtils;
+
     /**
      * 据模板id查询附件，并利用yozo文档中台预览附件,返回预览文件的url
      */
@@ -52,9 +56,9 @@ public class TemplateController extends BladeController {
         TemplateVO template = templateService.detail(id);
         String fileName = template.getFileName();
         String fileUrl = template.getFileUrl();
-        String HtmlName = YOZOfileUtils.removeSuffix(fileName);
-        String suffix = YOZOfileUtils.getSuffix(fileName).toLowerCase();
-        Path path = YOZOfileUtils.downloadFile(fileUrl, YOZOfileUtils.createTempFilePath(fileName));
+        String HtmlName = yozOfileUtils.removeSuffix(fileName);
+        String suffix = yozOfileUtils.getSuffix(fileName).toLowerCase();
+        Path path = yozOfileUtils.downloadFile(fileUrl, yozOfileUtils.createTempFilePath(fileName));
         String response;
         // 组织请求参数
         PreviewParams params = new PreviewParams();
@@ -68,7 +72,7 @@ public class TemplateController extends BladeController {
             params.setPrintMenu(true, false);
             // 设置可下载
             params.setDownloadMenu(true, fileName);
-           if (YOZOfileUtils.isWordExtension(suffix)) {
+           if (yozOfileUtils.isWordExtension(suffix)) {
                // 是否显示修订
                params.setAcceptTracks(false);
                // 允许复制
@@ -78,7 +82,7 @@ public class TemplateController extends BladeController {
                response= Sender.post(PreviewParams.URL_PREVIEW, PreviewParams.CONVERT_TYPE_PREVIEW_OFFICE, params.getRequestBody());
                 System.out.println("预览Office文件响应结果：");
                 System.out.println(response);
-           } else if(YOZOfileUtils.isPdfExtension(suffix)){
+           } else if(yozOfileUtils.isPdfExtension(suffix)){
                // 允许复制
                params.setCopy(true);
                response = Sender.post(PreviewParams.URL_PREVIEW, PreviewParams.CONVERT_TYPE_PREVIEW_PDF, params.getRequestBody());
@@ -86,7 +90,7 @@ public class TemplateController extends BladeController {
                System.out.println(response);
                String viewUrl = new JSONObject(response).optJSONObject("data").optString("viewUrl");
                System.out.println(viewUrl);
-           } else if (YOZOfileUtils.isImageExtension(suffix)) {
+           } else if (yozOfileUtils.isImageExtension(suffix)) {
                response = Sender.post(PreviewParams.URL_PREVIEW, PreviewParams.CONVERT_TYPE_PREVIEW_PIC, params.getRequestBody());
                System.out.println("预览图片文件响应结果：");
                System.out.println(response);
@@ -106,34 +110,36 @@ public class TemplateController extends BladeController {
         }
         //删除生成的临时文件
         System.out.println("删除文件路径:" + path.toString());
-        YOZOfileUtils.deleteTempFilePath(path.toString());
+        yozOfileUtils.deleteTempFilePath(path.toString());
         return result;
     }
 
     //新增和修改范本时，word文档返回文档中台的文件编辑URL，图片和pdf格式是显示预览文件
     @GetMapping("/getEditFileURL")
     @ApiModelProperty(value = "文档中台的文件编辑URL")
-    public ResultData<String> getEditFileURL(AttachmentRequestVO requestVO) {
+    public ResultData<String> getEditFileURL(AttachmentVO requestVO) {
+        Long attachmentId = requestVO.getId();
         String fileName = requestVO.getFileName();
         String fileUrl = requestVO.getFileUrl();
-        String HtmlName = YOZOfileUtils.removeSuffix(fileName);
-        String suffix = YOZOfileUtils.getSuffix(fileName).toLowerCase();
-        Path path = YOZOfileUtils.downloadFile(fileUrl, YOZOfileUtils.createTempFilePath(fileName));
+        String HtmlName = yozOfileUtils.removeSuffix(fileName);
+        String suffix = yozOfileUtils.getSuffix(fileName).toLowerCase();
+        Path path = yozOfileUtils.downloadFile(fileUrl, yozOfileUtils.createTempFilePath(fileName));
         //当前登录用户信息
         Long loginUserId = SecurityUtils.getUserId();
         String loginUserName = SecurityUtils.getUsername();
         try {
-            if (YOZOfileUtils.isWordExtension(suffix)) {
+            if (yozOfileUtils.isWordExtension(suffix)) {
                 // 编辑文档的-组织请求参数
                 EditParams params = new EditParams();
                 params.setFilePath(path.toString());
                 params.setFileName(fileName);
                 params.setUserInfo(loginUserId.toString(), loginUserName);
                 params.setUserRight(EditParams.USERRIGHT_EDIT);
+                params.setFileUUID(attachmentId.toString());
                 // 自动保存
                 params.setSaveFlag(true);
                 // 回调地址支持2中方式获取文件，请根据需要按照接口规范实现接口
-                params.setCallbackUrl("192.168.30.42:8052/business/template/fileUpload?version=cs&type=fb");
+                params.setCallbackUrl("192.168.30.42:8052/business/attachment/fileUpload?version=cs&type=fb");
                 // 是否可打印
                 params.setPrintMenu(true, false);
                 // 设置可下载
@@ -162,7 +168,7 @@ public class TemplateController extends BladeController {
                 String editUrl = new JSONObject(response).optJSONObject("data").optString("editUrl");
                 System.out.println(editUrl);
                 return ResultData.data(editUrl);
-            } else if (YOZOfileUtils.isImageExtension(suffix)){
+            } else if (yozOfileUtils.isImageExtension(suffix)){
                 // 组织请求参数
                 PreviewParams params = new PreviewParams();
                 // 设置要预览的文件
@@ -180,7 +186,7 @@ public class TemplateController extends BladeController {
                 String viewUrl = new JSONObject(response).optJSONObject("data").optString("viewUrl");
                 System.out.println(viewUrl);
                 return ResultData.data(viewUrl);
-            }else if (YOZOfileUtils.isPdfExtension(suffix)){
+            }else if (yozOfileUtils.isPdfExtension(suffix)){
                 // 组织请求参数
                 PreviewParams params = new PreviewParams();
                 // 设置要预览的文件
@@ -206,7 +212,6 @@ public class TemplateController extends BladeController {
         } catch (Exception e) {
             throw new RuntimeException("生成文件编辑url失败", e);
         }
-
 
     }
 

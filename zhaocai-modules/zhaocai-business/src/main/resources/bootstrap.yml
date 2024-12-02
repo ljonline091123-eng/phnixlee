@@ -27,6 +27,16 @@ spring:
         # 共享配置
         shared-configs:
           - application-${spring.profiles.active}.${spring.cloud.nacos.config.file-extension}
+
+#文档中台
+file-yozo:
+  server-url: http://192.168.240.31:9010/apiserver
+  appCode: 0hzTkMdt583i9Yf66G
+  appSecret: 4CDWd57l7Psnw19jdUUFqaXjZU
+  callback-url: http://192.168.30.42:8052/business/attachment/fileUpload
+  tempFilePath: D:\\tmp
+
+
 # 电子签章
 signature:
   platform: qiyuesuo-private

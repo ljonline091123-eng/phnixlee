@@ -1,7 +1,7 @@
 package com.zhaocai.business.pub.controller;
 
 import com.zhaocai.business.common.base.BladeController;
-import com.zhaocai.business.fileYOZO.util.fileUtils;
+import com.zhaocai.business.common.config.FileYOZOConfig;
 import com.zhaocai.business.pub.domain.Attachment;
 import com.zhaocai.business.pub.service.IAttachmentService;
 import com.zhaocai.business.pub.service.ISysFileService;
@@ -44,6 +44,9 @@ public class AttachmentController extends BladeController {
     @Autowired
     private ISysFileService sysFileService;
 
+    @Autowired
+    private YOZOfileUtils yozOfileUtils;
+
 
     @PostMapping("/addAttachment")
     @ApiModelProperty(value = "保存附件信息")
@@ -58,9 +61,9 @@ public class AttachmentController extends BladeController {
     public ResultData<String> getViweFileURL(AttachmentRequestVO requestVO) {
         String fileName = requestVO.getFileName();
         String fileUrl = requestVO.getFileUrl();
-        String HtmlName = YOZOfileUtils.removeSuffix(fileName);
-        String suffix = YOZOfileUtils.getSuffix(fileName).toLowerCase();
-        Path path = YOZOfileUtils.downloadFile(fileUrl, YOZOfileUtils.createTempFilePath(fileName));
+        String HtmlName = yozOfileUtils.removeSuffix(fileName);
+        String suffix = yozOfileUtils.getSuffix(fileName).toLowerCase();
+        Path path = yozOfileUtils.downloadFile(fileUrl, yozOfileUtils.createTempFilePath(fileName));
         String response;
         ResultData<String> result = null;
         // 组织请求参数
@@ -75,7 +78,7 @@ public class AttachmentController extends BladeController {
             params.setPrintMenu(true, false);
             // 设置可下载
             params.setDownloadMenu(true, fileName);
-            if (YOZOfileUtils.isWordExtension(suffix)) {
+            if (yozOfileUtils.isWordExtension(suffix)) {
                 // 是否显示修订
                 params.setAcceptTracks(false);
                 // 允许复制
@@ -85,7 +88,7 @@ public class AttachmentController extends BladeController {
                 response= Sender.post(PreviewParams.URL_PREVIEW, PreviewParams.CONVERT_TYPE_PREVIEW_OFFICE, params.getRequestBody());
                 System.out.println("预览Office文件响应结果：");
                 System.out.println(response);
-            } else if(YOZOfileUtils.isPdfExtension(suffix)){
+            } else if(yozOfileUtils.isPdfExtension(suffix)){
                 // 允许复制
                 params.setCopy(true);
                 response = Sender.post(PreviewParams.URL_PREVIEW, PreviewParams.CONVERT_TYPE_PREVIEW_PDF, params.getRequestBody());
@@ -93,7 +96,7 @@ public class AttachmentController extends BladeController {
                 System.out.println(response);
                 String viewUrl = new JSONObject(response).optJSONObject("data").optString("viewUrl");
                 System.out.println(viewUrl);
-            } else if (YOZOfileUtils.isImageExtension(suffix)) {
+            } else if (yozOfileUtils.isImageExtension(suffix)) {
                 response = Sender.post(PreviewParams.URL_PREVIEW, PreviewParams.CONVERT_TYPE_PREVIEW_PIC, params.getRequestBody());
                 System.out.println("预览图片文件响应结果：");
                 System.out.println(response);
@@ -113,7 +116,7 @@ public class AttachmentController extends BladeController {
         }
         //删除生成的临时文件
         System.out.println("删除文件路径:" + path.toString());
-        YOZOfileUtils.deleteTempFilePath(path.toString());
+        yozOfileUtils.deleteTempFilePath(path.toString());
         return result;
     }
 
@@ -124,9 +127,9 @@ public class AttachmentController extends BladeController {
         AttachmentVO attachmentVO = attachmentService.getAttachmentById(attachmentId);
         String fileName = attachmentVO.getFileName();
         String fileUrl = attachmentVO.getFileUrl();
-        String HtmlName = YOZOfileUtils.removeSuffix(fileName);
-        String suffix = YOZOfileUtils.getSuffix(fileName).toLowerCase();
-        Path path = YOZOfileUtils.downloadFile(fileUrl, YOZOfileUtils.createTempFilePath(fileName));
+        String HtmlName = yozOfileUtils.removeSuffix(fileName);
+        String suffix = yozOfileUtils.getSuffix(fileName).toLowerCase();
+        Path path = yozOfileUtils.downloadFile(fileUrl, yozOfileUtils.createTempFilePath(fileName));
         String response;
         ResultData<String> result = null;
         // 组织请求参数
@@ -141,7 +144,7 @@ public class AttachmentController extends BladeController {
             params.setPrintMenu(true, false);
             // 设置可下载
             params.setDownloadMenu(true, fileName);
-            if (YOZOfileUtils.isWordExtension(suffix)) {
+            if (yozOfileUtils.isWordExtension(suffix)) {
                 // 是否显示修订
                 params.setAcceptTracks(false);
                 // 允许复制
@@ -151,7 +154,7 @@ public class AttachmentController extends BladeController {
                 response= Sender.post(PreviewParams.URL_PREVIEW, PreviewParams.CONVERT_TYPE_PREVIEW_OFFICE, params.getRequestBody());
                 System.out.println("预览Office文件响应结果：");
                 System.out.println(response);
-            } else if(YOZOfileUtils.isPdfExtension(suffix)){
+            } else if(yozOfileUtils.isPdfExtension(suffix)){
                 // 允许复制
                 params.setCopy(true);
                 response = Sender.post(PreviewParams.URL_PREVIEW, PreviewParams.CONVERT_TYPE_PREVIEW_PDF, params.getRequestBody());
@@ -159,7 +162,7 @@ public class AttachmentController extends BladeController {
                 System.out.println(response);
                 String viewUrl = new JSONObject(response).optJSONObject("data").optString("viewUrl");
                 System.out.println(viewUrl);
-            } else if (YOZOfileUtils.isImageExtension(suffix)) {
+            } else if (yozOfileUtils.isImageExtension(suffix)) {
                 response = Sender.post(PreviewParams.URL_PREVIEW, PreviewParams.CONVERT_TYPE_PREVIEW_PIC, params.getRequestBody());
                 System.out.println("预览图片文件响应结果：");
                 System.out.println(response);
@@ -179,7 +182,7 @@ public class AttachmentController extends BladeController {
         }
         //删除生成的临时文件
         System.out.println("删除文件路径:" + path.toString());
-        YOZOfileUtils.deleteTempFilePath(path.toString());
+        yozOfileUtils.deleteTempFilePath(path.toString());
         return result;
     }
 
@@ -190,7 +193,7 @@ public class AttachmentController extends BladeController {
         AttachmentVO attachmentVO = attachmentService.getAttachmentById(attachmentId);
         String fileName = attachmentVO.getFileName();
         String fileUrl = attachmentVO.getFileUrl();
-        Path path = YOZOfileUtils.downloadFile(fileUrl, YOZOfileUtils.createTempFilePath(fileName));
+        Path path = yozOfileUtils.downloadFile(fileUrl, yozOfileUtils.createTempFilePath(fileName));
         //当前登录用户信息
         Long loginUserId = SecurityUtils.getUserId();
         String loginUserName = SecurityUtils.getUsername();
@@ -205,7 +208,7 @@ public class AttachmentController extends BladeController {
             // 自动保存
             params.setSaveFlag(true);
             // 回调地址支持2中方式获取文件，请根据需要按照接口规范实现接口
-            params.setCallbackUrl("192.168.30.42:8052/business/template/fileUpload?version=cs");
+            params.setCallbackUrl("192.168.30.42:8052/business/attachment/fileUpload");
             // 是否可打印
             params.setPrintMenu(true, false);
             // 设置可下载
@@ -243,7 +246,7 @@ public class AttachmentController extends BladeController {
     @ApiOperation(value = "中台文件上传至minio")
     public String  fileUpload(@RequestBody FileBeanVo fileBean) throws IOException {
         //读取文件
-        Path path =  fileUtils.downloadFile(fileBean.getFileUrl(),fileUtils.createTempFilePath(fileBean.getFilename()));
+        Path path =  yozOfileUtils.downloadFile(fileBean.getFileUrl(),yozOfileUtils.createTempFilePath(fileBean.getFilename()));
         File file = new File(path.toString());
         if (!file.exists()) {
             throw new IOException("文档不存在: " + fileBean.getFileUrl());

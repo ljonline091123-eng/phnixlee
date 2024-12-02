@@ -1,6 +1,14 @@
 package com.zhaocai.business.pub.utils;
 
+import com.zhaocai.business.BusinessApplication;
+import com.zhaocai.business.common.config.FileYOZOConfig;
+import com.zhaocai.business.common.config.MinioConfig;
 import com.zhaocai.common.core.utils.uuid.UUID;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.annotation.AnnotationConfigApplicationContext;
+import org.springframework.context.annotation.ComponentScan;
+import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -10,13 +18,53 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 
+@Component
 public class YOZOfileUtils {
+
+//    @Autowired
+//    private FileYOZOConfig fileYOZOConfig;
+
+
+    private final FileYOZOConfig fileYOZOConfig;
+
+    @Autowired
+    public YOZOfileUtils(FileYOZOConfig fileYOZOConfig) {
+        this.fileYOZOConfig = fileYOZOConfig;
+    }
+
+    public void main(String[] args) {
+
+        try {
+            String suffix = getSuffix("example.JPG").toLowerCase();
+            System.out.println("suffix:: " + suffix);
+            if(isImageExtension(suffix)){
+                System.out.println("是图片");
+            } else if (isPdfExtension(suffix)) {
+                System.out.println("是PDF");
+            } else if (isWordExtension(suffix)) {
+                System.out.println("是word");
+            }
+            String fileName = "建设工程施工专业分包合同.docx";
+            String fileUrl = "http://192.168.240.21:9000/wh-hnjt/2024/10/25/1-建设工程施工专业分包合同_20240827091758A105_20241025151420A036.docx";
+            Path targetPath = createTempFilePath(fileName);
+            System.out.println("filepath:" + targetPath);
+            Path path1 = downloadFile(fileUrl,targetPath);
+
+            System.out.println("配置类的引用：——————");
+            System.out.println("fileYOZOConfig:"+fileYOZOConfig.getTempFilePath());
+
+        } catch (RuntimeException e) {
+            e.printStackTrace();
+        }
+
+    }
+
     /**
      * 根据提供的URL下载文件，并保存到给定的路径。
      * @param urlStr 文件的URL
      * @param targetPath 保存的目标路径
      */
-    public static Path downloadFile(String urlStr, Path targetPath) {
+    public Path downloadFile(String urlStr, Path targetPath) {
         try (InputStream in = new URL(urlStr).openStream()) {
             Files.copy(in, targetPath, StandardCopyOption.REPLACE_EXISTING);
 
@@ -33,15 +81,18 @@ public class YOZOfileUtils {
      * @param fileName 文件名
      * @return 临时文件路径
      */
-    public static Path createTempFilePath(String fileName) {
+    public Path createTempFilePath(String fileName) {
         try {
-            Path tempDir = Paths.get("D:\\tmp");
+//            Path tempDir = Paths.get("D:\\tmp");
+            // 使用配置中的临时文件路径
+            Path tempDir = Paths.get(fileYOZOConfig.getTempFilePath());
+            System.out.println("TempFilePath:临时文件夹"+ fileYOZOConfig.getTempFilePath());
             // 检查目录是否存在，如果不存在则创建
             if (!Files.exists(tempDir)) {
                 Files.createDirectories(tempDir);
             }
             //在tmp下新建子目录来保存文件
-            String fileName2 = YOZOfileUtils.removeSuffix(fileName);
+            String fileName2 = removeSuffix(fileName);
             String outPutDirName = fileName2 + "_"+UUID.randomUUID().toString();
 //            String outPutDirName = fileName2;
             Path outputDir = tempDir.resolve(outPutDirName);
@@ -59,7 +110,7 @@ public class YOZOfileUtils {
     }
 
     //删除临时文件
-    public static void deleteTempFilePath(String FilePath){
+    public void deleteTempFilePath(String FilePath){
         if (FilePath != null) {
             try {
                 Files.deleteIfExists(Paths.get(FilePath));
@@ -72,7 +123,7 @@ public class YOZOfileUtils {
     }
 
     //去掉文件后缀
-    public static String removeSuffix(String fileName) {
+    public String removeSuffix(String fileName) {
         int dotIndex = fileName.lastIndexOf('.');
         if (dotIndex != -1) {
             return fileName.substring(0, dotIndex);
@@ -81,7 +132,7 @@ public class YOZOfileUtils {
     }
 
     //获取文件后缀（文件类型）
-    public static String getSuffix(String fileName) {
+    public String getSuffix(String fileName) {
         int dotIndex = fileName.lastIndexOf('.');
         if (dotIndex != -1 && dotIndex < fileName.length() - 1) {
             return fileName.substring(dotIndex + 1);
@@ -91,7 +142,7 @@ public class YOZOfileUtils {
 
     //判断文件类型
     //是否为图片
-    public static boolean isImageExtension(String extension) {
+    public boolean isImageExtension(String extension) {
         for (String imgExt : mineTypeUtils.IMAGE_EXTENSION) {
             if (imgExt.equalsIgnoreCase(extension)) {
                 return true;
@@ -100,7 +151,7 @@ public class YOZOfileUtils {
         return false;
     }
     //是否为word
-    public static boolean isWordExtension(String extension) {
+    public boolean isWordExtension(String extension) {
         for (String wordExt : mineTypeUtils.WORD_EXTENSION) {
             if (wordExt.equalsIgnoreCase(extension)) {
                 return true;
@@ -109,7 +160,7 @@ public class YOZOfileUtils {
         return false;
     }
     //是否为pdf
-    public static boolean isPdfExtension(String extension) {
+    public boolean isPdfExtension(String extension) {
         for (String pdfExt : mineTypeUtils.PDF_EXTENSION) {
             if (pdfExt.equalsIgnoreCase(extension)) {
                 return true;
@@ -119,29 +170,6 @@ public class YOZOfileUtils {
     }
 
 
-    public static void main(String[] args) {
-        try {
-            String suffix = getSuffix("example.JPG").toLowerCase();
-            System.out.println("suffix:: " + suffix);
-            if(isImageExtension(suffix)){
-                System.out.println("是图片");
-            } else if (isPdfExtension(suffix)) {
-                System.out.println("是PDF");
-            } else if (isWordExtension(suffix)) {
-                System.out.println("是word");
-            }
-            String fileName = "建设工程施工专业分包合同.docx";
-            String fileUrl = "http://192.168.240.21:9000/wh-hnjt/2024/10/25/1-建设工程施工专业分包合同_20240827091758A105_20241025151420A036.docx";
-            Path targetPath = createTempFilePath(fileName);
-            System.out.println("filepath:" + targetPath);
-            Path path1 = downloadFile(fileUrl,targetPath);
-
-        } catch (RuntimeException e) {
-            e.printStackTrace();
-        }
-
-
-    }
 
 
 
