@@ -35,6 +35,13 @@ public interface IAttachmentService extends IService<Attachment> {
     List<AttachmentVO> listAttachment(AttachmentTypeEnum businessType, Long businessId);
 
     /**
+     * 获取指定id的附件
+     * @param attachmentId
+     * @return
+     */
+    AttachmentVO getAttachmentById(Long attachmentId);
+
+    /**
      * 新增附件
      * @param requestVO
      * @param businessType
@@ -71,4 +78,6 @@ public interface IAttachmentService extends IService<Attachment> {
      * @return
      */
     DownloadAgreementVO getAttachmentInputStream(long attachmentId,String agreementName);
+
+
 }

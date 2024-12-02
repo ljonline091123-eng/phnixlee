@@ -19,7 +19,6 @@ import com.zhaocai.business.vendor.vo.res.DownloadAgreementVO;
 import com.zhaocai.common.core.utils.NumberUtil;
 import com.zhaocai.common.core.utils.StringUtils;
 import com.zhaocai.common.core.utils.bean.BeanCopierUtil;
-import com.zhaocai.common.core.utils.file.FileUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -74,6 +73,13 @@ public class AttachmentServiceImpl extends ServiceImpl<AttachmentMapper, Attachm
                 .eq(Attachment::getDelFlag, 0));
 
         return BeanCopierUtil.copyList(attachments, AttachmentVO.class);
+    }
+
+    @Override
+    public AttachmentVO getAttachmentById(Long attachmentId) {
+        Attachment attachment = super.getOne(new LambdaQueryWrapper<Attachment>()
+                .eq(Attachment::getId, attachmentId));
+        return BeanCopierUtil.copyBean(attachment, AttachmentVO.class);
     }
 
     @Override

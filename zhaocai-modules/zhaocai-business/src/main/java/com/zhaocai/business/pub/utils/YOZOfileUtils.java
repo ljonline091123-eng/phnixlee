@@ -1,5 +1,7 @@
 package com.zhaocai.business.pub.utils;
 
+import com.zhaocai.common.core.utils.uuid.UUID;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
@@ -38,7 +40,19 @@ public class YOZOfileUtils {
             if (!Files.exists(tempDir)) {
                 Files.createDirectories(tempDir);
             }
-            return tempDir.resolve(fileName);
+            //在tmp下新建子目录来保存文件
+            String fileName2 = YOZOfileUtils.removeSuffix(fileName);
+            String outPutDirName = fileName2 + "_"+UUID.randomUUID().toString();
+//            String outPutDirName = fileName2;
+            Path outputDir = tempDir.resolve(outPutDirName);
+            // 检查新子目录是否存在，如果不存在则创建
+            if (!Files.exists(outputDir)) {
+                Files.createDirectories(outputDir);
+            }
+
+            // 构建文件路径
+            Path filePath = outputDir.resolve(fileName);
+            return filePath;
         } catch (Exception e) {
             throw new RuntimeException("创建临时目录失败", e);
         }
@@ -64,6 +78,69 @@ public class YOZOfileUtils {
             return fileName.substring(0, dotIndex);
         }
         return fileName;
+    }
+
+    //获取文件后缀（文件类型）
+    public static String getSuffix(String fileName) {
+        int dotIndex = fileName.lastIndexOf('.');
+        if (dotIndex != -1 && dotIndex < fileName.length() - 1) {
+            return fileName.substring(dotIndex + 1);
+        }
+        return "";
+    }
+
+    //判断文件类型
+    //是否为图片
+    public static boolean isImageExtension(String extension) {
+        for (String imgExt : mineTypeUtils.IMAGE_EXTENSION) {
+            if (imgExt.equalsIgnoreCase(extension)) {
+                return true;
+            }
+        }
+        return false;
+    }
+    //是否为word
+    public static boolean isWordExtension(String extension) {
+        for (String wordExt : mineTypeUtils.WORD_EXTENSION) {
+            if (wordExt.equalsIgnoreCase(extension)) {
+                return true;
+            }
+        }
+        return false;
+    }
+    //是否为pdf
+    public static boolean isPdfExtension(String extension) {
+        for (String pdfExt : mineTypeUtils.PDF_EXTENSION) {
+            if (pdfExt.equalsIgnoreCase(extension)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+
+    public static void main(String[] args) {
+        try {
+            String suffix = getSuffix("example.JPG").toLowerCase();
+            System.out.println("suffix:: " + suffix);
+            if(isImageExtension(suffix)){
+                System.out.println("是图片");
+            } else if (isPdfExtension(suffix)) {
+                System.out.println("是PDF");
+            } else if (isWordExtension(suffix)) {
+                System.out.println("是word");
+            }
+            String fileName = "建设工程施工专业分包合同.docx";
+            String fileUrl = "http://192.168.240.21:9000/wh-hnjt/2024/10/25/1-建设工程施工专业分包合同_20240827091758A105_20241025151420A036.docx";
+            Path targetPath = createTempFilePath(fileName);
+            System.out.println("filepath:" + targetPath);
+            Path path1 = downloadFile(fileUrl,targetPath);
+
+        } catch (RuntimeException e) {
+            e.printStackTrace();
+        }
+
+
     }
 
 
