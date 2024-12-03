@@ -91,7 +91,7 @@ public class ExpertChangeInfoVO extends AdviceObject {
     private String businessTypeText;
 
     @ApiModelProperty(value =  "专家类别（文本）")
-    @DictCache(dictBizEnum= DictBizEnum.EXPERT_TYPE,filedName = "expertType")
+//    @DictCache(dictBizEnum= DictBizEnum.EXPERT_TYPE,filedName = "expertType")
     private String expertTypeText;
 
 

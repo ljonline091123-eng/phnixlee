@@ -56,7 +56,7 @@ public class ExpertChange extends BaseEntity
 
     /** 专家类别（1技术类 2经济类） */
     @ApiModelProperty(value =  "专家类别（1技术类 2经济类）")
-    private Integer expertType;
+    private String expertType;
 
     /** 专家状态 */
     @ApiModelProperty(value =  "专家状态(0(审批中/保存) | 1启用 | 2禁用)")
