@@ -609,7 +609,7 @@ import FileModule from "@/components/FileModule/index.vue";
 import PageTitle from "@/components/PageTitle/index.vue";
 import {offerRepo, offerService, uploadFileUrl} from "@/utils/const";
 import {isvalidatemobile, validEmail} from "@/utils/validate";
-import {addAttachment, getViweFileURL} from "@/api/template/file";
+import {addAttachment, getViweFileURL,getViewAttachmentURLByID} from "@/api/template/file";
 import {showSecretRelatedTips} from "@/utils/MyUtils";
 
 export default {
@@ -817,10 +817,28 @@ export default {
       this.$set(this.formData, "fileList", [{name: attachmentNotice.fileName,url: attachmentNotice.fileUrl}]);
       this.$set(this.formData, "fileTemplate", [attachmentNotice]);
     }
+
+    this.getViewNoticeURL();  //获取预览招标公告的URL
     this.getQAList(0);
     this.getNoticeUpdateList();
   },
   methods: {
+    async getViewNoticeURL(){
+      //获取招标公告的-》文档中台的该文件的预览url
+      if (this.attachmentId) {
+        console.log('created预览招标公告Attachment ID:', this.attachmentId);
+        //获取文档中台的文档编辑URL
+        try {
+          const res = await getViewAttachmentURLByID({ attachmentId: this.attachmentId });
+          this.viewFileUrl = res.data;
+          console.log("viewFileUrl:",this.viewFileUrl);
+        } catch (err) {
+          console.log(err);
+        }
+      } else {
+        console.warn('attachmentId 数据未正确加载');
+      }
+    },
     showSecretTips() {
       showSecretRelatedTips(()=>{
         this.$refs['upload'].$refs['upload-inner'].handleClick()
@@ -830,6 +848,7 @@ export default {
       this.$set(this.formData, "fileList", []);
       this.$set(this.formData, "fileTemplate", []);
       this.attachmentId = "";
+      this.viewFileUrl = ""; //删除上传的文件后，清空文档预览url
     },
     /**
      * 文件上传后钩子函数
@@ -848,15 +867,18 @@ export default {
         console.log(err);
       }
       //上传文件成功后，获取文档中台的该文件的预览url
-      try {
-        const query1 = { fileName: name, fileUrl: url };
-        const res = await getViweFileURL(query1);
-        console.log("fileName URL:",name);
-        console.log("URL:",url);
-        this.viewFileUrl = res.data;
-        console.log("editFileUrl:",this.editFileUrl);
-      } catch (err) {
-        console.log(err);
+      if (this.attachmentId) {
+        console.log('预览招标公告Attachment ID:', this.attachmentId);
+        //获取文档中台的文档编辑URL
+        try {
+          const res = await getViewAttachmentURLByID({ attachmentId: this.attachmentId });
+          this.viewFileUrl = res.data;
+          console.log("viewFileUrl:",this.viewFileUrl);
+        } catch (err) {
+          console.log(err);
+        }
+      } else {
+        console.warn('attachmentId 数据未正确加载');
       }
 
     },
