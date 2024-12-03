@@ -43,6 +43,7 @@ public class BpmService {
      * @return
      */
     public  BpmInitializeResponseDTO initialize(BpmInitializeRequestDTO requestDTO) {
+        requestDTO.setOrgPenetrate(true);
         BpmInitializeResponseDTO responseDTO = UnderlingRestTemplateService.postForObject(UnderlingPlatformUrlEnum.BPM_OPERATE_INITIALIZE,
                 BpmInitializeResponseDTO.class,requestDTO);
         return  responseDTO;
@@ -100,6 +101,7 @@ public class BpmService {
      * @return
      */
     public BpmAuditResponseDTO audit(BpmAuditRequestDTO requestDTO) {
+        requestDTO.setOrgPenetrate(true);
         BpmAuditResponseDTO responseDTO = UnderlingRestTemplateService.postForObject(UnderlingPlatformUrlEnum.BPM_OPERATE_AUDIT,
                 BpmAuditResponseDTO.class,requestDTO);
         return  responseDTO;
@@ -111,6 +113,7 @@ public class BpmService {
      * @return
      */
     public BpmSubmitResponseDTO submit(BpmSubmitRequestDTO requestDTO) {
+        requestDTO.setOrgPenetrate(true);
         log.info("[流程提交参数对象]{}",requestDTO);
 
 //        String projectCode = "SG20012024000002-2";
@@ -176,6 +179,7 @@ public class BpmService {
      * @return
      */
     public List<BpmLoadTaskDefResponseDTO> loadTaskDef(BpmLoadTaskDefRequestDTO requestDTO) {
+        requestDTO.setOrgPenetrate(true);
         List<BpmLoadTaskDefResponseDTO> responseDTO = UnderlingRestTemplateService.postForList(UnderlingPlatformUrlEnum.BPM_OPERATE_LOADTASKDEF,
                 BpmLoadTaskDefResponseDTO.class,requestDTO);
         return  responseDTO;
