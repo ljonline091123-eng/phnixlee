@@ -193,7 +193,7 @@ public class EditParams {
 	 * @param callbackUrl
 	 */
 	public void setCallbackUrl(String callbackUrl)  {
-		if(callbackUrl!=null && "".equals(callbackUrl.trim())) {
+		if(callbackUrl!=null && !"".equals(callbackUrl.trim())) {
 			requestBody.put("callbackUrl", callbackUrl);
 		}
 	}
