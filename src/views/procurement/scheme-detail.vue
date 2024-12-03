@@ -688,15 +688,20 @@
       </div>
     </el-drawer>
 
-    <!--  招标文件模板联想文档预览  -->
+    //预览文件弹窗
     <el-dialog
       :title="templateDialogTitle"
       :visible.sync="templateDialogVisible"
       width="80%"
     >
-      <FileModule :key="templateAttachmentId" :attachmentId="templateAttachmentId" height="700px" />
+    <!-- <FileModule :attachmentId="templateAttachmentId" height="500px" /> -->
+      <iframe
+        :src= this.viewFileUrl
+        width="100%"
+        height="500px"
+        frameborder="0"
+      ></iframe>
     </el-dialog>
-
     <ApprovalForm
       :visible.sync="sanctionVisible"
       title="采购方案审批流程"
@@ -722,6 +727,7 @@
 <script>
 import { mapGetters } from "vuex";
 import { Base64 } from "js-base64";
+import { getViewAttachmentURLByID } from "@/api/template/file";
 import {
   getSchemeDetail,
   submitProcurementScheme,
@@ -761,7 +767,6 @@ export default {
       activeTabs: "base",
       contractPlanList: [],
       inventoryVisible: false,
-      inventoryList: [],
       formData: {},
       openView: false,
       title: "",
@@ -803,6 +808,8 @@ export default {
       reviewText: "",
       selectedTag: null,
       tags: ["拟同意", "同意", "请修改, 再传至我处理", "阅"],
+      //预览招标文件和合同模板的Url
+      viewFileUrl:"",
     };
   },
   components: {
@@ -914,11 +921,28 @@ export default {
     handleClose() {
       console.log("已关闭");
     },
-    showTemplate(row,tmp) {
+    //展示预览文件方法
+    async showTemplate(row,tmp) {
       this.templateDialogTitle = row.fileName + "预览";
       this.templateAttachmentId = row.attachmentId;
       this.templateDialogVisible = true;
+
+      //获取附件的预览URL
+      if (this.templateAttachmentId) {
+        console.log('预览的Attachment ID:', this.templateAttachmentId);
+        //获取文档中台的文档编辑URL
+        try {
+          const res = await getViewAttachmentURLByID({ attachmentId: this.templateAttachmentId });
+          this.viewFileUrl = res.data;
+          console.log("viewFileUrl:",this.viewFileUrl);
+        } catch (err) {
+          console.log(err);
+        }
+      } else {
+        console.warn('attachmentId 数据未正确加载');
+      }
     },
+    //修改按钮
     goUpdate() {
       const { procurementType, id } = this.procurementScheme;
       let param = Base64.encode(

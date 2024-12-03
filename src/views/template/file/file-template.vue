@@ -203,19 +203,25 @@
                 :on-remove="fileRemove"
                 ref="upload"
               >
-
               </el-upload>
             </el-form-item>
           </el-col>
         </el-row>
       </el-form>
       <div class="file-box">
-        <FileModule
+        <!-- <FileModule
           v-if="attachmentId"
           :attachmentId="attachmentId"
           height="500px"
           type="edit"
-        />
+        /> -->
+        <iframe
+          v-if="attachmentId"
+          :src= this.editFileUrl
+          width="100%"
+          height="500px"
+          frameborder="0"
+        ></iframe>
       </div>
       <div slot="footer" class="dialog-footer">
         <el-button
@@ -281,11 +287,18 @@
         </div>
         <PageTitle title="模板内容" marginBottom="15px" />
         <div class="file-box">
-          <FileModule
+          <!-- <FileModule
             v-if="templateInfo.attachmentId"
             :attachmentId="templateInfo.attachmentId"
             height="500px"
-          />
+          /> -->
+          <iframe
+            v-if="templateInfo.attachmentId"
+            :src= this.PreviewFileUrl
+            width="100%"
+            height="500px"
+            frameborder="0"
+          ></iframe>
         </div>
       </div>
     </el-drawer>
@@ -301,6 +314,9 @@ import {
   addAttachment,
   listOrganizationCall,
   getContractTypeList,
+  getPreviewFileUrl,
+  editFile,
+  
 } from "@/api/template/file";
 import { uploadFileUrl, offerService, offerRepo } from "@/utils/const";
 import Treeselect from "@riophae/vue-treeselect";
@@ -313,6 +329,8 @@ export default {
   data() {
     return {
       fileTemplateList: [],
+      PreviewFileUrl:"",
+      editFileUrl:"",
       // 总条数
       total: 0,
       // 查询参数
@@ -436,6 +454,7 @@ export default {
       this.$set(this.fileForm, "fileTemplate", []);
       this.fileForm.id = "";
       this.attachmentId = "";
+      this.editFileUrl = "";
     },
     async fileSuccess(res) {
       const { url, name } = res.data;
@@ -444,6 +463,17 @@ export default {
       try {
         const res = await addAttachment({ fileName: name, fileUrl: url });
         this.attachmentId = res.data;
+      } catch (err) {
+        console.log(err);
+      }
+      //上传文件后，返回文档中台的文档编辑URL
+      try {
+        const query1 = { fileName: name, fileUrl: url };
+        const res = await editFile(query1);
+        console.log("fileName URL:",name);
+        console.log("URL:",url);
+        this.editFileUrl = res.data;
+        console.log("editFileUrl:",this.editFileUrl);
       } catch (err) {
         console.log(err);
       }
@@ -530,6 +560,18 @@ export default {
         this.fileForm.id = id;
         this.$set(this.fileForm, "contractType", contractType);
         console.log(res, "详情");
+
+        //点击修改按钮，返回文档中台的文档编辑URL
+        try {
+          const query1 = { fileName: fileName, fileUrl: fileUrl };
+          const res = await editFile(query1);
+          console.log("fileName URL:",fileName);
+          console.log("URL:",fileUrl);
+          this.editFileUrl = res.data;
+          console.log("editFileUrl:",this.editFileUrl);
+        } catch (err) {
+          console.log(err);
+        }
       } catch (err) {
         console.log(err);
       }
@@ -561,6 +603,11 @@ export default {
           usingUnitName,
           createBy,
         };
+        //获取模板附件预览的url
+        const res2 = await getPreviewFileUrl(id);
+        console.log("res2",res2)
+        this.PreviewFileUrl = res2.data;
+
       } catch (err) {
         console.log(err);
       }
@@ -568,6 +615,8 @@ export default {
     //关闭查看模板
     handleCloseView() {
       this.templateInfo = {};
+      //重置预览附件url
+      this.PreviewFileUrl = "";
     },
     //获取使用模板的公司
     async listOrganization4Company() {

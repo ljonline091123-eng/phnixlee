@@ -483,14 +483,20 @@
                   <div class="page-title">
                     <span>文件预览</span>
                   </div>
-                  <!--  增加:key="viewAttachmentId"做组件唯一约定放在缓存重复 -->
-                  <FileModule
+                  <!-- <FileModule
                     v-if="viewAttachmentId"
-                    :key="viewAttachmentId"
                     :attachmentId="viewAttachmentId"
                     height= "95%"
                     type="edit"
-                  />
+                  /> -->
+                  <iframe
+                    v-if="viewAttachmentId"
+                    :src= this.editFileUrl
+                    width="100%"
+                    height="500px"
+                    frameborder="0"
+                  ></iframe>
+
                 </div>
               </div>
             </el-tab-pane>
@@ -999,7 +1005,7 @@ import { getContractTypeList } from "@/api/template/file";
 import FileModule from "@/components/FileModule/index.vue";
 import { isvalidatemobile, validEmail, validatenum } from "@/utils/validate";
 import BackButton from "@/components/BackButton/index.vue";
-import { addAttachment } from "@/api/template/file";
+import { addAttachment , getEditFileUrlByID} from "@/api/template/file";
 import {showSecretRelatedTips} from "@/utils/MyUtils";
 import {offerRepo, offerService, uploadFileUrl} from "@/utils/const";
 
@@ -1258,6 +1264,7 @@ export default {
       selectedTemplateId: "",
       isScoreMOdel: false,
       contractTypeList: [],
+      editFileUrl:"", //编辑文档URL
     };
   },
   created() {
@@ -1751,8 +1758,6 @@ export default {
 
     },
 
-
-    /* 点击确定选择模板数据 2 招标文件模板 ，1 合同模板 */
     async confirmBcTemplate() {
       /* this.templateId是模板列表弹窗单选的双向绑定，意思就是模板文件id */
       const templateId = this.templateId;
@@ -1809,6 +1814,44 @@ export default {
           }
       } catch (err) {
         console.log(err);
+        // 加载文件框
+        let fileName = this.bcTemplateList.find(
+          (item) => item.id === templateId
+        ).fileName;
+        const fileUrl = this.bcTemplateList.find(
+          (item) => item.id === templateId
+        ).fileUrl;
+        try {
+          const res = await addAttachment({
+            fileName: fileName,
+            fileUrl: fileUrl,
+          });
+          this.$set(this.formData, "biddingAttachmentId", res.data);
+          this.viewAttachmentId = res.data;
+          console.log("viewAttachmentId:",this.viewAttachmentId);
+        } catch (err) {
+          console.log(err);
+        }
+
+        //据viewAttachmentId获取文件的文档中台的编辑URL
+        if (this.viewAttachmentId) {
+          console.log('Attachment ID:', this.viewAttachmentId);
+          //获取文档中台的文档编辑URL
+          try {
+            const res = await getEditFileUrlByID({ attachmentId: this.viewAttachmentId });
+            this.editFileUrl = res.data;
+            console.log("editFileUrl:",this.editFileUrl);
+          } catch (err) {
+            console.log(err);
+          }
+        } else {
+          console.warn('attachmentId 数据未正确加载');
+        }
+      } else {
+        this.$set(this.formData, "contractTemplateName", templateName);
+        this.$set(this.formData, "contractTemplateId", templateId);
+
+        this.$refs.form.clearValidate("contractTemplateName");
       }
 
       this.bcTemplateVisable = false;
