@@ -262,7 +262,7 @@ public class AttachmentController extends BladeController {
         FileInputStream fis = new FileInputStream(file);
         String fileUrl = sysFileService.uploadFile(fis, fileBean.getFilename());
         attcha.setFileUrl(fileUrl);
-        attachmentService.save(attcha);
+        attachmentService.updateBusiness(attcha.getId(),attcha.getBusinessId());
         System.out.println("fileUrl:"+fileUrl);
         return fileUrl;
     }
