@@ -110,13 +110,14 @@ public class TemplateController extends BladeController {
            result = ResultData.data(viewUrl);
         } catch (Exception e) {
             throw new RuntimeException("生成文件预览url失败", e);
+        }finally {
+            if (result == null) {
+                result = ResultData.fail("生成文件预览url失败！");
+            }
+            //删除生成的临时文件
+            System.out.println("删除文件路径:" + path.toString());
+            yozOfileUtils.deleteTempFilePath(path.toString());
         }
-        if (result == null) {
-            result = ResultData.fail("生成文件预览url失败！");
-        }
-        //删除生成的临时文件
-        System.out.println("删除文件路径:" + path.toString());
-        yozOfileUtils.deleteTempFilePath(path.toString());
         return result;
     }
 
