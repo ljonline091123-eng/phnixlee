@@ -258,11 +258,14 @@ public class AttachmentController extends BladeController {
         Long fileId = fileBean.getFileId()==null?null:Long.parseLong(fileBean.getFileId());
         System.out.println("文件ID:"+fileId);
         Attachment attcha =  attachmentService.getById(fileId);
+        if(attcha ==null){
+            throw new IOException("文档不存在: " + fileBean.getFileUrl());
+        }
         // 转换为InputStream
         FileInputStream fis = new FileInputStream(file);
         String fileUrl = sysFileService.uploadFile(fis, fileBean.getFilename());
         attcha.setFileUrl(fileUrl);
-        attachmentService.updateBusiness(attcha.getId(),attcha.getBusinessId());
+        attachmentService.updateBusiness(attcha.getId(),attcha.getBusinessId(),fileUrl,fileBean.getFilename());
         System.out.println("fileUrl:"+fileUrl);
         return fileUrl;
     }

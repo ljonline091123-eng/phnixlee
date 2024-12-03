@@ -76,7 +76,7 @@ public interface IAttachmentService extends IService<Attachment> {
      * @param attachmentTypeEnum
      * @param businessId
      */
-    void updateBusiness(Long id,  Long businessId);
+    void updateBusiness(Long id,  Long businessId,String fileUrl,String fileName);
 
     /**
      * 获取附件文件流
