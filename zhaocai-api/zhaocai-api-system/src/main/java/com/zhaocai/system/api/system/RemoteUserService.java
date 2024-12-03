@@ -84,4 +84,7 @@ public interface RemoteUserService
 
     @GetMapping("/user/getUserInfoById")
     SysUser getUserInfoById(@RequestParam("userId") Long userId, @RequestHeader(SecurityConstants.FROM_SOURCE) String source);
+
+    @GetMapping("/user/getUserInfoByUsername")
+    SysUser getUserInfoByUsername(@RequestParam("username") String username, @RequestHeader(SecurityConstants.FROM_SOURCE) String source);
 }

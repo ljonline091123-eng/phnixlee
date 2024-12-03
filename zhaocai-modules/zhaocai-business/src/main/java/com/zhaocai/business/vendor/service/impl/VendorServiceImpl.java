@@ -29,6 +29,7 @@ import com.zhaocai.business.vendor.service.*;
 import com.zhaocai.business.vendor.vo.req.*;
 import com.zhaocai.business.vendor.vo.res.*;
 import com.zhaocai.common.core.bean.PageResult;
+import com.zhaocai.common.core.constant.SecurityConstants;
 import com.zhaocai.common.core.constant.UserConstants;
 import com.zhaocai.common.core.utils.NumberUtil;
 import com.zhaocai.common.core.utils.bean.BeanCopierUtil;
@@ -40,6 +41,7 @@ import com.zhaocai.common.signature.dto.sign.SignatureResponse;
 import com.zhaocai.common.signature.service.SignatureCommandFactory;
 import com.zhaocai.common.signature.service.command.CompanyAuthCommand;
 import com.zhaocai.system.api.domain.SysUser;
+import com.zhaocai.system.api.system.RemoteUserService;
 import lombok.extern.slf4j.Slf4j;
 import net.qiyuesuo.v3sdk.model.company.response.CompanyauthH5pageResponse;
 import org.apache.commons.lang3.StringUtils;
@@ -104,6 +106,9 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
 
     @Autowired
     private IBankService bankService;
+
+    @Autowired
+    private RemoteUserService remoteUserService;
 
 
 
@@ -237,6 +242,7 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
         }
         if(flag){
             checkVendorInfo(requestVO.getVendor());
+            checkVendorContact(requestVO.getVendor(), requestVO.getVendorContact());
             // 保存基本信息
             vendor = requestVO.getVendor();
             vendor.setState(VendorStateEnum.IN_APPROVAL.getState());
@@ -269,7 +275,34 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
             if (CollUtil.isNotEmpty(requestVO.getRelevantCertificationList())){
                 vendorCertificationService.addCertification(requestVO.getRelevantCertificationList(), CertificationTypeEnum.RELEVANT_CERTIFICATION,vendor.getId());
             }
-
+            // 主要联系人
+            VendorContact contact = requestVO.getVendorContact();
+            // 新增供应商账号
+            Long longUserId = vendorContactService.addLoginUser(contact.getContactPhone(),contact.getContactName());
+            contact.setLoginUserId(longUserId);
+            contact.setCertificationId(legalAuthorizationId);
+            contact.setVendorId(vendor.getId());
+            // 注册时为默认为管理员
+            contact.setIsManager(0);
+            //新增法人账号(存在法人则法人为管理员，法人和主要联系人一样，则生成主要联系人信息)
+            if(!contact.getContactPhone().equals(vendor.getLegalPhone())){
+                Long longinId =vendorContactService.addLoginUser(vendor.getLegalPhone(),vendor.getLegalRepresentative());
+                VendorContact contact1 = new VendorContact();
+                contact1.setVendorId(vendor.getId());
+                contact1.setContactName(vendor.getLegalRepresentative());
+                contact1.setContactPhone(vendor.getLegalPhone());
+                contact1.setLoginUserId(longinId);
+                contact1.setContactIdCard(vendor.getLegalIdCard());
+                contact1.setIsManager(1);
+                vendorContactService.saveVendorContact(contact1);
+            }else{
+                contact.setIsManager(1);
+            }
+            long contactId=vendorContactService.saveMainVendorContact(contact);
+            // 更新法人授权的 businessId
+            vendorCertificationService.update(new LambdaUpdateWrapper<VendorCertification>()
+                    .set(VendorCertification::getBusinessId,contactId)
+                    .eq(VendorCertification::getId,legalAuthorizationId));
         }
 
         //接入底层逻辑平台流程
@@ -319,36 +352,21 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
         paramMap.put("responsibilityDeptId", orgThree);/* 责任单位 三级单位 */
         paramMap.put("parentProjectCode", org);/* 父项目编码(项目部) */
         processService.startProcessInstance(ProcessKeyEnum.ZHAOCAI_VENDOR_REGISTER.getIdentifying(),paramMap);
+    }
 
-        if (flag) {
-            // 主要联系人
-            VendorContact contact = requestVO.getVendorContact();
-            // 新增供应商账号
-            Long longUserId = vendorContactService.addLoginUser(contact.getContactPhone(),contact.getContactName());
-            contact.setLoginUserId(longUserId);
-            contact.setCertificationId(legalAuthorizationId);
-            contact.setVendorId(vendor.getId());
-            // 注册时为默认为管理员
-            contact.setIsManager(0);
-            //新增法人账号(存在法人则法人为管理员，法人和主要联系人一样，则生成主要联系人信息)
-            if(!contact.getContactPhone().equals(vendor.getLegalPhone())){
-                Long longinId =vendorContactService.addLoginUser(vendor.getLegalPhone(),vendor.getLegalRepresentative());
-                VendorContact contact1 = new VendorContact();
-                contact1.setVendorId(vendor.getId());
-                contact1.setContactName(vendor.getLegalRepresentative());
-                contact1.setContactPhone(vendor.getLegalPhone());
-                contact1.setLoginUserId(longinId);
-                contact1.setContactIdCard(vendor.getLegalIdCard());
-                contact1.setIsManager(1);
-                vendorContactService.saveVendorContact(contact1);
-            }else{
-                contact.setIsManager(1);
-            }
-            long contactId=vendorContactService.saveMainVendorContact(contact);
-            // 更新法人授权的 businessId
-            vendorCertificationService.update(new LambdaUpdateWrapper<VendorCertification>()
-                    .set(VendorCertification::getBusinessId,contactId)
-                    .eq(VendorCertification::getId,legalAuthorizationId));
+    /**
+     * 校验新增用户账号是否已存在
+     * @param vendor
+     * @param vendorContact
+     */
+    private void checkVendorContact(Vendor vendor, VendorContact vendorContact) {
+        SysUser user = remoteUserService.getUserInfoByUsername(vendor.getLegalPhone(), SecurityConstants.INNER);
+        if (user != null) {
+            throw new ParamValidateException("该法人联系方式已存在");
+        }
+        user = remoteUserService.getUserInfoByUsername(vendorContact.getContactPhone(), SecurityConstants.INNER);
+        if (user != null) {
+            throw new ParamValidateException("该联系人电话已存在");
         }
     }
 
