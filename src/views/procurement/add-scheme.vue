@@ -1796,10 +1796,7 @@ export default {
         this.$message.error("请先选择一个模板");
         return;
       }
-
-
       try {
-
         const {templateName, fileUrl, fileName} = this.bcTemplateList.find(
           (item) => item.id === templateId
         )
@@ -1827,6 +1824,20 @@ export default {
             this.$set(this.procurementSchemeTempObject.biddingTemplate, "templateId", templateId);
             this.viewAttachmentId = res.data;
 
+            //据viewAttachmentId获取文件的文档中台的编辑URL
+            if (this.viewAttachmentId) {
+              console.log('Attachment ID:', this.viewAttachmentId);
+              //获取文档中台的文档编辑URL
+              try {
+                const res = await getEditFileUrlByID({attachmentId: this.viewAttachmentId});
+                this.editFileUrl = res.data;
+                console.log("editFileUrl:", this.editFileUrl);
+              } catch (err) {
+                console.log(err);
+              }
+            } else {
+              console.warn('attachmentId 数据未正确加载');
+            }
           } else {
             this.$refs.uploadContract.clearFiles();
             this.$set(this.formData, "contractAttachmentId", res.data);
