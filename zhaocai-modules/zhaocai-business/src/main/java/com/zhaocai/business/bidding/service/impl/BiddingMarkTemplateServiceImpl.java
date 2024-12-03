@@ -20,15 +20,21 @@ import com.zhaocai.business.bidding.vo.res.BiddingMarkCategoryDetailVO;
 import com.zhaocai.business.bidding.vo.res.BiddingMarkItemDetailVO;
 import com.zhaocai.business.bidding.vo.res.BiddingMarkTemplateDetailVO;
 import com.zhaocai.business.bidding.vo.res.BiddingMarkTemplateListVO;
+import com.zhaocai.business.common.enums.DeptEnum;
 import com.zhaocai.business.common.exception.BusinessException;
 import com.zhaocai.business.common.utils.ValidateUtils;
+import com.zhaocai.business.pub.vo.res.TemplateListVO;
 import com.zhaocai.common.core.bean.PageResult;
 import com.zhaocai.common.core.constant.NumberConstant;
 import com.zhaocai.common.core.constant.SecurityConstants;
+import com.zhaocai.common.core.constant.UserConstants;
 import com.zhaocai.common.core.text.Convert;
 import com.zhaocai.common.core.utils.StringUtils;
 import com.zhaocai.common.core.utils.bean.BeanCopierUtil;
+import com.zhaocai.common.core.web.domain.AjaxResult;
+import com.zhaocai.common.security.utils.SecurityUtils;
 import com.zhaocai.system.api.domain.SysDept;
+import com.zhaocai.system.api.domain.SysUser;
 import com.zhaocai.system.api.system.RemoteSystemService;
 import org.jetbrains.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -37,6 +43,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -120,30 +127,31 @@ public class BiddingMarkTemplateServiceImpl extends ServiceImpl<BiddingMarkTempl
 
     @Nullable
     private IPage<BiddingMarkTemplateListVO> fanList(BiddingMarkTemplateQueryVO queryVO,String group) {
-        //陈胜
-     //   String currUserTowLevelThridDeptId =  remoteSystemService.getTwoLevelDeptByDeptId
-       //         (SecurityUtils.getSysUser().getDeptId(),SecurityConstants.INNER).getThridDeptId();
+        String currUserTowLevelThridDeptId =  remoteSystemService.getTwoLevelDeptByDeptId
+                (SecurityUtils.getSysUser().getDeptId(),SecurityConstants.INNER).getThridDeptId();
         // 获取所有二级组织及集团
-    //    List<SysDept> sysDeptList = remoteSystemService.getTwoLevelDepts(SecurityConstants.INNER);
-//        if (!currUserTowLevelThridDeptId.equals(UserConstants.GROUP_DEPT_ID)) {
-//            //通用模板
-//            if (group.equals("2")) {
-//                sysDeptList = sysDeptList.stream().filter(item -> item.getThridOrgLevel() == NumberConstant.ONE ||
-//                        item.getThridDeptId().equals(currUserTowLevelThridDeptId)).collect(Collectors.toList());
-//            }else {
+        List<SysDept> sysDeptList = remoteSystemService.getTwoLevelDepts(SecurityConstants.INNER);
+        if (!currUserTowLevelThridDeptId.equals(UserConstants.GROUP_DEPT_ID)) {
+            //通用模板
+            if (group.equals("2")) {
+                sysDeptList = sysDeptList.stream().filter(item -> item.getThridOrgLevel() == NumberConstant.ONE ||
+                        item.getThridDeptId().equals(currUserTowLevelThridDeptId)).collect(Collectors.toList());
+            }else {
 //                sysDeptList = sysDeptList.stream().filter(item ->
 //                        item.getThridDeptId().equals(currUserTowLevelThridDeptId)).collect(Collectors.toList());
-//            }
-//        }
-  //      if (CollectionUtil.isNotEmpty(sysDeptList)) {
-   //         List<String> deptIdList = sysDeptList.stream().map(dept -> dept.getDeptId()+"").collect(Collectors.toList());
-   //         String id=String.join(",",deptIdList);
-     //       String[] deptIds = Convert.toStrArray(id);
-    //        queryVO.setUseUnit(deptIds);
+                /* 权限控制到项目部 */
+                sysDeptList = remoteSystemService.getDeptByThridDeptId(currUserTowLevelThridDeptId,SecurityConstants.INNER);
+            }
+        }
+        if (CollectionUtil.isNotEmpty(sysDeptList)) {
+            List<String> deptIdList = sysDeptList.stream().map(dept -> dept.getDeptId()+"").collect(Collectors.toList());
+            String id=String.join(",",deptIdList);
+            String[] deptIds = Convert.toStrArray(id);
+            queryVO.setUseUnit(deptIds);
             IPage<BiddingMarkTemplateListVO> pages = baseMapper.selectList(queryVO.toMybatisPage(),queryVO);
             return pages;
-   //     }
-    //    return null;
+        }
+        return null;
     }
 
     /**

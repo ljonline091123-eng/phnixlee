@@ -6,6 +6,12 @@
     <resultMap type="com.zhaocai.business.vendor.domain.Vendor" id="VendorResult">
         <result property="id" column="id"/>
         <result property="enterpriseName" column="enterprise_name"/>
+        <result property="enterpriseCode" column="enterprise_code"/>
+        <result property="isExternal" column="is_external"/>
+        <result property="vendorAttribute" column="vendor_attribute"/>
+        <result property="establishDate" column="establish_date"/>
+        <result property="vendorStatus" column="vendor_status"/>
+        <result property="createdUnit" column="created_unit"/>
         <result property="socialCreditCode" column="social_credit_code"/>
         <result property="registeredCapital" column="registered_capital"/>
         <result property="currencyCode" column="currency_code"/>
@@ -46,12 +52,20 @@
         <result property="updateTime" column="update_time"/>
         <result property="delFlag" column="del_flag"/>
         <result property="processType" column="process_type"/>
-        <result property="operateComment" column="operate_comment"/>
+        <result property="affiliatedBank" column="affiliated_bank"/>
+        <result property="openingBranch" column="opening_branch"/>
+        <result property="registerApprovalTime" column="register_approval_time"/>
     </resultMap>
 
     <resultMap id="VendorManagementList" type="com.zhaocai.business.vendor.vo.res.VendorManagementListVO">
         <result property="id" column="id"/>
         <result property="enterpriseName" column="enterprise_name"/>
+        <result property="enterpriseCode" column="enterprise_code"/>
+        <result property="isExternal" column="is_external"/>
+        <result property="vendorAttribute" column="vendor_attribute"/>
+        <result property="establishDate" column="establish_date"/>
+        <result property="vendorStatus" column="vendor_status"/>
+        <result property="createdUnit" column="created_unit"/>
         <result property="socialCreditCode" column="social_credit_code"/>
         <result property="contactName" column="contact_name"/>
         <result property="contactPhone" column="contact_phone"/>
@@ -65,12 +79,15 @@
         <result property="cooperationAmount" column="total_amount_inc_tax"/>
         <result property="excellentNum" column="tvp_excellent_num"/>
         <result property="processType" column="process_type"/>
+        <result property="firstCooperationCompanyCode" column="first_cooperation_company_code"/>
+        <result property="firstCooperationCompanyName" column="first_cooperation_company_name"/>
     </resultMap>
 
     <select id="selectVendorListPage" resultMap="VendorManagementList">
-        select tv.id ,tv.enterprise_name,tv.social_credit_code,tvc.contact_name,tvc.contact_phone,tv.registered_capital,
+        select tv.id ,tv.enterprise_name,tv.is_external,tv.vendor_attribute,tv.establish_date,tv.vendor_status,tv.created_unit,tv.enterprise_code,tv.social_credit_code,tvc.contact_name,tvc.contact_phone,tv.registered_capital,
                 concat(tv.enterprise_province_name,'-',tv.enterprise_city_name) as vendor_location,tv.enterprise_type,tv.create_time,
-                tv.is_black,tv.vendor_class,tv.state,tv.process_type,tar.total_amount_inc_tax,tvpr.tvp_excellent_num
+                tv.is_black,tv.vendor_class,tv.state,tv.process_type,tar.total_amount_inc_tax,tvpr.tvp_excellent_num,
+                tv.first_cooperation_company_code,tv.first_cooperation_company_name
         from  tb_vendor tv
         inner join tb_vendor_contact tvc on tv.id = tvc.vendor_id and tvc.is_main_contact = 1
         left join (
@@ -153,7 +170,7 @@
     </select>
 
     <select id="selectVendorManagementList" resultType="com.zhaocai.business.vendor.vo.res.VendorManagementListDataVO">
-        select tv.id ,tv.enterprise_name,tv.social_credit_code,tvc.contact_name,tvc.contact_phone,tv.registered_capital,
+        select tv.id ,tv.enterprise_name,tv.is_external,tv.vendor_attribute,tv.establish_date,tv.vendor_status,tv.created_unit,tv.enterprise_code,tv.social_credit_code,tvc.contact_name,tvc.contact_phone,tv.registered_capital,
             concat(tv.enterprise_province_name,'-',tv.enterprise_city_name) as vendor_location,tv.enterprise_type,tv.create_time,
             tv.is_black,tv.vendor_class,tv.state,tar.total_amount_inc_tax,tvpr.tvp_excellent_num
         from  tb_vendor tv
@@ -223,8 +240,11 @@
     </select>
 
     <select id="selectVendorJkpthtListPage" resultType="com.zhaocai.business.vendor.vo.res.VendorVO">
-        select tv.id,tv.enterprise_name,tv.legal_representative,tv.legal_phone,tv.legal_id_card
-        from tb_vendor tv
+        select tv.id,tv.enterprise_name,tv.social_credit_code,tv.legal_representative,
+        tv.legal_phone,tv.legal_id_card,
+        tv.bank_account,io.affiliated_bank,io.opening_branch
+        from tb_vendor tv left join t_account_info io
+          on   io.up_id=tv.id and io.status=1
         <where>
             tv.state = 3
             <if test="queryVO.enterpriseName != null and queryVO.enterpriseName != ''">

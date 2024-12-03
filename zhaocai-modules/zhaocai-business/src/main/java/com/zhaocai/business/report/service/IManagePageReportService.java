@@ -7,10 +7,12 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 招标率报表Service接口
+ * 公司/集团管理组织Service接口
  */
 public interface IManagePageReportService {
     Map<String, Object> managePageReport(ManagePageReportVo managePage);
 
     List<SysDept> managePageReportDept(ManagePageReportVo managePage);
+
+    List<SysDept> getOrgList(String orgId);
 }

@@ -79,6 +79,12 @@ public class ProcurementSchemeBidding extends BaseEntity {
     /**
      * 合同模板id
      */
+    @ApiModelProperty(value = "合同模板附件id")
+    private Long contractAttachmentId;
+
+    /**
+     * 合同模板id
+     */
     @ApiModelProperty(value = "合同模板id")
     private Long contractTemplateId;
 }

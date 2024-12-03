@@ -18,4 +18,6 @@ public interface IVBidCountService {
     List<String> getBidCountProjectCode(String id);
 
     String getExportTitle(VBidCountVo vBidCountVo);
+
+    List<VBidCountVo> getBidCountReport(VBidCountVo vBidCountVo);
 }

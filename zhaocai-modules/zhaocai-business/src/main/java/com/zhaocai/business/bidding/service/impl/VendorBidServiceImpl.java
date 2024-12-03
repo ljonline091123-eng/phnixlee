@@ -107,7 +107,10 @@ public class VendorBidServiceImpl implements IVendorBidService {
     /* 在线报名 招标状态为  11发布 12报名情况 的数据 */
     @Override
     public PageResult<VendorNoticeListVO> pageNotice(VendorNoticePageQueryVO queryDTO) {
-        queryDTO.setVendorId(getVendor(SecurityUtils.getUserId()).getId());
+//        queryDTO.setVendorId(getVendor(SecurityUtils.getUserId()).getId());
+        Vendor vendor = getVendor(SecurityUtils.getUserId());
+        queryDTO.setVendorId(vendor.getId());
+        queryDTO.setRegisterApprovalTime(vendor.getRegisterApprovalTime());
         PageResult<VendorNoticeListVO> pageResult = tenderNoticeService.selectVendorNoticePageNotice(queryDTO);
         return pageResult;
     }
@@ -115,7 +118,10 @@ public class VendorBidServiceImpl implements IVendorBidService {
     /* 在线报名 招标状态为 非 (0废标 11发布 12报名情况) 并且在报名列表里面 的数据 */
     @Override
     public PageResult<VendorNoticeListVO> page(VendorNoticePageQueryVO queryDTO) {
-        queryDTO.setVendorId(getVendor(SecurityUtils.getUserId()).getId());
+//        queryDTO.setVendorId(getVendor(SecurityUtils.getUserId()).getId());
+        Vendor vendor = getVendor(SecurityUtils.getUserId());
+        queryDTO.setVendorId(vendor.getId());
+        queryDTO.setRegisterApprovalTime(vendor.getRegisterApprovalTime());
         PageResult<VendorNoticeListVO> pageResult = tenderNoticeService.selectVendorNoticePage(queryDTO);
         return pageResult;
     }

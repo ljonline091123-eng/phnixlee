@@ -2,9 +2,10 @@ package com.zhaocai.business.pub.mapper;
 
 import com.baomidou.mybatisplus.annotation.InterceptorIgnore;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
+import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.zhaocai.business.pub.domain.DwCdBank;
-
-import java.util.List;
+import org.apache.ibatis.annotations.Param;
 
 /**
  * 支行档案Mapper接口
@@ -28,7 +29,7 @@ public interface BankMapper extends BaseMapper<DwCdBank>
      * @param dwCdBank 支行档案
      * @return 支行档案集合
      */
-    public List<DwCdBank> selectBankList(DwCdBank dwCdBank);
+     IPage<DwCdBank> selectBankList(Page mybatisPage, @Param("dwCdBank") DwCdBank dwCdBank);
 
     /**
      * 新增支行档案

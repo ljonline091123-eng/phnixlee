@@ -2,9 +2,11 @@ package com.zhaocai.business.pub.mapper;
 
 import com.baomidou.mybatisplus.annotation.InterceptorIgnore;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
+import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.zhaocai.business.pub.domain.TAccountInfo;
-
-import java.util.List;
+import com.zhaocai.business.pub.vo.req.TAccountInfoVo;
+import org.apache.ibatis.annotations.Param;
 
 /**
  * 银行账户档案Mapper接口
@@ -28,8 +30,7 @@ public interface AccountMapper extends BaseMapper<TAccountInfo>
      * @param tAccountInfo 银行账户档案
      * @return 银行账户档案集合
      */
-    public List<TAccountInfo> selectAccountList(TAccountInfo tAccountInfo);
-
+    IPage<TAccountInfoVo> selectAccountList(Page mybatisPage, @Param("tAccountInfo") TAccountInfoVo tAccountInfo);
     /**
      * 新增银行账户档案
      *

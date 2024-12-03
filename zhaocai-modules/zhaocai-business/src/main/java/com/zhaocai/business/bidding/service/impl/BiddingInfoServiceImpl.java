@@ -551,6 +551,26 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
             throw new ParamValidateException("有未收取保证金的供应商，不允许进入下一环节");
         }
 
+        ProcurementScheme scheme = procurementSchemeService.getById(tenderNotice.getSchemeId());
+        long vendorIds = this.count(new LambdaQueryWrapper<BiddingInfo>()
+                .eq(BiddingInfo::getNoticeId, noticeId)
+                .eq(BiddingInfo::getSubmitStatus, 1)
+                .ne(BiddingInfo::getBiddingStatus, BiddingInfoStatusEnum.HAVE_ABANDON.getState())
+                .isNull(BiddingInfo::getParentId));
+        if (scheme.getProcurementType() != null){
+            if (scheme.getProcurementType() == NumberConstant.ONE && vendorIds < NumberConstant.THREE){
+                throw new ParamValidateException("公开招标需3家供应商以上");
+            }else if (scheme.getProcurementType() == NumberConstant.TWO && vendorIds < NumberConstant.THREE){
+                throw new ParamValidateException("邀请招标需3家供应商以上");
+            } else if (scheme.getProcurementType() == NumberConstant.THREE && vendorIds < NumberConstant.THREE){
+                throw new ParamValidateException("询价采购需3家供应商以上");
+            }
+//            else if (scheme.getProcurementType() == NumberConstant.FOUR && vendorIds != NumberConstant.ONE){
+//                throw new ParamValidateException("单一来源只能1家供应商");
+//            }
+        }
+
+
         /* 招标对象 关闭二次报价 */
         tenderNoticeService.update(new LambdaUpdateWrapper<TenderNotice>()
                 .set(TenderNotice::getTwiceQuotState, NumberConstant.ZERO)

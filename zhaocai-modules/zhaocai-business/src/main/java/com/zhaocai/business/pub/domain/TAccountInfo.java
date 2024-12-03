@@ -32,13 +32,35 @@ public class TAccountInfo implements Serializable {
     @Excel(name = "银行账号")
     private String bankAccount;
 
+    /** 所属银行 */
+    @Excel(name = "所属银行")
+    private String affiliatedBank;
+
+    /** 支行 */
+    @Excel(name = "支行")
+    private String openingBranch;
+
+    /** 银联号 */
+    @Excel(name = "银联号")
+    private String interbankNumber;
+
     /** BIPID */
     @Excel(name = "BIPID")
     private Long bipId;
 
     /** 账户类型 */
     @Excel(name = "账户类型")
-    private String acountType;
+    private Integer acountType;
+
+    /** 币种 */
+    @Excel(name = "币种")
+    private Integer currency;
+
+
+
+    /** 是否默认账户 */
+    @Excel(name = "是否默认账户")
+    private Integer status;
 
     /**
      * 创建者

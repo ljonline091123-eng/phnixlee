@@ -486,6 +486,21 @@ public class SysUserController extends BaseController
     }
 
     /**
+     * 根据用户账号获取用户信息
+     * @param username
+     * @return
+     */
+    @InnerAuth
+    @GetMapping("/getUserInfoByUsername")
+    SysUser getUserInfoByUsername(@RequestParam Object username){
+        String usernameNew = String.valueOf(username);
+        if (StringUtils.isEmpty(usernameNew)) {
+            throw new RuntimeException("查询 用户账户 不能为空");
+        }
+        return userService.selectUserByUserName(usernameNew);
+    }
+
+    /**
      * 获取机构下的用户
      * @return
      */

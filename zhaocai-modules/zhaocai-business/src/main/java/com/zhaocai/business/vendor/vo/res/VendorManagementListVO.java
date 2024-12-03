@@ -82,6 +82,12 @@ public class VendorManagementListVO extends AdviceObject {
     @ApiModelProperty(value = "流程类型")
     private Integer processType;
 
+    @ApiModelProperty(value = "首次合作单位")
+    private String firstCooperationCompanyCode;
+
+    @ApiModelProperty(value = "首次合作单位名称")
+    private String firstCooperationCompanyName;
+
     public Long getExcellentNum() {
         return excellentNum == null ? 0 : excellentNum;
     }

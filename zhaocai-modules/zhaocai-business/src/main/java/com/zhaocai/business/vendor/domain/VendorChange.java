@@ -48,6 +48,43 @@ public class VendorChange extends BaseEntity {
     private String enterpriseName;
 
     /**
+     * 企业编码
+     */
+    @ApiModelProperty(value = "企业编码")
+    private String enterpriseCode;
+
+    /**
+     * 是否外部客商
+     */
+    @ApiModelProperty(value = "是否外部客商")
+    private Integer isExternal;
+
+    /**
+     * 客商属性
+     */
+    @ApiModelProperty(value = "客商属性")
+    private Integer vendorAttribute;
+
+    /**
+     * 成立时间
+     */
+    @ApiModelProperty(value = "成立时间")
+    @JsonFormat(pattern = "yyyy-MM-dd", timezone = "GMT+8")
+    private Date establishDate;
+
+    /**
+     * 客商状态
+     */
+    @ApiModelProperty(value = "客商状态")
+    private Integer vendorStatus;
+
+    /**
+     * 创建单位
+     */
+    @ApiModelProperty(value = "创建单位")
+    private String createdUnit;
+
+    /**
      * 统一社会信用代码
      */
     @ApiModelProperty(value = "统一社会信用代码")

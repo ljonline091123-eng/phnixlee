@@ -3,8 +3,10 @@ package com.zhaocai.business.pub.domain;
 import com.baomidou.mybatisplus.annotation.*;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.zhaocai.common.core.annotation.Excel;
+import com.zhaocai.common.core.bean.PageRecive;
 import io.swagger.annotations.ApiModelProperty;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 
 import java.io.Serializable;
 import java.util.Date;
@@ -17,7 +19,8 @@ import java.util.Date;
  */
 @Data
 @TableName(value = "dw_cd_bank")
-public class DwCdBank implements Serializable {
+@EqualsAndHashCode(callSuper = true)
+public class DwCdBank extends PageRecive implements Serializable {
     private static final long serialVersionUID = 1L;
 
     /** $column.columnComment */

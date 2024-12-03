@@ -7,6 +7,7 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 
 import java.io.Serializable;
+import java.util.Date;
 
 /**
  * @author ssy
@@ -32,5 +33,8 @@ public class VendorNoticePageQueryVO extends PageRecive implements Serializable 
 
     @ApiModelProperty(value =  "招标单位")
     private String unit;
+
+    @ApiModelProperty(value =  "供应商注册审批通过时间")
+    private Date registerApprovalTime;
 
 }
