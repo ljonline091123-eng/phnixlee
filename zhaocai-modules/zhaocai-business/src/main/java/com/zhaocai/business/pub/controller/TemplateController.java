@@ -1,11 +1,11 @@
 package com.zhaocai.business.pub.controller;
 
 import com.zhaocai.business.common.base.BladeController;
+import com.zhaocai.business.common.config.FileYOZOConfig;
 import com.zhaocai.business.common.enums.ProcurementPlanTypeEnum;
-import com.zhaocai.business.pub.utils.Sender;
 import com.zhaocai.business.pub.service.ITemplateService;
+import com.zhaocai.business.pub.utils.Sender;
 import com.zhaocai.business.pub.utils.YOZOfileUtils;
-import com.zhaocai.business.pub.vo.req.AttachmentRequestVO;
 import com.zhaocai.business.pub.vo.req.TemplateListQueryVO;
 import com.zhaocai.business.pub.vo.req.TemplateSaveRequestVO;
 import com.zhaocai.business.pub.vo.res.AttachmentVO;
@@ -45,6 +45,9 @@ public class TemplateController extends BladeController {
 
     @Autowired
     private YOZOfileUtils yozOfileUtils;
+
+    @Autowired
+    private FileYOZOConfig fileYOZOConfig;
 
     /**
      * 据模板id查询附件，并利用yozo文档中台预览附件,返回预览文件的url
@@ -139,7 +142,7 @@ public class TemplateController extends BladeController {
                 // 自动保存
                 params.setSaveFlag(true);
                 // 回调地址支持2中方式获取文件，请根据需要按照接口规范实现接口
-                params.setCallbackUrl("192.168.30.42:8052/business/attachment/fileUpload?version=cs&type=fb");
+                params.setCallbackUrl(fileYOZOConfig.getCallbackUrl());
                 // 是否可打印
                 params.setPrintMenu(true, false);
                 // 设置可下载

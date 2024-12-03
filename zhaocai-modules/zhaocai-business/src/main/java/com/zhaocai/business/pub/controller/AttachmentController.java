@@ -47,6 +47,9 @@ public class AttachmentController extends BladeController {
     @Autowired
     private YOZOfileUtils yozOfileUtils;
 
+    @Autowired
+    private FileYOZOConfig  fileYOZOConfig;
+
 
     @PostMapping("/addAttachment")
     @ApiModelProperty(value = "保存附件信息")
@@ -208,7 +211,7 @@ public class AttachmentController extends BladeController {
             // 自动保存
             params.setSaveFlag(true);
             // 回调地址支持2中方式获取文件，请根据需要按照接口规范实现接口
-            params.setCallbackUrl("192.168.30.42:8052/business/attachment/fileUpload");
+            params.setCallbackUrl(fileYOZOConfig.getCallbackUrl());
             // 是否可打印
             params.setPrintMenu(true, false);
             // 设置可下载
