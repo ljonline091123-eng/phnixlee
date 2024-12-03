@@ -1828,7 +1828,7 @@ export default {
           });
           this.$set(this.formData, "biddingAttachmentId", res.data);
           this.viewAttachmentId = res.data;
-          console.log("viewAttachmentId:",this.viewAttachmentId);
+          console.log("viewAttachmentId:", this.viewAttachmentId);
         } catch (err) {
           console.log(err);
         }
@@ -1838,20 +1838,15 @@ export default {
           console.log('Attachment ID:', this.viewAttachmentId);
           //获取文档中台的文档编辑URL
           try {
-            const res = await getEditFileUrlByID({ attachmentId: this.viewAttachmentId });
+            const res = await getEditFileUrlByID({attachmentId: this.viewAttachmentId});
             this.editFileUrl = res.data;
-            console.log("editFileUrl:",this.editFileUrl);
+            console.log("editFileUrl:", this.editFileUrl);
           } catch (err) {
             console.log(err);
           }
         } else {
           console.warn('attachmentId 数据未正确加载');
         }
-      } else {
-        this.$set(this.formData, "contractTemplateName", templateName);
-        this.$set(this.formData, "contractTemplateId", templateId);
-
-        this.$refs.form.clearValidate("contractTemplateName");
       }
 
       this.bcTemplateVisable = false;
