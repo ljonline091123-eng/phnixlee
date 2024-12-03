@@ -316,7 +316,7 @@ import {
   getContractTypeList,
   getPreviewFileUrl,
   editFile,
-  
+
 } from "@/api/template/file";
 import { uploadFileUrl, offerService, offerRepo } from "@/utils/const";
 import Treeselect from "@riophae/vue-treeselect";

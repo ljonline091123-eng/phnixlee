@@ -1847,13 +1847,7 @@ export default {
         } else {
           console.warn('attachmentId 数据未正确加载');
         }
-      } else {
-        this.$set(this.formData, "contractTemplateName", templateName);
-        this.$set(this.formData, "contractTemplateId", templateId);
-
-        this.$refs.form.clearValidate("contractTemplateName");
       }
-
       this.bcTemplateVisable = false;
     },
 
