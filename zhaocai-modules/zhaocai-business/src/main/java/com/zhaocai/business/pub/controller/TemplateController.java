@@ -149,6 +149,7 @@ public class TemplateController extends BladeController {
                 params.setSaveFlag(true);
                 // 回调地址支持2中方式获取文件，请根据需要按照接口规范实现接口
                 params.setCallbackUrl(fileYOZOConfig.getCallbackUrl());
+                System.out.println("回调地址："+fileYOZOConfig.getCallbackUrl());
                 // 是否可打印
                 params.setPrintMenu(true, false);
                 // 设置可下载

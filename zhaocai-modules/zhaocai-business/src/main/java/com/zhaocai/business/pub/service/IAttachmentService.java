@@ -7,7 +7,6 @@ import com.zhaocai.business.pub.vo.req.AttachmentRequestVO;
 import com.zhaocai.business.pub.vo.res.AttachmentVO;
 import com.zhaocai.business.vendor.vo.res.DownloadAgreementVO;
 
-import java.io.InputStream;
 import java.util.List;
 
 /**
@@ -70,6 +69,14 @@ public interface IAttachmentService extends IService<Attachment> {
      * @param businessId
      */
     void updateBusiness(Long id, AttachmentTypeEnum attachmentTypeEnum, Long businessId);
+
+    /**
+     * 更新附件业务信息
+     * @param id
+     * @param attachmentTypeEnum
+     * @param businessId
+     */
+    void updateBusiness(Long id,  Long businessId,String fileUrl,String fileName);
 
     /**
      * 获取附件文件流

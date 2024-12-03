@@ -257,6 +257,7 @@ public class AttachmentController extends BladeController {
     @PostMapping("/fileUpload")
     @ApiOperation(value = "中台文件上传至minio")
     public String  fileUpload(@RequestBody FileBeanVo fileBean) throws IOException {
+        System.out.println("上传文件");
         //读取文件
         Path path =  yozOfileUtils.downloadFile(fileBean.getFileUrl(),yozOfileUtils.createTempFilePath(fileBean.getFilename()));
         File file = new File(path.toString());
@@ -264,12 +265,17 @@ public class AttachmentController extends BladeController {
             throw new IOException("文档不存在: " + fileBean.getFileUrl());
         }
         Long fileId = fileBean.getFileId()==null?null:Long.parseLong(fileBean.getFileId());
+        System.out.println("文件ID:"+fileId);
         Attachment attcha =  attachmentService.getById(fileId);
+        if(attcha ==null){
+            throw new IOException("文档不存在: " + fileBean.getFileUrl());
+        }
         // 转换为InputStream
         FileInputStream fis = new FileInputStream(file);
         String fileUrl = sysFileService.uploadFile(fis, fileBean.getFilename());
         attcha.setFileUrl(fileUrl);
-        attachmentService.save(attcha);
+        attachmentService.updateBusiness(attcha.getId(),attcha.getBusinessId(),fileUrl,fileBean.getFilename());
+        System.out.println("fileUrl:"+fileUrl);
         return fileUrl;
     }
 }

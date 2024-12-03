@@ -149,7 +149,7 @@ public class EditParams {
 	 * @param fallbackUrl 返回按钮的地址
 	 */
 	public void setFallbackUrl(String fallbackUrl)  {
-		if(fallbackUrl!=null && "".equals(fallbackUrl.trim())) {
+		if(fallbackUrl!=null && !"".equals(fallbackUrl.trim())) {
 			requestBody.put("fallbackUrl", fallbackUrl);
 		}
 	}
@@ -184,7 +184,7 @@ public class EditParams {
 	 * @param password 密码
 	 */
 	public void setPassword(String password)  {
-		if(password!=null && "".equals(password.trim())) {
+		if(password!=null && !"".equals(password.trim())) {
 			requestBody.put("password", password);
 		}
 	}
@@ -193,7 +193,7 @@ public class EditParams {
 	 * @param callbackUrl
 	 */
 	public void setCallbackUrl(String callbackUrl)  {
-		if(callbackUrl!=null && "".equals(callbackUrl.trim())) {
+		if(callbackUrl!=null && !"".equals(callbackUrl.trim())) {
 			requestBody.put("callbackUrl", callbackUrl);
 		}
 	}
@@ -204,7 +204,7 @@ public class EditParams {
 	 * @param fileUUID 文件的随机ID
 	 */
 	public void setFileUUID(String fileUUID)  {
-		if(fileUUID!=null && "".equals(fileUUID.trim())) {
+		if(fileUUID!=null && !"".equals(fileUUID.trim())) {
 			requestBody.put("fileUUID", fileUUID);
 		}
 	}

@@ -114,6 +114,16 @@ public class AttachmentServiceImpl extends ServiceImpl<AttachmentMapper, Attachm
     }
 
     @Override
+    public void updateBusiness(Long id, Long businessId,String fileUrl,String fileName) {
+        if (NumberUtil.isNullOrZero(id)  || NumberUtil.isNullOrZero(businessId)||fileUrl==null||fileName==null) {
+            throw new ParamValidateException("保存附件时关键信息为空");
+        }
+        super.update(new LambdaUpdateWrapper<Attachment>()
+                .set(Attachment::getBusinessId, businessId)
+                .eq(Attachment::getId, id));
+    }
+
+    @Override
     public void updateBusiness(Long id, AttachmentTypeEnum businessType, Long businessId) {
         if (NumberUtil.isNullOrZero(id) || businessType == null || NumberUtil.isNullOrZero(businessId)) {
             throw new ParamValidateException("保存附件时关键信息为空");
