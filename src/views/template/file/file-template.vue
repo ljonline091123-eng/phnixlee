@@ -468,7 +468,7 @@ export default {
       }
       //上传文件后，返回文档中台的文档编辑URL
       try {
-        const query1 = { fileName: name, fileUrl: url };
+        const query1 = { id: this.attachmentId, fileName: name, fileUrl: url };
         const res = await editFile(query1);
         console.log("fileName URL:",name);
         console.log("URL:",url);
@@ -563,7 +563,7 @@ export default {
 
         //点击修改按钮，返回文档中台的文档编辑URL
         try {
-          const query1 = { fileName: fileName, fileUrl: fileUrl };
+          const query1 = { id: this.attachmentId,fileName: fileName, fileUrl: fileUrl };
           const res = await editFile(query1);
           console.log("fileName URL:",fileName);
           console.log("URL:",fileUrl);

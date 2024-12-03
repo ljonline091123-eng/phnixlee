@@ -1692,6 +1692,22 @@ export default {
           this.$set(this.procurementSchemeTempObject.biddingTemplate, "templateId", templateId);
           /* 调起联想文档 */
           this.viewAttachmentId = res.data;
+
+          //据viewAttachmentId获取文件的文档中台的编辑URL
+          if (this.viewAttachmentId) {
+            console.log('Attachment ID:', this.viewAttachmentId);
+            //获取文档中台的文档编辑URL
+            try {
+              const res = await getEditFileUrlByID({attachmentId: this.viewAttachmentId});
+              this.editFileUrl = res.data;
+              console.log("editFileUrl:", this.editFileUrl);
+            } catch (err) {
+              console.log(err);
+            }
+          } else {
+            console.warn('attachmentId 数据未正确加载');
+          }
+
         } catch (err) {
           console.log(err);
         }
@@ -1722,6 +1738,21 @@ export default {
           this.$set(this.procurementSchemeTempObject.contractTemplate, "templateId", templateId);
           /* 调起联想文档 */
           this.viewAttachmentId = res.data;
+
+          //据viewAttachmentId获取文件的文档中台的编辑URL
+          if (this.viewAttachmentId) {
+            console.log('Attachment ID:', this.viewAttachmentId);
+            //获取文档中台的文档编辑URL
+            try {
+              const res = await getEditFileUrlByID({attachmentId: this.viewAttachmentId});
+              this.editFileUrl = res.data;
+              console.log("editFileUrl:", this.editFileUrl);
+            } catch (err) {
+              console.log(err);
+            }
+          } else {
+            console.warn('attachmentId 数据未正确加载');
+          }
         } catch (err) {
           console.log(err);
         }
@@ -1795,6 +1826,7 @@ export default {
             this.$set(this.procurementSchemeTempObject.biddingTemplate, "templateName", templateName);
             this.$set(this.procurementSchemeTempObject.biddingTemplate, "templateId", templateId);
             this.viewAttachmentId = res.data;
+
           } else {
             this.$refs.uploadContract.clearFiles();
             this.$set(this.formData, "contractAttachmentId", res.data);
@@ -1811,6 +1843,22 @@ export default {
             this.$set(this.procurementSchemeTempObject.contractTemplate, "templateName", templateName);
             this.$set(this.procurementSchemeTempObject.contractTemplate, "templateId", templateId);
             this.viewAttachmentId = res.data;
+
+            //据viewAttachmentId获取文件的文档中台的编辑URL
+            if (this.viewAttachmentId) {
+              console.log('Attachment ID:', this.viewAttachmentId);
+              //获取文档中台的文档编辑URL
+              try {
+                const res = await getEditFileUrlByID({attachmentId: this.viewAttachmentId});
+                this.editFileUrl = res.data;
+                console.log("editFileUrl:", this.editFileUrl);
+              } catch (err) {
+                console.log(err);
+              }
+            } else {
+              console.warn('attachmentId 数据未正确加载');
+            }
+
           }
       } catch (err) {
         console.log(err);
@@ -1893,6 +1941,21 @@ export default {
         this.$set(this.procurementSchemeTempObject.biddingTemplate, "templateId", this.formData.biddingTemplateId);
         /* 调起联想文档 */
         this.viewAttachmentId = res.data;
+
+        //据viewAttachmentId获取文件的文档中台的编辑URL
+        if (this.viewAttachmentId) {
+          console.log('Attachment ID:', this.viewAttachmentId);
+          //获取文档中台的文档编辑URL
+          try {
+            const res = await getEditFileUrlByID({attachmentId: this.viewAttachmentId});
+            this.editFileUrl = res.data;
+            console.log("editFileUrl:", this.editFileUrl);
+          } catch (err) {
+            console.log(err);
+          }
+        } else {
+          console.warn('attachmentId 数据未正确加载');
+        }
       } catch (err) {
         console.log(err);
       }
@@ -1910,6 +1973,7 @@ export default {
       this.$forceUpdate();
       /* 调起联想文档 */
       this.viewAttachmentId = null;
+      this.editFileUrl = ""; //删除文档后，文档中台的文档编辑URL设为空
     },
     /* 合同模板文件手动上传成功 */
     async fileSuccessContract(res) {
@@ -1930,6 +1994,21 @@ export default {
         this.$set(this.procurementSchemeTempObject.contractTemplate, "templateId", this.formData.contractTemplateId);
         /* 调起联想文档 */
         this.viewAttachmentId = res.data;
+
+        //据viewAttachmentId获取文件的文档中台的编辑URL
+        if (this.viewAttachmentId) {
+          console.log('Attachment ID:', this.viewAttachmentId);
+          //获取文档中台的文档编辑URL
+          try {
+            const res = await getEditFileUrlByID({attachmentId: this.viewAttachmentId});
+            this.editFileUrl = res.data;
+            console.log("editFileUrl:", this.editFileUrl);
+          } catch (err) {
+            console.log(err);
+          }
+        } else {
+          console.warn('attachmentId 数据未正确加载');
+        }
       } catch (err) {
         console.log(err);
       }
@@ -1947,6 +2026,7 @@ export default {
       this.$forceUpdate();
       /* 调起联想文档 */
       this.viewAttachmentId = null;
+      this.editFileUrl="";
     },
 
     handleKeydown(event) {

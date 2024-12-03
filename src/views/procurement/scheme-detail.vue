@@ -926,6 +926,7 @@ export default {
       this.templateDialogTitle = row.fileName + "预览";
       this.templateAttachmentId = row.attachmentId;
       this.templateDialogVisible = true;
+      console.log("this.templateAttachmentId",this.templateAttachmentId);
 
       //获取附件的预览URL
       if (this.templateAttachmentId) {
