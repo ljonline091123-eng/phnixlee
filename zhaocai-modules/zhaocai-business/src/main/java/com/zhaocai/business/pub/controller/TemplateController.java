@@ -59,6 +59,9 @@ public class TemplateController extends BladeController {
         TemplateVO template = templateService.detail(id);
         String fileName = template.getFileName();
         String fileUrl = template.getFileUrl();
+        if(yozOfileUtils.isNULLFileURL(fileUrl)){
+            return ResultData.fail("该文件存储的fileUrl为空，无法预览文件！！！");
+        }
         String HtmlName = yozOfileUtils.removeSuffix(fileName);
         String suffix = yozOfileUtils.getSuffix(fileName).toLowerCase();
         Path path = yozOfileUtils.downloadFile(fileUrl, yozOfileUtils.createTempFilePath(fileName));
@@ -124,6 +127,9 @@ public class TemplateController extends BladeController {
         Long attachmentId = requestVO.getId();
         String fileName = requestVO.getFileName();
         String fileUrl = requestVO.getFileUrl();
+        if(yozOfileUtils.isNULLFileURL(fileUrl)){
+            return ResultData.fail("该文件存储的fileUrl为空，无法编辑文件！！！");
+        }
         String HtmlName = yozOfileUtils.removeSuffix(fileName);
         String suffix = yozOfileUtils.getSuffix(fileName).toLowerCase();
         Path path = yozOfileUtils.downloadFile(fileUrl, yozOfileUtils.createTempFilePath(fileName));

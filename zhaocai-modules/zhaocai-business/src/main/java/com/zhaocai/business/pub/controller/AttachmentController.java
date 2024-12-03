@@ -64,6 +64,9 @@ public class AttachmentController extends BladeController {
     public ResultData<String> getViweFileURL(AttachmentRequestVO requestVO) {
         String fileName = requestVO.getFileName();
         String fileUrl = requestVO.getFileUrl();
+        if(yozOfileUtils.isNULLFileURL(fileUrl)){
+            return ResultData.fail("该文件存储的fileUrl为空，无法预览文件！！！");
+        }
         String HtmlName = yozOfileUtils.removeSuffix(fileName);
         String suffix = yozOfileUtils.getSuffix(fileName).toLowerCase();
         Path path = yozOfileUtils.downloadFile(fileUrl, yozOfileUtils.createTempFilePath(fileName));
@@ -130,6 +133,9 @@ public class AttachmentController extends BladeController {
         AttachmentVO attachmentVO = attachmentService.getAttachmentById(attachmentId);
         String fileName = attachmentVO.getFileName();
         String fileUrl = attachmentVO.getFileUrl();
+        if(yozOfileUtils.isNULLFileURL(fileUrl)){
+            return ResultData.fail("该文件存储的fileUrl为空，无法预览文件！！！");
+        }
         String HtmlName = yozOfileUtils.removeSuffix(fileName);
         String suffix = yozOfileUtils.getSuffix(fileName).toLowerCase();
         Path path = yozOfileUtils.downloadFile(fileUrl, yozOfileUtils.createTempFilePath(fileName));
@@ -196,6 +202,9 @@ public class AttachmentController extends BladeController {
         AttachmentVO attachmentVO = attachmentService.getAttachmentById(attachmentId);
         String fileName = attachmentVO.getFileName();
         String fileUrl = attachmentVO.getFileUrl();
+        if(yozOfileUtils.isNULLFileURL(fileUrl)){
+            return ResultData.fail("该文件存储的fileUrl为空，无法编辑文件！！！");
+        }
         Path path = yozOfileUtils.downloadFile(fileUrl, yozOfileUtils.createTempFilePath(fileName));
         //当前登录用户信息
         Long loginUserId = SecurityUtils.getUserId();

@@ -3,6 +3,7 @@ package com.zhaocai.business.pub.utils;
 import com.zhaocai.business.BusinessApplication;
 import com.zhaocai.business.common.config.FileYOZOConfig;
 import com.zhaocai.business.common.config.MinioConfig;
+import com.zhaocai.common.core.utils.StringUtils;
 import com.zhaocai.common.core.utils.uuid.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
@@ -167,6 +168,15 @@ public class YOZOfileUtils {
             }
         }
         return false;
+    }
+
+    //判断fileURL是否为空
+    public boolean isNULLFileURL(String fileUrl) {
+        if (StringUtils.isBlank(fileUrl)) {
+            return true;
+        } else {
+            return false;
+        }
     }
 
 
