@@ -2467,7 +2467,6 @@ export default {
             splitId,
             vendorId,
             agreementMaterialsList:list.agreementMaterialsList
-
           }).then((res) => {
             // * 此3个字段是必传字段
             this.typeContract= '';
