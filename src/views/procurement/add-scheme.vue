@@ -1021,252 +1021,10 @@ export default {
     BackButton,
   },
   data() {
-    const validatePhone = (rule, value, callback) => {
-      if (isvalidatemobile(value)[0]) {
-        callback(new Error(isvalidatemobile(value)[1]));
-      } else {
-        callback();
-      }
-    };
-    const validateContactName = (rule, value, callback) => {
-      const chineseNamePattern = /^[\u4e00-\u9fa5]+$/;
-
-      if (!chineseNamePattern.test(value)) {
-        callback(new Error("请输入正确的中文姓名"));
-      } else {
-        callback();
-      }
-    };
-
-    const validateEmail = (rule, value, callback) => {
-      if (!validEmail(value)) {
-        callback(new Error("请输入正确的邮箱地址"));
-      } else {
-        callback();
-      }
-    };
-    const validaNumber = (rule, value, callback) => {
-      if (!validatenum(value, 1)) {
-        callback(new Error("请输入正确的金额"));
-      } else {
-        callback();
-      }
-    };
-    return {
-      /*方案审批状态
-        DRAFT(0,"自由态"),
-        IN_APPROVAL(1,"审批中"),
-        CANCELLATION(2,"已作废"),
-        APPROVE(3,"已完成"),
-        REJECT(4,"已驳回"),
-        REVOKED(5,"已撤回"), */
-      state: null,
-      /* 文件上传 */
-      offerService,
-      offerRepo,
-      uploadFileUrl,
-      /* 采购方案文件，通过getSchemeDetail方法请求procurementScheme/detail?id=获取的数据 */
-      procurementSchemeTempObject: null,
-      fileList: [],
-      fileList2: [],
-      formData: {}, //form表单数据
-      planList: [],
-      inventoryList: [],
-      contractList: [],
-      rules: {
-        procurementSchemeName: [
-          {
-            required: true,
-            message: "任务名称不能为空",
-          },
-        ],
-        procurementType: [
-          {
-            required: true,
-            message: "请选择采购方式",
-          },
-        ],
-        isReceiveDeposit: [
-          {
-            required: true,
-            message: "请选择是否收取保证金",
-          },
-        ],
-        bidDeadline: [
-          {
-            required: true,
-            message: "请选择计划投标截止时间",
-          },
-        ],
-        bidContactPerson: [
-          {
-            required: true,
-            message: "联系人不能为空",
-          },
-          {
-            validator: validateContactName,
-            trigger: "blur",
-          },
-        ],
-        bidContactPhone: [
-          {
-            required: true,
-            message: "联系电话不能为空",
-          },
-          {
-            validator: validatePhone,
-            trigger: "blur",
-          },
-        ],
-        bidContactEmail: [
-          {
-            required: true,
-            message: "联系邮箱不能为空",
-          },
-          {
-            validator: validateEmail,
-            trigger: "blur",
-          },
-        ],
-        securityDeposit: [
-          {
-            required: true,
-            message: "请输入保证金",
-          },
-          {
-            validator: validaNumber,
-            trigger: "blur",
-          },
-        ],
-        financeConfirmId: [
-          {
-            required: true,
-            message: "请选择财务确认人员",
-          },
-        ],
-        templateName: [
-          {
-            required: true,
-            message: "请选择模板",
-          },
-        ],
-        biddingTemplateName: [
-          {
-            required: true,
-            message: "请选择招标文件模板",
-          },
-        ],
-        contractTemplateName: [
-          {
-            required: true,
-            message: "请选择合同模板",
-          },
-        ],
-      },
-      // 遮罩层
-      loading: false,
-      // 显示搜索条件
-      showSearch: true,
-      // 总条数
-      total: 0,
-      // 弹出层标题
-      title: "",
-      // 是否显示弹出层
-      open: false,
-      // 查询参数
-      queryParams: {
-        pageNumber: 1,
-        pageSize: 10,
-        state: 1,
-        procurementPlanCode: undefined,
-        procurementPlanName: undefined,
-        projectName: undefined,
-        operator: undefined,
-        procurementPlanType: "all",
-      },
-      templateQuery: {
-        pageNumber: 1,
-        pageSize: 10,
-        state: 1,
-        switchTemplateType: 1,
-      },
-      bcTemplateQuery: {
-        pageNumber: 1,
-        pageSize: 10,
-        state: 1,
-        templateType: "",
-        templateName: "",
-        switchTemplateType: "",
-        contractType: "",
-      },
-      isShow: false,
-      activeTab: "generalTemplate",
-      currentTab: "generalScoreTemplate",
-      generalTemplateList: [],
-      reusableTemplateList: [],
-      generalTemplateTotal: 0,
-      reusableTemplateTotal: 0,
-      procurementPlanIds: [], //计划id
-      expireTimeOption: {
-        // 设置日期时间显示格式，只显示年月日时分
-        format: "yyyy-MM-dd HH:mm:ss",
-        // 设置可选的时间范围
-        // selectableRange: "00:00:00 - 23:59:59",
-        selectableRange :new Date().getHours() + ':' + (new Date().getMinutes() + 1) + ':00 - 23:59:00',
-        disabledDate(time) {
-          console.log(new Date().getDate()+5)
-          return time.getTime() < Date.now() + (4 * 24 * 3600 * 1000); // 禁用小于当前日期的日期
-        }
-
-        // disabledDate(time) {
-        //   // 获取今天的时间戳
-        //   const today = new Date();
-        //   today.setHours(0, 0, 0, 0); // 设置为当天的零点
-
-        //   // 明天的时间戳
-        //   const tomorrow = new Date(today);
-        //   tomorrow.setDate(today.getDate() + 1);
-
-        //   // 将传入的时间戳转为日期对象
-        //   const date = new Date(time);
-
-        //   // 只能选择明天及之后的日期
-        //   return date <= today || date < tomorrow;
-        // },
-      },
-      activeTabs: "base",
-      inventoryVisible: false,
-      financeList: [],
-      evaluateVisable: false, //评分弹出
-      evaluateTemplateList: [], //评分模板列表
-      evaluateTemplateLoading: false,
-      templateId: "", //模板id
-      templateTotal: 0,
-      bcTemplateTitle: "",
-      bcTemplateVisableLoading: false,
-      generalTemplateLoading: false,
-      bcTemplateVisable: false,
-      bcTemplateList: [],
-      bcTemplatetType: 0,
-      bcTemplateTotal: 0,
-      biddingAttachmentId: "",
-      contractAttachmentId: "",
-      deptId: "",
-      attachmentId: "",
-      viewAttachmentId: "", //预览ID
-      isEdit: false,
-      isSubmit: false,
-      generalScoreTemplateListTotal: 0,
-      generalReuScoreTemplateListTotal: 0,
-      generalScoreTemplateList: [],
-      generalReuScoreTemplateList: [],
-      selectedTemplateId: "",
-      isScoreMOdel: false,
-      contractTypeList: [],
-      editFileUrl:"", //编辑文档URL
-    };
+    this.getInitialData();
   },
   created() {
+    this.getInitialData();
     const param = JSON.parse(Base64.decode(this.$route.params.params));
     this.getContractTypeList();
     console.log(param, "param--param--param");
@@ -1314,6 +1072,253 @@ export default {
     },
   },
   methods: {
+    /* 代替data初始化 */
+    getInitialData(){
+      const validatePhone = (rule, value, callback) => {
+        if (isvalidatemobile(value)[0]) {
+          callback(new Error(isvalidatemobile(value)[1]));
+        } else {
+          callback();
+        }
+      };
+      const validateContactName = (rule, value, callback) => {
+        const chineseNamePattern = /^[\u4e00-\u9fa5]+$/;
+
+        if (!chineseNamePattern.test(value)) {
+          callback(new Error("请输入正确的中文姓名"));
+        } else {
+          callback();
+        }
+      };
+
+      const validateEmail = (rule, value, callback) => {
+        if (!validEmail(value)) {
+          callback(new Error("请输入正确的邮箱地址"));
+        } else {
+          callback();
+        }
+      };
+      const validaNumber = (rule, value, callback) => {
+        if (!validatenum(value, 1)) {
+          callback(new Error("请输入正确的金额"));
+        } else {
+          callback();
+        }
+      };
+      return {
+        /*方案审批状态
+          DRAFT(0,"自由态"),
+          IN_APPROVAL(1,"审批中"),
+          CANCELLATION(2,"已作废"),
+          APPROVE(3,"已完成"),
+          REJECT(4,"已驳回"),
+          REVOKED(5,"已撤回"), */
+        state: null,
+        /* 文件上传 */
+        offerService,
+        offerRepo,
+        uploadFileUrl,
+        /* 采购方案文件，通过getSchemeDetail方法请求procurementScheme/detail?id=获取的数据 */
+        procurementSchemeTempObject: null,
+        fileList: [],
+        fileList2: [],
+        formData: {}, //form表单数据
+        planList: [],
+        inventoryList: [],
+        contractList: [],
+        rules: {
+          procurementSchemeName: [
+            {
+              required: true,
+              message: "任务名称不能为空",
+            },
+          ],
+          procurementType: [
+            {
+              required: true,
+              message: "请选择采购方式",
+            },
+          ],
+          isReceiveDeposit: [
+            {
+              required: true,
+              message: "请选择是否收取保证金",
+            },
+          ],
+          bidDeadline: [
+            {
+              required: true,
+              message: "请选择计划投标截止时间",
+            },
+          ],
+          bidContactPerson: [
+            {
+              required: true,
+              message: "联系人不能为空",
+            },
+            {
+              validator: validateContactName,
+              trigger: "blur",
+            },
+          ],
+          bidContactPhone: [
+            {
+              required: true,
+              message: "联系电话不能为空",
+            },
+            {
+              validator: validatePhone,
+              trigger: "blur",
+            },
+          ],
+          bidContactEmail: [
+            {
+              required: true,
+              message: "联系邮箱不能为空",
+            },
+            {
+              validator: validateEmail,
+              trigger: "blur",
+            },
+          ],
+          securityDeposit: [
+            {
+              required: true,
+              message: "请输入保证金",
+            },
+            {
+              validator: validaNumber,
+              trigger: "blur",
+            },
+          ],
+          financeConfirmId: [
+            {
+              required: true,
+              message: "请选择财务确认人员",
+            },
+          ],
+          templateName: [
+            {
+              required: true,
+              message: "请选择模板",
+            },
+          ],
+          biddingTemplateName: [
+            {
+              required: true,
+              message: "请选择招标文件模板",
+            },
+          ],
+          contractTemplateName: [
+            {
+              required: true,
+              message: "请选择合同模板",
+            },
+          ],
+        },
+        // 遮罩层
+        loading: false,
+        // 显示搜索条件
+        showSearch: true,
+        // 总条数
+        total: 0,
+        // 弹出层标题
+        title: "",
+        // 是否显示弹出层
+        open: false,
+        // 查询参数
+        queryParams: {
+          pageNumber: 1,
+          pageSize: 10,
+          state: 1,
+          procurementPlanCode: undefined,
+          procurementPlanName: undefined,
+          projectName: undefined,
+          operator: undefined,
+          procurementPlanType: "all",
+        },
+        templateQuery: {
+          pageNumber: 1,
+          pageSize: 10,
+          state: 1,
+          switchTemplateType: 1,
+        },
+        bcTemplateQuery: {
+          pageNumber: 1,
+          pageSize: 10,
+          state: 1,
+          templateType: "",
+          templateName: "",
+          switchTemplateType: "",
+          contractType: "",
+        },
+        isShow: false,
+        activeTab: "generalTemplate",
+        currentTab: "generalScoreTemplate",
+        generalTemplateList: [],
+        reusableTemplateList: [],
+        generalTemplateTotal: 0,
+        reusableTemplateTotal: 0,
+        procurementPlanIds: [], //计划id
+        expireTimeOption: {
+          // 设置日期时间显示格式，只显示年月日时分
+          format: "yyyy-MM-dd HH:mm:ss",
+          // 设置可选的时间范围
+          // selectableRange: "00:00:00 - 23:59:59",
+          selectableRange :new Date().getHours() + ':' + (new Date().getMinutes() + 1) + ':00 - 23:59:00',
+          disabledDate(time) {
+            console.log(new Date().getDate()+5)
+            return time.getTime() < Date.now() + (4 * 24 * 3600 * 1000); // 禁用小于当前日期的日期
+          }
+
+          // disabledDate(time) {
+          //   // 获取今天的时间戳
+          //   const today = new Date();
+          //   today.setHours(0, 0, 0, 0); // 设置为当天的零点
+
+          //   // 明天的时间戳
+          //   const tomorrow = new Date(today);
+          //   tomorrow.setDate(today.getDate() + 1);
+
+          //   // 将传入的时间戳转为日期对象
+          //   const date = new Date(time);
+
+          //   // 只能选择明天及之后的日期
+          //   return date <= today || date < tomorrow;
+          // },
+        },
+        activeTabs: "base",
+        inventoryVisible: false,
+        financeList: [],
+        evaluateVisable: false, //评分弹出
+        evaluateTemplateList: [], //评分模板列表
+        evaluateTemplateLoading: false,
+        templateId: "", //模板id
+        templateTotal: 0,
+        bcTemplateTitle: "",
+        bcTemplateVisableLoading: false,
+        generalTemplateLoading: false,
+        bcTemplateVisable: false,
+        bcTemplateList: [],
+        bcTemplatetType: 0,
+        bcTemplateTotal: 0,
+        biddingAttachmentId: "",
+        contractAttachmentId: "",
+        deptId: "",
+        attachmentId: "",
+        viewAttachmentId: "", //预览ID
+        isEdit: false,
+        isSubmit: false,
+        generalScoreTemplateListTotal: 0,
+        generalReuScoreTemplateListTotal: 0,
+        generalScoreTemplateList: [],
+        generalReuScoreTemplateList: [],
+        selectedTemplateId: "",
+        isScoreMOdel: false,
+        contractTypeList: [],
+        editFileUrl:"", //编辑文档URL
+      };
+    },
     /* 计划投标截止时间监听 */
     handleChange(value) {
       let newVal = new Date(value);
