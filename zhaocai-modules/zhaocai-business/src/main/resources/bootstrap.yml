@@ -36,7 +36,6 @@ file-yozo:
   callback-url: http://192.168.30.42:8052/business/attachment/fileUpload
   tempFilePath: D:\\tmp
 
-
 # 电子签章
 signature:
   platform: qiyuesuo-private

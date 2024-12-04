@@ -266,8 +266,9 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
 	</select>
 
     <select id="selectUserListByDeptId" resultType="com.zhaocai.system.api.domain.SysUser">
-		select su.user_id as userId,su.nick_name as nickName
+		select su.user_id as userId,su.nick_name as nickName,su.phonenumber,d.dept_name as orgDeptName,su.thrid_org_name
 		from sys_user su
+		left join sys_dept d on su.dept_id = d.dept_id
 		where su.dept_id = #{deptId,jdbcType=BIGINT} OR su.dept_id IN ( SELECT t.dept_id FROM sys_dept t WHERE find_in_set(#{deptId,jdbcType=BIGINT}, ancestors) )
 	</select>
 </mapper>
