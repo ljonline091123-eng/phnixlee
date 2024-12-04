@@ -1270,6 +1270,7 @@ export default {
     const param = JSON.parse(Base64.decode(this.$route.params.params));
     this.getContractTypeList();
     console.log(param, "param--param--param");
+    this.procurementPlanIds = param.ids;
     if (param?.type === "update") {
       this.isEdit = true;
       this.getSchemeDetail(param.id);
