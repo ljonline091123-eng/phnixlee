@@ -56,28 +56,28 @@
                 />
               </el-form-item>
               <el-form-item label="专家类别" prop="status">
-<!--                <el-select-->
-<!--                  v-model="queryParams.expertType"-->
-<!--                  placeholder="请选择专家类别"-->
-<!--                  clearable-->
-<!--                  style="width: 100%"-->
-<!--                >-->
-<!--                  <el-option-->
-<!--                    v-for="dict in dict.type.expert_type"-->
-<!--                    :key="dict.value"-->
-<!--                    :label="dict.label"-->
-<!--                    :value="dict.value"-->
-<!--                  ></el-option>-->
-<!--                </el-select>-->
-
-                <el-checkbox-group v-model="expertTypeList">
-                  <el-checkbox
+                <el-select
+                  v-model="queryParams.expertType"
+                  placeholder="请选择专家类别"
+                  clearable
+                  style="width: 100%"
+                >
+                  <el-option
                     v-for="dict in dict.type.expert_type"
-                    :label="dict.value"
                     :key="dict.value"
-                  >{{ dict.label }}</el-checkbox
-                  >
-                </el-checkbox-group>
+                    :label="dict.label"
+                    :value="dict.value"
+                  ></el-option>
+                </el-select>
+
+<!--                <el-checkbox-group v-model="expertTypeList">-->
+<!--                  <el-checkbox-->
+<!--                    v-for="dict in dict.type.expert_type"-->
+<!--                    :label="dict.value"-->
+<!--                    :key="dict.value"-->
+<!--                  >{{ dict.label }}</el-checkbox-->
+<!--                  >-->
+<!--                </el-checkbox-group>-->
               </el-form-item>
               <el-form-item>
                 <el-button
