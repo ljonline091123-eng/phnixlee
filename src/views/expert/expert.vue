@@ -193,21 +193,21 @@
                 key="expertState"
                 prop="expertState"
               >
-<!--                <template slot-scope="{ row }">-->
-<!--                  <el-switch-->
-<!--                    :value="row.expertState === 1 ? true : false"-->
-<!--                    active-text="启用"-->
-<!--                    inactive-text="禁用"-->
-<!--                    @change="updateDeposit(row)"-->
-<!--                    :disabled="-->
-<!--                      !$store.getters.permissions.includes(-->
-<!--                        'expert:expert:setting'-->
-<!--                      ) && !$store.getters.permissions.includes('*:*:*')-->
-<!--                    "-->
-<!--                    v-hasPermi="['expert:expert:setting']"-->
-<!--                  >-->
-<!--                  </el-switch>-->
-<!--                </template>-->
+                <template slot-scope="{ row }">
+                  <el-switch
+                    :value="row.expertState === 1 ? true : false"
+                    active-text="启用"
+                    inactive-text="禁用"
+                    @change="updateDeposit(row)"
+                    :disabled="
+                      !$store.getters.permissions.includes(
+                        'expert:expert:setting'
+                      ) && !$store.getters.permissions.includes('*:*:*')
+                    "
+                    v-hasPermi="['expert:expert:setting']"
+                  >
+                  </el-switch>
+                </template>
               </el-table-column>
             </el-table>
             <pagination
