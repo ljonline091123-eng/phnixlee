@@ -1851,6 +1851,7 @@ export default {
         const res = await addAttachment({ fileName: name, fileUrl: url });
         /* 设置新的附件返回的附件id */
         this.$set(this.formData, "biddingAttachmentId", res.data);
+        this.$set(this.formData, "biddingTemplateName", name);
         /* 同步更新页面的模板附件对象(附件修改按钮) */
         if (!this.procurementSchemeTempObject.biddingTemplate) {
           this.$set(this.procurementSchemeTempObject, 'biddingTemplate', {});
@@ -1888,6 +1889,7 @@ export default {
         const res = await addAttachment({ fileName: name, fileUrl: url });
         /* 设置新的附件返回的附件id */
         this.$set(this.formData, "contractAttachmentId", res.data);
+        this.$set(this.formData, "contractTemplateName", name);
         /* 同步更新页面的模板附件对象(附件修改按钮) */
         if (!this.procurementSchemeTempObject.contractTemplate) {
           this.$set(this.procurementSchemeTempObject, 'contractTemplate', {});
