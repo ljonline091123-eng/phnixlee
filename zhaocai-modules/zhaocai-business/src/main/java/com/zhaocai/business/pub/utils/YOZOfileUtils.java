@@ -110,6 +110,37 @@ public class YOZOfileUtils {
         }
     }
 
+
+    /**
+     * 修改文件名为原文件名加上随机UUID作为后缀。
+     *
+     * @param originalFileName 原始文件名（包括扩展名）
+     * @return 修改后的文件名
+     */
+    public static String modifyFileName(String originalFileName) {
+        if (originalFileName == null || originalFileName.isEmpty()) {
+            throw new IllegalArgumentException("文件名不能为空");
+        }
+
+        // 获取文件的扩展名（如果有）
+        int dotIndex = originalFileName.lastIndexOf('.');
+        String fileNameWithoutExtension;
+        String fileExtension = "";
+
+        if (dotIndex != -1) {
+            fileNameWithoutExtension = originalFileName.substring(0, dotIndex);
+            fileExtension = originalFileName.substring(dotIndex);
+        } else {
+            fileNameWithoutExtension = originalFileName;
+        }
+
+        // 生成一个新的UUID
+        String uuid = UUID.randomUUID().toString().replaceAll("-", "");
+
+        // 构建新的文件名：原文件名 + "_" + UUID + 扩展名
+        return fileNameWithoutExtension + "_" + uuid + fileExtension;
+    }
+
     //删除临时文件
     public void deleteTempFilePath(String FilePath){
         if (FilePath != null) {

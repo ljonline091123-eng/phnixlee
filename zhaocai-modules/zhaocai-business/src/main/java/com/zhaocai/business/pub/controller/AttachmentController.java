@@ -257,6 +257,13 @@ public class AttachmentController extends BladeController {
         }
     }
 
+    @GetMapping("/test")
+    @ApiOperation(value = "中台文件上传至minio")
+    public ResultData<String>  test(@RequestParam("fileName") String fileName) {
+        String newFileName = yozOfileUtils.modifyFileName(fileName);
+        return ResultData.data(newFileName);
+    }
+
     @PostMapping("/fileUpload")
     @ApiOperation(value = "中台文件上传至minio")
     public String  fileUpload(@RequestBody FileBeanVo fileBean) throws IOException {
@@ -275,9 +282,10 @@ public class AttachmentController extends BladeController {
         }
         // 转换为InputStream
         FileInputStream fis = new FileInputStream(file);
-        String fileUrl = sysFileService.uploadFile(fis, fileBean.getFilename());
+        String NewFileName = yozOfileUtils.modifyFileName(fileBean.getFilename());
+        String fileUrl = sysFileService.uploadFile(fis, NewFileName);
         attcha.setFileUrl(fileUrl);
-        attachmentService.updateBusiness(attcha.getId(),attcha.getBusinessId(),fileUrl,fileBean.getFilename());
+        attachmentService.updateBusiness(attcha.getId(),attcha.getBusinessId(),fileUrl,NewFileName);
         System.out.println("fileUrl:"+fileUrl);
         return fileUrl;
     }
