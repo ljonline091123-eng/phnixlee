@@ -1,17 +1,16 @@
 package com.zhaocai.system.api.system;
 
-import com.zhaocai.system.api.domain.BusinessUser;
-import com.zhaocai.system.api.domain.SysDept;
-import com.zhaocai.system.api.domain.SysRole;
-import org.springframework.cloud.openfeign.FeignClient;
-import org.springframework.validation.annotation.Validated;
-import org.springframework.web.bind.annotation.*;
 import com.zhaocai.common.core.constant.SecurityConstants;
 import com.zhaocai.common.core.constant.ServiceNameConstants;
 import com.zhaocai.common.core.domain.R;
+import com.zhaocai.system.api.domain.BusinessUser;
+import com.zhaocai.system.api.domain.SysRole;
 import com.zhaocai.system.api.domain.SysUser;
 import com.zhaocai.system.api.factory.RemoteUserFallbackFactory;
 import com.zhaocai.system.api.model.LoginUser;
+import org.springframework.cloud.openfeign.FeignClient;
+import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 

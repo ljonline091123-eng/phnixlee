@@ -26,6 +26,7 @@ public class AttachmentVO {
     @ApiModelProperty(value =  "文件名")
     private String fileName;
 
+
     public AttachmentVO(String fileName,String fileUrl) {
         this.fileName = fileName;
         this.fileUrl = fileUrl;

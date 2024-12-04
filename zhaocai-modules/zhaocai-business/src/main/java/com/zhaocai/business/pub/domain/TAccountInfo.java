@@ -26,7 +26,7 @@ public class TAccountInfo implements Serializable {
 
     /** 商户ID */
     @Excel(name = "商户ID")
-    private Long upId;
+    private String upId;
 
     /** 银行账号 */
     @Excel(name = "银行账号")

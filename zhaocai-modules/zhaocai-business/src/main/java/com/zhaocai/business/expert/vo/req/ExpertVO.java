@@ -56,8 +56,8 @@ public class ExpertVO implements Serializable {
     private String businessType;
 
     @ApiModelProperty(value =  "专家类别")
-    @NotNull(message = "工作部门不能为空", groups = {ValidateGroup.AddGroup.class})
-    private Integer expertType;
+    @NotNull(message = "专家类别不能为空")
+    private String expertType;
 
     @ApiModelProperty(value =  "专家用户id")
     private Long userId;

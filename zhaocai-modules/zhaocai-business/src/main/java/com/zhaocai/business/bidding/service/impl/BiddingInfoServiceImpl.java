@@ -1143,7 +1143,15 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
             LinkedHashMap<String, String> varParam = new LinkedHashMap<>();
             varParam.put("name", expert.getExpertName());
             varParam.put("place", placeBuff.toString());
-            varParam.put("catalogue", expert.getExpertType() == 1 ? "技术" : "商务");
+
+            String catalogue = "";
+            if(expert.getExpertType().contains("1") && expert.getExpertType().contains("2"))
+                catalogue = "技术商务";
+            else if(expert.getExpertType().contains("1"))
+                catalogue = "技术";
+            else if(expert.getExpertType().contains("2"))
+                catalogue = "商务";
+            varParam.put("catalogue", catalogue);
             smsSenderUtil.sendMessage(SmsTemplateEnum.EXPERT_BID_EVA_NOTICE.getCode(), expert.getExpertPhone(), varParam);
         }
         return true;

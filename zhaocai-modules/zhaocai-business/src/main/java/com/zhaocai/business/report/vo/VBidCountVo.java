@@ -57,6 +57,9 @@ public class VBidCountVo {
     /** 归属项目部 */
     private String projectDepartmentId;
 
+    /** 归属项目部名称 */
+    private String projectDepartmentName;
+
     /** 采购次数 */
     @Excel(name = "采购次数")
     private BigDecimal cgNum;

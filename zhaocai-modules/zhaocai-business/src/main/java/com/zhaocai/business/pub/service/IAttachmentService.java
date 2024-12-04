@@ -7,7 +7,6 @@ import com.zhaocai.business.pub.vo.req.AttachmentRequestVO;
 import com.zhaocai.business.pub.vo.res.AttachmentVO;
 import com.zhaocai.business.vendor.vo.res.DownloadAgreementVO;
 
-import java.io.InputStream;
 import java.util.List;
 
 /**
@@ -33,6 +32,13 @@ public interface IAttachmentService extends IService<Attachment> {
      * @return
      */
     List<AttachmentVO> listAttachment(AttachmentTypeEnum businessType, Long businessId);
+
+    /**
+     * 获取指定id的附件
+     * @param attachmentId
+     * @return
+     */
+    AttachmentVO getAttachmentById(Long attachmentId);
 
     /**
      * 新增附件
@@ -65,10 +71,20 @@ public interface IAttachmentService extends IService<Attachment> {
     void updateBusiness(Long id, AttachmentTypeEnum attachmentTypeEnum, Long businessId);
 
     /**
+     * 更新附件业务信息
+     * @param id
+     * @param attachmentTypeEnum
+     * @param businessId
+     */
+    void updateBusiness(Long id,  Long businessId,String fileUrl,String fileName);
+
+    /**
      * 获取附件文件流
      * @param attachmentId
      * @param agreementName
      * @return
      */
     DownloadAgreementVO getAttachmentInputStream(long attachmentId,String agreementName);
+
+
 }

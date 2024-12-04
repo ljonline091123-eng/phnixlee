@@ -9,22 +9,21 @@ spring:
     name: zhaocai-business
   profiles:
     # 环境配置
-    active: dev
+    active: prod
   cloud:
     nacos:
       username: nacos
       password: nacos
       discovery:
         # 服务注册地址
-        server-addr: 192.168.240.13:30848
+        server-addr: 192.168.241.87:31755
         metadata:
           version: cm
       config:
         # 配置中心地址
-        server-addr: 192.168.240.13:30848
+        server-addr: 192.168.241.87:31755
         # 配置文件格式
         file-extension: yml
         # 共享配置
         shared-configs:
           - application-${spring.profiles.active}.${spring.cloud.nacos.config.file-extension}
-

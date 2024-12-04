@@ -19,7 +19,6 @@ import com.zhaocai.business.vendor.vo.res.DownloadAgreementVO;
 import com.zhaocai.common.core.utils.NumberUtil;
 import com.zhaocai.common.core.utils.StringUtils;
 import com.zhaocai.common.core.utils.bean.BeanCopierUtil;
-import com.zhaocai.common.core.utils.file.FileUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -77,6 +76,13 @@ public class AttachmentServiceImpl extends ServiceImpl<AttachmentMapper, Attachm
     }
 
     @Override
+    public AttachmentVO getAttachmentById(Long attachmentId) {
+        Attachment attachment = super.getOne(new LambdaQueryWrapper<Attachment>()
+                .eq(Attachment::getId, attachmentId));
+        return BeanCopierUtil.copyBean(attachment, AttachmentVO.class);
+    }
+
+    @Override
     public Long addAttachment(AttachmentRequestVO requestVO, AttachmentTypeEnum businessType, Long businessId) {
         Attachment attachment = new Attachment();
         attachment.setBusinessType(businessType.getType());
@@ -105,6 +111,18 @@ public class AttachmentServiceImpl extends ServiceImpl<AttachmentMapper, Attachm
         super.save(attachment);
 
         return attachment.getId();
+    }
+
+    @Override
+    public void updateBusiness(Long id, Long businessId,String fileUrl,String fileName) {
+        if (NumberUtil.isNullOrZero(id)  || NumberUtil.isNullOrZero(businessId)||fileUrl==null||fileName==null) {
+            throw new ParamValidateException("保存附件时关键信息为空");
+        }
+        super.update(new LambdaUpdateWrapper<Attachment>()
+                .set(Attachment::getBusinessId, businessId)
+                .set(Attachment::getFileUrl, fileUrl)
+                .set(Attachment::getFileName, fileName)
+                .eq(Attachment::getId, id));
     }
 
     @Override

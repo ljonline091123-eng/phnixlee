@@ -33,4 +33,5 @@ public class Attachment extends BaseEntity {
     /** 文件名 */
     @ApiModelProperty(value =  "文件名")
     private String fileName;
+
 }

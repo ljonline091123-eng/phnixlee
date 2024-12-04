@@ -169,10 +169,11 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
             iPage.setTotal(expertList.size());
             iPage.setPages(expertList.size() / queryDTO.getPageSize() + 1);
         }
-        // 处理业态
+        // 处理业态、专家类别
         for (ExpertListVO vo : iPage.getRecords()) {
             if (StringUtils.isNotBlank(vo.getBusinessType())) {
                 vo.setBusinessTypeText(this.getBusinessTypeName(vo.getBusinessType()));
+                vo.setExpertTypeText(this.getExpertTypeName(vo.getExpertType()));
             }
         }
         return new PageResult<>(iPage);
@@ -194,15 +195,31 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
                 .collect(Collectors.joining(","));
     }
 
+    private String getExpertTypeName(String ids) {
+        if (StringUtils.isBlank(ids)) {
+            return null;
+        }
+        String[] arr = ids.split(",");
+        List<DictListVO> rentalTypeMap = dictDataService.listDictByType(DictBizEnum.EXPERT_TYPE.getName());
+        return Arrays.stream(arr)
+                .map(id -> rentalTypeMap.stream()
+                        .filter(dict -> id.equals(dict.getDictValue()))
+                        .map(DictListVO::getDictLabel)
+                        .findFirst()
+                        .orElse(null))
+                .filter(name -> name != null && !name.isEmpty())
+                .collect(Collectors.joining(","));
+    }
+
     /**
      * 根据条件随机抽取专家
      * */
     private List<ExpertListVO> randomDraw(List<ExpertListVO> expertList, ExpertRandomDrawVO drawVO){
-        List<ExpertListVO> drawExpertList = new ArrayList<>();
+        Set<ExpertListVO> drawExpertList = new HashSet<>();
         // 使用洗牌算法打乱列表中的元素
         Collections.shuffle(expertList);
-        List<ExpertListVO> techExpertList = expertList.stream().filter(item -> item.getExpertType() == 1).collect(Collectors.toList());
-        List<ExpertListVO> econExpertList = expertList.stream().filter(item -> item.getExpertType() == 2).collect(Collectors.toList());
+        List<ExpertListVO> techExpertList = expertList.stream().filter(item -> item.getExpertType().contains("1") || (item.getExpertType().contains("1")&&item.getExpertType().contains("2")) ).collect(Collectors.toList());
+        List<ExpertListVO> econExpertList = expertList.stream().filter(item -> item.getExpertType().contains("2") || (item.getExpertType().contains("1")&&item.getExpertType().contains("2"))).collect(Collectors.toList());
         Integer econExpertNum = drawVO.getEconExpertNum();
         Integer techExpertNum = drawVO.getTechExpertNum();
 
@@ -213,7 +230,7 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
         for (int j = 0; j < Math.min(econExpertList.size(), econExpertNum); j++) {
             drawExpertList.add(econExpertList.get(j));
         }
-        return drawExpertList;
+        return new ArrayList<>(drawExpertList);
     }
 
     @Override
