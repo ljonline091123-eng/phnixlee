@@ -42,14 +42,17 @@
             </el-col>
             <el-col :span="8" class="grid-cell">
               <el-form-item label="采购人" prop="procurementOfficerName" class="required label-right-align">
-                <el-select v-model="formData.procurementOfficerName" placeholder="请选择" filterable @change="changeOperator" :disabled="isSubmit" style="width: 100%">
-                  <el-option
-                    v-for="item in operatorList"
-                    :key="item.userId"
-                    :label="item.nickName"
-                    :value="item.userId">
-                  </el-option>
-                </el-select>
+                <el-input v-model="formData.procurementOfficerName" readonly @focus="handleClick" size="large" placeholder="请选择">
+                  <template slot="suffix"><i class="el-input__icon el-icon-arrow-down"></i></template>
+                </el-input>
+<!--                <el-select v-model="formData.procurementOfficerName" placeholder="请选择" filterable @change="changeOperator" :disabled="isSubmit" style="width: 100%">-->
+<!--                  <el-option-->
+<!--                    v-for="item in operatorList"-->
+<!--                    :key="item.userId"-->
+<!--                    :label="item.nickName"-->
+<!--                    :value="item.userId">-->
+<!--                  </el-option>-->
+<!--                </el-select>-->
               </el-form-item>
             </el-col>
           </el-row>
@@ -320,6 +323,91 @@
 
       </el-form>
 
+      <!-- 选择采购经办人 -->
+      <el-dialog title="采购人" :visible.sync="officerDialog" width="55%">
+        <el-form
+          :model="searchQuery"
+          ref="planForm"
+          label-position="left"
+          size="small"
+          inline
+          @submit.native.prevent
+        >
+          <el-form-item
+            label="用户"
+            prop="pushRoleList"
+            class="label-right-align"
+            label-width="40px"
+          >
+            <el-input
+              v-model="searchQuery.nickName"
+              placeholder="请输入用户"
+              clearable
+              style="width: 150px"
+              @keyup.enter.native="searchUser"
+            />
+          </el-form-item>
+          <el-form-item>
+            <el-button
+              type="primary"
+              icon="el-icon-search"
+              size="small"
+              style="width: 70px"
+              @click="searchUser"
+            >查询</el-button>
+          </el-form-item>
+        </el-form>
+        <virtual-scroll
+            :data="filteredOperatorList"
+            :item-size="62"
+            key-prop="virtualId"
+            ref="virScroll"
+            @change="(renderData) => virtualList = renderData">
+        <el-table
+          v-loading="officerLoading"
+          :data="virtualList"
+          stripe
+          size="small"
+          highlight-current-row
+          border
+          @selection-change="selectOfficer"
+          @row-click="selectOfficer"
+          :row-key="selSelectKey"
+          max-height="400"
+          ref="selectTable">
+          <el-table-column width="30" align="center">
+            <template slot-scope="scope">
+              <el-radio
+                v-model="selectedUserId"
+                :label="scope.row.userId"
+                @change="selectOfficer(scope.row)"
+              />
+            </template>
+          </el-table-column>
+          <el-table-column label="序号" prop="virtualId" width="60" align="center" />
+          <el-table-column label="用户" prop="nickName" show-overflow-tooltip align="center"/>
+          <el-table-column label="电话号码" prop="phonenumber" show-overflow-tooltip align="center"/>
+          <el-table-column label="归属当前组织名称" prop="thridOrgName" show-overflow-tooltip align="center"/>
+          <el-table-column label="归属管理组织名称" prop="orgDeptName" show-overflow-tooltip align="center"/>
+        </el-table>
+        </virtual-scroll>
+        <div slot="footer" class="dialog-footer">
+          <el-button
+            @click="officerDialog = false"
+            style="width: 100px"
+            size="small"
+          >取 消</el-button
+          >
+          <el-button
+            type="primary"
+            @click="submitOfficer"
+            style="width: 100px"
+            size="small"
+          >确 定</el-button
+          >
+        </div>
+      </el-dialog>
+
       <!-- 选择项目合约规划 -->
       <el-dialog title="清单" :visible.sync="inventoryVisible" width="70%">
         <el-table v-loading="loading" :data="inventoryList" stripe border size="small">
@@ -414,6 +502,7 @@ import BackButton from "@/components/BackButton/index.vue"
 import { mapGetters } from "vuex"
 import PageTitle from "@/components/PageTitle/index.vue"
 import {PRICETYPELIST, PRICETYPEOPTIONS} from "@/utils/constants";
+import VirtualScroll from 'el-table-virtual-scroll'
 export default {
   name: "add-plan",
   dicts: ['plan_type','price_type','procurement_counting_type','procurement_payment_type'],
@@ -426,6 +515,16 @@ export default {
       }
     }
     return {
+      // 选择采购经办人
+      officerDialog: false, // 控制对话框的显示隐藏
+      officerLoading: false,
+      filteredOperatorList: [], // 过滤后的用户列表
+      virtualList: [],
+      selectedUserId: null, // 选中的采购人ID
+      selectedUser: {}, // 选中的用户信息
+      searchQuery: {   // 搜索查询字符串
+        nickName: '',
+      },
       PRICETYPELIST:PRICETYPELIST,
       PRICETYPEOPTIONS:PRICETYPEOPTIONS,
       formData: {
@@ -569,7 +668,8 @@ export default {
   },
   components:{
     BackButton,
-    PageTitle
+    PageTitle,
+    VirtualScroll
   },
   created() {
     console.log('param--param--param!------------------');
@@ -610,6 +710,55 @@ export default {
       this.queryContractPlanSplitFlag();
   },
   methods: {
+    /** 选择采购人-点击行 */
+    selectOfficer(val){
+      this.selectedUser = val
+      this.selectedUserId = val.userId;
+    },
+    selSelectKey(row){
+      return row.virtualId
+    },
+    /** 选择采购人-点击确定 */
+    submitOfficer(){
+      if (this.selectedUser && this.selectedUser.userId) {
+        this.$set(this.formData,'procurementOfficerName',this.selectedUser.nickName);
+        this.$set(this.formData,'procurementOfficer',this.selectedUser.userId);
+        this.officerDialog = false;
+      } else {
+        this.$message.warning('请选择一个采购人');
+      }
+    },
+    /** 选择采购人-打开弹窗 */
+    handleClick(){
+      this.searchQuery = {
+        nickName: '',
+      };
+      if(this.formData.procurementOfficer){
+        this.selectedUserId = this.formData.procurementOfficer
+        this.selectedUser = {nickName:this.formData.procurementOfficerName,userId:this.formData.procurementOfficer}
+      }
+      try{
+        this.filteredOperatorList = this.operatorList.map((item, index) => ({
+          ...item,
+          virtualId: index+1
+        }));
+      }catch(err){
+        console.log(err);
+      }
+      this.officerDialog = true;
+    },
+    /** 选择采购人-过滤用户 */
+    searchUser() {
+      this.officerLoading = true;
+      const { nickName } = this.searchQuery;
+      this.filteredOperatorList = this.operatorList
+        .filter(item => !nickName || item.nickName.includes(nickName))
+        .map((item, index) => ({
+          ...item,
+          virtualId: index + 1
+        }));
+      this.officerLoading = false;
+    },
     getRowKeys2(row) {
       return row.planTable;
     },
