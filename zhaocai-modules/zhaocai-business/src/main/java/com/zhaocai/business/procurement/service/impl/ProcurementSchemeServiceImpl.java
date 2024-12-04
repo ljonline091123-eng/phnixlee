@@ -6,25 +6,20 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import com.zhaocai.business.agreement.domain.Agreement;
 import com.zhaocai.business.agreement.service.IAgreementMaterialsListService;
 import com.zhaocai.business.agreement.vo.req.AgreementSchemeQueryVO;
 import com.zhaocai.business.agreement.vo.res.AgreementSchemeListVO;
 import com.zhaocai.business.bidding.enums.TenderNoticeStatusEnum;
-import com.zhaocai.business.bidding.vo.res.BiddingQuotationDetailVO;
-import com.zhaocai.business.bidding.vo.res.BiddingVendorVO;
 import com.zhaocai.business.common.enums.*;
 import com.zhaocai.business.common.exception.BusinessException;
 import com.zhaocai.business.common.exception.ParamValidateException;
 import com.zhaocai.business.common.utils.ValidateUtils;
 import com.zhaocai.business.manager.http.dto.req.*;
-import com.zhaocai.business.manager.http.dto.res.BpmAuditResponseDTO;
 import com.zhaocai.business.manager.http.dto.res.BpmInitializeResponseDTO;
 import com.zhaocai.business.manager.http.dto.res.BpmListProcessLogResponseDTO;
 import com.zhaocai.business.manager.http.dto.res.BpmLoadTaskDefResponseDTO;
 import com.zhaocai.business.manager.http.service.UnderlingSystemService;
 import com.zhaocai.business.process.service.IBPMProcessService;
-import com.zhaocai.business.process.service.IPBMOverrideService;
 import com.zhaocai.business.procurement.domain.*;
 import com.zhaocai.business.procurement.mapper.ProcurementSchemeMapper;
 import com.zhaocai.business.procurement.service.*;
@@ -153,7 +148,7 @@ public class ProcurementSchemeServiceImpl extends ServiceImpl<ProcurementSchemeM
         /* 判断保证金状态 来赋值 */
         setSchemeDeposit(requestVO.getProcurementScheme());
 
-        if (NumberUtil.isNullOrZero(requestVO.getProcurementScheme().getId())) {
+        if (NumberUtil.isNullOrZero(requestVO.getProcurementScheme().getId())||requestVO.getContractSplitIds()==null||requestVO.getContractSplitIds().size()==0) {
             // 校验选择的物料
             ProcurementSchemeCreateVO schemeCreateVO = checkProcurementSchemeData(requestVO.getContractSplitIds());
 
@@ -522,7 +517,9 @@ public class ProcurementSchemeServiceImpl extends ServiceImpl<ProcurementSchemeM
 
         // 获取合约拆分记录
         List<ContractPlanningSplit> planningSplits = contractPlanningSplitService.listByIds(contractSplitIds);
-
+        if (planningSplits==null||planningSplits.size() ==0) {
+            throw new ParamValidateException("无合约拆分记录");
+        }
         // 获取&校验采购计划
         List<Long> planIdList = extractDistinctValues(planningSplits,ContractPlanningSplit::getProcurementPlanId);
         List<ProcurementPlan> procurementPlans = procurementPlanService.listByIds(planIdList);
