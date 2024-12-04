@@ -1779,10 +1779,7 @@ export default {
       this.generalReuScoreTemplateList = res.data.rows;
       this.generalTemplateLoading = false;
     },
-    searchReusableTemplates() {
-      this.templateQuery.pageNum = 1;
-      this.getReusableScoreTemplateList();
-    },
+
     onTemplateSelect(row) {
       this.selectedTemplateId = row.id;
       //  this.attachmentId = row.attachmentId;
@@ -1933,7 +1930,8 @@ export default {
           });
           this.isSubmit = true;
           console.log(this.firstForm, "this.firstForm----------------------");
-          // this.$refs.file.saveFile();  //原联想文档中台的保存文件修改的方法
+         // this.$refs.file.saveFile();
+          this.subForm();
         } else {
           this.isSubmit = false;
           // this.sumitLoding.close();
@@ -1941,15 +1939,10 @@ export default {
         }
       });
     },
-    subForm(value) {
-      const _this = this;
-      console.log(value, "收到的");
-      if (value.status !== 0) {
-        this.templateEditFlag = value.status;
-      }
+    subForm() {
       if (this.isSubmit) {
         delete this.firstForm.agreement.expenditureBusinessType;
-        this.firstForm.templateEditFlag = this.templateEditFlag;
+      //  this.firstForm.templateEditFlag = this.templateEditFlag;
         let formData = JSON.parse(JSON.stringify(this.firstForm));
         formData.agreement.paymentWay = this.firstForm.agreement.paymentWay?.join(",") || '';
         formData.agreement.marketMaterialContractId=this.firstForm.agreement.marketMaterialContractId
@@ -2540,7 +2533,7 @@ export default {
             getEditFileUrlByID({ attachmentId: this.attachmentId })
               .then((res) => {
                 this.editFileUrl = res.data;
-                console.log("editFileUrl:", this.editFileUrl); 
+                console.log("editFileUrl:", this.editFileUrl);
               })
               .catch((err) => {
                 console.error('Error fetching view file URL:', err);

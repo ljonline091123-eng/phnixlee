@@ -1202,7 +1202,6 @@ export default {
       isShow: false,
       activeTab: "generalTemplate",
       currentTab: "generalScoreTemplate",
-      templateId: null,
       generalTemplateList: [],
       reusableTemplateList: [],
       generalTemplateTotal: 0,
@@ -1433,6 +1432,7 @@ export default {
             procurementSchemeBiddingId,
           } = this.formData;
           const formData = {
+            contractSplitIds: this.procurementPlanIds,
             procurementScheme: {
               procurementSchemeName,
               procurementType,
@@ -1454,7 +1454,6 @@ export default {
               biddingTemplateId,
               id: procurementSchemeBiddingId || "",
             },
-            contractSplitIds: this.procurementPlanIds,
           };
           console.log(formData, "formData--formData--formData");
           try {
@@ -1941,6 +1940,7 @@ export default {
         const res = await addAttachment({ fileName: name, fileUrl: url });
         /* 设置新的附件返回的附件id */
         this.$set(this.formData, "biddingAttachmentId", res.data);
+        this.$set(this.formData, "biddingTemplateName", name);
         /* 同步更新页面的模板附件对象(附件修改按钮) */
         if (!this.procurementSchemeTempObject.biddingTemplate) {
           this.$set(this.procurementSchemeTempObject, 'biddingTemplate', {});
@@ -1994,6 +1994,7 @@ export default {
         const res = await addAttachment({ fileName: name, fileUrl: url });
         /* 设置新的附件返回的附件id */
         this.$set(this.formData, "contractAttachmentId", res.data);
+        this.$set(this.formData, "contractTemplateName", name);
         /* 同步更新页面的模板附件对象(附件修改按钮) */
         if (!this.procurementSchemeTempObject.contractTemplate) {
           this.$set(this.procurementSchemeTempObject, 'contractTemplate', {});
@@ -2055,9 +2056,7 @@ export default {
           procurementScheme,
           procurementSchemeBidding,
           contractPlanList,
-          approveNodeInfos,
-          approveLists,
-          contractSplitIdList,
+          contractSplitIdList
         } = res.data;
         /* 采购方案文件，通过getSchemeDetail方法请求procurementScheme/detail?id=获取的数据 */
         this.procurementSchemeTempObject = procurementSchemeBidding;
