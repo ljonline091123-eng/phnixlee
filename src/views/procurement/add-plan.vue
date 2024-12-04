@@ -507,164 +507,7 @@ export default {
   name: "add-plan",
   dicts: ['plan_type','price_type','procurement_counting_type','procurement_payment_type'],
   data() {
-    let checkNum = (rule, value, callback) => {
-      if (!/^[1-9]\d*$/.test(value)) {
-        callback(new Error('请输入正整数'));
-      } else {
-        callback();
-      }
-    }
-    return {
-      // 选择采购经办人
-      officerDialog: false, // 控制对话框的显示隐藏
-      officerLoading: false,
-      filteredOperatorList: [], // 过滤后的用户列表
-      virtualList: [],
-      selectedUserId: null, // 选中的采购人ID
-      selectedUser: {}, // 选中的用户信息
-      searchQuery: {   // 搜索查询字符串
-        nickName: '',
-      },
-      PRICETYPELIST:PRICETYPELIST,
-      PRICETYPEOPTIONS:PRICETYPEOPTIONS,
-      formData: {
-        priceType:1
-      }, //form表单数据
-      planList: [],
-      accountTable:'accountTable',
-      projectCode:'',
-      id:'',
-      yjtUrl:'',
-      isPushRevoke:null,//区分推送和撤销
-      dialogVisible:false,
-      materialsLists:[],
-      inventoryList: [],
-      // isEdit: true,
-      rules: {
-        procurementPlanName: [{
-          required: true,
-          message: '采购名称不可为空',
-        }],
-        beginDate: [{
-          required: true,
-          message: '开始时间不能为空',
-        }],
-        endDate: [{
-          required: true,
-          message: '完成时间不能为空',
-        }],
-        arrivalDate: [{
-          required: true,
-          message: '进场时间不能为空',
-        }],
-        procurementReporterName: [{
-          required: true,
-          message: '填报人不能为空',
-        }],
-        procurementOfficerName: [{
-          required: true,
-          message: '采购人不能为空',
-        }],
-        priceType: [{
-          required: true,
-          message: '采购价类型不能为空',
-        }],
-        paymentType: [{
-          required: true,
-          message: '付款方式不能为空',
-        }],
-        countingType: [{
-          required: true,
-          message: '计价方式不能为空',
-        }],
-        region: [{
-          required: true,
-          message: '区域不能为空',
-        }],
-      },
-      // 遮罩层
-      loading: false,
-      // 显示搜索条件
-      showSearch: true,
-      // 总条数
-      total: 0,
-      // 查询参数
-      queryParams: {
-        pageNum: 1,
-        pageSize: 10,
-        procurementPlanCode: undefined,
-        procurementPlanName: undefined,
-        projectName: undefined,
-        operator: undefined,
-        procurementPlanType: 'all'
-      },
-      inventoryVisible: false,
-      splitVisible: false, //是否显示拆分合同
-      splitForm: {
-        num: ''
-      }, //拆分合同数表单
-      splitRules: {
-        num: [
-          { required: true, message: '请输入拆分的份数', trigger: 'blur' },
-          { validator: checkNum, trigger: 'blur' }
-        ],
-      },
-      currentContract: {},
-      isSubmit: false,
-      // indexs:[],
-      operatorList:[],
-      isUpdate:false,
-      expireTimeOption: {
-        disabledDate(time) {
-          return time.getTime() < Date.now() - 8.64e7; // 禁用小于当前日期的日期
-        }
-      },
-      expireTimeOverOttion:{
-        disabledDate(time) {
-          // 获取今天的时间戳
-          const today = new Date();
-          today.setHours(0, 0, 0, 0); // 设置为当天的零点
-
-          // 明天的时间戳
-          const tomorrow = new Date(today);
-          tomorrow.setDate(today.getDate() + 1);
-
-          // 将传入的时间戳转为日期对象
-          const date = new Date(time);
-
-          // 只能选择明天及之后的日期
-          return date <= today || date < tomorrow;
-        }
-      },
-      regionOptions:[],
-      /* 是否是浮动价类型，浮动价/固定、浮动价 都是true */
-      isFloat:false,
-      isSpecific: false,
-      mathjs:null,
-      rentModeOptions:[],
-      /* 交易标的物（在浮动价更新后[已弃用！]该判断逻辑了） */
-      subjectMatter:"",
-      /* 采购类型 procurementType (浮动价逻辑使用了)
-        PURCHASE_MATERIALS(1, "购买材料"),
-        LEASED_MATERIAL(2, "租赁材料"),
-        RENTAL_MACHINERY(3, "租赁机械（设备）"),
-        SPECIALTY_SUBCONTRACT(4, "专业分包"),
-        SERVICE_SUBCONTRACT(5, "劳务分包"),
-        OTHER_TYPE(6, "其他"),
-      */
-      procurementType:"",
-      matterVisible:false,
-      matterList:[],
-      defaultProps: {
-        children: 'children',
-        label: 'serviceClassName'
-      },
-      selectedMatter:{},
-      matterCurrentId:'',
-      matterName:undefined,
-      initCountObj:{},
-      numDisable:false,
-    };
+    return this.getInitialData();
   },
   components:{
     BackButton,
@@ -672,6 +515,7 @@ export default {
     VirtualScroll
   },
   created() {
+    this.getInitialData();
     console.log('param--param--param!------------------');
     this.mathjs = create(all);
     this.mathjs.config({
@@ -710,6 +554,167 @@ export default {
       this.queryContractPlanSplitFlag();
   },
   methods: {
+    /* 代替data初始化 */
+    getInitialData() {
+      let checkNum = (rule, value, callback) => {
+        if (!/^[1-9]\d*$/.test(value)) {
+          callback(new Error('请输入正整数'));
+        } else {
+          callback();
+        }
+      }
+      return {
+        // 选择采购经办人
+        officerDialog: false, // 控制对话框的显示隐藏
+        officerLoading: false,
+        filteredOperatorList: [], // 过滤后的用户列表
+        virtualList: [],
+        selectedUserId: null, // 选中的采购人ID
+        selectedUser: {}, // 选中的用户信息
+        searchQuery: {   // 搜索查询字符串
+          nickName: '',
+        },
+        PRICETYPELIST:PRICETYPELIST,
+        PRICETYPEOPTIONS:PRICETYPEOPTIONS,
+        formData: {
+          priceType:1
+        }, //form表单数据
+        planList: [],
+        accountTable:'accountTable',
+        projectCode:'',
+        id:'',
+        yjtUrl:'',
+        isPushRevoke:null,//区分推送和撤销
+        dialogVisible:false,
+        materialsLists:[],
+        inventoryList: [],
+        // isEdit: true,
+        rules: {
+          procurementPlanName: [{
+            required: true,
+            message: '采购名称不可为空',
+          }],
+          beginDate: [{
+            required: true,
+            message: '开始时间不能为空',
+          }],
+          endDate: [{
+            required: true,
+            message: '完成时间不能为空',
+          }],
+          arrivalDate: [{
+            required: true,
+            message: '进场时间不能为空',
+          }],
+          procurementReporterName: [{
+            required: true,
+            message: '填报人不能为空',
+          }],
+          procurementOfficerName: [{
+            required: true,
+            message: '采购人不能为空',
+          }],
+          priceType: [{
+            required: true,
+            message: '采购价类型不能为空',
+          }],
+          paymentType: [{
+            required: true,
+            message: '付款方式不能为空',
+          }],
+          countingType: [{
+            required: true,
+            message: '计价方式不能为空',
+          }],
+          region: [{
+            required: true,
+            message: '区域不能为空',
+          }],
+        },
+        // 遮罩层
+        loading: false,
+        // 显示搜索条件
+        showSearch: true,
+        // 总条数
+        total: 0,
+        // 查询参数
+        queryParams: {
+          pageNum: 1,
+          pageSize: 10,
+          procurementPlanCode: undefined,
+          procurementPlanName: undefined,
+          projectName: undefined,
+          operator: undefined,
+          procurementPlanType: 'all'
+        },
+        inventoryVisible: false,
+        splitVisible: false, //是否显示拆分合同
+        splitForm: {
+          num: ''
+        }, //拆分合同数表单
+        splitRules: {
+          num: [
+            { required: true, message: '请输入拆分的份数', trigger: 'blur' },
+            { validator: checkNum, trigger: 'blur' }
+          ],
+        },
+        currentContract: {},
+        isSubmit: false,
+        // indexs:[],
+        operatorList:[],
+        isUpdate:false,
+        expireTimeOption: {
+          disabledDate(time) {
+            return time.getTime() < Date.now() - 8.64e7; // 禁用小于当前日期的日期
+          }
+        },
+        expireTimeOverOttion:{
+          disabledDate(time) {
+            // 获取今天的时间戳
+            const today = new Date();
+            today.setHours(0, 0, 0, 0); // 设置为当天的零点
+
+            // 明天的时间戳
+            const tomorrow = new Date(today);
+            tomorrow.setDate(today.getDate() + 1);
+
+            // 将传入的时间戳转为日期对象
+            const date = new Date(time);
+
+            // 只能选择明天及之后的日期
+            return date <= today || date < tomorrow;
+          }
+        },
+        regionOptions:[],
+        /* 是否是浮动价类型，浮动价/固定、浮动价 都是true */
+        isFloat:false,
+        isSpecific: false,
+        mathjs:null,
+        rentModeOptions:[],
+        /* 交易标的物（在浮动价更新后[已弃用！]该判断逻辑了） */
+        subjectMatter:"",
+        /* 采购类型 procurementType (浮动价逻辑使用了)
+          PURCHASE_MATERIALS(1, "购买材料"),
+          LEASED_MATERIAL(2, "租赁材料"),
+          RENTAL_MACHINERY(3, "租赁机械（设备）"),
+          SPECIALTY_SUBCONTRACT(4, "专业分包"),
+          SERVICE_SUBCONTRACT(5, "劳务分包"),
+          OTHER_TYPE(6, "其他"),
+        */
+        procurementType:"",
+        matterVisible:false,
+        matterList:[],
+        defaultProps: {
+          children: 'children',
+          label: 'serviceClassName'
+        },
+        selectedMatter:{},
+        matterCurrentId:'',
+        matterName:undefined,
+        initCountObj:{},
+        numDisable:false,
+      };
+    },
     /** 选择采购人-点击行 */
     selectOfficer(val){
       this.selectedUser = val
