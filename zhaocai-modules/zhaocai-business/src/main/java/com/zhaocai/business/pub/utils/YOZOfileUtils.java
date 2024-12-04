@@ -179,7 +179,21 @@ public class YOZOfileUtils {
         }
     }
 
+    //替换responseURL的前缀（服务器地址）
+    public String updateFileUrl(String fileUrl) {
+        // 定义旧的和新的URL前缀
+      String oldPrefix =fileYOZOConfig.getOldResponsePrefix();
+      String newPrefix = fileYOZOConfig.getNewResponsePrefix();
 
+        // 检查fileUrl是否以oldPrefix开头
+        if (fileUrl.startsWith(oldPrefix)) {
+            // 使用字符串替换方法更新URL
+            return fileUrl.replace(oldPrefix, newPrefix);
+        }
+
+        // 如果不匹配，则返回原URL
+        return fileUrl;
+    }
 
 
 

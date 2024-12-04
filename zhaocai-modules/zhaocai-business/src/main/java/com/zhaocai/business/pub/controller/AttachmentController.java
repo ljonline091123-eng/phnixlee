@@ -100,20 +100,21 @@ public class AttachmentController extends BladeController {
                 response = Sender.post(PreviewParams.URL_PREVIEW, PreviewParams.CONVERT_TYPE_PREVIEW_PDF, params.getRequestBody());
                 System.out.println("预览pdf文件响应结果：");
                 System.out.println(response);
-                String viewUrl = new JSONObject(response).optJSONObject("data").optString("viewUrl");
-                System.out.println(viewUrl);
+//                String viewUrl = new JSONObject(response).optJSONObject("data").optString("viewUrl");
+//                System.out.println(viewUrl);
             } else if (yozOfileUtils.isImageExtension(suffix)) {
                 response = Sender.post(PreviewParams.URL_PREVIEW, PreviewParams.CONVERT_TYPE_PREVIEW_PIC, params.getRequestBody());
                 System.out.println("预览图片文件响应结果：");
                 System.out.println(response);
-                String viewUrl = new JSONObject(response).optJSONObject("data").optString("viewUrl");
-                System.out.println(viewUrl);
+//                String viewUrl = new JSONObject(response).optJSONObject("data").optString("viewUrl");
+//                System.out.println(viewUrl);
             }else {
                 return ResultData.fail("无法预览该文件格式！");
             }
             String viewUrl = new JSONObject(response).optJSONObject("data").optString("viewUrl");
-            System.out.println(viewUrl);
-            result = ResultData.data(viewUrl);
+            String newViewUrl = yozOfileUtils.updateFileUrl(viewUrl);
+            System.out.println(newViewUrl);
+            result = ResultData.data(newViewUrl);
         } catch (Exception e) {
             throw new RuntimeException("生成文件预览url失败", e);
         }
@@ -181,8 +182,9 @@ public class AttachmentController extends BladeController {
                 return ResultData.fail("无法预览该文件格式！");
             }
             String viewUrl = new JSONObject(response).optJSONObject("data").optString("viewUrl");
-            System.out.println(viewUrl);
-            result = ResultData.data(viewUrl);
+            String newViewUrl = yozOfileUtils.updateFileUrl(viewUrl);
+            System.out.println(newViewUrl);
+            result = ResultData.data(newViewUrl);
         } catch (Exception e) {
             throw new RuntimeException("生成文件预览url失败", e);
         }
@@ -247,8 +249,9 @@ public class AttachmentController extends BladeController {
             System.out.println("编辑响应结果：");
             System.out.println(response);
             String editUrl = new JSONObject(response).optJSONObject("data").optString("editUrl");
-            System.out.println(editUrl);
-            return ResultData.data(editUrl);
+            String newEditUrl = yozOfileUtils.updateFileUrl(editUrl);
+            System.out.println(newEditUrl);
+            return ResultData.data(newEditUrl);
         } catch (Exception e) {
             throw new RuntimeException("生成文件编辑url失败", e);
         }
