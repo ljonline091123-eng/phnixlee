@@ -1432,6 +1432,7 @@ export default {
             procurementSchemeBiddingId,
           } = this.formData;
           const formData = {
+            contractSplitIds: this.procurementPlanIds,
             procurementScheme: {
               procurementSchemeName,
               procurementType,
@@ -1453,7 +1454,6 @@ export default {
               biddingTemplateId,
               id: procurementSchemeBiddingId || "",
             },
-            contractSplitIds: this.procurementPlanIds,
           };
           console.log(formData, "formData--formData--formData");
           try {
