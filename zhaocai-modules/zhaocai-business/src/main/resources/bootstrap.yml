@@ -39,7 +39,6 @@ file-yozo:
   newResponsePrefix: https://zc.hncig.cn:32068/
 
 
-
 # 电子签章
 signature:
   platform: qiyuesuo-private

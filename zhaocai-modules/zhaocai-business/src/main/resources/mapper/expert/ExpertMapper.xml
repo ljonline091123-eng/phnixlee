@@ -69,10 +69,14 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                 and ex.belong_organization = #{query.belongOrganization}
             </if>
             <if test="query.expertType != null">
-                and ex.expert_type = #{query.expertType}
+                and find_in_set(#{query.expertType}, ex.expert_type)
             </if>
-            <if test="query.expertTypes != null and query.expertTypes != ''">
-                and find_in_set(ex.expert_type, #{query.expertTypes})
+            <if test="query.expertTypes != null and query.expertTypes.size() > 0">
+                and (
+                <foreach collection="query.expertTypes" item="expertTypeItem" open="(" separator=" and " close=")">
+                    find_in_set(#{expertTypeItem}, ex.expert_type)
+                </foreach>
+                )
             </if>
             <if test="query.businessType != null ">
                 and ex.business_type = #{query.businessType}
@@ -147,10 +151,14 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                 and ex.belong_organization = #{query.belongOrganization}
             </if>
             <if test="query.expertType != null">
-                and ex.expert_type = #{query.expertType}
+                and find_in_set(#{query.expertType}, ex.expert_type)
             </if>
-            <if test="query.expertTypes != null and query.expertTypes != ''">
-                and find_in_set(ex.expert_type, #{query.expertTypes})
+            <if test="query.expertTypes != null and query.expertTypes.size() > 0">
+                and (
+                <foreach collection="query.expertTypes" item="expertTypeItem" open="(" separator=" and " close=")">
+                    find_in_set(#{expertTypeItem}, ex.expert_type)
+                </foreach>
+                )
             </if>
             <if test="query.businessType != null ">
                 and ex.business_type = #{query.businessType}

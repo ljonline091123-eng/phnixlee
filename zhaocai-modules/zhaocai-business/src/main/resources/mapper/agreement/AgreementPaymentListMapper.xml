@@ -6,6 +6,7 @@
     <resultMap type="com.zhaocai.business.agreement.domain.AgreementPaymentList" id="AgreementPaymentListResult">
         <result property="id" column="id"/>
         <result property="agreementId" column="agreement_id"/>
+        <result property="settlementStage" column="settlement_stage"/>
         <result property="paymentName" column="payment_name"/>
         <result property="paymentBasis" column="payment_basis"/>
         <result property="paymentRatio" column="payment_ratio"/>

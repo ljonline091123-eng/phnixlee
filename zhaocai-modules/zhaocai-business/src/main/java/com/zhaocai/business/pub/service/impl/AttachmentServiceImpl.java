@@ -120,6 +120,8 @@ public class AttachmentServiceImpl extends ServiceImpl<AttachmentMapper, Attachm
         }
         super.update(new LambdaUpdateWrapper<Attachment>()
                 .set(Attachment::getBusinessId, businessId)
+                .set(Attachment::getFileUrl, fileUrl)
+                .set(Attachment::getFileName, fileName)
                 .eq(Attachment::getId, id));
     }
 

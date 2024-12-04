@@ -157,9 +157,9 @@ public class MaterialsListServiceImpl extends ServiceImpl<MaterialsListMapper, M
         List<MaterialsListDTO> materialsList = baseMapper.selectMaterialsListByPlanId(planId);
 
         if (isFilter) {
-            // 过滤掉数量为 0 的清单 和 已推送到易料的清单
+            // 过滤掉 已推送到易料的清单
             materialsList = materialsList.stream()
-                    .filter(x -> NumberUtil.compare(x.getCount(),BigDecimal.ZERO) > 0 && x.getPushFlag().equals("N"))
+                    .filter(x -> x.getPushFlag().equals("N"))
                     .collect(Collectors.toList());
         }
 
