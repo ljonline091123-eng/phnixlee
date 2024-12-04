@@ -1270,7 +1270,6 @@ export default {
     const param = JSON.parse(Base64.decode(this.$route.params.params));
     this.getContractTypeList();
     console.log(param, "param--param--param");
-    this.procurementPlanIds = param.ids;
     if (param?.type === "update") {
       this.isEdit = true;
       this.getSchemeDetail(param.id);
@@ -2055,9 +2054,7 @@ export default {
           procurementScheme,
           procurementSchemeBidding,
           contractPlanList,
-          approveNodeInfos,
-          approveLists,
-          contractSplitIdList,
+          contractSplitIdList
         } = res.data;
         /* 采购方案文件，通过getSchemeDetail方法请求procurementScheme/detail?id=获取的数据 */
         this.procurementSchemeTempObject = procurementSchemeBidding;
