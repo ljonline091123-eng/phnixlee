@@ -415,6 +415,18 @@
           </commonTitle>
           <div style="margin-bottom: 24px">
             <el-table :data="firstForm.agreementPaymentLists" style="width: 100%">
+              <el-table-column prop="settlementStage" label="结算阶段">
+                <template slot-scope="scope">
+                  <el-form-item label-width="0" :prop="'agreementPaymentLists.' + scope.$index + '.settlementStage'"
+                                :rules="[{ required: true, trigger: 'change', message: '请选择结算阶段' }]">
+                    <el-select style="width: 100%" v-model="scope.row.settlementStage" @change="value => changeSettlementStage(scope, value)">
+                      <el-option v-for="dict in dictObj.settlement_stage" :key="dict.value" :label="dict.label"
+                                 :value="dict.value">
+                      </el-option>
+                    </el-select>
+                  </el-form-item>
+                </template>
+              </el-table-column>
               <el-table-column prop="paymentName" label="付款条件/结算与付款节点">
                 <template slot-scope="scope">
                   <el-form-item label-width="0" :prop="'agreementPaymentLists.' + scope.$index + '.paymentName'"
@@ -1556,6 +1568,7 @@ export default {
         invoice_type: "", // 发票类型
         priceForm: "", // 价格形式
         payment_basis: "", // 付款基准
+        settlement_stage: "", // 结算阶段
         payment_type: "", // 付款类型
         deposit_type: "", // 保证金类型
         deposit_way: "", // 保证金方式
@@ -1570,6 +1583,7 @@ export default {
         SYS_CURRENCY: "currency", //币种
         INVOICE_TYPE: "invoice_type", //发票类型
         PAYMENT_BASE_TYPE: "payment_basis", //付款基数
+        SETTLEMENT_STAGE: "settlement_stage", //结算阶段
         PRICE_TYPE: "payment_type", //价款类型
         DEPOSIT_TYPE: "deposit_type", //押金/保证金类型
         DEPOSIT_BASE_TYPE: "deposit_base_amount", //押金/保证金基数
@@ -2345,6 +2359,9 @@ export default {
       } else {
         this.$set(scope.row, 'paymentAmount', 0)
       }
+    },
+    changeSettlementStage(scope, value){
+      console.log('%c 结算阶段监听changeSettlementStage ', `font-size: 20px;background-color: #f00;`, scope, value);
     },
     changePaymentBasis(scope, value){
       console.log(scope,'scope');
