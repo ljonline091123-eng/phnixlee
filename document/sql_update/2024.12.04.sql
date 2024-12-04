@@ -16,3 +16,10 @@ VALUES(357, 2, '过程结算', '2', 'settlement_stage', NULL, 'default', 'N', '0
 INSERT INTO `hnjiantou-zhaocai-dev`.sys_dict_data
 (dict_code, dict_sort, dict_label, dict_value, dict_type, css_class, list_class, is_default, status, create_by, create_time, update_by, update_time, remark)
 VALUES(356, 1, '其他', '1', 'settlement_stage', NULL, 'default', 'N', '0', '18374562968', '2024-12-04 09:40:57', '18374562968', '2024-12-04 09:41:04', '其他');
+
+
+
+
+# 专家类型多选
+ALTER TABLE `hnjiantou-zhaocai-dev`.tb_expert MODIFY COLUMN expert_type varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL COMMENT '专家类别（1技术类 2经济类）';
+ALTER TABLE `hnjiantou-zhaocai-dev`.tb_expert_change MODIFY COLUMN expert_type varchar(50) NULL COMMENT '专家类别（1技术类 2经济类）';
