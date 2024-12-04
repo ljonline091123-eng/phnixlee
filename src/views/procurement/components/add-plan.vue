@@ -471,7 +471,6 @@ export default {
       selectedMatter:{},
       matterCurrentId:'',
       matterName:undefined,
-      initCountObj:{},
       numDisable:false,
       initCountObj:{}
     };

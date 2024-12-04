@@ -1,5 +1,53 @@
 import request from "@/utils/request";
 
+// 范本管理-查询模板附件的-文档中台的预览url
+export function getPreviewFileUrl(id) {
+  return request({
+    url: "/business/template/PreviewFile",
+    method: "get",
+    params: {
+      id,
+    },
+  });
+}
+
+// 范本管理-查询模板附件的-文档中台的编辑url
+export function editFile(params) {
+  return request({
+    url: "/business/template/getEditFileURL",
+    method: "get",
+    params,
+  });
+}
+
+//招标公告-预览招标公告附件-文档中台的预览url && 招标文件附件预览
+export function getViweFileURL(params) {
+  return request({
+    url: "/business/attachment/getViweFileURL",
+    method: "get",
+    params,
+  });
+}
+
+
+//合同签订-预览合同附件-文档中台的预览url 
+export function getViewAttachmentURLByID(params) {
+  return request({
+    url: "/business/attachment/getViweFileUrlByID",
+    method: "get",
+    params,
+  });
+}
+
+//合同签订新增-编辑合同附件-文档中台的编辑url 
+export function getEditFileUrlByID(params) {
+  return request({
+    url: "/business/attachment/getEditFileUrlByID",
+    method: "get",
+    params,
+  });
+}
+
 // 查询合同或招标模板
 export function getFileTemplate(params) {
   return request({

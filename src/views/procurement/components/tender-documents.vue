@@ -237,12 +237,19 @@
         </el-row>
 
         <PageTitle title="招标文件内容" marginBottom="15px" />
-        <FileModule
+        <!-- <FileModule
           :attachmentId="
             scheme.biddingTemplate && scheme.biddingTemplate.attachmentId
           "
           height="500px"
-        />
+        /> -->
+        <iframe
+          v-if="scheme.biddingTemplate"
+          :src= this.viewFileUrl
+          width="100%"
+          height="500px"
+          frameborder="0"
+        ></iframe>
       </el-form>
       <!-- 选择供应商 -->
       <el-dialog
@@ -623,6 +630,8 @@ import { deptTreeSelect } from "@/api/system/user";
 import { getVendorList } from "@/api/vendor/vendor";
 import FileModule from "@/components/FileModule/index.vue";
 import PageTitle from "@/components/PageTitle/index.vue";
+import { get } from "lodash";
+import { getViweFileURL } from "@/api/template/file";
 export default {
   name: "tender-documents",
   dicts: ["vendor_level"],
@@ -649,6 +658,7 @@ export default {
       }
     };
     return {
+      viewFileUrl:"",  //预览招标文件url
       // * 方案名称
       schemeName: '',
       formatApplyTime: '',
@@ -819,8 +829,34 @@ export default {
     this.getDeptTree();
     this.getQAList(0);
     this.getNoticeUpdateList();
+
+    //获取招标文件的预览url
+    this.getbiddingTemplate();
   },
   methods: {
+    //获取招标文件的预览url
+    async getbiddingTemplate(){
+      //解构biddingTemplate，获取招标文件的属性
+      if (this.scheme && this.scheme.biddingTemplate) {
+        const { attachmentId = '', fileName = '', fileUrl = '' } = this.scheme.biddingTemplate;
+        console.log('Attachment ID:', attachmentId);
+        console.log('File Name:', fileName);
+        console.log('File URL:', fileUrl);
+        //获取文档中台的文档编辑URL
+        try {
+          const query1 = { fileName: fileName, fileUrl: fileUrl };
+          console.log('query1:', query1);
+          const res = await getViweFileURL(query1);
+          this.viewFileUrl = res.data;
+          console.log("viewFileUrl:",this.viewFileUrl);
+        } catch (err) {
+          console.log(err);
+        }
+      } else {
+        console.warn('biddingTemplate 数据未正确加载');
+      }
+    },
+
     async updateTimeDifference() {
       // 投标截止时间
       const deadline = new Date(this.noticeDetail?.tenderNotice?.applyTime);
@@ -838,7 +874,9 @@ export default {
         if(this.noticeDetail?.tenderNotice?.twiceQuotState === 1){
           const { id: noticeId } = this.noticeDetail?.tenderNotice || {};
           try {
-            const res = await twiceBidFinish(noticeId);
+            if(this.noticeDetail.tenderNotice.noticeStatus === 3){
+              const res = await twiceBidFinish(noticeId);
+            }
           } catch (err) {
             console.log(err);
           }

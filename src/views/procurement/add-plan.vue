@@ -1403,7 +1403,7 @@ console.log("-2222--"+JSON.stringify(this.materialsLists))
     },
     async getPlanDetail() {
       this.loading = true;
-      const { id } = this.currentContract
+      const { id, procurementPlanType } = this.currentContract
       try {
         const res = await getPlanDetail(id);
         console.log(res, '详情!!!!!!!!!!!!!');
@@ -1451,10 +1451,10 @@ console.log("-2222--"+JSON.stringify(this.materialsLists))
         const { projectId } = this.formData
         getContractMaterials(contractPlanning.contractPlanningId, projectId,contractPlanning.contractPlanningCategory,contractPlanning.contractPlanningCode).then(res => {
           this.inventoryList = res.data.contractMaterialsList;
-          /* 同步将清单内所有的价格类型改成一致的（固定价） */
-          this.updateMaterialsFloat(1);
         })
         console.log(this.planList, 'this.planList');
+        /* 采购方案类型(购买材料,劳务分包....) */
+        this.procurementType = procurementPlanType || '';
       } catch (err) {
         console.log(err);
       }

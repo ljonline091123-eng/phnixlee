@@ -91,7 +91,7 @@
               <el-button
                 type="primary"
                 size="mini"
-                v-if="!scheme.calibrationAttachmentList"
+                v-if="!scheme.calibrationAttachmentList && !shouldDisableButton"
                 @click="showSecretTips"
                 style="margin-top: 8px"
               >上传</el-button
@@ -483,12 +483,19 @@
       :visible.sync="templateDialogVisible"
       width="80%"
     >
-      <FileModule
+      <!-- <FileModule
         :attachmentId="
           scheme.biddingTemplate && scheme.biddingTemplate.attachmentId
         "
         height="600px"
-      />
+      /> -->
+      <iframe
+        v-if="scheme.biddingTemplate"
+        :src= this.viewFileUrl
+        width="100%"
+        height="500px"
+        frameborder="0"
+      ></iframe>
     </el-dialog>
     <!-- 定标审批流程详情 -->
     <el-dialog
@@ -604,6 +611,7 @@ import PageTitle from "@/components/PageTitle/index.vue";
 import { uploadFileUrl } from "@/utils/const";
 import BackBidDetail from "./back-bid-detail.vue";
 import {showSecretRelatedTips} from "@/utils/MyUtils";
+import { getViweFileURL } from "@/api/template/file";
 export default {
   name: "define-bid",
   props: {
@@ -646,6 +654,7 @@ export default {
   },
   data() {
     return {
+      viewFileUrl :"",  //预览招标文件url
       procurementScheme: {},
       isSubmit: false,
       evaluateList: [],
@@ -692,6 +701,7 @@ export default {
 
   created() {
     this.getBiddingQuotationList();
+    this.getbiddingTemplate();
   },
   // mounted() {
   //   this.$nextTick(() => {
@@ -725,6 +735,29 @@ export default {
   // },
 
   methods: {
+    //获取招标文件的预览url
+    async getbiddingTemplate(){
+      //解构biddingTemplate，获取招标文件的属性
+      if (this.scheme && this.scheme.biddingTemplate) {
+        const { attachmentId = '', fileName = '', fileUrl = '' } = this.scheme.biddingTemplate;
+        console.log('Attachment ID:', attachmentId);
+        console.log('File Name:', fileName);
+        console.log('File URL:', fileUrl);
+        //获取文档中台的文档编辑URL
+        try {
+          const query1 = { fileName: fileName, fileUrl: fileUrl };
+          console.log('query1:', query1);
+          const res = await getViweFileURL(query1);
+          this.viewFileUrl = res.data;
+          console.log("viewFileUrl:",this.viewFileUrl);
+        } catch (err) {
+          console.log(err);
+        }
+      } else {
+        console.warn('biddingTemplate 数据未正确加载');
+      }
+    },
+
     formatterUpProcurementScheme(row) {
       if(row.scheme && row.scheme.procurementScheme && row.scheme.procurementScheme.ceilingPrice){
         return Number(row?.quotationDataVOList[row.quotationDataVOList.length - 1]?.taxPricePattern || 0) > Number(row.scheme?.procurementScheme?.ceilingPrice) ? "是" : "否";
