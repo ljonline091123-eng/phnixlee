@@ -458,7 +458,7 @@ export default {
     return {
       //预览合同模板url
       PreviewFileUrl:"",
-      editFileUrl:"",
+      editFileUrl:"",  //编辑合同模板URL
       fileTemplateList: [],
       // 总条数
       total: 0,

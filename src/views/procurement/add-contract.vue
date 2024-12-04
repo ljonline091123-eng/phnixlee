@@ -1933,7 +1933,7 @@ export default {
           });
           this.isSubmit = true;
           console.log(this.firstForm, "this.firstForm----------------------");
-          this.$refs.file.saveFile();
+          // this.$refs.file.saveFile();  //原联想文档中台的保存文件修改的方法
         } else {
           this.isSubmit = false;
           // this.sumitLoding.close();
@@ -2474,7 +2474,6 @@ export default {
             splitId,
             vendorId,
             agreementMaterialsList:list.agreementMaterialsList
-
           }).then((res) => {
             // * 此3个字段是必传字段
             this.typeContract= '';
