@@ -1202,7 +1202,6 @@ export default {
       isShow: false,
       activeTab: "generalTemplate",
       currentTab: "generalScoreTemplate",
-      templateId: null,
       generalTemplateList: [],
       reusableTemplateList: [],
       generalTemplateTotal: 0,
