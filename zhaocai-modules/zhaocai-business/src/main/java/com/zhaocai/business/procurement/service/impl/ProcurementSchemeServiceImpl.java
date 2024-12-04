@@ -148,7 +148,7 @@ public class ProcurementSchemeServiceImpl extends ServiceImpl<ProcurementSchemeM
         /* 判断保证金状态 来赋值 */
         setSchemeDeposit(requestVO.getProcurementScheme());
 
-        if (NumberUtil.isNullOrZero(requestVO.getProcurementScheme().getId())||requestVO.getContractSplitIds()==null||requestVO.getContractSplitIds().size()==0) {
+        if (NumberUtil.isNullOrZero(requestVO.getProcurementScheme().getId())) {
             // 校验选择的物料
             ProcurementSchemeCreateVO schemeCreateVO = checkProcurementSchemeData(requestVO.getContractSplitIds());
 
@@ -514,104 +514,104 @@ public class ProcurementSchemeServiceImpl extends ServiceImpl<ProcurementSchemeM
      */
     private ProcurementSchemeCreateVO checkProcurementSchemeData(List<Long> contractSplitIds) {
         ProcurementSchemeCreateVO schemeCreateVO = new ProcurementSchemeCreateVO();
+ if(contractSplitIds !=null &&contractSplitIds.size()==0){
+     // 获取合约拆分记录
+     List<ContractPlanningSplit> planningSplits = contractPlanningSplitService.listByIds(contractSplitIds);
+     if (planningSplits==null||planningSplits.size() ==0) {
+         throw new ParamValidateException("无合约拆分记录");
+     }
+     // 获取&校验采购计划
+     List<Long> planIdList = extractDistinctValues(planningSplits,ContractPlanningSplit::getProcurementPlanId);
+     List<ProcurementPlan> procurementPlans = procurementPlanService.listByIds(planIdList);
 
-        // 获取合约拆分记录
-        List<ContractPlanningSplit> planningSplits = contractPlanningSplitService.listByIds(contractSplitIds);
-        if (planningSplits==null||planningSplits.size() ==0) {
-            throw new ParamValidateException("无合约拆分记录");
-        }
-        // 获取&校验采购计划
-        List<Long> planIdList = extractDistinctValues(planningSplits,ContractPlanningSplit::getProcurementPlanId);
-        List<ProcurementPlan> procurementPlans = procurementPlanService.listByIds(planIdList);
+     // 校验采购类型
+     List<Integer> procurementPlanType = extractDistinctValues(procurementPlans,ProcurementPlan::getProcurementPlanType);
+     if (procurementPlanType.size() > 1) {
+         throw new ParamValidateException("所选择的采购计划存在多种采购类型，请确认后重新选择");
+     }
+     schemeCreateVO.setProcurementPlanType(procurementPlanType.get(0));
+     schemeCreateVO.setProcurementOfficerName(procurementPlans.get(0).getProcurementOfficerName());
+     schemeCreateVO.setFirstProcurementPlanId(planIdList.get(0));
+     schemeCreateVO.setProcurementSchemeName(procurementPlans.get(0).getProcurementPlanName());
 
-        // 校验采购类型
-        List<Integer> procurementPlanType = extractDistinctValues(procurementPlans,ProcurementPlan::getProcurementPlanType);
-        if (procurementPlanType.size() > 1) {
-            throw new ParamValidateException("所选择的采购计划存在多种采购类型，请确认后重新选择");
-        }
-        schemeCreateVO.setProcurementPlanType(procurementPlanType.get(0));
-        schemeCreateVO.setProcurementOfficerName(procurementPlans.get(0).getProcurementOfficerName());
-        schemeCreateVO.setFirstProcurementPlanId(planIdList.get(0));
-        schemeCreateVO.setProcurementSchemeName(procurementPlans.get(0).getProcurementPlanName());
+     /*
+      * 购买材料需要做一些校验
+      */
+     if (ProcurementPlanTypeEnum.PURCHASE_MATERIALS.equalsType(procurementPlanType.get(0))) {
+         List<Integer> subjectMatterType = procurementPlans.stream()
+                 .filter(Objects::nonNull)
+                 .map(ProcurementPlan::getSubjectMatterType)
+                 .distinct()
+                 .collect(Collectors.toList());
+         if (subjectMatterType.size() > 1) {
+             throw new ParamValidateException("所选择的采购计划存在多种不同交易标的物类型，请确认后重新选择");
+         }
+         schemeCreateVO.setSubjectMatterType(subjectMatterType.get(0));
 
-        /*
-         * 购买材料需要做一些校验
-         */
-        if (ProcurementPlanTypeEnum.PURCHASE_MATERIALS.equalsType(procurementPlanType.get(0))) {
-            List<Integer> subjectMatterType = procurementPlans.stream()
-                    .filter(Objects::nonNull)
-                    .map(ProcurementPlan::getSubjectMatterType)
-                    .distinct()
-                    .collect(Collectors.toList());
-            if (subjectMatterType.size() > 1) {
-                throw new ParamValidateException("所选择的采购计划存在多种不同交易标的物类型，请确认后重新选择");
-            }
-            schemeCreateVO.setSubjectMatterType(subjectMatterType.get(0));
+         /* 获取采购计划的价格类型列表 校验价格类型 */
+         List<Integer> priceTypes = extractDistinctValues(procurementPlans,ProcurementPlan::getPriceType);
+         if (priceTypes.size() > 1) {
+             throw new ParamValidateException("所选择的采购计划存在多种价格类型，请确认后重新选择");
+         }
+         schemeCreateVO.setPriceType(priceTypes.get(0));
 
-            /* 获取采购计划的价格类型列表 校验价格类型 */
-            List<Integer> priceTypes = extractDistinctValues(procurementPlans,ProcurementPlan::getPriceType);
-            if (priceTypes.size() > 1) {
-                throw new ParamValidateException("所选择的采购计划存在多种价格类型，请确认后重新选择");
-            }
-            schemeCreateVO.setPriceType(priceTypes.get(0));
+         // 计数方式
+         List<Integer> countingTypes = extractDistinctValues(procurementPlans,ProcurementPlan::getCountingType);
+         if (countingTypes.size() > 1) {
+             throw new ParamValidateException("所选择的采购计划存在多种计数方式，请确认后重新选择");
+         }
+         schemeCreateVO.setCountingType(countingTypes.get(0));
 
-            // 计数方式
-            List<Integer> countingTypes = extractDistinctValues(procurementPlans,ProcurementPlan::getCountingType);
-            if (countingTypes.size() > 1) {
-                throw new ParamValidateException("所选择的采购计划存在多种计数方式，请确认后重新选择");
-            }
-            schemeCreateVO.setCountingType(countingTypes.get(0));
+         // 付款方式
+         List<Integer> paymentTypes = extractDistinctValues(procurementPlans,ProcurementPlan::getPaymentType);
+         if (paymentTypes.size() > 1) {
+             throw new ParamValidateException("所选择的采购计划存在多种付款方式，请确认后重新选择");
+         }
+         schemeCreateVO.setPaymentType(paymentTypes.get(0));
+     }
 
-            // 付款方式
-            List<Integer> paymentTypes = extractDistinctValues(procurementPlans,ProcurementPlan::getPaymentType);
-            if (paymentTypes.size() > 1) {
-                throw new ParamValidateException("所选择的采购计划存在多种付款方式，请确认后重新选择");
-            }
-            schemeCreateVO.setPaymentType(paymentTypes.get(0));
-        }
+     // 校验合约拆分是否已被其他方案使用
+     List<ContractPlanningSplit> existPlanningSplits = contractPlanningSplitService.listExistPlanningSplits(contractSplitIds);
+     if (CollectionUtil.isNotEmpty(existPlanningSplits)) {
+         String splitName = existPlanningSplits.stream()
+                 .map(ContractPlanningSplit::getSplitContractName)
+                 .collect(Collectors.joining(","));
+         throw new BusinessException("您所选择的合约拆分:" + splitName + "已被其他采购方案使用，请重新选择");
+     }
 
-        // 校验合约拆分是否已被其他方案使用
-        List<ContractPlanningSplit> existPlanningSplits = contractPlanningSplitService.listExistPlanningSplits(contractSplitIds);
-        if (CollectionUtil.isNotEmpty(existPlanningSplits)) {
-            String splitName = existPlanningSplits.stream()
-                    .map(ContractPlanningSplit::getSplitContractName)
-                    .collect(Collectors.joining(","));
-            throw new BusinessException("您所选择的合约拆分:" + splitName + "已被其他采购方案使用，请重新选择");
-        }
+     // 判断是否为同一个项目
+     List<ProcurementContractPlanListVO> contractPlanningList = contractPlanningService.listByPlanIds(planIdList);
+     List<String> projectCodesList = extractDistinctValues(contractPlanningList,ProcurementContractPlanListVO::getProjectCode);
+     if (projectCodesList.size() > 1) {
+         throw new ParamValidateException("所现在的采购计划归属项目，请确认后重新选择");
+     }
+     schemeCreateVO.setProjectCode(projectCodesList.get(0));
 
-        // 判断是否为同一个项目
-        List<ProcurementContractPlanListVO> contractPlanningList = contractPlanningService.listByPlanIds(planIdList);
-        List<String> projectCodesList = extractDistinctValues(contractPlanningList,ProcurementContractPlanListVO::getProjectCode);
-        if (projectCodesList.size() > 1) {
-            throw new ParamValidateException("所现在的采购计划归属项目，请确认后重新选择");
-        }
-        schemeCreateVO.setProjectCode(projectCodesList.get(0));
+     // 校验经办人
+     List<Long> procurementOfficerList = extractDistinctValues(procurementPlans,ProcurementPlan::getProcurementOfficer);
+     if (procurementOfficerList.size() > 1) {
+         throw new ParamValidateException("所选择的采购计划存在多个采购经办人，请确认后重新选择");
+     }
+     if (!procurementOfficerList.get(0).equals(SecurityUtils.getUserId())) {
+         throw new ParamValidateException("所选择的采购计划的采购经办人不是您本人");
+     }
 
-        // 校验经办人
-        List<Long> procurementOfficerList = extractDistinctValues(procurementPlans,ProcurementPlan::getProcurementOfficer);
-        if (procurementOfficerList.size() > 1) {
-            throw new ParamValidateException("所选择的采购计划存在多个采购经办人，请确认后重新选择");
-        }
-        if (!procurementOfficerList.get(0).equals(SecurityUtils.getUserId())) {
-            throw new ParamValidateException("所选择的采购计划的采购经办人不是您本人");
-        }
+     //计算上限价和交易标的物
+     List<MaterialsList> materialsLists = materialsListService.listMaterialsListByContractSplitIds(contractSplitIds);
+     BigDecimal ceilingPrice = BigDecimal.ZERO;
+     List<String> subjectMatterCodeSet = new ArrayList<>();
+     List<String> subjectMatterNameSet = new ArrayList<>();
 
-        //计算上限价和交易标的物
-        List<MaterialsList> materialsLists = materialsListService.listMaterialsListByContractSplitIds(contractSplitIds);
-        BigDecimal ceilingPrice = BigDecimal.ZERO;
-        List<String> subjectMatterCodeSet = new ArrayList<>();
-        List<String> subjectMatterNameSet = new ArrayList<>();
+     for (MaterialsList materials : materialsLists) {
+         ceilingPrice = ceilingPrice.add(materials.getAmountInclTax());
 
-        for (MaterialsList materials : materialsLists) {
-            ceilingPrice = ceilingPrice.add(materials.getAmountInclTax());
-
-            subjectMatterCodeSet.add(materials.getSubjectMatterCode());
-            subjectMatterNameSet.add(materials.getSubjectMatterName());
-        }
-
-        schemeCreateVO.setCeilingPrice(NumberUtil.round(ceilingPrice, Constants.SCALE_AMOUNT_VO));
-        schemeCreateVO.setSubjectMatterName(subjectMatterNameSet.stream().filter(StringUtils::isNotBlank).distinct().collect(Collectors.joining(",")));
-        schemeCreateVO.setSubjectMatterCode(subjectMatterCodeSet.stream().filter(StringUtils::isNotBlank).distinct().collect(Collectors.joining(",")));
+         subjectMatterCodeSet.add(materials.getSubjectMatterCode());
+         subjectMatterNameSet.add(materials.getSubjectMatterName());
+     }
+     schemeCreateVO.setCeilingPrice(NumberUtil.round(ceilingPrice, Constants.SCALE_AMOUNT_VO));
+     schemeCreateVO.setSubjectMatterName(subjectMatterNameSet.stream().filter(StringUtils::isNotBlank).distinct().collect(Collectors.joining(",")));
+     schemeCreateVO.setSubjectMatterCode(subjectMatterCodeSet.stream().filter(StringUtils::isNotBlank).distinct().collect(Collectors.joining(",")));
+ }
 
         return schemeCreateVO;
     }
