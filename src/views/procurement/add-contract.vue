@@ -1634,6 +1634,24 @@ export default {
     });
   },
   methods: {
+    //获取合同附件的文档中台编辑URL
+    getAttachmentEditURL(){
+      //获取合同附件的文档中台编辑URL
+      if (this.attachmentId) {
+        console.log('新增合同签订编辑文件的AttachmentID:', this.attachmentId);
+        //获取文档中台的文档编辑URL
+        getEditFileUrlByID({ attachmentId: this.attachmentId })
+          .then((res) => {
+            this.editFileUrl = res.data;
+            console.log("新增合同签订编辑editFileUrl:", this.editFileUrl); 
+          })
+          .catch((err) => {
+            console.error('Error fetching view file URL:', err);
+          });
+      } else {
+        console.warn('attachmentId 数据未正确加载');
+      }
+    },
     selectBcTemplate(row) {
       this.templateId = row.templateId;
       this.templateRow=row
@@ -1675,6 +1693,7 @@ export default {
         this.attachmentId = res
         this.firstForm.agreement.attachmentId = res;
         console.log(this.templateId+"firstForm.agreement.attachmentId "+JSON.stringify(this.attachmentId))
+        this.getAttachmentEditURL(); //获取文档编辑的URL
       })
       // const templateName = this.bcTemplateList.find(
       //   (item) => item.id === templateId
@@ -2480,7 +2499,7 @@ export default {
             this.attachmentId = res.data.attachmentId;
             console.log("agreementFileUrl",res.data.agreementFileUrl);
             console.log("agreementFileName",res.data.agreementFileName);
-            console.log("attachmentId:",res.data.attachmentId);
+            console.log("getAgreementCreateInfo获取的attachmentId:",res.data.attachmentId);
 
             this.firstForm.agreement.attachmentId = res.data.attachmentId;
             this.totalAmountIncTax = res.data.totalAmountIncTax;
@@ -2525,22 +2544,8 @@ export default {
               JSON.stringify(res?.data["biddingListQuotation"])
             );
           });
-
           //获取合同附件的文档中台编辑URL
-          if (this.attachmentId) {
-            console.log('编辑文件的Attachment ID:', this.attachmentId);
-            //获取文档中台的文档编辑URL
-            getEditFileUrlByID({ attachmentId: this.attachmentId })
-              .then((res) => {
-                this.editFileUrl = res.data;
-                console.log("editFileUrl:", this.editFileUrl);
-              })
-              .catch((err) => {
-                console.error('Error fetching view file URL:', err);
-              });
-          } else {
-            console.warn('attachmentId 数据未正确加载');
-          }
+          this.getAttachmentEditURL();
 
         }
       },
