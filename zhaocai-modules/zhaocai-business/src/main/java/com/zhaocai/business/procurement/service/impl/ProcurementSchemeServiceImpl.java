@@ -515,7 +515,7 @@ public class ProcurementSchemeServiceImpl extends ServiceImpl<ProcurementSchemeM
      */
     private ProcurementSchemeCreateVO checkProcurementSchemeData(List<Long> contractSplitIds) {
         ProcurementSchemeCreateVO schemeCreateVO = new ProcurementSchemeCreateVO();
- if(contractSplitIds !=null &&contractSplitIds.size()==0){
+ if(contractSplitIds !=null &&contractSplitIds.size()!=0){
      // 获取合约拆分记录
      List<ContractPlanningSplit> planningSplits = contractPlanningSplitService.listByIds(contractSplitIds);
      if (planningSplits==null||planningSplits.size() ==0) {
