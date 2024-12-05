@@ -632,9 +632,7 @@ public class VendorBidServiceImpl implements IVendorBidService {
             Map<Long,MaterialsList> materialsListMap = materialsListList.stream().collect(Collectors.toMap(MaterialsList::getId, Function.identity(),(existing, replacement) -> replacement));
 
             BiddingInfo newestBiddingInfo = biddingInfoService.getOne(new LambdaQueryWrapper<BiddingInfo>()
-                    .eq(BiddingInfo::getParentId, biddingInfo.getId())
-                    .and(q -> q.eq(BiddingInfo::getPriceChangeState, NumberConstant.ONE)/* 已经调价 */
-                            .or().isNull(BiddingInfo::getPriceChangeState))/* 历史数据兼容 */
+                    .eq(BiddingInfo::getParentId, biddingInfo.getParentId())
                     .orderByDesc(BiddingInfo::getCreateTime).last("limit 1"));
             for (BidQuotationVO quotationVO : bidQuotationVoS) {
                 //物料数量
