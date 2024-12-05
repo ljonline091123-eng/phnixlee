@@ -549,7 +549,7 @@ export default {
       let param = Base64.encode(
         JSON.stringify({ id, procurementType, type: "update" })
       );
-      debugger;
+      // debugger;
       param = encodeURIComponent(param); //避免base64编码中出现"/"时路由404
       this.$router.push(`/procurement/add-scheme/${param}`);
     },
