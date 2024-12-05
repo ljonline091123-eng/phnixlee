@@ -312,6 +312,7 @@ public class ProcurementSchemeServiceImpl extends ServiceImpl<ProcurementSchemeM
 
     @Override
     public ProcurementSchemeCreateVO getProcurementSchemeCreateInfo(List<Long> contractSplitIds) {
+        System.out.println("contractSplitIds："+ contractSplitIds);
         ProcurementSchemeCreateVO schemeCreate = this.checkProcurementSchemeData(contractSplitIds);
         System.out.println("schemeCreate+最小核算项目是："+ schemeCreate.getProjectCode());
         MinProjectVO minProjectVO = minProjectService.getMinProjectByMinAccountCode(schemeCreate.getProjectCode());
