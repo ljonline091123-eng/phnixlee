@@ -103,7 +103,7 @@
                         style="width: 100%"
                       >
                         <el-option
-                          v-for="dict in dict.type.procurement_type"
+                          v-for="dict in dictObj.procurement_type"
                           :key="dict.value"
                           :label="dict.label"
                           :value="dict.value"
@@ -1008,20 +1008,28 @@ import BackButton from "@/components/BackButton/index.vue";
 import { addAttachment , getEditFileUrlByID} from "@/api/template/file";
 import {showSecretRelatedTips} from "@/utils/MyUtils";
 import {offerRepo, offerService, uploadFileUrl} from "@/utils/const";
+import { listUnderlingDict } from "@/api/procurement/contract";
 
 export default {
   name: "add-scheme",
-  dicts: [
-    "procurement_type",
-    "procurement_counting_type",
-    "procurement_payment_type",
-  ],
+  // dicts: [
+  //   "procurement_type",
+  //   "procurement_counting_type",
+  //   "procurement_payment_type",
+  // ],
   components: {
     FileModule,
     BackButton,
   },
   data() {
     this.getInitialData();
+  },
+  //new
+  mounted() {
+    //获取字典
+    Object.keys(this.dictObjMap).forEach((key) => {
+      this.getListUnderlingDict(key);
+    });
   },
   created() {
     this.getInitialData();
@@ -1072,6 +1080,17 @@ export default {
     },
   },
   methods: {
+    //获取字典
+    async getListUnderlingDict(type) {
+      const res = await listUnderlingDict(type);
+      const resMap = res.data.map((item) => ({
+        value: item.dictValue,
+        label: item.dictLabel,
+      }));
+      const dictType = this.dictObjMap[type];
+      this.dictObj[dictType] = resMap;
+    },
+
     /* 代替data初始化 */
     getInitialData(){
       const validatePhone = (rule, value, callback) => {
@@ -1106,6 +1125,18 @@ export default {
         }
       };
       return {
+        //数据字典
+        dictObj: {
+          procurement_type:"",
+          procurement_counting_type: "",
+          procurement_payment_type: "",
+        },
+        dictObjMap: {
+          PROCUREMENT_TYPE:"procurement_type",
+          PROCUREMENT_COUNTING_TYPE:"procurement_counting_type",
+          PROCUREMENT_PAYMENT_TYPE:"procurement_payment_type",
+        },
+
         /*方案审批状态
           DRAFT(0,"自由态"),
           IN_APPROVAL(1,"审批中"),
