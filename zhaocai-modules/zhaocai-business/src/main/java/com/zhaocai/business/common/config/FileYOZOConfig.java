@@ -35,6 +35,13 @@ public class FileYOZOConfig {
     @Value("${file-yozo.tempFilePath}")
     private String tempFilePath;
 
+    //原responseURL的前缀（服务器地址）
+    @Value("${file-yozo.oldResponsePrefix}")
+    private String oldResponsePrefix;
+
+    //新responseURL的前缀（服务器地址）
+    @Value("${file-yozo.newResponsePrefix}")
+    private String newResponsePrefix;
 
 
 }

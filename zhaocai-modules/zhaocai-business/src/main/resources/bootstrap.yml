@@ -35,6 +35,9 @@ file-yozo:
   appSecret: 4CDWd57l7Psnw19jdUUFqaXjZU
   callback-url: http://192.168.30.42:8052/business/attachment/fileUpload
   tempFilePath: D:\\tmp
+  oldResponsePrefix: http://192.168.240.31:9010/
+  newResponsePrefix: https://zc.hncig.cn:32068/
+
 
 # 电子签章
 signature:
