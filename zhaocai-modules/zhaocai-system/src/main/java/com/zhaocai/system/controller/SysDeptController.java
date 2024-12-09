@@ -275,4 +275,17 @@ public class SysDeptController extends BaseController
         return deptService.getDeptByThridDeptId(thridDeptIdNew);
     }
 
+    /**
+     * 根据单位id查询对应的二级单位
+     * @param deptId
+     * @return
+     */
+    @GetMapping("/getTwoLevelDeptByDeptId1")
+    public SysDept getTwoLevelDeptByDeptId1(@RequestParam Long deptId) {
+        if (null == deptId) {
+            throw new RuntimeException("部门 id 不能为空");
+        }
+        return deptService.getTwoLevelDeptByDeptId(deptId);
+    }
+
 }
