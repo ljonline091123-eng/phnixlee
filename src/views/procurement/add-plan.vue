@@ -42,14 +42,17 @@
             </el-col>
             <el-col :span="8" class="grid-cell">
               <el-form-item label="采购人" prop="procurementOfficerName" class="required label-right-align">
-                <el-select v-model="formData.procurementOfficerName" placeholder="请选择" filterable @change="changeOperator" :disabled="isSubmit" style="width: 100%">
-                  <el-option
-                    v-for="item in operatorList"
-                    :key="item.userId"
-                    :label="item.nickName"
-                    :value="item.userId">
-                  </el-option>
-                </el-select>
+                <el-input v-model="formData.procurementOfficerName" readonly @focus="handleClick" size="large" placeholder="请选择">
+                  <template slot="suffix"><i class="el-input__icon el-icon-arrow-down"></i></template>
+                </el-input>
+<!--                <el-select v-model="formData.procurementOfficerName" placeholder="请选择" filterable @change="changeOperator" :disabled="isSubmit" style="width: 100%">-->
+<!--                  <el-option-->
+<!--                    v-for="item in operatorList"-->
+<!--                    :key="item.userId"-->
+<!--                    :label="item.nickName"-->
+<!--                    :value="item.userId">-->
+<!--                  </el-option>-->
+<!--                </el-select>-->
               </el-form-item>
             </el-col>
           </el-row>
@@ -320,6 +323,91 @@
 
       </el-form>
 
+      <!-- 选择采购经办人 -->
+      <el-dialog title="采购人" :visible.sync="officerDialog" width="55%">
+        <el-form
+          :model="searchQuery"
+          ref="planForm"
+          label-position="left"
+          size="small"
+          inline
+          @submit.native.prevent
+        >
+          <el-form-item
+            label="用户"
+            prop="pushRoleList"
+            class="label-right-align"
+            label-width="40px"
+          >
+            <el-input
+              v-model="searchQuery.nickName"
+              placeholder="请输入用户"
+              clearable
+              style="width: 150px"
+              @keyup.enter.native="searchUser"
+            />
+          </el-form-item>
+          <el-form-item>
+            <el-button
+              type="primary"
+              icon="el-icon-search"
+              size="small"
+              style="width: 70px"
+              @click="searchUser"
+            >查询</el-button>
+          </el-form-item>
+        </el-form>
+        <virtual-scroll
+            :data="filteredOperatorList"
+            :item-size="62"
+            key-prop="virtualId"
+            ref="virScroll"
+            @change="(renderData) => virtualList = renderData">
+        <el-table
+          v-loading="officerLoading"
+          :data="virtualList"
+          stripe
+          size="small"
+          highlight-current-row
+          border
+          @selection-change="selectOfficer"
+          @row-click="selectOfficer"
+          :row-key="selSelectKey"
+          max-height="400"
+          ref="selectTable">
+          <el-table-column width="30" align="center">
+            <template slot-scope="scope">
+              <el-radio
+                v-model="selectedUserId"
+                :label="scope.row.userId"
+                @change="selectOfficer(scope.row)"
+              />
+            </template>
+          </el-table-column>
+          <el-table-column label="序号" prop="virtualId" width="60" align="center" />
+          <el-table-column label="用户" prop="nickName" show-overflow-tooltip align="center"/>
+          <el-table-column label="电话号码" prop="phonenumber" show-overflow-tooltip align="center"/>
+          <el-table-column label="归属当前组织名称" prop="thridOrgName" show-overflow-tooltip align="center"/>
+          <el-table-column label="归属管理组织名称" prop="orgDeptName" show-overflow-tooltip align="center"/>
+        </el-table>
+        </virtual-scroll>
+        <div slot="footer" class="dialog-footer">
+          <el-button
+            @click="officerDialog = false"
+            style="width: 100px"
+            size="small"
+          >取 消</el-button
+          >
+          <el-button
+            type="primary"
+            @click="submitOfficer"
+            style="width: 100px"
+            size="small"
+          >确 定</el-button
+          >
+        </div>
+      </el-dialog>
+
       <!-- 选择项目合约规划 -->
       <el-dialog title="清单" :visible.sync="inventoryVisible" width="70%">
         <el-table v-loading="loading" :data="inventoryList" stripe border size="small">
@@ -414,164 +502,20 @@ import BackButton from "@/components/BackButton/index.vue"
 import { mapGetters } from "vuex"
 import PageTitle from "@/components/PageTitle/index.vue"
 import {PRICETYPELIST, PRICETYPEOPTIONS} from "@/utils/constants";
+import VirtualScroll from 'el-table-virtual-scroll'
 export default {
   name: "add-plan",
   dicts: ['plan_type','price_type','procurement_counting_type','procurement_payment_type'],
   data() {
-    let checkNum = (rule, value, callback) => {
-      if (!/^[1-9]\d*$/.test(value)) {
-        callback(new Error('请输入正整数'));
-      } else {
-        callback();
-      }
-    }
-    return {
-      PRICETYPELIST:PRICETYPELIST,
-      PRICETYPEOPTIONS:PRICETYPEOPTIONS,
-      formData: {
-        priceType:1
-      }, //form表单数据
-      planList: [],
-      accountTable:'accountTable',
-      projectCode:'',
-      id:'',
-      yjtUrl:'',
-      isPushRevoke:null,//区分推送和撤销
-      dialogVisible:false,
-      materialsLists:[],
-      inventoryList: [],
-      // isEdit: true,
-      rules: {
-        procurementPlanName: [{
-          required: true,
-          message: '采购名称不可为空',
-        }],
-        beginDate: [{
-          required: true,
-          message: '开始时间不能为空',
-        }],
-        endDate: [{
-          required: true,
-          message: '完成时间不能为空',
-        }],
-        arrivalDate: [{
-          required: true,
-          message: '进场时间不能为空',
-        }],
-        procurementReporterName: [{
-          required: true,
-          message: '填报人不能为空',
-        }],
-        procurementOfficerName: [{
-          required: true,
-          message: '采购人不能为空',
-        }],
-        priceType: [{
-          required: true,
-          message: '采购价类型不能为空',
-        }],
-        paymentType: [{
-          required: true,
-          message: '付款方式不能为空',
-        }],
-        countingType: [{
-          required: true,
-          message: '计价方式不能为空',
-        }],
-        region: [{
-          required: true,
-          message: '区域不能为空',
-        }],
-      },
-      // 遮罩层
-      loading: false,
-      // 显示搜索条件
-      showSearch: true,
-      // 总条数
-      total: 0,
-      // 查询参数
-      queryParams: {
-        pageNum: 1,
-        pageSize: 10,
-        procurementPlanCode: undefined,
-        procurementPlanName: undefined,
-        projectName: undefined,
-        operator: undefined,
-        procurementPlanType: 'all'
-      },
-      inventoryVisible: false,
-      splitVisible: false, //是否显示拆分合同
-      splitForm: {
-        num: ''
-      }, //拆分合同数表单
-      splitRules: {
-        num: [
-          { required: true, message: '请输入拆分的份数', trigger: 'blur' },
-          { validator: checkNum, trigger: 'blur' }
-        ],
-      },
-      currentContract: {},
-      isSubmit: false,
-      // indexs:[],
-      operatorList:[],
-      isUpdate:false,
-      expireTimeOption: {
-        disabledDate(time) {
-          return time.getTime() < Date.now() - 8.64e7; // 禁用小于当前日期的日期
-        }
-      },
-      expireTimeOverOttion:{
-        disabledDate(time) {
-          // 获取今天的时间戳
-          const today = new Date();
-          today.setHours(0, 0, 0, 0); // 设置为当天的零点
-
-          // 明天的时间戳
-          const tomorrow = new Date(today);
-          tomorrow.setDate(today.getDate() + 1);
-
-          // 将传入的时间戳转为日期对象
-          const date = new Date(time);
-
-          // 只能选择明天及之后的日期
-          return date <= today || date < tomorrow;
-        }
-      },
-      regionOptions:[],
-      /* 是否是浮动价类型，浮动价/固定、浮动价 都是true */
-      isFloat:false,
-      isSpecific: false,
-      mathjs:null,
-      rentModeOptions:[],
-      /* 交易标的物（在浮动价更新后[已弃用！]该判断逻辑了） */
-      subjectMatter:"",
-      /* 采购类型 procurementType (浮动价逻辑使用了)
-        PURCHASE_MATERIALS(1, "购买材料"),
-        LEASED_MATERIAL(2, "租赁材料"),
-        RENTAL_MACHINERY(3, "租赁机械（设备）"),
-        SPECIALTY_SUBCONTRACT(4, "专业分包"),
-        SERVICE_SUBCONTRACT(5, "劳务分包"),
-        OTHER_TYPE(6, "其他"),
-      */
-      procurementType:"",
-      matterVisible:false,
-      matterList:[],
-      defaultProps: {
-        children: 'children',
-        label: 'serviceClassName'
-      },
-      selectedMatter:{},
-      matterCurrentId:'',
-      matterName:undefined,
-      initCountObj:{},
-      numDisable:false,
-    };
+    return this.getInitialData();
   },
   components:{
     BackButton,
-    PageTitle
+    PageTitle,
+    VirtualScroll
   },
   created() {
+    this.getInitialData();
     console.log('param--param--param!------------------');
     this.mathjs = create(all);
     this.mathjs.config({
@@ -610,6 +554,216 @@ export default {
       this.queryContractPlanSplitFlag();
   },
   methods: {
+    /* 代替data初始化 */
+    getInitialData() {
+      let checkNum = (rule, value, callback) => {
+        if (!/^[1-9]\d*$/.test(value)) {
+          callback(new Error('请输入正整数'));
+        } else {
+          callback();
+        }
+      }
+      return {
+        // 选择采购经办人
+        officerDialog: false, // 控制对话框的显示隐藏
+        officerLoading: false,
+        filteredOperatorList: [], // 过滤后的用户列表
+        virtualList: [],
+        selectedUserId: null, // 选中的采购人ID
+        selectedUser: {}, // 选中的用户信息
+        searchQuery: {   // 搜索查询字符串
+          nickName: '',
+        },
+        PRICETYPELIST:PRICETYPELIST,
+        PRICETYPEOPTIONS:PRICETYPEOPTIONS,
+        formData: {
+          priceType:1
+        }, //form表单数据
+        planList: [],
+        accountTable:'accountTable',
+        projectCode:'',
+        id:'',
+        yjtUrl:'',
+        isPushRevoke:null,//区分推送和撤销
+        dialogVisible:false,
+        materialsLists:[],
+        inventoryList: [],
+        // isEdit: true,
+        rules: {
+          procurementPlanName: [{
+            required: true,
+            message: '采购名称不可为空',
+          }],
+          beginDate: [{
+            required: true,
+            message: '开始时间不能为空',
+          }],
+          endDate: [{
+            required: true,
+            message: '完成时间不能为空',
+          }],
+          arrivalDate: [{
+            required: true,
+            message: '进场时间不能为空',
+          }],
+          procurementReporterName: [{
+            required: true,
+            message: '填报人不能为空',
+          }],
+          procurementOfficerName: [{
+            required: true,
+            message: '采购人不能为空',
+          }],
+          priceType: [{
+            required: true,
+            message: '采购价类型不能为空',
+          }],
+          paymentType: [{
+            required: true,
+            message: '付款方式不能为空',
+          }],
+          countingType: [{
+            required: true,
+            message: '计价方式不能为空',
+          }],
+          region: [{
+            required: true,
+            message: '区域不能为空',
+          }],
+        },
+        // 遮罩层
+        loading: false,
+        // 显示搜索条件
+        showSearch: true,
+        // 总条数
+        total: 0,
+        // 查询参数
+        queryParams: {
+          pageNum: 1,
+          pageSize: 10,
+          procurementPlanCode: undefined,
+          procurementPlanName: undefined,
+          projectName: undefined,
+          operator: undefined,
+          procurementPlanType: 'all'
+        },
+        inventoryVisible: false,
+        splitVisible: false, //是否显示拆分合同
+        splitForm: {
+          num: ''
+        }, //拆分合同数表单
+        splitRules: {
+          num: [
+            { required: true, message: '请输入拆分的份数', trigger: 'blur' },
+            { validator: checkNum, trigger: 'blur' }
+          ],
+        },
+        currentContract: {},
+        isSubmit: false,
+        // indexs:[],
+        operatorList:[],
+        isUpdate:false,
+        expireTimeOption: {
+          disabledDate(time) {
+            return time.getTime() < Date.now() - 8.64e7; // 禁用小于当前日期的日期
+          }
+        },
+        expireTimeOverOttion:{
+          disabledDate(time) {
+            // 获取今天的时间戳
+            const today = new Date();
+            today.setHours(0, 0, 0, 0); // 设置为当天的零点
+
+            // 明天的时间戳
+            const tomorrow = new Date(today);
+            tomorrow.setDate(today.getDate() + 1);
+
+            // 将传入的时间戳转为日期对象
+            const date = new Date(time);
+
+            // 只能选择明天及之后的日期
+            return date <= today || date < tomorrow;
+          }
+        },
+        regionOptions:[],
+        /* 是否是浮动价类型，浮动价/固定、浮动价 都是true */
+        isFloat:false,
+        isSpecific: false,
+        mathjs:null,
+        rentModeOptions:[],
+        /* 交易标的物（在浮动价更新后[已弃用！]该判断逻辑了） */
+        subjectMatter:"",
+        /* 采购类型 procurementType (浮动价逻辑使用了)
+          PURCHASE_MATERIALS(1, "购买材料"),
+          LEASED_MATERIAL(2, "租赁材料"),
+          RENTAL_MACHINERY(3, "租赁机械（设备）"),
+          SPECIALTY_SUBCONTRACT(4, "专业分包"),
+          SERVICE_SUBCONTRACT(5, "劳务分包"),
+          OTHER_TYPE(6, "其他"),
+        */
+        procurementType:"",
+        matterVisible:false,
+        matterList:[],
+        defaultProps: {
+          children: 'children',
+          label: 'serviceClassName'
+        },
+        selectedMatter:{},
+        matterCurrentId:'',
+        matterName:undefined,
+        initCountObj:{},
+        numDisable:false,
+      };
+    },
+    /** 选择采购人-点击行 */
+    selectOfficer(val){
+      this.selectedUser = val
+      this.selectedUserId = val.userId;
+    },
+    selSelectKey(row){
+      return row.virtualId
+    },
+    /** 选择采购人-点击确定 */
+    submitOfficer(){
+      if (this.selectedUser && this.selectedUser.userId) {
+        this.$set(this.formData,'procurementOfficerName',this.selectedUser.nickName);
+        this.$set(this.formData,'procurementOfficer',this.selectedUser.userId);
+        this.officerDialog = false;
+      } else {
+        this.$message.warning('请选择一个采购人');
+      }
+    },
+    /** 选择采购人-打开弹窗 */
+    handleClick(){
+      this.searchQuery = {
+        nickName: '',
+      };
+      if(this.formData.procurementOfficer){
+        this.selectedUserId = this.formData.procurementOfficer
+        this.selectedUser = {nickName:this.formData.procurementOfficerName,userId:this.formData.procurementOfficer}
+      }
+      try{
+        this.filteredOperatorList = this.operatorList.map((item, index) => ({
+          ...item,
+          virtualId: index+1
+        }));
+      }catch(err){
+        console.log(err);
+      }
+      this.officerDialog = true;
+    },
+    /** 选择采购人-过滤用户 */
+    searchUser() {
+      this.officerLoading = true;
+      const { nickName } = this.searchQuery;
+      this.filteredOperatorList = this.operatorList
+        .filter(item => !nickName || item.nickName.includes(nickName))
+        .map((item, index) => ({
+          ...item,
+          virtualId: index + 1
+        }));
+      this.officerLoading = false;
+    },
     getRowKeys2(row) {
       return row.planTable;
     },
@@ -1249,7 +1403,7 @@ console.log("-2222--"+JSON.stringify(this.materialsLists))
     },
     async getPlanDetail() {
       this.loading = true;
-      const { id } = this.currentContract
+      const { id, procurementPlanType } = this.currentContract
       try {
         const res = await getPlanDetail(id);
         console.log(res, '详情!!!!!!!!!!!!!');
@@ -1297,10 +1451,10 @@ console.log("-2222--"+JSON.stringify(this.materialsLists))
         const { projectId } = this.formData
         getContractMaterials(contractPlanning.contractPlanningId, projectId,contractPlanning.contractPlanningCategory,contractPlanning.contractPlanningCode).then(res => {
           this.inventoryList = res.data.contractMaterialsList;
-          /* 同步将清单内所有的价格类型改成一致的（固定价） */
-          this.updateMaterialsFloat(1);
         })
         console.log(this.planList, 'this.planList');
+        /* 采购方案类型(购买材料,劳务分包....) */
+        this.procurementType = procurementPlanType || '';
       } catch (err) {
         console.log(err);
       }

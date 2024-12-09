@@ -318,19 +318,28 @@
                 prop="expertType"
                 class="required label-right-align"
               >
-                <el-select
-                  v-model="formData.expertType"
-                  placeholder="请选择专家类别"
-                  style="width: 100%"
-                  :disabled="isSubmit"
-                >
-                  <el-option
+<!--                <el-select-->
+<!--                  v-model="formData.expertType"-->
+<!--                  placeholder="请选择专家类别"-->
+<!--                  style="width: 100%"-->
+<!--                  :disabled="isSubmit"-->
+<!--                >-->
+<!--                  <el-option-->
+<!--                    v-for="dict in dict.type.expert_type"-->
+<!--                    :key="dict.value"-->
+<!--                    :label="dict.label"-->
+<!--                    :value="dict.value"-->
+<!--                  ></el-option>-->
+<!--                </el-select>-->
+
+                <el-checkbox-group v-model="expertTypeList" :disabled="isSubmit">
+                  <el-checkbox
                     v-for="dict in dict.type.expert_type"
+                    :label="dict.value"
                     :key="dict.value"
-                    :label="dict.label"
-                    :value="dict.value"
-                  ></el-option>
-                </el-select>
+                  >{{ dict.label }}</el-checkbox
+                  >
+                </el-checkbox-group>
               </el-form-item>
             </el-col>
             <el-col :span="16" class="grid-cell">
@@ -350,7 +359,7 @@
                     >{{ dict.label }}</el-radio
                   >
                 </el-radio-group> -->
-                 <el-checkbox-group v-model="businessTypeList">
+                 <el-checkbox-group v-model="businessTypeList"  :disabled="isSubmit">
                   <el-checkbox
                     v-for="dict in dict.type.expert_business_type"
                     :label="dict.value"
@@ -378,6 +387,7 @@
                   :rows="4"
                   placeholder="请输入内容"
                   v-model="formData.professionResume"
+                  :disabled="isSubmit"
                 >
                 </el-input>
               </el-form-item>
@@ -390,7 +400,7 @@
                 prop="resumeAttachList"
                 class="required label-right-align uploadItem"
               >
-                <el-button size="small" type="primary" style="margin-top: 8px;" @click="showSecretTips">点击上传</el-button>
+                <el-button size="small" type="primary" style="margin-top: 8px;" @click="showSecretTips" :disabled="isSubmit">点击上传</el-button>
                 <el-upload
                   :action="uploadFileUrl"
                   :limit="1"
@@ -466,6 +476,7 @@ export default {
       id:'',
       type:'',
       businessTypeList:[],
+      expertTypeList:[],
       expertVisible:false,
       calibrateVisible: false,
       calibrateLoading: false,
@@ -697,6 +708,7 @@ export default {
     },
 
     async getInfoDetail(id) {
+        console.log('%c👽 Base64.encode(JSON.stringify(id)) ', `font-size: 20px;background-color: #f00;`, Base64.encode(JSON.stringify(id)));
         const res = await getInfo(id);
         const data=res.data
         this.formData=data
@@ -704,6 +716,7 @@ export default {
         this.formData.expertType=data.expertType+""
         this.formData.businessType=data.businessType+""
         this.businessTypeList=data.businessType.split(",");
+        this.expertTypeList=data.expertType.split(",");
         this.formData.state=data.state+""
         if(data.registeredCertificate){
           this.formData.registeredCertificate=data.registeredCertificate+""
@@ -722,6 +735,7 @@ export default {
     saveForm(formName){
       this.isSubmit = true;
          this.formData.businessType=this.businessTypeList.join(",");
+         this.formData.expertType=this.expertTypeList.join(",");
       this.$refs[formName].validate(async (valid) => {
         if (valid) {
           console.log(this.formData, "this.formData");
@@ -796,6 +810,14 @@ export default {
       this.$set(this.formData, "fileList", []);
       this.$set(this.formData, "fileTemplate", []);
       this.attachmentId = "";
+    },
+  },
+  watch: {
+    expertTypeList(val){
+      this.formData.expertType=this.expertTypeList.join(",");
+    },
+    businessTypeList(val){
+      this.formData.businessType=this.businessTypeList.join(",");
     },
   },
   components: {

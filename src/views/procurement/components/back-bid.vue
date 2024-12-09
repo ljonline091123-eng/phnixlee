@@ -101,6 +101,12 @@
           width="100"
         />
         <el-table-column
+          label="合计"
+          align="center"
+          prop="taxPricePattern"
+          width="100"
+        />
+        <el-table-column
           label="投标时间"
           align="center"
           prop="updateTime"
@@ -545,7 +551,9 @@ export default {
         if(this.noticeDetail?.tenderNotice?.twiceQuotState === 1){
           const { id: noticeId } = this.noticeDetail?.tenderNotice || {};
           try {
-            const res = await twiceBidFinish(noticeId);
+            if(this.noticeDetail.tenderNotice.noticeStatus === 3){
+              const res = await twiceBidFinish(noticeId);
+            }
           } catch (err) {
             console.log(err);
           }

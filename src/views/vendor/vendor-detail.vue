@@ -901,7 +901,7 @@ export default {
     },
     async listBankAccountContactFn() {
           const res = await listBankAccountContact(this.param);
-           this.bankList=res.data.rows
+            this.bankList=res.data.rows
      },
     async getVendorDetail() {
       try {
