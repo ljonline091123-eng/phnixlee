@@ -69,6 +69,15 @@
                     :value="dict.value"
                   ></el-option>
                 </el-select>
+
+<!--                <el-checkbox-group v-model="expertTypeList">-->
+<!--                  <el-checkbox-->
+<!--                    v-for="dict in dict.type.expert_type"-->
+<!--                    :label="dict.value"-->
+<!--                    :key="dict.value"-->
+<!--                  >{{ dict.label }}</el-checkbox-->
+<!--                  >-->
+<!--                </el-checkbox-group>-->
               </el-form-item>
               <el-form-item>
                 <el-button
@@ -496,6 +505,7 @@ export default {
       expertTotal: 0,
       isFirstLoad: true, // 标志位，初始值为 true
       isSelectQuery: true,
+      expertTypeList:[],
     };
   },
   watch: {

@@ -415,6 +415,18 @@
           </commonTitle>
           <div style="margin-bottom: 24px">
             <el-table :data="firstForm.agreementPaymentLists" style="width: 100%">
+              <el-table-column prop="settlementStage" label="结算阶段">
+                <template slot-scope="scope">
+                  <el-form-item label-width="0" :prop="'agreementPaymentLists.' + scope.$index + '.settlementStage'"
+                                :rules="[{ required: true, trigger: 'change', message: '请选择结算阶段' }]">
+                    <el-select style="width: 100%" v-model="scope.row.settlementStage" @change="value => changeSettlementStage(scope, value)">
+                      <el-option v-for="dict in dictObj.settlement_stage" :key="dict.value" :label="dict.label"
+                                 :value="dict.value">
+                      </el-option>
+                    </el-select>
+                  </el-form-item>
+                </template>
+              </el-table-column>
               <el-table-column prop="paymentName" label="付款条件/结算与付款节点">
                 <template slot-scope="scope">
                   <el-form-item label-width="0" :prop="'agreementPaymentLists.' + scope.$index + '.paymentName'"
@@ -1565,6 +1577,7 @@ export default {
         invoice_type: "", // 发票类型
         priceForm: "", // 价格形式
         payment_basis: "", // 付款基准
+        settlement_stage: "", // 结算阶段
         payment_type: "", // 付款类型
         deposit_type: "", // 保证金类型
         deposit_way: "", // 保证金方式
@@ -1579,6 +1592,7 @@ export default {
         SYS_CURRENCY: "currency", //币种
         INVOICE_TYPE: "invoice_type", //发票类型
         PAYMENT_BASE_TYPE: "payment_basis", //付款基数
+        SETTLEMENT_STAGE: "settlement_stage", //结算阶段
         PRICE_TYPE: "payment_type", //价款类型
         DEPOSIT_TYPE: "deposit_type", //押金/保证金类型
         DEPOSIT_BASE_TYPE: "deposit_base_amount", //押金/保证金基数
@@ -1634,6 +1648,24 @@ export default {
     });
   },
   methods: {
+    //获取合同附件的文档中台编辑URL
+    getAttachmentEditURL(){
+      //获取合同附件的文档中台编辑URL
+      if (this.attachmentId) {
+        console.log('新增合同签订编辑文件的AttachmentID:', this.attachmentId);
+        //获取文档中台的文档编辑URL
+        getEditFileUrlByID({ attachmentId: this.attachmentId })
+          .then((res) => {
+            this.editFileUrl = res.data;
+            console.log("新增合同签订编辑editFileUrl:", this.editFileUrl); 
+          })
+          .catch((err) => {
+            console.error('Error fetching view file URL:', err);
+          });
+      } else {
+        console.warn('attachmentId 数据未正确加载');
+      }
+    },
     selectBcTemplate(row) {
       this.templateId = row.templateId;
       this.templateRow=row
@@ -1675,6 +1707,7 @@ export default {
         this.attachmentId = res
         this.firstForm.agreement.attachmentId = res;
         console.log(this.templateId+"firstForm.agreement.attachmentId "+JSON.stringify(this.attachmentId))
+        this.getAttachmentEditURL(); //获取文档编辑的URL
       })
       // const templateName = this.bcTemplateList.find(
       //   (item) => item.id === templateId
@@ -1779,10 +1812,7 @@ export default {
       this.generalReuScoreTemplateList = res.data.rows;
       this.generalTemplateLoading = false;
     },
-    searchReusableTemplates() {
-      this.templateQuery.pageNum = 1;
-      this.getReusableScoreTemplateList();
-    },
+
     onTemplateSelect(row) {
       this.selectedTemplateId = row.id;
       //  this.attachmentId = row.attachmentId;
@@ -1933,7 +1963,8 @@ export default {
           });
           this.isSubmit = true;
           console.log(this.firstForm, "this.firstForm----------------------");
-          this.$refs.file.saveFile();
+         // this.$refs.file.saveFile();
+          this.subForm();
         } else {
           this.isSubmit = false;
           // this.sumitLoding.close();
@@ -1941,15 +1972,10 @@ export default {
         }
       });
     },
-    subForm(value) {
-      const _this = this;
-      console.log(value, "收到的");
-      if (value.status !== 0) {
-        this.templateEditFlag = value.status;
-      }
+    subForm() {
       if (this.isSubmit) {
         delete this.firstForm.agreement.expenditureBusinessType;
-        this.firstForm.templateEditFlag = this.templateEditFlag;
+      //  this.firstForm.templateEditFlag = this.templateEditFlag;
         let formData = JSON.parse(JSON.stringify(this.firstForm));
         formData.agreement.paymentWay = this.firstForm.agreement.paymentWay?.join(",") || '';
         formData.agreement.marketMaterialContractId=this.firstForm.agreement.marketMaterialContractId
@@ -2355,6 +2381,9 @@ export default {
         this.$set(scope.row, 'paymentAmount', 0)
       }
     },
+    changeSettlementStage(scope, value){
+      console.log('%c 结算阶段监听changeSettlementStage ', `font-size: 20px;background-color: #f00;`, scope, value);
+    },
     changePaymentBasis(scope, value){
       console.log(scope,'scope');
       if(value === "1"){
@@ -2474,7 +2503,6 @@ export default {
             splitId,
             vendorId,
             agreementMaterialsList:list.agreementMaterialsList
-
           }).then((res) => {
             // * 此3个字段是必传字段
             this.typeContract= '';
@@ -2488,7 +2516,7 @@ export default {
             this.attachmentId = res.data.attachmentId;
             console.log("agreementFileUrl",res.data.agreementFileUrl);
             console.log("agreementFileName",res.data.agreementFileName);
-            console.log("attachmentId:",res.data.attachmentId);
+            console.log("getAgreementCreateInfo获取的attachmentId:",res.data.attachmentId);
 
             this.firstForm.agreement.attachmentId = res.data.attachmentId;
             this.totalAmountIncTax = res.data.totalAmountIncTax;
@@ -2533,22 +2561,8 @@ export default {
               JSON.stringify(res?.data["biddingListQuotation"])
             );
           });
-
           //获取合同附件的文档中台编辑URL
-          if (this.attachmentId) {
-            console.log('编辑文件的Attachment ID:', this.attachmentId);
-            //获取文档中台的文档编辑URL
-            getEditFileUrlByID({ attachmentId: this.attachmentId })
-              .then((res) => {
-                this.editFileUrl = res.data;
-                console.log("editFileUrl:", this.editFileUrl); 
-              })
-              .catch((err) => {
-                console.error('Error fetching view file URL:', err);
-              });
-          } else {
-            console.warn('attachmentId 数据未正确加载');
-          }
+          this.getAttachmentEditURL();
 
         }
       },
