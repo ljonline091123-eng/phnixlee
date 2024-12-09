@@ -101,6 +101,12 @@
           width="100"
         />
         <el-table-column
+          label="合计"
+          align="center"
+          prop="taxPricePattern"
+          width="100"
+        />
+        <el-table-column
           label="投标时间"
           align="center"
           prop="updateTime"
