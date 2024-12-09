@@ -103,7 +103,7 @@
                         style="width: 100%"
                       >
                         <el-option
-                          v-for="dict in dict.type.procurement_type"
+                          v-for="dict in dictObj.procurement_type"
                           :key="dict.value"
                           :label="dict.label"
                           :value="dict.value"
@@ -483,10 +483,8 @@
                   <div class="page-title">
                     <span>文件预览</span>
                   </div>
-                  <!--  增加:key="viewAttachmentId"做组件唯一约定放在缓存重复 -->
                   <!-- <FileModule
                     v-if="viewAttachmentId"
-                    :key="viewAttachmentId"
                     :attachmentId="viewAttachmentId"
                     height= "95%"
                     type="edit"
@@ -1010,20 +1008,28 @@ import BackButton from "@/components/BackButton/index.vue";
 import { addAttachment , getEditFileUrlByID} from "@/api/template/file";
 import {showSecretRelatedTips} from "@/utils/MyUtils";
 import {offerRepo, offerService, uploadFileUrl} from "@/utils/const";
+import { listUnderlingDict } from "@/api/procurement/contract";
 
 export default {
   name: "add-scheme",
-  dicts: [
-    "procurement_type",
-    "procurement_counting_type",
-    "procurement_payment_type",
-  ],
+  // dicts: [
+  //   "procurement_type",
+  //   "procurement_counting_type",
+  //   "procurement_payment_type",
+  // ],
   components: {
     FileModule,
     BackButton,
   },
   data() {
     return this.getInitialData();
+  },
+  //new
+  mounted() {
+    //获取字典
+    Object.keys(this.dictObjMap).forEach((key) => {
+      this.getListUnderlingDict(key);
+    });
   },
   created() {
     this.getInitialData();
@@ -1074,6 +1080,17 @@ export default {
     },
   },
   methods: {
+    //获取字典
+    async getListUnderlingDict(type) {
+      const res = await listUnderlingDict(type);
+      const resMap = res.data.map((item) => ({
+        value: item.dictValue,
+        label: item.dictLabel,
+      }));
+      const dictType = this.dictObjMap[type];
+      this.dictObj[dictType] = resMap;
+    },
+
     /* 代替data初始化 */
     getInitialData(){
       const validatePhone = (rule, value, callback) => {
@@ -1108,6 +1125,18 @@ export default {
         }
       };
       return {
+        //数据字典
+        dictObj: {
+          procurement_type:"",
+          procurement_counting_type: "",
+          procurement_payment_type: "",
+        },
+        dictObjMap: {
+          PROCUREMENT_TYPE:"procurement_type",
+          PROCUREMENT_COUNTING_TYPE:"procurement_counting_type",
+          PROCUREMENT_PAYMENT_TYPE:"procurement_payment_type",
+        },
+
         /*方案审批状态
           DRAFT(0,"自由态"),
           IN_APPROVAL(1,"审批中"),
@@ -1795,8 +1824,6 @@ export default {
 
     },
 
-
-    /* 点击确定选择模板数据 2 招标文件模板 ，1 合同模板 */
     async confirmBcTemplate() {
       /* this.templateId是模板列表弹窗单选的双向绑定，意思就是模板文件id */
       const templateId = this.templateId;
