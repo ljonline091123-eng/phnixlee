@@ -239,7 +239,7 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
         }
         if(flag){
             checkVendorInfo(requestVO.getVendor());
-            checkVendorContact(requestVO.getVendor(), requestVO.getVendorContact());
+//            checkVendorContact(requestVO.getVendor(), requestVO.getVendorContact());
             // 保存基本信息
             vendor = requestVO.getVendor();
             vendor.setState(VendorStateEnum.IN_APPROVAL.getState());
