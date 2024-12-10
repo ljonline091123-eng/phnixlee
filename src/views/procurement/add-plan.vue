@@ -388,8 +388,8 @@
             </template>
           </el-table-column>
           <el-table-column label="序号" prop="virtualId" width="60" align="center" />
-          <el-table-column label="用户" prop="nickName" show-overflow-tooltip align="center"/>
-          <el-table-column label="电话号码" prop="phonenumber" show-overflow-tooltip align="center"/>
+          <el-table-column label="用户" prop="nickName" width="100" align="center"/>
+          <el-table-column label="电话号码" prop="phonenumber" width="150" align="center"/>
           <el-table-column label="归属当前组织名称" prop="thridOrgName" show-overflow-tooltip align="center"/>
           <el-table-column label="归属管理组织名称" prop="orgDeptName" show-overflow-tooltip align="center"/>
         </el-table>
