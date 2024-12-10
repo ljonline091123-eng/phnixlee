@@ -539,4 +539,24 @@ public class SysDeptServiceImpl extends ServiceImpl<SysDeptMapper, SysDept> impl
         }
         return sysDepts;
     }
+
+    /**
+     * 根据第三方部门 id 获取组织机构信息(本部门及以下部门，不含项目部、部门)
+     * @param thridDeptId
+     * @return
+     */
+    @Override
+    public List<SysDept> getDeptByThridDeptIdNoBM(String thridDeptId) {
+        List<SysDept> sysDepts = new ArrayList<>();
+        SysDept sysDept = deptMapper.selectOne(new LambdaQueryWrapper<SysDept>()
+                .eq(SysDept::getThridDeptId, thridDeptId));
+        if (!ObjectUtils.isEmpty(sysDept)){
+            String ancestors = sysDept.getAncestors() + "," + sysDept.getDeptId();
+            sysDepts = super.list(new LambdaQueryWrapper<SysDept>()
+                    .likeRight(SysDept::getAncestors, ancestors)
+                    .notIn(SysDept::getThridOrgType, "X,BM"));
+            sysDepts.add(0, sysDept);
+        }
+        return sysDepts;
+    }
 }
