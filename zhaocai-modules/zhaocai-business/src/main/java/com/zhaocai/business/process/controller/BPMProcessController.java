@@ -73,7 +73,8 @@ public class BPMProcessController {
 
     @PostMapping("getOrg")
     @ApiOperation("根据第三方组织获取二三级单位值")
-    public ResultData<String> getOrg(@ApiIgnore @RequestBody String org) {
+    public ResultData<String> getOrg(@ApiIgnore @RequestBody JSONObject body) {
+        String org = body.getString("org");
         try {
             return ResultData.data(processService.getOrg(org));
         } catch (Exception e) {
@@ -83,7 +84,8 @@ public class BPMProcessController {
 
     @PostMapping("getOrgByUserId")
     @ApiOperation("根据用户id获取二三级单位值")
-    public ResultData<String> getOrgByUserId(@ApiIgnore @RequestBody String userId) {
+    public ResultData<String> getOrgByUserId(@ApiIgnore @RequestBody JSONObject body) {
+        String userId  = body.getString("userId");
         try {
             return ResultData.data(processService.getOrgByUserId(userId));
         } catch (Exception e) {
