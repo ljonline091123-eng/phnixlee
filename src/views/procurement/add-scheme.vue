@@ -493,7 +493,7 @@
                     v-if="viewAttachmentId"
                     :src= this.editFileUrl
                     width="100%"
-                    height="500px"
+                    height="700px"
                     frameborder="0"
                   ></iframe>
 
@@ -999,6 +999,7 @@ import {
   getTemplateSwitchList,
   getProcurementSchemeCreateInfo,
   getSchemeDetail,
+  getSchemeEditFileUrl,
 } from "@/api/procurement/scheme";
 import { getSwitchPageList } from "@/api/procurement/manage";
 import { getContractTypeList } from "@/api/template/file";

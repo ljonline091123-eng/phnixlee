@@ -962,7 +962,7 @@
             v-if="activeName === 'second' && this.attachmentId"
             :src= this.viewFileUrl
             width="100%"
-            height="500px"
+            height="700px"
             frameborder="0"
           ></iframe>
 
@@ -1144,6 +1144,7 @@ import {
   signAgreement,
   cancelledSignAgreement,
   pushAgreementToVendor,
+  getAgreementViewURL,
 } from "@/api/procurement/contract";
 import { offerRepo, offerService } from "@/utils/const";
 import FileModule from "@/components/FileModule/index.vue";
@@ -3408,7 +3409,7 @@ export default {
           console.log('Attachment ID:', this.attachmentId);
           //获取文档中台的文档编辑URL
           try {
-            const res = await getViewAttachmentURLByID({ attachmentId: this.attachmentId });
+            const res = await getAgreementViewURL({ attachmentId: this.attachmentId ,agreementId: this.param.id});
             this.viewFileUrl = res.data;
             console.log("viewFileUrl:",this.viewFileUrl);
           } catch (err) {

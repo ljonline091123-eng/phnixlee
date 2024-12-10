@@ -326,7 +326,7 @@
           v-if="attachmentId"
           :src= this.editFileUrl
           width="100%"
-          height="500px"
+          height="700px"
           frameborder="0"
         ></iframe>
       </div>
@@ -423,7 +423,7 @@
             v-if="templateInfo.attachmentId"
             :src= this.PreviewFileUrl
             width="100%"
-            height="500px"
+            height="700px"
             frameborder="0"
           ></iframe>
         </div>
