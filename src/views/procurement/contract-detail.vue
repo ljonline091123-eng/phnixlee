@@ -958,7 +958,7 @@
             :attachmentId="this.attachmentId"
             height="600px"
           /> -->
-          <iframe
+          <iframe allowfullscreen="true"
             v-if="activeName === 'second' && this.attachmentId"
             :src= this.viewFileUrl
             width="100%"

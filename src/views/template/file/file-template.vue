@@ -215,7 +215,7 @@
           height="500px"
           type="edit"
         /> -->
-        <iframe
+        <iframe allowfullscreen="true"
           v-if="attachmentId"
           :src= this.editFileUrl
           width="100%"
@@ -292,7 +292,7 @@
             :attachmentId="templateInfo.attachmentId"
             height="500px"
           /> -->
-          <iframe
+          <iframe allowfullscreen="true"
             v-if="templateInfo.attachmentId"
             :src= this.PreviewFileUrl
             width="100%"

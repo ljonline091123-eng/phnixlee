@@ -1170,7 +1170,7 @@
               :isContract="true"
               type="edit"
             /> -->
-            <iframe
+            <iframe allowfullscreen="true"
               v-if="attachmentId"
               :src= this.editFileUrl
               width="100%"

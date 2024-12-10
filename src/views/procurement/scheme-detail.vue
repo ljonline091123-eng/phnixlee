@@ -695,7 +695,7 @@
       width="80%"
     >
     <!-- <FileModule :attachmentId="templateAttachmentId" height="500px" /> -->
-      <iframe
+      <iframe allowfullscreen="true"
         :src= this.viewFileUrl
         width="100%"
         height="700px"
