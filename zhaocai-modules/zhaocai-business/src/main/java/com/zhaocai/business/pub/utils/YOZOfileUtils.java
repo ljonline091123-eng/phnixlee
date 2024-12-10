@@ -18,6 +18,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Component
 public class YOZOfileUtils {
@@ -117,6 +119,7 @@ public class YOZOfileUtils {
      * @param originalFileName 原始文件名（包括扩展名）
      * @return 修改后的文件名
      */
+
     public static String modifyFileName(String originalFileName) {
         if (originalFileName == null || originalFileName.isEmpty()) {
             throw new IllegalArgumentException("文件名不能为空");
@@ -134,11 +137,17 @@ public class YOZOfileUtils {
             fileNameWithoutExtension = originalFileName;
         }
 
-        // 生成一个新的UUID
-        String uuid = UUID.randomUUID().toString().replaceAll("-", "");
+        // 如果文件名中包含下划线，则移除下划线及其后面的内容
+        int underscoreIndex = fileNameWithoutExtension.indexOf('_');
+        if (underscoreIndex != -1) {
+            fileNameWithoutExtension = fileNameWithoutExtension.substring(0, underscoreIndex);
+        }
 
-        // 构建新的文件名：原文件名 + "_" + UUID + 扩展名
-        return fileNameWithoutExtension + "_" + uuid + fileExtension;
+        // 生成新的UUID并去掉其中的连字符
+        String newUuid = UUID.randomUUID().toString().replaceAll("-", "");
+
+        // 构建新的文件名：更新后的文件名 + 新UUID + 扩展名
+        return fileNameWithoutExtension + "_" + newUuid + fileExtension;
     }
 
     //删除临时文件

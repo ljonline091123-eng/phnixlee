@@ -17,6 +17,18 @@ import java.util.List;
  */
 public interface IAttachmentService extends IService<Attachment> {
 
+    //文档中台——获取预览word文件URL
+    String  viewWordFileURL(String fileName, String fileUrl);
+
+    //文档中台——获取预览PDF文件URL
+    String  viewPDFFileURL(String fileName, String fileUrl);
+
+    //文档中台——获取预览图片URL
+    String  viewImageURL(String fileName, String fileUrl);
+
+    //文档中台——获取编辑word文档的URL
+    String  editWordURL(Long attachmentId, String fileName, String fileUrl);
+
     /**
      * 新增附件
      * @param attachmentList    附件列表
@@ -73,7 +85,7 @@ public interface IAttachmentService extends IService<Attachment> {
     /**
      * 更新附件业务信息
      * @param id
-     * @param attachmentTypeEnum
+     * @param fileName
      * @param businessId
      */
     void updateBusiness(Long id,  Long businessId,String fileUrl,String fileName);

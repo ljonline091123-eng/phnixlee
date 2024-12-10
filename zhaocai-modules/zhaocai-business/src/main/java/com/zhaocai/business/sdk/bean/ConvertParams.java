@@ -70,6 +70,18 @@ public class ConvertParams {
 		requestBody.put("file", new File(filePath));
 	}
 	/**
+	 * 设置是否接受修订记录
+	 * @param show true 展示修订  false 不展示修订记录
+	 * @throws JSONException
+	 */
+	public void setAccepTracks(boolean show) throws JSONException{
+		if(show) {
+			extraParam.put("acceptTracks", 1);
+		}else {
+			extraParam.put("acceptTracks", 0);
+		}
+	}
+	/**
 	 * 设置文件路径，仅适用于/pms/convert/fileurl
 	 * @param fileUrl http 或 https 的网络文件路径
 	 * @throws IOException

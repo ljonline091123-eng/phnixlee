@@ -140,7 +140,7 @@ public class ProcurementPlanController extends BladeController {
     @GetMapping("/listPlanContractSplit")
     @ApiOperation(value = "获取采购计划和拆分合约")
     public ResultData<PageResult<ProcurementPlanContractSplitVO>> listPlanContractSplit(@Valid ProcurementPlanContractSplitQueryVO queryVO) {
-        queryVO.setProcurementOfficer(SecurityUtils.getUserId());
+//        queryVO.setProcurementOfficer(SecurityUtils.getUserId());
         return ResultData.data(procurementPlanService.listPlanContractSplit(queryVO));
     }
 
