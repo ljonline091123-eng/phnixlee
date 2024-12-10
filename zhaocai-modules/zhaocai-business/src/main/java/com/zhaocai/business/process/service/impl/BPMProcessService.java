@@ -3,6 +3,7 @@ package com.zhaocai.business.process.service.impl;
 import cn.hutool.core.util.IdUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.extra.spring.SpringUtil;
+import com.zhaocai.business.common.enums.ProcessKeyEnum;
 import com.zhaocai.business.common.enums.ProcessStateEnum;
 import com.zhaocai.business.common.enums.RejectTaskKeyEnum;
 import com.zhaocai.business.common.exception.ParamValidateException;
@@ -329,12 +330,30 @@ public class BPMProcessService implements IBPMProcessService {
 
     @Override
     public String getOrg(String org){
+        String result = null;
         /* 根据组织获取对应的二级单位 */
         String orgTwo = underlingSystemService.getL2OrgByOrgId(org);
         /* 获取三级单位 */
         String orgThree = underlingSystemService.getL3OrgByOrgId(org);
-        if(orgThree==null)orgThree = orgTwo;
-        return orgThree;
+        /* 获取所有流程 */
+        List<ListCataLogDTO> listCataLogDTOS = underlingSystemService.listCatalog();
+        if (listCataLogDTOS != null) {
+            /* 判断二级单位流程是否存在 */
+            ListCataLogDTO cataLogDTOTwo = listCataLogDTOS.stream().filter(cateLog -> cateLog.getCatalogKey().equals(orgTwo)).findFirst().orElse(null);
+            if (cataLogDTOTwo != null) {
+                /* 赋值使用二级单位 */
+                result = orgTwo;
+            }
+            if (orgThree != null) {
+                /* 判断三级单位流程是否存在 */
+                ListCataLogDTO cataLogDTOThree = listCataLogDTOS.stream().filter(cateLog -> cateLog.getCatalogKey().equals(orgThree)).findFirst().orElse(null);
+                if (cataLogDTOThree != null) {
+                    /* 赋值使用三级单位 */
+                    result = orgThree;
+                }
+            }
+        }
+        return result;
     }
 
     @Override
