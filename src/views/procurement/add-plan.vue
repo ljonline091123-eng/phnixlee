@@ -161,13 +161,16 @@
             <template slot-scope="props">
               <el-table :data="props.row.children" size="small"    border>
                 <!-- <el-table-column type="selection"></el-table-column> -->
-                <el-table-column label="拆分合约规划名称" prop="splitContractName" width="150">
+                <el-table-column v-if="planList[0].children.length>1" label="拆分合约规划名称" prop="splitContractName" width="150">
                   <template slot-scope="scope">
                     <el-input v-model="scope.row.splitContractName" :disabled="isSubmit"/>
                   </template>
                 </el-table-column>
-                <el-table-column label="拟签约合同承包范围" prop="contractScope" width="150">
+                <el-table-column v-if="planList[0].children.length>1" label="拟签约合同承包范围" prop="contractScope" width="150">
                   <template slot-scope="scope">
+                    <div  style="position: absolute;top: 20px;right: 40px;">
+                      <el-button  type="danger" size="small"  @click="handleDelete(scope.$index)">删除标包</el-button>
+                    </div>
                     <el-input v-model="scope.row.contractScope" :disabled="isSubmit"/>
                   </template>
                 </el-table-column>
@@ -502,7 +505,7 @@ import BackButton from "@/components/BackButton/index.vue"
 import { mapGetters } from "vuex"
 import PageTitle from "@/components/PageTitle/index.vue"
 import {PRICETYPELIST, PRICETYPEOPTIONS} from "@/utils/constants";
-import VirtualScroll from 'el-table-virtual-scroll'
+import VirtualScroll from 'el-table-virtual-scroll';
 import {getTwoLevelDeptByDeptId} from "@/api/system/dept";
 export default {
   name: "add-plan",
@@ -1016,15 +1019,19 @@ export default {
           }
 
           const isAll = planList[0]?.children.every(item => item.splitContractName && item.contractScope)
+          //判断长度大于1
+          if( planList[0].children.length>1){
           if(!isAll){
             this.isSubmit = false;
-            this.$message({
+            if(planList[0].children.length!=1){
+              this.$message({
               message: '拆分合约规划名称/拟签约合同承包范围不能为空',
               type: 'error'
             });
+            }
             return false;
           }
-
+        }
           // const isZero = planList[0]?.children.some(item => {
           //   let isLoop = true;
           //   if (isLoop) {
@@ -1295,6 +1302,27 @@ console.log("-2222--"+JSON.stringify(this.materialsLists))
     handleTypeClick(tab) {
       this.queryParams.procurementPlanType = tab.name;
     },
+    handleDelete(index) {
+      console.log("this.planList[0].children[index]"+JSON.stringify(this.planList[0].children[index]))
+      let arrData=this.planList[0].children[index].materialsLists
+      for(let i = 0 ; i <  arrData.length ; i++){
+          console.log("删除"+JSON.stringify(arrData[i]))
+            if(arrData.pushFlag=='Y'){
+              return this.$message({type:'error',message:"目前是推送状态不可删除！"})
+            }else{
+              this.$confirm("是否确定删除标包？", "提示", {
+                confirmButtonText: "确定",
+                cancelButtonText: "取消",
+                type: "warning",
+              }).then(() => {
+                  // 删除数据
+              this.planList[0].children.splice(index, 1);
+              // 强制Vue重新渲染
+              this.$forceUpdate();
+              });
+            }
+          }
+    },
     /** 查询定时任务列表 */
     getList() {
       this.loading = false;
@@ -1391,8 +1419,8 @@ console.log("-2222--"+JSON.stringify(this.materialsLists))
 
     async getListProcurementOfficer(){
       try{
-        // const projectRes = await getMinProject(this.formData.projectCode);
-        const dept = await getTwoLevelDeptByDeptId(this.$store.state.user.userInfo.deptId);
+         // const projectRes = await getMinProject(this.formData.projectCode);
+         const dept = await getTwoLevelDeptByDeptId(this.$store.state.user.userInfo.deptId);
         const res = await getListProcurementOfficer(dept.deptId)
         this.operatorList = res.data;
       }catch(err){

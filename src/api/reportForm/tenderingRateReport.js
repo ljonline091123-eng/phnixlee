@@ -38,3 +38,15 @@ export function getProjectCode(id) {
     params: {id}
   })
 }
+/**
+ * 获取组织
+ * @param id
+ * @returns {*}
+ */
+export function getOrgList(id) {
+  return request({
+    url: '/business/report/getOrgList',
+    method: 'get',
+    params: {id}
+  })
+}

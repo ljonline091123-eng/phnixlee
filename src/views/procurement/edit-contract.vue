@@ -12,7 +12,7 @@
       <div class="tabs-box">
 
       <!-- 基本信息 / 合同附件 -->
-      <el-tabs v-model="activeName">
+      <el-tabs v-model="activeName" @tab-click="attachmenthandleTabClick">
         <el-tab-pane label="基本信息" name="first">
           <!-- 基本信息 -->
           <commonTitle>基本信息</commonTitle>
@@ -1191,11 +1191,11 @@
       <!-- 合同附件 -->
       <div class="contract-box" :class="activeName !== 'second' && 'hide'">
         <!-- <FileModule ref="file" v-if="attachmentId" :attachmentId="attachmentId" @submitFileZ="subForm" :isContract = true type="edit"/> -->
-        <iframe
+        <iframe allowfullscreen="true"
           v-if="attachmentId"
           :src= this.editFileUrl
           width="100%"
-          height="500px"
+          height="700px"
           frameborder="0"
         ></iframe>
       </div>
@@ -1301,7 +1301,7 @@
 import { Base64 } from "js-base64";
 import { create, all } from "mathjs"
 import commonTitle from "@/views/procurement/components/common-title.vue";
-import { getAgreementCreateInfo,getAgreementAttachmentId,getAgreementDetail,getLabelAttachmentId, saveAgreement, listUnderlingDict, listDeviceClass, listDevice, listMaterialsClass, listMaterials, deviceFeatureList, deviceFeatureValueList, listMaterialsFeature, listMaterialsFeatureValue,  avoidSubmitByMarket} from "@/api/procurement/contract";
+import { getAgreementEditURL,getAgreementCreateInfo,getAgreementAttachmentId,getAgreementDetail,getLabelAttachmentId, saveAgreement, listUnderlingDict, listDeviceClass, listDevice, listMaterialsClass, listMaterials, deviceFeatureList, deviceFeatureValueList, listMaterialsFeature, listMaterialsFeatureValue,  avoidSubmitByMarket} from "@/api/procurement/contract";
 import { offerService, offerRepo } from "@/utils/const"
 import {getEditFileUrlByID} from "@/api/template/file"; 
 import { cardid, isvalidatemobile, validatenull } from "@/utils/validate"
@@ -1430,27 +1430,62 @@ export default {
             this.attachmentMessage = res.data.message;
           }
         }
+        this.editFileUrl = "";  //先把编辑的url清空
         this.getAttachmentEditURL(); //获取合同附件的文档中台编辑URL
 
       }
     },
 
-    //获取合同附件的文档中台编辑URL
-    async getAttachmentEditURL(){
-      if (this.attachmentId) {
-        console.log('编辑文件的Attachment ID:', this.attachmentId);
-        //获取文档中台的文档编辑URL
-        getEditFileUrlByID({ attachmentId: this.attachmentId })
+    // //获取合同附件的文档中台编辑URL
+    // async getAttachmentEditURL(){
+    //   if (this.attachmentId) {
+    //     console.log('编辑文件的Attachment ID:', this.attachmentId);
+    //     //获取文档中台的文档编辑URL
+    //     getEditFileUrlByID({ attachmentId: this.attachmentId })
+    //       .then((res) => {
+    //         this.editFileUrl = res.data;
+    //         console.log("editFileUrl:", this.editFileUrl); 
+    //       })
+    //       .catch((err) => {
+    //         console.error('Error fetching view file URL:', err);
+    //       });
+    //   } else {
+    //     console.warn('attachmentId 数据未正确加载');
+    //   }
+    // },
+
+    //切换页签到合同附件时
+    async attachmenthandleTabClick(tab){
+      // tab.name 是被点击的标签页的 name 属性值
+      this.editFileUrl=""; //先清空编辑文档的URL，在重新获取
+      if (tab.name === 'second') {
+        this.getAttachmentEditURL();
+      }
+    },
+    // 获取合同附件的文档中台编辑URL
+    async getAttachmentEditURL() {
+      console.log("getAttachmentEditURL编辑url方法==》》");
+      console.log("this.attachmentId", this.attachmentId);
+      // if (this.attachmentId) {
+        this.firstForm.agreement.paymentWay=this.paymentWayArr.join(",");
+        let params = JSON.parse(JSON.stringify(this.firstForm.agreement))
+        console.log("this.firstForm=>", this.firstForm);
+        delete params.expenditureBusinessType;
+        params.attachmentId = this.attachmentId;
+        console.log("生成编辑文档URL的params数据===>", params);
+        console.log('新增合同签订编辑文件的AttachmentID:', params.attachmentId);
+        // 获取文档中台的文档编辑URL
+        getAgreementEditURL(params)
           .then((res) => {
             this.editFileUrl = res.data;
-            console.log("editFileUrl:", this.editFileUrl); 
+            console.log("新增合同签订编辑editFileUrl:", this.editFileUrl);
           })
           .catch((err) => {
-            console.error('Error fetching view file URL:', err);
+            console.error('生成编辑文档URL的错误:', err);
           });
-      } else {
-        console.warn('attachmentId 数据未正确加载');
-      }
+      // } else {
+      //   console.warn('attachmentId 数据未正确加载');
+      // }
     },
 
     getAgreementDetail(){
@@ -1475,6 +1510,7 @@ export default {
           this.paymentWayArr=this.firstForm.agreement.paymentWay.split(",");
 
           // this.getLabelAttachmentId()
+          this.editFileUrl = "";  //先把编辑的url清空
           this.getAttachmentEditURL(); //获取合同附件编辑URL
        })
     },
@@ -1485,6 +1521,7 @@ export default {
         this.attachmentId = res.data.attachmentId;
           console.log(JSON.stringify(res))
       })
+      this.editFileUrl = "";  //先把编辑的url清空
       this.getAttachmentEditURL(); //获取合同附件编辑URL
     },
     visaAdd(type) {
@@ -1584,9 +1621,10 @@ export default {
             background: 'rgba(0, 0, 0, 0.7)'
           });
           this.isSubmit = true;
-          this.subForm();
+          // this.subForm();
           console.log(this.firstForm,'this.firstForm----------------------');
           // this.$refs.file.saveFile()
+          this.subForm();
         }
         else {
           this.isSubmit = false;
@@ -1605,7 +1643,7 @@ export default {
       // }
       if(this.isSubmit){
         delete this.firstForm.agreement.expenditureBusinessType;
-        this.firstForm.templateEditFlag = this.templateEditFlag
+        // this.firstForm.templateEditFlag = this.templateEditFlag
         this.firstForm.agreement.paymentWay=this.paymentWayArr.join(",");
         let params = JSON.parse(JSON.stringify(this.firstForm))
         console.log('提交数据===>', params)

@@ -168,6 +168,18 @@
         />
         <el-table-column label="序号" type="index" width="50" align="center" />
         <el-table-column
+          prop="sureBid"
+          label="确定中标"
+          align="center"
+          v-if="shouldDisableButton"
+        >
+          <template #default="{ row }">
+            <span :style="{ color: row.sureBid === 1 ? 'red' : 'black' }">
+              {{ row.sureBid === 1 ? '中标' : '未中标' }}
+            </span>
+          </template>
+        </el-table-column>
+        <el-table-column
           label="中标候选人"
           width="200"
           align="center"
@@ -489,11 +501,11 @@
         "
         height="600px"
       /> -->
-      <iframe
+      <iframe allowfullscreen="true"
         v-if="scheme.biddingTemplate"
         :src= this.viewFileUrl
         width="100%"
-        height="500px"
+        height="700px"
         frameborder="0"
       ></iframe>
     </el-dialog>
