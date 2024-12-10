@@ -102,8 +102,8 @@ public class ProcurementSchemeServiceImpl extends ServiceImpl<ProcurementSchemeM
     @Override
     public PageResult<ProcurementSchemeListVO> listPage(ProcurementSchemeListQueryVO queryVO) {
         // ToDo 获取当前登录用户，判断是否为领导，如果是领导则可以看到所有
-        queryVO.setIsLeader(0);
-        queryVO.setProcurementOfficer(SecurityUtils.getUserId());
+//        queryVO.setIsLeader(0);
+//        queryVO.setProcurementOfficer(SecurityUtils.getUserId());
         IPage<ProcurementSchemeListVO> iPage = baseMapper.selectPageList(queryVO.toMybatisPage(), queryVO);
 
         return new PageResult<>(iPage);
@@ -112,12 +112,12 @@ public class ProcurementSchemeServiceImpl extends ServiceImpl<ProcurementSchemeM
     @Override
     public PageResult<BiddingSchemeListVO> biddingSchemeListPage(BiddingSchemeListQueryVO queryVO) {
         queryVO.setState(ProcurementSchemeStateEnum.APPROVE.getState());
-        if(null == queryVO.getType()){
-            //设置当前登录用户为采购经办人的查询条件
-            queryVO.setIsLeader(0);
-            queryVO.setProcurementOfficer(SecurityUtils.getUserId());
-            queryVO.setFinanceConfirmId(SecurityUtils.getUserId().toString());
-        }
+//        if(null == queryVO.getType()){
+//            //设置当前登录用户为采购经办人的查询条件
+//            queryVO.setIsLeader(0);
+//            queryVO.setProcurementOfficer(SecurityUtils.getUserId());
+//            queryVO.setFinanceConfirmId(SecurityUtils.getUserId().toString());
+//        }
         IPage<BiddingSchemeListVO> iPage = baseMapper.selectBiddingSchemePageList(queryVO.toMybatisPage(), queryVO);
         iPage.getRecords().forEach(item -> {
             if (item.getNoticeStatus() != null) {
@@ -602,9 +602,9 @@ public class ProcurementSchemeServiceImpl extends ServiceImpl<ProcurementSchemeM
      if (procurementOfficerList.size() > 1) {
          throw new ParamValidateException("所选择的采购计划存在多个采购经办人，请确认后重新选择");
      }
-     if (!procurementOfficerList.get(0).equals(SecurityUtils.getUserId())) {
-         throw new ParamValidateException("所选择的采购计划的采购经办人不是您本人");
-     }
+//     if (!procurementOfficerList.get(0).equals(SecurityUtils.getUserId())) {
+//         throw new ParamValidateException("所选择的采购计划的采购经办人不是您本人");
+//     }
 
      //计算上限价和交易标的物
      List<MaterialsList> materialsLists = materialsListService.listMaterialsListByContractSplitIds(contractSplitIds);
