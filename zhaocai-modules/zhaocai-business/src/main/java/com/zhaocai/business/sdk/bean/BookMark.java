@@ -4,6 +4,7 @@ import com.zhaocai.business.pub.utils.Sender;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
+import org.springframework.beans.factory.annotation.Autowired;
 
 import java.io.File;
 import java.io.IOException;
@@ -14,6 +15,9 @@ import java.util.Map;
 
 
 public class BookMark {
+	@Autowired
+	private Sender sender;
+
 	/**
 	 * 书签类型：文本类型书签
 	 */
@@ -217,7 +221,7 @@ public class BookMark {
 	private String upLoadFile(String filePath) throws NoSuchAlgorithmException, JSONException, IOException {
     	Map<String, Object> requestBody = new HashMap<>();
     	requestBody.put("file", new File(filePath));
-    	String response = Sender.post(ConvertParams.URL_CONVERT_FILE,ConvertParams.CONVERT_TYPE_CONVERT_FILE,requestBody);
+    	String response = sender.post(ConvertParams.URL_CONVERT_FILE,ConvertParams.CONVERT_TYPE_CONVERT_FILE,requestBody);
     	JSONObject json = new JSONObject(response);
     	if(json.optInt("code")!=0) {
     		throw new IOException("上传文件失败："+json.optString("msg"));
