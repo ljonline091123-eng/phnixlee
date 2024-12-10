@@ -168,6 +168,18 @@
         />
         <el-table-column label="序号" type="index" width="50" align="center" />
         <el-table-column
+          prop="sureBid"
+          label="确定中标"
+          align="center"
+          v-if="shouldDisableButton"
+        >
+          <template #default="{ row }">
+            <span :style="{ color: row.sureBid === 1 ? 'red' : 'black' }">
+              {{ row.sureBid === 1 ? '中标' : '未中标' }}
+            </span>
+          </template>
+        </el-table-column>
+        <el-table-column
           label="中标候选人"
           width="200"
           align="center"
@@ -612,6 +624,8 @@ import { uploadFileUrl } from "@/utils/const";
 import BackBidDetail from "./back-bid-detail.vue";
 import {showSecretRelatedTips} from "@/utils/MyUtils";
 import { getViweFileURL } from "@/api/template/file";
+import Vue from 'vue'
+const vm = new Vue();
 export default {
   name: "define-bid",
   props: {
@@ -888,19 +902,51 @@ export default {
       //   new Map(mergedList.map((item) => [item.id, item])).values()
       // );
       // this.evaluateList = uniqueList;
-      try {
-        const res = await calibration({
-          calibrationVOList: this.evaluateList,
-          detailUrl: detailUrl,
-          calibrationDocAttachList: this.uploadAttachmentList,
+
+
+      let vendorNames = this.evaluateList.filter(obj => obj.sureBid === 1 && this.formatterUpProcurementScheme(obj) === '是').map(obj => '<br>&nbsp;&nbsp;'+obj.vendorName).toString().replace(/,/g, '');
+      console.log('%c👽 超出上限价的供应商： ', `font-size: 20px;background-color: #f00;`, vendorNames);
+      if(vendorNames!==null&&vendorNames!==undefined&&vendorNames!==''&&vendorNames.length>0){
+        vm.$confirm('<b>您选择的供应商</b>'+vendorNames+'<br><b>投标已经超上限价，是否继续？</b>', '提示', {
+          confirmButtonText: '确定',
+          cancelButtonText: '取消',
+          type: 'warning',
+          dangerouslyUseHTMLString: true // 启用 HTML 支持
+        }).then(async () => {
+          try {
+            const res = await calibration({
+              calibrationVOList: this.evaluateList,
+              detailUrl: detailUrl,
+              calibrationDocAttachList: this.uploadAttachmentList,
+            });
+            this.$message.success("定标成功");
+            this.isSuccess = true;
+            this.$emit("changeState");
+          } catch (err) {
+            console.log(err);
+          }
+        }).catch(() => {
+          vm.$message({
+            type: 'info',
+            message: '已取消'
+          });
         });
-        this.$message.success("定标成功");
-        this.isSuccess = true;
-        this.$emit("changeState");
-      } catch (err) {
-        console.log(err);
+        this.isSubmit = false;
+      }else{
+        try {
+          const res = await calibration({
+            calibrationVOList: this.evaluateList,
+            detailUrl: detailUrl,
+            calibrationDocAttachList: this.uploadAttachmentList,
+          });
+          this.$message.success("定标成功");
+          this.isSuccess = true;
+          this.$emit("changeState");
+        } catch (err) {
+          console.log(err);
+        }
+        this.isSubmit = false;
       }
-      this.isSubmit = false;
     },
     getUserNames(userList) {
       if (!userList || userList.length === 0) {

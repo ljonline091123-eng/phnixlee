@@ -1023,7 +1023,7 @@ export default {
     BackButton,
   },
   data() {
-    this.getInitialData();
+    return this.getInitialData();
   },
   //new
   mounted() {

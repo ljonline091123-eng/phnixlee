@@ -110,6 +110,17 @@
           align="center"
           prop="candidate"
         />
+        <el-table-column
+          prop="sureBid"
+          label="中标结果"
+          align="center"
+        >
+          <template #default="{ row }">
+            <span :style="{ color: row.bidResult === 1 ? 'red' : 'black' }">
+              {{ row.bidResult === 1 ? '中标' : row.bidResult === 0 ? '未中标' : ''}}
+            </span>
+          </template>
+        </el-table-column>
       </el-table>
       <!-- 选择项目合约规划 -->
       <el-dialog
