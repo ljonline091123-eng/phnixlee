@@ -250,7 +250,7 @@
               label-width="110px"
               label="作废节点"
               class="label-right-align">
-              <el-radio v-model="selectedOption" label="reTender">重新招标</el-radio>
+              <el-radio v-model="selectedOption" label="reTender">重新招标 <span style="color: red">不允许修改任何模板!</span></el-radio>
               <el-radio v-model="selectedOption" label="reScheme">返回到采购方案</el-radio>
 <!--              <el-radio v-model="selectedOption" label="rePlan">返回到采购计划</el-radio>-->
             </el-form-item>
