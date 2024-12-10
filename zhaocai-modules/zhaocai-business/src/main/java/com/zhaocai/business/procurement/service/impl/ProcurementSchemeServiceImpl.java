@@ -319,8 +319,9 @@ public class ProcurementSchemeServiceImpl extends ServiceImpl<ProcurementSchemeM
 
     @Override
     public ProcurementSchemeCreateVO getProcurementSchemeCreateInfo(List<Long> contractSplitIds) {
+        System.out.println("contractSplitIds："+ contractSplitIds);
         ProcurementSchemeCreateVO schemeCreate = this.checkProcurementSchemeData(contractSplitIds);
-
+        System.out.println("schemeCreate+最小核算项目是："+ schemeCreate.getProjectCode());
         MinProjectVO minProjectVO = minProjectService.getMinProjectByMinAccountCode(schemeCreate.getProjectCode());
         schemeCreate.setProjectDeptId(minProjectVO.getDeptId());
         return schemeCreate;
@@ -521,16 +522,17 @@ public class ProcurementSchemeServiceImpl extends ServiceImpl<ProcurementSchemeM
      */
     private ProcurementSchemeCreateVO checkProcurementSchemeData(List<Long> contractSplitIds) {
         ProcurementSchemeCreateVO schemeCreateVO = new ProcurementSchemeCreateVO();
- if(contractSplitIds !=null &&contractSplitIds.size()==0){
+ if(contractSplitIds !=null &&contractSplitIds.size()!=0){
      // 获取合约拆分记录
      List<ContractPlanningSplit> planningSplits = contractPlanningSplitService.listByIds(contractSplitIds);
      if (planningSplits==null||planningSplits.size() ==0) {
          throw new ParamValidateException("无合约拆分记录");
      }
+     System.out.println("planningSplits："+ planningSplits);
      // 获取&校验采购计划
      List<Long> planIdList = extractDistinctValues(planningSplits,ContractPlanningSplit::getProcurementPlanId);
      List<ProcurementPlan> procurementPlans = procurementPlanService.listByIds(planIdList);
-
+     System.out.println("planIdList："+ planIdList);
      // 校验采购类型
      List<Integer> procurementPlanType = extractDistinctValues(procurementPlans,ProcurementPlan::getProcurementPlanType);
      if (procurementPlanType.size() > 1) {
@@ -593,6 +595,7 @@ public class ProcurementSchemeServiceImpl extends ServiceImpl<ProcurementSchemeM
          throw new ParamValidateException("所现在的采购计划归属项目，请确认后重新选择");
      }
      schemeCreateVO.setProjectCode(projectCodesList.get(0));
+     System.out.println("contractPlanningList："+ contractPlanningList);
 
      // 校验经办人
      List<Long> procurementOfficerList = extractDistinctValues(procurementPlans,ProcurementPlan::getProcurementOfficer);
