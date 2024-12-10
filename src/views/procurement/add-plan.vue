@@ -505,7 +505,7 @@ import BackButton from "@/components/BackButton/index.vue"
 import { mapGetters } from "vuex"
 import PageTitle from "@/components/PageTitle/index.vue"
 import {PRICETYPELIST, PRICETYPEOPTIONS} from "@/utils/constants";
-import VirtualScroll from 'el-table-virtual-scroll';
+import VirtualScroll from 'el-table-virtual-scroll'
 import {getTwoLevelDeptByDeptId} from "@/api/system/dept";
 export default {
   name: "add-plan",
@@ -1419,8 +1419,8 @@ console.log("-2222--"+JSON.stringify(this.materialsLists))
 
     async getListProcurementOfficer(){
       try{
-         // const projectRes = await getMinProject(this.formData.projectCode);
-         const dept = await getTwoLevelDeptByDeptId(this.$store.state.user.userInfo.deptId);
+        // const projectRes = await getMinProject(this.formData.projectCode);
+        const dept = await getTwoLevelDeptByDeptId(this.$store.state.user.userInfo.deptId);
         const res = await getListProcurementOfficer(dept.deptId)
         this.operatorList = res.data;
       }catch(err){
