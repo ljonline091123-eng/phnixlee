@@ -501,7 +501,7 @@
         "
         height="600px"
       /> -->
-      <iframe
+      <iframe allowfullscreen="true"
         v-if="scheme.biddingTemplate"
         :src= this.viewFileUrl
         width="100%"

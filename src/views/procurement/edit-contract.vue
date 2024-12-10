@@ -1191,7 +1191,7 @@
       <!-- 合同附件 -->
       <div class="contract-box" :class="activeName !== 'second' && 'hide'">
         <!-- <FileModule ref="file" v-if="attachmentId" :attachmentId="attachmentId" @submitFileZ="subForm" :isContract = true type="edit"/> -->
-        <iframe
+        <iframe allowfullscreen="true"
           v-if="attachmentId"
           :src= this.editFileUrl
           width="100%"

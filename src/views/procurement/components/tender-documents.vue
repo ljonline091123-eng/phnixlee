@@ -243,7 +243,7 @@
           "
           height="500px"
         /> -->
-        <iframe
+        <iframe allowfullscreen="true"
           v-if="scheme.biddingTemplate"
           :src= this.viewFileUrl
           width="100%"

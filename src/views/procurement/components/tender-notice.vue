@@ -215,7 +215,7 @@
           v-if="attachmentId"
           height="500px"
         /> -->
-        <iframe
+        <iframe allowfullscreen="true"
             v-if="attachmentId"
             :src= this.viewFileUrl
             width="100%"

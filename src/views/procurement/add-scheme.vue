@@ -491,7 +491,7 @@
                     height= "95%"
                     type="edit"
                   /> -->
-                  <iframe
+                  <iframe allowfullscreen="true"
                     v-if="viewAttachmentId"
                     :src= this.editFileUrl
                     width="100%"
