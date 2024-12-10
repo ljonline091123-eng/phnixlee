@@ -14,10 +14,12 @@ import com.zhaocai.business.process.service.IBPMProcessService;
 import com.zhaocai.business.process.service.IProcessBusinessBaseService;
 import com.zhaocai.business.procurement.service.IMinProjectService;
 import com.zhaocai.business.procurement.vo.res.MinProjectVO;
+import com.zhaocai.business.pub.service.ISystemUserService;
 import com.zhaocai.common.core.constant.UserConstants;
 import com.zhaocai.common.core.utils.bean.BeanCopierUtil;
 import com.zhaocai.common.core.web.bean.ResultData;
 import com.zhaocai.common.security.utils.SecurityUtils;
+import com.zhaocai.system.api.domain.SysUser;
 import io.swagger.annotations.ApiOperation;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -46,7 +48,8 @@ public class BPMProcessService implements IBPMProcessService {
     private BpmService bpmService;
     @Autowired
     private IMinProjectService minProjectService;
-
+    @Autowired
+    private ISystemUserService systemUserService;
     @Autowired
     private UnderlingSystemService underlingSystemService;
 
@@ -321,6 +324,24 @@ public class BPMProcessService implements IBPMProcessService {
             throw new ParamValidateException("未找到对应流程");
         }
         return variable.get("processId").toString();
+    }
+
+
+    @Override
+    public String getOrg(String org){
+        /* 根据组织获取对应的二级单位 */
+        String orgTwo = underlingSystemService.getL2OrgByOrgId(org);
+        /* 获取三级单位 */
+        String orgThree = underlingSystemService.getL3OrgByOrgId(org);
+        if(orgThree==null)orgThree = orgTwo;
+        return orgThree;
+    }
+
+    @Override
+    public String getOrgByUserId(String userId){
+        SysUser sysUser = systemUserService.getUserById(Long.parseLong(userId));
+        if(sysUser==null)return null;
+        return getOrg(sysUser.getThridOrgId());
     }
 
     /**
