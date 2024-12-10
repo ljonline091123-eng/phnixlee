@@ -247,7 +247,7 @@
           v-if="scheme.biddingTemplate"
           :src= this.viewFileUrl
           width="100%"
-          height="500px"
+          height="700px"
           frameborder="0"
         ></iframe>
       </el-form>
