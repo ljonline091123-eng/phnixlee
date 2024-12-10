@@ -168,7 +168,7 @@
                 </el-table-column>
                 <el-table-column v-if="planList[0].children.length>1" label="拟签约合同承包范围" prop="contractScope" width="150">
                   <template slot-scope="scope">
-                    <div  style="position: absolute;top: 20px;right: 40px;">
+                    <div  style="position: absolute;top: 5px;right: 40px;">
                       <el-button  type="danger" size="small"  @click="handleDelete(scope.$index)">删除标包</el-button>
                     </div>
                     <el-input v-model="scope.row.contractScope" :disabled="isSubmit"/>
@@ -1305,12 +1305,12 @@ console.log("-2222--"+JSON.stringify(this.materialsLists))
     handleDelete(index) {
       console.log("this.planList[0].children[index]"+JSON.stringify(this.planList[0].children[index]))
       let arrData=this.planList[0].children[index].materialsLists
-      for(let i = 0 ; i <  arrData.length ; i++){
-          console.log("删除"+JSON.stringify(arrData[i]))
-            if(arrData.pushFlag=='Y'){
+      for(let i = 0 ; i <  arrData?.length ; i++){
+            if(arrData[i]?.pushFlag=='Y'){
               return this.$message({type:'error',message:"目前是推送状态不可删除！"})
-            }else{
-              this.$confirm("是否确定删除标包？", "提示", {
+            }
+          }
+          this.$confirm("是否确定删除标包？", "提示", {
                 confirmButtonText: "确定",
                 cancelButtonText: "取消",
                 type: "warning",
@@ -1320,8 +1320,6 @@ console.log("-2222--"+JSON.stringify(this.materialsLists))
               // 强制Vue重新渲染
               this.$forceUpdate();
               });
-            }
-          }
     },
     /** 查询定时任务列表 */
     getList() {
@@ -1383,6 +1381,9 @@ console.log("-2222--"+JSON.stringify(this.materialsLists))
             //     unitPriceInclTaxText:item.unitPriceInclTaxText
             //   })),
             // })
+            console.log(this.planList[0].children.length)
+            console.log(index)
+            if(index+1>this.planList[0].children.length){
             children.push({
               index,
               planTable:'planTable'+index,
@@ -1395,6 +1396,9 @@ console.log("-2222--"+JSON.stringify(this.materialsLists))
 
               }))
             })
+          }else{
+            children.push(this.planList[0].children[index])
+          }
           });
           this.$set(this.planList[0], 'children', JSON.parse(JSON.stringify(children)));
           this.splitVisible = false;

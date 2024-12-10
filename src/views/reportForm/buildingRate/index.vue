@@ -197,7 +197,10 @@ export default {
     },
     expandNodes(level) {
       this.levelExpand=level
+      this.treeData=[]
+      
       if (level === 1) {
+     
           // 关闭所有默认节点
           const tree = this.$refs.tree;
           const allNodes = Object.values(tree.store.nodesMap);
@@ -209,6 +212,7 @@ export default {
           });
         } else if (level === 2) {
           this.treeData=['1826912577508798466']
+          console.log(JSON.stringify(this.treeData))
         }else if (level === 3) {
           this.arrData.forEach(element => {
             if(element.thridOrgLevel==2){
