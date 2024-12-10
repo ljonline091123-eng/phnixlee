@@ -137,7 +137,7 @@
     <el-dialog
       title="招标文件模板"
       :visible.sync="fileTemplateVisible"
-      width="70%"
+      width="80%"
       @closed="handleClose"
     >
       <el-form
@@ -215,11 +215,11 @@
           height="500px"
           type="edit"
         /> -->
-        <iframe
+        <iframe allowfullscreen="true"
           v-if="attachmentId"
           :src= this.editFileUrl
           width="100%"
-          height="500px"
+          height="700px"
           frameborder="0"
         ></iframe>
       </div>
@@ -292,11 +292,11 @@
             :attachmentId="templateInfo.attachmentId"
             height="500px"
           /> -->
-          <iframe
+          <iframe allowfullscreen="true"
             v-if="templateInfo.attachmentId"
             :src= this.PreviewFileUrl
             width="100%"
-            height="500px"
+            height="700px"
             frameborder="0"
           ></iframe>
         </div>
@@ -484,7 +484,7 @@ export default {
       this.attachmentId = "";
     },
     treeSelect(value) {
-      debugger
+      // debugger
       console.log("file-template---treeSelect---value",value)
       if (value.disabled) {
         this.$modal.msgError("该单位不能选择");

@@ -688,16 +688,17 @@
       </div>
     </el-drawer>
 
+    //预览文件弹窗
     <el-dialog
       :title="templateDialogTitle"
       :visible.sync="templateDialogVisible"
       width="80%"
     >
-    <!-- <FileModule :key="templateAttachmentId" :attachmentId="templateAttachmentId" height="700px" /> -->
-      <iframe
+    <!-- <FileModule :attachmentId="templateAttachmentId" height="500px" /> -->
+      <iframe allowfullscreen="true"
         :src= this.viewFileUrl
         width="100%"
-        height="500px"
+        height="700px"
         frameborder="0"
       ></iframe>
     </el-dialog>
