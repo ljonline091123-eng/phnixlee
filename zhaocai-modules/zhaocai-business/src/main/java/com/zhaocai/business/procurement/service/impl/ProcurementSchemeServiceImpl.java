@@ -190,6 +190,13 @@ public class ProcurementSchemeServiceImpl extends ServiceImpl<ProcurementSchemeM
                 ProcessKeyEnum.ZHAOCAI_PROCUREMENT_SCHEME.getIdentifying(),paramMap);
     }
 
+    //获取采购方案详细信息
+    @Override
+    public ProcurementScheme getProcurementSchemeInfoByID(Long id) {
+        ProcurementScheme procurementScheme = baseMapper.selectById(id);
+        ValidateUtils.isNullException(procurementScheme, "该采购方案不存在，请确认");
+        return  procurementScheme;
+    }
     @Override
     public ProcurementSchemeDetailVO detail(Long id) {
         ProcurementScheme procurementScheme = baseMapper.selectById(id);

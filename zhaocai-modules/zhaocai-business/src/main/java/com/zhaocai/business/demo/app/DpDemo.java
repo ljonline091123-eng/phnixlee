@@ -423,6 +423,29 @@ public class DpDemo {
 	}
 
 	/**
+	 * 去除word修订记录
+	 *
+	 * @throws IOException
+	 * @throws JSONException
+	 * @throws NoSuchAlgorithmException
+	 */
+	public static void convertOfficeToOffice() throws IOException, NoSuchAlgorithmException, JSONException {
+		ConvertParams params = new ConvertParams();
+		// 设置要处理的文档模版
+		params.setFilePath(DemoTestFile.getFilePath("服务合同.docx"));
+		// 设置水印
+//		WaterMark wm = new WaterMark(WaterMark.TYPE_TXT, "DEMO-水印");
+//		// 将水印设置到参数中
+//		params.setWaterMark(wm);
+		params.setAccepTracks(false);
+		String response = Sender1.post(ConvertParams.URL_CONVERT, ConvertParams.CONVERT_TYPE_CONVERT_DOCUMENT, params.getRequestBody());
+		System.out.println("转换文件响应结果：");
+		System.out.println(response);
+		String viewUrl = new JSONObject(response).optJSONObject("data").optString("viewUrl");
+		System.out.println(viewUrl);
+	}
+
+	/**
 	 * office文件转Ofd
 	 */
 	public static void convertOfficeToOfd() throws IOException, NoSuchAlgorithmException, JSONException {

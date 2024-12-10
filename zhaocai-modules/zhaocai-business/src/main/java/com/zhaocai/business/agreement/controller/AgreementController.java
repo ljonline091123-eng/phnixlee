@@ -1,19 +1,30 @@
 package com.zhaocai.business.agreement.controller;
 
 import com.alibaba.fastjson.JSONObject;
+import com.zhaocai.business.agreement.domain.Agreement;
 import com.zhaocai.business.agreement.service.IAgreementService;
 import com.zhaocai.business.agreement.vo.req.*;
 import com.zhaocai.business.agreement.vo.res.*;
 import com.zhaocai.business.common.annotations.RepeatSubmit;
 import com.zhaocai.business.common.base.BladeController;
+import com.zhaocai.business.common.enums.DictBizEnum;
+import com.zhaocai.business.common.utils.ValidateUtils;
 import com.zhaocai.business.manager.http.dto.req.BpmInitializeRequestDTO;
 import com.zhaocai.business.manager.http.dto.req.BpmListProcessLogRequestDTO;
 import com.zhaocai.business.manager.http.dto.req.BpmLoadTaskDefRequestDTO;
 import com.zhaocai.business.manager.http.dto.res.BpmInitializeResponseDTO;
 import com.zhaocai.business.manager.http.dto.res.BpmListProcessLogResponseDTO;
 import com.zhaocai.business.manager.http.dto.res.BpmLoadTaskDefResponseDTO;
+import com.zhaocai.business.procurement.domain.ContractPlanning;
+import com.zhaocai.business.procurement.service.IContractPlanningService;
 import com.zhaocai.business.procurement.service.IProcurementSchemeService;
+import com.zhaocai.business.pub.service.IAttachmentService;
+import com.zhaocai.business.pub.service.ISysDictDataService;
+import com.zhaocai.business.pub.utils.BookmarkUtils;
+import com.zhaocai.business.pub.utils.YOZOfileUtils;
+import com.zhaocai.business.pub.vo.res.AttachmentVO;
 import com.zhaocai.common.core.bean.PageResult;
+import com.zhaocai.common.core.utils.bean.BeanCopierUtil;
 import com.zhaocai.common.core.web.bean.ResultData;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
@@ -22,7 +33,10 @@ import org.springframework.web.bind.annotation.*;
 import springfox.documentation.annotations.ApiIgnore;
 
 import javax.validation.Valid;
+import java.util.ArrayList;
 import java.util.List;
+
+import static jdk.nashorn.internal.objects.Global.undefined;
 
 /**
  * 合同基本信息Controller
@@ -40,6 +54,107 @@ public class AgreementController extends BladeController {
 
     @Autowired
     private IProcurementSchemeService procurementSchemeService;
+
+    @Autowired
+    private IAttachmentService attachmentService;
+
+    @Autowired
+    private ISysDictDataService sysDictDataService;
+
+    @Autowired
+    private BookmarkUtils bookmarkUtils;
+    @Autowired
+    private YOZOfileUtils yozOfileUtils;
+
+    @Autowired
+    private IContractPlanningService contractPlanningService;
+
+    /**
+     * 查看合同信息时，合同附件填充数据到书签部分，并且返回填充数据后的文件预览URL
+     */
+    @GetMapping("/getAgreementViewURL")
+    @ApiOperation(value = "合同附件预览URL")
+    public ResultData<String> getAgreementViewURL(@RequestParam("attachmentId") Long attachmentId, @RequestParam("agreementId") Long agreementId) {
+        AttachmentVO attachmentVO = attachmentService.getAttachmentById(attachmentId);
+        ValidateUtils.isNullException(attachmentVO,"合同不存在,请确认");
+        String fileName = attachmentVO.getFileName();
+        String fileUrl = attachmentVO.getFileUrl();
+        AgreementDetailVO agreementDetailVO = agreementService.detail(agreementId);
+        AgreementVO agreementVO = agreementDetailVO.getAgreement();
+        AgreementBookmarkVO agreementBookmarkVO = BeanCopierUtil.copyBean(agreementVO,AgreementBookmarkVO.class);
+        Integer rentalMethod = agreementBookmarkVO.getRentalMethod();
+        if(rentalMethod != null && rentalMethod != undefined){
+            String RentalMethodText = sysDictDataService.getLabel(DictBizEnum.AGREEMENT_RENTAL_METHOD.getName(),rentalMethod.toString());
+            agreementBookmarkVO.setRentalMethodText(RentalMethodText);
+        }
+        String newfileURL= bookmarkUtils.FillBookmarkData(fileUrl,fileName,agreementBookmarkVO);
+        if(yozOfileUtils.isNULLFileURL(newfileURL)){
+            return ResultData.fail("填充书签数据失败，无法编辑文件！！！");
+        }
+        return ResultData.data(attachmentService.viewWordFileURL(fileName,newfileURL));
+    }
+
+    /**
+     * 新增合同信息时，合同附件填充数据到书签部分，并且返回填充数据后的文件编辑URL
+     */
+    @PostMapping("/getAgreementEditURL")
+    @ApiOperation(value = "合同附件编辑URL")
+    public ResultData<String> getAgreementEditURL(@RequestBody Agreement agreement) {
+        Long attachmentId = agreement.getAttachmentId();
+        AttachmentVO attachmentVO = attachmentService.getAttachmentById(attachmentId);
+        ValidateUtils.isNullException(attachmentVO,"合同不存在,请确认");
+        String fileName = attachmentVO.getFileName();
+        String fileUrl = attachmentVO.getFileUrl();
+        //获取需填充的合同数据
+        AgreementBookmarkVO agreementBookmarkVO = BeanCopierUtil.copyBean(agreement,AgreementBookmarkVO.class);
+        //获取计租方式的label
+        Integer rentalMethod = agreementBookmarkVO.getRentalMethod();
+        if(rentalMethod != null && rentalMethod != undefined){
+            String RentalMethodText = sysDictDataService.getLabel(DictBizEnum.AGREEMENT_RENTAL_METHOD.getName(),rentalMethod.toString());
+            agreementBookmarkVO.setRentalMethodText(RentalMethodText);
+        }
+        //获取支付方式
+        String PaymentWay = agreementBookmarkVO.getPaymentWay();
+        if (PaymentWay != null && !PaymentWay.trim().isEmpty()) {
+            // 将 paymentWay 按逗号分隔成数组
+            String[] paymentWays = PaymentWay.split(",");
+            // 创建一个列表来保存所有的支付方式文本
+            List<String> paymentWayTexts = new ArrayList<>();
+            // 遍历每一个支付方式编码并获取其文本描述
+            for (String way : paymentWays) {
+                if (way.trim().isEmpty()) continue; // 忽略空字符串
+
+                String paymentWayText = sysDictDataService.getLabel(DictBizEnum.AGREEMENT_PAYMENT_WAY.getName(), way.trim());
+                if (paymentWayText != null && !paymentWayText.trim().isEmpty()) {
+                    paymentWayTexts.add(paymentWayText);
+                }
+            }
+            // 将所有支付方式文本用逗号连接起来
+            String combinedPaymentWayText = String.join(", ", paymentWayTexts);
+            // 设置支付方式文本到 VO 对象中
+            agreementBookmarkVO.setPaymentWayText(combinedPaymentWayText);
+        }
+        //获取支付周期
+        String PaymentCycle = agreementBookmarkVO.getPaymentCycle();
+        if(PaymentCycle != null && !PaymentCycle.isEmpty()){
+            String PaymentCycleText = sysDictDataService.getLabel(DictBizEnum.AGREEMENT_PAYMENT_CYCLE.getName(),PaymentCycle);
+            agreementBookmarkVO.setPaymentCycleText(PaymentCycleText);
+        }
+        //获取支出业务分类
+        Long SplitId = agreement.getContractSplitId();
+        if(SplitId != null){
+            ContractPlanning contractPlanning = contractPlanningService.getByContractSplitId(SplitId);
+            String expenditureBusinessTypeText = contractPlanning.getContractPlanningCategoryName();
+            agreementBookmarkVO.setExpenditureBusinessTypeText(expenditureBusinessTypeText);
+        }
+        //填充到书签位置
+        String newfileURL= bookmarkUtils.FillBookmarkData(fileUrl,fileName,agreementBookmarkVO);
+        if(yozOfileUtils.isNULLFileURL(newfileURL)){
+            return ResultData.fail("填充书签数据失败，无法编辑文件！！！");
+        }
+        return ResultData.data(attachmentService.editWordURL(attachmentId,fileName,newfileURL));
+    }
+
 
     /**
      * 合同列表查询
