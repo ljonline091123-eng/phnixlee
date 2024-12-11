@@ -10,8 +10,9 @@ const project = {
   },
 
   actions: {
-    setProject({commit}) {
-      commit('SET_PROJECT')
+    setProject({commit},data) {
+      console.log('%c👽👽 data ', `font-size: 20px;background-color: #f00;`, data);
+      commit('SET_PROJECT',data)
     }
   }
 }

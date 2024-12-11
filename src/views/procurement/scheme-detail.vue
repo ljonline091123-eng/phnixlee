@@ -694,13 +694,14 @@
       width="80%"
     >
     <!-- <FileModule :attachmentId="templateAttachmentId" height="500px" /> -->
-      <iframe
+      <iframe allowfullscreen="true"
         :src= this.viewFileUrl
         width="100%"
-        height="500px"
+        height="700px"
         frameborder="0"
       ></iframe>
     </el-dialog>
+
     <ApprovalForm
       :visible.sync="sanctionVisible"
       title="采购方案审批流程"

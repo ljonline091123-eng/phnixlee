@@ -46,11 +46,11 @@
             >推送至供应商</el-button
           >
         </div>
-        <div v-else-if="isOperate === 1 && Number(agreementState) === 7">
-          <el-button type="primary" size="mini" @click="pushToSignPlatform()"
-            >推送至电子签章平台</el-button
-          >
-        </div>
+<!--        <div v-else-if="isOperate === 1 && Number(agreementState) === 7">-->
+<!--          <el-button type="primary" size="mini" @click="pushToSignPlatform()"-->
+<!--            >推送至电子签章平台</el-button-->
+<!--          >-->
+<!--        </div>-->
         <div v-else-if="isOperate === 1 && Number(agreementState) === 9">
           <el-button type="primary" size="mini" @click="toSignAgreement()"
             >签署</el-button
@@ -958,11 +958,11 @@
             :attachmentId="this.attachmentId"
             height="600px"
           /> -->
-          <iframe
+          <iframe allowfullscreen="true"
             v-if="activeName === 'second' && this.attachmentId"
             :src= this.viewFileUrl
             width="100%"
-            height="500px"
+            height="700px"
             frameborder="0"
           ></iframe>
 
@@ -992,53 +992,53 @@
       @update:visible="calibrateVisible = $event"
     />
 
-    <el-dialog
-      title="推送至电子签章平台"
-      :visible.sync="pushSignDialog"
-      width="600px"
-      @closed="clearPushSignFormData"
-    >
-      <span
-        style="
-          font-size: 16px;
-          line-height: 30px;
-          text-align: center;
-          margin-bottom: 25px;
-          display: block;
-        "
-        >{{ pushSignTitle }}</span
-      >
-      <el-form
-        :model="pushSignFormData"
-        ref="pushSignForm"
-        :rules="pushSignFormRules"
-      >
-        <el-form-item label="签署人：" prop="partyAUserId">
-          <el-select
-            v-model="pushSignFormData.partyAUserId"
-            placeholder="请选择"
-            filterable
-          >
-            <el-option
-              v-for="item in partyAUserList"
-              :key="item.userId"
-              :label="item.nickName"
-              :value="item.userId"
-            >
-            </el-option>
-          </el-select>
-        </el-form-item>
-      </el-form>
-      <div slot="footer" class="dialog-footer">
-        <el-button @click="pushSignDialog = false">取 消</el-button>
-        <el-button
-          type="primary"
-          @click="toPushSignPlatform"
-          :loading="pushSignFormSubBtn"
-          >{{ pushSignFormSubBtn ? "推送中..." : "推 送" }}</el-button
-        >
-      </div>
-    </el-dialog>
+<!--    <el-dialog-->
+<!--      title="推送至电子签章平台"-->
+<!--      :visible.sync="pushSignDialog"-->
+<!--      width="600px"-->
+<!--      @closed="clearPushSignFormData"-->
+<!--    >-->
+<!--      <span-->
+<!--        style="-->
+<!--          font-size: 16px;-->
+<!--          line-height: 30px;-->
+<!--          text-align: center;-->
+<!--          margin-bottom: 25px;-->
+<!--          display: block;-->
+<!--        "-->
+<!--        >{{ pushSignTitle }}</span-->
+<!--      >-->
+<!--      <el-form-->
+<!--        :model="pushSignFormData"-->
+<!--        ref="pushSignForm"-->
+<!--        :rules="pushSignFormRules"-->
+<!--      >-->
+<!--        <el-form-item label="签署人：" prop="partyAUserId">-->
+<!--          <el-select-->
+<!--            v-model="pushSignFormData.partyAUserId"-->
+<!--            placeholder="请选择"-->
+<!--            filterable-->
+<!--          >-->
+<!--            <el-option-->
+<!--              v-for="item in partyAUserList"-->
+<!--              :key="item.userId"-->
+<!--              :label="item.nickName"-->
+<!--              :value="item.userId"-->
+<!--            >-->
+<!--            </el-option>-->
+<!--          </el-select>-->
+<!--        </el-form-item>-->
+<!--      </el-form>-->
+<!--      <div slot="footer" class="dialog-footer">-->
+<!--        <el-button @click="pushSignDialog = false">取 消</el-button>-->
+<!--        <el-button-->
+<!--          type="primary"-->
+<!--          @click="toPushSignPlatform"-->
+<!--          :loading="pushSignFormSubBtn"-->
+<!--          >{{ pushSignFormSubBtn ? "推送中..." : "推 送" }}</el-button-->
+<!--        >-->
+<!--      </div>-->
+<!--    </el-dialog>-->
     <el-dialog
       title="签署合同"
       :visible.sync="signAgreementDialog"
@@ -1144,6 +1144,7 @@ import {
   signAgreement,
   cancelledSignAgreement,
   pushAgreementToVendor,
+  getAgreementViewURL,
 } from "@/api/procurement/contract";
 import { offerRepo, offerService } from "@/utils/const";
 import FileModule from "@/components/FileModule/index.vue";
@@ -3408,7 +3409,7 @@ export default {
           console.log('Attachment ID:', this.attachmentId);
           //获取文档中台的文档编辑URL
           try {
-            const res = await getViewAttachmentURLByID({ attachmentId: this.attachmentId });
+            const res = await getAgreementViewURL({ attachmentId: this.attachmentId ,agreementId: this.param.id});
             this.viewFileUrl = res.data;
             console.log("viewFileUrl:",this.viewFileUrl);
           } catch (err) {

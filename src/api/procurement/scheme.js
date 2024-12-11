@@ -1,5 +1,14 @@
 import request from "@/utils/request";
 
+//获取采购方案部分文件的编辑URL
+export const getSchemeEditFileUrl = (params) => {
+  return request({
+    url: "/business/procurementScheme/getSchemeEditFileUrl",
+    method: "get",
+    params,
+  });
+};
+
 // 采购需求列表
 export const getSchemeList = (params) => {
   return request({

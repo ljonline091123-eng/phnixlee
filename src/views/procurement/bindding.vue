@@ -353,6 +353,9 @@ export default {
       noticeId:''
     };
   },
+  created() {
+
+  },
   computed: {
     ...mapGetters(["project"]),
   },

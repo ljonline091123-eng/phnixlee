@@ -483,17 +483,19 @@
                   <div class="page-title">
                     <span>文件预览</span>
                   </div>
+                  <!--  增加:key="viewAttachmentId"做组件唯一约定放在缓存重复 -->
                   <!-- <FileModule
                     v-if="viewAttachmentId"
+                    :key="viewAttachmentId"
                     :attachmentId="viewAttachmentId"
                     height= "95%"
                     type="edit"
                   /> -->
-                  <iframe
+                  <iframe allowfullscreen="true"
                     v-if="viewAttachmentId"
                     :src= this.editFileUrl
                     width="100%"
-                    height="500px"
+                    height="700px"
                     frameborder="0"
                   ></iframe>
 
@@ -999,6 +1001,7 @@ import {
   getTemplateSwitchList,
   getProcurementSchemeCreateInfo,
   getSchemeDetail,
+  getSchemeEditFileUrl,
 } from "@/api/procurement/scheme";
 import { getSwitchPageList } from "@/api/procurement/manage";
 import { getContractTypeList } from "@/api/template/file";
@@ -1824,6 +1827,8 @@ export default {
 
     },
 
+
+    /* 点击确定选择模板数据 2 招标文件模板 ，1 合同模板 */
     async confirmBcTemplate() {
       /* this.templateId是模板列表弹窗单选的双向绑定，意思就是模板文件id */
       const templateId = this.templateId;
