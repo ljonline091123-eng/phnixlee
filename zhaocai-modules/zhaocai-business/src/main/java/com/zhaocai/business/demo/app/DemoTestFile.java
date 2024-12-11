@@ -37,36 +37,36 @@ public class DemoTestFile {
 	 * @throws IOException
 	 */
 	public static String download(String fileUrl,String fileName) throws IOException {
-		// 建立链接  
-        URL httpUrl=new URL(fileUrl);  
-        HttpURLConnection conn=(HttpURLConnection) httpUrl.openConnection();  
-        //以Post方式提交表单，默认get方式  
-        conn.setRequestMethod("GET");  
-        conn.setDoInput(true);    
-        conn.setDoOutput(true);  
-        // post方式不能使用缓存   
-        conn.setUseCaches(false);  
-        //连接指定的资源   
-        conn.connect();  
-        //获取网络输入流  
-        InputStream inputStream=conn.getInputStream();  
-        BufferedInputStream bis = new BufferedInputStream(inputStream);  
+		// 建立链接
+        URL httpUrl=new URL(fileUrl);
+        HttpURLConnection conn=(HttpURLConnection) httpUrl.openConnection();
+        //以Post方式提交表单，默认get方式
+        conn.setRequestMethod("GET");
+        conn.setDoInput(true);
+        conn.setDoOutput(true);
+        // post方式不能使用缓存
+        conn.setUseCaches(false);
+        //连接指定的资源
+        conn.connect();
+        //获取网络输入流
+        InputStream inputStream=conn.getInputStream();
+        BufferedInputStream bis = new BufferedInputStream(inputStream);
         String downloadFilePath = getFilePath()+fileName;
-        //写入到文件（注意文件保存路径的后面一定要加上文件的名称）  
-        FileOutputStream fileOut = new FileOutputStream(downloadFilePath);  
-        BufferedOutputStream bos = new BufferedOutputStream(fileOut);  
-          
-        byte[] buf = new byte[4096];  
-        int length = bis.read(buf);  
-        //保存文件  
-        while(length != -1)  
-        {  
-            bos.write(buf, 0, length);  
-            length = bis.read(buf);  
-        }  
-        bos.close();  
-        bis.close();  
-        conn.disconnect();  
+        //写入到文件（注意文件保存路径的后面一定要加上文件的名称）
+        FileOutputStream fileOut = new FileOutputStream(downloadFilePath);
+        BufferedOutputStream bos = new BufferedOutputStream(fileOut);
+
+        byte[] buf = new byte[4096];
+        int length = bis.read(buf);
+        //保存文件
+        while(length != -1)
+        {
+            bos.write(buf, 0, length);
+            length = bis.read(buf);
+        }
+        bos.close();
+        bis.close();
+        conn.disconnect();
 		return downloadFilePath;
 	}
 	public static void main(String[] args) {

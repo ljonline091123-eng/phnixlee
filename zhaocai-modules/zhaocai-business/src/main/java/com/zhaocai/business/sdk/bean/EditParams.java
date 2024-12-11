@@ -49,7 +49,7 @@ public class EditParams {
 	/**
 	 * 设置编辑文件的路径，仅适用于/pms/wo3/fileurl
 	 * @param fileUrl http 或 https 的网络文件路径
-	 * @throws IOException 
+	 * @throws IOException
 	 */
 	public void setFileUrl(String fileUrl) throws IOException {
 		if(fileUrl==null || "".equals(fileUrl.trim())) {
@@ -80,7 +80,7 @@ public class EditParams {
 	 * 阅读者
 	 */
 	public static final String ROLE_VIEW = "view";
-	
+
 	public void setRole(String role) throws JSONException {
 		if(role!=null) {
 			switch (role) {
@@ -108,7 +108,7 @@ public class EditParams {
 	/**
 	 * 隐藏限制编辑，不调用默认显示（false）
 	 * @param hidden true 隐藏，false 显示
-	 * @throws JSONException 
+	 * @throws JSONException
 	 */
 	public void hiddenLimitedit(boolean hidden) throws JSONException {
 		setMenuHidden("yozo_WP_limitedit");
@@ -208,7 +208,7 @@ public class EditParams {
 			requestBody.put("fileUUID", fileUUID);
 		}
 	}
-	
+
 	/**
 	 * 设置编辑用户信息
 	 * @param userId 用户唯一ID
@@ -227,7 +227,7 @@ public class EditParams {
 	/**
 	 * 设置要隐藏的菜单
 	 * @param menuIds
-	 * @throws JSONException 
+	 * @throws JSONException
 	 */
 	public void setMenuHidden(String... menuIds) throws JSONException {
 		for (String menuId : menuIds) {
@@ -237,7 +237,7 @@ public class EditParams {
 	/**
 	 * 设置要禁用的菜单（菜单显示，但是不可用）
 	 * @param menuIds
-	 * @throws JSONException 
+	 * @throws JSONException
 	 */
 	public void setMenuDisable(String... menuIds) throws JSONException {
 		for (String menuId : menuIds) {
@@ -247,7 +247,7 @@ public class EditParams {
 	/**
 	 * 设置可用的菜单，一般不用设置，除非默认不显示的菜单
 	 * @param menuIds
-	 * @throws JSONException 
+	 * @throws JSONException
 	 */
 	public void setMenuEnable(String... menuIds) throws JSONException {
 		for (String menuId : menuIds) {
@@ -281,10 +281,10 @@ public class EditParams {
 		}
 	}
 	/**
-	 * @throws JSONException 
+	 * @throws JSONException
 	 * 设置编辑页面打开后的缩放比例，如果不设置，会自动根据文档中记录的比例显示
 	 * @param zoom 100为100%，如果要按照110%显示，则设置110
-	 * @throws  
+	 * @throws
 	 */
 	public void setPageZoom(int zoom) throws JSONException  {
 		if(zoom>=0) {
@@ -434,7 +434,7 @@ public class EditParams {
 	 * <br><b>注意：设置完成水印后，再修改WaterMark对象无效</b>
 	 * @param type 1文档水印 2页面水印，在EditParams.WATER_MARK_TYPE_中选择
 	 * @param wm 水印对象
-	 * @throws JSONException 
+	 * @throws JSONException
 	 */
 	public void setWaterMark(int type,WaterMark wm) throws JSONException {
 		wm.addEditExtraParam(waterMark);
@@ -449,7 +449,7 @@ public class EditParams {
 			break;
 		}
 	}
-	
+
 	private void combinationExtraParam() throws JSONException {
 		//如果水印有设置，则追加至参数中
 		if(waterMark.length()>0) {
@@ -464,7 +464,7 @@ public class EditParams {
 	/**
 	 * 得到要提交的带文件流的参数
 	 * @return Map对象
-	 * @throws JSONException 
+	 * @throws JSONException
 	 */
 	public Map<String, Object> getRequestBody() throws JSONException{
 		combinationExtraParam();
@@ -473,7 +473,7 @@ public class EditParams {
 	/**
 	 * 得到非文件流的参数数据
 	 * @return 字符串
-	 * @throws JSONException 
+	 * @throws JSONException
 	 */
 	public String  getRequestBodyString() throws JSONException {
 		combinationExtraParam();

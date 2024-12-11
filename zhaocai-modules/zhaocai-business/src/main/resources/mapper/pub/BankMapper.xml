@@ -3,7 +3,7 @@
 PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
 "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.zhaocai.business.pub.mapper.BankMapper">
-    
+
     <resultMap type="com.zhaocai.business.pub.domain.DwCdBank" id="BankResult">
         <result property="id"    column="id"    />
         <result property="parentName"    column="parent_name"    />
@@ -38,7 +38,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <include refid="selectBankVo"/>
         where id = #{id}
     </select>
-        
+
     <insert id="insertBank" parameterType="com.zhaocai.business.pub.domain.DwCdBank">
         insert into dw_cd_bank
         <trim prefix="(" suffix=")" suffixOverrides=",">

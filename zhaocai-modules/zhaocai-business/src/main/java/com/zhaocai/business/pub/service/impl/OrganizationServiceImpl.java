@@ -2,6 +2,7 @@ package com.zhaocai.business.pub.service.impl;
 
 import cn.hutool.core.collection.CollectionUtil;
 import com.zhaocai.business.common.exception.BusinessException;
+import com.zhaocai.business.process.service.IBPMProcessService;
 import com.zhaocai.business.pub.service.IOrganizationService;
 import com.zhaocai.business.pub.vo.res.OrganizationVO;
 import com.zhaocai.common.core.constant.NumberConstant;
@@ -35,6 +36,9 @@ public class OrganizationServiceImpl implements IOrganizationService {
 
     @Autowired
     private RemoteSystemService remoteSystemService;
+
+    @Autowired
+    private IBPMProcessService processService;
 
     @Override
     public List<OrganizationVO> getOriganizationTreeList() {
@@ -139,25 +143,56 @@ public class OrganizationServiceImpl implements IOrganizationService {
      */
     @Override
     public List<OrganizationVO> listOrganizationCalligraphy() {
-        // 获取当前用户的二级组织或集团
-        String currUserTowLevelThridDeptId =  remoteSystemService.getTwoLevelDeptByDeptId
-                (SecurityUtils.getSysUser().getDeptId(),SecurityConstants.INNER).getThridDeptId();
-        // 获取所有二级组织及集团
-        List<SysDept> sysDeptList = remoteSystemService.getTwoLevelDepts(SecurityConstants.INNER);
-        List<OrganizationVO>  organizationTree = null;
-        if (!currUserTowLevelThridDeptId.equals(UserConstants.GROUP_DEPT_ID)) {
-            sysDeptList = sysDeptList.stream().filter(item -> item.getThridOrgLevel() == NumberConstant.ONE ||
-                    item.getThridDeptId().equals(currUserTowLevelThridDeptId)).collect(Collectors.toList());
+        List<OrganizationVO>  organizationTree = new ArrayList<>();
+        // 1、获取当前用户的三级组织或二级组织
+        String thridDeptId = processService.getOrgByUserId(String.valueOf(SecurityUtils.getUserId()));
+        // 2、查询三级组织或二级组织下的公司
+        if(null != thridDeptId){
+            List<SysDept> deptList = remoteSystemService.getDeptByThridDeptIdNoBM(thridDeptId,SecurityConstants.INNER);
+            organizationTree =  buildOrganizationTreeByOrg(thridDeptId,deptList);
         }
 
-        organizationTree =  buildOrganizationTree(sysDeptList);
-        if (!currUserTowLevelThridDeptId.equals(UserConstants.GROUP_DEPT_ID)) {
-            organizationTree.stream().forEach(item -> {
-                item.setOrganizationType("2");
-            });
-        }
+        // 获取当前用户的二级组织或集团
+//        String currUserTowLevelThridDeptId =  remoteSystemService.getTwoLevelDeptByDeptId
+//                (SecurityUtils.getSysUser().getDeptId(),SecurityConstants.INNER).getThridDeptId();
+//        // 获取所有二级组织及集团
+//        List<SysDept> sysDeptList = remoteSystemService.getTwoLevelDepts(SecurityConstants.INNER);
+//        List<OrganizationVO>  organizationTree = null;
+//        if (!currUserTowLevelThridDeptId.equals(UserConstants.GROUP_DEPT_ID)) {
+//            sysDeptList = sysDeptList.stream().filter(item -> item.getThridOrgLevel() == NumberConstant.ONE ||
+//                    item.getThridDeptId().equals(currUserTowLevelThridDeptId)).collect(Collectors.toList());
+//        }
+//
+//        organizationTree =  buildOrganizationTree(sysDeptList);
+//        if (!currUserTowLevelThridDeptId.equals(UserConstants.GROUP_DEPT_ID)) {
+//            organizationTree.stream().forEach(item -> {
+//                item.setOrganizationType("2");
+//            });
+//        }
 
         return organizationTree;
+    }
+
+    /**
+     * 构建机构树(不从集团层开始)
+     * @param org
+     * @param deptList
+     * @return
+     */
+    private List<OrganizationVO> buildOrganizationTreeByOrg(String org, List<SysDept> deptList) {
+        // 获取 root 机构
+        List<SysDept> rootList = deptList.stream()
+                .filter(dept -> org.equals(dept.getThridParentId()))
+                .collect(Collectors.toList());
+
+        // 构建一个集合
+        Map<String, SysDept> sysDeptMap = deptList.stream()
+                .collect(Collectors.toMap(SysDept::getThridDeptId, Function.identity()));
+
+        // 构建机构树
+        return rootList.stream()
+                .map(dept -> buildOrganizationTree(dept, sysDeptMap))
+                .collect(Collectors.toList());
     }
 
 }

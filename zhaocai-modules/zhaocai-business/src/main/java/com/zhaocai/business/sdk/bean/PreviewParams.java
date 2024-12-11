@@ -8,6 +8,9 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
+import org.json.JSONException;
+import org.json.JSONObject;
+
 /**
  * 预览参数对象
  * @author lizb
@@ -68,7 +71,7 @@ public class PreviewParams {
 	/**
 	 * 设置文件路径，仅适用于/pms/preview/upload
 	 * @param fileUrl http 或 https 的网络文件路径
-	 * @throws IOException 
+	 * @throws IOException
 	 */
 	public void setFileUrl(String fileUrl) throws IOException {
 		if(fileUrl==null || "".equals(fileUrl.trim())) {
@@ -139,7 +142,7 @@ public class PreviewParams {
 	/**
 	 * 设置预览时是否显示导航窗格/缩略图
 	 * @param show true显示，false不显示
-	 * @throws JSONException 
+	 * @throws JSONException
 	 */
 	public void setShowList(boolean show) throws JSONException {
 		if(show) {
@@ -243,7 +246,7 @@ public class PreviewParams {
 	 * @param show true显示，false不显示
 	 * @param callBackUrl 如果需要签批，需要设置签批回调的URL，http或https
 	 * @throws JSONException
-	 * @throws IOException 
+	 * @throws IOException
 	 */
 	public void setSignature(boolean show,String callBackUrl) throws JSONException, IOException {
 		if(show) {
@@ -314,7 +317,7 @@ public class PreviewParams {
 	 * 设置同一个预览地址可以查看的次数，不设置默认不限制预览
 	 * <br>商密如果要控制预览权限，可以设置num为1
 	 * @param num 可预览次数，0为不限制
-	 * @throws JSONException 
+	 * @throws JSONException
 	 */
 	public void setPreviewNumber(long num) throws JSONException {
 		if(num>=0) {
@@ -325,7 +328,7 @@ public class PreviewParams {
 	/**
 	 * 设置预览地址过期时间，不设置默认为系统统一的过期时间
 	 * @param time 过期时间单位秒，0为不限制
-	 * @throws JSONException 
+	 * @throws JSONException
 	 */
 	public void setExpirationTime(long time) throws JSONException {
 		if(time>=0) {
@@ -338,7 +341,7 @@ public class PreviewParams {
 	 * 设置水印
 	 * <br><b>注意：设置完成水印后，再修改WaterMark对象无效</b>
 	 * @param wm 水印对象
-	 * @throws JSONException 
+	 * @throws JSONException
 	 */
 	public void setWaterMark(WaterMark wm) throws JSONException {
 		wm.addExtraParam(extraParam);

@@ -155,7 +155,10 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             </if>
         order by tn.create_time desc
         ) resultData
-        where resultData.applyTime >= #{queryDTO.registerApprovalTime}
+        where 1 = 1
+        <if test="queryDTO.registerApprovalTime != null">
+            and resultData.applyTime >= #{queryDTO.registerApprovalTime}
+        </if>
     </select>
 
 

@@ -52,6 +52,7 @@ public class VendorPortalServiceImpl implements IVendorPortalService {
     @Autowired
     private IVendorCertificationService vendorCertificationService;
 
+    /* 供应商首页 未登录只能查看公开招标 */
     @Override
     public PageResult<VendorPortalNoticeListVO> getNotice(VendorPortalNoticePageQueryVO queryDTO) {
         queryDTO.setNowDate(DateUtils.getNowDate());
@@ -61,6 +62,7 @@ public class VendorPortalServiceImpl implements IVendorPortalService {
         return pageResult;
     }
 
+    /* 供应商首页 登录后不仅仅查看公开招标还有邀请和单一等等，是根据供应商id来查询 */
     @Override
     public PageResult<VendorPortalNoticeListVO> getNoticeLogin(VendorPortalNoticePageQueryVO queryDTO) {
         queryDTO.setNowDate(DateUtils.getNowDate());
@@ -69,6 +71,7 @@ public class VendorPortalServiceImpl implements IVendorPortalService {
         return pageResult;
     }
 
+    /* 供应商 工作台首页 消息栏 列表数据 */
     @Override
     public List<VendorPortalMsgListVO>  msgList(VendorPortalNoticePageQueryVO queryDTO) {
         queryDTO.setNowDate(DateUtils.getNowDate());
@@ -78,6 +81,7 @@ public class VendorPortalServiceImpl implements IVendorPortalService {
         queryDTO.setVendorId(vendor.getId());
         queryDTO.setRegisterApprovalTime(vendor.getRegisterApprovalTime());
         PageResult<VendorPortalNoticeListVO> pageResult = tenderNoticeService.selectVendorPortalNoticePage(queryDTO);
+        /* 返回对象 */
         List<VendorPortalMsgListVO> list = new ArrayList<>();
         if(pageResult!=null && pageResult.getTotal()>0){
             for (int i = 0; i < pageResult.getRows().size(); i++) {

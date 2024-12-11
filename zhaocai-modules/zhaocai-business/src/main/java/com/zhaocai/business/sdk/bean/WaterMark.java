@@ -1,5 +1,8 @@
 package com.zhaocai.business.sdk.bean;
 
+import org.json.JSONException;
+import org.json.JSONObject;
+
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -113,9 +116,9 @@ public class WaterMark {
 	/**
 	 * @param type 水印类型 0 文字水印 1图片水印（编辑不支持图片水印）
 	 * @param wmPicPath 图片水印在服务器上的绝对路径，文字水印的内容
-	 * @throws IOException 
-	 * @throws JSONException 
-	 * @throws NoSuchAlgorithmException 
+	 * @throws IOException
+	 * @throws JSONException
+	 * @throws NoSuchAlgorithmException
 	 */
 	public WaterMark(int type,String contentOrPicPath) throws IOException, NoSuchAlgorithmException, JSONException {
 		setDefault();
@@ -331,13 +334,13 @@ public class WaterMark {
 	/**
 	 * 设置图片水印内容(调试中)
 	 * @param wmPicPath 图片水印的路径
-	 * @throws IOException 
+	 * @throws IOException
 	 */
 	public void setWmPicBase64(String wmPicPath) throws IOException {
 		if(wmPicPath==null || "".equals(wmPicPath.trim())) {
 			throw new IOException("图片水印路径为空");
 		}
-		Path filePath = Paths.get(wmPicPath);  
+		Path filePath = Paths.get(wmPicPath);
         byte[] fileBytes = Files.readAllBytes(filePath);
         String base64EncodedString = Base64.getEncoder().encodeToString(fileBytes);
 		this.wmImage = base64EncodedString;
@@ -346,9 +349,9 @@ public class WaterMark {
 	/**
 	 * 设置图片水印内容
 	 * @param wmPicPath 可以访问的图片地址
-	 * @throws NoSuchAlgorithmException 
-	 * @throws JSONException 
-	 * @throws IOException 
+	 * @throws NoSuchAlgorithmException
+	 * @throws JSONException
+	 * @throws IOException
 	 */
 	public void setWmPicPath(String wmPicPath) throws NoSuchAlgorithmException, JSONException, IOException {
 //		//组织要上传的图片水印参数

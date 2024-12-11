@@ -843,6 +843,9 @@ public class TenderNoticeServiceImpl extends ServiceImpl<TenderNoticeMapper,Tend
         return new PageResult<>(iPage);
     }
 
+    /* 供应商首页 未登录只能查看公开招标 */
+    /* 供应商首页 登录后不仅仅查看公开招标还有邀请和单一等等，是根据供应商id来查询 */
+    /* 供应商 工作台首页 消息栏 列表数据 */
     @Override
     public PageResult<VendorPortalNoticeListVO> selectVendorPortalNoticePage(VendorPortalNoticePageQueryVO queryDTO) {
         IPage<VendorPortalNoticeListVO> iPage = baseMapper.findVendorPortalNoticePage(queryDTO.toMybatisPage(), queryDTO);

@@ -18,6 +18,8 @@ INSERT INTO `hnjiantou-zhaocai-dev`.sys_dict_data
 VALUES(356, 1, '其他', '1', 'settlement_stage', NULL, 'default', 'N', '0', '18374562968', '2024-12-04 09:40:57', '18374562968', '2024-12-04 09:41:04', '其他');
 
 
+# 增加结算阶段列
+ALTER TABLE `hnjiantou-zhaocai-dev`.tb_agreement_payment_list ADD settlement_stage varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL COMMENT '结算阶段';
 
 
 # 专家类型多选

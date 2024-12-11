@@ -18,7 +18,7 @@ public class DpDemo {
 
 	/**
 	 * 主方法
-	 * 
+	 *
 	 * @param args
 	 * @throws JSONException
 	 * @throws IOException
@@ -51,6 +51,8 @@ public class DpDemo {
 //		 previewZip();
 //		 System.out.println("*********处理书签******************************************");
 //		 bookMarkOperate();
+//		 System.out.println("*********编辑文件******************************************");
+//		 editDocument();
 //		System.out.println("*********office转pdf******************************************");
 //		convertOfficeToPdf();
 //		System.out.println("*********office转ofd******************************************");
@@ -69,7 +71,7 @@ public class DpDemo {
 
 	/**
 	 * 预览Office文件（word、excel、ppt）
-	 * 
+	 *
 	 * @throws IOException
 	 * @throws JSONException
 	 * @throws NoSuchAlgorithmException
@@ -114,7 +116,7 @@ public class DpDemo {
 
 	/**
 	 * 以图片方式预览Office（移动端采用此方式预览效果较好）
-	 * 
+	 *
 	 * @throws IOException
 	 * @throws JSONException
 	 * @throws NoSuchAlgorithmException
@@ -197,7 +199,7 @@ public class DpDemo {
 		params.setDownloadMenu(true, "测试1.ofd");
 		// 设置水印
 		WaterMark wm = new WaterMark(WaterMark.TYPE_TXT, "DEMO-OFD水印");
-		
+
 		// 将水印设置到参数中
 		params.setWaterMark(wm);
 		String response = Sender1.post(PreviewParams.URL_PREVIEW, PreviewParams.CONVERT_TYPE_PREVIEW_OFD, params.getRequestBody());
@@ -263,7 +265,7 @@ public class DpDemo {
 
 	/**
 	 * 编辑office文件
-	 * 
+	 *
 	 * @throws JSONException
 	 * @throws IOException
 	 * @throws NoSuchAlgorithmException
@@ -315,7 +317,7 @@ public class DpDemo {
 
 	/**
 	 * 文档中插入文本（后台处理）
-	 * 
+	 *
 	 * @throws IOException
 	 * @throws JSONException
 	 * @throws NoSuchAlgorithmException
@@ -355,9 +357,9 @@ public class DpDemo {
 
 	/**
 	 * 套红，同样也可以作为插入文档内容到主文件的实现
-	 * @throws IOException 
-	 * @throws JSONException 
-	 * @throws NoSuchAlgorithmException 
+	 * @throws IOException
+	 * @throws JSONException
+	 * @throws NoSuchAlgorithmException
 	 */
 	public static void redSet() throws NoSuchAlgorithmException, JSONException, IOException {
 		// 组织表单数据
@@ -402,7 +404,7 @@ public class DpDemo {
 
 	/**
 	 * office文件转pdf
-	 * 
+	 *
 	 * @throws IOException
 	 * @throws JSONException
 	 * @throws NoSuchAlgorithmException
@@ -516,7 +518,8 @@ public class DpDemo {
 		String viewUrl = new JSONObject(response).optJSONObject("data").optString("viewUrl");
 		System.out.println(viewUrl);
 	}
-	/**
+
+/**
 	 * 编辑文档
 	 * @param filePath 文档地址
 	 * @param role 文档所属角色
@@ -536,7 +539,7 @@ public class DpDemo {
 			params.hiddenLimitedit(true);
 			//设置角色
 			params.setRole(role);
-			
+
 			String response = Sender1.post(EditParams.URL_EDIT, EditParams.CONVERT_TYPE_EDIT, params.getRequestBody());
 			System.out.println("编辑响应结果：");
 			System.out.println(response);
