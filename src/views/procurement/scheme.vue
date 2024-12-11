@@ -282,12 +282,24 @@
             label="拆分合约规划名称"
             prop="splitContractName"
             show-overflow-tooltip
-          />
+          >
+          <template slot-scope="scope">
+            <span >
+              {{ scope.row.procurementSchemeCode?scope.row.procurementSchemeCode:'/' }}
+            </span>
+          </template>
+          </el-table-column>
           <el-table-column
             label="拟签约合同承包范围"
             prop="contractScope"
             show-overflow-tooltip
-          />
+          >
+          <template slot-scope="scope">
+            <span >
+              {{ scope.row.contractScope? scope.row.contractScope:'/' }}
+            </span>
+          </template>
+          </el-table-column>
         </el-table>
         <pagination
           v-show="planTotal > 0"
@@ -549,7 +561,7 @@ export default {
       let param = Base64.encode(
         JSON.stringify({ id, procurementType, type: "update" })
       );
-      debugger;
+      // debugger;
       param = encodeURIComponent(param); //避免base64编码中出现"/"时路由404
       this.$router.push(`/procurement/add-scheme/${param}`);
     },

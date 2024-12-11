@@ -1,5 +1,33 @@
 import request from "@/utils/request";
 
+
+/**
+ * 获取预览URL
+ * @param params
+ * @returns {*}
+ */
+export const getAgreementViewURL = (params) => {
+  return request({
+    url: "/business/agreement/getAgreementViewURL",
+    method: "get",
+    params,
+  });
+};
+
+
+/**
+ * 获取编辑URL
+ * @param data
+ * @returns {*}
+ */
+export const getAgreementEditURL = (data) => {
+  return request({
+    url: "/business/agreement/getAgreementEditURL",
+    method: "post",
+    data,
+  });
+};
+
 /**
  * 获取采购合同列表
  * @param params
