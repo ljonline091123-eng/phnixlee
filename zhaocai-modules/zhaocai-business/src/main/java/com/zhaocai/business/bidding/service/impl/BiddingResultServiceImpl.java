@@ -20,6 +20,7 @@ import com.zhaocai.business.bidding.vo.req.ResultReleasVO;
 import com.zhaocai.business.bidding.vo.res.*;
 import com.zhaocai.business.common.enums.*;
 import com.zhaocai.business.common.exception.ParamValidateException;
+import com.zhaocai.business.common.utils.ValidateUtils;
 import com.zhaocai.business.manager.http.dto.req.*;
 import com.zhaocai.business.manager.http.dto.res.BpmAuditResponseDTO;
 import com.zhaocai.business.manager.http.dto.res.BpmInitializeResponseDTO;
@@ -166,6 +167,37 @@ public class BiddingResultServiceImpl extends ServiceImpl<BiddingResultMapper,Bi
 
         return res;
     }
+
+
+    /**
+     * 撤回定标
+     * @param id
+     */
+    @Override
+    public void revokeBidding(Long id) {
+        TenderNotice tenderNotice = tenderNoticeService.getTenderNotice(id);
+        ValidateUtils.isNullException(tenderNotice.getWfProcessId(),"非审批中的定标不允许撤回");
+        // 撤回流程
+        Map<String,Object> paramMap = new HashMap<>();
+        paramMap.put("businessId", tenderNotice.getId());
+        paramMap.put("processId", tenderNotice.getWfProcessId());
+        processService.revokeProcess(ProcessKeyEnum.ZHAOCAI_TENDER_CALIBRATE.getIdentifying(),paramMap);
+    }
+
+    /**
+     * 撤回定标 回调方法
+     * @param variables
+     */
+    @Override
+    public void processAuditRevoke(Map<String, Object> variables) {
+        String processId = variables.get("processId").toString();
+        String businessId = variables.get("businessId").toString();
+        tenderNoticeService.update(new LambdaUpdateWrapper<TenderNotice>()
+                .set( TenderNotice::getNoticeStatus, TenderNoticeStatusEnum.CALI_REPORT.getState())
+                .set(TenderNotice::getWfProcessId, null)
+                .eq(TenderNotice::getId, Long.valueOf(businessId)));
+    }
+
 
     @Override
     public List<BiddingResultListVO> getBiddingResult(Long noticeId) {
