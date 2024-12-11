@@ -282,12 +282,24 @@
             label="拆分合约规划名称"
             prop="splitContractName"
             show-overflow-tooltip
-          />
+          >
+          <template slot-scope="scope">
+            <span >
+              {{ scope.row.procurementSchemeCode?scope.row.procurementSchemeCode:'/' }}
+            </span>
+          </template>
+          </el-table-column>
           <el-table-column
             label="拟签约合同承包范围"
             prop="contractScope"
             show-overflow-tooltip
-          />
+          >
+          <template slot-scope="scope">
+            <span >
+              {{ scope.row.contractScope? scope.row.contractScope:'/' }}
+            </span>
+          </template>
+          </el-table-column>
         </el-table>
         <pagination
           v-show="planTotal > 0"
@@ -351,13 +363,12 @@
           <el-row :gutter="20">
             <el-col :span="20" class="grid-cell">
               <el-form-item
-              label="采购计划是作废"
-              label-width="430px"
-              prop="contractName"
-              class="label-right-align"
-            >
-            <el-checkbox v-model="checked"></el-checkbox>
-          </el-form-item>
+                label-width="110px"
+                label="作废节点"
+                class="label-right-align">
+                <el-radio v-model="selectedOption" label="reScheme">重新新建采购方案</el-radio>
+                <el-radio v-model="selectedOption" label="rePlan">返回到采购计划</el-radio>
+              </el-form-item>
           </el-col>
         </el-row>
         </el-form>
@@ -391,15 +402,16 @@ import {
   withdrawalPlan,
 } from "@/api/procurement/scheme";
 import { getPlanList, getSplitPlanList } from "@/api/procurement/plan";
+import {abandonBidMore} from "@/api/procurement/manage";
 
 export default {
   name: "Scheme",
   dicts: ["procurement_plan_type"],
   data() {
     return {
+      selectedOption:'reScheme',
       planVisible: false,
       schemeList: [],
-      checked:false,
       procurementSchemeNameDialog:'',
       id:'',
       planList: [],
@@ -443,6 +455,7 @@ export default {
     /** 获取需求列表 */
     async getSchemeList() {
       this.loading = true;
+      console.log('%c👽 getSchemeList(this.queryParams==) ', `font-size: 20px;background-color: #f00;`, this.queryParams);
       const query = {
         ...this.queryParams,
         procurementPlanType:
@@ -451,6 +464,7 @@ export default {
             : this.queryParams.procurementPlanType,
       };
       try {
+        console.log('%c👽 getSchemeList(query==) ', `font-size: 20px;background-color: #f00;`, query);
         const res = await getSchemeList(query);
         this.loading = false;
         if (res.data) {
@@ -547,6 +561,7 @@ export default {
       let param = Base64.encode(
         JSON.stringify({ id, procurementType, type: "update" })
       );
+      // debugger;
       param = encodeURIComponent(param); //避免base64编码中出现"/"时路由404
       this.$router.push(`/procurement/add-scheme/${param}`);
     },
@@ -596,33 +611,36 @@ export default {
     goCancellation(id, procurementSchemeName) {
       this.id=id
       this.procurementSchemeNameDialog='确定要作废采购方案：'+procurementSchemeName
-      this.bidVisiable=true
-      // this.$confirm("确定要作废采购方案：" + procurementSchemeName, "提示", {
-      //   confirmButtonText: "确定",
-      //   cancelButtonText: "取消",
-      //   type: "warning",
-      // }).then(async () => {
-      //   try {
-      //     await cancellationProcurementScheme(id);
-      //     this.$message.success("作废成功");
-      //     this.getSchemeList();
-      //   } catch (error) {}
-      // });
+      // this.bidVisiable=true
+      // /* 默认选中 重新招标 */
+      // this.selectedOption = 'reScheme';
+      this.$confirm("确定要作废采购方案：" + procurementSchemeName, "提示", {
+        confirmButtonText: "确定",
+        cancelButtonText: "取消",
+        type: "warning",
+      }).then(async () => {
+        try {
+          await cancellationProcurementScheme(id);
+          this.$message.success("作废成功");
+          this.getSchemeList();
+        } catch (error) {}
+      });
     },
 
    async confirmCancellationBid(){
-    console.log(this.checked)
        const res=null
-        if(this.checked){
-          res=await cancellationProcurementSchemePlan(this.id);
-        }else{
-          res = await cancellationProcurementScheme(this.id);
-        }
+         if(this.selectedOption === 'rePlan'){
+           /* 选择了作废到 采购计划 */
+           const resPlan = await cancellationProcurementSchemePlan(id);
+         }else{
+           /* 选择了作废到 采购方案 */
+           const resScheme = await cancellationProcurementScheme(id);
+         }
         if(res.code==200){
            this.getSchemeList();
            this.$message.success("作废成功");
         }
-         
+
           this.bidVisiable=false
     },
     //切换tab类型
@@ -663,11 +681,14 @@ export default {
     /** 监控类型切换 */
     "queryParams.procurementPlanType": {
       handler(val) {
+        console.log('%c👽 监控类型切换-》JSON.stringify(this.queryParams) ', `font-size: 20px;background-color: #f00;`, JSON.stringify(val));
         this.getSchemeList();
       },
     },
     project: {
       handler(newVal, oldVal) {
+        console.log('%c👽 handler-》oldVal ', `font-size: 20px;background-color: #f00;`, oldVal);
+        console.log('%c👽 handler-》newVal ', `font-size: 20px;background-color: #f00;`, JSON.stringify(newVal));
         if (oldVal === undefined || newVal.id !== oldVal.id) {
           this.planQuery.projectCode = newVal.code;
           this.queryParams = {
@@ -679,10 +700,14 @@ export default {
             procurementPlanType: "all",
             projectCode: newVal.code,
           };
+          console.log('%c👽 handler-》 JSON.stringify(this.queryParams) ', `font-size: 20px;background-color: #f00;`, JSON.stringify(this.queryParams));
           this.getSchemeList();
         }
       },
       immediate: true,
+    },
+    selectedOption(newVal) {
+      console.log('废标选中', newVal);
     },
   },
 };

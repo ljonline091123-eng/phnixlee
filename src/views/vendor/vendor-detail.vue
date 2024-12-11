@@ -24,8 +24,12 @@
           size="mini"
           v-if="isShowButton"
           @click="handelSanction"
-          >审批</el-button
-        >
+          >审批</el-button>
+        <!-- <el-button
+        type="primary"
+        size="mini"
+        @click="handelSanction"
+        >审批</el-button> -->
         <!-- <el-button
           type="primary"
           size="small"
@@ -41,7 +45,7 @@
     <!-- 审批和审批详情 -->
     <ApprovalForm
       :visible.sync="sanctionVisible"
-      :title="'采购方案审批流程'"
+      :title="'供应商审批流程'"
       :formModel="sanctionForm"
       :rejectNodeList="rejectNodeList"
       :nextCandidateList="nextCandidateList"
@@ -51,7 +55,7 @@
     />
     <ApprovalDetailsDialog
       :visible.sync="calibrateVisible"
-      title="采购方案审批流程详情"
+      title="供应商审批流程详情"
       :activeStep="calibrateActive"
       :processInformationList="processInformationList"
       :approveLists="approveArr"
@@ -211,7 +215,45 @@
                 }}</el-form-item></el-col
               >
             </el-row>
+
           </el-form>
+              <el-divider />
+                 <!-- <el-table
+                  :data="bankList"
+                  empty-text="暂无数据"
+                  height="calc(100% - 132px)"
+                  border
+
+              >
+                <el-table-column
+                    label="序号"
+                    type="index"
+                    width="80"
+                    align="center"
+                />
+                <el-table-column
+                    label="支行名称"
+                    align="center"
+                    prop="openingBranch"
+                />
+                <el-table-column
+                    label="银行名称"
+                    prop="affiliatedBank"
+                     align="center"
+                    show-overflow-tooltip
+                />
+                  <el-table-column
+                    label="银行帐号"
+                    prop="bankAccount"
+                     align="center"
+                    show-overflow-tooltip
+                />
+               <el-table-column label="是否默认账户" align="center">
+                  <template #default="{ row }">
+                    {{row.status==1?'是':'否'}}
+                  </template>
+               </el-table-column>
+          </el-table>-->
         </el-tab-pane>
         <el-tab-pane
           label="资质材料"
@@ -718,7 +760,7 @@
 </template>
 <script>
 import {
-  getVendorDetail,
+  getVendorDetail,listBankAccountContact,
   updateVendorLevel,
   saveVendorLevel,
   updateBlackState,
@@ -728,9 +770,9 @@ import {
 import { Base64 } from "js-base64";
 import BackButton from "@/components/BackButton/index.vue";
 import {
-  getPermissionButton,
-  postAuditProcess,
-  getLoadTaskDef,
+  getPermissionButton,getPermissionButtonVendor,
+  postAuditProcess,postAuditProcessVendor,
+  getLoadTaskDef,getLoadTaskDefVendor,
   getProcessLogList,
 } from "@/api/procurement/manage";
 import ApprovalForm from "@/components/Approval/approvalForm.vue";
@@ -752,6 +794,7 @@ export default {
       businessLicense: {}, //营业执照
       integrity: {}, //诚信合规材料
       legalAuthorizationList: [], //法人授权书
+      bankList:[],
       relevantCertificationList: [], //相关资质
       //供应商等级
       gradeVisible: false,
@@ -802,6 +845,7 @@ export default {
     console.log("param613" + param);
     this.param = param;
     this.getVendorDetail();
+  //  this.listBankAccountContactFn();
   },
   methods: {
      downAttachment(file,uelFileName) {
@@ -855,6 +899,10 @@ export default {
         );
       }
     },
+    async listBankAccountContactFn() {
+          const res = await listBankAccountContact(this.param);
+            this.bankList=res.data.rows
+     },
     async getVendorDetail() {
       try {
         debugger
@@ -903,7 +951,8 @@ export default {
         })
         console.log(res, "res-res");
         if (this.vendor.state === 1) {
-          this.getPermissionButton();
+          // this.getPermissionButton();
+          this.getPermissionButtonVendor();
         }
       } catch (err) {
         console.log(err);
@@ -1017,6 +1066,20 @@ export default {
             processId: this.exampleId, //流程id
           });
           this.rejectNodeList = res.data.completedTaskList;
+          this.taskPresentId = res.data.curTaskId;
+          this.isShowButton = res.data.auditable;
+        }
+      } catch (error) {}
+    },
+        // 供应商审批逻辑
+    async getPermissionButtonVendor() {
+      try {
+        if (this.purchaserId && this.exampleId) {
+          const res = await getPermissionButtonVendor({
+            businessId: this.purchaserId, //联系人id
+            processId: this.exampleId, //流程id
+          });
+          this.rejectNodeList = res.data.completedTaskList;
           /* 下一步审批人列表 */
           this.nextCandidateList = res.data.nextCandidateList;
           /* 下一步审批人是否可选 */
@@ -1054,12 +1117,17 @@ export default {
         processKey: this.processKey,
         // processKey: "jiantou-zhaocai:{org}:ZHAOCAI_VENDOR_REGISTER",
       };
-      postAuditProcess(params).then(() => {
+      postAuditProcessVendor(params).then(() => {
         this.$message.success("提交成功");
         // this.$router.go(-1);
         this.$modal.closeLoading();
         this.sanctionVisible = false;
-        this.getPermissionButton();
+        if(this.vendor.processType == 1){
+          this.getPermissionButtonVendor()
+        }else{
+          this.getPermissionButton();
+        }
+
         this.getVendorDetail();
       }).catch(error => {
         /* 关闭遮罩层 */
@@ -1067,11 +1135,17 @@ export default {
       });
     },
     async handelCalibrationApproval() {
+      if(!this.vendor.changeId || this.vendor.processType == 1){
+          this.purchaserId=this.purchaserId
+          }else{
+          this.purchaserId=this.vendor.changeId
+          }
+
       try {
         this.calibrateVisible = true;
         this.calibrateLoading = true;
         const params = {
-          //businessId: this.vendor.changeId?this.vendor.changeId:this.purchaserId,
+          businessId: this.purchaserId,
           processId: this.exampleId,
         };
         const getProcessLogListParams = {
@@ -1079,7 +1153,7 @@ export default {
           processId: this.exampleId,
         };
         if (this.purchaserId && this.exampleId) {
-          const res = await getLoadTaskDef(params);
+          const res = await getLoadTaskDefVendor(params);
           this.processInformationList = res.data;
           function getActive(nodes) {
             let allFalse = true;
@@ -1100,6 +1174,43 @@ export default {
           this.approveArr = response.data;
         }
       } catch (error) {}
+
+      /* 修改流程数据[发起人]名称为[供应商名称] */
+      try {
+        /* 供应商审批流程类型  枚举值：Java对象：VendorProcessTypeEnum */
+        if ([1, 2, 3, 4].includes(this.vendor.processType)) {
+            function updateNodeLoadName(nodes) {
+              for (let i = 0; i < nodes.length; i++) {
+                if (nodes[i].nodeName === '发起人') {
+                  for (let j = 0; j < nodes[i].userList.length; j++) {
+                    /* 修改发起人名称为 供应商公司名称 */
+                    nodes[i].userList[j].userName = this.vendor.enterpriseName;
+                  }
+                }
+                break;
+              }
+            }
+            /* 横轴流程顺序上面数据 数据修改 */
+            updateNodeLoadName.call(this, this.processInformationList);
+
+            /* 发起人名称为 供应商公司名称 方法 */
+            function updateListNodeName(nodes) {
+              for (let i = 0; i < nodes.length; i++) {
+                if (nodes[i].taskName === '发起人') {
+                  /* 发起人名称为 供应商公司名称 */
+                  nodes[i].preHandlerName = this.vendor.enterpriseName;
+                  nodes[i].handlerName = this.vendor.enterpriseName;
+                  nodes[i].operateRemark = this.vendor.enterpriseName + ' 提交了流程.';
+                  break;
+                }
+              }
+            }
+            /* 流程列表数据 数据修改 */
+            updateListNodeName.call(this, this.approveArr);
+        }
+      } catch (error) {console.log(' [发起人名称为供应商公司名称方法] [error] ',error);}
+
+
       this.calibrateLoading = false;
     },
   },

@@ -1,11 +1,11 @@
 <template>
   <div class="app-container">
-  
+
     <div class="context flex flex-column">
       <BackButton v-if="report" path="/tender-procurement/reportForm/buildingRate" title="招标管理详情">
       </BackButton>
       <el-radio-group
-        v-if="!report" 
+        v-if="!report"
         v-model="queryParams.procurementType"
         size="small"
         style="padding-bottom: 15px"
@@ -245,24 +245,14 @@
           </el-col>
         </el-row>
         <el-row>
-          <el-col :span="24" class="grid-cell">
+          <el-col :span="12" class="grid-cell">
             <el-form-item
-            label="采购计划作废"
-            label-width="150px"
-            class="label-right-align"
-          >
-            <el-checkbox v-model="checkedPlan"></el-checkbox>
-            </el-form-item>
-          </el-col>
-        </el-row>
-      <el-row>
-          <el-col :span="24" class="grid-cell">
-            <el-form-item
-            label-width="150px"
-            label="采购方案作废"
-            class="label-right-align"
-          >
-            <el-checkbox v-model="checkedScheme"></el-checkbox>
+              label-width="110px"
+              label="作废节点"
+              class="label-right-align">
+              <el-radio v-model="selectedOption" label="reTender">重新招标 <span style="color: red">不允许修改任何模板!</span></el-radio>
+              <el-radio v-model="selectedOption" label="reScheme">返回到采购方案</el-radio>
+<!--              <el-radio v-model="selectedOption" label="rePlan">返回到采购计划</el-radio>-->
             </el-form-item>
           </el-col>
         </el-row>
@@ -322,8 +312,7 @@ export default {
   dicts: ["procurement_type", "bindding_step"],
   data() {
     return {
-      checkedPlan:false,
-      checkedScheme:false,
+      selectedOption:'reTender',
       schemeList: [],
       // 遮罩层
       loading: false,
@@ -365,41 +354,7 @@ export default {
     };
   },
   created() {
-    // this.queryParams = {...this.$route.query}
-    // this.getBiddingSchemeList();
-    this.queryParams.procurementType = this.$route.query.procurementType
-    this.queryParams.projectCode = this.$route.query.projectCode
-    this.queryParams.projectCodeList = this.$route.query.projectCodeList
-    this.queryParams.type = this.$route.query.type
-    this.queryParams.noticeStatus = this.$route.query.noticeStatus
 
-    this.getDicts("plan_type").then((res) => {
-      this.bindding_type = res.data;
-    });
-
-    if(this.$route.query.report){
-      this.report=this.$route.query.report
-    }
-     console.log(" this.queryParams.procurementType"+ this.queryParams.procurementType);
-      console.log(" this.queryParams.projectCode"+ this.queryParams.projectCode);
-      console.log(" this.queryParams.projectCodeList"+ this.queryParams.projectCodeList);
-      console.log(" this.queryParams.type"+ this.queryParams.type);
-      console.log(" this.queryParams.noticeStatus"+ this.queryParams.noticeStatus);
-      console.log(" this.queryParams.report"+ this.queryParams.report);
-
-    // if(this.$route.query.report==undefined){
-    //   // const url = 'http://192.168.240.17:31800/ckControl/zbcg/procurement/procurement$bindding?projectCodeList=SG20012024000002-2&type=buildingRate&noticeStatus=8&procurementType=all&report=report&wjSs=%2Fzhaocai%2Fprocurement%2Fbindding';
-    //   const url =window.parent.location.href
-    //   const queryParams = this.parseQuery(url);
-    //   this.queryParams.procurementType = queryParams.procurementType
-    //   this.queryParams.projectCode = queryParams.projectCode
-    //   this.queryParams.projectCodeList = queryParams.projectCodeList
-    //   this.queryParams.type = queryParams.type
-    //   this.queryParams.noticeStatus = queryParams.noticeStatus
-    //   this.report=queryParams.report
-    //   console.log("报表参数",JSON.stringify(queryParams))
-
-    // }
   },
   computed: {
     ...mapGetters(["project"]),
@@ -428,6 +383,7 @@ export default {
     /** 获取需求列表 */
     async getBiddingSchemeList() {
       this.loading = true;
+      console.log('%c👽 getBiddingSchemeList(this.queryParams==) ', `font-size: 20px;background-color: #f00;`, this.queryParams);
       const query = {
         ...this.queryParams,
         procurementType:
@@ -435,7 +391,7 @@ export default {
             ? undefined
             : this.queryParams.procurementType,
       };
-      console.log("报表参数",JSON.stringify(query))
+      console.log('%c👽 getBiddingSchemeList(query==) ', `font-size: 20px;background-color: #f00;`, query);
       try {
         const res = await getBiddingSchemeList(query);
         if (res.data) {
@@ -443,7 +399,7 @@ export default {
           // if(this.report=="report" && this.schemeList.length == 0){
           //   this.schemeList = res.data.rows;
           //   this.total = res.data.total;
-          // }else 
+          // }else
           // if(this.report=="report" && this.schemeList.length > 0){
           //   this.report=""
           // }else{
@@ -497,6 +453,8 @@ export default {
       this.abandonBidForm.operator = this.$store.state.user.nickname;
       this.abandonBidForm.procurementSchemeName = this.procurementSchemeName;
       this.abandonBidForm.noticeId = this.noticeId;
+      /* 默认选中 重新招标 */
+      this.selectedOption = 'reTender';
     },
     /** 重新招标 */
     againHandle() {
@@ -541,13 +499,16 @@ export default {
           console.log(formData, "formData");
           try {
             const res=null
-            if(this.checkedPlan){
-              const resPlan=await cancellationProcurementSchemePlan(id);
-              }else  if(this.checkedScheme){
+            if(this.selectedOption === 'rePlan'){
+              /* 选择了作废到 采购计划 */
+              const resPlan = await cancellationProcurementSchemePlan(id);
+            }else  if(this.selectedOption === 'reScheme'){
+              /* 选择了作废到 采购方案 */
               const resScheme = await cancellationProcurementScheme(id);
-              }else{
-                const res = await abandonBidMore(formData);
-              }
+            }else{
+              /* 重新招标 */
+              const res = await abandonBidMore(formData);
+            }
             this.$message.success("废标成功");
             this.abandonBidVisiable = false;
             this.currentBid = {};
@@ -564,13 +525,14 @@ export default {
     /** 监控类型切换 */
     "queryParams.procurementType": {
       handler(val) {
-         console.log( "监控类型切换",JSON.stringify(this.queryParams));
+         console.log('%c👽 监控类型切换-》JSON.stringify(this.queryParams) ', `font-size: 20px;background-color: #f00;`, JSON.stringify(val));
         this.getBiddingSchemeList();
       },
     },
     project: {
       handler(newVal, oldVal) {
-        console.log("监控项目oldVal"+oldVal.id ,"newVal"+JSON.stringify(newVal.id));
+        console.log('%c👽 handler-》oldVal ', `font-size: 20px;background-color: #f00;`, oldVal);
+        console.log('%c👽 handler-》newVal ', `font-size: 20px;background-color: #f00;`, JSON.stringify(newVal));
         if (oldVal === undefined || newVal.id !== oldVal.id) {
           this.queryParams = {
             pageNumber: 1,
@@ -583,12 +545,15 @@ export default {
             procurementType: "all",
             projectCode: newVal.code,
           };
-          console.log( "监控项目",JSON.stringify(this.queryParams));
-            this.getBiddingSchemeList();
+          console.log('%c👽 handler-》 JSON.stringify(this.queryParams) ', `font-size: 20px;background-color: #f00;`, JSON.stringify(this.queryParams));
+          this.getBiddingSchemeList();
 
         }
       },
       immediate: true,
+    },
+    selectedOption(newVal) {
+      console.log('废标选中', newVal);
     },
   },
   components: {

@@ -42,14 +42,17 @@
             </el-col>
             <el-col :span="8" class="grid-cell">
               <el-form-item label="采购人" prop="procurementOfficerName" class="required label-right-align">
-                <el-select v-model="formData.procurementOfficerName" placeholder="请选择" filterable @change="changeOperator" :disabled="isSubmit" style="width: 100%">
-                  <el-option
-                    v-for="item in operatorList"
-                    :key="item.userId"
-                    :label="item.nickName"
-                    :value="item.userId">
-                  </el-option>
-                </el-select>
+                <el-input v-model="formData.procurementOfficerName" readonly @focus="handleClick" size="large" placeholder="请选择">
+                  <template slot="suffix"><i class="el-input__icon el-icon-arrow-down"></i></template>
+                </el-input>
+<!--                <el-select v-model="formData.procurementOfficerName" placeholder="请选择" filterable @change="changeOperator" :disabled="isSubmit" style="width: 100%">-->
+<!--                  <el-option-->
+<!--                    v-for="item in operatorList"-->
+<!--                    :key="item.userId"-->
+<!--                    :label="item.nickName"-->
+<!--                    :value="item.userId">-->
+<!--                  </el-option>-->
+<!--                </el-select>-->
               </el-form-item>
             </el-col>
           </el-row>
@@ -108,6 +111,7 @@
             </el-col>
             <el-col :span="8" class="grid-cell" v-if="(procurementType == 1)">
               <el-form-item label="价格类型" prop="priceType" class="required label-right-align">
+                <!-- 价格类型，1固定价，2浮动价，2固定、浮动价。清单的列根据这个监听来判断是否显示隐藏，反之也通过监听清单的价格类型@chang=changePriceType 来判断赋值该价格类型。 -->
                 <el-select
                   v-model="formData.priceType"
                   placeholder="请选择价格类型"
@@ -157,13 +161,16 @@
             <template slot-scope="props">
               <el-table :data="props.row.children" size="small"    border>
                 <!-- <el-table-column type="selection"></el-table-column> -->
-                <el-table-column label="拆分合约规划名称" prop="splitContractName" width="150">
+                <el-table-column v-if="planList[0].children.length>1" label="拆分合约规划名称" prop="splitContractName" width="150">
                   <template slot-scope="scope">
                     <el-input v-model="scope.row.splitContractName" :disabled="isSubmit"/>
                   </template>
                 </el-table-column>
-                <el-table-column label="拟签约合同承包范围" prop="contractScope" width="150">
+                <el-table-column v-if="planList[0].children.length>1" label="拟签约合同承包范围" prop="contractScope" width="150">
                   <template slot-scope="scope">
+                    <div  style="position: absolute;top: 5px;right: 40px;">
+                      <el-button  type="danger" size="small"  @click="handleDelete(scope.$index)">删除标包</el-button>
+                    </div>
                     <el-input v-model="scope.row.contractScope" :disabled="isSubmit"/>
                   </template>
                 </el-table-column>
@@ -184,9 +191,9 @@
                       </el-table-column>
                       <el-table-column label="规格型号" min-width="150" prop="specification" show-overflow-tooltip/>
                       <el-table-column label="计量单位" align="center" prop="unitMeasurement" />
-                      <el-table-column label="价格类型" align="center" prop="priceType" width="200">
+                      <el-table-column label="价格类型" align="center" prop="priceType" width="200" v-if="procurementType === 1">
                         <template slot-scope="scope">
-                          <el-select style="width: 100%" v-model="scope.row.priceType" placeholder="请选择">
+                          <el-select style="width: 100%" v-model="scope.row.priceType" placeholder="请选择" @change="changePriceType(inventory.$index,scope,$event)">
                             <el-option v-for="dict in PRICETYPEOPTIONS" :key="dict.value" :label="dict.label"
                               :value="dict.value">
                             </el-option>
@@ -214,7 +221,7 @@
                         </template>
                       </el-table-column>
 <!--                      基价由原来浮动价不可编辑，变成了可以编辑-->
-                      <el-table-column label="基价" align="right" width="130" prop="basePrice" >
+                      <el-table-column label="基价" align="right" width="130" prop="basePrice"  v-if="procurementType === 1 && formData.priceType !== 1">
                         <template slot-scope="scope">
                           <span v-if="scope.row.priceType === 1">/</span>
                           <div v-else>
@@ -224,7 +231,7 @@
 
                         </template>
                       </el-table-column>
-                      <el-table-column label="单价(含税)" align="right" prop="unitPriceInclTax" width="180">
+                      <el-table-column label="单价(含税)" align="right" prop="unitPriceInclTax" width="180" v-if="formData.priceType !== 2">
                         <template slot-scope="scope">
                           <span v-if="scope.row.priceType !== 1">/</span>
                           <el-input v-else v-model="scope.row.unitPriceInclTax" :disabled="isSubmit || scope.row.belongOffer || scope.row.pushFlag === 'Y'" @blur="changePrice(scope.row,$event)" v-thousandth/>
@@ -236,7 +243,7 @@
                           {{ scope.row.unitPriceExclTax }}
                         </template>
                       </el-table-column>
-                      <el-table-column label="浮动价" align="right" width="130" prop="floatingPrice" >
+                      <el-table-column label="浮动价" align="right" width="130" prop="floatingPrice"  v-if="procurementType === 1 && formData.priceType !== 1">
                         <template slot-scope="scope">
                           <span v-if="scope.row.priceType === 1">/</span>
                           <div v-else>
@@ -246,7 +253,7 @@
 
                         </template>
                       </el-table-column>
-                      <el-table-column label="装卸费" align="right" width="130" prop="unloadingFee" >
+                      <el-table-column label="装卸费" align="right" width="130" prop="unloadingFee"  v-if="procurementType === 1 && formData.priceType !== 1">
                         <template slot-scope="scope">
                           <span v-if="scope.row.priceType === 1">/</span>
                           <div v-else>
@@ -318,6 +325,91 @@
                     @pagination="getList" />
 
       </el-form>
+
+      <!-- 选择采购经办人 -->
+      <el-dialog title="采购人" :visible.sync="officerDialog" width="55%">
+        <el-form
+          :model="searchQuery"
+          ref="planForm"
+          label-position="left"
+          size="small"
+          inline
+          @submit.native.prevent
+        >
+          <el-form-item
+            label="用户"
+            prop="pushRoleList"
+            class="label-right-align"
+            label-width="40px"
+          >
+            <el-input
+              v-model="searchQuery.nickName"
+              placeholder="请输入用户"
+              clearable
+              style="width: 150px"
+              @keyup.enter.native="searchUser"
+            />
+          </el-form-item>
+          <el-form-item>
+            <el-button
+              type="primary"
+              icon="el-icon-search"
+              size="small"
+              style="width: 70px"
+              @click="searchUser"
+            >查询</el-button>
+          </el-form-item>
+        </el-form>
+        <virtual-scroll
+            :data="filteredOperatorList"
+            :item-size="62"
+            key-prop="virtualId"
+            ref="virScroll"
+            @change="(renderData) => virtualList = renderData">
+        <el-table
+          v-loading="officerLoading"
+          :data="virtualList"
+          stripe
+          size="small"
+          highlight-current-row
+          border
+          @selection-change="selectOfficer"
+          @row-click="selectOfficer"
+          :row-key="selSelectKey"
+          max-height="400"
+          ref="selectTable">
+          <el-table-column width="30" align="center">
+            <template slot-scope="scope">
+              <el-radio
+                v-model="selectedUserId"
+                :label="scope.row.userId"
+                @change="selectOfficer(scope.row)"
+              />
+            </template>
+          </el-table-column>
+          <el-table-column label="序号" prop="virtualId" width="60" align="center" />
+          <el-table-column label="用户" prop="nickName" width="100" align="center"/>
+          <el-table-column label="电话号码" prop="phonenumber" width="150" align="center"/>
+          <el-table-column label="归属当前组织名称" prop="thridOrgName" show-overflow-tooltip align="center"/>
+          <el-table-column label="归属管理组织名称" prop="orgDeptName" show-overflow-tooltip align="center"/>
+        </el-table>
+        </virtual-scroll>
+        <div slot="footer" class="dialog-footer">
+          <el-button
+            @click="officerDialog = false"
+            style="width: 100px"
+            size="small"
+          >取 消</el-button
+          >
+          <el-button
+            type="primary"
+            @click="submitOfficer"
+            style="width: 100px"
+            size="small"
+          >确 定</el-button
+          >
+        </div>
+      </el-dialog>
 
       <!-- 选择项目合约规划 -->
       <el-dialog title="清单" :visible.sync="inventoryVisible" width="70%">
@@ -413,164 +505,21 @@ import BackButton from "@/components/BackButton/index.vue"
 import { mapGetters } from "vuex"
 import PageTitle from "@/components/PageTitle/index.vue"
 import {PRICETYPELIST, PRICETYPEOPTIONS} from "@/utils/constants";
+import VirtualScroll from 'el-table-virtual-scroll';
+import {getTwoLevelDeptByDeptId} from "@/api/system/dept";
 export default {
   name: "add-plan",
   dicts: ['plan_type','price_type','procurement_counting_type','procurement_payment_type'],
   data() {
-    let checkNum = (rule, value, callback) => {
-      if (!/^[1-9]\d*$/.test(value)) {
-        callback(new Error('请输入正整数'));
-      } else {
-        callback();
-      }
-    }
-    return {
-      PRICETYPELIST:PRICETYPELIST,
-      PRICETYPEOPTIONS:PRICETYPEOPTIONS,
-      formData: {
-        priceType:1
-      }, //form表单数据
-      planList: [],
-      accountTable:'accountTable',
-      projectCode:'',
-      id:'',
-      yjtUrl:'',
-      isPushRevoke:null,//区分推送和撤销
-      dialogVisible:false,
-      materialsLists:[],
-      inventoryList: [],
-      // isEdit: true,
-      rules: {
-        procurementPlanName: [{
-          required: true,
-          message: '采购名称不可为空',
-        }],
-        beginDate: [{
-          required: true,
-          message: '开始时间不能为空',
-        }],
-        endDate: [{
-          required: true,
-          message: '完成时间不能为空',
-        }],
-        arrivalDate: [{
-          required: true,
-          message: '进场时间不能为空',
-        }],
-        procurementReporterName: [{
-          required: true,
-          message: '填报人不能为空',
-        }],
-        procurementOfficerName: [{
-          required: true,
-          message: '采购人不能为空',
-        }],
-        priceType: [{
-          required: true,
-          message: '采购价类型不能为空',
-        }],
-        paymentType: [{
-          required: true,
-          message: '付款方式不能为空',
-        }],
-        countingType: [{
-          required: true,
-          message: '计价方式不能为空',
-        }],
-        region: [{
-          required: true,
-          message: '区域不能为空',
-        }],
-      },
-      // 遮罩层
-      loading: false,
-      // 显示搜索条件
-      showSearch: true,
-      // 总条数
-      total: 0,
-      // 查询参数
-      queryParams: {
-        pageNum: 1,
-        pageSize: 10,
-        procurementPlanCode: undefined,
-        procurementPlanName: undefined,
-        projectName: undefined,
-        operator: undefined,
-        procurementPlanType: 'all'
-      },
-      inventoryVisible: false,
-      splitVisible: false, //是否显示拆分合同
-      splitForm: {
-        num: ''
-      }, //拆分合同数表单
-      splitRules: {
-        num: [
-          { required: true, message: '请输入拆分的份数', trigger: 'blur' },
-          { validator: checkNum, trigger: 'blur' }
-        ],
-      },
-      currentContract: {},
-      isSubmit: false,
-      // indexs:[],
-      operatorList:[],
-      isUpdate:false,
-      expireTimeOption: {
-        disabledDate(time) {
-          return time.getTime() < Date.now() - 8.64e7; // 禁用小于当前日期的日期
-        }
-      },
-      expireTimeOverOttion:{
-        disabledDate(time) {
-          // 获取今天的时间戳
-          const today = new Date();
-          today.setHours(0, 0, 0, 0); // 设置为当天的零点
-
-          // 明天的时间戳
-          const tomorrow = new Date(today);
-          tomorrow.setDate(today.getDate() + 1);
-
-          // 将传入的时间戳转为日期对象
-          const date = new Date(time);
-
-          // 只能选择明天及之后的日期
-          return date <= today || date < tomorrow;
-        }
-      },
-      regionOptions:[],
-      /* 是否是浮动价类型，浮动价/固定、浮动价 都是true */
-      isFloat:false,
-      isSpecific: false,
-      mathjs:null,
-      rentModeOptions:[],
-      /* 交易标的物（在浮动价更新后[已弃用！]该判断逻辑了） */
-      subjectMatter:"",
-      /* 采购类型 procurementType (浮动价逻辑使用了)
-        PURCHASE_MATERIALS(1, "购买材料"),
-        LEASED_MATERIAL(2, "租赁材料"),
-        RENTAL_MACHINERY(3, "租赁机械（设备）"),
-        SPECIALTY_SUBCONTRACT(4, "专业分包"),
-        SERVICE_SUBCONTRACT(5, "劳务分包"),
-        OTHER_TYPE(6, "其他"),
-      */
-      procurementType:"",
-      matterVisible:false,
-      matterList:[],
-      defaultProps: {
-        children: 'children',
-        label: 'serviceClassName'
-      },
-      selectedMatter:{},
-      matterCurrentId:'',
-      matterName:undefined,
-      initCountObj:{},
-      numDisable:false,
-    };
+    return this.getInitialData();
   },
   components:{
     BackButton,
-    PageTitle
+    PageTitle,
+    VirtualScroll
   },
   created() {
+    this.getInitialData();
     console.log('param--param--param!------------------');
     this.mathjs = create(all);
     this.mathjs.config({
@@ -598,6 +547,8 @@ export default {
         // 获取合约规划清单后，默认合约拆分一份
         // this.$set(this.splitForm,"num",1);
         this.handleSplitInit();
+        /* 同步将清单内所有的价格类型改成一致的（固定价） */
+        this.updateMaterialsFloat(1);
       })
     }
     /* 获取省市区 */
@@ -607,6 +558,216 @@ export default {
       this.queryContractPlanSplitFlag();
   },
   methods: {
+    /* 代替data初始化 */
+    getInitialData() {
+      let checkNum = (rule, value, callback) => {
+        if (!/^[1-9]\d*$/.test(value)) {
+          callback(new Error('请输入正整数'));
+        } else {
+          callback();
+        }
+      }
+      return {
+        // 选择采购经办人
+        officerDialog: false, // 控制对话框的显示隐藏
+        officerLoading: false,
+        filteredOperatorList: [], // 过滤后的用户列表
+        virtualList: [],
+        selectedUserId: null, // 选中的采购人ID
+        selectedUser: {}, // 选中的用户信息
+        searchQuery: {   // 搜索查询字符串
+          nickName: '',
+        },
+        PRICETYPELIST:PRICETYPELIST,
+        PRICETYPEOPTIONS:PRICETYPEOPTIONS,
+        formData: {
+          priceType:1
+        }, //form表单数据
+        planList: [],
+        accountTable:'accountTable',
+        projectCode:'',
+        id:'',
+        yjtUrl:'',
+        isPushRevoke:null,//区分推送和撤销
+        dialogVisible:false,
+        materialsLists:[],
+        inventoryList: [],
+        // isEdit: true,
+        rules: {
+          procurementPlanName: [{
+            required: true,
+            message: '采购名称不可为空',
+          }],
+          beginDate: [{
+            required: true,
+            message: '开始时间不能为空',
+          }],
+          endDate: [{
+            required: true,
+            message: '完成时间不能为空',
+          }],
+          arrivalDate: [{
+            required: true,
+            message: '进场时间不能为空',
+          }],
+          procurementReporterName: [{
+            required: true,
+            message: '填报人不能为空',
+          }],
+          procurementOfficerName: [{
+            required: true,
+            message: '采购人不能为空',
+          }],
+          priceType: [{
+            required: true,
+            message: '采购价类型不能为空',
+          }],
+          paymentType: [{
+            required: true,
+            message: '付款方式不能为空',
+          }],
+          countingType: [{
+            required: true,
+            message: '计价方式不能为空',
+          }],
+          region: [{
+            required: true,
+            message: '区域不能为空',
+          }],
+        },
+        // 遮罩层
+        loading: false,
+        // 显示搜索条件
+        showSearch: true,
+        // 总条数
+        total: 0,
+        // 查询参数
+        queryParams: {
+          pageNum: 1,
+          pageSize: 10,
+          procurementPlanCode: undefined,
+          procurementPlanName: undefined,
+          projectName: undefined,
+          operator: undefined,
+          procurementPlanType: 'all'
+        },
+        inventoryVisible: false,
+        splitVisible: false, //是否显示拆分合同
+        splitForm: {
+          num: ''
+        }, //拆分合同数表单
+        splitRules: {
+          num: [
+            { required: true, message: '请输入拆分的份数', trigger: 'blur' },
+            { validator: checkNum, trigger: 'blur' }
+          ],
+        },
+        currentContract: {},
+        isSubmit: false,
+        // indexs:[],
+        operatorList:[],
+        isUpdate:false,
+        expireTimeOption: {
+          disabledDate(time) {
+            return time.getTime() < Date.now() - 8.64e7; // 禁用小于当前日期的日期
+          }
+        },
+        expireTimeOverOttion:{
+          disabledDate(time) {
+            // 获取今天的时间戳
+            const today = new Date();
+            today.setHours(0, 0, 0, 0); // 设置为当天的零点
+
+            // 明天的时间戳
+            const tomorrow = new Date(today);
+            tomorrow.setDate(today.getDate() + 1);
+
+            // 将传入的时间戳转为日期对象
+            const date = new Date(time);
+
+            // 只能选择明天及之后的日期
+            return date <= today || date < tomorrow;
+          }
+        },
+        regionOptions:[],
+        /* 是否是浮动价类型，浮动价/固定、浮动价 都是true */
+        isFloat:false,
+        isSpecific: false,
+        mathjs:null,
+        rentModeOptions:[],
+        /* 交易标的物（在浮动价更新后[已弃用！]该判断逻辑了） */
+        subjectMatter:"",
+        /* 采购类型 procurementType (浮动价逻辑使用了)
+          PURCHASE_MATERIALS(1, "购买材料"),
+          LEASED_MATERIAL(2, "租赁材料"),
+          RENTAL_MACHINERY(3, "租赁机械（设备）"),
+          SPECIALTY_SUBCONTRACT(4, "专业分包"),
+          SERVICE_SUBCONTRACT(5, "劳务分包"),
+          OTHER_TYPE(6, "其他"),
+        */
+        procurementType:"",
+        matterVisible:false,
+        matterList:[],
+        defaultProps: {
+          children: 'children',
+          label: 'serviceClassName'
+        },
+        selectedMatter:{},
+        matterCurrentId:'',
+        matterName:undefined,
+        initCountObj:{},
+        numDisable:false,
+      };
+    },
+    /** 选择采购人-点击行 */
+    selectOfficer(val){
+      this.selectedUser = val
+      this.selectedUserId = val.userId;
+    },
+    selSelectKey(row){
+      return row.virtualId
+    },
+    /** 选择采购人-点击确定 */
+    submitOfficer(){
+      if (this.selectedUser && this.selectedUser.userId) {
+        this.$set(this.formData,'procurementOfficerName',this.selectedUser.nickName);
+        this.$set(this.formData,'procurementOfficer',this.selectedUser.userId);
+        this.officerDialog = false;
+      } else {
+        this.$message.warning('请选择一个采购人');
+      }
+    },
+    /** 选择采购人-打开弹窗 */
+    handleClick(){
+      this.searchQuery = {
+        nickName: '',
+      };
+      if(this.formData.procurementOfficer){
+        this.selectedUserId = this.formData.procurementOfficer
+        this.selectedUser = {nickName:this.formData.procurementOfficerName,userId:this.formData.procurementOfficer}
+      }
+      try{
+        this.filteredOperatorList = this.operatorList.map((item, index) => ({
+          ...item,
+          virtualId: index+1
+        }));
+      }catch(err){
+        console.log(err);
+      }
+      this.officerDialog = true;
+    },
+    /** 选择采购人-过滤用户 */
+    searchUser() {
+      this.officerLoading = true;
+      const { nickName } = this.searchQuery;
+      this.filteredOperatorList = this.operatorList
+        .filter(item => !nickName || item.nickName.includes(nickName))
+        .map((item, index) => ({
+          ...item,
+          virtualId: index + 1
+        }));
+      this.officerLoading = false;
+    },
     getRowKeys2(row) {
       return row.planTable;
     },
@@ -791,7 +952,7 @@ export default {
     submitForm(formName) {
       console.log(this.planList,'ppp');
       const { add, subtract,divide,multiply, bignumber, format,floor } = this.mathjs;
-      // this.isSubmit = true;
+      this.isSubmit = true;
       this.$refs[formName].validate(async (valid,done) => {
         if (valid) {
           // * 首先先判断类型为浮动价的单行是否存在数据不合法的情况
@@ -858,15 +1019,19 @@ export default {
           }
 
           const isAll = planList[0]?.children.every(item => item.splitContractName && item.contractScope)
+          //判断长度大于1
+          if( planList[0].children.length>1){
           if(!isAll){
             this.isSubmit = false;
-            this.$message({
+            if(planList[0].children.length!=1){
+              this.$message({
               message: '拆分合约规划名称/拟签约合同承包范围不能为空',
               type: 'error'
             });
+            }
             return false;
           }
-
+        }
           // const isZero = planList[0]?.children.some(item => {
           //   let isLoop = true;
           //   if (isLoop) {
@@ -1137,6 +1302,25 @@ console.log("-2222--"+JSON.stringify(this.materialsLists))
     handleTypeClick(tab) {
       this.queryParams.procurementPlanType = tab.name;
     },
+    handleDelete(index) {
+      console.log("this.planList[0].children[index]"+JSON.stringify(this.planList[0].children[index]))
+      let arrData=this.planList[0].children[index].materialsLists
+      for(let i = 0 ; i <  arrData?.length ; i++){
+            if(arrData[i]?.pushFlag=='Y'){
+              return this.$message({type:'error',message:"目前是推送状态不可删除！"})
+            }
+          }
+          this.$confirm("是否确定删除标包？", "提示", {
+                confirmButtonText: "确定",
+                cancelButtonText: "取消",
+                type: "warning",
+              }).then(() => {
+                  // 删除数据
+              this.planList[0].children.splice(index, 1);
+              // 强制Vue重新渲染
+              this.$forceUpdate();
+              });
+    },
     /** 查询定时任务列表 */
     getList() {
       this.loading = false;
@@ -1197,6 +1381,9 @@ console.log("-2222--"+JSON.stringify(this.materialsLists))
             //     unitPriceInclTaxText:item.unitPriceInclTaxText
             //   })),
             // })
+            console.log(this.planList[0].children.length)
+            console.log(index)
+            if(index+1>this.planList[0].children.length){
             children.push({
               index,
               planTable:'planTable'+index,
@@ -1209,6 +1396,9 @@ console.log("-2222--"+JSON.stringify(this.materialsLists))
 
               }))
             })
+          }else{
+            children.push(this.planList[0].children[index])
+          }
           });
           this.$set(this.planList[0], 'children', JSON.parse(JSON.stringify(children)));
           this.splitVisible = false;
@@ -1233,8 +1423,9 @@ console.log("-2222--"+JSON.stringify(this.materialsLists))
 
     async getListProcurementOfficer(){
       try{
-        const projectRes = await getMinProject(this.formData.projectCode);
-        const res = await getListProcurementOfficer(projectRes.data.deptId)
+         // const projectRes = await getMinProject(this.formData.projectCode);
+         const dept = await getTwoLevelDeptByDeptId(this.$store.state.user.userInfo.deptId);
+        const res = await getListProcurementOfficer(dept.deptId)
         this.operatorList = res.data;
       }catch(err){
         console.log(err);
@@ -1246,7 +1437,7 @@ console.log("-2222--"+JSON.stringify(this.materialsLists))
     },
     async getPlanDetail() {
       this.loading = true;
-      const { id } = this.currentContract
+      const { id, procurementPlanType } = this.currentContract
       try {
         const res = await getPlanDetail(id);
         console.log(res, '详情!!!!!!!!!!!!!');
@@ -1296,6 +1487,8 @@ console.log("-2222--"+JSON.stringify(this.materialsLists))
           this.inventoryList = res.data.contractMaterialsList;
         })
         console.log(this.planList, 'this.planList');
+        /* 采购方案类型(购买材料,劳务分包....) */
+        this.procurementType = procurementPlanType || '';
       } catch (err) {
         console.log(err);
       }
@@ -1306,15 +1499,52 @@ console.log("-2222--"+JSON.stringify(this.materialsLists))
         this.$refs.tableRef.toggleRowExpansion(row, true);
       });
     },
+    /* 每个清单的价格类型监听，用来给采购计划的价格类型赋值，如果清单出现多种价格类型，就给采购计划赋值为=3 固定、浮动价。 */
+    changePriceType(splitIndex, scope, event) {
+      // 初始化一个 Map 来存储各类型的数量
+      const priceTypeCountMap = new Map();
+      // 遍历数据结构，统计各 priceType 的数量
+      this.planList[0]?.children.forEach(item => {
+        item.children.forEach(subItem => {
+          // 清单的价格类型
+          const priceType = subItem.priceType;
+          // 如果 Map 中还没有该 priceType，初始化数量为 0
+          if (!priceTypeCountMap.has(priceType)) {
+            priceTypeCountMap.set(priceType, 0);
+          }
+          // 增加该 priceType 的计数
+          priceTypeCountMap.set(priceType, priceTypeCountMap.get(priceType) + 1);
+        });
+      });
+
+      // 打印所有 priceType 的数量
+      console.log('清单的Price Type Counts:', priceTypeCountMap);
+
+      // 根据 priceType 的数量决定 formData.priceType 的值
+      if (priceTypeCountMap.size > 1) {
+        // 如果有多个不同的 priceType，设置为 3 固定、浮动价
+        this.$set(this.formData, 'priceType', 3);
+      } else if (priceTypeCountMap.size === 1) {
+        // 如果只有一种 priceType，设置为该 priceType 可能是 1 固定价 ，可能是 2 浮动价
+        this.$set(this.formData, 'priceType', [...priceTypeCountMap.keys()][0]);
+      }
+      // 采购计划表单的this.formData.priceType如果清单的priceType存在多种。就设置为3，只有一种就设置为那一种的priceType
+    },
     //数量计算
     changeCount(splitIndex,scope,event){
       console.log('%c 🚀 ~ file:add-plan --method:changeCount --line:1135 --variable:splitIndex,scope,event===>', `font-size:16px; font-weight:bold; color:#fff; padding:4px; border-radius:4px; background:linear-gradient(90deg, ${["#ff005a", "#ff9900", "#33cc33", "#0099ff", "#ffc300"][Math.floor(Math.random() * 5)]}, ${["#ff005a", "#ff9900", "#33cc33", "#0099ff", "#ffc300"][Math.floor(Math.random() * 5)]});`,
         splitIndex,scope,event);
       console.log(event,'~~~~~~~~~~~~~~~~~~');
-      const regexN1 = /^(?:[1-9]\d*|0)(\.\d+)?$/;
-      const regexN2 = /^\d+(\.\d{0,4})?$/
+      const regexN1 = /^-?(?:[1-9]\d*|0)(\.\d+)?$/;
+      const regexN2 = /^-?\d+(\.\d{0,4})?$/;
 
-      if(scope.row.count == ''){
+      // 判断为空则默认设置为0
+      if (scope.row.count === '' || scope.row.count == null) {
+        this.$set(scope.row, 'count', 0);
+        scope.row.count = 0;  // 将其值设为0
+      }
+
+      if(scope.row.count === ''){
         event.target.style = "border: 1px solid red;"
         this.$message.error("请输入数量");
         return
@@ -1400,8 +1630,14 @@ console.log("-2222--"+JSON.stringify(this.materialsLists))
       }
     },
     checkOtherPrice(row,key,event) {
-      const regexN1 = /^(?:[1-9]\d*|0)(\.\d+)?$/;
-      const regexN2 = /^\d+(\.\d{0,4})?$/
+      // 如果为空，设置为0
+      if (!row[key]) {
+        this.$set(row, key, 0);
+        row[key] = 0;
+      }
+
+      const regexN1 = /^-?(?:[1-9]\d*|0)(\.\d+)?$/;
+      const regexN2 = /^-?\d+(\.\d{0,4})?$/;
       if(!regexN2.test(row[key])){
         event.target.style = "border: 1px solid red;"
         this.$message.error("请输入小于4位的小数");
@@ -1418,8 +1654,8 @@ console.log("-2222--"+JSON.stringify(this.materialsLists))
         row,event);
       const { unitPriceInclTax, taxRate} = row
 
-       const regexN1 = /^(?:[1-9]\d*|0)(\.\d+)?$/;
-       const regexN2 = /^\d+(\.\d{0,4})?$/
+      const regexN1 = /^-?(?:[1-9]\d*|0)(\.\d+)?$/;
+      const regexN2 = /^-?\d+(\.\d{0,4})?$/;
 
        if(unitPriceInclTax == ''){
           event.target.style = "border: 1px solid red;"
@@ -1633,6 +1869,20 @@ console.log("-2222--"+JSON.stringify(this.materialsLists))
         })
       })
       console.log(this.planList[0],'0000000000000000000000000000');
+    },
+    /* 同步将清单内所有的价格类型改成一致的 */
+    updateMaterialsFloat(val){
+      this.planList.forEach((item) => {
+        if (item.children && Array.isArray(item.children)) {
+          item.children.forEach((itemChildren) => {
+            if (itemChildren.children && Array.isArray(itemChildren.children)) {
+              itemChildren.children.forEach((children) => {
+                this.$set(children, 'priceType', val);
+              });
+            }
+          });
+        }
+      });
     }
   },
   computed: {
@@ -1700,21 +1950,30 @@ console.log("-2222--"+JSON.stringify(this.materialsLists))
       handler(val){
         if(Number(val) === 1 || Number(val) === 2){
           /* 同步将清单内所有的价格类型改成一致的 */
+          this.updateMaterialsFloat(val);
+        }
+        /* 浮动价显示基价选项 */
+        if(Number(val) === 2 || Number(val) === 3){
+          this.isFloat = true;
+          // 判断 'floatingPrice' 和 'unloadingFee' 浮动价，装卸费 是否为空，如果为空则设置为0
           this.planList.forEach((item) => {
             if (item.children && Array.isArray(item.children)) {
               item.children.forEach((itemChildren) => {
                 if (itemChildren.children && Array.isArray(itemChildren.children)) {
                   itemChildren.children.forEach((children) => {
-                    this.$set(children, 'priceType', val);
+                    // 判断 'floatingPrice' 和 'unloadingFee' 浮动价，装卸费 是否为空，如果为空则设置为0
+                    if (!children.floatingPrice) {
+                      this.$set(children, 'floatingPrice', 0);
+                    }
+                    if (!children.unloadingFee) {
+                      this.$set(children, 'unloadingFee', 0);
+                    }
                   });
                 }
               });
             }
           });
-        }
-        /* 浮动价显示基价选项 */
-        if(Number(val) === 2 || Number(val) === 3){
-          this.isFloat = true;
+
         }else {
           this.isFloat = false;
         }

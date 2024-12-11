@@ -11,7 +11,7 @@
           >取消</el-button
         >
       <el-button
-        v-if="type=='edit'"
+        v-if="type=='edit' && formData.state != 1"
         type="primary"
         size="mini"
         @click="saveForm('form')"
@@ -21,7 +21,7 @@
       >
 <!--   审批通过不显示提交     -->
         <el-button
-          v-if="type=='edit' && formData.state != 3"
+          v-if="type=='edit' && formData.state != 1"
           type="primary"
           size="mini"
           @click="submitForm('form')"
@@ -318,19 +318,28 @@
                 prop="expertType"
                 class="required label-right-align"
               >
-                <el-select
-                  v-model="formData.expertType"
-                  placeholder="请选择专家类别"
-                  style="width: 100%"
-                  :disabled="isSubmit"
-                >
-                  <el-option
+<!--                <el-select-->
+<!--                  v-model="formData.expertType"-->
+<!--                  placeholder="请选择专家类别"-->
+<!--                  style="width: 100%"-->
+<!--                  :disabled="isSubmit"-->
+<!--                >-->
+<!--                  <el-option-->
+<!--                    v-for="dict in dict.type.expert_type"-->
+<!--                    :key="dict.value"-->
+<!--                    :label="dict.label"-->
+<!--                    :value="dict.value"-->
+<!--                  ></el-option>-->
+<!--                </el-select>-->
+
+                <el-checkbox-group v-model="expertTypeList" :disabled="isSubmit">
+                  <el-checkbox
                     v-for="dict in dict.type.expert_type"
+                    :label="dict.value"
                     :key="dict.value"
-                    :label="dict.label"
-                    :value="dict.value"
-                  ></el-option>
-                </el-select>
+                  >{{ dict.label }}</el-checkbox
+                  >
+                </el-checkbox-group>
               </el-form-item>
             </el-col>
             <el-col :span="16" class="grid-cell">
@@ -350,7 +359,7 @@
                     >{{ dict.label }}</el-radio
                   >
                 </el-radio-group> -->
-                 <el-checkbox-group v-model="businessTypeList">
+                 <el-checkbox-group v-model="businessTypeList"  :disabled="isSubmit">
                   <el-checkbox
                     v-for="dict in dict.type.expert_business_type"
                     :label="dict.value"
@@ -378,6 +387,7 @@
                   :rows="4"
                   placeholder="请输入内容"
                   v-model="formData.professionResume"
+                  :disabled="isSubmit"
                 >
                 </el-input>
               </el-form-item>
@@ -388,8 +398,9 @@
               <el-form-item
                 label="附件"
                 prop="resumeAttachList"
-                class="required label-right-align"
+                class="required label-right-align uploadItem"
               >
+                <el-button size="small" type="primary" style="margin-top: 8px;" @click="showSecretTips" :disabled="isSubmit">点击上传</el-button>
                 <el-upload
                   :action="uploadFileUrl"
                   :limit="1"
@@ -398,8 +409,8 @@
                   :file-list="formData.resumeAttachList"
                   :on-remove="fileRemove"
                   :on-preview="handlePreview"
+                  ref="upload"
                 >
-                  <el-button size="small" type="primary">点击上传</el-button>
                 </el-upload>
               </el-form-item>
             </el-col>
@@ -444,6 +455,7 @@ import {
   getLoadTaskDef, getLoadTaskDefNew,
   getProcessLogList, getProcessLogListNew,
 } from "@/api/procurement/manage";
+import {showSecretRelatedTips} from "@/utils/MyUtils";
 export default {
   name: "add-expert",
   dicts: [
@@ -464,6 +476,7 @@ export default {
       id:'',
       type:'',
       businessTypeList:[],
+      expertTypeList:[],
       expertVisible:false,
       calibrateVisible: false,
       calibrateLoading: false,
@@ -588,6 +601,11 @@ export default {
     }
   },
   methods: {
+    showSecretTips() {
+      showSecretRelatedTips(()=>{
+        this.$refs['upload'].$refs['upload-inner'].handleClick()
+      })
+    },
      handleCheckedCitiesChange(value) {
         console.log(JSON.stringify(value))
       },
@@ -689,6 +707,7 @@ export default {
     },
 
     async getInfoDetail(id) {
+        console.log('%c👽 Base64.encode(JSON.stringify(id)) ', `font-size: 20px;background-color: #f00;`, Base64.encode(JSON.stringify(id)));
         const res = await getInfo(id);
         const data=res.data
         this.formData=data
@@ -696,6 +715,7 @@ export default {
         this.formData.expertType=data.expertType+""
         this.formData.businessType=data.businessType+""
         this.businessTypeList=data.businessType.split(",");
+        this.expertTypeList=data.expertType.split(",");
         this.formData.state=data.state+""
         if(data.registeredCertificate){
           this.formData.registeredCertificate=data.registeredCertificate+""
@@ -714,6 +734,7 @@ export default {
     saveForm(formName){
       this.isSubmit = true;
          this.formData.businessType=this.businessTypeList.join(",");
+         this.formData.expertType=this.expertTypeList.join(",");
       this.$refs[formName].validate(async (valid) => {
         if (valid) {
           console.log(this.formData, "this.formData");
@@ -723,7 +744,7 @@ export default {
             background: "rgba(0, 0, 0, 0.7)",
           });
           try {
-         
+
             await saveExpert(this.formData);
             this.$message({
               message: "保存成功",
@@ -790,6 +811,14 @@ export default {
       this.attachmentId = "";
     },
   },
+  watch: {
+    expertTypeList(val){
+      this.formData.expertType=this.expertTypeList.join(",");
+    },
+    businessTypeList(val){
+      this.formData.businessType=this.businessTypeList.join(",");
+    },
+  },
   components: {
     BackButton,
     PageTitle,
@@ -799,6 +828,11 @@ export default {
 };
 </script>
 <style lang="scss" scoped>
+::v-deep .el-form-item.uploadItem {
+  .el-form-item__content {
+    line-height: 0;
+  }
+}
 .page-title {
   width: 100%;
   border-bottom: solid 1px #ccc;

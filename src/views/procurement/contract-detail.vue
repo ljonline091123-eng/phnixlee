@@ -46,11 +46,11 @@
             >推送至供应商</el-button
           >
         </div>
-        <div v-else-if="isOperate === 1 && Number(agreementState) === 7">
-          <el-button type="primary" size="mini" @click="pushToSignPlatform()"
-            >推送至电子签章平台</el-button
-          >
-        </div>
+<!--        <div v-else-if="isOperate === 1 && Number(agreementState) === 7">-->
+<!--          <el-button type="primary" size="mini" @click="pushToSignPlatform()"-->
+<!--            >推送至电子签章平台</el-button-->
+<!--          >-->
+<!--        </div>-->
         <div v-else-if="isOperate === 1 && Number(agreementState) === 9">
           <el-button type="primary" size="mini" @click="toSignAgreement()"
             >签署</el-button
@@ -127,7 +127,7 @@
               :key="index"
               class="custom-row"
             >
-              <el-col v-for="item in row" :key="item.id" :span="8">
+              <el-col v-for="item in row" :key="item.id" :span="8" v-if="!((item.prop==='isRelatedMySteelText' || item.prop==='mySteelPriceFluctuationText') && isRelatedMySteelView === 'N')">
                 <el-form-item
                   :label="item.label"
                   label-width="220px"
@@ -439,47 +439,58 @@
               </template>
             </el-table-column>
             <el-table-column
+              header-align="center"
+              align="center"
+              label="合同价"
+            >
+            <el-table-column
               prop="signTaxRateText"
-              label="本次签订税率(%)"
+              label="签订税率(%)"
               width="140"
               align="right"
             />
             <el-table-column
               prop="signCountText"
-              label="本次签订量"
+              label="签订量"
               width="100"
               align="right"
             />
             <el-table-column
               prop="signUnitPriceInclTaxText"
-              label="本次签订含税单价(元)"
+              label="签订含税单价(元)"
               width="180"
               align="right"
             />
             <el-table-column
               prop="signUnitPriceExclTaxText"
-              label="本次签订不含税单价(元)"
+              label="签订不含税单价(元)"
               width="180"
               align="right"
             />
             <el-table-column
               prop="signAmountInclTaxText"
-              label="本次签订含税总价(元)"
+              label="签订含税总价(元)"
               width="180"
               align="right"
             />
             <el-table-column
               prop="signAmountExclTaxText"
-              label="本次签订不含税总价(元)"
+              label="签订不含税总价(元)"
               width="180"
               align="right"
             />
             <el-table-column
               prop="signTaxAmountText"
-              label="本次签订税额"
+              label="签订税额"
               width="140"
               align="right"
             />
+            </el-table-column>
+            <el-table-column
+              header-align="center"
+              align="center"
+              label="中标价"
+            >
             <el-table-column
               prop="notTaxUnitPriceText"
               label="不含税单价(元)"
@@ -516,6 +527,7 @@
               width="120"
               align="right"
             />
+            </el-table-column>
             <el-table-column prop="remark" label="备注" width="120" />
           </el-table>
           <!-- 专业分包类、劳务分包类 -->
@@ -582,52 +594,63 @@
             />
             <el-table-column
               prop="countText"
-              label="数量"
+              label="投标总量"
               width="100"
               align="right"
             />
             <el-table-column
+              header-align="center"
+              align="center"
+              label="合同价"
+            >
+            <el-table-column
               prop="signTaxRateText"
-              label="本次签订税率(%)"
+              label="签订税率(%)"
               width="140"
               align="right"
             />
             <el-table-column
               prop="signCountText"
-              label="本次签订量"
+              label="签订量"
               width="100"
               align="right"
             />
             <el-table-column
               prop="signUnitPriceInclTaxText"
-              label="本次签订含税单价(元)"
+              label="签订含税单价(元)"
               width="180"
               align="right"
             />
             <el-table-column
               prop="signUnitPriceExclTaxText"
-              label="本次签订不含税单价(元)"
+              label="签订不含税单价(元)"
               width="180"
               align="right"
             />
             <el-table-column
               prop="signAmountInclTaxText"
-              label="本次签订含税总价(元)"
+              label="签订含税总价(元)"
               width="180"
               align="right"
             />
             <el-table-column
               prop="signAmountExclTaxText"
-              label="本次签订不含税总价(元)"
+              label="签订不含税总价(元)"
               width="180"
               align="right"
             />
             <el-table-column
               prop="signTaxAmountText"
-              label="本次签订税额"
+              label="签订税额"
               width="140"
               align="right"
             />
+            </el-table-column>
+            <el-table-column
+              header-align="center"
+              align="center"
+              label="中标价"
+            >
             <el-table-column
               prop="notTaxUnitPriceText"
               label="不含税单价(元)"
@@ -664,6 +687,7 @@
               width="120"
               align="right"
             />
+            </el-table-column>
             <el-table-column prop="remark" label="备注" width="120" />
           </el-table>
           <!-- 其它 -->
@@ -717,52 +741,63 @@
             />
             <el-table-column
               prop="countText"
-              label="数量"
+              label="投标总量"
               width="100"
               align="right"
             />
             <el-table-column
+              header-align="center"
+              align="center"
+              label="合同价"
+            >
+            <el-table-column
               prop="signTaxRateText"
-              label="本次签订税率(%)"
+              label="签订税率(%)"
               width="140"
               align="right"
             />
             <el-table-column
               prop="signCountText"
-              label="本次签订量"
+              label="签订量"
               width="100"
               align="right"
             />
             <el-table-column
               prop="signUnitPriceInclTaxText"
-              label="本次签订含税单价(元)"
+              label="签订含税单价(元)"
               width="180"
               align="right"
             />
             <el-table-column
               prop="signUnitPriceExclTaxText"
-              label="本次签订不含税单价(元)"
+              label="签订不含税单价(元)"
               width="180"
               align="right"
             />
             <el-table-column
               prop="signAmountInclTaxText"
-              label="本次签订含税总价(元)"
+              label="签订含税总价(元)"
               width="180"
               align="right"
             />
             <el-table-column
               prop="signAmountExclTaxText"
-              label="本次签订不含税总价(元)"
+              label="签订不含税总价(元)"
               width="180"
               align="right"
             />
             <el-table-column
               prop="signTaxAmountText"
-              label="本次签订税额"
+              label="签订税额"
               width="140"
               align="right"
             />
+            </el-table-column>
+            <el-table-column
+              header-align="center"
+              align="center"
+              label="中标价"
+            >
             <el-table-column
               prop="notTaxUnitPriceText"
               label="不含税单价(元)"
@@ -799,6 +834,7 @@
               width="120"
               align="right"
             />
+            </el-table-column>
             <el-table-column prop="remark" label="备注" width="120" />
           </el-table>
           <!--专业分包/劳务分包类独有开始 -->
@@ -917,11 +953,18 @@
           </el-table>
         </el-tab-pane>
         <el-tab-pane label="合同附件" name="second">
-          <FileModule
+          <!-- <FileModule
             v-if="activeName === 'second' && this.attachmentId"
             :attachmentId="this.attachmentId"
             height="600px"
-          />
+          /> -->
+          <iframe allowfullscreen="true"
+            v-if="activeName === 'second' && this.attachmentId"
+            :src= this.viewFileUrl
+            width="100%"
+            height="700px"
+            frameborder="0"
+          ></iframe>
 
           <div v-else style="font-size: 14px; text-align: center">
             <span>{{ this.attachmentMessage }}</span>
@@ -949,53 +992,53 @@
       @update:visible="calibrateVisible = $event"
     />
 
-    <el-dialog
-      title="推送至电子签章平台"
-      :visible.sync="pushSignDialog"
-      width="600px"
-      @closed="clearPushSignFormData"
-    >
-      <span
-        style="
-          font-size: 16px;
-          line-height: 30px;
-          text-align: center;
-          margin-bottom: 25px;
-          display: block;
-        "
-        >{{ pushSignTitle }}</span
-      >
-      <el-form
-        :model="pushSignFormData"
-        ref="pushSignForm"
-        :rules="pushSignFormRules"
-      >
-        <el-form-item label="签署人：" prop="partyAUserId">
-          <el-select
-            v-model="pushSignFormData.partyAUserId"
-            placeholder="请选择"
-            filterable
-          >
-            <el-option
-              v-for="item in partyAUserList"
-              :key="item.userId"
-              :label="item.nickName"
-              :value="item.userId"
-            >
-            </el-option>
-          </el-select>
-        </el-form-item>
-      </el-form>
-      <div slot="footer" class="dialog-footer">
-        <el-button @click="pushSignDialog = false">取 消</el-button>
-        <el-button
-          type="primary"
-          @click="toPushSignPlatform"
-          :loading="pushSignFormSubBtn"
-          >{{ pushSignFormSubBtn ? "推送中..." : "推 送" }}</el-button
-        >
-      </div>
-    </el-dialog>
+<!--    <el-dialog-->
+<!--      title="推送至电子签章平台"-->
+<!--      :visible.sync="pushSignDialog"-->
+<!--      width="600px"-->
+<!--      @closed="clearPushSignFormData"-->
+<!--    >-->
+<!--      <span-->
+<!--        style="-->
+<!--          font-size: 16px;-->
+<!--          line-height: 30px;-->
+<!--          text-align: center;-->
+<!--          margin-bottom: 25px;-->
+<!--          display: block;-->
+<!--        "-->
+<!--        >{{ pushSignTitle }}</span-->
+<!--      >-->
+<!--      <el-form-->
+<!--        :model="pushSignFormData"-->
+<!--        ref="pushSignForm"-->
+<!--        :rules="pushSignFormRules"-->
+<!--      >-->
+<!--        <el-form-item label="签署人：" prop="partyAUserId">-->
+<!--          <el-select-->
+<!--            v-model="pushSignFormData.partyAUserId"-->
+<!--            placeholder="请选择"-->
+<!--            filterable-->
+<!--          >-->
+<!--            <el-option-->
+<!--              v-for="item in partyAUserList"-->
+<!--              :key="item.userId"-->
+<!--              :label="item.nickName"-->
+<!--              :value="item.userId"-->
+<!--            >-->
+<!--            </el-option>-->
+<!--          </el-select>-->
+<!--        </el-form-item>-->
+<!--      </el-form>-->
+<!--      <div slot="footer" class="dialog-footer">-->
+<!--        <el-button @click="pushSignDialog = false">取 消</el-button>-->
+<!--        <el-button-->
+<!--          type="primary"-->
+<!--          @click="toPushSignPlatform"-->
+<!--          :loading="pushSignFormSubBtn"-->
+<!--          >{{ pushSignFormSubBtn ? "推送中..." : "推 送" }}</el-button-->
+<!--        >-->
+<!--      </div>-->
+<!--    </el-dialog>-->
     <el-dialog
       title="签署合同"
       :visible.sync="signAgreementDialog"
@@ -1101,6 +1144,7 @@ import {
   signAgreement,
   cancelledSignAgreement,
   pushAgreementToVendor,
+  getAgreementViewURL,
 } from "@/api/procurement/contract";
 import { offerRepo, offerService } from "@/utils/const";
 import FileModule from "@/components/FileModule/index.vue";
@@ -1114,6 +1158,7 @@ import {
   getLoadTaskDef,
   getProcessLogList,
 } from "@/api/procurement/manage";
+import { getViewAttachmentURLByID } from "@/api/template/file";
 export default {
   components: {
     commonTitle,
@@ -1126,6 +1171,7 @@ export default {
 
   data() {
     return {
+      viewFileUrl:"", //预览合同附件的url
       activeName: "first",
       offerService,
       isSave: false,
@@ -1208,7 +1254,7 @@ export default {
           },
           {
             id: 8,
-            label: "数量",
+            label: "投标总量",
             prop: "countText",
             width: "120",
             align: "right",
@@ -1550,7 +1596,7 @@ export default {
           },
           {
             id: 8,
-            label: "数量",
+            label: "投标总量",
             prop: "countText",
             width: "120",
             align: "right",
@@ -1650,7 +1696,7 @@ export default {
           },
           {
             id: 8,
-            label: "数量",
+            label: "投标总量",
             prop: "countText",
             width: "120",
             align: "right",
@@ -1738,7 +1784,7 @@ export default {
           },
           {
             id: 6,
-            label: "数量",
+            label: "投标总量",
             prop: "countText",
             width: "120",
             align: "right",
@@ -2910,6 +2956,8 @@ export default {
           },
         ],
       },
+      // 是否展示款项信息中的  是否关联我的钢铁网价格
+      isRelatedMySteelView: '',
       //款项信息
       paymentItem: {
         1: [
@@ -3299,7 +3347,9 @@ export default {
     this.param = param;
     this.getContractDetail();
     this.intervalId = setInterval(this.loadAgreementAttachmentId, 3000);
+    
   },
+
   methods: {
     getContractDetail() {
       this.fullLoading = true;
@@ -3311,6 +3361,7 @@ export default {
             ...res.data.agreement,
             ...res.data.agreementPaymentItem,
           };
+          this.isRelatedMySteelView = res.data.agreement.isRelatedMySteelView;
           this.exampleId = res.data.agreement.wfProcessId;
           this.isShowApprovalDetails = res.data.agreement.wfProcessId
             ? true
@@ -3351,6 +3402,21 @@ export default {
           } else {
             this.attachmentMessage = res.data.message;
           }
+        }
+
+        //预览合同附件
+        if (this.attachmentId) {
+          console.log('Attachment ID:', this.attachmentId);
+          //获取文档中台的文档编辑URL
+          try {
+            const res = await getAgreementViewURL({ attachmentId: this.attachmentId ,agreementId: this.param.id});
+            this.viewFileUrl = res.data;
+            console.log("viewFileUrl:",this.viewFileUrl);
+          } catch (err) {
+            console.log(err);
+          }
+        } else {
+          console.warn('attachmentId 数据未正确加载');
         }
       }
     },

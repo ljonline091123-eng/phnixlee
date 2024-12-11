@@ -130,3 +130,13 @@ export const getCooperationList = (params) => {
     params
   })
 }
+// 获取账户列表查
+export const listBankAccountContact=(upId)=> {
+  return request({
+    url: "/business/account/list",
+    method: "get",
+    params: {
+      upId,
+    },
+  })
+}

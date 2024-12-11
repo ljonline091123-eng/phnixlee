@@ -12,7 +12,7 @@
       <el-form ref="firstForm" :model="firstForm" label-width="210px">
       <div class="tabs-box">
       <!-- 基本信息 / 合同附件 -->
-      <el-tabs v-model="activeName">
+      <el-tabs v-model="activeName" @tab-click="attachmenthandleTabClick">
         <el-tab-pane label="基本信息" name="first">
           <!-- 基本信息 -->
           <commonTitle>基本信息</commonTitle>
@@ -372,7 +372,7 @@
                   </el-input>
                 </el-form-item>
               </el-col>
-              <el-col :span="8" v-if="[1].includes(contractType)">
+              <el-col :span="8" v-if="firstForm.agreement.isRelatedMySteelView == 'Y'">
                 <el-form-item label="是否关联我的钢铁网价格：" prop="agreementPaymentItem.isRelatedMySteel"
                   :rules="[{ required: true, trigger: 'change', message: '请选择是否关联我的钢铁网价格' }]">
                   <el-select style="width: 100%" v-model="firstForm.agreementPaymentItem.isRelatedMySteel"
@@ -386,7 +386,7 @@
             </el-row>
 
             <el-row :gutter="10">
-              <el-col :span="8" v-if="[1].includes(contractType) && firstForm.agreementPaymentItem.isRelatedMySteel == 1">
+              <el-col :span="8" v-if="firstForm.agreement.isRelatedMySteelView == 'Y' && firstForm.agreementPaymentItem.isRelatedMySteel == 1">
                 <el-form-item label="我的钢铁网价格浮动值：" prop="agreementPaymentItem.mySteelPriceFluctuation"
                   :rules="[{ required: true, trigger: 'blur', message: '请输入我的钢铁网价格浮动值' }, {validator: validateFloat, trigger: 'blur'}]">
                   <el-input v-model="firstForm.agreementPaymentItem.mySteelPriceFluctuation" placeholder="请输入我的钢铁网价格浮动值"
@@ -415,6 +415,18 @@
           </commonTitle>
           <div style="margin-bottom: 24px">
             <el-table :data="firstForm.agreementPaymentLists" style="width: 100%">
+              <el-table-column prop="settlementStage" label="结算阶段">
+                <template slot-scope="scope">
+                  <el-form-item label-width="0" :prop="'agreementPaymentLists.' + scope.$index + '.settlementStage'"
+                                :rules="[{ required: true, trigger: 'change', message: '请选择结算阶段' }]">
+                    <el-select style="width: 100%" v-model="scope.row.settlementStage" @change="value => changeSettlementStage(scope, value)">
+                      <el-option v-for="dict in dictObj.settlement_stage" :key="dict.value" :label="dict.label"
+                                 :value="dict.value">
+                      </el-option>
+                    </el-select>
+                  </el-form-item>
+                </template>
+              </el-table-column>
               <el-table-column prop="paymentName" label="付款条件/结算与付款节点">
                 <template slot-scope="scope">
                   <el-form-item label-width="0" :prop="'agreementPaymentLists.' + scope.$index + '.paymentName'"
@@ -509,18 +521,22 @@
               </el-table-column>
               <el-table-column prop="costAccount" label="成本科目" width="150" show-overflow-tooltip/>
               <el-table-column prop="paymentTypeText" label="价款类型" align="center" width="120"/>
-              <el-table-column prop="countText" label="数量" width="120" align="right"/>
-              <el-table-column prop="signTaxRate" label="本次签定税率(%)" align="right" width="150"/>
-              <el-table-column prop="signCountText" label="本次签订量" width="120" align="right"/>
-              <el-table-column prop="signUnitPriceInclTax" label="本次签订含税单价(元)"  width="120" align="right"/>
-              <el-table-column prop="signUnitPriceExclTax" label="本次签订不含税单价(元)" width="120" align="right"/>
-              <el-table-column prop="taxPriceText" label="本次签订含税总价(元)"  width="120" align="right"/>
-              <el-table-column prop="notTaxPriceText" label="本次签订不含税总价(元)"  width="120" align="right"/>
-              <el-table-column prop="taxAmountText" label="本次签订税额" width="180" align="right"/>
-              <el-table-column prop="notTaxUnitPrice" label="不含税单价(元)" width="160" align="right"/>
-              <el-table-column prop="taxUnitPrice" label="含税单价(元)" width="150" align="right"/>
-              <el-table-column prop="taxRateText" label="税率(%)" width="100" align="right"/>
-              <el-table-column prop="taxAmountText" label="税额" width="150" align="right"/>
+              <el-table-column prop="countText" label="投标总量" width="120" align="right"/>
+              <el-table-column header-align="center" align="center" label="合同价">
+                <el-table-column prop="signTaxRate" label="签定税率(%)" align="right" width="150"/>
+                <el-table-column prop="signCountText" label="签订量" width="120" align="right"/>
+                <el-table-column prop="signUnitPriceInclTax" label="签订含税单价(元)"  width="120" align="right"/>
+                <el-table-column prop="signUnitPriceExclTax" label="签订不含税单价(元)" width="120" align="right"/>
+                <el-table-column prop="taxPriceText" label="签订含税总价(元)"  width="120" align="right"/>
+                <el-table-column prop="notTaxPriceText" label="签订不含税总价(元)"  width="120" align="right"/>
+                <el-table-column prop="taxAmountText" label="签订税额" width="180" align="right"/>
+              </el-table-column>
+              <el-table-column header-align="center" align="center" label="中标价">
+                <el-table-column prop="notTaxUnitPrice" label="不含税单价(元)" width="160" align="right"/>
+                <el-table-column prop="taxUnitPrice" label="含税单价(元)" width="150" align="right"/>
+                <el-table-column prop="taxRateText" label="税率(%)" width="100" align="right"/>
+                <el-table-column prop="taxAmountText" label="税额" width="150" align="right"/>
+              </el-table-column>
               <el-table-column prop="remark" align="center" width="180" label="备注">
                 <template slot-scope="scope">
                   <el-form-item :prop="'agreementMaterialsLists.' + scope.$index + '.remark'" label-width="0">
@@ -550,23 +566,57 @@
               </el-table-column>
               <el-table-column prop="costAccount" label="成本科目" width="150" show-overflow-tooltip/>
               <el-table-column prop="paymentTypeText" label="价款类型" align="center" width="120"/>
-              <el-table-column prop="countText" label="总数量" width="120" align="right"/>
+              <el-table-column prop="countText" label="投标总量" width="120" align="right"/>
               <el-table-column prop="surplusCountText" label="剩余可用量" align="right" width="150"/>
-              <el-table-column prop="signCountText" label="本次签订量" width="120" align="right"/>
-              <el-table-column prop="basePriceText" label="基价(元)" v-if="priceType == 2" width="120" align="right"/>
-              <el-table-column prop="floatingPriceText" label="浮动价(元)" v-if="priceType == 2" width="120" align="right"/>
-              <el-table-column prop="unloadingFeeText" label="装卸费(元)" v-if="priceType == 2" width="120" align="right"/>
+              <el-table-column header-align="center" align="center" label="合同价">
+                <el-table-column prop="signCountText" label="签订量" width="120" align="right"/>
+                <el-table-column prop="signUnitPriceExclTaxText" label="签订不含税单价(元)" width="180" align="right"/>
+                <el-table-column prop="signUnitPriceInclTaxText" label="签订含税单价(元)" width="160" align="right"/>
+                <el-table-column prop="signAmountExclTaxText" label="不含税总价(元)" width="150" align="right"/>
+                <el-table-column prop="signAmountInclTaxText" label="含税总价(元)" width="150" align="right"/>
+              </el-table-column>
 
-              <el-table-column prop="signUnitPriceExclTaxText" label="本次签订不含税单价(元)" width="180" align="right"/>
-              <el-table-column prop="signUnitPriceInclTaxText" label="本次签订含税单价(元)" width="160" align="right"/>
-              <el-table-column prop="signAmountExclTaxText" label="本次不含税总价(元)" width="150" align="right"/>
-              <el-table-column prop="signAmountInclTaxText" label="本次含税总价(元)" width="150" align="right"/>
-              <el-table-column prop="notTaxUnitPriceText" label="单价(不含税)" v-if="priceType != 2" width="150" align="right"/>
-              <el-table-column prop="taxUnitPriceText" label="单价(含税)" v-if="priceType != 2" width="150" align="right"/>
-              <el-table-column prop="notTaxPriceText" label="金额(不含税)" width="150" align="right"/>
-              <el-table-column prop="taxPriceText" label="金额(含税)" width="150" align="right"/>
-              <el-table-column prop="taxRateText" label="税率(%)" width="100" align="right"/>
-              <el-table-column prop="taxAmountText" label="税额" width="150" align="right"/>
+              <el-table-column header-align="center" align="center" label="中标价">
+                <!-- 基价(元) -->
+                <el-table-column prop="basePriceText" label="基价(元)" width="120" align="right">
+                  <template #default="{ row }">
+                    {{ priceType === 2 || row.priceType === 2 || row.priceType === 3 ? row.basePriceText : '/' }}
+                  </template>
+                </el-table-column>
+
+                <!-- 浮动价(元) -->
+                <el-table-column prop="floatingPriceText" label="浮动价(元)" width="120" align="right">
+                  <template #default="{ row }">
+                    {{ priceType === 2 || row.priceType === 2 || row.priceType === 3 ? row.floatingPriceText : '/' }}
+                  </template>
+                </el-table-column>
+
+                <!-- 装卸费(元) -->
+                <el-table-column prop="unloadingFeeText" label="装卸费(元)" width="120" align="right">
+                  <template #default="{ row }">
+                    {{ priceType === 2 || row.priceType === 2 || row.priceType === 3 ? row.unloadingFeeText : '/' }}
+                  </template>
+                </el-table-column>
+
+                <!-- 单价(不含税) -->
+                <el-table-column prop="notTaxUnitPriceText" label="单价(不含税)" width="150" align="right">
+                  <template #default="{ row }">
+                    {{ priceType !== 2 && row.priceType !== 2 && row.priceType !== 3 ? row.notTaxUnitPriceText : '/' }}
+                  </template>
+                </el-table-column>
+
+                <!-- 单价(含税) -->
+                <el-table-column prop="taxUnitPriceText" label="单价(含税)" width="150" align="right">
+                  <template #default="{ row }">
+                    {{  priceType !== 2 && row.priceType !== 2 && row.priceType !== 3 ? row.taxUnitPriceText : '/' }}
+                  </template>
+                </el-table-column>
+                  <!-- 通用列 -->
+                  <el-table-column prop="notTaxPriceText" label="金额(不含税)" width="150" align="right" />
+                  <el-table-column prop="taxPriceText" label="金额(含税)" width="150" align="right" />
+                  <el-table-column prop="taxRateText" label="税率(%)" width="100" align="right" />
+                  <el-table-column prop="taxAmountText" label="税额" width="150" align="right" />
+              </el-table-column>
               <el-table-column prop="remark" align="center" width="180" label="备注">
                 <template slot-scope="scope">
                   <el-form-item :prop="'agreementMaterialsLists.' + scope.$index + '.remark'" label-width="0">
@@ -629,17 +679,21 @@
                 </template>
               </el-table-column>
               <el-table-column prop="surplusCountText" label="剩余可用量" align="right" width="150"/>
-              <el-table-column prop="signCountText" label="本次签订量" width="120" align="right"/>
-              <el-table-column prop="taxRateText" label="税率(%)" align="right" width="100"/>
-              <el-table-column prop="signUnitPriceExclTaxText" label="本次签订不含税单价(元)" width="180" align="right"/>
-              <el-table-column prop="signUnitPriceInclTaxText" label="本次签订含税单价(元)" width="160" align="right"/>
-              <el-table-column prop="signAmountExclTaxText" label="本次不含税总价(元)" width="150" align="right"/>
-              <el-table-column prop="signAmountInclTaxText" label="本次含税总价(元)" width="150" align="right"/>
-              <el-table-column prop="notTaxUnitPriceText" label="单价(不含税)" align="right" width="120"/>
-              <el-table-column prop="taxUnitPriceText" label="单价(含税)" align="right" width="120"/>
-              <el-table-column prop="notTaxPriceText" label="金额(不含税)" align="right" width="120"/>
-              <el-table-column prop="taxPriceText" label="金额(含税)" align="right" width="120"/>
-              <el-table-column prop="taxAmountText" label="税额" align="right" width="120"/>
+              <el-table-column header-align="center" align="center" label="合同价">
+                <el-table-column prop="signCountText" label="签订量" width="120" align="right"/>
+                <el-table-column prop="taxRateText" label="税率(%)" align="right" width="100"/>
+                <el-table-column prop="signUnitPriceExclTaxText" label="签订不含税单价(元)" width="180" align="right"/>
+                <el-table-column prop="signUnitPriceInclTaxText" label="签订含税单价(元)" width="160" align="right"/>
+                <el-table-column prop="signAmountExclTaxText" label="不含税总价(元)" width="150" align="right"/>
+                <el-table-column prop="signAmountInclTaxText" label="含税总价(元)" width="150" align="right"/>
+              </el-table-column>
+              <el-table-column header-align="center" align="center" label="中标价">
+                <el-table-column prop="notTaxUnitPriceText" label="单价(不含税)" align="right" width="120"/>
+                <el-table-column prop="taxUnitPriceText" label="单价(含税)" align="right" width="120"/>
+                <el-table-column prop="notTaxPriceText" label="金额(不含税)" align="right" width="120"/>
+                <el-table-column prop="taxPriceText" label="金额(含税)" align="right" width="120"/>
+                <el-table-column prop="taxAmountText" label="税额" align="right" width="120"/>
+              </el-table-column>
               <el-table-column prop="remark" align="center" width="180" label="备注">
                 <template slot-scope="scope">
                   <el-form-item :prop="'agreementMaterialsLists.' + scope.$index + '.remark'" label-width="0">
@@ -660,19 +714,23 @@
               <el-table-column prop="measurementRules" label="计量规则" width="150" show-overflow-tooltip/>
               <el-table-column prop="workContent" label="基本工作内容" width="150" show-overflow-tooltip/>
               <el-table-column prop="costAccount" label="成本科目" width="150" show-overflow-tooltip/>
-              <el-table-column prop="countText" label="数量" width="120" align="right"/>
+              <el-table-column prop="countText" label="投标总量" width="120" align="right"/>
               <el-table-column prop="surplusCountText" label="剩余可用量" align="right" width="150"/>
-              <el-table-column prop="signCountText" label="本次签订量" width="120" align="right"/>
-              <el-table-column prop="taxRateText" label="税率(%)" align="center" />
-              <el-table-column prop="signUnitPriceExclTaxText" label="本次签订不含税单价(元)" width="180" align="right"/>
-              <el-table-column prop="signUnitPriceInclTaxText" label="本次签订含税单价(元)" width="160" align="right"/>
-              <el-table-column prop="signAmountExclTaxText" label="本次不含税总价(元)" width="150" align="right"/>
-              <el-table-column prop="signAmountInclTaxText" label="本次含税总价(元)" width="150" align="right"/>
-              <el-table-column prop="notTaxUnitPriceText" label="单价(不含税)" width="120" align="right"/>
-              <el-table-column prop="taxUnitPriceText" label="单价(含税)" width="120" align="right"/>
-              <el-table-column prop="notTaxPriceText" label="金额(不含税)" width="120" align="right"/>
-              <el-table-column prop="taxPriceText" label="金额(含税)" width="120" align="right"/>
-              <el-table-column prop="taxAmountText" label="税额" width="120" align="right"/>
+              <el-table-column header-align="center" align="center" label="合同价">
+                <el-table-column prop="signCountText" label="签订量" width="120" align="right"/>
+                <el-table-column prop="taxRateText" label="税率(%)" align="center" />
+                <el-table-column prop="signUnitPriceExclTaxText" label="签订不含税单价(元)" width="180" align="right"/>
+                <el-table-column prop="signUnitPriceInclTaxText" label="签订含税单价(元)" width="160" align="right"/>
+                <el-table-column prop="signAmountExclTaxText" label="不含税总价(元)" width="150" align="right"/>
+                <el-table-column prop="signAmountInclTaxText" label="含税总价(元)" width="150" align="right"/>
+              </el-table-column>
+              <el-table-column header-align="center" align="center" label="中标价">
+                <el-table-column prop="notTaxUnitPriceText" label="单价(不含税)" width="120" align="right"/>
+                <el-table-column prop="taxUnitPriceText" label="单价(含税)" width="120" align="right"/>
+                <el-table-column prop="notTaxPriceText" label="金额(不含税)" width="120" align="right"/>
+                <el-table-column prop="taxPriceText" label="金额(含税)" width="120" align="right"/>
+                <el-table-column prop="taxAmountText" label="税额" width="120" align="right"/>
+              </el-table-column>
               <el-table-column prop="remark" align="center" width="180" label="备注">
                 <template slot-scope="scope">
                   <el-form-item :prop="'agreementMaterialsLists.' + scope.$index + '.remark'" label-width="0">
@@ -691,19 +749,23 @@
               <el-table-column prop="specification" label="特征值及特征项" width="150"/>
               <el-table-column prop="unitMeasurement" label="计量单位" width="100"/>
               <el-table-column prop="costAccount" label="成本科目" width="150" show-overflow-tooltip/>
-              <el-table-column prop="countText" label="数量" width="120" align="right"/>
+              <el-table-column prop="countText" label="投标总量" width="120" align="right"/>
               <el-table-column prop="surplusCountText" label="剩余可用量" align="right" width="150"/>
-              <el-table-column prop="signCountText" label="本次签订量" width="120" align="right"/>
-              <el-table-column prop="taxRateText" label="税率(%)" align="center" />
-              <el-table-column prop="signUnitPriceExclTaxText" label="本次签订不含税单价(元)" width="180" align="right"/>
-              <el-table-column prop="signUnitPriceInclTaxText" label="本次签订含税单价(元)" width="160" align="right"/>
-              <el-table-column prop="signAmountExclTaxText" label="本次不含税总价(元)" width="150" align="right"/>
-              <el-table-column prop="signAmountInclTaxText" label="本次含税总价(元)" width="150" align="right"/>
-              <el-table-column prop="notTaxUnitPrice" label="单价(不含税)" width="120" align="right"/>
-              <el-table-column prop="taxUnitPrice" label="单价(含税)" width="120" align="right"/>
-              <el-table-column prop="notTaxPrice" label="金额(不含税)" width="120" align="right"/>
-              <el-table-column prop="taxPrice" label="金额(含税)" width="120" align="right"/>
-              <el-table-column prop="taxAmountText" label="税额" width="120" align="right"/>
+              <el-table-column header-align="center" align="center" label="合同价">
+                <el-table-column prop="signCountText" label="签订量" width="120" align="right"/>
+                <el-table-column prop="taxRateText" label="税率(%)" align="center" />
+                <el-table-column prop="signUnitPriceExclTaxText" label="签订不含税单价(元)" width="180" align="right"/>
+                <el-table-column prop="signUnitPriceInclTaxText" label="签订含税单价(元)" width="160" align="right"/>
+                <el-table-column prop="signAmountExclTaxText" label="不含税总价(元)" width="150" align="right"/>
+                <el-table-column prop="signAmountInclTaxText" label="含税总价(元)" width="150" align="right"/>
+              </el-table-column>
+              <el-table-column header-align="center" align="center" label="中标价">
+                <el-table-column prop="notTaxUnitPrice" label="单价(不含税)" width="120" align="right"/>
+                <el-table-column prop="taxUnitPrice" label="单价(含税)" width="120" align="right"/>
+                <el-table-column prop="notTaxPrice" label="金额(不含税)" width="120" align="right"/>
+                <el-table-column prop="taxPrice" label="金额(含税)" width="120" align="right"/>
+                <el-table-column prop="taxAmountText" label="税额" width="120" align="right"/>
+              </el-table-column>
               <el-table-column prop="remark" align="center" width="180" label="备注">
                 <template slot-scope="scope">
                   <el-form-item :prop="'agreementMaterialsLists.' + scope.$index + '.remark'" label-width="0">
@@ -1095,19 +1157,27 @@
               </el-table-column>
             </el-table>
           </div>
-            </el-tab-pane>
+          </el-tab-pane>
             <el-tab-pane label="合同附件" name="second" />
           </el-tabs>
           <!-- 合同附件 -->
           <div class="contract-box" :class="activeName !== 'second' && 'hide'">
-            <FileModule
+            <!-- <FileModule
               ref="file"
               v-if="attachmentId"
               :attachmentId="attachmentId"
               @submitFileZ="subForm"
               :isContract="true"
               type="edit"
-            />
+            /> -->
+            <iframe allowfullscreen="true"
+              v-if="attachmentId"
+              :src= this.editFileUrl
+              width="100%"
+              height="700px"
+              frameborder="0"
+            ></iframe>
+
           </div>
         </div>
       </el-form>
@@ -1420,13 +1490,13 @@
 import { Base64 } from "js-base64";
 import { create, all } from "mathjs";
 import commonTitle from "@/views/procurement/components/common-title.vue";
-import { getAgreementCreateInfo, saveAgreement, listUnderlingDict, listDeviceClass, listDevice, listMaterialsClass, listMaterials, deviceFeatureList, deviceFeatureValueList, listMaterialsFeature, listMaterialsFeatureValue, getAgreementCreateInfoYl,agreementCreateAttachmentHandle,avoidSubmitByMarket } from "@/api/procurement/contract";
+import { getAgreementEditURL,getAgreementCreateInfo, saveAgreement, listUnderlingDict, listDeviceClass, listDevice, listMaterialsClass, listMaterials, deviceFeatureList, deviceFeatureValueList, listMaterialsFeature, listMaterialsFeatureValue, getAgreementCreateInfoYl,agreementCreateAttachmentHandle,avoidSubmitByMarket } from "@/api/procurement/contract";
 import { offerService, offerRepo } from "@/utils/const"
 import { cardid, isvalidatemobile, validatenull } from "@/utils/validate"
 import BackButton from "@/components/BackButton/index.vue"
 import FileModule from '@/components/FileModule/index.vue'
 import Drag from '@/components/Drag/index.vue'
-import { getContractTypeList } from "@/api/template/file";
+import { getContractTypeList ,getEditFileUrlByID} from "@/api/template/file";
 import {
   getTemplateSwitchList,
 } from "@/api/procurement/scheme";
@@ -1438,6 +1508,7 @@ export default {
   dicts: ["sys_yes_no", "expenditureBusinessType"],
   data() {
     return {
+      editFileUrl:"", //编辑合同附件URL
       //模板
       isAvoidSubmit:false,
       bcTemplateTitle: "",
@@ -1506,6 +1577,7 @@ export default {
         invoice_type: "", // 发票类型
         priceForm: "", // 价格形式
         payment_basis: "", // 付款基准
+        settlement_stage: "", // 结算阶段
         payment_type: "", // 付款类型
         deposit_type: "", // 保证金类型
         deposit_way: "", // 保证金方式
@@ -1520,6 +1592,7 @@ export default {
         SYS_CURRENCY: "currency", //币种
         INVOICE_TYPE: "invoice_type", //发票类型
         PAYMENT_BASE_TYPE: "payment_basis", //付款基数
+        SETTLEMENT_STAGE: "settlement_stage", //结算阶段
         PRICE_TYPE: "payment_type", //价款类型
         DEPOSIT_TYPE: "deposit_type", //押金/保证金类型
         DEPOSIT_BASE_TYPE: "deposit_base_amount", //押金/保证金基数
@@ -1568,13 +1641,39 @@ export default {
     this.mathjs.config({
       number: "BigNumber",
     });
-
     //获取字典
     Object.keys(this.dictObjMap).forEach((key) => {
       this.getListUnderlingDict(key);
     });
   },
   methods: {
+    //切换页签到合同附件时
+    attachmenthandleTabClick(tab){
+      // tab.name 是被点击的标签页的 name 属性值
+      this.editFileUrl=""; //先清空编辑文档的URL，在重新获取
+      if (tab.name === 'second') {
+        this.getAttachmentEditURL();
+      }
+    },
+    // 获取合同附件的文档中台编辑URL
+    getAttachmentEditURL() {
+      let formData = JSON.parse(JSON.stringify(this.firstForm.agreement));
+      delete formData.expenditureBusinessType;
+      formData.paymentWay = this.firstForm.agreement.paymentWay?.join(",") || '';
+      let params = JSON.parse(JSON.stringify(formData));
+      console.log("生成编辑文档URL的params数据===>", params);
+      console.log('新增合同签订编辑文件的AttachmentID:', params.attachmentId);
+      // 获取文档中台的文档编辑URL
+      getAgreementEditURL(params)
+        .then((res) => {
+          this.editFileUrl = res.data;
+          console.log("新增合同签订编辑editFileUrl:", this.editFileUrl);
+        })
+        .catch((err) => {
+          console.error('生成编辑文档URL的错误:', err);
+        });
+    },
+
     selectBcTemplate(row) {
       this.templateId = row.templateId;
       this.templateRow=row
@@ -1616,6 +1715,7 @@ export default {
         this.attachmentId = res
         this.firstForm.agreement.attachmentId = res;
         console.log(this.templateId+"firstForm.agreement.attachmentId "+JSON.stringify(this.attachmentId))
+        // this.getAttachmentEditURL(); //获取文档编辑的URL
       })
       // const templateName = this.bcTemplateList.find(
       //   (item) => item.id === templateId
@@ -1720,10 +1820,7 @@ export default {
       this.generalReuScoreTemplateList = res.data.rows;
       this.generalTemplateLoading = false;
     },
-    searchReusableTemplates() {
-      this.templateQuery.pageNum = 1;
-      this.getReusableScoreTemplateList();
-    },
+
     onTemplateSelect(row) {
       this.selectedTemplateId = row.id;
       //  this.attachmentId = row.attachmentId;
@@ -1874,7 +1971,8 @@ export default {
           });
           this.isSubmit = true;
           console.log(this.firstForm, "this.firstForm----------------------");
-          this.$refs.file.saveFile();
+         // this.$refs.file.saveFile();
+          this.subForm();
         } else {
           this.isSubmit = false;
           // this.sumitLoding.close();
@@ -1882,15 +1980,10 @@ export default {
         }
       });
     },
-    subForm(value) {
-      const _this = this;
-      console.log(value, "收到的");
-      if (value.status !== 0) {
-        this.templateEditFlag = value.status;
-      }
+    subForm() {
       if (this.isSubmit) {
         delete this.firstForm.agreement.expenditureBusinessType;
-        this.firstForm.templateEditFlag = this.templateEditFlag;
+      //  this.firstForm.templateEditFlag = this.templateEditFlag;
         let formData = JSON.parse(JSON.stringify(this.firstForm));
         formData.agreement.paymentWay = this.firstForm.agreement.paymentWay?.join(",") || '';
         formData.agreement.marketMaterialContractId=this.firstForm.agreement.marketMaterialContractId
@@ -2296,6 +2389,9 @@ export default {
         this.$set(scope.row, 'paymentAmount', 0)
       }
     },
+    changeSettlementStage(scope, value){
+      console.log('%c 结算阶段监听changeSettlementStage ', `font-size: 20px;background-color: #f00;`, scope, value);
+    },
     changePaymentBasis(scope, value){
       console.log(scope,'scope');
       if(value === "1"){
@@ -2409,13 +2505,12 @@ export default {
           console.log(newVal, "$route.query.schemeId");
           const { schemeId, splitId, vendorId } = this.$route.query;
           console.log(schemeId, "schemeId------");
-          const list = JSON.parse(window.sessionStorage.getItem("contract")) || {}
+          const list = JSON.parse(window.sessionStorage.getItem("contract")) || {};
           getAgreementCreateInfo({
             schemeId,
             splitId,
             vendorId,
             agreementMaterialsList:list.agreementMaterialsList
-
           }).then((res) => {
             // * 此3个字段是必传字段
             this.typeContract= '';
@@ -2427,8 +2522,10 @@ export default {
             this.agreementFileUrl = res.data.agreementFileUrl;
             this.agreementFileName = res.data.agreementFileName;
             this.attachmentId = res.data.attachmentId;
-
+            console.log("agreementFileUrl",res.data.agreementFileUrl);
+            console.log("agreementFileName",res.data.agreementFileName);
             this.firstForm.agreement.attachmentId = res.data.attachmentId;
+            console.log("getAgreementCreateInfo获取的attachmentId:",this.firstForm.agreement.attachmentId);
             this.totalAmountIncTax = res.data.totalAmountIncTax;
 
             // 合同类型
@@ -2470,10 +2567,15 @@ export default {
             this.firstForm.agreementMaterialsLists = JSON.parse(
               JSON.stringify(res?.data["biddingListQuotation"])
             );
+
+            // 获取合同附件的文档中台编辑URL
+            this.editFileUrl=""; //先清空文档编辑URL
+            this.getAttachmentEditURL();
           });
+
         }
       },
-      immediate: true,
+      immediate: true, // 立即执行一次监听器
     },
   },
   computed: {

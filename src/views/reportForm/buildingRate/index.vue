@@ -1,18 +1,74 @@
 <template>
-  <ShowTable :table-header-list="tableHeaderList" :table-data="tableData" :queryItemList="queryItemList"
-             @query="handleQuery" :loading="loading" :exportFlag=true @export="handleExport"></ShowTable>
+  <Drag>
+    <template v-slot:left-content style="background: #fff;">
+          <!-- 动态生成圆形按钮 -->
+          <div class="left">
+          <el-input
+              v-model="deptName"
+              placeholder="请输入部门名称"
+              clearable
+              size="small"
+              prefix-icon="el-icon-search"
+              style="width: 220px;margin:10px 0 0 10px;"
+            />
+          <div class="circle-buttons" style="margin: 10px 0 0 10px">
+            <button
+              v-for="n in buttonCount"
+              :key="n"
+              class="circle-btn"
+              :class="levelExpand==n?'circle-btn-selected':'circle-btn'"
+              @click="expandNodes(n)"
+            >
+              {{ n }}
+            </button>
+          </div>
+          <el-tree
+            v-loading="deptTreeLoading"
+            :data="deptOptions"
+            :default-expanded-keys="treeData"
+            class="address-tree"
+            :props="defaultProps"
+            :expand-on-click-node="true"
+            :filter-node-method="filterNode"
+            ref="tree"
+            node-key="deptId"
+            highlight-current
+            @node-click="handleNodeClick"
+          />
+     
+        </div>
+    </template>
+    <template v-slot:right-content>
+      <ShowTable :table-header-list="tableHeaderList" :table-data="tableData" :queryItemList="queryItemList"
+      @query="handleQuery" :loading="loading" :exportFlag=true @export="handleExport"></ShowTable>
+      </template>
+  </Drag>
+
 </template>
 
 <script>
 import ShowTable from "@/views/reportForm/components/ShowTable.vue";
-import {bidCountReport, getProjectCode, tenderingRateReport} from "@/api/reportForm/tenderingRateReport";
+import {bidCountReport, getProjectCode, tenderingRateReport, getOrgList} from "@/api/reportForm/tenderingRateReport";
 import {mixin} from "@/views/reportForm/mixins/mixin";
-
+import Drag from "@/components/Drag/index.vue";
 export default {
-  components: { ShowTable},
+  components: { ShowTable, Drag,},
   mixins: [mixin],
   data() {
     return {
+      // 部门树选项
+        // 部门名称
+      deptName: undefined,
+      buttonCount: 1,
+      levelExpand:2,
+      arrData:[],
+      deptOptions: undefined,
+      deptTreeLoading: false,
+      treeData:['1826912577508798466'],
+      defaultProps: {
+        children: "children",
+        label: "deptName",
+      },
       queryItemList: [{
         prop: 'deptId',
         label: '组织机构',
@@ -96,6 +152,15 @@ export default {
       tableData: [],
     }
   },
+  mounted() {
+    this.getOrgListFn()
+  },
+  watch: {
+    // 根据名称筛选部门树
+    deptName(val) {
+      this.$refs.tree.filter(val);
+    },
+  },
   methods: {
     getList(params) {
       this.loading = true;
@@ -125,6 +190,77 @@ export default {
         this.loading = false;
       })
     },
+     // 筛选节点
+     filterNode(value, data) {
+      if (!value) return true;
+      return data.deptName.indexOf(value) !== -1;
+    },
+    expandNodes(level) {
+      this.levelExpand=level
+      this.treeData=[]
+      
+      if (level === 1) {
+     
+          // 关闭所有默认节点
+          const tree = this.$refs.tree;
+          const allNodes = Object.values(tree.store.nodesMap);
+          allNodes.forEach((node) => {
+              // 关闭所有父节点
+              if (node.data.parentId === "0") {
+                tree.store.getNode(node.key).expanded = false;
+              }
+          });
+        } else if (level === 2) {
+          this.treeData=['1826912577508798466']
+          console.log(JSON.stringify(this.treeData))
+        }else if (level === 3) {
+          this.arrData.forEach(element => {
+            if(element.thridOrgLevel==2){
+              this.treeData.push(element.deptId)
+            }
+          });
+        }else if (level === 4) {
+          this.arrData.forEach(element => {
+              this.treeData.push(element.deptId)
+          });
+        }
+    },
+       // 节点单击事件
+    handleNodeClick(data) {
+      // this.queryParams.deptId = data.deptId;
+      // this.handleQuery();
+    },
+    getOrgListFn(){
+      this.deptTreeLoading = true;
+      getOrgList('1000000000').then(res=>{
+        this.arrData=res.data
+        this.deptOptions = this.handleTree(res.data, "deptId");
+        this.deptTreeLoading = false;
+      })
+      .then(() => {
+          this.initButtons();
+        })
+    },
+       // 递归计算最大层级
+       calculateMaxLevel(nodes, level = 0) {
+      let maxLevel = level;
+
+      nodes.forEach((node) => {
+        if (node.children && node.children.length > 0) {
+          maxLevel = Math.max(
+            maxLevel,
+            this.calculateMaxLevel(node.children, level + 1)
+          );
+        }
+      });
+
+      return maxLevel;
+    },
+    // 初始化按钮
+    initButtons() {
+      const maxLevel = this.calculateMaxLevel(this.deptOptions);
+      this.buttonCount = maxLevel + 1;
+    },
     getExport(params) {
       this.download(
         "business/report/bidCountReportExport",
@@ -144,5 +280,83 @@ export default {
   .vue-treeselect__control {
     height: 32px;
   }
+}
+.address-tree {
+  margin: 0;
+  height: calc(100vh - 110px);
+  overflow-y: scroll;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+
+  ::v-deep .icon-shouyetianchong:before {
+    content: "\E692";
+    color: #004ea2;
+  }
+
+  ::v-deep .icon-24gf-folderOpen:before {
+    content: "\eac5";
+    color: #004ea2;
+  }
+
+  ::v-deep .el-tree-node {
+    .el-tree-node__content {
+      height: auto;
+      padding: 2px 0;
+      margin: 2px 0;
+  
+      font-size: 13px;
+      color: #606266;
+    
+
+      .el-tree-node__label {
+        white-space: pre-wrap;
+        line-height: 20px;
+      }
+    }
+  }
+}
+
+::v-deep .address-tree .el-tree-node .is-current >  .el-tree-node__content {
+  color: #2b4acb !important;
+}
+.circle-btn {
+  background-color: #e8e8ef;
+  color: #999;
+  border: none;
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  text-align: center;
+  line-height: 20px;
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  outline: none;
+  margin: 5px;
+}
+.circle-btn-selected {
+  background-color: #2b4acb;
+  color: #fff;
+  border: none;
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  text-align: center;
+  line-height: 20px;
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  outline: none;
+  margin: 5px;
+}
+/* 鼠标移上去时的效果 */
+.circle-btn:hover {
+  background-color: #2b4acb;
+  color: #ffffff;
+}
+::v-deep .left_box{
+    background: #ffffff;
 }
 </style>

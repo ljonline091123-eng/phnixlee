@@ -103,7 +103,7 @@
                         style="width: 100%"
                       >
                         <el-option
-                          v-for="dict in dict.type.procurement_type"
+                          v-for="dict in dictObj.procurement_type"
                           :key="dict.value"
                           :label="dict.label"
                           :value="dict.value"
@@ -329,6 +329,7 @@
                          popper-class="date-clear"
                         :picker-options="endTimeOptions"
                         value-format="yyyy-MM-dd HH:mm:ss"
+                        @change="handleChange"
                       />
                     </el-form-item>
                   </el-col>
@@ -395,6 +396,7 @@
                     </el-form-item>
                   </el-col>
                   <el-col :span="8" class="grid-cell">
+
                     <el-form-item
                       label=" 招标文件模板"
                       prop="biddingTemplateName"
@@ -405,13 +407,37 @@
                         }}</a>
                       </template>
                       <el-button
+                        v-if="formData.biddingTemplateName"
+                        size="mini"
+                        @click="modifyTempFile(2)"
+                      >修改附件</el-button>
+
+                      <el-button
                         v-else
                         size="small"
                         type="primary"
                         @click="getBcTemplateList(2)"
                         >选择模板</el-button
                       >
+
+                      <br>
+                      <div style="margin-left: -90px;width: 300px;">
+                        <!--  先选择模板后再去手动上传附件模板，优先保证系统数据能拥有tempId的值吧，然后判断审批状态是否可上传 -->
+                        <el-button size="mini" type="primary" v-show="formData.biddingTemplateName && (state === null || (state !== 1 && state !== 2 && state !== 3))" @click="uploadBiddingClick">手动上传</el-button>
+                        <el-upload
+                          style="margin-left: 90px;margin-top: -75px;"
+                          :action="uploadFileUrl"
+                          :limit="1"
+                          :on-success="fileSuccessBidding"
+                          :file-list="formData.fileListBidding"
+                          :on-remove="fileRemoveBidding"
+                          ref="uploadBidding"
+                        >
+                        </el-upload>
+                      </div>
                     </el-form-item>
+
+
                   </el-col>
                   <el-col :span="8" class="grid-cell">
                     <el-form-item label=" 合同模板" prop="contractTemplateName">
@@ -421,26 +447,58 @@
                         }}</a>
                       </template>
                       <el-button
+                        v-if="formData.contractTemplateName"
+                        size="mini"
+                        @click="modifyTempFile(1)"
+                      >修改附件</el-button>
+                      <el-button
                         v-else
                         size="small"
                         type="primary"
                         @click="getBcTemplateList(1)"
                         >选择模板</el-button
                       >
+                      <br>
+                      <div style="margin-left: -90px;width: 300px;">
+                        <!--  先选择模板后再去手动上传附件模板，优先保证系统数据能拥有tempId的值吧，然后判断审批状态是否可上传 -->
+                        <el-button size="mini" type="primary" v-show="formData.contractTemplateName && (state === null || (state !== 1 && state !== 2 && state !== 3))" @click="uploadContractClick">手动上传</el-button>
+                        <el-upload
+                          style="margin-left: 90px;margin-top: -75px;"
+                          :action="uploadFileUrl"
+                          :limit="1"
+                          :on-success="fileSuccessContract"
+                          :file-list="formData.fileListContract"
+                          :on-remove="fileRemoveContract"
+                          ref="uploadContract"
+                        >
+                        </el-upload>
+                      </div>
                     </el-form-item>
                   </el-col>
+
+
                 </el-row>
                 <!-- 在线预览 -->
                 <div class="previewFile">
                   <div class="page-title">
                     <span>文件预览</span>
                   </div>
-                  <FileModule
+                  <!--  增加:key="viewAttachmentId"做组件唯一约定放在缓存重复 -->
+                  <!-- <FileModule
                     v-if="viewAttachmentId"
+                    :key="viewAttachmentId"
                     :attachmentId="viewAttachmentId"
                     height= "95%"
                     type="edit"
-                  />
+                  /> -->
+                  <iframe allowfullscreen="true"
+                    v-if="viewAttachmentId"
+                    :src= this.editFileUrl
+                    width="100%"
+                    height="700px"
+                    frameborder="0"
+                  ></iframe>
+
                 </div>
               </div>
             </el-tab-pane>
@@ -636,8 +694,8 @@
               <el-table-column label="使用单位" prop="useUnitName" />
             </el-table>
             <pagination
-              v-show="templateTotal > 0"
-              :total="templateTotal"
+              v-show="generalScoreTemplateListTotal > 0"
+              :total="generalScoreTemplateListTotal"
               :page.sync="templateQuery.pageNumber"
               :limit.sync="templateQuery.pageSize"
               @pagination="getGeneralScoreTemplateList"
@@ -694,8 +752,8 @@
               <el-table-column label="使用单位" prop="useUnitName" />
             </el-table>
             <pagination
-              v-show="reusableTemplateTotal > 0"
-              :total="reusableTemplateTotal"
+              v-show="generalReuScoreTemplateListTotal > 0"
+              :total="generalReuScoreTemplateListTotal"
               :page.sync="templateQuery.pageNumber"
               :limit.sync="templateQuery.pageSize"
               @pagination="getReusableScoreTemplateList"
@@ -815,7 +873,6 @@
               />
             </el-table>
             <pagination
-              v-show="generalTemplateTotal > 0"
               :total="generalTemplateTotal"
               :page.sync="bcTemplateQuery.pageNumber"
               :limit.sync="bcTemplateQuery.pageSize"
@@ -905,7 +962,6 @@
               />
             </el-table>
             <pagination
-              v-show="reusableTemplateTotal > 0"
               :total="reusableTemplateTotal"
               :page.sync="bcTemplateQuery.pageNumber"
               :limit.sync="bcTemplateQuery.pageSize"
@@ -945,256 +1001,41 @@ import {
   getTemplateSwitchList,
   getProcurementSchemeCreateInfo,
   getSchemeDetail,
+  getSchemeEditFileUrl,
 } from "@/api/procurement/scheme";
 import { getSwitchPageList } from "@/api/procurement/manage";
 import { getContractTypeList } from "@/api/template/file";
 import FileModule from "@/components/FileModule/index.vue";
 import { isvalidatemobile, validEmail, validatenum } from "@/utils/validate";
 import BackButton from "@/components/BackButton/index.vue";
-import { addAttachment } from "@/api/template/file";
+import { addAttachment , getEditFileUrlByID} from "@/api/template/file";
 import {showSecretRelatedTips} from "@/utils/MyUtils";
+import {offerRepo, offerService, uploadFileUrl} from "@/utils/const";
+import { listUnderlingDict } from "@/api/procurement/contract";
 
 export default {
   name: "add-scheme",
-  dicts: [
-    "procurement_type",
-    "procurement_counting_type",
-    "procurement_payment_type",
-  ],
+  // dicts: [
+  //   "procurement_type",
+  //   "procurement_counting_type",
+  //   "procurement_payment_type",
+  // ],
   components: {
     FileModule,
     BackButton,
   },
   data() {
-    const validatePhone = (rule, value, callback) => {
-      if (isvalidatemobile(value)[0]) {
-        callback(new Error(isvalidatemobile(value)[1]));
-      } else {
-        callback();
-      }
-    };
-    const validateContactName = (rule, value, callback) => {
-      const chineseNamePattern = /^[\u4e00-\u9fa5]+$/;
-
-      if (!chineseNamePattern.test(value)) {
-        callback(new Error("请输入正确的中文姓名"));
-      } else {
-        callback();
-      }
-    };
-
-    const validateEmail = (rule, value, callback) => {
-      if (!validEmail(value)) {
-        callback(new Error("请输入正确的邮箱地址"));
-      } else {
-        callback();
-      }
-    };
-    const validaNumber = (rule, value, callback) => {
-      if (!validatenum(value, 1)) {
-        callback(new Error("请输入正确的金额"));
-      } else {
-        callback();
-      }
-    };
-    return {
-      fileList: [],
-      fileList2: [],
-      formData: {}, //form表单数据
-      planList: [],
-      inventoryList: [],
-      contractList: [],
-      rules: {
-        procurementSchemeName: [
-          {
-            required: true,
-            message: "任务名称不能为空",
-          },
-        ],
-        procurementType: [
-          {
-            required: true,
-            message: "请选择采购方式",
-          },
-        ],
-        isReceiveDeposit: [
-          {
-            required: true,
-            message: "请选择是否收取保证金",
-          },
-        ],
-        bidDeadline: [
-          {
-            required: true,
-            message: "请选择计划投标截止时间",
-          },
-        ],
-        bidContactPerson: [
-          {
-            required: true,
-            message: "联系人不能为空",
-          },
-          {
-            validator: validateContactName,
-            trigger: "blur",
-          },
-        ],
-        bidContactPhone: [
-          {
-            required: true,
-            message: "联系电话不能为空",
-          },
-          {
-            validator: validatePhone,
-            trigger: "blur",
-          },
-        ],
-        bidContactEmail: [
-          {
-            required: true,
-            message: "联系邮箱不能为空",
-          },
-          {
-            validator: validateEmail,
-            trigger: "blur",
-          },
-        ],
-        securityDeposit: [
-          {
-            required: true,
-            message: "请输入保证金",
-          },
-          {
-            validator: validaNumber,
-            trigger: "blur",
-          },
-        ],
-        financeConfirmId: [
-          {
-            required: true,
-            message: "请选择财务确认人员",
-          },
-        ],
-        templateName: [
-          {
-            required: true,
-            message: "请选择模板",
-          },
-        ],
-        biddingTemplateName: [
-          {
-            required: true,
-            message: "请选择招标文件模板",
-          },
-        ],
-        contractTemplateName: [
-          {
-            required: true,
-            message: "请选择合同模板",
-          },
-        ],
-      },
-      // 遮罩层
-      loading: false,
-      // 显示搜索条件
-      showSearch: true,
-      // 总条数
-      total: 0,
-      // 弹出层标题
-      title: "",
-      // 是否显示弹出层
-      open: false,
-      // 查询参数
-      queryParams: {
-        pageNumber: 1,
-        pageSize: 10,
-        state: 1,
-        procurementPlanCode: undefined,
-        procurementPlanName: undefined,
-        projectName: undefined,
-        operator: undefined,
-        procurementPlanType: "all",
-      },
-      templateQuery: {
-        pageNumber: 1,
-        pageSize: 10,
-        state: 1,
-        switchTemplateType: 1,
-      },
-      bcTemplateQuery: {
-        pageNumber: 1,
-        pageSize: 10,
-        state: 1,
-        templateType: "",
-        templateName: "",
-        switchTemplateType: "",
-        contractType: "",
-      },
-      isShow: false,
-      activeTab: "generalTemplate",
-      currentTab: "generalScoreTemplate",
-      templateId: null,
-      generalTemplateList: [],
-      reusableTemplateList: [],
-      generalTemplateTotal: 0,
-      reusableTemplateTotal: 0,
-      procurementPlanIds: [], //计划id
-      expireTimeOption: {
-        // 设置日期时间显示格式，只显示年月日时分
-        format: "yyyy-MM-dd HH:mm:ss",
-        // 设置可选的时间范围
-        // selectableRange: "00:00:00 - 23:59:59",
-        selectableRange :new Date().getHours() + ':' + (new Date().getMinutes() + 1) + ':00 - 23:59:00',
-        disabledDate(time) {
-          console.log(new Date().getDate()+5)
-          return time.getTime() < Date.now() + (4 * 24 * 3600 * 1000); // 禁用小于当前日期的日期
-        }
-        
-        // disabledDate(time) {
-        //   // 获取今天的时间戳
-        //   const today = new Date();
-        //   today.setHours(0, 0, 0, 0); // 设置为当天的零点
-
-        //   // 明天的时间戳
-        //   const tomorrow = new Date(today);
-        //   tomorrow.setDate(today.getDate() + 1);
-
-        //   // 将传入的时间戳转为日期对象
-        //   const date = new Date(time);
-
-        //   // 只能选择明天及之后的日期
-        //   return date <= today || date < tomorrow;
-        // },
-      },
-      activeTabs: "base",
-      inventoryVisible: false,
-      financeList: [],
-      evaluateVisable: false, //评分弹出
-      evaluateTemplateList: [], //评分模板列表
-      evaluateTemplateLoading: false,
-      templateId: "", //模板id
-      templateTotal: 0,
-      bcTemplateTitle: "",
-      bcTemplateVisableLoading: false,
-      generalTemplateLoading: false,
-      bcTemplateVisable: false,
-      bcTemplateList: [],
-      bcTemplatetType: 0,
-      bcTemplateTotal: 0,
-      biddingAttachmentId: "",
-      deptId: "",
-      attachmentId: "",
-      viewAttachmentId: "", //预览ID
-      isEdit: false,
-      isSubmit: false,
-      generalScoreTemplateList: [],
-      generalReuScoreTemplateList: [],
-      selectedTemplateId: "",
-      isScoreMOdel: false,
-      contractTypeList: [],
-    };
+    return this.getInitialData();
+  },
+  //new
+  mounted() {
+    //获取字典
+    Object.keys(this.dictObjMap).forEach((key) => {
+      this.getListUnderlingDict(key);
+    });
   },
   created() {
+    this.getInitialData();
     const param = JSON.parse(Base64.decode(this.$route.params.params));
     this.getContractTypeList();
     console.log(param, "param--param--param");
@@ -1228,7 +1069,7 @@ export default {
         disabledDate(time) {
           // 只能选大于当前截止时间的
             return time.getTime() < Date.now() + (4 * 24 * 3600 * 1000); // 禁用小于当前日期的日期
-       
+
         }
       }
     },
@@ -1242,7 +1083,285 @@ export default {
     },
   },
   methods: {
-   
+    //获取字典
+    async getListUnderlingDict(type) {
+      const res = await listUnderlingDict(type);
+      const resMap = res.data.map((item) => ({
+        value: item.dictValue,
+        label: item.dictLabel,
+      }));
+      const dictType = this.dictObjMap[type];
+      this.dictObj[dictType] = resMap;
+    },
+
+    /* 代替data初始化 */
+    getInitialData(){
+      const validatePhone = (rule, value, callback) => {
+        if (isvalidatemobile(value)[0]) {
+          callback(new Error(isvalidatemobile(value)[1]));
+        } else {
+          callback();
+        }
+      };
+      const validateContactName = (rule, value, callback) => {
+        const chineseNamePattern = /^[\u4e00-\u9fa5]+$/;
+
+        if (!chineseNamePattern.test(value)) {
+          callback(new Error("请输入正确的中文姓名"));
+        } else {
+          callback();
+        }
+      };
+
+      const validateEmail = (rule, value, callback) => {
+        if (!validEmail(value)) {
+          callback(new Error("请输入正确的邮箱地址"));
+        } else {
+          callback();
+        }
+      };
+      const validaNumber = (rule, value, callback) => {
+        if (!validatenum(value, 1)) {
+          callback(new Error("请输入正确的金额"));
+        } else {
+          callback();
+        }
+      };
+      return {
+        //数据字典
+        dictObj: {
+          procurement_type:"",
+          procurement_counting_type: "",
+          procurement_payment_type: "",
+        },
+        dictObjMap: {
+          PROCUREMENT_TYPE:"procurement_type",
+          PROCUREMENT_COUNTING_TYPE:"procurement_counting_type",
+          PROCUREMENT_PAYMENT_TYPE:"procurement_payment_type",
+        },
+
+        /*方案审批状态
+          DRAFT(0,"自由态"),
+          IN_APPROVAL(1,"审批中"),
+          CANCELLATION(2,"已作废"),
+          APPROVE(3,"已完成"),
+          REJECT(4,"已驳回"),
+          REVOKED(5,"已撤回"), */
+        state: null,
+        /* 文件上传 */
+        offerService,
+        offerRepo,
+        uploadFileUrl,
+        /* 采购方案文件，通过getSchemeDetail方法请求procurementScheme/detail?id=获取的数据 */
+        procurementSchemeTempObject: null,
+        fileList: [],
+        fileList2: [],
+        formData: {}, //form表单数据
+        planList: [],
+        inventoryList: [],
+        contractList: [],
+        rules: {
+          procurementSchemeName: [
+            {
+              required: true,
+              message: "任务名称不能为空",
+            },
+          ],
+          procurementType: [
+            {
+              required: true,
+              message: "请选择采购方式",
+            },
+          ],
+          isReceiveDeposit: [
+            {
+              required: true,
+              message: "请选择是否收取保证金",
+            },
+          ],
+          bidDeadline: [
+            {
+              required: true,
+              message: "请选择计划投标截止时间",
+            },
+          ],
+          bidContactPerson: [
+            {
+              required: true,
+              message: "联系人不能为空",
+            },
+            {
+              validator: validateContactName,
+              trigger: "blur",
+            },
+          ],
+          bidContactPhone: [
+            {
+              required: true,
+              message: "联系电话不能为空",
+            },
+            {
+              validator: validatePhone,
+              trigger: "blur",
+            },
+          ],
+          bidContactEmail: [
+            {
+              required: true,
+              message: "联系邮箱不能为空",
+            },
+            {
+              validator: validateEmail,
+              trigger: "blur",
+            },
+          ],
+          securityDeposit: [
+            {
+              required: true,
+              message: "请输入保证金",
+            },
+            {
+              validator: validaNumber,
+              trigger: "blur",
+            },
+          ],
+          financeConfirmId: [
+            {
+              required: true,
+              message: "请选择财务确认人员",
+            },
+          ],
+          templateName: [
+            {
+              required: true,
+              message: "请选择模板",
+            },
+          ],
+          biddingTemplateName: [
+            {
+              required: true,
+              message: "请选择招标文件模板",
+            },
+          ],
+          contractTemplateName: [
+            {
+              required: true,
+              message: "请选择合同模板",
+            },
+          ],
+        },
+        // 遮罩层
+        loading: false,
+        // 显示搜索条件
+        showSearch: true,
+        // 总条数
+        total: 0,
+        // 弹出层标题
+        title: "",
+        // 是否显示弹出层
+        open: false,
+        // 查询参数
+        queryParams: {
+          pageNumber: 1,
+          pageSize: 10,
+          state: 1,
+          procurementPlanCode: undefined,
+          procurementPlanName: undefined,
+          projectName: undefined,
+          operator: undefined,
+          procurementPlanType: "all",
+        },
+        templateQuery: {
+          pageNumber: 1,
+          pageSize: 10,
+          state: 1,
+          switchTemplateType: 1,
+        },
+        bcTemplateQuery: {
+          pageNumber: 1,
+          pageSize: 10,
+          state: 1,
+          templateType: "",
+          templateName: "",
+          switchTemplateType: "",
+          contractType: "",
+        },
+        isShow: false,
+        activeTab: "generalTemplate",
+        currentTab: "generalScoreTemplate",
+        generalTemplateList: [],
+        reusableTemplateList: [],
+        generalTemplateTotal: 0,
+        reusableTemplateTotal: 0,
+        procurementPlanIds: [], //计划id
+        expireTimeOption: {
+          // 设置日期时间显示格式，只显示年月日时分
+          format: "yyyy-MM-dd HH:mm:ss",
+          // 设置可选的时间范围
+          // selectableRange: "00:00:00 - 23:59:59",
+          selectableRange :new Date().getHours() + ':' + (new Date().getMinutes() + 1) + ':00 - 23:59:00',
+          disabledDate(time) {
+            console.log(new Date().getDate()+5)
+            return time.getTime() < Date.now() + (4 * 24 * 3600 * 1000); // 禁用小于当前日期的日期
+          }
+
+          // disabledDate(time) {
+          //   // 获取今天的时间戳
+          //   const today = new Date();
+          //   today.setHours(0, 0, 0, 0); // 设置为当天的零点
+
+          //   // 明天的时间戳
+          //   const tomorrow = new Date(today);
+          //   tomorrow.setDate(today.getDate() + 1);
+
+          //   // 将传入的时间戳转为日期对象
+          //   const date = new Date(time);
+
+          //   // 只能选择明天及之后的日期
+          //   return date <= today || date < tomorrow;
+          // },
+        },
+        activeTabs: "base",
+        inventoryVisible: false,
+        financeList: [],
+        evaluateVisable: false, //评分弹出
+        evaluateTemplateList: [], //评分模板列表
+        evaluateTemplateLoading: false,
+        templateId: "", //模板id
+        templateTotal: 0,
+        bcTemplateTitle: "",
+        bcTemplateVisableLoading: false,
+        generalTemplateLoading: false,
+        bcTemplateVisable: false,
+        bcTemplateList: [],
+        bcTemplatetType: 0,
+        bcTemplateTotal: 0,
+        biddingAttachmentId: "",
+        contractAttachmentId: "",
+        deptId: "",
+        attachmentId: "",
+        viewAttachmentId: "", //预览ID
+        isEdit: false,
+        isSubmit: false,
+        generalScoreTemplateListTotal: 0,
+        generalReuScoreTemplateListTotal: 0,
+        generalScoreTemplateList: [],
+        generalReuScoreTemplateList: [],
+        selectedTemplateId: "",
+        isScoreMOdel: false,
+        contractTypeList: [],
+        editFileUrl:"", //编辑文档URL
+      };
+    },
+    /* 计划投标截止时间监听 */
+    handleChange(value) {
+      let newVal = new Date(value);
+      let currentDate = Date.now(); // 获取当前时间戳
+      // 比较当前日期是否小于5天后的日期
+      if (newVal && newVal < currentDate + 5 * 24 * 60 * 60 * 1000) {
+        this.formData.bidDeadline = null; // 设置为null
+      }
+    },
     handleTabClick(tab) {
       // 处理标签页点击事件，根据标签页切换表格数据
       this.activeTab = tab.name;
@@ -1294,6 +1413,7 @@ export default {
       this.reusableTemplateList = res.data.rows;
       this.bcTemplateVisableLoading = false;
     },
+    /* 评分模板标签页 通用 */
     async getGeneralScoreTemplateList() {
       // 获取通用模板列表数据
       this.generalTemplateLoading = true;
@@ -1301,8 +1421,10 @@ export default {
       this.templateQuery.switchTemplateType = "1";
       const res = await getTemplateSwitchList(this.templateQuery);
       this.generalScoreTemplateList = res.data.rows;
+      this.generalScoreTemplateListTotal = res.data.total;
       this.generalTemplateLoading = false;
     },
+    /* 评分模板标签页 复用 */
     async getReusableScoreTemplateList() {
       // 获取通用模板列表数据
       this.generalTemplateLoading = true;
@@ -1310,6 +1432,7 @@ export default {
       this.templateQuery.switchTemplateType = "2";
       const res = await getTemplateSwitchList(this.templateQuery);
       this.generalReuScoreTemplateList = res.data.rows;
+      this.generalReuScoreTemplateListTotal = res.data.total;
       this.generalTemplateLoading = false;
     },
     //提交
@@ -1341,12 +1464,14 @@ export default {
             financeConfirmName,
             evaluationTemplateId,
             biddingAttachmentId,
+            contractAttachmentId,
             contractTemplateId,
             biddingTemplateId,
             procurementSchemeId,
             procurementSchemeBiddingId,
           } = this.formData;
           const formData = {
+            contractSplitIds: this.procurementPlanIds,
             procurementScheme: {
               procurementSchemeName,
               procurementType,
@@ -1363,11 +1488,11 @@ export default {
               bidContactEmail,
               evaluationTemplateId,
               biddingAttachmentId,
+              contractAttachmentId,
               contractTemplateId,
               biddingTemplateId,
               id: procurementSchemeBiddingId || "",
             },
-            contractSplitIds: this.procurementPlanIds,
           };
           console.log(formData, "formData--formData--formData");
           try {
@@ -1573,8 +1698,109 @@ export default {
       this.$refs.form.clearValidate("templateName");
       this.evaluateVisable = false;
     },
+    /* 修改不同的模板 2 招标文件模板 ，1 合同模板 联想文档绑定文件id对象名称viewAttachmentId  */
+    async modifyTempFile(type){
+      console.log('%c modifyTempFile(2 招标文件模板 ，1 合同模板)', `font-size: 20px;background-color: #f00;`, type);
+      console.log('%c procurementSchemeTempObject', `font-size: 20px;background-color: #f00;`, this.procurementSchemeTempObject);
+      console.log('%c formData', `font-size: 20px;background-color: #f00;`, this.formData);
+      /* 2 招标模板 */
+      if(type === 2){
+        let {attachmentId , fileName , fileUrl , templateName , templateId} = this.procurementSchemeTempObject.biddingTemplate;
+        try {
+          let res = {};
+          if(this.formData.biddingAttachmentId === this.formData.biddingTemplateId){
+            /* 生成新的附件 */
+            res = await addAttachment({
+              fileName: fileName,
+              fileUrl: fileUrl,
+            });
+          }else{
+            res.data = this.formData.biddingAttachmentId;
+          }
+          /* 设置新的附件返回的附件id */
+          this.$set(this.formData, "biddingAttachmentId", res.data);
+          /* 同步更新页面的模板附件对象(附件修改按钮) */
+          if (!this.procurementSchemeTempObject.biddingTemplate) {
+            this.$set(this.procurementSchemeTempObject, 'biddingTemplate', {});
+          }
+          this.$set(this.procurementSchemeTempObject.biddingTemplate, "attachmentId", res.data);
+          this.$set(this.procurementSchemeTempObject.biddingTemplate, "fileName", fileName);
+          this.$set(this.procurementSchemeTempObject.biddingTemplate, "fileUrl", fileUrl);
+          this.$set(this.procurementSchemeTempObject.biddingTemplate, "templateName", templateName);
+          this.$set(this.procurementSchemeTempObject.biddingTemplate, "templateId", templateId);
+          /* 调起联想文档 */
+          this.viewAttachmentId = res.data;
+
+          //据viewAttachmentId获取文件的文档中台的编辑URL
+          if (this.viewAttachmentId) {
+            console.log('Attachment ID:', this.viewAttachmentId);
+            //获取文档中台的文档编辑URL
+            try {
+              const res = await getEditFileUrlByID({attachmentId: this.viewAttachmentId});
+              this.editFileUrl = res.data;
+              console.log("editFileUrl:", this.editFileUrl);
+            } catch (err) {
+              console.log(err);
+            }
+          } else {
+            console.warn('attachmentId 数据未正确加载');
+          }
+
+        } catch (err) {
+          console.log(err);
+        }
+      }else if(type === 1){
+        /* 1 合同模板 */
+        let {attachmentId , fileName , fileUrl , templateName , templateId} = this.procurementSchemeTempObject.contractTemplate;
+        try {
+          let res = {};
+          if(this.formData.contractAttachmentId === this.formData.contractTemplateId){
+            /* 生成新的附件 */
+            res = await addAttachment({
+              fileName: fileName,
+              fileUrl: fileUrl,
+            });
+          }else{
+            res.data = this.formData.contractAttachmentId;
+          }
+          /* 设置新的附件返回的附件id */
+          this.$set(this.formData, "contractAttachmentId", res.data);
+          /* 同步更新页面的模板附件对象(附件修改按钮) */
+          if (!this.procurementSchemeTempObject.contractTemplate) {
+            this.$set(this.procurementSchemeTempObject, 'contractTemplate', {});
+          }
+          this.$set(this.procurementSchemeTempObject.contractTemplate, "attachmentId", res.data);
+          this.$set(this.procurementSchemeTempObject.contractTemplate, "fileName", fileName);
+          this.$set(this.procurementSchemeTempObject.contractTemplate, "fileUrl", fileUrl);
+          this.$set(this.procurementSchemeTempObject.contractTemplate, "templateName", templateName);
+          this.$set(this.procurementSchemeTempObject.contractTemplate, "templateId", templateId);
+          /* 调起联想文档 */
+          this.viewAttachmentId = res.data;
+
+          //据viewAttachmentId获取文件的文档中台的编辑URL
+          if (this.viewAttachmentId) {
+            console.log('Attachment ID:', this.viewAttachmentId);
+            //获取文档中台的文档编辑URL
+            try {
+              const res = await getEditFileUrlByID({attachmentId: this.viewAttachmentId});
+              this.editFileUrl = res.data;
+              console.log("editFileUrl:", this.editFileUrl);
+            } catch (err) {
+              console.log(err);
+            }
+          } else {
+            console.warn('attachmentId 数据未正确加载');
+          }
+        } catch (err) {
+          console.log(err);
+        }
+      }
+    },
+    /* 点击显示选择模板列表 2 招标文件模板 ，1 合同模板 */
     async getBcTemplateList(type) {
       showSecretRelatedTips(async ()=>{
+        this.bcTemplateQuery.pageNumber = 1;
+        this.bcTemplateQuery.pageSize = 10;
         this.bcTemplateTitle = type === 2 ? "选择招标文件模板" : "选择合同模板";
         this.isScoreMOdel = type === 2 ? true : false;
         this.activeTab = "generalTemplate";
@@ -1595,25 +1821,98 @@ export default {
         // 获取模板列表
         const res = await getSwitchPageList(this.bcTemplateQuery);
         this.bcTemplateList = res.data.rows;
+        /* 最后再获取分页数据，区分了通用和复用模板。 */
+        await this.activeTabListen(this.activeTab);
       })
 
     },
 
+
+    /* 点击确定选择模板数据 2 招标文件模板 ，1 合同模板 */
     async confirmBcTemplate() {
+      /* this.templateId是模板列表弹窗单选的双向绑定，意思就是模板文件id */
       const templateId = this.templateId;
       if (!templateId) {
         this.$message.error("请先选择一个模板");
         return;
       }
-      const templateName = this.bcTemplateList.find(
-        (item) => item.id === templateId
-      ).templateName;
+      try {
+        const {templateName, fileUrl, fileName} = this.bcTemplateList.find(
+          (item) => item.id === templateId
+        )
+        /* 创建新文件 */
+        const res = await addAttachment({
+          fileName: fileName,
+          fileUrl: fileUrl,
+        });
 
-      if (this.bcTemplatetType === 2) {
-        this.$set(this.formData, "biddingTemplateName", templateName);
-        this.$set(this.formData, "biddingTemplateId", templateId);
-        this.$refs.form.clearValidate("biddingTemplateName");
+          /* 2 招标文件模板 ，1 合同模板 */
+          if (this.bcTemplatetType === 2) {
+            this.$refs.uploadBidding.clearFiles();
+            this.$set(this.formData, "biddingAttachmentId", res.data);
+            this.$set(this.formData, "biddingTemplateName", templateName);
+            this.$set(this.formData, "biddingTemplateId", templateId);
+            this.$refs.form.clearValidate("biddingTemplateName");
+            /* 同步更新页面的模板附件对象(附件修改按钮) */
+            if (!this.procurementSchemeTempObject.biddingTemplate) {
+              this.$set(this.procurementSchemeTempObject, 'biddingTemplate', {});
+            }
+            this.$set(this.procurementSchemeTempObject.biddingTemplate, "attachmentId", res.data);
+            this.$set(this.procurementSchemeTempObject.biddingTemplate, "fileName", fileName);
+            this.$set(this.procurementSchemeTempObject.biddingTemplate, "fileUrl", fileUrl);
+            this.$set(this.procurementSchemeTempObject.biddingTemplate, "templateName", templateName);
+            this.$set(this.procurementSchemeTempObject.biddingTemplate, "templateId", templateId);
+            this.viewAttachmentId = res.data;
 
+            //据viewAttachmentId获取文件的文档中台的编辑URL
+            if (this.viewAttachmentId) {
+              console.log('Attachment ID:', this.viewAttachmentId);
+              //获取文档中台的文档编辑URL
+              try {
+                const res = await getEditFileUrlByID({attachmentId: this.viewAttachmentId});
+                this.editFileUrl = res.data;
+                console.log("editFileUrl:", this.editFileUrl);
+              } catch (err) {
+                console.log(err);
+              }
+            } else {
+              console.warn('attachmentId 数据未正确加载');
+            }
+          } else {
+            this.$refs.uploadContract.clearFiles();
+            this.$set(this.formData, "contractAttachmentId", res.data);
+            this.$set(this.formData, "contractTemplateName", templateName);
+            this.$set(this.formData, "contractTemplateId", templateId);
+            this.$refs.form.clearValidate("contractTemplateName");
+            /* 同步更新页面的模板附件对象(附件修改按钮) */
+            if (!this.procurementSchemeTempObject.contractTemplate) {
+              this.$set(this.procurementSchemeTempObject, 'contractTemplate', {});
+            }
+            this.$set(this.procurementSchemeTempObject.contractTemplate, "attachmentId", res.data);
+            this.$set(this.procurementSchemeTempObject.contractTemplate, "fileName", fileName);
+            this.$set(this.procurementSchemeTempObject.contractTemplate, "fileUrl", fileUrl);
+            this.$set(this.procurementSchemeTempObject.contractTemplate, "templateName", templateName);
+            this.$set(this.procurementSchemeTempObject.contractTemplate, "templateId", templateId);
+            this.viewAttachmentId = res.data;
+
+            //据viewAttachmentId获取文件的文档中台的编辑URL
+            if (this.viewAttachmentId) {
+              console.log('Attachment ID:', this.viewAttachmentId);
+              //获取文档中台的文档编辑URL
+              try {
+                const res = await getEditFileUrlByID({attachmentId: this.viewAttachmentId});
+                this.editFileUrl = res.data;
+                console.log("editFileUrl:", this.editFileUrl);
+              } catch (err) {
+                console.log(err);
+              }
+            } else {
+              console.warn('attachmentId 数据未正确加载');
+            }
+
+          }
+      } catch (err) {
+        console.log(err);
         // 加载文件框
         let fileName = this.bcTemplateList.find(
           (item) => item.id === templateId
@@ -1628,16 +1927,26 @@ export default {
           });
           this.$set(this.formData, "biddingAttachmentId", res.data);
           this.viewAttachmentId = res.data;
+          console.log("viewAttachmentId:", this.viewAttachmentId);
         } catch (err) {
           console.log(err);
         }
-      } else {
-        this.$set(this.formData, "contractTemplateName", templateName);
-        this.$set(this.formData, "contractTemplateId", templateId);
 
-        this.$refs.form.clearValidate("contractTemplateName");
+        //据viewAttachmentId获取文件的文档中台的编辑URL
+        if (this.viewAttachmentId) {
+          console.log('Attachment ID:', this.viewAttachmentId);
+          //获取文档中台的文档编辑URL
+          try {
+            const res = await getEditFileUrlByID({attachmentId: this.viewAttachmentId});
+            this.editFileUrl = res.data;
+            console.log("editFileUrl:", this.editFileUrl);
+          } catch (err) {
+            console.log(err);
+          }
+        } else {
+          console.warn('attachmentId 数据未正确加载');
+        }
       }
-
       this.bcTemplateVisable = false;
     },
 
@@ -1650,6 +1959,129 @@ export default {
       this.selectedTemplateId = row.id;
       //  this.attachmentId = row.attachmentId;
     },
+
+
+    /* 手动合同模板附件上传 */
+    uploadBiddingClick() {
+      showSecretRelatedTips(()=>{
+        this.$refs['uploadBidding'].$refs['upload-inner'].handleClick()
+      })
+    },
+    /* 手动合同模板附件上传 */
+    uploadContractClick() {
+      showSecretRelatedTips(()=>{
+        this.$refs['uploadContract'].$refs['upload-inner'].handleClick()
+      })
+    },
+    /* 招标文件手动上传成功 */
+    async fileSuccessBidding(res) {
+      const { url, name } = res.data;
+      try {
+        /* 保存到文件表获取返回id */
+        const res = await addAttachment({ fileName: name, fileUrl: url });
+        /* 设置新的附件返回的附件id */
+        this.$set(this.formData, "biddingAttachmentId", res.data);
+        this.$set(this.formData, "biddingTemplateName", name);
+        /* 同步更新页面的模板附件对象(附件修改按钮) */
+        if (!this.procurementSchemeTempObject.biddingTemplate) {
+          this.$set(this.procurementSchemeTempObject, 'biddingTemplate', {});
+        }
+        this.$set(this.procurementSchemeTempObject.biddingTemplate, "attachmentId", res.data);
+        this.$set(this.procurementSchemeTempObject.biddingTemplate, "fileName", name);
+        this.$set(this.procurementSchemeTempObject.biddingTemplate, "fileUrl", url);
+        this.$set(this.procurementSchemeTempObject.biddingTemplate, "templateName", this.formData.biddingTemplateName);
+        this.$set(this.procurementSchemeTempObject.biddingTemplate, "templateId", this.formData.biddingTemplateId);
+        /* 调起联想文档 */
+        this.viewAttachmentId = res.data;
+
+        //据viewAttachmentId获取文件的文档中台的编辑URL
+        if (this.viewAttachmentId) {
+          console.log('Attachment ID:', this.viewAttachmentId);
+          //获取文档中台的文档编辑URL
+          try {
+            const res = await getEditFileUrlByID({attachmentId: this.viewAttachmentId});
+            this.editFileUrl = res.data;
+            console.log("editFileUrl:", this.editFileUrl);
+          } catch (err) {
+            console.log(err);
+          }
+        } else {
+          console.warn('attachmentId 数据未正确加载');
+        }
+      } catch (err) {
+        console.log(err);
+      }
+    },
+    /* 招标文件手动上传文件删除 */
+    fileRemoveBidding() {
+      this.$set(this.formData, "biddingAttachmentId", null);
+      this.$set(this.formData, "biddingTemplateName", null);
+      this.$set(this.formData, "biddingTemplateId", null);
+      this.$set(this.procurementSchemeTempObject.biddingTemplate, "attachmentId", null);
+      this.$set(this.procurementSchemeTempObject.biddingTemplate, "fileName", null);
+      this.$set(this.procurementSchemeTempObject.biddingTemplate, "fileUrl", null);
+      this.$set(this.procurementSchemeTempObject.biddingTemplate, "templateName", null);
+      this.$set(this.procurementSchemeTempObject.biddingTemplate, "templateId", null);
+      this.$forceUpdate();
+      /* 调起联想文档 */
+      this.viewAttachmentId = null;
+      this.editFileUrl = ""; //删除文档后，文档中台的文档编辑URL设为空
+    },
+    /* 合同模板文件手动上传成功 */
+    async fileSuccessContract(res) {
+      const { url, name } = res.data;
+      try {
+        /* 保存到文件表获取返回id */
+        const res = await addAttachment({ fileName: name, fileUrl: url });
+        /* 设置新的附件返回的附件id */
+        this.$set(this.formData, "contractAttachmentId", res.data);
+        this.$set(this.formData, "contractTemplateName", name);
+        /* 同步更新页面的模板附件对象(附件修改按钮) */
+        if (!this.procurementSchemeTempObject.contractTemplate) {
+          this.$set(this.procurementSchemeTempObject, 'contractTemplate', {});
+        }
+        this.$set(this.procurementSchemeTempObject.contractTemplate, "attachmentId", res.data);
+        this.$set(this.procurementSchemeTempObject.contractTemplate, "fileName", name);
+        this.$set(this.procurementSchemeTempObject.contractTemplate, "fileUrl", url);
+        this.$set(this.procurementSchemeTempObject.contractTemplate, "templateName", this.formData.contractTemplateName);
+        this.$set(this.procurementSchemeTempObject.contractTemplate, "templateId", this.formData.contractTemplateId);
+        /* 调起联想文档 */
+        this.viewAttachmentId = res.data;
+
+        //据viewAttachmentId获取文件的文档中台的编辑URL
+        if (this.viewAttachmentId) {
+          console.log('Attachment ID:', this.viewAttachmentId);
+          //获取文档中台的文档编辑URL
+          try {
+            const res = await getEditFileUrlByID({attachmentId: this.viewAttachmentId});
+            this.editFileUrl = res.data;
+            console.log("editFileUrl:", this.editFileUrl);
+          } catch (err) {
+            console.log(err);
+          }
+        } else {
+          console.warn('attachmentId 数据未正确加载');
+        }
+      } catch (err) {
+        console.log(err);
+      }
+    },
+    /* 合同模板手动上传文件删除 */
+    fileRemoveContract() {
+      this.$set(this.formData, "contractAttachmentId", null);
+      this.$set(this.formData, "contractTemplateName", null);
+      this.$set(this.formData, "contractTemplateId", null);
+      this.$set(this.procurementSchemeTempObject.contractTemplate, "attachmentId", null);
+      this.$set(this.procurementSchemeTempObject.contractTemplate, "fileName", null);
+      this.$set(this.procurementSchemeTempObject.contractTemplate, "fileUrl", null);
+      this.$set(this.procurementSchemeTempObject.contractTemplate, "templateName", null);
+      this.$set(this.procurementSchemeTempObject.contractTemplate, "templateId", null);
+      this.$forceUpdate();
+      /* 调起联想文档 */
+      this.viewAttachmentId = null;
+      this.editFileUrl="";
+    },
+
     handleKeydown(event) {
       if (event.key === "Enter") {
         this.handleQuery();
@@ -1665,10 +2097,10 @@ export default {
           procurementScheme,
           procurementSchemeBidding,
           contractPlanList,
-          approveNodeInfos,
-          approveLists,
-          contractSplitIdList,
+          contractSplitIdList
         } = res.data;
+        /* 采购方案文件，通过getSchemeDetail方法请求procurementScheme/detail?id=获取的数据 */
+        this.procurementSchemeTempObject = procurementSchemeBidding;
         this.contractList = contractPlanList;
         const {
           procurementSchemeName,
@@ -1689,7 +2121,10 @@ export default {
           priceType,
           priceTypeText,
           projectDeptId,
+          state,
         } = procurementScheme;
+        /* 本方案审批状态 */
+        this.state = state;
         const {
           bidDeadline,
           bidContactPerson,
@@ -1717,6 +2152,19 @@ export default {
         this.$set(this.formData, "financeConfirmId", financeConfirmId);
         this.$set(this.formData, "financeConfirmName", financeConfirmName);
 
+        this.formData.fileListBidding = [{
+          name: procurementSchemeBidding.biddingTemplate.fileName,  // 文件名
+          url: procurementSchemeBidding.biddingTemplate.fileUrl,  // 文件的 URL（如果是已上传的文件）
+          status: 'success',  // 上传状态，可以是 'success' | 'failure' | 'uploading'
+          uid: Date.now()  // 文件的唯一标识符
+        }];
+        this.formData.fileListContract = [{
+          name: procurementSchemeBidding.contractTemplate.fileName,  // 文件名
+          url: procurementSchemeBidding.contractTemplate.fileUrl,  // 文件的 URL（如果是已上传的文件）
+          status: 'success',  // 上传状态，可以是 'success' | 'failure' | 'uploading'
+          uid: Date.now()  // 文件的唯一标识符
+        }];
+
         this.formData.countingTypeText = countingTypeText;
         this.formData.procurementPlanType = procurementPlanType;
         this.formData.paymentTypeText = paymentTypeText;
@@ -1727,11 +2175,12 @@ export default {
 
         this.formData.evaluationTemplateId = evaluationTemplate.templateId;
         this.formData.templateName = evaluationTemplate.templateName;
-        this.formData.biddingAttachmentId = biddingTemplate.attachmentId;
-        this.formData.biddingTemplateName = biddingTemplate.templateName;
-        this.formData.biddingTemplateId = biddingTemplate.templateId;
-        this.formData.contractTemplateId = contractTemplate.templateId;
-        this.formData.contractTemplateName = contractTemplate.templateName;
+        this.formData.biddingAttachmentId = !biddingTemplate?null:biddingTemplate.attachmentId;
+        this.formData.biddingTemplateName = !biddingTemplate?null:biddingTemplate.templateName;
+        this.formData.biddingTemplateId = !biddingTemplate?null:biddingTemplate.templateId;
+        this.formData.contractAttachmentId = !contractTemplate?null:contractTemplate.attachmentId;
+        this.formData.contractTemplateId = !contractTemplate?null:contractTemplate.templateId;
+        this.formData.contractTemplateName = !contractTemplate?null:contractTemplate.templateName;
         this.formData.procurementSchemeId = procurementSchemeId;
         this.formData.procurementSchemeBiddingId = procurementSchemeBiddingId;
         this.formData.procurementSchemeCode = procurementSchemeCode;
@@ -1739,10 +2188,26 @@ export default {
         this.formData.procurementOfficerName = procurementOfficerName;
         this.formData.procurementOfficer = procurementOfficer;
         this.procurementPlanIds = contractSplitIdList;
+        console.log('%c👽 this.procurementPlanIds', `font-size: 20px;background-color: #f00;`, this.procurementPlanIds);
 
         console.log(this.formData, "this.formData-this.formData~");
       } catch (err) {
         console.log(err);
+      }
+    },
+    async activeTabListen(newTab) {
+      if (newTab === "generalTemplate") {
+        this.bcTemplateQuery.switchTemplateType = "1";
+      } else {
+        this.bcTemplateQuery.switchTemplateType = "2";
+      }
+      const res = await getSwitchPageList(this.bcTemplateQuery);
+      if (newTab === "generalTemplate") {
+        this.bcTemplateList = res.data.rows;
+        this.generalTemplateTotal = res.data.total;
+      } else {
+        this.bcTemplateList = res.data.rows;
+        this.reusableTemplateTotal = res.data.total;
       }
     },
   },
@@ -1753,6 +2218,16 @@ export default {
           this.$router.replace("/procurement/scheme");
         }
       },
+    },
+    /* 招标文件合同模板弹窗显示隐藏监听 */
+    bcTemplateVisable(val) {
+      /* 如果弹窗隐藏，重置分页数据 */
+      if(!val){
+        this.bcTemplateQuery.pageNumber = 1;
+        this.bcTemplateQuery.pageSize = 10;
+        this.reusableTemplateTotal = 0;
+        this.generalTemplateTotal = 0;
+      }
     },
     async activeTab(newTab) {
       if (newTab === "generalTemplate") {

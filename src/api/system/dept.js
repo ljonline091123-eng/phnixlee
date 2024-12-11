@@ -50,3 +50,16 @@ export function delDept(deptId) {
     method: 'delete'
   })
 }
+
+/**
+ * 根据单位id查询对应的二级单位
+ * @param deptId
+ * @returns {*}
+ */
+export function getTwoLevelDeptByDeptId(deptId) {
+  return request({
+    url: '/system/dept/getTwoLevelDeptByDeptId1',
+    method: 'get',
+    params: {deptId}
+  })
+}

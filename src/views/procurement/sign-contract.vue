@@ -248,79 +248,82 @@
               >
             </div>
 
-            <div
-              v-else-if="
-                Number(scope.row.isOperate) === 1 &&
-                Number(scope.row.agreementState) === 3
-              "
-            >
-              <el-button
-                type="text"
-                @click="
-                  pushToVendor(
-                    scope.row.id,
-                    scope.row.agreementName,
-                    scope.row.partyBName
-                  )
-                "
-                icon="el-icon-s-promotion"
-                size="small"
-                >推送至供应商</el-button
-              >
-            </div>
-            <div
-              v-else-if="
-                Number(scope.row.isOperate) === 1 &&
-                Number(scope.row.agreementState) === 7
-              "
-            >
-              <el-button
-                type="text"
-                @click="
-                  pushToSignPlatform(
-                    scope.row.id,
-                    scope.row.agreementName,
-                    scope.row.partyADeptId
-                  )
-                "
-                icon="el-icon-s-promotion"
-                size="small"
-                >推送至电子签章平台</el-button
-              >
-            </div>
-            <div
-              v-else-if="
-                Number(scope.row.isOperate) === 1 &&
-                Number(scope.row.agreementState) === 9
-              "
-            >
-              <el-button
-                type="text"
-                @click="toSignAgreement(scope.row.id)"
-                icon="el-icon-paperclip"
-                size="small"
-                >签署</el-button
-              >
-            </div>
-            <div
-              v-else-if="
-                Number(scope.row.isOperate) === 1 &&
-                Number(scope.row.agreementState) === 10
-              "
-            >
-              <el-button
-                type="text"
-                @click="
-                  toCancelledSignAgreementDialog(
-                    scope.row.id,
-                    scope.row.agreementName
-                  )
-                "
-                icon="el-icon-delete"
-                size="small"
-                >作废签署合同</el-button
-              >
-            </div>
+<!--            -->
+<!--            <div-->
+<!--              v-else-if="-->
+<!--                Number(scope.row.isOperate) === 1 &&-->
+<!--                Number(scope.row.agreementState) === 3-->
+<!--              "-->
+<!--            >-->
+<!--              <el-button-->
+<!--                type="text"-->
+<!--                @click="-->
+<!--                  pushToVendor(-->
+<!--                    scope.row.id,-->
+<!--                    scope.row.agreementName,-->
+<!--                    scope.row.partyBName-->
+<!--                  )-->
+<!--                "-->
+<!--                icon="el-icon-s-promotion"-->
+<!--                size="small"-->
+<!--                >推送至供应商</el-button-->
+<!--              >-->
+<!--            </div>-->
+<!--            <div-->
+<!--              v-else-if="-->
+<!--                Number(scope.row.isOperate) === 1 &&-->
+<!--                Number(scope.row.agreementState) === 7-->
+<!--              "-->
+<!--            >-->
+<!--              <el-button-->
+<!--                type="text"-->
+<!--                @click="-->
+<!--                  pushToSignPlatform(-->
+<!--                    scope.row.id,-->
+<!--                    scope.row.agreementName,-->
+<!--                    scope.row.partyADeptId-->
+<!--                  )-->
+<!--                "-->
+<!--                icon="el-icon-s-promotion"-->
+<!--                size="small"-->
+<!--                >推送至电子签章平台</el-button-->
+<!--              >-->
+<!--            </div>-->
+<!--            <div-->
+<!--              v-else-if="-->
+<!--                Number(scope.row.isOperate) === 1 &&-->
+<!--                Number(scope.row.agreementState) === 9-->
+<!--              "-->
+<!--            >-->
+<!--              <el-button-->
+<!--                type="text"-->
+<!--                @click="toSignAgreement(scope.row.id)"-->
+<!--                icon="el-icon-paperclip"-->
+<!--                size="small"-->
+<!--                >签署</el-button-->
+<!--              >-->
+<!--            </div>-->
+<!--            <div-->
+<!--              v-else-if="-->
+<!--                Number(scope.row.isOperate) === 1 &&-->
+<!--                Number(scope.row.agreementState) === 10-->
+<!--              "-->
+<!--            >-->
+<!--              <el-button-->
+<!--                type="text"-->
+<!--                @click="-->
+<!--                  toCancelledSignAgreementDialog(-->
+<!--                    scope.row.id,-->
+<!--                    scope.row.agreementName-->
+<!--                  )-->
+<!--                "-->
+<!--                icon="el-icon-delete"-->
+<!--                size="small"-->
+<!--                >作废签署合同</el-button-->
+<!--              >-->
+<!--            </div>-->
+
+
 
             <span v-else>-</span>
           </template>
@@ -769,233 +772,233 @@
               align="center"
               label="合同价"
             >
-              <el-table-column
-                label="签订量"
-                align="center"
-                prop="signCount"
-                width="150"
-                :key="'signCount'"
-              >
-                <template slot-scope="scope">
-                  <el-form-item
-                    label-width="0"
-                    :prop="
-                    'vendorBiddingListQuotationList.' +
-                    scope.$index +
-                    '.signCount'
-                  "
-                    :rules="[
-                    {
-                      required: true,
-                      trigger: 'blur',
-                      message: '请输入签订量',
-                    },
-                    {
-                      pattern: /^(?:[1-9]\d*|0)(\.\d+)?$/,
-                      trigger: 'blur',
-                      message: '请输入正确的值',
-                    },
-                    {
-                      pattern: /^\d+(\.\d{0,4})?$/,
-                      trigger: 'blur',
-                      message: '请输入小于4位的小数',
-                    },
-                  ]"
-                  >
-                    <el-input
-                      v-model="scope.row.signCount"
-                      placeholder="请输入"
-                      v-thousandth
-                    />
-                  </el-form-item>
-                </template>
-              </el-table-column>
-              <el-table-column
-                label="签订含税单价(元)"
-                align="center"
-              prop="signUnitPriceInclTax"
-                width="150"
-                :key="'signUnitPriceInclTax'"
-              >
-                <template slot-scope="scope">
-                  <el-form-item
-                    label-width="0"
-                    :prop="
-                    'vendorBiddingListQuotationList.' +
-                    scope.$index +
-                    '.signUnitPriceInclTax'
-                  "
-                    :rules="[
-                    {
-                      required: true,
-                      trigger: 'blur',
-                      message: '请输入签订含税单价',
-                    },
-                    {
-                      pattern: /^(?:[1-9]\d*|0)(\.\d+)?$/,
-                      trigger: 'blur',
-                      message: '请输入正确的值',
-                    },
-                    {
-                      pattern: /^\d+(\.\d{0,4})?$/,
-                      trigger: 'blur',
-                      message: '请输入小于4位的小数',
-                    },
-                  ]"
-                  >
-                    <el-input
-                      v-model="scope.row.signUnitPriceInclTax"
-                      placeholder="请输入"
-                      v-thousandth
-                    />
-                  </el-form-item>
-                </template>
-              </el-table-column>
-              <el-table-column
-                label="签订不含税单价(元)"
-                align="right"
-                width="170"
-              >
-                <template slot-scope="scope">
-                  {{
-                    countComputed(
-                      scope.row,
-                      scope.row.signUnitPriceInclTax,
-                      scope.row.taxRate,
-                      scope.row.signCount,
-                      "excludingTax"
-                    )
-                  }}
-                </template>
-              </el-table-column>
-              <el-table-column label="含税总价(元)" align="right" width="150">
-                <template slot-scope="scope">
-                  {{
-                    countComputed(
-                      scope.row,
-                      scope.row.signUnitPriceInclTax,
-                      scope.row.taxRate,
-                      scope.row.signCount,
-                      "taxIncludedTotal"
-                    )
-                  }}
-                </template>
-              </el-table-column>
-              <el-table-column
-                label="不含税总价(元)"
-                align="right"
-                width="150"
-              >
-                <template slot-scope="scope">
-                  {{
-                    countComputed(
-                      scope.row,
-                      scope.row.signUnitPriceInclTax,
-                      scope.row.taxRate,
-                      scope.row.signCount
-                    )
-                  }}
-                </template>
-              </el-table-column>
-            </el-table-column>
+                    <el-table-column
+                      label="签订量"
+                      align="center"
+                      prop="signCount"
+                      width="150"
+                      :key="'signCount'"
+                    >
+                      <template slot-scope="scope">
+                        <el-form-item
+                          label-width="0"
+                          :prop="
+                          'vendorBiddingListQuotationList.' +
+                          scope.$index +
+                          '.signCount'
+                        "
+                          :rules="[
+                          {
+                            required: true,
+                            trigger: 'blur',
+                            message: '请输入签订量',
+                          },
+                          {
+                            pattern: /^(?:[1-9]\d*|0)(\.\d+)?$/,
+                            trigger: 'blur',
+                            message: '请输入正确的值',
+                          },
+                          {
+                            pattern: /^\d+(\.\d{0,4})?$/,
+                            trigger: 'blur',
+                            message: '请输入小于4位的小数',
+                          },
+                        ]"
+                        >
+                          <el-input
+                            v-model="scope.row.signCount"
+                            placeholder="请输入"
+                            v-thousandth
+                          />
+                        </el-form-item>
+                      </template>
+                    </el-table-column>
+                    <el-table-column
+                      label="签订含税单价(元)"
+                      align="center"
+                    prop="signUnitPriceInclTax"
+                      width="150"
+                      :key="'signUnitPriceInclTax'"
+                    >
+                      <template slot-scope="scope">
+                        <el-form-item
+                          label-width="0"
+                          :prop="
+                          'vendorBiddingListQuotationList.' +
+                          scope.$index +
+                          '.signUnitPriceInclTax'
+                        "
+                          :rules="[
+                          {
+                            required: true,
+                            trigger: 'blur',
+                            message: '请输入签订含税单价',
+                          },
+                          {
+                            pattern: /^(?:[1-9]\d*|0)(\.\d+)?$/,
+                            trigger: 'blur',
+                            message: '请输入正确的值',
+                          },
+                          {
+                            pattern: /^\d+(\.\d{0,4})?$/,
+                            trigger: 'blur',
+                            message: '请输入小于4位的小数',
+                          },
+                        ]"
+                        >
+                          <el-input
+                            v-model="scope.row.signUnitPriceInclTax"
+                            placeholder="请输入"
+                            v-thousandth
+                          />
+                        </el-form-item>
+                      </template>
+                    </el-table-column>
+                    <el-table-column
+                      label="签订不含税单价(元)"
+                      align="right"
+                      width="170"
+                    >
+                      <template slot-scope="scope">
+                        {{
+                          countComputed(
+                            scope.row,
+                            scope.row.signUnitPriceInclTax,
+                            scope.row.taxRate,
+                            scope.row.signCount,
+                            "excludingTax"
+                          )
+                        }}
+                      </template>
+                    </el-table-column>
+                    <el-table-column label="含税总价(元)" align="right" width="150">
+                      <template slot-scope="scope">
+                        {{
+                          countComputed(
+                            scope.row,
+                            scope.row.signUnitPriceInclTax,
+                            scope.row.taxRate,
+                            scope.row.signCount,
+                            "taxIncludedTotal"
+                          )
+                        }}
+                      </template>
+                    </el-table-column>
+                    <el-table-column
+                      label="不含税总价(元)"
+                      align="right"
+                      width="150"
+                    >
+                      <template slot-scope="scope">
+                        {{
+                          countComputed(
+                            scope.row,
+                            scope.row.signUnitPriceInclTax,
+                            scope.row.taxRate,
+                            scope.row.signCount
+                          )
+                        }}
+                      </template>
+                    </el-table-column>
 
-            <el-table-column
-              label="租赁方式"
-              align="right"
-              prop="rentModeText"
-              :key="'rentModeText'"
-              v-if="procurementType == 2 || procurementType == 3"
-            />
-            <el-table-column
-              label="租赁时间"
-              align="right"
-              prop="rentTimeText"
-              width="150"
-              :key="'rentTimeText'"
-              v-if="procurementType == 2 || procurementType == 3"
-            >
-              <template slot-scope="scope">
-                {{ scope.row.rentTimeText || "-" }}
-              </template>
+                    <el-table-column
+                      label="租赁方式"
+                      align="right"
+                      prop="rentModeText"
+                      :key="'rentModeText'"
+                      v-if="procurementType == 2 || procurementType == 3"
+                    />
+                    <el-table-column
+                      label="租赁时间"
+                      align="right"
+                      prop="rentTimeText"
+                      width="150"
+                      :key="'rentTimeText'"
+                      v-if="procurementType == 2 || procurementType == 3"
+                    >
+                      <template slot-scope="scope">
+                        {{ scope.row.rentTimeText || "-" }}
+                      </template>
+                    </el-table-column>
+                    <el-table-column
+                      label="租赁数量"
+                      align="right"
+                      prop="rentQuantityText"
+                      width="150"
+                      :key="'rentQuantityText'"
+                      v-if="procurementType == 2 || procurementType == 3"
+                    >
+                      <template slot-scope="scope">
+                        {{ scope.row.rentQuantityText || "-" }}
+                      </template>
+                    </el-table-column>
+                    <el-table-column
+                      label="工作量"
+                      align="right"
+                      prop="countText"
+                      width="150"
+                      :key="'countText'"
+                      v-if="procurementType == 2 || procurementType == 3"
+                    />
             </el-table-column>
-            <el-table-column
-              label="租赁数量"
-              align="right"
-              prop="rentQuantityText"
-              width="150"
-              :key="'rentQuantityText'"
-              v-if="procurementType == 2 || procurementType == 3"
-            >
-              <template slot-scope="scope">
-                {{ scope.row.rentQuantityText || "-" }}
-              </template>
-            </el-table-column>
-            <el-table-column
-              label="工作量"
-              align="right"
-              prop="countText"
-              width="150"
-              :key="'countText'"
-              v-if="procurementType == 2 || procurementType == 3"
-            />
-            <el-table-column
-              label="基价(元)"
-              align="right"
-              prop="basePriceText"
-              width="150"
-              v-if="priceType == 2"
-              :key="'basePriceText'"
-            />
-            <el-table-column
-              label="浮动价(元)"
-              align="right"
-              width="150"
-              prop="floatingPriceText"
-              v-if="priceType == 2"
-              :key="'floatingPriceText'"
-            />
-            <el-table-column
-              label="装卸费"
-              align="right"
-              width="150"
-              prop="unloadingFeeText"
-              :key="'unloadingFeeText'"
-              v-if="priceType == 2"
-            />
             <el-table-column
               header-align="center"
               align="center"
               label="中标价"
             >
-              <el-table-column
-                label="含税单价(元)"
-                align="right"
-                width="150"
-                prop="taxUnitPriceText"
-                :key="'taxUnitPriceText'"
-                v-if="subjectMatter != 1 && subjectMatter != 2"
-              />
-              <el-table-column
-                label="不含税单价(元)"
-                align="right"
-                width="150"
-                prop="notTaxUnitPriceText"
-                :key="'notTaxUnitPriceText'"
-                v-if="subjectMatter != 1 && subjectMatter != 2"
-              />
-              <el-table-column
-                label="含税总价(元)"
-                align="right"
-                width="150"
-                prop="taxPriceText"
-              />
-              <el-table-column
-                label="不含税总价(元)"
-                align="right"
-                width="150"
-                prop="notTaxPriceText"
-              />
-              <el-table-column label="税率(%)" align="center" prop="taxRate" />
+                <el-table-column
+                  label="基价(元)"
+                  align="right"
+                  prop="basePriceText"
+                  width="150"
+                  v-if="priceType == 2"
+                  :key="'basePriceText'"
+                />
+                <el-table-column
+                  label="浮动价(元)"
+                  align="right"
+                  width="150"
+                  prop="floatingPriceText"
+                  v-if="priceType == 2"
+                  :key="'floatingPriceText'"
+                />
+                <el-table-column
+                  label="装卸费"
+                  align="right"
+                  width="150"
+                  prop="unloadingFeeText"
+                  :key="'unloadingFeeText'"
+                  v-if="priceType == 2"
+                />
+                  <el-table-column
+                    label="含税单价(元)"
+                    align="right"
+                    width="150"
+                    prop="taxUnitPriceText"
+                    :key="'taxUnitPriceText'"
+                    v-if="subjectMatter != 1 && subjectMatter != 2"
+                  />
+                  <el-table-column
+                    label="不含税单价(元)"
+                    align="right"
+                    width="150"
+                    prop="notTaxUnitPriceText"
+                    :key="'notTaxUnitPriceText'"
+                    v-if="subjectMatter != 1 && subjectMatter != 2"
+                  />
+                  <el-table-column
+                    label="含税总价(元)"
+                    align="right"
+                    width="150"
+                    prop="taxPriceText"
+                  />
+                  <el-table-column
+                    label="不含税总价(元)"
+                    align="right"
+                    width="150"
+                    prop="notTaxPriceText"
+                  />
+                  <el-table-column label="税率(%)" align="center" prop="taxRate" />
             </el-table-column>
 
             <el-table-column
@@ -1038,60 +1041,60 @@
       </span>
     </el-dialog>
 
-    <el-dialog
-      title="推送至电子签章平台"
-      :visible.sync="pushSignDialog"
-      width="600px"
-      @closed="clearPushSignFormData"
-    >
-      <span
-        style="
-          font-size: 16px;
-          line-height: 30px;
-          text-align: center;
-          margin-bottom: 25px;
-          display: block;
-        "
-        >{{ pushSignTitle }}</span
-      >
-      <el-form
-        :model="pushSignFormData"
-        ref="pushSignForm"
-        :rules="pushSignFormRules"
-      >
-        <el-form-item label="签署人：" prop="partyAUserId">
-          <el-select
-            v-model="pushSignFormData.partyAUserId"
-            placeholder="请选择"
-            filterable
-          >
-            <el-option
-              v-for="item in partyAUserList"
-              :key="item.userId"
-              :label="item.nickName"
-              :value="item.userId"
-            >
-            </el-option>
-          </el-select>
-        </el-form-item>
-      </el-form>
-      <div slot="footer" class="dialog-footer">
-        <el-button @click="pushSignDialog = false">取 消</el-button>
-        <el-button
-          type="primary"
-          @click="toPushSignPlatform"
-          :loading="pushSignFormSubBtn"
-          >{{ pushSignFormSubBtn ? "推送中..." : "推 送" }}</el-button
-        >
-      </div>
-    </el-dialog>
+<!--    <el-dialog-->
+<!--      title="推送至电子签章平台"-->
+<!--      :visible.sync="pushSignDialog"-->
+<!--      width="600px"-->
+<!--      @closed="clearPushSignFormData"-->
+<!--    >-->
+<!--      <span-->
+<!--        style="-->
+<!--          font-size: 16px;-->
+<!--          line-height: 30px;-->
+<!--          text-align: center;-->
+<!--          margin-bottom: 25px;-->
+<!--          display: block;-->
+<!--        "-->
+<!--        >{{ pushSignTitle }}</span-->
+<!--      >-->
+<!--      <el-form-->
+<!--        :model="pushSignFormData"-->
+<!--        ref="pushSignForm"-->
+<!--        :rules="pushSignFormRules"-->
+<!--      >-->
+<!--        <el-form-item label="签署人：" prop="partyAUserId">-->
+<!--          <el-select-->
+<!--            v-model="pushSignFormData.partyAUserId"-->
+<!--            placeholder="请选择"-->
+<!--            filterable-->
+<!--          >-->
+<!--            <el-option-->
+<!--              v-for="item in partyAUserList"-->
+<!--              :key="item.userId"-->
+<!--              :label="item.nickName"-->
+<!--              :value="item.userId"-->
+<!--            >-->
+<!--            </el-option>-->
+<!--          </el-select>-->
+<!--        </el-form-item>-->
+<!--      </el-form>-->
+<!--      <div slot="footer" class="dialog-footer">-->
+<!--        <el-button @click="pushSignDialog = false">取 消</el-button>-->
+<!--        <el-button-->
+<!--          type="primary"-->
+<!--          @click="toPushSignPlatform"-->
+<!--          :loading="pushSignFormSubBtn"-->
+<!--          >{{ pushSignFormSubBtn ? "推送中..." : "推 送" }}</el-button-->
+<!--        >-->
+<!--      </div>-->
+<!--    </el-dialog>-->
 
     <el-dialog
       title="签署合同"
       :visible.sync="signAgreementDialog"
       width="1500px"
     >
-      <iframe
+      <iframe 
         v-if="signAgreementUrl"
         :src="signAgreementUrl"
         width="100%"

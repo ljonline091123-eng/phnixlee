@@ -7,6 +7,7 @@
           type="primary"
           plain
           size="mini"
+          :disabled="isSubmit"
           @click="$router.push('/tender-procurement/expert/expert')"
           >取消</el-button
         >
@@ -318,19 +319,28 @@
                 prop="expertType"
                 class="required label-right-align"
               >
-                <el-select
-                  v-model="formData.expertType"
-                  placeholder="请选择专家类别"
-                  style="width: 100%"
-                  :disabled="isSubmit"
-                >
-                  <el-option
+<!--                <el-select-->
+<!--                  v-model="formData.expertType"-->
+<!--                  placeholder="请选择专家类别"-->
+<!--                  style="width: 100%"-->
+<!--                  :disabled="isSubmit"-->
+<!--                >-->
+<!--                  <el-option-->
+<!--                    v-for="dict in dict.type.expert_type"-->
+<!--                    :key="dict.value"-->
+<!--                    :label="dict.label"-->
+<!--                    :value="dict.value"-->
+<!--                  ></el-option>-->
+<!--                </el-select>-->
+
+                <el-checkbox-group v-model="expertTypeList" :disabled="true">
+                  <el-checkbox
                     v-for="dict in dict.type.expert_type"
+                    :label="dict.value"
                     :key="dict.value"
-                    :label="dict.label"
-                    :value="dict.value"
-                  ></el-option>
-                </el-select>
+                  >{{ dict.label }}</el-checkbox
+                  >
+                </el-checkbox-group>
               </el-form-item>
             </el-col>
             <el-col :span="16" class="grid-cell">
@@ -339,17 +349,16 @@
                 prop="businessType"
                 class="required label-right-align"
               >
-                <el-radio-group
-                  v-model="formData.businessType"
+                <el-checkbox-group v-model="businessTypeList"
                   :disabled="isSubmit"
                 >
-                  <el-radio
+                  <el-checkbox
                     v-for="dict in dict.type.expert_business_type"
                     :key="dict.value"
                     :label="dict.value"
-                    >{{ dict.label }}</el-radio
+                    >{{ dict.label }}</el-checkbox
                   >
-                </el-radio-group>
+                </el-checkbox-group>
               </el-form-item>
             </el-col>
           </el-row>
@@ -365,6 +374,7 @@
                   :rows="4"
                   placeholder="请输入内容"
                   v-model="formData.professionResume"
+                  :disabled="isSubmit"
                 >
                 </el-input>
               </el-form-item>
@@ -386,7 +396,7 @@
                   :on-remove="fileRemove"
                   :on-preview="handlePreview"
                 >
-                  <el-button size="small" type="primary">点击上传</el-button>
+                  <el-button size="small" type="primary" :disabled="isSubmit">点击上传</el-button>
                 </el-upload>
               </el-form-item>
             </el-col>
@@ -529,6 +539,8 @@ export default {
       },
       isSubmit: false,
       uploadFileUrl,
+      expertTypeList:[],
+      businessTypeList:[],
     };
   },
   created() {
@@ -648,6 +660,8 @@ export default {
         this.formData=data
         this.formData.educationDegree=this.formData.educationDegree+""
         this.formData.expertType=data.expertType+""
+        this.expertTypeList=data.expertType.split(",");
+        this.businessTypeList=data.businessType.split(",");
         this.formData.businessType=data.businessType+""
         this.formData.state=data.state+""
         if(data.registeredCertificate){
@@ -661,6 +675,7 @@ export default {
     //保存
     saveForm(formName){
       this.isSubmit = true;
+      this.formData.expertType=this.expertTypeList.join(",");
       this.$refs[formName].validate(async (valid) => {
         if (valid) {
           console.log(this.formData, "this.formData");

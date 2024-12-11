@@ -91,7 +91,7 @@
               <el-button
                 type="primary"
                 size="mini"
-                v-if="!scheme.calibrationAttachmentList"
+                v-if="!scheme.calibrationAttachmentList && !shouldDisableButton"
                 @click="showSecretTips"
                 style="margin-top: 8px"
               >上传</el-button
@@ -167,6 +167,18 @@
           align="center"
         />
         <el-table-column label="序号" type="index" width="50" align="center" />
+        <el-table-column
+          prop="sureBid"
+          label="确定中标"
+          align="center"
+          v-if="shouldDisableButton"
+        >
+          <template #default="{ row }">
+            <span :style="{ color: row.sureBid === 1 ? 'red' : 'black' }">
+              {{ row.sureBid === 1 ? '中标' : '未中标' }}
+            </span>
+          </template>
+        </el-table-column>
         <el-table-column
           label="中标候选人"
           width="200"
@@ -483,12 +495,19 @@
       :visible.sync="templateDialogVisible"
       width="80%"
     >
-      <FileModule
+      <!-- <FileModule
         :attachmentId="
           scheme.biddingTemplate && scheme.biddingTemplate.attachmentId
         "
         height="600px"
-      />
+      /> -->
+      <iframe allowfullscreen="true"
+        v-if="scheme.biddingTemplate"
+        :src= this.viewFileUrl
+        width="100%"
+        height="700px"
+        frameborder="0"
+      ></iframe>
     </el-dialog>
     <!-- 定标审批流程详情 -->
     <el-dialog
@@ -604,6 +623,9 @@ import PageTitle from "@/components/PageTitle/index.vue";
 import { uploadFileUrl } from "@/utils/const";
 import BackBidDetail from "./back-bid-detail.vue";
 import {showSecretRelatedTips} from "@/utils/MyUtils";
+import { getViweFileURL } from "@/api/template/file";
+import Vue from 'vue'
+const vm = new Vue();
 export default {
   name: "define-bid",
   props: {
@@ -646,6 +668,7 @@ export default {
   },
   data() {
     return {
+      viewFileUrl :"",  //预览招标文件url
       procurementScheme: {},
       isSubmit: false,
       evaluateList: [],
@@ -692,6 +715,7 @@ export default {
 
   created() {
     this.getBiddingQuotationList();
+    this.getbiddingTemplate();
   },
   // mounted() {
   //   this.$nextTick(() => {
@@ -725,6 +749,29 @@ export default {
   // },
 
   methods: {
+    //获取招标文件的预览url
+    async getbiddingTemplate(){
+      //解构biddingTemplate，获取招标文件的属性
+      if (this.scheme && this.scheme.biddingTemplate) {
+        const { attachmentId = '', fileName = '', fileUrl = '' } = this.scheme.biddingTemplate;
+        console.log('Attachment ID:', attachmentId);
+        console.log('File Name:', fileName);
+        console.log('File URL:', fileUrl);
+        //获取文档中台的文档编辑URL
+        try {
+          const query1 = { fileName: fileName, fileUrl: fileUrl };
+          console.log('query1:', query1);
+          const res = await getViweFileURL(query1);
+          this.viewFileUrl = res.data;
+          console.log("viewFileUrl:",this.viewFileUrl);
+        } catch (err) {
+          console.log(err);
+        }
+      } else {
+        console.warn('biddingTemplate 数据未正确加载');
+      }
+    },
+
     formatterUpProcurementScheme(row) {
       if(row.scheme && row.scheme.procurementScheme && row.scheme.procurementScheme.ceilingPrice){
         return Number(row?.quotationDataVOList[row.quotationDataVOList.length - 1]?.taxPricePattern || 0) > Number(row.scheme?.procurementScheme?.ceilingPrice) ? "是" : "否";
@@ -855,19 +902,51 @@ export default {
       //   new Map(mergedList.map((item) => [item.id, item])).values()
       // );
       // this.evaluateList = uniqueList;
-      try {
-        const res = await calibration({
-          calibrationVOList: this.evaluateList,
-          detailUrl: detailUrl,
-          calibrationDocAttachList: this.uploadAttachmentList,
+
+
+      let vendorNames = this.evaluateList.filter(obj => obj.sureBid === 1 && this.formatterUpProcurementScheme(obj) === '是').map(obj => '<br>&nbsp;&nbsp;'+obj.vendorName).toString().replace(/,/g, '');
+      console.log('%c👽 超出上限价的供应商： ', `font-size: 20px;background-color: #f00;`, vendorNames);
+      if(vendorNames!==null&&vendorNames!==undefined&&vendorNames!==''&&vendorNames.length>0){
+        vm.$confirm('<b>您选择的供应商</b>'+vendorNames+'<br><b>投标已经超上限价，是否继续？</b>', '提示', {
+          confirmButtonText: '确定',
+          cancelButtonText: '取消',
+          type: 'warning',
+          dangerouslyUseHTMLString: true // 启用 HTML 支持
+        }).then(async () => {
+          try {
+            const res = await calibration({
+              calibrationVOList: this.evaluateList,
+              detailUrl: detailUrl,
+              calibrationDocAttachList: this.uploadAttachmentList,
+            });
+            this.$message.success("定标成功");
+            this.isSuccess = true;
+            this.$emit("changeState");
+          } catch (err) {
+            console.log(err);
+          }
+        }).catch(() => {
+          vm.$message({
+            type: 'info',
+            message: '已取消'
+          });
         });
-        this.$message.success("定标成功");
-        this.isSuccess = true;
-        this.$emit("changeState");
-      } catch (err) {
-        console.log(err);
+        this.isSubmit = false;
+      }else{
+        try {
+          const res = await calibration({
+            calibrationVOList: this.evaluateList,
+            detailUrl: detailUrl,
+            calibrationDocAttachList: this.uploadAttachmentList,
+          });
+          this.$message.success("定标成功");
+          this.isSuccess = true;
+          this.$emit("changeState");
+        } catch (err) {
+          console.log(err);
+        }
+        this.isSubmit = false;
       }
-      this.isSubmit = false;
     },
     getUserNames(userList) {
       if (!userList || userList.length === 0) {

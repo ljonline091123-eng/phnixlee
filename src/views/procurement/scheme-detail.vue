@@ -290,7 +290,7 @@
                   <a
                     class="link-type"
                     @click="
-                      showTemplate(procurementSchemeBidding.biddingTemplate)
+                      showTemplate(procurementSchemeBidding.biddingTemplate,'biddingTemplate')
                     "
                   >
                     {{
@@ -322,7 +322,7 @@
                   <a
                     class="link-type"
                     @click="
-                      showTemplate(procurementSchemeBidding.contractTemplate)
+                      showTemplate(procurementSchemeBidding.contractTemplate,'contractTemplate')
                     "
                     href="javascript:;"
                   >
@@ -688,13 +688,21 @@
       </div>
     </el-drawer>
 
+    //预览文件弹窗
     <el-dialog
       :title="templateDialogTitle"
       :visible.sync="templateDialogVisible"
       width="80%"
     >
-      <FileModule :attachmentId="templateAttachmentId" height="500px" />
+    <!-- <FileModule :attachmentId="templateAttachmentId" height="500px" /> -->
+      <iframe allowfullscreen="true"
+        :src= this.viewFileUrl
+        width="100%"
+        height="700px"
+        frameborder="0"
+      ></iframe>
     </el-dialog>
+
     <ApprovalForm
       :visible.sync="sanctionVisible"
       title="采购方案审批流程"
@@ -720,6 +728,7 @@
 <script>
 import { mapGetters } from "vuex";
 import { Base64 } from "js-base64";
+import { getViewAttachmentURLByID } from "@/api/template/file";
 import {
   getSchemeDetail,
   submitProcurementScheme,
@@ -759,7 +768,6 @@ export default {
       activeTabs: "base",
       contractPlanList: [],
       inventoryVisible: false,
-      inventoryList: [],
       formData: {},
       openView: false,
       title: "",
@@ -768,9 +776,14 @@ export default {
         { value: "unit2", label: "单位二" },
         { value: "unit3", label: "单位三" },
       ],
+      /* 合同模板联想文档预览 */
       templateDialogTitle: "",
       templateDialogVisible: false,
       templateAttachmentId: "",
+      /* 招标文件模板联想文档预览 */
+      templateBiddingDialogTitle: "",
+      templateBiddingDialogVisible: false,
+      templateBiddingAttachmentId: "",
       sanctionVisible: false,
       sanctionForm: {
         pass: true,
@@ -796,6 +809,8 @@ export default {
       reviewText: "",
       selectedTag: null,
       tags: ["拟同意", "同意", "请修改, 再传至我处理", "阅"],
+      //预览招标文件和合同模板的Url
+      viewFileUrl:"",
     };
   },
   components: {
@@ -907,11 +922,29 @@ export default {
     handleClose() {
       console.log("已关闭");
     },
-    showTemplate(row) {
+    //展示预览文件方法
+    async showTemplate(row,tmp) {
       this.templateDialogTitle = row.fileName + "预览";
       this.templateAttachmentId = row.attachmentId;
       this.templateDialogVisible = true;
+      console.log("this.templateAttachmentId",this.templateAttachmentId);
+
+      //获取附件的预览URL
+      if (this.templateAttachmentId) {
+        console.log('预览的Attachment ID:', this.templateAttachmentId);
+        //获取文档中台的文档编辑URL
+        try {
+          const res = await getViewAttachmentURLByID({ attachmentId: this.templateAttachmentId });
+          this.viewFileUrl = res.data;
+          console.log("viewFileUrl:",this.viewFileUrl);
+        } catch (err) {
+          console.log(err);
+        }
+      } else {
+        console.warn('attachmentId 数据未正确加载');
+      }
     },
+    //修改按钮
     goUpdate() {
       const { procurementType, id } = this.procurementScheme;
       let param = Base64.encode(

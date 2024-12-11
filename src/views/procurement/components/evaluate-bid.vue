@@ -236,6 +236,7 @@
           v-if="scheme.procurementType !== 4"
         >
           <el-table
+            ref="tableRef"
             size="small"
             :data="evaluateList"
             border
@@ -1011,6 +1012,30 @@
                         key="expertName"
                         prop="expertName"
                       />
+                      <el-table-column label="专家类别" align="center" key="expertType">
+                      <template #default="{ row }">
+                        <template v-if="checkExpertType(row)">
+                          <el-select
+                            v-model="row.expertTypeSelect"
+                            @change="handleExpertTypeChange(row)"
+                            placeholder="请选择"
+                            style="width: 100%"
+                          >
+                            <el-option
+                              v-for="dict in dict.type.expert_type"
+                              :key="dict.value"
+                              :label="dict.label"
+                              :value="dict.value"
+                            ></el-option>
+                          </el-select>
+
+                        </template>
+                        <template v-else>
+                          <!-- 渲染文本 -->
+                          {{ row.expertTypeText }}
+                        </template>
+                      </template>
+                    </el-table-column>
                       <el-table-column
                         label="手机号码"
                         align="center"
@@ -1053,13 +1078,6 @@
                           </div>
                         </template>
                       </el-table-column>
-                      <el-table-column
-                        label="专家类别"
-                        align="center"
-                        key="expertTypeText"
-                        prop="expertTypeText"
-                        v-if="foldFlagChoose"
-                      />
                       <el-table-column
                         label="专业"
                         align="center"
@@ -1380,6 +1398,7 @@ export default {
       leftSelection: [],
       rightSelection: [],
       debouncedLoadDeptOptions: null,
+      expertTypeSingle: null,
       // expertQuery: {
       //   deptIds: [],
       // },
@@ -1454,7 +1473,9 @@ export default {
         if(this.noticeDetail?.tenderNotice?.twiceQuotState === 1){
           const { id: noticeId } = this.noticeDetail?.tenderNotice || {};
           try {
-            const res = await twiceBidFinish(noticeId);
+            if(this.noticeDetail.tenderNotice.noticeStatus === 3){
+              const res = await twiceBidFinish(noticeId);
+            }
           } catch (err) {
             console.log(err);
           }
@@ -1548,6 +1569,39 @@ export default {
     searchExpert() {
       this.queryParams.pageNum = 1;
       this.getExpertList();
+    },
+    /* 移入专家校验是否多选 */
+    checkExpertType(row){
+      /* 将expertType值先保存到vue对象里面，后续还要根据这个判断来显示下拉框 */
+      if(!row.expertTypeBeforeVue){
+        row.expertTypeBeforeVue = row.expertType;
+      }
+      /* 专家类型存在多个就显示下拉框 */
+      if(row.expertTypeBeforeVue && (row.expertTypeBeforeVue).toString().includes(',')){
+        /* 如果下拉框没被选择，就清空赋值：提交前会校验是否为空 */
+        if(!row.expertTypeSelect){
+          row.expertType = null;
+        }
+        return true;
+      }else {
+        return false;
+      }
+    },
+    /* 移入专家下拉框选择监听 */
+    handleExpertTypeChange(row){
+      /* v-model绑定对象赋值 */
+      row.expertType = row.expertTypeSelect;
+      this.$set(row,"expertType",row.expertTypeSelect);
+      /* 查找符合条件的列表对象 */
+      const matchedType = this.dict.type.expert_type.find(item => item.value === row.expertTypeSelect);
+      /* 如果找到了，赋值 expertTypeText显示 */
+      if (matchedType) {
+        row.expertTypeText = matchedType.label;
+      } else {
+        /* 如果没有匹配到，可以选择清空或赋默认值 */
+        row.expertTypeText = '';
+      }
+      console.log('%c👽 row ', `font-size: 20px;background-color: #f00;`, row);
     },
     /** 确定开标人员 */
     async confirmOpenWorker() {
@@ -1666,9 +1720,7 @@ export default {
         dataToSubmit.businessTypes = Array.isArray(dataToSubmit?.businessTypes)
           ? dataToSubmit.businessTypes.join(",")
           : "";
-        dataToSubmit.expertTypes = Array.isArray(dataToSubmit?.expertTypes)
-          ? dataToSubmit.expertTypes.join(",")
-          : "";
+        dataToSubmit.expertTypes = dataToSubmit?.expertTypes;
         const res = await getExpertList(dataToSubmit);
         this.expertList = res.data.rows;
         this.expertTotal = res.data.total;
@@ -1739,15 +1791,23 @@ export default {
       const notJoinedExperts = selectedMapList.filter(
         (expert) => expert.isJoin === false
       );
+      const joinedExpertTypeIsNull = selectedMapList.filter(
+        (expert) => expert.expertType === null
+      );
 
       const adopt = joinedExperts.length >= 5 && joinedExperts.length % 2 !== 0;
 
       if (!adopt)
         return this.$message.error("请选择5名或5名以上专家并且总数为奇数");
+      if (joinedExpertTypeIsNull.length > 0){
+        return this.$message.error("还有"+joinedExpertTypeIsNull.length+"名专家未指定类别，请手动指定专家类别");
+      }
 
-      const hasTechExpert = joinedExperts.some((item) => item.expertType === 1);
-      const hasEconExpert = joinedExperts.some((item) => item.expertType === 2);
+      const hasTechExpert = joinedExperts.some((item) => item.expertType == 1);
+      const hasEconExpert = joinedExperts.some((item) => item.expertType == 2);
 
+      console.log('%c👽 hasTechExpert ', `font-size: 20px;background-color: #f00;`, hasTechExpert);
+      console.log('%c👽 hasEconExpert ', `font-size: 20px;background-color: #f00;`, hasEconExpert);
       if (!hasTechExpert || !hasEconExpert)
         return this.$message.error("评标专家必须包括经济、技术两类专家");
       const { id: schemeId } = this.scheme;
@@ -1820,8 +1880,12 @@ export default {
       });
     },
     clickTwiceBidConfButton() {
-      if (this.biddingInfoIds.length === 0){
-        return this.$message.error("请选择调价项目");
+      /* 再判断一次是否全选 */
+      const isAllSelected = this.biddingInfoIds.length === this.evaluateList.length;
+      if(!isAllSelected){
+        /* 默认自动全选 */
+        this.$refs.tableRef.toggleAllSelection();
+        return this.$message.error("开启二次调价需要全选项目");
       }
       this.dialogVisible = true
     },
