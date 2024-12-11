@@ -1,20 +1,19 @@
 const project = {
   state: {
-    project: {}
+    project:{}
   },
 
   mutations: {
     SET_PROJECT: (state, project) => {
-      state.project = project; // 更新 project
+      state.project = project
     }
   },
 
   actions: {
-    setProject({ commit }, data) {
-      console.log('%c👽👽 data ', `font-size: 20px;background-color: #f00;`, data);
-      commit('SET_PROJECT', data); // 传递 data 给 mutation
+    setProject({commit}) {
+      commit('SET_PROJECT')
     }
   }
 }
 
-export default project;
+export default project
