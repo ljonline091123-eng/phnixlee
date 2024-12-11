@@ -13,7 +13,9 @@ import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.URL;
+import java.io.UnsupportedEncodingException;
+import java.net.*;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -68,15 +70,22 @@ public class YOZOfileUtils {
      * @param targetPath 保存的目标路径
      */
     public Path downloadFile(String urlStr, Path targetPath) {
-        try (InputStream in = new URL(urlStr).openStream()) {
-            Files.copy(in, targetPath, StandardCopyOption.REPLACE_EXISTING);
+        //对urlStr的空格部分进行编码
+        try {
+            // 直接替换url里的空格为 %20
+            String encodedUrl = urlStr.replace(" ", "%20");
+            // 输出编码后的URL
+            System.out.println(encodedUrl);
 
+            InputStream in = new URL(encodedUrl.toString()).openStream();
+            Files.copy(in, targetPath, StandardCopyOption.REPLACE_EXISTING);
             System.out.println("文件已下载至: " + targetPath);
 
         } catch (IOException e) {
             System.err.println("下载文件时发生错误: " + e.getMessage());
         }
         return targetPath;
+
     }
 
     /**
