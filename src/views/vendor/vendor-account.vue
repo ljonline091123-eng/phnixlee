@@ -232,7 +232,7 @@ import {
   getPermissionButton,
   postAuditProcess,
   getLoadTaskDef,
-  getProcessLogList,
+  getProcessLogList, getOrgByUserId,
 } from "@/api/procurement/manage";
 import {
   getVendorContactList,
@@ -307,12 +307,22 @@ export default {
       try {
         this.calibrateVisible = true;
         this.calibrateLoading = true;
-        const params = {
+        let params = {
           businessId: this.businessId,
           processId: this.processId,
         };
+        let res = null;
         if (this.businessId && this.processId) {
-          const res = await getLoadTaskDef(params);
+          res = await getLoadTaskDef(params);
+        }else{
+          /* 未提交时查看流程执行流程，根据登录人id 获取流程分组 */
+          res = await getOrgByUserId(this.$store.state.user.id);
+          params = {
+            processKey: "jiantou-zhaocai:"+res.data+":ZHAOCAI_VENDOR_ADDCONTACT",
+            businessId: 8888888888,
+          };
+          res = await getLoadTaskDef(params);
+        }
           this.processInformationList = res.data;
           function getActive(nodes) {
             let allFalse = true;
@@ -329,6 +339,8 @@ export default {
             return nodes.length;
           }
           this.calibrateActive = getActive(this.processInformationList);
+
+        if (this.businessId && this.processId) {
           const response = await getProcessLogList(params);
           this.approveArr = response.data;
         }

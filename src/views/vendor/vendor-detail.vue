@@ -770,10 +770,10 @@ import {
 import { Base64 } from "js-base64";
 import BackButton from "@/components/BackButton/index.vue";
 import {
-  getPermissionButton,getPermissionButtonVendor,
-  postAuditProcess,postAuditProcessVendor,
-  getLoadTaskDef,getLoadTaskDefVendor,
-  getProcessLogList,
+  getPermissionButton, getPermissionButtonVendor,
+  postAuditProcess, postAuditProcessVendor,
+  getLoadTaskDef, getLoadTaskDefVendor,
+  getProcessLogList, getOrgByUserId,
 } from "@/api/procurement/manage";
 import ApprovalForm from "@/components/Approval/approvalForm.vue";
 import ApprovalDetailsDialog from "@/components/Approval/approvalDetailsDialog.vue";
@@ -1144,7 +1144,7 @@ export default {
       try {
         this.calibrateVisible = true;
         this.calibrateLoading = true;
-        const params = {
+        let params = {
           businessId: this.purchaserId,
           processId: this.exampleId,
         };
@@ -1152,8 +1152,34 @@ export default {
           businessId: "",
           processId: this.exampleId,
         };
+        let res = null;
         if (this.purchaserId && this.exampleId) {
-          const res = await getLoadTaskDefVendor(params);
+          res = await getLoadTaskDefVendor(params);
+        }else{
+          /* 未提交时查看流程执行流程，根据首次合作单位 获取流程分组 */
+          res = await getOrgByUserId(this.vendor.firstCooperationCompanyCode);
+          //修改
+          if (this.vendor.processType == 2) {
+            this.processKey = "jiantou-zhaocai:"+res.data+":ZHAOCAI_VENDOR_UPDATEINFO";
+          } else if (this.vendor.processType == 1) {
+            //注册
+            this.processKey = "jiantou-zhaocai:"+res.data+":ZHAOCAI_VENDOR_REGISTER";
+          } else if (this.vendor.processType == 3) {
+            //黑名单
+            this.processKey = "jiantou-zhaocai:"+res.data+":ZHAOCAI_VENDOR_MOVE_INOROUT_BLACK";
+          } else if (this.vendor.processType == 4) {
+            //修改等级
+            this.processKey = "jiantou-zhaocai:"+res.data+":ZHAOCAI_VENDOR_UPDATE_LEVEL";
+          }else{
+            //注册
+            this.processKey = "jiantou-zhaocai:"+res.data+":ZHAOCAI_VENDOR_REGISTER";
+          }
+          params = {
+            processKey: this.processKey,
+            businessId: 8888888888,
+          };
+          res = await getLoadTaskDef(params);
+        }
           this.processInformationList = res.data;
           function getActive(nodes) {
             let allFalse = true;
@@ -1170,6 +1196,8 @@ export default {
             return nodes.length;
           }
           this.calibrateActive = getActive(this.processInformationList);
+
+        if (this.purchaserId && this.exampleId) {
           const response = await getProcessLogList(getProcessLogListParams);
           this.approveArr = response.data;
         }
