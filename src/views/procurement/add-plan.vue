@@ -1315,8 +1315,13 @@ console.log("-2222--"+JSON.stringify(this.materialsLists))
                 cancelButtonText: "取消",
                 type: "warning",
               }).then(() => {
-                  // 删除数据
+              // 删除数据
               this.planList[0].children.splice(index, 1);
+              //如果删除只有一条数据了,强制设置为"拆分合约规划名称和拟签约合同承包范围"为空
+              if(this.planList[0].children.length==1){
+                this.planList[0].children[index].splitContractName=''
+                this.planList[0].children[index].contractScope=''
+              }
               // 强制Vue重新渲染
               this.$forceUpdate();
               });
@@ -1397,6 +1402,13 @@ console.log("-2222--"+JSON.stringify(this.materialsLists))
               }))
             })
           }else{
+            if(this.planList[0].children[index].splitContractName=="null"){
+                this.planList[0].children[index].splitContractName=''
+            }
+            if(this.planList[0].children[index].contractScope=="null"){
+                this.planList[0].children[index].contractScope=''
+            }
+            console.log("this.planList[0].children[index]"+JSON.stringify(this.planList[0].children[index]))
             children.push(this.planList[0].children[index])
           }
           });
