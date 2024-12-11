@@ -2,6 +2,7 @@ package com.zhaocai.business.pub.service.impl;
 
 import cn.hutool.core.collection.CollectionUtil;
 import com.zhaocai.business.common.exception.BusinessException;
+import com.zhaocai.business.manager.http.service.UnderlingSystemService;
 import com.zhaocai.business.process.service.IBPMProcessService;
 import com.zhaocai.business.pub.service.IOrganizationService;
 import com.zhaocai.business.pub.vo.res.OrganizationVO;
@@ -38,7 +39,7 @@ public class OrganizationServiceImpl implements IOrganizationService {
     private RemoteSystemService remoteSystemService;
 
     @Autowired
-    private IBPMProcessService processService;
+    private UnderlingSystemService underlingSystemService;
 
     @Override
     public List<OrganizationVO> getOriganizationTreeList() {
@@ -145,7 +146,7 @@ public class OrganizationServiceImpl implements IOrganizationService {
     public List<OrganizationVO> listOrganizationCalligraphy() {
         List<OrganizationVO>  organizationTree = new ArrayList<>();
         // 1、获取当前用户的三级组织或二级组织
-        String thridDeptId = processService.getOrgByUserId(String.valueOf(SecurityUtils.getUserId()));
+        String thridDeptId = this.getOrgByUserId(SecurityUtils.getThridOrgId());
         // 2、查询三级组织或二级组织下的公司
         if(null != thridDeptId){
             List<SysDept> deptList = remoteSystemService.getDeptByThridDeptIdNoBM(thridDeptId,SecurityConstants.INNER);
@@ -171,6 +172,21 @@ public class OrganizationServiceImpl implements IOrganizationService {
 //        }
 
         return organizationTree;
+    }
+
+    private String getOrgByUserId(String s) {
+        String result = null;
+        /* 根据组织获取对应的二级单位 */
+        String orgTwo = underlingSystemService.getL2OrgByOrgId(s);
+        /* 获取三级单位 */
+        String orgThree = underlingSystemService.getL3OrgByOrgId(s);
+        if (orgThree != null) {
+            result = orgThree;
+        } else if (orgTwo != null) {
+            /* 赋值使用二级单位 */
+            result = orgTwo;
+        }
+        return result;
     }
 
     /**

@@ -1,9 +1,6 @@
 package com.zhaocai.system.service.impl;
 
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -552,9 +549,10 @@ public class SysDeptServiceImpl extends ServiceImpl<SysDeptMapper, SysDept> impl
                 .eq(SysDept::getThridDeptId, thridDeptId));
         if (!ObjectUtils.isEmpty(sysDept)){
             String ancestors = sysDept.getAncestors() + "," + sysDept.getDeptId();
+            List<String> thridOrgTypes = Arrays.asList("X", "BM");
             sysDepts = super.list(new LambdaQueryWrapper<SysDept>()
                     .likeRight(SysDept::getAncestors, ancestors)
-                    .notIn(SysDept::getThridOrgType, "X,BM"));
+                    .notIn(SysDept::getThridOrgType, thridOrgTypes));
             sysDepts.add(0, sysDept);
         }
         return sysDepts;
