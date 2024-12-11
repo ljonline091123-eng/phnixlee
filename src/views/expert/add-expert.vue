@@ -452,7 +452,7 @@ import { uploadFileUrl } from "@/utils/const";
 import {
   getPermissionButton, getPermissionButtonNew,
   postAuditProcess, postAuditProcessNew,
-  getLoadTaskDef, getLoadTaskDefNew,
+  getLoadTaskDef, getLoadTaskDefNew, getOrgByUserId,
   getProcessLogList, getProcessLogListNew,
 } from "@/api/procurement/manage";
 import {showSecretRelatedTips} from "@/utils/MyUtils";
@@ -639,7 +639,7 @@ export default {
       try {
         this.calibrateVisible = true;
         this.calibrateLoading = true;
-        const params = {
+        let params = {
           businessId: this.businessId,
           processId: this.processId,
           /* 流程类型 */
@@ -647,24 +647,36 @@ export default {
           // EXPERT_CHANGE(2,"专家修改"),
           processType: this.formData.processType,
         };
+        let res = null;
         if (this.businessId && this.processId) {
-          const res = await getLoadTaskDefNew(params);
-          this.processInformationList = res.data;
-          function getActive(nodes) {
-            let allFalse = true;
-            for (let i = 0; i < nodes.length; i++) {
-              if (!nodes[i].completed) {
-                if (i === 0) {
-                  return 0;
-                } else {
-                  return i;
-                }
+          res = await getLoadTaskDefNew(params);
+        }else{
+          /* 未提交时查看流程执行流程，根据专家id 获取流程分组 */
+          res = await getOrgByUserId(this.formData.userId);
+          params = {
+            processKey: "jiantou-zhaocai:"+res.data+":ZHAOCAI_EXPERT_ADD",
+            businessId: 8888888888,
+          };
+          res = await getLoadTaskDef(params);
+        }
+        this.processInformationList = res.data;
+        function getActive(nodes) {
+          let allFalse = true;
+          for (let i = 0; i < nodes.length; i++) {
+            if (!nodes[i].completed) {
+              if (i === 0) {
+                return 0;
+              } else {
+                return i;
               }
-              allFalse = false;
             }
-            return nodes.length;
+            allFalse = false;
           }
-          this.calibrateActive = getActive(this.processInformationList);
+          return nodes.length;
+        }
+        this.calibrateActive = getActive(this.processInformationList);
+
+        if (this.businessId && this.processId) {
           const response = await getProcessLogListNew(params);
           this.approveArr = response.data;
         }
