@@ -9,6 +9,7 @@ import com.zhaocai.business.agreement.domain.Agreement;
 import com.zhaocai.business.agreement.service.IAgreementService;
 import com.zhaocai.business.bidding.domain.*;
 import com.zhaocai.business.bidding.enums.BiddingInfoStatusEnum;
+import com.zhaocai.business.bidding.enums.TenderNoticeApprovalStatusEnum;
 import com.zhaocai.business.bidding.enums.TenderNoticeStatusEnum;
 import com.zhaocai.business.bidding.mapper.TenderNoticeMapper;
 import com.zhaocai.business.bidding.service.*;
@@ -171,6 +172,7 @@ public class TenderNoticeServiceImpl extends ServiceImpl<TenderNoticeMapper,Tend
 
         /* 公告状态 */
         tenderNotice.setNoticeStatus(TenderNoticeStatusEnum.TENDER_NOTICE.getState());
+        tenderNotice.setState(TenderNoticeApprovalStatusEnum.DRAFT.getState());
         //保存招标公告信息
         boolean res = this.save(tenderNotice);
 

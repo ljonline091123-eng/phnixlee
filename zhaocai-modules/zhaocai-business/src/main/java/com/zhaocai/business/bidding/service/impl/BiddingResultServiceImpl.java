@@ -8,6 +8,7 @@ import com.zhaocai.business.agreement.domain.Agreement;
 import com.zhaocai.business.bidding.domain.BiddingInfo;
 import com.zhaocai.business.bidding.domain.BiddingResult;
 import com.zhaocai.business.bidding.domain.TenderNotice;
+import com.zhaocai.business.bidding.enums.TenderNoticeApprovalStatusEnum;
 import com.zhaocai.business.bidding.enums.TenderNoticeStatusEnum;
 import com.zhaocai.business.bidding.mapper.BiddingResultMapper;
 import com.zhaocai.business.bidding.service.IBiddingInfoService;
@@ -194,9 +195,9 @@ public class BiddingResultServiceImpl extends ServiceImpl<BiddingResultMapper,Bi
     public void processAuditRevoke(Map<String, Object> variables) {
         String processId = variables.get("processId").toString();
         String businessId = variables.get("businessId").toString();
-        /* 设置为空是因为之前没有审批状态的属性，前端按这个判断的 */
+        /* 设置已经撤回 */
         tenderNoticeService.update(new LambdaUpdateWrapper<TenderNotice>()
-                .set(TenderNotice::getWfProcessId, null)
+                .set(TenderNotice::getState, TenderNoticeApprovalStatusEnum.REVOKED.getState())
                 .eq(TenderNotice::getId, Long.valueOf(businessId)));
     }
 
@@ -360,33 +361,42 @@ public class BiddingResultServiceImpl extends ServiceImpl<BiddingResultMapper,Bi
         String businessId = variables.get("businessId").toString();
         Object flagObj = variables.get("completedFlag");
         Integer nextNoticeStatus = null;
+        Integer state = TenderNoticeApprovalStatusEnum.IN_APPROVAL.getState();
         if (!ObjectUtils.isEmpty(flagObj) && ProcessStateEnum.COMPLETED.getDesc().equals(flagObj.toString())){
             //如果流程状态为已完成，则直接更新状态
             nextNoticeStatus = findNextTenderNoticeStatus(Long.valueOf(businessId));
+            state = TenderNoticeApprovalStatusEnum.APPROVE.getState();
         }
         tenderNoticeService.update(new LambdaUpdateWrapper<TenderNotice>()
                 .set(null != nextNoticeStatus, TenderNotice::getNoticeStatus, nextNoticeStatus)
                 .set(TenderNotice::getWfProcessId, processId)
+                .set(TenderNotice::getState, state)/* 已通过/审批中 */
                 .eq(TenderNotice::getId, Long.valueOf(businessId)));
     }
 
+    /** 审批通过，可设置状态为 已完成 */
     @Override
     public void processAuditPass(Map<String, Object> variables) {
         String businessId = variables.get("businessId").toString();
         Integer nextNoticeStatus = findNextTenderNoticeStatus(Long.valueOf(businessId));
         tenderNoticeService.updateStatus(Long.valueOf(businessId), nextNoticeStatus);
+        /* 审批已通过 */
+        tenderNoticeService.update(new LambdaUpdateWrapper<TenderNotice>()
+                .set(TenderNotice::getState, TenderNoticeApprovalStatusEnum.APPROVE.getState())
+                .eq(TenderNotice::getId, Long.valueOf(businessId)));
     }
 
     /** 驳回到发起人 */
     @Override
     public void processAuditFreedom(Map<String, Object> variables) {
         String businessId = variables.get("businessId").toString();
-        /* 设置为空是因为之前没有审批状态的属性，前端按这个判断的 */
+        /* 已驳回 */
         tenderNoticeService.update(new LambdaUpdateWrapper<TenderNotice>()
-                .set(TenderNotice::getWfProcessId, null)
+                .set(TenderNotice::getState, TenderNoticeApprovalStatusEnum.REJECT.getState())
                 .eq(TenderNotice::getId, Long.valueOf(businessId)));
     }
 
+    /** 驳回到中途节点，可以设置状态为 审批中 */
     @Override
     public void processAuditReject(Map<String, Object> variables) {
 
