@@ -19,8 +19,10 @@ import com.zhaocai.business.pub.utils.Sender;
 import com.zhaocai.business.pub.utils.YOZOfileUtils;
 import com.zhaocai.business.pub.vo.req.AttachmentRequestVO;
 import com.zhaocai.business.pub.vo.res.AttachmentVO;
+import com.zhaocai.business.sdk.bean.ConvertParams;
 import com.zhaocai.business.sdk.bean.EditParams;
 import com.zhaocai.business.sdk.bean.PreviewParams;
+import com.zhaocai.business.sdk.bean.WaterMark;
 import com.zhaocai.business.vendor.vo.res.DownloadAgreementVO;
 import com.zhaocai.common.core.utils.NumberUtil;
 import com.zhaocai.common.core.utils.StringUtils;
@@ -103,6 +105,7 @@ public class AttachmentServiceImpl extends ServiceImpl<AttachmentMapper, Attachm
     @Override
     public String  viewPDFFileURL(String fileName, String fileUrl){
         String HtmlName = yozOfileUtils.removeSuffix(fileName);
+//        String PDFfileName = HtmlName + ".pdf";
         Path path = yozOfileUtils.downloadFile(fileUrl, yozOfileUtils.createTempFilePath(fileName));
         try {
             // 组织请求参数
@@ -127,6 +130,37 @@ public class AttachmentServiceImpl extends ServiceImpl<AttachmentMapper, Attachm
             //删除生成的临时文件
             System.out.println("删除文件路径:" + path.toString());
             yozOfileUtils.deleteTempFilePath(path.toString());
+            return newViewUrl;
+        } catch (Exception e) {
+            throw new RuntimeException("生成文件预览url失败", e);
+        }
+
+    }
+
+    //文档中台——根据文件URL获取预览PDF文件URL（不用下载在本地）
+    @Override
+    public String  previewPdfUrlByFileUrl(String fileName, String fileUrl){
+        String HtmlName = yozOfileUtils.removeSuffix(fileName);
+        try {
+            // 组织请求参数
+            PreviewParams params = new PreviewParams();
+            // 设置要预览的文件
+            params.setFileUrl(fileUrl);
+            params.setFileName(fileName);
+            params.setHtmlName(HtmlName);
+            params.setHtmlTitle(HtmlName);
+            // 是否可打印
+            params.setPrintMenu(true, false);
+            // 设置可下载
+            params.setDownloadMenu(true, fileName);
+            // 允许复制
+            params.setCopy(true);
+            String response = sender.post(PreviewParams.URL_PREVIEW_URL, PreviewParams.CONVERT_TYPE_PREVIEW_PDF, params.getRequestBodyString());
+            System.out.println("预览Office文件响应结果：");
+            System.out.println(response);
+            String viewUrl = new JSONObject(response).optJSONObject("data").optString("viewUrl");
+            String newViewUrl = yozOfileUtils.updateFileUrl(viewUrl);
+            System.out.println(newViewUrl);
             return newViewUrl;
         } catch (Exception e) {
             throw new RuntimeException("生成文件预览url失败", e);
@@ -221,6 +255,28 @@ public class AttachmentServiceImpl extends ServiceImpl<AttachmentMapper, Attachm
 
     }
 
+    //文档中台-office转PDF
+    @Override
+    public String  convertOfficeToPdf(String fileName, String fileUrl, String waterMarkContent) {
+        Path path = yozOfileUtils.downloadFile(fileUrl, yozOfileUtils.createTempFilePath(fileName));
+        try {
+            ConvertParams params = new ConvertParams();
+            // 设置要处理的文档模版
+            params.setFilePath(path.toString());
+            // 设置水印
+            WaterMark wm = new WaterMark(WaterMark.TYPE_TXT, waterMarkContent);
+            // 将水印设置到参数中
+            params.setWaterMark(wm);
+            String response = sender.post(ConvertParams.URL_CONVERT, ConvertParams.CONVERT_TYPE_DOC_PDF, params.getRequestBody());
+            System.out.println("转换文件响应结果：");
+            System.out.println(response);
+            String viewUrl = new JSONObject(response).optJSONObject("data").optString("viewUrl");
+            System.out.println(viewUrl);
+            return viewUrl;
+        } catch (Exception e) {
+            throw new RuntimeException("office转PDF文件失败", e);
+        }
+    }
 
     @Override
     public void addAttachment(List<AttachmentRequestVO> attachmentList, AttachmentTypeEnum businessType, Long businessId) {

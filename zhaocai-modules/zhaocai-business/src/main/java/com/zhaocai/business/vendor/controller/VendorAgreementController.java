@@ -3,6 +3,9 @@ package com.zhaocai.business.vendor.controller;
 import com.zhaocai.business.agreement.service.IAgreementService;
 import com.zhaocai.business.common.annotations.VendorStateCheck;
 import com.zhaocai.business.common.base.BladeController;
+import com.zhaocai.business.pub.service.IAttachmentService;
+import com.zhaocai.business.pub.utils.YOZOfileUtils;
+import com.zhaocai.business.pub.vo.res.AttachmentVO;
 import com.zhaocai.business.vendor.domain.Vendor;
 import com.zhaocai.business.vendor.service.IVendorService;
 import com.zhaocai.business.vendor.vo.req.VendorAgreementListQueryVO;
@@ -34,6 +37,12 @@ public class VendorAgreementController extends BladeController {
     @Autowired
     private IVendorService vendorService;
 
+    @Autowired
+    private IAttachmentService attachmentService;
+
+    @Autowired
+    private YOZOfileUtils yozOfileUtils;
+
     /**
      * 列表查询
      */
@@ -54,6 +63,30 @@ public class VendorAgreementController extends BladeController {
     @GetMapping("/detail")
     public ResultData<VendorAgreementDetailVO> detail(@RequestParam Long id) {
         return ResultData.data(agreementService.getVendorAgreementDetail(id));
+    }
+
+    /**
+     * 合同管理-把合同附件转为PDF、加水印并生成预览URL
+     */
+    @GetMapping("/getViewAgreementAttachmentURL")
+    @ApiOperation("合同附件转PDF并预览")
+    public ResultData<String> getViewAgreementAttachmentURL(@RequestParam("attachmentId") Long attachmentId,@RequestParam("partyAName") String partyAName) {
+        AttachmentVO attachmentVO = attachmentService.getAttachmentById(attachmentId);
+        String fileName = attachmentVO.getFileName();
+        String fileUrl = attachmentVO.getFileUrl();
+        String waterMarkContent = partyAName;
+        if(yozOfileUtils.isNULLFileURL(fileUrl)){
+            return ResultData.fail("该文件存储的fileUrl为空，无法预览文件！！！");
+        }
+        String suffix = yozOfileUtils.getSuffix(fileName).toLowerCase();
+        if (yozOfileUtils.isWordExtension(suffix)) {
+            String PDFUrl = attachmentService.convertOfficeToPdf(fileName,fileUrl,waterMarkContent);
+            String PDFfileName = yozOfileUtils.removeSuffix(fileName) + ".pdf";
+            String viewURL = attachmentService.viewPDFFileURL(PDFfileName,PDFUrl);
+            return ResultData.data(viewURL);
+        }else {
+            return ResultData.fail("非word文档格式，文件格式错误，无法预览");
+        }
     }
 
     /**
