@@ -119,7 +119,7 @@ public class BiddingResultServiceImpl extends ServiceImpl<BiddingResultMapper,Bi
             throw new ParamValidateException("当前数据状态不能定标");
         }
         /* 删除之前的数据 */
-        this.getBaseMapper().delete(new LambdaQueryWrapper<BiddingResult>().eq(BiddingResult::getNoticeId, noticeId));
+        baseMapper.deleteByNoticeId(noticeId);
 
         /* 获取对应的采购方案 */
         ProcurementScheme scheme = procurementSchemeService.getById(tenderNotice.getSchemeId());
