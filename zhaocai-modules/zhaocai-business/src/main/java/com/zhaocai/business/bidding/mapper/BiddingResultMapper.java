@@ -24,6 +24,6 @@ public interface BiddingResultMapper extends BaseMapper<BiddingResult> {
     List<BiddingResult> selectBiddingVendorBySchemeId(@Param("schemeId") Long schemeId);
 
 
-    @Delete("delete from tb_tender_notice where notice_id = #{noticeId} ")
+    @Delete("delete from tb_bidding_result where notice_id = #{noticeId} ")
     void deleteByNoticeId(Long noticeId);
 }
