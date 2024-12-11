@@ -194,8 +194,8 @@ public class BiddingResultServiceImpl extends ServiceImpl<BiddingResultMapper,Bi
     public void processAuditRevoke(Map<String, Object> variables) {
         String processId = variables.get("processId").toString();
         String businessId = variables.get("businessId").toString();
+        /* 设置为空是因为之前没有审批状态的属性，前端按这个判断的 */
         tenderNoticeService.update(new LambdaUpdateWrapper<TenderNotice>()
-                .set( TenderNotice::getNoticeStatus, TenderNoticeStatusEnum.CALI_REPORT.getState())
                 .set(TenderNotice::getWfProcessId, null)
                 .eq(TenderNotice::getId, Long.valueOf(businessId)));
     }
@@ -377,9 +377,14 @@ public class BiddingResultServiceImpl extends ServiceImpl<BiddingResultMapper,Bi
         tenderNoticeService.updateStatus(Long.valueOf(businessId), nextNoticeStatus);
     }
 
+    /** 驳回到发起人 */
     @Override
     public void processAuditFreedom(Map<String, Object> variables) {
-
+        String businessId = variables.get("businessId").toString();
+        /* 设置为空是因为之前没有审批状态的属性，前端按这个判断的 */
+        tenderNoticeService.update(new LambdaUpdateWrapper<TenderNotice>()
+                .set(TenderNotice::getWfProcessId, null)
+                .eq(TenderNotice::getId, Long.valueOf(businessId)));
     }
 
     @Override
