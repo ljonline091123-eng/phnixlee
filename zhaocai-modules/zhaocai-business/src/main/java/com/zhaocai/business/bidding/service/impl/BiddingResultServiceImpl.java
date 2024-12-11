@@ -117,6 +117,8 @@ public class BiddingResultServiceImpl extends ServiceImpl<BiddingResultMapper,Bi
         if (!TenderNoticeStatusEnum.CALI_REPORT.getState().equals(tenderNotice.getNoticeStatus())){
             throw new ParamValidateException("当前数据状态不能定标");
         }
+        /* 删除之前的数据 */
+        this.remove(new LambdaQueryWrapper<BiddingResult>().eq(BiddingResult::getNoticeId, noticeId));
 
         /* 获取对应的采购方案 */
         ProcurementScheme scheme = procurementSchemeService.getById(tenderNotice.getSchemeId());
