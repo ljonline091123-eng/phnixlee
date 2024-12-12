@@ -803,6 +803,7 @@
                 <el-input
                   v-model="bcTemplateQuery.templateName"
                   placeholder="请输入模板名称"
+                  clearable
                 />
               </el-form-item>
               <el-form-item
@@ -814,6 +815,7 @@
                   style="width: 100%"
                   v-model="bcTemplateQuery.contractType"
                   placeholder="请选择"
+                  clearable
                 >
                   <el-option
                     v-for="dict in contractTypeList"
@@ -892,6 +894,7 @@
                 <el-input
                   v-model="bcTemplateQuery.templateName"
                   placeholder="请输入模板名称"
+                  clearable
                 />
               </el-form-item>
               <el-form-item
@@ -903,6 +906,7 @@
                   style="width: 100%"
                   v-model="bcTemplateQuery.contractType"
                   placeholder="请选择"
+                  clearable
                 >
                   <el-option
                     v-for="dict in contractTypeList"
@@ -1554,10 +1558,14 @@ export default {
     handleQuery() {
       this.bcTemplateQuery.pageNum = 1;
       this.getGeneralTemplateList();
+      /* 最后再获取分页数据，区分了通用和复用模板。 */
+      this.activeTabListen(this.activeTab);
     },
     handleQueryReusable() {
       this.bcTemplateQuery.pageNum = 1;
       this.getReusableTemplateList();
+      /* 最后再获取分页数据，区分了通用和复用模板。 */
+      this.activeTabListen(this.activeTab);
     },
     searchGeneralTemplates() {
       this.templateQuery.pageNum = 1;
