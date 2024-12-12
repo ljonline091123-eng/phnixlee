@@ -518,12 +518,14 @@
           <el-table-column
             label="拆分合约规划名称"
             width="200"
+             v-if="isAll"
             prop="splitContractName"
             show-overflow-tooltip
           />
           <el-table-column
             label="拟签约合同拆包范围"
             width="200"
+            v-if="isAll"
             prop="contractScope"
             show-overflow-tooltip
           />
@@ -1159,6 +1161,7 @@ export default {
         formData: {}, //form表单数据
         planList: [],
         inventoryList: [],
+        isAll:false,
         contractList: [],
         rules: {
           procurementSchemeName: [
@@ -1324,6 +1327,7 @@ export default {
         activeTabs: "base",
         inventoryVisible: false,
         financeList: [],
+        
         evaluateVisable: false, //评分弹出
         evaluateTemplateList: [], //评分模板列表
         evaluateTemplateLoading: false,
@@ -1587,6 +1591,8 @@ export default {
       try {
         const res = await getListMaterials(formData);
         this.inventoryList = res.data;
+        console.log(JSON.stringify(this.inventoryList[0]))
+        this.isAll = this.inventoryList.every(item => item.splitContractName && item.splitContractName!="null" && item.contractScope && item.contractScope!="null")
         console.log(res, "清单");
       } catch (err) {
         console.log(err);

@@ -285,7 +285,7 @@
           >
           <template slot-scope="scope">
             <span >
-              {{ scope.row.procurementSchemeCode?scope.row.procurementSchemeCode:'/' }}
+              {{ scope.row.splitContractName && scope.row.splitContractName!="null"?scope.row.splitContractName:'/' }}
             </span>
           </template>
           </el-table-column>
@@ -296,7 +296,7 @@
           >
           <template slot-scope="scope">
             <span >
-              {{ scope.row.contractScope? scope.row.contractScope:'/' }}
+              {{ scope.row.contractScope && scope.row.contractScope!="null"? scope.row.contractScope:'/' }}
             </span>
           </template>
           </el-table-column>
