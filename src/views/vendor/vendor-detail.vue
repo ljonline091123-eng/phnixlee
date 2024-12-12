@@ -202,6 +202,8 @@
                   vendorState.firstCooperationCompanyName
                 }}</el-form-item></el-col
               >
+            </el-row>
+            <el-row>
               <el-col :span="8"
                 ><el-form-item label="当前类型">{{
                   vendorState.vendorClassText
