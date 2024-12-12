@@ -303,4 +303,29 @@ public class SysDeptController extends BaseController
         return deptService.getDeptByThridDeptIdNoBM(thridDeptIdNew);
     }
 
+    /**
+     * 根据部门code组装出父级公司名称， ***集团 / ***公司 / ***公司
+     */
+    @InnerAuth
+    @GetMapping("/getDeptNameLoop")
+    public String getDeptNameLoop(@RequestParam String thridDeptId,@RequestParam String deptName) {
+        SysDept sysDept = deptService.getByThridDeptId(thridDeptId);
+        if (sysDept == null || (deptName!=null&&deptName.length()>900) ) {
+            /* 找不到 或者死循环了 就直接返回 */
+            return deptName;
+        }else{
+            /* 集团是顶级不用再递归了 */
+            if(sysDept.getThridParentId().equals(UserConstants.GROUP_DEPT_ID)){
+                /* 是本身层级就不在拼接了 */
+                if(deptName!=null&&deptName.equals(sysDept.getDeptName())){
+                    return deptName;
+                }
+                /* 拼接返回 */
+                return sysDept.getDeptName() + (deptName==null ? "" : " / " + deptName);
+            }else{
+                /* 递归拼接 */
+                return getDeptNameLoop(sysDept.getThridParentId(),sysDept.getDeptName() + (deptName==null ? "" : " / " + deptName));
+            }
+        }
+    }
 }

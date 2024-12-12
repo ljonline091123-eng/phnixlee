@@ -41,6 +41,7 @@ import com.zhaocai.common.signature.dto.sign.SignatureResponse;
 import com.zhaocai.common.signature.service.SignatureCommandFactory;
 import com.zhaocai.common.signature.service.command.CompanyAuthCommand;
 import com.zhaocai.system.api.domain.SysUser;
+import com.zhaocai.system.api.system.RemoteSystemService;
 import com.zhaocai.system.api.system.RemoteUserService;
 import lombok.extern.slf4j.Slf4j;
 import net.qiyuesuo.v3sdk.model.company.response.CompanyauthH5pageResponse;
@@ -109,6 +110,8 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
 
     @Autowired
     private RemoteUserService remoteUserService;
+    @Autowired
+    private RemoteSystemService remoteSystemService;
 
 
 
@@ -505,6 +508,8 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
             VendorCertificationListVO certificationList = vendorCertificationService.listCertification(id,mainContactVO.getId());
 
             VendorStateVO vendorState = BeanCopierUtil.copyBean(vendor,VendorStateVO.class);
+            /* 递归拼接部门名称 */
+            vendorState.setFirstCooperationCompanyName(remoteSystemService.getDeptNameLoop(vendor.getFirstCooperationCompanyCode(),vendorState.getFirstCooperationCompanyName(),SecurityConstants.INNER));
 
             // 查询最新变更id
             Long changeId = vendorChangeService.getLastChangeId(id);
