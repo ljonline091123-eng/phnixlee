@@ -284,11 +284,15 @@ public class ProcurementSchemeServiceImpl extends ServiceImpl<ProcurementSchemeM
         List<ProcurementSchemePlanRelate> relateList = procurementSchemePlanRelateService.listBySchemeId(id);
         //获取 拆分合约id
         List<Long> contractSplitList = relateList.stream().map(ProcurementSchemePlanRelate::getContractSplitId).collect(Collectors.toList());
+        System.out.println("拆分合约id:"+ contractSplitList);
         //获取 采购计划id
         List<Long> procurementPlanList = relateList.stream().map(ProcurementSchemePlanRelate::getProcurementPlanId).collect(Collectors.toList());
+        System.out.println("采购计划id:"+ procurementPlanList);
         ProcurementPlan plan = procurementPlanService.getById(procurementPlanList.get(0));
+        System.out.println("计划:"+ plan);
         //获取合约规划信息
         List<ProcurementContractPlanListVO> contractPlanList = contractPlanningService.listProcurementContractPlanByContractSplit(contractSplitList);
+        System.out.println("获取合约规划信息:"+ contractPlanList);
         contractPlanList.forEach(item -> {
             CompMaterialsVO compMaterialsVO = new CompMaterialsVO();
             compMaterialsVO.setPlanId(item.getPlanId());
@@ -300,6 +304,7 @@ public class ProcurementSchemeServiceImpl extends ServiceImpl<ProcurementSchemeM
             queryVO.setPlanId(item.getPlanId());
             queryVO.setContractSpiltIdList(contractSplitList);
             List<CompContractSplitMaterialsVO> contractSplitMaterials = materialsListService.listContractSplitMaterials4Bidding(queryVO);
+            System.out.println("contractSplitMaterials:"+ contractSplitMaterials);
             contractSplitMaterials.forEach(compVO -> {
                     compVO.setCompName("（" + item.getContractPlanningName() + "）" + compVO.getSplitContractName());
                     compVO.setPriceType(plan.getPriceType());
@@ -307,6 +312,7 @@ public class ProcurementSchemeServiceImpl extends ServiceImpl<ProcurementSchemeM
             });
 
             compMaterialsVO.setCompVOList(compVOList);
+            System.out.println("compMaterialsVO:"+ compMaterialsVO);
             dataVo.add(compMaterialsVO);
         });
         return dataVo;
