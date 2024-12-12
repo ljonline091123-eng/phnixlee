@@ -149,4 +149,10 @@ public interface RemoteSystemService {
     List<SysDept> getDeptByThridDeptIdNoBM(@RequestParam(value = "thridDeptId") String thridDeptId, @RequestHeader(SecurityConstants.FROM_SOURCE) String source);
 
 
+    /**
+     *  根据部门code组装出父级公司名称， ***公司 / ***公司 / ***公司
+     */
+    @GetMapping("/dept/getDeptNameLoop")
+    String getDeptNameLoop(@RequestParam(value = "thridDeptId") String thridDeptId,@RequestParam(value = "deptName") String deptName, @RequestHeader(SecurityConstants.FROM_SOURCE) String source);
+
 }
