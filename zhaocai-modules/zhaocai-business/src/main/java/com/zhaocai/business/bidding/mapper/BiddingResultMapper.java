@@ -2,6 +2,7 @@ package com.zhaocai.business.bidding.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.zhaocai.business.bidding.domain.BiddingResult;
+import org.apache.ibatis.annotations.Delete;
 import org.apache.ibatis.annotations.Param;
 
 import java.util.List;
@@ -21,4 +22,8 @@ public interface BiddingResultMapper extends BaseMapper<BiddingResult> {
      * @return
      */
     List<BiddingResult> selectBiddingVendorBySchemeId(@Param("schemeId") Long schemeId);
+
+
+    @Delete("delete from tb_bidding_result where notice_id = #{noticeId} ")
+    void deleteByNoticeId(Long noticeId);
 }

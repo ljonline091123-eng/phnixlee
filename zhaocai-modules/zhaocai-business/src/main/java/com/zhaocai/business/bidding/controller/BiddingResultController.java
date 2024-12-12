@@ -60,6 +60,13 @@ public class BiddingResultController extends BladeController {
         return ResultData.status(biddingResultService.calibration(entranceVO));
     }
 
+    @ApiOperation(value = "撤回定标")
+    @PostMapping("/revokeBidding")
+    public ResultData<Boolean> revokeBidding(@RequestParam Long id) {
+        biddingResultService.revokeBidding(id);
+        return ResultData.success();
+    }
+
     /**
      * 查询定标供应商数据列表（中标公示）
      */

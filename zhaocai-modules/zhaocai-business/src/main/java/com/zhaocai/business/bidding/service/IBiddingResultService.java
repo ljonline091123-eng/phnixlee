@@ -41,6 +41,12 @@ public interface IBiddingResultService  extends IService<BiddingResult> , IProce
     boolean calibration(CalibrationEntranceVO entranceVO);
 
     /**
+     * 撤回定标
+     * @param id
+     */
+    void revokeBidding(Long id);
+
+    /**
      * 查询定标供应商数据列表（中标公示）
      *
      * @param noticeId 招标公告id
