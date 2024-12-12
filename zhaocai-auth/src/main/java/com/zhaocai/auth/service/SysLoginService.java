@@ -67,9 +67,9 @@ public class SysLoginService
      */
     public LoginUser login(String username, String password,String userType)
     {
-        if (StringUtils.isBlank(userType)) {
-            userType = UserTypeEnum.PURCHASE.getName();
-        }
+//        if (StringUtils.isBlank(userType)) {
+//            userType = UserTypeEnum.PURCHASE.getName();
+//        }
         // 用户名或密码为空 错误
         if (StringUtils.isAnyBlank(username, password))
         {

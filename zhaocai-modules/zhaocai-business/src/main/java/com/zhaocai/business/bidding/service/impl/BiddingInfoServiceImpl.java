@@ -89,6 +89,8 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
     @Autowired
     private IExpertService expertService;
     @Autowired
+    private IBiddingResultService biddingResultService;
+    @Autowired
     @Lazy
     private IProcurementPlanService procurementPlanService;
     @Autowired
@@ -344,8 +346,31 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
             Collections.sort(listReturn);
             //补充字段内容
             fillFieldBid(listReturn, isFillBiddingInfo, quoteNum);
+            // 中标审批结果显示
+            fillFieldBidApply(listReturn,queryVO.getNoticeId());
         }
         return listReturn;
+    }
+
+    /** 填充列表列表信息 */
+    private void fillFieldBidApply(List<BiddingQuotationListVO> list,Long noticeId){
+        List<BiddingResult> results = biddingResultService.list(new LambdaQueryWrapper<BiddingResult>()
+                .eq(BiddingResult::getNoticeId, noticeId)
+                .eq(BiddingResult::getSureBid, NumberConstant.ONE));
+        if (results.isEmpty()) {
+            return;
+        }
+        Map<Long, BiddingResult> resultMap = results.stream()
+                .collect(Collectors.toMap(BiddingResult::getVendorId, result -> result));
+        /* 遍历 list，检查每个 BiddingQuotationListVO 是否匹配，并更新 sureBid */
+        for (BiddingQuotationListVO quotationListVO : list) {
+            BiddingResult result = resultMap.get(quotationListVO.getVendorId());
+            if (result != null) {
+                quotationListVO.setSureBid(1);  // 设置 sureBid 为 1
+            }else{
+                quotationListVO.setSureBid(0);  // 设置 sureBid 为 0
+            }
+        }
     }
 
     /** 填充列表列表信息 */

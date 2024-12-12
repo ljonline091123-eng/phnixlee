@@ -1317,8 +1317,8 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
         AttachmentRequestVO attachmentRequestVO = new AttachmentRequestVO(agreementAttachment.getFileName(),agreementAttachment.getFileUrl());
         long attachmentId = attachmentService.addAttachment(attachmentRequestVO,AttachmentTypeEnum.AGREEMENT_ORIGINAL,null);
 
-        // 新增任务
-        fileZTaskService.addInitialFileZTask(FileZTaskBusinessEnum.AGREEMENT_CREATE,attachmentId);
+        // 新增任务(联想中台)
+//        fileZTaskService.addInitialFileZTask(FileZTaskBusinessEnum.AGREEMENT_CREATE,attachmentId);
 
         return attachmentId;
     }

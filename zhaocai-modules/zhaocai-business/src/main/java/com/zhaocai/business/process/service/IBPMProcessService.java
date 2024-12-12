@@ -51,6 +51,9 @@ public interface IBPMProcessService {
 
     public String revokedProcessInstance(String processKey, Map<String, Object> variables);
 
+    public String getOrg(String org);
+    public String getOrgByUserId(String userId);
+
     /**
      * 撤回流程
      * */

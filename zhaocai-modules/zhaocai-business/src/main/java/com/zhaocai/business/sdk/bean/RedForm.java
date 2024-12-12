@@ -2,12 +2,16 @@ package com.zhaocai.business.sdk.bean;
 
 import com.zhaocai.business.pub.utils.Sender;
 import org.json.JSONException;
+import org.springframework.beans.factory.annotation.Autowired;
 
 import java.io.IOException;
 import java.security.NoSuchAlgorithmException;
 
 
 public class RedForm {
+
+	@Autowired
+	private Sender sender;
 	/**
 	 * 正文位置书签的名称
 	 */
@@ -111,7 +115,7 @@ public class RedForm {
 		// 组织书签
 		params.setBookMark(bookMark);
 		// 提交处理文档
-		String response = Sender.post(ConvertParams.URL_CONVERT, ConvertParams.CONVERT_TYPE_CONVERT_DOCUMENT, params.getRequestBody());
+		String response = sender.post(ConvertParams.URL_CONVERT, ConvertParams.CONVERT_TYPE_CONVERT_DOCUMENT, params.getRequestBody());
 		return response;
     }
 }

@@ -57,6 +57,10 @@
         </filter>
     </appender>
 
+    <logger name="com.alibaba.nacos" level="DEBUG"/>
+    <logger name="com.alibaba.cloud" level="DEBUG"/>
+    <logger name="org.springframework.cloud.alibaba" level="DEBUG"/>
+
     <!-- 系统模块日志级别控制  -->
 	<logger name="com.zhaocai" level="debug" />
 	<!-- Spring日志级别控制  -->
