@@ -36,11 +36,6 @@
                   type="primary"
                   size="small"
                   @click="setModify"
-                  :disabled="
-                    noticeDetail.purchaseOfficer === undefined
-                      ? false
-                      : !noticeDetail.purchaseOfficer
-                  "
                 >变更
                 </el-button
                 >
@@ -51,11 +46,6 @@
                 type="primary"
                 size="small"
                 @click="setModify"
-                :disabled="
-                  noticeDetail.purchaseOfficer === undefined
-                    ? false
-                    : !noticeDetail.purchaseOfficer
-                "
               >变更
               </el-button
               >
@@ -66,11 +56,6 @@
                   type="primary"
                   size="small"
                   @click="setQA"
-                  :disabled="
-                    noticeDetail.purchaseOfficer === undefined
-                      ? false
-                      : !noticeDetail.purchaseOfficer
-                  "
                 >答疑
                 </el-button
                 >
@@ -81,11 +66,6 @@
                 type="primary"
                 size="small"
                 @click="setQA"
-                :disabled="
-                  noticeDetail.purchaseOfficer === undefined
-                    ? false
-                    : !noticeDetail.purchaseOfficer
-                "
               >答疑
               </el-button
               >
