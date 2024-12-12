@@ -2,6 +2,13 @@
   <div class="app-container">
     <BackButton path="/procurement/sign-contract" title="新增合同信息">
       <div>
+        <el-button
+          type="primary"
+          size="mini"
+          @click="handelCalibrationApproval"
+        >
+          审批详情
+        </el-button>
         <el-button type="primary" size="mini" @click="submitForm"
           >保存</el-button>
           <el-button type="primary" v-if="typeContract=='add' && parseInt(firstForm.agreementPaymentItem.totalAmountIncTax)<50000"  size="mini" @click="avoidSubmitForm"
@@ -1500,7 +1507,7 @@ import { getContractTypeList ,getEditFileUrlByID} from "@/api/template/file";
 import {
   getTemplateSwitchList,
 } from "@/api/procurement/scheme";
-import { getSwitchPageList } from "@/api/procurement/manage";
+import {getLoadTaskDef, getOrgByUserId, getProcessLogList, getSwitchPageList} from "@/api/procurement/manage";
 import {showSecretRelatedTips} from "@/utils/MyUtils";
 export default {
   name: "add-contract",
@@ -2428,7 +2435,51 @@ export default {
       this.$set(scope.row, 'paymentAmount', "")
       this.$set(scope.row, 'depositRatio', "")
       this.$set(scope.row, 'depositAmount', "")
-    }
+    },
+    async handelCalibrationApproval() {
+      try {
+        this.calibrateVisible = true;
+        this.calibrateLoading = true;
+        let params = {
+          businessId: this.purchaserId,
+          processId: this.exampleId,
+        };
+        let res = null;
+        if (this.purchaserId && this.exampleId) {
+          res = await getLoadTaskDef(params);
+        }else{
+          /* 未提交时查看流程执行流程，根据登录人id 获取流程分组 */
+          res = await getOrgByUserId(this.$store.state.user.id);
+          params = {
+            processKey: "jiantou-zhaocai:"+res.data+":ZHAOCAI_AGREEMENT_SIGN",
+            businessId: 8888888888,
+          };
+          res = await getLoadTaskDef(params);
+        }
+        this.processInformationList = res.data;
+        function getActive(nodes) {
+          let allFalse = true;
+          for (let i = 0; i < nodes.length; i++) {
+            if (!nodes[i].completed) {
+              if (i === 0) {
+                return 0;
+              } else {
+                return i;
+              }
+            }
+            allFalse = false;
+          }
+          return nodes.length;
+        }
+        this.calibrateActive = getActive(this.processInformationList);
+
+        if (this.purchaserId && this.exampleId) {
+          const response = await getProcessLogList(params);
+          this.approveArr = response.data;
+        }
+      } catch (error) {}
+      this.calibrateLoading = false;
+    },
   },
   watch: {
     // 根据名称筛选树
