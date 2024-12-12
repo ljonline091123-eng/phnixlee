@@ -315,7 +315,10 @@ public class SysDeptController extends BaseController
             return deptName;
         }else{
             /* 集团是顶级不用再递归了 */
-            if(sysDept.getThridParentId().equals(UserConstants.GROUP_DEPT_ID)){
+            if(sysDept.getThridParentId().equals(UserConstants.GROUP_DEPT_ID)
+                    ||sysDept.getThridParentId().equals("0")
+                    ||sysDept.getThridParentId().equals("")
+                    ||sysDept.getThridParentId()==null){
                 /* 是本身层级就不在拼接了 */
                 if(deptName!=null&&deptName.equals(sysDept.getDeptName())){
                     return deptName;
