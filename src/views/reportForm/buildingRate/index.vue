@@ -197,10 +197,7 @@ export default {
     },
     expandNodes(level) {
       this.levelExpand=level
-      this.treeData=[]
-      
       if (level === 1) {
-     
           // 关闭所有默认节点
           const tree = this.$refs.tree;
           const allNodes = Object.values(tree.store.nodesMap);
@@ -211,17 +208,44 @@ export default {
               }
           });
         } else if (level === 2) {
-          this.treeData=['1826912577508798466']
-          console.log(JSON.stringify(this.treeData))
+          const tree = this.$refs.tree;
+          const allNodes = Object.values(tree.store.nodesMap);
+            allNodes.forEach((node) => {
+              if (node.data.parentId === "0") {
+                  tree.store.getNode(node.key).expanded = true; // 展开父节点
+                } else if(node.level==1){
+                  tree.store.getNode(node.key).expanded = true; // 展开二级节点
+                }else{
+                  tree.store.getNode(node.key).expanded = false;
+                }
+          });
         }else if (level === 3) {
-          this.arrData.forEach(element => {
-            if(element.thridOrgLevel==2){
-              this.treeData.push(element.deptId)
-            }
+           const tree = this.$refs.tree;
+          const allNodes = Object.values(tree.store.nodesMap);
+            allNodes.forEach((node) => {
+              if (node.data.parentId === "0") {
+                  tree.store.getNode(node.key).expanded = true; // 展开父节点
+                }else if(node.level==1){
+                  tree.store.getNode(node.key).expanded = true; // 展开二级节点
+                }else if(node.level==2){
+                  tree.store.getNode(node.key).expanded = true; // 展开二级节点
+                }else{
+                  tree.store.getNode(node.key).expanded = false;
+                }
           });
         }else if (level === 4) {
-          this.arrData.forEach(element => {
-              this.treeData.push(element.deptId)
+            const tree = this.$refs.tree;
+            const allNodes = Object.values(tree.store.nodesMap);
+            allNodes.forEach((node) => {
+              if (node.data.parentId === "0") {
+                  tree.store.getNode(node.key).expanded = true; // 展开父节点
+                } else if(node.level==2){
+                  tree.store.getNode(node.key).expanded = true; // 展开二级节点
+                }else if(node.level==3){
+                  tree.store.getNode(node.key).expanded = true; // 展开二级节点
+                }else{
+                  tree.store.getNode(node.key).expanded = false;
+                }
           });
         }
     },
