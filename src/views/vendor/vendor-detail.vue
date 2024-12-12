@@ -197,7 +197,7 @@
           <el-divider />
           <el-form label-width="150px" label-suffix=":">
             <el-row>
-              <el-col :span="8"
+              <el-col :span="24"
                 ><el-form-item label="首次注册合作单位">{{
                   vendorState.firstCooperationCompanyName
                 }}</el-form-item></el-col
