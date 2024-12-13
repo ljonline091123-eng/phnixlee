@@ -274,7 +274,7 @@
                       </el-table-column>
                       <el-table-column
                       v-if="currentContract.contractPlanningCategory == 1"
-                      label="易商品编码"
+                      label="易料商品编码"
                       align="center"
                       min-width="150" prop="skuId" show-overflow-tooltip
                     >
