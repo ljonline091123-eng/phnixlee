@@ -1,6 +1,6 @@
 <template>
   <div class="app-container">
-    <BackButton path="/vendor/vendor-base" title="供应商信息详情">
+    <BackButton :path="path" title="供应商信息详情">
       <div v-if="activeName === 'base' || activeName === 'aptitude'">
         <el-button
           type="primary"
@@ -793,6 +793,8 @@ export default {
       vendorState: {},
       mainContact: {},
       vendorBlack: "",
+      vendorClass:'',
+      path:'/vendor/vendor-base',
       //资质材料
       businessLicense: {}, //营业执照
       integrity: {}, //诚信合规材料
@@ -845,8 +847,10 @@ export default {
   },
   created() {
     const param = JSON.parse(Base64.decode(this.$route.params.params));
-    console.log("param613" + param);
-    this.param = param;
+    console.log("param613" + JSON.stringify(param));
+    this.param = param.id;
+    this.vendorClass=param.vendorClass
+    this.path=this.path+'?vendorClass='+this.vendorClass
     this.getVendorDetail();
   //  this.listBankAccountContactFn();
   },
