@@ -104,11 +104,12 @@
                 v-model="formData.applyTimeNotice"
                 type="datetime"
                 style="width: 100%"
-                placeholder="选择日期"
+                placeholder="(说明:截止时间不能少于5天)"
                 :picker-options="expireTimeOption"
                 value-format="yyyy-MM-dd HH:mm:ss"
                 :disabled="!!(formData.id || isSubmit)"
                 class="date_picker"
+                @change="handleChange"
               />
             </el-form-item>
           </el-col>
@@ -803,6 +804,15 @@ export default {
     this.getNoticeUpdateList();
   },
   methods: {
+    /* 报名截止时间监听 */
+    handleChange(value) {
+      let newVal = new Date(value);
+      let currentDate = Date.now(); // 获取当前时间戳
+      // 比较当前日期是否小于5天后的日期
+      if (newVal && newVal < currentDate + 5 * 24 * 60 * 60 * 1000) {
+        this.formData.applyTimeNotice = null; // 设置为null
+      }
+    },
     async getViewNoticeURL(){
       //获取招标公告的-》文档中台的该文件的预览url
       if (this.attachmentId) {
