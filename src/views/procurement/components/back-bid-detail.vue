@@ -386,7 +386,7 @@ export default {
           };
         });
         console.log(JSON.stringify(this.backBidList))
-          this.isAll = this.backBidList[0].compVOList.every(item => item.splitContractName && item.contractScope)
+          this.isAll = this.backBidList[0].compVOList.every(item => item.splitContractName && item.splitContractName!="null" && item.contractScope && item.contractScope!="null")
         this.vendorInfo = {
           vnedorName: data.vendorName,
           notTaxPricePattern: data.notTaxPricePattern,

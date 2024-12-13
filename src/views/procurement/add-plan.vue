@@ -1018,7 +1018,7 @@ export default {
             return false;
           }
 
-          const isAll = planList[0]?.children.every(item => item.splitContractName && item.contractScope)
+          const isAll = planList[0]?.children.every(item => item.splitContractName && item.splitContractName!="null" && item.contractScope && item.contractScope!="null")
           //判断长度大于1
           if( planList[0].children.length>1){
           if(!isAll){
@@ -1146,7 +1146,7 @@ export default {
             return false;
           }
 
-          const isAll = planList[0]?.children.every(item => item.splitContractName && item.contractScope)
+          const isAll = planList[0]?.children.every(item => item.splitContractName && item.splitContractName!="null" && item.contractScope && item.contractScope!="null")
           if(!isAll){
             this.isSubmit = false;
             this.$message({
