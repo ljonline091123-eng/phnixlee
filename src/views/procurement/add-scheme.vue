@@ -325,7 +325,7 @@
                         v-model="formData.bidDeadline"
                         type="datetime"
                         style="width: 100%"
-                        placeholder="选择日期"
+                        placeholder="(说明:截止时间不能少于5天)"
                          popper-class="date-clear"
                         :picker-options="endTimeOptions"
                         value-format="yyyy-MM-dd HH:mm:ss"
