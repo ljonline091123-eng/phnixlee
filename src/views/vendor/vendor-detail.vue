@@ -751,10 +751,11 @@
       center
       :append-to-body="false"
       destroy-on-close
+      width="1200px"
     >
       <!-- 直接用iframe嵌套pdf预览模式 "#toolbar=0"是为了隐藏pdf的按钮  -->
       <div class="dialogtext">
-        <iframe width="800"  height="1200"   :src="this.iframeUrls + '#toolbar=0'" />
+        <iframe width="100%"  :style="{ minHeight: '700px' }" :src="this.iframeUrls + '#toolbar=0'" />
       </div>
     </el-dialog>
 
