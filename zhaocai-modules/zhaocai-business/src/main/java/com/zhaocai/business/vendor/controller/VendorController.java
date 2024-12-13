@@ -12,6 +12,9 @@ import com.zhaocai.business.manager.http.dto.res.BpmAuditResponseDTO;
 import com.zhaocai.business.manager.http.dto.res.BpmInitializeResponseDTO;
 import com.zhaocai.business.manager.http.dto.res.BpmListProcessLogResponseDTO;
 import com.zhaocai.business.manager.http.dto.res.BpmLoadTaskDefResponseDTO;
+import com.zhaocai.business.pub.service.IAttachmentService;
+import com.zhaocai.business.pub.utils.YOZOfileUtils;
+import com.zhaocai.business.pub.vo.res.AttachmentVO;
 import com.zhaocai.business.vendor.domain.Vendor;
 import com.zhaocai.business.vendor.service.IVendorService;
 import com.zhaocai.business.vendor.vo.req.VendorRegisterRequestVO;
@@ -45,6 +48,36 @@ public class VendorController extends BladeController {
 
     @Autowired
     private IVendorService vendorService;
+
+    @Autowired
+    private IAttachmentService attachmentService;
+
+    @Autowired
+    private YOZOfileUtils yozOfileUtils;
+
+    /**
+     * 投标管理-把招标公告转为PDF、加水印并生成预览URL
+     */
+    @GetMapping("/getViewNoticeURL")
+    @ApiOperation("招标公告转PDF并预览")
+    public ResultData<String> getViewNoticeURL(@RequestParam("attachmentId") Long attachmentId,@RequestParam("unit") String unit) {
+        AttachmentVO attachmentVO = attachmentService.getAttachmentById(attachmentId);
+        String fileName = attachmentVO.getFileName();
+        String fileUrl = attachmentVO.getFileUrl();
+        String waterMarkContent = unit;
+        if(yozOfileUtils.isNULLFileURL(fileUrl)){
+            return ResultData.fail("该文件存储的fileUrl为空，无法预览文件！！！");
+        }
+        String suffix = yozOfileUtils.getSuffix(fileName).toLowerCase();
+        if (yozOfileUtils.isWordExtension(suffix)) {
+            String PDFUrl = attachmentService.convertOfficeToPdf(fileName,fileUrl,waterMarkContent);
+            String PDFfileName = yozOfileUtils.removeSuffix(fileName) + ".pdf";
+            String viewURL = attachmentService.viewPDFFileURL(PDFfileName,PDFUrl);
+            return ResultData.data(viewURL);
+        }else {
+            return ResultData.fail("非word文档格式，文件格式错误，无法预览");
+        }
+    }
 
     /**
      * 供应商注册

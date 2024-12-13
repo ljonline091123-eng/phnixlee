@@ -367,6 +367,8 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
             BiddingResult result = resultMap.get(quotationListVO.getVendorId());
             if (result != null) {
                 quotationListVO.setSureBid(1);  // 设置 sureBid 为 1
+            }else{
+                quotationListVO.setSureBid(0);  // 设置 sureBid 为 0
             }
         }
     }

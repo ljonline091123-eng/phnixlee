@@ -7,9 +7,7 @@ import com.zhaocai.business.common.enums.DictBizEnum;
 import com.zhaocai.business.common.enums.PriceTypeEnum;
 import com.zhaocai.business.common.enums.ProcurementPlanTypeEnum;
 import com.zhaocai.business.common.exception.BusinessException;
-import com.zhaocai.business.common.exception.ParamValidateException;
 import com.zhaocai.business.common.utils.AmountCalUtil;
-import com.zhaocai.business.manager.http.dto.res.ContractPlanMaterialListDTO;
 import com.zhaocai.business.manager.http.service.UnderlingSystemService;
 import com.zhaocai.business.procurement.domain.MaterialsList;
 import com.zhaocai.business.procurement.domain.ProcurementPlan;
@@ -225,7 +223,8 @@ public class MaterialsListServiceImpl extends ServiceImpl<MaterialsListMapper, M
     @Override
     public List<CompContractSplitMaterialsVO> listContractSplitMaterials4Bidding(ContractSplitMaterialsQueryVO queryVO) {
         List<CompContractSplitMaterialsVO> materialsList = this.listMaterialsByPlanId4Bidding(queryVO.getPlanId());
-
+        System.out.println("materialsList:"+ materialsList);
+        System.out.println("queryVO:"+ queryVO);
         return materialsList.stream()
                 .filter(x -> queryVO.getContractSpiltIdList().contains(x.getSplitId()))
                 .collect(Collectors.toList());

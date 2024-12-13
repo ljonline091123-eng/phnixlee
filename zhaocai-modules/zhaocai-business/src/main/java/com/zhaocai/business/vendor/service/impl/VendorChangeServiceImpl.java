@@ -22,11 +22,13 @@ import com.zhaocai.business.vendor.service.*;
 import com.zhaocai.business.vendor.vo.req.VendorBlackRequestVO;
 import com.zhaocai.business.vendor.vo.req.VendorChangeRequestVO;
 import com.zhaocai.business.vendor.vo.res.*;
+import com.zhaocai.common.core.constant.SecurityConstants;
 import com.zhaocai.common.core.constant.UserConstants;
 import com.zhaocai.common.core.utils.bean.BeanCopierUtil;
 import com.zhaocai.common.core.utils.bean.BeanUtils;
 import com.zhaocai.common.core.web.bean.ResultData;
 import com.zhaocai.common.core.web.domain.BaseEntity;
+import com.zhaocai.system.api.system.RemoteSystemService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -79,6 +81,8 @@ public class VendorChangeServiceImpl extends ServiceImpl<VendorChangeMapper,Vend
 
     @Autowired
     private UnderlingSystemService underlingSystemService;
+    @Autowired
+    private RemoteSystemService remoteSystemService;
 
     /**
      * 获取供应商修改详情
@@ -414,6 +418,8 @@ public class VendorChangeServiceImpl extends ServiceImpl<VendorChangeMapper,Vend
             VendorCertificationListVO certificationList = certificationChangeService.listCertification(id, version);
 
             VendorStateVO vendorState = BeanCopierUtil.copyBean(vendorChange,VendorStateVO.class);
+            /* 递归拼接部门名称 */
+            vendorState.setFirstCooperationCompanyName(remoteSystemService.getDeptNameLoop(vendor.getFirstCooperationCompanyCode(),vendorState.getFirstCooperationCompanyName(), SecurityConstants.INNER));
 
             VendorBlackRequestVO vendorBlack = this.getBlackDetail(vendorChange);
             return VendorManagementDetailVO.builder()

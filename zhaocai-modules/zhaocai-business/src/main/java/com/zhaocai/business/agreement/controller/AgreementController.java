@@ -109,7 +109,7 @@ public class AgreementController extends BladeController {
         AgreementBookmarkVO agreementBookmarkVO = BeanCopierUtil.copyBean(agreement,AgreementBookmarkVO.class);
         //获取计租方式的label
         Integer rentalMethod = agreementBookmarkVO.getRentalMethod();
-        if(rentalMethod != null && rentalMethod != undefined){
+        if(rentalMethod != null){
             String RentalMethodText = sysDictDataService.getLabel(DictBizEnum.AGREEMENT_RENTAL_METHOD.getName(),rentalMethod.toString());
             agreementBookmarkVO.setRentalMethodText(RentalMethodText);
         }

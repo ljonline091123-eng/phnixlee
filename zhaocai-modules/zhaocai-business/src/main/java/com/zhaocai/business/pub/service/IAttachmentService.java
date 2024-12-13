@@ -23,11 +23,18 @@ public interface IAttachmentService extends IService<Attachment> {
     //文档中台——获取预览PDF文件URL
     String  viewPDFFileURL(String fileName, String fileUrl);
 
+
+    //文档中台——根据文件URL获取预览PDF文件URL（不用下载在本地）
+    String  previewPdfUrlByFileUrl(String fileName, String fileUrl);
+
     //文档中台——获取预览图片URL
     String  viewImageURL(String fileName, String fileUrl);
 
     //文档中台——获取编辑word文档的URL
     String  editWordURL(Long attachmentId, String fileName, String fileUrl);
+
+    //文档中台-office转PDF
+    String  convertOfficeToPdf(String fileName, String fileUrl, String waterMarkContent);
 
     /**
      * 新增附件

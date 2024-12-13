@@ -402,6 +402,26 @@ public class DpDemo {
 		System.out.println(editUrl);
 	}
 
+	//据文件URL预览PDF文件（不要下载在本地）
+	public static void previewPdfUrl() throws IOException, JSONException, NoSuchAlgorithmException {
+		// 组织请求参数
+		PreviewParams params = new PreviewParams();
+		// 设置要预览的文件
+		params.setFileUrl("http://192.168.240.31:9010/docplatform/fcscloud/view/preview/3QL7ZR1mQ1SQMWvu_ypWF9NQq317jAdTF2GEPndNoRpNV738FiEr3gcUG-mjFmcct3FPXfiXCSGSBIZe9VNuCuza8VQWR8VU5ammeK3Yef2i1VYCxQu18YDcq8MwSm-RNATKtUUuX0q35bWqJHu52huBqUZYRUmxR2BYdStCH3xLFnIdt0rLbXuUh7JQVwWi00cma3JZi-W72iytOhEovhIRjL_KZSrZZqIdlRiY0uqX0Uz0Ov-s4pIIIO1qJ9jgGfjOSfFldi6iNcUM1opDJdP_jE66I5KZ0N_QhX1uttZ8fOnYP0OgffXjFuozsyyQjw7m6qjLIv1aPfrxl_dCE6jg48pSdB2PNf0XFcctcQl044OSP71h5nxuDwFLtfERkVWjzE_Ljf0/");
+		// 是否可打印
+		params.setPrintMenu(true, true);
+		// 允许复制
+		params.setCopy(true);
+		// 设置可下载
+		params.setDownloadMenu(true, null);
+
+		String response = Sender1.post(PreviewParams.URL_PREVIEW_URL, PreviewParams.CONVERT_TYPE_PREVIEW_PDF, params.getRequestBodyString());
+		System.out.println("预览pdf文件响应结果：");
+		System.out.println(response);
+		String viewUrl = new JSONObject(response).optJSONObject("data").optString("viewUrl");
+		System.out.println(viewUrl);
+	}
+
 	/**
 	 * office文件转pdf
 	 *
