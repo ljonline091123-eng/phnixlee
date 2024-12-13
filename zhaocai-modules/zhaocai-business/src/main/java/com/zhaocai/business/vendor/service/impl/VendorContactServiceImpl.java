@@ -467,6 +467,16 @@ public class VendorContactServiceImpl extends ServiceImpl<VendorContactMapper,Ve
         throw new BusinessException("该id经查询无供应商联系人数据");
     }
 
+    @Override
+    public String checkLoginAccount(String contactPhone) {
+        VendorContact vendorContact = super.getOne(new LambdaQueryWrapper<VendorContact>()
+                .eq(VendorContact::getContactPhone,contactPhone));
+        if (vendorContact != null) {
+            return "成功";
+        }
+        return " 登录用户:"+contactPhone+" 不存在";
+    }
+
     /**
      * 校验联系人
      * @param contact
