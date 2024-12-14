@@ -27,9 +27,11 @@ import com.zhaocai.business.manager.http.dto.res.*;
 import com.zhaocai.business.manager.http.service.UnderlingSystemService;
 import com.zhaocai.business.process.service.IBPMProcessService;
 import com.zhaocai.business.process.service.IPBMOverrideService;
+import com.zhaocai.business.pub.domain.Attachment;
 import com.zhaocai.business.pub.service.IAttachmentService;
 import com.zhaocai.business.pub.service.ISysDictDataService;
 import com.zhaocai.business.pub.service.ISystemUserService;
+import com.zhaocai.business.pub.vo.req.AttachmentRequestVO;
 import com.zhaocai.business.pub.vo.res.AttachmentVO;
 import com.zhaocai.business.pub.vo.res.DictListVO;
 import com.zhaocai.business.vendor.domain.Vendor;
@@ -278,7 +280,6 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
         //新增专家信息
         Expert expert;
         ExpertChange expertChange;
-        /* 新增才走审批流程，修改不走 */
         if(idIsNull){
             expert = BeanCopierUtil.copyBean(expertVO, Expert.class);
             /* 待审批 */
@@ -373,7 +374,6 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
         //新增专家信息
         Expert expert;
         ExpertChange expertChange = null;
-        /* 新增才走审批流程，修改不走 */
         if(idIsNull){
             expert = BeanCopierUtil.copyBean(expertVO, Expert.class);
             /* 待审批 */
@@ -562,6 +562,18 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
                 BeanUtils.copyProperties(expertChange, expert);
                 expert.setId(expertChange.getExpertId());
                 super.updateById(expert);
+                /* 修改审批后赋值给专家 */
+                List<AttachmentVO> attachmentVOList = attachmentService.listAttachment(AttachmentTypeEnum.EXPERT_RESUME, expertChange.getId());
+                if(attachmentVOList!=null && !attachmentVOList.isEmpty()){
+                    List<AttachmentRequestVO> attachmentList = new ArrayList<>();
+                    attachmentVOList.forEach(x -> {
+                        AttachmentRequestVO attachment = new AttachmentRequestVO();
+                        attachment.setFileUrl(x.getFileUrl());
+                        attachment.setFileName(x.getFileName());
+                        attachmentList.add(attachment);
+                    });
+                    attachmentService.addAttachment(attachmentList, AttachmentTypeEnum.EXPERT_RESUME, expert.getId());
+                }
             }
             super.update(new LambdaUpdateWrapper<Expert>()
                     .set(Expert::getWfProcessId,processId)/* 流程id */
@@ -603,6 +615,18 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
             BeanUtils.copyProperties(expertChange, expert);
             expert.setId(expertChange.getExpertId());
             super.updateById(expert);
+            /* 修改审批后赋值给专家 */
+            List<AttachmentVO> attachmentVOList = attachmentService.listAttachment(AttachmentTypeEnum.EXPERT_RESUME, expertChange.getId());
+            if(attachmentVOList!=null && !attachmentVOList.isEmpty()){
+                List<AttachmentRequestVO> attachmentList = new ArrayList<>();
+                attachmentVOList.forEach(x -> {
+                    AttachmentRequestVO attachment = new AttachmentRequestVO();
+                    attachment.setFileUrl(x.getFileUrl());
+                    attachment.setFileName(x.getFileName());
+                    attachmentList.add(attachment);
+                });
+                attachmentService.addAttachment(attachmentList, AttachmentTypeEnum.EXPERT_RESUME, expert.getId());
+            }
             super.update(new LambdaUpdateWrapper<Expert>()
                     .set(Expert::getWfProcessId,processId)/* 流程id */
                     .set(Expert::getExpertState,NumberConstant.ONE)/* 启用状态 */
