@@ -424,6 +424,19 @@
       :loading="calibrateLoading"
       @update:visible="calibrateVisible = $event"
   />
+
+    <el-dialog
+      :title="templateDialogTitle"
+      :visible.sync="templateDialogVisible"
+      width="80%"
+    >
+      <iframe allowfullscreen="true"
+              :src= this.viewFileUrl
+              width="100%"
+              height="700px"
+              frameborder="0"
+      ></iframe>
+    </el-dialog>
   </div>
 </template>
 
@@ -441,6 +454,7 @@ import {
   getLoadTaskDef, getLoadTaskDefNew,
   getProcessLogList, getProcessLogListNew, getOrgByUserId,
 } from "@/api/procurement/manage";
+import {getViewAttachmentURLByID} from "@/api/template/file";
 export default {
   name: "expert-detail",
   dicts: [
@@ -460,6 +474,10 @@ export default {
     return {
       id:'',
       type:'',
+      /* 合同模板联想文档预览 */
+      templateDialogTitle: "",
+      templateDialogVisible: false,
+      viewFileUrl:"",
       expertVisible:false,
       calibrateVisible: false,
       calibrateLoading: false,
@@ -657,14 +675,32 @@ export default {
       } catch (error) {}
     },
     //点击文件列表中已上传文件进行下载
-    handlePreview(file) {
-      var a = document.createElement('a');
-      var event = new MouseEvent('click');
-      a.download = file.name;
-      a.href = file.fileUrl;
-      a.dispatchEvent(event);
-      console.log(file)
-    },
+     async handlePreview(file) {
+       // var a = document.createElement('a');
+       // var event = new MouseEvent('click');
+       // a.download = file.name;
+       // a.href = file.fileUrl;
+       // a.dispatchEvent(event);
+       console.log(file)
+
+
+       //获取附件的预览URL
+       if (file.id) {
+         this.templateDialogTitle = file.name + "预览";
+         this.templateDialogVisible = true;
+         //获取文档中台的文档编辑URL
+         try {
+           const res = await getViewAttachmentURLByID({attachmentId: file.id});
+           this.viewFileUrl = res.data;
+           console.log("viewFileUrl:", this.viewFileUrl);
+         } catch (err) {
+           console.log(err);
+         }
+       } else {
+         console.error('专家附件 数据未正确加载');
+       }
+
+     },
 
     async getInfoDetail(id) {
         const res = await getInfo(id);
@@ -676,6 +712,17 @@ export default {
         this.businessTypeList=data.businessType.split(",");
         this.formData.businessType=data.businessType+""
         this.formData.state=data.state+""
+
+
+      // 遍历数组，新增 name 属性,给文件组件显示文件名称
+      this.formData.resumeAttachList = this.formData.resumeAttachList.map(item => {
+        return {
+          ...item, // 保留原有属性
+          name: item.fileName, // 将 fileName 的值赋给 name
+          url: item.fileUrl // 将 fileUrl 的值赋给 url
+        };
+      });
+
         if(data.registeredCertificate){
           this.formData.registeredCertificate=data.registeredCertificate+""
         }
@@ -753,14 +800,12 @@ export default {
       console.log("sub");
     },
     async fileSuccess(res) {
+      this.formData.resumeAttachList = null;
       const { url, name } = res.data;
-      this.formData.resumeAttachList = [{ fileName: name, fileUrl: url }];
-      this.$refs.fileFormRef.clearValidate("fileTemplate");
+      this.formData.resumeAttachList = [{ fileName: name, fileUrl: url,name: name, url: url }];
     },
     fileRemove() {
-      this.$set(this.formData, "fileList", []);
-      this.$set(this.formData, "fileTemplate", []);
-      this.attachmentId = "";
+      this.$set(this.formData, "resumeAttachList", []);
     },
   },
   components: {
