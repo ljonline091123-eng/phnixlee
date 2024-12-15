@@ -947,5 +947,19 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
                 .eq(Vendor::getId, businessId));
     }
 
+    @Override
+    public void revokeVendor(Long id) {
 
+        VendorChangeRequestVO vendorUpdateDetail = vendorChangeService.getVendorUpdateDetail(id);
+        //VendorManagementDetailVO vendorManagementDetail = vendorChangeService.getVendorManagementDetail(id);
+        ValidateUtils.isNullException(vendorUpdateDetail,"该供应商不存在");
+        ValidateUtils.isNullException(vendorUpdateDetail.getVendorChange(),"该供应商不存在修改");
+        ValidateUtils.validateStatusNotEquals(VendorStateEnum.IN_APPROVAL::equalsState,vendorUpdateDetail.getVendorChange().getChangeStatus(),"该状态下的供应商不允许撤回");
+        // 撤回流程
+        Map<String,Object> paramMap = new HashMap<>();
+        paramMap.put("businessId", vendorUpdateDetail.getVendorChange().getId());
+        paramMap.put("processId", vendorUpdateDetail.getVendorChange().getWfProcessId());
+        //processService.revokeProcess(ProcessKeyEnum.ZHAOCAI_VENDOR_UPDATEINFO.getIdentifying(),paramMap);
+        processService.revokeVendorProcess(ProcessKeyEnum.ZHAOCAI_VENDOR_UPDATEINFO.getIdentifying(),paramMap);
+    }
 }

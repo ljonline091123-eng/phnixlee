@@ -131,4 +131,6 @@ public interface IVendorService  extends IService<Vendor> , IProcessBusinessBase
     VendorSignAuthInfo getVendorSignAuthInfo();
 
     String checkRegister(Long vendorId);
+
+    void revokeVendor(Long id);
 }

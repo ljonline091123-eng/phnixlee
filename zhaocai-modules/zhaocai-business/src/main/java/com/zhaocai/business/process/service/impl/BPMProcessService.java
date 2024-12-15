@@ -52,70 +52,71 @@ public class BPMProcessService implements IBPMProcessService {
 
     /**
      * 发起流程
+     *
      * @param processKey
      * @param variables
      * @return
      */
     @Override
-    @Transactional(propagation = Propagation.REQUIRED,rollbackFor = Exception.class)
+    @Transactional(propagation = Propagation.REQUIRED, rollbackFor = Exception.class)
     public String startProcessInstance(String processKey, Map<String, Object> variables) {
-        log.info("[发起流程startProcessInstance] processKey:{}",processKey);
-        log.info("[发起流程startProcessInstance] variables:{}",variables);
+        log.info("[发起流程startProcessInstance] processKey:{}", processKey);
+        log.info("[发起流程startProcessInstance] variables:{}", variables);
         //1.实现调用第三方的提交接口
         BpmSubmitRequestDTO requestDTO = new BpmSubmitRequestDTO();
-        String customProcessKey = variables.get("customProcessKey")==null?null:variables.get("customProcessKey").toString();
+        String customProcessKey = variables.get("customProcessKey") == null ? null : variables.get("customProcessKey").toString();
         requestDTO.setBusinessId(variables.get("businessId").toString());
-        requestDTO.setProcessKey(StrUtil.isBlank(customProcessKey)?processKey:customProcessKey);
+        requestDTO.setProcessKey(StrUtil.isBlank(customProcessKey) ? processKey : customProcessKey);
         requestDTO.setBusinessContent(
-                variables.get("businessContent")==null?null:variables.get("businessContent").toString());
+                variables.get("businessContent") == null ? null : variables.get("businessContent").toString());
         //variables.get("businessTitle").toString()
         // 目前就暂时按这里这样统一的叫法
         requestDTO.setBusinessTitle("流程审批");
-        requestDTO.setState(variables.get("detailUrl")==null? IdUtil.getSnowflakeNextId()+"" :variables.get("detailUrl").toString());
-        requestDTO.setUserObj(variables.get("userObj")==null?null:variables.get("userObj").toString());
-        String operateComment = variables.get("operateComment")==null?null:variables.get("operateComment").toString();
+        requestDTO.setState(variables.get("detailUrl") == null ? IdUtil.getSnowflakeNextId() + "" : variables.get("detailUrl").toString());
+        requestDTO.setUserObj(variables.get("userObj") == null ? null : variables.get("userObj").toString());
+        String operateComment = variables.get("operateComment") == null ? null : variables.get("operateComment").toString();
         requestDTO.setOperateComment(operateComment);
         /* 下一个审批用户id */
-        System.out.println("[下一个审批用户id]"+variables.get("nextAuditUserId"));
-        requestDTO.setNextAuditUserId(variables.get("nextAuditUserId")==null?null:variables.get("nextAuditUserId").toString());
+        System.out.println("[下一个审批用户id]" + variables.get("nextAuditUserId"));
+        requestDTO.setNextAuditUserId(variables.get("nextAuditUserId") == null ? null : variables.get("nextAuditUserId").toString());
 
         /** propertyList:运行时属性对象：项目部（parentProjectCode），责任单位（responsibilityDeptId），公司（companyId），集团（groupId），合同类型（contractType），价格(contractMoney) */
         /* 集团是顶级，公司是二级，责任单位是三级，项目部是四级 */
         List<PropertyListRequestDTO<Object>> propertyList = new ArrayList<>();
 
         /* 业务用到的 区分集团账号唯一编码 */
-        if(variables.get("groupId")!=null) {
+        if (variables.get("groupId") != null) {
             PropertyListRequestDTO.addPropertyToList(propertyList, "groupId", variables.get("groupId").toString());/* 1000000000 */
             requestDTO.setPropertyList(propertyList);
         }
         /* 业务用到的 责任单位（responsibilityDeptId） */
-        if(variables.get("responsibilityDeptId")!=null) {
+        if (variables.get("responsibilityDeptId") != null) {
             PropertyListRequestDTO.addPropertyToList(propertyList, "responsibilityDeptId", variables.get("responsibilityDeptId").toString());
             requestDTO.setPropertyList(propertyList);
         }
         /* 业务用到的 公司（companyId） */
-        if(variables.get("companyId")!=null) {
+        if (variables.get("companyId") != null) {
             PropertyListRequestDTO.addPropertyToList(propertyList, "companyId", variables.get("companyId").toString());
             requestDTO.setPropertyList(propertyList);
         }
         /* 业务用到的 项目部（parentProjectCode） */
-        if(variables.get("parentProjectCode")!=null) {
+        if (variables.get("parentProjectCode") != null) {
             PropertyListRequestDTO.addPropertyToList(propertyList, "parentProjectCode", variables.get("parentProjectCode").toString());
             requestDTO.setPropertyList(propertyList);
         }
         /* 合同类型 ：劳务分包 专业分包 购买材料 租赁材料 租赁机械（设备） 其他 */
-        if(variables.get("contractType")!=null){
+        if (variables.get("contractType") != null) {
             PropertyListRequestDTO.addPropertyToList(propertyList, "contractType", variables.get("contractType").toString());
             requestDTO.setPropertyList(propertyList);
         }
         /* 合同签订金额(含税) */
-        if(variables.get("contractMoney")!=null){
+        if (variables.get("contractMoney") != null) {
             /** BigDecimal类型 */
             PropertyListRequestDTO.addPropertyToList(propertyList, "contractMoney", new BigDecimal(variables.get("contractMoney").toString()));
             requestDTO.setPropertyList(propertyList);
         }
         /* 最小核算项目编码 */
-        String projectCode = variables.get("projectCode")==null?null:variables.get("projectCode").toString();
+        String projectCode = variables.get("projectCode") == null ? null : variables.get("projectCode").toString();
         if (StrUtil.isNotBlank(projectCode)) {
             /* 最小核算项目 */
             MinProjectVO minProjectVO = minProjectService.getMinProjectByMinAccountCode(projectCode);
@@ -133,7 +134,7 @@ public class BPMProcessService implements IBPMProcessService {
         variables.put("processId", processId);
 
         String completedFlag = "";
-        if (ProcessStateEnum.COMPLETED.getValue().equals(responseDTO.getProcessStatus())){
+        if (ProcessStateEnum.COMPLETED.getValue().equals(responseDTO.getProcessStatus())) {
             completedFlag = ProcessStateEnum.COMPLETED.getDesc();
         }
         variables.put("completedFlag", completedFlag);
@@ -147,12 +148,13 @@ public class BPMProcessService implements IBPMProcessService {
 
     /**
      * 审批流程
+     *
      * @param processKey
      * @param variables
      * @return
      */
     @Override
-    @Transactional(propagation = Propagation.REQUIRED,rollbackFor = Exception.class)
+    @Transactional(propagation = Propagation.REQUIRED, rollbackFor = Exception.class)
     public String auditProcessInstance(String processKey, Map<String, Object> variables) {
         //1.实现调用第三方的审批接口
         BpmAuditRequestDTO requestDTO = new BpmAuditRequestDTO();
@@ -161,40 +163,40 @@ public class BPMProcessService implements IBPMProcessService {
         requestDTO.setOperateComment(variables.get("operateComment").toString());
         requestDTO.setCurTaskId(variables.get("curTaskId").toString());
         /* 下一个审批用户id */
-        System.out.println("[下一个审批用户id]"+variables.get("nextAuditUserId"));
-        requestDTO.setNextAuditUserId(variables.get("nextAuditUserId")==null?null:variables.get("nextAuditUserId").toString());
+        System.out.println("[下一个审批用户id]" + variables.get("nextAuditUserId"));
+        requestDTO.setNextAuditUserId(variables.get("nextAuditUserId") == null ? null : variables.get("nextAuditUserId").toString());
 
         /** propertyList:运行时属性对象：项目部（parentProjectCode），责任单位（responsibilityDeptId），公司（companyId），集团（groupId），合同类型（contractType），价格(contractMoney) */
         /* 集团是顶级，公司是二级，责任单位是三级，项目部是四级 */
         List<PropertyListRequestDTO<Object>> propertyList = new ArrayList<>();
 
         /* 业务用到的 区分集团账号唯一编码 */
-        if(variables.get("groupId")!=null) {
+        if (variables.get("groupId") != null) {
             PropertyListRequestDTO.addPropertyToList(propertyList, "groupId", variables.get("groupId").toString());/* 1000000000 */
             requestDTO.setPropertyList(propertyList);
         }
         /* 业务用到的 责任单位（responsibilityDeptId） */
-        if(variables.get("responsibilityDeptId")!=null) {
+        if (variables.get("responsibilityDeptId") != null) {
             PropertyListRequestDTO.addPropertyToList(propertyList, "responsibilityDeptId", variables.get("responsibilityDeptId").toString());
             requestDTO.setPropertyList(propertyList);
         }
         /* 业务用到的 公司（companyId） */
-        if(variables.get("companyId")!=null) {
+        if (variables.get("companyId") != null) {
             PropertyListRequestDTO.addPropertyToList(propertyList, "companyId", variables.get("companyId").toString());
             requestDTO.setPropertyList(propertyList);
         }
         /* 业务用到的 项目部（parentProjectCode） */
-        if(variables.get("parentProjectCode")!=null) {
+        if (variables.get("parentProjectCode") != null) {
             PropertyListRequestDTO.addPropertyToList(propertyList, "parentProjectCode", variables.get("parentProjectCode").toString());
             requestDTO.setPropertyList(propertyList);
         }
         /* 合同类型 ：劳务分包 专业分包 购买材料 租赁材料 租赁机械（设备） 其他 */
-        if(variables.get("contractType")!=null){
+        if (variables.get("contractType") != null) {
             PropertyListRequestDTO.addPropertyToList(propertyList, "contractType", variables.get("contractType").toString());
             requestDTO.setPropertyList(propertyList);
         }
         /* 合同签订金额(含税) */
-        if(variables.get("contractMoney")!=null){
+        if (variables.get("contractMoney") != null) {
             /** BigDecimal类型 */
             PropertyListRequestDTO.addPropertyToList(propertyList, "contractMoney", new BigDecimal(variables.get("contractMoney").toString()));
             requestDTO.setPropertyList(propertyList);
@@ -202,7 +204,7 @@ public class BPMProcessService implements IBPMProcessService {
 
         boolean pass = (boolean) variables.get("pass");
         requestDTO.setPass(pass);
-        if(!pass){
+        if (!pass) {
             requestDTO.setRejectTaskKey(variables.get("rejectTaskKey").toString());
         }
         BpmAuditResponseDTO responseDTO = bpmService.audit(requestDTO);
@@ -212,13 +214,13 @@ public class BPMProcessService implements IBPMProcessService {
         System.out.println(responseDTO);
         //流程状态
         String processStatus = responseDTO.getProcessStatus();
-        if (pass){
+        if (pass) {
             //完成状态
             if (ProcessStateEnum.COMPLETED.getValue().equals(processStatus)) {
                 System.out.println("-------------ProcessStateEnum.COMPLETED.getValue()");
                 getProcessBusinessService(processKey).processAuditPass(variables);
             }
-        }else{
+        } else {
             //驳回到发起人 状态：自由态
             if (ProcessStateEnum.FREEDOM.getValue().equals(processStatus)) {
                 getProcessBusinessService(processKey).processAuditFreedom(variables);
@@ -227,9 +229,9 @@ public class BPMProcessService implements IBPMProcessService {
             //驳回
             if (ProcessStateEnum.REJECTED.getValue().equals(processStatus)) {
                 //驳回到发起人 状态：自由态
-                if (requestDTO.getRejectTaskKey().equals(RejectTaskKeyEnum.SUBMIT.getDesc())){
+                if (requestDTO.getRejectTaskKey().equals(RejectTaskKeyEnum.SUBMIT.getDesc())) {
                     getProcessBusinessService(processKey).processAuditFreedom(variables);
-                }else {
+                } else {
                     getProcessBusinessService(processKey).processAuditReject(variables);
                 }
             }
@@ -240,6 +242,7 @@ public class BPMProcessService implements IBPMProcessService {
 
     /**
      * 撤销流程
+     *
      * @param processKey
      * @param variables
      * @return
@@ -260,6 +263,7 @@ public class BPMProcessService implements IBPMProcessService {
 
     /**
      * 撤回流程
+     *
      * @param processKey
      * @param variable
      * @return
@@ -274,7 +278,7 @@ public class BPMProcessService implements IBPMProcessService {
         // 获取流程定义信息
         List<BpmLoadTaskDefResponseDTO> loadTaskDefList = bpmService.loadTaskDef(loadTask);
 
-        if(!ObjectUtils.isEmpty(loadTaskDefList)){
+        if (!ObjectUtils.isEmpty(loadTaskDefList)) {
             // 找到待审位置：即第一个完成状态为false的位置
             OptionalInt indexOpt = IntStream.range(0, loadTaskDefList.size())
                     .filter(i -> !loadTaskDefList.get(i).isCompleted())
@@ -286,7 +290,7 @@ public class BPMProcessService implements IBPMProcessService {
             } else {
                 int index = indexOpt.getAsInt();
                 // 可撤回节点：待审节点的前一个节点
-                BpmLoadTaskDefResponseDTO loadTaskDef = loadTaskDefList.get(index-1);
+                BpmLoadTaskDefResponseDTO loadTaskDef = loadTaskDefList.get(index - 1);
                 List<UserList> userList = loadTaskDef.getUserList();
                 String userId = String.valueOf(SecurityUtils.getThridUserId());
                 List<String> user = userList.stream().filter(u -> u.getUserId().equals(userId))
@@ -295,7 +299,7 @@ public class BPMProcessService implements IBPMProcessService {
 //                        .filter(u -> u.getUserId().equals(String.valueOf(SecurityUtils.getUserId())))
 //                        .findFirst();
                 // 判断可撤回的人员和当前登陆人是否是同一个人
-                if(!user.isEmpty()){
+                if (!user.isEmpty()) {
                     BpmInitializeRequestDTO initializeRequestDTO = BeanCopierUtil.copyBean(loadTask, BpmInitializeRequestDTO.class);
                     BpmInitializeResponseDTO initialize = bpmService.initialize(initializeRequestDTO);
                     Map<String, Object> variables = new HashMap<>();
@@ -304,7 +308,7 @@ public class BPMProcessService implements IBPMProcessService {
                     variables.put("operateComment", "撤回");
                     variables.put("pass", false);
                     variables.put("processId", loadTask.getProcessId());
-                    if (index-1 == 0) {
+                    if (index - 1 == 0) {
                         // 发起人撤回
                         revokedProcessInstance(processKey, variables);
                     } else {
@@ -314,7 +318,7 @@ public class BPMProcessService implements IBPMProcessService {
                     }
                 } else {
                     String userName = userList.stream().map(UserList::getUserName).collect(Collectors.joining(", "));
-                    throw new ParamValidateException("当前登陆人不能进行撤回,当前登陆人："+SecurityUtils.getLoginUserNickName()+",可撤回人员："+userName);
+                    throw new ParamValidateException("当前登陆人不能进行撤回,当前登陆人：" + SecurityUtils.getLoginUserNickName() + ",可撤回人员：" + userName);
                 }
             }
         } else {
@@ -329,6 +333,7 @@ public class BPMProcessService implements IBPMProcessService {
     public ResultData<BpmInitializeResponseDTO> initialize(BpmInitializeRequestDTO requestDTO) {
         return ResultData.data(bpmService.initialize(requestDTO));
     }
+
     /**
      * 流程操作日志列表接口
      */
@@ -343,9 +348,68 @@ public class BPMProcessService implements IBPMProcessService {
         return ResultData.data(bpmService.loadTaskDef(requestDTO));
     }
 
+    @Override
+    public String revokeVendorProcess(String processKey, Map<String, Object> variable) {
+        BpmLoadTaskDefRequestDTO loadTask = new BpmLoadTaskDefRequestDTO();
+        loadTask.setBusinessId(variable.get("businessId").toString());
+        loadTask.setProcessId(variable.get("processId").toString());
+
+
+        // 获取流程定义信息
+        List<BpmLoadTaskDefResponseDTO> loadTaskDefList = bpmService.loadTaskDef(loadTask);
+
+        if (!ObjectUtils.isEmpty(loadTaskDefList)) {
+            // 找到待审位置：即第一个完成状态为false的位置
+            OptionalInt indexOpt = IntStream.range(0, loadTaskDefList.size())
+                    .filter(i -> !loadTaskDefList.get(i).isCompleted())
+                    .findFirst();
+            // 判断待审是否存在
+            if (!indexOpt.isPresent() || indexOpt.getAsInt() == 0) {
+                // 所有结点都已完成或都未完成(未提交)
+                throw new ParamValidateException("流程已结束或开始");
+            } else {
+                int index = indexOpt.getAsInt();
+                // 可撤回节点：待审节点的前一个节点
+                BpmLoadTaskDefResponseDTO loadTaskDef = loadTaskDefList.get(index - 1);
+                List<UserList> userList = loadTaskDef.getUserList();
+                String userId = String.valueOf(SecurityUtils.getThridUserId());
+                List<String> user = userList.stream().filter(u -> u.getUserId().equals(userId))
+                        .map(UserList::getUserId).collect(Collectors.toList());
+//                Optional<UserList> user = loadTaskDef.getUserList().stream()
+//                        .filter(u -> u.getUserId().equals(String.valueOf(SecurityUtils.getUserId())))
+//                        .findFirst();
+                // 判断可撤回的人员和当前登陆人是否是同一个人 或者 第一步是招采
+                if (!user.isEmpty() || (index - 1 == 0 && userList != null && userList.size() > 0 && "zc-anonymous".equals(userList.get(0).getUserId()))) {
+                    BpmInitializeRequestDTO initializeRequestDTO = BeanCopierUtil.copyBean(loadTask, BpmInitializeRequestDTO.class);
+                    BpmInitializeResponseDTO initialize = bpmService.initialize(initializeRequestDTO);
+                    Map<String, Object> variables = new HashMap<>();
+                    variables.put("businessId", loadTask.getBusinessId());
+                    variables.put("curTaskId", initialize.getCurTaskId());
+                    variables.put("operateComment", "撤回");
+                    variables.put("pass", false);
+                    variables.put("processId", loadTask.getProcessId());
+                    if (index - 1 == 0) {
+                        // 发起人撤回
+                        revokedProcessInstance(processKey, variables);
+                    } else {
+                        variables.put("rejectTaskKey", loadTaskDef.getNodeKey());
+                        // 其他节点撤回
+                        auditProcessInstance(processKey, variables);
+                    }
+                } else {
+                    String userName = userList.stream().map(UserList::getUserName).collect(Collectors.joining(", "));
+                    throw new ParamValidateException("当前登陆人不能进行撤回,当前登陆人：" + SecurityUtils.getLoginUserNickName() + ",可撤回人员：" + userName);
+                }
+            }
+        } else {
+            throw new ParamValidateException("未找到对应流程");
+        }
+        return variable.get("processId").toString();
+    }
+
 
     /* 业务流程实现对象 */
-    private IProcessBusinessBaseService getProcessBusinessService(String processKey){
+    private IProcessBusinessBaseService getProcessBusinessService(String processKey) {
         Class<IProcessBusinessBaseService> handlerServiceClass = PROCESS_BUSINESS_MAP.get(processKey);
         if (handlerServiceClass == null) {
             throw new ParamValidateException(processKey + "对应的业务类为空,请在[IBPMProcessService#PROCESS_BUSINESS_MAP]中配置...");
