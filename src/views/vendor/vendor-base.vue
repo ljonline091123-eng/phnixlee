@@ -327,7 +327,7 @@ export default {
         enterpriseName: undefined,
         contactName: undefined,
         contactPhone: undefined,
-        vendorClass: 0,
+        vendorClass: "0",
         processType: "10",
       },
       //合约规划查询参数
@@ -381,7 +381,7 @@ export default {
     },
     /** 跳转方案详情 */
     goDetail(id,vendorClass) {
-      let param = Base64.encode(JSON.stringify({id}));
+      let param = Base64.encode(JSON.stringify({id,vendorClass}));
       param = encodeURIComponent(param); //避免base64编码中出现"/"时路由404
       this.$router.push(`/vendor/vendor-detail/${param}`);
     },

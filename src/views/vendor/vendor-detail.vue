@@ -793,7 +793,7 @@ export default {
       vendorState: {},
       mainContact: {},
       vendorBlack: "",
-      vendorClass:0,
+      vendorClass:'',
       path:'/vendor/vendor-base',
       //资质材料
       businessLicense: {}, //营业执照
@@ -897,7 +897,7 @@ export default {
         this.$set(
           this.gradeForm,
           "vendorClass",
-          this.vendorState?.vendorClass || ""
+          this.vendorState?.vendorClass.toString() || ""
         );
         this.$set(
           this.gradeForm,
