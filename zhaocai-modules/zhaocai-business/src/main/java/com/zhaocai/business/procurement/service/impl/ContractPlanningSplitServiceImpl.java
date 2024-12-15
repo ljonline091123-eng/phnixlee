@@ -47,6 +47,7 @@ public class ContractPlanningSplitServiceImpl extends ServiceImpl<ContractPlanni
 
     @Override
     public List<MaterialsList> saveContractPlanningSplit(List<ContractPlanningSplitRequestVO> splitRequestList, Long planId, ProcurementPlan procurementPlan) {
+        System.out.println("保存合约信息:"+splitRequestList);
         List<MaterialsList> list = new ArrayList<>();
         Integer[] floatCount = {0};
         Integer[] fixedCount = {0};
@@ -74,6 +75,7 @@ public class ContractPlanningSplitServiceImpl extends ServiceImpl<ContractPlanni
     public List<MaterialsList> updateContractPlanningSplit(List<ContractPlanningSplitRequestVO> splitRequestList, Long planId,ProcurementPlan procurementPlan) {
         // 删除合约拆分记录
         baseMapper.deleteByPlanId(planId);
+        System.out.println("删除合约拆分记录");
 
         // 删除物料信息
         materialsListService.deleteByPlanId(planId);
