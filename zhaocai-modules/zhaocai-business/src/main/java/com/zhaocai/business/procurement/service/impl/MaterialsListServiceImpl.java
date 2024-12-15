@@ -77,6 +77,7 @@ public class MaterialsListServiceImpl extends ServiceImpl<MaterialsListMapper, M
     public List<MaterialsList> saveMaterialsList(List<MaterialsList> materialsLists, Long contractSplitId, Long planId, ProcurementPlan procurementPlan,Integer[] floatCount,Integer[] fixedCount) {
 //        Integer[] floatCount = {0};
 //        Integer[] fixedCount = {0};
+        System.out.println("List<MaterialsList>:"+materialsLists);
         materialsLists.forEach(materials -> {
             materials.setPlanId(planId);
             materials.setContractSplitId(contractSplitId);
