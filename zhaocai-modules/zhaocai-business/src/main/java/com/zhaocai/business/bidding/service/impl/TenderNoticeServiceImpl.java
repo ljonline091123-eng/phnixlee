@@ -8,7 +8,6 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.zhaocai.business.agreement.domain.Agreement;
 import com.zhaocai.business.agreement.service.IAgreementService;
 import com.zhaocai.business.bidding.domain.*;
-import com.zhaocai.business.bidding.enums.BiddingInfoStatusEnum;
 import com.zhaocai.business.bidding.enums.TenderNoticeApprovalStatusEnum;
 import com.zhaocai.business.bidding.enums.TenderNoticeStatusEnum;
 import com.zhaocai.business.bidding.mapper.TenderNoticeMapper;
@@ -17,8 +16,9 @@ import com.zhaocai.business.bidding.vo.req.TenderNoticeVO;
 import com.zhaocai.business.bidding.vo.req.UnderlingTenderNoticeQueryVO;
 import com.zhaocai.business.bidding.vo.req.query.*;
 import com.zhaocai.business.bidding.vo.res.*;
-import com.zhaocai.business.common.cache.DictBizCache;
-import com.zhaocai.business.common.enums.*;
+import com.zhaocai.business.common.enums.AgreementStateEnum;
+import com.zhaocai.business.common.enums.AttachmentTypeEnum;
+import com.zhaocai.business.common.enums.VendorStateEnum;
 import com.zhaocai.business.common.exception.ParamValidateException;
 import com.zhaocai.business.common.sms.SmsSenderUtil;
 import com.zhaocai.business.manager.http.common.config.ThirdPartyTodoFlowGroupEnum;
@@ -27,7 +27,6 @@ import com.zhaocai.business.manager.http.dto.req.PushThirdPartyTodoTaskRequestDT
 import com.zhaocai.business.manager.http.dto.req.PushThirdPartyTodoTaskSonRequestDTO;
 import com.zhaocai.business.manager.http.service.PerformanceEvaluationService;
 import com.zhaocai.business.manager.http.service.ThridPartyTodoTaskService;
-import com.zhaocai.business.procurement.domain.MinProject;
 import com.zhaocai.business.procurement.domain.ProcurementScheme;
 import com.zhaocai.business.procurement.domain.ProcurementSchemeBidding;
 import com.zhaocai.business.procurement.service.IMinProjectService;
@@ -57,7 +56,6 @@ import com.zhaocai.common.core.utils.bean.BeanCopierUtil;
 import com.zhaocai.common.security.utils.SecurityUtils;
 import com.zhaocai.system.api.domain.SysUser;
 import com.zhaocai.system.api.system.RemoteUserService;
-import io.swagger.annotations.ApiModelProperty;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
@@ -84,6 +82,12 @@ public class TenderNoticeServiceImpl extends ServiceImpl<TenderNoticeMapper,Tend
 
     @Autowired
     private ITenderNoticeRangeService tenderNoticeRangeService;
+
+    @Override
+    public Map<String, Integer> numNotice(VendorNoticePageQueryVO queryDTO) {
+        return null;
+    }
+
     @Autowired
     private ITenderNoticeChangeRecordService tenderNoticeChangeRecordService;
     @Autowired
