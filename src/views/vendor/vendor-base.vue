@@ -327,7 +327,7 @@ export default {
         enterpriseName: undefined,
         contactName: undefined,
         contactPhone: undefined,
-        vendorClass: "0",
+        vendorClass: 0,
         processType: "10",
       },
       //合约规划查询参数
