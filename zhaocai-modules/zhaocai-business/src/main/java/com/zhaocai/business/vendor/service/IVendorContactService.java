@@ -153,4 +153,6 @@ public interface IVendorContactService  extends IService<VendorContact> , IProce
     VendorContact getVendorManager(Long vendorId);
 
     VendorContactInfoVO getInfo(Long id);
+
+    String checkLoginAccount(String contactPhone);
 }

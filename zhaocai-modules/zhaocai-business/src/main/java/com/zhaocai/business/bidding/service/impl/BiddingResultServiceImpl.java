@@ -8,6 +8,7 @@ import com.zhaocai.business.agreement.domain.Agreement;
 import com.zhaocai.business.bidding.domain.BiddingInfo;
 import com.zhaocai.business.bidding.domain.BiddingResult;
 import com.zhaocai.business.bidding.domain.TenderNotice;
+import com.zhaocai.business.bidding.enums.TenderNoticeApprovalStatusEnum;
 import com.zhaocai.business.bidding.enums.TenderNoticeStatusEnum;
 import com.zhaocai.business.bidding.mapper.BiddingResultMapper;
 import com.zhaocai.business.bidding.service.IBiddingInfoService;
@@ -20,6 +21,7 @@ import com.zhaocai.business.bidding.vo.req.ResultReleasVO;
 import com.zhaocai.business.bidding.vo.res.*;
 import com.zhaocai.business.common.enums.*;
 import com.zhaocai.business.common.exception.ParamValidateException;
+import com.zhaocai.business.common.utils.ValidateUtils;
 import com.zhaocai.business.manager.http.dto.req.*;
 import com.zhaocai.business.manager.http.dto.res.BpmAuditResponseDTO;
 import com.zhaocai.business.manager.http.dto.res.BpmInitializeResponseDTO;
@@ -116,6 +118,8 @@ public class BiddingResultServiceImpl extends ServiceImpl<BiddingResultMapper,Bi
         if (!TenderNoticeStatusEnum.CALI_REPORT.getState().equals(tenderNotice.getNoticeStatus())){
             throw new ParamValidateException("当前数据状态不能定标");
         }
+        /* 删除之前的数据 */
+        baseMapper.deleteByNoticeId(noticeId);
 
         /* 获取对应的采购方案 */
         ProcurementScheme scheme = procurementSchemeService.getById(tenderNotice.getSchemeId());
@@ -166,6 +170,37 @@ public class BiddingResultServiceImpl extends ServiceImpl<BiddingResultMapper,Bi
 
         return res;
     }
+
+
+    /**
+     * 撤回定标
+     * @param id
+     */
+    @Override
+    public void revokeBidding(Long id) {
+        TenderNotice tenderNotice = tenderNoticeService.getTenderNotice(id);
+        ValidateUtils.isNullException(tenderNotice.getWfProcessId(),"非审批中的定标不允许撤回");
+        // 撤回流程
+        Map<String,Object> paramMap = new HashMap<>();
+        paramMap.put("businessId", tenderNotice.getId());
+        paramMap.put("processId", tenderNotice.getWfProcessId());
+        processService.revokeProcess(ProcessKeyEnum.ZHAOCAI_TENDER_CALIBRATE.getIdentifying(),paramMap);
+    }
+
+    /**
+     * 撤回定标 回调方法
+     * @param variables
+     */
+    @Override
+    public void processAuditRevoke(Map<String, Object> variables) {
+        String processId = variables.get("processId").toString();
+        String businessId = variables.get("businessId").toString();
+        /* 设置已经撤回 */
+        tenderNoticeService.update(new LambdaUpdateWrapper<TenderNotice>()
+                .set(TenderNotice::getState, TenderNoticeApprovalStatusEnum.REVOKED.getState())
+                .eq(TenderNotice::getId, Long.valueOf(businessId)));
+    }
+
 
     @Override
     public List<BiddingResultListVO> getBiddingResult(Long noticeId) {
@@ -326,28 +361,42 @@ public class BiddingResultServiceImpl extends ServiceImpl<BiddingResultMapper,Bi
         String businessId = variables.get("businessId").toString();
         Object flagObj = variables.get("completedFlag");
         Integer nextNoticeStatus = null;
+        Integer state = TenderNoticeApprovalStatusEnum.IN_APPROVAL.getState();
         if (!ObjectUtils.isEmpty(flagObj) && ProcessStateEnum.COMPLETED.getDesc().equals(flagObj.toString())){
             //如果流程状态为已完成，则直接更新状态
             nextNoticeStatus = findNextTenderNoticeStatus(Long.valueOf(businessId));
+            state = TenderNoticeApprovalStatusEnum.APPROVE.getState();
         }
         tenderNoticeService.update(new LambdaUpdateWrapper<TenderNotice>()
                 .set(null != nextNoticeStatus, TenderNotice::getNoticeStatus, nextNoticeStatus)
                 .set(TenderNotice::getWfProcessId, processId)
+                .set(TenderNotice::getState, state)/* 已通过/审批中 */
                 .eq(TenderNotice::getId, Long.valueOf(businessId)));
     }
 
+    /** 审批通过，可设置状态为 已完成 */
     @Override
     public void processAuditPass(Map<String, Object> variables) {
         String businessId = variables.get("businessId").toString();
         Integer nextNoticeStatus = findNextTenderNoticeStatus(Long.valueOf(businessId));
         tenderNoticeService.updateStatus(Long.valueOf(businessId), nextNoticeStatus);
+        /* 审批已通过 */
+        tenderNoticeService.update(new LambdaUpdateWrapper<TenderNotice>()
+                .set(TenderNotice::getState, TenderNoticeApprovalStatusEnum.APPROVE.getState())
+                .eq(TenderNotice::getId, Long.valueOf(businessId)));
     }
 
+    /** 驳回到发起人 */
     @Override
     public void processAuditFreedom(Map<String, Object> variables) {
-
+        String businessId = variables.get("businessId").toString();
+        /* 已驳回 */
+        tenderNoticeService.update(new LambdaUpdateWrapper<TenderNotice>()
+                .set(TenderNotice::getState, TenderNoticeApprovalStatusEnum.REJECT.getState())
+                .eq(TenderNotice::getId, Long.valueOf(businessId)));
     }
 
+    /** 驳回到中途节点，可以设置状态为 审批中 */
     @Override
     public void processAuditReject(Map<String, Object> variables) {
 

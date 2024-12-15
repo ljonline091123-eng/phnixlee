@@ -52,6 +52,7 @@ public class VendorPortalServiceImpl implements IVendorPortalService {
     @Autowired
     private IVendorCertificationService vendorCertificationService;
 
+    /* 供应商首页 未登录只能查看公开招标 */
     @Override
     public PageResult<VendorPortalNoticeListVO> getNotice(VendorPortalNoticePageQueryVO queryDTO) {
         queryDTO.setNowDate(DateUtils.getNowDate());
@@ -61,6 +62,7 @@ public class VendorPortalServiceImpl implements IVendorPortalService {
         return pageResult;
     }
 
+    /* 供应商首页 登录后不仅仅查看公开招标还有邀请和单一等等，是根据供应商id来查询 */
     @Override
     public PageResult<VendorPortalNoticeListVO> getNoticeLogin(VendorPortalNoticePageQueryVO queryDTO) {
         queryDTO.setNowDate(DateUtils.getNowDate());
@@ -69,11 +71,17 @@ public class VendorPortalServiceImpl implements IVendorPortalService {
         return pageResult;
     }
 
+    /* 供应商 工作台首页 消息栏 列表数据 */
     @Override
     public List<VendorPortalMsgListVO>  msgList(VendorPortalNoticePageQueryVO queryDTO) {
         queryDTO.setNowDate(DateUtils.getNowDate());
-        queryDTO.setVendorId(getVendor(SecurityUtils.getUserId()).getId());
+//        queryDTO.setVendorId(getVendor(SecurityUtils.getUserId()).getId());
+        /* 获取供应商信息 */
+        Vendor vendor = getVendor(SecurityUtils.getUserId());
+        queryDTO.setVendorId(vendor.getId());
+        queryDTO.setRegisterApprovalTime(vendor.getRegisterApprovalTime());
         PageResult<VendorPortalNoticeListVO> pageResult = tenderNoticeService.selectVendorPortalNoticePage(queryDTO);
+        /* 返回对象 */
         List<VendorPortalMsgListVO> list = new ArrayList<>();
         if(pageResult!=null && pageResult.getTotal()>0){
             for (int i = 0; i < pageResult.getRows().size(); i++) {
@@ -86,7 +94,7 @@ public class VendorPortalServiceImpl implements IVendorPortalService {
             }
         }
         /* 获取供应商信息 */
-        Vendor vendor = vendorService.getByLoginUser(SecurityUtils.getUserId());
+//        Vendor vendor = vendorService.getByLoginUser(SecurityUtils.getUserId());
         /* 获取该企业的 法人授权书 */
         Date date30 = DateUtils.plusDay(new Date(),30);
         List<VendorCertification> attachments = vendorCertificationService.list(new LambdaQueryWrapper<VendorCertification>()

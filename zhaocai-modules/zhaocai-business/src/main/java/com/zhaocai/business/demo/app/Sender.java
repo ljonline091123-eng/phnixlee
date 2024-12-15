@@ -19,15 +19,15 @@ public class Sender {
 	/**
 	 * 服务部署地址
 	 */
-	private static final String SERVER_URL = "http://192.168.240.31:9010/apiserver";
+	private static final String SERVER_URL = "http://192.168.241.156:9010/apiserver";
 	/**
 	 * 分配的应用代码
 	 */
-	private static final String AppCode = "0hzTkMdt583i9Yf66G";
+	private static final String AppCode = "LVKzL0SRfIkQzJOIHt";
 	/**
 	 * 分配的应用秘钥，请不要通过参数传递
 	 */
-	private static final String AppSecret = "4CDWd57l7Psnw19jdUUFqaXjZU";
+	private static final String AppSecret = "iCFRTfRXKFPoBkTzqc6W0aivdf";
 
 	/**
 	 * Http请求方法，POST

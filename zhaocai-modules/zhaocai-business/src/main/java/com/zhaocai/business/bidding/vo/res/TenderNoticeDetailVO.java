@@ -35,6 +35,12 @@ public class TenderNoticeDetailVO {
     @ApiModelProperty(value =  "是否报名（未报名 已报名）")
     private String applyStatus;
 
+    /**
+     * 审批状态 {@link com.zhaocai.business.bidding.enums.TenderNoticeApprovalStatusEnum}
+     */
+    @ApiModelProperty(value = "审批状态")
+    private Integer state;
+
     @ApiModelProperty(value =  "是否投标时间结束（0未结束 1已结束）")
     private Integer bidEndStatus;
 

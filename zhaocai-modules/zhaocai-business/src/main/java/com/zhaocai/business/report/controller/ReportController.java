@@ -58,9 +58,19 @@ public class ReportController extends BladeController {
      * @param vBidCountVo
      * @return
      */
+//    @GetMapping("/bidCountReport")
+//    public ResultData<List<VBidCountVo>> bidCountReport(VBidCountVo vBidCountVo){
+//        return ResultData.data(bidCountService.bidCountReport(vBidCountVo));
+//    }
+
+    /**
+     * 招标率报表(左树右表形式)
+     * @param vBidCountVo
+     * @return
+     */
     @GetMapping("/bidCountReport")
     public ResultData<List<VBidCountVo>> bidCountReport(VBidCountVo vBidCountVo){
-        return ResultData.data(bidCountService.bidCountReport(vBidCountVo));
+        return ResultData.data(bidCountService.getBidCountReport(vBidCountVo));
     }
 
     /**
@@ -206,5 +216,15 @@ public class ReportController extends BladeController {
     @GetMapping("/managePageReportDept")
     public AjaxResult managePageReportDept(ManagePageReportVo managePage) {
         return AjaxResult.success(managePageReportService.managePageReportDept(managePage));
+    }
+
+    /**
+     * 获取当前组织及以下的组织机构
+     * @param id
+     * @return
+     */
+    @GetMapping("/getOrgList")
+    public AjaxResult getOrgList(String id) {
+        return AjaxResult.success(managePageReportService.getOrgList(id));
     }
 }

@@ -46,7 +46,7 @@ public class AgreementWordUtils {
         replacements.put("$乙方纳税人识别号$",agreementWordInfo.getVendor().getSocialCreditCode());
         replacements.put("$乙方地址$",agreementWordInfo.getVendor().getEnterpriseAddress());
         replacements.put("$乙方电话$",agreementWordInfo.getVendor().getContactPhone());
-        replacements.put("$乙方开户行$",agreementWordInfo.getVendor().getAccountBranch()==null?"":agreementWordInfo.getVendor().getAccountBranch().toString());
+        replacements.put("$乙方开户行$",agreementWordInfo.getVendor().getAccountBranch()==null?"":agreementWordInfo.getVendor().getAccountBranch());
         replacements.put("$乙方账号$",agreementWordInfo.getVendor().getBankAccount());
         replacements.put("$乙方开票金额$",agreementWordInfo.getTotalAmountExcTax().toString());
 

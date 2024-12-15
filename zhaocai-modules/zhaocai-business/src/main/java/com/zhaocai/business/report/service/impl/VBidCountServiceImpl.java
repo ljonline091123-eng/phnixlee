@@ -280,6 +280,100 @@ public class VBidCountServiceImpl extends ServiceImpl<VBidCountMapper, VBidCount
     }
 
     /**
+     * 获取招标率报表（左树右表）
+     * @param vBidCountVo
+     * @return
+     */
+    @Override
+    public List<VBidCountVo> getBidCountReport(VBidCountVo vBidCountVo) {
+        List<VBidCountVo> resultList = new ArrayList<>();
+        // 集团或公司端
+        if(null != vBidCountVo.getId()){
+            // 获取组织结构(本级及以下)
+            if(null != vBidCountVo.getDeptId()){
+                vBidCountVo.setId(vBidCountVo.getDeptId());
+            }
+            List<VBidCountVo> bidCountList = baseMapper.select(vBidCountVo);
+            if(!CollectionUtils.isEmpty(bidCountList)){
+                bidCountList = this.handleDict(bidCountList);
+                // 按部门编号分组
+                resultList = bidCountList.stream()
+                        .collect(Collectors.groupingBy(VBidCountVo::getProjectDepartmentId))
+                        .entrySet()
+                        .stream()
+                        .map(entry -> {
+                            List<VBidCountVo> projectList = entry.getValue();
+                            VBidCountVo vo = new VBidCountVo();
+                            vo = this.getCountData(vo,projectList);
+                            vo.setId(entry.getKey());
+                            // 获取 projectList 中第一个对象的 projectDepartmentName
+                            if (!projectList.isEmpty()) {
+                                vo.setDeptName(projectList.get(0).getProjectDepartmentName());
+                            }
+                            vo.setType("G");
+                            vo.setChildren(projectList);
+                            return vo;
+                        }).collect(Collectors.toList());
+            }
+        } else if(null != vBidCountVo.getMinAccountCode()){         // 项目端
+            List<VBidCountVo> bidCountList = baseMapper.select(vBidCountVo);
+            if(!CollectionUtils.isEmpty(bidCountList)){
+                VBidCountVo vo = new VBidCountVo();
+                vo = this.getCountData(vo,bidCountList);
+                vo.setId(bidCountList.get(0).getProjectDepartmentId());
+                vo.setDeptName(bidCountList.get(0).getProjectDepartmentName());
+                vo.setType("X");
+                vo.setChildren(bidCountList);
+                resultList.add(vo);
+            }
+        }
+        return resultList;
+    }
+
+    /**
+     * 获取汇总数据
+     * @param vo
+     * @param projectList
+     * @return
+     */
+    private VBidCountVo getCountData(VBidCountVo vo, List<VBidCountVo> projectList) {
+        // 初始化BigDecimal变量
+        BigDecimal cgNum = BigDecimal.ZERO;
+        BigDecimal gkNum = BigDecimal.ZERO;
+        BigDecimal yqNum = BigDecimal.ZERO;
+        BigDecimal xjNum = BigDecimal.ZERO;
+        BigDecimal dyNum = BigDecimal.ZERO;
+        BigDecimal gkTotalNum = BigDecimal.ZERO;
+        BigDecimal ngkTotalNum = BigDecimal.ZERO;
+        BigDecimal nBidTotalNum = BigDecimal.ZERO;
+        // 一次性遍历列表，计算所有需要的值
+        for (VBidCountVo item : projectList) {
+            cgNum = cgNum.add(item.getCgNum());
+            gkNum = gkNum.add(item.getGkNum());
+            yqNum = yqNum.add(item.getYqNum());
+            xjNum = xjNum.add(item.getXjNum());
+            dyNum = dyNum.add(item.getDyNum());
+            gkTotalNum = gkTotalNum.add(item.getGkTotalNum());
+            ngkTotalNum = ngkTotalNum.add(item.getNgkTotalNum());
+            nBidTotalNum = nBidTotalNum.add(item.getNBidTotalNum());
+        }
+        // 设置计算结果
+        vo.setCgNum(cgNum);
+        vo.setGkNum(gkNum);
+        vo.setYqNum(yqNum);
+        vo.setXjNum(xjNum);
+        vo.setDyNum(dyNum);
+        vo.setGkTotalNum(gkTotalNum);
+        vo.setNgkTotalNum(ngkTotalNum);
+        vo.setNBidTotalNum(nBidTotalNum);
+        // 计算比率
+        if (cgNum.compareTo(BigDecimal.ZERO) > 0) {
+            vo.setGkRatio(gkNum.divide(cgNum, 4, RoundingMode.HALF_UP).multiply(BigDecimal.valueOf(100)).setScale(2, RoundingMode.HALF_UP));
+        }
+        return vo;
+    }
+
+    /**
      * 创建组织树
      * @param resultList
      * @param thridParentId

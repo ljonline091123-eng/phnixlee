@@ -33,4 +33,10 @@ public class BiddingResultListVO implements Serializable {
     @ApiModelProperty(value = "中标候选人名次")
     private String candidate;
 
+    /**
+     * 中标结果（0未中标 1已中标）
+     */
+    @ApiModelProperty(value = "中标结果（0未中标 1已中标）")
+    private Integer bidResult;
+
 }

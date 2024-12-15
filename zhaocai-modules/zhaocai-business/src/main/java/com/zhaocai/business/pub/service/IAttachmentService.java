@@ -7,7 +7,6 @@ import com.zhaocai.business.pub.vo.req.AttachmentRequestVO;
 import com.zhaocai.business.pub.vo.res.AttachmentVO;
 import com.zhaocai.business.vendor.vo.res.DownloadAgreementVO;
 
-import java.io.InputStream;
 import java.util.List;
 
 /**
@@ -17,6 +16,25 @@ import java.util.List;
  * @date 2024-05-24
  */
 public interface IAttachmentService extends IService<Attachment> {
+
+    //文档中台——获取预览word文件URL
+    String  viewWordFileURL(String fileName, String fileUrl);
+
+    //文档中台——获取预览PDF文件URL
+    String  viewPDFFileURL(String fileName, String fileUrl);
+
+
+    //文档中台——根据文件URL获取预览PDF文件URL（不用下载在本地）
+    String  previewPdfUrlByFileUrl(String fileName, String fileUrl);
+
+    //文档中台——获取预览图片URL
+    String  viewImageURL(String fileName, String fileUrl);
+
+    //文档中台——获取编辑word文档的URL
+    String  editWordURL(Long attachmentId, String fileName, String fileUrl);
+
+    //文档中台-office转PDF
+    String  convertOfficeToPdf(String fileName, String fileUrl, String waterMarkContent);
 
     /**
      * 新增附件
@@ -33,6 +51,13 @@ public interface IAttachmentService extends IService<Attachment> {
      * @return
      */
     List<AttachmentVO> listAttachment(AttachmentTypeEnum businessType, Long businessId);
+
+    /**
+     * 获取指定id的附件
+     * @param attachmentId
+     * @return
+     */
+    AttachmentVO getAttachmentById(Long attachmentId);
 
     /**
      * 新增附件
@@ -65,10 +90,20 @@ public interface IAttachmentService extends IService<Attachment> {
     void updateBusiness(Long id, AttachmentTypeEnum attachmentTypeEnum, Long businessId);
 
     /**
+     * 更新附件业务信息
+     * @param id
+     * @param fileName
+     * @param businessId
+     */
+    void updateBusiness(Long id,  Long businessId,String fileUrl,String fileName);
+
+    /**
      * 获取附件文件流
      * @param attachmentId
      * @param agreementName
      * @return
      */
     DownloadAgreementVO getAttachmentInputStream(long attachmentId,String agreementName);
+
+
 }

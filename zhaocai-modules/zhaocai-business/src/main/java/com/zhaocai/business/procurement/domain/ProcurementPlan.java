@@ -127,7 +127,7 @@ public class ProcurementPlan extends BaseEntity {
     private Integer subjectMatterType;
 
     /**
-     * 价格类型
+     * 价格类型 {@link com.zhaocai.business.common.enums.PriceTypeEnum}
      */
     @ApiModelProperty(value = "价格类型")
     private Integer priceType;

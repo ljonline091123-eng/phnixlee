@@ -15,8 +15,12 @@ import com.zhaocai.business.procurement.vo.req.BiddingSchemeListQueryVO;
 import com.zhaocai.business.procurement.vo.req.ProcurementSchemeListQueryVO;
 import com.zhaocai.business.procurement.vo.req.ProcurementSchemeRequestVO;
 import com.zhaocai.business.procurement.vo.res.*;
+import com.zhaocai.business.pub.service.IAttachmentService;
+import com.zhaocai.business.pub.utils.YOZOfileUtils;
+import com.zhaocai.business.pub.vo.res.AttachmentVO;
 import com.zhaocai.common.core.bean.PageResult;
 import com.zhaocai.common.core.web.bean.ResultData;
+import com.zhaocai.common.security.utils.SecurityUtils;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiModelProperty;
 import io.swagger.annotations.ApiOperation;
@@ -46,6 +50,35 @@ public class ProcurementSchemeController extends BladeController {
 
     @Autowired
     private IBiddingResultService biddingResultService;
+
+    @Autowired
+    private YOZOfileUtils yozOfileUtils;
+
+    @Autowired
+    private IAttachmentService attachmentService;
+
+    /*
+    * 获取采购方案的招标文件和合同模板的文档中台的编辑URL
+    * */
+    @GetMapping("/getSchemeEditFileUrl")
+    @ApiOperation(value = "采购方案的文档编辑URL")
+    public ResultData<String> getSchemeEditFileUrl(@RequestParam("attachmentId") Long attachmentId, @RequestParam("procurementSchemeId") Long procurementSchemeId) {
+        String createBy = procurementSchemeService.getProcurementSchemeInfoByID(procurementSchemeId).getCreateBy();
+        String LoginUserNickName = SecurityUtils.getLoginUserNickName();
+        AttachmentVO attachmentVO = attachmentService.getAttachmentById(attachmentId);
+        String fileName = attachmentVO.getFileName();
+        String fileUrl = attachmentVO.getFileUrl();
+        if(yozOfileUtils.isNULLFileURL(fileUrl)){
+            return ResultData.fail("该文件存储的fileUrl为空，无法编辑文件！！！");
+        }
+        //只有创建者可以编辑文档，其他用户只能预览文档
+        if(createBy.equals(LoginUserNickName)){
+            return ResultData.data(attachmentService.editWordURL(attachmentId,fileName,fileUrl));
+        }else {
+            return ResultData.data(attachmentService.viewWordFileURL(fileName,fileUrl));
+        }
+
+    }
 
     /**
      * 采购方案列表查询

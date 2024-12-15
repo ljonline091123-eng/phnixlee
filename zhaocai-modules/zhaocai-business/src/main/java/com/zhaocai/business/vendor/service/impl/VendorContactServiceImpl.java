@@ -50,6 +50,7 @@ import com.zhaocai.common.signature.dto.command.PersonAuthCommandRequestBuilder;
 import com.zhaocai.common.signature.service.SignatureCommandFactory;
 import com.zhaocai.common.signature.service.command.PersonAuthCommand;
 import com.zhaocai.system.api.domain.BusinessUser;
+import com.zhaocai.system.api.domain.SysUser;
 import com.zhaocai.system.api.system.RemoteUserService;
 import lombok.extern.slf4j.Slf4j;
 import net.qiyuesuo.v3sdk.model.auth.response.UserauthAuthurl2Response;
@@ -274,17 +275,22 @@ public class VendorContactServiceImpl extends ServiceImpl<VendorContactMapper,Ve
 
     @Override
     public Long addLoginUser(String contactPhone, String contactName) {
-        BusinessUser businessUser = new BusinessUser();
-        businessUser.setUserName(contactPhone);
-        businessUser.setNickName(contactName);
-        businessUser.setUserType(UserTypeEnum.VENDOR);
-        R<Long> r = remoteUserService.addBusinessUser(businessUser, SecurityConstants.INNER);
+        SysUser user = remoteUserService.getUserInfoByUsername(contactPhone, SecurityConstants.INNER);
+        if (user != null) {
+            return user.getUserId();
+        } else {
+            BusinessUser businessUser = new BusinessUser();
+            businessUser.setUserName(contactPhone);
+            businessUser.setNickName(contactName);
+            businessUser.setUserType(UserTypeEnum.VENDOR);
+            R<Long> r = remoteUserService.addBusinessUser(businessUser, SecurityConstants.INNER);
 
-        if (R.SUCCESS != r.getCode()) {
-            throw new BusinessException(r.getMsg());
+            if (R.SUCCESS != r.getCode()) {
+                throw new BusinessException(r.getMsg());
+            }
+
+            return r.getData();
         }
-
-        return r.getData();
     }
 
     @Override
@@ -459,6 +465,16 @@ public class VendorContactServiceImpl extends ServiceImpl<VendorContactMapper,Ve
             return vo;
         }
         throw new BusinessException("该id经查询无供应商联系人数据");
+    }
+
+    @Override
+    public String checkLoginAccount(String contactPhone) {
+        VendorContact vendorContact = super.getOne(new LambdaQueryWrapper<VendorContact>()
+                .eq(VendorContact::getContactPhone,contactPhone));
+        if (vendorContact != null) {
+            return "成功";
+        }
+        return " 登录用户:"+contactPhone+" 不存在";
     }
 
     /**

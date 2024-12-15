@@ -3,6 +3,7 @@ package com.zhaocai.business.process.service.impl;
 import cn.hutool.core.util.IdUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.extra.spring.SpringUtil;
+import com.zhaocai.business.common.enums.ProcessKeyEnum;
 import com.zhaocai.business.common.enums.ProcessStateEnum;
 import com.zhaocai.business.common.enums.RejectTaskKeyEnum;
 import com.zhaocai.business.common.exception.ParamValidateException;
@@ -14,10 +15,12 @@ import com.zhaocai.business.process.service.IBPMProcessService;
 import com.zhaocai.business.process.service.IProcessBusinessBaseService;
 import com.zhaocai.business.procurement.service.IMinProjectService;
 import com.zhaocai.business.procurement.vo.res.MinProjectVO;
+import com.zhaocai.business.pub.service.ISystemUserService;
 import com.zhaocai.common.core.constant.UserConstants;
 import com.zhaocai.common.core.utils.bean.BeanCopierUtil;
 import com.zhaocai.common.core.web.bean.ResultData;
 import com.zhaocai.common.security.utils.SecurityUtils;
+import com.zhaocai.system.api.domain.SysUser;
 import io.swagger.annotations.ApiOperation;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -46,7 +49,8 @@ public class BPMProcessService implements IBPMProcessService {
     private BpmService bpmService;
     @Autowired
     private IMinProjectService minProjectService;
-
+    @Autowired
+    private ISystemUserService systemUserService;
     @Autowired
     private UnderlingSystemService underlingSystemService;
 
@@ -325,6 +329,42 @@ public class BPMProcessService implements IBPMProcessService {
             throw new ParamValidateException("未找到对应流程");
         }
         return variable.get("processId").toString();
+    }
+
+
+    @Override
+    public String getOrg(String org){
+        String result = null;
+        /* 根据组织获取对应的二级单位 */
+        String orgTwo = underlingSystemService.getL2OrgByOrgId(org);
+        /* 获取三级单位 */
+        String orgThree = underlingSystemService.getL3OrgByOrgId(org);
+        /* 获取所有流程 */
+        List<ListCataLogDTO> listCataLogDTOS = underlingSystemService.listCatalog();
+        if (listCataLogDTOS != null) {
+            /* 判断二级单位流程是否存在 */
+            ListCataLogDTO cataLogDTOTwo = listCataLogDTOS.stream().filter(cateLog -> cateLog.getCatalogKey().equals(orgTwo)).findFirst().orElse(null);
+            if (cataLogDTOTwo != null) {
+                /* 赋值使用二级单位 */
+                result = orgTwo;
+            }
+            if (orgThree != null) {
+                /* 判断三级单位流程是否存在 */
+                ListCataLogDTO cataLogDTOThree = listCataLogDTOS.stream().filter(cateLog -> cateLog.getCatalogKey().equals(orgThree)).findFirst().orElse(null);
+                if (cataLogDTOThree != null) {
+                    /* 赋值使用三级单位 */
+                    result = orgThree;
+                }
+            }
+        }
+        return result;
+    }
+
+    @Override
+    public String getOrgByUserId(String userId){
+        SysUser sysUser = systemUserService.getUserById(Long.parseLong(userId));
+        if(sysUser==null)return null;
+        return getOrg(sysUser.getThridOrgId());
     }
 
     /**

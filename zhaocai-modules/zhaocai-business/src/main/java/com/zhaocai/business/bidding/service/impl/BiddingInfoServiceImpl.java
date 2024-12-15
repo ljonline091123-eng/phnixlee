@@ -89,6 +89,8 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
     @Autowired
     private IExpertService expertService;
     @Autowired
+    private IBiddingResultService biddingResultService;
+    @Autowired
     @Lazy
     private IProcurementPlanService procurementPlanService;
     @Autowired
@@ -344,8 +346,31 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
             Collections.sort(listReturn);
             //补充字段内容
             fillFieldBid(listReturn, isFillBiddingInfo, quoteNum);
+            // 中标审批结果显示
+            fillFieldBidApply(listReturn,queryVO.getNoticeId());
         }
         return listReturn;
+    }
+
+    /** 填充列表列表信息 */
+    private void fillFieldBidApply(List<BiddingQuotationListVO> list,Long noticeId){
+        List<BiddingResult> results = biddingResultService.list(new LambdaQueryWrapper<BiddingResult>()
+                .eq(BiddingResult::getNoticeId, noticeId)
+                .eq(BiddingResult::getSureBid, NumberConstant.ONE));
+        if (results.isEmpty()) {
+            return;
+        }
+        Map<Long, BiddingResult> resultMap = results.stream()
+                .collect(Collectors.toMap(BiddingResult::getVendorId, result -> result));
+        /* 遍历 list，检查每个 BiddingQuotationListVO 是否匹配，并更新 sureBid */
+        for (BiddingQuotationListVO quotationListVO : list) {
+            BiddingResult result = resultMap.get(quotationListVO.getVendorId());
+            if (result != null) {
+                quotationListVO.setSureBid(1);  // 设置 sureBid 为 1
+            }else{
+                quotationListVO.setSureBid(0);  // 设置 sureBid 为 0
+            }
+        }
     }
 
     /** 填充列表列表信息 */
@@ -550,6 +575,26 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
         if (count > 0){
             throw new ParamValidateException("有未收取保证金的供应商，不允许进入下一环节");
         }
+
+        ProcurementScheme scheme = procurementSchemeService.getById(tenderNotice.getSchemeId());
+        long vendorIds = this.count(new LambdaQueryWrapper<BiddingInfo>()
+                .eq(BiddingInfo::getNoticeId, noticeId)
+                .eq(BiddingInfo::getSubmitStatus, 1)
+                .ne(BiddingInfo::getBiddingStatus, BiddingInfoStatusEnum.HAVE_ABANDON.getState())
+                .isNull(BiddingInfo::getParentId));
+        if (scheme.getProcurementType() != null){
+            if (scheme.getProcurementType() == NumberConstant.ONE && vendorIds < NumberConstant.THREE){
+                throw new ParamValidateException("公开招标需3家供应商以上");
+            }else if (scheme.getProcurementType() == NumberConstant.TWO && vendorIds < NumberConstant.THREE){
+                throw new ParamValidateException("邀请招标需3家供应商以上");
+            } else if (scheme.getProcurementType() == NumberConstant.THREE && vendorIds < NumberConstant.THREE){
+                throw new ParamValidateException("询价采购需3家供应商以上");
+            }
+//            else if (scheme.getProcurementType() == NumberConstant.FOUR && vendorIds != NumberConstant.ONE){
+//                throw new ParamValidateException("单一来源只能1家供应商");
+//            }
+        }
+
 
         /* 招标对象 关闭二次报价 */
         tenderNoticeService.update(new LambdaUpdateWrapper<TenderNotice>()
@@ -1123,7 +1168,15 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
             LinkedHashMap<String, String> varParam = new LinkedHashMap<>();
             varParam.put("name", expert.getExpertName());
             varParam.put("place", placeBuff.toString());
-            varParam.put("catalogue", expert.getExpertType() == 1 ? "技术" : "商务");
+
+            String catalogue = "";
+            if(expert.getExpertType().contains("1") && expert.getExpertType().contains("2"))
+                catalogue = "技术商务";
+            else if(expert.getExpertType().contains("1"))
+                catalogue = "技术";
+            else if(expert.getExpertType().contains("2"))
+                catalogue = "商务";
+            varParam.put("catalogue", catalogue);
             smsSenderUtil.sendMessage(SmsTemplateEnum.EXPERT_BID_EVA_NOTICE.getCode(), expert.getExpertPhone(), varParam);
         }
         return true;

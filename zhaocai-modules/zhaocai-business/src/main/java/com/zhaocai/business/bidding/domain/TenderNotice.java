@@ -71,16 +71,17 @@ public class TenderNotice extends BaseEntity {
     @ApiModelProperty(value =  "专家是否开启评标（0否-默认 1是）")
     private Integer isEval;
 
-//    @ApiModelProperty(value =  "是否允许调价")
-//    private Long isOpenPeople;
-
     /**
      * 流程实例id
      */
     @ApiModelProperty(hidden = true)
     private String wfProcessId;
 
-
+    /**
+     * 审批状态 {@link com.zhaocai.business.bidding.enums.TenderNoticeApprovalStatusEnum}
+     */
+    @ApiModelProperty(value = "审批状态")
+    private Integer state;
 
     /** 发布公告联系人 */
     @ApiModelProperty(value =  "发布公告联系人")

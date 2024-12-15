@@ -60,7 +60,7 @@ public class ProcurementScheme extends BaseEntity {
     private Integer procurementPlanType;
 
     /**
-     * 采购方式
+     * 采购方式 （1公开招标 2邀请招标 3询价采购 4单一来源）
      */
     @ApiModelProperty(value = "采购方式")
     @NotNull(message = "采购方式不能为空")

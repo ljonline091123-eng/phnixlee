@@ -47,7 +47,7 @@ public class ProcurementPlanController extends BladeController {
     }
 
     /**
-     * 项目合约规划列表查询
+     * 项目合约规划列表查询 新增采购计划弹窗页面
      */
     @GetMapping("/contractPlanningListPage")
     @ApiOperation(value = "项目合约规划列表查询")
@@ -140,7 +140,7 @@ public class ProcurementPlanController extends BladeController {
     @GetMapping("/listPlanContractSplit")
     @ApiOperation(value = "获取采购计划和拆分合约")
     public ResultData<PageResult<ProcurementPlanContractSplitVO>> listPlanContractSplit(@Valid ProcurementPlanContractSplitQueryVO queryVO) {
-        queryVO.setProcurementOfficer(SecurityUtils.getUserId());
+//        queryVO.setProcurementOfficer(SecurityUtils.getUserId());
         return ResultData.data(procurementPlanService.listPlanContractSplit(queryVO));
     }
 

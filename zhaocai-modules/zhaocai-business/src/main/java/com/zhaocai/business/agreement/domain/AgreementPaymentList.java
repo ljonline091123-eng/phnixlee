@@ -28,6 +28,12 @@ public class AgreementPaymentList extends BaseEntity {
     private Long agreementId;
 
     /**
+     * 结算阶段  枚举值：{@link com.zhaocai.business.agreement.enums.SettlementStageStatusEnum}
+     */
+    @ApiModelProperty(value = "结算阶段")
+    private String settlementStage;
+
+    /**
      * 付款阶段名称
      */
     @ApiModelProperty(value = "付款阶段名称")

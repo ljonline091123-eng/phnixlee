@@ -50,6 +50,9 @@ public interface IProcurementSchemeService  extends IService<ProcurementScheme>,
      */
     void submitProcurementScheme(Long id,String detailUrl,String operateComment);
 
+    //获取采购方案详细信息
+    ProcurementScheme getProcurementSchemeInfoByID(Long id);
+
     /**
      * 获取采购方案详情
      * @param id

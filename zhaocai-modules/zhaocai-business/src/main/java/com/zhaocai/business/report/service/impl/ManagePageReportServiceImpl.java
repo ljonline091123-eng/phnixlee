@@ -105,6 +105,14 @@ public class ManagePageReportServiceImpl extends ServiceImpl<ManagePageReportMap
         return depts;
     }
 
+    @Override
+    public List<SysDept> getOrgList(String orgId) {
+        OrgInfoQueryDTO queryDTO = new OrgInfoQueryDTO();
+        queryDTO.setThridOrgId(orgId);
+        List<SysDept> depts = remoteSystemService.getOrgInfoList(queryDTO, SecurityConstants.INNER);
+        return depts;
+    }
+
     private List<ManagePageReportVo> getPage(List<ManagePageReportVo> taskList, int page, int pageSize) {
         int total = taskList.size();
         int fromIndex = (page - 1) * pageSize;
