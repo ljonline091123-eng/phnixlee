@@ -381,7 +381,7 @@ export default {
     },
     /** 跳转方案详情 */
     goDetail(id,vendorClass) {
-      let param = Base64.encode(JSON.stringify({id,vendorClass}));
+      let param = Base64.encode(JSON.stringify({id}));
       param = encodeURIComponent(param); //避免base64编码中出现"/"时路由404
       this.$router.push(`/vendor/vendor-detail/${param}`);
     },
