@@ -2,17 +2,13 @@ package com.zhaocai.business.procurement.controller;
 
 import com.zhaocai.business.common.annotations.RepeatSubmit;
 import com.zhaocai.business.common.base.BladeController;
-import com.zhaocai.business.manager.http.dto.req.UsersRoleListRequestDTO;
 import com.zhaocai.business.manager.http.dto.res.UsersRoleContractPlanListResponseDTO;
-import com.zhaocai.business.manager.http.dto.res.UsersRoleListResponseDTO;
-import com.zhaocai.business.manager.http.service.PlatRoleService;
 import com.zhaocai.business.procurement.service.IMaterialsListService;
 import com.zhaocai.business.procurement.service.IProcurementPlanService;
 import com.zhaocai.business.procurement.vo.req.*;
 import com.zhaocai.business.procurement.vo.res.*;
 import com.zhaocai.common.core.bean.PageResult;
 import com.zhaocai.common.core.web.bean.ResultData;
-import com.zhaocai.common.security.utils.SecurityUtils;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -83,6 +79,7 @@ public class ProcurementPlanController extends BladeController {
     @ApiOperation(value = "保存采购计划")
     @RepeatSubmit(key = "#requestVO.contractPlanning.contractPlanningId")
     public ResultData<MaterialProcurementPushRequestVO> saveProcurementPlan(@RequestBody @Valid ProcurementPlanRequestVO requestVO) {
+        System.out.println("保存采购计划："+ requestVO.getSplitRequestList());
         return ResultData.data(procurementPlanService.saveProcurementPlan(requestVO));
     }
 

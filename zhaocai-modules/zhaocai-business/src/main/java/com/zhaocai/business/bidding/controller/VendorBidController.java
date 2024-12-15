@@ -18,6 +18,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
 import javax.validation.Valid;
+import java.util.Map;
 
 /**
  * @author ssy
@@ -40,6 +41,17 @@ public class VendorBidController {
     public ResultData<PageResult<VendorNoticeListVO>> pageNotice(VendorNoticePageQueryVO queryDTO) {
         PageResult<VendorNoticeListVO> pages = vendorBidService.pageNotice(queryDTO);
         return ResultData.data(pages);
+    }
+
+
+    /**
+     * 在线投标报名报名情况
+     */
+    @GetMapping("/numNotice")
+    @ApiOperation(value = "在线投标报名报名情况", notes = "传入queryDTO")
+    public ResultData<Map<String,Integer>> numNotice(VendorNoticePageQueryVO queryDTO) {
+       Map<String,Integer> map= vendorBidService.numNotice(queryDTO);
+        return ResultData.data(map);
     }
 
     /**

@@ -10,7 +10,10 @@ import com.zhaocai.business.bidding.vo.req.BidVO;
 import com.zhaocai.business.bidding.vo.req.query.TwiceBidPageQueryVO;
 import com.zhaocai.business.bidding.vo.req.query.VendorNoticePageQueryVO;
 import com.zhaocai.business.bidding.vo.req.query.WinningNotifiPageQueryVO;
-import com.zhaocai.business.bidding.vo.res.*;
+import com.zhaocai.business.bidding.vo.res.TenderNoticeDetailVO;
+import com.zhaocai.business.bidding.vo.res.TwiceBidListVO;
+import com.zhaocai.business.bidding.vo.res.VendorNoticeListVO;
+import com.zhaocai.business.bidding.vo.res.WinningNotifiListVO;
 import com.zhaocai.business.common.enums.AttachmentTypeEnum;
 import com.zhaocai.business.common.enums.PriceTypeEnum;
 import com.zhaocai.business.common.enums.ProcurementPlanTypeEnum;
@@ -22,7 +25,6 @@ import com.zhaocai.business.manager.http.common.config.ThirdPartyTodoFlowModuleE
 import com.zhaocai.business.manager.http.dto.req.PushThirdPartyTodoTaskRequestDTO;
 import com.zhaocai.business.manager.http.dto.req.PushThirdPartyTodoTaskSonRequestDTO;
 import com.zhaocai.business.manager.http.service.ThridPartyTodoTaskService;
-import com.zhaocai.business.procurement.domain.ContractPlanningPushRecord;
 import com.zhaocai.business.procurement.domain.MaterialsList;
 import com.zhaocai.business.procurement.domain.ProcurementScheme;
 import com.zhaocai.business.procurement.service.IMaterialsListService;
@@ -113,6 +115,15 @@ public class VendorBidServiceImpl implements IVendorBidService {
         queryDTO.setRegisterApprovalTime(vendor.getRegisterApprovalTime());
         PageResult<VendorNoticeListVO> pageResult = tenderNoticeService.selectVendorNoticePageNotice(queryDTO);
         return pageResult;
+    }
+
+    @Override
+    public Map<String, Integer> numNotice(VendorNoticePageQueryVO queryDTO) {
+        Vendor vendor = getVendor(SecurityUtils.getUserId());
+        queryDTO.setVendorId(vendor.getId());
+        queryDTO.setRegisterApprovalTime(vendor.getRegisterApprovalTime());
+        Map<String, Integer> map = tenderNoticeService.numNotice(queryDTO);
+        return map;
     }
 
     /* 在线报名 招标状态为 非 (0废标 11发布 12报名情况) 并且在报名列表里面 的数据 */
@@ -914,6 +925,8 @@ public class VendorBidServiceImpl implements IVendorBidService {
         }
         return bidQuotationVoS;
     }
+
+
 
     @Override
     public PageResult<WinningNotifiListVO> winningNotifiPage(WinningNotifiPageQueryVO queryDTO) {

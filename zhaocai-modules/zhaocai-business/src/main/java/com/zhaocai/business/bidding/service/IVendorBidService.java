@@ -10,6 +10,8 @@ import com.zhaocai.business.bidding.vo.res.VendorNoticeListVO;
 import com.zhaocai.business.bidding.vo.res.WinningNotifiListVO;
 import com.zhaocai.common.core.bean.PageResult;
 
+import java.util.Map;
+
 /**
  * @author ssy
  * @date 2024/5/27 18:20
@@ -82,4 +84,5 @@ public interface IVendorBidService {
 
     PageResult<WinningNotifiListVO> winningNotifiPage(WinningNotifiPageQueryVO queryDTO);
 
+    Map<String, Integer> numNotice(VendorNoticePageQueryVO queryDTO);
 }

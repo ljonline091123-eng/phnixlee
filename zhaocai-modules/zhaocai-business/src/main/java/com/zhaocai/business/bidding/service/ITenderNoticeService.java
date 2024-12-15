@@ -11,6 +11,7 @@ import com.zhaocai.common.core.bean.PageResult;
 
 import java.util.Date;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 招标公告Service接口
@@ -125,6 +126,9 @@ public interface ITenderNoticeService  extends IService<TenderNotice> {
      */
     PageResult<VendorNoticeListVO> selectVendorNoticePageNotice(VendorNoticePageQueryVO queryDTO);
 
+
+    Map<String, Integer> numNotice(VendorNoticePageQueryVO queryDTO);
+
     /**
      * 展示供应商可查看的招标公告列表数据-分页
      *
@@ -191,4 +195,6 @@ public interface ITenderNoticeService  extends IService<TenderNotice> {
      * @return
      */
     List<ContractPlanningNoticeVO> getListByContractPlanningId(ContractPlanningQueryVO requestDTO);
+
+
 }
