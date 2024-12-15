@@ -7,9 +7,7 @@ import com.zhaocai.business.common.enums.DictBizEnum;
 import com.zhaocai.business.common.enums.PriceTypeEnum;
 import com.zhaocai.business.common.enums.ProcurementPlanTypeEnum;
 import com.zhaocai.business.common.exception.BusinessException;
-import com.zhaocai.business.common.exception.ParamValidateException;
 import com.zhaocai.business.common.utils.AmountCalUtil;
-import com.zhaocai.business.manager.http.dto.res.ContractPlanMaterialListDTO;
 import com.zhaocai.business.manager.http.service.UnderlingSystemService;
 import com.zhaocai.business.procurement.domain.MaterialsList;
 import com.zhaocai.business.procurement.domain.ProcurementPlan;
@@ -124,7 +122,7 @@ public class MaterialsListServiceImpl extends ServiceImpl<MaterialsListMapper, M
 
             // 税额 = 含税金额 - 不含税金额
             materials.setTaxAmount(AmountCalUtil.calTaxAmount(materials.getAmountInclTax(),materials.getAmountExclTax()));
-
+            System.out.println("materials:"+materials);
             baseMapper.insert(materials);
         });
         /* 是否是 “购买材料” */

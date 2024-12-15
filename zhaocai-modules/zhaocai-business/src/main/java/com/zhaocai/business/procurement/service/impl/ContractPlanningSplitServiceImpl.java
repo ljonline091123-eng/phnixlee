@@ -78,7 +78,7 @@ public class ContractPlanningSplitServiceImpl extends ServiceImpl<ContractPlanni
         System.out.println("删除合约拆分记录");
 
         // 删除物料信息
-     //   materialsListService.deleteByPlanId(planId);
+        materialsListService.deleteByPlanId(planId);
 
         // 保存信息
         List<MaterialsList> list = this.saveContractPlanningSplit(splitRequestList, planId, procurementPlan);
