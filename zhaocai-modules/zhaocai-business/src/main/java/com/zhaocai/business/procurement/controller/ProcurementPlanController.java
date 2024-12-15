@@ -79,7 +79,7 @@ public class ProcurementPlanController extends BladeController {
     @ApiOperation(value = "保存采购计划")
     @RepeatSubmit(key = "#requestVO.contractPlanning.contractPlanningId")
     public ResultData<MaterialProcurementPushRequestVO> saveProcurementPlan(@RequestBody @Valid ProcurementPlanRequestVO requestVO) {
-        System.out.println("保存采购计划："+ requestVO.getSplitRequestList());
+        System.out.println("保存采购计划："+ requestVO);
         return ResultData.data(procurementPlanService.saveProcurementPlan(requestVO));
     }
 
