@@ -1212,7 +1212,7 @@ export default {
   computed: {
     endTimeOptions() {
       //这里判断是不是今天
-      let newVal = new Date(this.formData.bidDeadline)
+      let newVal = new Date(this.formData.applyTimeNotice)
       let    selectableRange =new Date().getHours() + ':' + (new Date().getMinutes() + 1) + ':00 - 23:59:00'
       console.log( newVal.getDate()+"---"+new Date().getDate()+5)
       if (
