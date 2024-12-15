@@ -142,5 +142,17 @@ public interface RemoteSystemService {
     @GetMapping("/dept/getDeptByThridDeptId")
     List<SysDept> getDeptByThridDeptId(@RequestParam(value = "thridDeptId") String thridDeptId, @RequestHeader(SecurityConstants.FROM_SOURCE) String source);
 
+    /**
+     * 根据第三方部门 id 获取组织机构信息(本部门及以下部门，不含部门、项目部)
+     */
+    @GetMapping("/dept/getDeptByThridDeptIdNoBM")
+    List<SysDept> getDeptByThridDeptIdNoBM(@RequestParam(value = "thridDeptId") String thridDeptId, @RequestHeader(SecurityConstants.FROM_SOURCE) String source);
+
+
+    /**
+     *  根据部门code组装出父级公司名称， ***公司 / ***公司 / ***公司
+     */
+    @GetMapping("/dept/getDeptNameLoop")
+    String getDeptNameLoop(@RequestParam(value = "thridDeptId") String thridDeptId,@RequestParam(value = "deptName") String deptName, @RequestHeader(SecurityConstants.FROM_SOURCE) String source);
 
 }

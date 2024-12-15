@@ -8,6 +8,8 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.zhaocai.business.agreement.domain.Agreement;
 import com.zhaocai.business.agreement.service.IAgreementService;
 import com.zhaocai.business.bidding.domain.*;
+import com.zhaocai.business.bidding.enums.BiddingInfoStatusEnum;
+import com.zhaocai.business.bidding.enums.TenderNoticeApprovalStatusEnum;
 import com.zhaocai.business.bidding.enums.TenderNoticeStatusEnum;
 import com.zhaocai.business.bidding.mapper.TenderNoticeMapper;
 import com.zhaocai.business.bidding.service.*;
@@ -170,6 +172,7 @@ public class TenderNoticeServiceImpl extends ServiceImpl<TenderNoticeMapper,Tend
 
         /* 公告状态 */
         tenderNotice.setNoticeStatus(TenderNoticeStatusEnum.TENDER_NOTICE.getState());
+        tenderNotice.setState(TenderNoticeApprovalStatusEnum.DRAFT.getState());
         //保存招标公告信息
         boolean res = this.save(tenderNotice);
 
@@ -210,6 +213,11 @@ public class TenderNoticeServiceImpl extends ServiceImpl<TenderNoticeMapper,Tend
     @Transactional(propagation = Propagation.REQUIRED,rollbackFor = Exception.class)
     public boolean registerStatus(TenderNoticeVO tenderNoticeVO) {
         verifyParam(tenderNoticeVO);
+        long count = tenderApplyService.count(new LambdaUpdateWrapper<TenderApply>()
+                .eq(TenderApply::getNoticeId, tenderNoticeVO.getId()));
+        if (count < NumberConstant.THREE) {
+            throw new ParamValidateException("公开招标需供应商报名3家及以上");
+        }
 
         TenderNotice tenderNoticeVerify = this.getOne(new LambdaQueryWrapper<TenderNotice>()
                 .eq(TenderNotice::getId, tenderNoticeVO.getId())
@@ -837,6 +845,9 @@ public class TenderNoticeServiceImpl extends ServiceImpl<TenderNoticeMapper,Tend
         return new PageResult<>(iPage);
     }
 
+    /* 供应商首页 未登录只能查看公开招标 */
+    /* 供应商首页 登录后不仅仅查看公开招标还有邀请和单一等等，是根据供应商id来查询 */
+    /* 供应商 工作台首页 消息栏 列表数据 */
     @Override
     public PageResult<VendorPortalNoticeListVO> selectVendorPortalNoticePage(VendorPortalNoticePageQueryVO queryDTO) {
         IPage<VendorPortalNoticeListVO> iPage = baseMapper.findVendorPortalNoticePage(queryDTO.toMybatisPage(), queryDTO);

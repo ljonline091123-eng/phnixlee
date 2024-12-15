@@ -21,6 +21,12 @@ public class AgreementPaymentListVO extends AdviceObject {
     @ApiModelProperty(value = "合同id")
     private Long agreementId;
 
+    /**
+     * 结算阶段  枚举值：{@link com.zhaocai.business.agreement.enums.SettlementStageStatusEnum}
+     */
+    @ApiModelProperty(value = "结算阶段")
+    private String settlementStage;
+
     @ApiModelProperty(value =  "付款阶段名称")
     private String paymentName;
 

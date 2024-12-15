@@ -1,12 +1,12 @@
 package com.zhaocai.business.sdk.bean;
 
+import org.json.JSONException;
+import org.json.JSONObject;
+
 import java.io.File;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
-
-import org.json.JSONException;
-import org.json.JSONObject;
 
 /**
  * 编辑的参数对象
@@ -49,7 +49,7 @@ public class EditParams {
 	/**
 	 * 设置编辑文件的路径，仅适用于/pms/wo3/fileurl
 	 * @param fileUrl http 或 https 的网络文件路径
-	 * @throws IOException 
+	 * @throws IOException
 	 */
 	public void setFileUrl(String fileUrl) throws IOException {
 		if(fileUrl==null || "".equals(fileUrl.trim())) {
@@ -60,7 +60,59 @@ public class EditParams {
 		}
 		requestBody.put("fileUrl", fileUrl);
 	}
+	/**
+	 * 编辑者
+	 */
+	public static final String ROLE_EDITER = "editor";
+	/**
+	 * 批注者
+	 */
+	public static final String ROLE_ANNOTATION = "annotation";
+	/**
+	 * 审核者
+	 */
+	public static final String ROLE_AUDIT = "audit";
+	/**
+	 * 编辑限制者
+	 */
+	public static final String ROLE_SUPER = "super";
+	/**
+	 * 阅读者
+	 */
+	public static final String ROLE_VIEW = "view";
 
+	public void setRole(String role) throws JSONException {
+		if(role!=null) {
+			switch (role) {
+			case ROLE_EDITER:
+				//限制编辑、修订、接受、拒绝
+				setMenuHidden("yozo_WP_limitedit","yozo_WP_reviseView","yozo_WP_reviseAccept","yozo_WP_reviseRefuse");
+				trackRevisionsClose();
+				trackRevisionsHidden();
+				break;
+			case ROLE_ANNOTATION:
+				setUserRight(USERRIGHT_READONLY);
+				break;
+			case ROLE_AUDIT:
+				setMenuHidden("yozo_WP_limitedit","yozo_WP_reviseView","yozo_WP_reviseAccept","yozo_WP_reviseRefuse");
+				trackRevisionsShow();
+				trackRevisionsOpen();
+				break;
+			case ROLE_SUPER:
+				break;
+			default:
+				break;
+			}
+		}
+	}
+	/**
+	 * 隐藏限制编辑，不调用默认显示（false）
+	 * @param hidden true 隐藏，false 显示
+	 * @throws JSONException
+	 */
+	public void hiddenLimitedit(boolean hidden) throws JSONException {
+		setMenuHidden("yozo_WP_limitedit");
+	}
 	/**
 	 * 设置文件名称
 	 * @param fileName 文件名称，例如：测试文档.docx
@@ -82,13 +134,13 @@ public class EditParams {
 	 * @param facePath 头像地址，建议不传递
 	 */
 	public void setUserInfo(String userId,String userName,String facePath)  {
-		if(userId!=null && "".equals(userId.trim())) {
+		if(userId!=null && !"".equals(userId.trim())) {
 			requestBody.put("userId", userId);
 		}
-		if(userName!=null && "".equals(userName.trim())) {
+		if(userName!=null && !"".equals(userName.trim())) {
 			requestBody.put("userName", userName);
 		}
-		if(facePath!=null && "".equals(facePath.trim())) {
+		if(facePath!=null && !"".equals(facePath.trim())) {
 			requestBody.put("userAvatar", facePath);
 		}
 	}
@@ -97,7 +149,7 @@ public class EditParams {
 	 * @param fallbackUrl 返回按钮的地址
 	 */
 	public void setFallbackUrl(String fallbackUrl)  {
-		if(fallbackUrl!=null && "".equals(fallbackUrl.trim())) {
+		if(fallbackUrl!=null && !"".equals(fallbackUrl.trim())) {
 			requestBody.put("fallbackUrl", fallbackUrl);
 		}
 	}
@@ -132,7 +184,7 @@ public class EditParams {
 	 * @param password 密码
 	 */
 	public void setPassword(String password)  {
-		if(password!=null && "".equals(password.trim())) {
+		if(password!=null && !"".equals(password.trim())) {
 			requestBody.put("password", password);
 		}
 	}
@@ -141,7 +193,7 @@ public class EditParams {
 	 * @param callbackUrl
 	 */
 	public void setCallbackUrl(String callbackUrl)  {
-		if(callbackUrl!=null && "".equals(callbackUrl.trim())) {
+		if(callbackUrl!=null && !"".equals(callbackUrl.trim())) {
 			requestBody.put("callbackUrl", callbackUrl);
 		}
 	}
@@ -152,11 +204,11 @@ public class EditParams {
 	 * @param fileUUID 文件的随机ID
 	 */
 	public void setFileUUID(String fileUUID)  {
-		if(fileUUID!=null && "".equals(fileUUID.trim())) {
+		if(fileUUID!=null && !"".equals(fileUUID.trim())) {
 			requestBody.put("fileUUID", fileUUID);
 		}
 	}
-	
+
 	/**
 	 * 设置编辑用户信息
 	 * @param userId 用户唯一ID
@@ -175,7 +227,7 @@ public class EditParams {
 	/**
 	 * 设置要隐藏的菜单
 	 * @param menuIds
-	 * @throws JSONException 
+	 * @throws JSONException
 	 */
 	public void setMenuHidden(String... menuIds) throws JSONException {
 		for (String menuId : menuIds) {
@@ -185,7 +237,7 @@ public class EditParams {
 	/**
 	 * 设置要禁用的菜单（菜单显示，但是不可用）
 	 * @param menuIds
-	 * @throws JSONException 
+	 * @throws JSONException
 	 */
 	public void setMenuDisable(String... menuIds) throws JSONException {
 		for (String menuId : menuIds) {
@@ -195,7 +247,7 @@ public class EditParams {
 	/**
 	 * 设置可用的菜单，一般不用设置，除非默认不显示的菜单
 	 * @param menuIds
-	 * @throws JSONException 
+	 * @throws JSONException
 	 */
 	public void setMenuEnable(String... menuIds) throws JSONException {
 		for (String menuId : menuIds) {
@@ -229,10 +281,10 @@ public class EditParams {
 		}
 	}
 	/**
-	 * @throws JSONException 
+	 * @throws JSONException
 	 * 设置编辑页面打开后的缩放比例，如果不设置，会自动根据文档中记录的比例显示
 	 * @param zoom 100为100%，如果要按照110%显示，则设置110
-	 * @throws  
+	 * @throws
 	 */
 	public void setPageZoom(int zoom) throws JSONException  {
 		if(zoom>=0) {
@@ -278,6 +330,22 @@ public class EditParams {
 		extraParam.put("Mark", 1);
 	}
 	/**
+	 * 显示插入图章菜单
+	 * @param domain 外部监听的域名或IP
+	 * @throws JSONException
+	 */
+	public void showInsPic(String domain) throws JSONException  {
+		extraParam.put("insPic", 1);
+		extraParam.put("domain",domain );
+	}
+	/**
+	 * 隐藏插入图章菜单（默认不显示）
+	 * @throws JSONException
+	 */
+	public void hiddenInsPic() throws JSONException  {
+		extraParam.put("insPic",0);
+	}
+	/**
 	 * 隐藏修订记录
 	 * @throws JSONException
 	 */
@@ -301,11 +369,24 @@ public class EditParams {
 	/**
 	 * 设置可设置的书签名称列表
 	 * @param bookMarkListRange 书签名称，多个名称之间用英文逗号分隔，例如：甲方,乙方,金额,签订日期
+	 * @param bookMarkInput 是否可以编辑书签名字，true 可以编辑，false 不可编辑
+	 * @param bookMarkAuto 是否显示自动添加书签功能，true 显示，false 隐藏
 	 * @throws JSONException
 	 */
-	public void setBookMarkListRange(String bookMarkListRange) throws JSONException  {
+	public void setBookMarkListRange(String bookMarkListRange,boolean bookMarkInput,boolean bookMarkAuto) throws JSONException  {
 		if(bookMarkListRange!=null && !"".equals(bookMarkListRange.trim())) {
 			extraParam.put("bookMarkListRange", bookMarkListRange);
+			if(bookMarkInput) {
+				extraParam.put("bookMarkInput", 1);
+			}else {
+				extraParam.put("bookMarkInput", 0);
+			}
+			if(bookMarkAuto) {
+				extraParam.put("bookMarkAuto", 1);
+			}else {
+				extraParam.put("bookMarkAuto", 0);
+			}
+			setMenuHidden("yozo_WP_bookMark");
 		}
 	}
 	/**
@@ -353,7 +434,7 @@ public class EditParams {
 	 * <br><b>注意：设置完成水印后，再修改WaterMark对象无效</b>
 	 * @param type 1文档水印 2页面水印，在EditParams.WATER_MARK_TYPE_中选择
 	 * @param wm 水印对象
-	 * @throws JSONException 
+	 * @throws JSONException
 	 */
 	public void setWaterMark(int type,WaterMark wm) throws JSONException {
 		wm.addEditExtraParam(waterMark);
@@ -368,7 +449,7 @@ public class EditParams {
 			break;
 		}
 	}
-	
+
 	private void combinationExtraParam() throws JSONException {
 		//如果水印有设置，则追加至参数中
 		if(waterMark.length()>0) {
@@ -377,13 +458,13 @@ public class EditParams {
 		requestBody.put("extraParam", extraParam.toString());
 		//如果有权限设置，则追加至参数中
 		if(userMenuPermission.length()>0) {
-			requestBody.put("waterMark", userMenuPermission.toString());
+			requestBody.put("userMenuPermission", userMenuPermission.toString());
 		}
 	}
 	/**
 	 * 得到要提交的带文件流的参数
 	 * @return Map对象
-	 * @throws JSONException 
+	 * @throws JSONException
 	 */
 	public Map<String, Object> getRequestBody() throws JSONException{
 		combinationExtraParam();
@@ -392,7 +473,7 @@ public class EditParams {
 	/**
 	 * 得到非文件流的参数数据
 	 * @return 字符串
-	 * @throws JSONException 
+	 * @throws JSONException
 	 */
 	public String  getRequestBodyString() throws JSONException {
 		combinationExtraParam();

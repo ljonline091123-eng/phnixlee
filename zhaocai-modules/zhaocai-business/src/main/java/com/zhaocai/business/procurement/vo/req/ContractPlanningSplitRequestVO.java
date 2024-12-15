@@ -6,7 +6,6 @@ import io.swagger.annotations.ApiModelProperty;
 import lombok.Data;
 
 import javax.validation.Valid;
-import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.NotNull;
 import java.util.List;
 
@@ -20,11 +19,11 @@ import java.util.List;
 @ApiModel(value = "合约规划拆分")
 public class ContractPlanningSplitRequestVO {
 
-    @NotBlank(message = "拆分合约规划名称不能为空")
+    //@NotBlank(message = "拆分合约规划名称不能为空")
     @ApiModelProperty(value = "拆分合约规划名称")
     private String splitContractName;
 
-    @NotBlank(message = "拟签约合同承包范围不能为空")
+    //@NotBlank(message = "拟签约合同承包范围不能为空")
     @ApiModelProperty(value = "拟签约合同承包范围")
     private String contractScope;
 

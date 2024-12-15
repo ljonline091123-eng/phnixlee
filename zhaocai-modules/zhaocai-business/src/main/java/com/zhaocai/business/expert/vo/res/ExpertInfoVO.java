@@ -50,7 +50,7 @@ public class ExpertInfoVO extends AdviceObject {
     private String businessType;
 
     @ApiModelProperty(value =  "专家类别")
-    private Integer expertType;
+    private String expertType;
 
     @ApiModelProperty(value =  "专家状态(0账号审批中|1启用|2禁用)")
     private Integer expertState;
@@ -91,7 +91,7 @@ public class ExpertInfoVO extends AdviceObject {
     private String businessTypeText;
 
     @ApiModelProperty(value =  "专家类别（文本）")
-    @DictCache(dictBizEnum= DictBizEnum.EXPERT_TYPE,filedName = "expertType")
+//    @DictCache(dictBizEnum= DictBizEnum.EXPERT_TYPE,filedName = "expertType")
     private String expertTypeText;
 
 

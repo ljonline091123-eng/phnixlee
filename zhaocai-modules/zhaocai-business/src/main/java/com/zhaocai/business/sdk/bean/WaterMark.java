@@ -11,6 +11,9 @@ import java.security.NoSuchAlgorithmException;
 import java.util.Base64;
 import java.util.regex.Pattern;
 
+import org.json.JSONException;
+import org.json.JSONObject;
+
 public class WaterMark {
 	/**
 	 * 宋体
@@ -89,9 +92,13 @@ public class WaterMark {
 	 */
 	float wmTransparency=-1;
 	/**
+	 * 图片水印的路径
+	 */
+	String wmPicPath;
+	/**
 	 * 图片水印的图片base64
 	 */
-	String wmPicBase64;
+	String wmImage;
 	/**
 	 * 图片水印宽度
 	 */
@@ -109,9 +116,9 @@ public class WaterMark {
 	/**
 	 * @param type 水印类型 0 文字水印 1图片水印（编辑不支持图片水印）
 	 * @param wmPicPath 图片水印在服务器上的绝对路径，文字水印的内容
-	 * @throws IOException 
-	 * @throws JSONException 
-	 * @throws NoSuchAlgorithmException 
+	 * @throws IOException
+	 * @throws JSONException
+	 * @throws NoSuchAlgorithmException
 	 */
 	public WaterMark(int type,String contentOrPicPath) throws IOException, NoSuchAlgorithmException, JSONException {
 		setDefault();
@@ -120,7 +127,13 @@ public class WaterMark {
 			setWmContent(contentOrPicPath);
 			break;
 		case TYPE_PIC:
-			setWmPicPath(contentOrPicPath);
+			//如果是http开头的，则是网络文件
+			String path = contentOrPicPath.toLowerCase();
+			if(path.startsWith("http://") || path.startsWith("https://")) {
+				setWmPicPath(contentOrPicPath);
+			}else {
+				setWmPicBase64(contentOrPicPath);
+			}
 			break;
 		default:
 			setWmContent(contentOrPicPath);
@@ -305,32 +318,40 @@ public class WaterMark {
 		this.wmTransparency = wmTransparency;
 	}
 	/**
-	 * 得到图片水印的base64
-	 * @return wmPicBase64 如果没有图片水印，则为null
+	 * 得到图片水印的路径
+	 * @return wmPicPath 如果没有图片水印，则为null
+	 */
+	public String getWmPicPath() {
+		return wmPicPath;
+	}
+	/**
+	 * 得到图片的base64
+	 * @return
 	 */
 	public String getWmPicBase64() {
-		return wmPicBase64;
+		return wmImage;
 	}
 	/**
 	 * 设置图片水印内容(调试中)
 	 * @param wmPicPath 图片水印的路径
-	 * @throws IOException 
+	 * @throws IOException
 	 */
 	public void setWmPicBase64(String wmPicPath) throws IOException {
 		if(wmPicPath==null || "".equals(wmPicPath.trim())) {
 			throw new IOException("图片水印路径为空");
 		}
-		Path filePath = Paths.get(wmPicPath);  
+		Path filePath = Paths.get(wmPicPath);
         byte[] fileBytes = Files.readAllBytes(filePath);
         String base64EncodedString = Base64.getEncoder().encodeToString(fileBytes);
-		this.wmPicBase64 = base64EncodedString;
+		this.wmImage = base64EncodedString;
+		this.wmPicPath=null;
 	}
 	/**
 	 * 设置图片水印内容
 	 * @param wmPicPath 可以访问的图片地址
-	 * @throws NoSuchAlgorithmException 
-	 * @throws JSONException 
-	 * @throws IOException 
+	 * @throws NoSuchAlgorithmException
+	 * @throws JSONException
+	 * @throws IOException
 	 */
 	public void setWmPicPath(String wmPicPath) throws NoSuchAlgorithmException, JSONException, IOException {
 //		//组织要上传的图片水印参数
@@ -344,7 +365,8 @@ public class WaterMark {
 //        String inputPath =  json.optString("data");
 //        System.out.println("水印图片地址:"+inputPath);
 //        this.wmPicBase64=inputPath;
-		this.wmPicBase64=wmPicPath;
+		this.wmPicPath=wmPicPath;
+		this.wmImage =null;
 	}
 	/**
 	 * 得到图片水印的宽度，单位px
@@ -426,7 +448,10 @@ public class WaterMark {
 			extraParam.put("wmPicSize", getWidth()+","+getHeight());
 		}
 		if(getWmPicBase64()!=null) {
-			extraParam.put("wmPicPath", getWmPicBase64());
+			extraParam.put("wmImage", getWmPicBase64());
+		}
+		if(getWmPicPath()!=null) {
+			extraParam.put("wmPicPath", getWmPicPath());
 		}
 	}
 	/**

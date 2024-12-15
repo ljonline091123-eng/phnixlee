@@ -107,7 +107,10 @@ public class VendorBidServiceImpl implements IVendorBidService {
     /* 在线报名 招标状态为  11发布 12报名情况 的数据 */
     @Override
     public PageResult<VendorNoticeListVO> pageNotice(VendorNoticePageQueryVO queryDTO) {
-        queryDTO.setVendorId(getVendor(SecurityUtils.getUserId()).getId());
+//        queryDTO.setVendorId(getVendor(SecurityUtils.getUserId()).getId());
+        Vendor vendor = getVendor(SecurityUtils.getUserId());
+        queryDTO.setVendorId(vendor.getId());
+        queryDTO.setRegisterApprovalTime(vendor.getRegisterApprovalTime());
         PageResult<VendorNoticeListVO> pageResult = tenderNoticeService.selectVendorNoticePageNotice(queryDTO);
         return pageResult;
     }
@@ -115,7 +118,10 @@ public class VendorBidServiceImpl implements IVendorBidService {
     /* 在线报名 招标状态为 非 (0废标 11发布 12报名情况) 并且在报名列表里面 的数据 */
     @Override
     public PageResult<VendorNoticeListVO> page(VendorNoticePageQueryVO queryDTO) {
-        queryDTO.setVendorId(getVendor(SecurityUtils.getUserId()).getId());
+//        queryDTO.setVendorId(getVendor(SecurityUtils.getUserId()).getId());
+        Vendor vendor = getVendor(SecurityUtils.getUserId());
+        queryDTO.setVendorId(vendor.getId());
+        queryDTO.setRegisterApprovalTime(vendor.getRegisterApprovalTime());
         PageResult<VendorNoticeListVO> pageResult = tenderNoticeService.selectVendorNoticePage(queryDTO);
         return pageResult;
     }
@@ -626,9 +632,7 @@ public class VendorBidServiceImpl implements IVendorBidService {
             Map<Long,MaterialsList> materialsListMap = materialsListList.stream().collect(Collectors.toMap(MaterialsList::getId, Function.identity(),(existing, replacement) -> replacement));
 
             BiddingInfo newestBiddingInfo = biddingInfoService.getOne(new LambdaQueryWrapper<BiddingInfo>()
-                    .eq(BiddingInfo::getParentId, biddingInfo.getId())
-                    .and(q -> q.eq(BiddingInfo::getPriceChangeState, NumberConstant.ONE)/* 已经调价 */
-                            .or().isNull(BiddingInfo::getPriceChangeState))/* 历史数据兼容 */
+                    .eq(BiddingInfo::getParentId, biddingInfo.getParentId())
                     .orderByDesc(BiddingInfo::getCreateTime).last("limit 1"));
             for (BidQuotationVO quotationVO : bidQuotationVoS) {
                 //物料数量

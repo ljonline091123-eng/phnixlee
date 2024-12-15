@@ -1,5 +1,6 @@
 package com.zhaocai.business.exam.controller;
 
+import com.deepoove.poi.xwpf.NiceXWPFDocument;
 import com.zhaocai.business.common.base.BladeController;
 import com.zhaocai.business.common.utils.FreeMarkUtils;
 import com.zhaocai.business.common.utils.LibToPdf;
@@ -12,8 +13,10 @@ import com.zhaocai.common.core.utils.StringUtils;
 import com.zhaocai.common.core.utils.file.FileTypeUtils;
 import com.zhaocai.common.core.utils.uuid.Seq;
 import com.zhaocai.common.core.web.bean.ResultData;
+import com.zhaocai.common.log.annotation.Log;
 import com.zhaocai.common.log.enums.BusinessType;
 import io.swagger.annotations.Api;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.io.FilenameUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
@@ -30,6 +33,7 @@ import com.deepoove.poi.xwpf.NiceXWPFDocument;
 import java.util.UUID;
 
 
+@Slf4j
 @Api("考生管理")
 @RestController
 @RequestMapping("/exam/exam")
@@ -41,12 +45,12 @@ public class examController extends BladeController {
     @Autowired
     private ISysFileService iSysFileService;
 
-    @Log(title = "test", businessType = BusinessType.UPDATE)
-    @GetMapping("/test")
-    public ResultData  test(@RequestBody Examinee exam)
-    {
-        return ResultData.success("1");
-    }
+//    @Log(title = "test", businessType = BusinessType.UPDATE)
+//    @GetMapping("/test")
+//    public ResultData  test(@RequestBody Examinee exam)
+//    {
+//        return ResultData.success("1");
+//    }
 
     //查询所有考场
     @Log(title = "查询所有考场", businessType = BusinessType.UPDATE)
@@ -107,6 +111,11 @@ public class examController extends BladeController {
             params.put("no1",examinee.getExaminationRoom());
             params.put("no2",examinee.getSeatNumber());
             params.put("point",examinee.getExamPointName());
+            //创建results文件夹存生成的文件
+            File resultsDir = new File("/tmp/results/");
+            if (!resultsDir.exists()) {
+                resultsDir.mkdirs();
+            }
 
             //生成没有头像的文档, 路径改为  /tmp/results/
             String outPath= FreeMarkUtils.createDocx(params, "templates/2.docx","/tmp/results/");
@@ -122,7 +131,7 @@ public class examController extends BladeController {
             try {
                 String outPutfileName = UUID.randomUUID().toString() + ".docx";
                 //路径改为  /tmp/results/
-//                String wordTargetPath = "D:\\results\\" +"examFileWithPicture"+ outPutfileName;
+//                String wordTargetPath = "/tmp/results/" +"examFileWithPicture"+ outPutfileName;
                 String wordTargetPath = "/tmp/results/" +"examFileWithPicture"+ outPutfileName;
                 FreeMarkUtils.sealInWord(outPath,
                         wordTargetPath,
@@ -134,16 +143,21 @@ public class examController extends BladeController {
                 NiceXWPFDocument doc=new NiceXWPFDocument(input);
                 String PDFfileName = UUID.randomUUID().toString() + ".pdf";
                 //路径改为  /tmp/results/
-//                String PDFtargetPath = "D:\\results\\" +"examPDF"+ PDFfileName;
+//                String PDFtargetPath = "/tmp/results/" +"examPDF"+ PDFfileName;
                 String PDFtargetPath = "/tmp/results/" +"examPDF"+ PDFfileName;
                 OutputStream outputStream = new FileOutputStream(PDFtargetPath);
+                log.info("[examController][repaceWord]doc:{}",doc);
                 ByteArrayInputStream inputStream = LibToPdf.getNiceXWPFDocByInputStream(doc);
+                log.info("[examController][repaceWord]inputStream:{}",inputStream);
                 try {
                     LibToPdf.setLibreoffceLocation("192.168.240.16");
                     LibToPdf.setLibreoffceProt(30002);
-//                    LibToPdf.setLibreoffceLocation("192.168.30.240");
-//                    LibToPdf.setLibreoffceProt(8989);
+//                    LibToPdf.setLibreoffceLocation("192.168.240.16");
+                    log.info("[LibToPdf.setLibreoffceLocation]:{}",LibToPdf.getLibreoffceLocation());
+//                    LibToPdf.setLibreoffceProt(30002);
+                    log.info("[LibToPdf.setLibreoffceProt]:{}",LibToPdf.getLibreoffceProt());
                     LibToPdf.doDocumentConvert(inputStream,outputStream, "docx","pdf");
+                    log.info("[LibToPdf.doDocumentConvert]");
                 } catch (Exception e) {
                     e.printStackTrace();
                     try {
@@ -159,6 +173,7 @@ public class examController extends BladeController {
 
                 //读取生成的pdf文件
                 File fileWithImg = new File(PDFtargetPath);
+                log.info("[LibToPdf.doDocumentConvert][读取生成的pdf文件]fileWithImg:{}",fileWithImg);
                 if (!fileWithImg.exists()) {
                     throw new IOException("生成的带有头像图片的Word文档不存在: " + PDFtargetPath);
                 }
@@ -167,8 +182,10 @@ public class examController extends BladeController {
                 String imgFileName = StringUtils.format("{}/{}_{}.{}", DateUtils.datePath(),
                         FilenameUtils.getBaseName(fileWithImg.getName()), Seq.getId(Seq.uploadSeqType), FileTypeUtils.getFileType(fileWithImg));
 
+                log.info("[LibToPdf.doDocumentConvert][imgFileName]imgFileName:{}",imgFileName);
                 // 将文档上传到MinIO
                 String fileWithImgUrl = iSysFileService.uploadFile(fis, imgFileName);
+                log.info("[LibToPdf.doDocumentConvert][imgFileName]fileWithImgUrl:{}",fileWithImgUrl);
                 return ResultData.success(fileWithImgUrl);
 
             } catch (Exception e) {
@@ -179,6 +196,66 @@ public class examController extends BladeController {
         }
         return ResultData.fail("未查询到该身份证的用户");
     }
+
+
+//    //根据输入的身份证号码替换word模板，并生成pdf，然后在浏览器打开
+//    @GetMapping("/repaceWord")
+//    public ResultData repaceWord(@RequestParam("identityCardId") String identityCardId) throws IOException {
+//        Examinee examinee =  examineeService.selectExamineeByIdentityCardId(identityCardId);
+//        Map<String, Object> params = new HashMap<>();
+//        if (examinee != null){
+//            params.put("name",examinee.getExamineeName());
+//            params.put("card",identityCardId);
+//            params.put("dep",examinee.getWorkUnit());
+//            params.put("no",examinee.getEntryCardNumber());
+//            params.put("no1",examinee.getExaminationRoom());
+//            params.put("no2",examinee.getSeatNumber());
+//            //创建results文件夹存生成的文件
+//            File resultsDir = new File("D:\\results");
+//            if (!resultsDir.exists()) {
+//                resultsDir.mkdirs();
+//            }
+//            //生成没有头像的文档
+//            String outPath= FreeMarkUtils.createDocx(params, "templates/2.docx","D:\\results\\");
+//            //判断图片是否存在
+//            String picture = examinee.getPictureUrl();
+//            if (Objects.isNull(picture) || picture.isEmpty()) {
+//                return ResultData.fail("请先上传头像图片");
+//            }
+//            //下载无头像图片到本地
+//            String pictureUrl = FreeMarkUtils.downloadFileFromUrl(examinee.getPictureUrl());
+//            //添加头像图片到word文档中,
+//            try {
+//                String outPutfileName = UUID.randomUUID().toString() + ".docx";
+//                String wordTargetPath = "D:\\results\\" +"examFileWithPicture"+ outPutfileName;
+//                FreeMarkUtils.sealInWord(outPath,
+//                        wordTargetPath,
+//                        pictureUrl, "参赛人员须知", 80, 100,
+//                        375, -197, false);
+//
+//                //读取生成的文件
+//                File fileWithImg = new File(wordTargetPath);
+//                if (!fileWithImg.exists()) {
+//                    throw new IOException("生成的带有头像图片的Word文档不存在: " + wordTargetPath);
+//                }
+//                // 将带有头像的word文档转换为InputStream
+//                FileInputStream fis = new FileInputStream(fileWithImg);
+//                String imgFileName = StringUtils.format("{}/{}_{}.{}", DateUtils.datePath(),
+//                        FilenameUtils.getBaseName(fileWithImg.getName()), Seq.getId(Seq.uploadSeqType), FileTypeUtils.getFileType(fileWithImg));
+//
+//                // 将带有头像的word文档上传到MinIO
+//                String fileWithImgUrl = iSysFileService.uploadFile(fis, imgFileName);
+//                return ResultData.success(fileWithImgUrl);
+//
+//            } catch (Exception e) {
+//                e.printStackTrace();
+//                return ResultData.fail("生成带图片的准考证文档失败");
+//            }
+//
+//        }
+//        return ResultData.fail("未查询到该身份证的用户");
+//    }
+
 
 
     /**

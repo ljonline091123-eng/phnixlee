@@ -94,4 +94,9 @@ public class BpmSubmitRequestDTO extends UnderlyingPlatformBaseDTO{
      * 合同签订金额(含税)
      */
     private BigDecimal contractMoney;
+
+    /**
+     * 组织穿透标注true公司向下查 false公司不向下查
+     */
+    private boolean orgPenetrate;
 }

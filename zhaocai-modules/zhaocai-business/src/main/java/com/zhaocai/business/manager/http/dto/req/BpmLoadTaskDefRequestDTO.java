@@ -52,4 +52,9 @@ public class BpmLoadTaskDefRequestDTO extends UnderlyingPlatformBaseDTO{
      * 业务所属机构id
      */
     private String subjectOrgId;
+
+    /**
+     * 组织穿透标注true公司向下查 false公司不向下查
+     */
+    private boolean orgPenetrate;
 }

@@ -2,18 +2,28 @@ package com.zhaocai.business.pub.controller;
 
 import com.zhaocai.business.common.base.BladeController;
 import com.zhaocai.business.common.enums.ProcurementPlanTypeEnum;
+import com.zhaocai.business.pub.service.IAttachmentService;
 import com.zhaocai.business.pub.service.ITemplateService;
+import com.zhaocai.business.pub.utils.BookmarkUtils;
+import com.zhaocai.business.pub.utils.YOZOfileUtils;
 import com.zhaocai.business.pub.vo.req.TemplateListQueryVO;
 import com.zhaocai.business.pub.vo.req.TemplateSaveRequestVO;
+import com.zhaocai.business.pub.vo.res.AttachmentVO;
 import com.zhaocai.business.pub.vo.res.TemplateListVO;
 import com.zhaocai.business.pub.vo.res.TemplateVO;
+import com.zhaocai.business.sdk.bean.EditParams;
+import com.zhaocai.business.sdk.bean.PreviewParams;
 import com.zhaocai.common.core.bean.PageResult;
 import com.zhaocai.common.core.web.bean.ResultData;
+import com.zhaocai.common.security.utils.SecurityUtils;
 import io.swagger.annotations.Api;
+import io.swagger.annotations.ApiModelProperty;
 import io.swagger.annotations.ApiOperation;
+import org.json.JSONObject;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -32,6 +42,61 @@ public class TemplateController extends BladeController {
 
     @Autowired
     private ITemplateService templateService;
+
+    @Autowired
+    private YOZOfileUtils yozOfileUtils;
+
+
+    @Autowired
+    private IAttachmentService attachmentService;
+
+    /**
+     * 据模板id查询附件，并利用yozo文档中台预览附件,返回预览文件的url
+     */
+    @GetMapping("/PreviewFile")
+    @ApiOperation(value = "预览附件文件")
+    public ResultData<String> PreviewFile(@RequestParam Long id) {
+        TemplateVO template = templateService.detail(id);
+        String fileName = template.getFileName();
+        String fileUrl = template.getFileUrl();
+        if(yozOfileUtils.isNULLFileURL(fileUrl)){
+            return ResultData.fail("该文件存储的fileUrl为空，无法预览文件！！！");
+        }
+        String suffix = yozOfileUtils.getSuffix(fileName).toLowerCase();
+       if (yozOfileUtils.isWordExtension(suffix)) {
+            return ResultData.data(attachmentService.viewWordFileURL(fileName,fileUrl));
+       } else if(yozOfileUtils.isPdfExtension(suffix)){
+            return ResultData.data(attachmentService.viewPDFFileURL(fileName,fileUrl));
+       } else if (yozOfileUtils.isImageExtension(suffix)) {
+            return ResultData.data(attachmentService.viewImageURL(fileName,fileUrl));
+       }else {
+           return ResultData.fail("无法预览该文件格式！");
+       }
+    }
+
+    //新增和修改范本时，word文档返回文档中台的文件编辑URL，图片和pdf格式是显示预览文件
+    @GetMapping("/getEditFileURL")
+    @ApiModelProperty(value = "文档中台的文件编辑URL")
+    public ResultData<String> getEditFileURL(AttachmentVO requestVO) {
+        Long attachmentId = requestVO.getId();
+        String fileName = requestVO.getFileName();
+        String fileUrl = requestVO.getFileUrl();
+        if(yozOfileUtils.isNULLFileURL(fileUrl)){
+            return ResultData.fail("该文件存储的fileUrl为空，无法编辑文件！！！");
+        }
+        String suffix = yozOfileUtils.getSuffix(fileName).toLowerCase();
+        //word文件则编辑，其他文件则预览
+        if (yozOfileUtils.isWordExtension(suffix)) {
+            return ResultData.data(attachmentService.editWordURL(attachmentId,fileName,fileUrl));
+        } else if (yozOfileUtils.isImageExtension(suffix)){
+            return ResultData.data(attachmentService.viewImageURL(fileName,fileUrl));
+        }else if (yozOfileUtils.isPdfExtension(suffix)){
+            return ResultData.data(attachmentService.viewPDFFileURL(fileName,fileUrl));
+        }else {
+            return ResultData.fail("上传文件类型错误，不支持该类型文件");
+        }
+    }
+
 
     /**
      * 列表查询
@@ -57,6 +122,8 @@ public class TemplateController extends BladeController {
         }
         return ResultData.data(resultList);
     }
+
+
 
     /**
      * 列表查询

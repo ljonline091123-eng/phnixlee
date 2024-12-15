@@ -45,6 +45,11 @@ public class BpmAuditRequestDTO extends UnderlyingPlatformBaseDTO{
     private boolean pass;
 
     /**
+     * 组织穿透标注true公司向下查 false公司不向下查
+     */
+    private boolean orgPenetrate;
+
+    /**
      * 流程id
      */
     private String processId;
