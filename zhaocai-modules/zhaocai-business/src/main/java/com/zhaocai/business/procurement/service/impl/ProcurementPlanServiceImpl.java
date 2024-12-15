@@ -2,17 +2,13 @@ package com.zhaocai.business.procurement.service.impl;
 
 import cn.hutool.core.collection.CollectionUtil;
 import cn.hutool.core.util.ObjectUtil;
-import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONObject;
-import com.baomidou.mybatisplus.core.conditions.Wrapper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.zhaocai.business.agreement.domain.MarketMaterialContract;
 import com.zhaocai.business.agreement.service.IMarketMaterialContractService;
-import com.zhaocai.business.bidding.domain.BiddingListQuotation;
-import com.zhaocai.business.bidding.domain.TenderNotice;
 import com.zhaocai.business.bidding.service.ITenderNoticeService;
 import com.zhaocai.business.bidding.vo.res.ContractPlanningNoticeVO;
 import com.zhaocai.business.common.enums.*;
@@ -39,25 +35,16 @@ import com.zhaocai.business.procurement.mapper.ProcurementPlanMapper;
 import com.zhaocai.business.procurement.service.*;
 import com.zhaocai.business.procurement.vo.req.*;
 import com.zhaocai.business.procurement.vo.res.*;
-import com.zhaocai.business.pub.domain.Attachment;
 import com.zhaocai.business.pub.service.IAreaDivisionService;
 import com.zhaocai.business.pub.service.IBusinessCodeService;
 import com.zhaocai.common.core.bean.PageResult;
 import com.zhaocai.common.core.constant.Constants;
-import com.zhaocai.common.core.constant.HttpStatus;
 import com.zhaocai.common.core.constant.NumberConstant;
-import com.zhaocai.common.core.constant.SecurityConstants;
-import com.zhaocai.common.core.domain.R;
-import com.zhaocai.common.core.exception.CheckedException;
 import com.zhaocai.common.core.constant.SecurityConstants;
 import com.zhaocai.common.core.utils.NumberUtil;
 import com.zhaocai.common.core.utils.bean.BeanCopierUtil;
-import com.zhaocai.common.core.web.bean.ResultData;
 import com.zhaocai.common.core.web.domain.BaseEntity;
 import com.zhaocai.common.security.utils.SecurityUtils;
-import com.zhaocai.common.signature.domain.AgreementSignature;
-import com.zhaocai.system.api.domain.SysUser;
-import com.zhaocai.system.api.system.RemoteUserService;
 import com.zhaocai.system.api.domain.SetConfigValueDTO;
 import com.zhaocai.system.api.system.RemoteSystemService;
 import lombok.extern.slf4j.Slf4j;
@@ -385,6 +372,7 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
     public MaterialProcurementPushRequestVO saveProcurementPlan(ProcurementPlanRequestVO requestVO) {
         MaterialProcurementPushRequestVO vo = new MaterialProcurementPushRequestVO();
         checkMaterialsList(requestVO);
+        System.out.println("保存采购计划："+ requestVO.getSplitRequestList());
         if (NumberUtil.isNullOrZero(requestVO.getProcurementPlan().getId())) {
             // 新增
             vo = addProcurementPlan(requestVO);
@@ -772,6 +760,7 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
      * @param requestVO
      */
     private MaterialProcurementPushRequestVO updateProcurementPlan(ProcurementPlanRequestVO requestVO) {
+        System.out.println("保存采购计划："+ requestVO.getSplitRequestList());
         ProcurementPlan procurementPlan = requestVO.getProcurementPlan();
         ProcurementPlan checkPlan = baseMapper.selectById(procurementPlan.getId());
 
@@ -798,6 +787,7 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
      * @param requestVO
      */
     private MaterialProcurementPushRequestVO addProcurementPlan(ProcurementPlanRequestVO requestVO) {
+        System.out.println("保存采购计划："+ requestVO.getSplitRequestList());
         ProcurementPlan procurementPlan = requestVO.getProcurementPlan();
         procurementPlan.setProcurementPlanCode(getProcurementPlanCode());
         procurementPlan.setProcurementReporter(SecurityUtils.getUserId());
