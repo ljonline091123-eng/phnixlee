@@ -123,7 +123,7 @@ public class MaterialsListServiceImpl extends ServiceImpl<MaterialsListMapper, M
             // 税额 = 含税金额 - 不含税金额
             materials.setTaxAmount(AmountCalUtil.calTaxAmount(materials.getAmountInclTax(),materials.getAmountExclTax()));
             System.out.println("materials:"+materials);
-            baseMapper.insert(materials);
+         //   baseMapper.insert(materials);
         });
         /* 是否是 “购买材料” */
         if(procurementPlan.getProcurementPlanType().equals(NumberConstant.ONE)){
