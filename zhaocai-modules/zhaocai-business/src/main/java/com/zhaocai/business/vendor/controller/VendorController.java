@@ -200,4 +200,10 @@ public class VendorController extends BladeController {
         return vendorService.loadTaskDef(requestDTO);
     }
 
+    @ApiOperation(value = "撤回供应商流程")
+    @PostMapping("/revokeVendor")
+    public ResultData<Boolean> revokeVendor(@RequestParam Long id) {
+        vendorService.revokeVendor(id);
+        return ResultData.success();
+    }
 }
