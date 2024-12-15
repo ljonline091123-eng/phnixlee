@@ -607,6 +607,9 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
         } else if (VendorStateEnum.REJECT.equalsState(vendor.getState())){
             message = "审批被拒绝，请联系管理员";
             isAvailable = false;
+        } else if (VendorStateEnum.SAVE.equalsState(vendor.getState())){
+            message = "注册审批已撤回";
+            isAvailable = false;
         } else {
             if (vendor.getIsBlack() == 1) {
                 message = "您已被拉入黑名单，请联系管理员";
@@ -949,17 +952,39 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
 
     @Override
     public void revokeVendor(Long id) {
-
+        VendorDetailVO vendorDetail = this.getVendorDetail(id);
         VendorChangeRequestVO vendorUpdateDetail = vendorChangeService.getVendorUpdateDetail(id);
-        //VendorManagementDetailVO vendorManagementDetail = vendorChangeService.getVendorManagementDetail(id);
-        ValidateUtils.isNullException(vendorUpdateDetail,"该供应商不存在");
-        ValidateUtils.isNullException(vendorUpdateDetail.getVendorChange(),"该供应商不存在修改");
-        ValidateUtils.validateStatusNotEquals(VendorStateEnum.IN_APPROVAL::equalsState,vendorUpdateDetail.getVendorChange().getChangeStatus(),"该状态下的供应商不允许撤回");
-        // 撤回流程
-        Map<String,Object> paramMap = new HashMap<>();
-        paramMap.put("businessId", vendorUpdateDetail.getVendorChange().getId());
-        paramMap.put("processId", vendorUpdateDetail.getVendorChange().getWfProcessId());
-        //processService.revokeProcess(ProcessKeyEnum.ZHAOCAI_VENDOR_UPDATEINFO.getIdentifying(),paramMap);
-        processService.revokeVendorProcess(ProcessKeyEnum.ZHAOCAI_VENDOR_UPDATEINFO.getIdentifying(),paramMap);
+        if(VendorProcessTypeEnum.VENDOR_REGISTER.getState().equals(vendorDetail.getVendor().getProcessType())){
+            ValidateUtils.validateStatusNotEquals(VendorStateEnum.IN_APPROVAL::equalsState,vendorDetail.getVendor().getState(),"该状态下的供应商不允许撤回");
+            // 撤回流程
+            Map<String,Object> paramMap = new HashMap<>();
+            paramMap.put("businessId", vendorDetail.getVendor().getId());
+            paramMap.put("processId", vendorDetail.getVendor().getWfProcessId());
+            processService.revokeVendorProcess(ProcessKeyEnum.ZHAOCAI_VENDOR_REGISTER.getIdentifying(),paramMap);
+        }else{
+            //VendorChangeRequestVO vendorUpdateDetail = vendorChangeService.getVendorUpdateDetail(id);
+            //VendorManagementDetailVO vendorManagementDetail = vendorChangeService.getVendorManagementDetail(id);
+            ValidateUtils.isNullException(vendorUpdateDetail,"该供应商不存在");
+            ValidateUtils.isNullException(vendorUpdateDetail.getVendorChange(),"该供应商不存在修改");
+            ValidateUtils.validateStatusNotEquals(VendorStateEnum.IN_APPROVAL::equalsState,vendorUpdateDetail.getVendorChange().getChangeStatus(),"该状态下的供应商不允许撤回");
+            // 撤回流程
+            Map<String,Object> paramMap = new HashMap<>();
+            paramMap.put("businessId", vendorUpdateDetail.getVendorChange().getId());
+            paramMap.put("processId", vendorUpdateDetail.getVendorChange().getWfProcessId());
+            processService.revokeVendorProcess(ProcessKeyEnum.ZHAOCAI_VENDOR_UPDATEINFO.getIdentifying(),paramMap);
+        }
+
+    }
+
+    /**
+     * 审批测回
+     * @param variables
+     */
+    @Override
+    public void processAuditRevoke(Map<String, Object> variables) {
+        String businessId = variables.get("businessId").toString();
+        super.update(new LambdaUpdateWrapper<Vendor>()
+                .set(Vendor::getState,VendorStateEnum.SAVE.getState())
+                .eq(Vendor::getId, businessId));
     }
 }
