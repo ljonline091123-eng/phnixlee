@@ -1209,7 +1209,7 @@ export default {
         if ([1, 2, 3, 4].includes(this.vendor.processType)) {
             function updateNodeLoadName(nodes) {
               for (let i = 0; i < nodes.length; i++) {
-                if (nodes[i].nodeName === '发起人') {
+                if (nodes[i].nodeName === '发起人' ) {
                   for (let j = 0; j < nodes[i].userList.length; j++) {
                     /* 修改发起人名称为 供应商公司名称 */
                     nodes[i].userList[j].userName = this.vendor.enterpriseName;
@@ -1221,6 +1221,7 @@ export default {
             /* 横轴流程顺序上面数据 数据修改 */
             updateNodeLoadName.call(this, this.processInformationList);
 
+
             /* 发起人名称为 供应商公司名称 方法 */
             function updateListNodeName(nodes) {
               for (let i = 0; i < nodes.length; i++) {
@@ -1229,7 +1230,11 @@ export default {
                   nodes[i].preHandlerName = this.vendor.enterpriseName;
                   nodes[i].handlerName = this.vendor.enterpriseName;
                   nodes[i].operateRemark = this.vendor.enterpriseName + ' 提交了流程.';
-                  break;
+                  //break;
+                }else if(nodes[i].taskName === '撤销' && nodes[i].handlerName === '招采'){
+                  nodes[i].preHandlerName = this.vendor.enterpriseName;
+                  nodes[i].handlerName = this.vendor.enterpriseName;
+                  nodes[i].operateRemark = this.vendor.enterpriseName + ' 撤销了流程.';
                 }
               }
             }
