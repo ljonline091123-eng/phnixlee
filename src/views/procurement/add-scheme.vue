@@ -325,7 +325,7 @@
                         v-model="formData.bidDeadline"
                         type="datetime"
                         style="width: 100%"
-                        placeholder="选择日期"
+                        placeholder="(说明:截止时间不能少于5天)"
                          popper-class="date-clear"
                         :picker-options="endTimeOptions"
                         value-format="yyyy-MM-dd HH:mm:ss"
@@ -489,11 +489,11 @@
                     height= "95%"
                     type="edit"
                   /> -->
-                  <iframe
+                  <iframe allowfullscreen="true"
                     v-if="viewAttachmentId"
                     :src= this.editFileUrl
                     width="100%"
-                    height="500px"
+                    height="700px"
                     frameborder="0"
                   ></iframe>
 
@@ -799,6 +799,7 @@
                 <el-input
                   v-model="bcTemplateQuery.templateName"
                   placeholder="请输入模板名称"
+                  clearable
                 />
               </el-form-item>
               <el-form-item
@@ -810,6 +811,7 @@
                   style="width: 100%"
                   v-model="bcTemplateQuery.contractType"
                   placeholder="请选择"
+                  clearable
                 >
                   <el-option
                     v-for="dict in contractTypeList"
@@ -888,6 +890,7 @@
                 <el-input
                   v-model="bcTemplateQuery.templateName"
                   placeholder="请输入模板名称"
+                  clearable
                 />
               </el-form-item>
               <el-form-item
@@ -899,6 +902,7 @@
                   style="width: 100%"
                   v-model="bcTemplateQuery.contractType"
                   placeholder="请选择"
+                  clearable
                 >
                   <el-option
                     v-for="dict in contractTypeList"
@@ -999,6 +1003,7 @@ import {
   getTemplateSwitchList,
   getProcurementSchemeCreateInfo,
   getSchemeDetail,
+  getSchemeEditFileUrl,
 } from "@/api/procurement/scheme";
 import { getSwitchPageList } from "@/api/procurement/manage";
 import { getContractTypeList } from "@/api/template/file";
@@ -1547,10 +1552,14 @@ export default {
     handleQuery() {
       this.bcTemplateQuery.pageNum = 1;
       this.getGeneralTemplateList();
+      /* 最后再获取分页数据，区分了通用和复用模板。 */
+      this.activeTabListen(this.activeTab);
     },
     handleQueryReusable() {
       this.bcTemplateQuery.pageNum = 1;
       this.getReusableTemplateList();
+      /* 最后再获取分页数据，区分了通用和复用模板。 */
+      this.activeTabListen(this.activeTab);
     },
     searchGeneralTemplates() {
       this.templateQuery.pageNum = 1;

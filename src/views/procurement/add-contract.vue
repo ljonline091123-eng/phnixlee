@@ -2,6 +2,13 @@
   <div class="app-container">
     <BackButton path="/procurement/sign-contract" title="新增合同信息">
       <div>
+        <el-button
+          type="primary"
+          size="mini"
+          @click="handelCalibrationApproval"
+        >
+          审批详情
+        </el-button>
         <el-button type="primary" size="mini" @click="submitForm"
           >保存</el-button>
           <el-button type="primary" v-if="typeContract=='add' && parseInt(firstForm.agreementPaymentItem.totalAmountIncTax)<50000"  size="mini" @click="avoidSubmitForm"
@@ -12,7 +19,7 @@
       <el-form ref="firstForm" :model="firstForm" label-width="210px">
       <div class="tabs-box">
       <!-- 基本信息 / 合同附件 -->
-      <el-tabs v-model="activeName">
+      <el-tabs v-model="activeName" @tab-click="attachmenthandleTabClick">
         <el-tab-pane label="基本信息" name="first">
           <!-- 基本信息 -->
           <commonTitle>基本信息</commonTitle>
@@ -1157,7 +1164,7 @@
               </el-table-column>
             </el-table>
           </div>
-            </el-tab-pane>
+          </el-tab-pane>
             <el-tab-pane label="合同附件" name="second" />
           </el-tabs>
           <!-- 合同附件 -->
@@ -1170,11 +1177,11 @@
               :isContract="true"
               type="edit"
             /> -->
-            <iframe
+            <iframe allowfullscreen="true"
               v-if="attachmentId"
               :src= this.editFileUrl
               width="100%"
-              height="500px"
+              height="700px"
               frameborder="0"
             ></iframe>
 
@@ -1490,7 +1497,7 @@
 import { Base64 } from "js-base64";
 import { create, all } from "mathjs";
 import commonTitle from "@/views/procurement/components/common-title.vue";
-import { getAgreementCreateInfo, saveAgreement, listUnderlingDict, listDeviceClass, listDevice, listMaterialsClass, listMaterials, deviceFeatureList, deviceFeatureValueList, listMaterialsFeature, listMaterialsFeatureValue, getAgreementCreateInfoYl,agreementCreateAttachmentHandle,avoidSubmitByMarket } from "@/api/procurement/contract";
+import { getAgreementEditURL,getAgreementCreateInfo, saveAgreement, listUnderlingDict, listDeviceClass, listDevice, listMaterialsClass, listMaterials, deviceFeatureList, deviceFeatureValueList, listMaterialsFeature, listMaterialsFeatureValue, getAgreementCreateInfoYl,agreementCreateAttachmentHandle,avoidSubmitByMarket } from "@/api/procurement/contract";
 import { offerService, offerRepo } from "@/utils/const"
 import { cardid, isvalidatemobile, validatenull } from "@/utils/validate"
 import BackButton from "@/components/BackButton/index.vue"
@@ -1500,7 +1507,7 @@ import { getContractTypeList ,getEditFileUrlByID} from "@/api/template/file";
 import {
   getTemplateSwitchList,
 } from "@/api/procurement/scheme";
-import { getSwitchPageList } from "@/api/procurement/manage";
+import {getLoadTaskDef, getOrgByUserId, getProcessLogList, getSwitchPageList} from "@/api/procurement/manage";
 import {showSecretRelatedTips} from "@/utils/MyUtils";
 export default {
   name: "add-contract",
@@ -1641,31 +1648,39 @@ export default {
     this.mathjs.config({
       number: "BigNumber",
     });
-
     //获取字典
     Object.keys(this.dictObjMap).forEach((key) => {
       this.getListUnderlingDict(key);
     });
   },
   methods: {
-    //获取合同附件的文档中台编辑URL
-    getAttachmentEditURL(){
-      //获取合同附件的文档中台编辑URL
-      if (this.attachmentId) {
-        console.log('新增合同签订编辑文件的AttachmentID:', this.attachmentId);
-        //获取文档中台的文档编辑URL
-        getEditFileUrlByID({ attachmentId: this.attachmentId })
-          .then((res) => {
-            this.editFileUrl = res.data;
-            console.log("新增合同签订编辑editFileUrl:", this.editFileUrl); 
-          })
-          .catch((err) => {
-            console.error('Error fetching view file URL:', err);
-          });
-      } else {
-        console.warn('attachmentId 数据未正确加载');
+    //切换页签到合同附件时
+    attachmenthandleTabClick(tab){
+      // tab.name 是被点击的标签页的 name 属性值
+      this.editFileUrl=""; //先清空编辑文档的URL，在重新获取
+      if (tab.name === 'second') {
+        this.getAttachmentEditURL();
       }
     },
+    // 获取合同附件的文档中台编辑URL
+    getAttachmentEditURL() {
+      let formData = JSON.parse(JSON.stringify(this.firstForm.agreement));
+      delete formData.expenditureBusinessType;
+      formData.paymentWay = this.firstForm.agreement.paymentWay?.join(",") || '';
+      let params = JSON.parse(JSON.stringify(formData));
+      console.log("生成编辑文档URL的params数据===>", params);
+      console.log('新增合同签订编辑文件的AttachmentID:', params.attachmentId);
+      // 获取文档中台的文档编辑URL
+      getAgreementEditURL(params)
+        .then((res) => {
+          this.editFileUrl = res.data;
+          console.log("新增合同签订编辑editFileUrl:", this.editFileUrl);
+        })
+        .catch((err) => {
+          console.error('生成编辑文档URL的错误:', err);
+        });
+    },
+
     selectBcTemplate(row) {
       this.templateId = row.templateId;
       this.templateRow=row
@@ -1707,7 +1722,7 @@ export default {
         this.attachmentId = res
         this.firstForm.agreement.attachmentId = res;
         console.log(this.templateId+"firstForm.agreement.attachmentId "+JSON.stringify(this.attachmentId))
-        this.getAttachmentEditURL(); //获取文档编辑的URL
+        // this.getAttachmentEditURL(); //获取文档编辑的URL
       })
       // const templateName = this.bcTemplateList.find(
       //   (item) => item.id === templateId
@@ -2420,7 +2435,51 @@ export default {
       this.$set(scope.row, 'paymentAmount', "")
       this.$set(scope.row, 'depositRatio', "")
       this.$set(scope.row, 'depositAmount', "")
-    }
+    },
+    async handelCalibrationApproval() {
+      try {
+        this.calibrateVisible = true;
+        this.calibrateLoading = true;
+        let params = {
+          businessId: this.purchaserId,
+          processId: this.exampleId,
+        };
+        let res = null;
+        if (this.purchaserId && this.exampleId) {
+          res = await getLoadTaskDef(params);
+        }else{
+          /* 未提交时查看流程执行流程，根据登录人id 获取流程分组 */
+          res = await getOrgByUserId(this.$store.state.user.id);
+          params = {
+            processKey: "jiantou-zhaocai:"+res.data+":ZHAOCAI_AGREEMENT_SIGN",
+            businessId: 8888888888,
+          };
+          res = await getLoadTaskDef(params);
+        }
+        this.processInformationList = res.data;
+        function getActive(nodes) {
+          let allFalse = true;
+          for (let i = 0; i < nodes.length; i++) {
+            if (!nodes[i].completed) {
+              if (i === 0) {
+                return 0;
+              } else {
+                return i;
+              }
+            }
+            allFalse = false;
+          }
+          return nodes.length;
+        }
+        this.calibrateActive = getActive(this.processInformationList);
+
+        if (this.purchaserId && this.exampleId) {
+          const response = await getProcessLogList(params);
+          this.approveArr = response.data;
+        }
+      } catch (error) {}
+      this.calibrateLoading = false;
+    },
   },
   watch: {
     // 根据名称筛选树
@@ -2497,7 +2556,7 @@ export default {
           console.log(newVal, "$route.query.schemeId");
           const { schemeId, splitId, vendorId } = this.$route.query;
           console.log(schemeId, "schemeId------");
-          const list = JSON.parse(window.sessionStorage.getItem("contract")) || {}
+          const list = JSON.parse(window.sessionStorage.getItem("contract")) || {};
           getAgreementCreateInfo({
             schemeId,
             splitId,
@@ -2516,9 +2575,8 @@ export default {
             this.attachmentId = res.data.attachmentId;
             console.log("agreementFileUrl",res.data.agreementFileUrl);
             console.log("agreementFileName",res.data.agreementFileName);
-            console.log("getAgreementCreateInfo获取的attachmentId:",res.data.attachmentId);
-
             this.firstForm.agreement.attachmentId = res.data.attachmentId;
+            console.log("getAgreementCreateInfo获取的attachmentId:",this.firstForm.agreement.attachmentId);
             this.totalAmountIncTax = res.data.totalAmountIncTax;
 
             // 合同类型
@@ -2560,13 +2618,15 @@ export default {
             this.firstForm.agreementMaterialsLists = JSON.parse(
               JSON.stringify(res?.data["biddingListQuotation"])
             );
+
+            // 获取合同附件的文档中台编辑URL
+            this.editFileUrl=""; //先清空文档编辑URL
+            this.getAttachmentEditURL();
           });
-          //获取合同附件的文档中台编辑URL
-          this.getAttachmentEditURL();
 
         }
       },
-      immediate: true,
+      immediate: true, // 立即执行一次监听器
     },
   },
   computed: {

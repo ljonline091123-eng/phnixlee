@@ -11,10 +11,21 @@
             @click="handelSanction"
             >审批</el-button
           >
+            <!--     撤回操作，这个招标对象 没有审批状态 属性，所以只能根据是否存在流程id或者招标环节阶段值来判断noticeStatus === 5   审批状态为 1 审批中 才能撤回   -->
           <el-button
             type="primary"
             size="small"
-            v-if="isShowApprovalDetails"
+            v-if="shouldDisableButton  && noticeDetail.tenderNotice.noticeStatus === 5  && noticeDetail.tenderNotice.state === 1"
+            @click="
+                  revokeBiddingForm(
+                    tenantId,
+                    scheme.procurementSchemeName
+                  )
+                "
+            >撤回</el-button>
+          <el-button
+            type="primary"
+            size="small"
             @click="handelCalibrationApproval"
             >审批详情</el-button
           >
@@ -22,7 +33,7 @@
             type="primary"
             size="small"
             @click="submitForm"
-            :disabled="shouldDisableButton"
+            :disabled="shouldDisableButton && ![0,4,5].includes(noticeDetail.tenderNotice.state)"
             :loading="isSubmit"
             >{{ isSubmit ? "提交中..." : "提交" }}</el-button
           >
@@ -91,7 +102,7 @@
               <el-button
                 type="primary"
                 size="mini"
-                v-if="!scheme.calibrationAttachmentList && !shouldDisableButton"
+                v-if="(!scheme.calibrationAttachmentList && !shouldDisableButton) || [0,4,5].includes(noticeDetail.tenderNotice.state)"
                 @click="showSecretTips"
                 style="margin-top: 8px"
               >上传</el-button
@@ -139,7 +150,7 @@
           <el-button
             type="primary"
             size="small"
-            :disabled="shouldDisableButton"
+            :disabled="shouldDisableButton && ![0,4,5].includes(noticeDetail.tenderNotice.state)"
             @click="handelConfirmBidOpening"
             >确定中标人</el-button
           >
@@ -167,6 +178,18 @@
           align="center"
         />
         <el-table-column label="序号" type="index" width="50" align="center" />
+        <el-table-column
+          prop="sureBid"
+          label="确定中标"
+          align="center"
+          v-if="shouldDisableButton && ![0,4,5].includes(noticeDetail.tenderNotice.state)"
+        >
+          <template #default="{ row }">
+            <span :style="{ color: row.sureBid === 1 ? 'red' : 'black' }">
+              {{ row.sureBid === 1 ? '中标' : '未中标' }}
+            </span>
+          </template>
+        </el-table-column>
         <el-table-column
           label="中标候选人"
           width="200"
@@ -489,11 +512,11 @@
         "
         height="600px"
       /> -->
-      <iframe
+      <iframe allowfullscreen="true"
         v-if="scheme.biddingTemplate"
         :src= this.viewFileUrl
         width="100%"
-        height="500px"
+        height="700px"
         frameborder="0"
       ></iframe>
     </el-dialog>
@@ -604,7 +627,7 @@ import {
   getBiddingQuotationList,
   getLoadTaskDef,
   getProcessLogList,
-  postAuditProcess,
+  postAuditProcess, getOrgByUserId, revokeBidding,
 } from "@/api/procurement/manage";
 import FileModule from "@/components/FileModule/index.vue";
 import PageTitle from "@/components/PageTitle/index.vue";
@@ -613,6 +636,7 @@ import BackBidDetail from "./back-bid-detail.vue";
 import {showSecretRelatedTips} from "@/utils/MyUtils";
 import { getViweFileURL } from "@/api/template/file";
 import Vue from 'vue'
+import {withdrawalPlan} from "@/api/procurement/scheme";
 const vm = new Vue();
 export default {
   name: "define-bid",
@@ -902,15 +926,23 @@ export default {
           dangerouslyUseHTMLString: true // 启用 HTML 支持
         }).then(async () => {
           try {
+            this.revokeLoding = this.$loading({
+              lock: true,
+              text: "定标提交中...",
+              spinner: "el-icon-loading",
+              background: "rgba(0, 0, 0, 0.7)",
+            });
             const res = await calibration({
               calibrationVOList: this.evaluateList,
               detailUrl: detailUrl,
               calibrationDocAttachList: this.uploadAttachmentList,
             });
+            this.revokeLoding.close();
             this.$message.success("定标成功");
             this.isSuccess = true;
             this.$emit("changeState");
           } catch (err) {
+            this.revokeLoding.close();
             console.log(err);
           }
         }).catch(() => {
@@ -935,6 +967,34 @@ export default {
         }
         this.isSubmit = false;
       }
+    },
+    /* 撤回定标 */
+    async revokeBiddingForm(id,name){
+      console.log('%c👽 是否确定撤回定标 ', `font-size: 20px;background-color: #f00;`, '是否确定撤回定标');
+      this.$confirm("是否确定撤回定标：" + name, "提示", {
+        confirmButtonText: "确定",
+        cancelButtonText: "取消",
+        type: "warning",
+      }).then(async () => {
+        try {
+          this.revokeLoding = this.$loading({
+            lock: true,
+            text: "撤回中...",
+            spinner: "el-icon-loading",
+            background: "rgba(0, 0, 0, 0.7)",
+          });
+          revokeBidding(id)
+            .then((res) => {
+              if (res.code == 200) {
+                this.$message.success("撤回成功");
+              }
+              this.revokeLoding.close();
+              /* 刷新页面 */
+              location.reload();
+            })
+            .catch((e) => this.revokeLoding.close());
+        } catch (error) {}
+      });
     },
     getUserNames(userList) {
       if (!userList || userList.length === 0) {
@@ -1021,12 +1081,22 @@ export default {
       try {
         this.calibrateVisible = true;
         this.calibrateLoading = true;
-        const params = {
+        let params = {
           businessId: this.tenantId,
           processId: this.authorityId,
         };
-        if (this.tenantId && this.authorityId) {
-          const res = await getLoadTaskDef(params);
+        let res = null;
+        if (this.tenantId && this.authorityId && this.noticeDetail.tenderNotice.wfProcessId) {
+          res = await getLoadTaskDef(params);
+        }else{
+          /* 未提交时查看流程执行流程，根据登录人id 获取流程分组 */
+          res = await getOrgByUserId(this.$store.state.user.id);
+          params = {
+            processKey: "jiantou-zhaocai:"+res.data+":ZHAOCAI_TENDER_CALIBRATE",
+            businessId: 88882352353245888,
+          };
+          res = await getLoadTaskDef(params);
+        }
           this.processInformationList = res.data;
           function getActive(nodes) {
             let allFalse = true;
@@ -1043,6 +1113,9 @@ export default {
             return nodes.length;
           }
           this.calibrateActive = getActive(this.processInformationList);
+
+
+        if (this.tenantId && this.authorityId && this.noticeDetail.tenderNotice.wfProcessId) {
           const response = await getProcessLogList(params);
           this.approveLists = response.data;
         }

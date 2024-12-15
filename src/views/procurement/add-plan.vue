@@ -274,7 +274,7 @@
                       </el-table-column>
                       <el-table-column
                       v-if="currentContract.contractPlanningCategory == 1"
-                      label="易商品编码"
+                      label="易料商品编码"
                       align="center"
                       min-width="150" prop="skuId" show-overflow-tooltip
                     >
@@ -385,8 +385,8 @@
             </template>
           </el-table-column>
           <el-table-column label="序号" prop="virtualId" width="60" align="center" />
-          <el-table-column label="用户" prop="nickName" show-overflow-tooltip align="center"/>
-          <el-table-column label="电话号码" prop="phonenumber" show-overflow-tooltip align="center"/>
+          <el-table-column label="用户" prop="nickName" width="100" align="center"/>
+          <el-table-column label="电话号码" prop="phonenumber" width="150" align="center"/>
           <el-table-column label="归属当前组织名称" prop="thridOrgName" show-overflow-tooltip align="center"/>
           <el-table-column label="归属管理组织名称" prop="orgDeptName" show-overflow-tooltip align="center"/>
         </el-table>
@@ -503,6 +503,7 @@ import { mapGetters } from "vuex"
 import PageTitle from "@/components/PageTitle/index.vue"
 import {PRICETYPELIST, PRICETYPEOPTIONS} from "@/utils/constants";
 import VirtualScroll from 'el-table-virtual-scroll'
+import {getTwoLevelDeptByDeptId} from "@/api/system/dept";
 export default {
   name: "add-plan",
   dicts: ['plan_type','price_type','procurement_counting_type','procurement_payment_type'],
@@ -1390,8 +1391,9 @@ console.log("-2222--"+JSON.stringify(this.materialsLists))
 
     async getListProcurementOfficer(){
       try{
-        const projectRes = await getMinProject(this.formData.projectCode);
-        const res = await getListProcurementOfficer(projectRes.data.deptId)
+        // const projectRes = await getMinProject(this.formData.projectCode);
+        const dept = await getTwoLevelDeptByDeptId(this.$store.state.user.userInfo.deptId);
+        const res = await getListProcurementOfficer(dept.deptId)
         this.operatorList = res.data;
       }catch(err){
         console.log(err);

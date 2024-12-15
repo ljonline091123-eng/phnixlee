@@ -40,7 +40,6 @@
           <el-button
             type="primary"
             size="mini"
-            v-if="isShowApprovalDetails"
             @click="handelCalibrationApproval"
             >审批详情</el-button
           >
@@ -688,16 +687,17 @@
       </div>
     </el-drawer>
 
+    //预览文件弹窗
     <el-dialog
       :title="templateDialogTitle"
       :visible.sync="templateDialogVisible"
       width="80%"
     >
-    <!-- <FileModule :key="templateAttachmentId" :attachmentId="templateAttachmentId" height="700px" /> -->
-      <iframe
+    <!-- <FileModule :attachmentId="templateAttachmentId" height="500px" /> -->
+      <iframe allowfullscreen="true"
         :src= this.viewFileUrl
         width="100%"
-        height="500px"
+        height="700px"
         frameborder="0"
       ></iframe>
     </el-dialog>
@@ -739,7 +739,7 @@ import {
   getPermissionButton,
   postAuditProcess,
   getLoadTaskDef,
-  getProcessLogList,
+  getProcessLogList, getOrgByUserId,
 } from "@/api/procurement/manage";
 import { getRating } from "@/api/template/rating";
 import FileModule from "@/components/FileModule/index.vue";
@@ -1087,28 +1087,40 @@ export default {
       try {
         this.calibrateVisible = true;
         this.calibrateLoading = true;
-        const params = {
+        let params = {
           businessId: this.purchaserId,
           processId: this.exampleId,
         };
+        let res = null;
         if (this.purchaserId && this.exampleId) {
-          const res = await getLoadTaskDef(params);
-          this.processInformationList = res.data;
-          function getActive(nodes) {
-            let allFalse = true;
-            for (let i = 0; i < nodes.length; i++) {
-              if (!nodes[i].completed) {
-                if (i === 0) {
-                  return 0;
-                } else {
-                  return i;
-                }
+          res = await getLoadTaskDef(params);
+        }else{
+          /* 未提交时查看流程执行流程，根据登录人id 获取流程分组 */
+          res = await getOrgByUserId(this.$store.state.user.id);
+          params = {
+            processKey: "jiantou-zhaocai:"+res.data+":ZHAOCAI_PROCUREMENT_SCHEME",
+            businessId: 8888888888,
+          };
+          res = await getLoadTaskDef(params);
+        }
+        this.processInformationList = res.data;
+        function getActive(nodes) {
+          let allFalse = true;
+          for (let i = 0; i < nodes.length; i++) {
+            if (!nodes[i].completed) {
+              if (i === 0) {
+                return 0;
+              } else {
+                return i;
               }
-              allFalse = false;
             }
-            return nodes.length;
+            allFalse = false;
           }
-          this.calibrateActive = getActive(this.processInformationList);
+          return nodes.length;
+        }
+        this.calibrateActive = getActive(this.processInformationList);
+
+        if (this.purchaserId && this.exampleId) {
           const response = await getProcessLogList(params);
           this.approveArr = response.data;
         }

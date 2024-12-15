@@ -282,12 +282,24 @@
             label="拆分合约规划名称"
             prop="splitContractName"
             show-overflow-tooltip
-          />
+          >
+          <template slot-scope="scope">
+            <span >
+              {{ scope.row.procurementSchemeCode?scope.row.procurementSchemeCode:'/' }}
+            </span>
+          </template>
+          </el-table-column>
           <el-table-column
             label="拟签约合同承包范围"
             prop="contractScope"
             show-overflow-tooltip
-          />
+          >
+          <template slot-scope="scope">
+            <span >
+              {{ scope.row.contractScope? scope.row.contractScope:'/' }}
+            </span>
+          </template>
+          </el-table-column>
         </el-table>
         <pagination
           v-show="planTotal > 0"

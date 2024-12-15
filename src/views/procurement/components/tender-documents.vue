@@ -52,11 +52,6 @@
                   type="primary"
                   size="small"
                   @click="setModify"
-                  :disabled="
-                    noticeDetail.purchaseOfficer === undefined
-                      ? false
-                      : !noticeDetail.purchaseOfficer
-                  "
                   >变更</el-button
                 >
               </el-badge>
@@ -66,11 +61,6 @@
                 type="primary"
                 size="small"
                 @click="setModify"
-                :disabled="
-                  noticeDetail.purchaseOfficer === undefined
-                    ? false
-                    : !noticeDetail.purchaseOfficer
-                "
                 >变更</el-button
               >
             </div>
@@ -80,11 +70,6 @@
                   type="primary"
                   size="small"
                   @click="setQA"
-                  :disabled="
-                    noticeDetail.purchaseOfficer === undefined
-                      ? false
-                      : !noticeDetail.purchaseOfficer
-                  "
                   >答疑</el-button
                 >
               </el-badge>
@@ -94,11 +79,6 @@
                 type="primary"
                 size="small"
                 @click="setQA"
-                :disabled="
-                  noticeDetail.purchaseOfficer === undefined
-                    ? false
-                    : !noticeDetail.purchaseOfficer
-                "
                 >答疑</el-button
               >
             </div>
@@ -243,11 +223,11 @@
           "
           height="500px"
         /> -->
-        <iframe
+        <iframe allowfullscreen="true"
           v-if="scheme.biddingTemplate"
           :src= this.viewFileUrl
           width="100%"
-          height="500px"
+          height="700px"
           frameborder="0"
         ></iframe>
       </el-form>

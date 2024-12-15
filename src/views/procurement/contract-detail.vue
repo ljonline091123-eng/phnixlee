@@ -958,11 +958,11 @@
             :attachmentId="this.attachmentId"
             height="600px"
           /> -->
-          <iframe
+          <iframe allowfullscreen="true"
             v-if="activeName === 'second' && this.attachmentId"
             :src= this.viewFileUrl
             width="100%"
-            height="500px"
+            height="700px"
             frameborder="0"
           ></iframe>
 
@@ -1144,6 +1144,7 @@ import {
   signAgreement,
   cancelledSignAgreement,
   pushAgreementToVendor,
+  getAgreementViewURL,
 } from "@/api/procurement/contract";
 import { offerRepo, offerService } from "@/utils/const";
 import FileModule from "@/components/FileModule/index.vue";
@@ -1155,7 +1156,7 @@ import {
   getPermissionButton,
   postAuditProcess,
   getLoadTaskDef,
-  getProcessLogList,
+  getProcessLogList, getOrgByUserId,
 } from "@/api/procurement/manage";
 import { getViewAttachmentURLByID } from "@/api/template/file";
 export default {
@@ -3346,7 +3347,7 @@ export default {
     this.param = param;
     this.getContractDetail();
     this.intervalId = setInterval(this.loadAgreementAttachmentId, 3000);
-    
+
   },
 
   methods: {
@@ -3408,7 +3409,7 @@ export default {
           console.log('Attachment ID:', this.attachmentId);
           //获取文档中台的文档编辑URL
           try {
-            const res = await getViewAttachmentURLByID({ attachmentId: this.attachmentId });
+            const res = await getAgreementViewURL({ attachmentId: this.attachmentId ,agreementId: this.param.id});
             this.viewFileUrl = res.data;
             console.log("viewFileUrl:",this.viewFileUrl);
           } catch (err) {
@@ -3470,12 +3471,22 @@ export default {
       try {
         this.calibrateVisible = true;
         this.calibrateLoading = true;
-        const params = {
+        let params = {
           businessId: this.purchaserId,
           processId: this.exampleId,
         };
+        let res = null;
         if (this.purchaserId && this.exampleId) {
-          const res = await getLoadTaskDef(params);
+          res = await getLoadTaskDef(params);
+        }else{
+          /* 未提交时查看流程执行流程，根据登录人id 获取流程分组 */
+          res = await getOrgByUserId(this.$store.state.user.id);
+          params = {
+            processKey: "jiantou-zhaocai:"+res.data+":ZHAOCAI_AGREEMENT_SIGN",
+            businessId: 8888888888,
+          };
+          res = await getLoadTaskDef(params);
+        }
           this.processInformationList = res.data;
           function getActive(nodes) {
             let allFalse = true;
@@ -3492,6 +3503,8 @@ export default {
             return nodes.length;
           }
           this.calibrateActive = getActive(this.processInformationList);
+
+        if (this.purchaserId && this.exampleId) {
           const response = await getProcessLogList(params);
           this.approveArr = response.data;
         }
