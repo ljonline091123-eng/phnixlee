@@ -471,7 +471,7 @@ import {
   getProcessLogList, getProcessLogListNew,
 } from "@/api/procurement/manage";
 import {showSecretRelatedTips} from "@/utils/MyUtils";
-import {getViewAttachmentURLByID} from "@/api/template/file";
+import {getViewAttachmentURLByID, getViweFileURL} from "@/api/template/file";
 export default {
   name: "add-expert",
   dicts: [
@@ -759,7 +759,20 @@ export default {
         } catch (err) {
           console.log(err);
         }
-      } else {
+      } else if(file.response.code === 200){
+        /* 新增时未保存附件无附件id时调用 */
+        this.templateDialogTitle = file.response.data.name + "预览";
+        this.templateDialogVisible = true;
+        try {
+          const query = { fileName: file.response.data.name?file.response.data.name:'获取不到文件名', fileUrl: file.response.data.url };
+          console.log('%c👽 getViweFileURL:query ', `font-size: 20px;background-color: #f00;`, query);
+          const res = await getViweFileURL(query);
+          this.viewFileUrl = res.data;
+          console.log("viewFileUrl:", this.viewFileUrl);
+        } catch (err) {
+          console.log(err);
+        }
+      }else{
         console.error('专家附件 数据未正确加载');
       }
 
