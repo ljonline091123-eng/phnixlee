@@ -354,7 +354,9 @@ export default {
     };
   },
   created() {
-    this.queryParams.vendorClass=this.$route.query.vendorClass
+    if(this.$route.query?.vendorClass){
+      this.queryParams.vendorClass=this.$route.query?.vendorClass || ""
+    }
     this.getVendorList();
   },
   methods: {
