@@ -423,7 +423,7 @@
                       <br>
                       <div style="margin-left: -90px;width: 300px;">
                         <!--  先选择模板后再去手动上传附件模板，优先保证系统数据能拥有tempId的值吧，然后判断审批状态是否可上传 -->
-                        <el-button size="mini" type="primary" v-show="formData.biddingTemplateName && (state === null || (state !== 1 && state !== 2 && state !== 3))" @click="uploadBiddingClick">手动上传</el-button>
+                        <el-button size="mini" type="primary" v-show="(state === null || (state !== 1 && state !== 2 && state !== 3))" @click="uploadBiddingClick">手动上传</el-button>
                         <el-upload
                           style="margin-left: 90px;margin-top: -75px;"
                           :action="uploadFileUrl"
@@ -461,7 +461,7 @@
                       <br>
                       <div style="margin-left: -90px;width: 300px;">
                         <!--  先选择模板后再去手动上传附件模板，优先保证系统数据能拥有tempId的值吧，然后判断审批状态是否可上传 -->
-                        <el-button size="mini" type="primary" v-show="formData.contractTemplateName && (state === null || (state !== 1 && state !== 2 && state !== 3))" @click="uploadContractClick">手动上传</el-button>
+                        <el-button size="mini" type="primary" v-show="(state === null || (state !== 1 && state !== 2 && state !== 3))" @click="uploadContractClick">手动上传</el-button>
                         <el-upload
                           style="margin-left: 90px;margin-top: -75px;"
                           :action="uploadFileUrl"
@@ -1331,7 +1331,7 @@ export default {
         activeTabs: "base",
         inventoryVisible: false,
         financeList: [],
-        
+
         evaluateVisable: false, //评分弹出
         evaluateTemplateList: [], //评分模板列表
         evaluateTemplateLoading: false,
@@ -1734,6 +1734,9 @@ export default {
           /* 设置新的附件返回的附件id */
           this.$set(this.formData, "biddingAttachmentId", res.data);
           /* 同步更新页面的模板附件对象(附件修改按钮) */
+          if (!this.procurementSchemeTempObject) {
+            this.$set(this, 'procurementSchemeTempObject', {});
+          }
           if (!this.procurementSchemeTempObject.biddingTemplate) {
             this.$set(this.procurementSchemeTempObject, 'biddingTemplate', {});
           }
@@ -1780,6 +1783,9 @@ export default {
           /* 设置新的附件返回的附件id */
           this.$set(this.formData, "contractAttachmentId", res.data);
           /* 同步更新页面的模板附件对象(附件修改按钮) */
+          if (!this.procurementSchemeTempObject) {
+            this.$set(this, 'procurementSchemeTempObject', {});
+          }
           if (!this.procurementSchemeTempObject.contractTemplate) {
             this.$set(this.procurementSchemeTempObject, 'contractTemplate', {});
           }
@@ -1868,6 +1874,9 @@ export default {
             this.$set(this.formData, "biddingTemplateId", templateId);
             this.$refs.form.clearValidate("biddingTemplateName");
             /* 同步更新页面的模板附件对象(附件修改按钮) */
+            if (!this.procurementSchemeTempObject) {
+              this.$set(this, 'procurementSchemeTempObject', {});
+            }
             if (!this.procurementSchemeTempObject.biddingTemplate) {
               this.$set(this.procurementSchemeTempObject, 'biddingTemplate', {});
             }
@@ -1899,6 +1908,9 @@ export default {
             this.$set(this.formData, "contractTemplateId", templateId);
             this.$refs.form.clearValidate("contractTemplateName");
             /* 同步更新页面的模板附件对象(附件修改按钮) */
+            if (!this.procurementSchemeTempObject) {
+              this.$set(this, 'procurementSchemeTempObject', {});
+            }
             if (!this.procurementSchemeTempObject.contractTemplate) {
               this.$set(this.procurementSchemeTempObject, 'contractTemplate', {});
             }
@@ -1997,6 +2009,9 @@ export default {
         this.$set(this.formData, "biddingAttachmentId", res.data);
         this.$set(this.formData, "biddingTemplateName", name);
         /* 同步更新页面的模板附件对象(附件修改按钮) */
+        if (!this.procurementSchemeTempObject) {
+          this.$set(this, 'procurementSchemeTempObject', {});
+        }
         if (!this.procurementSchemeTempObject.biddingTemplate) {
           this.$set(this.procurementSchemeTempObject, 'biddingTemplate', {});
         }
@@ -2051,6 +2066,9 @@ export default {
         this.$set(this.formData, "contractAttachmentId", res.data);
         this.$set(this.formData, "contractTemplateName", name);
         /* 同步更新页面的模板附件对象(附件修改按钮) */
+        if (!this.procurementSchemeTempObject) {
+          this.$set(this, 'procurementSchemeTempObject', {});
+        }
         if (!this.procurementSchemeTempObject.contractTemplate) {
           this.$set(this.procurementSchemeTempObject, 'contractTemplate', {});
         }
@@ -2114,7 +2132,7 @@ export default {
           contractSplitIdList
         } = res.data;
         /* 采购方案文件，通过getSchemeDetail方法请求procurementScheme/detail?id=获取的数据 */
-        this.procurementSchemeTempObject = procurementSchemeBidding;
+        this.procurementSchemeTempObject = procurementSchemeBidding?procurementSchemeBidding:{};
         this.contractList = contractPlanList;
         const {
           procurementSchemeName,
