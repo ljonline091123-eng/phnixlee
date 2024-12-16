@@ -404,11 +404,13 @@
                 <el-upload
                   :action="uploadFileUrl"
                   :limit="1"
-                  accept=".pdf, .doc, .docx"
+                  accept=".pdf"
                   :on-success="fileSuccess"
                   :file-list="formData.resumeAttachList"
                   :on-remove="fileRemove"
                   :on-preview="handlePreview"
+                  :before-upload="beforeUpload"
+                  :disabled="isSubmit"
                   ref="upload"
                 >
                 </el-upload>
@@ -762,7 +764,25 @@ export default {
       }
 
     },
+    /* 专家附件文件大小上传限制 */
+    beforeUpload(file) {
+      const isSizeValid = file.size / 1024 / 1024 < 30; // 限制文件大小为 30MB
+      const isFormatValid = file.type === 'application/pdf'; // 限制文件格式为 .pdf
 
+      // 校验文件格式
+      if (!isFormatValid) {
+        this.$message.error('文件格式限制为 PDF！且大小不能超过 30MB');
+        return false; // 返回 false 将停止上传
+      }
+
+      // 校验文件大小
+      if (!isSizeValid) {
+        this.$message.error('文件大小不能超过 30MB！且文件格式限制为 PDF');
+        return false; // 返回 false 将停止上传
+      }
+
+      return true; // 文件通过校验，允许上传
+    },
     async getInfoDetail(id) {
         console.log('%c👽 Base64.encode(JSON.stringify(id)) ', `font-size: 20px;background-color: #f00;`, Base64.encode(JSON.stringify(id)));
         const res = await getInfo(id);
