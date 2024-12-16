@@ -848,9 +848,15 @@ export default {
   created() {
     const param = JSON.parse(Base64.decode(this.$route.params.params));
     console.log("param613" + JSON.stringify(param));
-    this.param = param.id;
-    this.vendorClass=param.vendorClass
-    this.path=this.path+'?vendorClass='+this.vendorClass
+    // 没有param.id是招采跳转否则待办跳转
+    if(param?.id){
+        this.param = param.id;
+        this.vendorClass=param.vendorClass
+        this.path=this.path+'?vendorClass='+this.vendorClass
+    }else{
+        this.param = param;
+    }
+   
     this.getVendorDetail();
   //  this.listBankAccountContactFn();
   },
