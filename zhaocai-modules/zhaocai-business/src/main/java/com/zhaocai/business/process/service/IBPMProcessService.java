@@ -73,4 +73,9 @@ public interface IBPMProcessService {
      * 加载定义接口
      */
     ResultData<List<BpmLoadTaskDefResponseDTO>> loadTaskDef(BpmLoadTaskDefRequestDTO requestDTO);
+
+    /**
+     * 供应商撤回流程
+     * */
+    String revokeVendorProcess(String identifying, Map<String, Object> paramMap);
 }
