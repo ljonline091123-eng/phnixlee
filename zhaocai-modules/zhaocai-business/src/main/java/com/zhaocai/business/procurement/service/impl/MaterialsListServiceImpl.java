@@ -443,10 +443,16 @@ public class MaterialsListServiceImpl extends ServiceImpl<MaterialsListMapper, M
         CompContractSplitMaterialsVO  splitMaterialsVO;
         for (Map.Entry<String,List<MaterialsList>> entry : map.entrySet()) {
             splitMaterialsVO = new CompContractSplitMaterialsVO();
-            String[] keys = entry.getKey().split("-_#_-");
-            splitMaterialsVO.setSplitId(Long.valueOf(keys[0]));
-            splitMaterialsVO.setSplitContractName(keys[1]);
-            splitMaterialsVO.setContractScope(keys[2]);
+            //判断是否只有一个
+            if(materialsList!=null&&materialsList.size()==1){
+                splitMaterialsVO.setSplitId(Long.valueOf(materialsList.get(0).getId()));
+            }else{
+                String[] keys = entry.getKey().split("-_#_-");
+                splitMaterialsVO.setSplitId(Long.valueOf(keys[0]));
+                splitMaterialsVO.setSplitContractName(keys[1]);
+                splitMaterialsVO.setContractScope(keys[2]);
+            }
+
 
             List<CompMaterialsContentVO> materialsLists = BeanCopierUtil.copyList(entry.getValue(), CompMaterialsContentVO.class);
 
