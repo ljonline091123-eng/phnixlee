@@ -125,6 +125,26 @@ export const postAuditProcess = (data) => {
     data,
   });
 };
+// 获取二三级单位
+export const postGetOrg = (org) => {
+  return request({
+    url: "/business/process/getOrg",
+    method: "post",
+    data: {
+      org,
+    },
+  });
+};
+// 获取二三级单位
+export const getOrgByUserId = (userId) => {
+  return request({
+    url: "/business/process/getOrgByUserId",
+    method: "post",
+    data: {
+      userId
+    },
+  });
+};
 export const postAuditProcessVendor = (data) => {
   return request({
     url: "/business/vendor/audit",
@@ -334,6 +354,17 @@ export const calibration = (data, detailUrl) => {
     data: data,
     params: {
       detailUrl: detailUrl,
+    },
+  });
+};
+
+/** 撤回定标 */
+export const revokeBidding = (id) => {
+  return request({
+    url: "/business/result/revokeBidding",
+    method: "post",
+    params: {
+      id,
     },
   });
 };

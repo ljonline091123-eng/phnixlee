@@ -36,11 +36,6 @@
                   type="primary"
                   size="small"
                   @click="setModify"
-                  :disabled="
-                    noticeDetail.purchaseOfficer === undefined
-                      ? false
-                      : !noticeDetail.purchaseOfficer
-                  "
                 >变更
                 </el-button
                 >
@@ -51,11 +46,6 @@
                 type="primary"
                 size="small"
                 @click="setModify"
-                :disabled="
-                  noticeDetail.purchaseOfficer === undefined
-                    ? false
-                    : !noticeDetail.purchaseOfficer
-                "
               >变更
               </el-button
               >
@@ -66,11 +56,6 @@
                   type="primary"
                   size="small"
                   @click="setQA"
-                  :disabled="
-                    noticeDetail.purchaseOfficer === undefined
-                      ? false
-                      : !noticeDetail.purchaseOfficer
-                  "
                 >答疑
                 </el-button
                 >
@@ -81,11 +66,6 @@
                 type="primary"
                 size="small"
                 @click="setQA"
-                :disabled="
-                  noticeDetail.purchaseOfficer === undefined
-                    ? false
-                    : !noticeDetail.purchaseOfficer
-                "
               >答疑
               </el-button
               >
@@ -124,11 +104,12 @@
                 v-model="formData.applyTimeNotice"
                 type="datetime"
                 style="width: 100%"
-                placeholder="选择日期"
-                :picker-options="expireTimeOption"
+                placeholder="(说明:截止时间不能少于5天)"
+                popper-class="date-clear"
+                :picker-options="endTimeOptions"
                 value-format="yyyy-MM-dd HH:mm:ss"
                 :disabled="!!(formData.id || isSubmit)"
-                class="date_picker"
+                @change="handleChange"
               />
             </el-form-item>
           </el-col>
@@ -714,25 +695,30 @@ export default {
         // 设置日期时间显示格式，只显示年月日时分
         format: "yyyy-MM-dd HH:mm:ss",
         // 设置可选的时间范围
-        selectableRange: "00:00:00 - 23:59:59",
+        // selectableRange: "00:00:00 - 23:59:59",
+        selectableRange :new Date().getHours() + ':' + (new Date().getMinutes() + 1) + ':00 - 23:59:00',
+        disabledDate(time) {
+          console.log(new Date().getDate()+5)
+          return time.getTime() < Date.now() + (4 * 24 * 3600 * 1000); // 禁用小于当前日期的日期
+        }
         // disabledDate(time) {
         //   return time.getTime() < Date.now() - 8.64e7; // 禁用小于当前日期的日期
         // }
-        disabledDate(time) {
-          // 获取今天的时间戳
-          const today = new Date();
-          today.setHours(24, 0, 0, 0); // 设置为当天的24点
-
-          // 过5天的时间戳
-          const next = new Date(today);
-          next.setDate(today.getDate() + 5);
-
-          // 将传入的时间戳转为日期对象
-          const date = new Date(time);
-
-          // 只能选择过5天后的日期【比如今天是24号，则30号及以后可以选择】
-          return date < next;
-        },
+        // disabledDate(time) {
+        //   // 获取今天的时间戳
+        //   const today = new Date();
+        //   today.setHours(24, 0, 0, 0); // 设置为当天的24点
+        //
+        //   // 过5天的时间戳
+        //   const next = new Date(today);
+        //   next.setDate(today.getDate() + 5);
+        //
+        //   // 将传入的时间戳转为日期对象
+        //   const date = new Date(time);
+        //
+        //   // 只能选择过5天后的日期【比如今天是24号，则30号及以后可以选择】
+        //   return date < next;
+        // },
       },
       modifyVisible: false,
       modifyForm: {},
@@ -823,6 +809,15 @@ export default {
     this.getNoticeUpdateList();
   },
   methods: {
+    /* 报名截止时间监听 */
+    handleChange(value) {
+      let newVal = new Date(value);
+      let currentDate = Date.now(); // 获取当前时间戳
+      // 比较当前日期是否小于5天后的日期
+      if (newVal && newVal < currentDate + 5 * 24 * 60 * 60 * 1000) {
+        this.formData.applyTimeNotice = null; // 设置为null
+      }
+    },
     async getViewNoticeURL(){
       //获取招标公告的-》文档中台的该文件的预览url
       if (this.attachmentId) {
@@ -1215,6 +1210,29 @@ export default {
     },
   },
   computed: {
+    endTimeOptions() {
+      //这里判断是不是今天
+      let newVal = new Date(this.formData.applyTimeNotice)
+      let    selectableRange =new Date().getHours() + ':' + (new Date().getMinutes() + 1) + ':00 - 23:59:00'
+      console.log( newVal.getDate()+"---"+new Date().getDate()+5)
+      if (
+        newVal &&
+        newVal.getDate() == new Date().getDate()+5
+      ) {
+        selectableRange =new Date().getHours() + ':' + (new Date().getMinutes() + 1) + ':00 - 23:59:00'
+      }
+      else if(newVal.getDate() > new Date().getDate()+5){
+        selectableRange = '00:00:00 - 23:59:00' //默认的时间范围
+      }
+      return {
+        selectableRange,
+        disabledDate(time) {
+          // 只能选大于当前截止时间的
+          return time.getTime() < Date.now() + (4 * 24 * 3600 * 1000); // 禁用小于当前日期的日期
+
+        }
+      }
+    },
     disableSelectAllStyle() {
       let obj = {};
       if (this.scheme.procurementType === 1) {

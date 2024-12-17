@@ -34,7 +34,7 @@
         <el-form-item label="方案名称" prop="schemeName" label-width="68px">
           <el-input
             v-model="queryParams.procurementSchemeName"
-            placeholder="请输入方案名称"
+            placeholder="请输入 方案名称"
             clearable
             @keyup.enter.native="handleQuery"
           />
@@ -285,7 +285,7 @@
           >
           <template slot-scope="scope">
             <span >
-              {{ scope.row.procurementSchemeCode?scope.row.procurementSchemeCode:'/' }}
+              {{ scope.row.splitContractName && scope.row.splitContractName!="null"?scope.row.splitContractName:'/' }}
             </span>
           </template>
           </el-table-column>
@@ -296,7 +296,7 @@
           >
           <template slot-scope="scope">
             <span >
-              {{ scope.row.contractScope? scope.row.contractScope:'/' }}
+              {{ scope.row.contractScope && scope.row.contractScope!="null"? scope.row.contractScope:'/' }}
             </span>
           </template>
           </el-table-column>

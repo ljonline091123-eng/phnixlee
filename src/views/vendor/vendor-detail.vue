@@ -197,11 +197,13 @@
           <el-divider />
           <el-form label-width="150px" label-suffix=":">
             <el-row>
-              <el-col :span="8"
+              <el-col :span="24"
                 ><el-form-item label="首次注册合作单位">{{
                   vendorState.firstCooperationCompanyName
                 }}</el-form-item></el-col
               >
+            </el-row>
+            <el-row>
               <el-col :span="8"
                 ><el-form-item label="当前类型">{{
                   vendorState.vendorClassText
@@ -770,10 +772,10 @@ import {
 import { Base64 } from "js-base64";
 import BackButton from "@/components/BackButton/index.vue";
 import {
-  getPermissionButton,getPermissionButtonVendor,
-  postAuditProcess,postAuditProcessVendor,
-  getLoadTaskDef,getLoadTaskDefVendor,
-  getProcessLogList,
+  getPermissionButton, getPermissionButtonVendor,
+  postAuditProcess, postAuditProcessVendor,
+  getLoadTaskDef, getLoadTaskDefVendor,
+  getProcessLogList, getOrgByUserId,
 } from "@/api/procurement/manage";
 import ApprovalForm from "@/components/Approval/approvalForm.vue";
 import ApprovalDetailsDialog from "@/components/Approval/approvalDetailsDialog.vue";
@@ -1144,7 +1146,7 @@ export default {
       try {
         this.calibrateVisible = true;
         this.calibrateLoading = true;
-        const params = {
+        let params = {
           businessId: this.purchaserId,
           processId: this.exampleId,
         };
@@ -1152,8 +1154,34 @@ export default {
           businessId: "",
           processId: this.exampleId,
         };
+        let res = null;
         if (this.purchaserId && this.exampleId) {
-          const res = await getLoadTaskDefVendor(params);
+          res = await getLoadTaskDefVendor(params);
+        }else{
+          /* 未提交时查看流程执行流程，根据首次合作单位 获取流程分组 */
+          res = await getOrgByUserId(this.vendor.firstCooperationCompanyCode);
+          //修改
+          if (this.vendor.processType == 2) {
+            this.processKey = "jiantou-zhaocai:"+res.data+":ZHAOCAI_VENDOR_UPDATEINFO";
+          } else if (this.vendor.processType == 1) {
+            //注册
+            this.processKey = "jiantou-zhaocai:"+res.data+":ZHAOCAI_VENDOR_REGISTER";
+          } else if (this.vendor.processType == 3) {
+            //黑名单
+            this.processKey = "jiantou-zhaocai:"+res.data+":ZHAOCAI_VENDOR_MOVE_INOROUT_BLACK";
+          } else if (this.vendor.processType == 4) {
+            //修改等级
+            this.processKey = "jiantou-zhaocai:"+res.data+":ZHAOCAI_VENDOR_UPDATE_LEVEL";
+          }else{
+            //注册
+            this.processKey = "jiantou-zhaocai:"+res.data+":ZHAOCAI_VENDOR_REGISTER";
+          }
+          params = {
+            processKey: this.processKey,
+            businessId: 8888888888,
+          };
+          res = await getLoadTaskDef(params);
+        }
           this.processInformationList = res.data;
           function getActive(nodes) {
             let allFalse = true;
@@ -1170,6 +1198,8 @@ export default {
             return nodes.length;
           }
           this.calibrateActive = getActive(this.processInformationList);
+
+        if (this.purchaserId && this.exampleId) {
           const response = await getProcessLogList(getProcessLogListParams);
           this.approveArr = response.data;
         }
@@ -1181,7 +1211,7 @@ export default {
         if ([1, 2, 3, 4].includes(this.vendor.processType)) {
             function updateNodeLoadName(nodes) {
               for (let i = 0; i < nodes.length; i++) {
-                if (nodes[i].nodeName === '发起人') {
+                if (nodes[i].nodeName === '发起人' ) {
                   for (let j = 0; j < nodes[i].userList.length; j++) {
                     /* 修改发起人名称为 供应商公司名称 */
                     nodes[i].userList[j].userName = this.vendor.enterpriseName;
@@ -1193,6 +1223,7 @@ export default {
             /* 横轴流程顺序上面数据 数据修改 */
             updateNodeLoadName.call(this, this.processInformationList);
 
+
             /* 发起人名称为 供应商公司名称 方法 */
             function updateListNodeName(nodes) {
               for (let i = 0; i < nodes.length; i++) {
@@ -1201,7 +1232,11 @@ export default {
                   nodes[i].preHandlerName = this.vendor.enterpriseName;
                   nodes[i].handlerName = this.vendor.enterpriseName;
                   nodes[i].operateRemark = this.vendor.enterpriseName + ' 提交了流程.';
-                  break;
+                  //break;
+                }else if(nodes[i].taskName === '撤销' && nodes[i].handlerName === '招采'){
+                  nodes[i].preHandlerName = this.vendor.enterpriseName;
+                  nodes[i].handlerName = this.vendor.enterpriseName;
+                  nodes[i].operateRemark = this.vendor.enterpriseName + ' 撤销了流程.';
                 }
               }
             }

@@ -205,7 +205,7 @@
                   style="width: 100%"
                   placeholder="选择日期"
                   value-format="yyyy-MM-dd"
-                  :disabled="formData.id ? true : false || isSubmit"
+                  :disabled="isSubmit"
                 />
               </el-form-item>
             </el-col>
@@ -237,7 +237,7 @@
                   style="width: 100%"
                   placeholder="选择日期"
                   value-format="yyyy-MM-dd"
-                  :disabled="formData.id ? true : false || isSubmit"
+                  :disabled="isSubmit"
                 />
               </el-form-item>
             </el-col>
@@ -276,7 +276,7 @@
                   style="width: 100%"
                   placeholder="选择日期"
                   value-format="yyyy-MM-dd"
-                  :disabled="formData.id ? true : false || isSubmit"
+                  :disabled="isSubmit"
                 />
               </el-form-item>
             </el-col>
@@ -404,11 +404,13 @@
                 <el-upload
                   :action="uploadFileUrl"
                   :limit="1"
-                  accept=".pdf, .doc, .docx"
+                  accept=".pdf"
                   :on-success="fileSuccess"
                   :file-list="formData.resumeAttachList"
                   :on-remove="fileRemove"
                   :on-preview="handlePreview"
+                  :before-upload="beforeUpload"
+                  :disabled="isSubmit"
                   ref="upload"
                 >
                 </el-upload>
@@ -438,6 +440,19 @@
       :loading="calibrateLoading"
       @update:visible="calibrateVisible = $event"
   />
+
+    <el-dialog
+      :title="templateDialogTitle"
+      :visible.sync="templateDialogVisible"
+      width="80%"
+    >
+      <iframe allowfullscreen="true"
+              :src= this.viewFileUrl
+              width="100%"
+              height="700px"
+              frameborder="0"
+      ></iframe>
+    </el-dialog>
   </div>
 </template>
 
@@ -452,10 +467,11 @@ import { uploadFileUrl } from "@/utils/const";
 import {
   getPermissionButton, getPermissionButtonNew,
   postAuditProcess, postAuditProcessNew,
-  getLoadTaskDef, getLoadTaskDefNew,
+  getLoadTaskDef, getLoadTaskDefNew, getOrgByUserId,
   getProcessLogList, getProcessLogListNew,
 } from "@/api/procurement/manage";
 import {showSecretRelatedTips} from "@/utils/MyUtils";
+import {getViewAttachmentURLByID, getViweFileURL} from "@/api/template/file";
 export default {
   name: "add-expert",
   dicts: [
@@ -475,6 +491,10 @@ export default {
     return {
       id:'',
       type:'',
+      /* 合同模板联想文档预览 */
+      templateDialogTitle: "",
+      templateDialogVisible: false,
+      viewFileUrl:"",
       businessTypeList:[],
       expertTypeList:[],
       expertVisible:false,
@@ -489,7 +509,6 @@ export default {
         rejectTaskKey: "",
         operateComment: "",
       },
-      cities :['上海', '北京', '广州', '深圳'],
       rejectNodeList: [],
       /* 下一步审批人列表 */
       nextCandidateList: [],
@@ -639,7 +658,7 @@ export default {
       try {
         this.calibrateVisible = true;
         this.calibrateLoading = true;
-        const params = {
+        let params = {
           businessId: this.businessId,
           processId: this.processId,
           /* 流程类型 */
@@ -647,24 +666,36 @@ export default {
           // EXPERT_CHANGE(2,"专家修改"),
           processType: this.formData.processType,
         };
+        let res = null;
         if (this.businessId && this.processId) {
-          const res = await getLoadTaskDefNew(params);
-          this.processInformationList = res.data;
-          function getActive(nodes) {
-            let allFalse = true;
-            for (let i = 0; i < nodes.length; i++) {
-              if (!nodes[i].completed) {
-                if (i === 0) {
-                  return 0;
-                } else {
-                  return i;
-                }
+          res = await getLoadTaskDefNew(params);
+        }else{
+          /* 未提交时查看流程执行流程，根据专家id 获取流程分组 */
+          res = await getOrgByUserId(this.formData.userId);
+          params = {
+            processKey: "jiantou-zhaocai:"+res.data+":ZHAOCAI_EXPERT_ADD",
+            businessId: 8888888888,
+          };
+          res = await getLoadTaskDef(params);
+        }
+        this.processInformationList = res.data;
+        function getActive(nodes) {
+          let allFalse = true;
+          for (let i = 0; i < nodes.length; i++) {
+            if (!nodes[i].completed) {
+              if (i === 0) {
+                return 0;
+              } else {
+                return i;
               }
-              allFalse = false;
             }
-            return nodes.length;
+            allFalse = false;
           }
-          this.calibrateActive = getActive(this.processInformationList);
+          return nodes.length;
+        }
+        this.calibrateActive = getActive(this.processInformationList);
+
+        if (this.businessId && this.processId) {
           const response = await getProcessLogListNew(params);
           this.approveArr = response.data;
         }
@@ -698,15 +729,73 @@ export default {
       } catch (error) {}
     },
     //点击文件列表中已上传文件进行下载
-    handlePreview(file) {
-      var a = document.createElement('a');
-      var event = new MouseEvent('click');
-      a.download = file.name;
-      a.href = file.fileUrl;
-      a.dispatchEvent(event);
+    async handlePreview(file) {
       console.log(file)
-    },
+      // var a = document.createElement('a');
+      // var event = new MouseEvent('click');
+      // a.download = file.name;
+      // a.href = file.fileUrl;
+      // a.dispatchEvent(event);
+      // console.log(file)
 
+
+      // if (file.url) {
+      //   // 在新标签页打开文件
+      //   window.open(file.url, "_blank");
+      // } else {
+      //   this.$message.error("文件无法预览，缺少 URL");
+      // }
+
+
+      //获取附件的预览URL
+      if (file.id) {
+        this.templateDialogTitle = file.name + "预览";
+        this.templateDialogVisible = true;
+        //获取文档中台的文档编辑URL
+        try {
+          const res = await getViewAttachmentURLByID({attachmentId: file.id});
+          this.viewFileUrl = res.data;
+          console.log("viewFileUrl:", this.viewFileUrl);
+        } catch (err) {
+          console.log(err);
+        }
+      } else if(file.response.code === 200){
+        /* 新增时未保存附件无附件id时调用 */
+        this.templateDialogTitle = file.response.data.name + "预览";
+        this.templateDialogVisible = true;
+        try {
+          const query = { fileName: file.response.data.name?file.response.data.name:'获取不到文件名', fileUrl: file.response.data.url };
+          console.log('%c👽 getViweFileURL:query ', `font-size: 20px;background-color: #f00;`, query);
+          const res = await getViweFileURL(query);
+          this.viewFileUrl = res.data;
+          console.log("viewFileUrl:", this.viewFileUrl);
+        } catch (err) {
+          console.log(err);
+        }
+      }else{
+        console.error('专家附件 数据未正确加载');
+      }
+
+    },
+    /* 专家附件文件大小上传限制 */
+    beforeUpload(file) {
+      const isSizeValid = file.size / 1024 / 1024 < 30; // 限制文件大小为 30MB
+      const isFormatValid = file.type === 'application/pdf'; // 限制文件格式为 .pdf
+
+      // 校验文件格式
+      if (!isFormatValid) {
+        this.$message.error('文件格式限制为 PDF！且大小不能超过 30MB');
+        return false; // 返回 false 将停止上传
+      }
+
+      // 校验文件大小
+      if (!isSizeValid) {
+        this.$message.error('文件大小不能超过 30MB！且文件格式限制为 PDF');
+        return false; // 返回 false 将停止上传
+      }
+
+      return true; // 文件通过校验，允许上传
+    },
     async getInfoDetail(id) {
         console.log('%c👽 Base64.encode(JSON.stringify(id)) ', `font-size: 20px;background-color: #f00;`, Base64.encode(JSON.stringify(id)));
         const res = await getInfo(id);
@@ -724,7 +813,18 @@ export default {
         if(data.technicalTitles){
           this.formData.technicalTitles=data.technicalTitles+""
         }
-        // SAVE(0,"保存"),
+
+      // 遍历数组，新增 name 属性,给文件组件显示文件名称
+      this.formData.resumeAttachList = this.formData.resumeAttachList.map(item => {
+        return {
+          ...item, // 保留原有属性
+          name: item.fileName, // 将 fileName 的值赋给 name
+          url: item.fileUrl // 将 fileUrl 的值赋给 url
+        };
+      });
+
+
+      // SAVE(0,"保存"),
         // IN_APPROVAL(1,"审批中"),
         // REJECT(2,"审批拒绝"),
         // APPROVE(3,"审批通过")
@@ -802,14 +902,12 @@ export default {
       console.log("sub");
     },
     async fileSuccess(res) {
+      this.formData.resumeAttachList = null;
       const { url, name } = res.data;
-      this.formData.resumeAttachList = [{ fileName: name, fileUrl: url }];
-      this.$refs.fileFormRef.clearValidate("fileTemplate");
+      this.formData.resumeAttachList = [{ fileName: name, fileUrl: url,name: name, url: url }];
     },
     fileRemove() {
-      this.$set(this.formData, "fileList", []);
-      this.$set(this.formData, "fileTemplate", []);
-      this.attachmentId = "";
+      this.$set(this.formData, "resumeAttachList", []);
     },
   },
   watch: {

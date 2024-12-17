@@ -325,7 +325,7 @@
                         v-model="formData.bidDeadline"
                         type="datetime"
                         style="width: 100%"
-                        placeholder="选择日期"
+                        placeholder="(说明:截止时间不能少于5天)"
                          popper-class="date-clear"
                         :picker-options="endTimeOptions"
                         value-format="yyyy-MM-dd HH:mm:ss"
@@ -423,9 +423,13 @@
                       <br>
                       <div style="margin-left: -90px;width: 300px;">
                         <!--  先选择模板后再去手动上传附件模板，优先保证系统数据能拥有tempId的值吧，然后判断审批状态是否可上传 -->
+<<<<<<< HEAD
                         <el-button size="mini" type="primary" 
                         v-show="formData.biddingTemplateName && (state === null || (state !== 1 && state !== 2 && state !== 3))" 
                         @click="uploadBiddingClick">手动上传</el-button>
+=======
+                        <el-button size="mini" type="primary" v-show="(state === null || (state !== 1 && state !== 2 && state !== 3))" @click="uploadBiddingClick">手动上传</el-button>
+>>>>>>> f919190e011b0c08ea9a54d174434b4cff43726f
                         <el-upload
                           style="margin-left: 90px;margin-top: -75px;"
                           :action="uploadFileUrl"
@@ -465,9 +469,13 @@
                       <br>
                       <div style="margin-left: -90px;width: 300px;">
                         <!--  先选择模板后再去手动上传附件模板，优先保证系统数据能拥有tempId的值吧，然后判断审批状态是否可上传 -->
+<<<<<<< HEAD
                         <el-button size="mini" type="primary" 
                           v-show="formData.contractTemplateName && (state === null || (state !== 1 && state !== 2 && state !== 3))" 
                           @click="uploadContractClick">手动上传</el-button>
+=======
+                        <el-button size="mini" type="primary" v-show="(state === null || (state !== 1 && state !== 2 && state !== 3))" @click="uploadContractClick">手动上传</el-button>
+>>>>>>> f919190e011b0c08ea9a54d174434b4cff43726f
                         <el-upload
                           style="margin-left: 90px;margin-top: -75px;"
                           :action="uploadFileUrl"
@@ -527,12 +535,14 @@
           <el-table-column
             label="拆分合约规划名称"
             width="200"
+             v-if="isAll"
             prop="splitContractName"
             show-overflow-tooltip
           />
           <el-table-column
             label="拟签约合同拆包范围"
             width="200"
+            v-if="isAll"
             prop="contractScope"
             show-overflow-tooltip
           />
@@ -810,6 +820,7 @@
                 <el-input
                   v-model="bcTemplateQuery.templateName"
                   placeholder="请输入模板名称"
+                  clearable
                 />
               </el-form-item>
               <el-form-item
@@ -821,6 +832,7 @@
                   style="width: 100%"
                   v-model="bcTemplateQuery.contractType"
                   placeholder="请选择"
+                  clearable
                 >
                   <el-option
                     v-for="dict in contractTypeList"
@@ -899,6 +911,7 @@
                 <el-input
                   v-model="bcTemplateQuery.templateName"
                   placeholder="请输入模板名称"
+                  clearable
                 />
               </el-form-item>
               <el-form-item
@@ -910,6 +923,7 @@
                   style="width: 100%"
                   v-model="bcTemplateQuery.contractType"
                   placeholder="请选择"
+                  clearable
                 >
                   <el-option
                     v-for="dict in contractTypeList"
@@ -1170,6 +1184,7 @@ export default {
         formData: {}, //form表单数据
         planList: [],
         inventoryList: [],
+        isAll:false,
         contractList: [],
         rules: {
           procurementSchemeName: [
@@ -1335,6 +1350,7 @@ export default {
         activeTabs: "base",
         inventoryVisible: false,
         financeList: [],
+
         evaluateVisable: false, //评分弹出
         evaluateTemplateList: [], //评分模板列表
         evaluateTemplateLoading: false,
@@ -1561,10 +1577,14 @@ export default {
     handleQuery() {
       this.bcTemplateQuery.pageNum = 1;
       this.getGeneralTemplateList();
+      /* 最后再获取分页数据，区分了通用和复用模板。 */
+      this.activeTabListen(this.activeTab);
     },
     handleQueryReusable() {
       this.bcTemplateQuery.pageNum = 1;
       this.getReusableTemplateList();
+      /* 最后再获取分页数据，区分了通用和复用模板。 */
+      this.activeTabListen(this.activeTab);
     },
     searchGeneralTemplates() {
       this.templateQuery.pageNum = 1;
@@ -1598,6 +1618,8 @@ export default {
       try {
         const res = await getListMaterials(formData);
         this.inventoryList = res.data;
+        console.log(JSON.stringify(this.inventoryList[0]))
+        this.isAll = this.inventoryList.every(item => item.splitContractName && item.splitContractName!="null" && item.contractScope && item.contractScope!="null")
         console.log(res, "清单");
       } catch (err) {
         console.log(err);
@@ -1733,6 +1755,9 @@ export default {
           /* 设置新的附件返回的附件id */
           this.$set(this.formData, "biddingAttachmentId", res.data);
           /* 同步更新页面的模板附件对象(附件修改按钮) */
+          if (!this.procurementSchemeTempObject) {
+            this.$set(this, 'procurementSchemeTempObject', {});
+          }
           if (!this.procurementSchemeTempObject.biddingTemplate) {
             this.$set(this.procurementSchemeTempObject, 'biddingTemplate', {});
           }
@@ -1781,6 +1806,9 @@ export default {
           /* 设置新的附件返回的附件id */
           this.$set(this.formData, "contractAttachmentId", res.data);
           /* 同步更新页面的模板附件对象(附件修改按钮) */
+          if (!this.procurementSchemeTempObject) {
+            this.$set(this, 'procurementSchemeTempObject', {});
+          }
           if (!this.procurementSchemeTempObject.contractTemplate) {
             this.$set(this.procurementSchemeTempObject, 'contractTemplate', {});
           }
@@ -1871,6 +1899,9 @@ export default {
             this.$set(this.formData, "biddingTemplateId", templateId);
             this.$refs.form.clearValidate("biddingTemplateName");
             /* 同步更新页面的模板附件对象(附件修改按钮) */
+            if (!this.procurementSchemeTempObject) {
+              this.$set(this, 'procurementSchemeTempObject', {});
+            }
             if (!this.procurementSchemeTempObject.biddingTemplate) {
               this.$set(this.procurementSchemeTempObject, 'biddingTemplate', {});
             }
@@ -1902,6 +1933,9 @@ export default {
             this.$set(this.formData, "contractTemplateId", templateId);
             this.$refs.form.clearValidate("contractTemplateName");
             /* 同步更新页面的模板附件对象(附件修改按钮) */
+            if (!this.procurementSchemeTempObject) {
+              this.$set(this, 'procurementSchemeTempObject', {});
+            }
             if (!this.procurementSchemeTempObject.contractTemplate) {
               this.$set(this.procurementSchemeTempObject, 'contractTemplate', {});
             }
@@ -2021,6 +2055,9 @@ export default {
         this.$set(this.formData, "biddingAttachmentId", res.data);
         this.$set(this.formData, "biddingTemplateName", name);
         /* 同步更新页面的模板附件对象(附件修改按钮) */
+        if (!this.procurementSchemeTempObject) {
+          this.$set(this, 'procurementSchemeTempObject', {});
+        }
         if (!this.procurementSchemeTempObject.biddingTemplate) {
           this.$set(this.procurementSchemeTempObject, 'biddingTemplate', {});
         }
@@ -2075,6 +2112,9 @@ export default {
         this.$set(this.formData, "contractAttachmentId", res.data);
         this.$set(this.formData, "contractTemplateName", name);
         /* 同步更新页面的模板附件对象(附件修改按钮) */
+        if (!this.procurementSchemeTempObject) {
+          this.$set(this, 'procurementSchemeTempObject', {});
+        }
         if (!this.procurementSchemeTempObject.contractTemplate) {
           this.$set(this.procurementSchemeTempObject, 'contractTemplate', {});
         }
@@ -2138,7 +2178,7 @@ export default {
           contractSplitIdList
         } = res.data;
         /* 采购方案文件，通过getSchemeDetail方法请求procurementScheme/detail?id=获取的数据 */
-        this.procurementSchemeTempObject = procurementSchemeBidding;
+        this.procurementSchemeTempObject = procurementSchemeBidding?procurementSchemeBidding:{};
         this.contractList = contractPlanList;
         const {
           procurementSchemeName,
