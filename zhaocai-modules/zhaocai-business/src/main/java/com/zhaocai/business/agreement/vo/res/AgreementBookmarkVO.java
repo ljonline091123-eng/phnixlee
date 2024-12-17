@@ -1,6 +1,7 @@
 package com.zhaocai.business.agreement.vo.res;
 
 import com.zhaocai.business.common.annotations.DictCache;
+import com.zhaocai.business.common.annotations.MoneyFormat;
 import com.zhaocai.business.common.base.AdviceObject;
 import com.zhaocai.business.common.enums.DictBizEnum;
 import io.swagger.annotations.ApiModelProperty;
@@ -15,9 +16,6 @@ public class AgreementBookmarkVO extends AdviceObject {
 
     @ApiModelProperty(value = "合同编号")
     private String agreementCode;
-
-    @ApiModelProperty(value = "合同签订金额(含税)")
-    private BigDecimal totalAmountIncTax;
 
     @ApiModelProperty(value = "单位内部合同管理编码")
     private String innerAgreementCode;
@@ -84,6 +82,75 @@ public class AgreementBookmarkVO extends AdviceObject {
     @DictCache(dictBizEnum = DictBizEnum.AGREEMENT_RENTAL_METHOD,filedName = "rentalMethod")
     @ApiModelProperty(value = "计租方式")
     private String rentalMethodText;
+
+
+    //合同款项信息
+    @ApiModelProperty(value =  "币种")
+    private String currency;
+
+    @ApiModelProperty(value =  "发票类型")
+    private String invoiceType;
+
+    @ApiModelProperty(value =  "合同税率")
+    private BigDecimal contractTaxRate;
+
+    @ApiModelProperty(value =  "约定预付款比例")
+    private BigDecimal prepaymentRatio;
+
+    @ApiModelProperty(value =  "约定预付款金额")
+    private BigDecimal prepaymentAmount;
+
+    @ApiModelProperty(value =  "预付款扣回条件")
+    private String prepaymentDeductionConditions;
+
+    @ApiModelProperty(value =  "预付款全部扣回截止点")
+    private BigDecimal prepaymentDeductionDeadline;
+
+    @ApiModelProperty(value =  "允许合同外结算占合同比例")
+    private BigDecimal outOfSettlementRatio;
+
+    @ApiModelProperty(value =  "停滞台班结算比例")
+    private BigDecimal stagnationRatio;
+
+    @ApiModelProperty(value = "合同签订金额(含税)")
+    private BigDecimal totalAmountIncTax;
+
+    @ApiModelProperty(value = "合同签订金额(不含税)")
+    private BigDecimal totalAmountExcTax;
+
+    @MoneyFormat(filedName = "contractTaxRate",scale = 2)
+    @ApiModelProperty(value =  "合同税率")
+    private String contractTaxRateText;
+
+    @MoneyFormat(filedName = "prepaymentRatio",scale = 2)
+    @ApiModelProperty(value =  "约定预付款比例")
+    private String prepaymentRatioText;
+
+    @MoneyFormat(filedName = "prepaymentAmount")
+    @ApiModelProperty(value =  "约定预付款金额")
+    private String prepaymentAmountText;
+
+    @MoneyFormat(filedName = "totalAmountIncTax",scale = 2)
+    @ApiModelProperty(value = "合同签订金额(含税)")
+    private String totalAmountIncTaxText;
+
+    @MoneyFormat(filedName = "totalAmountExcTax",scale = 2)
+    @ApiModelProperty(value = "合同签订金额(不含税)")
+    private String totalAmountExcTaxText;
+
+    @MoneyFormat(filedName = "prepaymentDeductionDeadline",scale = 2)
+    @ApiModelProperty(value =  "预付款全部扣回截止点")
+    private String prepaymentDeductionDeadlineText;
+
+    @MoneyFormat(filedName = "outOfSettlementRatio",scale = 2)
+    @ApiModelProperty(value =  "允许合同外结算占合同比例")
+    private String outOfSettlementRatioText;
+
+    @ApiModelProperty(value =  "币种-文本")
+    private String currencyText;
+
+    @ApiModelProperty(value =  "发票类型-文本")
+    private String invoiceTypeText;
 
 
 }

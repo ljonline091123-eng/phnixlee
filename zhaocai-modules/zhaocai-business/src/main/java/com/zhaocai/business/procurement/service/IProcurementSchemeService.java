@@ -103,6 +103,9 @@ public interface IProcurementSchemeService  extends IService<ProcurementScheme>,
      */
     AttachmentVO getAgreementTemplateAttachmentInfo(Long id);
 
+    //从采购方案的招标信息中获取合同附件id，以及附件文件名和文件URL
+    AttachmentVO getAgreementContractAttachmentInfo(Long id);
+
     /**
      * 通过采购方案id获取最小核算项目信息
      * @param id
