@@ -423,13 +423,7 @@
                       <br>
                       <div style="margin-left: -90px;width: 300px;">
                         <!--  先选择模板后再去手动上传附件模板，优先保证系统数据能拥有tempId的值吧，然后判断审批状态是否可上传 -->
-<<<<<<< HEAD
-                        <el-button size="mini" type="primary" 
-                        v-show="formData.biddingTemplateName && (state === null || (state !== 1 && state !== 2 && state !== 3))" 
-                        @click="uploadBiddingClick">手动上传</el-button>
-=======
                         <el-button size="mini" type="primary" v-show="(state === null || (state !== 1 && state !== 2 && state !== 3))" @click="uploadBiddingClick">手动上传</el-button>
->>>>>>> f919190e011b0c08ea9a54d174434b4cff43726f
                         <el-upload
                           style="margin-left: 90px;margin-top: -75px;"
                           :action="uploadFileUrl"
@@ -469,13 +463,7 @@
                       <br>
                       <div style="margin-left: -90px;width: 300px;">
                         <!--  先选择模板后再去手动上传附件模板，优先保证系统数据能拥有tempId的值吧，然后判断审批状态是否可上传 -->
-<<<<<<< HEAD
-                        <el-button size="mini" type="primary" 
-                          v-show="formData.contractTemplateName && (state === null || (state !== 1 && state !== 2 && state !== 3))" 
-                          @click="uploadContractClick">手动上传</el-button>
-=======
                         <el-button size="mini" type="primary" v-show="(state === null || (state !== 1 && state !== 2 && state !== 3))" @click="uploadContractClick">手动上传</el-button>
->>>>>>> f919190e011b0c08ea9a54d174434b4cff43726f
                         <el-upload
                           style="margin-left: 90px;margin-top: -75px;"
                           :action="uploadFileUrl"
