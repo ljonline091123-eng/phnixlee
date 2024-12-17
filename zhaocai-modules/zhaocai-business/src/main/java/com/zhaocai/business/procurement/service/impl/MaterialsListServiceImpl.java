@@ -162,8 +162,8 @@ public class MaterialsListServiceImpl extends ServiceImpl<MaterialsListMapper, M
         }
 
         Map<String, List<MaterialsList>> map = materialsList.stream()
-                .collect(Collectors.groupingBy( x -> x.getSplitId() + "-_#_-" + x.getSplitContractName()==null?"&":x.getSplitContractName()
-                                + "-_#_-" +x.getContractScope()==null?"&":x.getContractScope() ,
+                .collect(Collectors.groupingBy( x -> x.getSplitId() + "-_#_-" + (x.getSplitContractName()==null?"&":x.getSplitContractName())
+                                + "-_#_-" +(x.getContractScope()==null?"&":x.getContractScope()) ,
                         Collectors.mapping(materials -> BeanCopierUtil.copyBean(materials,MaterialsList.class),
                                 Collectors.toList())));
 
@@ -435,10 +435,9 @@ public class MaterialsListServiceImpl extends ServiceImpl<MaterialsListMapper, M
         materialsList = materialsList.stream()
                 .filter(x -> NumberUtil.compare(x.getCount(),BigDecimal.ZERO) > 0 && x.getPushFlag().equals("N"))
                 .collect(Collectors.toList());
-
         Map<String, List<MaterialsList>> map = materialsList.stream()
-                .collect(Collectors.groupingBy( x -> x.getSplitId() + "-_#_-" + x.getSplitContractName()==null?"&":x.getSplitContractName()
-                                + "-_#_-" +x.getContractScope()==null?"&":x.getContractScope() ,
+                .collect(Collectors.groupingBy( x -> x.getSplitId() + "-_#_-" + (x.getSplitContractName()==null?"&":x.getSplitContractName())
+                                + "-_#_-" +(x.getContractScope()==null?"&":x.getContractScope()) ,
                         Collectors.mapping(materials -> BeanCopierUtil.copyBean(materials,MaterialsList.class),
                                 Collectors.toList())));
 
