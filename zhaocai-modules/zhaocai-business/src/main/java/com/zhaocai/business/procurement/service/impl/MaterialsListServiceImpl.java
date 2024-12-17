@@ -167,12 +167,13 @@ public class MaterialsListServiceImpl extends ServiceImpl<MaterialsListMapper, M
                                  Collectors.toList())));
 
         Map<String,String> rentModeMap = underlingSystemService.listDictMap(DictBizEnum.UNDERLING_RENT_MODE.getName());
-
+        System.out.println("rentModeMap"+ rentModeMap);
         List<ContractSplitMaterialsVO> resultList = new ArrayList<>(map.size());
         ContractSplitMaterialsVO  splitMaterialsVO;
         for (Map.Entry<String,List<MaterialsList>> entry : map.entrySet()) {
             splitMaterialsVO = new ContractSplitMaterialsVO();
             String[] keys = entry.getKey().split("-_#_-");
+            System.out.println("keys"+ keys);
             splitMaterialsVO.setSplitId(Long.valueOf(keys[0]));
             splitMaterialsVO.setSplitContractName(keys[1]);
             splitMaterialsVO.setContractScope(keys[2]);

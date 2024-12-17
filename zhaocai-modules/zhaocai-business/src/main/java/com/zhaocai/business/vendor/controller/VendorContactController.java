@@ -187,4 +187,16 @@ public class VendorContactController extends BladeController {
     public ResultData<List<BpmLoadTaskDefResponseDTO>> loadTaskDef(BpmLoadTaskDefRequestDTO requestDTO) {
         return vendorContactService.loadTaskDef(requestDTO);
     }
+
+    /**
+     * 校验登录账号是否存在
+     *
+     * @param contactPhone
+     * @return
+     */
+    @GetMapping("/checkLoginAccount")
+    @ApiOperation(value = "校验登录账号是否存在")
+    public ResultData<String> checkLoginAccount(@RequestParam String contactPhone) {
+        return ResultData.success(vendorContactService.checkLoginAccount(contactPhone));
+    }
 }
