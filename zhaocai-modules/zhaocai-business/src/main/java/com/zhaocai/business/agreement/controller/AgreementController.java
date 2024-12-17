@@ -36,7 +36,6 @@ import javax.validation.Valid;
 import java.util.ArrayList;
 import java.util.List;
 
-import static jdk.nashorn.internal.objects.Global.undefined;
 
 /**
  * 合同基本信息Controller
@@ -86,7 +85,7 @@ public class AgreementController extends BladeController {
         AgreementVO agreementVO = agreementDetailVO.getAgreement();
         AgreementBookmarkVO agreementBookmarkVO = BeanCopierUtil.copyBean(agreementVO,AgreementBookmarkVO.class);
         Integer rentalMethod = agreementBookmarkVO.getRentalMethod();
-        if(rentalMethod != null && rentalMethod != undefined){
+        if(rentalMethod != null){
             String RentalMethodText = sysDictDataService.getLabel(DictBizEnum.AGREEMENT_RENTAL_METHOD.getName(),rentalMethod.toString());
             agreementBookmarkVO.setRentalMethodText(RentalMethodText);
         }
