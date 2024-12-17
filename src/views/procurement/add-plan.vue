@@ -1319,8 +1319,8 @@ console.log("-2222--"+JSON.stringify(this.materialsLists))
               this.planList[0].children.splice(index, 1);
               //如果删除只有一条数据了,强制设置为"拆分合约规划名称和拟签约合同承包范围"为空
               if(this.planList[0].children.length==1){
-                this.planList[0].children[index].splitContractName=''
-                this.planList[0].children[index].contractScope=''
+                this.planList[0].children[0].splitContractName=''
+                this.planList[0].children[0].contractScope=''
               }
               // 强制Vue重新渲染
               this.$forceUpdate();
