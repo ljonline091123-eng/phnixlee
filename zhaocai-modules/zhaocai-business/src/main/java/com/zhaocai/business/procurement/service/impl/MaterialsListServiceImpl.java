@@ -174,6 +174,7 @@ public class MaterialsListServiceImpl extends ServiceImpl<MaterialsListMapper, M
         ContractSplitMaterialsVO  splitMaterialsVO;
         for (Map.Entry<String,List<MaterialsList>> entry : map.entrySet()) {
             splitMaterialsVO = new ContractSplitMaterialsVO();
+            System.out.println("entry："+ entry);
             String[] keys = entry.getKey().split("-_#_-");
             splitMaterialsVO.setSplitId(Long.valueOf(keys[0]));
             splitMaterialsVO.setSplitContractName(keys[1].equals("&")?null:keys[1]);
