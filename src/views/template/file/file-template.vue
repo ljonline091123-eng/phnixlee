@@ -138,7 +138,7 @@
       title="招标文件模板"
       :visible.sync="fileTemplateVisible"
       width="80%"
-
+      class="view-dialog"
       @closed="handleClose"
     >
       <el-form
@@ -708,5 +708,9 @@ export default {
 }
 .file-box {
   min-height: 500px;
+}
+//弹窗大小
+::v-deep  .view-dialog .el-dialog .el-dialog__body {
+max-height: 80vh !important;
 }
 </style>

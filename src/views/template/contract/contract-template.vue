@@ -139,7 +139,7 @@
       title="合同模板"
       :visible.sync="fileTemplateVisible"
       width="70%"
-      
+      class="view-dialog"
       @closed="handleClose"
     >
       <el-radio-group
@@ -877,5 +877,9 @@ export default {
 }
 .stamp-table .el-form-item {
   margin-bottom: 0;
+}
+//弹窗大小
+::v-deep  .view-dialog .el-dialog .el-dialog__body {
+max-height: 80vh !important;
 }
 </style>
