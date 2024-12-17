@@ -1657,12 +1657,22 @@ export default {
     },
     // 获取合同附件的文档中台编辑URL
     getAttachmentEditURL() {
-      let formData = JSON.parse(JSON.stringify(this.firstForm.agreement));
-      delete formData.expenditureBusinessType;
-      formData.paymentWay = this.firstForm.agreement.paymentWay?.join(",") || '';
+      // let formData = JSON.parse(JSON.stringify(this.firstForm.agreement));
+      // 确保 attachmentId 存在
+      if (!this.firstForm.agreement.attachmentId) {
+        console.warn('attachmentId 数据未正确加载');
+        return;
+      }
+      let formData = {
+        agreement: JSON.parse(JSON.stringify(this.firstForm.agreement)), // 深拷贝 agreement
+        agreementPaymentItem: JSON.parse(JSON.stringify(this.firstForm.agreementPaymentItem)) // 深拷贝 agreementPaymentItem
+      };
+      delete formData.agreement.expenditureBusinessType;
+      formData.agreement.paymentWay = this.firstForm.agreement.paymentWay?.join(",") || '';
+      //waterMarkContent
       let params = JSON.parse(JSON.stringify(formData));
       console.log("生成编辑文档URL的params数据===>", params);
-      console.log('新增合同签订编辑文件的AttachmentID:', params.attachmentId);
+      console.log('新增合同签订编辑文件的AttachmentID:', params.agreement.attachmentId);
       // 获取文档中台的文档编辑URL
       getAgreementEditURL(params)
         .then((res) => {

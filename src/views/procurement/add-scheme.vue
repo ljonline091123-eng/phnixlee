@@ -423,7 +423,9 @@
                       <br>
                       <div style="margin-left: -90px;width: 300px;">
                         <!--  先选择模板后再去手动上传附件模板，优先保证系统数据能拥有tempId的值吧，然后判断审批状态是否可上传 -->
-                        <el-button size="mini" type="primary" v-show="formData.biddingTemplateName && (state === null || (state !== 1 && state !== 2 && state !== 3))" @click="uploadBiddingClick">手动上传</el-button>
+                        <el-button size="mini" type="primary" 
+                        v-show="formData.biddingTemplateName && (state === null || (state !== 1 && state !== 2 && state !== 3))" 
+                        @click="uploadBiddingClick">手动上传</el-button>
                         <el-upload
                           style="margin-left: 90px;margin-top: -75px;"
                           :action="uploadFileUrl"
@@ -432,6 +434,8 @@
                           :file-list="formData.fileListBidding"
                           :on-remove="fileRemoveBidding"
                           ref="uploadBidding"
+                          :before-upload="handleBeforeUpload"  
+                          accept=".doc,.docx"  
                         >
                         </el-upload>
                       </div>
@@ -461,7 +465,9 @@
                       <br>
                       <div style="margin-left: -90px;width: 300px;">
                         <!--  先选择模板后再去手动上传附件模板，优先保证系统数据能拥有tempId的值吧，然后判断审批状态是否可上传 -->
-                        <el-button size="mini" type="primary" v-show="formData.contractTemplateName && (state === null || (state !== 1 && state !== 2 && state !== 3))" @click="uploadContractClick">手动上传</el-button>
+                        <el-button size="mini" type="primary" 
+                          v-show="formData.contractTemplateName && (state === null || (state !== 1 && state !== 2 && state !== 3))" 
+                          @click="uploadContractClick">手动上传</el-button>
                         <el-upload
                           style="margin-left: 90px;margin-top: -75px;"
                           :action="uploadFileUrl"
@@ -470,6 +476,8 @@
                           :file-list="formData.fileListContract"
                           :on-remove="fileRemoveContract"
                           ref="uploadContract"
+                          :before-upload="handleBeforeUpload"  
+                          accept=".doc,.docx"  
                         >
                         </el-upload>
                       </div>
@@ -494,8 +502,9 @@
                   <iframe allowfullscreen="true"
                     v-if="viewAttachmentId"
                     :src= this.editFileUrl
+                    :key= this.editFileUrl
                     width="100%"
-                    height="700px"
+                    height="500px"
                     frameborder="0"
                   ></iframe>
 
@@ -1008,7 +1017,7 @@ import { getContractTypeList } from "@/api/template/file";
 import FileModule from "@/components/FileModule/index.vue";
 import { isvalidatemobile, validEmail, validatenum } from "@/utils/validate";
 import BackButton from "@/components/BackButton/index.vue";
-import { addAttachment , getEditFileUrlByID} from "@/api/template/file";
+import { addAttachment , getEditFileUrlByID, ModifyFileNameAndFileURL} from "@/api/template/file";
 import {showSecretRelatedTips} from "@/utils/MyUtils";
 import {offerRepo, offerService, uploadFileUrl} from "@/utils/const";
 import { listUnderlingDict } from "@/api/procurement/contract";
@@ -1042,6 +1051,7 @@ export default {
     if (param?.type === "update") {
       this.isEdit = true;
       this.getSchemeDetail(param.id);
+      console.log("进入到修改采购方案的create里面-》》》》》》》》》")
     } else {
       this.procurementPlanIds = param.ids;
       this.getProcurementSchemeCreateInfo();
@@ -1096,6 +1106,7 @@ export default {
 
     /* 代替data初始化 */
     getInitialData(){
+      console.log("进入getInitialData方法-》》》》》》》》")
       const validatePhone = (rule, value, callback) => {
         if (isvalidatemobile(value)[0]) {
           callback(new Error(isvalidatemobile(value)[1]));
@@ -1714,6 +1725,8 @@ export default {
               fileName: fileName,
               fileUrl: fileUrl,
             });
+            //复制模板后，修改文件名和文件URL
+            await ModifyFileNameAndFileURL({attachmentId: res.data})
           }else{
             res.data = this.formData.biddingAttachmentId;
           }
@@ -1733,7 +1746,7 @@ export default {
 
           //据viewAttachmentId获取文件的文档中台的编辑URL
           if (this.viewAttachmentId) {
-            console.log('Attachment ID:', this.viewAttachmentId);
+            console.log('点击修改附件后的Attachment ID:', this.viewAttachmentId);
             //获取文档中台的文档编辑URL
             try {
               const res = await getEditFileUrlByID({attachmentId: this.viewAttachmentId});
@@ -1760,6 +1773,8 @@ export default {
               fileName: fileName,
               fileUrl: fileUrl,
             });
+            //复制模板后，修改文件名和文件URL
+            await ModifyFileNameAndFileURL({attachmentId: res.data})
           }else{
             res.data = this.formData.contractAttachmentId;
           }
@@ -1779,7 +1794,7 @@ export default {
 
           //据viewAttachmentId获取文件的文档中台的编辑URL
           if (this.viewAttachmentId) {
-            console.log('Attachment ID:', this.viewAttachmentId);
+            console.log('点击修改附件后的Attachment ID:', this.viewAttachmentId);
             //获取文档中台的文档编辑URL
             try {
               const res = await getEditFileUrlByID({attachmentId: this.viewAttachmentId});
@@ -1845,6 +1860,8 @@ export default {
           fileName: fileName,
           fileUrl: fileUrl,
         });
+        //复制模板后，修改文件名和文件URL
+        await ModifyFileNameAndFileURL({attachmentId: res.data})
 
           /* 2 招标文件模板 ，1 合同模板 */
           if (this.bcTemplatetType === 2) {
@@ -1925,6 +1942,8 @@ export default {
             fileName: fileName,
             fileUrl: fileUrl,
           });
+          //复制模板后，修改文件名和文件URL
+          await ModifyFileNameAndFileURL({attachmentId: res.data})
           this.$set(this.formData, "biddingAttachmentId", res.data);
           this.viewAttachmentId = res.data;
           console.log("viewAttachmentId:", this.viewAttachmentId);
@@ -1964,12 +1983,31 @@ export default {
     /* 手动合同模板附件上传 */
     uploadBiddingClick() {
       showSecretRelatedTips(()=>{
+         // 清除现有文件列表
+        this.$refs['uploadBidding'].clearFiles();  // 使用 clearFiles 方法清除文件列表
         this.$refs['uploadBidding'].$refs['upload-inner'].handleClick()
       })
+    },
+    /* 在合同模板以及招标文件上传前处理逻辑 */
+    handleBeforeUpload(file) {
+      const allowedTypes = ['application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+      if (!allowedTypes.includes(file.type)) {
+        this.$message.error('不支持上传该格式的文件，请上传Word文件');
+        return false;
+      }
+      return true;  // 返回 true 表示允许继续上传
     },
     /* 手动合同模板附件上传 */
     uploadContractClick() {
       showSecretRelatedTips(()=>{
+        console.log('Before clearing files:', this.$refs['uploadContract'].fileList); // 打印清除前的文件列表
+        // 清除现有文件列表
+       this.$refs['uploadContract'].clearFiles();  // 使用 clearFiles 方法清除文件列表
+
+       console.log('After clearing files:', this.$refs['uploadContract'].fileList); // 打印清除后的文件列表
+       
+    
+        // 触发文件选择器打开
         this.$refs['uploadContract'].$refs['upload-inner'].handleClick()
       })
     },
@@ -2280,6 +2318,6 @@ export default {
 }
 .previewFile {
   width: 100%;
-  height: 500px;
+  height: 700px;
 }
 </style>

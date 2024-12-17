@@ -282,6 +282,23 @@
 
             <el-row class="custom-row">
               <el-col :span="8" class="custom-col">
+                <el-form-item label="评分模板" class="custom-form-item">
+                  <a
+                    class="link-type"
+                    @click="
+                      handleCheck(
+                        procurementSchemeBidding.evaluationTemplate.templateId
+                      )
+                    "
+                  >
+                    {{
+                      procurementSchemeBidding.evaluationTemplate &&
+                      procurementSchemeBidding.evaluationTemplate.templateName
+                    }}
+                  </a>
+                </el-form-item>
+              </el-col>
+              <el-col :span="8" class="custom-col">
                 <el-form-item
                   label="招标文件"
                   label-width="140px"
@@ -296,23 +313,6 @@
                     {{
                       procurementSchemeBidding.biddingTemplate &&
                       procurementSchemeBidding.biddingTemplate.templateName
-                    }}
-                  </a>
-                </el-form-item>
-              </el-col>
-              <el-col :span="8" class="custom-col">
-                <el-form-item label="评分模板" class="custom-form-item">
-                  <a
-                    class="link-type"
-                    @click="
-                      handleCheck(
-                        procurementSchemeBidding.evaluationTemplate.templateId
-                      )
-                    "
-                  >
-                    {{
-                      procurementSchemeBidding.evaluationTemplate &&
-                      procurementSchemeBidding.evaluationTemplate.templateName
                     }}
                   </a>
                 </el-form-item>

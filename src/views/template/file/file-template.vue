@@ -138,6 +138,7 @@
       title="招标文件模板"
       :visible.sync="fileTemplateVisible"
       width="80%"
+
       @closed="handleClose"
     >
       <el-form
@@ -202,6 +203,8 @@
                 :file-list="fileForm.fileList"
                 :on-remove="fileRemove"
                 ref="upload"
+                :before-upload="handleBeforeUpload"  
+                accept=".doc,.docx"  
               >
               </el-upload>
             </el-form-item>
@@ -219,7 +222,7 @@
           v-if="attachmentId"
           :src= this.editFileUrl
           width="100%"
-          height="700px"
+          height="500px"
           frameborder="0"
         ></iframe>
       </div>
@@ -375,8 +378,19 @@ export default {
   methods: {
     showSecretTips() {
       showSecretRelatedTips(()=>{
+        // 清除现有文件列表
+        this.$refs['upload'].clearFiles();  // 使用 clearFiles 方法清除文件列表
         this.$refs['upload'].$refs['upload-inner'].handleClick()
       })
+    },
+    /* 在模板文件上传前处理逻辑 */
+    handleBeforeUpload(file) {
+      const allowedTypes = ['application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+      if (!allowedTypes.includes(file.type)) {
+        this.$message.error('不支持上传该格式的文件,请上传Word文件');
+        return false;
+      }
+      return true;  // 返回 true 表示允许继续上传
     },
     /** 查询采购计划列表 */
     async getFileTemplate() {
