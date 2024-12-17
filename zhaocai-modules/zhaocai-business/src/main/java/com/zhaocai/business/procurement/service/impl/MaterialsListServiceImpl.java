@@ -176,8 +176,8 @@ public class MaterialsListServiceImpl extends ServiceImpl<MaterialsListMapper, M
             splitMaterialsVO = new ContractSplitMaterialsVO();
             String[] keys = entry.getKey().split("-_#_-");
             splitMaterialsVO.setSplitId(Long.valueOf(keys[0]));
-            splitMaterialsVO.setSplitContractName(keys[1].equals("")?null:keys[1]);
-            splitMaterialsVO.setContractScope(keys[2].equals("")?null:keys[2]);
+            splitMaterialsVO.setSplitContractName(keys[1].equals("&")?null:keys[1]);
+            splitMaterialsVO.setContractScope(keys[2].equals("&")?null:keys[2]);
 
             List<MaterialsVO> materialsLists = BeanCopierUtil.copyList(entry.getValue(), MaterialsVO.class);
             for (MaterialsVO materials : materialsLists) {
@@ -447,8 +447,8 @@ public class MaterialsListServiceImpl extends ServiceImpl<MaterialsListMapper, M
             splitMaterialsVO = new CompContractSplitMaterialsVO();
                 String[] keys = entry.getKey().split("-_#_-");
                 splitMaterialsVO.setSplitId(Long.valueOf(keys[0]));
-                splitMaterialsVO.setSplitContractName(keys[1].equals("")?null:keys[1]);
-                splitMaterialsVO.setContractScope(keys[2].equals("")?null:keys[2]);
+                splitMaterialsVO.setSplitContractName(keys[1].equals("&")?null:keys[1]);
+                splitMaterialsVO.setContractScope(keys[2].equals("&")?null:keys[2]);
 
 
 
