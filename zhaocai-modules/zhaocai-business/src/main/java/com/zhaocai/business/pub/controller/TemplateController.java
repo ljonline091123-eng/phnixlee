@@ -87,7 +87,8 @@ public class TemplateController extends BladeController {
         String suffix = yozOfileUtils.getSuffix(fileName).toLowerCase();
         //word文件则编辑，其他文件则预览
         if (yozOfileUtils.isWordExtension(suffix)) {
-            return ResultData.data(attachmentService.editWordURL(attachmentId,fileName,fileUrl));
+            //开启限制编辑
+            return ResultData.data(attachmentService.editWordURLWithLimitEdit(attachmentId,fileName,fileUrl));
         } else if (yozOfileUtils.isImageExtension(suffix)){
             return ResultData.data(attachmentService.viewImageURL(fileName,fileUrl));
         }else if (yozOfileUtils.isPdfExtension(suffix)){

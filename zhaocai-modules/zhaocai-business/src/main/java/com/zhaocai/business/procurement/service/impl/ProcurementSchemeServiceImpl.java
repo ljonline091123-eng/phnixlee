@@ -28,6 +28,8 @@ import com.zhaocai.business.procurement.vo.req.ContractSplitMaterialsQueryVO;
 import com.zhaocai.business.procurement.vo.req.ProcurementSchemeListQueryVO;
 import com.zhaocai.business.procurement.vo.req.ProcurementSchemeRequestVO;
 import com.zhaocai.business.procurement.vo.res.*;
+import com.zhaocai.business.pub.domain.Attachment;
+import com.zhaocai.business.pub.service.IAttachmentService;
 import com.zhaocai.business.pub.service.IBusinessCodeService;
 import com.zhaocai.business.pub.service.ITemplateService;
 import com.zhaocai.business.pub.vo.res.AttachmentVO;
@@ -98,6 +100,9 @@ public class ProcurementSchemeServiceImpl extends ServiceImpl<ProcurementSchemeM
 
     @Autowired
     private IAgreementMaterialsListService agreementMaterialsListService;
+
+    @Autowired
+    private IAttachmentService attachmentService;
 
     @Override
     public PageResult<ProcurementSchemeListVO> listPage(ProcurementSchemeListQueryVO queryVO) {
@@ -345,6 +350,20 @@ public class ProcurementSchemeServiceImpl extends ServiceImpl<ProcurementSchemeM
         ValidateUtils.isNullException(schemeBidding, "该采购方案的招标信息不存在，请确认");
 
         return templateService.getTemplateAttachmentInfo(schemeBidding.getContractTemplateId());
+    }
+
+    //从采购方案的招标信息中获取合同附件id，以及附件文件名和文件URL
+    @Override
+    public AttachmentVO getAgreementContractAttachmentInfo(Long id) {
+        ProcurementSchemeBidding schemeBidding = procurementSchemeBiddingService.getDomainBySchemeId(id);
+        ValidateUtils.isNullException(schemeBidding, "该采购方案的招标信息不存在，请确认");
+        //获取合同附件ID
+        Long contractAttachmentId = schemeBidding.getContractAttachmentId();
+        ValidateUtils.isNullException(contractAttachmentId, "该采购方案的合同附件id不存在，请确认");
+        //获取合同附件ID的对应的附件信息--文件名和文件URL
+        Attachment attachment = attachmentService.getById(contractAttachmentId);
+        ValidateUtils.isNullException(attachment,"该合同附件id对应的附件不存在");
+        return new AttachmentVO(attachment.getId(),attachment.getFileUrl(),attachment.getFileName());
     }
 
     @Override

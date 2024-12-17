@@ -74,7 +74,10 @@ public class AgreementController extends BladeController {
      */
     @GetMapping("/getAgreementViewURL")
     @ApiOperation(value = "合同附件预览URL")
-    public ResultData<String> getAgreementViewURL(@RequestParam("attachmentId") Long attachmentId, @RequestParam("agreementId") Long agreementId) {
+    public ResultData<String> getAgreementViewURL(@RequestParam("attachmentId") Long attachmentId, @RequestParam("agreementId") Long agreementId, @RequestParam("waterMarkContent")String waterMarkContent) {
+        if(attachmentId==null || agreementId==null || waterMarkContent==null){
+            return ResultData.fail("请求参数attachmentId、agreementId、waterMarkContent中有空值，请检查！");
+        }
         AttachmentVO attachmentVO = attachmentService.getAttachmentById(attachmentId);
         ValidateUtils.isNullException(attachmentVO,"合同不存在,请确认");
         String fileName = attachmentVO.getFileName();
@@ -91,7 +94,7 @@ public class AgreementController extends BladeController {
         if(yozOfileUtils.isNULLFileURL(newfileURL)){
             return ResultData.fail("填充书签数据失败，无法编辑文件！！！");
         }
-        return ResultData.data(attachmentService.viewWordFileURL(fileName,newfileURL));
+        return ResultData.data(attachmentService.viewWordFileURLWithWaterMarK(fileName,newfileURL,waterMarkContent));
     }
 
     /**
@@ -99,14 +102,28 @@ public class AgreementController extends BladeController {
      */
     @PostMapping("/getAgreementEditURL")
     @ApiOperation(value = "合同附件编辑URL")
-    public ResultData<String> getAgreementEditURL(@RequestBody Agreement agreement) {
+    public ResultData<String> getAgreementEditURL(@RequestBody AgreementAttachmentEditRequestVO requestVO) {
+        String waterMarkContent = requestVO.getAgreement().getPartyAName();
+        if (waterMarkContent==null){
+            return ResultData.fail("水印内容为空，检查是否获取到甲方名称！");
+        }
+        Agreement agreement = requestVO.getAgreement();
+        AgreementPaymentItemVO agreementPaymentItemVO = requestVO.getAgreementPaymentItem();
         Long attachmentId = agreement.getAttachmentId();
+        if(attachmentId == null){
+            return ResultData.fail("attachmentId为空，请检查！");
+        }
         AttachmentVO attachmentVO = attachmentService.getAttachmentById(attachmentId);
-        ValidateUtils.isNullException(attachmentVO,"合同不存在,请确认");
+        ValidateUtils.isNullException(attachmentVO,"合同附件不存在,请确认");
         String fileName = attachmentVO.getFileName();
         String fileUrl = attachmentVO.getFileUrl();
+        if(fileName == null || fileUrl == null){
+            return ResultData.fail("fileName或者fileUrl为空，请检查！");
+        }
         //获取需填充的合同数据
-        AgreementBookmarkVO agreementBookmarkVO = BeanCopierUtil.copyBean(agreement,AgreementBookmarkVO.class);
+        AgreementBookmarkVO agreementBookmarkVO = new AgreementBookmarkVO();
+        BeanCopierUtil.copyBean(agreement, agreementBookmarkVO);
+        BeanCopierUtil.copyBean(agreementPaymentItemVO, agreementBookmarkVO);
         //获取计租方式的label
         Integer rentalMethod = agreementBookmarkVO.getRentalMethod();
         if(rentalMethod != null){
@@ -152,7 +169,7 @@ public class AgreementController extends BladeController {
         if(yozOfileUtils.isNULLFileURL(newfileURL)){
             return ResultData.fail("填充书签数据失败，无法编辑文件！！！");
         }
-        return ResultData.data(attachmentService.editWordURL(attachmentId,fileName,newfileURL));
+        return ResultData.data(attachmentService.editWordURLWithWaterMark(attachmentId,fileName,newfileURL,waterMarkContent));
     }
 
 
