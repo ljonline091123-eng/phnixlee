@@ -1,27 +1,18 @@
 package com.zhaocai.business.pub.utils;
 
-import com.zhaocai.business.BusinessApplication;
 import com.zhaocai.business.common.config.FileYOZOConfig;
-import com.zhaocai.business.common.config.MinioConfig;
 import com.zhaocai.common.core.utils.StringUtils;
 import com.zhaocai.common.core.utils.uuid.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.ApplicationContext;
-import org.springframework.context.annotation.AnnotationConfigApplicationContext;
-import org.springframework.context.annotation.ComponentScan;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.UnsupportedEncodingException;
-import java.net.*;
-import java.nio.charset.StandardCharsets;
+import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 @Component
 public class YOZOfileUtils {
@@ -105,7 +96,7 @@ public class YOZOfileUtils {
             }
             //在tmp下新建子目录来保存文件
             String fileName2 = removeSuffix(fileName);
-            String outPutDirName = fileName2 + "_"+UUID.randomUUID().toString();
+            String outPutDirName =UUID.randomUUID().toString();
 //            String outPutDirName = fileName2;
             Path outputDir = tempDir.resolve(outPutDirName);
             // 检查新子目录是否存在，如果不存在则创建
