@@ -88,7 +88,7 @@ public class AttachmentServiceImpl extends ServiceImpl<AttachmentMapper, Attachm
             params.setPreviewNumber(5);
             String response= sender.post(PreviewParams.URL_PREVIEW, PreviewParams.CONVERT_TYPE_PREVIEW_OFFICE, params.getRequestBody());
             System.out.println("预览Office文件响应结果：");
-            System.out.println(response);
+            System.out.println("response:"+response);
             String viewUrl = new JSONObject(response).optJSONObject("data").optString("viewUrl");
             String newViewUrl = yozOfileUtils.updateFileUrl(viewUrl);
             System.out.println(newViewUrl);
