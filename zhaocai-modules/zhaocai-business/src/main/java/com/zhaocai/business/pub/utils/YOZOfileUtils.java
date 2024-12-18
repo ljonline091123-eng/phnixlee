@@ -1,21 +1,14 @@
 package com.zhaocai.business.pub.utils;
 
-import com.zhaocai.business.BusinessApplication;
 import com.zhaocai.business.common.config.FileYOZOConfig;
-import com.zhaocai.business.common.config.MinioConfig;
-import com.zhaocai.common.core.domain.R;
 import com.zhaocai.common.core.utils.StringUtils;
 import com.zhaocai.common.core.utils.uuid.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.ApplicationContext;
-import org.springframework.context.annotation.AnnotationConfigApplicationContext;
-import org.springframework.context.annotation.ComponentScan;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.UnsupportedEncodingException;
-import java.net.*;
+import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -23,8 +16,6 @@ import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.text.SimpleDateFormat;
 import java.util.Date;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 @Component
 public class YOZOfileUtils {
