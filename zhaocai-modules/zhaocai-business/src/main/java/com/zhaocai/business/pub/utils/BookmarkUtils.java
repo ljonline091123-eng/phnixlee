@@ -1,27 +1,19 @@
 package com.zhaocai.business.pub.utils;
 
-import com.zhaocai.business.agreement.service.IAgreementService;
 import com.zhaocai.business.agreement.vo.res.AgreementBookmarkVO;
-import com.zhaocai.business.agreement.vo.res.AgreementDetailVO;
-import com.zhaocai.business.agreement.vo.res.AgreementVO;
-import com.zhaocai.business.common.config.FileYOZOConfig;
-import com.zhaocai.business.common.enums.DictBizEnum;
-import com.zhaocai.business.manager.http.service.UnderlingSystemService;
 import com.zhaocai.business.pub.service.ISysDictDataService;
 import com.zhaocai.business.pub.vo.res.DictListVO;
 import com.zhaocai.business.sdk.bean.BookMark;
 import com.zhaocai.business.sdk.bean.ConvertParams;
-import com.zhaocai.common.core.utils.bean.BeanCopierUtil;
-import com.zhaocai.common.core.web.bean.ResultData;
+import org.json.JSONObject;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
-import org.json.JSONObject;
 
+import java.lang.reflect.Field;
 import java.nio.file.Path;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.HashMap;
-import java.lang.reflect.Field;
 import java.util.stream.Collectors;
 
 @Component
@@ -83,9 +75,9 @@ public class BookmarkUtils {
             System.out.println("转换文件响应结果：");
             System.out.println(response);
             String viewUrl = new JSONObject(response).optJSONObject("data").optString("viewUrl");
-            String newViewUrl = yozOfileUtils.updateFileUrl(viewUrl);
-            System.out.println(newViewUrl);
-            return newViewUrl;
+           // String newViewUrl = yozOfileUtils.updateFileUrl(viewUrl);
+          //  System.out.println(newViewUrl);
+            return viewUrl;
         } catch (Exception e) {
             throw new RuntimeException("书签位置填充数据失败", e);
         }
