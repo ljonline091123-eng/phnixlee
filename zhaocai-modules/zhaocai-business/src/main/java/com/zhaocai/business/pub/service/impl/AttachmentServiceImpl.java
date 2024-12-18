@@ -67,6 +67,7 @@ public class AttachmentServiceImpl extends ServiceImpl<AttachmentMapper, Attachm
     public String  viewWordFileURL(String fileName, String fileUrl){
         String HtmlName = yozOfileUtils.removeSuffix(fileName);
         Path path = yozOfileUtils.downloadFile(fileUrl, yozOfileUtils.createTempFilePath(fileName));
+        System.out.println("path:"+path);
         try {
             // 组织请求参数
             PreviewParams params = new PreviewParams();
