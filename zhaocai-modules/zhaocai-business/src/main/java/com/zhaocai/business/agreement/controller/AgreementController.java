@@ -88,6 +88,7 @@ public class AgreementController extends BladeController {
             agreementBookmarkVO.setRentalMethodText(RentalMethodText);
         }
         String newfileURL= bookmarkUtils.FillBookmarkData(fileUrl,fileName,agreementBookmarkVO);
+        System.out.println("newfileURL:"+ newfileURL);
         if(yozOfileUtils.isNULLFileURL(newfileURL)){
             return ResultData.fail("填充书签数据失败，无法编辑文件！！！");
         }
