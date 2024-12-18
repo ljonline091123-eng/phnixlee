@@ -162,9 +162,11 @@ public class MaterialsListServiceImpl extends ServiceImpl<MaterialsListMapper, M
         }
 
         Map<String, List<MaterialsList>> map = materialsList.stream()
-                 .collect(Collectors.groupingBy( x -> x.getSplitId() + "-_#_-" + x.getSplitContractName() + "-_#_-" +x.getContractScope() ,
-                         Collectors.mapping(materials -> BeanCopierUtil.copyBean(materials,MaterialsList.class),
-                                 Collectors.toList())));
+                .collect(Collectors.groupingBy( x -> x.getSplitId() + "-_#_-" + (x.getSplitContractName().equals("")?"&":x.getSplitContractName())
+                                + "-_#_-" +(x.getContractScope().equals("")?"&":x.getContractScope()) ,
+                        Collectors.mapping(materials -> BeanCopierUtil.copyBean(materials,MaterialsList.class),
+                                Collectors.toList())));
+
 
         Map<String,String> rentModeMap = underlingSystemService.listDictMap(DictBizEnum.UNDERLING_RENT_MODE.getName());
         System.out.println("rentModeMap"+ rentModeMap);
@@ -172,11 +174,11 @@ public class MaterialsListServiceImpl extends ServiceImpl<MaterialsListMapper, M
         ContractSplitMaterialsVO  splitMaterialsVO;
         for (Map.Entry<String,List<MaterialsList>> entry : map.entrySet()) {
             splitMaterialsVO = new ContractSplitMaterialsVO();
+            System.out.println("entry："+ entry);
             String[] keys = entry.getKey().split("-_#_-");
-            System.out.println("entry"+ entry);
             splitMaterialsVO.setSplitId(Long.valueOf(keys[0]));
-            splitMaterialsVO.setSplitContractName(keys[1]);
-            splitMaterialsVO.setContractScope(keys[2]);
+            splitMaterialsVO.setSplitContractName(keys[1].equals("&")?null:keys[1]);
+            splitMaterialsVO.setContractScope(keys[2].equals("&")?null:keys[2]);
 
             List<MaterialsVO> materialsLists = BeanCopierUtil.copyList(entry.getValue(), MaterialsVO.class);
             for (MaterialsVO materials : materialsLists) {
@@ -433,9 +435,9 @@ public class MaterialsListServiceImpl extends ServiceImpl<MaterialsListMapper, M
         materialsList = materialsList.stream()
                 .filter(x -> NumberUtil.compare(x.getCount(),BigDecimal.ZERO) > 0 && x.getPushFlag().equals("N"))
                 .collect(Collectors.toList());
-
         Map<String, List<MaterialsList>> map = materialsList.stream()
-                .collect(Collectors.groupingBy( x -> x.getSplitId() + "-_#_-" + x.getSplitContractName() + "-_#_-" +x.getContractScope() ,
+                .collect(Collectors.groupingBy( x -> x.getSplitId() + "-_#_-" + (x.getSplitContractName().equals("")?"&":x.getSplitContractName())
+                                + "-_#_-" +(x.getContractScope().equals("")?"&":x.getContractScope()) ,
                         Collectors.mapping(materials -> BeanCopierUtil.copyBean(materials,MaterialsList.class),
                                 Collectors.toList())));
 
@@ -443,10 +445,12 @@ public class MaterialsListServiceImpl extends ServiceImpl<MaterialsListMapper, M
         CompContractSplitMaterialsVO  splitMaterialsVO;
         for (Map.Entry<String,List<MaterialsList>> entry : map.entrySet()) {
             splitMaterialsVO = new CompContractSplitMaterialsVO();
-            String[] keys = entry.getKey().split("-_#_-");
-            splitMaterialsVO.setSplitId(Long.valueOf(keys[0]));
-            splitMaterialsVO.setSplitContractName(keys[1]);
-            splitMaterialsVO.setContractScope(keys[2]);
+                String[] keys = entry.getKey().split("-_#_-");
+                splitMaterialsVO.setSplitId(Long.valueOf(keys[0]));
+                splitMaterialsVO.setSplitContractName(keys[1].equals("&")?null:keys[1]);
+                splitMaterialsVO.setContractScope(keys[2].equals("&")?null:keys[2]);
+
+
 
             List<CompMaterialsContentVO> materialsLists = BeanCopierUtil.copyList(entry.getValue(), CompMaterialsContentVO.class);
 
