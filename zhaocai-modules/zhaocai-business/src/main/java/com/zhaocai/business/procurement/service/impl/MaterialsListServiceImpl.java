@@ -225,7 +225,8 @@ public class MaterialsListServiceImpl extends ServiceImpl<MaterialsListMapper, M
     @Override
     public List<CompContractSplitMaterialsVO> listContractSplitMaterials4Bidding(ContractSplitMaterialsQueryVO queryVO) {
         List<CompContractSplitMaterialsVO> materialsList = this.listMaterialsByPlanId4Bidding(queryVO.getPlanId());
-
+        System.out.println("materialsList:"+ materialsList);
+        System.out.println("queryVO:"+ queryVO);
         return materialsList.stream()
                 .filter(x -> queryVO.getContractSpiltIdList().contains(x.getSplitId()))
                 .collect(Collectors.toList());
