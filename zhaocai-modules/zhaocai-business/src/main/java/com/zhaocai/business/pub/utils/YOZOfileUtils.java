@@ -1,9 +1,15 @@
 package com.zhaocai.business.pub.utils;
 
+import com.zhaocai.business.BusinessApplication;
 import com.zhaocai.business.common.config.FileYOZOConfig;
+import com.zhaocai.business.common.config.MinioConfig;
+import com.zhaocai.common.core.domain.R;
 import com.zhaocai.common.core.utils.StringUtils;
 import com.zhaocai.common.core.utils.uuid.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.annotation.AnnotationConfigApplicationContext;
+import org.springframework.context.annotation.ComponentScan;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
@@ -15,6 +21,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Component
 public class YOZOfileUtils {
@@ -63,12 +73,15 @@ public class YOZOfileUtils {
      * @param targetPath 保存的目标路径
      */
     public Path downloadFile(String urlStr, Path targetPath) {
+        if (urlStr == null || urlStr.trim().isEmpty()) {
+            throw new RuntimeException("无法下载文件，未获取到文件URL");
+        }
         //对urlStr的空格部分进行编码
         try {
             // 直接替换url里的空格为 %20
             String encodedUrl = urlStr.replace(" ", "%20");
             // 输出编码后的URL
-            System.out.println(encodedUrl);
+            System.out.println("替换空格后的encodedUrl(下载地址)：" + encodedUrl);
 
             InputStream in = new URL(encodedUrl.toString()).openStream();
             Files.copy(in, targetPath, StandardCopyOption.REPLACE_EXISTING);
@@ -76,6 +89,7 @@ public class YOZOfileUtils {
 
         } catch (IOException e) {
             System.err.println("下载文件时发生错误: " + e.getMessage());
+            throw new RuntimeException("下载文件时发生错误:" + e.getMessage(), e);
         }
         return targetPath;
 
@@ -87,6 +101,15 @@ public class YOZOfileUtils {
      * @return 临时文件路径
      */
     public Path createTempFilePath(String fileName) {
+        if (fileName == null || fileName.trim().isEmpty()) {
+            throw new RuntimeException("创建临时目录失败，未获取到文件名fileName");
+        }
+        // 判断文件名是否超过255字节长度
+        byte[] fileNameBytes = fileName.getBytes(StandardCharsets.UTF_8);
+        if (fileNameBytes.length > 255) {
+            throw new RuntimeException("创建临时目录失败，文件名过长，超过255字节");
+        }
+
         try {
 //            Path tempDir = Paths.get("D:\\tmp");
             // 使用配置中的临时文件路径
@@ -98,8 +121,10 @@ public class YOZOfileUtils {
             }
             //在tmp下新建子目录来保存文件
             String fileName2 = removeSuffix(fileName);
-            String outPutDirName =UUID.randomUUID().toString();
-//            String outPutDirName = fileName2;
+//            // 生成当前时间戳并格式化
+//            SimpleDateFormat dateFormat = new SimpleDateFormat("yyyyMMddHHmmssSSS");
+//            String timestamp = dateFormat.format(new Date());
+            String outPutDirName = UUID.randomUUID().toString();
             Path outputDir = tempDir.resolve(outPutDirName);
             // 检查新子目录是否存在，如果不存在则创建
             if (!Files.exists(outputDir)) {
@@ -110,7 +135,7 @@ public class YOZOfileUtils {
             Path filePath = outputDir.resolve(fileName);
             return filePath;
         } catch (Exception e) {
-            throw new RuntimeException("创建临时目录失败", e);
+            throw new RuntimeException("创建临时目录失败" + e.getMessage(), e);
         }
     }
 
@@ -121,6 +146,36 @@ public class YOZOfileUtils {
      * @param originalFileName 原始文件名（包括扩展名）
      * @return 修改后的文件名
      */
+
+//    public static String modifyFileName(String originalFileName) {
+//        if (originalFileName == null || originalFileName.isEmpty()) {
+//            throw new IllegalArgumentException("文件名不能为空");
+//        }
+//
+//        // 获取文件的扩展名（如果有）
+//        int dotIndex = originalFileName.lastIndexOf('.');
+//        String fileNameWithoutExtension;
+//        String fileExtension = "";
+//
+//        if (dotIndex != -1) {
+//            fileNameWithoutExtension = originalFileName.substring(0, dotIndex);
+//            fileExtension = originalFileName.substring(dotIndex);
+//        } else {
+//            fileNameWithoutExtension = originalFileName;
+//        }
+//
+//        // 如果文件名中包含下划线，则移除下划线及其后面的内容
+//        int underscoreIndex = fileNameWithoutExtension.indexOf('_');
+//        if (underscoreIndex != -1) {
+//            fileNameWithoutExtension = fileNameWithoutExtension.substring(0, underscoreIndex);
+//        }
+//
+//        // 生成新的UUID并去掉其中的连字符
+//        String newUuid = UUID.randomUUID().toString().replaceAll("-", "");
+//
+//        // 构建新的文件名：更新后的文件名 + 新UUID + 扩展名
+//        return fileNameWithoutExtension + "_" + newUuid + fileExtension;
+//    }
 
     public static String modifyFileName(String originalFileName) {
         if (originalFileName == null || originalFileName.isEmpty()) {
@@ -139,17 +194,18 @@ public class YOZOfileUtils {
             fileNameWithoutExtension = originalFileName;
         }
 
-        // 如果文件名中包含下划线，则移除下划线及其后面的内容
-        int underscoreIndex = fileNameWithoutExtension.indexOf('_');
-        if (underscoreIndex != -1) {
-            fileNameWithoutExtension = fileNameWithoutExtension.substring(0, underscoreIndex);
-        }
+        // 定义时间戳的正则表达式模式
+        String timestampPattern = "_\\d{17}";  // 匹配下划线后跟17位数字（yyyyMMddHHmmssSSS）
 
-        // 生成新的UUID并去掉其中的连字符
-        String newUuid = UUID.randomUUID().toString().replaceAll("-", "");
+        // 移除文件名中已有的时间戳（如果存在）
+        fileNameWithoutExtension = fileNameWithoutExtension.replaceAll(timestampPattern, "");
+
+        // 生成当前时间戳并格式化
+        SimpleDateFormat dateFormat = new SimpleDateFormat("yyyyMMddHHmmssSSS");
+        String timestamp = dateFormat.format(new Date());
 
         // 构建新的文件名：更新后的文件名 + 新UUID + 扩展名
-        return fileNameWithoutExtension + "_" + newUuid + fileExtension;
+        return fileNameWithoutExtension + "_" + timestamp + fileExtension;
     }
 
     //删除临时文件

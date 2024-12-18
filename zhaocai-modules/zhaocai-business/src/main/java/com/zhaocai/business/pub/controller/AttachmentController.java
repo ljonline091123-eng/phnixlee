@@ -16,6 +16,7 @@ import com.zhaocai.business.pub.service.ISysFileService;
 import com.zhaocai.business.pub.utils.BookmarkUtils;
 import com.zhaocai.business.pub.utils.Sender;
 import com.zhaocai.business.pub.utils.YOZOfileUtils;
+import com.zhaocai.business.pub.vo.req.AttachmentIdRequest;
 import com.zhaocai.business.pub.vo.req.AttachmentRequestVO;
 import com.zhaocai.business.pub.vo.req.FileBeanVo;
 import com.zhaocai.business.pub.vo.res.AttachmentVO;
@@ -23,6 +24,7 @@ import com.zhaocai.business.pub.vo.res.DictListVO;
 import com.zhaocai.business.sdk.bean.ConvertParams;
 import com.zhaocai.business.sdk.bean.EditParams;
 import com.zhaocai.business.sdk.bean.PreviewParams;
+import com.zhaocai.common.core.utils.StringUtils;
 import com.zhaocai.common.core.utils.bean.BeanCopierUtil;
 import com.zhaocai.common.core.web.bean.ResultData;
 import com.zhaocai.common.security.utils.SecurityUtils;
@@ -84,9 +86,12 @@ public class AttachmentController extends BladeController {
     }
 
 //    @GetMapping("/test1")
-//    public ResultData<String> test() {
-//        String filename = yozOfileUtils.modifyFileName("招标文件-材料_是的111111_2190218303_20240918151504A380_20240918151504A380_7e85a4eae5654f2a871d23625db07b56.docx");
-//        return ResultData.data(filename);
+//    public ResultData<String> test(@RequestParam("fileName") String fileName, @RequestParam("fileURL") String fileURL) {
+//        // https://zc.hncig.cn:32068/minio/wh-hnjt/2024/09/18/3、钢材采购合同_20240918151604A381.docx
+//        //3、钢材采购合同_20240918151604A381.docx
+////        String filename = yozOfileUtils.modifyFileName(fileName);
+//        Path path  =  path = yozOfileUtils.downloadFile(fileURL, yozOfileUtils.createTempFilePath(fileName));
+//        return ResultData.data(path.toString());
 ////        String bookmarkLabel = bookmarkUtils.getBookmarkLabel();
 ////        return ResultData.data(bookmarkLabel);
 //    }
@@ -107,15 +112,27 @@ public class AttachmentController extends BladeController {
 //        return ResultData.data(fileURL);
 //    }
 
+    /*
+     * 复制模板文件时（修改文件名和文件URL）
+     * */
+    @PostMapping("/ModifyFileNameAndFileURL")
+    @ApiModelProperty(value = "修改文件名和文件URL")
+    public ResultData<String> ModifyFileNameAndFileURL(@RequestBody AttachmentIdRequest request) throws IOException {
+        Long attachmentId = request.getAttachmentId();
+        attachmentService.ModifyFileNameAndFileURL(attachmentId);
+        return ResultData.success();
+    }
 
-
+    /*
+    * 预览文件-据文件名和文件URL
+    * */
     @GetMapping("/getViweFileURL")
     @ApiModelProperty(value = "获取预览附件url")
     public ResultData<String> getViweFileURL(AttachmentRequestVO requestVO) {
         String fileName = requestVO.getFileName();
         String fileUrl = requestVO.getFileUrl();
-        if(yozOfileUtils.isNULLFileURL(fileUrl)){
-            return ResultData.fail("该文件存储的fileUrl为空，无法预览文件！！！");
+        if(StringUtils.isEmpty(fileUrl) || StringUtils.isEmpty(fileName)){
+            return ResultData.fail("该文件存储的fileUrl或者fileName为空，无法预览文件！！！");
         }
         String suffix = yozOfileUtils.getSuffix(fileName).toLowerCase();
         if (yozOfileUtils.isWordExtension(suffix)) {
@@ -134,6 +151,9 @@ public class AttachmentController extends BladeController {
     @GetMapping("/getViweFileUrlByID")
     @ApiModelProperty(value = "据attachmentId获取预览附件url")
     public ResultData<String> getViweFileUrlByID(@RequestParam("attachmentId") Long attachmentId) {
+        if(attachmentId == null){
+            return ResultData.fail("生成文件预览url失败,attachmentId为空，请检查！");
+        }
         AttachmentVO attachmentVO = attachmentService.getAttachmentById(attachmentId);
         String fileName = attachmentVO.getFileName();
         String fileUrl = attachmentVO.getFileUrl();
@@ -156,6 +176,9 @@ public class AttachmentController extends BladeController {
     @GetMapping("/getEditFileUrlByID")
     @ApiModelProperty(value = "据attachmentId获取编辑附件url")
     public ResultData<String> getEditFileUrlByID(@RequestParam("attachmentId") Long attachmentId) {
+        if(attachmentId == null){
+            return ResultData.fail("生成文件编辑url失败,attachmentId为空，请检查！");
+        }
         AttachmentVO attachmentVO = attachmentService.getAttachmentById(attachmentId);
         String fileName = attachmentVO.getFileName();
         String fileUrl = attachmentVO.getFileUrl();
@@ -184,10 +207,10 @@ public class AttachmentController extends BladeController {
         }
         // 转换为InputStream
         FileInputStream fis = new FileInputStream(file);
-        String NewFileName = yozOfileUtils.modifyFileName(fileBean.getFilename());
-        String fileUrl = sysFileService.uploadFile(fis, NewFileName);
+//        String NewFileName = yozOfileUtils.modifyFileName(fileBean.getFilename());
+        String fileUrl = sysFileService.uploadFile(fis, fileBean.getFilename());
         attcha.setFileUrl(fileUrl);
-        attachmentService.updateBusiness(attcha.getId(),attcha.getBusinessId(),fileUrl,NewFileName);
+        attachmentService.updateBusiness(attcha.getId(),attcha.getBusinessId(),fileUrl,fileBean.getFilename());
         System.out.println("fileUrl:"+fileUrl);
         return fileUrl;
     }

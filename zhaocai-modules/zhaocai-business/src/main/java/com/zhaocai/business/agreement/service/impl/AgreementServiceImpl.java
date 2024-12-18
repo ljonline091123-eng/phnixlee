@@ -86,6 +86,7 @@ import com.zhaocai.common.signature.service.command.GetSignUrlCommand;
 import com.zhaocai.system.api.domain.SysDept;
 import com.zhaocai.system.api.domain.SysUser;
 import com.zhaocai.system.api.system.RemoteSystemService;
+import lombok.val;
 import net.qiyuesuo.v3sdk.model.contract.response.ContractSignurlV3Response;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
@@ -94,6 +95,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.ObjectUtils;
 
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.Serializable;
 import java.math.BigDecimal;
@@ -1304,18 +1306,39 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
 
     /**
      * 处理新增合同时的附件<br>
-     * 1. 为合同选定的合同模板新增一个附件
-     * 2. 为合同附件增加一个联想文档任务
+     * 1. 招标信息无合同附件时->为合同选定的合同模板新增一个附件; 有合同附件时->复制合同附件新增一个附件
+     * 2. 新增附件时，修改文件名和文件URL
      * @param schemeId
      * @return
      */
     private long agreementCreateAttachmentHandle(Long schemeId) {
-        AttachmentVO agreementAttachment = procurementSchemeService.getAgreementTemplateAttachmentInfo(schemeId);
-        ValidateUtils.isNullException(agreementAttachment,"该合同没有选择模板，请确认");
+        //查询该采购计划有无合同附件ID
+        ProcurementSchemeBidding schemeBidding = procurementSchemeBiddingService.getDomainBySchemeId(schemeId);
+        Long contractAttachmentId = schemeBidding.getContractAttachmentId();
+        AttachmentRequestVO attachmentRequestVO;
 
-        // 新增附件
-        AttachmentRequestVO attachmentRequestVO = new AttachmentRequestVO(agreementAttachment.getFileName(),agreementAttachment.getFileUrl());
+        //有合同附件ID使用合同附件ID，无合同附件ID时使用合同模板ID
+        if(contractAttachmentId != null){
+            //查询合同附件信息
+            AttachmentVO agreementContractAttachment = procurementSchemeService.getAgreementContractAttachmentInfo(schemeId);
+            ValidateUtils.isNullException(agreementContractAttachment,"该合同没有保存合同附件信息，请确认");
+            // 复制采购方案的合同附件信息，新增一条附件记录
+            attachmentRequestVO = new AttachmentRequestVO(agreementContractAttachment.getFileName(),agreementContractAttachment.getFileUrl());
+
+        }else {
+            //查询合同模板信息
+            AttachmentVO agreementAttachment = procurementSchemeService.getAgreementTemplateAttachmentInfo(schemeId);
+            ValidateUtils.isNullException(agreementAttachment,"该合同没有选择模板，请确认");
+            // 复制采购方案的合同模板，新增附件
+            attachmentRequestVO = new AttachmentRequestVO(agreementAttachment.getFileName(),agreementAttachment.getFileUrl());
+        }
         long attachmentId = attachmentService.addAttachment(attachmentRequestVO,AttachmentTypeEnum.AGREEMENT_ORIGINAL,null);
+        //新增合同签订复制采购方案的合同附件信息时，需要修改合同附件的文件名和文件URL
+        try {
+            attachmentService.ModifyFileNameAndFileURL(attachmentId);
+        } catch (IOException e) {
+            throw new RuntimeException("新增合同时，修改文件名和文件URL失败" +e.getMessage(), e);
+        }
 
         // 新增任务(联想中台)
 //        fileZTaskService.addInitialFileZTask(FileZTaskBusinessEnum.AGREEMENT_CREATE,attachmentId);

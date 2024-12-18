@@ -7,6 +7,7 @@ import com.zhaocai.business.pub.vo.req.AttachmentRequestVO;
 import com.zhaocai.business.pub.vo.res.AttachmentVO;
 import com.zhaocai.business.vendor.vo.res.DownloadAgreementVO;
 
+import java.io.IOException;
 import java.util.List;
 
 /**
@@ -17,8 +18,14 @@ import java.util.List;
  */
 public interface IAttachmentService extends IService<Attachment> {
 
+    //修改附件的文件名和文件URL
+    void  ModifyFileNameAndFileURL(Long attachmentId) throws IOException;
+
     //文档中台——获取预览word文件URL
     String  viewWordFileURL(String fileName, String fileUrl);
+
+    //文档中台——获取预览word文件URL+加上水印
+    String  viewWordFileURLWithWaterMarK(String fileName, String fileUrl, String waterMarkContent);
 
     //文档中台——获取预览PDF文件URL
     String  viewPDFFileURL(String fileName, String fileUrl);
@@ -30,8 +37,15 @@ public interface IAttachmentService extends IService<Attachment> {
     //文档中台——获取预览图片URL
     String  viewImageURL(String fileName, String fileUrl);
 
+
+    //文档中台——获取编辑word文档的URL-（开启限制编辑按钮）
+    String  editWordURLWithLimitEdit(Long attachmentId, String fileName, String fileUrl);
+
     //文档中台——获取编辑word文档的URL
     String  editWordURL(Long attachmentId, String fileName, String fileUrl);
+
+    //文档中台——获取编辑word文档的URL+ 加水印
+    String  editWordURLWithWaterMark(Long attachmentId, String fileName, String fileUrl, String waterMarkContent);
 
     //文档中台-office转PDF
     String  convertOfficeToPdf(String fileName, String fileUrl, String waterMarkContent);
@@ -80,6 +94,9 @@ public interface IAttachmentService extends IService<Attachment> {
      * @return
      */
     Long saveAttachment(AttachmentRequestVO requestVO);
+
+    //更新文件名和文件URL
+    void updateFileNameANDFileUrl(Long id, String fileUrl, String fileName);
 
     /**
      * 更新附件业务信息

@@ -73,11 +73,11 @@ public class BookmarkUtils {
             // 提交处理文档
             String response = sender.post(ConvertParams.URL_CONVERT, ConvertParams.CONVERT_TYPE_CONVERT_DOCUMENT, params.getRequestBody());
             System.out.println("转换文件响应结果：");
-            System.out.println(response);
+            System.out.println("response:" + response);
             String viewUrl = new JSONObject(response).optJSONObject("data").optString("viewUrl");
-            String newViewUrl = yozOfileUtils.updateFileUrl(viewUrl);
-            System.out.println(newViewUrl);
-            return newViewUrl;
+//            String newViewUrl = yozOfileUtils.updateFileUrl(viewUrl);
+            System.out.println("填充书签后生成的文件下载地址:" + viewUrl);
+            return viewUrl;
         } catch (Exception e) {
             throw new RuntimeException("书签位置填充数据失败", e);
         }
