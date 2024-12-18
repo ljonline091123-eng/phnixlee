@@ -521,6 +521,13 @@ export default {
     },
     /* 在模板文件上传前处理逻辑 */
     handleBeforeUpload(file) {
+      //限制上传的文件名长度
+      const fileName = file.name;
+        if (fileName.length > 80) {
+            this.$message.error('文件名不能超过80个字符');
+            return false; // 阻止上传
+      }
+      //限制上传文件类型
       const allowedTypes = ['application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
       if (!allowedTypes.includes(file.type)) {
         this.$message.error('不支持上传该格式的文件,请上传Word文件');
