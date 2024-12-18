@@ -368,18 +368,6 @@ export const revokeBidding = (id) => {
   });
 };
 
-
-/** 撤回定标 */
-export const revokeBidding = (id) => {
-  return request({
-    url: "/business/result/revokeBidding",
-    method: "post",
-    params: {
-      id,
-    },
-  });
-};
-
 /** 查询定标供应商数据 */
 export const getBiddingResult = (noticeId) => {
   return request({
