@@ -1466,26 +1466,31 @@ export default {
     async getAttachmentEditURL() {
       console.log("getAttachmentEditURL编辑url方法==》》");
       console.log("this.attachmentId", this.attachmentId);
-      // if (this.attachmentId) {
-        this.firstForm.agreement.paymentWay=this.paymentWayArr.join(",");
-        let params = JSON.parse(JSON.stringify(this.firstForm.agreement))
-        console.log("this.firstForm=>", this.firstForm);
-        delete params.expenditureBusinessType;
-        params.attachmentId = this.attachmentId;
-        console.log("生成编辑文档URL的params数据===>", params);
-        console.log('新增合同签订编辑文件的AttachmentID:', params.attachmentId);
-        // 获取文档中台的文档编辑URL
-        getAgreementEditURL(params)
-          .then((res) => {
-            this.editFileUrl = res.data;
-            console.log("新增合同签订编辑editFileUrl:", this.editFileUrl);
-          })
-          .catch((err) => {
-            console.error('生成编辑文档URL的错误:', err);
-          });
-      // } else {
-      //   console.warn('attachmentId 数据未正确加载');
-      // }
+      // 确保 attachmentId 存在
+      if (!this.attachmentId) {
+        console.warn('attachmentId 数据未正确加载');
+        return;
+      }
+      this.firstForm.agreement.paymentWay=this.paymentWayArr.join(",");
+      // 创建 params 对象
+      let params = {
+        agreement: JSON.parse(JSON.stringify(this.firstForm.agreement)), // 深拷贝 agreement
+        agreementPaymentItem: JSON.parse(JSON.stringify(this.firstForm.agreementPaymentItem)) // 深拷贝 agreementPaymentItem
+      };
+      console.log("this.firstForm=>", this.firstForm);
+      delete params.agreement.expenditureBusinessType;
+      params.agreement.attachmentId = this.attachmentId;
+      console.log("生成编辑文档URL的params数据===>", params);
+      console.log('新增合同签订编辑文件的AttachmentID:', params.agreement.attachmentId);
+      // 获取文档中台的文档编辑URL
+      getAgreementEditURL(params)
+        .then((res) => {
+          this.editFileUrl = res.data;
+          console.log("新增合同签订编辑editFileUrl:", this.editFileUrl);
+        })
+        .catch((err) => {
+          console.error('生成编辑文档URL的错误:', err);
+        });
     },
 
     getAgreementDetail(){

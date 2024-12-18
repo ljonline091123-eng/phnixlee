@@ -1,5 +1,14 @@
 import request from "@/utils/request";
 
+// 新增招标文件或者合同时，复制模板后，修改文件名和文件URL
+export function ModifyFileNameAndFileURL(data) {
+  return request({
+    url: "/business/attachment/ModifyFileNameAndFileURL",
+    method: "post",
+    data,
+  });
+}
+
 // 范本管理-查询模板附件的-文档中台的预览url
 export function getPreviewFileUrl(id) {
   return request({

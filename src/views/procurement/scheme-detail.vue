@@ -281,6 +281,23 @@
 
             <el-row class="custom-row">
               <el-col :span="8" class="custom-col">
+                <el-form-item label="评分模板" class="custom-form-item">
+                  <a
+                    class="link-type"
+                    @click="
+                      handleCheck(
+                        procurementSchemeBidding.evaluationTemplate.templateId
+                      )
+                    "
+                  >
+                    {{
+                      procurementSchemeBidding.evaluationTemplate &&
+                      procurementSchemeBidding.evaluationTemplate.templateName
+                    }}
+                  </a>
+                </el-form-item>
+              </el-col>
+              <el-col :span="8" class="custom-col">
                 <el-form-item
                   label="招标文件"
                   label-width="140px"
@@ -295,23 +312,6 @@
                     {{
                       procurementSchemeBidding.biddingTemplate &&
                       procurementSchemeBidding.biddingTemplate.templateName
-                    }}
-                  </a>
-                </el-form-item>
-              </el-col>
-              <el-col :span="8" class="custom-col">
-                <el-form-item label="评分模板" class="custom-form-item">
-                  <a
-                    class="link-type"
-                    @click="
-                      handleCheck(
-                        procurementSchemeBidding.evaluationTemplate.templateId
-                      )
-                    "
-                  >
-                    {{
-                      procurementSchemeBidding.evaluationTemplate &&
-                      procurementSchemeBidding.evaluationTemplate.templateName
                     }}
                   </a>
                 </el-form-item>
@@ -377,12 +377,14 @@
           />
           <el-table-column
             label="拆分合约规划名称"
+            v-if="isAll"
             width="200"
             prop="splitContractName"
             show-overflow-tooltip
           />
           <el-table-column
             label="拟签约合同拆包范围"
+            v-if="isAll"
             width="200"
             prop="contractScope"
             show-overflow-tooltip
@@ -764,6 +766,7 @@ export default {
       contractSplitIdList: [],
       skeletonLoading: true,
       param: "",
+      isAll:false,
       activeTabs: "base",
       contractPlanList: [],
       inventoryVisible: false,
@@ -886,6 +889,7 @@ export default {
       try {
         const res = await getListMaterials(formData);
         this.inventoryList = res.data;
+        this.isAll = this.inventoryList.every(item => item.splitContractName && item.splitContractName!="null" && item.contractScope && item.contractScope!="null")
         console.log(res, "清单");
       } catch (err) {
         console.log(err);

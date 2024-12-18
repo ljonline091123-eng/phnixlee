@@ -117,12 +117,14 @@
         <el-table-column
           label="拆分合约规划名称"
           width="150"
+          v-if="isAll"
           align="center"
           prop="splitContractName"
           show-overflow-tooltip
         />
         <el-table-column
           label="拟签约合同承包范围"
+          v-if="isAll"
           width="150"
           align="center"
           prop="contractScope"
@@ -317,6 +319,7 @@ export default {
   data() {
     return {
       loading: false,
+      isAll:false,
       inventoryList: [],
       isSubmit: false,
       procurementPlan: {}, //基本信息
@@ -384,6 +387,8 @@ export default {
           splitMaterials,
           contractPlanning,
         });
+        console.log("splitMaterials"+JSON.stringify(this.splitMaterials))
+        this.isAll = this.splitMaterials.every(item => item.splitContractName && item.splitContractName!="null" && item.contractScope && item.contractScope!="null")
         this.wfProcessId = procurementPlan.wfProcessId;
       } catch (err) {
         console.log(err);

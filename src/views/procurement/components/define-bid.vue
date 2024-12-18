@@ -516,7 +516,7 @@
         v-if="scheme.biddingTemplate"
         :src= this.viewFileUrl
         width="100%"
-        height="700px"
+        height="500px"
         frameborder="0"
       ></iframe>
     </el-dialog>

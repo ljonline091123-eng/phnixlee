@@ -432,6 +432,8 @@
                           :file-list="formData.fileListBidding"
                           :on-remove="fileRemoveBidding"
                           ref="uploadBidding"
+                          :before-upload="handleBeforeUpload"  
+                          accept=".doc,.docx"  
                         >
                         </el-upload>
                       </div>
@@ -470,6 +472,8 @@
                           :file-list="formData.fileListContract"
                           :on-remove="fileRemoveContract"
                           ref="uploadContract"
+                          :before-upload="handleBeforeUpload"  
+                          accept=".doc,.docx"  
                         >
                         </el-upload>
                       </div>
@@ -492,8 +496,9 @@
                   <iframe allowfullscreen="true"
                     v-if="viewAttachmentId"
                     :src= this.editFileUrl
+                    :key= this.editFileUrl
                     width="100%"
-                    height="700px"
+                    height="500px"
                     frameborder="0"
                   ></iframe>
 
@@ -516,12 +521,14 @@
           <el-table-column
             label="拆分合约规划名称"
             width="200"
+             v-if="isAll"
             prop="splitContractName"
             show-overflow-tooltip
           />
           <el-table-column
             label="拟签约合同拆包范围"
             width="200"
+            v-if="isAll"
             prop="contractScope"
             show-overflow-tooltip
           />
@@ -1010,7 +1017,7 @@ import { getContractTypeList } from "@/api/template/file";
 import FileModule from "@/components/FileModule/index.vue";
 import { isvalidatemobile, validEmail, validatenum } from "@/utils/validate";
 import BackButton from "@/components/BackButton/index.vue";
-import { addAttachment , getEditFileUrlByID} from "@/api/template/file";
+import { addAttachment , getEditFileUrlByID, ModifyFileNameAndFileURL} from "@/api/template/file";
 import {showSecretRelatedTips} from "@/utils/MyUtils";
 import {offerRepo, offerService, uploadFileUrl} from "@/utils/const";
 import { listUnderlingDict } from "@/api/procurement/contract";
@@ -1044,6 +1051,7 @@ export default {
     if (param?.type === "update") {
       this.isEdit = true;
       this.getSchemeDetail(param.id);
+      console.log("进入到修改采购方案的create里面-》》》》》》》》》")
     } else {
       this.procurementPlanIds = param.ids;
       this.getProcurementSchemeCreateInfo();
@@ -1098,6 +1106,7 @@ export default {
 
     /* 代替data初始化 */
     getInitialData(){
+      console.log("进入getInitialData方法-》》》》》》》》")
       const validatePhone = (rule, value, callback) => {
         if (isvalidatemobile(value)[0]) {
           callback(new Error(isvalidatemobile(value)[1]));
@@ -1161,6 +1170,7 @@ export default {
         formData: {}, //form表单数据
         planList: [],
         inventoryList: [],
+        isAll:false,
         contractList: [],
         rules: {
           procurementSchemeName: [
@@ -1326,6 +1336,7 @@ export default {
         activeTabs: "base",
         inventoryVisible: false,
         financeList: [],
+
         evaluateVisable: false, //评分弹出
         evaluateTemplateList: [], //评分模板列表
         evaluateTemplateLoading: false,
@@ -1593,6 +1604,8 @@ export default {
       try {
         const res = await getListMaterials(formData);
         this.inventoryList = res.data;
+        console.log(JSON.stringify(this.inventoryList[0]))
+        this.isAll = this.inventoryList.every(item => item.splitContractName && item.splitContractName!="null" && item.contractScope && item.contractScope!="null")
         console.log(res, "清单");
       } catch (err) {
         console.log(err);
@@ -1720,6 +1733,8 @@ export default {
               fileName: fileName,
               fileUrl: fileUrl,
             });
+            //复制模板后，修改文件名和文件URL
+            await ModifyFileNameAndFileURL({attachmentId: res.data})
           }else{
             res.data = this.formData.biddingAttachmentId;
           }
@@ -1742,7 +1757,7 @@ export default {
 
           //据viewAttachmentId获取文件的文档中台的编辑URL
           if (this.viewAttachmentId) {
-            console.log('Attachment ID:', this.viewAttachmentId);
+            console.log('点击修改附件后的Attachment ID:', this.viewAttachmentId);
             //获取文档中台的文档编辑URL
             try {
               const res = await getEditFileUrlByID({attachmentId: this.viewAttachmentId});
@@ -1769,6 +1784,8 @@ export default {
               fileName: fileName,
               fileUrl: fileUrl,
             });
+            //复制模板后，修改文件名和文件URL
+            await ModifyFileNameAndFileURL({attachmentId: res.data})
           }else{
             res.data = this.formData.contractAttachmentId;
           }
@@ -1791,7 +1808,7 @@ export default {
 
           //据viewAttachmentId获取文件的文档中台的编辑URL
           if (this.viewAttachmentId) {
-            console.log('Attachment ID:', this.viewAttachmentId);
+            console.log('点击修改附件后的Attachment ID:', this.viewAttachmentId);
             //获取文档中台的文档编辑URL
             try {
               const res = await getEditFileUrlByID({attachmentId: this.viewAttachmentId});
@@ -1855,6 +1872,8 @@ export default {
           fileName: fileName,
           fileUrl: fileUrl,
         });
+        //复制模板后，修改文件名和文件URL
+        await ModifyFileNameAndFileURL({attachmentId: res.data})
 
           /* 2 招标文件模板 ，1 合同模板 */
           if (this.bcTemplatetType === 2) {
@@ -1941,6 +1960,8 @@ export default {
             fileName: fileName,
             fileUrl: fileUrl,
           });
+          //复制模板后，修改文件名和文件URL
+          await ModifyFileNameAndFileURL({attachmentId: res.data})
           this.$set(this.formData, "biddingAttachmentId", res.data);
           this.viewAttachmentId = res.data;
           console.log("viewAttachmentId:", this.viewAttachmentId);
@@ -1980,12 +2001,38 @@ export default {
     /* 手动合同模板附件上传 */
     uploadBiddingClick() {
       showSecretRelatedTips(()=>{
+         // 清除现有文件列表
+        this.$refs['uploadBidding'].clearFiles();  // 使用 clearFiles 方法清除文件列表
         this.$refs['uploadBidding'].$refs['upload-inner'].handleClick()
       })
+    },
+    /* 在合同模板以及招标文件上传前处理逻辑 */
+    handleBeforeUpload(file) {
+      //限制上传的文件名长度
+      const fileName = file.name;
+        if (fileName.length > 80) {
+            this.$message.error('文件名不能超过80个字符');
+            return false; // 阻止上传
+      }
+      //限制上传文件类型
+      const allowedTypes = ['application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+      if (!allowedTypes.includes(file.type)) {
+        this.$message.error('不支持上传该格式的文件，请上传Word文件');
+        return false;
+      }
+      return true;  // 返回 true 表示允许继续上传
     },
     /* 手动合同模板附件上传 */
     uploadContractClick() {
       showSecretRelatedTips(()=>{
+        console.log('Before clearing files:', this.$refs['uploadContract'].fileList); // 打印清除前的文件列表
+        // 清除现有文件列表
+       this.$refs['uploadContract'].clearFiles();  // 使用 clearFiles 方法清除文件列表
+
+       console.log('After clearing files:', this.$refs['uploadContract'].fileList); // 打印清除后的文件列表
+       
+    
+        // 触发文件选择器打开
         this.$refs['uploadContract'].$refs['upload-inner'].handleClick()
       })
     },
@@ -2302,6 +2349,6 @@ export default {
 }
 .previewFile {
   width: 100%;
-  height: 500px;
+  height: 700px;
 }
 </style>

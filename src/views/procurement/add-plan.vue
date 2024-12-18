@@ -168,6 +168,9 @@
                 </el-table-column>
                 <el-table-column label="拟签约合同承包范围" prop="contractScope" width="150">
                   <template slot-scope="scope">
+                    <div  style="position: absolute;top: 5px;right: 40px;">
+                      <el-button  type="danger" size="small"  @click="handleDelete(scope.$index)">删除标包</el-button>
+                    </div>
                     <el-input v-model="scope.row.contractScope" :disabled="isSubmit"/>
                   </template>
                 </el-table-column>
@@ -1015,7 +1018,7 @@ export default {
             return false;
           }
 
-          const isAll = planList[0]?.children.every(item => item.splitContractName && item.contractScope)
+          const isAll = planList[0]?.children.every(item => item.splitContractName && item.splitContractName!="null" && item.contractScope && item.contractScope!="null")
           if(!isAll){
             this.isSubmit = false;
             this.$message({
@@ -1139,7 +1142,7 @@ export default {
             return false;
           }
 
-          const isAll = planList[0]?.children.every(item => item.splitContractName && item.contractScope)
+          const isAll = planList[0]?.children.every(item => item.splitContractName && item.splitContractName!="null" && item.contractScope && item.contractScope!="null")
           if(!isAll){
             this.isSubmit = false;
             this.$message({
@@ -1295,6 +1298,30 @@ console.log("-2222--"+JSON.stringify(this.materialsLists))
     handleTypeClick(tab) {
       this.queryParams.procurementPlanType = tab.name;
     },
+    handleDelete(index) {
+      console.log("this.planList[0].children[index]"+JSON.stringify(this.planList[0].children[index]))
+      let arrData=this.planList[0].children[index].materialsLists
+      for(let i = 0 ; i <  arrData?.length ; i++){
+            if(arrData[i]?.pushFlag=='Y'){
+              return this.$message({type:'error',message:"目前是推送状态不可删除！"})
+            }
+          }
+          this.$confirm("是否确定删除标包？", "提示", {
+                confirmButtonText: "确定",
+                cancelButtonText: "取消",
+                type: "warning",
+              }).then(() => {
+              // 删除数据
+              this.planList[0].children.splice(index, 1);
+              //如果删除只有一条数据了,强制设置为"拆分合约规划名称和拟签约合同承包范围"为空
+              if(this.planList[0].children.length==1){
+                this.planList[0].children[0].splitContractName=''
+                this.planList[0].children[0].contractScope=''
+              }
+              // 强制Vue重新渲染
+              this.$forceUpdate();
+              });
+    },
     /** 查询定时任务列表 */
     getList() {
       this.loading = false;
@@ -1355,6 +1382,9 @@ console.log("-2222--"+JSON.stringify(this.materialsLists))
             //     unitPriceInclTaxText:item.unitPriceInclTaxText
             //   })),
             // })
+            console.log(this.planList[0].children.length)
+            console.log(index)
+            if(index+1>this.planList[0].children.length){
             children.push({
               index,
               planTable:'planTable'+index,
@@ -1367,6 +1397,16 @@ console.log("-2222--"+JSON.stringify(this.materialsLists))
 
               }))
             })
+          }else{
+            if(this.planList[0].children[index].splitContractName=="null"){
+                this.planList[0].children[index].splitContractName=''
+            }
+            if(this.planList[0].children[index].contractScope=="null"){
+                this.planList[0].children[index].contractScope=''
+            }
+            console.log("this.planList[0].children[index]"+JSON.stringify(this.planList[0].children[index]))
+            children.push(this.planList[0].children[index])
+          }
           });
           this.$set(this.planList[0], 'children', JSON.parse(JSON.stringify(children)));
           this.splitVisible = false;
