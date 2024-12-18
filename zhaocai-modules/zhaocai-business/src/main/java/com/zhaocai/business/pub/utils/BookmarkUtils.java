@@ -75,9 +75,9 @@ public class BookmarkUtils {
             System.out.println("转换文件响应结果：");
             System.out.println(response);
             String viewUrl = new JSONObject(response).optJSONObject("data").optString("viewUrl");
-           // String newViewUrl = yozOfileUtils.updateFileUrl(viewUrl);
-          //  System.out.println(newViewUrl);
-            return viewUrl;
+            String newViewUrl = yozOfileUtils.updateFileUrl(viewUrl);
+            System.out.println(newViewUrl);
+            return newViewUrl;
         } catch (Exception e) {
             throw new RuntimeException("书签位置填充数据失败", e);
         }
