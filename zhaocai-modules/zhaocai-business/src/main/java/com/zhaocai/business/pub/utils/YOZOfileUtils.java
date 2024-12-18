@@ -74,14 +74,14 @@ public class YOZOfileUtils {
      */
     public Path downloadFile(String urlStr, Path targetPath) {
         if (urlStr == null || urlStr.trim().isEmpty()) {
-            throw new RuntimeException("下载文件时错误，未获取到文件URL");
+            throw new RuntimeException("无法下载文件，未获取到文件URL");
         }
         //对urlStr的空格部分进行编码
         try {
             // 直接替换url里的空格为 %20
             String encodedUrl = urlStr.replace(" ", "%20");
             // 输出编码后的URL
-            System.out.println(encodedUrl);
+            System.out.println("替换空格后的encodedUrl(下载地址)：" + encodedUrl);
 
             InputStream in = new URL(encodedUrl.toString()).openStream();
             Files.copy(in, targetPath, StandardCopyOption.REPLACE_EXISTING);
@@ -89,6 +89,7 @@ public class YOZOfileUtils {
 
         } catch (IOException e) {
             System.err.println("下载文件时发生错误: " + e.getMessage());
+            throw new RuntimeException("下载文件时发生错误:" + e.getMessage(), e);
         }
         return targetPath;
 
@@ -120,8 +121,10 @@ public class YOZOfileUtils {
             }
             //在tmp下新建子目录来保存文件
             String fileName2 = removeSuffix(fileName);
-            String outPutDirName = fileName2 + "_"+UUID.randomUUID().toString();
-//            String outPutDirName = fileName2;
+//            // 生成当前时间戳并格式化
+//            SimpleDateFormat dateFormat = new SimpleDateFormat("yyyyMMddHHmmssSSS");
+//            String timestamp = dateFormat.format(new Date());
+            String outPutDirName = UUID.randomUUID().toString();
             Path outputDir = tempDir.resolve(outPutDirName);
             // 检查新子目录是否存在，如果不存在则创建
             if (!Files.exists(outputDir)) {

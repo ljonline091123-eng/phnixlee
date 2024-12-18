@@ -86,10 +86,12 @@ public class AttachmentController extends BladeController {
     }
 
 //    @GetMapping("/test1")
-//    public ResultData<String> test(@RequestParam("fileName") String fileName) {
-////        招标文件-材料_2190218303_20240918151504A38_20241217091602634.docx
-//        String filename = yozOfileUtils.modifyFileName(fileName);
-//        return ResultData.data(filename);
+//    public ResultData<String> test(@RequestParam("fileName") String fileName, @RequestParam("fileURL") String fileURL) {
+//        // https://zc.hncig.cn:32068/minio/wh-hnjt/2024/09/18/3、钢材采购合同_20240918151604A381.docx
+//        //3、钢材采购合同_20240918151604A381.docx
+////        String filename = yozOfileUtils.modifyFileName(fileName);
+//        Path path  =  path = yozOfileUtils.downloadFile(fileURL, yozOfileUtils.createTempFilePath(fileName));
+//        return ResultData.data(path.toString());
 ////        String bookmarkLabel = bookmarkUtils.getBookmarkLabel();
 ////        return ResultData.data(bookmarkLabel);
 //    }

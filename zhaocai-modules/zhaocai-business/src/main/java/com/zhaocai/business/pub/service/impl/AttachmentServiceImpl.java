@@ -143,12 +143,13 @@ public class AttachmentServiceImpl extends ServiceImpl<AttachmentMapper, Attachm
             }  catch (JSONException e) {
                 throw new RuntimeException("文档中台-解析服务器响应失败: " + e.getMessage(), e);
             }
-            //删除生成的临时文件
-            System.out.println("删除文件路径:" + path.toString());
-            yozOfileUtils.deleteTempFilePath(path.toString());
             return newViewUrl;
         } catch (Exception e) {
             throw new RuntimeException("生成文件预览url失败"+ e.getMessage(), e);
+        }finally {
+            //删除生成的临时文件
+            System.out.println("删除文件路径:" + path.toString());
+            yozOfileUtils.deleteTempFilePath(path.toString());
         }
 
     }
@@ -203,16 +204,18 @@ public class AttachmentServiceImpl extends ServiceImpl<AttachmentMapper, Attachm
 
                 String viewUrl = new JSONObject(response).optJSONObject("data").optString("viewUrl");
                 newViewUrl = yozOfileUtils.updateFileUrl(viewUrl);
-                System.out.println(newViewUrl);
+                System.out.println("生成的文件预览URL：" + newViewUrl);
             } catch (JSONException e) {
                 throw new RuntimeException("文档中台-解析服务器响应失败: " + e.getMessage(), e);
             }
+            return newViewUrl;
+
+        } catch (Exception e) {
+            throw new RuntimeException("生成文件预览url失败"+ e.getMessage(), e);
+        }finally {
             //删除生成的临时文件
             System.out.println("删除文件路径:" + path.toString());
             yozOfileUtils.deleteTempFilePath(path.toString());
-            return newViewUrl;
-        } catch (Exception e) {
-            throw new RuntimeException("生成文件预览url失败"+ e.getMessage(), e);
         }
 
     }
@@ -261,12 +264,13 @@ public class AttachmentServiceImpl extends ServiceImpl<AttachmentMapper, Attachm
             }  catch (JSONException e) {
                 throw new RuntimeException("文档中台-解析服务器响应失败: " + e.getMessage(), e);
             }
-            //删除生成的临时文件
-            System.out.println("删除文件路径:" + path.toString());
-            yozOfileUtils.deleteTempFilePath(path.toString());
             return newViewUrl;
         } catch (Exception e) {
             throw new RuntimeException("生成文件预览url失败"+ e.getMessage(), e);
+        }finally {
+            //删除生成的临时文件
+            System.out.println("删除文件路径:" + path.toString());
+            yozOfileUtils.deleteTempFilePath(path.toString());
         }
 
     }
@@ -363,12 +367,14 @@ public class AttachmentServiceImpl extends ServiceImpl<AttachmentMapper, Attachm
             }  catch (JSONException e) {
                 throw new RuntimeException("文档中台-解析服务器响应失败: " + e.getMessage(), e);
             }
-            //删除生成的临时文件
-            System.out.println("删除文件路径:" + path.toString());
-            yozOfileUtils.deleteTempFilePath(path.toString());
+
             return newViewUrl;
         } catch (Exception e) {
             throw new RuntimeException("生成文件预览url失败"+ e.getMessage(), e);
+        }finally{
+            //删除生成的临时文件
+            System.out.println("删除文件路径:" + path.toString());
+            yozOfileUtils.deleteTempFilePath(path.toString());
         }
 
     }
