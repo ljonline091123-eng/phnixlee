@@ -21,7 +21,7 @@ public interface BankMapper extends BaseMapper<DwCdBank>
      * @param id 支行档案主键
      * @return 支行档案
      */
-    public DwCdBank selectBankById(Long id);
+    public DwCdBank selectBankById(String id);
 
     /**
      * 查询支行档案列表

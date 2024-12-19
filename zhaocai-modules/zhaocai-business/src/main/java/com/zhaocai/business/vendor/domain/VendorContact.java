@@ -1,5 +1,6 @@
 package com.zhaocai.business.vendor.domain;
 
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.zhaocai.common.core.web.domain.BaseEntity;
 import io.swagger.annotations.ApiModelProperty;
@@ -95,4 +96,8 @@ public class VendorContact extends BaseEntity {
      */
     @ApiModelProperty(value = "流程实例 id")
     private String wfProcessId;
+
+    @TableField(exist = false)
+    @ApiModelProperty(value = "密码")
+    private String newPassword;
 }

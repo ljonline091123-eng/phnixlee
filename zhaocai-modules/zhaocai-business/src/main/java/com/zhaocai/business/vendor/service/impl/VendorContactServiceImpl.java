@@ -40,6 +40,7 @@ import com.zhaocai.common.core.constant.UserConstants;
 import com.zhaocai.common.core.domain.R;
 import com.zhaocai.common.core.enums.UserTypeEnum;
 import com.zhaocai.common.core.utils.NumberUtil;
+import com.zhaocai.common.core.utils.StringUtils;
 import com.zhaocai.common.core.utils.bean.BeanCopierUtil;
 import com.zhaocai.common.core.web.bean.ResultData;
 import com.zhaocai.common.core.web.domain.BaseEntity;
@@ -274,15 +275,23 @@ public class VendorContactServiceImpl extends ServiceImpl<VendorContactMapper,Ve
     }
 
     @Override
-    public Long addLoginUser(String contactPhone, String contactName) {
+    public Long addLoginUser(String contactPhone, String contactName, String password) {
         SysUser user = remoteUserService.getUserInfoByUsername(contactPhone, SecurityConstants.INNER);
-        if (user != null) {
+        if (user != null ) {
+            if(StringUtils.isNotEmpty(password)){
+                //重置密码
+                user.setPassword(password);
+                remoteUserService.resetPwd(user,SecurityConstants.INNER);
+            }
             return user.getUserId();
         } else {
             BusinessUser businessUser = new BusinessUser();
             businessUser.setUserName(contactPhone);
             businessUser.setNickName(contactName);
             businessUser.setUserType(UserTypeEnum.VENDOR);
+            if(StringUtils.isNotEmpty(password)){
+                businessUser.setPassword(password);
+            }
             R<Long> r = remoteUserService.addBusinessUser(businessUser, SecurityConstants.INNER);
 
             if (R.SUCCESS != r.getCode()) {
@@ -534,7 +543,7 @@ public class VendorContactServiceImpl extends ServiceImpl<VendorContactMapper,Ve
      */
     private void handleApprove(VendorContact contact) {
         // 增加新增账号
-        Long loginUserId=  this.addLoginUser(contact.getContactPhone(),contact.getContactName());
+        Long loginUserId=  this.addLoginUser(contact.getContactPhone(),contact.getContactName(),null);
         contact.setLoginUserId(loginUserId);
         super.updateById(contact);
     }

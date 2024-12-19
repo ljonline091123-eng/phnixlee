@@ -3,6 +3,7 @@ package com.zhaocai.system.api.system;
 import com.zhaocai.common.core.constant.SecurityConstants;
 import com.zhaocai.common.core.constant.ServiceNameConstants;
 import com.zhaocai.common.core.domain.R;
+import com.zhaocai.common.core.web.domain.AjaxResult;
 import com.zhaocai.system.api.domain.BusinessUser;
 import com.zhaocai.system.api.domain.SysRole;
 import com.zhaocai.system.api.domain.SysUser;
@@ -86,4 +87,8 @@ public interface RemoteUserService
 
     @GetMapping("/user/getUserInfoByUsername")
     SysUser getUserInfoByUsername(@RequestParam("username") String username, @RequestHeader(SecurityConstants.FROM_SOURCE) String source);
+
+    @PutMapping("/user/resetPwd")
+    AjaxResult resetPwd(@RequestBody SysUser sysUser, @RequestHeader(SecurityConstants.FROM_SOURCE) String source);
+
 }

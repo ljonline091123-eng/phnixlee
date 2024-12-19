@@ -83,7 +83,7 @@ public class BankServiceImpl extends ServiceImpl<BankMapper, DwCdBank> implement
      * @return 支行档案
      */
     @Override
-    public DwCdBank selectBankById(Long id)
+    public DwCdBank selectBankById(String id)
     {
         return bankMapper.selectBankById(id);
     }
