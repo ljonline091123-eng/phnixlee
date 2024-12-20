@@ -1019,14 +1019,27 @@ export default {
           }
 
           const isAll = planList[0]?.children.every(item => item.splitContractName && item.splitContractName!="null" && item.contractScope && item.contractScope!="null")
+              //判断长度大于1
+          if(planList[0].children.length>1){
           if(!isAll){
             this.isSubmit = false;
-            this.$message({
+            if(planList[0].children.length!=1){
+              this.$message({
               message: '拆分合约规划名称/拟签约合同承包范围不能为空',
               type: 'error'
             });
+            }
             return false;
           }
+        }
+          // if(!isAll){
+          //   this.isSubmit = false;
+          //   this.$message({
+          //     message: '拆分合约规划名称/拟签约合同承包范围不能为空',
+          //     type: 'error'
+          //   });
+          //   return false;
+          // }
 
           // const isZero = planList[0]?.children.some(item => {
           //   let isLoop = true;
@@ -1143,14 +1156,26 @@ export default {
           }
 
           const isAll = planList[0]?.children.every(item => item.splitContractName && item.splitContractName!="null" && item.contractScope && item.contractScope!="null")
+         if(planList[0].children.length>1){
           if(!isAll){
             this.isSubmit = false;
-            this.$message({
+            if(planList[0].children.length!=1){
+              this.$message({
               message: '拆分合约规划名称/拟签约合同承包范围不能为空',
               type: 'error'
             });
+            }
             return false;
           }
+        }
+        // if(!isAll){
+          //   this.isSubmit = false;
+          //   this.$message({
+          //     message: '拆分合约规划名称/拟签约合同承包范围不能为空',
+          //     type: 'error'
+          //   });
+          //   return false;
+          // }
 
           // const isZero = planList[0]?.children.some(item => {
           //   let isLoop = true;
