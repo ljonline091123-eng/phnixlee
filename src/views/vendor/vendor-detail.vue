@@ -89,7 +89,7 @@
               </el-col>
               <el-col :span="8">
                 <el-form-item label="开户支行">{{
-                  vendor.accountBranch
+                  vendor.openingBranch
                 }}</el-form-item>
               </el-col>
               <el-col :span="8">
