@@ -1,6 +1,7 @@
 package com.zhaocai.business.vendor.service.impl;
 
 import cn.hutool.core.codec.Base64;
+import com.alibaba.csp.sentinel.util.StringUtil;
 import com.alibaba.fastjson.JSON;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
@@ -14,7 +15,9 @@ import com.zhaocai.business.manager.http.service.UnderlingSystemService;
 import com.zhaocai.business.process.service.IBPMProcessService;
 import com.zhaocai.business.process.service.IPBMOverrideService;
 import com.zhaocai.business.pub.domain.Attachment;
+import com.zhaocai.business.pub.domain.DwCdBank;
 import com.zhaocai.business.pub.service.IAttachmentService;
+import com.zhaocai.business.pub.service.IBankService;
 import com.zhaocai.business.pub.vo.req.AttachmentRequestVO;
 import com.zhaocai.business.vendor.domain.*;
 import com.zhaocai.business.vendor.mapper.VendorChangeMapper;
@@ -78,6 +81,9 @@ public class VendorChangeServiceImpl extends ServiceImpl<VendorChangeMapper,Vend
 
     @Autowired
     private IAttachmentService attachmentService;
+
+    @Autowired
+    private IBankService bankService;
 
     @Autowired
     private UnderlingSystemService underlingSystemService;
@@ -175,6 +181,15 @@ public class VendorChangeServiceImpl extends ServiceImpl<VendorChangeMapper,Vend
             if (null != vendorChange.getChangeStatus() && vendorChange.getChangeStatus().equals(VendorStateEnum.APPROVE.getState())) {
                 // 获取最新版本副本
                 vendorChangeRequestVO = this.createCopy(vendorChange);
+            }
+        }
+
+        if(vendorChangeRequestVO.getVendorChange() != null && StringUtil.isNotEmpty(vendorChangeRequestVO.getVendorChange().getAccountBranch())){
+            DwCdBank bank = bankService.selectBankById(vendorChangeRequestVO.getVendorChange().getAccountBranch());
+            if(bank != null){
+                vendorChangeRequestVO.getVendorChange().setBankName(bank.getName());
+            }else {
+                vendorChangeRequestVO.getVendorChange().setBankName(vendorChangeRequestVO.getVendorChange().getAccountBranch());
             }
         }
         // 处理返回的内容
@@ -422,6 +437,14 @@ public class VendorChangeServiceImpl extends ServiceImpl<VendorChangeMapper,Vend
             vendorState.setFirstCooperationCompanyName(remoteSystemService.getDeptNameLoop(vendor.getFirstCooperationCompanyCode(),vendorState.getFirstCooperationCompanyName(), SecurityConstants.INNER));
 
             VendorBlackRequestVO vendorBlack = this.getBlackDetail(vendorChange);
+            if(vendorVO != null && StringUtil.isNotEmpty(vendorVO.getAccountBranch())){
+                DwCdBank bank = bankService.selectBankById(vendorVO.getAccountBranch());
+                if(bank != null){
+                    vendorVO.setOpeningBranch(bank.getName());
+                }else {
+                    vendorVO.setOpeningBranch(vendorVO.getAccountBranch());
+                }
+            }
             return VendorManagementDetailVO.builder()
                     .vendor(vendorVO)
                     .mainContact(mainContactVO)

@@ -409,7 +409,14 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
                 .filter(x -> x.getIsMainContact().equals(0))
                 .map(mc -> BeanCopierUtil.copyBean(mc, VendorContactVO.class))
                 .collect(Collectors.toList());
-
+        if(vendorVO != null && StringUtil.isNotEmpty(vendorVO.getAccountBranch())){
+            DwCdBank bank = bankService.selectBankById(vendorVO.getAccountBranch());
+            if(bank != null){
+                vendorVO.setOpeningBranch(bank.getName());
+            }else {
+                vendorVO.setOpeningBranch(vendorVO.getAccountBranch());
+            }
+        }
         return VendorDetailVO.builder()
                 .vendor(vendorVO)
                 .mainContact(mainContact)
@@ -660,7 +667,14 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
             if(null != changeId){
                 vendorVO.setChangeId(changeId);
             }
-
+            if(vendorVO != null && StringUtil.isNotEmpty(vendorVO.getAccountBranch())){
+                DwCdBank bank = bankService.selectBankById(vendorVO.getAccountBranch());
+                if(bank != null){
+                    vendorVO.setOpeningBranch(bank.getName());
+                }else {
+                    vendorVO.setOpeningBranch(vendorVO.getAccountBranch());
+                }
+            }
             return VendorManagementDetailVO.builder()
                     .vendor(vendorVO)
                     .mainContact(mainContactVO)
@@ -1174,6 +1188,7 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
             contact.setLoginUserId(longUserId);
             contact.setIsMainContact(1);
             contact.setState(VendorContactStateEnum.VALID.getState());
+            contact.setIsLegal(1);
             vendorContactService.saveOrUpdate(contact);
         }
 

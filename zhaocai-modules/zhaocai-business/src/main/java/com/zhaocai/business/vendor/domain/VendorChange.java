@@ -265,4 +265,8 @@ public class VendorChange extends BaseEntity {
      */
     @TableField(exist = false)
     private String operateComment;
+
+    @TableField(exist = false)
+    @ApiModelProperty(value = "开户支行名称")
+    private String bankName;
 }
