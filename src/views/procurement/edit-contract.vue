@@ -250,8 +250,8 @@
             <el-row :gutter="10" v-if="[4, 5].includes(contractType)">
               <el-col :span="24">
                 <el-form-item label="工程范围及工作内容：" prop="agreement.scopeOfWork"
-                  :rules="[{ required: true, trigger: 'blur', message: '请输入工程范围及工作内容' }]">
-                  <el-input v-model="firstForm.agreement.scopeOfWork" placeholder="请输入工程范围及工作内容" clearable />
+                  :rules="[{ required: true, trigger: 'blur', message: '请输入工程范围及工作内容,内容字符上限为1000' }]">
+                  <el-input maxlength="1000" v-model="firstForm.agreement.scopeOfWork" placeholder="请输入工程范围及工作内容" clearable />
                 </el-form-item>
               </el-col>
             </el-row>
