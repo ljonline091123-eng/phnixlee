@@ -182,6 +182,14 @@ public class VendorContactServiceImpl extends ServiceImpl<VendorContactMapper,Ve
     public void updateContactState(Long id, Integer state) {
         VendorContact vendorContact = super.getById(id);
         ValidateUtils.isNullException(vendorContact,"该联系人不存在");
+        if(VendorContactStateEnum.VALID.getState().equals(state)){
+            long totalCount = super.count(new LambdaQueryWrapper<VendorContact>()
+                    .eq(VendorContact::getVendorId,vendorContact.getVendorId())
+                    .eq(VendorContact::getState,VendorContactStateEnum.VALID.getState()));
+            if (totalCount > 4 ) {
+                throw new ParamValidateException("联系人启用已满5人!");
+            }
+        }
 
         super.update(new LambdaUpdateWrapper<VendorContact>()
                 .set(VendorContact::getState,state)
@@ -486,6 +494,11 @@ public class VendorContactServiceImpl extends ServiceImpl<VendorContactMapper,Ve
         return " 登录用户:"+contactPhone+" 不存在";
     }
 
+    @Override
+    public int updateByVendorId(Long id, Long uuid) {
+        return baseMapper.updateByVendorId(id,uuid);
+    }
+
     /**
      * 校验联系人
      * @param contact
@@ -499,9 +512,10 @@ public class VendorContactServiceImpl extends ServiceImpl<VendorContactMapper,Ve
         }
 
         long totalCount = super.count(new LambdaQueryWrapper<VendorContact>()
-                        .eq(VendorContact::getVendorId,contact.getVendorId()));
-        if (totalCount > 5 && null == contact.getId()) {
-            throw new ParamValidateException("联系人已满5人，不能再添加了");
+                        .eq(VendorContact::getVendorId,contact.getVendorId())
+                .eq(VendorContact::getState,VendorContactStateEnum.VALID.getState()));
+        if (totalCount > 4 && null == contact.getId()) {
+            throw new ParamValidateException("联系人启用已满5人，不能再添加了");
         }
 
         if (contact.getIsManager() == 1) {
@@ -545,6 +559,20 @@ public class VendorContactServiceImpl extends ServiceImpl<VendorContactMapper,Ve
         // 增加新增账号
         Long loginUserId=  this.addLoginUser(contact.getContactPhone(),contact.getContactName(),null);
         contact.setLoginUserId(loginUserId);
+
+        long totalCount = super.count(new LambdaQueryWrapper<VendorContact>()
+                .eq(VendorContact::getVendorId,contact.getVendorId())
+                .eq(VendorContact::getState,VendorContactStateEnum.VALID.getState())
+                .ne(VendorContact::getId,contact.getId()));
+        if (totalCount > 4 ) {
+            contact.setState(VendorContactStateEnum.INVALID.getState());
+        }
+        /*List<VendorContact> list = super.list(new LambdaQueryWrapper<VendorContact>()
+                .eq(VendorContact::getVendorId, contact.getVendorId())
+                .eq(VendorContact::getState, VendorContactStateEnum.VALID.getState()));
+        if(!list.isEmpty() && list.size()>4){
+
+        }*/
         super.updateById(contact);
     }
 

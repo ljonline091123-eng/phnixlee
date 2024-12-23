@@ -23,4 +23,5 @@ public interface VendorContactMapper extends BaseMapper<VendorContact> {
      */
     IPage<VendorContactListVO> selectVendorContactListPage(Page mybatisPage, @Param("queryVO") VendorContactListQueryVO queryVO);
 
+    int updateByVendorId(@Param("id") Long id,@Param("uuid") Long uuid);
 }

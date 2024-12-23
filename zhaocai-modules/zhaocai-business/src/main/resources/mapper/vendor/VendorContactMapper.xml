@@ -39,6 +39,9 @@
         <result property="effectiveEndDate" column="effective_end_date"/>
         <result property="wfProcessId" column="wf_process_id"/>
     </resultMap>
+    <update id="updateByVendorId">
+        update tb_vendor_contact set vendor_id = #{uuid} where vendor_id = #{id}
+    </update>
 
     <select id="selectVendorContactListPage" resultMap="VendorContactManagementResult">
         select tvc.id,tvc.contact_name,tvc.contact_phone,tv.enterprise_name,tvc.is_manager,tvc.state,tvc.create_time,tvc.wf_process_id,

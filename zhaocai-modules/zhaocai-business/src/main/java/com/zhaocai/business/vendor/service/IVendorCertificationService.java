@@ -92,4 +92,6 @@ public interface IVendorCertificationService extends IService<VendorCertificatio
      * @return
      */
     List<VendorCertification> listVendorCertification(Long vendorId, CertificationTypeEnum businessType, Long businessId);
+
+    int updateByVendorId(Long id, Long uuid);
 }

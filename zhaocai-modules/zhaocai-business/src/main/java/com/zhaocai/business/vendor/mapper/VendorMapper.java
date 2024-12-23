@@ -40,4 +40,6 @@ public interface VendorMapper extends BaseMapper<Vendor> {
      * @return
      */
     IPage<VendorVO> selectVendorJkpthtListPage(Page mybatisPage, @Param("queryVO") VendorManagementListQueryVO queryVO);
+
+    int updateByMyId(@Param("id") Long id,@Param("uuid") Long uuid);
 }

@@ -20,4 +20,8 @@
         <result property="updateTime" column="update_time"/>
         <result property="delFlag" column="del_flag"/>
     </resultMap>
+    <update id="updateByVendorId">
+        update tb_vendor_certification set vendor_id = #{uuid} ,
+         business_id = if(business_code != 'LEGAL_AUTHORIZATION' , #{uuid},  business_id)  where vendor_id = #{id}
+    </update>
 </mapper>

@@ -65,4 +65,6 @@ public interface AccountMapper extends BaseMapper<TAccountInfo>
 
     @InterceptorIgnore(blockAttack = "true")
     Boolean deleteSyncAccount();
+
+    int updateByVendorId(@Param("id") Long id, @Param("uuid") Long uuid);
 }

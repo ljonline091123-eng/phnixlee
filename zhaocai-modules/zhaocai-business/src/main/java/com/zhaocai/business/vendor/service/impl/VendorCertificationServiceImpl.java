@@ -213,6 +213,11 @@ public class VendorCertificationServiceImpl extends ServiceImpl<VendorCertificat
                 .eq(VendorCertification::getBusinessId,businessId));
     }
 
+    @Override
+    public int updateByVendorId(Long id, Long uuid) {
+        return baseMapper.updateByVendorId(id,uuid);
+    }
+
 
     @Override
     public VendorOneRequestVO listCertification(VendorOneRequestVO vo, Long vendorId, Long mainContactId) {

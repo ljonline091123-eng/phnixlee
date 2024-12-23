@@ -83,6 +83,10 @@
         <result property="firstCooperationCompanyName" column="first_cooperation_company_name"/>
     </resultMap>
 
+    <update id="updateByMyId">
+        update tb_vendor set id = #{uuid} where id = #{id}
+    </update>
+
     <select id="selectVendorListPage" resultMap="VendorManagementList">
         select tv.id ,tv.enterprise_name,tv.is_external,tv.vendor_attribute,tv.establish_date,tv.vendor_status,tv.created_unit,tv.enterprise_code,tv.social_credit_code,tvc.contact_name,tvc.contact_phone,tv.registered_capital,
                 concat(tv.enterprise_province_name,'-',tv.enterprise_city_name) as vendor_location,tv.enterprise_type,tv.create_time,
