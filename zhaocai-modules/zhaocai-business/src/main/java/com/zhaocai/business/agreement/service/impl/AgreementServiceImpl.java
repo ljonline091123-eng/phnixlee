@@ -944,6 +944,10 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
         }
     }
 
+    /**
+     * 供应商确认合同
+     * @param id
+     */
     @Override
     public void vendorAffirmAgreement(Long id) {
         Agreement agreement = this.getById(id);

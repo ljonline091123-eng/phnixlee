@@ -661,7 +661,7 @@ public class AttachmentServiceImpl extends ServiceImpl<AttachmentMapper, Attachm
                 }
 
                 viewUrl = new JSONObject(response).optJSONObject("data").optString("viewUrl");
-                System.out.println(viewUrl);
+                System.out.println("转为PDF后的文件URL：" + viewUrl);
             }  catch (Exception e) {
                 throw new RuntimeException("文档中台-解析服务器响应失败: " + e.getMessage(), e);
             }

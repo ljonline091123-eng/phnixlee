@@ -2,6 +2,7 @@ package com.zhaocai.business.agreement.controller;
 
 import com.alibaba.fastjson.JSONObject;
 import com.zhaocai.business.agreement.domain.Agreement;
+import com.zhaocai.business.agreement.service.IAgreementPaymentItemService;
 import com.zhaocai.business.agreement.service.IAgreementService;
 import com.zhaocai.business.agreement.vo.req.*;
 import com.zhaocai.business.agreement.vo.res.*;
@@ -68,6 +69,9 @@ public class AgreementController extends BladeController {
     @Autowired
     private IContractPlanningService contractPlanningService;
 
+    @Autowired
+    private IAgreementPaymentItemService agreementPaymentItemService;
+
     /**
      * 查看合同信息时，合同附件填充数据到书签部分，并且返回填充数据后的文件预览URL
      */
@@ -82,13 +86,64 @@ public class AgreementController extends BladeController {
         String fileName = attachmentVO.getFileName();
         String fileUrl = attachmentVO.getFileUrl();
         AgreementDetailVO agreementDetailVO = agreementService.detail(agreementId);
+        //合同基本信息
         AgreementVO agreementVO = agreementDetailVO.getAgreement();
-        AgreementBookmarkVO agreementBookmarkVO = BeanCopierUtil.copyBean(agreementVO,AgreementBookmarkVO.class);
+        // 合同款项信息
+        AgreementPaymentItemVO agreementPaymentItemVO = agreementPaymentItemService.getByAgreementId(agreementId);
+        agreementPaymentItemVO.setTotalAmountExcTax(agreementVO.getTotalAmountExcTax());
+        agreementPaymentItemVO.setTotalAmountIncTax(agreementVO.getTotalAmountIncTax());
+        //复制到书签库
+        AgreementBookmarkVO agreementBookmarkVO = new AgreementBookmarkVO();
+        BeanCopierUtil.copyBean(agreementVO, agreementBookmarkVO);
+        BeanCopierUtil.copyBean(agreementPaymentItemVO, agreementBookmarkVO);
+
+        //获取计租方式的label
         Integer rentalMethod = agreementBookmarkVO.getRentalMethod();
         if(rentalMethod != null){
             String RentalMethodText = sysDictDataService.getLabel(DictBizEnum.AGREEMENT_RENTAL_METHOD.getName(),rentalMethod.toString());
             agreementBookmarkVO.setRentalMethodText(RentalMethodText);
         }
+        //获取支付方式
+        String PaymentWay = agreementBookmarkVO.getPaymentWay();
+        if (PaymentWay != null && !PaymentWay.trim().isEmpty()) {
+            // 将 paymentWay 按逗号分隔成数组
+            String[] paymentWays = PaymentWay.split(",");
+            // 创建一个列表来保存所有的支付方式文本
+            List<String> paymentWayTexts = new ArrayList<>();
+            // 遍历每一个支付方式编码并获取其文本描述
+            for (String way : paymentWays) {
+                if (way.trim().isEmpty()) continue; // 忽略空字符串
+
+                String paymentWayText = sysDictDataService.getLabel(DictBizEnum.AGREEMENT_PAYMENT_WAY.getName(), way.trim());
+                if (paymentWayText != null && !paymentWayText.trim().isEmpty()) {
+                    paymentWayTexts.add(paymentWayText);
+                }
+            }
+            // 将所有支付方式文本用逗号连接起来
+            String combinedPaymentWayText = String.join(", ", paymentWayTexts);
+            // 设置支付方式文本到 VO 对象中
+            agreementBookmarkVO.setPaymentWayText(combinedPaymentWayText);
+        }
+        //获取支付周期
+        String PaymentCycle = agreementBookmarkVO.getPaymentCycle();
+        if(PaymentCycle != null && !PaymentCycle.isEmpty()){
+            String PaymentCycleText = sysDictDataService.getLabel(DictBizEnum.AGREEMENT_PAYMENT_CYCLE.getName(),PaymentCycle);
+            agreementBookmarkVO.setPaymentCycleText(PaymentCycleText);
+        }
+        //获取支出业务分类
+        Long SplitId = agreementVO.getContractSplitId();
+        if(SplitId != null){
+            ContractPlanning contractPlanning = contractPlanningService.getByContractSplitId(SplitId);
+            String expenditureBusinessTypeText = contractPlanning.getContractPlanningCategoryName();
+            agreementBookmarkVO.setExpenditureBusinessTypeText(expenditureBusinessTypeText);
+        }
+        //获取价格形式
+        String priceForm = agreementVO.getPriceForm();
+        if(SplitId != null){
+            String priceFormText = sysDictDataService.getLabel(DictBizEnum.AGREEMENT_PRICE_FORM.getName(),priceForm);
+            agreementBookmarkVO.setPriceFormText(priceFormText);
+        }
+
         String newfileURL= bookmarkUtils.FillBookmarkData(fileUrl,fileName,agreementBookmarkVO);
         System.out.println("newfileURL:"+ newfileURL);
         if(yozOfileUtils.isNULLFileURL(newfileURL)){
@@ -107,7 +162,9 @@ public class AgreementController extends BladeController {
         if (waterMarkContent==null){
             return ResultData.fail("水印内容为空，检查是否获取到甲方名称！");
         }
+        //获取请求参数里的agreementId
         Agreement agreement = requestVO.getAgreement();
+        //获取协议付款项目
         AgreementPaymentItemVO agreementPaymentItemVO = requestVO.getAgreementPaymentItem();
         Long attachmentId = agreement.getAttachmentId();
         if(attachmentId == null){
@@ -163,6 +220,12 @@ public class AgreementController extends BladeController {
             ContractPlanning contractPlanning = contractPlanningService.getByContractSplitId(SplitId);
             String expenditureBusinessTypeText = contractPlanning.getContractPlanningCategoryName();
             agreementBookmarkVO.setExpenditureBusinessTypeText(expenditureBusinessTypeText);
+        }
+        //获取价格形式
+        String priceForm = agreement.getPriceForm();
+        if(SplitId != null){
+            String priceFormText = sysDictDataService.getLabel(DictBizEnum.AGREEMENT_PRICE_FORM.getName(),priceForm);
+            agreementBookmarkVO.setPriceFormText(priceFormText);
         }
         //填充到书签位置
         String newfileURL= bookmarkUtils.FillBookmarkData(fileUrl,fileName,agreementBookmarkVO);
