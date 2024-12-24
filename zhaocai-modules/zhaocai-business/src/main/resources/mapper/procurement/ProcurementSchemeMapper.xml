@@ -50,6 +50,7 @@
         select tps.*
         from tb_procurement_scheme tps
         <where>
+            tps.state != 2  add
             tps.project_code = #{queryVO.projectCode,jdbcType=VARCHAR}
             <if test="queryVO.procurementSchemeCode != null and queryVO.procurementSchemeCode != ''">
                 and tps.procurement_scheme_code like concat('%',#{queryVO.procurementSchemeCode,jdbcType=VARCHAR},'%')

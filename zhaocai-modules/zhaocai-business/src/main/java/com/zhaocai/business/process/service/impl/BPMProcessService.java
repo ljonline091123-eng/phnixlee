@@ -3,7 +3,6 @@ package com.zhaocai.business.process.service.impl;
 import cn.hutool.core.util.IdUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.extra.spring.SpringUtil;
-import com.zhaocai.business.common.enums.ProcessKeyEnum;
 import com.zhaocai.business.common.enums.ProcessStateEnum;
 import com.zhaocai.business.common.enums.RejectTaskKeyEnum;
 import com.zhaocai.business.common.exception.ParamValidateException;
@@ -21,16 +20,12 @@ import com.zhaocai.common.core.utils.bean.BeanCopierUtil;
 import com.zhaocai.common.core.web.bean.ResultData;
 import com.zhaocai.common.security.utils.SecurityUtils;
 import com.zhaocai.system.api.domain.SysUser;
-import io.swagger.annotations.ApiOperation;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.ObjectUtils;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
 
 import java.math.BigDecimal;
 import java.util.*;
@@ -125,6 +120,7 @@ public class BPMProcessService implements IBPMProcessService {
             /* 最小核算项目 */
             MinProjectVO minProjectVO = minProjectService.getMinProjectByMinAccountCode(projectCode);
             if (null != minProjectVO) {
+
                 PropertyListRequestDTO.addPropertyToList(propertyList, "parentProjectCode", minProjectVO.getParentCode());
                 PropertyListRequestDTO.addPropertyToList(propertyList, "responsibilityDeptId", minProjectVO.getDutyUnit());
                 PropertyListRequestDTO.addPropertyToList(propertyList, "groupId", UserConstants.GROUP_DEPT_ID);
