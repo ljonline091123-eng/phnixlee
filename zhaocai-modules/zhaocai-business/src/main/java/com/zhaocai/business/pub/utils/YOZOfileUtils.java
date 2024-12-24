@@ -14,8 +14,15 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.text.ParseException;
 import java.text.SimpleDateFormat;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.Date;
+import java.util.Locale;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Component
 public class YOZOfileUtils {
@@ -57,6 +64,29 @@ public class YOZOfileUtils {
         }
 
     }
+
+    /**
+     * 将Date对象格式化为指定格式的字符串，然后再解析回Date对象。
+     *
+     * @param date       需要格式化的Date对象
+     * @param formatStr  目标日期格式，例如 "yyyy-MM-dd"
+     * @return           格式化后的Date对象
+     */
+    public static String formatDate(Date date, String formatStr) {
+        if (date == null || formatStr == null || formatStr.trim().isEmpty()) {
+            throw new IllegalArgumentException("日期或格式不能为空");
+        }
+
+        // 创建SimpleDateFormat对象用于格式化和解析日期
+        SimpleDateFormat sdf = new SimpleDateFormat(formatStr);
+        // 将Date对象格式化为字符串
+        String formattedDateStr = sdf.format(date);
+        // 解析字符串回Date对象
+//            return sdf.parse(formattedDateStr);
+        return formattedDateStr;
+
+    }
+
 
     /**
      * 根据提供的URL下载文件，并保存到给定的路径。

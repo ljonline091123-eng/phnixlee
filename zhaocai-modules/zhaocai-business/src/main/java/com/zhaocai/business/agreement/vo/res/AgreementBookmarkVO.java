@@ -93,12 +93,19 @@ public class AgreementBookmarkVO extends AdviceObject {
     @ApiModelProperty(value = "进场日期")
     private Date entryDate;
 
+    @ApiModelProperty(value = "进场日期")
+    private String entryDateText;
+
+
     /**
      * 完工日期
      */
     @JsonFormat(pattern = "yyyy-MM-dd", timezone = "GMT+8")
     @ApiModelProperty(value = "完工日期")
     private Date finishDate;
+
+    @ApiModelProperty(value = "完工日期")
+    private String finishDateText;
 
     /**
      * 工期
