@@ -74,7 +74,7 @@ public class YOZOfileUtils {
      */
     public static String formatDate(Date date, String formatStr) {
         if (date == null || formatStr == null || formatStr.trim().isEmpty()) {
-            throw new IllegalArgumentException("日期或格式不能为空");
+            throw new IllegalArgumentException("进场日期或者完工日期不能为空");
         }
 
         // 创建SimpleDateFormat对象用于格式化和解析日期
