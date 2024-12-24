@@ -1402,6 +1402,7 @@ export default {
       this.bcTemplateQuery.switchTemplateType = "1";
       const res = await getSwitchPageList(this.bcTemplateQuery);
       this.generalTemplateList = res.data.rows;
+      this.bcTemplateList = res.data.rows;  //分页时更新bcTemplateList
       this.bcTemplateVisableLoading = false;
     },
     async getReusableTemplateList() {
@@ -1411,6 +1412,7 @@ export default {
       this.bcTemplateQuery.switchTemplateType = "2";
       const res = await getSwitchPageList(this.bcTemplateQuery);
       this.reusableTemplateList = res.data.rows;
+      this.bcTemplateList = res.data.rows; //分页时，更新bcTemplateList
       this.bcTemplateVisableLoading = false;
     },
     /* 评分模板标签页 通用 */
@@ -1830,13 +1832,17 @@ export default {
 
     /* 点击确定选择模板数据 2 招标文件模板 ，1 合同模板 */
     async confirmBcTemplate() {
+      console.log("选择模板的确认按钮-》》》》");
+      
       /* this.templateId是模板列表弹窗单选的双向绑定，意思就是模板文件id */
       const templateId = this.templateId;
+      console.log("this.templateId模板文件id->",templateId);
       if (!templateId) {
         this.$message.error("请先选择一个模板");
         return;
       }
       try {
+        console.log("this.bcTemplateList->",this.bcTemplateList);
         const {templateName, fileUrl, fileName} = this.bcTemplateList.find(
           (item) => item.id === templateId
         )
@@ -1953,7 +1959,7 @@ export default {
     selectBcTemplate(row) {
       this.templateId = row.templateId;
       this.attachmentId = row.attachmentId;
-      console.log(row, "rrr");
+      console.log(row, "选中的模板rrr");
     },
     onTemplateSelect(row) {
       this.selectedTemplateId = row.id;
