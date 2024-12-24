@@ -434,7 +434,7 @@ public class VendorChangeServiceImpl extends ServiceImpl<VendorChangeMapper,Vend
 
             VendorStateVO vendorState = BeanCopierUtil.copyBean(vendorChange,VendorStateVO.class);
             /* 递归拼接部门名称 */
-            vendorState.setFirstCooperationCompanyName(remoteSystemService.getDeptNameLoop(vendor.getFirstCooperationCompanyCode(),vendorState.getFirstCooperationCompanyName(), SecurityConstants.INNER));
+            vendorState.setFirstCooperationCompanyName(remoteSystemService.getDeptNameLoop(vendor.getFirstCooperationCompanyCode(),"null", SecurityConstants.INNER));
 
             VendorBlackRequestVO vendorBlack = this.getBlackDetail(vendorChange);
             if(vendorVO != null && StringUtil.isNotEmpty(vendorVO.getAccountBranch())){

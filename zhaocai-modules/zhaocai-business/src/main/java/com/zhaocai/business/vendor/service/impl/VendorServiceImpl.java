@@ -698,8 +698,8 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
 
             VendorStateVO vendorState = BeanCopierUtil.copyBean(vendor,VendorStateVO.class);
             /* 递归拼接部门名称 */
-            vendorState.setFirstCooperationCompanyName(remoteSystemService.getDeptNameLoop(vendor.getFirstCooperationCompanyCode(),vendorState.getFirstCooperationCompanyName(),SecurityConstants.INNER));
-
+            //vendorState.setFirstCooperationCompanyName(remoteSystemService.getDeptNameLoop(vendor.getFirstCooperationCompanyCode(),vendorState.getFirstCooperationCompanyName(),SecurityConstants.INNER));
+            vendorState.setFirstCooperationCompanyName(remoteSystemService.getDeptNameLoop(vendor.getFirstCooperationCompanyCode(),"null",SecurityConstants.INNER));
             // 查询最新变更id
             Long changeId = vendorChangeService.getLastChangeId(id);
             if(null != changeId){

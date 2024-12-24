@@ -308,8 +308,9 @@ public class SysDeptController extends BaseController
      */
     @InnerAuth
     @GetMapping("/getDeptNameLoop")
-    public String getDeptNameLoop(@RequestParam String thridDeptId,@RequestParam String deptName) {
-        SysDept sysDept = deptService.getByThridDeptId(thridDeptId);
+    public String getDeptNameLoop(@RequestParam Object thridDeptId,@RequestParam String deptName) {
+        String s =thridDeptId + "";
+        SysDept sysDept = deptService.getByThridDeptId(s);
         if (sysDept == null || (deptName!=null&&deptName.length()>900) ) {
             /* 找不到 或者死循环了 就直接返回 */
             return deptName;
@@ -324,10 +325,10 @@ public class SysDeptController extends BaseController
                     return deptName;
                 }
                 /* 拼接返回 */
-                return sysDept.getDeptName() + (deptName==null ? "" : " / " + deptName);
+                return sysDept.getDeptName() + (StringUtils.isEmpty(deptName)||  "null".equals(deptName)? "" : " / " + deptName);
             }else{
                 /* 递归拼接 */
-                return getDeptNameLoop(sysDept.getThridParentId(),sysDept.getDeptName() + (deptName==null ? "" : " / " + deptName));
+                return getDeptNameLoop(sysDept.getThridParentId(),sysDept.getDeptName() + (StringUtils.isEmpty(deptName)||  "null".equals(deptName)? "" : " / " + deptName));
             }
         }
     }
