@@ -144,6 +144,12 @@ public class AgreementController extends BladeController {
             String priceFormText = sysDictDataService.getLabel(DictBizEnum.AGREEMENT_PRICE_FORM.getName(),priceForm);
             agreementBookmarkVO.setPriceFormText(priceFormText);
         }
+        //进场日期和出场日期格式转换
+        Date entryDate = agreementBookmarkVO.getEntryDate();
+        Date finishDate = agreementBookmarkVO.getFinishDate();
+//        String entryDateStr = yozOfileUtils.formatDate(entryDate, "yyyy-MM-dd");
+        agreementBookmarkVO.setEntryDateText(yozOfileUtils.formatDate(entryDate, "yyyy-MM-dd"));
+        agreementBookmarkVO.setFinishDateText(yozOfileUtils.formatDate(finishDate, "yyyy-MM-dd"));
 
         String newfileURL= bookmarkUtils.FillBookmarkData(fileUrl,fileName,agreementBookmarkVO);
         System.out.println("newfileURL:"+ newfileURL);

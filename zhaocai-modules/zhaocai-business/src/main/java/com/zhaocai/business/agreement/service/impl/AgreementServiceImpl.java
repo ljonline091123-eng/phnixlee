@@ -1453,7 +1453,7 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
         }
 
         // 接入联想文档
-        agreementFileZService.setAgreementLabel(agreement, requestVO.getAgreementMaterialsLists(), requestVO.getTemplateEditFlag());
+//        agreementFileZService.setAgreementLabel(agreement, requestVO.getAgreementMaterialsLists(), requestVO.getTemplateEditFlag());
 
         AgreementSaveVO saveVO = new AgreementSaveVO();
         saveVO.setId(agreement.getId());
