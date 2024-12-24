@@ -40,7 +40,6 @@
           <el-button
             type="primary"
             size="mini"
-            v-if="isShowApprovalDetails"
             @click="handelCalibrationApproval"
             >审批详情</el-button
           >
@@ -282,6 +281,23 @@
 
             <el-row class="custom-row">
               <el-col :span="8" class="custom-col">
+                <el-form-item label="评分模板" class="custom-form-item">
+                  <a
+                    class="link-type"
+                    @click="
+                      handleCheck(
+                        procurementSchemeBidding.evaluationTemplate.templateId
+                      )
+                    "
+                  >
+                    {{
+                      procurementSchemeBidding.evaluationTemplate &&
+                      procurementSchemeBidding.evaluationTemplate.templateName
+                    }}
+                  </a>
+                </el-form-item>
+              </el-col>
+              <el-col :span="8" class="custom-col">
                 <el-form-item
                   label="招标文件"
                   label-width="140px"
@@ -296,23 +312,6 @@
                     {{
                       procurementSchemeBidding.biddingTemplate &&
                       procurementSchemeBidding.biddingTemplate.templateName
-                    }}
-                  </a>
-                </el-form-item>
-              </el-col>
-              <el-col :span="8" class="custom-col">
-                <el-form-item label="评分模板" class="custom-form-item">
-                  <a
-                    class="link-type"
-                    @click="
-                      handleCheck(
-                        procurementSchemeBidding.evaluationTemplate.templateId
-                      )
-                    "
-                  >
-                    {{
-                      procurementSchemeBidding.evaluationTemplate &&
-                      procurementSchemeBidding.evaluationTemplate.templateName
                     }}
                   </a>
                 </el-form-item>
@@ -378,12 +377,14 @@
           />
           <el-table-column
             label="拆分合约规划名称"
+            v-if="isAll"
             width="200"
             prop="splitContractName"
             show-overflow-tooltip
           />
           <el-table-column
             label="拟签约合同拆包范围"
+            v-if="isAll"
             width="200"
             prop="contractScope"
             show-overflow-tooltip
@@ -740,7 +741,7 @@ import {
   getPermissionButton,
   postAuditProcess,
   getLoadTaskDef,
-  getProcessLogList,
+  getProcessLogList, getOrgByUserId,
 } from "@/api/procurement/manage";
 import { getRating } from "@/api/template/rating";
 import FileModule from "@/components/FileModule/index.vue";
@@ -765,6 +766,7 @@ export default {
       contractSplitIdList: [],
       skeletonLoading: true,
       param: "",
+      isAll:false,
       activeTabs: "base",
       contractPlanList: [],
       inventoryVisible: false,
@@ -887,6 +889,7 @@ export default {
       try {
         const res = await getListMaterials(formData);
         this.inventoryList = res.data;
+        this.isAll = this.inventoryList.every(item => item.splitContractName && item.splitContractName!="null" && item.contractScope && item.contractScope!="null")
         console.log(res, "清单");
       } catch (err) {
         console.log(err);
@@ -1088,28 +1091,40 @@ export default {
       try {
         this.calibrateVisible = true;
         this.calibrateLoading = true;
-        const params = {
+        let params = {
           businessId: this.purchaserId,
           processId: this.exampleId,
         };
+        let res = null;
         if (this.purchaserId && this.exampleId) {
-          const res = await getLoadTaskDef(params);
-          this.processInformationList = res.data;
-          function getActive(nodes) {
-            let allFalse = true;
-            for (let i = 0; i < nodes.length; i++) {
-              if (!nodes[i].completed) {
-                if (i === 0) {
-                  return 0;
-                } else {
-                  return i;
-                }
+          res = await getLoadTaskDef(params);
+        }else{
+          /* 未提交时查看流程执行流程，根据登录人id 获取流程分组 */
+          res = await getOrgByUserId(this.$store.state.user.id);
+          params = {
+            processKey: "jiantou-zhaocai:"+res.data+":ZHAOCAI_PROCUREMENT_SCHEME",
+            businessId: 8888888888,
+          };
+          res = await getLoadTaskDef(params);
+        }
+        this.processInformationList = res.data;
+        function getActive(nodes) {
+          let allFalse = true;
+          for (let i = 0; i < nodes.length; i++) {
+            if (!nodes[i].completed) {
+              if (i === 0) {
+                return 0;
+              } else {
+                return i;
               }
-              allFalse = false;
             }
-            return nodes.length;
+            allFalse = false;
           }
-          this.calibrateActive = getActive(this.processInformationList);
+          return nodes.length;
+        }
+        this.calibrateActive = getActive(this.processInformationList);
+
+        if (this.purchaserId && this.exampleId) {
           const response = await getProcessLogList(params);
           this.approveArr = response.data;
         }

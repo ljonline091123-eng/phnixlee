@@ -139,6 +139,7 @@
       title="合同模板"
       :visible.sync="fileTemplateVisible"
       width="70%"
+      class="view-dialog"
       @closed="handleClose"
     >
       <el-radio-group
@@ -215,6 +216,7 @@
                 :accept="'.doc,.docx'"
                 :on-remove="fileRemove"
                 ref="upload"
+                :before-upload="handleBeforeUpload"  
               >
               </el-upload>
             </el-form-item>
@@ -326,7 +328,7 @@
           v-if="attachmentId"
           :src= this.editFileUrl
           width="100%"
-          height="700px"
+          height="500px"
           frameborder="0"
         ></iframe>
       </div>
@@ -512,8 +514,26 @@ export default {
   methods: {
     showSecretTips() {
       showSecretRelatedTips(()=>{
+        // 清除现有文件列表
+        this.$refs['upload'].clearFiles();  // 使用 clearFiles 方法清除文件列表
         this.$refs['upload'].$refs['upload-inner'].handleClick()
       })
+    },
+    /* 在模板文件上传前处理逻辑 */
+    handleBeforeUpload(file) {
+      //限制上传的文件名长度
+      const fileName = file.name;
+        if (fileName.length > 80) {
+            this.$message.error('文件名不能超过80个字符');
+            return false; // 阻止上传
+      }
+      //限制上传文件类型
+      const allowedTypes = ['application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+      if (!allowedTypes.includes(file.type)) {
+        this.$message.error('不支持上传该格式的文件,请上传Word文件');
+        return false;
+      }
+      return true;  // 返回 true 表示允许继续上传
     },
     /** 查询采购计划列表 */
     async getFileTemplate() {
@@ -819,6 +839,12 @@ export default {
     line-height: 0;
   }
 }
+//弹窗样式
+.custom-dialog {
+  height: 90vh; /* 设置为视口高度的 90% */
+  display: flex;
+  flex-direction: column;
+}
 .view-box {
   padding: 0 20px;
   .page-title {
@@ -858,5 +884,9 @@ export default {
 }
 .stamp-table .el-form-item {
   margin-bottom: 0;
+}
+//弹窗大小
+::v-deep  .view-dialog .el-dialog .el-dialog__body {
+max-height: 80vh !important;
 }
 </style>

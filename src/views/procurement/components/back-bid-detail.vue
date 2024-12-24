@@ -78,12 +78,14 @@
         align="left"
       ></el-table-column>
       <el-table-column
+        v-if="isAll"
         prop="splitContractName"
         label="拆分合约规划名称"
         width="130"
         align="center"
       ></el-table-column>
       <el-table-column
+        v-if="isAll"
         prop="contractScope"
         label="拟签约合同拆包范围"
         width="150"
@@ -294,6 +296,7 @@ export default {
     return {
       backBidLoading: false,
       backBidList: [],
+      isAll:false,
       vendorInfo: {},
       // templateDialogVisible:false
       invoice_type: [
@@ -361,6 +364,9 @@ export default {
         const res = await getBidInfo(this.id);
         const { data } = res;
         this.assignRowIds(data.materialsList);
+        // splitContractName，contractScope
+       
+       
         this.backBidList = data.materialsList.map((materialList) => {
           return {
             ...materialList,
@@ -379,6 +385,8 @@ export default {
             }),
           };
         });
+        console.log(JSON.stringify(this.backBidList))
+          this.isAll = this.backBidList[0].compVOList.every(item => item.splitContractName && item.splitContractName!="null" && item.contractScope && item.contractScope!="null")
         this.vendorInfo = {
           vnedorName: data.vendorName,
           notTaxPricePattern: data.notTaxPricePattern,

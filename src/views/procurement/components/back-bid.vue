@@ -667,6 +667,7 @@ export default {
     /** 查看供应商详情 */
     async getVendorDetail(id) {
       this.vendorDetailVisiable = true;
+      debugger
       const res = await getVendorDetail(id);
       console.log(res.data, "供应商详情");
       const { certificationList } = res.data;

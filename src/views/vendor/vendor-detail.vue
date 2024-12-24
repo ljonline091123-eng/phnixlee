@@ -1,6 +1,6 @@
 <template>
   <div class="app-container">
-    <BackButton path="/vendor/vendor-base" title="供应商信息详情">
+    <BackButton :path="path" title="供应商信息详情">
       <div v-if="activeName === 'base' || activeName === 'aptitude'">
         <el-button
           type="primary"
@@ -197,11 +197,13 @@
           <el-divider />
           <el-form label-width="150px" label-suffix=":">
             <el-row>
-              <el-col :span="8"
+              <el-col :span="24"
                 ><el-form-item label="首次注册合作单位">{{
                   vendorState.firstCooperationCompanyName
                 }}</el-form-item></el-col
               >
+            </el-row>
+            <el-row>
               <el-col :span="8"
                 ><el-form-item label="当前类型">{{
                   vendorState.vendorClassText
@@ -749,10 +751,11 @@
       center
       :append-to-body="false"
       destroy-on-close
+      width="1200px"
     >
       <!-- 直接用iframe嵌套pdf预览模式 "#toolbar=0"是为了隐藏pdf的按钮  -->
       <div class="dialogtext">
-        <iframe width="800"  height="1200"   :src="this.iframeUrls + '#toolbar=0'" />
+        <iframe width="100%"  :style="{ minHeight: '700px' }" :src="this.iframeUrls + '#toolbar=0'" />
       </div>
     </el-dialog>
 
@@ -770,10 +773,10 @@ import {
 import { Base64 } from "js-base64";
 import BackButton from "@/components/BackButton/index.vue";
 import {
-  getPermissionButton,getPermissionButtonVendor,
-  postAuditProcess,postAuditProcessVendor,
-  getLoadTaskDef,getLoadTaskDefVendor,
-  getProcessLogList,
+  getPermissionButton, getPermissionButtonVendor,
+  postAuditProcess, postAuditProcessVendor,
+  getLoadTaskDef, getLoadTaskDefVendor,
+  getProcessLogList, getOrgByUserId,
 } from "@/api/procurement/manage";
 import ApprovalForm from "@/components/Approval/approvalForm.vue";
 import ApprovalDetailsDialog from "@/components/Approval/approvalDetailsDialog.vue";
@@ -790,6 +793,8 @@ export default {
       vendorState: {},
       mainContact: {},
       vendorBlack: "",
+      vendorClass:'',
+      path:'/vendor/vendor-base',
       //资质材料
       businessLicense: {}, //营业执照
       integrity: {}, //诚信合规材料
@@ -842,8 +847,16 @@ export default {
   },
   created() {
     const param = JSON.parse(Base64.decode(this.$route.params.params));
-    console.log("param613" + param);
-    this.param = param;
+    console.log("param613" + JSON.stringify(param));
+    // 没有param.id是招采跳转否则待办跳转
+    if(param?.id){
+        this.param = param.id;
+        this.vendorClass=param.vendorClass
+        this.path=this.path+'?vendorClass='+this.vendorClass
+    }else{
+        this.param = param;
+    }
+   
     this.getVendorDetail();
   //  this.listBankAccountContactFn();
   },
@@ -1144,7 +1157,7 @@ export default {
       try {
         this.calibrateVisible = true;
         this.calibrateLoading = true;
-        const params = {
+        let params = {
           businessId: this.purchaserId,
           processId: this.exampleId,
         };
@@ -1152,8 +1165,34 @@ export default {
           businessId: "",
           processId: this.exampleId,
         };
+        let res = null;
         if (this.purchaserId && this.exampleId) {
-          const res = await getLoadTaskDefVendor(params);
+          res = await getLoadTaskDefVendor(params);
+        }else{
+          /* 未提交时查看流程执行流程，根据首次合作单位 获取流程分组 */
+          res = await getOrgByUserId(this.vendor.firstCooperationCompanyCode);
+          //修改
+          if (this.vendor.processType == 2) {
+            this.processKey = "jiantou-zhaocai:"+res.data+":ZHAOCAI_VENDOR_UPDATEINFO";
+          } else if (this.vendor.processType == 1) {
+            //注册
+            this.processKey = "jiantou-zhaocai:"+res.data+":ZHAOCAI_VENDOR_REGISTER";
+          } else if (this.vendor.processType == 3) {
+            //黑名单
+            this.processKey = "jiantou-zhaocai:"+res.data+":ZHAOCAI_VENDOR_MOVE_INOROUT_BLACK";
+          } else if (this.vendor.processType == 4) {
+            //修改等级
+            this.processKey = "jiantou-zhaocai:"+res.data+":ZHAOCAI_VENDOR_UPDATE_LEVEL";
+          }else{
+            //注册
+            this.processKey = "jiantou-zhaocai:"+res.data+":ZHAOCAI_VENDOR_REGISTER";
+          }
+          params = {
+            processKey: this.processKey,
+            businessId: 8888888888,
+          };
+          res = await getLoadTaskDef(params);
+        }
           this.processInformationList = res.data;
           function getActive(nodes) {
             let allFalse = true;
@@ -1170,6 +1209,8 @@ export default {
             return nodes.length;
           }
           this.calibrateActive = getActive(this.processInformationList);
+
+        if (this.purchaserId && this.exampleId) {
           const response = await getProcessLogList(getProcessLogListParams);
           this.approveArr = response.data;
         }
@@ -1181,7 +1222,7 @@ export default {
         if ([1, 2, 3, 4].includes(this.vendor.processType)) {
             function updateNodeLoadName(nodes) {
               for (let i = 0; i < nodes.length; i++) {
-                if (nodes[i].nodeName === '发起人') {
+                if (nodes[i].nodeName === '发起人' ) {
                   for (let j = 0; j < nodes[i].userList.length; j++) {
                     /* 修改发起人名称为 供应商公司名称 */
                     nodes[i].userList[j].userName = this.vendor.enterpriseName;
@@ -1193,6 +1234,7 @@ export default {
             /* 横轴流程顺序上面数据 数据修改 */
             updateNodeLoadName.call(this, this.processInformationList);
 
+
             /* 发起人名称为 供应商公司名称 方法 */
             function updateListNodeName(nodes) {
               for (let i = 0; i < nodes.length; i++) {
@@ -1201,7 +1243,11 @@ export default {
                   nodes[i].preHandlerName = this.vendor.enterpriseName;
                   nodes[i].handlerName = this.vendor.enterpriseName;
                   nodes[i].operateRemark = this.vendor.enterpriseName + ' 提交了流程.';
-                  break;
+                  //break;
+                }else if(nodes[i].taskName === '撤销' && nodes[i].handlerName === '招采'){
+                  nodes[i].preHandlerName = this.vendor.enterpriseName;
+                  nodes[i].handlerName = this.vendor.enterpriseName;
+                  nodes[i].operateRemark = this.vendor.enterpriseName + ' 撤销了流程.';
                 }
               }
             }

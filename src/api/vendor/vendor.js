@@ -11,6 +11,7 @@ export const getVendorList = (params) => {
 
 // 获取供应商详情
 export const getVendorDetail = (id) => {
+  debugger;
   return request({
     url: '/business/vendor/management/vendorDetail',
     method: 'get',

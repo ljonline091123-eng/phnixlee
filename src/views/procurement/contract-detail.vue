@@ -95,7 +95,7 @@
               :key="index"
               class="custom-row"
             >
-<!--              工程范围及工作内容特殊处理-->
+            <!--  工程范围及工作内容特殊处理-->
               <el-col v-for="item in row" :key="item.id" :span="item.prop==='scopeOfWork'?24:8">
                 <el-form-item
                   :label="item.label"
@@ -1156,7 +1156,7 @@ import {
   getPermissionButton,
   postAuditProcess,
   getLoadTaskDef,
-  getProcessLogList,
+  getProcessLogList, getOrgByUserId,
 } from "@/api/procurement/manage";
 import { getViewAttachmentURLByID } from "@/api/template/file";
 export default {
@@ -1172,6 +1172,7 @@ export default {
   data() {
     return {
       viewFileUrl:"", //预览合同附件的url
+      partyAName:"", //获取甲方名称，设置水印
       activeName: "first",
       offerService,
       isSave: false,
@@ -3347,7 +3348,7 @@ export default {
     this.param = param;
     this.getContractDetail();
     this.intervalId = setInterval(this.loadAgreementAttachmentId, 3000);
-    
+
   },
 
   methods: {
@@ -3378,6 +3379,8 @@ export default {
           this.partyADeptId = res.data.agreement.partyADeptId;
           this.partyBName = res.data.agreement.partyBName;
           this.fullLoading = false;
+          this.partyAName = res.data.agreement.partyAName; //获取甲方名称，即水印内容
+          console.log("获取详情时的partyAName",this.partyAName);
           (this.agreementDailyWageList =
             res.data?.agreementDailyWageList || []),
             (this.agreementMachineShifts =
@@ -3407,9 +3410,12 @@ export default {
         //预览合同附件
         if (this.attachmentId) {
           console.log('Attachment ID:', this.attachmentId);
+          //水印内容
+          console.log('获取预览合同附件URL时获取的partyAName-》',this.partyAName)
           //获取文档中台的文档编辑URL
           try {
-            const res = await getAgreementViewURL({ attachmentId: this.attachmentId ,agreementId: this.param.id});
+            const res = await getAgreementViewURL({ attachmentId: this.attachmentId ,agreementId: this.param.id ,waterMarkContent: this.partyAName});
+            
             this.viewFileUrl = res.data;
             console.log("viewFileUrl:",this.viewFileUrl);
           } catch (err) {
@@ -3471,12 +3477,22 @@ export default {
       try {
         this.calibrateVisible = true;
         this.calibrateLoading = true;
-        const params = {
+        let params = {
           businessId: this.purchaserId,
           processId: this.exampleId,
         };
+        let res = null;
         if (this.purchaserId && this.exampleId) {
-          const res = await getLoadTaskDef(params);
+          res = await getLoadTaskDef(params);
+        }else{
+          /* 未提交时查看流程执行流程，根据登录人id 获取流程分组 */
+          res = await getOrgByUserId(this.$store.state.user.id);
+          params = {
+            processKey: "jiantou-zhaocai:"+res.data+":ZHAOCAI_AGREEMENT_SIGN",
+            businessId: 8888888888,
+          };
+          res = await getLoadTaskDef(params);
+        }
           this.processInformationList = res.data;
           function getActive(nodes) {
             let allFalse = true;
@@ -3493,6 +3509,8 @@ export default {
             return nodes.length;
           }
           this.calibrateActive = getActive(this.processInformationList);
+
+        if (this.purchaserId && this.exampleId) {
           const response = await getProcessLogList(params);
           this.approveArr = response.data;
         }

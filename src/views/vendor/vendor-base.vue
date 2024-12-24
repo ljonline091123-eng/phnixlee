@@ -77,7 +77,7 @@
           show-overflow-tooltip
         >
           <template slot-scope="{ row }">
-            <a class="link-type" @click="goDetail(row.id)">
+            <a class="link-type" @click="goDetail(row.id,queryParams.vendorClass)">
               {{ row.enterpriseName }}
             </a>
           </template>
@@ -354,6 +354,9 @@ export default {
     };
   },
   created() {
+    if(this.$route.query?.vendorClass){
+      this.queryParams.vendorClass=this.$route.query?.vendorClass || ""
+    }
     this.getVendorList();
   },
   methods: {
@@ -379,8 +382,8 @@ export default {
       this.getVendorList();
     },
     /** 跳转方案详情 */
-    goDetail(id) {
-      let param = Base64.encode(JSON.stringify(id));
+    goDetail(id,vendorClass) {
+      let param = Base64.encode(JSON.stringify({id,vendorClass}));
       param = encodeURIComponent(param); //避免base64编码中出现"/"时路由404
       this.$router.push(`/vendor/vendor-detail/${param}`);
     },

@@ -1508,6 +1508,7 @@ export default {
     project: {
       handler(newVal, oldVal) {
         if (oldVal === undefined || newVal.id !== oldVal.id) {
+          console.log("进入到合同签订列表的project的方法里面-》》》》》》》》》》》》")
           this.queryParams.projectCode = newVal.code;
           this.queryParams_procurement.projectCode = newVal.code;
           this.queryParams_procurementYl.belongAccountingItemCode = newVal.code;
