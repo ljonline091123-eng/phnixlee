@@ -1417,6 +1417,14 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
         agreement.setPartyAContactName(sysUser.getNickName());
         agreement.setPartyAContactPhone(sysUser.getPhonenumber());
 
+        //复制合同地attachmentId附件到-》合同的labelAttachmentID附件和WatermarkAttachmentId；
+        Attachment attachment = attachmentService.getById(agreement.getAttachmentId());
+        AttachmentRequestVO attachmentRequestVO = new AttachmentRequestVO(attachment.getFileName(),attachment.getFileUrl());
+        Long labelAttachmentId = attachmentService.addAttachment(attachmentRequestVO,AttachmentTypeEnum.AGREEMENT_ORIGINAL,agreement.getId());
+        Long WatermarkAttachmentId = attachmentService.addAttachment(attachmentRequestVO,AttachmentTypeEnum.AGREEMENT_ORIGINAL,agreement.getId());
+        agreement.setWatermarkAttachmentId(WatermarkAttachmentId);
+        agreement.setLabelAttachmentId(labelAttachmentId);
+
         super.save(agreement);
 
         // 合同款项信息
@@ -1464,11 +1472,7 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
         // 接入联想文档
 //        agreementFileZService.setAgreementLabel(agreement, requestVO.getAgreementMaterialsLists(), requestVO.getTemplateEditFlag());
 
-        //复制合同地attachmentId附件到-》合同的labelAttachmentID附件
-        Attachment attachment = attachmentService.getById(agreement.getAttachmentId());
-        AttachmentRequestVO attachmentRequestVO = new AttachmentRequestVO(attachment.getFileName(),attachment.getFileUrl());
-        Long labelAttachmentId = attachmentService.addAttachment(attachmentRequestVO,AttachmentTypeEnum.AGREEMENT_ORIGINAL,agreement.getId());
-        agreement.setLabelAttachmentId(labelAttachmentId);
+
 
         AgreementSaveVO saveVO = new AgreementSaveVO();
         saveVO.setId(agreement.getId());
