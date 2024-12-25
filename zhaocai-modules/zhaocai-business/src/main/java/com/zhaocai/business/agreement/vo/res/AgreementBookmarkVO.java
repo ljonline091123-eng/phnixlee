@@ -1,5 +1,6 @@
 package com.zhaocai.business.agreement.vo.res;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import com.zhaocai.business.common.annotations.DictCache;
 import com.zhaocai.business.common.annotations.MoneyFormat;
 import com.zhaocai.business.common.base.AdviceObject;
@@ -9,6 +10,8 @@ import lombok.Builder;
 import lombok.Data;
 
 import java.math.BigDecimal;
+import java.util.Date;
+
 @Data
 public class AgreementBookmarkVO extends AdviceObject {
     @ApiModelProperty(value = "合同名称")
@@ -82,6 +85,46 @@ public class AgreementBookmarkVO extends AdviceObject {
     @DictCache(dictBizEnum = DictBizEnum.AGREEMENT_RENTAL_METHOD,filedName = "rentalMethod")
     @ApiModelProperty(value = "计租方式")
     private String rentalMethodText;
+
+    /**
+     * 进场日期
+     */
+    @JsonFormat(pattern = "yyyy-MM-dd", timezone = "GMT+8")
+    @ApiModelProperty(value = "进场日期")
+    private Date entryDate;
+
+    @ApiModelProperty(value = "进场日期")
+    private String entryDateText;
+
+
+    /**
+     * 完工日期
+     */
+    @JsonFormat(pattern = "yyyy-MM-dd", timezone = "GMT+8")
+    @ApiModelProperty(value = "完工日期")
+    private Date finishDate;
+
+    @ApiModelProperty(value = "完工日期")
+    private String finishDateText;
+
+    /**
+     * 工期
+     */
+    @ApiModelProperty(value = "工期")
+    private String duration;
+
+    /**
+     * 价格形式
+     */
+    @ApiModelProperty(value = "价格形式")
+    private String priceForm;
+
+    @ApiModelProperty(value = "价格形式")
+    private String priceFormText;
+
+    @ApiModelProperty(value = "工程范围及工作内容")
+    private String scopeOfWork;
+
 
 
     //合同款项信息
