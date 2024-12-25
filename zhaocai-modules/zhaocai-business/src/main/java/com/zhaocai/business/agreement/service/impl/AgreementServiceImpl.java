@@ -88,6 +88,7 @@ import com.zhaocai.system.api.domain.SysUser;
 import com.zhaocai.system.api.system.RemoteSystemService;
 import lombok.val;
 import net.qiyuesuo.v3sdk.model.contract.response.ContractSignurlV3Response;
+import org.checkerframework.checker.units.qual.A;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
@@ -723,12 +724,16 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
         String message = "获取成功";
         if (NumberUtil.isNotNullAndZero(agreement.getWatermarkAttachmentId())) {
             attachmentId = agreement.getWatermarkAttachmentId();
-        }else if (NumberUtil.isNotNullAndZero(agreement.getLabelAttachmentId())) {
+        }
+        else if (NumberUtil.isNotNullAndZero(agreement.getLabelAttachmentId())) {
             attachmentId = agreement.getLabelAttachmentId();
-        } else {
+        }
+        else if (NumberUtil.isNotNullAndZero(agreement.getAttachmentId())) {
+            attachmentId = agreement.getAttachmentId();
+        }
+        else {
             message = "合同附件正在生成中，请稍后再查看";
         }
-
         return new AgreementFileVO(attachmentId,message);
     }
 
@@ -838,7 +843,11 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
             throw new BusinessException("该状态下的合同不允许修改");
         }
 
-        if (NumberUtil.isNullOrZero(agreement.getLabelAttachmentId())) {
+//        if (NumberUtil.isNullOrZero(agreement.getLabelAttachmentId())) {
+//            throw new BusinessException("合同附件正在生成中，请稍后重试");
+//        }
+        //改为使用attachmentId
+        if (NumberUtil.isNullOrZero(agreement.getAttachmentId())) {
             throw new BusinessException("合同附件正在生成中，请稍后重试");
         }
 
@@ -1454,6 +1463,12 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
 
         // 接入联想文档
 //        agreementFileZService.setAgreementLabel(agreement, requestVO.getAgreementMaterialsLists(), requestVO.getTemplateEditFlag());
+
+        //复制合同地attachmentId附件到-》合同的labelAttachmentID附件
+        Attachment attachment = attachmentService.getById(agreement.getAttachmentId());
+        AttachmentRequestVO attachmentRequestVO = new AttachmentRequestVO(attachment.getFileName(),attachment.getFileUrl());
+        Long labelAttachmentId = attachmentService.addAttachment(attachmentRequestVO,AttachmentTypeEnum.AGREEMENT_ORIGINAL,agreement.getId());
+        agreement.setLabelAttachmentId(labelAttachmentId);
 
         AgreementSaveVO saveVO = new AgreementSaveVO();
         saveVO.setId(agreement.getId());
