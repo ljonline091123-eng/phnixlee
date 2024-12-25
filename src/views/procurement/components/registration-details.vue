@@ -6,6 +6,11 @@
           <span style="margin-left: 16px;color: #ff0000;font-size: 13px;" v-if="(noticeDetail.tenderNotice && noticeDetail.tenderNotice.noticeStatus === 12)">{{timeDifferenceElement}}</span>
         </template>
         <div class="page-title-right">
+          <el-tooltip
+            effect="dark"
+            content="登录人是采购人并且招标环节为报名情况"
+            placement="top"
+          >
           <el-button
             type="primary"
             size="small"
@@ -17,6 +22,7 @@
             @click="next"
           >进入下一环节</el-button
           >
+          </el-tooltip>
         </div>
       </PageTitle>
       <el-table
@@ -28,7 +34,7 @@
       >
         <!-- <el-table-column
           type="selection"
-          width="55" 
+          width="55"
           :selectable="disabledHandle"
         /> -->
         <el-table-column label="序号" type="index" width="50" align="center" />
