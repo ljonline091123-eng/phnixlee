@@ -207,8 +207,8 @@ export default {
       const end = new Date(value[1]);
       const timeDifference = end - start;
       const daysBetween = Math.floor(timeDifference / (1000 * 60 * 60 * 24));
-      if (daysBetween < 3) {
-        callback(new Error("公示日期最少3天"));
+      if (daysBetween+1 < 3) {
+        callback(new Error("公示期不得少于三天"));
       } else {
         callback(); // 继续执行或表示成功
       }

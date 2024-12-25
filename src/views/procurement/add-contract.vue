@@ -1304,6 +1304,7 @@
              <el-input
                v-model="bcTemplateQuery.templateName"
                placeholder="请输入模板名称"
+               @change="handleQuery"
              />
            </el-form-item>
            <el-form-item
@@ -1315,6 +1316,7 @@
                style="width: 100%"
                v-model="bcTemplateQuery.contractType"
                placeholder="请选择"
+               @change="handleQuery"
              >
                <el-option
                  v-for="dict in contractTypeList"
@@ -1394,6 +1396,7 @@
              <el-input
                v-model="bcTemplateQuery.templateName"
                placeholder="请输入模板名称"
+               @change="handleQueryReusable"
              />
            </el-form-item>
            <el-form-item
@@ -1405,6 +1408,7 @@
                style="width: 100%"
                v-model="bcTemplateQuery.contractType"
                placeholder="请选择"
+               @change="handleQueryReusable"
              >
                <el-option
                  v-for="dict in contractTypeList"
@@ -1782,11 +1786,11 @@ export default {
     },
       /** 搜索按钮操作 */
     handleQuery() {
-      this.bcTemplateQuery.pageNum = 1;
+      this.bcTemplateQuery.pageNumber = 1;
       this.getGeneralTemplateList();
     },
     handleQueryReusable() {
-      this.bcTemplateQuery.pageNum = 1;
+      this.bcTemplateQuery.pageNumber = 1;
       this.getReusableTemplateList();
     },
     getContractTypeList() {
@@ -1812,11 +1816,11 @@ export default {
       }
     },
     searchGeneralTemplates() {
-      this.templateQuery.pageNum = 1;
+      this.templateQuery.pageNumber = 1;
       this.getGeneralScoreTemplateList();
     },
     searchReusableTemplates() {
-      this.templateQuery.pageNum = 1;
+      this.templateQuery.pageNumber = 1;
       this.getReusableScoreTemplateList();
     },
     async getGeneralScoreTemplateList() {
