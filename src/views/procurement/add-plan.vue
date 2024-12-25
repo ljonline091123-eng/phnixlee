@@ -1,4 +1,4 @@
-<template>
+<template :key="$route.fullPath">
   <div class="app-container">
     <BackButton path="/procurement/plan" :title="currentContract.type === 'update'? '修改采购计划' : '新增采购计划'">
       <div>
@@ -519,7 +519,6 @@ export default {
     VirtualScroll
   },
   created() {
-    this.getInitialData();
     console.log('param--param--param!------------------');
     this.mathjs = create(all);
     this.mathjs.config({
