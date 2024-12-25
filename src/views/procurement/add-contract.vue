@@ -2006,11 +2006,38 @@ export default {
         formData.agreement.marketMaterialContractId=this.firstForm.agreement.marketMaterialContractId
         let params = JSON.parse(JSON.stringify(formData));
         console.log("提交数据===>", params);
+        // saveAgreement(params)
+        //   .then((res) => {
+        //     if (res.success) {
+        //       _this.$message.success("保存成功");
+        //       if(_this.isAvoidSubmit){
+        //         // this.$route.query.id
+        //         avoidSubmitByMarket(res?.data?.id).then((res) => {
+
+        //         })
+        //       }
+        //       let param = Base64.encode(
+        //         JSON.stringify({
+        //           id: res?.data?.id,
+        //           type: res?.data?.procurementPlanType,
+        //           agreementName: this.firstForm.agreement.agreementName,
+        //         })
+        //       );
+        //       param = encodeURIComponent(param); //避免base64编码中出现"/"时路由404
+        //       _this.$router.replace(`/procurement/contract-detail/${param}`);
+        //       _this.sumitLoding.close();
+        //     }
+        //   })
+        //   .catch((err) => {
+        //     console.log(err);
+        //     _this.sumitLoding.close();
+        //   });
         saveAgreement(params)
           .then((res) => {
             if (res.success) {
-              _this.$message.success("保存成功");
-              if(_this.isAvoidSubmit){
+              this.$message.success("保存成功");
+              console.log("this.isAvoidSubmit的值-》",this.isAvoidSubmit);
+              if(this.isAvoidSubmit){
                 // this.$route.query.id
                 avoidSubmitByMarket(res?.data?.id).then((res) => {
 
@@ -2024,13 +2051,13 @@ export default {
                 })
               );
               param = encodeURIComponent(param); //避免base64编码中出现"/"时路由404
-              _this.$router.replace(`/procurement/contract-detail/${param}`);
-              _this.sumitLoding.close();
+              this.$router.replace(`/procurement/contract-detail/${param}`);
+              this.sumitLoding.close();
             }
           })
           .catch((err) => {
             console.log(err);
-            _this.sumitLoding.close();
+            this.sumitLoding.close();
           });
       }
     },
