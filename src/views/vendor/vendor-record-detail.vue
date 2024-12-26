@@ -1,6 +1,7 @@
 <template>
   <div class="app-container">
-    <BackButton path="/vendor/vendor-base" title="供应商合作记录详情"/>
+    <!--<BackButton path="/vendor/vendor-base" title="供应商合作记录详情"/>-->
+    <BackButton path="/vendor/vendor-base" :title="titleMy"/>
     <div class="context">
       <el-radio-group v-model="queryParams.expenditureBusinessType" size="small" style="padding: 15px 0;">
         <el-radio-button label="all">全部</el-radio-button>
@@ -29,6 +30,7 @@
         <el-table-column label="已结算金额(元)" min-width="140" align="right" prop="settledAmountText"/>
         <el-table-column label="已付款金额(元)" min-width="140" align="right" prop="paidAmountText"/>
         <el-table-column label="未付款金额(元)" min-width="140" align="right" prop="unpaidAmountText"/>
+        <el-table-column label="合同签订日期" min-width="140" align="center" prop="agreementSignDate"/>
       </el-table>
     </div>
   </div>
@@ -36,7 +38,7 @@
 
 <script>
 import { Base64 } from 'js-base64'
-import { getCooperationList } from '@/api/vendor/vendor'
+import { getCooperationList,getVendorDetail } from '@/api/vendor/vendor'
 import BackButton from '@/components/BackButton/index.vue'
 
 export default {
@@ -46,6 +48,7 @@ export default {
     return {
       vendorLoading: false,
       vendorList: [],
+      titleMy: '供应商合作记录详情',
       // 查询参数
       queryParams: {
         expenditureBusinessType: 'all',
@@ -70,6 +73,8 @@ export default {
           ...this.queryParams,
           expenditureBusinessType: this.queryParams.expenditureBusinessType === 'all' ? undefined : this.queryParams.expenditureBusinessType
         }
+        const res2 = await getVendorDetail(this.queryParams.vendorId)
+        this.titleMy = '供应商合作记录详情-'+res2.data.vendor.enterpriseName;
         console.log(query, 'qqqqqqqqq')
         const res = await getCooperationList(query)
         this.vendorLoading = false

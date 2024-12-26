@@ -23,29 +23,58 @@
         :inline="true"
         v-show="showSearch"
       >
-        <el-form-item
-          label="供应商名称"
-          prop="enterpriseName"
-          label-width="90px"
-        >
-          <el-input
-            v-model="queryParams.enterpriseName"
-            placeholder="请输入供应商名称"
-            clearable
-            @keyup.enter.native="handleQuery"
-          />
-        </el-form-item>
-        <el-form-item>
-          <el-button
-            type="primary"
-            icon="el-icon-search"
-            size="small"
-            @click="handleQuery"
+        <el-row>
+          <el-form-item label="供应商名称" prop="enterpriseName" label-width="100px">
+            <el-input v-model="queryParams.enterpriseName" placeholder="请输入供应商名称" clearable/>
+          </el-form-item>
+          <el-form-item label="首次注册合作单位" prop="firstCooperationCompanyCode" label-width="130px">
+            <el-cascader
+              v-model="queryParams.firstCooperationCompanyCode"
+              :options="organizationList"
+              change-on-select
+              :show-all-levels="true"
+              :props="{
+                  label: 'organizationName',
+                  value: 'organizationCode',
+                  checkStrictly: true,
+                  emitPath: false,
+                }"
+              filterable
+            >
+            </el-cascader>
+            <!--<el-input v-model="queryParams.enterpriseName" placeholder="请输入供应商名称" clearable/>-->
+          </el-form-item>
+          <el-form-item label="企业所在地" prop="enterpriseName" label-width="90px">
+            <el-input v-model="queryParams.enterpriseName" placeholder="请输入供应商名称" clearable/>
+          </el-form-item>
+          <el-form-item label="企业分类" prop="enterpriseName" label-width="90px">
+            <el-input v-model="queryParams.enterpriseName" placeholder="请输入供应商名称" clearable/>
+          </el-form-item>
+          <el-form-item>
+            <el-button
+              type="primary"
+              icon="el-icon-search"
+              size="small"
+              @click="handleQuery"
             >查询</el-button
-          >
-        </el-form-item>
+            >
+            <el-button size="small" type="warning" icon="el-icon-refresh" @click="handleQuery">重置</el-button>
+          </el-form-item>
+        </el-row>
+        <el-row>
+          <el-form-item label="注册申请时间" prop="enterpriseName" label-width="100px">
+            <el-input v-model="queryParams.enterpriseName" placeholder="请输入供应商名称" clearable/>
+          </el-form-item>
+          <el-form-item label="首次注册合作单位" prop="enterpriseName" label-width="130px">
+            <el-input v-model="queryParams.enterpriseName" placeholder="请输入供应商名称" clearable/>
+          </el-form-item>
+          <el-form-item label="状态" prop="enterpriseName" label-width="90px" v-if="queryParams.vendorClass == 0 || queryParams.vendorClass == 4">
+            <el-input v-model="queryParams.enterpriseName" placeholder="请输入供应商名称" clearable/>
+          </el-form-item>
+        </el-row>
+
       </el-form>
-      <el-radio-group
+      <!--<el-radio-group
         v-if="queryParams.vendorClass == '1'"
         v-model="queryParams.processType"
         size="small"
@@ -59,7 +88,7 @@
         >
           {{ dict.label }}
         </el-radio-button>
-      </el-radio-group>
+      </el-radio-group>-->
       <el-table
         v-loading="vendorLoading"
         :data="vendorList"
@@ -86,28 +115,23 @@
           label="合作记录"
           min-width="100"
           align="center"
-          v-if="['0', '2', '3'].includes(queryParams.vendorClass)"
+          v-if="['0', '2', '3', '4'].includes(queryParams.vendorClass)"
         >
           <template
             slot-scope="{ row }"
-            v-if="['0', '2', '3'].includes(queryParams.vendorClass)"
+            v-if="['0', '2', '3', '4'].includes(queryParams.vendorClass)"
           >
             <el-button type="text" size="small" @click="viewRecord(row.id)"
-              >查看详情</el-button
+              >{{ row.cooperationNum }}</el-button
             >
           </template>
         </el-table-column>
         <el-table-column
-          label="统一社会信用代码"
-          min-width="200"
-          align="center"
-          prop="socialCreditCode"
-        />
-        <el-table-column
-          width="120"
-          label="注册资金(万元)"
+          width="140"
+          label="合作金额（万元）"
           align="right"
-          prop="registeredCapitalText"
+          prop="cooperationAmountText"
+          v-if="['0', '2', '3', '4'].includes(queryParams.vendorClass)"
         />
         <el-table-column
           width="150"
@@ -116,22 +140,22 @@
           prop="vendorLocation"
         />
         <el-table-column
-          width="150"
+          min-width="180"
           label="企业分类"
           prop="enterpriseTypeText"
           show-overflow-tooltip
         />
-        <el-table-column
-          width="180"
-          label="提交申请时间"
+        <!--<el-table-column
+          label="统一社会信用代码"
+          min-width="200"
           align="center"
-          prop="createTime"
-        />
+          prop="socialCreditCode"
+        />-->
         <el-table-column
           width="120"
-          label="供应商库类型"
-          align="center"
-          prop="vendorLibraryText"
+          label="注册资金(万元)"
+          align="right"
+          prop="registeredCapitalText"
         />
         <el-table-column
           width="180"
@@ -141,13 +165,30 @@
           show-overflow-tooltip
         />
         <el-table-column
-          width="120"
-          label="供应商合作金额"
-          align="right"
-          prop="cooperationAmountText"
-          v-if="['0', '2', '3'].includes(queryParams.vendorClass)"
+          width="180"
+          label="注册申请时间"
+          align="center"
+          prop="createTime"
+          v-if="['1'].includes(queryParams.vendorClass)"
         />
         <el-table-column
+          width="180"
+          label="注册时间"
+          align="center"
+          prop="registerApprovalTime"
+          v-if="['2', '3', '4', '0'].includes(queryParams.vendorClass)"
+        />
+
+        <el-table-column
+          width="120"
+          label="供应商类型"
+          align="center"
+          prop="vendorLibraryText"
+          v-if="['0'].includes(queryParams.vendorClass)"
+        />
+
+
+        <!--<el-table-column
           width="120"
           label="供应商评价"
           align="center"
@@ -176,7 +217,20 @@
               >查看详情</el-button
             >
           </template>
-        </el-table-column>
+        </el-table-column>-->
+        <el-table-column
+          width="120"
+          label="状态"
+          align="center"
+          prop="vendorState"
+          v-if="['2', '3','4', '0'].includes(queryParams.vendorClass)"
+        />
+        <!--<el-table-column
+          width="150"
+          label="待审人（待开发）"
+          align="center"
+          prop="enterpriseName"
+        />-->
       </el-table>
     </div>
     <div class="pagination_item">
@@ -294,6 +348,7 @@ import {
   getVendorList,
   getVendorCooperativePartner,
   listVendorPerformance,
+  listOrganization4Company,
 } from "@/api/vendor/vendor";
 
 export default {
@@ -302,12 +357,13 @@ export default {
     return {
       vendorLoading: false,
       vendorList: [],
+      organizationList: null,
       vendorState: [
-        { label: "供应商名录", value: "0" },
-        { label: "战略供应商", value: "3" },
+        { label: "注册待审供应商", value: "1" },
         { label: "合格供应商", value: "2" },
-        { label: "待审供应商", value: "1" },
-        { label: "黑名单", value: "4" },
+        { label: "战略供应商", value: "3" },
+        { label: "黑名单供应商", value: "4" },
+        { label: "全部供应商", value: "0" },
       ],
       pendingVendorState: [
         { label: "注册待审", value: "10" },
@@ -327,7 +383,7 @@ export default {
         enterpriseName: undefined,
         contactName: undefined,
         contactPhone: undefined,
-        vendorClass: "0",
+        vendorClass: "1",
         processType: "10",
       },
       //合约规划查询参数
@@ -358,6 +414,7 @@ export default {
       this.queryParams.vendorClass=this.$route.query?.vendorClass || ""
     }
     this.getVendorList();
+    this.getOrganization4CompanyList();
   },
   methods: {
     /** 查询采购计划列表 */
@@ -376,6 +433,15 @@ export default {
         console.log(err);
       }
     },
+    async getOrganization4CompanyList() {
+      try {
+        const res = await listOrganization4Company()
+        this.organizationList = res.data
+      } catch (err) {
+        console.log(err)
+      }
+    },
+
     /** 搜索按钮操作 */
     handleQuery() {
       this.queryParams.pageNumber = 1;

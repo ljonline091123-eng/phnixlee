@@ -141,3 +141,11 @@ export const listBankAccountContact=(upId)=> {
     },
   })
 }
+
+// 获取合作单位
+export function listOrganization4Company() {
+  return request({
+    url: "/business/organization/listOrganization4Company",
+    method: "get",
+  })
+}
