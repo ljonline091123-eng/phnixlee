@@ -211,6 +211,12 @@ export default {
       }
     }
   },
+     // 组件不具有此钩子
+  beforeRouteLeave(to, from, next) {
+    console.log("tendering")
+    this.$destroy(true)
+    next();
+  },
   methods: {
     async getNoticeDetail() {
       this.loadingDetail = true;

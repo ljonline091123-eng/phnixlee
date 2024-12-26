@@ -1416,6 +1416,12 @@ export default {
       this.getListUnderlingDict(key)
     })
   },
+      // 组件不具有此钩子
+    beforeRouteLeave(to, from, next) {
+      this.$destroy(true)
+      console.log("destroyed---vue实例销毁后beforeRouteLeave");
+      next();
+    },
   methods: {
 
     async loadAgreementAttachmentId() {
