@@ -169,7 +169,7 @@
             >
               <el-select
                 style="width: 100%"
-                :disabled="formData.paymentType"
+                :disabled="!applyButtonShow && !isSubmit"
                 v-model="formData.paymentType"
                 placeholder="请选择付款方式"
               >
@@ -658,6 +658,12 @@ export default {
             message: "投标截止时间不能为空",
           },
         ],
+        // paymentType: [
+        //   {
+        //     required: true,
+        //     message: "付款方式不能为空",
+        //   },
+        // ],
       },
       // 遮罩层
       loading: false,
