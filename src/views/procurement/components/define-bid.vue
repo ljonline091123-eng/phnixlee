@@ -801,7 +801,8 @@ export default {
 
     formatterUpProcurementScheme(row) {
       if(row.scheme && row.scheme.procurementScheme && row.scheme.procurementScheme.ceilingPrice){
-        return Number(row?.quotationDataVOList[row.quotationDataVOList.length - 1]?.taxPricePattern || 0) > Number(row.scheme?.procurementScheme?.ceilingPrice) ? "是" : "否";
+        const cleanedString = (row?.quotationDataVOList[row.quotationDataVOList.length - 1]?.taxPricePattern || 0).replace(/,/g, '');
+        return Number(cleanedString) > Number(row.scheme?.procurementScheme?.ceilingPrice) ? "是" : "否";
       }
     },
     showSecretTips() {
@@ -922,6 +923,7 @@ export default {
       }
     },
     async submitForm() {
+      debugger
       this.isSubmit = true;
       const detailUrl = this.$route.fullPath;
       // const mergedList = [...this.selectedRowList, ...this.evaluateList];
@@ -934,7 +936,7 @@ export default {
       let vendorNames = this.evaluateList.filter(obj => obj.sureBid === 1 && this.formatterUpProcurementScheme(obj) === '是').map(obj => '<br>&nbsp;&nbsp;'+obj.vendorName).toString().replace(/,/g, '');
       console.log('%c👽 超出上限价的供应商： ', `font-size: 20px;background-color: #f00;`, vendorNames);
       if(vendorNames!==null&&vendorNames!==undefined&&vendorNames!==''&&vendorNames.length>0){
-        vm.$confirm('<b>您选择的供应商</b>'+vendorNames+'<br><b>投标已经超上限价，是否继续？</b>', '提示', {
+        vm.$confirm('<b>您选择的供应商</b>'+vendorNames+'<br><b>投标已经超上限价，是否继续？</b><br><b style="color: red">如需继续请点击取消上传相关说明！</b>', '提示', {
           confirmButtonText: '确定',
           cancelButtonText: '取消',
           type: 'warning',
