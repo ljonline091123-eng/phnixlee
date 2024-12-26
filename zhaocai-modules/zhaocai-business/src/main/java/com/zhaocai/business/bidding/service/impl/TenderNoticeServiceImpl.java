@@ -958,6 +958,15 @@ public class TenderNoticeServiceImpl extends ServiceImpl<TenderNoticeMapper,Tend
         return baseMapper.getListByContractPlanningId(queryVO);
     }
 
+    @Override
+    public PageResult<VendorPortalNoticeListVO> selectVendorPortalNoticePageTwo(VendorPortalNoticePageQueryVO queryDTO) {
+        IPage<VendorPortalNoticeListVO> iPage = baseMapper.findVendorPortalNoticePageTwo(queryDTO.toMybatisPage(), queryDTO);
+        for (VendorPortalNoticeListVO record : iPage.getRecords()) {
+            record.setMinProjectName(getMinProjectName(record.getSchemeId()));
+        }
+        return new PageResult<>(iPage);
+    }
+
     /**
      * 获取招标公告列表-(第三方-招标公告接口)
      * @param queryVO

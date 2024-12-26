@@ -197,4 +197,5 @@ public interface ITenderNoticeService  extends IService<TenderNotice> {
     List<ContractPlanningNoticeVO> getListByContractPlanningId(ContractPlanningQueryVO requestDTO);
 
 
+    PageResult<VendorPortalNoticeListVO> selectVendorPortalNoticePageTwo(VendorPortalNoticePageQueryVO queryDTO);
 }

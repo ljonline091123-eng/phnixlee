@@ -80,7 +80,7 @@ public class VendorPortalServiceImpl implements IVendorPortalService {
         Vendor vendor = getVendor(SecurityUtils.getUserId());
         queryDTO.setVendorId(vendor.getId());
         queryDTO.setRegisterApprovalTime(vendor.getRegisterApprovalTime());
-        PageResult<VendorPortalNoticeListVO> pageResult = tenderNoticeService.selectVendorPortalNoticePage(queryDTO);
+        PageResult<VendorPortalNoticeListVO> pageResult = tenderNoticeService.selectVendorPortalNoticePageTwo(queryDTO);
         /* 返回对象 */
         List<VendorPortalMsgListVO> list = new ArrayList<>();
         if(pageResult!=null && pageResult.getTotal()>0){

@@ -357,4 +357,53 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         order by tn.create_time desc
     </select>
 
+    <select id="findVendorPortalNoticePageTwo" resultType="com.zhaocai.business.bidding.vo.res.VendorPortalNoticeListVO">
+        select resultData.* from (
+        SELECT tn.id noticeId, ps.id schemeId, ps.procurement_scheme_code, ps.procurement_scheme_name, ps.procurement_plan_type,
+        ps.price_type, ps.subject_matter_type,
+        tn.create_time, tn.notice_status, su.thrid_org_name unit,
+        ps.procurement_type,
+        CASE WHEN ps.procurement_type = 1 then
+        CASE WHEN (tn.notice_status = 11 or tn.notice_status = 12 or tn.notice_status = 13) then
+        CASE WHEN (select update_after from tb_tender_notice_change_record where tn.id = notice_id and notice_status = 11 and type = 1 and del_flag = 0  order by id desc limit 1) IS NOT NULL
+        THEN str_to_date((select update_after from tb_tender_notice_change_record where tn.id = notice_id and notice_status = 11 and type = 1 and del_flag = 0 order by id desc limit 1), '%Y-%m-%d %H:%i') ELSE tn.apply_time_notice END
+        ELSE
+        CASE WHEN (select update_after from tb_tender_notice_change_record where tn.id = notice_id and notice_status = 1 and type = 1 and del_flag = 0  order by id desc limit 1) IS NOT NULL
+        THEN str_to_date((select update_after from tb_tender_notice_change_record where tn.id = notice_id and notice_status = 1 and type = 1 and del_flag = 0 order by id desc limit 1), '%Y-%m-%d %H:%i') ELSE tn.apply_time END
+        END
+        ELSE
+        CASE WHEN (select update_after from tb_tender_notice_change_record where tn.id = notice_id and notice_status = 1 and type = 1 and del_flag = 0  order by id desc limit 1) IS NOT NULL
+        THEN str_to_date((select update_after from tb_tender_notice_change_record where tn.id = notice_id and notice_status = 1 and type = 1 and del_flag = 0 order by id desc limit 1), '%Y-%m-%d %H:%i') ELSE tn.apply_time END
+        END AS applyTime
+        FROM tb_tender_notice tn
+        LEFT JOIN tb_procurement_scheme ps ON ps.id = tn.scheme_id AND ps.del_flag = 0
+        left join tb_tender_notice_range tnr on tnr.notice_id = tn.id and tnr.del_flag = 0 and tnr.type = 1
+        left join sys_user su on su.user_id = ps.procurement_officer
+        where
+        tn.del_flag = 0
+        and (tn.notice_status = 11 or tn.notice_status = 12 or tn.notice_status = 13 or tn.notice_status = 1)
+        <if test="queryDTO.procurementPlanType != null">
+            and ps.procurement_plan_type = #{queryDTO.procurementPlanType}
+        </if>
+        <if test="queryDTO.procurementSchemeName != null and queryDTO.procurementSchemeName != ''">
+            and ps.procurement_scheme_name like CONCAT('%', #{queryDTO.procurementSchemeName}, '%')
+        </if>
+        <if test="queryDTO.schemeType != null">
+            and ps.procurement_type = #{queryDTO.schemeType}
+        </if>
+        <if test="queryDTO.vendorId != null">
+            and (
+            CASE
+            WHEN ps.procurement_type != 1 and tn.vendor_range = 1 THEN tnr.vendor_id = #{queryDTO.vendorId}
+            ELSE 1
+            END) = 1
+        </if>
+        order by tn.create_time desc
+        ) resultData
+        where 1 = 1 and resultData.applyTime > now()
+        <if test="queryDTO.registerApprovalTime != null">
+            and resultData.applyTime >= #{queryDTO.registerApprovalTime}
+        </if>
+    </select>
+
 </mapper>
