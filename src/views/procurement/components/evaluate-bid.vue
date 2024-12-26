@@ -1320,21 +1320,21 @@ export default {
         format: "yyyy-MM-dd HH:mm:ss",
         // 设置可选的时间范围
         selectableRange: "00:00:00 - 23:59:59",
-        // disabledDate(time) {
-        //   return time.getTime() < Date.now() - 8.64e7; // 禁用小于当前日期的日期
-        // }
         disabledDate(time) {
-
-          // 获取截止时间
-          const next = new Date(_that.noticeDetail.tenderNotice.twiceTime);
-          next.setDate(next.getDate() -1);
-
-          // 将传入的时间戳转为日期对象
-          const date = new Date(time);
-
-          // 只能选择过5天后的日期【比如今天是24号，则30号及以后可以选择】
-          return date < next;
-        },
+          return time.getTime() < Date.now(); // 禁用小于当前日期的日期
+        }
+        // disabledDate(time) {
+        //
+        //   // 获取截止时间
+        //   const next = new Date(_that.noticeDetail.tenderNotice.twiceTime);
+        //   next.setDate(next.getDate() -1);
+        //
+        //   // 将传入的时间戳转为日期对象
+        //   const date = new Date(time);
+        //
+        //   // 只能选择过5天后的日期【比如今天是24号，则30号及以后可以选择】
+        //   return date < next;
+        // },
       },
       quoteForm: {}, //二次洽商
       //选择专家数据

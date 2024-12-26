@@ -201,6 +201,18 @@ export default {
     PageTitle,
   },
   data() {
+    const publicityTimeValidator = (rule, value, callback) => {
+      // 计算两个日期之间的天数差
+      const start = new Date(value[0]);
+      const end = new Date(value[1]);
+      const timeDifference = end - start;
+      const daysBetween = Math.floor(timeDifference / (1000 * 60 * 60 * 24));
+      if (daysBetween+1 < 3) {
+        callback(new Error("公示期不得少于三天"));
+      } else {
+        callback(); // 继续执行或表示成功
+      }
+    };
     return {
       procurementScheme: {},
       isSubmit: false,
@@ -214,7 +226,9 @@ export default {
           {
             required: true,
             message: "请选择公示期",
+            trigger: "blur"
           },
+          { validator: publicityTimeValidator, trigger: "blur" }
         ],
       },
       pickerOptions: {

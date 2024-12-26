@@ -654,6 +654,7 @@
                 <el-input
                   v-model="templateQuery.name"
                   placeholder="请输入模板名称"
+                  @change="searchGeneralTemplates"
                 />
               </el-form-item>
               <el-form-item>
@@ -712,6 +713,7 @@
                 <el-input
                   v-model="templateQuery.name"
                   placeholder="请输入模板名称"
+                  @change="searchGeneralTemplates"
                 />
               </el-form-item>
               <el-form-item>
@@ -807,6 +809,7 @@
                   v-model="bcTemplateQuery.templateName"
                   placeholder="请输入模板名称"
                   clearable
+                  @change="handleQuery"
                 />
               </el-form-item>
               <el-form-item
@@ -819,6 +822,7 @@
                   v-model="bcTemplateQuery.contractType"
                   placeholder="请选择"
                   clearable
+                  @change="handleQuery"
                 >
                   <el-option
                     v-for="dict in contractTypeList"
@@ -898,6 +902,7 @@
                   v-model="bcTemplateQuery.templateName"
                   placeholder="请输入模板名称"
                   clearable
+                  @change="handleQueryReusable"
                 />
               </el-form-item>
               <el-form-item
@@ -910,6 +915,7 @@
                   v-model="bcTemplateQuery.contractType"
                   placeholder="请选择"
                   clearable
+                  @change="handleQueryReusable"
                 >
                   <el-option
                     v-for="dict in contractTypeList"
@@ -1563,23 +1569,23 @@ export default {
     },
     /** 搜索按钮操作 */
     handleQuery() {
-      this.bcTemplateQuery.pageNum = 1;
+      this.bcTemplateQuery.pageNumber = 1;
       this.getGeneralTemplateList();
       /* 最后再获取分页数据，区分了通用和复用模板。 */
       this.activeTabListen(this.activeTab);
     },
     handleQueryReusable() {
-      this.bcTemplateQuery.pageNum = 1;
+      this.bcTemplateQuery.pageNumber = 1;
       this.getReusableTemplateList();
       /* 最后再获取分页数据，区分了通用和复用模板。 */
       this.activeTabListen(this.activeTab);
     },
     searchGeneralTemplates() {
-      this.templateQuery.pageNum = 1;
+      this.templateQuery.pageNumber = 1;
       this.getGeneralScoreTemplateList();
     },
     searchReusableTemplates() {
-      this.templateQuery.pageNum = 1;
+      this.templateQuery.pageNumber = 1;
       this.getReusableScoreTemplateList();
     },
     /** 重置按钮操作 */
