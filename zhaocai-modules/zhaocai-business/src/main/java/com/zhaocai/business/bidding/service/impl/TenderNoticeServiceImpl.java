@@ -456,7 +456,7 @@ public class TenderNoticeServiceImpl extends ServiceImpl<TenderNoticeMapper,Tend
         //推送消息类型 1工作通知
         requestDTO.setType(NumberConstant.ONE);
         //推送公司类型 2晟晟
-        requestDTO.setCompanyType(NumberConstant.TWO);
+        requestDTO.setCompanyType(NumberConstant.THREE);
         messageList.add(requestDTO);
         log.info("[财务人员待办信息][messageList] {}",messageList);
         parentRequestDTO.setMessageList(messageList);

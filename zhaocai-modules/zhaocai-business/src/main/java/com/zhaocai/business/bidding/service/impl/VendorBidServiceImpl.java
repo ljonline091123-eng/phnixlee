@@ -451,13 +451,10 @@ public class VendorBidServiceImpl implements IVendorBidService {
 
 
     private void dealOpenPeopleTodoTask(ProcurementScheme procurementScheme, TenderNotice tenderNotice,  Vendor vendor) {
-        System.out.println("开始:"+procurementScheme);
         PushThirdPartyTodoTaskRequestDTO parentRequestDTO = new PushThirdPartyTodoTaskRequestDTO();
         List<PushThirdPartyTodoTaskSonRequestDTO> messageList = new ArrayList<>();
         PushThirdPartyTodoTaskSonRequestDTO requestDTO = new PushThirdPartyTodoTaskSonRequestDTO();
         MinProjectVO project = minProjectService.getMinProjectByMinAccountCode(procurementScheme.getProjectCode());
-        System.out.println("项目:"+project);
-       // List<SysDictData>  dataList =  dictDataService.listDictDataLabel("procurement_type",procurementScheme.getProcurementType().toString());
         String label = "";
         switch (procurementScheme.getProcurementType()){
             case 1:
@@ -470,13 +467,24 @@ public class VendorBidServiceImpl implements IVendorBidService {
                 label = "单一来源";
             default:
         }
-        System.out.println("label:"+label);
         requestDTO.setTitle("财务人员待办信息");
-        String  xm =procurementScheme.getFinanceConfirmName()+ "你好!" + project.getMinAccountFullName()+"项目的"+
-                procurementScheme.getProcurementSchemeName()+"、编号为"+ procurementScheme.getProcurementSchemeCode()+"、招标方式为"+ label+"于"+formatDate(tenderNotice.getCreateTime())+
-                "发布了招标文件、供应商"+vendor.getEnterpriseName()+"已经响应提交了投标文件，且需要收取投标保证金、请及时确认是否收到保证金！";
+        String xm = (procurementScheme==null?"":procurementScheme.getFinanceConfirmName()==null?"":procurementScheme.getFinanceConfirmName())
+                + "你好!"
+                + (project==null?"":project.getMinAccountFullName()==null?"":project.getMinAccountFullName())
+                + "项目的"
+                + (procurementScheme==null?"":procurementScheme.getProcurementSchemeName()==null?"":procurementScheme.getProcurementSchemeName())
+                + "、编号为"
+                + (procurementScheme==null?"":procurementScheme.getProcurementSchemeCode()==null?"":procurementScheme.getProcurementSchemeCode()) +
+                "、招标方式为"
+                + label
+                + "于"
+                + (tenderNotice==null?"":tenderNotice.getCreateTime()==null?"":this.formatDate(tenderNotice.getCreateTime()))
+                + "发布了招标文件、供应商"
+                + vendor.getEnterpriseName()
+                + "已经响应提交了投标文件，且需要收取投标保证金、请及时确认是否收到保证金！";
+
+        log.info("[供应商][财务人员待办信息][xm] {}",xm);
         requestDTO.setContent(xm);
-        System.out.println("xm:"+xm);
         requestDTO.setArrivalTime(formatDate(new Date()));
         requestDTO.setCreateTime(formatDate(new Date()));
         String thridUserId = SecurityUtils.getThridUserId();
@@ -495,14 +503,13 @@ public class VendorBidServiceImpl implements IVendorBidService {
         //推送消息类型 1工作通知
         requestDTO.setType(NumberConstant.ONE);
         //推送公司类型 2晟晟
-        requestDTO.setCompanyType(NumberConstant.TWO);
+        requestDTO.setCompanyType(NumberConstant.THREE);
         messageList.add(requestDTO);
         parentRequestDTO.setMessageList(messageList);
-        System.out.println("messageList:"+messageList);
-        System.out.println("推送:");
+        log.info("[财务人员待办信息][messageList] {}",messageList);
         parentRequestDTO.setAuthorization(SecurityUtils.getMasterControlToken());
         thridPartyTodoTaskService.pushTodoTask(parentRequestDTO);
-        System.out.println("推送完成:");
+        log.info("[财务人员待办信息][推送] {}",parentRequestDTO);
 
     }
 
