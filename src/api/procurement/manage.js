@@ -27,7 +27,7 @@ export const applyNext = (data) => {
   });
 };
 
-// 发布公告
+// 发布招标文件
 export const addNotice = (data) => {
   return request({
     url: "/business/notice/add",
@@ -519,6 +519,15 @@ export const getExpertEvalStatus = (params) => {
 export const abandonBidMore = (data) => {
   return request({
     url: "/business/info/abandonBidMore",
+    method: "post",
+    data,
+  });
+};
+
+/** 招标管理列表废标 同时 废除采购方案 */
+export const abandonBidMoreScheme = (data) => {
+  return request({
+    url: "/business/info/abandonBidMoreScheme",
     method: "post",
     data,
   });

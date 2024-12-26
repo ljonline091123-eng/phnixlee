@@ -918,11 +918,9 @@ export default {
 
           console.log(formData, "formData");
           try {
-            if (this.scheme.noticeStatus === 0) {
-              await aNewAdd(formData);
-            } else {
-              await addNotice(formData);
-            }
+
+            await addNotice(formData);
+
             loading.close();
             this.$message({
               message: "保存成功",
