@@ -169,6 +169,7 @@
         height="calc(40vh - 15px)"
         @selection-change="handleSelectionChange"
         :row-key="selBidKey"
+        :cell-style="cellStyle"
       >
         <el-table-column
           :reserve-selection="true"
@@ -230,7 +231,7 @@
           align="center"
           prop="phone"
         />
-        <el-table-column label="上限价(元)" width="150" align="right">
+        <el-table-column label="上限价(元)" width="150" align="right" prop="ceilingPrice">
           <template slot-scope="{ row }">
             {{row.scheme && row.scheme.procurementScheme && row.scheme.procurementScheme.ceilingPrice}}
           </template>
@@ -243,7 +244,7 @@
           :formatter="formatterUpProcurementScheme"
         >
         </el-table-column>
-        <el-table-column label="含税总价(元)" width="150" align="right">
+        <el-table-column label="含税总价(元)" width="150" align="right" prop="taxPrice">
           <template slot-scope="{ row }">
             {{
               row.quotationDataVOList[row.quotationDataVOList.length - 1]
@@ -761,6 +762,20 @@ export default {
   // },
 
   methods: {
+    cellStyle({ row, column }) {
+      const ceilingPrice = row.scheme?.procurementScheme?.ceilingPrice;
+      const taxPrice = row.quotationDataVOList[row.quotationDataVOList.length - 1]?.taxPricePattern;
+
+      // 判断是否是“上限价”或“含税总价”列
+      if (column.property === 'ceilingPrice' || column.property === 'taxPrice') {
+        if (ceilingPrice !== undefined && taxPrice !== undefined && taxPrice > ceilingPrice) {
+          return { color: 'red' };
+        }
+      }
+
+      // 对于其他列，返回空对象表示不应用任何特殊样式
+      return {};
+    },
     //获取招标文件的预览url
     async getbiddingTemplate(){
       //解构biddingTemplate，获取招标文件的属性
