@@ -27,6 +27,8 @@ import com.zhaocai.business.manager.http.dto.res.BpmListProcessLogResponseDTO;
 import com.zhaocai.business.manager.http.dto.res.BpmLoadTaskDefResponseDTO;
 import com.zhaocai.business.manager.http.dto.res.ListCataLogDTO;
 import com.zhaocai.business.manager.http.service.UnderlingRestTemplateService;
+import com.zhaocai.business.manager.http.dto.res.*;
+import com.zhaocai.business.manager.http.service.UnderlingRestTemplateService;
 import com.zhaocai.business.manager.http.service.UnderlingSystemService;
 import com.zhaocai.business.process.service.IBPMProcessService;
 import com.zhaocai.business.procurement.vo.res.ContractPlanningListVO;
@@ -79,6 +81,7 @@ import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 /**
@@ -729,23 +732,68 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
         }
 
         IPage<VendorManagementListVO> iPage = baseMapper.selectVendorListPage(queryVO.toMybatisPage(),queryVO);
-        for (VendorManagementListVO vo : iPage.getRecords()) {
-            if (vo.getIsBlack() == 1) {
-                vo.setVendorLibraryText("黑名单");
-            } else if (vo.getState() == 1) {
-                vo.setVendorLibraryText("待审供应商");
-            } else if (vo.getVendorClass() == 1) {
-                vo.setVendorLibraryText("合格供应商");
-            } else if (vo.getVendorClass() == 2) {
-                vo.setVendorLibraryText("战略供应商");
-            }
+        // 异步处理结果集转换
+        if (CollectionUtil.isNotEmpty(iPage.getRecords())) {
+            List<CompletableFuture<VendorManagementListVO>> futureList = iPage.getRecords().stream()
+                    .map(dto -> CompletableFuture.supplyAsync(() -> {
+                        VendorManagementListVO vo = BeanCopierUtil.copyBean(dto,VendorManagementListVO.class);
+                        if (vo.getIsBlack() == 1) {
+                            vo.setVendorLibraryText("黑名单供应商");
+                        } else if (vo.getState() == 1 && vo.getIsBlack() == 0
+                                && VendorProcessTypeEnum.VENDOR_REGISTER.getState().equals(vo.getProcessType())) {
+                            vo.setVendorLibraryText("注册待审供应商");
+                        } else if (vo.getVendorClass() == 1 && vo.getIsBlack() == 0
+                                && (VendorStateEnum.APPROVE.getState().equals(vo.getState()) ||
+                                (VendorStateEnum.IN_APPROVAL.getState().equals(vo.getState()) &&
+                                        !VendorProcessTypeEnum.VENDOR_REGISTER.getState().equals(vo.getProcessType())))) {
+                            vo.setVendorLibraryText("合格供应商");
+                        } else if (vo.getVendorClass() == 2 && vo.getIsBlack() == 0
+                                && (VendorStateEnum.APPROVE.getState().equals(vo.getState()) ||
+                                (VendorStateEnum.IN_APPROVAL.getState().equals(vo.getState()) &&
+                                        !VendorProcessTypeEnum.VENDOR_REGISTER.getState().equals(vo.getProcessType())))) {
+                            vo.setVendorLibraryText("战略供应商");
+                        }
+                        if(VendorStateEnum.APPROVE.getState().equals(vo.getState())){
+                            vo.setVendorState("正常");
+                        }else if(VendorStateEnum.IN_APPROVAL.getState().equals(vo.getState())
+                                && VendorProcessTypeEnum.VENDOR_UPDATEINFO.getState().equals(vo.getProcessType())){
+                            vo.setVendorState("信息修改待审");
+                        }else if(VendorStateEnum.IN_APPROVAL.getState().equals(vo.getState())
+                                && VendorProcessTypeEnum.VENDOR_UPDATE_LEVEL.getState().equals(vo.getProcessType())){
+                            vo.setVendorState("等级修改待审");
+                        }else if(VendorStateEnum.IN_APPROVAL.getState().equals(vo.getState())
+                                && VendorProcessTypeEnum.VENDOR_MOVE_INOROUT_BLACK.getState().equals(vo.getProcessType())
+                                && Integer.valueOf(0).equals(vo.getIsBlack()) ){
+                            vo.setVendorState("移入黑名单待审");
+                        }else if(VendorStateEnum.IN_APPROVAL.getState().equals(vo.getState())
+                                && VendorProcessTypeEnum.VENDOR_MOVE_INOROUT_BLACK.getState().equals(vo.getProcessType())
+                                && Integer.valueOf(1).equals(vo.getIsBlack()) ){
+                            vo.setVendorState("移出黑名单待审");
+                        }else if(VendorStateEnum.IN_APPROVAL.getState().equals(vo.getState())
+                                && VendorProcessTypeEnum.VENDOR_REGISTER.getState().equals(vo.getProcessType())){
+                            vo.setVendorState("注册供应商待审");
+                        }
+                        // 处理企业分类
+                        if (StringUtils.isNotBlank(vo.getEnterpriseType())) {
+                            vo.setEnterpriseTypeText(vendorClassifyService.getVendorClassifyName(vo.getEnterpriseType()));
+                        }
+                        vo.setFirstCooperationCompanyName(remoteSystemService.getDeptNameLoop(vo.getFirstCooperationCompanyCode(),"null",SecurityConstants.INNER));
+                        return vo;
+                    })).collect(Collectors.toList());
 
-            // 处理企业分类
-            if (StringUtils.isNotBlank(vo.getEnterpriseType())) {
-                vo.setEnterpriseTypeText(vendorClassifyService.getVendorClassifyName(vo.getEnterpriseType()));
-            }
+            List<VendorManagementListVO> resultList = futureList.stream()
+                    .map(future -> {
+                        try {
+                            return future.join();
+                        } catch (Exception e) {
+                            // 记录日志，或者返回一个默认值
+                            log.error("Future execution failed", e);
+                            return null; // 根据需求处理失败的 future
+                        }
+                    })
+                    .collect(Collectors.toList());
+            iPage.setRecords(resultList);
         }
-
         return new PageResult<>(iPage);
     }
 

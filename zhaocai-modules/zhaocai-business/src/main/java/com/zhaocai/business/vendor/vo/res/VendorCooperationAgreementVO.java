@@ -1,5 +1,6 @@
 package com.zhaocai.business.vendor.vo.res;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import com.zhaocai.business.common.annotations.MoneyFormat;
 import com.zhaocai.business.common.base.AdviceObject;
 import io.swagger.annotations.ApiModelProperty;
@@ -9,6 +10,7 @@ import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 
 /**
@@ -87,4 +89,8 @@ public class VendorCooperationAgreementVO extends AdviceObject {
     @MoneyFormat(filedName = "unpaidAmount",scale = 2)
     @ApiModelProperty(value = "未付款金额(元)")
     private String unpaidAmountText;
+
+    @JsonFormat(pattern = "yyyy-MM-dd", timezone = "GMT+8")
+    @ApiModelProperty(value = "合同签订日期")
+    private Date agreementSignDate;
 }

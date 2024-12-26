@@ -93,7 +93,8 @@ public class VendorCooperationServiceImpl implements IVendorCooperationService {
         // 获取合同数据
         List<Agreement> agreementList = agreementService.list(new LambdaQueryWrapper<Agreement>()
                 .eq(Agreement::getVendorId,queryVO.getVendorId())
-                .eq(queryVO.getExpenditureBusinessType() != null,Agreement::getExpenditureBusinessType,queryVO.getExpenditureBusinessType()));
+                .eq(queryVO.getExpenditureBusinessType() != null,Agreement::getExpenditureBusinessType,queryVO.getExpenditureBusinessType())
+                .orderByDesc(Agreement::getAgreementSignDate));
 
         // 获取合同收付款信息
         List<ContractListDTO> contractList = performanceEvaluationService.listContractList(queryVO.getVendorId(),queryVO.getExpenditureBusinessType());
@@ -113,7 +114,7 @@ public class VendorCooperationServiceImpl implements IVendorCooperationService {
                             cooperationAgreement.setVendorName(vendor.getEnterpriseName());
                             cooperationAgreement.setAgreementName(agreement.getAgreementName());
                             cooperationAgreement.setTotalAmountIncTax(agreement.getTotalAmountIncTax());
-
+                            cooperationAgreement.setAgreementSignDate(agreement.getAgreementSignDate());
                             // 处理合同收付款
                             ContractListDTO listDTO = contractListMap.get(agreement.getAgreementCode());
                             if (listDTO != null) {
