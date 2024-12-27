@@ -24,6 +24,9 @@ public class AgreementSaveRequestVO {
     @ApiModelProperty(value = "结算与付款节点信息")
     private List<AgreementPaymentList> agreementPaymentLists;
 
+    @ApiModelProperty(value = "合同签约方信息对象")
+    private List<AgreementPartyInfo> agreementPartyInfoLists;
+
     @ApiModelProperty(value = "合同清单")
     private List<AgreementMaterialsList> agreementMaterialsLists;
 
