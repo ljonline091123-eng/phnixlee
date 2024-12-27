@@ -5,6 +5,7 @@ import com.zhaocai.business.common.enums.CertificationTypeEnum;
 import com.zhaocai.business.pub.vo.req.AttachmentRequestVO;
 import com.zhaocai.business.vendor.domain.VendorCertification;
 import com.zhaocai.business.vendor.vo.req.VendorCertificationRequestVO;
+import com.zhaocai.business.vendor.vo.req.VendorOneRequestVO;
 import com.zhaocai.business.vendor.vo.req.VendorRegisterRequestVO;
 import com.zhaocai.business.vendor.vo.res.VendorCertificationListVO;
 
@@ -52,6 +53,14 @@ public interface IVendorCertificationService extends IService<VendorCertificatio
     VendorRegisterRequestVO listCertification(VendorRegisterRequestVO  vendorRequestVO,Long vendorId, Long mainContactId);
 
     /**
+     * 获取供应商认证
+     * @param vendorId
+     * @param mainContactId
+     * @return
+     */
+    VendorOneRequestVO listCertification(VendorOneRequestVO  vo, Long vendorId, Long mainContactId);
+
+    /**
      * 删除供应商认证
      * @param vendorId
      * @param id
@@ -83,4 +92,6 @@ public interface IVendorCertificationService extends IService<VendorCertificatio
      * @return
      */
     List<VendorCertification> listVendorCertification(Long vendorId, CertificationTypeEnum businessType, Long businessId);
+
+    int updateByVendorId(Long id, Long uuid);
 }

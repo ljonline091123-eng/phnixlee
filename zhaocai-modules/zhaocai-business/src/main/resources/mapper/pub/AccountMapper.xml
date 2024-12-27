@@ -90,6 +90,9 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         </trim>
         where id = #{id}
     </update>
+    <update id="updateByVendorId">
+        update t_account_info set up_id = #{uuid} where up_id = #{id}
+    </update>
 
     <delete id="deleteAccountById" parameterType="Long">
         delete from t_account_info where id = #{id}

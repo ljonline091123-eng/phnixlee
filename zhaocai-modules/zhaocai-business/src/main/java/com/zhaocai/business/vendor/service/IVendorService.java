@@ -132,5 +132,24 @@ public interface IVendorService  extends IService<Vendor> , IProcessBusinessBase
 
     String checkRegister(Long vendorId);
 
-    void revokeVendor(Long id);
+    void  revokeVendor(Long id);
+
+    void registerLinkman(VendorOneRequestVO requestVO);
+
+    Vendor getByLoginUserTwo(Long userId);
+
+    VendorOneRequestVO getLoginUserDetail(Long loginUserId);
+
+    /**
+     * 供应商注册保存
+     * @param requestVO
+     */
+    void registerSave(VendorOneRequestVO requestVO);
+
+    /**
+     * 校验企业名称和id
+     * @param enterpriseName
+     * @param vendorId
+     */
+    String checkEnterpriseNameAndId(String enterpriseName, Long vendorId);
 }

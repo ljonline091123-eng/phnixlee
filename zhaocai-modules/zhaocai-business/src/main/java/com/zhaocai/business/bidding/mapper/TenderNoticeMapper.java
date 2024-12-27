@@ -85,4 +85,6 @@ public interface TenderNoticeMapper extends BaseMapper<TenderNotice> {
      * @return
      */
     IPage<TenderNoticeVO> listTenderNoticePage(@Param("page") Page<TenderNoticeVO> page, @Param("queryVO") UnderlingTenderNoticeQueryVO queryVO);
+
+    IPage<VendorPortalNoticeListVO> findVendorPortalNoticePageTwo(Page toMybatisPage, @Param("queryDTO") VendorPortalNoticePageQueryVO queryDTO);
 }

@@ -66,7 +66,7 @@ public class VendorPortalServiceImpl implements IVendorPortalService {
     @Override
     public PageResult<VendorPortalNoticeListVO> getNoticeLogin(VendorPortalNoticePageQueryVO queryDTO) {
         queryDTO.setNowDate(DateUtils.getNowDate());
-        queryDTO.setVendorId(getVendor(SecurityUtils.getUserId()).getId());
+        queryDTO.setVendorId(getVendorTwo(SecurityUtils.getUserId()).getId());
         PageResult<VendorPortalNoticeListVO> pageResult = tenderNoticeService.selectVendorPortalNoticePage(queryDTO);
         return pageResult;
     }
@@ -80,7 +80,7 @@ public class VendorPortalServiceImpl implements IVendorPortalService {
         Vendor vendor = getVendor(SecurityUtils.getUserId());
         queryDTO.setVendorId(vendor.getId());
         queryDTO.setRegisterApprovalTime(vendor.getRegisterApprovalTime());
-        PageResult<VendorPortalNoticeListVO> pageResult = tenderNoticeService.selectVendorPortalNoticePage(queryDTO);
+        PageResult<VendorPortalNoticeListVO> pageResult = tenderNoticeService.selectVendorPortalNoticePageTwo(queryDTO);
         /* 返回对象 */
         List<VendorPortalMsgListVO> list = new ArrayList<>();
         if(pageResult!=null && pageResult.getTotal()>0){
@@ -135,5 +135,8 @@ public class VendorPortalServiceImpl implements IVendorPortalService {
         return vendorService.getByLoginUser(userId);
     }
 
+    private Vendor getVendorTwo(Long userId){
+        return vendorService.getByLoginUserTwo(userId);
+    }
 
 }

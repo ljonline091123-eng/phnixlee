@@ -99,6 +99,11 @@ public class AccountServiceImpl extends ServiceImpl<AccountMapper, TAccountInfo>
 
             }
 
+            @Override
+            public int updateByVendorId(Long id, Long uuid) {
+                return baseMapper.updateByVendorId(id,uuid);
+            }
+
             /**
      * 删除银行账户档案信息
      *

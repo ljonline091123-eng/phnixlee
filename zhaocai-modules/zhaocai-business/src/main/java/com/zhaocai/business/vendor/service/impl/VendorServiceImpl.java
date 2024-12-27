@@ -3,13 +3,18 @@ package com.zhaocai.business.vendor.service.impl;
 import cn.hutool.core.codec.Base64;
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.collection.CollectionUtil;
+import cn.hutool.core.util.IdUtil;
+import cn.hutool.crypto.KeyUtil;
+import com.alibaba.csp.sentinel.util.StringUtil;
 import com.alibaba.fastjson.JSON;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.deepoove.poi.data.Numberings;
 import com.zhaocai.business.common.enums.*;
 import com.zhaocai.business.common.exception.BusinessException;
+import com.zhaocai.business.common.exception.NotFoundException;
 import com.zhaocai.business.common.exception.ParamValidateException;
 import com.zhaocai.business.common.utils.ValidateUtils;
 import com.zhaocai.business.manager.http.dto.req.*;
@@ -19,10 +24,13 @@ import com.zhaocai.business.manager.http.dto.res.BpmLoadTaskDefResponseDTO;
 import com.zhaocai.business.manager.http.dto.res.ListCataLogDTO;
 import com.zhaocai.business.manager.http.service.UnderlingSystemService;
 import com.zhaocai.business.process.service.IBPMProcessService;
+import com.zhaocai.business.pub.domain.DwCdBank;
+import com.zhaocai.business.pub.domain.TAccountInfo;
 import com.zhaocai.business.pub.service.IAccountService;
 import com.zhaocai.business.pub.service.IAttachmentService;
 import com.zhaocai.business.pub.service.IBankService;
 import com.zhaocai.business.pub.service.ISystemUserService;
+import com.zhaocai.business.pub.vo.req.TAccountInfoVo;
 import com.zhaocai.business.vendor.domain.*;
 import com.zhaocai.business.vendor.mapper.VendorMapper;
 import com.zhaocai.business.vendor.service.*;
@@ -33,6 +41,8 @@ import com.zhaocai.common.core.constant.SecurityConstants;
 import com.zhaocai.common.core.constant.UserConstants;
 import com.zhaocai.common.core.utils.NumberUtil;
 import com.zhaocai.common.core.utils.bean.BeanCopierUtil;
+import com.zhaocai.common.core.utils.bean.BeanUtils;
+import com.zhaocai.common.core.utils.uuid.IdUtils;
 import com.zhaocai.common.core.web.bean.ResultData;
 import com.zhaocai.common.security.utils.SecurityUtils;
 import com.zhaocai.common.signature.dto.command.CompanyAuthCommandRequest;
@@ -115,6 +125,7 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
 
 
 
+
     @Override
     @Transactional(propagation = Propagation.REQUIRED,rollbackFor = Exception.class)
     public VendorRegisterRequestVO getVendorUpdateDetail(Long vendorId) {
@@ -126,6 +137,14 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
         List<VendorContact> contactListMain;
         // 根据供应商id在供应商
         Vendor vendor = super.getById(vendorId);
+        if(vendor != null && StringUtil.isNotEmpty(vendor.getAccountBranch())){
+            DwCdBank bank = bankService.selectBankById(vendor.getAccountBranch());
+            if(bank != null){
+                vendor.setBankName(bank.getName());
+            }else {
+                vendor.setBankName(vendor.getAccountBranch());
+            }
+        }
         contactList = vendorContactService.list(new LambdaQueryWrapper<VendorContact>()
                 .eq(VendorContact::getVendorId, vendorId)
                 .eq(VendorContact::getIsMainContact, 1));
@@ -163,7 +182,7 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
         VendorContact contact = requestVO.getVendorContact();
 
         // 新增供应商账号
-        Long longUserId = vendorContactService.addLoginUser(contact.getContactPhone(),contact.getContactName());
+        Long longUserId = vendorContactService.addLoginUser(contact.getContactPhone(),contact.getContactName(),null);
         contact.setLoginUserId(longUserId);
         contact.setCertificationId(legalAuthorizationId);
         contact.setVendorId(vendor.getId());
@@ -191,6 +210,7 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
             Long id =requestVO.getVendor().getId();
             vendor = super.getById(requestVO.getVendor().getId());
             if(vendor!=null){
+                Vendor vendor1 = BeanCopierUtil.copyBean(vendor, Vendor.class);
                 // 保存基本信息
                 vendor = requestVO.getVendor();
                 vendor.setState(VendorStateEnum.IN_APPROVAL.getState());
@@ -200,22 +220,38 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
                 super.saveOrUpdate(vendor);
                 //保存银行账户信息
                 //先删除
-//                TAccountInfo acountQuery = new TAccountInfo();
-//                acountQuery.setUpId(vendor.getId());
-//                List<TAccountInfoVo> accountList = accountService.selectAccountList(acountQuery);
-//                if(!accountList.isEmpty()){
-//                    for (TAccountInfo info: accountList) {
-//                        accountService.deleteAccountById(info.getId());
-//                    }
-//                }
-//                //再新增
-//                TAccountInfo acount = new TAccountInfo();
-//                acount.setBankAccount(vendor.getBankAccount());
-//                acount.setBipId(vendor.getAccountBranch());
-//                acount.setCurrency(vendor.getCurrencyCode());
-//                acount.setUpId(vendor.getId());
-//                acount.setAcountType(AccountEnum.GYS_TYPE.getType());
-//                accountService.save(acount);
+                List<TAccountInfo> list = accountService.list(new LambdaUpdateWrapper<TAccountInfo>()
+                        .eq(TAccountInfo::getUpId, vendor.getId()));
+                if(!list.isEmpty()){
+                    list.stream().forEach(p->{
+                        accountService.deleteAccountById(p.getId());
+                    });
+                }
+                //再新增
+                DwCdBank bank = bankService.selectBankById(vendor.getAccountBranch());
+                TAccountInfo acount = new TAccountInfo();
+                acount.setBankAccount(vendor.getBankAccount());
+                acount.setBipId(vendor.getAccountBranch());
+                acount.setCurrency(vendor.getCurrencyCode());
+                if(bank!=null){
+                    acount.setInterbankNumber(bank.getCode());
+                    acount.setAffiliatedBank(bank.getParentName());
+                    acount.setOpeningBranch(bank.getName());
+                }
+                acount.setUpId(vendor.getId());
+                //供应商
+                acount.setAcountType(AccountEnum.GYS_TYPE.getType());
+                //默认账户
+                acount.setStatus(1);
+                acount.setId(IdUtil.getSnowflakeNextId());
+                accountService.save(acount);
+                /*TAccountInfo acount = new TAccountInfo();
+                acount.setBankAccount(vendor.getBankAccount());
+                acount.setBipId(vendor.getAccountBranch());
+                acount.setCurrency(vendor.getCurrencyCode());
+                acount.setUpId(vendor.getId());
+                acount.setAcountType(AccountEnum.GYS_TYPE.getType());
+                accountService.save(acount);*/
                 // 保存供应商资质
                 vendorCertificationService.addCertification(requestVO.getBusinessLicense(), CertificationTypeEnum.BUSINESS_LICENSE,vendor.getId());
                 vendorCertificationService.addCertification(requestVO.getIntegrity(), CertificationTypeEnum.INTEGRITY,vendor.getId());
@@ -237,6 +273,21 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
                 vendorCertificationService.update(new LambdaUpdateWrapper<VendorCertification>()
                         .set(VendorCertification::getBusinessId,contact.getId())
                         .eq(VendorCertification::getId,legalAuthorizationId));
+                if(vendor1 != null && StringUtil.isNotEmpty(vendor1.getWfProcessId())
+                        && VendorProcessTypeEnum.VENDOR_REGISTER.getState().equals(vendor1.getProcessType())
+                        && !vendor1.getFirstCooperationCompanyCode().equals(vendor.getFirstCooperationCompanyCode())){
+                    Long uuid = IdUtil.getSnowflakeNextId();
+                    System.out.println("uuid:"+uuid);
+                    //重新赋值供应商id
+                    baseMapper.updateByMyId(id,uuid);
+                    //更新联系人的关联id
+                    vendorContactService.updateByVendorId(id,uuid);
+                    //更新资质的关联id
+                    vendorCertificationService.updateByVendorId(id,uuid);
+                    //更新银行账号的关联id
+                    accountService.updateByVendorId(id,uuid);
+                    vendor.setId(uuid);
+                }
             }else{
                 flag = true;
             }
@@ -254,23 +305,23 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
             vendor.setVendorLevel(3);
             super.save(vendor);
             //保存银行账户信息
-//            DwCdBank bank = bankService.selectBankById(vendor.getAccountBranch());
-//            TAccountInfo acount = new TAccountInfo();
-//            acount.setBankAccount(vendor.getBankAccount());
-//            acount.setBipId(vendor.getAccountBranch());
-//            acount.setCurrency(vendor.getCurrencyCode());
-//            if(bank!=null){
-//                acount.setInterbankNumber(bank.getCode());
-//                acount.setAffiliatedBank(bank.getParentName());
-//                acount.setOpeningBranch(bank.getName());
-//            }
-//            acount.setUpId(vendor.getId());
-//            //供应商
-//            acount.setAcountType(AccountEnum.GYS_TYPE.getType());
-//            //默认账户
-//            acount.setStatus(1);
-//            acount.setId(IdUtil.getSnowflakeNextId());
-//            accountService.save(acount);
+            DwCdBank bank = bankService.selectBankById(vendor.getAccountBranch());
+            TAccountInfo acount = new TAccountInfo();
+            acount.setBankAccount(vendor.getBankAccount());
+            acount.setBipId(vendor.getAccountBranch());
+            acount.setCurrency(vendor.getCurrencyCode());
+            if(bank!=null){
+               acount.setInterbankNumber(bank.getCode());
+               acount.setAffiliatedBank(bank.getParentName());
+               acount.setOpeningBranch(bank.getName());
+            }
+            acount.setUpId(vendor.getId());
+            //供应商
+            acount.setAcountType(AccountEnum.GYS_TYPE.getType());
+            //默认账户
+            acount.setStatus(1);
+            acount.setId(IdUtil.getSnowflakeNextId());
+            accountService.save(acount);
             // 保存供应商资质
             vendorCertificationService.addCertification(requestVO.getBusinessLicense(), CertificationTypeEnum.BUSINESS_LICENSE,vendor.getId());
             vendorCertificationService.addCertification(requestVO.getIntegrity(), CertificationTypeEnum.INTEGRITY,vendor.getId());
@@ -281,15 +332,15 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
             // 主要联系人
             VendorContact contact = requestVO.getVendorContact();
             // 新增供应商账号
-            Long longUserId = vendorContactService.addLoginUser(contact.getContactPhone(),contact.getContactName());
+            Long longUserId = vendorContactService.addLoginUser(contact.getContactPhone(),contact.getContactName(),null);
             contact.setLoginUserId(longUserId);
             contact.setCertificationId(legalAuthorizationId);
             contact.setVendorId(vendor.getId());
             // 注册时为默认为管理员
             contact.setIsManager(0);
             //新增法人账号(存在法人则法人为管理员，法人和主要联系人一样，则生成主要联系人信息)
-            if(!contact.getContactPhone().equals(vendor.getLegalPhone())){
-                Long longinId =vendorContactService.addLoginUser(vendor.getLegalPhone(),vendor.getLegalRepresentative());
+            /*if(!contact.getContactPhone().equals(vendor.getLegalPhone())){
+                Long longinId =vendorContactService.addLoginUser(vendor.getLegalPhone(),vendor.getLegalRepresentative(),null);
                 VendorContact contact1 = new VendorContact();
                 contact1.setVendorId(vendor.getId());
                 contact1.setContactName(vendor.getLegalRepresentative());
@@ -300,7 +351,7 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
                 vendorContactService.saveVendorContact(contact1);
             }else{
                 contact.setIsManager(1);
-            }
+            }*/
             long contactId=vendorContactService.saveMainVendorContact(contact);
             // 更新法人授权的 businessId
             vendorCertificationService.update(new LambdaUpdateWrapper<VendorCertification>()
@@ -396,7 +447,14 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
                 .filter(x -> x.getIsMainContact().equals(0))
                 .map(mc -> BeanCopierUtil.copyBean(mc, VendorContactVO.class))
                 .collect(Collectors.toList());
-
+        if(vendorVO != null && StringUtil.isNotEmpty(vendorVO.getAccountBranch())){
+            DwCdBank bank = bankService.selectBankById(vendorVO.getAccountBranch());
+            if(bank != null){
+                vendorVO.setOpeningBranch(bank.getName());
+            }else {
+                vendorVO.setOpeningBranch(vendorVO.getAccountBranch());
+            }
+        }
         return VendorDetailVO.builder()
                 .vendor(vendorVO)
                 .mainContact(mainContact)
@@ -438,7 +496,138 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
     public Vendor getByLoginUser(Long userId) {
         VendorContact vendorContact = vendorContactService.getVendorContactByLoginUser(userId);
         Vendor vendor = super.getById(vendorContact.getVendorId());
-        return Optional.of(vendor).orElseThrow(() -> new ParamValidateException("用户对应的供应商信息不存在"));
+        return Optional.ofNullable(vendor).orElseThrow(() -> new ParamValidateException("用户对应的供应商信息不存在"));
+    }
+
+    @Override
+    public Vendor getByLoginUserTwo(Long userId) {
+        VendorContact vendorContact = vendorContactService.getVendorContactByLoginUser(userId);
+        Vendor vendor = super.getById(vendorContact.getVendorId());
+        return Optional.ofNullable(vendor).orElse(new Vendor());
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRED,rollbackFor = Exception.class)
+    public VendorOneRequestVO getLoginUserDetail(Long loginUserId) {
+        VendorOneRequestVO vo = new VendorOneRequestVO();
+        VendorContact vendorContact = vendorContactService.getVendorContactByLoginUser(loginUserId);
+        ValidateUtils.validateStatusNotEquals(VendorContactStateEnum.VALID::equalsState,vendorContact.getState(),"您当前已被禁用!!!");
+        vo.setVendorContact(vendorContact);
+        Vendor vendor = super.getById(vendorContact.getVendorId());
+        if(vendor != null && StringUtil.isNotEmpty(vendor.getAccountBranch())){
+            DwCdBank bank = bankService.selectBankById(vendor.getAccountBranch());
+            if(bank != null){
+                vendor.setBankName(bank.getName());
+            }else {
+                vendor.setBankName(vendor.getAccountBranch());
+            }
+        }
+        vo.setVendor(vendor);
+        if(vendorContact.getVendorId() != null && vendor != null){
+            vendorCertificationService.listCertification(vo,vendorContact.getVendorId(), vendorContact.getId());
+        }
+        return vo;
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRED,rollbackFor = Exception.class)
+    public void registerSave(VendorOneRequestVO requestVO) {
+        Boolean flag =true;
+        Long legalAuthorizationId = null;
+        Vendor vendor = new Vendor();
+        //如果重新提交则走if里面的方法
+        if(requestVO.getVendor()!=null&&requestVO.getVendor().getId()!=null){
+            flag = false;
+            Long id =requestVO.getVendor().getId();
+            vendor = super.getById(requestVO.getVendor().getId());
+            if(vendor!=null){
+                // 保存基本信息
+                vendor = requestVO.getVendor();
+                vendor.setState(VendorStateEnum.SAVE.getState());
+                vendor.setSignState(SignStateEnum.TO_SIGN.getState());
+                vendor.setVendorClass(1);
+                vendor.setVendorLevel(3);
+                super.saveOrUpdate(vendor);
+                //保存银行账户信息
+                // 保存供应商资质
+                if(requestVO.getBusinessLicense() != null){
+                    vendorCertificationService.addCertification(requestVO.getBusinessLicense(), CertificationTypeEnum.BUSINESS_LICENSE,vendor.getId());
+                }
+                if(requestVO.getIntegrity() != null){
+                    vendorCertificationService.addCertification(requestVO.getIntegrity(), CertificationTypeEnum.INTEGRITY,vendor.getId());
+                }
+                if(requestVO.getLegalAuthorization() != null){
+                    legalAuthorizationId = vendorCertificationService.addCertification(requestVO.getLegalAuthorization(),CertificationTypeEnum.LEGAL_AUTHORIZATION,vendor.getId());
+                }
+                if (CollUtil.isNotEmpty(requestVO.getRelevantCertificationList())){
+                    vendorCertificationService.addCertification(requestVO.getRelevantCertificationList(), CertificationTypeEnum.RELEVANT_CERTIFICATION,vendor.getId());
+                }
+                // 主要联系人
+                VendorContact contact = requestVO.getVendorContact();
+                // 新增供应商账号
+                contact.setCertificationId(legalAuthorizationId);
+                contact.setVendorId(vendor.getId());
+                // 注册时为默认为管理员
+                contact.setIsManager(1);
+                vendorContactService.saveOrUpdate(contact);
+                // 更新法人授权的 businessId
+                vendorCertificationService.update(new LambdaUpdateWrapper<VendorCertification>()
+                        .set(VendorCertification::getBusinessId,contact.getId())
+                        .eq(VendorCertification::getId,legalAuthorizationId));
+            }else{
+                flag = true;
+            }
+        }else{
+            flag =true;
+        }
+        if(flag){
+            vendor = requestVO.getVendor();
+            Vendor checkVendor = super.getOne(new LambdaQueryWrapper<Vendor>()
+                    .eq(Vendor::getSocialCreditCode,vendor.getSocialCreditCode()));
+            if (checkVendor != null && !checkVendor.getId().equals(vendor.getId())) {
+                throw new ParamValidateException("该统一社会信用代码已存在");
+            }
+
+            checkVendor = super.getOne(new LambdaQueryWrapper<Vendor>()
+                    .eq(Vendor::getEnterpriseName,vendor.getEnterpriseName()));
+            if (checkVendor != null && !checkVendor.getId().equals(vendor.getId())) {
+                throw new ParamValidateException("该企业名称已存在");
+            }
+//            checkVendorContact(requestVO.getVendor(), requestVO.getVendorContact());
+            // 保存基本信息
+
+            vendor.setState(VendorStateEnum.SAVE.getState());
+            vendor.setSignState(SignStateEnum.TO_SIGN.getState());
+            vendor.setVendorClass(1);
+            vendor.setVendorLevel(3);
+            super.save(vendor);
+            // 保存供应商资质
+            if(requestVO.getBusinessLicense() != null){
+                vendorCertificationService.addCertification(requestVO.getBusinessLicense(), CertificationTypeEnum.BUSINESS_LICENSE,vendor.getId());
+            }
+            if(requestVO.getIntegrity() != null){
+                vendorCertificationService.addCertification(requestVO.getIntegrity(), CertificationTypeEnum.INTEGRITY,vendor.getId());
+            }
+            if(requestVO.getLegalAuthorization() != null){
+                legalAuthorizationId = vendorCertificationService.addCertification(requestVO.getLegalAuthorization(),CertificationTypeEnum.LEGAL_AUTHORIZATION,vendor.getId());
+            }
+            if (CollUtil.isNotEmpty(requestVO.getRelevantCertificationList())){
+                vendorCertificationService.addCertification(requestVO.getRelevantCertificationList(), CertificationTypeEnum.RELEVANT_CERTIFICATION,vendor.getId());
+            }
+            // 主要联系人
+            VendorContact contact = requestVO.getVendorContact();
+            // 修改用户别名
+            //Long longUserId = vendorContactService.addLoginUser(contact.getContactPhone(),contact.getContactName(),null);
+            contact.setCertificationId(legalAuthorizationId);
+            contact.setVendorId(vendor.getId());
+            // 注册时为默认为管理员
+            contact.setIsManager(0);
+            long contactId=vendorContactService.saveMainVendorContact(contact);
+            // 更新法人授权的 businessId
+            vendorCertificationService.update(new LambdaUpdateWrapper<VendorCertification>()
+                    .set(VendorCertification::getBusinessId,contactId)
+                    .eq(VendorCertification::getId,legalAuthorizationId));
+        }
     }
 
     @Override
@@ -509,14 +698,21 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
 
             VendorStateVO vendorState = BeanCopierUtil.copyBean(vendor,VendorStateVO.class);
             /* 递归拼接部门名称 */
-            vendorState.setFirstCooperationCompanyName(remoteSystemService.getDeptNameLoop(vendor.getFirstCooperationCompanyCode(),vendorState.getFirstCooperationCompanyName(),SecurityConstants.INNER));
-
+            //vendorState.setFirstCooperationCompanyName(remoteSystemService.getDeptNameLoop(vendor.getFirstCooperationCompanyCode(),vendorState.getFirstCooperationCompanyName(),SecurityConstants.INNER));
+            vendorState.setFirstCooperationCompanyName(remoteSystemService.getDeptNameLoop(vendor.getFirstCooperationCompanyCode(),"null",SecurityConstants.INNER));
             // 查询最新变更id
             Long changeId = vendorChangeService.getLastChangeId(id);
             if(null != changeId){
                 vendorVO.setChangeId(changeId);
             }
-
+            if(vendorVO != null && StringUtil.isNotEmpty(vendorVO.getAccountBranch())){
+                DwCdBank bank = bankService.selectBankById(vendorVO.getAccountBranch());
+                if(bank != null){
+                    vendorVO.setOpeningBranch(bank.getName());
+                }else {
+                    vendorVO.setOpeningBranch(vendorVO.getAccountBranch());
+                }
+            }
             return VendorManagementDetailVO.builder()
                     .vendor(vendorVO)
                     .mainContact(mainContactVO)
@@ -610,7 +806,9 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
         long userId = SecurityUtils.getUserId();
         VendorContact vendorContact = vendorContactService.getVendorContactByLoginUser(userId);
         ValidateUtils.validateStatusNotEquals(VendorContactStateEnum.VALID::equalsState,vendorContact.getState(),"您当前已被禁用!!!");
-
+        if(vendorContact.getVendorId() == null){
+            throw new NotFoundException("请先完善供应商信息！");
+        }
         Vendor vendor = super.getById(vendorContact.getVendorId());
         ValidateUtils.isNullException(vendor,"获取所属供应商信息失败");
 
@@ -1003,6 +1201,38 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
 
     }
 
+    @Override
+    @Transactional(propagation = Propagation.REQUIRED,rollbackFor = Exception.class)
+    public void registerLinkman(VendorOneRequestVO requestVO) {
+        Boolean flag =true;
+        if(flag){
+            //查询是否有联系人和对应的登录用户,有联系人数据并且绑定了userid不让注册，没有联系人绑定userid但有用户账号则添加联系人
+            // 主要联系人
+            VendorContact contact = requestVO.getVendorContact();
+            List<String> stateList = new ArrayList<>();
+            stateList.add("0");
+            stateList.add("1");
+            List<VendorContact> contactList = vendorContactService.list(new LambdaUpdateWrapper<VendorContact>().eq(VendorContact::getContactPhone, contact.getContactPhone())
+                    .isNotNull(VendorContact::getLoginUserId)
+                    .eq(VendorContact::getDelFlag, "0")
+                    .in(VendorContact::getState, stateList));
+            if(contactList != null && contactList.size()>0){
+                throw new NotFoundException("已存在手机号为"+contact.getContactPhone()+"的用户");
+            }else{
+                contact.setIsManager(0);
+            }
+            // 新增供应商账号
+            Long longUserId = vendorContactService.addLoginUser(contact.getContactPhone(),contact.getContactName(),contact.getNewPassword());
+            contact.setLoginUserId(longUserId);
+            contact.setIsMainContact(1);
+            contact.setState(VendorContactStateEnum.VALID.getState());
+            contact.setIsLegal(1);
+            vendorContactService.saveOrUpdate(contact);
+        }
+
+
+    }
+
     /**
      * 审批测回
      * @param variables
@@ -1013,5 +1243,16 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
         super.update(new LambdaUpdateWrapper<Vendor>()
                 .set(Vendor::getState,VendorStateEnum.SAVE.getState())
                 .eq(Vendor::getId, businessId));
+    }
+
+    @Override
+    public String checkEnterpriseNameAndId(String enterpriseName, Long vendorId) {
+        Vendor vendor = super.getOne(new LambdaQueryWrapper<Vendor>()
+                .eq(Vendor::getEnterpriseName,enterpriseName));
+        if (vendor != null && !vendor.getId().equals(vendorId)) {
+            VendorMainContactVO mainContact = vendorContactService.getMainContact(vendor.getId());
+            return "企业名称已存在，请联系 " + mainContact.getContactName() + "-" + mainContact.getContactPhone();
+        }
+        return "成功";
     }
 }

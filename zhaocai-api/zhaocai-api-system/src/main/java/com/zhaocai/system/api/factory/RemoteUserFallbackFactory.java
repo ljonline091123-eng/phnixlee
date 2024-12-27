@@ -1,6 +1,7 @@
 package com.zhaocai.system.api.factory;
 
 import com.zhaocai.common.core.domain.R;
+import com.zhaocai.common.core.web.domain.AjaxResult;
 import com.zhaocai.system.api.domain.BusinessUser;
 import com.zhaocai.system.api.domain.SysRole;
 import com.zhaocai.system.api.domain.SysUser;
@@ -94,6 +95,11 @@ public class RemoteUserFallbackFactory implements FallbackFactory<RemoteUserServ
 
             @Override
             public SysUser getUserInfoByUsername(String username, String source) {
+                return null;
+            }
+
+            @Override
+            public AjaxResult resetPwd(SysUser sysUser, String source) {
                 return null;
             }
 

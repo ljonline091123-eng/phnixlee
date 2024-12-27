@@ -57,6 +57,8 @@ import com.zhaocai.common.core.utils.bean.BeanCopierUtil;
 import com.zhaocai.common.security.utils.SecurityUtils;
 import com.zhaocai.system.api.domain.SysUser;
 import com.zhaocai.system.api.system.RemoteUserService;
+import io.swagger.annotations.ApiModelProperty;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
@@ -78,6 +80,7 @@ import java.util.stream.Collectors;
  * @author WH
  * @date 2024-05-24
  */
+@Slf4j
 @Service
 public class TenderNoticeServiceImpl extends ServiceImpl<TenderNoticeMapper,TenderNotice> implements ITenderNoticeService {
 
@@ -402,59 +405,64 @@ public class TenderNoticeServiceImpl extends ServiceImpl<TenderNoticeMapper,Tend
     }
 
     private void dealOpenPeopleTodoTask(ProcurementScheme procurementScheme, TenderNotice tenderNotice) {
-       System.out.println("开始:"+procurementScheme);
         PushThirdPartyTodoTaskRequestDTO parentRequestDTO = new PushThirdPartyTodoTaskRequestDTO();
         List<PushThirdPartyTodoTaskSonRequestDTO> messageList = new ArrayList<>();
-            PushThirdPartyTodoTaskSonRequestDTO requestDTO = new PushThirdPartyTodoTaskSonRequestDTO();
+        PushThirdPartyTodoTaskSonRequestDTO requestDTO = new PushThirdPartyTodoTaskSonRequestDTO();
         MinProjectVO project = minProjectService.getMinProjectByMinAccountCode(procurementScheme.getProjectCode());
-        System.out.println("项目:"+project);
-       /* List<SysDictData>  dataList =  dictDataService.listDictDataLabel("procurement_type",procurementScheme.getProcurementType().toString());*/
         String label = "";
-     switch (procurementScheme.getProcurementType()){
-         case 1:
-             label = "公开招标";
-         case 2:
-             label = "邀请招标";
-         case 3:
-             label = "询价";
-         case 4:
-             label = "单一来源";
-         default:
-     }
-        System.out.println("label:"+label);
-            requestDTO.setTitle("财务人员待办信息");
-        String  xm =procurementScheme.getFinanceConfirmName()+ "你好!" + project.getMinAccountFullName()+"项目的"+
-                procurementScheme.getProcurementSchemeName()+"、编号为"+ procurementScheme.getProcurementSchemeCode()+"、招标方式为"+ label+"于"+formatDate(tenderNotice.getCreateTime())+
-                "发布了招标文件、开启了招标工作，需要收取投标保证金。请您及时关注投标人是否按时缴纳保证金。";
+        switch (procurementScheme.getProcurementType()){
+             case 1:
+                 label = "公开招标";
+             case 2:
+                 label = "邀请招标";
+             case 3:
+                 label = "询价";
+             case 4:
+                 label = "单一来源";
+             default:
+        }
+        requestDTO.setTitle("财务人员待办信息");
 
-           System.out.println("xm:"+xm);
-            requestDTO.setContent(xm);
-            requestDTO.setArrivalTime(formatDate(new Date()));
-            requestDTO.setCreateTime(formatDate(new Date()));
-            String thridUserId = SecurityUtils.getThridUserId();
-            requestDTO.setMsgFromPerCode(StringUtils.isNotEmpty(thridUserId) ? Long.parseLong(thridUserId) : null);
-            requestDTO.setMsgFromPerName(SecurityUtils.getLoginUserNickName());
-            String findThirdUserId = findThirdUserId(procurementScheme.getFinanceConfirmId()==null?null:Long.valueOf(procurementScheme.getFinanceConfirmId()));
-            requestDTO.setMsgToPerCode(StringUtils.isNotEmpty(findThirdUserId) ? Long.parseLong(findThirdUserId) : null);
-            requestDTO.setMsgToPerName(procurementScheme.getFinanceConfirmName());
-            requestDTO.setFlowGroup(ThirdPartyTodoFlowGroupEnum.XCW_BID.getDesc());
-            requestDTO.setFlowModule(ThirdPartyTodoFlowModuleEnum.BID_MANAGE.getDesc());
-            requestDTO.setFlowName(procurementScheme.getFinanceConfirmName() + "的" + ThirdPartyTodoFlowGroupEnum.XCW_BID.getDesc());
-            requestDTO.setDetailUrl("/procurement/tendering");
-//            requestDTO.setDetailUrl("/procurement/plan-detail/IjE4MTkyODk4NDM3Njk0NzA5Nzgi");
-//            requestDTO.setUserObj("{\\\"id\\\":1111}");
-//            requestDTO.setUserObj(openPeople.toString());
-            //推送消息类型 1工作通知
-            requestDTO.setType(NumberConstant.ONE);
-            //推送公司类型 2晟晟
-            requestDTO.setCompanyType(NumberConstant.TWO);
-            messageList.add(requestDTO);
-        System.out.println("messageList:"+messageList);
+        String xm = (procurementScheme==null?"":procurementScheme.getFinanceConfirmName()==null?"":procurementScheme.getFinanceConfirmName())
+            + "你好!"
+            + (project==null?"":project.getMinAccountFullName()==null?"":project.getMinAccountFullName())
+            + "项目的"
+            + (procurementScheme==null?"":procurementScheme.getProcurementSchemeName()==null?"":procurementScheme.getProcurementSchemeName())
+            + "、编号为"
+            + (procurementScheme==null?"":procurementScheme.getProcurementSchemeCode()==null?"":procurementScheme.getProcurementSchemeCode()) +
+            "、招标方式为"
+            + label
+            + "于"
+            + (tenderNotice==null?"":tenderNotice.getCreateTime()==null?"":this.formatDate(tenderNotice.getCreateTime()))
+            + "发布了招标文件、开启了招标工作，需要收取投标保证金。请您及时关注投标人是否按时缴纳保证金。";
+
+        log.info("[财务人员待办信息][xm] {}",xm);
+        requestDTO.setContent(xm);
+        requestDTO.setArrivalTime(formatDate(new Date()));
+        requestDTO.setCreateTime(formatDate(new Date()));
+        String thridUserId = SecurityUtils.getThridUserId();
+        requestDTO.setMsgFromPerCode(StringUtils.isNotEmpty(thridUserId) ? Long.parseLong(thridUserId) : null);
+        requestDTO.setMsgFromPerName(SecurityUtils.getLoginUserNickName());
+        String findThirdUserId = findThirdUserId(procurementScheme.getFinanceConfirmId()==null?null:Long.valueOf(procurementScheme.getFinanceConfirmId()));
+        requestDTO.setMsgToPerCode(StringUtils.isNotEmpty(findThirdUserId) ? Long.parseLong(findThirdUserId) : null);
+        requestDTO.setMsgToPerName((procurementScheme==null?"":procurementScheme.getFinanceConfirmName()==null?"":procurementScheme.getFinanceConfirmName()));
+        requestDTO.setFlowGroup(ThirdPartyTodoFlowGroupEnum.XCW_BID.getDesc());
+        requestDTO.setFlowModule(ThirdPartyTodoFlowModuleEnum.BID_MANAGE.getDesc());
+        requestDTO.setFlowName((procurementScheme==null?"":procurementScheme.getFinanceConfirmName()==null?"":procurementScheme.getFinanceConfirmName()) + "的" + ThirdPartyTodoFlowGroupEnum.XCW_BID.getDesc());
+        requestDTO.setDetailUrl("/procurement/tendering");
+        //            requestDTO.setDetailUrl("/procurement/plan-detail/IjE4MTkyODk4NDM3Njk0NzA5Nzgi");
+        //            requestDTO.setUserObj("{\\\"id\\\":1111}");
+        //            requestDTO.setUserObj(openPeople.toString());
+        //推送消息类型 1工作通知
+        requestDTO.setType(NumberConstant.ONE);
+        //推送公司类型 2晟晟
+        requestDTO.setCompanyType(NumberConstant.THREE);
+        messageList.add(requestDTO);
+        log.info("[财务人员待办信息][messageList] {}",messageList);
         parentRequestDTO.setMessageList(messageList);
         parentRequestDTO.setAuthorization(SecurityUtils.getMasterControlToken());
-        System.out.println("推送:");
         thridPartyTodoTaskService.pushTodoTask(parentRequestDTO);
-        System.out.println("推送完成:");
+        log.info("[财务人员待办信息][推送] {}",parentRequestDTO);
     }
 
     private String formatDate(Date date){
@@ -956,6 +964,15 @@ public class TenderNoticeServiceImpl extends ServiceImpl<TenderNoticeMapper,Tend
     @Override
     public List<ContractPlanningNoticeVO> getListByContractPlanningId(ContractPlanningQueryVO queryVO) {
         return baseMapper.getListByContractPlanningId(queryVO);
+    }
+
+    @Override
+    public PageResult<VendorPortalNoticeListVO> selectVendorPortalNoticePageTwo(VendorPortalNoticePageQueryVO queryDTO) {
+        IPage<VendorPortalNoticeListVO> iPage = baseMapper.findVendorPortalNoticePageTwo(queryDTO.toMybatisPage(), queryDTO);
+        for (VendorPortalNoticeListVO record : iPage.getRecords()) {
+            record.setMinProjectName(getMinProjectName(record.getSchemeId()));
+        }
+        return new PageResult<>(iPage);
     }
 
     /**

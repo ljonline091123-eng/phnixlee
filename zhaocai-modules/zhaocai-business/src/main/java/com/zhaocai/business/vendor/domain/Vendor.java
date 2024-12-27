@@ -1,5 +1,6 @@
 package com.zhaocai.business.vendor.domain;
 
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.zhaocai.common.core.web.domain.BaseEntity;
@@ -7,6 +8,7 @@ import io.swagger.annotations.ApiModelProperty;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.beans.Transient;
 import java.math.BigDecimal;
 import java.util.Date;
 
@@ -278,4 +280,10 @@ public class Vendor extends BaseEntity {
      */
     @ApiModelProperty(value = "注册审批通过时间")
     private Date registerApprovalTime;
+
+    @TableField(exist = false)
+    @ApiModelProperty(value = "开户支行名称")
+    private String bankName;
+
+
 }

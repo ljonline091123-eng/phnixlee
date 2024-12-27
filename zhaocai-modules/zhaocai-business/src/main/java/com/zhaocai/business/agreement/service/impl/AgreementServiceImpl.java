@@ -13,6 +13,7 @@ import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.zhaocai.business.agreement.domain.*;
+import com.zhaocai.business.agreement.domain.AgreementPartyInfoVO;
 import com.zhaocai.business.agreement.dto.AgreementMaterialsInfoDTO;
 import com.zhaocai.business.agreement.mapper.AgreementMapper;
 import com.zhaocai.business.agreement.service.*;
@@ -133,6 +134,9 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
 
     @Autowired
     private IAgreementPaymentListService agreementPaymentListService;
+    /* 合同签约方信息 */
+    @Autowired
+    private IAgreementPartyInfoService agreementPartyInfoService;
 
     @Autowired
     private IAgreementDailyWageService agreementDailyWageService;
@@ -495,6 +499,8 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
 
         // 结算与付款节点信息
         List<AgreementPaymentListVO> agreementPaymentLists = agreementPaymentListService.listByAgreementId(id);
+        // 合同签约方信息
+        List<AgreementPartyInfoVO> agreementPartyInfoLists = agreementPartyInfoService.listByAgreementId(id);
 
         List<AgreementMaterialsListVO> materialsLists;
         // 合同清单
@@ -532,6 +538,7 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
                 .agreement(agreementVO)
                 .agreementPaymentItem(agreementPaymentItemVO)
                 .agreementPaymentLists(agreementPaymentLists)
+                .agreementPartyInfoLists(agreementPartyInfoLists)
                 .materialsList(materialsLists)
                 .agreementDeposits(agreementDeposits)
                 .agreementDailyWageList(agreementDailyWageList)
@@ -668,6 +675,10 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
         // 合同-结算与付款信息节点
         List<AgreementPaymentListVO> contractNodeList = agreementPaymentListService.listByAgreementId(id);
         underlingDetailVO.setContractNodeList(contractNodeList);
+
+        // 合同-合同签约方信息
+        List<AgreementPartyInfoVO> contractPartyInfoList = agreementPartyInfoService.listByAgreementId(id);
+        underlingDetailVO.setContractPartyInfoList(contractPartyInfoList);
 
         // 甲供设备清单列表
         List<AgreementEquipmentSupplyVO> contractSupplyEquipmentList = agreementEquipmentSupplyService.listByAgreementId(id);
@@ -1449,6 +1460,9 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
         // 结算与付款节点信息
         agreementPaymentListService.saveAgreementPaymentList(requestVO.getAgreementPaymentLists(),agreement.getId());
 
+        // 合同签约方信息
+        agreementPartyInfoService.saveAgreementPartyInfo(requestVO.getAgreementPartyInfoLists(),agreement.getId());
+
         // 合同清单
         agreementMaterialsListService.saveAgreementMaterialsList(requestVO.getAgreementMaterialsLists(),agreement.getId());
 
@@ -1737,6 +1751,9 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
 
         // 结算与付款节点信息
         agreementPaymentListService.updateAgreementPaymentList(requestVO.getAgreementPaymentLists(),agreement.getId());
+
+        // 合同签约方信息
+        agreementPartyInfoService.updateAgreementPartyInfo(requestVO.getAgreementPartyInfoLists(),agreement.getId());
 
         // 合同清单
         agreementMaterialsListService.updateAgreementMaterialsList(requestVO.getAgreementMaterialsLists(),agreement.getId());

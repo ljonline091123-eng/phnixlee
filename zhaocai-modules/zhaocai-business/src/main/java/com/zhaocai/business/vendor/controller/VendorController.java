@@ -4,6 +4,9 @@ import com.alibaba.fastjson.JSONObject;
 import com.zhaocai.business.common.annotations.VendorStateCheck;
 import com.zhaocai.business.common.base.BladeController;
 import com.zhaocai.business.common.enums.SupplierRegistSourceEnum;
+import com.zhaocai.business.common.enums.VendorContactStateEnum;
+import com.zhaocai.business.common.exception.NotFoundException;
+import com.zhaocai.business.common.utils.ValidateUtils;
 import com.zhaocai.business.manager.http.dto.req.BpmAuditRequestDTO;
 import com.zhaocai.business.manager.http.dto.req.BpmInitializeRequestDTO;
 import com.zhaocai.business.manager.http.dto.req.BpmListProcessLogRequestDTO;
@@ -16,7 +19,10 @@ import com.zhaocai.business.pub.service.IAttachmentService;
 import com.zhaocai.business.pub.utils.YOZOfileUtils;
 import com.zhaocai.business.pub.vo.res.AttachmentVO;
 import com.zhaocai.business.vendor.domain.Vendor;
+import com.zhaocai.business.vendor.domain.VendorContact;
+import com.zhaocai.business.vendor.service.IVendorContactService;
 import com.zhaocai.business.vendor.service.IVendorService;
+import com.zhaocai.business.vendor.vo.req.VendorOneRequestVO;
 import com.zhaocai.business.vendor.vo.req.VendorRegisterRequestVO;
 import com.zhaocai.business.vendor.vo.req.VendorSaveRequestVO;
 import com.zhaocai.business.vendor.vo.res.VendorDetailVO;
@@ -54,6 +60,9 @@ public class VendorController extends BladeController {
 
     @Autowired
     private YOZOfileUtils yozOfileUtils;
+
+    @Autowired
+    private IVendorContactService vendorContactService;
 
     /**
      * 投标管理-把招标公告转为PDF、加水印并生成预览URL
@@ -153,6 +162,19 @@ public class VendorController extends BladeController {
     }
 
     /**
+     * 校验企业名称
+     *
+     * @param enterpriseName
+     * @param vendorId
+     * @return
+     */
+    @GetMapping("/checkEnterpriseNameAndId")
+    @ApiOperation(value = "校验企业名称和id")
+    public ResultData<String> checkEnterpriseNameAndId(@RequestParam("enterpriseName") String enterpriseName ,@RequestParam("vendorId") Long vendorId) {
+        return ResultData.success(vendorService.checkEnterpriseNameAndId(enterpriseName,vendorId));
+    }
+
+    /**
      * 签章注册
      */
     @PostMapping("/vendorSignAuth")
@@ -204,6 +226,46 @@ public class VendorController extends BladeController {
     @PostMapping("/revokeVendor")
     public ResultData<Boolean> revokeVendor(@RequestParam Long id) {
         vendorService.revokeVendor(id);
+        return ResultData.success();
+    }
+
+    /**
+     * 供应商注册
+     */
+    @Log(title = "供应商联系人注册", businessType = BusinessType.INSERT)
+    @PostMapping("/registerLinkman")
+    @ApiOperation("供应商联系人注册")
+    public ResultData<Boolean> registerLinkman(@RequestBody @Valid VendorOneRequestVO requestVO) {
+        vendorService.registerLinkman(requestVO);
+        return ResultData.success();
+    }
+
+    @GetMapping("/getVendor")
+    @ApiOperation("获取用户供应商")
+    public ResultData<VendorOneRequestVO> getVendor() {
+        VendorOneRequestVO bean = new VendorOneRequestVO();
+        long userId = SecurityUtils.getUserId();
+        VendorContact vendorContact = vendorContactService.getVendorContactByLoginUser(userId);
+        ValidateUtils.validateStatusNotEquals(VendorContactStateEnum.VALID::equalsState,vendorContact.getState(),"您当前已被禁用!!!");
+        Vendor vendor = vendorService.getById(vendorContact.getVendorId());
+        bean.setVendor(vendor);
+        bean.setVendorContact(vendorContact);
+        return ResultData.data(bean);
+    }
+
+    @GetMapping("/loginUserDetail")
+    @ApiOperation("供应商注册详情")
+    public ResultData<VendorOneRequestVO> loginUserDetail(Long loginUserId) {
+        return ResultData.data(vendorService.getLoginUserDetail(loginUserId));
+    }
+
+    @VendorStateCheck
+    @Log(title = "供应商注册保存", businessType = BusinessType.UPDATE)
+    @PostMapping("/registerSave")
+    @ApiOperation("供应商注册保存")
+    public ResultData<String> registerSave(@RequestBody @Valid VendorOneRequestVO requestVO) {
+        //vendorService.saveVendor(requestVO);
+        vendorService.registerSave(requestVO);
         return ResultData.success();
     }
 }

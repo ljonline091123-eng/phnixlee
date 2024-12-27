@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhaocai.business.agreement.mapper.AgreementPartyInfoMapper">
+
+    <resultMap type="com.zhaocai.business.agreement.domain.AgreementPartyInfo" id="AgreementPartyInfoResult">
+        <result property="id"    column="id"    />
+        <result property="agreementId"    column="agreement_id"    />
+        <result property="roleType"    column="role_type"    />
+        <result property="signerCode"    column="signer_code"    />
+        <result property="signerName"    column="signer_name"    />
+        <result property="signerRate"    column="signer_rate"    />
+        <result property="signerBankName"    column="signer_bank_name"    />
+        <result property="signerBankOpen"    column="signer_bank_open"    />
+        <result property="signerBankAccount"    column="signer_bank_account"    />
+        <result property="signerTaxpayerNumber"    column="signer_taxpayer_number"    />
+        <result property="createBy"    column="create_by"    />
+        <result property="createId"    column="create_id"    />
+        <result property="createTime"    column="create_time"    />
+        <result property="updateBy"    column="update_by"    />
+        <result property="updateId"    column="update_id"    />
+        <result property="updateTime"    column="update_time"    />
+        <result property="delFlag"    column="del_flag"    />
+    </resultMap>
+
+    <sql id="selectAgreementPartyInfoVo">
+        select id,
+               agreement_id,
+               role_type,
+               signer_code,
+               signer_name,
+               signer_rate,
+               signer_bank_name,
+               signer_bank_open,
+               signer_bank_account,
+               signer_taxpayer_number,
+               create_by,
+               create_id,
+               create_time,
+               update_by,
+               update_id,
+               update_time,
+               del_flag
+        from tb_agreement_party_info api
+    </sql>
+
+    <delete id="deleteByAgreementId">
+        delete from tb_agreement_party_info where agreement_id = #{agreementId,jdbcType=BIGINT}
+    </delete>
+
+</mapper>

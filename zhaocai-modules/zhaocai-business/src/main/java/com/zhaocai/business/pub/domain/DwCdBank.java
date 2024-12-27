@@ -25,7 +25,7 @@ public class DwCdBank extends PageRecive implements Serializable {
 
     /** $column.columnComment */
     @TableId(value = "id",type = IdType.AUTO)
-    private Long id;
+    private String id;
 
     /** 银行名称 */
     @Excel(name = "银行名称")

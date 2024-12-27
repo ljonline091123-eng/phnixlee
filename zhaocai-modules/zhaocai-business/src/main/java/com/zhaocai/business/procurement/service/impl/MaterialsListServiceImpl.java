@@ -442,7 +442,6 @@ public class MaterialsListServiceImpl extends ServiceImpl<MaterialsListMapper, M
                                 + "-_#_-" +((x.getContractScope()==null||x.getContractScope().equals(""))?"&":x.getContractScope()) ,
                         Collectors.mapping(materials -> BeanCopierUtil.copyBean(materials,MaterialsList.class),
                                 Collectors.toList())));
-
         List<CompContractSplitMaterialsVO> resultList = new ArrayList<>(map.size());
         CompContractSplitMaterialsVO  splitMaterialsVO;
         for (Map.Entry<String,List<MaterialsList>> entry : map.entrySet()) {

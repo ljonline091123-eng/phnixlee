@@ -20,7 +20,7 @@ public interface IBankService extends IService<DwCdBank>
      * @param id 主键
      * @return 银行信息
      */
-    public DwCdBank selectBankById(Long id);
+    public DwCdBank selectBankById(String id);
 
     /**
      * 查询列表

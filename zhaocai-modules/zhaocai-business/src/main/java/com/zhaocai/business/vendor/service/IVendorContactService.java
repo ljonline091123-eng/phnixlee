@@ -117,7 +117,7 @@ public interface IVendorContactService  extends IService<VendorContact> , IProce
      * @param contactName
      * @return
      */
-    Long addLoginUser(String contactPhone, String contactName);
+    Long addLoginUser(String contactPhone, String contactName, String password);
 
     /**
      * 设置供应商管理员
@@ -155,4 +155,6 @@ public interface IVendorContactService  extends IService<VendorContact> , IProce
     VendorContactInfoVO getInfo(Long id);
 
     String checkLoginAccount(String contactPhone);
+
+    int updateByVendorId(Long id, Long uuid);
 }

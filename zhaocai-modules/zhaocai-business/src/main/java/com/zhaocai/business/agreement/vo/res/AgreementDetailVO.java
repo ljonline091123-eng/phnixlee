@@ -1,5 +1,6 @@
 package com.zhaocai.business.agreement.vo.res;
 
+import com.zhaocai.business.agreement.domain.AgreementPartyInfoVO;
 import com.zhaocai.business.common.base.AdviceObject;
 import io.swagger.annotations.ApiModelProperty;
 import lombok.Builder;
@@ -25,6 +26,9 @@ public class AgreementDetailVO extends AdviceObject {
 
     @ApiModelProperty(value = "结算与付款节点信息")
     private List<AgreementPaymentListVO> agreementPaymentLists;
+
+    @ApiModelProperty(value = "合同签约方信息对象")
+    private List<AgreementPartyInfoVO> agreementPartyInfoLists;
 
     @ApiModelProperty(value = "物质清单")
     private List<AgreementMaterialsListVO> materialsList;

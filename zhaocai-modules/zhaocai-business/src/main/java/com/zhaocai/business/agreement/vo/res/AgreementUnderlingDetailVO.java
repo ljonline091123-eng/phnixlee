@@ -2,6 +2,7 @@ package com.zhaocai.business.agreement.vo.res;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.zhaocai.business.agreement.domain.Agreement;
+import com.zhaocai.business.agreement.domain.AgreementPartyInfoVO;
 import com.zhaocai.business.common.conver.ProcurementPlanTypeConver;
 import com.zhaocai.business.procurement.domain.ContractPlanning;
 import com.zhaocai.business.procurement.domain.ProcurementScheme;
@@ -85,6 +86,11 @@ public class AgreementUnderlingDetailVO {
      * 合同-结算与付款信息节点
      */
     private List<AgreementPaymentListVO> contractNodeList;
+
+    /**
+     * 合同-结算与付款信息节点
+     */
+    private List<AgreementPartyInfoVO> contractPartyInfoList;
 
     /**
      * 甲供设备清单列表
