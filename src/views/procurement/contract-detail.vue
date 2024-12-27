@@ -3433,7 +3433,19 @@ export default {
             : false;
           this.agreementMaterialsLists = res.data.materialsList;
           this.agreementPaymentLists = res.data.agreementPaymentLists;
-          this.agreementPartyInfoLists = res.data.agreementPartyInfoLists;
+          this.agreementPartyInfoLists = res.data.agreementPartyInfoLists || [];
+
+          /* 填充字典值，和默认甲乙方 this.dictObj.con_role_type */
+          const updatedLists = this.agreementPartyInfoLists.map(item => {
+            if (item.roleType === '1') {
+              return { ...item,  roleTypeText: '合同甲方'};
+            } else if (item.roleType === '2') {
+              return { ...item,  roleTypeText: '合同乙方'};
+            }
+            return item;
+          });
+          this.$set(this, 'agreementPartyInfoLists', updatedLists);
+
           this.agreementDeposits = res.data.agreementDeposits;
           this.approveNodeInfos = res.data.approveNodeInfos;
           this.approveLists = res.data.approveLists;
