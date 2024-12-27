@@ -1720,8 +1720,24 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
             throw new BusinessException("该状态下的合同不允许修改");
         }
 
+        //获取agreement的AttachmentId，复制文件名和文件url到LabelAttachmentId
+        if (agreement.getAttachmentId() != null ) {
+            //LabelAttachmentId标签合同附件文件不存在的话，复制原始合同附件给它
+            if (NumberUtil.isNullOrZero(agreement.getLabelAttachmentId())) {
+                Attachment attachment = attachmentService.getById(agreement.getAttachmentId());
+                Long labelAttachmentId= attachmentService.addAttachment(new AttachmentRequestVO(attachment.getFileName(),attachment.getFileUrl()),AttachmentTypeEnum.AGREEMENT_ORIGINAL,agreement.getId());
+                agreement.setLabelAttachmentId(labelAttachmentId);
+                // 只更新 LabelAttachmentId
+                super.update(new LambdaUpdateWrapper<Agreement>()
+                        .set(Agreement::getLabelAttachmentId,labelAttachmentId)
+                        .eq(Agreement::getId,agreement.getId()));
+            }
+        } else {
+            throw new BusinessException("原始合同附件不存在，请检查");
+        }
+
         if (NumberUtil.isNullOrZero(agreement.getLabelAttachmentId())) {
-            throw new BusinessException("合同附件还在生成中，请稍后重试");
+            throw new BusinessException("标签合同附件还在生成中，请稍后重试");
         }
         if (!agreement.getCreateId().equals(SecurityUtils.getUserId())) {
             throw new BusinessException("不是您新建的合同，您无权编辑");

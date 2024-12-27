@@ -32,7 +32,7 @@ public class CreateByCategoryRequest extends SignatureRequest {
     /**
      * 签署文档id
      */
-    @NotNull(message = "签署文档id")
+    @NotNull(message = "签署文档id不能为空")
     private Long documents;
 
     /**
