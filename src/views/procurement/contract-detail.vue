@@ -1862,7 +1862,7 @@ export default {
       partyInfoHeaderList:[
         {
           id: 1,
-          label: "合同角色类型",
+          label: "签约方类型",
           prop: "roleTypeText",
         },
         {

@@ -422,7 +422,7 @@
           </commonTitle>
           <div style="margin-bottom: 24px">
             <el-table :data="firstForm.agreementPartyInfoLists" style="width: 100%">
-              <el-table-column label="合同角色类型" width="130" align="center" prop="roleTypeText" />
+              <el-table-column label="签约方类型" width="130" align="center" prop="roleTypeText" />
               <el-table-column label="签约单位名称" align="center" prop="signerName">
                 <template slot-scope="scope">
                   <el-form-item label-width="0" :prop="'agreementPartyInfoLists.' + scope.$index + '.signerName'"
