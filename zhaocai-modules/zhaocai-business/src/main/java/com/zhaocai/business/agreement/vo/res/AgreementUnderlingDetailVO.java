@@ -2,7 +2,7 @@ package com.zhaocai.business.agreement.vo.res;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.zhaocai.business.agreement.domain.Agreement;
-import com.zhaocai.business.agreement.domain.AgreementPartyInfoVO;
+import com.zhaocai.business.agreement.vo.res.AgreementPartyInfoVO;
 import com.zhaocai.business.common.conver.ProcurementPlanTypeConver;
 import com.zhaocai.business.procurement.domain.ContractPlanning;
 import com.zhaocai.business.procurement.domain.ProcurementScheme;

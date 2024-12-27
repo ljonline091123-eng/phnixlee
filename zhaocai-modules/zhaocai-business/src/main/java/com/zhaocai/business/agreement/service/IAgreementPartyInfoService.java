@@ -2,7 +2,7 @@ package com.zhaocai.business.agreement.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.zhaocai.business.agreement.domain.AgreementPartyInfo;
-import com.zhaocai.business.agreement.domain.AgreementPartyInfoVO;
+import com.zhaocai.business.agreement.vo.res.AgreementPartyInfoVO;
 
 import java.util.List;
 

@@ -13,7 +13,7 @@ import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.zhaocai.business.agreement.domain.*;
-import com.zhaocai.business.agreement.domain.AgreementPartyInfoVO;
+import com.zhaocai.business.agreement.vo.res.AgreementPartyInfoVO;
 import com.zhaocai.business.agreement.dto.AgreementMaterialsInfoDTO;
 import com.zhaocai.business.agreement.mapper.AgreementMapper;
 import com.zhaocai.business.agreement.service.*;

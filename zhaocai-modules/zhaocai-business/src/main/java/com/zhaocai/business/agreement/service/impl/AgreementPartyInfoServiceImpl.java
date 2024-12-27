@@ -4,7 +4,7 @@ import cn.hutool.core.collection.CollectionUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.zhaocai.business.agreement.domain.AgreementPartyInfo;
-import com.zhaocai.business.agreement.domain.AgreementPartyInfoVO;
+import com.zhaocai.business.agreement.vo.res.AgreementPartyInfoVO;
 import com.zhaocai.business.agreement.mapper.AgreementPartyInfoMapper;
 import com.zhaocai.business.agreement.service.IAgreementPartyInfoService;
 import com.zhaocai.business.common.enums.DictBizEnum;
