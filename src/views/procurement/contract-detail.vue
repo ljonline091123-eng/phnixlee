@@ -86,7 +86,7 @@
       </div>
     </BackButton>
     <div class="context">
-      <el-tabs v-model="activeName">
+      <el-tabs v-model="activeName" @tab-click="attachmenthandleTabClick">
         <el-tab-pane label="基本信息" name="first">
           <commonTitle> 基本信息 </commonTitle>
           <el-form :model="showInfo" class="form-container">
@@ -1180,7 +1180,7 @@ import {
   getProcessLogList, getOrgByUserId,
 } from "@/api/procurement/manage";
 import { getViewAttachmentURLByID } from "@/api/template/file";
-import { ElMessageBoxComponent } from "element-ui/types/message-box";
+
 export default {
   components: {
     commonTitle,
@@ -3417,10 +3417,20 @@ export default {
   },
 
   methods: {
+    //切换页签到合同附件时
+    attachmenthandleTabClick(tab){
+      // tab.name 是被点击的标签页的 name 属性值
+      this.viewFileUrl=""; //先清空编辑文档的URL，在重新获取
+      if (tab.name === 'second') {
+        this.getAgreementViewURLFn();
+      }
+    },
+
     getAgreementViewURLFn(){
       //获取合同预览URL
       if (this.attachmentId) {
-        if (isNullOrEmpty(this.attachmentId) || isNullOrEmpty(this.param?.id) || isNullOrEmpty(this.partyAName)) {
+        console.log("进获取合同预览的方法，getAgreementViewURLFn-》》》》")
+        if (!this.attachmentId || !this.param?.id || !this.partyAName) {
           console.error('attachmentId,agreementId, partyAName数据未正确加载,无法预览合同附件');
           return;
         }
