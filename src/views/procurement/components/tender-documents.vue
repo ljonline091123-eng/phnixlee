@@ -1211,7 +1211,7 @@ export default {
             email: this.scheme.bidContactEmail,
             ...value,
             /* 付款方式 如果数据库有值优先使用数据库的值，否则使用缓存中的值 */
-            paymentType: newVal.tenderNotice.paymentType?newVal.tenderNotice.paymentType:Number(sessionStorage.getItem('formData.paymentType')),
+            paymentType: newVal.tenderNotice.paymentType?newVal.tenderNotice.paymentType:(sessionStorage.getItem('formData.paymentType')?Number(sessionStorage.getItem('formData.paymentType')):null),
           };
           this.formData = formData;
         }
