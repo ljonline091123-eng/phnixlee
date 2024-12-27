@@ -413,6 +413,76 @@
             </el-row>
           </div>
 
+          <!-- 合同签约方信息 -->
+          <commonTitle>
+            合同签约方信息
+            <template #right>
+<!--              <el-button type="success" icon="el-icon-plus" size="mini" @click="addRow('agreementPartyInfoLists')">新增</el-button>-->
+            </template>
+          </commonTitle>
+          <div style="margin-bottom: 24px">
+            <el-table :data="firstForm.agreementPartyInfoLists" style="width: 100%">
+              <el-table-column label="合同角色类型" width="130" align="center" prop="roleTypeText" />
+              <el-table-column label="签约单位名称" align="center" prop="signerName">
+                <template slot-scope="scope">
+                  <el-form-item label-width="0" :prop="'agreementPartyInfoLists.' + scope.$index + '.signerName'"
+                                :rules="[{ required: true, trigger: 'blur', message: '请输入签约单位名称' }]">
+                    <el-input v-model="scope.row.signerName"/>
+                  </el-form-item>
+                </template>
+              </el-table-column>
+              <el-table-column label="签约单位编号" align="center" prop="signerCode">
+                <template slot-scope="scope">
+                  <el-form-item label-width="0" :prop="'agreementPartyInfoLists.' + scope.$index + '.signerCode'"
+                                :rules="[{ required: true, trigger: 'blur', message: '请输入签约单位编号' }]">
+                    <el-input v-model="scope.row.signerCode" clearable />
+                  </el-form-item>
+                </template>
+              </el-table-column>
+              <el-table-column label="银行账号名称" align="center" prop="signerBankAccount">
+                <template slot-scope="scope">
+                  <el-form-item label-width="0" :prop="'agreementPartyInfoLists.' + scope.$index + '.signerBankAccount'"
+                                :rules="[{ required: true, trigger: 'blur', message: '请输入签约单位银行账号' }]">
+                    <el-input v-model="scope.row.signerBankAccount" clearable />
+                  </el-form-item>
+                </template>
+              </el-table-column>
+              <el-table-column label="签约单位银行账户名称" align="center" prop="signerBankName">
+                <template slot-scope="scope">
+                  <el-form-item label-width="0" :prop="'agreementPartyInfoLists.' + scope.$index + '.signerBankName'"
+                                :rules="[{ required: true, trigger: 'blur', message: '请输入签约单位银行账户名称' }]">
+                    <el-input v-model="scope.row.signerBankName" clearable />
+                  </el-form-item>
+                </template>
+              </el-table-column>
+              <el-table-column label="签约单位开户支行" align="center" prop="signerBankOpen">
+                <template slot-scope="scope">
+                  <el-form-item label-width="0" :prop="'agreementPartyInfoLists.' + scope.$index + '.signerBankOpen'"
+                                :rules="[{ required: true, trigger: 'blur', message: '请输入签约单位开户支行' }]">
+                    <el-input v-model="scope.row.signerBankOpen" clearable />
+                  </el-form-item>
+                </template>
+              </el-table-column>
+              <el-table-column label="签约单位所占比例(%)" width="180" align="center" prop="signerRate">
+                <template slot-scope="scope">
+                  <el-form-item label-width="0" :prop="'agreementPartyInfoLists.' + scope.$index + '.signerRate'"
+                                :rules="[{ required: true, trigger: 'blur', message: '请输入签约单位所占比例' }, {validator: validateNumber, trigger: 'blur'}]">
+                    <el-input v-model="scope.row.signerRate" clearable />
+                  </el-form-item>
+                </template>
+              </el-table-column>
+              <el-table-column label="签约单位纳税人识别号" align="center" prop="signerTaxpayerNumber">
+                <template slot-scope="scope">
+                  <el-form-item label-width="0" :prop="'agreementPartyInfoLists.' + scope.$index + '.signerTaxpayerNumber'"
+                                :rules="[{ required: true, trigger: 'blur', message: '请输入签约单位纳税人识别号' }]">
+                    <el-input v-model="scope.row.signerTaxpayerNumber" clearable />
+                  </el-form-item>
+                </template>
+              </el-table-column>
+            </el-table>
+          </div>
+
+
           <!-- 结算与付款节点信息 -->
           <commonTitle>
             结算与付款节点信息
@@ -1565,6 +1635,11 @@ export default {
         }, // 合同基本信息
         agreementPaymentItem: {}, // 合同款项信息
         agreementPaymentLists: [], // 结算与付款节点信息
+        agreementPartyInfoLists: [{
+          roleType: '1', // 合同甲方
+        },{
+          roleType: '2', // 合同乙方
+        }], // 合同签约方信息
         agreementMaterialsLists: [], // 合同清单
         agreementMaterialsListsYl:[],// 物料合同清单
         agreementDeposits: [], // 合同保证金
@@ -1584,6 +1659,7 @@ export default {
       dictObj: {
         payment_cycle: "", // 结算周期
         payment_way: "", // 付款方式
+        con_role_type: "", // 合同签约方信息
         currency: "", // 币种
         invoice_type: "", // 发票类型
         priceForm: "", // 价格形式
@@ -1600,6 +1676,7 @@ export default {
       dictObjMap: {
         PAYMENT_CYCLE: "payment_cycle", //支付周期
         PAYMENT_TYPE: "payment_way", //付款方式
+        CON_ROLE_TYPE: "con_role_type", //合同签约方信息
         SYS_CURRENCY: "currency", //币种
         INVOICE_TYPE: "invoice_type", //发票类型
         PAYMENT_BASE_TYPE: "payment_basis", //付款基数
@@ -1947,6 +2024,10 @@ export default {
         // * 先校验3个表格是否不为空
         if (this.firstForm.agreementPaymentLists.length === 0) {
           this.$message.error("结算与付款节点信息不完整");
+          return false;
+        }
+        if (this.firstForm.agreementPartyInfoLists.length === 0) {
+          this.$message.error("合同签约方信息不完整");
           return false;
         }
         if (this.firstForm.agreementDeposits.length === 0) {
@@ -2538,6 +2619,7 @@ export default {
         if (newVal && this.$route.query.type=='add') {
           getAgreementCreateInfoYl(newVal).then((res) => {
             this.getContractTypeList();
+
            // * 此3个字段是必传字段
            this.firstForm.agreement.schemeId = res.data.schemeId;
             this.firstForm.agreement.contractSplitId = res.data.splitId;
@@ -2592,6 +2674,22 @@ export default {
             this.firstForm.agreementMaterialsLists = JSON.parse(
               JSON.stringify(res?.data["biddingListQuotation"])
             );
+
+
+
+            console.log('%c👽 this.dictObj.con_role_type ', `font-size: 20px;background-color: #f00;`, this.dictObj.con_role_type);
+            /* 填充字典值，和默认甲乙方 */
+            const updatedLists = this.firstForm.agreementPartyInfoLists.map(item => {
+              if (item.roleType === '1') {
+                return { ...item, signerName: this.firstForm.agreement.partyAName, roleTypeText: this.dictObj.con_role_type.find((obj) => obj.value === item.roleType).label};
+              } else if (item.roleType === '2') {
+                return { ...item, signerName: this.firstForm.agreement.partyBName, roleTypeText: this.dictObj.con_role_type.find((obj) => obj.value === item.roleType).label };
+              }
+              return item;
+            });
+            this.$set(this.firstForm, 'agreementPartyInfoLists', updatedLists);
+
+
           });
         }
       },
@@ -2669,6 +2767,22 @@ export default {
             // 获取合同附件的文档中台编辑URL
             this.editFileUrl=""; //先清空文档编辑URL
             this.getAttachmentEditURL();
+
+
+
+            console.log('%c👽 this.dictObj.con_role_type ', `font-size: 20px;background-color: #f00;`, this.dictObj.con_role_type);
+            /* 填充字典值，和默认甲乙方 */
+            const updatedLists = this.firstForm.agreementPartyInfoLists.map(item => {
+              if (item.roleType === '1') {
+                return { ...item, signerName: this.firstForm.agreement.partyAName, roleTypeText: this.dictObj.con_role_type.find((obj) => obj.value === item.roleType).label};
+              } else if (item.roleType === '2') {
+                return { ...item, signerName: this.firstForm.agreement.partyBName, roleTypeText: this.dictObj.con_role_type.find((obj) => obj.value === item.roleType).label };
+              }
+              return item;
+            });
+            this.$set(this.firstForm, 'agreementPartyInfoLists', updatedLists);
+
+
           });
 
         }

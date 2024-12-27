@@ -151,6 +151,27 @@
               </el-col>
             </el-row>
           </el-form>
+          <commonTitle style="margin-top: 20px"> 合同签约方信息 </commonTitle>
+          <el-table
+            :data="agreementPartyInfoLists"
+            highlight-current-row
+            :header-cell-style="{ background: '#F3F2F8' }"
+            style="width: 100%"
+          >
+            <el-table-column
+              label="序号"
+              type="index"
+              width="50"
+              align="center"
+            />
+            <el-table-column
+              v-for="(item, index) in partyInfoHeaderList"
+              :key="index"
+              :label="item.label"
+              :prop="item.prop"
+            >
+            </el-table-column>
+          </el-table>
           <commonTitle style="margin-top: 20px"> 结算与付款节点 </commonTitle>
           <el-table
             :data="agreementPaymentLists"
@@ -1838,6 +1859,48 @@ export default {
           },
         ],
       },
+      partyInfoHeaderList:[
+        {
+          id: 1,
+          label: "合同角色类型",
+          prop: "roleTypeText",
+        },
+        {
+          id: 2,
+          label: "签约单位名称",
+          prop: "signerName",
+        },
+        {
+          id: 3,
+          label: "签约单位编号",
+          prop: "signerCode",
+        },
+        {
+          id: 4,
+          label: "银行账号名称",
+          prop: "signerBankAccount",
+        },
+        {
+          id: 5,
+          label: "签约单位银行账户名称",
+          prop: "signerBankName",
+        },
+        {
+          id: 6,
+          label: "签约单位开户支行",
+          prop: "signerBankOpen",
+        },
+        {
+          id: 7,
+          label: "签约单位所占比例(%)",
+          prop: "signerRate",
+        },
+        {
+          id: 8,
+          label: "签约单位纳税人识别号",
+          prop: "signerTaxpayerNumber",
+        },
+      ],
       settlementHeaderList: [
         {
           id: 1,
@@ -2100,6 +2163,7 @@ export default {
       //* 合同清单
       agreementMaterialsLists: [],
       agreementPaymentLists: [], //结算与付款节点
+      agreementPartyInfoLists: [], //合同签约方信息
       agreementDeposits: [], // 押金、保证金信息
       // * 基本信息
       showInfo: {},
@@ -3369,6 +3433,7 @@ export default {
             : false;
           this.agreementMaterialsLists = res.data.materialsList;
           this.agreementPaymentLists = res.data.agreementPaymentLists;
+          this.agreementPartyInfoLists = res.data.agreementPartyInfoLists;
           this.agreementDeposits = res.data.agreementDeposits;
           this.approveNodeInfos = res.data.approveNodeInfos;
           this.approveLists = res.data.approveLists;
@@ -3415,7 +3480,7 @@ export default {
           //获取文档中台的文档编辑URL
           try {
             const res = await getAgreementViewURL({ attachmentId: this.attachmentId ,agreementId: this.param.id ,waterMarkContent: this.partyAName});
-            
+
             this.viewFileUrl = res.data;
             console.log("viewFileUrl:",this.viewFileUrl);
           } catch (err) {

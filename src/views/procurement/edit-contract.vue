@@ -392,6 +392,76 @@
             </el-row>
           </div>
 
+
+          <!-- 合同签约方信息 -->
+          <commonTitle>
+            合同签约方信息
+            <template #right>
+              <!--              <el-button type="success" icon="el-icon-plus" size="mini" @click="addRow('agreementPartyInfoLists')">新增</el-button>-->
+            </template>
+          </commonTitle>
+          <div style="margin-bottom: 24px">
+            <el-table :data="firstForm.agreementPartyInfoLists" style="width: 100%">
+              <el-table-column label="合同角色类型" width="130" align="center" prop="roleTypeText" />
+              <el-table-column label="签约单位名称" align="center" prop="signerName">
+                <template slot-scope="scope">
+                  <el-form-item label-width="0" :prop="'agreementPartyInfoLists.' + scope.$index + '.signerName'"
+                                :rules="[{ required: true, trigger: 'blur', message: '请输入签约单位名称' }]">
+                    <el-input v-model="scope.row.signerName"/>
+                  </el-form-item>
+                </template>
+              </el-table-column>
+              <el-table-column label="签约单位编号" align="center" prop="signerCode">
+                <template slot-scope="scope">
+                  <el-form-item label-width="0" :prop="'agreementPartyInfoLists.' + scope.$index + '.signerCode'"
+                                :rules="[{ required: true, trigger: 'blur', message: '请输入签约单位编号' }]">
+                    <el-input v-model="scope.row.signerCode" clearable />
+                  </el-form-item>
+                </template>
+              </el-table-column>
+              <el-table-column label="银行账号名称" align="center" prop="signerBankAccount">
+                <template slot-scope="scope">
+                  <el-form-item label-width="0" :prop="'agreementPartyInfoLists.' + scope.$index + '.signerBankAccount'"
+                                :rules="[{ required: true, trigger: 'blur', message: '请输入签约单位银行账号' }]">
+                    <el-input v-model="scope.row.signerBankAccount" clearable />
+                  </el-form-item>
+                </template>
+              </el-table-column>
+              <el-table-column label="签约单位银行账户名称" align="center" prop="signerBankName">
+                <template slot-scope="scope">
+                  <el-form-item label-width="0" :prop="'agreementPartyInfoLists.' + scope.$index + '.signerBankName'"
+                                :rules="[{ required: true, trigger: 'blur', message: '请输入签约单位银行账户名称' }]">
+                    <el-input v-model="scope.row.signerBankName" clearable />
+                  </el-form-item>
+                </template>
+              </el-table-column>
+              <el-table-column label="签约单位开户支行" align="center" prop="signerBankOpen">
+                <template slot-scope="scope">
+                  <el-form-item label-width="0" :prop="'agreementPartyInfoLists.' + scope.$index + '.signerBankOpen'"
+                                :rules="[{ required: true, trigger: 'blur', message: '请输入签约单位开户支行' }]">
+                    <el-input v-model="scope.row.signerBankOpen" clearable />
+                  </el-form-item>
+                </template>
+              </el-table-column>
+              <el-table-column label="签约单位所占比例(%)" width="180" align="center" prop="signerRate">
+                <template slot-scope="scope">
+                  <el-form-item label-width="0" :prop="'agreementPartyInfoLists.' + scope.$index + '.signerRate'"
+                                :rules="[{ required: true, trigger: 'blur', message: '请输入签约单位所占比例' }, {validator: validateNumber, trigger: 'blur'}]">
+                    <el-input v-model="scope.row.signerRate" clearable />
+                  </el-form-item>
+                </template>
+              </el-table-column>
+              <el-table-column label="签约单位纳税人识别号" align="center" prop="signerTaxpayerNumber">
+                <template slot-scope="scope">
+                  <el-form-item label-width="0" :prop="'agreementPartyInfoLists.' + scope.$index + '.signerTaxpayerNumber'"
+                                :rules="[{ required: true, trigger: 'blur', message: '请输入签约单位纳税人识别号' }]">
+                    <el-input v-model="scope.row.signerTaxpayerNumber" clearable />
+                  </el-form-item>
+                </template>
+              </el-table-column>
+            </el-table>
+          </div>
+
           <!-- 结算与付款节点信息 -->
           <commonTitle>
             结算与付款节点信息
@@ -1303,7 +1373,7 @@ import { create, all } from "mathjs"
 import commonTitle from "@/views/procurement/components/common-title.vue";
 import { getAgreementEditURL,getAgreementCreateInfo,getAgreementAttachmentId,getAgreementDetail,getLabelAttachmentId, saveAgreement, listUnderlingDict, listDeviceClass, listDevice, listMaterialsClass, listMaterials, deviceFeatureList, deviceFeatureValueList, listMaterialsFeature, listMaterialsFeatureValue,  avoidSubmitByMarket} from "@/api/procurement/contract";
 import { offerService, offerRepo } from "@/utils/const"
-import {getEditFileUrlByID} from "@/api/template/file"; 
+import {getEditFileUrlByID} from "@/api/template/file";
 import { cardid, isvalidatemobile, validatenull } from "@/utils/validate"
 import BackButton from "@/components/BackButton/index.vue"
 import FileModule from '@/components/FileModule/index.vue'
@@ -1325,6 +1395,11 @@ export default {
         agreement: {},  // 合同基本信息
         agreementPaymentItem: {},  // 合同款项信息
         agreementPaymentLists: [],  // 结算与付款节点信息
+        agreementPartyInfoLists: [{
+          roleType: '1', // 合同甲方
+        },{
+          roleType: '2', // 合同乙方
+        }], // 合同签约方信息
         agreementMaterialsLists: [],  // 合同清单
         agreementDeposits: [],  // 合同保证金
         agreementDailyWageList: [],  // 合同-计日工对象
@@ -1450,7 +1525,7 @@ export default {
     //     getEditFileUrlByID({ attachmentId: this.attachmentId })
     //       .then((res) => {
     //         this.editFileUrl = res.data;
-    //         console.log("editFileUrl:", this.editFileUrl); 
+    //         console.log("editFileUrl:", this.editFileUrl);
     //       })
     //       .catch((err) => {
     //         console.error('Error fetching view file URL:', err);
@@ -1514,6 +1589,7 @@ export default {
           this.firstForm.agreementMachineShifts = res.data.agreementMachineShifts || [] // 合同-机械台班对象
           this.firstForm.agreementPaymentItem = res.data.agreementPaymentItem || {} // 合同款项信息
           this.firstForm.agreementPaymentLists = res.data.agreementPaymentLists || [] // 结算与付款节点信息
+          this.firstForm.agreementPartyInfoLists = res.data.agreementPartyInfoLists || [] // 合同签约方信息
           this.firstForm.agreementMaterialsLists =res.data.materialsList || [] // 合同清单
           this.firstForm.agreementMaterialSupplies = res.data.agreementMaterialSupplies || [] // 合同-甲供材料清单对象
           this.firstForm.agreement.expenditureBusinessType=res.data.agreement.expenditureBusinessTypeText
@@ -1599,6 +1675,10 @@ export default {
         if (this.firstForm.agreementPaymentLists.length === 0) {
           this.$message.error('结算与付款节点信息不完整')
           return false
+        }
+        if (this.firstForm.agreementPartyInfoLists.length === 0) {
+          this.$message.error("合同签约方信息不完整");
+          return false;
         }
         if(this.firstForm.agreementDeposits.length === 0){
           this.$message.error('押金、保证金信息不完整')
