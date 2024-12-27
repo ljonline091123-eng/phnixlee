@@ -39,4 +39,12 @@ public interface IAgreementFileService {
      * @param fileUrl
      */
     void agreementConvertToPdf(Long id, String watermarkText, String agreementName, String fileUrl);
+
+    /**
+     * 合同转换为PDF（永中文档中台），把pdf文件url存入到pdfAttachmentId的附件中
+     *
+     * @param pdfAttachmentId
+     * @return
+     */
+    Long agreementConvertToPdfYOZO(Long agreementId, Long pdfAttachmentId, String watermarkText, String fileName, String fileUrl);
 }

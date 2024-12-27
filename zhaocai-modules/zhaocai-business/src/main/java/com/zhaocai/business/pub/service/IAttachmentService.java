@@ -50,6 +50,12 @@ public interface IAttachmentService extends IService<Attachment> {
     //文档中台-office转PDF
     String  convertOfficeToPdf(String fileName, String fileUrl, String waterMarkContent);
 
+    /*  把传入的attachmentId附件转换为PDF文件（带水印），更新fileUrl
+    1.若传入的attachmentId存在，更新传入的attachmentId附件（pdf文件）的fileUrl，返回更新的attachmentId；
+    2.若传入的attachmentId不存在，新增attachment，返回新增的attachmentId
+    */
+    Long ConverToPDFAndUpdateFileUrl(Long busnessId, AttachmentTypeEnum busnessType, Long attachmentId, String watermarkText, String targetFileName, String fileUrl) throws IOException;
+
     /**
      * 新增附件
      * @param attachmentList    附件列表

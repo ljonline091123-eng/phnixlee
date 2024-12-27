@@ -17,7 +17,9 @@ import com.zhaocai.business.filez.service.dto.AgreementSetLabelDTO;
 import com.zhaocai.business.pub.domain.Attachment;
 import com.zhaocai.business.pub.service.IAttachmentService;
 import com.zhaocai.business.pub.service.ISysFileService;
+import com.zhaocai.business.pub.utils.YOZOfileUtils;
 import com.zhaocai.business.pub.vo.req.AttachmentRequestVO;
+import com.zhaocai.business.pub.vo.res.AttachmentVO;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.util.IOUtils;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
@@ -28,6 +30,7 @@ import org.springframework.stereotype.Service;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.math.BigDecimal;
 import java.util.List;
@@ -54,6 +57,9 @@ public class AgreementFileServiceImpl implements IAgreementFileService {
 
     @Autowired
     private IFileZBusinessService fileZBusinessService;
+
+    @Autowired
+    private YOZOfileUtils yozOfileUtils;
 
 
     @Override
@@ -107,9 +113,40 @@ public class AgreementFileServiceImpl implements IAgreementFileService {
     @Override
     public void agreementConvertToPdf(Long agreementId, String watermarkText, String agreementName, String fileUrl) {
         log.info("[合同转换为 pdf-{}] - 开始发送合同转换为 pdf请求",agreementId);
+
+        //联想文档转pdf
         fileZBusinessService.convertToPdf(fileUrl,agreementName,watermarkText,FileZTaskBusinessEnum.AGREEMENT_CONVERT_TO_PDF,agreementId);
 
         log.info("[合同转换为 pdf-{}] - 合同转换为 pdf请求发送成功",agreementId);
+    }
+
+    /**
+     * 合同转换为PDF（永中文档中台），把pdf文件url存入到pdfAttachmentId对应的附件fileUrl中
+     *
+     * @param pdfAttachmentId
+     * @return
+     */
+    @Override
+    public Long agreementConvertToPdfYOZO(Long agreementId, Long pdfAttachmentId, String watermarkText, String fileName, String fileUrl) {
+        if (pdfAttachmentId != null) {
+            //判断传入的pdfAttachmentId是不是word文件,非word文件不用转pdf，直接返回pdfAttachmentId
+            AttachmentVO attachment = attachmentService.getAttachmentById(pdfAttachmentId);
+            String OriginalfileName = attachment.getFileName();
+            String Suffix = yozOfileUtils.getSuffix(OriginalfileName);
+            if (!yozOfileUtils.isWordExtension(Suffix)){
+                return pdfAttachmentId;
+            }
+        }
+
+        //永中文档中台转换pdf,存入到合同的 pdf附件id 对应的fileUrl中
+        try {
+            //返回存入pdf文件URl的对应附件AttachmentId
+            Long attachmentId = attachmentService.ConverToPDFAndUpdateFileUrl(agreementId,AttachmentTypeEnum.AGREEMENT_PDFFILE,pdfAttachmentId,watermarkText,fileName,fileUrl);
+            return attachmentId;
+        } catch (IOException e) {
+            throw new RuntimeException("永中文档中台转换pdf失败"+e.getMessage(), e);
+        }
+
     }
 
     /**

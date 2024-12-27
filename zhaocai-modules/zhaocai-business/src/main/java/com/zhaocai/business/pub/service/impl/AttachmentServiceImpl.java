@@ -2,6 +2,7 @@ package com.zhaocai.business.pub.service.impl;
 
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.collection.CollectionUtil;
+import cn.hutool.core.date.DateUtil;
 import cn.hutool.core.io.file.FileNameUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
@@ -39,6 +40,7 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.nio.file.Path;
@@ -632,18 +634,22 @@ public class AttachmentServiceImpl extends ServiceImpl<AttachmentMapper, Attachm
         if(StringUtils.isEmpty(fileName) || StringUtils.isEmpty(fileUrl)){
             throw new RuntimeException("生成文件编辑url失败,未获取到文件名或者文件URL！");
         }
-        if(StringUtils.isEmpty(waterMarkContent)){
-            throw new RuntimeException("生成文件编辑url失败,未获取到水印内容！");
-        }
+//        if(StringUtils.isEmpty(waterMarkContent)){
+//            throw new RuntimeException("生成文件编辑url失败,未获取到水印内容！");
+//        }
         Path path = yozOfileUtils.downloadFile(fileUrl, yozOfileUtils.createTempFilePath(fileName));
         try {
             ConvertParams params = new ConvertParams();
             // 设置要处理的文档模版
             params.setFilePath(path.toString());
-            // 设置水印
-            WaterMark wm = new WaterMark(WaterMark.TYPE_TXT, waterMarkContent);
-            // 将水印设置到参数中
-            params.setWaterMark(wm);
+            // 设置水印(有水印内容时)
+            if(StringUtils.isNotBlank(waterMarkContent)){
+                WaterMark wm = new WaterMark(WaterMark.TYPE_TXT, waterMarkContent);
+                // 将水印设置到参数中
+                params.setWaterMark(wm);
+                // 将水印设置到参数中
+                params.setWaterMark(wm);
+            }
             String viewUrl = null;
             try {
                 String response = sender.post(ConvertParams.URL_CONVERT, ConvertParams.CONVERT_TYPE_DOC_PDF, params.getRequestBody());
@@ -669,6 +675,42 @@ public class AttachmentServiceImpl extends ServiceImpl<AttachmentMapper, Attachm
         } catch (Exception e) {
             throw new RuntimeException("office转PDF文件失败"+ e.getMessage(), e);
         }
+    }
+
+    /*  把传入的attachmentId附件转换为PDF文件（带水印），更新fileUrl
+    1.若传入的attachmentId存在，更新传入的attachmentId附件（pdf文件）的fileUrl，返回更新的attachmentId；
+    2.若传入的attachmentId不存在，新增attachment，返回新增的attachmentId
+    */
+    @Override
+    public Long ConverToPDFAndUpdateFileUrl(Long busnessId, AttachmentTypeEnum busnessType, Long attachmentId, String watermarkText, String targetFileName, String fileUrl) throws IOException {
+//        targetFileName = targetFileName + "_" + DateUtil.format(new Date(),"yyyyMMddHHmmss") + ".pdf";
+
+        String PDFfileUrl = convertOfficeToPdf(targetFileName,fileUrl,watermarkText);
+        if (StringUtils.isBlank(PDFfileUrl)){
+            throw new RuntimeException("生成的pfd文件URL为空，office转PDF文件失败!");
+        }
+
+        //下载生成的pdf文件URL到临时文件夹
+        Path path = yozOfileUtils.downloadFile(PDFfileUrl, yozOfileUtils.createTempFilePath(targetFileName));
+        File file = new File(path.toString());
+        if (!file.exists()) {
+            throw new IOException("文档不存在: " + PDFfileUrl);
+        }
+        // 转换为InputStream，上传到文档中台
+        FileInputStream fis = new FileInputStream(file);
+        String NewFileUrl = sysFileService.uploadFile(fis, targetFileName);
+        //传入的attachmentId存在则更新该附件的文件名和文件URL，不存在则新增一条attachment记录，返回新增pdf文件的attachmentId
+        Long pdfAttachmentId;
+        if (NumberUtil.isNullOrZero(attachmentId)){
+            pdfAttachmentId = addAttachment(new AttachmentRequestVO(targetFileName, NewFileUrl), busnessType,busnessId);
+        }else {
+            updateFileNameANDFileUrl(attachmentId,NewFileUrl,targetFileName);
+            pdfAttachmentId = attachmentId;
+        }
+        //删除生成的临时文件
+        System.out.println("删除文件路径:" + path);
+        yozOfileUtils.deleteTempFilePath(path.toString());
+        return pdfAttachmentId;
     }
 
     @Override
