@@ -1419,6 +1419,7 @@ export default {
       dictObj: {
         payment_cycle:'',  // 结算周期
         payment_way:'',  // 付款方式
+        con_role_type: "", // 合同签约方信息
         currency:'',  // 币种
         invoice_type:'',  // 发票类型
         priceForm:'',  // 价格形式
@@ -1434,6 +1435,7 @@ export default {
       dictObjMap:{
         PAYMENT_CYCLE: 'payment_cycle',  //支付周期
         PAYMENT_TYPE: 'payment_way',  //付款方式
+        CON_ROLE_TYPE: "con_role_type", //合同签约方信息
         SYS_CURRENCY:'currency',  //币种
         INVOICE_TYPE: 'invoice_type',  //发票类型
         PAYMENT_BASE_TYPE: 'payment_basis', //付款基数
@@ -1590,6 +1592,26 @@ export default {
           this.firstForm.agreementPaymentItem = res.data.agreementPaymentItem || {} // 合同款项信息
           this.firstForm.agreementPaymentLists = res.data.agreementPaymentLists || [] // 结算与付款节点信息
           this.firstForm.agreementPartyInfoLists = res.data.agreementPartyInfoLists || [] // 合同签约方信息
+
+          if(!this.firstForm.agreementPartyInfoLists || this.firstForm.agreementPartyInfoLists.length <= 0 ){
+            /* 如果历史数据该选项为空，该修改页需要补充 */
+            this.firstForm.agreementPartyInfoLists = [{
+              roleType: '1', // 合同甲方
+            },{
+              roleType: '2', // 合同乙方
+            }];
+            /* 填充字典值，和默认甲乙方 */
+            const updatedLists = this.firstForm.agreementPartyInfoLists.map(item => {
+              if (item.roleType === '1') {
+                return { ...item, signerName: this.firstForm.agreement.partyAName, roleTypeText: this.dictObj.con_role_type.find((obj) => obj.value === item.roleType).label};
+              } else if (item.roleType === '2') {
+                return { ...item, signerName: this.firstForm.agreement.partyBName, roleTypeText: this.dictObj.con_role_type.find((obj) => obj.value === item.roleType).label };
+              }
+              return item;
+            });
+            this.$set(this.firstForm, 'agreementPartyInfoLists', updatedLists);
+          }
+
           this.firstForm.agreementMaterialsLists =res.data.materialsList || [] // 合同清单
           this.firstForm.agreementMaterialSupplies = res.data.agreementMaterialSupplies || [] // 合同-甲供材料清单对象
           this.firstForm.agreement.expenditureBusinessType=res.data.agreement.expenditureBusinessTypeText
