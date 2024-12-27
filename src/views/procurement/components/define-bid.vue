@@ -169,6 +169,7 @@
         height="calc(40vh - 15px)"
         @selection-change="handleSelectionChange"
         :row-key="selBidKey"
+        :cell-style="cellStyle"
       >
         <el-table-column
           :reserve-selection="true"
@@ -230,7 +231,7 @@
           align="center"
           prop="phone"
         />
-        <el-table-column label="上限价(元)" width="150" align="right">
+        <el-table-column label="上限价(元)" width="150" align="right" prop="ceilingPrice">
           <template slot-scope="{ row }">
             {{row.scheme && row.scheme.procurementScheme && row.scheme.procurementScheme.ceilingPrice}}
           </template>
@@ -243,7 +244,7 @@
           :formatter="formatterUpProcurementScheme"
         >
         </el-table-column>
-        <el-table-column label="含税总价(元)" width="150" align="right">
+        <el-table-column label="含税总价(元)" width="150" align="right" prop="taxPrice">
           <template slot-scope="{ row }">
             {{
               row.quotationDataVOList[row.quotationDataVOList.length - 1]
@@ -761,6 +762,20 @@ export default {
   // },
 
   methods: {
+    cellStyle({ row, column }) {
+      const ceilingPrice = row.scheme?.procurementScheme?.ceilingPrice;
+      const taxPrice = row.quotationDataVOList[row.quotationDataVOList.length - 1]?.taxPricePattern;
+
+      // 判断是否是“上限价”或“含税总价”列
+      if (column.property === 'ceilingPrice' || column.property === 'taxPrice') {
+        if (ceilingPrice !== undefined && taxPrice !== undefined && taxPrice > ceilingPrice) {
+          return { color: 'red' };
+        }
+      }
+
+      // 对于其他列，返回空对象表示不应用任何特殊样式
+      return {};
+    },
     //获取招标文件的预览url
     async getbiddingTemplate(){
       //解构biddingTemplate，获取招标文件的属性
@@ -786,7 +801,8 @@ export default {
 
     formatterUpProcurementScheme(row) {
       if(row.scheme && row.scheme.procurementScheme && row.scheme.procurementScheme.ceilingPrice){
-        return Number(row?.quotationDataVOList[row.quotationDataVOList.length - 1]?.taxPricePattern || 0) > Number(row.scheme?.procurementScheme?.ceilingPrice) ? "是" : "否";
+        const cleanedString = (row?.quotationDataVOList[row.quotationDataVOList.length - 1]?.taxPricePattern || 0).replace(/,/g, '');
+        return Number(cleanedString) > Number(row.scheme?.procurementScheme?.ceilingPrice) ? "是" : "否";
       }
     },
     showSecretTips() {
@@ -907,6 +923,7 @@ export default {
       }
     },
     async submitForm() {
+      debugger
       this.isSubmit = true;
       const detailUrl = this.$route.fullPath;
       // const mergedList = [...this.selectedRowList, ...this.evaluateList];
@@ -919,7 +936,7 @@ export default {
       let vendorNames = this.evaluateList.filter(obj => obj.sureBid === 1 && this.formatterUpProcurementScheme(obj) === '是').map(obj => '<br>&nbsp;&nbsp;'+obj.vendorName).toString().replace(/,/g, '');
       console.log('%c👽 超出上限价的供应商： ', `font-size: 20px;background-color: #f00;`, vendorNames);
       if(vendorNames!==null&&vendorNames!==undefined&&vendorNames!==''&&vendorNames.length>0){
-        vm.$confirm('<b>您选择的供应商</b>'+vendorNames+'<br><b>投标已经超上限价，是否继续？</b>', '提示', {
+        vm.$confirm('<b>您选择的供应商</b>'+vendorNames+'<br><b>投标已经超上限价，是否继续？</b><br><b style="color: red">如需继续请点击取消上传相关说明！</b>', '提示', {
           confirmButtonText: '确定',
           cancelButtonText: '取消',
           type: 'warning',

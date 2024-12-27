@@ -75,9 +75,23 @@
               :key="index"
             >
               <template #title>
-                <a href="javascript:;" @click="goStep(item.value)">{{
+
+                <el-tooltip
+                  effect="dark"
+                  content="等待供应商报名后自动进入该环节"
+                  placement="top"
+                  v-if="item.value === 12"
+                >
+                  <a href="javascript:;" @click="goStep(item.value)">{{
+                      item.label
+                    }}</a>
+                </el-tooltip>
+
+                <a href="javascript:;" @click="goStep(item.value)"
+                v-else >{{
                     item.label
                   }}</a>
+
               </template>
             </el-step>
           </el-steps>
@@ -196,6 +210,12 @@ export default {
         this.goStep(0);
       }
     }
+  },
+     // 组件不具有此钩子
+  beforeRouteLeave(to, from, next) {
+    console.log("tendering")
+    this.$destroy(true)
+    next();
   },
   methods: {
     async getNoticeDetail() {

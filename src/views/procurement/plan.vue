@@ -900,6 +900,8 @@ export default {
       if(row.surplusQuantity==0){
         this.$message({type:'success',message:"工程量为0，不能新增采购计划"})
       }else{
+        /* 增加随机数时间来更新跳转后的组件数据 */
+        row.nowDate = new Date();
         this.contractVisible = false;
        let param = Base64.encode(JSON.stringify(row));
        param = encodeURIComponent(param); //避免base64编码中出现"/"时路由404

@@ -167,9 +167,10 @@
               prop="email"
               class="required label-right-align"
             >
+              <!-- 付款方式 字段 监听中watch 使用缓存/数据库的值。 -->
               <el-select
                 style="width: 100%"
-                :disabled="formData.paymentType"
+                :disabled="!applyButtonShow && !isSubmit"
                 v-model="formData.paymentType"
                 placeholder="请选择付款方式"
               >
@@ -658,6 +659,12 @@ export default {
             message: "投标截止时间不能为空",
           },
         ],
+        // paymentType: [
+        //   {
+        //     required: true,
+        //     message: "付款方式不能为空",
+        //   },
+        // ],
       },
       // 遮罩层
       loading: false,
@@ -912,11 +919,9 @@ export default {
 
           console.log(formData, "formData");
           try {
-            if (this.scheme.noticeStatus === 0) {
-              await aNewAdd(formData);
-            } else {
-              await addNotice(formData);
-            }
+
+            await addNotice(formData);
+
             loading.close();
             this.$message({
               message: "保存成功",
@@ -1205,12 +1210,20 @@ export default {
             phone: this.scheme.bidContactPhone,
             email: this.scheme.bidContactEmail,
             ...value,
+            /* 付款方式 如果数据库有值优先使用数据库的值，否则使用缓存中的值 */
+            paymentType: newVal.tenderNotice.paymentType?newVal.tenderNotice.paymentType:(sessionStorage.getItem('formData.paymentType')?Number(sessionStorage.getItem('formData.paymentType')):null),
           };
           this.formData = formData;
         }
       },
       deep: true,
       immediate: true,
+    },
+    /* 付款方式 字段 监听值 增加到缓存 */
+    'formData.paymentType':{
+      handler(val) {
+        sessionStorage.setItem('formData.paymentType',val)
+      }
     },
     "modifyForm.type": {
       handler(val) {

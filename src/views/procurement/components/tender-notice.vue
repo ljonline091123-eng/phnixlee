@@ -900,8 +900,10 @@ export default {
           console.log(formData, "formData");
           try {
             if (this.scheme.noticeStatus === 0) {
+              /* 发布招标文件 */
               await aNewAdd(formData);
             } else {
+              /* 如果是公开招标 就发布公告，只有这个公开招标才有 公告环节 */
               await addTenderNotice(formData);
             }
             loading.close();

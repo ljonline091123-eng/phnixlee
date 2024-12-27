@@ -301,7 +301,7 @@
 <script>
 import { mapGetters } from "vuex";
 import { Base64 } from "js-base64";
-import { getBiddingSchemeList, abandonBidMore } from "@/api/procurement/manage";
+import {getBiddingSchemeList, abandonBidMore, abandonBidMoreScheme} from "@/api/procurement/manage";
 import {
   cancellationProcurementScheme,cancellationProcurementSchemePlan,
 } from "@/api/procurement/scheme";
@@ -497,14 +497,19 @@ export default {
             ],
           };
           console.log(formData, "formData");
+          console.log('%c👽 作废节点this.selectedOption ', `font-size: 20px;background-color: #f00;`, this.selectedOption);
           try {
             const res=null
             if(this.selectedOption === 'rePlan'){
               /* 选择了作废到 采购计划 */
-              const resPlan = await cancellationProcurementSchemePlan(id);
+              console.log('%c👽 作废节点this.selectedOption ', `font-size: 20px;background-color: #f00;`, '采购计划');
             }else  if(this.selectedOption === 'reScheme'){
+              if(formData.abandonMoreVOList[0].noticeId)
+                formData.noticeId = formData.abandonMoreVOList[0].noticeId;
+              if(formData.abandonMoreVOList[0].schemeId)
+                formData.schemeId = formData.abandonMoreVOList[0].schemeId;
               /* 选择了作废到 采购方案 */
-              const resScheme = await cancellationProcurementScheme(id);
+              const resScheme = await abandonBidMoreScheme(formData);
             }else{
               /* 重新招标 */
               const res = await abandonBidMore(formData);

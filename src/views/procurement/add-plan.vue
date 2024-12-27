@@ -1,4 +1,4 @@
-<template>
+<template :key="$route.fullPath">
   <div class="app-container">
     <BackButton path="/procurement/plan" :title="currentContract.type === 'update'? '修改采购计划' : '新增采购计划'">
       <div>
@@ -519,7 +519,6 @@ export default {
     VirtualScroll
   },
   created() {
-    this.getInitialData();
     console.log('param--param--param!------------------');
     this.mathjs = create(all);
     this.mathjs.config({
@@ -556,6 +555,11 @@ export default {
   },
   mounted(){
       this.queryContractPlanSplitFlag();
+  },
+    // 组件不具有此钩子
+  beforeRouteLeave(to, from, next) {
+    this.$destroy(true)
+    next();
   },
   methods: {
     /* 代替data初始化 */
@@ -1338,10 +1342,18 @@ console.log("-2222--"+JSON.stringify(this.materialsLists))
               }).then(() => {
               // 删除数据
               this.planList[0].children.splice(index, 1);
+              console.log(JSON.stringify(this.planList[0].children))
+          
+           
               //如果删除只有一条数据了,强制设置为"拆分合约规划名称和拟签约合同承包范围"为空
               if(this.planList[0].children.length==1){
                 this.planList[0].children[0].splitContractName=''
                 this.planList[0].children[0].contractScope=''
+                var arr=this.planList[0].children[0]
+                this.inventoryList.forEach( (item, index) => {
+                    arr.children[index].count=item.count
+                    })
+
               }
               // 强制Vue重新渲染
               this.$forceUpdate();
