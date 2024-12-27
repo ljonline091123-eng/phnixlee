@@ -1,6 +1,6 @@
 package com.zhaocai.business.agreement.vo.res;
 
-import com.zhaocai.business.agreement.domain.AgreementPartyInfoVO;
+import com.zhaocai.business.agreement.vo.res.AgreementPartyInfoVO;
 import com.zhaocai.business.common.base.AdviceObject;
 import io.swagger.annotations.ApiModelProperty;
 import lombok.Builder;
