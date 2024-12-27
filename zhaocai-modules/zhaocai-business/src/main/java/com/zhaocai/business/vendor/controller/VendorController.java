@@ -79,12 +79,20 @@ public class VendorController extends BladeController {
         }
         String suffix = yozOfileUtils.getSuffix(fileName).toLowerCase();
         if (yozOfileUtils.isWordExtension(suffix)) {
+            //先把word转pdf加水印
             String PDFUrl = attachmentService.convertOfficeToPdf(fileName,fileUrl,waterMarkContent);
             String PDFfileName = yozOfileUtils.removeSuffix(fileName) + ".pdf";
+            //预览pdf的URL
             String viewURL = attachmentService.viewPDFFileURL(PDFfileName,PDFUrl);
             return ResultData.data(viewURL);
-        }else {
-            return ResultData.fail("非word文档格式，文件格式错误，无法预览");
+        } else if (yozOfileUtils.isPdfExtension(suffix)) {
+            String viewUrl = attachmentService.viewPDFFileURL(fileName,fileUrl);
+            return ResultData.data(viewUrl);
+        } else if (yozOfileUtils.isImageExtension(suffix)) {
+            String viewUrl = attachmentService.viewImageURL(fileName,fileUrl);
+            return ResultData.data(viewUrl);
+        } else {
+            return ResultData.fail("无法预览，不支持预览该文档格式，只能预览word、PDF、图片格式的文件！！！");
         }
     }
 
