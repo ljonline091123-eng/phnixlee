@@ -3419,6 +3419,7 @@ export default {
   methods: {
     //切换页签到合同附件时
     attachmenthandleTabClick(tab){
+      this.loadAgreementAttachmentId();
       // tab.name 是被点击的标签页的 name 属性值
       this.viewFileUrl=""; //先清空编辑文档的URL，在重新获取
       if (tab.name === 'second') {
@@ -3426,10 +3427,16 @@ export default {
       }
     },
 
-    getAgreementViewURLFn(){
+    getAgreementViewURLFn(attachmentId){
+      this.loadAgreementAttachmentId();
+      console.log("进获取合同预览的方法getAgreementViewURLFn，-》》》》")
+      // 获取合同预览URL
+      const attachmentIdToUse = attachmentId !== undefined ? attachmentId : this.attachmentId;  
+      console.log("传入的attachmentId",attachmentId)
+      console.log("获取的this.attachmentId", this.attachmentId)
       //获取合同预览URL
-      if (this.attachmentId) {
-        console.log("进获取合同预览的方法，getAgreementViewURLFn-》》》》")
+      if (attachmentIdToUse) {
+        console.log("获取到attachmentIdToUse，进行获取预览的方法-》》》》")
         if (!this.attachmentId || !this.param?.id || !this.partyAName) {
           console.error('attachmentId,agreementId, partyAName数据未正确加载,无法预览合同附件');
           return;
@@ -3500,7 +3507,9 @@ export default {
           this.partyAName = res.data.agreement.partyAName; //获取甲方名称，即水印内容
           console.log("获取详情时的partyAName",this.partyAName);
           //获取合同文件预览URl
-          this.getAgreementViewURLFn();
+          console.log("getDetail的:this.attachmentId-》：", this.attachmentId)
+          this.loadAgreementAttachmentId();
+          this.getAgreementViewURLFn(this.attachmentId);
 
           (this.agreementDailyWageList =
             res.data?.agreementDailyWageList || []),
