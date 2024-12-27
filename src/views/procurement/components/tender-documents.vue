@@ -167,6 +167,7 @@
               prop="email"
               class="required label-right-align"
             >
+              <!-- 付款方式 字段 监听中watch 使用缓存/数据库的值。 -->
               <el-select
                 style="width: 100%"
                 :disabled="!applyButtonShow && !isSubmit"
@@ -1209,12 +1210,20 @@ export default {
             phone: this.scheme.bidContactPhone,
             email: this.scheme.bidContactEmail,
             ...value,
+            /* 付款方式 如果数据库有值优先使用数据库的值，否则使用缓存中的值 */
+            paymentType: newVal.tenderNotice.paymentType?newVal.tenderNotice.paymentType:Number(sessionStorage.getItem('formData.paymentType')),
           };
           this.formData = formData;
         }
       },
       deep: true,
       immediate: true,
+    },
+    /* 付款方式 字段 监听值 增加到缓存 */
+    'formData.paymentType':{
+      handler(val) {
+        sessionStorage.setItem('formData.paymentType',val)
+      }
     },
     "modifyForm.type": {
       handler(val) {
