@@ -1159,6 +1159,7 @@ import {
   getProcessLogList, getOrgByUserId,
 } from "@/api/procurement/manage";
 import { getViewAttachmentURLByID } from "@/api/template/file";
+import { ElMessageBoxComponent } from "element-ui/types/message-box";
 export default {
   components: {
     commonTitle,
@@ -3352,6 +3353,36 @@ export default {
   },
 
   methods: {
+    getAgreementViewURLFn(){
+      //获取合同预览URL
+      if (this.attachmentId) {
+        if (isNullOrEmpty(this.attachmentId) || isNullOrEmpty(this.param?.id) || isNullOrEmpty(this.partyAName)) {
+          console.error('attachmentId,agreementId, partyAName数据未正确加载,无法预览合同附件');
+          return;
+        }
+        console.log('Attachment ID:', this.attachmentId);
+        //水印内容
+        console.log('获取预览合同附件URL时获取的partyAName-》',this.partyAName)
+
+        // 获取文档中台的文档编辑URL
+        getAgreementViewURL({
+          attachmentId: this.attachmentId,
+          agreementId: this.param.id,
+          waterMarkContent: this.partyAName
+        })
+        .then((res) => {
+          this.viewFileUrl = res.data;
+          console.log("获取合同预览viewFileUrl:", this.viewFileUrl);
+        })
+        .catch((err) => {
+          console.log(err);
+        });
+
+      } else {
+        console.warn('attachmentId 数据未正确加载');
+      }
+    },
+
     getContractDetail() {
       this.fullLoading = true;
       getAgreementDetail({
@@ -3381,6 +3412,9 @@ export default {
           this.fullLoading = false;
           this.partyAName = res.data.agreement.partyAName; //获取甲方名称，即水印内容
           console.log("获取详情时的partyAName",this.partyAName);
+          //获取合同文件预览URl
+          this.getAgreementViewURLFn();
+
           (this.agreementDailyWageList =
             res.data?.agreementDailyWageList || []),
             (this.agreementMachineShifts =
