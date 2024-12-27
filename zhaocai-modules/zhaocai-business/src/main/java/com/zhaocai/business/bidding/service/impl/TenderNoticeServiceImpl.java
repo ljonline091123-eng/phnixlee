@@ -912,6 +912,9 @@ public class TenderNoticeServiceImpl extends ServiceImpl<TenderNoticeMapper,Tend
         IPage<VendorPortalNoticeListVO> iPage = baseMapper.findVendorPortalNoticePage(queryDTO.toMybatisPage(), queryDTO);
         for (VendorPortalNoticeListVO record : iPage.getRecords()) {
             record.setMinProjectName(getMinProjectName(record.getSchemeId()));
+
+            /* 不使用采购人的招标单位信息，使用采购方案对应项目的的招标单位信息 */
+            record.setUnit(getDeptName(record.getSchemeId()));
         }
         return new PageResult<>(iPage);
     }
