@@ -1,4 +1,4 @@
-package com.zhaocai.business.agreement.domain;
+package com.zhaocai.business.agreement.vo.res;
 
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.zhaocai.business.common.annotations.DictCache;

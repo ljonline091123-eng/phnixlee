@@ -14,6 +14,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * 支出合同合同登记引用招采合同接口
+ */
 @Api(value = "第三方-合同接口")
 @RestController
 @RequestMapping("/underling/agreement")
