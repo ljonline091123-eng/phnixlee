@@ -697,6 +697,8 @@ public class AttachmentServiceImpl extends ServiceImpl<AttachmentMapper, Attachm
             ConvertParams params = new ConvertParams();
             // 设置要处理的文档模版
             params.setFilePath(path.toString());
+            //去除修订记录
+            params.setAccepTracks(false);
             // 设置水印(有水印内容时)
             if(StringUtils.isNotBlank(waterMarkContent)){
                 WaterMark wm = new WaterMark(WaterMark.TYPE_TXT, waterMarkContent);
