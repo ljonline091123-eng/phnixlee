@@ -104,6 +104,12 @@ public class ProcurementSchemeServiceImpl extends ServiceImpl<ProcurementSchemeM
     @Autowired
     private IAttachmentService attachmentService;
 
+
+    @Override
+    public IPage<BiddingSchemeListVO> selectBiddingSchemePageList(BiddingSchemeListQueryVO queryVO){
+        return baseMapper.selectBiddingSchemePageList(queryVO.toMybatisPage(), queryVO);
+    }
+
     @Override
     public PageResult<ProcurementSchemeListVO> listPage(ProcurementSchemeListQueryVO queryVO) {
         // ToDo 获取当前登录用户，判断是否为领导，如果是领导则可以看到所有

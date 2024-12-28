@@ -1,5 +1,6 @@
 package com.zhaocai.business.procurement.service;
 
+import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.zhaocai.business.agreement.vo.req.AgreementSchemeQueryVO;
 import com.zhaocai.business.agreement.vo.res.AgreementSchemeListVO;
@@ -13,6 +14,7 @@ import com.zhaocai.business.procurement.vo.res.*;
 import com.zhaocai.business.pub.vo.res.AttachmentVO;
 import com.zhaocai.common.core.bean.PageResult;
 import com.zhaocai.common.core.web.bean.ResultData;
+import org.apache.ibatis.annotations.Param;
 
 import java.util.List;
 
@@ -23,6 +25,8 @@ import java.util.List;
  * @date 2024-05-24
  */
 public interface IProcurementSchemeService  extends IService<ProcurementScheme>, IProcessBusinessBaseService, IPBMOverrideService {
+
+    IPage<BiddingSchemeListVO> selectBiddingSchemePageList(BiddingSchemeListQueryVO queryVO);
 
     /**
      * 采购方案列表查询

@@ -1,6 +1,9 @@
 package com.zhaocai.business.bidding.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zhaocai.business.bidding.domain.*;
 import com.zhaocai.business.bidding.enums.BiddingInfoStatusEnum;
 import com.zhaocai.business.bidding.enums.TenderNoticeStatusEnum;
@@ -30,10 +33,8 @@ import com.zhaocai.business.procurement.domain.ProcurementScheme;
 import com.zhaocai.business.procurement.service.IMaterialsListService;
 import com.zhaocai.business.procurement.service.IMinProjectService;
 import com.zhaocai.business.procurement.service.IProcurementSchemeService;
-import com.zhaocai.business.procurement.vo.res.CompContractSplitMaterialsVO;
-import com.zhaocai.business.procurement.vo.res.CompMaterialsContentVO;
-import com.zhaocai.business.procurement.vo.res.CompMaterialsVO;
-import com.zhaocai.business.procurement.vo.res.MinProjectVO;
+import com.zhaocai.business.procurement.vo.req.BiddingSchemeListQueryVO;
+import com.zhaocai.business.procurement.vo.res.*;
 import com.zhaocai.business.pub.service.IAttachmentService;
 import com.zhaocai.business.vendor.domain.Vendor;
 import com.zhaocai.business.vendor.domain.VendorContact;
@@ -60,12 +61,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.CollectionUtils;
 
+import java.io.UnsupportedEncodingException;
 import java.math.BigDecimal;
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -496,7 +495,32 @@ public class VendorBidServiceImpl implements IVendorBidService {
         requestDTO.setFlowGroup(ThirdPartyTodoFlowGroupEnum.XCW_BID.getDesc());
         requestDTO.setFlowModule(ThirdPartyTodoFlowModuleEnum.BID_MANAGE.getDesc());
         requestDTO.setFlowName(procurementScheme.getFinanceConfirmName() + "的" + ThirdPartyTodoFlowGroupEnum.XCW_BID.getDesc());
-        requestDTO.setDetailUrl("/procurement/tendering");
+        /* 先跳转到列表，下面不报错再跳转覆盖 */
+        requestDTO.setDetailUrl("/procurement/bindding");
+
+        String base64Encoded = "";
+        if(tenderNotice!=null && tenderNotice.getId()!=null){
+            BiddingSchemeListQueryVO query = new BiddingSchemeListQueryVO();
+            query.setPageNumber(1);
+            query.setPageSize(1);
+            query.setNoticeId(tenderNotice.getId());
+            IPage<BiddingSchemeListVO> iPage = procurementSchemeService.selectBiddingSchemePageList(query);
+            if(iPage.getTotal()>0){
+                BiddingSchemeListVO biddingSchemeListVO = iPage.getRecords().get(0);
+                // 将数据转换为 JSON 字符串
+                ObjectMapper objectMapper = new ObjectMapper();
+                try{
+                    String jsonString = objectMapper.writeValueAsString(biddingSchemeListVO);
+                    // 使用 Base64 编码 JSON 字符串
+                    base64Encoded = Base64.getEncoder().encodeToString(jsonString.getBytes("UTF-8"));
+                    /* 精准定位跳转到该条招标对象 */
+                    requestDTO.setDetailUrl("/procurement/tendering/"+base64Encoded);
+                    log.info("[财务人员待办信息][Base64编码转换] {} ", base64Encoded);
+                }catch (JsonProcessingException | UnsupportedEncodingException e){
+                    log.info("[财务人员待办信息][Base64编码转换 ERROR ] {} ",e.getMessage());
+                }
+            }
+        }
 //            requestDTO.setDetailUrl("/procurement/plan-detail/IjE4MTkyODk4NDM3Njk0NzA5Nzgi");
 //            requestDTO.setUserObj("{\\\"id\\\":1111}");
 //            requestDTO.setUserObj(openPeople.toString());

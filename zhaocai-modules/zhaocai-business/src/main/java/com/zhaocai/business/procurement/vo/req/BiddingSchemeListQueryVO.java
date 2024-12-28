@@ -17,6 +17,9 @@ import java.util.List;
 public class BiddingSchemeListQueryVO extends PageRecive {
     private static final long serialVersionUID = 1188362470189395967L;
 
+    @ApiModelProperty(value =  "招标对象id")
+    private Long noticeId;
+
     @ApiModelProperty(value =  "采购方案编号")
     private String procurementSchemeCode;
 
