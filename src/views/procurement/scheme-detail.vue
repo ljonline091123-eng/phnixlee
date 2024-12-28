@@ -736,6 +736,7 @@ import {
   getListMaterials,
   cancellationProcurementScheme,
   withdrawalPlan,
+  ViweProcurementSchemeFile,
 } from "@/api/procurement/scheme";
 import {
   getPermissionButton,
@@ -937,7 +938,8 @@ export default {
         console.log('预览的Attachment ID:', this.templateAttachmentId);
         //获取文档中台的文档编辑URL
         try {
-          const res = await getViewAttachmentURLByID({ attachmentId: this.templateAttachmentId });
+          // const res = await getViewAttachmentURLByID({ attachmentId: this.templateAttachmentId }); //无修订记录
+          const res = await ViweProcurementSchemeFile({ attachmentId: this.templateAttachmentId }); //有修订记录
           this.viewFileUrl = res.data;
           console.log("viewFileUrl:",this.viewFileUrl);
         } catch (err) {

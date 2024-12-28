@@ -86,7 +86,7 @@
       </div>
     </BackButton>
     <div class="context">
-      <el-tabs v-model="activeName">
+      <el-tabs v-model="activeName" @tab-click="attachmenthandleTabClick">
         <el-tab-pane label="基本信息" name="first">
           <commonTitle> 基本信息 </commonTitle>
           <el-form :model="showInfo" class="form-container">
@@ -1180,6 +1180,7 @@ import {
   getProcessLogList, getOrgByUserId,
 } from "@/api/procurement/manage";
 import { getViewAttachmentURLByID } from "@/api/template/file";
+
 export default {
   components: {
     commonTitle,
@@ -3416,6 +3417,53 @@ export default {
   },
 
   methods: {
+    //切换页签到合同附件时
+    attachmenthandleTabClick(tab){
+      this.loadAgreementAttachmentId();
+      // tab.name 是被点击的标签页的 name 属性值
+      this.viewFileUrl=""; //先清空编辑文档的URL，在重新获取
+      if (tab.name === 'second') {
+        this.getAgreementViewURLFn();
+      }
+    },
+
+    getAgreementViewURLFn(attachmentId){
+      this.loadAgreementAttachmentId();
+      console.log("进获取合同预览的方法getAgreementViewURLFn，-》》》》")
+      // 获取合同预览URL
+      const attachmentIdToUse = attachmentId !== undefined ? attachmentId : this.attachmentId;  
+      console.log("传入的attachmentId",attachmentId)
+      console.log("获取的this.attachmentId", this.attachmentId)
+      //获取合同预览URL
+      if (attachmentIdToUse) {
+        console.log("获取到attachmentIdToUse，进行获取预览的方法-》》》》")
+        if (!this.attachmentId || !this.param?.id || !this.partyAName) {
+          console.error('attachmentId,agreementId, partyAName数据未正确加载,无法预览合同附件');
+          return;
+        }
+        console.log('Attachment ID:', this.attachmentId);
+        //水印内容
+        console.log('获取预览合同附件URL时获取的partyAName-》',this.partyAName)
+
+        // 获取文档中台的文档编辑URL
+        getAgreementViewURL({
+          attachmentId: this.attachmentId,
+          agreementId: this.param.id,
+          waterMarkContent: this.partyAName
+        })
+        .then((res) => {
+          this.viewFileUrl = res.data;
+          console.log("获取合同预览viewFileUrl:", this.viewFileUrl);
+        })
+        .catch((err) => {
+          console.log(err);
+        });
+
+      } else {
+        console.warn('attachmentId 数据未正确加载');
+      }
+    },
+
     getContractDetail() {
       this.fullLoading = true;
       getAgreementDetail({
@@ -3458,6 +3506,11 @@ export default {
           this.fullLoading = false;
           this.partyAName = res.data.agreement.partyAName; //获取甲方名称，即水印内容
           console.log("获取详情时的partyAName",this.partyAName);
+          //获取合同文件预览URl
+          console.log("getDetail的:this.attachmentId-》：", this.attachmentId)
+          this.loadAgreementAttachmentId();
+          this.getAgreementViewURLFn(this.attachmentId);
+
           (this.agreementDailyWageList =
             res.data?.agreementDailyWageList || []),
             (this.agreementMachineShifts =
