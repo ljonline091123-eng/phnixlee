@@ -9,6 +9,15 @@ export const getSchemeEditFileUrl = (params) => {
   });
 };
 
+//获取采购方案部分文件(招标文件、合同模板)的预览URL，开启修订记录
+export const ViweProcurementSchemeFile = (params) => {
+  return request({
+    url: "/business/procurementScheme/ViweProcurementSchemeFile",
+    method: "get",
+    params,
+  });
+};
+
 // 采购需求列表
 export const getSchemeList = (params) => {
   return request({
