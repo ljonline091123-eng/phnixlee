@@ -2,7 +2,6 @@ package com.zhaocai.business.pub.service.impl;
 
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.collection.CollectionUtil;
-import cn.hutool.core.date.DateUtil;
 import cn.hutool.core.io.file.FileNameUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
@@ -40,7 +39,6 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.nio.file.Path;
@@ -95,6 +93,64 @@ public class AttachmentServiceImpl extends ServiceImpl<AttachmentMapper, Attachm
         //删除生成的临时文件
         System.out.println("删除文件路径:" + path);
         yozOfileUtils.deleteTempFilePath(path.toString());
+    }
+
+    //文档中台——获取预览word文件URL,显示修订记录
+    @Override
+    public String  viewWordFileUrlWithRevise(String fileName, String fileUrl){
+        if(StringUtils.isEmpty(fileName) || StringUtils.isEmpty(fileUrl)){
+            throw new RuntimeException("生成文件预览url失败,未获取到文件名或者文件URL！");
+        }
+        String HtmlName = yozOfileUtils.removeSuffix(fileName);
+        Path path = yozOfileUtils.downloadFile(fileUrl, yozOfileUtils.createTempFilePath(fileName));
+        try {
+            // 组织请求参数
+            PreviewParams params = new PreviewParams();
+            // 设置要预览的文件
+            params.setFilePath(path.toString());
+            params.setFileName(fileName);
+            params.setHtmlName(HtmlName);
+            params.setHtmlTitle(HtmlName);
+            // 是否可打印
+            params.setPrintMenu(true, false);
+            // 设置可下载
+            params.setDownloadMenu(true, fileName);
+            // 是否显示修订
+            params.setAcceptTracks(true);
+            // 允许复制
+            params.setCopy(false);
+            // 只允许打开一次
+            params.setPreviewNumber(5);
+            String newViewUrl = null;
+            try {
+                String response= sender.post(PreviewParams.URL_PREVIEW, PreviewParams.CONVERT_TYPE_PREVIEW_OFFICE, params.getRequestBody());
+                System.out.println("预览Office文件响应结果：");
+                System.out.println(response);
+
+                //抛出服务器响应错误
+                JSONObject jsonResponse = new JSONObject(response);
+                int code = jsonResponse.optInt("code", -1); // 默认值-1表示未找到该字段或转换失败
+                String msg = jsonResponse.optString("msg", "未知错误");
+                // 判断 code 是否为 0，响应成功则code为0；
+                if (code != 0) {
+                    System.err.println("文档中台-服务器响应错误: " + msg);
+                    throw new RuntimeException("文档中台-服务器响应错误: " + msg);
+                }
+
+                String viewUrl = new JSONObject(response).optJSONObject("data").optString("viewUrl");
+                newViewUrl = yozOfileUtils.updateFileUrl(viewUrl);
+                System.out.println(newViewUrl);
+            }  catch (JSONException e) {
+                throw new RuntimeException("文档中台-解析服务器响应失败: " + e.getMessage(), e);
+            }
+            return newViewUrl;
+        } catch (Exception e) {
+            throw new RuntimeException("生成文件预览url失败"+ e.getMessage(), e);
+        }finally {
+            //删除生成的临时文件
+            System.out.println("删除文件路径:" + path.toString());
+            yozOfileUtils.deleteTempFilePath(path.toString());
+        }
     }
 
     //文档中台——获取预览word文件URL
@@ -153,7 +209,6 @@ public class AttachmentServiceImpl extends ServiceImpl<AttachmentMapper, Attachm
             System.out.println("删除文件路径:" + path.toString());
             yozOfileUtils.deleteTempFilePath(path.toString());
         }
-
     }
 
     //文档中台——获取预览word文件URL+加上水印
