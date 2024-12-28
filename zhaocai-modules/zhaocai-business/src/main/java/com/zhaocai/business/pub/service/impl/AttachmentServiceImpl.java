@@ -95,6 +95,64 @@ public class AttachmentServiceImpl extends ServiceImpl<AttachmentMapper, Attachm
         yozOfileUtils.deleteTempFilePath(path.toString());
     }
 
+    //文档中台——获取预览word文件URL,显示修订记录
+    @Override
+    public String  viewWordFileUrlWithRevise(String fileName, String fileUrl){
+        if(StringUtils.isEmpty(fileName) || StringUtils.isEmpty(fileUrl)){
+            throw new RuntimeException("生成文件预览url失败,未获取到文件名或者文件URL！");
+        }
+        String HtmlName = yozOfileUtils.removeSuffix(fileName);
+        Path path = yozOfileUtils.downloadFile(fileUrl, yozOfileUtils.createTempFilePath(fileName));
+        try {
+            // 组织请求参数
+            PreviewParams params = new PreviewParams();
+            // 设置要预览的文件
+            params.setFilePath(path.toString());
+            params.setFileName(fileName);
+            params.setHtmlName(HtmlName);
+            params.setHtmlTitle(HtmlName);
+            // 是否可打印
+            params.setPrintMenu(true, false);
+            // 设置可下载
+            params.setDownloadMenu(true, fileName);
+            // 是否显示修订
+            params.setAcceptTracks(true);
+            // 允许复制
+            params.setCopy(false);
+            // 只允许打开一次
+            params.setPreviewNumber(5);
+            String newViewUrl = null;
+            try {
+                String response= sender.post(PreviewParams.URL_PREVIEW, PreviewParams.CONVERT_TYPE_PREVIEW_OFFICE, params.getRequestBody());
+                System.out.println("预览Office文件响应结果：");
+                System.out.println(response);
+
+                //抛出服务器响应错误
+                JSONObject jsonResponse = new JSONObject(response);
+                int code = jsonResponse.optInt("code", -1); // 默认值-1表示未找到该字段或转换失败
+                String msg = jsonResponse.optString("msg", "未知错误");
+                // 判断 code 是否为 0，响应成功则code为0；
+                if (code != 0) {
+                    System.err.println("文档中台-服务器响应错误: " + msg);
+                    throw new RuntimeException("文档中台-服务器响应错误: " + msg);
+                }
+
+                String viewUrl = new JSONObject(response).optJSONObject("data").optString("viewUrl");
+                newViewUrl = yozOfileUtils.updateFileUrl(viewUrl);
+                System.out.println(newViewUrl);
+            }  catch (JSONException e) {
+                throw new RuntimeException("文档中台-解析服务器响应失败: " + e.getMessage(), e);
+            }
+            return newViewUrl;
+        } catch (Exception e) {
+            throw new RuntimeException("生成文件预览url失败"+ e.getMessage(), e);
+        }finally {
+            //删除生成的临时文件
+            System.out.println("删除文件路径:" + path.toString());
+            yozOfileUtils.deleteTempFilePath(path.toString());
+        }
+    }
+
     //文档中台——获取预览word文件URL
     @Override
     public String  viewWordFileURL(String fileName, String fileUrl){
@@ -151,7 +209,6 @@ public class AttachmentServiceImpl extends ServiceImpl<AttachmentMapper, Attachm
             System.out.println("删除文件路径:" + path.toString());
             yozOfileUtils.deleteTempFilePath(path.toString());
         }
-
     }
 
     //文档中台——获取预览word文件URL+加上水印
@@ -632,18 +689,24 @@ public class AttachmentServiceImpl extends ServiceImpl<AttachmentMapper, Attachm
         if(StringUtils.isEmpty(fileName) || StringUtils.isEmpty(fileUrl)){
             throw new RuntimeException("生成文件编辑url失败,未获取到文件名或者文件URL！");
         }
-        if(StringUtils.isEmpty(waterMarkContent)){
-            throw new RuntimeException("生成文件编辑url失败,未获取到水印内容！");
-        }
+//        if(StringUtils.isEmpty(waterMarkContent)){
+//            throw new RuntimeException("生成文件编辑url失败,未获取到水印内容！");
+//        }
         Path path = yozOfileUtils.downloadFile(fileUrl, yozOfileUtils.createTempFilePath(fileName));
         try {
             ConvertParams params = new ConvertParams();
             // 设置要处理的文档模版
             params.setFilePath(path.toString());
-            // 设置水印
-            WaterMark wm = new WaterMark(WaterMark.TYPE_TXT, waterMarkContent);
-            // 将水印设置到参数中
-            params.setWaterMark(wm);
+            //去除修订记录
+            params.setAccepTracks(false);
+            // 设置水印(有水印内容时)
+            if(StringUtils.isNotBlank(waterMarkContent)){
+                WaterMark wm = new WaterMark(WaterMark.TYPE_TXT, waterMarkContent);
+                // 将水印设置到参数中
+                params.setWaterMark(wm);
+                // 将水印设置到参数中
+                params.setWaterMark(wm);
+            }
             String viewUrl = null;
             try {
                 String response = sender.post(ConvertParams.URL_CONVERT, ConvertParams.CONVERT_TYPE_DOC_PDF, params.getRequestBody());
@@ -669,6 +732,42 @@ public class AttachmentServiceImpl extends ServiceImpl<AttachmentMapper, Attachm
         } catch (Exception e) {
             throw new RuntimeException("office转PDF文件失败"+ e.getMessage(), e);
         }
+    }
+
+    /*  把传入的attachmentId附件转换为PDF文件（带水印），更新fileUrl
+    1.若传入的attachmentId存在，更新传入的attachmentId附件（pdf文件）的fileUrl，返回更新的attachmentId；
+    2.若传入的attachmentId不存在，新增attachment，返回新增的attachmentId
+    */
+    @Override
+    public Long ConverToPDFAndUpdateFileUrl(Long busnessId, AttachmentTypeEnum busnessType, Long attachmentId, String watermarkText, String targetFileName, String fileUrl) throws IOException {
+//        targetFileName = targetFileName + "_" + DateUtil.format(new Date(),"yyyyMMddHHmmss") + ".pdf";
+
+        String PDFfileUrl = convertOfficeToPdf(targetFileName,fileUrl,watermarkText);
+        if (StringUtils.isBlank(PDFfileUrl)){
+            throw new RuntimeException("生成的pfd文件URL为空，office转PDF文件失败!");
+        }
+
+        //下载生成的pdf文件URL到临时文件夹
+        Path path = yozOfileUtils.downloadFile(PDFfileUrl, yozOfileUtils.createTempFilePath(targetFileName));
+        File file = new File(path.toString());
+        if (!file.exists()) {
+            throw new IOException("文档不存在: " + PDFfileUrl);
+        }
+        // 转换为InputStream，上传到文档中台
+        FileInputStream fis = new FileInputStream(file);
+        String NewFileUrl = sysFileService.uploadFile(fis, targetFileName);
+        //传入的attachmentId存在则更新该附件的文件名和文件URL，不存在则新增一条attachment记录，返回新增pdf文件的attachmentId
+        Long pdfAttachmentId;
+        if (NumberUtil.isNullOrZero(attachmentId)){
+            pdfAttachmentId = addAttachment(new AttachmentRequestVO(targetFileName, NewFileUrl), busnessType,busnessId);
+        }else {
+            updateFileNameANDFileUrl(attachmentId,NewFileUrl,targetFileName);
+            pdfAttachmentId = attachmentId;
+        }
+        //删除生成的临时文件
+        System.out.println("删除文件路径:" + path);
+        yozOfileUtils.deleteTempFilePath(path.toString());
+        return pdfAttachmentId;
     }
 
     @Override

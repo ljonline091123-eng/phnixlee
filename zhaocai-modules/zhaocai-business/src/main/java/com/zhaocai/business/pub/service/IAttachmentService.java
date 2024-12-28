@@ -21,6 +21,9 @@ public interface IAttachmentService extends IService<Attachment> {
     //修改附件的文件名和文件URL
     void  ModifyFileNameAndFileURL(Long attachmentId) throws IOException;
 
+    //文档中台——获取预览word文件URL,显示修订记录
+    String  viewWordFileUrlWithRevise(String fileName, String fileUrl);
+
     //文档中台——获取预览word文件URL
     String  viewWordFileURL(String fileName, String fileUrl);
 
@@ -49,6 +52,12 @@ public interface IAttachmentService extends IService<Attachment> {
 
     //文档中台-office转PDF
     String  convertOfficeToPdf(String fileName, String fileUrl, String waterMarkContent);
+
+    /*  把传入的attachmentId附件转换为PDF文件（带水印），更新fileUrl
+    1.若传入的attachmentId存在，更新传入的attachmentId附件（pdf文件）的fileUrl，返回更新的attachmentId；
+    2.若传入的attachmentId不存在，新增attachment，返回新增的attachmentId
+    */
+    Long ConverToPDFAndUpdateFileUrl(Long busnessId, AttachmentTypeEnum busnessType, Long attachmentId, String watermarkText, String targetFileName, String fileUrl) throws IOException;
 
     /**
      * 新增附件

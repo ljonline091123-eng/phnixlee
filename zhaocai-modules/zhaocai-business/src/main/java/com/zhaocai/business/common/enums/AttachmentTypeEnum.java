@@ -39,6 +39,7 @@ public enum AttachmentTypeEnum {
     FILE_Z_DOWNLOAD("file-z-download","联想文档下载"),
 
     AGREEMENT_ORIGINAL("agreement_original","合同原始文件"),
+    AGREEMENT_PDFFILE("agreement_pdfFile","合同pdf文件"),
     AGREEMENT_MATERIALS_LIST("agreement_materials_List","合同清单列表"),
 
     ;

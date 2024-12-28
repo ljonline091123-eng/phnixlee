@@ -20,9 +20,6 @@ import com.zhaocai.business.agreement.service.*;
 import com.zhaocai.business.agreement.vo.req.*;
 import com.zhaocai.business.agreement.vo.res.*;
 import com.zhaocai.business.bidding.domain.BiddingListQuotation;
-import com.zhaocai.business.bidding.domain.BiddingOpenPeople;
-import com.zhaocai.business.bidding.domain.TenderNotice;
-import com.zhaocai.business.bidding.enums.TenderNoticeStatusEnum;
 import com.zhaocai.business.bidding.service.IBiddingListQuotationService;
 import com.zhaocai.business.bidding.service.IBiddingResultService;
 import com.zhaocai.business.bidding.vo.res.VendorBiddingListQuotationListVO;
@@ -33,17 +30,14 @@ import com.zhaocai.business.common.enums.*;
 import com.zhaocai.business.common.exception.BusinessException;
 import com.zhaocai.business.common.exception.ParamValidateException;
 import com.zhaocai.business.common.exception.ResultCode;
-import com.zhaocai.business.common.interceptor.RequestParamLoggingInterceptor;
 import com.zhaocai.business.common.utils.AmountCalUtil;
 import com.zhaocai.business.common.utils.ValidateUtils;
-import com.zhaocai.business.expert.domain.Expert;
 import com.zhaocai.business.filez.service.IFileZTaskService;
 import com.zhaocai.business.manager.http.dto.req.*;
 import com.zhaocai.business.manager.http.dto.res.*;
 import com.zhaocai.business.manager.http.service.ContractPlanService;
 import com.zhaocai.business.manager.http.service.UnderlingSystemService;
 import com.zhaocai.business.process.service.IBPMProcessService;
-import com.zhaocai.business.process.service.IPBMOverrideService;
 import com.zhaocai.business.procurement.domain.*;
 import com.zhaocai.business.procurement.service.*;
 import com.zhaocai.business.procurement.vo.res.MinProjectVO;
@@ -63,7 +57,6 @@ import com.zhaocai.business.vendor.vo.res.VendorAgreementDetailVO;
 import com.zhaocai.business.vendor.vo.res.VendorAgreementListVO;
 import com.zhaocai.business.vendor.vo.res.VendorAgreementVO;
 import com.zhaocai.common.core.bean.PageResult;
-import com.zhaocai.common.core.constant.NumberConstant;
 import com.zhaocai.common.core.constant.SecurityConstants;
 import com.zhaocai.common.core.constant.UserConstants;
 import com.zhaocai.common.core.utils.DateUtils;
@@ -87,9 +80,7 @@ import com.zhaocai.common.signature.service.command.GetSignUrlCommand;
 import com.zhaocai.system.api.domain.SysDept;
 import com.zhaocai.system.api.domain.SysUser;
 import com.zhaocai.system.api.system.RemoteSystemService;
-import lombok.val;
 import net.qiyuesuo.v3sdk.model.contract.response.ContractSignurlV3Response;
-import org.checkerframework.checker.units.qual.A;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
@@ -995,8 +986,21 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
 
         Attachment attachment = attachmentService.getById(agreement.getWatermarkAttachmentId());
 
-        // 生成 PDF
-        agreementFileZService.agreementConvertToPdf(id,null,agreement.getAgreementName(),attachment.getFileUrl());
+        // 生成 PDF（联想文档）
+//        agreementFileZService.agreementConvertToPdf(id,null,agreement.getAgreementName(),attachment.getFileUrl());
+        //永中文档中台转PDF、
+        Long PdfAttachmentId= agreement.getConvertPdfAttachmentId();
+        String watermarkText  = agreement.getPartyAName();
+        Long ConvertPdfAttachmentId = agreementFileZService.agreementConvertToPdfYOZO(id, PdfAttachmentId,watermarkText,attachment.getFileName(),attachment.getFileUrl());
+        //更新保存pdf文件URl后的附件id（ConvertPdfAttachmentId）
+        coverToPdfFinish(id,ConvertPdfAttachmentId);
+    }
+
+    @Override
+    public void setConvertPdfFile(Long id, long attachmentId) {
+        this.update(new LambdaUpdateWrapper<Agreement>()
+                .set(Agreement::getConvertPdfAttachmentId,attachmentId)
+                .eq(Agreement::getId,id));
     }
 
     @Override

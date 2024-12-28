@@ -163,6 +163,13 @@ public interface IAgreementService  extends IService<Agreement> , IProcessBusine
     void vendorAffirmAgreement(Long id);
 
     /**
+     * 转换为 pdf 后，保存在agreement的pdf附件id中
+     * @param id
+     * @param attachmentId
+     */
+    void setConvertPdfFile(Long id, long attachmentId);
+
+    /**
      * 转换为 pdf 完成
      * @param id
      * @param attachmentId

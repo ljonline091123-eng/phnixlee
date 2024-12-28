@@ -53,6 +53,7 @@ public class BookmarkUtils {
         // 设置要处理的文档模版
         try {
             params.setFilePath(path.toString());
+            params.setAccepTracks(true); //显示修订记录
             List<DictListVO> list = sysDictDataService.listDictByType("document_bookmark");
             BookMark bookMark = new BookMark();
 
@@ -79,7 +80,7 @@ public class BookmarkUtils {
             System.out.println("填充书签后生成的文件下载地址:" + viewUrl);
             return viewUrl;
         } catch (Exception e) {
-            throw new RuntimeException("书签位置填充数据失败", e);
+            throw new RuntimeException("书签位置填充数据失败," + e.getMessage(), e);
         }
     }
 

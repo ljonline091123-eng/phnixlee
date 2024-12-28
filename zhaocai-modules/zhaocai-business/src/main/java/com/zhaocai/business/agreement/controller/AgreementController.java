@@ -155,7 +155,7 @@ public class AgreementController extends BladeController {
         String newfileURL= bookmarkUtils.FillBookmarkData(fileUrl,fileName,agreementBookmarkVO);
         System.out.println("newfileURL:"+ newfileURL);
         if(yozOfileUtils.isNULLFileURL(newfileURL)){
-            return ResultData.fail("填充书签数据失败，无法编辑文件！！！");
+            return ResultData.fail("填充书签数据失败，无法预览文件！！！");
         }
         return ResultData.data(attachmentService.viewWordFileURLWithWaterMarK(fileName,newfileURL,waterMarkContent));
     }

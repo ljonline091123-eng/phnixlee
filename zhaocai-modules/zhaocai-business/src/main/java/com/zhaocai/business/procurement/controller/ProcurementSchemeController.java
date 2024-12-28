@@ -80,6 +80,31 @@ public class ProcurementSchemeController extends BladeController {
 
     }
 
+    @GetMapping("/ViweProcurementSchemeFile")
+    @ApiModelProperty(value = "据attachmentId获取预览采购方案部分的招标文件以及合同附件附件url")
+    public ResultData<String> getViweFileUrlByID(@RequestParam("attachmentId") Long attachmentId) {
+        if(attachmentId == null){
+            return ResultData.fail("生成文件预览url失败,attachmentId为空，请检查！");
+        }
+        AttachmentVO attachmentVO = attachmentService.getAttachmentById(attachmentId);
+        String fileName = attachmentVO.getFileName();
+        String fileUrl = attachmentVO.getFileUrl();
+        if(yozOfileUtils.isNULLFileURL(fileUrl)){
+            return ResultData.fail("该文件存储的fileUrl为空，无法预览文件！！！");
+        }
+        String suffix = yozOfileUtils.getSuffix(fileName).toLowerCase();
+        if (yozOfileUtils.isWordExtension(suffix)) {
+            //显示修订记录
+            return ResultData.data(attachmentService.viewWordFileUrlWithRevise(fileName,fileUrl));
+        } else if(yozOfileUtils.isPdfExtension(suffix)){
+            return ResultData.data(attachmentService.viewPDFFileURL(fileName,fileUrl));
+        } else if (yozOfileUtils.isImageExtension(suffix)) {
+            return ResultData.data(attachmentService.viewImageURL(fileName,fileUrl));
+        }else {
+            return ResultData.fail("无法预览该文件格式！");
+        }
+    }
+
     /**
      * 采购方案列表查询
      */
