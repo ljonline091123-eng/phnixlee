@@ -75,6 +75,7 @@ import org.springframework.util.ObjectUtils;
 import java.io.UnsupportedEncodingException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.net.URLEncoder;
 import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -468,10 +469,14 @@ public class TenderNoticeServiceImpl extends ServiceImpl<TenderNoticeMapper,Tend
                 BiddingSchemeListVO biddingSchemeListVO = iPage.getRecords().get(0);
                 // 将数据转换为 JSON 字符串
                 ObjectMapper objectMapper = new ObjectMapper();
+                /* 过滤空属性json生成 */
+                objectMapper.setSerializationInclusion(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL);
                 try{
                     String jsonString = objectMapper.writeValueAsString(biddingSchemeListVO);
                     // 使用 Base64 编码 JSON 字符串
                     base64Encoded = Base64.getEncoder().encodeToString(jsonString.getBytes("UTF-8"));
+                    // 模仿 encodeURIComponent
+                    base64Encoded = URLEncoder.encode(base64Encoded, "UTF-8");
                     /* 精准定位跳转到该条招标对象 */
                     requestDTO.setDetailUrl("/procurement/tendering/"+base64Encoded);
                     log.info("[财务人员待办信息][Base64编码转换] {} ", base64Encoded);
