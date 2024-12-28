@@ -316,6 +316,11 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
                 listVO.setPaymentType(scheme.getPriceType() == null ? PriceTypeEnum.FIXED_PRICE.getType().toString() : scheme.getPriceType().toString());
             }
             baseInfoVO.setSubjectMatterType(scheme.getSubjectMatterType());
+        }else {
+            /* 购买材料之外的其它类型都是固定价1 */
+            for (VendorBiddingListQuotationListVO listVO : listQuotation.getVendorBiddingListQuotationList()) {
+                listVO.setPaymentType(scheme.getPriceType() == null ? PriceTypeEnum.FIXED_PRICE.getType().toString() : scheme.getPriceType().toString());
+            }
         }
 
         // 处理清单数据
