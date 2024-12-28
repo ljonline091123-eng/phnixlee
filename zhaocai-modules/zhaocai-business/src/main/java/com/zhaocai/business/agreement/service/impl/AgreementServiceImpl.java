@@ -313,7 +313,7 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
         // 购买材料，设置价款类型、交易标的物类型
         if (ProcurementPlanTypeEnum.PURCHASE_MATERIALS.equalsType(scheme.getProcurementType())) {
             for (VendorBiddingListQuotationListVO listVO : listQuotation.getVendorBiddingListQuotationList()) {
-                listVO.setPaymentType(scheme.getPriceType() == null ? "" : scheme.getPriceType().toString());
+                listVO.setPaymentType(scheme.getPriceType() == null ? PriceTypeEnum.FIXED_PRICE.getType().toString() : scheme.getPriceType().toString());
             }
             baseInfoVO.setSubjectMatterType(scheme.getSubjectMatterType());
         }
@@ -688,6 +688,13 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
                     .eq(AgreementMaterialsList::getAgreementId, id));
             underlingMaterialsList = BeanCopierUtil.copyList(lists,AgreementUnderlingMaterialsVO.class);
         }
+        underlingMaterialsList = underlingMaterialsList.stream().map(x ->{
+            if(x.getPaymentType()==null || x.getPaymentType().isEmpty()){
+                /* 未处理数据默认固定价1 */
+                x.setPaymentType(PriceTypeEnum.FIXED_PRICE.getType().toString());
+            }
+            return x;
+        }).collect(Collectors.toList());
         switch (agreement.getExpenditureBusinessType()) {
             case 1 :
                 // 物资采购
