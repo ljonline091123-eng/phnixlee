@@ -763,8 +763,10 @@ export default {
 
   methods: {
     cellStyle({ row, column }) {
+      debugger
       const ceilingPrice = row.scheme?.procurementScheme?.ceilingPrice;
-      const taxPrice = row.quotationDataVOList[row.quotationDataVOList.length - 1]?.taxPricePattern;
+      const taxPrice = (row?.quotationDataVOList[row.quotationDataVOList.length - 1]?.taxPricePattern || 0).replace(/,/g, '');
+      // const taxPrice = row.quotationDataVOList[row.quotationDataVOList.length - 1]?.taxPricePattern;
 
       // 判断是否是“上限价”或“含税总价”列
       if (column.property === 'ceilingPrice' || column.property === 'taxPrice') {
