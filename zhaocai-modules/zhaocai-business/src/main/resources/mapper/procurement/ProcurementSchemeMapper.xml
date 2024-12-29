@@ -83,6 +83,9 @@
             <if test="queryVO.procurementSchemeCode != null and queryVO.procurementSchemeCode != ''">
                 and  tps.procurement_scheme_code like concat('%',#{queryVO.procurementSchemeCode,jdbcType=VARCHAR},'%')
             </if>
+            <if test="queryVO.noticeId != null">
+                and tn.id = #{queryVO.noticeId,jdbcType=BIGINT}
+            </if>
             <if test="queryVO.procurementSchemeName != null and queryVO.procurementSchemeName != ''">
                 and  tps.procurement_scheme_name like concat('%',#{queryVO.procurementSchemeName,jdbcType=VARCHAR},'%')
             </if>
