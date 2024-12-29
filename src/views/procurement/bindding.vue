@@ -432,11 +432,12 @@ export default {
       this.open = true;
       this.title = "添加任务";
     },
-    /** 跳转方案详情 */
+    /** 跳转招标详情 */
     goDetail(row) {
-      console.log(row, "rrrr");
+      console.log('%c👽 [跳转招标详情] ', `font-size: 20px;background-color: #f00;`, row);
       let param = Base64.encode(JSON.stringify(row));
       param = encodeURIComponent(param); //避免base64编码中出现"/"时路由404
+      console.log('%c👽 [跳转招标详情][Base64]->[encodeURIComponent] ', `font-size: 20px;background-color: #f00;`, param);
       this.$router.push(`/procurement/tendering/${param}`);
     },
     /* 选择招标管理 */

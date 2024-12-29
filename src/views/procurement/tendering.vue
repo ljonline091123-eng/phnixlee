@@ -188,6 +188,7 @@ export default {
     const param = JSON.parse(
       Base64.decode(decodeURIComponent(this.$route.params.params))
     );
+    console.log('%c👽 [解码Base64招标对象] ', `font-size: 20px;background-color: #f00;`, param);
     this.scheme = param;
     this.getDicts("procurement_type").then(res => {
       const procurementType = param.procurementType;
