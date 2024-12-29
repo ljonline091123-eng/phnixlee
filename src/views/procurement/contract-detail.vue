@@ -41,11 +41,11 @@
           >
         </div>
 
-        <div v-else-if="isOperate === 1 && Number(agreementState) === 3">
+        <!-- <div v-else-if="isOperate === 1 && Number(agreementState) === 3">
           <el-button type="primary" size="mini" @click="pushToVendor()"
             >推送至供应商</el-button
           >
-        </div>
+        </div> -->
 <!--        <div v-else-if="isOperate === 1 && Number(agreementState) === 7">-->
 <!--          <el-button type="primary" size="mini" @click="pushToSignPlatform()"-->
 <!--            >推送至电子签章平台</el-button-->
