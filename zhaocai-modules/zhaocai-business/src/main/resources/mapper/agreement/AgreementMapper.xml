@@ -160,7 +160,7 @@
         left join tb_tender_notice ttn on ttn.scheme_id = ta.scheme_id and ttn.notice_status = 8
         left join tb_bidding_info tbi on  tbi.notice_id = ttn.id and ta.vendor_id = tbi.vendor_id and tbi.parent_id is null
         <where>
-            ta.vendor_id = #{queryVO.vendorId,jdbcType=BIGINT} and ta.agreement_state in ('6','7','8','9','10')
+            ta.vendor_id = #{queryVO.vendorId,jdbcType=BIGINT} and ta.agreement_state in ('3','6','7','8','9','10')
             <if test="queryVO.agreementCode != null and queryVO.agreementCode != ''">
                 and ta.agreement_code like concat('%',#{queryVO.agreementCode,jdbcType=VARCHAR},'%')
             </if>

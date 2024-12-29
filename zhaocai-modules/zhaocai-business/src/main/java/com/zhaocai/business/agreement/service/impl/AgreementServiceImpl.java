@@ -792,7 +792,6 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
         if (agreement.getAttachmentId() != null) {
             Attachment attachment = attachmentService.getById(agreement.getAttachmentId());
             Long labelAttachmentId= attachmentService.addAttachment(new AttachmentRequestVO(attachment.getFileName(),attachment.getFileUrl()),AttachmentTypeEnum.AGREEMENT_ORIGINAL,id);
-            agreement.setLabelAttachmentId(labelAttachmentId);
             // 只更新 LabelAttachmentId
             super.update(new LambdaUpdateWrapper<Agreement>()
                     .set(Agreement::getLabelAttachmentId,labelAttachmentId)
@@ -800,7 +799,6 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
         } else {
             throw new BusinessException("合同附件不存在，请稍后重试");
         }
-
 
         // 状态调整为审批中
         super.update(new LambdaUpdateWrapper<Agreement>()
@@ -957,6 +955,21 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
     public void pushAgreementToVendor(Long id) {
         Agreement agreement = this.getById(id);
         ValidateUtils.validateStatusNotEquals(AgreementStateEnum.APPROVE::equalsState,agreement.getAgreementState(),"该状态下的合同不允许推送至供应商");
+
+        //获取agreement的AttachmentId，复制文件名和文件url到WatermarkAttachmentId
+        if (NumberUtil.isNotNullAndZero(agreement.getAttachmentId()) ) {
+            Attachment attachment = attachmentService.getById(agreement.getAttachmentId());
+            Long WatermarkAttachmentId= attachmentService.addAttachment(new AttachmentRequestVO(attachment.getFileName(),attachment.getFileUrl()),AttachmentTypeEnum.AGREEMENT_ORIGINAL,id);
+//            agreement.setWatermarkAttachmentId(WatermarkAttachmentId);
+            if (NumberUtil.isNullOrZero(agreement.getWatermarkAttachmentId())) {
+                // 只更新 WatermarkAttachmentId
+                super.update(new LambdaUpdateWrapper<Agreement>()
+                        .set(Agreement::getWatermarkAttachmentId,WatermarkAttachmentId)
+                        .eq(Agreement::getId,id));
+            }
+        } else {
+            throw new BusinessException("合同附件不存在，请联系开发确认！");
+        }
 
         if (NumberUtil.isNullOrZero(agreement.getWatermarkAttachmentId())) {
             throw new BusinessException("合同水印还没有生成，请联系开发确认");
