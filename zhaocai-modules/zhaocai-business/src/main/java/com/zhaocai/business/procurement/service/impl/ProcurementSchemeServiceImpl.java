@@ -427,6 +427,10 @@ public class ProcurementSchemeServiceImpl extends ServiceImpl<ProcurementSchemeM
         ProcurementScheme procurementScheme = this.getById(requestDTO.getBusinessId());
         /* 流程角色配置规则传参 */
         List<PropertyListRequestDTO<Object>> propertyList = new ArrayList<>();
+
+        /** 合同类型（contractType），价格(contractMoney)，项目部（parentProjectCode），责任单位（responsibilityDeptId），公司（companyId） */
+        PropertyListRequestDTO.addPropertyToList(propertyList,"contractType", ProcurementPlanTypeEnum.getProcessType(procurementScheme.getProcurementPlanType()));/* 采购方案 合同类型 */
+        PropertyListRequestDTO.addPropertyToList(propertyList,"contractMoney", procurementScheme.getCeilingPrice());/* 采购方案上限价 价格 */
         /* 最小核算项目 */
         MinProjectVO minProjectVO = minProjectService.getMinProjectByMinAccountCode(procurementScheme.getProjectCode());
         if (null != minProjectVO) {
@@ -445,6 +449,9 @@ public class ProcurementSchemeServiceImpl extends ServiceImpl<ProcurementSchemeM
         ProcurementScheme procurementScheme = this.getById(requestDTO.getBusinessId());
         /* 流程角色配置规则传参 */
         List<PropertyListRequestDTO<Object>> propertyList = new ArrayList<>();
+        /** 合同类型（contractType），价格(contractMoney)，项目部（parentProjectCode），责任单位（responsibilityDeptId），公司（companyId） */
+        PropertyListRequestDTO.addPropertyToList(propertyList,"contractType", ProcurementPlanTypeEnum.getProcessType(procurementScheme.getProcurementPlanType()));/* 采购方案 合同类型 */
+        PropertyListRequestDTO.addPropertyToList(propertyList,"contractMoney", procurementScheme.getCeilingPrice());/* 采购方案上限价 价格 */
         /* 最小核算项目 */
         MinProjectVO minProjectVO = minProjectService.getMinProjectByMinAccountCode(procurementScheme.getProjectCode());
         if (null != minProjectVO) {
@@ -461,6 +468,10 @@ public class ProcurementSchemeServiceImpl extends ServiceImpl<ProcurementSchemeM
     @Override
     public String audit(String processKey, Map<String, Object> variables) {
         ProcurementScheme procurementScheme = getById((Serializable) variables.get("businessId"));
+
+        /** 合同类型（contractType），价格(contractMoney)，项目部（parentProjectCode），责任单位（responsibilityDeptId），公司（companyId） */
+        variables.put("contractType", ProcurementPlanTypeEnum.getProcessType(procurementScheme.getProcurementPlanType()));/* 采购方案 合同类型 */
+        variables.put("contractMoney", procurementScheme.getCeilingPrice());/* 采购方案上限价 价格 */
         /* 最小核算项目 */
         MinProjectVO minProjectVO = minProjectService.getMinProjectByMinAccountCode(procurementScheme.getProjectCode());
         if (null != minProjectVO) {
@@ -478,6 +489,9 @@ public class ProcurementSchemeServiceImpl extends ServiceImpl<ProcurementSchemeM
         ProcurementScheme procurementScheme = this.getById(requestDTO.getBusinessId());
         /* 流程角色配置规则传参 */
         List<PropertyListRequestDTO<Object>> propertyList = new ArrayList<>();
+        /** 合同类型（contractType），价格(contractMoney)，项目部（parentProjectCode），责任单位（responsibilityDeptId），公司（companyId） */
+        PropertyListRequestDTO.addPropertyToList(propertyList,"contractType", ProcurementPlanTypeEnum.getProcessType(procurementScheme.getProcurementPlanType()));/* 采购方案 合同类型 */
+        PropertyListRequestDTO.addPropertyToList(propertyList,"contractMoney", procurementScheme.getCeilingPrice());/* 采购方案上限价 价格 */
         /* 最小核算项目 */
         MinProjectVO minProjectVO = minProjectService.getMinProjectByMinAccountCode(procurementScheme.getProjectCode());
         if (null != minProjectVO) {
