@@ -131,6 +131,23 @@
                               </el-form-item>
                             </template>
                           </el-table-column>
+                          <el-table-column  label="评分描述">
+                            <template slot-scope="subScope">
+                              <el-input v-model="subScope.row.contant"></el-input>
+                            </template>
+                          </el-table-column>
+                          <el-table-column label="" width="80">
+                            <template slot-scope="subScope">
+                              <el-button type="danger" @click="
+                                removeSubRow(
+                                  index,
+                                  scope.$index,
+                                  subScope.$index
+                                )
+                                " icon="el-icon-minus" circle size="mini"></el-button>
+                            </template>
+                          </el-table-column>
+
                         </el-table>
                       </div>
                     </template>
@@ -169,6 +186,16 @@
                         <el-input v-model.number="scope.row.highRange" @blur="validateS"
                           :class="{ 'is-invalid': scope.row.highRange === 0 }"></el-input>
                       </el-form-item>
+                    </template>
+                  </el-table-column>
+                  <el-table-column prop="'biddingMarkCategoryVOList.' +
+                        index +
+                        '.biddingMarkItemVOList.' +
+                        scope.$index +
+                        '.contant'
+                        " label="评分描述">
+                    <template slot-scope="scope">
+                      <el-input v-model="scope.row.contant"></el-input>
                     </template>
                   </el-table-column>
                 </el-table>
@@ -293,7 +320,7 @@ export default {
             table.biddingMarkItemVOList.forEach((item) => {
               if (item.name.trim() === "") {
                 this.$message.error("评分项名称不能为空");
-                
+
                 isValid = false;
                 this.isSubmit = false;
             loading.close();
@@ -375,7 +402,7 @@ export default {
             text: "数据提交中...",
             background: "rgba(0, 0, 0, 0.7)",
           });
-          
+
           try {
             const res = await addUpdateRating(this.formData);
             loading.close();
@@ -419,6 +446,7 @@ export default {
               name: "",
               lowRange: null,
               highRange: null,
+              contant:null,
               subItems: [],
             },
           ],
@@ -435,6 +463,7 @@ export default {
         name: "",
         lowRange: null,
         highRange: null,
+        contant:null,
         subItems: [],
       });
     },
@@ -443,6 +472,7 @@ export default {
         name: "",
         lowRange: null,
         highRange: null,
+        contant:null,
       });
       this.$forceUpdate(); // 强制刷新视图
     },
@@ -587,7 +617,7 @@ export default {
           setTimeout(()=>{
             this.editTrue = false;
           },300)
-          
+
           // markCategoryDatailVOList
           // this.formData.selectedTypes = this.formData.markCategoryDatailVOList.map(obj=>obj.itemType);
         }
