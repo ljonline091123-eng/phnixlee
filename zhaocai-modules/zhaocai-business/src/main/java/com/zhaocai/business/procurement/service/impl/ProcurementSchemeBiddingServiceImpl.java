@@ -87,6 +87,7 @@ public class ProcurementSchemeBiddingServiceImpl extends ServiceImpl<Procurement
         Template template = templateService.getById(schemeBidding.getBiddingTemplateId());
         if(template!=null){
             ProcurementSchemeTemplateVO schemeTemplate = new ProcurementSchemeTemplateVO(template.getId(),template.getTemplateName());
+            /* 招标文件附件 */
             Attachment biddingAttachment = attachmentService.getById(schemeBidding.getBiddingAttachmentId());
             if(biddingAttachment!=null){
                 schemeTemplate.setAttachmentId(biddingAttachment.getId());
@@ -96,12 +97,24 @@ public class ProcurementSchemeBiddingServiceImpl extends ServiceImpl<Procurement
             schemeBiddingVO.setBiddingTemplate(schemeTemplate);
         }else{
             schemeBiddingVO.setBiddingTemplate(null);
+            /* 招标文件附件 */
+            if(schemeBidding.getBiddingAttachmentId()!=null){
+                ProcurementSchemeTemplateVO schemeTemplate = new ProcurementSchemeTemplateVO(null,null);
+                Attachment biddingAttachment = attachmentService.getById(schemeBidding.getBiddingAttachmentId());
+                if(biddingAttachment!=null){
+                    schemeTemplate.setAttachmentId(biddingAttachment.getId());
+                    schemeTemplate.setFileName(biddingAttachment.getFileName());
+                    schemeTemplate.setFileUrl(biddingAttachment.getFileUrl());
+                    schemeBiddingVO.setBiddingTemplate(schemeTemplate);
+                }
+            }
         }
 
         // 合同模板
         template = templateService.getById(schemeBidding.getContractTemplateId());
         if(template!=null) {
             ProcurementSchemeTemplateVO schemeTemplate = new ProcurementSchemeTemplateVO(template.getId(),template.getTemplateName());
+            /* 合同(模板)的附件 */
             AttachmentVO agreementAttachment = templateService.getTemplateAttachmentInfo(schemeBidding.getContractTemplateId());
             if(agreementAttachment!=null){
                 schemeTemplate.setAttachmentId(agreementAttachment.getId());
@@ -120,6 +133,17 @@ public class ProcurementSchemeBiddingServiceImpl extends ServiceImpl<Procurement
             schemeBiddingVO.setContractTemplate(schemeTemplate);
         }else{
             schemeBiddingVO.setContractTemplate(null);
+            /* 也可以编辑使用合同模板自己编辑过的附件 */
+            if(schemeBidding.getContractAttachmentId()!=null){
+                ProcurementSchemeTemplateVO schemeTemplate = new ProcurementSchemeTemplateVO(null,null);
+                Attachment contractAttachment = attachmentService.getById(schemeBidding.getContractAttachmentId());
+                if(contractAttachment!=null){
+                    schemeTemplate.setAttachmentId(contractAttachment.getId());
+                    schemeTemplate.setFileName(contractAttachment.getFileName());
+                    schemeTemplate.setFileUrl(contractAttachment.getFileUrl());
+                    schemeBiddingVO.setContractTemplate(schemeTemplate);
+                }
+            }
         }
 
         return schemeBiddingVO;
