@@ -172,6 +172,62 @@
                 <!--黑名单 -->
                 and tv.is_black = 1
             </if>
+            <if  test="queryVO.firstCooperationCompanyCode != null and queryVO.firstCooperationCompanyCode != ''">
+                and tv.first_cooperation_company_code = #{queryVO.firstCooperationCompanyCode, jdbcType=VARCHAR}
+            </if>
+            <if  test="queryVO.regionCityCode != null and queryVO.regionCityCode != ''">
+                and tv.enterprise_city_code = #{queryVO.regionCityCode, jdbcType=VARCHAR}
+            </if>
+            <if  test="queryVO.vendorLocation != null and queryVO.vendorLocation != ''">
+                and tv.enterprise_type = #{queryVO.vendorLocation, jdbcType=VARCHAR}
+            </if>
+            <if  test="queryVO.startDate != null and queryVO.startDate != '' and queryVO.vendorClass == 1">
+                and DATE(tv.create_time) &gt;= #{queryVO.startDate, jdbcType=VARCHAR}
+        </if>
+            <if  test="queryVO.startDate != null and queryVO.startDate != '' and queryVO.vendorClass != 1">
+                and DATE(tv.register_approval_time) &gt;= #{queryVO.startDate, jdbcType=VARCHAR}
+            </if>
+            <if  test="queryVO.endDate != null and queryVO.endDate != '' and queryVO.vendorClass == 1">
+                and DATE(tv.create_time) &lt;= #{queryVO.endDate, jdbcType=VARCHAR}
+            </if>
+            <if  test="queryVO.endDate != null and queryVO.endDate != '' and queryVO.vendorClass != 1">
+                and DATE(tv.register_approval_time) &lt;= #{queryVO.endDate, jdbcType=VARCHAR}
+            </if>
+            <if  test="queryVO.registeredCapitalStart != null">
+                and tv.registered_capital &gt;= #{queryVO.registeredCapitalStart}
+            </if>
+            <if  test="queryVO.registeredCapitalEnd != null">
+                and tv.registered_capital &lt;= #{queryVO.registeredCapitalEnd}
+            </if>
+            <if  test="queryVO.vendorState != null and queryVO.vendorState != ''">
+                <if test="queryVO.vendorState == '0'">
+                    <!--正常 -->
+                    and tv.state = 3
+                </if>
+                <if test="queryVO.vendorState == '1'.toString() ">
+                    <!--注册待审 -->
+                    and tv.state = 1 and tv.process_type = 1
+                </if>
+                <if test="queryVO.vendorState == '2'.toString() ">
+                    <!--信息修改待审 -->
+                    and tv.state = 1 and tv.process_type = 2
+                </if>
+                <if test="queryVO.vendorState == '3'.toString()">
+                    <!--等级修改待审 -->
+                    and tv.state = 1 and tv.process_type = 4
+                </if>
+                <if test="queryVO.vendorState == '4'.toString()">
+                    and tv.state = 1 and tv.process_type = 3 and tv.is_black = 0
+                    <!--移入黑名单待审 -->
+                </if>
+                <if test="queryVO.vendorState == '5'.toString()">
+                    and tv.state = 1 and tv.process_type = 3 and tv.is_black = 1
+                    <!--移出黑名单待审 -->
+                </if>
+
+            </if>
+
+
         </where>
         /*order by tar.total_amount_inc_tax desc,tvpr.tvp_excellent_num desc,tv.create_time desc*/
         order by

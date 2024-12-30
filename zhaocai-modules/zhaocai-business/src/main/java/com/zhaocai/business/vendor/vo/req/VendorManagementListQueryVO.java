@@ -1,5 +1,6 @@
 package com.zhaocai.business.vendor.vo.req;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import com.zhaocai.common.core.bean.PageRecive;
 import io.swagger.annotations.ApiModelProperty;
 import lombok.Data;
@@ -55,6 +56,31 @@ public class VendorManagementListQueryVO extends PageRecive {
     @ApiModelProperty(value =  "统一社会信用代码")
     private String socialCreditCode;
 
+    @ApiModelProperty(value = "首次合作单位")
+    private String firstCooperationCompanyCode;
+
+    @ApiModelProperty(value =  "企业所在地")
+    private String vendorLocation;
+
+    @ApiModelProperty(hidden = true)
+    private String vendorState;
+
+    @ApiModelProperty(hidden = true)
+    private String regionCityCode;
+
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss",timezone = "GMT+8")
+    @ApiModelProperty(hidden = true)
+    private String startDate;
+
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss",timezone = "GMT+8")
+    @ApiModelProperty(hidden = true)
+    private String endDate;
+
+    @ApiModelProperty(hidden = true)
+    private BigDecimal registeredCapitalStart;
+
+    @ApiModelProperty(hidden = true)
+    private BigDecimal registeredCapitalEnd;
 
 
 }
