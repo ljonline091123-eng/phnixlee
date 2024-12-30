@@ -407,7 +407,7 @@
                         }}</a>
                       </template>
                       <el-button
-                        v-if="formData.biddingTemplateName"
+                        v-if="formData.biddingAttachmentId || formData.biddingTemplateId"
                         size="mini"
                         @click="modifyTempFile(2)"
                       >修改附件</el-button>
@@ -449,7 +449,7 @@
                         }}</a>
                       </template>
                       <el-button
-                        v-if="formData.contractTemplateName"
+                        v-if="formData.contractTemplateId || formData.contractAttachmentId"
                         size="mini"
                         @click="modifyTempFile(1)"
                       >修改附件</el-button>
