@@ -739,9 +739,9 @@ import {
   ViweProcurementSchemeFile,
 } from "@/api/procurement/scheme";
 import {
-  getPermissionButton,
-  postAuditProcess,
-  getLoadTaskDef,
+  getPermissionButtonScheme,
+  postAuditProcessScheme,
+  getLoadTaskDefScheme,
   getProcessLogList, getOrgByUserId,
 } from "@/api/procurement/manage";
 import { getRating } from "@/api/template/rating";
@@ -873,7 +873,7 @@ export default {
           approveLists,
           contractSplitIdList,
         });
-        this.getPermissionButton();
+        this.getPermissionButtonScheme();
       } catch (err) {
         console.log(err);
       }
@@ -1051,10 +1051,10 @@ export default {
         } catch (error) {}
       });
     },
-    async getPermissionButton() {
+    async getPermissionButtonScheme() {
       try {
         if (this.purchaserId && this.exampleId) {
-          const res = await getPermissionButton({
+          const res = await getPermissionButtonScheme({
             businessId: this.purchaserId,
             processId: this.exampleId,
           });
@@ -1070,7 +1070,7 @@ export default {
     },
     handelSanction() {
       this.sanctionVisible = true;
-      this.getPermissionButton();
+      this.getPermissionButtonScheme();
     },
     handleSubmit() {
       const params = {
@@ -1080,7 +1080,7 @@ export default {
         curTaskId: this.taskPresentId,
         processKey: "jiantou-zhaocai:{org}:ZHAOCAI_PROCUREMENT_SCHEME",
       };
-      postAuditProcess(params).then(() => {
+      postAuditProcessScheme(params).then(() => {
         this.$message.success("提交成功");
         this.sanctionVisible = false;
         this.getSchemeDetail();
@@ -1099,7 +1099,7 @@ export default {
         };
         let res = null;
         if (this.purchaserId && this.exampleId) {
-          res = await getLoadTaskDef(params);
+          res = await getLoadTaskDefScheme(params);
         }else{
           /* 未提交时查看流程执行流程，根据登录人id 获取流程分组 */
           res = await getOrgByUserId(this.$store.state.user.id);
@@ -1107,7 +1107,7 @@ export default {
             processKey: "jiantou-zhaocai:"+res.data+":ZHAOCAI_PROCUREMENT_SCHEME",
             businessId: 8888888888,
           };
-          res = await getLoadTaskDef(params);
+          res = await getLoadTaskDefScheme(params);
         }
         this.processInformationList = res.data;
         function getActive(nodes) {
