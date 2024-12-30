@@ -432,8 +432,8 @@
                           :file-list="formData.fileListBidding"
                           :on-remove="fileRemoveBidding"
                           ref="uploadBidding"
-                          :before-upload="handleBeforeUpload"  
-                          accept=".doc,.docx"  
+                          :before-upload="handleBeforeUpload"
+                          accept=".doc,.docx"
                         >
                         </el-upload>
                       </div>
@@ -472,8 +472,8 @@
                           :file-list="formData.fileListContract"
                           :on-remove="fileRemoveContract"
                           ref="uploadContract"
-                          :before-upload="handleBeforeUpload"  
-                          accept=".doc,.docx"  
+                          :before-upload="handleBeforeUpload"
+                          accept=".doc,.docx"
                         >
                         </el-upload>
                       </div>
@@ -1053,7 +1053,7 @@ export default {
     this.getInitialData();
     const param = JSON.parse(Base64.decode(this.$route.params.params));
     this.getContractTypeList();
-    console.log(param, "param--param--param");
+    console.log('%c👽 采购方案url入参 ', `font-size: 14px;background-color: #f00;`, param);
     if (param?.type === "update") {
       this.isEdit = true;
       this.getSchemeDetail(param.id);
@@ -1098,7 +1098,7 @@ export default {
       );
     },
   },
-  
+
     // 组件不具有此钩子
     beforeRouteLeave(to, from, next) {
       this.$destroy(true)
@@ -1873,7 +1873,7 @@ export default {
 
     async confirmBcTemplate() {
       console.log("选择模板的确认按钮-》》》》");
-      
+
       /* this.templateId是模板列表弹窗单选的双向绑定，意思就是模板文件id */
       const templateId = this.templateId;
       console.log("this.templateId模板文件id->",templateId);
@@ -2049,8 +2049,8 @@ export default {
        this.$refs['uploadContract'].clearFiles();  // 使用 clearFiles 方法清除文件列表
 
        console.log('After clearing files:', this.$refs['uploadContract'].fileList); // 打印清除后的文件列表
-       
-    
+
+
         // 触发文件选择器打开
         this.$refs['uploadContract'].$refs['upload-inner'].handleClick()
       })
@@ -2180,7 +2180,7 @@ export default {
       try {
         const res = await getSchemeDetail(id);
         this.skeletonLoading = false;
-        console.log(res, "详情");
+        console.log('%c👽 采购方案获取详情接口/business/procurementScheme/detail数据 ', `font-size: 14px;background-color: #f00;`, res);
         const {
           procurementScheme,
           procurementSchemeBidding,
@@ -2240,18 +2240,23 @@ export default {
         this.$set(this.formData, "financeConfirmId", financeConfirmId);
         this.$set(this.formData, "financeConfirmName", financeConfirmName);
 
-        this.formData.fileListBidding = [{
-          name: procurementSchemeBidding.biddingTemplate.fileName,  // 文件名
-          url: procurementSchemeBidding.biddingTemplate.fileUrl,  // 文件的 URL（如果是已上传的文件）
-          status: 'success',  // 上传状态，可以是 'success' | 'failure' | 'uploading'
-          uid: Date.now()  // 文件的唯一标识符
-        }];
-        this.formData.fileListContract = [{
-          name: procurementSchemeBidding.contractTemplate.fileName,  // 文件名
-          url: procurementSchemeBidding.contractTemplate.fileUrl,  // 文件的 URL（如果是已上传的文件）
-          status: 'success',  // 上传状态，可以是 'success' | 'failure' | 'uploading'
-          uid: Date.now()  // 文件的唯一标识符
-        }];
+        /* 填充el-upload的值 */
+        if(procurementSchemeBidding.biddingTemplate){
+          this.formData.fileListBidding = [{
+            name: procurementSchemeBidding.biddingTemplate.fileName,  // 文件名
+            url: procurementSchemeBidding.biddingTemplate.fileUrl,  // 文件的 URL（如果是已上传的文件）
+            status: 'success',  // 上传状态，可以是 'success' | 'failure' | 'uploading'
+            uid: Date.now()  // 文件的唯一标识符
+          }];
+        }
+        if(procurementSchemeBidding.contractTemplate){
+          this.formData.fileListContract = [{
+            name: procurementSchemeBidding.contractTemplate.fileName,  // 文件名
+            url: procurementSchemeBidding.contractTemplate.fileUrl,  // 文件的 URL（如果是已上传的文件）
+            status: 'success',  // 上传状态，可以是 'success' | 'failure' | 'uploading'
+            uid: Date.now()  // 文件的唯一标识符
+          }];
+        }
 
         this.formData.countingTypeText = countingTypeText;
         this.formData.procurementPlanType = procurementPlanType;
@@ -2276,9 +2281,8 @@ export default {
         this.formData.procurementOfficerName = procurementOfficerName;
         this.formData.procurementOfficer = procurementOfficer;
         this.procurementPlanIds = contractSplitIdList;
-        console.log('%c👽 this.procurementPlanIds', `font-size: 20px;background-color: #f00;`, this.procurementPlanIds);
-
-        console.log(this.formData, "this.formData-this.formData~");
+        console.log('%c👽 采购方案获取详情接口contractSpiltIdList属性this.procurementPlanIds数据 ', `font-size: 14px;background-color: #f00;`, this.procurementPlanIds);
+        console.log('%c👽 采购方案获取详情接口this.formData数据 ', `font-size: 14px;background-color: #f00;`, this.formData);
       } catch (err) {
         console.log(err);
       }
