@@ -30,6 +30,10 @@ public class BiddingMarkItem extends BaseEntity {
     @ApiModelProperty(value =  "分值范围-高")
     private Integer highRange;
 
+    /** 评分描述*/
+    @ApiModelProperty(value =  "评分描述")
+    private String contant;
+
     /** 模板项id */
     @ApiModelProperty(value =  "模板项id")
     private Long categoryId;

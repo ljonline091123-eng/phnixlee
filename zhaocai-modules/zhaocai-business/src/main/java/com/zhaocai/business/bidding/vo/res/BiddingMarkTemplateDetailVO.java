@@ -34,6 +34,9 @@ public class BiddingMarkTemplateDetailVO {
     @ApiModelProperty(value =  "使用单位")
     private String useUnit;
 
+    @ApiModelProperty(value =  "描述")
+    private String contant;
+
     @ApiModelProperty(value = "评分模板项信息")
     private List<BiddingMarkCategoryDetailVO> markCategoryDatailVOList;
 
