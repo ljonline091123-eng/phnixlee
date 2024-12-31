@@ -276,6 +276,20 @@ public class SysDeptController extends BaseController
     }
 
     /**
+     * 根据第三方部门 id 获取组织机构信息(本部门及以下部门，含项目部) 树结构
+     * @param thridDeptId
+     * @return
+     */
+    @GetMapping("/getDeptTreeByThridDeptId")
+    public AjaxResult getDeptTreeByThridDeptId(@RequestParam Object thridDeptId) {
+        String thridDeptIdNew = String.valueOf(thridDeptId);
+        if (StringUtils.isEmpty(thridDeptIdNew)) {
+            throw new RuntimeException("第三方部门 id 不能为空");
+        }
+        return success(deptService.getDeptTreeByThridDeptId(thridDeptIdNew));
+    }
+
+    /**
      * 根据单位id查询对应的二级单位
      * @param deptId
      * @return
