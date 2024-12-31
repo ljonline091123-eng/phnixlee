@@ -1216,14 +1216,17 @@ export default {
       //这里判断是不是今天
       let newVal = new Date(this.formData.applyTimeNotice)
       let    selectableRange =new Date().getHours() + ':' + (new Date().getMinutes() + 1) + ':00 - 23:59:00'
-      console.log( newVal.getDate()+"---"+new Date().getDate()+5)
+          // 将日期字符串转换为JavaScript日期对象
+        let originalDate = new Date();
+        // 对日期对象进行加5天操作
+        originalDate.setDate(originalDate.getDate() + 5);
       if (
         newVal &&
-        newVal.getDate() == new Date().getDate()+5
+        newVal.getDate() == originalDate.getDate()
       ) {
-        selectableRange =new Date().getHours() + ':' + (new Date().getMinutes() + 1) + ':00 - 23:59:00'
+       selectableRange =new Date().getHours() + ':' + (new Date().getMinutes() + 1) + ':00 - 23:59:00'
       }
-      else if(newVal.getDate() > new Date().getDate()+5){
+      else if(newVal.getDate() > originalDate.getDate()){
         selectableRange = '00:00:00 - 23:59:00' //默认的时间范围
       }
       return {
