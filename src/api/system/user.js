@@ -133,6 +133,14 @@ export function deptTreeCondSelect(params) {
     params,
   });
 }
+// 查询集团下部门下拉树结构
+export function getDeptTreeByThridDeptId(params) {
+  return request({
+    url: "/system/dept/getDeptTreeByThridDeptId",
+    method: "get",
+    params,
+  });
+}
 
 // 查询部门下拉树结构
 export function deptTreeSelect(params) {
