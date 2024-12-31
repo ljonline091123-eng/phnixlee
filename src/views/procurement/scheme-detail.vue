@@ -24,7 +24,7 @@
             >作废</el-button
           >
         </div>
-        <div v-if="Number(procurementScheme.state) === 1">
+        <div v-if="bpmInitData.revokable">
           <el-button type="primary" size="mini" @click="handelWithdrawalPlan"
             >撤回</el-button
           >
@@ -33,7 +33,7 @@
           <el-button
             type="primary"
             size="mini"
-            v-if="isShowButton"
+            v-if="bpmInitData.auditable"
             @click="handelSanction"
             >审批</el-button
           >
@@ -807,6 +807,7 @@ export default {
       approveArr: [],
       calibrateLoading: false,
       isShowButton: false,
+      bpmInitData: {},
       isShowApprovalDetails: false,
       submitDialogVisible: false,
       reviewText: "",
@@ -1058,6 +1059,7 @@ export default {
             businessId: this.purchaserId,
             processId: this.exampleId,
           });
+          this.bpmInitData = res.data;
           this.rejectNodeList = res.data.completedTaskList;
           /* 下一步审批人列表 */
           this.nextCandidateList = res.data.nextCandidateList;

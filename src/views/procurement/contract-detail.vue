@@ -35,7 +35,8 @@
             >作废</el-button
           >
         </div>
-        <div v-if="isOperate === 1 && Number(agreementState) === 1">
+<!-- 合同状态 待甲方签署9&合同已签署10&登录人==该合同的签章用户&登录人有权限撤回  -->
+        <div v-if="(isOperate === 1 && Number(agreementState) === 1 && bpmInitData.revokable)">
           <el-button type="primary" size="mini" @click="revokeProcess()"
             >撤回</el-button
           >
@@ -1228,6 +1229,7 @@ export default {
       isShowButton: false,
       isShowApprovalDetails: false,
       isOperate: 0,
+      bpmInitData: {},
       contractHeader: {
         1: [
           {
@@ -3431,7 +3433,7 @@ export default {
       this.loadAgreementAttachmentId();
       console.log("进获取合同预览的方法getAgreementViewURLFn，-》》》》")
       // 获取合同预览URL
-      const attachmentIdToUse = attachmentId !== undefined ? attachmentId : this.attachmentId;  
+      const attachmentIdToUse = attachmentId !== undefined ? attachmentId : this.attachmentId;
       console.log("传入的attachmentId",attachmentId)
       console.log("获取的this.attachmentId", this.attachmentId)
       //获取合同预览URL
@@ -3500,6 +3502,7 @@ export default {
           this.attachmentId = res.data.agreement.agreementAttachmentId;
           this.agreementState = res.data.agreement.agreementState;
           this.agreementName = res.data.agreement.agreementName;
+          // 合同状态 待甲方签署9&合同已签署10&登录人==该合同的签章用户
           this.isOperate = res.data.agreement.isOperate;
           this.partyADeptId = res.data.agreement.partyADeptId;
           this.partyBName = res.data.agreement.partyBName;
@@ -3564,6 +3567,7 @@ export default {
             businessId: this.purchaserId,
             processId: this.exampleId,
           });
+          this.bpmInitData = res.data;
           this.rejectNodeList = res.data.completedTaskList;
           /* 下一步审批人列表 */
           this.nextCandidateList = res.data.nextCandidateList;

@@ -173,6 +173,7 @@ export default {
       tenantId: "1",
       authorityId: "1",
       isShowButton: false,
+      bpmInitData: {},
       rejectNodeList: [],
       /* 下一步审批人列表 */
       nextCandidateList: [],
@@ -241,6 +242,7 @@ export default {
             businessId: this.tenantId,
             processId: this.authorityId,
           });
+          this.bpmInitData = res.data;
           this.isShowButton = response.data.auditable;
           this.rejectNodeList = response.data.completedTaskList;
           /* 下一步审批人列表 */
