@@ -1107,7 +1107,7 @@ export default {
           res = await getOrgByUserId(this.$store.state.user.id);
           params = {
             processKey: "jiantou-zhaocai:"+res.data+":ZHAOCAI_PROCUREMENT_SCHEME",
-            businessId: 8888888888,
+            businessId: this.purchaserId,
           };
           res = await getLoadTaskDefScheme(params);
         }
