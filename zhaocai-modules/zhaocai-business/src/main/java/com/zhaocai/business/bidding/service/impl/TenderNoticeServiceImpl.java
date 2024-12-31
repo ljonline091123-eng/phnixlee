@@ -28,6 +28,8 @@ import com.zhaocai.business.manager.http.common.config.ThirdPartyTodoFlowGroupEn
 import com.zhaocai.business.manager.http.common.config.ThirdPartyTodoFlowModuleEnum;
 import com.zhaocai.business.manager.http.dto.req.PushThirdPartyTodoTaskRequestDTO;
 import com.zhaocai.business.manager.http.dto.req.PushThirdPartyTodoTaskSonRequestDTO;
+import com.zhaocai.business.manager.http.dto.res.MinProjectDetailResponseDTO;
+import com.zhaocai.business.manager.http.service.ContractPlanService;
 import com.zhaocai.business.manager.http.service.PerformanceEvaluationService;
 import com.zhaocai.business.manager.http.service.ThridPartyTodoTaskService;
 import com.zhaocai.business.procurement.domain.ProcurementScheme;
@@ -59,7 +61,9 @@ import com.zhaocai.common.core.exception.CheckedException;
 import com.zhaocai.common.core.utils.DateUtils;
 import com.zhaocai.common.core.utils.bean.BeanCopierUtil;
 import com.zhaocai.common.security.utils.SecurityUtils;
+import com.zhaocai.system.api.domain.SysDept;
 import com.zhaocai.system.api.domain.SysUser;
+import com.zhaocai.system.api.system.RemoteSystemService;
 import com.zhaocai.system.api.system.RemoteUserService;
 import io.swagger.annotations.ApiModelProperty;
 import lombok.extern.slf4j.Slf4j;
@@ -111,6 +115,10 @@ public class TenderNoticeServiceImpl extends ServiceImpl<TenderNoticeMapper,Tend
     private IVendorService vendorService;
     @Autowired
     private IProcurementSchemeService procurementSchemeService;
+    @Autowired
+    private ContractPlanService contractPlanService;
+    @Autowired
+    private RemoteSystemService remoteSystemService;
 
     @Autowired
     private ThridPartyTodoTaskService thridPartyTodoTaskService;
@@ -833,6 +841,8 @@ public class TenderNoticeServiceImpl extends ServiceImpl<TenderNoticeMapper,Tend
                 item.setAttachmentNotice(attachmentNotice);
             }
 
+            /* 不使用采购人的招标单位信息，使用采购方案对应项目的的招标单位信息 */
+            item.setUnit(getDeptName(item.getSchemeId()));
         });
 
         return new PageResult<>(iPage);
@@ -1034,6 +1044,26 @@ public class TenderNoticeServiceImpl extends ServiceImpl<TenderNoticeMapper,Tend
         }
 
         return new PageResult<>(pages);
+    }
+
+    /** 根据采购方案往合约拆分查询最小核算项目对应的招标单位部门名称 */
+    private String getDeptName(Long schemeId){
+        /* 根据采购方案往合约拆分查询最小核算项目信息 */
+        List<MinProjectDataVO> minProjectDataList = procurementSchemeService.selectDataByScheme(schemeId);
+        if (!CollectionUtils.isEmpty(minProjectDataList)){
+            /* 用现成方法的查询 */
+            MinProjectDetailResponseDTO projectDetail = contractPlanService.getMinProjectDetail(minProjectDataList.get(0).getProjectCode());
+            if(projectDetail!=null){
+                if (StringUtils.isNotBlank(projectDetail.getManagementOrgId())) {
+                    /* 获取部门信息 */
+                    SysDept sysDept = remoteSystemService.getByThridDeptId(projectDetail.getManagementOrgId(), SecurityConstants.INNER);
+                    return Optional.ofNullable(sysDept)
+                            .map(SysDept::getDeptName)
+                            .orElse("");
+                }
+            }
+        }
+        return null;
     }
 
     /** 获取最小核算项目名称 */
