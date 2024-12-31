@@ -1240,6 +1240,7 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
     @Override
     public void processAuditRevoke(Map<String, Object> variables) {
         String businessId = variables.get("businessId").toString();
+        System.out.println(businessId+"供应商注册撤回");
         super.update(new LambdaUpdateWrapper<Vendor>()
                 .set(Vendor::getState,VendorStateEnum.SAVE.getState())
                 .eq(Vendor::getId, businessId));
