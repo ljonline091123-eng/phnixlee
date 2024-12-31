@@ -288,6 +288,11 @@
                       align="center"
                       label="评分项"
                     />
+                    <el-table-column
+                      prop="contant"
+                      align="center"
+                      label="评分描述"
+                    />
                   </el-table>
                 </el-form-item>
               </el-col>

@@ -253,6 +253,26 @@
                                 </el-form-item>
                               </template>
                             </el-table-column>
+                            <el-table-column label="评分描述">
+                              <template slot-scope="subScope">
+                                <el-form-item
+                                  :prop="
+                                    'biddingMarkCategoryVOList.' +
+                                    index +
+                                    '.biddingMarkItemVOList.' +
+                                    scope.$index +
+                                    '.subBiddingMarkItemVOList.' +
+                                    subScope.$index +
+                                    '.contant'
+                                  "
+                                  :rules="contantRules"
+                                >
+                                  <el-input
+                                    v-model="subScope.row.contant"
+                                  ></el-input>
+                                </el-form-item>
+                              </template>
+                            </el-table-column>
                           </el-table>
                         </div>
                       </template>
@@ -313,6 +333,22 @@
                         <span v-else>{{ scope.row.highRange }}</span>
                       </template>
                     </el-table-column>
+                    <el-table-column label="评分描述">
+                      <template slot-scope="scope">
+                        <el-form-item
+                          :prop="
+                            'biddingMarkCategoryVOList.' +
+                            index +
+                            '.biddingMarkItemVOList.' +
+                            scope.$index +
+                            '.contant'
+                          "
+                          :rules="contantRules"
+                        >
+                          <el-input v-model="scope.row.contant"></el-input>
+                        </el-form-item>
+                      </template>
+                    </el-table-column>
                   </el-table>
                 </el-form-item>
               </el-col>
@@ -369,6 +405,7 @@ export default {
         },
       ],
       nameRules: [{ required: true, message: "请输入名称", trigger: "blur" }],
+      contantRules:[{ required: true, message: "请输入评分描述", trigger: "blur" }],
       rules: {
         name: [{ required: true, message: "请输入模板名称", trigger: "blur" }],
         createUser: [
@@ -624,6 +661,7 @@ export default {
               name: "",
               lowRange: null,
               highRange: null,
+              contant: null,
               subBiddingMarkItemVOList: [],
             },
           ],
@@ -646,6 +684,7 @@ export default {
         name: "",
         lowRange: null,
         highRange: null,
+        contant: null,
         subBiddingMarkItemVOList: [],
       });
     },
@@ -656,6 +695,7 @@ export default {
         name: "",
         lowRange: null,
         highRange: null,
+        contant: null,
       });
       this.$forceUpdate(); // 强制刷新视图
     },
