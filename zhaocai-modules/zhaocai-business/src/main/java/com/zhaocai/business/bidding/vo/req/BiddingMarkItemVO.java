@@ -27,6 +27,10 @@ public class BiddingMarkItemVO implements Serializable {
     @ApiModelProperty(value = "分值范围-高")
     private Integer highRange;
 
+    @ApiModelProperty(value = "评分描述")
+    private String contant;
+
+
     @ApiModelProperty(value = "子项集合")
     private List<BiddingMarkItemVO> subBiddingMarkItemVOList;
 

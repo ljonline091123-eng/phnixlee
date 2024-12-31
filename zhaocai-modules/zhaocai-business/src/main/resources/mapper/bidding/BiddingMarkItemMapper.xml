@@ -9,6 +9,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="name"    column="name"    />
         <result property="lowRange"    column="low_range"    />
         <result property="highRange"    column="high_range"    />
+        <result property="contant"    column="contant"    />
         <result property="categoryId"    column="category_id"    />
         <result property="parentId"    column="parent_id"    />
         <result property="createBy"    column="create_by"    />
@@ -21,7 +22,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     </resultMap>
 
     <sql id="selectBiddingMarkItemVo">
-        select id, name, low_range, high_range, category_id, parent_id, create_by, create_id, create_time, update_by, update_id, update_time, del_flag from tb_bidding_mark_item
+        select id, contant,name, low_range, high_range, category_id, parent_id, create_by, create_id, create_time, update_by, update_id, update_time, del_flag from tb_bidding_mark_item
     </sql>
 
 </mapper>
