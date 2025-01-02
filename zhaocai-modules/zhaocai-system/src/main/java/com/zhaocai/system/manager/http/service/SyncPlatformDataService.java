@@ -105,6 +105,11 @@ public class SyncPlatformDataService {
                 }
 
                 sysDept.setDeptName(StringUtils.isEmpty(item.getDeptName()) ? item.getRemark() : item.getDeptName());
+                //数据中台里面“湖南建工集团有限公司”被集团占用（财务方面的），所以真正得建工有限加上了（总承包）三个字，但是这是为了内部区分
+                //对外场合时（比如签合同），必须去掉总承包三个字，对于招采系统，目前处理方式直接同步过来改掉就行
+                if(item.getDeptName()!=null&&item.getDeptName().equals("湖南建工集团有限公司（总承包）")){
+                    sysDept.setDeptName("湖南建工集团有限公司");
+                }
                 sysDept.setOrderNum(Integer.valueOf(item.getOrderNum()));
                 sysDept.setPhone(item.getPhone());
                 sysDept.setEmail(item.getEmail());
