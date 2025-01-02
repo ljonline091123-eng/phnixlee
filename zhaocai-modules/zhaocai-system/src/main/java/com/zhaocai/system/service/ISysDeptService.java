@@ -176,6 +176,8 @@ public interface ISysDeptService extends IService<SysDept>
     List<SysDept> getThreeLevelDepts();
 
     List<SysDept> getDeptByThridDeptId(String thridDeptId);
+    /* 同getDeptByThridDeptId效果一样，数据被格式化了 */
+    List<TreeSelect> getDeptTreeByThridDeptId(String thridDeptId);
 
     List<SysDept> getDeptByThridDeptIdNoBM(String thridDeptIdNew);
 }

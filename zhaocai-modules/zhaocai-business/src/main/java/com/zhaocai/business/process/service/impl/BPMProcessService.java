@@ -270,61 +270,67 @@ public class BPMProcessService implements IBPMProcessService {
      */
     @Override
     public String revokeProcess(String processKey, Map<String, Object> variable) {
-        BpmLoadTaskDefRequestDTO loadTask = new BpmLoadTaskDefRequestDTO();
-        loadTask.setBusinessId(variable.get("businessId").toString());
-        loadTask.setProcessId(variable.get("processId").toString());
-
-
-        // 获取流程定义信息
-        List<BpmLoadTaskDefResponseDTO> loadTaskDefList = bpmService.loadTaskDef(loadTask);
-
-        if (!ObjectUtils.isEmpty(loadTaskDefList)) {
-            // 找到待审位置：即第一个完成状态为false的位置
-            OptionalInt indexOpt = IntStream.range(0, loadTaskDefList.size())
-                    .filter(i -> !loadTaskDefList.get(i).isCompleted())
-                    .findFirst();
-            // 判断待审是否存在
-            if (!indexOpt.isPresent() || indexOpt.getAsInt() == 0) {
-                // 所有结点都已完成或都未完成(未提交)
-                throw new ParamValidateException("流程已结束或开始");
-            } else {
-                int index = indexOpt.getAsInt();
-                // 可撤回节点：待审节点的前一个节点
-                BpmLoadTaskDefResponseDTO loadTaskDef = loadTaskDefList.get(index - 1);
-                List<UserList> userList = loadTaskDef.getUserList();
-                String userId = String.valueOf(SecurityUtils.getThridUserId());
-                List<String> user = userList.stream().filter(u -> u.getUserId().equals(userId))
-                        .map(UserList::getUserId).collect(Collectors.toList());
-//                Optional<UserList> user = loadTaskDef.getUserList().stream()
-//                        .filter(u -> u.getUserId().equals(String.valueOf(SecurityUtils.getUserId())))
-//                        .findFirst();
-                // 判断可撤回的人员和当前登陆人是否是同一个人
-                if (!user.isEmpty()) {
-                    BpmInitializeRequestDTO initializeRequestDTO = BeanCopierUtil.copyBean(loadTask, BpmInitializeRequestDTO.class);
-                    BpmInitializeResponseDTO initialize = bpmService.initialize(initializeRequestDTO);
-                    Map<String, Object> variables = new HashMap<>();
-                    variables.put("businessId", loadTask.getBusinessId());
-                    variables.put("curTaskId", initialize.getCurTaskId());
-                    variables.put("operateComment", "撤回");
-                    variables.put("pass", false);
-                    variables.put("processId", loadTask.getProcessId());
-                    if (index - 1 == 0) {
-                        // 发起人撤回
-                        revokedProcessInstance(processKey, variables);
-                    } else {
-                        variables.put("rejectTaskKey", loadTaskDef.getNodeKey());
-                        // 其他节点撤回
-                        auditProcessInstance(processKey, variables);
-                    }
-                } else {
-                    String userName = userList.stream().map(UserList::getUserName).collect(Collectors.joining(", "));
-                    throw new ParamValidateException("当前登陆人不能进行撤回,当前登陆人：" + SecurityUtils.getLoginUserNickName() + ",可撤回人员：" + userName);
-                }
-            }
-        } else {
-            throw new ParamValidateException("未找到对应流程");
-        }
+        Map<String, Object> variables = new HashMap<>();
+        variables.put("businessId", variable.get("businessId").toString());
+        variables.put("processId", variable.get("processId").toString());
+        revokedProcessInstance(processKey, variables);
         return variable.get("processId").toString();
+
+//        BpmLoadTaskDefRequestDTO loadTask = new BpmLoadTaskDefRequestDTO();
+//        loadTask.setBusinessId(variable.get("businessId").toString());
+//        loadTask.setProcessId(variable.get("processId").toString());
+//
+//
+//        // 获取流程定义信息
+//        List<BpmLoadTaskDefResponseDTO> loadTaskDefList = bpmService.loadTaskDef(loadTask);
+//
+//        if (!ObjectUtils.isEmpty(loadTaskDefList)) {
+//            // 找到待审位置：即第一个完成状态为false的位置
+//            OptionalInt indexOpt = IntStream.range(0, loadTaskDefList.size())
+//                    .filter(i -> !loadTaskDefList.get(i).isCompleted())
+//                    .findFirst();
+//            // 判断待审是否存在
+//            if (!indexOpt.isPresent() || indexOpt.getAsInt() == 0) {
+//                // 所有结点都已完成或都未完成(未提交)
+//                throw new ParamValidateException("流程已结束或开始");
+//            } else {
+//                int index = indexOpt.getAsInt();
+//                // 可撤回节点：待审节点的前一个节点
+//                BpmLoadTaskDefResponseDTO loadTaskDef = loadTaskDefList.get(index - 1);
+//                List<UserList> userList = loadTaskDef.getUserList();
+//                String userId = String.valueOf(SecurityUtils.getThridUserId());
+//                List<String> user = userList.stream().filter(u -> u.getUserId().equals(userId))
+//                        .map(UserList::getUserId).collect(Collectors.toList());
+////                Optional<UserList> user = loadTaskDef.getUserList().stream()
+////                        .filter(u -> u.getUserId().equals(String.valueOf(SecurityUtils.getUserId())))
+////                        .findFirst();
+//                // 判断可撤回的人员和当前登陆人是否是同一个人
+//                if (!user.isEmpty()) {
+//                    BpmInitializeRequestDTO initializeRequestDTO = BeanCopierUtil.copyBean(loadTask, BpmInitializeRequestDTO.class);
+//                    BpmInitializeResponseDTO initialize = bpmService.initialize(initializeRequestDTO);
+//                    Map<String, Object> variables = new HashMap<>();
+//                    variables.put("businessId", loadTask.getBusinessId());
+//                    variables.put("curTaskId", initialize.getCurTaskId());
+//                    variables.put("operateComment", "撤回");
+//                    variables.put("pass", false);
+//                    variables.put("processId", loadTask.getProcessId());
+//                    if (index - 1 == 0) {
+//                        // 发起人撤回
+//                        revokedProcessInstance(processKey, variables);
+//                    } else {
+//                        variables.put("rejectTaskKey", loadTaskDef.getNodeKey());
+//                        // 其他节点撤回
+//                        auditProcessInstance(processKey, variables);
+//                    }
+//                } else {
+//                    String userName = userList.stream().map(UserList::getUserName).collect(Collectors.joining(", "));
+//                    throw new ParamValidateException("当前登陆人不能进行撤回,当前登陆人：" + SecurityUtils.getLoginUserNickName() + ",可撤回人员：" + userName);
+//                }
+//            }
+//        } else {
+//            throw new ParamValidateException("未找到对应流程");
+//        }
+//        return variable.get("processId").toString();
     }
 
 

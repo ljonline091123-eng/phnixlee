@@ -145,7 +145,8 @@ public class VendorChangeServiceImpl extends ServiceImpl<VendorChangeMapper,Vend
         // 不存在变更版本时，创建一份VO版本
         if (CollectionUtils.isEmpty(vendorChangeList)) {
             //如果并未审批通过，不生成新版本
-            if(vendor.getState()==VendorStateEnum.REJECT.getState()||vendor.getState()==VendorStateEnum.IN_APPROVAL.getState()){
+            if(vendor.getState()==VendorStateEnum.REJECT.getState()||vendor.getState()==VendorStateEnum.SAVE.getState()
+                    ||vendor.getState()==VendorStateEnum.IN_APPROVAL.getState()){
                 BeanUtils.copyProperties(vendor, vendorChange);
 //                List<VendorContact>  contactList= vendorContactService.list(new LambdaQueryWrapper<VendorContact>()
 //                        .eq(VendorContact::getVendorId, vendorId));
