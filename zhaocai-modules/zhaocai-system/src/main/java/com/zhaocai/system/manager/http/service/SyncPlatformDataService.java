@@ -77,7 +77,6 @@ public class SyncPlatformDataService {
                     sysDept = deptMap.get(item.getDeptId());
                     //初始化父级关系和祖级
                     sysDept.setParentId(0L);
-                    sysDept.setDeptName(item.getDeptName());
                     /** 这个祖级是根据部门往上查的getDeptId将他join.toString.{@link com.zhaocai.system.service.impl.SysDeptServiceImpl#insertDept} */
                     sysDept.setAncestors("");
                     sysDeptsUpdate.add(sysDept);
@@ -105,7 +104,7 @@ public class SyncPlatformDataService {
 //                    }
                 }
 
-                sysDept.setDeptName(StringUtils.isEmpty(item.getRemark()) ? item.getDeptName() : item.getRemark());
+                sysDept.setDeptName(StringUtils.isEmpty(item.getDeptName()) ? item.getRemark() : item.getDeptName());
                 sysDept.setOrderNum(Integer.valueOf(item.getOrderNum()));
                 sysDept.setPhone(item.getPhone());
                 sysDept.setEmail(item.getEmail());
