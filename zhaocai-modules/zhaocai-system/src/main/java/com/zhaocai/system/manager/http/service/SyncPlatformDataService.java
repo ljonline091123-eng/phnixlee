@@ -20,7 +20,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.CollectionUtils;
-import org.springframework.util.ObjectUtils;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -78,6 +77,7 @@ public class SyncPlatformDataService {
                     sysDept = deptMap.get(item.getDeptId());
                     //初始化父级关系和祖级
                     sysDept.setParentId(0L);
+                    sysDept.setDeptName(item.getDeptName());
                     /** 这个祖级是根据部门往上查的getDeptId将他join.toString.{@link com.zhaocai.system.service.impl.SysDeptServiceImpl#insertDept} */
                     sysDept.setAncestors("");
                     sysDeptsUpdate.add(sysDept);
