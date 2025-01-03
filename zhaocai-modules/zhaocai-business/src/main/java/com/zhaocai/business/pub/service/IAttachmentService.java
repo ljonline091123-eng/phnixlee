@@ -53,10 +53,16 @@ public interface IAttachmentService extends IService<Attachment> {
     //文档中台-office转PDF
     String  convertOfficeToPdf(String fileName, String fileUrl, String waterMarkContent);
 
-    /*  把传入的attachmentId附件转换为PDF文件（带水印），更新fileUrl
-    1.若传入的attachmentId存在，更新传入的attachmentId附件（pdf文件）的fileUrl，返回更新的attachmentId；
-    2.若传入的attachmentId不存在，新增attachment，返回新增的attachmentId
+    /*  把convertOfficeToPdf生成的(永中文档)的PDF文件（带水印）下载链接：
+        1.下载到临时文件夹，修改原文件名后缀为.pdf
+        2.再上传到minio，返回minio的FileUrl；
     */
+    AttachmentRequestVO downloadYOZOFileAndUploadMINIO(String OldFileName, String YOZOPdfFileUrl) throws IOException;
+
+    /*  把传入的attachmentId附件转换为PDF文件（带水印），更新fileUrl
+        1.若传入的attachmentId存在，更新传入的attachmentId附件（pdf文件）的fileUrl，返回更新的attachmentId；
+        2.若传入的attachmentId不存在，新增attachment，返回新增的attachmentId
+        */
     Long ConverToPDFAndUpdateFileUrl(Long busnessId, AttachmentTypeEnum busnessType, Long attachmentId, String watermarkText, String targetFileName, String fileUrl) throws IOException;
 
     /**

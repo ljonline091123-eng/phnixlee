@@ -11,12 +11,10 @@ import com.zhaocai.business.bidding.service.*;
 import com.zhaocai.business.bidding.vo.req.BidQuotationVO;
 import com.zhaocai.business.bidding.vo.req.BidVO;
 import com.zhaocai.business.bidding.vo.req.query.TwiceBidPageQueryVO;
+import com.zhaocai.business.bidding.vo.req.query.VendorBidPdfFileRequstVO;
 import com.zhaocai.business.bidding.vo.req.query.VendorNoticePageQueryVO;
 import com.zhaocai.business.bidding.vo.req.query.WinningNotifiPageQueryVO;
-import com.zhaocai.business.bidding.vo.res.TenderNoticeDetailVO;
-import com.zhaocai.business.bidding.vo.res.TwiceBidListVO;
-import com.zhaocai.business.bidding.vo.res.VendorNoticeListVO;
-import com.zhaocai.business.bidding.vo.res.WinningNotifiListVO;
+import com.zhaocai.business.bidding.vo.res.*;
 import com.zhaocai.business.common.enums.AttachmentTypeEnum;
 import com.zhaocai.business.common.enums.PriceTypeEnum;
 import com.zhaocai.business.common.enums.ProcurementPlanTypeEnum;
@@ -36,6 +34,8 @@ import com.zhaocai.business.procurement.service.IProcurementSchemeService;
 import com.zhaocai.business.procurement.vo.req.BiddingSchemeListQueryVO;
 import com.zhaocai.business.procurement.vo.res.*;
 import com.zhaocai.business.pub.service.IAttachmentService;
+import com.zhaocai.business.pub.vo.req.AttachmentRequestVO;
+import com.zhaocai.business.pub.vo.res.AttachmentVO;
 import com.zhaocai.business.vendor.domain.Vendor;
 import com.zhaocai.business.vendor.domain.VendorContact;
 import com.zhaocai.business.vendor.service.IVendorContactService;
@@ -61,6 +61,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.CollectionUtils;
 
+import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.math.BigDecimal;
 import java.net.URLEncoder;
@@ -135,6 +136,28 @@ public class VendorBidServiceImpl implements IVendorBidService {
         queryDTO.setRegisterApprovalTime(vendor.getRegisterApprovalTime());
         PageResult<VendorNoticeListVO> pageResult = tenderNoticeService.selectVendorNoticePage(queryDTO);
         return pageResult;
+    }
+
+
+    @Override
+    public List<AttachmentVO> getVendorBidPdfFileList(VendorBidPdfFileRequstVO requstVO) throws IOException {
+        //招标文件的word附件
+        List<AttachmentVO> attachmentVOList = requstVO.getOldAttachmentList();
+        String unit = requstVO.getUnit();
+        //判断是否已经存在该招标文件的pdf附件
+        List<AttachmentVO> pdfList= attachmentService.listAttachment(AttachmentTypeEnum.BIDING_NOTICE_PDF, requstVO.getNoticeId());
+        if(CollectionUtils.isEmpty(pdfList)) {
+            //把招标文件的word文件转换为pdf附件
+            for (AttachmentVO attachmentVO : attachmentVOList) {
+                String yozoPdfFileUrl = attachmentService.convertOfficeToPdf(attachmentVO.getFileName(), attachmentVO.getFileUrl(), unit);
+                AttachmentRequestVO attachmentRequestVO = attachmentService.downloadYOZOFileAndUploadMINIO(attachmentVO.getFileName(), yozoPdfFileUrl);
+                //把招标公告 tb_tender_notice的id,设为pdf附件的businessId；
+                attachmentService.addAttachment(attachmentRequestVO, AttachmentTypeEnum.BIDING_NOTICE_PDF, requstVO.getNoticeId());
+            }
+        }
+        /* 查询招标文件的pdf附件 */
+        List<AttachmentVO> PdfAttachmentList = attachmentService.listAttachment(AttachmentTypeEnum.BIDING_NOTICE_PDF, requstVO.getNoticeId());
+        return   PdfAttachmentList;
     }
 
     @Override

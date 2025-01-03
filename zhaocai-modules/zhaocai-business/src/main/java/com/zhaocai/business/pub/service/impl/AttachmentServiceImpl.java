@@ -734,6 +734,34 @@ public class AttachmentServiceImpl extends ServiceImpl<AttachmentMapper, Attachm
         }
     }
 
+    /*  把convertOfficeToPdf生成的永中文档的PDF文件（带水印）下载链接：
+        1.下载到临时文件夹，修改原文件名后缀为.pdf
+        2.再上传到minio，返回minio的FileUrl；
+    */
+    @Override
+    public AttachmentRequestVO downloadYOZOFileAndUploadMINIO(String OldFileName, String YOZOPdfFileUrl) throws IOException {
+        String fileNameSuffixless = yozOfileUtils.removeSuffix(OldFileName);
+        String targetFileName = fileNameSuffixless + ".pdf";
+//        targetFileName = targetFileName + "_" + DateUtil.format(new Date(),"yyyyMMddHHmmss") + ".pdf";
+
+        if (StringUtils.isBlank(YOZOPdfFileUrl)  || StringUtils.isBlank(OldFileName)) {
+            throw new RuntimeException("下载pdf文件时：文件url或文件名为空，请检查!");
+        }
+
+        //下载生成的pdf文件URL到临时文件夹
+        Path path = yozOfileUtils.downloadFile(YOZOPdfFileUrl, yozOfileUtils.createTempFilePath(targetFileName));
+        File file = new File(path.toString());
+        if (!file.exists()) {
+            throw new IOException("PDF文档不存在: " + YOZOPdfFileUrl);
+        }
+        // 转换为InputStream，上传到文档中台
+        FileInputStream fis = new FileInputStream(file);
+        String NewPdfFileUrl = sysFileService.uploadFile(fis, targetFileName);
+        return new AttachmentRequestVO(targetFileName,NewPdfFileUrl);
+    }
+
+
+
     /*  把传入的attachmentId附件转换为PDF文件（带水印），更新fileUrl
     1.若传入的attachmentId存在，更新传入的attachmentId附件（pdf文件）的fileUrl，返回更新的attachmentId；
     2.若传入的attachmentId不存在，新增attachment，返回新增的attachmentId

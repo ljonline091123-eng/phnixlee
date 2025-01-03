@@ -2,14 +2,18 @@ package com.zhaocai.business.bidding.service;
 
 import com.zhaocai.business.bidding.vo.req.BidVO;
 import com.zhaocai.business.bidding.vo.req.query.TwiceBidPageQueryVO;
+import com.zhaocai.business.bidding.vo.req.query.VendorBidPdfFileRequstVO;
 import com.zhaocai.business.bidding.vo.req.query.VendorNoticePageQueryVO;
 import com.zhaocai.business.bidding.vo.req.query.WinningNotifiPageQueryVO;
 import com.zhaocai.business.bidding.vo.res.TenderNoticeDetailVO;
 import com.zhaocai.business.bidding.vo.res.TwiceBidListVO;
 import com.zhaocai.business.bidding.vo.res.VendorNoticeListVO;
 import com.zhaocai.business.bidding.vo.res.WinningNotifiListVO;
+import com.zhaocai.business.pub.vo.res.AttachmentVO;
 import com.zhaocai.common.core.bean.PageResult;
 
+import java.io.IOException;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -33,6 +37,11 @@ public interface IVendorBidService {
      * @return 结果
      */
     PageResult<VendorNoticeListVO> page(VendorNoticePageQueryVO queryDTO);
+
+    /**
+     * 把招标文件的转换为pdf文件，返回pdf文件列表
+     */
+    List<AttachmentVO> getVendorBidPdfFileList(VendorBidPdfFileRequstVO requstVO) throws IOException;
 
     /**
      * 投标数据详情

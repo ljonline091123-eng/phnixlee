@@ -2,12 +2,14 @@ package com.zhaocai.business.bidding.controller;
 
 import com.zhaocai.business.bidding.service.IVendorBidService;
 import com.zhaocai.business.bidding.vo.req.BidVO;
+import com.zhaocai.business.bidding.vo.req.query.VendorBidPdfFileRequstVO;
 import com.zhaocai.business.bidding.vo.req.query.VendorNoticePageQueryVO;
 import com.zhaocai.business.bidding.vo.req.query.WinningNotifiPageQueryVO;
 import com.zhaocai.business.bidding.vo.res.TenderNoticeDetailVO;
 import com.zhaocai.business.bidding.vo.res.VendorNoticeListVO;
 import com.zhaocai.business.bidding.vo.res.WinningNotifiListVO;
 import com.zhaocai.business.common.annotations.VendorStateCheck;
+import com.zhaocai.business.pub.vo.res.AttachmentVO;
 import com.zhaocai.common.core.bean.PageResult;
 import com.zhaocai.common.core.web.bean.ResultData;
 import io.swagger.annotations.Api;
@@ -18,6 +20,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
 import javax.validation.Valid;
+import java.io.IOException;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -71,6 +75,15 @@ public class VendorBidController {
     @ApiOperation(value = "投标数据详情", notes = "传入noticeId")
     public ResultData<TenderNoticeDetailVO> detail(@ApiParam(value = "招标公告主键id", required = true) @RequestParam("noticeId") Long noticeId) {
         return ResultData.data(vendorBidService.detail(noticeId));
+    }
+
+    /**
+     * 把招标文件的转换为pdf文件，返回pdf文件列表
+     */
+    @PostMapping("/getVendorBidPdfFileList")
+    @ApiOperation(value = "获取招标文件的pdf文件", notes = "传入noticeId")
+    public ResultData<List<AttachmentVO>> getVendorBidPdfFileList(@RequestBody VendorBidPdfFileRequstVO requstVO) throws IOException {
+        return ResultData.data(vendorBidService.getVendorBidPdfFileList(requstVO));
     }
 
     /**
