@@ -51,7 +51,14 @@
   </div>
   <!-- 文件预览 -->
   <el-dialog title="招标文件预览" :visible.sync="templateDialogVisible" width="80%">
-    <FileModule :attachmentId="procurementSchemeBidding.biddingTemplate && procurementSchemeBidding.biddingTemplate.attachmentId" height="500px"/>
+    <!-- <FileModule :attachmentId="procurementSchemeBidding.biddingTemplate && procurementSchemeBidding.biddingTemplate.attachmentId" height="500px"/> -->
+    <iframe allowfullscreen="true"
+        v-if="procurementSchemeBidding.biddingTemplate && procurementSchemeBidding.biddingTemplate.attachmentId"
+        :src= this.viewFileUrl
+        width="100%"
+        height="500px"
+        frameborder="0"
+      ></iframe>
   </el-dialog>
   </div>
 </template>
@@ -60,6 +67,7 @@
 import { Base64 } from 'js-base64';
 import { getSchemeDetail } from "@/api/procurement/scheme";
 import { getMarkTempInfo, expertEvaluation, getExpertEvalData, getExpertEvalRecord } from "@/api/evaluate-expert/evaluate-bids"
+import { getViweFileURL } from "@/api/template/file";
 import FileModule from '@/components/FileModule/index.vue'
 import PageTitle from "@/components/PageTitle/index.vue"
 import BackButton from '@/components/BackButton/index.vue'
@@ -67,6 +75,7 @@ export default {
   name: "evaluate-bids-end-detail",
   data() {
     return {
+      viewFileUrl :"",  //预览招标文件url
       loading: false,
       inventoryList: [],
       isSubmit: false,
@@ -96,6 +105,36 @@ export default {
     this.getExpertEvalRecord({noticeId:param.noticeId,vendorId:param.item.vendorId})
   },
   methods: {
+    //获取招标文件的预览url
+    async getbiddingTemplate(){
+      console.log("开始获取招标文件预览URL-》》******");
+      //解构biddingTemplate，获取招标文件的属性
+      if (this.procurementSchemeBidding && this.procurementSchemeBidding.biddingTemplate) {
+        const { attachmentId = '', fileName = '', fileUrl = '' } = this.procurementSchemeBidding.biddingTemplate;
+        if (!fileName || !fileUrl) {
+          console.error('招标文件为空(文件名或者文件URL为空)，无法预览');
+          // 提示用户招标文件为空无法预览
+          ElMessage.error('招标文件为空(文件名或者文件URL为空)，无法预览');
+          return; // 终止函数执行
+        }
+        console.log('Attachment ID:', attachmentId);
+        console.log('File Name:', fileName);
+        console.log('File URL:', fileUrl);
+        //获取文档中台的文档编辑URL
+        try {
+          const query1 = { fileName: fileName, fileUrl: fileUrl };
+          console.log('query1:', query1);
+          const res = await getViweFileURL(query1);
+          this.viewFileUrl = res.data;
+          console.log("viewFileUrl:",this.viewFileUrl);
+        } catch (err) {
+          console.log(err);
+        }
+      } else {
+        console.error('无法预览招标文件,招标文件模板数据(procurementSchemeBidding.biddingTemplate)未正确加载');
+      }
+    },
+
     async getSchemeDetail() {
       try {
         const res = await getSchemeDetail(this.param.schemeId);
@@ -103,6 +142,8 @@ export default {
         console.log(res, '详情');
         const { procurementScheme, procurementSchemeBidding} = res.data;
         Object.assign(this, { procurementScheme, procurementSchemeBidding });
+        console.log("this.procurementSchemeBidding->",this.procurementSchemeBidding);
+        this.getbiddingTemplate(); //获取招标文件预览url
       } catch (err) {
         console.log(err);
       }

@@ -856,7 +856,7 @@ export default {
     }else{
         this.param = param;
     }
-   
+
     this.getVendorDetail();
   //  this.listBankAccountContactFn();
   },
@@ -1092,6 +1092,7 @@ export default {
             businessId: this.purchaserId, //联系人id
             processId: this.exampleId, //流程id
           });
+          this.bpmInitData = res.data;
           this.rejectNodeList = res.data.completedTaskList;
           /* 下一步审批人列表 */
           this.nextCandidateList = res.data.nextCandidateList;

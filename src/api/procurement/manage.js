@@ -65,6 +65,14 @@ export const getPermissionButton = (params) => {
     params,
   });
 };
+// 采购方案流程 初始化接口
+export const getPermissionButtonScheme = (params) => {
+  return request({
+    url: "/business/procurementScheme/initialize",
+    method: "get",
+    params,
+  });
+};
 
 // 获取供应商审批权限
 export const getPermissionButtonVendor = (params) => {
@@ -75,10 +83,18 @@ export const getPermissionButtonVendor = (params) => {
   });
 };
 
-// 加载定义接口
+// 加载定义接口 公共
 export const getLoadTaskDef = (params) => {
   return request({
     url: "/business/bpm/loadTaskDef",
+    method: "get",
+    params,
+  });
+};
+// 采购方案流程列表接口
+export const getLoadTaskDefScheme = (params) => {
+  return request({
+    url: "/business/procurementScheme/loadTaskDef",
     method: "get",
     params,
   });
@@ -121,6 +137,14 @@ export const getProcessLogListVendor = (params) => {
 export const postAuditProcess = (data) => {
   return request({
     url: "/business/process/auditProcess",
+    method: "post",
+    data,
+  });
+};
+// 采购方案流程 审批接口
+export const postAuditProcessScheme = (data) => {
+  return request({
+    url: "/business/procurementScheme/audit",
     method: "post",
     data,
   });

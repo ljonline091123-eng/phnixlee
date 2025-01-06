@@ -24,7 +24,7 @@
             >作废</el-button
           >
         </div>
-        <div v-if="Number(procurementScheme.state) === 1">
+        <div v-if="bpmInitData.revokable">
           <el-button type="primary" size="mini" @click="handelWithdrawalPlan"
             >撤回</el-button
           >
@@ -33,7 +33,7 @@
           <el-button
             type="primary"
             size="mini"
-            v-if="isShowButton"
+            v-if="bpmInitData.auditable"
             @click="handelSanction"
             >审批</el-button
           >
@@ -279,8 +279,8 @@
               </el-col>
             </el-row>
 
-            <el-row class="custom-row">
-              <el-col :span="8" class="custom-col">
+            <el-row class="custom-row" style="height: 180px">
+              <el-col :span="8" class="custom-col"  style="height: 180px">
                 <el-form-item label="评分模板" class="custom-form-item">
                   <a
                     class="link-type"
@@ -297,7 +297,7 @@
                   </a>
                 </el-form-item>
               </el-col>
-              <el-col :span="8" class="custom-col">
+              <el-col :span="8" class="custom-col" style="height: 180px">
                 <el-form-item
                   label="招标文件"
                   label-width="140px"
@@ -311,12 +311,12 @@
                   >
                     {{
                       procurementSchemeBidding.biddingTemplate &&
-                      procurementSchemeBidding.biddingTemplate.templateName
+                      (procurementSchemeBidding.biddingTemplate.templateName || procurementSchemeBidding.biddingTemplate.fileName)
                     }}
                   </a>
                 </el-form-item>
               </el-col>
-              <el-col :span="8" class="custom-col">
+              <el-col :span="8" class="custom-col" style="height: 180px">
                 <el-form-item label="合同模板" class="custom-form-item">
                   <a
                     class="link-type"
@@ -327,7 +327,7 @@
                   >
                     {{
                       procurementSchemeBidding.contractTemplate &&
-                      procurementSchemeBidding.contractTemplate.templateName
+                      (procurementSchemeBidding.contractTemplate.templateName || procurementSchemeBidding.contractTemplate.fileName)
                     }}
                   </a>
                 </el-form-item>
@@ -736,11 +736,12 @@ import {
   getListMaterials,
   cancellationProcurementScheme,
   withdrawalPlan,
+  ViweProcurementSchemeFile,
 } from "@/api/procurement/scheme";
 import {
-  getPermissionButton,
-  postAuditProcess,
-  getLoadTaskDef,
+  getPermissionButtonScheme,
+  postAuditProcessScheme,
+  getLoadTaskDefScheme,
   getProcessLogList, getOrgByUserId,
 } from "@/api/procurement/manage";
 import { getRating } from "@/api/template/rating";
@@ -806,6 +807,7 @@ export default {
       approveArr: [],
       calibrateLoading: false,
       isShowButton: false,
+      bpmInitData: {},
       isShowApprovalDetails: false,
       submitDialogVisible: false,
       reviewText: "",
@@ -872,7 +874,7 @@ export default {
           approveLists,
           contractSplitIdList,
         });
-        this.getPermissionButton();
+        this.getPermissionButtonScheme();
       } catch (err) {
         console.log(err);
       }
@@ -937,7 +939,8 @@ export default {
         console.log('预览的Attachment ID:', this.templateAttachmentId);
         //获取文档中台的文档编辑URL
         try {
-          const res = await getViewAttachmentURLByID({ attachmentId: this.templateAttachmentId });
+          // const res = await getViewAttachmentURLByID({ attachmentId: this.templateAttachmentId }); //无修订记录
+          const res = await ViweProcurementSchemeFile({ attachmentId: this.templateAttachmentId }); //有修订记录
           this.viewFileUrl = res.data;
           console.log("viewFileUrl:",this.viewFileUrl);
         } catch (err) {
@@ -1049,13 +1052,14 @@ export default {
         } catch (error) {}
       });
     },
-    async getPermissionButton() {
+    async getPermissionButtonScheme() {
       try {
         if (this.purchaserId && this.exampleId) {
-          const res = await getPermissionButton({
+          const res = await getPermissionButtonScheme({
             businessId: this.purchaserId,
             processId: this.exampleId,
           });
+          this.bpmInitData = res.data;
           this.rejectNodeList = res.data.completedTaskList;
           /* 下一步审批人列表 */
           this.nextCandidateList = res.data.nextCandidateList;
@@ -1068,7 +1072,7 @@ export default {
     },
     handelSanction() {
       this.sanctionVisible = true;
-      this.getPermissionButton();
+      this.getPermissionButtonScheme();
     },
     handleSubmit() {
       const params = {
@@ -1078,7 +1082,7 @@ export default {
         curTaskId: this.taskPresentId,
         processKey: "jiantou-zhaocai:{org}:ZHAOCAI_PROCUREMENT_SCHEME",
       };
-      postAuditProcess(params).then(() => {
+      postAuditProcessScheme(params).then(() => {
         this.$message.success("提交成功");
         this.sanctionVisible = false;
         this.getSchemeDetail();
@@ -1097,15 +1101,15 @@ export default {
         };
         let res = null;
         if (this.purchaserId && this.exampleId) {
-          res = await getLoadTaskDef(params);
+          res = await getLoadTaskDefScheme(params);
         }else{
           /* 未提交时查看流程执行流程，根据登录人id 获取流程分组 */
           res = await getOrgByUserId(this.$store.state.user.id);
           params = {
             processKey: "jiantou-zhaocai:"+res.data+":ZHAOCAI_PROCUREMENT_SCHEME",
-            businessId: 8888888888,
+            businessId: this.purchaserId,
           };
-          res = await getLoadTaskDef(params);
+          res = await getLoadTaskDefScheme(params);
         }
         this.processInformationList = res.data;
         function getActive(nodes) {

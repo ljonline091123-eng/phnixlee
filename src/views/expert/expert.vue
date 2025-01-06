@@ -215,7 +215,7 @@
               :total="total"
               :page.sync="queryParams.pageNumber"
               :limit.sync="queryParams.pageSize"
-              @pagination="getExpertListAll"
+              @pagination="getExpertListAllByPage"
             />
           </div>
         </template>
@@ -440,7 +440,7 @@ import {
   changeUserStatus,
   deptTreeSelect,
   deptTreeCondSelect,
-  postStatus,
+  postStatus, getDeptTreeByThridDeptId,
 } from "@/api/system/user";
 import { getToken } from "@/utils/auth";
 import Treeselect from "@riophae/vue-treeselect";
@@ -536,16 +536,37 @@ export default {
       param = encodeURIComponent(param); //避免base64编码中出现"/"时路由404
       this.$router.push(`/expert/add-expert/${param}`);
     },
-
+    /** 获取已入库列表 */
+    async getExpertListAllByPage() {
+      this.queryParams.nodeTreeClick = true;
+      await this.getExpertListAll();
+    },
     /** 获取已入库列表 */
     async getExpertListAll() {
       this.loading = true;
       if (this.isFirstLoad) {
-        this.queryParams.deptId =
-          this.$store.state.user?.userInfo.thridOrgDeptId;
+        this.queryParams.deptId = this.$store.state.user?.userInfo.thridOrgDeptId;
         this.isFirstLoad = false; // 将标志位设置为 false，确保后续不再赋值
       }
+      console.log('%c👽 this.queryParams ', `font-size: 14px;background-color: #f00;`, this.queryParams);
+      console.log('%c👽 this.$store.state.user ', `font-size: 14px;background-color: #f00;`, this.$store.state.user);
       try {
+        /* 如果是超级管理员不做限制 */
+        if(this.$store.state.user?.userInfo.roles.find(obj => obj.admin === true)){
+          /* 如果是组织部门树点击来的还是做过滤筛选 */
+          if(this.queryParams.nodeTreeClick){
+            this.queryParams.nodeTreeClick = false;// 下次不准进来了
+            delete this.queryParams.nodeTreeClick;
+          }else{
+            /* 去除筛选条件 */
+            this.queryParams.deptId = null;
+            delete this.queryParams.deptId;
+            this.queryParams.deptIds = null;
+            delete this.queryParams.deptIds;
+            this.queryParams.deptIdList = null;
+            delete this.queryParams.deptIdList;
+          }
+        }
         const res = await getExpertListAll(this.queryParams);
         this.loading = false;
         this.expertList = res.data.rows;
@@ -604,9 +625,15 @@ export default {
     },
     /** 查询部门下拉树结构 */
     getDeptTree() {
-      deptTreeCondSelect({
-        thridDeptId: this.$store.state.user?.userInfo.thridOrgId,
-      }).then((response) => {
+      let params = {thridDeptId : this.$store.state.user?.userInfo.thridOrgId};
+      /* 如果是超级管理员不做限制 */
+      if(this.$store.state.user?.userInfo.roles.find(obj => obj.admin === true)){
+        params = {thridDeptId : '1000000000'};
+      }
+      // deptTreeCondSelect(params).then((response) => {
+      //   this.deptOptions = response.data;
+      // });
+      getDeptTreeByThridDeptId(params).then((response) => {
         this.deptOptions = response.data;
       });
     },
@@ -618,10 +645,12 @@ export default {
     // 节点单击事件
     handleNodeClick(data) {
       this.queryParams.deptId = data.id;
+      this.queryParams.nodeTreeClick = true;
       this.handleQuery();
     },
     handleNodeClickTwo(data) {
       this.selectQuery.deptId = data.id;
+      this.queryParams.nodeTreeClick = true;
       this.notLibraryQuery();
     },
     // 用户状态修改
@@ -648,6 +677,7 @@ export default {
     /** 搜索已入库专家 */
     handleQuery() {
       this.queryParams.pageNumber = 1;
+      this.queryParams.nodeTreeClick = true;
       this.getExpertListAll();
     },
     /** 搜索未入库专家 */

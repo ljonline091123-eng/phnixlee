@@ -35,17 +35,18 @@
             >作废</el-button
           >
         </div>
-        <div v-if="isOperate === 1 && Number(agreementState) === 1">
+<!-- 合同状态 待甲方签署9&合同已签署10&登录人==该合同的签章用户&登录人有权限撤回  -->
+        <div v-if="(isOperate === 1 && Number(agreementState) === 1 && bpmInitData.revokable)">
           <el-button type="primary" size="mini" @click="revokeProcess()"
             >撤回</el-button
           >
         </div>
 
-        <div v-else-if="isOperate === 1 && Number(agreementState) === 3">
+        <!-- <div v-else-if="isOperate === 1 && Number(agreementState) === 3">
           <el-button type="primary" size="mini" @click="pushToVendor()"
             >推送至供应商</el-button
           >
-        </div>
+        </div> -->
 <!--        <div v-else-if="isOperate === 1 && Number(agreementState) === 7">-->
 <!--          <el-button type="primary" size="mini" @click="pushToSignPlatform()"-->
 <!--            >推送至电子签章平台</el-button-->
@@ -86,7 +87,7 @@
       </div>
     </BackButton>
     <div class="context">
-      <el-tabs v-model="activeName">
+      <el-tabs v-model="activeName" @tab-click="attachmenthandleTabClick">
         <el-tab-pane label="基本信息" name="first">
           <commonTitle> 基本信息 </commonTitle>
           <el-form :model="showInfo" class="form-container">
@@ -151,6 +152,27 @@
               </el-col>
             </el-row>
           </el-form>
+          <commonTitle style="margin-top: 20px"> 合同签约方信息 </commonTitle>
+          <el-table
+            :data="agreementPartyInfoLists"
+            highlight-current-row
+            :header-cell-style="{ background: '#F3F2F8' }"
+            style="width: 100%"
+          >
+            <el-table-column
+              label="序号"
+              type="index"
+              width="50"
+              align="center"
+            />
+            <el-table-column
+              v-for="(item, index) in partyInfoHeaderList"
+              :key="index"
+              :label="item.label"
+              :prop="item.prop"
+            >
+            </el-table-column>
+          </el-table>
           <commonTitle style="margin-top: 20px"> 结算与付款节点 </commonTitle>
           <el-table
             :data="agreementPaymentLists"
@@ -1159,6 +1181,7 @@ import {
   getProcessLogList, getOrgByUserId,
 } from "@/api/procurement/manage";
 import { getViewAttachmentURLByID } from "@/api/template/file";
+
 export default {
   components: {
     commonTitle,
@@ -1206,6 +1229,7 @@ export default {
       isShowButton: false,
       isShowApprovalDetails: false,
       isOperate: 0,
+      bpmInitData: {},
       contractHeader: {
         1: [
           {
@@ -1838,6 +1862,48 @@ export default {
           },
         ],
       },
+      partyInfoHeaderList:[
+        {
+          id: 1,
+          label: "签约方类型",
+          prop: "roleTypeText",
+        },
+        {
+          id: 2,
+          label: "签约单位名称",
+          prop: "signerName",
+        },
+        {
+          id: 3,
+          label: "签约单位编号",
+          prop: "signerCode",
+        },
+        {
+          id: 4,
+          label: "银行账号名称",
+          prop: "signerBankAccount",
+        },
+        {
+          id: 5,
+          label: "签约单位银行账户名称",
+          prop: "signerBankName",
+        },
+        {
+          id: 6,
+          label: "签约单位开户支行",
+          prop: "signerBankOpen",
+        },
+        {
+          id: 7,
+          label: "签约单位所占比例(%)",
+          prop: "signerRate",
+        },
+        {
+          id: 8,
+          label: "签约单位纳税人识别号",
+          prop: "signerTaxpayerNumber",
+        },
+      ],
       settlementHeaderList: [
         {
           id: 1,
@@ -2100,6 +2166,7 @@ export default {
       //* 合同清单
       agreementMaterialsLists: [],
       agreementPaymentLists: [], //结算与付款节点
+      agreementPartyInfoLists: [], //合同签约方信息
       agreementDeposits: [], // 押金、保证金信息
       // * 基本信息
       showInfo: {},
@@ -3352,6 +3419,53 @@ export default {
   },
 
   methods: {
+    //切换页签到合同附件时
+    attachmenthandleTabClick(tab){
+      this.loadAgreementAttachmentId();
+      // tab.name 是被点击的标签页的 name 属性值
+      this.viewFileUrl=""; //先清空编辑文档的URL，在重新获取
+      if (tab.name === 'second') {
+        this.getAgreementViewURLFn();
+      }
+    },
+
+    getAgreementViewURLFn(attachmentId){
+      this.loadAgreementAttachmentId();
+      console.log("进获取合同预览的方法getAgreementViewURLFn，-》》》》")
+      // 获取合同预览URL
+      const attachmentIdToUse = attachmentId !== undefined ? attachmentId : this.attachmentId;
+      console.log("传入的attachmentId",attachmentId)
+      console.log("获取的this.attachmentId", this.attachmentId)
+      //获取合同预览URL
+      if (attachmentIdToUse) {
+        console.log("获取到attachmentIdToUse，进行获取预览的方法-》》》》")
+        if (!this.attachmentId || !this.param?.id || !this.partyAName) {
+          console.error('attachmentId,agreementId, partyAName数据未正确加载,无法预览合同附件');
+          return;
+        }
+        console.log('Attachment ID:', this.attachmentId);
+        //水印内容
+        console.log('获取预览合同附件URL时获取的partyAName-》',this.partyAName)
+
+        // 获取文档中台的文档编辑URL
+        getAgreementViewURL({
+          attachmentId: this.attachmentId,
+          agreementId: this.param.id,
+          waterMarkContent: this.partyAName
+        })
+        .then((res) => {
+          this.viewFileUrl = res.data;
+          console.log("获取合同预览viewFileUrl:", this.viewFileUrl);
+        })
+        .catch((err) => {
+          console.log(err);
+        });
+
+      } else {
+        console.warn('attachmentId 数据未正确加载');
+      }
+    },
+
     getContractDetail() {
       this.fullLoading = true;
       getAgreementDetail({
@@ -3369,18 +3483,37 @@ export default {
             : false;
           this.agreementMaterialsLists = res.data.materialsList;
           this.agreementPaymentLists = res.data.agreementPaymentLists;
+          this.agreementPartyInfoLists = res.data.agreementPartyInfoLists || [];
+
+          /* 填充字典值，和默认甲乙方 this.dictObj.con_role_type */
+          const updatedLists = this.agreementPartyInfoLists.map(item => {
+            if (item.roleType === '1') {
+              return { ...item,  roleTypeText: '合同甲方'};
+            } else if (item.roleType === '2') {
+              return { ...item,  roleTypeText: '合同乙方'};
+            }
+            return item;
+          });
+          this.$set(this, 'agreementPartyInfoLists', updatedLists);
+
           this.agreementDeposits = res.data.agreementDeposits;
           this.approveNodeInfos = res.data.approveNodeInfos;
           this.approveLists = res.data.approveLists;
           this.attachmentId = res.data.agreement.agreementAttachmentId;
           this.agreementState = res.data.agreement.agreementState;
           this.agreementName = res.data.agreement.agreementName;
+          // 合同状态 待甲方签署9&合同已签署10&登录人==该合同的签章用户
           this.isOperate = res.data.agreement.isOperate;
           this.partyADeptId = res.data.agreement.partyADeptId;
           this.partyBName = res.data.agreement.partyBName;
           this.fullLoading = false;
           this.partyAName = res.data.agreement.partyAName; //获取甲方名称，即水印内容
           console.log("获取详情时的partyAName",this.partyAName);
+          //获取合同文件预览URl
+          console.log("getDetail的:this.attachmentId-》：", this.attachmentId)
+          this.loadAgreementAttachmentId();
+          this.getAgreementViewURLFn(this.attachmentId);
+
           (this.agreementDailyWageList =
             res.data?.agreementDailyWageList || []),
             (this.agreementMachineShifts =
@@ -3415,7 +3548,7 @@ export default {
           //获取文档中台的文档编辑URL
           try {
             const res = await getAgreementViewURL({ attachmentId: this.attachmentId ,agreementId: this.param.id ,waterMarkContent: this.partyAName});
-            
+
             this.viewFileUrl = res.data;
             console.log("viewFileUrl:",this.viewFileUrl);
           } catch (err) {
@@ -3434,6 +3567,7 @@ export default {
             businessId: this.purchaserId,
             processId: this.exampleId,
           });
+          this.bpmInitData = res.data;
           this.rejectNodeList = res.data.completedTaskList;
           /* 下一步审批人列表 */
           this.nextCandidateList = res.data.nextCandidateList;

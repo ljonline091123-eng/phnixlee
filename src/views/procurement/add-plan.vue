@@ -1112,9 +1112,50 @@ export default {
               projectId,projectName,projectCode,bidResponsibleOrg,bidResponsibleOrgName,subjectMatter:this.subjectMatter,contractPlanningCode,brand
             }
           }
-          console.log(formData,'this.formData');
+          console.log('%c👽 提交数据 ', `font-size: 14px;background-color: #f00;`, formData);
+          /* 对象递归需要处理 千分位的属性 处理提交给Java后台对应的BigDecimal类型 */
+          const targetKeys = [
+            /* 租赁数量 */
+            "rentQuantity",
+            /* 租赁时间 */
+            "rentTime",
+            /* 基价 */
+            "basePrice",
+            /* 卸费 */
+            "unloadingFee",
+            /* 浮动价 */
+            "floatingPrice",
+            /* 税额 */
+            "taxAmount",
+            /* 金额(含税) */
+            "amountInclTax",
+            /* 金额(不含税) */
+            "amountExclTax",
+            /* 单价(含税) */
+            "unitPriceInclTax",
+            /* 单价(不含税) */
+            "unitPriceExclTax",
+            /* 税率 */
+            "taxRate",
+            /* 已使用数量 */
+            "usedCount",
+            /* 数量 */
+            "count",
+            /* 规划金额（含税） */
+            "plannedAmountInclTax",
+            /* 已发生规划金额 */
+            "incurredPlannedAmount",
+            /* 规划余量 */
+            "planningBalance",
+            /* 基价 */
+            "basePrice",
+            /* 指导价 */
+            "guidancePrice"
+          ];
+          let formDataHandle = this.removeThousandsSeparator(formData,targetKeys);
+          console.log('%c👽 提交数据处理后 ', `font-size: 14px;background-color: #f00;`, formDataHandle);
           try{
-            const res = await saveProcurementPlan(formData);
+            const res = await saveProcurementPlan(formDataHandle);
             loading.close();
             this.$message({
               message: '保存成功',
@@ -1140,7 +1181,36 @@ export default {
         }
       });
     },
-
+    /* 批量替换对象中指定属性的,号，用于金额校验，提交对象数据给后台时将金额格式化。 */
+    removeThousandsSeparator(obj, targetKeys = []) {
+        // 检查传入的数据类型
+        if (typeof obj === "object" && obj !== null) {
+          if (Array.isArray(obj)) {
+            // 如果是数组，遍历每一项
+            return obj.map(item => this.removeThousandsSeparator(item, targetKeys));
+          } else {
+            // 如果是对象，遍历每个属性
+            const newObj = {};
+            for (const key in obj) {
+              if (obj.hasOwnProperty(key)) {
+                // 仅处理目标属性名
+                if (targetKeys.includes(key)) {
+                  newObj[key] = typeof obj[key] === "string"
+                    ? obj[key].replace(/,/g, '')
+                    : this.removeThousandsSeparator(obj[key], targetKeys);
+                } else {
+                  newObj[key] = this.removeThousandsSeparator(obj[key], targetKeys);
+                }
+              }
+            }
+            return newObj;
+          }
+        } else if (typeof obj === "string") {
+          // 非对象情况下，直接返回原值
+          return obj;
+        }
+        return obj;
+      },
      //提交推送
      submitFormPush(formName) {
       console.log(this.planList,'ppp');
@@ -1343,8 +1413,8 @@ console.log("-2222--"+JSON.stringify(this.materialsLists))
               // 删除数据
               this.planList[0].children.splice(index, 1);
               console.log(JSON.stringify(this.planList[0].children))
-          
-           
+
+
               //如果删除只有一条数据了,强制设置为"拆分合约规划名称和拟签约合同承包范围"为空
               if(this.planList[0].children.length==1){
                 this.planList[0].children[0].splitContractName=''
@@ -1758,6 +1828,7 @@ console.log("-2222--"+JSON.stringify(this.materialsLists))
           }
 
           row.unitPriceExclTax = this.formatNumberWithThousandsSeparator(formattedResult)
+      console.log('%c👽 row.unitPriceExclTax ', `font-size: 14px;background-color: #f00;`, row.unitPriceExclTax);
     },
     countDecimalPlaces(num) {
         // 将数字转换为字符串

@@ -173,6 +173,7 @@ export default {
       tenantId: "1",
       authorityId: "1",
       isShowButton: false,
+      bpmInitData: {},
       rejectNodeList: [],
       /* 下一步审批人列表 */
       nextCandidateList: [],
@@ -188,6 +189,7 @@ export default {
     const param = JSON.parse(
       Base64.decode(decodeURIComponent(this.$route.params.params))
     );
+    console.log('%c👽 [解码Base64招标对象] ', `font-size: 20px;background-color: #f00;`, param);
     this.scheme = param;
     this.getDicts("procurement_type").then(res => {
       const procurementType = param.procurementType;
@@ -240,6 +242,7 @@ export default {
             businessId: this.tenantId,
             processId: this.authorityId,
           });
+          this.bpmInitData = res.data;
           this.isShowButton = response.data.auditable;
           this.rejectNodeList = response.data.completedTaskList;
           /* 下一步审批人列表 */

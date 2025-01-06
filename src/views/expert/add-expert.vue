@@ -510,6 +510,7 @@ export default {
         operateComment: "",
       },
       rejectNodeList: [],
+      bpmInitData: {},
       /* 下一步审批人列表 */
       nextCandidateList: [],
       /* 是否可以审批 */
@@ -716,6 +717,7 @@ export default {
             businessId: this.formData.id, //联系人id
             processId: this.formData.wfProcessId, //流程id
           });
+          this.bpmInitData = res.data;
           this.rejectNodeList = res.data.completedTaskList;
           /* 下一步审批人列表 */
           this.nextCandidateList = res.data.nextCandidateList;
