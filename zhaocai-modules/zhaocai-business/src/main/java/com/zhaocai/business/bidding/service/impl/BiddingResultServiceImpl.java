@@ -414,6 +414,15 @@ public class BiddingResultServiceImpl extends ServiceImpl<BiddingResultMapper,Bi
             PropertyListRequestDTO.addPropertyToList(propertyList, "companyId", underlingSystemService.getL2OrgByOrgId(SecurityUtils.getThridOrgId()));/* 公司 二级单位 */
             PropertyListRequestDTO.addPropertyToList(propertyList, "responsibilityDeptId", minProjectVO.getDutyUnit());/* 责任单位 三级单位 */
             PropertyListRequestDTO.addPropertyToList(propertyList, "parentProjectCode", minProjectVO.getParentCode());/* 父项目编码(项目部) */
+
+            /* 获取对应的采购方案 */
+            ProcurementScheme scheme = procurementSchemeService.getById(detailVO.getSchemeId());
+            if (null != scheme) {
+                /** 合同类型（contractType），价格(contractMoney)，项目部（parentProjectCode），责任单位（responsibilityDeptId），公司（companyId） */
+                PropertyListRequestDTO.addPropertyToList(propertyList,"contractType", ProcurementPlanTypeEnum.getProcessType(scheme.getProcurementPlanType()));/* 采购方案 合同类型 */
+                PropertyListRequestDTO.addPropertyToList(propertyList,"contractMoney", scheme.getCeilingPrice());/* 定标(可能存在多个中标人，还是使用采购方案的上限价) 价格 */
+            }
+
             requestDTO.setPropertyList(propertyList);
         }
         requestDTO.setPropertyList(propertyList);
@@ -432,6 +441,15 @@ public class BiddingResultServiceImpl extends ServiceImpl<BiddingResultMapper,Bi
             PropertyListRequestDTO.addPropertyToList(propertyList, "companyId", underlingSystemService.getL2OrgByOrgId(SecurityUtils.getThridOrgId()));/* 公司 二级单位 */
             PropertyListRequestDTO.addPropertyToList(propertyList, "responsibilityDeptId", minProjectVO.getDutyUnit());/* 责任单位 三级单位 */
             PropertyListRequestDTO.addPropertyToList(propertyList, "parentProjectCode", minProjectVO.getParentCode());/* 父项目编码(项目部) */
+
+            /* 获取对应的采购方案 */
+            ProcurementScheme scheme = procurementSchemeService.getById(detailVO.getSchemeId());
+            if (null != scheme) {
+                /** 合同类型（contractType），价格(contractMoney)，项目部（parentProjectCode），责任单位（responsibilityDeptId），公司（companyId） */
+                PropertyListRequestDTO.addPropertyToList(propertyList,"contractType", ProcurementPlanTypeEnum.getProcessType(scheme.getProcurementPlanType()));/* 采购方案 合同类型 */
+                PropertyListRequestDTO.addPropertyToList(propertyList,"contractMoney", scheme.getCeilingPrice());/* 定标(可能存在多个中标人，还是使用采购方案的上限价) 价格 */
+            }
+
             requestDTO.setPropertyList(propertyList);
         }
         requestDTO.setPropertyList(propertyList);
@@ -449,6 +467,13 @@ public class BiddingResultServiceImpl extends ServiceImpl<BiddingResultMapper,Bi
             variables.put("companyId", underlingSystemService.getL2OrgByOrgId(SecurityUtils.getThridOrgId()));/* 公司 二级单位 */
             variables.put("responsibilityDeptId", minProjectVO.getDutyUnit());/* 责任单位 三级单位 */
             variables.put("parentProjectCode", minProjectVO.getParentCode());/* 父项目编码(项目部) */
+            /* 获取对应的采购方案 */
+            ProcurementScheme scheme = procurementSchemeService.getById(detailVO.getSchemeId());
+            if (null != scheme) {
+                /** 合同类型（contractType），价格(contractMoney)，项目部（parentProjectCode），责任单位（responsibilityDeptId），公司（companyId） */
+                variables.put("contractType", ProcurementPlanTypeEnum.getProcessType(scheme.getProcurementPlanType()));/* 采购方案 合同类型 */
+                variables.put("contractMoney", scheme.getCeilingPrice());/* 定标(可能存在多个中标人，还是使用采购方案的上限价) 价格 */
+            }
         }
         return processService.auditProcessInstance(ProcessKeyEnum.ZHAOCAI_TENDER_CALIBRATE.getIdentifying(),variables);
     }
@@ -465,6 +490,15 @@ public class BiddingResultServiceImpl extends ServiceImpl<BiddingResultMapper,Bi
             PropertyListRequestDTO.addPropertyToList(propertyList, "companyId", underlingSystemService.getL2OrgByOrgId(SecurityUtils.getThridOrgId()));/* 公司 二级单位 */
             PropertyListRequestDTO.addPropertyToList(propertyList, "responsibilityDeptId", minProjectVO.getDutyUnit());/* 责任单位 三级单位 */
             PropertyListRequestDTO.addPropertyToList(propertyList, "parentProjectCode", minProjectVO.getParentCode());/* 父项目编码(项目部) */
+
+            /* 获取对应的采购方案 */
+            ProcurementScheme scheme = procurementSchemeService.getById(detailVO.getSchemeId());
+            if (null != scheme) {
+                /** 合同类型（contractType），价格(contractMoney)，项目部（parentProjectCode），责任单位（responsibilityDeptId），公司（companyId） */
+                PropertyListRequestDTO.addPropertyToList(propertyList,"contractType", ProcurementPlanTypeEnum.getProcessType(scheme.getProcurementPlanType()));/* 采购方案 合同类型 */
+                PropertyListRequestDTO.addPropertyToList(propertyList,"contractMoney", scheme.getCeilingPrice());/* 定标(可能存在多个中标人，还是使用采购方案的上限价) 价格 */
+            }
+
             requestDTO.setPropertyList(propertyList);
         }
         requestDTO.setPropertyList(propertyList);
