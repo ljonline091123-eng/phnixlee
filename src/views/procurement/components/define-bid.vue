@@ -639,8 +639,10 @@ import {
   getBidEvaluationList,
   getBiddingQuotationList,
   getLoadTaskDef,
+  getLoadTaskDefBidding,
   getProcessLogList,
-  postAuditProcess, getOrgByUserId, revokeBidding,
+  getProcessLogListBidding,
+  postAuditProcess, getOrgByUserId, revokeBidding, postAuditProcessBidding,
 } from "@/api/procurement/manage";
 import FileModule from "@/components/FileModule/index.vue";
 import PageTitle from "@/components/PageTitle/index.vue";
@@ -1132,15 +1134,15 @@ export default {
         };
         let res = null;
         if (this.tenantId && this.authorityId && this.noticeDetail.tenderNotice.wfProcessId) {
-          res = await getLoadTaskDef(params);
+          res = await getLoadTaskDefBidding(params);
         }else{
           /* 未提交时查看流程执行流程，根据登录人id 获取流程分组 */
           res = await getOrgByUserId(this.$store.state.user.id);
           params = {
             processKey: "jiantou-zhaocai:"+res.data+":ZHAOCAI_TENDER_CALIBRATE",
-            businessId: 88882352353245888,
+            businessId: this.tenantId?this.tenantId:88882352353245888,
           };
-          res = await getLoadTaskDef(params);
+          res = await getLoadTaskDefBidding(params);
         }
           this.processInformationList = res.data;
           function getActive(nodes) {
@@ -1161,7 +1163,8 @@ export default {
 
 
         if (this.tenantId && this.authorityId && this.noticeDetail.tenderNotice.wfProcessId) {
-          const response = await getProcessLogList(params);
+          // const response = await getProcessLogList(params);
+          const response = await getProcessLogListBidding(params);
           this.approveLists = response.data;
         }
       } catch (error) {
@@ -1181,7 +1184,8 @@ export default {
         curTaskId: this.taskPresentId,
         processKey: "jiantou-zhaocai:{org}:ZHAOCAI_TENDER_CALIBRATE",
       };
-      postAuditProcess(params).then(() => {
+      postAuditProcessBidding(params).then(() => {
+        // postAuditProcess(params).then(() => {
         this.$message.success("提交成功");
         this.sanctionVisible = false;
         this.$emit("submitSuccess");

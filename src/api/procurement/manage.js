@@ -91,6 +91,15 @@ export const getLoadTaskDef = (params) => {
     params,
   });
 };
+
+// 加载定义接口 定标
+export const getLoadTaskDefBidding = (params) => {
+  return request({
+    url: "/business/result/loadTaskDef",
+    method: "get",
+    params,
+  });
+};
 // 采购方案流程列表接口
 export const getLoadTaskDefScheme = (params) => {
   return request({
@@ -120,6 +129,19 @@ export const getProcessLogList = (params) => {
   });
 };
 
+// 流程操作日志列表 定标
+export const getProcessLogListBidding = (params) => {
+  // 手动拼接 businessId 到 URL 中
+  let url = `/business/result/listProcessLog?processId=${params.processId}`;
+  // 如果 businessId 存在，即使为空字符串，也将其拼接到 URL 中
+  if (params.businessId !== undefined) {
+    url += `&businessId=${params.businessId}`;
+  }
+  return request({
+    url: url,
+    method: "get",
+  });
+};
 // 流程操作日志列表
 export const getProcessLogListVendor = (params) => {
   // 手动拼接 businessId 到 URL 中
@@ -145,6 +167,14 @@ export const postAuditProcess = (data) => {
 export const postAuditProcessScheme = (data) => {
   return request({
     url: "/business/procurementScheme/audit",
+    method: "post",
+    data,
+  });
+};
+// 定标流程 审批接口
+export const postAuditProcessBidding = (data) => {
+  return request({
+    url: "/business/result/audit",
     method: "post",
     data,
   });
@@ -604,7 +634,7 @@ export const getLoadTaskDefNew= (params) => {
     params,
   });
 };
-// 流程操作日志列表
+// 流程操作日志列表 专家
 export const getProcessLogListNew = (params) => {
   // 手动拼接 businessId 到 URL 中
   let url = `/business/expert/listProcessLog?processId=${params.processId}`;
