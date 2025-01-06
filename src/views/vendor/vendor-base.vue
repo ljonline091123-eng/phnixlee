@@ -110,10 +110,10 @@
             />
             <!--<el-input v-model="queryParams.enterpriseName" placeholder="请输入供应商名称" clearable/>-->
           </el-form-item>
-          <el-form-item label="注册资金" prop="registeredCapital" label-width="130px">
-              <el-input v-model="queryParams.registeredCapitalStart" type="number"  style="width: 95px" />
+          <el-form-item label="注册资金(万元)" prop="registeredCapital" label-width="130px">
+              <el-input v-model="queryParams.registeredCapitalStart" type="number"  style="width: 101px" />
             -
-            <el-input v-model="queryParams.registeredCapitalEnd" type="number" style="width: 95px" />
+            <el-input v-model="queryParams.registeredCapitalEnd" type="number" style="width: 100px" />
           </el-form-item>
           <el-form-item label="状态" prop="vendorState" label-width="90px" v-if="queryParams.vendorClass == 0 || queryParams.vendorClass == 4">
             <!--<el-input v-model="queryParams.vendorState" placeholder="请输入供应商名称" clearable/>-->

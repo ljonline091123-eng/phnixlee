@@ -21,7 +21,17 @@
       >
         <el-table-column label="合作单位" min-width="200" prop="cooperativePartnerName" show-overflow-tooltip/>
         <el-table-column label="供应商名称" min-width="250" align="center" prop="vendorName"/>
-        <el-table-column label="合同名称" min-width="250" prop="agreementName" show-overflow-tooltip/>
+        <!--<el-table-column label="合同名称" min-width="250" prop="agreementName" show-overflow-tooltip/>-->
+        <el-table-column label="合同名称" min-width="250" prop="agreementName" show-overflow-tooltip>
+          <template slot-scope="scope">
+            <a
+              class="link-type"
+              @click="goDetail(scope.row.agreementId, scope.row.expenditureBusinessType)"
+            >
+              {{ scope.row.agreementName }}
+            </a>
+          </template>
+        </el-table-column>
         <el-table-column label="履约评价（优）" min-width="120" align="center" prop="excellentNum"/>
         <el-table-column label="履约评价（良）" min-width="120" align="center" prop="goodNum"/>
         <el-table-column label="履约评价（合格）" min-width="140" align="center" prop="qualifiedNum"/>
@@ -84,7 +94,12 @@ export default {
         this.vendorLoading = false
         console.log(err)
       }
-    }
+    },
+    goDetail(id, type) {
+      let param = Base64.encode(JSON.stringify({ id, type }));
+      param = encodeURIComponent(param); //避免base64编码中出现"/"时路由404
+      this.$router.push(`/procurement/contract-detail/${param}`);
+    },
   },
   watch: {
     /** 监控类型切换 */
