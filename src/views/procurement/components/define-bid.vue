@@ -1163,8 +1163,8 @@ export default {
 
 
         if (this.tenantId && this.authorityId && this.noticeDetail.tenderNotice.wfProcessId) {
-          // const response = await getProcessLogList(params);
-          const response = await getProcessLogListBidding(params);
+          const response = await getProcessLogList(params);
+          // const response = await getProcessLogListBidding(params);
           this.approveLists = response.data;
         }
       } catch (error) {
