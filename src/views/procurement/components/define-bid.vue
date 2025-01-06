@@ -15,7 +15,7 @@
           <el-button
             type="primary"
             size="small"
-            v-if="shouldDisableButton  && noticeDetail.tenderNotice.noticeStatus === 5  && noticeDetail.tenderNotice.state === 1"
+            v-if="bpmInitData.revokable && shouldDisableButton  && noticeDetail.tenderNotice.noticeStatus === 5  && noticeDetail.tenderNotice.state === 1"
             @click="
                   revokeBiddingForm(
                     tenantId,
@@ -589,6 +589,18 @@
             ></el-option>
           </el-select>
         </el-form-item>
+        <!--   选择'通过'显示，'可选审批人'显示   -->
+        <el-form-item v-if="sanctionForm.pass && nextAppointable" label="指派人" required>
+          <!--  nextAuditUserId下一步审批人  -->
+          <el-select v-model="sanctionForm.nextAuditUserId" placeholder="请选择" :clearable="true">
+            <el-option
+              v-for="candidate in nextCandidateList"
+              :key="candidate.userId"
+              :label="candidate.userName"
+              :value="candidate.userId"
+            ></el-option>
+          </el-select>
+        </el-form-item>
         <el-form-item label="批语">
           <el-input
             type="textarea"
@@ -649,6 +661,20 @@ export default {
     scheme: {
       type: Object,
       default: () => {},
+    },
+    bpmInitData: {
+      type: Object,
+      default: () => {},
+    },
+    /* 可选审批人列表 */
+    nextCandidateList: {
+      type: Array,
+      required: true,
+    },
+    /* 是否可指定审批人 */
+    nextAppointable: {
+      type: Boolean,
+      required: true,
     },
     isShowButton: {
       type: Boolean,

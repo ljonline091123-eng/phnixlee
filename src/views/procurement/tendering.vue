@@ -31,6 +31,7 @@
         :noticeDetail="noticeDetail"
         :scheme="scheme"
         :isShowButton="isShowButton"
+        :bpmInitData="bpmInitData"
         :tenantId="tenantId"
         :authorityId="authorityId"
         :rejectNodeList="rejectNodeList"
@@ -242,13 +243,13 @@ export default {
             businessId: this.tenantId,
             processId: this.authorityId,
           });
-          this.bpmInitData = res.data;
+          this.bpmInitData = response.data;
           this.isShowButton = response.data.auditable;
           this.rejectNodeList = response.data.completedTaskList;
           /* 下一步审批人列表 */
-          this.nextCandidateList = res.data.nextCandidateList;
+          this.nextCandidateList = response.data.nextCandidateList;
           /* 下一步审批人是否可选 */
-          this.nextAppointable = res.data.nextAppointable;
+          this.nextAppointable = response.data.nextAppointable;
           this.taskPresentId = response.data.curTaskId;
         }
         this.noticeDetail = res.data || {};
