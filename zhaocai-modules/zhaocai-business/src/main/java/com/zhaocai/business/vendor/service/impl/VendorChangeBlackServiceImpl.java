@@ -269,6 +269,24 @@ public class VendorChangeBlackServiceImpl extends ServiceImpl<VendorChangeMapper
                 .eq(Vendor::getId, vendorChange.getVendorId()));
     }
 
+    /**
+     * 审批驳回到提交人状态
+     * @param variables
+     */
+    @Override
+    public void processAuditFreedom(Map<String, Object> variables) {
+        String businessId = variables.get("businessId").toString();
+        // 修改变更状态为驳回
+        super.update(new LambdaUpdateWrapper<VendorChange>()
+                .set(VendorChange::getChangeStatus,VendorStateEnum.REJECT.getState())
+                .eq(VendorChange::getId, businessId));
+        // 审批驳回将供应商状态改回审批通过
+        VendorChange vendorChange = super.getById(businessId);
+        vendorService.update(new LambdaUpdateWrapper<Vendor>()
+                .set(Vendor::getState,VendorStateEnum.APPROVE.getState())
+                .eq(Vendor::getId, vendorChange.getVendorId()));
+    }
+
     @Override
     public ResultData<BpmInitializeResponseDTO> initialize(BpmInitializeRequestDTO requestDTO) {
         VendorChange vendorChange = vendorChangeService.getById(requestDTO.getBusinessId());

@@ -81,4 +81,7 @@ public interface RemoteBusinessService {
 
     @GetMapping("/syncPlatformBasicData/syncAccount")
     public ResultData<Boolean> syncAccount(@RequestHeader(SecurityConstants.FROM_SOURCE) String inner);
+
+    @GetMapping("/vendor/removeBlacklist")
+    public ResultData<Boolean> removeBlacklist(@RequestHeader(SecurityConstants.FROM_SOURCE) String inner);
 }

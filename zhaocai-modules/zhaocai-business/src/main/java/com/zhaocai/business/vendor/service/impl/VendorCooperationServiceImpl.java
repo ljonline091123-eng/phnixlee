@@ -115,6 +115,8 @@ public class VendorCooperationServiceImpl implements IVendorCooperationService {
                             cooperationAgreement.setAgreementName(agreement.getAgreementName());
                             cooperationAgreement.setTotalAmountIncTax(agreement.getTotalAmountIncTax());
                             cooperationAgreement.setAgreementSignDate(agreement.getAgreementSignDate());
+                            cooperationAgreement.setAgreementId(agreement.getId());
+                            cooperationAgreement.setExpenditureBusinessType(agreement.getExpenditureBusinessType());
                             // 处理合同收付款
                             ContractListDTO listDTO = contractListMap.get(agreement.getAgreementCode());
                             if (listDTO != null) {

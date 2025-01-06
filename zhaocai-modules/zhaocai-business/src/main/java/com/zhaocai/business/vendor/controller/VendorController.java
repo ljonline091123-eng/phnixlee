@@ -284,4 +284,13 @@ public class VendorController extends BladeController {
         vendorService.initializeCode();
         return ResultData.success();
     }
+
+    /**
+     * 移除过期黑名单
+     */
+    @GetMapping("/removeBlacklist")
+    @Log(title = "移除过期黑名单", businessType = BusinessType.UPDATE)
+    public ResultData removeBlacklist() {
+        return ResultData.data(vendorService.removeBlacklist());
+    }
 }

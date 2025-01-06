@@ -139,7 +139,7 @@
             </if>
             <if test="queryVO.vendorClass == 0" >
                 <!-- 供应商名录 -->
-                and tv.state != 0 and tv.is_black = 0 and ( tv.process_type != 1 or tv.state not  in (2,3) )
+                and tv.state != 0 and tv.is_black = 0 and ( tv.process_type != 1 or tv.state  != 2 )
             </if>
             <if test="queryVO.vendorClass == 1">
                 <!-- 待审供应商 -->

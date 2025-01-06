@@ -1570,4 +1570,29 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
         }
 
     }
+
+    @Override
+    public boolean removeBlacklist() {
+        boolean flat=true;
+        try {
+            List<Vendor> list = super.list(new LambdaQueryWrapper<Vendor>()
+                    .eq(Vendor::getState, VendorStateEnum.APPROVE.getState())
+                    .eq(Vendor::getIsBlack,Integer.valueOf("1"))
+                    .le(Vendor::getBlackEndDate,new Date()));
+            if(CollectionUtil.isNotEmpty(list)){
+                list.stream().forEach(p->{
+                    super.update(new LambdaUpdateWrapper<Vendor>()
+                            .set(Vendor::getBlackBeginDate,null)
+                            .set(Vendor::getBlackEndDate,null)
+                            .set(Vendor::getIsBlack,Integer.valueOf("0"))
+                            .eq(Vendor::getId, p.getId()));
+                });
+            }
+        } catch (Exception ex) {
+            flat=false;
+            log.error("移除黑名单失败:{}", ex.getMessage());
+            ex.printStackTrace();
+        }
+        return flat;
+    }
 }

@@ -35,6 +35,12 @@ public class VendorCooperationAgreementVO extends AdviceObject {
     @ApiModelProperty(value = "合同名称")
     private String agreementName;
 
+    @ApiModelProperty(value = "合同id")
+    private Long agreementId;
+
+    @ApiModelProperty(value = "合同支出业务分类")
+    private Integer expenditureBusinessType;
+
     @ApiModelProperty(value = "合同金额(元)")
     private BigDecimal totalAmountIncTax;
 

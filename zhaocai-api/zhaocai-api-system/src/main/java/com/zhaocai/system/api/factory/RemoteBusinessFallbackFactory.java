@@ -60,6 +60,11 @@ public class RemoteBusinessFallbackFactory implements FallbackFactory<RemoteBusi
                 return ResultData.fail("同步第三方支行数据失败:" + throwable.getMessage());
             }
 
+            @Override
+            public ResultData<Boolean> removeBlacklist(String inner) {
+                return ResultData.fail("供应商移除黑名单失败:" + throwable.getMessage());
+            }
+
         };
     }
 
