@@ -1586,6 +1586,22 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
                             .set(Vendor::getBlackEndDate,null)
                             .set(Vendor::getIsBlack,Integer.valueOf("0"))
                             .eq(Vendor::getId, p.getId()));
+                    List<VendorChange> vendorChangeList = vendorChangeService.list(new LambdaQueryWrapper<VendorChange>()
+                            .eq(VendorChange::getVendorId, p.getId())
+                            .orderByDesc(VendorChange::getVersion));
+                    if (!CollectionUtils.isEmpty(vendorChangeList)) {
+                        VendorChange vendorChange = vendorChangeList.get(0);
+                        vendorChange.setId(null);
+                        vendorChange.setVersion(vendorChange.getVersion()+1);
+                        vendorChange.setIsBlack(Integer.valueOf("0"));
+                        vendorChange.setBlackBeginDate(null);
+                        vendorChange.setBlackEndDate(null);
+                        vendorChangeService.save(vendorChange);
+                        // 供应商资质
+                        List<VendorCertificationChange> certificationList = certificationChangeService.createCertificationChange(vendorChange.getVendorId(), vendorChange.getVersion());
+                        // 供应商联系人
+                        List<VendorContactChange> contactChangeList = contactChangeService.createContactChange(vendorChange.getVendorId(), vendorChange.getVersion());
+                    }
                 });
             }
         } catch (Exception ex) {
