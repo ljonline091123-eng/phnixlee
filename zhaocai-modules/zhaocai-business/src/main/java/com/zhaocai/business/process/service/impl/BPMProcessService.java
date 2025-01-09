@@ -66,11 +66,14 @@ public class BPMProcessService implements IBPMProcessService {
         String customProcessKey = variables.get("customProcessKey") == null ? null : variables.get("customProcessKey").toString();
         requestDTO.setBusinessId(variables.get("businessId").toString());
         requestDTO.setProcessKey(StrUtil.isBlank(customProcessKey) ? processKey : customProcessKey);
-        requestDTO.setBusinessContent(
-                variables.get("businessContent") == null ? null : variables.get("businessContent").toString());
-        //variables.get("businessTitle").toString()
+        requestDTO.setBusinessContent(variables.get("businessContent") == null ? null : variables.get("businessContent").toString());
+
         // 目前就暂时按这里这样统一的叫法
         requestDTO.setBusinessTitle("流程审批");
+        /* 覆盖 */
+        if (variables.get("businessTitle") != null) {
+            requestDTO.setBusinessTitle(variables.get("businessTitle").toString());
+        }
         requestDTO.setState(variables.get("detailUrl") == null ? IdUtil.getSnowflakeNextId() + "" : variables.get("detailUrl").toString());
         requestDTO.setUserObj(variables.get("userObj") == null ? null : variables.get("userObj").toString());
         String operateComment = variables.get("operateComment") == null ? null : variables.get("operateComment").toString();
