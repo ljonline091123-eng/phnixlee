@@ -362,7 +362,7 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
         //接入底层逻辑平台流程
         Map<String,Object> paramMap = new HashMap<>();
         paramMap.put("businessId", vendor.getId());
-        paramMap.put("businessTitle", "供应商注册审批");
+        paramMap.put("businessTitle", "招标采购/供应商管理/供应商基本信息 供应商注册审批");
         /* 获取二级单位 */
         String org = underlingSystemService.getL2OrgByOrgId(vendor.getFirstCooperationCompanyCode());
         //供应商注册时候选择审批单位，只能由选择的单位维护的供应商审核人员进行审核，如果供应商信息修改也是需要原审核单位进行审核

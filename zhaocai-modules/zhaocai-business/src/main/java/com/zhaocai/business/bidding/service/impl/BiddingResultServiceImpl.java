@@ -146,7 +146,7 @@ public class BiddingResultServiceImpl extends ServiceImpl<BiddingResultMapper,Bi
         paramMap.put("businessId", noticeId);
         paramMap.put("detailUrl", detailUrl);
         paramMap.put("projectCode", detailVO.getProjectCode());
-        paramMap.put("businessTitle", "招标管理-定标环节审批");
+        paramMap.put("businessTitle", "招标采购/采购管理/招标管理 定标环节审批");
         paramMap.put("businessContent",
                 String.format(ApproveFlowPromptTemplateEnum.BID_CALIBRATION.getDesc(),detailVO.getProcurementSchemeName()));
         paramMap.put("operateComment", entranceVO.getOperateComment());

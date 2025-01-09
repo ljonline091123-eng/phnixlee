@@ -371,7 +371,7 @@ public class VendorContactServiceImpl extends ServiceImpl<VendorContactMapper,Ve
         //接入底层逻辑平台流程
         Map<String,Object> paramMap = new HashMap<>();
         paramMap.put("businessId", id);
-        paramMap.put("businessTitle", "供应商-新增联系人审批");
+        paramMap.put("businessTitle", "招标采购/供应商管理/供应商账号管理 新增联系人审批");
         paramMap.put("businessContent", String.format("您有供应商：%s新增联系人在审核节点的审批！", vendor.getEnterpriseName()));
         paramMap.put("detailUrl", "/vendor/vendor-account?id="+Base64.encode(id+""));
         String org = underlingSystemService.getL2OrgByOrgId(vendor.getFirstCooperationCompanyCode());

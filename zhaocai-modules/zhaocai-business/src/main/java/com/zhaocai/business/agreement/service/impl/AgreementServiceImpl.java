@@ -833,7 +833,7 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
         Map<String,Object> paramMap = new HashMap<>();
         paramMap.put("businessId", agreement.getId());
         paramMap.put("projectCode", agreement.getBelongAccountingItemCode());
-        paramMap.put("businessTitle", "合同审批");
+        paramMap.put("businessTitle", "招标采购/采购管理/合同签订 合同审批");
         paramMap.put("businessContent", String.format(ApproveFlowPromptTemplateEnum.CONTRACT_APPROVE.getDesc(), agreement.getAgreementName()));
         paramMap.put("detailUrl", detailUrl);
         UserObj userObj = UserObj.builder().businessType(ProcessKeyEnum.ZHAOCAI_AGREEMENT_SIGN.name()).

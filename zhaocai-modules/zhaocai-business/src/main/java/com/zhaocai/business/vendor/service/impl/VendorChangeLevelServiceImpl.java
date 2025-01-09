@@ -110,7 +110,7 @@ public class VendorChangeLevelServiceImpl extends ServiceImpl<VendorChangeMapper
         Vendor vendor = vendorService.getById(vendorChange.getVendorId());
         Map<String,Object> paramMap = new HashMap<>();
         paramMap.put("businessId", vendorChange.getId());
-        paramMap.put("businessTitle", "供应商修改等级");
+        paramMap.put("businessTitle", "招标采购/供应商管理/供应商基本信息 供应商修改等级");
         paramMap.put("businessContent", String.format("您有供应商：%s修改等级在审核节点的审批！", vendor.getEnterpriseName()));
         paramMap.put("detailUrl", "/vendor/vendor-detail/"+ Base64.encodeStr(("\""+vendorChange.getVendorId().toString()+"\"").getBytes(),true,true));
         String org = underlingSystemService.getL2OrgByOrgId(vendor.getFirstCooperationCompanyCode());
