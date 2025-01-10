@@ -20,7 +20,7 @@
                 :tree-props="{children: 'children', hasChildren: 'hasChildren'}"
       >
         <el-table-column label="合作单位" min-width="200" prop="cooperativePartnerName" show-overflow-tooltip/>
-        <el-table-column label="供应商名称" min-width="250" align="center" prop="vendorName"/>
+        <!--<el-table-column label="供应商名称" min-width="250" align="center" prop="vendorName"/>-->
         <!--<el-table-column label="合同名称" min-width="250" prop="agreementName" show-overflow-tooltip/>-->
         <el-table-column label="合同名称" min-width="250" prop="agreementName" show-overflow-tooltip>
           <template slot-scope="scope">
@@ -32,15 +32,17 @@
             </a>
           </template>
         </el-table-column>
-        <el-table-column label="履约评价（优）" min-width="120" align="center" prop="excellentNum"/>
-        <el-table-column label="履约评价（良）" min-width="120" align="center" prop="goodNum"/>
-        <el-table-column label="履约评价（合格）" min-width="140" align="center" prop="qualifiedNum"/>
-        <el-table-column label="履约评价（差）" min-width="120" align="center" prop="badNum"/>
+        <el-table-column label="合同签订日期" min-width="140" align="center" prop="agreementSignDate"/>
         <el-table-column label="合同金额(元)" min-width="140" align="right" prop="totalAmountIncTaxText"/>
         <el-table-column label="已结算金额(元)" min-width="140" align="right" prop="settledAmountText"/>
         <el-table-column label="已付款金额(元)" min-width="140" align="right" prop="paidAmountText"/>
         <el-table-column label="未付款金额(元)" min-width="140" align="right" prop="unpaidAmountText"/>
-        <el-table-column label="合同签订日期" min-width="140" align="center" prop="agreementSignDate"/>
+        <el-table-column label="履约评价（优）" min-width="120" align="center" prop="excellentNum"/>
+        <el-table-column label="履约评价（良）" min-width="120" align="center" prop="goodNum"/>
+        <el-table-column label="履约评价（合格）" min-width="140" align="center" prop="qualifiedNum"/>
+        <el-table-column label="履约评价（差）" min-width="120" align="center" prop="badNum"/>
+
+
       </el-table>
     </div>
   </div>
