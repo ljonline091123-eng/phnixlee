@@ -164,20 +164,9 @@
                       label="选择财务确认人员"
                       prop="financeConfirmId"
                     >
-                      <el-select
-                        v-model="formData.financeConfirmId"
-                        placeholder="请选择财务人员"
-                        filterable
-                        style="width: 100%"
-                        @change="changeFinance"
-                      >
-                        <el-option
-                          v-for="item in financeList"
-                          :key="item.userId"
-                          :label="item.nickName +' / '+ item.thridOrgName"
-                          :value="item.userId"
-                        ></el-option>
-                      </el-select>
+                      <el-input v-model="formData.financeConfirmName" readonly @focus="handleClick" size="large" placeholder="请选择">
+                        <template slot="suffix"><i class="el-input__icon el-icon-arrow-down"></i></template>
+                      </el-input>
                     </el-form-item>
                   </el-col>
                 </el-row>
@@ -1001,6 +990,93 @@
           >
         </div>
       </el-dialog>
+
+
+
+      <!-- 选择财务确认人员 -->
+      <el-dialog title="财务确认人员" :visible.sync="officerDialog" width="55%">
+        <el-form
+          :model="searchQuery"
+          ref="planForm"
+          label-position="left"
+          size="small"
+          inline
+          @submit.native.prevent
+        >
+          <el-form-item
+            label="用户"
+            prop="pushRoleList"
+            class="label-right-align"
+            label-width="40px"
+          >
+            <el-input
+              v-model="searchQuery.nickName"
+              placeholder="请输入用户"
+              clearable
+              style="width: 150px"
+              @keyup.enter.native="searchUser"
+            />
+          </el-form-item>
+          <el-form-item>
+            <el-button
+              type="primary"
+              icon="el-icon-search"
+              size="small"
+              style="width: 70px"
+              @click="searchUser"
+            >查询</el-button>
+          </el-form-item>
+        </el-form>
+        <virtual-scroll
+          :data="filteredOperatorList"
+          :item-size="62"
+          key-prop="virtualId"
+          ref="virScroll"
+          @change="(renderData) => virtualList = renderData">
+          <el-table
+            v-loading="officerLoading"
+            :data="virtualList"
+            stripe
+            size="small"
+            highlight-current-row
+            border
+            @selection-change="selectOfficer"
+            @row-click="selectOfficer"
+            :row-key="selSelectKey"
+            max-height="400"
+            ref="selectTable">
+            <el-table-column width="30" align="center">
+              <template slot-scope="scope">
+                <el-radio
+                  v-model="selectedUserId"
+                  :label="scope.row.userId"
+                  @change="selectOfficer(scope.row)"
+                />
+              </template>
+            </el-table-column>
+            <el-table-column label="序号" prop="virtualId" width="60" align="center" />
+            <el-table-column label="用户" prop="nickName" width="100" align="center"/>
+            <el-table-column label="电话号码" prop="phonenumber" width="150" align="center"/>
+            <el-table-column label="归属当前组织名称" prop="thridOrgName" width="450" show-overflow-tooltip align="center"/>
+            <el-table-column label="归属管理组织名称" prop="orgDeptName" show-overflow-tooltip align="center"/>
+          </el-table>
+        </virtual-scroll>
+        <div slot="footer" class="dialog-footer">
+          <el-button
+            @click="officerDialog = false"
+            style="width: 100px"
+            size="small"
+          >取 消</el-button
+          >
+          <el-button
+            type="primary"
+            @click="submitOfficer"
+            style="width: 100px"
+            size="small"
+          >确 定</el-button
+          >
+        </div>
+      </el-dialog>
     </div>
   </div>
 </template>
@@ -1027,6 +1103,7 @@ import { addAttachment , getEditFileUrlByID, ModifyFileNameAndFileURL} from "@/a
 import {showSecretRelatedTips} from "@/utils/MyUtils";
 import {offerRepo, offerService, uploadFileUrl} from "@/utils/const";
 import { listUnderlingDict } from "@/api/procurement/contract";
+import VirtualScroll from 'el-table-virtual-scroll'
 
 export default {
   name: "add-scheme",
@@ -1038,6 +1115,7 @@ export default {
   components: {
     FileModule,
     BackButton,
+    VirtualScroll
   },
   data() {
     return this.getInitialData();
@@ -1166,6 +1244,15 @@ export default {
           PROCUREMENT_PAYMENT_TYPE:"procurement_payment_type",
         },
 
+        officerDialog: false, // 控制对话框的显示隐藏
+        officerLoading: false,
+        filteredOperatorList: [], // 过滤后的用户列表
+        virtualList: [],
+        selectedUserId: null, // 选中的采购人ID
+        selectedUser: {}, // 选中的用户信息
+        searchQuery: {   // 搜索查询字符串
+          nickName: '',
+        },
         /*方案审批状态
           DRAFT(0,"自由态"),
           IN_APPROVAL(1,"审批中"),
@@ -1380,6 +1467,55 @@ export default {
         contractTypeList: [],
         editFileUrl:"", //编辑文档URL
       };
+    },
+    /** 选择采购人-点击行 */
+    selectOfficer(val){
+      this.selectedUser = val;
+      this.selectedUserId = val.userId;
+    },
+    selSelectKey(row){
+      return row.virtualId
+    },
+    /** 选择采购人-点击确定 */
+    submitOfficer(){
+      if (this.selectedUser && this.selectedUser.userId) {
+        this.$set(this.formData,'financeConfirmName',this.selectedUser.nickName);
+        this.$set(this.formData,'financeConfirmId',this.selectedUser.userId);
+        this.officerDialog = false;
+      } else {
+        this.$message.warning('请选择一个财务确认人员');
+      }
+    },
+    /** 选择采购人-打开弹窗 */
+    handleClick(){
+      this.searchQuery = {
+        nickName: '',
+      };
+      if(this.formData.procurementOfficer){
+        this.selectedUserId = this.formData.procurementOfficer
+        this.selectedUser = {nickName:this.formData.procurementOfficerName,userId:this.formData.procurementOfficer}
+      }
+      try{
+        this.filteredOperatorList = this.financeList.map((item, index) => ({
+          ...item,
+          virtualId: index+1
+        }));
+      }catch(err){
+        console.log(err);
+      }
+      this.officerDialog = true;
+    },
+    /** 选择采购人-过滤用户 */
+    searchUser() {
+      this.officerLoading = true;
+      const { nickName } = this.searchQuery;
+      this.filteredOperatorList = this.financeList
+        .filter(item => !nickName || item.nickName.includes(nickName))
+        .map((item, index) => ({
+          ...item,
+          virtualId: index + 1
+        }));
+      this.officerLoading = false;
     },
     /* 计划投标截止时间监听 */
     handleChange(value) {
@@ -1708,7 +1844,7 @@ export default {
         this.formData.subjectMatterType = subjectMatterType;
         this.formData.priceType = priceType;
         this.formData.priceTypeText = priceTypeText;
-        this.getFinanceList();
+        await this.getFinanceList();
       } catch (err) {
         console.log(err);
       }
@@ -2226,7 +2362,7 @@ export default {
           id: procurementSchemeBiddingId,
         } = procurementSchemeBidding;
         this.deptId = projectDeptId;
-        this.getFinanceList();
+        await this.getFinanceList();
         this.$set(
           this.formData,
           "procurementSchemeName",
