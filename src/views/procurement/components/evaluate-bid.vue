@@ -253,25 +253,25 @@
             />
             <el-table-column
               label="供应商名称"
-              width="200"
+              width="260"
               prop="vendorName"
               show-overflow-tooltip
             />
             <el-table-column
               label="联系人"
-              width="100"
+              width="90"
               align="center"
               prop="contact"
             />
             <el-table-column
               label="联系电话"
-              width="200"
+              width="130"
               align="center"
               prop="phone"
             />
             <el-table-column
               label="调价状态"
-              width="200"
+              width="100"
               align="center"
               prop="priceChangeState"
               :formatter="formatterPriceChangeState"

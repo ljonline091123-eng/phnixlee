@@ -1873,11 +1873,12 @@ export default {
           label: "签约单位名称",
           prop: "signerName",
         },
-        {
-          id: 3,
-          label: "签约单位编号",
-          prop: "signerCode",
-        },
+        /* 前端已经隐藏该字段，暂不清楚是否有意义，防止支出合同接口报错先赋值一个值 */
+        // {
+        //   id: 3,
+        //   label: "签约单位编号",
+        //   prop: "signerCode",
+        // },
         {
           id: 4,
           label: "银行账号名称",

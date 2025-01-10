@@ -431,14 +431,15 @@
                   </el-form-item>
                 </template>
               </el-table-column>
-              <el-table-column label="签约单位编号" align="center" prop="signerCode">
-                <template slot-scope="scope">
-                  <el-form-item label-width="0" :prop="'agreementPartyInfoLists.' + scope.$index + '.signerCode'"
-                                :rules="[{ required: true, trigger: 'blur', message: '请输入签约单位编号' }]">
-                    <el-input v-model="scope.row.signerCode" clearable />
-                  </el-form-item>
-                </template>
-              </el-table-column>
+<!--       前端已经隐藏该字段，暂不清楚是否有意义，防止支出合同接口报错先赋值一个值       -->
+<!--              <el-table-column label="签约单位编号" align="center" prop="signerCode">-->
+<!--                <template slot-scope="scope">-->
+<!--                  <el-form-item label-width="0" :prop="'agreementPartyInfoLists.' + scope.$index + '.signerCode'"-->
+<!--                                :rules="[{ required: true, trigger: 'blur', message: '请输入签约单位编号' }]">-->
+<!--                    <el-input v-model="scope.row.signerCode" clearable />-->
+<!--                  </el-form-item>-->
+<!--                </template>-->
+<!--              </el-table-column>-->
               <el-table-column label="银行账号名称" align="center" prop="signerBankAccount">
                 <template slot-scope="scope">
                   <el-form-item label-width="0" :prop="'agreementPartyInfoLists.' + scope.$index + '.signerBankAccount'"

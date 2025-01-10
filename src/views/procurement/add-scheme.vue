@@ -174,7 +174,7 @@
                         <el-option
                           v-for="item in financeList"
                           :key="item.userId"
-                          :label="item.nickName"
+                          :label="item.nickName +' / '+ item.thridOrgName"
                           :value="item.userId"
                         ></el-option>
                       </el-select>
