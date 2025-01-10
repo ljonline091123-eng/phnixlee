@@ -63,7 +63,7 @@ public interface IAccountService extends IService<TAccountInfo>
 
     Boolean deleteSyncAccount();
 
-    void push(TAccountInfo accountInfo,Integer type);
+    void push(TAccountInfo accountInfo,String type);
 
     int updateByVendorId(Long id, Long uuid);
 

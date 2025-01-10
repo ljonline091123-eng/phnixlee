@@ -1,16 +1,21 @@
 package com.zhaocai.business.vendor.util;
 
+import cn.hutool.core.util.IdUtil;
 import cn.hutool.http.HttpRequest;
 import cn.hutool.http.HttpResponse;
 import com.alibaba.fastjson2.JSONObject;
 import com.zhaocai.business.manager.template.config.UnderlingPlatformConfig;
 import com.zhaocai.business.vendor.config.DataMiddlePlatformConfig;
+import com.zhaocai.business.vendor.domain.TInterfaceLog;
 import com.zhaocai.business.vendor.domain.Vendor;
+import com.zhaocai.business.vendor.service.ITInterfaceLogService;
+import com.zhaocai.common.core.utils.SpringUtils;
 import org.apache.commons.codec.digest.DigestUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import java.io.File;
+import java.util.Date;
 
 /**
  * 中台对接工具类
@@ -87,7 +92,7 @@ public class DataCenterUtil {
     }
 
 
-    private JSONObject sendToDataCenter(JSONObject dataObject, String TYDTC_API_KEY) {
+    private JSONObject sendToDataCenter(JSONObject dataObject, String TYDTC_API_KEY ,String logType , String createBy) {
         boolean flag = false;
         JSONObject data = new JSONObject();
         Long start = System.currentTimeMillis();
@@ -98,7 +103,7 @@ public class DataCenterUtil {
         String tySign = DigestUtils.md5Hex(start + sendData + this.dataMiddlePlatformConfig.getTydtcAppSecret());
 
         //地址
-        String url = underlingPlatformConfig.getBaseUrl() + "/" + TYDTC_API_KEY + "?tyStamp=" + start + "&tySign=" + tySign;
+        String url = dataMiddlePlatformConfig.getDataUrl() + "/" + TYDTC_API_KEY + "?tyStamp=" + start + "&tySign=" + tySign;
         String receive = "";
         Long end = System.currentTimeMillis();
         try {
@@ -137,12 +142,12 @@ public class DataCenterUtil {
             flag = false;
         }
 
-        /*try {
+        try {
             //保存访问的日志
-            saveLog(start, url, sendData, receive, end, type, flag, createBy, jobId);
+            saveLog(start, url, sendData, receive, end, logType, flag, createBy , TYDTC_API_KEY);
         } catch (Exception e) {
             e.printStackTrace();
-        }*/
+        }
 
         if (receive.contains("Read timed out")) {
             data = new JSONObject(Integer.parseInt("-10000"));
@@ -152,7 +157,7 @@ public class DataCenterUtil {
     }
 
 
-    /*private void saveLog(Long start, String url, String sendData, String receive, Long end, String type, boolean flag, String createBy, Long jobId) {
+    private void saveLog(Long start, String url, String sendData, String receive, Long end, String type, boolean flag, String createBy , String apiKey) {
         TInterfaceLog log = new TInterfaceLog();
         log.setId(IdUtil.getSnowflake(1, 1).nextId());
         log.setSendTime(new Date(start));
@@ -173,32 +178,10 @@ public class DataCenterUtil {
             businessId = jsonObject.getJSONObject("conditionValues").getString("internal_id");
         }
         log.setBusinessId(businessId);
+        log.setRemark(apiKey);
         SpringUtils.getBean(ITInterfaceLogService.class).insertTInterfaceLog(log);
-        //记录推送失败的次数
-        //获取IFailedPushService实例
-        IFailedPushService bean = SpringUtils.getBean(IFailedPushService.class);
-        LambdaQueryWrapper<FailedPush> lambdaQuery = Wrappers.lambdaQuery();
-        lambdaQuery.eq(FailedPush::getBusinessId, log.getBusinessId());
-        if (flag) {
-            bean.getBaseMapper().delete(lambdaQuery);
-        } else {
-            FailedPush failedPush = new FailedPush();
-            failedPush.setBusinessId(log.getBusinessId());
-            //查询该业务id是否存在表里
-            FailedPush failed = bean.getBaseMapper().selectOne(lambdaQuery);
-            //如果业务id为null,则插入新数据，如果有，则修改错误次数
-            if (failed == null) {
-                failedPush.setCreateBy(createBy);
-                failedPush.setSendFlag("0");
-                failedPush.setFailCount(1L);
-                bean.save(failedPush);
-            } else {
-                failed.setFailCount(failed.getFailCount() + 1);
-                bean.updateById(failed);
-            }
-        }
     }
-*/
+
     public String getToken() {
         String result = HttpRequest.get(this.dataMiddlePlatformConfig.getDataUrl() + "/token")
                 .header("TYDTC_APP_ID", this.dataMiddlePlatformConfig.getTydtcAppId())
@@ -220,18 +203,16 @@ public class DataCenterUtil {
 
     //公用推送
     public JSONObject postCommonInfo(JSONObject object, String typeApiKey, String logType, String createBy, Long jobId) {
-        String ty = (String) object.get("type");
         boolean flag = false;
         JSONObject data = new JSONObject();
-        if (StringUtils.isNotEmpty(ty)) {
+        if (StringUtils.isNotEmpty(logType)) {
             JSONObject dataObject = new JSONObject();
-            String tydtcApiKey = "";
-            String type = "";
+            object.put("report_status", new Date());
             //根据类型的不同,判断是新增,修改,删除接口
-            if (Vendor.LOG_TYPE_ADD.equals(ty)) {
-                object.put("approval_status", "-1"); //待新增
+            if (Vendor.LOG_TYPE_ADD.equals(logType)) {
+                object.put("report_status", "-1"); //待新增
                 dataObject.put("data", object);
-            } else if (Vendor.LOG_TYPE_MODIFY.equals(ty)) {
+            } else if (Vendor.LOG_TYPE_MODIFY.equals(logType)) {
                 object.put("report_status", "-2");
                 JSONObject conditions = new JSONObject();
                 dataObject.put("values", object);
@@ -240,7 +221,7 @@ public class DataCenterUtil {
                 JSONObject conditionValues = new JSONObject();
                 conditionValues.put("internal_id", object.get("internal_id"));
                 dataObject.put("conditionValues", conditionValues);
-            } else if (Vendor.LOG_TYPE_REMOVE.equals(ty)) {
+            } else if (Vendor.LOG_TYPE_REMOVE.equals(logType)) {
                 object.put("report_status", "-3");
                 JSONObject conditions = new JSONObject();
                 conditions.put("internal_id", "=");
@@ -248,7 +229,7 @@ public class DataCenterUtil {
                 JSONObject conditionValues = new JSONObject();
                 conditionValues.put("internal_id", object.get("internal_id"));
                 dataObject.put("conditionValues", conditionValues);
-            } else if (Vendor.LOG_TYPE_ENABLE.equals(ty)) {
+            } else if (Vendor.LOG_TYPE_ENABLE.equals(logType)) {
                 object.put("report_status", "-2");
                 JSONObject conditions = new JSONObject();
                 dataObject.put("values", object);
@@ -257,7 +238,7 @@ public class DataCenterUtil {
                 JSONObject conditionValues = new JSONObject();
                 conditionValues.put("internal_id", object.get("internal_id"));
                 dataObject.put("conditionValues", conditionValues);
-            } else if (Vendor.LOG_TYPE_DISABLE.equals(ty)) {
+            } else if (Vendor.LOG_TYPE_DISABLE.equals(logType)) {
                 object.put("report_status", -2);
                 JSONObject conditions = new JSONObject();
                 dataObject.put("values", object);
@@ -268,9 +249,9 @@ public class DataCenterUtil {
                 dataObject.put("conditionValues", conditionValues);
             }
             //访问组织库接口
-            data = sendToDataCenter(dataObject, tydtcApiKey);
+            data = sendToDataCenter(dataObject, typeApiKey , logType , createBy);
         }
-
+        System.out.println(data.toJSONString());
         return data;
     }
 

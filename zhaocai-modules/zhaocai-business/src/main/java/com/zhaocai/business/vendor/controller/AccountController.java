@@ -4,6 +4,7 @@ import cn.hutool.core.util.IdUtil;
 import com.zhaocai.business.pub.domain.TAccountInfo;
 import com.zhaocai.business.pub.service.IAccountService;
 import com.zhaocai.business.pub.vo.req.TAccountInfoVo;
+import com.zhaocai.business.vendor.domain.Vendor;
 import com.zhaocai.common.core.bean.PageResult;
 import com.zhaocai.common.core.utils.bean.BeanCopierUtil;
 import com.zhaocai.common.core.web.bean.ResultData;
@@ -49,9 +50,9 @@ public class AccountController extends BaseController
     @PostMapping("/save")
     @ApiOperation(value = "保存账户详情")
     public ResultData<Boolean> save(@RequestBody TAccountInfoVo accountInfo) {
-        Integer type =1;// 修改
+        String type = Vendor.LOG_TYPE_MODIFY;// 修改
         if(accountInfo.getId()==null){
-            type =2; //新增
+            type = Vendor.LOG_TYPE_ADD; //新增
         }
         TAccountInfo info = new TAccountInfo();
         info=  BeanCopierUtil.copyBean(accountInfo, TAccountInfo.class);
@@ -60,7 +61,7 @@ public class AccountController extends BaseController
         }
             accountService.saveOrUpdate(info);
 
-      //  accountService.push(info,type);
+         accountService.push(info,type);
         return ResultData.success();
     }
     /**
@@ -69,7 +70,11 @@ public class AccountController extends BaseController
     @PostMapping("/remove")
     @ApiOperation(value = "作废账户")
     public ResultData<Boolean> remove(@RequestParam Long id) {
+        TAccountInfo bean = accountService.selectAccountById(id);
         accountService.deleteAccountById(id);
+        if(bean != null){
+            accountService.push(bean,Vendor.LOG_TYPE_REMOVE);
+        }
         return ResultData.success();
     }
 }

@@ -234,6 +234,8 @@ public class VendorChangeBlackServiceImpl extends ServiceImpl<VendorChangeMapper
                 .set(Vendor::getState,VendorStateEnum.APPROVE.getState())
                 .set(Vendor::getWfProcessId,vendorChange.getWfProcessId())
                 .eq(Vendor::getId,vendorChange.getVendorId()));
+        //推送中台接口
+        vendorService.pushVendor(vendorChange.getVendorId(),Vendor.LOG_TYPE_MODIFY,vendorChange.getIsBlack());
     }
 
     /**

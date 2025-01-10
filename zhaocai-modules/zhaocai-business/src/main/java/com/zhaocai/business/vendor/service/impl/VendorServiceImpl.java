@@ -1317,8 +1317,6 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
             }
     }
 
-
-
     /**
      * 审批驳回
      * @param variables
@@ -1586,6 +1584,7 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
                             .set(Vendor::getBlackEndDate,null)
                             .set(Vendor::getIsBlack,Integer.valueOf("0"))
                             .eq(Vendor::getId, p.getId()));
+                    this.pushVendor(p.getId(),Vendor.LOG_TYPE_MODIFY,Integer.valueOf("0"));
                     List<VendorChange> vendorChangeList = vendorChangeService.list(new LambdaQueryWrapper<VendorChange>()
                             .eq(VendorChange::getVendorId, p.getId())
                             .orderByDesc(VendorChange::getVersion));
