@@ -269,7 +269,9 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
 
             //设置综合得分
             BigDecimal score = null;
+            /* 商务评分分数 */
             BigDecimal avgBusTotalScore = BigDecimal.ZERO;
+            /* 技术评分分数 */
             BigDecimal avgTechTotalScore = BigDecimal.ZERO;
 
             //1.倒序循环quotationDataVOList
@@ -285,7 +287,8 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
                 for (BiddingEvaluatExpert evaluatExpert : expertList) {
                     //查询评标专家产生的评分数据
                     ExpertScore expertScore = expertScoreService.getOne(new LambdaQueryWrapper<ExpertScore>()
-                            .eq(ExpertScore::getBiddingInfoId, biddingInfoId)
+                            .eq(ExpertScore::getNoticeId, queryVO.getNoticeId())
+                            .eq(ExpertScore::getVendorId, vo.getVendorId())
                             .eq(ExpertScore::getExpertId, evaluatExpert.getExpertId())
                             .orderByDesc(ExpertScore::getCreateTime).last("limit 1"));
                     if (!ObjectUtils.isEmpty(expertScore)){
@@ -1107,6 +1110,8 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
         List<BiddingQuotationListVO> list = baseMapper.findBiddingQuotationList(queryVO);
 
         for (BiddingQuotationListVO vo : list) {
+
+
 
             BigDecimal busTotalScore = BigDecimal.ZERO;
             BigDecimal techTotalScore = BigDecimal.ZERO;
