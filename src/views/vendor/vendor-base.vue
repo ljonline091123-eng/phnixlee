@@ -115,6 +115,13 @@
             -
             <el-input v-model="queryParams.registeredCapitalEnd" type="number" style="width: 100px" />
           </el-form-item>
+          <el-form-item label="状态" prop="vendorState" label-width="90px" v-if="queryParams.vendorClass == 2">
+            <el-select v-model="queryParams.vendorState" clearable>
+              <el-option v-for="dict in dict.type.vendor_state.filter(item => (item.value != '1' && item.value != '5'))" :key="dict.value" :label="dict.label"
+                         :value="dict.value">
+              </el-option>
+            </el-select>
+          </el-form-item>
           <el-form-item label="状态" prop="vendorState" label-width="90px" v-if="queryParams.vendorClass == 0 || queryParams.vendorClass == 4">
             <!--<el-input v-model="queryParams.vendorState" placeholder="请输入供应商名称" clearable/>-->
             <el-select v-model="queryParams.vendorState" clearable>
@@ -153,7 +160,7 @@
         <el-table-column
           label="供应商名称"
           align="left"
-          width="250"
+          min-width="250"
           prop="enterpriseName"
           show-overflow-tooltip
         >
@@ -165,7 +172,7 @@
         </el-table-column>
         <el-table-column
           label="合作记录"
-          min-width="100"
+          width="80"
           align="center"
           v-if="['0', '2', '3', '4'].includes(queryParams.vendorClass)"
         >
@@ -221,10 +228,11 @@
         <el-table-column
           width="180"
           label="首次注册合作单位"
-          align="center"
+          align="left"
           prop="firstCooperationCompanyName"
-          show-overflow-tooltip
-        />
+          show-overflow-tooltip="true"
+        >
+        </el-table-column>
         <el-table-column
           width="180"
           label="注册申请时间"
