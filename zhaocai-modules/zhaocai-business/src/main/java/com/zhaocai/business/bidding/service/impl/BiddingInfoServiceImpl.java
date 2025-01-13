@@ -281,14 +281,12 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
             //5.计算综合得分
             for (int i = quotationDataVOList.size()-1; i >= 0; i--) {
                 List<ExpertScoreExtraVO> expertScores = new ArrayList<>();
-                //投标单id
-                Long biddingInfoId = quotationDataVOList.get(i).getId();
                 ExpertScoreExtraVO expertScoreExtraVO;
                 for (BiddingEvaluatExpert evaluatExpert : expertList) {
                     //查询评标专家产生的评分数据
                     ExpertScore expertScore = expertScoreService.getOne(new LambdaQueryWrapper<ExpertScore>()
                             .eq(ExpertScore::getNoticeId, queryVO.getNoticeId())
-                            .eq(ExpertScore::getVendorId, vo.getVendorId())
+                            .eq(ExpertScore::getVendorId, vendorId)
                             .eq(ExpertScore::getExpertId, evaluatExpert.getExpertId())
                             .orderByDesc(ExpertScore::getCreateTime).last("limit 1"));
                     if (!ObjectUtils.isEmpty(expertScore)){
@@ -296,10 +294,6 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
                         expertScoreExtraVO.setExpertType(evaluatExpert.getExpertType());
                         //产生评分数据
                         expertScores.add(expertScoreExtraVO);
-                    } else {
-                        //没有产生评分数据
-                        expertScores.clear();
-                        break;
                     }
                 }
 
