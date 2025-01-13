@@ -99,4 +99,6 @@ public class VendorCooperationAgreementVO extends AdviceObject {
     @JsonFormat(pattern = "yyyy-MM-dd", timezone = "GMT+8")
     @ApiModelProperty(value = "合同签订日期")
     private Date agreementSignDate;
+
+    private BigDecimal childrenNum;
 }

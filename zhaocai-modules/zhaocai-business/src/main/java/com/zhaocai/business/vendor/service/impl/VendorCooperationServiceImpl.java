@@ -1,6 +1,7 @@
 package com.zhaocai.business.vendor.service.impl;
 
 import cn.hutool.core.collection.CollectionUtil;
+import com.alibaba.csp.sentinel.util.StringUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.zhaocai.business.agreement.domain.Agreement;
@@ -192,6 +193,11 @@ public class VendorCooperationServiceImpl implements IVendorCooperationService {
         if (cooperationAgreementVO.getUnpaidAmount() == null) {
             cooperationAgreementVO.setUnpaidAmount(BigDecimal.ZERO);
         }
+        if (StringUtil.isEmpty(cooperationAgreementVO.getAgreementName())) {
+            cooperationAgreementVO.setChildrenNum(new BigDecimal(0));
+        }else{
+            cooperationAgreementVO.setChildrenNum(new BigDecimal(1));
+        }
 
         if (CollectionUtil.isNotEmpty(cooperationAgreementVO.getChildren())) {
             for (VendorCooperationAgreementVO children : cooperationAgreementVO.getChildren()) {
@@ -208,6 +214,9 @@ public class VendorCooperationServiceImpl implements IVendorCooperationService {
                 }
                 if (children.getUnpaidAmount() != null) {
                     cooperationAgreementVO.setUnpaidAmount(cooperationAgreementVO.getUnpaidAmount().add(children.getUnpaidAmount()));
+                }
+                if(children.getChildrenNum() != null ){
+                    cooperationAgreementVO.setChildrenNum(cooperationAgreementVO.getChildrenNum().add(children.getChildrenNum()));
                 }
             }
         }
@@ -256,6 +265,7 @@ public class VendorCooperationServiceImpl implements IVendorCooperationService {
                 agreementVO.setId(numberId.incrementAndGet());
             }
             cooperationAgreement.setChildren(agreementList);
+            //cooperationAgreement.setAgreementName(agreementList.size()+"");
         } else {
             cooperationAgreement.setChildren(new ArrayList<>());
         }

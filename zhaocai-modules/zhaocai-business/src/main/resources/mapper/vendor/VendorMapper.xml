@@ -200,7 +200,7 @@
                 and tv.registered_capital &lt;= #{queryVO.registeredCapitalEnd}
             </if>
             <if  test="queryVO.vendorState != null and queryVO.vendorState != ''">
-                <if test="queryVO.vendorState == '0'">
+                <if test="queryVO.vendorState == '0'.toString()">
                     <!--正常 -->
                     and tv.state = 3
                 </if>
