@@ -279,7 +279,7 @@
                   >
                     <el-input
                       v-model="vendorQuery.registeredCapital"
-                      type="text"
+                      type="number"
                       clearable
                     ></el-input>
                   </el-form-item>
