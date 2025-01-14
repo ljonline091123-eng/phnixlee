@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhaocai.business.process.mapper.BpmLogMapper">
+
+    <resultMap type="com.zhaocai.business.process.domain.BpmLog" id="BpmLogResult">
+        <result property="id"    column="id"    />
+        <result property="businessId"    column="business_id"    />
+        <result property="wfProcessId"    column="wf_process_id"    />
+        <result property="bpmType"    column="bpm_type"    />
+        <result property="bpmKey"    column="bpm_key"    />
+        <result property="bpmParam"    column="bpm_param"    />
+        <result property="bpmResponse"    column="bpm_response"    />
+        <result property="bpmUrl"    column="bpm_url"    />
+        <result property="createBy"    column="create_by"    />
+        <result property="createId"    column="create_id"    />
+        <result property="createTime"    column="create_time"    />
+    </resultMap>
+
+
+</mapper>
