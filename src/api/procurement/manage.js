@@ -57,6 +57,11 @@ export const getNoticeDetail = (schemeId, noticeId) => {
   });
 };
 
+
+
+
+
+
 // 获取审批权限
 export const getPermissionButton = (params) => {
   return request({
@@ -99,6 +104,19 @@ export const getPermissionButtonVendor = (params) => {
   });
 };
 
+// 获取供应商联系人审批权限
+export const getPermissionButtonVendorContact = (params) => {
+  return request({
+    url: "/business/vendorContact/initialize",
+    method: "get",
+    params,
+  });
+};
+
+
+
+
+
 // 加载定义接口 公共
 export const getLoadTaskDef = (params) => {
   return request({
@@ -125,7 +143,8 @@ export const getLoadTaskDefBidding = (params) => {
     params,
   });
 };
-// 采购方案流程列表接口
+
+// 加载定义接口 采购方案
 export const getLoadTaskDefScheme = (params) => {
   return request({
     url: "/business/procurementScheme/loadTaskDef",
@@ -133,6 +152,8 @@ export const getLoadTaskDefScheme = (params) => {
     params,
   });
 };
+
+// 加载定义接口 供应商
 export const getLoadTaskDefVendor = (params) => {
   return request({
     url: "/business/vendor/loadTaskDef",
@@ -140,7 +161,21 @@ export const getLoadTaskDefVendor = (params) => {
     params,
   });
 };
-// 流程操作日志列表
+
+// 加载定义接口 供应商联系人
+export const getLoadTaskDefVendorContact = (params) => {
+  return request({
+    url: "/business/vendorContact/loadTaskDef",
+    method: "get",
+    params,
+  });
+};
+
+
+
+
+
+// 流程操作日志列表 公共接口
 export const getProcessLogList = (params) => {
   // 手动拼接 businessId 到 URL 中
   let url = `/business/bpm/listProcessLog?processId=${params.processId}`;
@@ -180,7 +215,10 @@ export const getProcessLogListVendor = (params) => {
     method: "get",
   });
 };
-// 审批流程
+
+
+
+// 审批流程 公共接口
 export const postAuditProcess = (data) => {
   return request({
     url: "/business/process/auditProcess",
@@ -212,6 +250,24 @@ export const postAuditProcessBidding = (data) => {
     data,
   });
 };
+// 供应商 审批接口
+export const postAuditProcessVendor = (data) => {
+  return request({
+    url: "/business/vendor/audit",
+    method: "post",
+    data,
+  });
+};
+// 供应商联系人 审批接口
+export const postAuditProcessVendorContact = (data) => {
+  return request({
+    url: "/business/vendorContact/audit",
+    method: "post",
+    data,
+  });
+};
+
+
 // 获取二三级单位
 export const postGetOrg = (org) => {
   return request({
@@ -222,7 +278,8 @@ export const postGetOrg = (org) => {
     },
   });
 };
-// 获取二三级单位
+
+// 根据用户id 获取二三级单位目前已有的流程
 export const getOrgByUserId = (userId) => {
   return request({
     url: "/business/process/getOrgByUserId",
@@ -230,13 +287,6 @@ export const getOrgByUserId = (userId) => {
     data: {
       userId
     },
-  });
-};
-export const postAuditProcessVendor = (data) => {
-  return request({
-    url: "/business/vendor/audit",
-    method: "post",
-    data,
   });
 };
 // 获取公告文件修改
@@ -643,8 +693,12 @@ export const saveUrgeExpertMes = (data) => {
     data,
   });
 };
+
+
+
+
 // 获取专家责任单位审批权限
-export const getPermissionButtonNew = (params) => {
+export const getPermissionButtonExpert = (params) => {
   return request({
     url: "/business/expert/initialize",
     method: "get",
@@ -652,7 +706,7 @@ export const getPermissionButtonNew = (params) => {
   });
 };
 // 审批流程
-export const postAuditProcessNew = (data) => {
+export const postAuditProcessExpert = (data) => {
   return request({
     url: "/business/expert/audit",
     method: "post",
@@ -660,7 +714,7 @@ export const postAuditProcessNew = (data) => {
   });
 };
 // 加载责任单位定义接口
-export const getLoadTaskDefNew= (params) => {
+export const getLoadTaskDefExpert= (params) => {
   return request({
     url: "/business/expert/loadTaskDef",
     method: "get",
@@ -668,7 +722,7 @@ export const getLoadTaskDefNew= (params) => {
   });
 };
 // 流程操作日志列表 专家
-export const getProcessLogListNew = (params) => {
+export const getProcessLogListExpert = (params) => {
   // 手动拼接 businessId 到 URL 中
   let url = `/business/expert/listProcessLog?processId=${params.processId}`;
   // 如果 businessId 存在，即使为空字符串，也将其拼接到 URL 中

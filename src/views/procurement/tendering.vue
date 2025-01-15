@@ -105,7 +105,7 @@
 <script>
 import { Base64 } from "js-base64";
 import { mapGetters } from "vuex";
-import { getNoticeDetail, getPermissionButton } from "@/api/procurement/manage";
+import { getNoticeDetail, getPermissionButtonResult } from "@/api/procurement/manage";
 import TenderDocuments from "./components/tender-documents.vue";
 import BackBid from "./components/back-bid.vue";
 import EvaluateBid from "./components/evaluate-bid.vue";
@@ -239,7 +239,7 @@ export default {
           this.tenantId &&
           this.authorityId
         ) {
-          const response = await getPermissionButton({
+          const response = await getPermissionButtonResult({
             businessId: this.tenantId,
             processId: this.authorityId,
           });

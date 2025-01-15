@@ -449,10 +449,10 @@ import BackButton from "@/components/BackButton/index.vue";
 import PageTitle from "@/components/PageTitle/index.vue";
 import { uploadFileUrl } from "@/utils/const";
 import {
-  getPermissionButton, getPermissionButtonNew,
-  postAuditProcess, postAuditProcessNew,
-  getLoadTaskDef, getLoadTaskDefNew,
-  getProcessLogList, getProcessLogListNew, getOrgByUserId,
+  getPermissionButton, getPermissionButtonExpert,
+  postAuditProcess, postAuditProcessExpert,
+  getLoadTaskDef, getLoadTaskDefExpert,
+  getProcessLogList, getProcessLogListExpert, getOrgByUserId,
 } from "@/api/procurement/manage";
 import {getViewAttachmentURLByID} from "@/api/template/file";
 export default {
@@ -587,7 +587,7 @@ export default {
         curTaskId: this.taskPresentId,
         processKey: "jiantou-zhaocai:{org}:ZHAOCAI_EXPERT_ADD",
       };
-      postAuditProcessNew(params).then(() => {
+      postAuditProcessExpert(params).then(() => {
         this.$message.success("提交成功");
         this.$modal.closeLoading();
         this.expertVisible = false;
@@ -617,13 +617,13 @@ export default {
         };
         let res = null;
         if (this.businessId && this.processId) {
-          res = await getLoadTaskDefNew(params);
+          res = await getLoadTaskDefExpert(params);
         }else{
           /* 未提交时查看流程执行流程，根据专家id 获取流程分组 */
           res = await getOrgByUserId(this.formData.userId);
           params = {
             processKey: "jiantou-zhaocai:"+res.data+":ZHAOCAI_EXPERT_ADD",
-            businessId: 8888888888,
+            businessId: this.businessId,
           };
           res = await getLoadTaskDef(params);
         }
@@ -645,7 +645,7 @@ export default {
         this.calibrateActive = getActive(this.processInformationList);
 
         if (this.businessId && this.processId) {
-          const response = await getProcessLogListNew(params);
+          const response = await getProcessLogListExpert(params);
           this.approveArr = response.data;
         }
       } catch (error) {}
@@ -661,7 +661,7 @@ export default {
       this.processId = this.formData.wfProcessId;
       try {
         if (this.formData.id) {
-          const res = await getPermissionButtonNew({
+          const res = await getPermissionButtonExpert({
             businessId: this.formData.id, //联系人id
             processId: this.formData.wfProcessId, //流程id
           });
