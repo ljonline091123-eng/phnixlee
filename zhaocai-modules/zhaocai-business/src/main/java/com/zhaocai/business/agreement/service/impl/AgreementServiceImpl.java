@@ -1267,6 +1267,8 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
             PropertyListRequestDTO.addPropertyToList(propertyList, "parentProjectCode", minProjectVO.getParentCode());/* 父项目编码(项目部) */
             requestDTO.setPropertyList(propertyList);
         }
+        PropertyListRequestDTO.addPropertyToList(propertyList,"contractType", ProcurementPlanTypeEnum.getProcessType(agreement.getExpenditureBusinessType()));/* 合同类型 */
+        PropertyListRequestDTO.addPropertyToList(propertyList,"contractMoney", agreement.getTotalAmountIncTax());/* 合同签订金额(含税) */
         requestDTO.setPropertyList(propertyList);
         return processService.initialize(requestDTO);
     }
@@ -1285,6 +1287,8 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
             PropertyListRequestDTO.addPropertyToList(propertyList, "parentProjectCode", minProjectVO.getParentCode());/* 父项目编码(项目部) */
             requestDTO.setPropertyList(propertyList);
         }
+        PropertyListRequestDTO.addPropertyToList(propertyList,"contractType", ProcurementPlanTypeEnum.getProcessType(agreement.getExpenditureBusinessType()));/* 合同类型 */
+        PropertyListRequestDTO.addPropertyToList(propertyList,"contractMoney", agreement.getTotalAmountIncTax());/* 合同签订金额(含税) */
         requestDTO.setPropertyList(propertyList);
         return processService.listProcessLog(requestDTO);
     }
@@ -1301,6 +1305,9 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
             variables.put("responsibilityDeptId", minProjectVO.getDutyUnit());/* 责任单位 三级单位 */
             variables.put("parentProjectCode", minProjectVO.getParentCode());/* 父项目编码(项目部) */
         }
+        /** 合同类型（contractType），价格(contractMoney)，项目部（parentProjectCode），责任单位（responsibilityDeptId），公司（companyId） */
+        variables.put("contractType", ProcurementPlanTypeEnum.getProcessType(agreement.getExpenditureBusinessType()));/* 合同类型 */
+        variables.put("contractMoney", agreement.getTotalAmountIncTax());/* 合同签订金额(含税) */
         return processService.auditProcessInstance(ProcessKeyEnum.ZHAOCAI_AGREEMENT_SIGN.getIdentifying(),variables);
     }
 
@@ -1318,6 +1325,8 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
             PropertyListRequestDTO.addPropertyToList(propertyList, "parentProjectCode", minProjectVO.getParentCode());/* 父项目编码(项目部) */
             requestDTO.setPropertyList(propertyList);
         }
+        PropertyListRequestDTO.addPropertyToList(propertyList,"contractType", ProcurementPlanTypeEnum.getProcessType(agreement.getExpenditureBusinessType()));/* 合同类型 */
+        PropertyListRequestDTO.addPropertyToList(propertyList,"contractMoney", agreement.getTotalAmountIncTax());/* 合同签订金额(含税) */
         requestDTO.setPropertyList(propertyList);
         return processService.loadTaskDef(requestDTO);
     }

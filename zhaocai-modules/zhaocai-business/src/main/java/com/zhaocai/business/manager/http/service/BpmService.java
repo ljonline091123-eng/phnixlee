@@ -187,28 +187,6 @@ public class BpmService {
         requestDTO.setOrgPenetrate(true);
         log.info("[流程提交参数对象]{}",requestDTO);
 
-//        String projectCode = "SG20012024000002-2";
-//        if (StrUtil.isNotBlank(projectCode)) {
-//            MinProjectVO minProjectVO = minProjectService.getMinProjectByMinAccountCode(projectCode);
-//                if (null != minProjectVO) {
-//                    List<PropertyListRequestDTO> propertyList = new ArrayList<>();
-//                    PropertyListRequestDTO propertyListRequestDTO =
-//                            new PropertyListRequestDTO("parentProjectCode", minProjectVO.getParentCode());
-//                    propertyList.add(propertyListRequestDTO);
-//                    PropertyListRequestDTO propertyListRequestDTO1 =
-//                            new PropertyListRequestDTO("responsibilityDeptId", minProjectVO.getDutyUnit());
-//                    propertyList.add(propertyListRequestDTO1);
-//                    PropertyListRequestDTO propertyListRequestDTO2 =
-//                            new PropertyListRequestDTO("companyId", "2013000000");
-//                    propertyList.add(propertyListRequestDTO2);
-//                    PropertyListRequestDTO propertyListRequestDTO3 =
-//                            new PropertyListRequestDTO("groupId", "1000000000");
-//                    propertyList.add(propertyListRequestDTO3);
-//
-//
-//                requestDTO.setPropertyList(propertyList);
-//            }
-//        }
 
         String processKeyReplace = requestDTO.getProcessKey();
         String processKey = requestDTO.getProcessKey();
