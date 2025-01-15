@@ -1025,7 +1025,7 @@ export default {
         } catch (error) {}
       });
     },
-    // 撤回
+    /* 撤回按钮点击 */
     handelWithdrawalPlan() {
       const { procurementSchemeName, id } = this.procurementScheme;
       this.$confirm("是否确定撤回采购方案：" + procurementSchemeName, "提示", {
@@ -1040,6 +1040,7 @@ export default {
             spinner: "el-icon-loading",
             background: "rgba(0, 0, 0, 0.7)",
           });
+          /* 请求流程撤回方法 */
           withdrawalPlan(id)
             .then((res) => {
               if (res.code == 200) {
@@ -1052,24 +1053,31 @@ export default {
         } catch (error) {}
       });
     },
+    /* 审批按钮点击后获取流程基础信息 */
     async getPermissionButtonScheme() {
       try {
         if (this.purchaserId && this.exampleId) {
+          /* 大汉要求初始化接口initialize也需要传参数，所以参数在java后台拼接 */
           const res = await getPermissionButtonScheme({
             businessId: this.purchaserId,
             processId: this.exampleId,
           });
+          /* 初始化流程基础信息回调数据 */
           this.bpmInitData = res.data;
+          /* 驳回节点 */
           this.rejectNodeList = res.data.completedTaskList;
           /* 下一步审批人列表 */
           this.nextCandidateList = res.data.nextCandidateList;
           /* 下一步审批人是否可选 */
           this.nextAppointable = res.data.nextAppointable;
+          /* 任务阶段 */
           this.taskPresentId = res.data.curTaskId;
+          /* 是否可以审批 */
           this.isShowButton = res.data.auditable;
         }
       } catch (error) {}
     },
+    /* 审批按钮 */
     handelSanction() {
       this.sanctionVisible = true;
       this.getPermissionButtonScheme();
@@ -1091,6 +1099,7 @@ export default {
         this.$modal.closeLoading();
       });
     },
+    /* 审批详情 */
     async handelCalibrationApproval() {
       try {
         this.calibrateVisible = true;
@@ -1100,17 +1109,22 @@ export default {
           processId: this.exampleId,
         };
         let res = null;
+        /* 判断业务id和流程id是否同时存在(判断是否已经提交工作流) */
         if (this.purchaserId && this.exampleId) {
+          /* 存在就去获取x轴列表的工作流执行环节 */
           res = await getLoadTaskDefScheme(params);
         }else{
+          /* 采购方案是使用提交人的组织机构来确定走哪个公司层级的流程Key */
           /* 未提交时查看流程执行流程，根据登录人id 获取流程分组 */
           res = await getOrgByUserId(this.$store.state.user.id);
           params = {
             processKey: "jiantou-zhaocai:"+res.data+":ZHAOCAI_PROCUREMENT_SCHEME",
             businessId: this.purchaserId,
           };
+          /* 不存在就去获取x轴列表的工作流执行环节 */
           res = await getLoadTaskDefScheme(params);
         }
+        /* 审批流程接口(大汉流程)返回的数据 */
         this.processInformationList = res.data;
         function getActive(nodes) {
           let allFalse = true;
@@ -1129,6 +1143,7 @@ export default {
         this.calibrateActive = getActive(this.processInformationList);
 
         if (this.purchaserId && this.exampleId) {
+          /* 流程操作日志 /listProcessLog */
           const response = await getProcessLogList(params);
           this.approveArr = response.data;
         }

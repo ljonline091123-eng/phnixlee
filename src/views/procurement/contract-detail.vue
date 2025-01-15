@@ -1175,10 +1175,9 @@ import Roam from "@/components/Roam";
 import ApprovalForm from "@/components/Approval/approvalForm.vue";
 import ApprovalDetailsDialog from "@/components/Approval/approvalDetailsDialog.vue";
 import {
-  getPermissionButton,
-  postAuditProcess,
-  getLoadTaskDef,
-  getProcessLogList, getOrgByUserId,
+  getPermissionButtonAgreement,
+  getLoadTaskDefAgreement,
+  getProcessLogList, getOrgByUserId, postAuditProcessAgreement,
 } from "@/api/procurement/manage";
 import { getViewAttachmentURLByID } from "@/api/template/file";
 
@@ -3564,7 +3563,7 @@ export default {
       try {
         this.purchaserId = this.param.id;
         if (this.purchaserId && this.exampleId) {
-          const res = await getPermissionButton({
+          const res = await getPermissionButtonAgreement({
             businessId: this.purchaserId,
             processId: this.exampleId,
           });
@@ -3596,7 +3595,7 @@ export default {
         text: "正在提交...",
         background: "rgba(0, 0, 0, 0.7)",
       });
-      postAuditProcess(params).then(() => {
+      postAuditProcessAgreement(params).then(() => {
         this.$message.success("提交成功");
         this.sanctionVisible = false;
         this.getContractDetail();
@@ -3618,15 +3617,15 @@ export default {
         };
         let res = null;
         if (this.purchaserId && this.exampleId) {
-          res = await getLoadTaskDef(params);
+          res = await getLoadTaskDefAgreement(params);
         }else{
           /* 未提交时查看流程执行流程，根据登录人id 获取流程分组 */
           res = await getOrgByUserId(this.$store.state.user.id);
           params = {
             processKey: "jiantou-zhaocai:"+res.data+":ZHAOCAI_AGREEMENT_SIGN",
-            businessId: 8888888888,
+            businessId: this.purchaserId,
           };
-          res = await getLoadTaskDef(params);
+          res = await getLoadTaskDefAgreement(params);
         }
           this.processInformationList = res.data;
           function getActive(nodes) {

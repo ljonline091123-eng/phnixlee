@@ -65,6 +65,22 @@ export const getPermissionButton = (params) => {
     params,
   });
 };
+// 获取审批权限
+export const getPermissionButtonAgreement = (params) => {
+  return request({
+    url: "/business/agreement/initialize",
+    method: "get",
+    params,
+  });
+};
+// 获取审批权限 招标定标
+export const getPermissionButtonResult = (params) => {
+  return request({
+    url: "/business/result/initialize",
+    method: "get",
+    params,
+  });
+};
 // 采购方案流程 初始化接口
 export const getPermissionButtonScheme = (params) => {
   return request({
@@ -87,6 +103,15 @@ export const getPermissionButtonVendor = (params) => {
 export const getLoadTaskDef = (params) => {
   return request({
     url: "/business/bpm/loadTaskDef",
+    method: "get",
+    params,
+  });
+};
+
+// 加载定义接口 合同
+export const getLoadTaskDefAgreement = (params) => {
+  return request({
+    url: "/business/agreement/loadTaskDef",
     method: "get",
     params,
   });
@@ -159,6 +184,14 @@ export const getProcessLogListVendor = (params) => {
 export const postAuditProcess = (data) => {
   return request({
     url: "/business/process/auditProcess",
+    method: "post",
+    data,
+  });
+};
+// 合同流程 审批接口
+export const postAuditProcessAgreement = (data) => {
+  return request({
+    url: "/business/agreement/audit",
     method: "post",
     data,
   });

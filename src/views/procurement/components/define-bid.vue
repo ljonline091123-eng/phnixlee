@@ -952,6 +952,7 @@ export default {
         document.body.removeChild(a);
       }
     },
+    /* 定标提交按钮 */
     async submitForm() {
       debugger
       this.isSubmit = true;
@@ -979,6 +980,7 @@ export default {
               spinner: "el-icon-loading",
               background: "rgba(0, 0, 0, 0.7)",
             });
+            /* 定标提交方法 */
             const res = await calibration({
               calibrationVOList: this.evaluateList,
               detailUrl: detailUrl,
@@ -1001,6 +1003,7 @@ export default {
         this.isSubmit = false;
       }else{
         try {
+          /* 定标提交方法 */
           const res = await calibration({
             calibrationVOList: this.evaluateList,
             detailUrl: detailUrl,
@@ -1123,7 +1126,7 @@ export default {
       this.bidDetailVisiable = true;
       this.biddingInfoId = id;
     },
-    // 审批流程
+    /* 审批详情点击 */
     async handelCalibrationApproval() {
       try {
         this.calibrateVisible = true;
