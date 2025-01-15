@@ -659,7 +659,7 @@
                 <el-option
                   v-for="item in contractSplitOptions"
                   :key="item.splitId"
-                  :label="item.splitContractName"
+                  :label="item.splitContractName ? item.splitContractName : item.schemeName"
                   :value="item.splitId"
                 >
                 </el-option>
@@ -1094,7 +1094,7 @@
       :visible.sync="signAgreementDialog"
       width="1500px"
     >
-      <iframe 
+      <iframe
         v-if="signAgreementUrl"
         :src="signAgreementUrl"
         width="100%"
@@ -1501,6 +1501,7 @@ export default {
     "form.vendorId": {
       handler(newV) {
         if (newV) {
+          /* 获取供应商的报价清单 */
           this.listVendorBiddingListQuotation();
         }
       },
@@ -1582,6 +1583,7 @@ export default {
         }
       });
     },
+    /* 获取供应商的报价清单 */
     listVendorBiddingListQuotation() {
       if (this.schemeId && this.form.vendorId && this.form.splitId) {
         this.loading_tax = true;
@@ -1595,7 +1597,7 @@ export default {
           this.form.vendorBiddingListQuotationList =
             res.data.vendorBiddingListQuotationList.map(item=>{
               this.$set(item,'signCount',item.surplusCount)
-              this.$set(item,'signUnitPriceInclTax',item.taxUnitPriceText)
+              this.$set(item,'signUnitPriceInclTax',item.taxUnitPrice)
               return item
             });
           (this.subjectMatter = res?.data.subjectMatter),
@@ -1664,6 +1666,7 @@ export default {
         id: this.schemeId,
       }).then((res) => {
         this.contractSplitOptions = res?.data;
+        console.log('%c🏀 新增合同弹窗-采购方案列表数据-this.contractSplitOptions \n', `font-size: 14px;background-color: #fe0;`, this.contractSplitOptions );
       });
     },
     handleSelectionChange(val) {
@@ -2090,7 +2093,7 @@ export default {
 
         let formattedResult;
 
-        let newRes = taxUnitPrice.replace(/\.?0+$/, "");
+        let newRes = (taxUnitPrice.toString()).replace(/\.?0+$/, "");
 
         if (type === "excludingTax") {
           if (this.countDecimalPlaces(newRes) <= 2) {
@@ -2138,6 +2141,7 @@ export default {
       const newCount = (Math.floor(count * 100) / 100).toFixed(2);
       return newCount.toString().slice(0, newCount.toString().indexOf(".") + 3);
     },
+    /* 计算本次不含税总计 */
     totalNotTaxPriceTotal() {
       if (this.form.vendorBiddingListQuotationList?.length === 0) return 0.0;
       const { add, bignumber } = this.mathjs;
