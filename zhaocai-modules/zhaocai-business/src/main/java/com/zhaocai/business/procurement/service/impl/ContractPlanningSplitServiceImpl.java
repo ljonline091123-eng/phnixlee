@@ -10,9 +10,11 @@ import com.zhaocai.business.common.utils.AmountCalUtil;
 import com.zhaocai.business.procurement.domain.ContractPlanningSplit;
 import com.zhaocai.business.procurement.domain.MaterialsList;
 import com.zhaocai.business.procurement.domain.ProcurementPlan;
+import com.zhaocai.business.procurement.domain.ProcurementScheme;
 import com.zhaocai.business.procurement.mapper.ContractPlanningSplitMapper;
 import com.zhaocai.business.procurement.service.IContractPlanningSplitService;
 import com.zhaocai.business.procurement.service.IMaterialsListService;
+import com.zhaocai.business.procurement.service.IProcurementSchemeService;
 import com.zhaocai.business.procurement.vo.req.ContractPlanningSplitRequestVO;
 import com.zhaocai.business.procurement.vo.req.ProcurementPlanContractSplitQueryVO;
 import com.zhaocai.business.procurement.vo.res.ContractSplitListVO;
@@ -44,6 +46,8 @@ public class ContractPlanningSplitServiceImpl extends ServiceImpl<ContractPlanni
 
     @Autowired
     private IMaterialsListService materialsListService;
+    @Autowired
+    private IProcurementSchemeService procurementSchemeService;
 
     @Override
     public List<MaterialsList> saveContractPlanningSplit(List<ContractPlanningSplitRequestVO> splitRequestList, Long planId, ProcurementPlan procurementPlan) {
@@ -95,10 +99,14 @@ public class ContractPlanningSplitServiceImpl extends ServiceImpl<ContractPlanni
 
     @Override
     public List<ProcurementSchemeSplitListVO> listContractSplitBySchemeId(Long schemeId) {
+        ProcurementScheme procurementScheme = procurementSchemeService.getById(schemeId);
         List<ProcurementSchemeSplitListVO> resultList = baseMapper.selectContractSplitListBySchemeId(schemeId);
         for(ProcurementSchemeSplitListVO splitListVO : resultList) {
             if (splitListVO.getIsUseUp() != null && splitListVO.getIsUseUp() == 2) {
                 splitListVO.setSplitContractName(splitListVO.getSplitContractName() + "(已使用完毕)");
+            }
+            if (procurementScheme!=null && !procurementScheme.getProcurementSchemeName().isEmpty()){
+                splitListVO.setSchemeName(procurementScheme.getProcurementSchemeName());
             }
         }
         return resultList;

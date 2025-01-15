@@ -23,4 +23,7 @@ public class ProcurementSchemeSplitListVO {
 
     @ApiModelProperty(value = "是否已用完")
     private Integer isUseUp;
+
+    @ApiModelProperty(value = "采购方案名称")
+    private String schemeName;
 }
