@@ -472,7 +472,8 @@
 
                 </el-row>
                 <!-- 在线预览 -->
-                <div class="previewFile">
+                <div class="previewFile"
+                     ref="lianXiangWenDangIframe">
                   <div class="page-title">
                     <span>文件预览</span>
                   </div>
@@ -1351,13 +1352,15 @@ export default {
               message: "请选择模板",
             },
           ],
-          biddingTemplateName: [
+          /* 现在都是将模板生成一个附件(手动上传不用)，使用附件id */
+          biddingAttachmentId: [
             {
               required: true,
               message: "请选择招标文件模板",
             },
           ],
-          contractTemplateName: [
+          /* 现在都是将模板生成一个附件(手动上传不用)，使用附件id */
+          contractAttachmentId: [
             {
               required: true,
               message: "请选择合同模板",
@@ -1687,8 +1690,8 @@ export default {
             "bidContactPhone",
             "bidContactEmail",
             "templateName",
-            "biddingTemplateName",
-            "contractTemplateName",
+            "biddingAttachmentId",
+            "contractAttachmentId",
           ];
           const [[firstKey]] = Object.entries(object);
           const messageName = object[firstKey][0].field;
@@ -1887,7 +1890,7 @@ export default {
               fileUrl: fileUrl,
             });
             //复制模板后，修改文件名和文件URL
-            await ModifyFileNameAndFileURL({attachmentId: res.data})
+            ModifyFileNameAndFileURL({attachmentId: res.data})
           }else{
             res.data = this.formData.biddingAttachmentId;
           }
@@ -1912,13 +1915,7 @@ export default {
           if (this.viewAttachmentId) {
             console.log('点击修改附件后的Attachment ID:', this.viewAttachmentId);
             //获取文档中台的文档编辑URL
-            try {
-              const res = await getEditFileUrlByID({attachmentId: this.viewAttachmentId});
-              this.editFileUrl = res.data;
-              console.log("editFileUrl:", this.editFileUrl);
-            } catch (err) {
-              console.log(err);
-            }
+            this.loadEditFileUrl();
           } else {
             console.warn('attachmentId 数据未正确加载');
           }
@@ -1938,7 +1935,7 @@ export default {
               fileUrl: fileUrl,
             });
             //复制模板后，修改文件名和文件URL
-            await ModifyFileNameAndFileURL({attachmentId: res.data})
+            ModifyFileNameAndFileURL({attachmentId: res.data})
           }else{
             res.data = this.formData.contractAttachmentId;
           }
@@ -1963,13 +1960,7 @@ export default {
           if (this.viewAttachmentId) {
             console.log('点击修改附件后的Attachment ID:', this.viewAttachmentId);
             //获取文档中台的文档编辑URL
-            try {
-              const res = await getEditFileUrlByID({attachmentId: this.viewAttachmentId});
-              this.editFileUrl = res.data;
-              console.log("editFileUrl:", this.editFileUrl);
-            } catch (err) {
-              console.log(err);
-            }
+            this.loadEditFileUrl();
           } else {
             console.warn('attachmentId 数据未正确加载');
           }
@@ -2008,7 +1999,7 @@ export default {
       })
 
     },
-
+    /* 确定招标文件模板 */
     async confirmBcTemplate() {
       console.log("选择模板的确认按钮-》》》》");
 
@@ -2030,7 +2021,7 @@ export default {
           fileUrl: fileUrl,
         });
         //复制模板后，修改文件名和文件URL
-        await ModifyFileNameAndFileURL({attachmentId: res.data})
+        ModifyFileNameAndFileURL({attachmentId: res.data})
 
           /* 2 招标文件模板 ，1 合同模板 */
           if (this.bcTemplatetType === 2) {
@@ -2057,13 +2048,7 @@ export default {
             if (this.viewAttachmentId) {
               console.log('Attachment ID:', this.viewAttachmentId);
               //获取文档中台的文档编辑URL
-              try {
-                const res = await getEditFileUrlByID({attachmentId: this.viewAttachmentId});
-                this.editFileUrl = res.data;
-                console.log("editFileUrl:", this.editFileUrl);
-              } catch (err) {
-                console.log(err);
-              }
+              this.loadEditFileUrl();
             } else {
               console.warn('attachmentId 数据未正确加载');
             }
@@ -2091,13 +2076,7 @@ export default {
             if (this.viewAttachmentId) {
               console.log('Attachment ID:', this.viewAttachmentId);
               //获取文档中台的文档编辑URL
-              try {
-                const res = await getEditFileUrlByID({attachmentId: this.viewAttachmentId});
-                this.editFileUrl = res.data;
-                console.log("editFileUrl:", this.editFileUrl);
-              } catch (err) {
-                console.log(err);
-              }
+              this.loadEditFileUrl();
             } else {
               console.warn('attachmentId 数据未正确加载');
             }
@@ -2118,7 +2097,7 @@ export default {
             fileUrl: fileUrl,
           });
           //复制模板后，修改文件名和文件URL
-          await ModifyFileNameAndFileURL({attachmentId: res.data})
+          ModifyFileNameAndFileURL({attachmentId: res.data})
           this.$set(this.formData, "biddingAttachmentId", res.data);
           this.viewAttachmentId = res.data;
           console.log("viewAttachmentId:", this.viewAttachmentId);
@@ -2130,18 +2109,32 @@ export default {
         if (this.viewAttachmentId) {
           console.log('Attachment ID:', this.viewAttachmentId);
           //获取文档中台的文档编辑URL
-          try {
-            const res = await getEditFileUrlByID({attachmentId: this.viewAttachmentId});
-            this.editFileUrl = res.data;
-            console.log("editFileUrl:", this.editFileUrl);
-          } catch (err) {
-            console.log(err);
-          }
+          this.loadEditFileUrl();
         } else {
           console.warn('attachmentId 数据未正确加载');
         }
       }
       this.bcTemplateVisable = false;
+    },
+
+
+    /* 加载在线文档 单独拿出来异步加载。 */
+    async loadEditFileUrl() {
+      const loading = this.$loading({
+        lock: true,
+        text: "加载中...",
+        background: "rgba(0, 0, 0, 0.7)",
+        target: this.$refs.lianXiangWenDangIframe,
+      });
+      try {
+        const res = await getEditFileUrlByID({ attachmentId: this.viewAttachmentId });
+        this.editFileUrl = res.data;
+        console.log("editFileUrl:", this.editFileUrl);
+        loading.close();
+      } catch (err) {
+        console.log(err);
+        loading.close();
+      }
     },
 
     selectBcTemplate(row) {
@@ -2221,13 +2214,7 @@ export default {
         if (this.viewAttachmentId) {
           console.log('Attachment ID:', this.viewAttachmentId);
           //获取文档中台的文档编辑URL
-          try {
-            const res = await getEditFileUrlByID({attachmentId: this.viewAttachmentId});
-            this.editFileUrl = res.data;
-            console.log("editFileUrl:", this.editFileUrl);
-          } catch (err) {
-            console.log(err);
-          }
+          this.loadEditFileUrl();
         } else {
           console.warn('attachmentId 数据未正确加载');
         }
@@ -2278,13 +2265,7 @@ export default {
         if (this.viewAttachmentId) {
           console.log('Attachment ID:', this.viewAttachmentId);
           //获取文档中台的文档编辑URL
-          try {
-            const res = await getEditFileUrlByID({attachmentId: this.viewAttachmentId});
-            this.editFileUrl = res.data;
-            console.log("editFileUrl:", this.editFileUrl);
-          } catch (err) {
-            console.log(err);
-          }
+          this.loadEditFileUrl();
         } else {
           console.warn('attachmentId 数据未正确加载');
         }
