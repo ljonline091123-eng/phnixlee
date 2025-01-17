@@ -76,7 +76,7 @@ export const listBiddingVendor = (params) => {
 };
 
 /**
- * 弹框表格
+ * 获取供应商的报价清单
  * @param params
  * @returns {*}
  */

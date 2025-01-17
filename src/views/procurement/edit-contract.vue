@@ -574,7 +574,19 @@
                 <el-table-column prop="signTaxRate" label="签订税率(%)" width="130" align="right">
                   <template slot-scope="scope">
                     <el-form-item label-width="0" :prop="'agreementMaterialsLists.' + scope.$index + '.signTaxRate'">
-                      <el-input v-model="scope.row.signTaxRate" v-thousandth clearable @blur="computedAmount(scope)"/>
+<!--                      <el-input v-model="scope.row.signTaxRate" v-thousandth clearable @blur="computedAmount(scope)"/>-->
+                      <el-select
+                        v-model="scope.row.signTaxRateName"
+                        @change="handleTaxRateChange(scope)"
+                        v-thousandth clearable
+                      >
+                        <el-option
+                          v-for="dict in dictObj.rax_archives"
+                          :key="dict.value"
+                          :label="dict.label"
+                          :value="dict.value"
+                        />
+                      </el-select>
                     </el-form-item>
                   </template>
                 </el-table-column>
@@ -711,7 +723,19 @@
                 <el-table-column prop="signTaxRate" label="签订税率(%)" width="130" align="right">
                   <template slot-scope="scope">
                     <el-form-item label-width="0" :prop="'agreementMaterialsLists.' + scope.$index + '.signTaxRate'">
-                      <el-input v-model="scope.row.signTaxRate" v-thousandth clearable @blur="computedAmount(scope)"/>
+<!--                      <el-input v-model="scope.row.signTaxRate" v-thousandth clearable @blur="computedAmount(scope)"/>-->
+                      <el-select
+                        v-model="scope.row.signTaxRateName"
+                        @change="handleTaxRateChange(scope)"
+                        v-thousandth clearable
+                      >
+                        <el-option
+                          v-for="dict in dictObj.rax_archives"
+                          :key="dict.value"
+                          :label="dict.label"
+                          :value="dict.value"
+                        />
+                      </el-select>
                     </el-form-item>
                   </template>
                 </el-table-column>
@@ -772,7 +796,19 @@
                 <el-table-column prop="signTaxRate" label="签订税率(%)" width="130" align="right">
                   <template slot-scope="scope">
                     <el-form-item label-width="0" :prop="'agreementMaterialsLists.' + scope.$index + '.signTaxRate'">
-                      <el-input v-model="scope.row.signTaxRate" v-thousandth clearable @blur="computedAmount(scope)"/>
+<!--                      <el-input v-model="scope.row.signTaxRate" v-thousandth clearable @blur="computedAmount(scope)"/>-->
+                      <el-select
+                        v-model="scope.row.signTaxRateName"
+                        @change="handleTaxRateChange(scope)"
+                        v-thousandth clearable
+                      >
+                        <el-option
+                          v-for="dict in dictObj.rax_archives"
+                          :key="dict.value"
+                          :label="dict.label"
+                          :value="dict.value"
+                        />
+                      </el-select>
                     </el-form-item>
                   </template>
                 </el-table-column>
@@ -831,7 +867,19 @@
                 <el-table-column prop="signTaxRate" label="签订税率(%)" width="130" align="right">
                   <template slot-scope="scope">
                     <el-form-item label-width="0" :prop="'agreementMaterialsLists.' + scope.$index + '.signTaxRate'">
-                      <el-input v-model="scope.row.signTaxRate" v-thousandth clearable @blur="computedAmount(scope)"/>
+<!--                      <el-input v-model="scope.row.signTaxRate" v-thousandth clearable @blur="computedAmount(scope)"/>-->
+                      <el-select
+                        v-model="scope.row.signTaxRateName"
+                        @change="handleTaxRateChange(scope)"
+                        v-thousandth clearable
+                      >
+                        <el-option
+                          v-for="dict in dictObj.rax_archives"
+                          :key="dict.value"
+                          :label="dict.label"
+                          :value="dict.value"
+                        />
+                      </el-select>
                     </el-form-item>
                   </template>
                 </el-table-column>
@@ -1432,7 +1480,8 @@ export default {
         deposit_base_amount:'',  // 保证金基数
         jobTitleCode:'',  // 工种
         rentalType:'',  // 租赁方式
-        rentalUnit:''  // 租赁单位
+        rentalUnit:'',  // 租赁单位
+        rax_archives:''  // 税率
       },
       dictObjMap:{
         PAYMENT_CYCLE: 'payment_cycle',  //支付周期
@@ -1448,7 +1497,8 @@ export default {
         DEPOSIT_MODE: 'deposit_way', //押金/保证金方式
         DATALLER_WORK_TYPE: 'jobTitleCode', //工种
         RENT_MODE:'rentalType', //租赁方式
-        RENT_UNIT:'rentalUnit' //租赁单位
+        RENT_UNIT:'rentalUnit', //租赁单位
+        RAX_ARCHIVES:'rax_archives' //税率
       },
       dialogOpen:false,
       dialogTitle:'',
@@ -1826,7 +1876,7 @@ export default {
     //获取字典
     async getListUnderlingDict(type){
       const res = await listUnderlingDict(type)
-      const resMap = res.data.map(item => ({value:item.dictValue,label:item.dictLabel}))
+      const resMap = res.data.map(item => ({value:item.dictValue,label:item.dictLabel, remark: item.remark}))
       const dictType = this.dictObjMap[type]
       this.dictObj[dictType] = resMap
     },
@@ -2203,6 +2253,21 @@ export default {
       return decimalPart !== undefined
         ? `${formattedIntegerPart}.${decimalPart}`
         : formattedIntegerPart;
+    },
+    /* 税率下拉监听 */
+    handleTaxRateChange(scope) {
+      console.log('%c🪴 税率字典rax_archives \n', `font-size: 14px;background-color: #f00;`, this.dictObj.rax_archives );
+      const selectedDict = this.dictObj.rax_archives.find(dict => dict.value === scope.row.signTaxRateName);
+      console.log('%c👽 选择的税率字典 \n', `font-size: 14px;background-color: #fa8;`, selectedDict);
+      /* 税率值 */
+      scope.row.signTaxRate = selectedDict.remark;
+      /* 税率编码 */
+      scope.row.signTaxRateCode = selectedDict.value;
+      /* 税率名称 */
+      scope.row.signTaxRateName = selectedDict.label;
+      console.log('%c🏀 更新后当前行的值scope.row \n', `font-size: 14px;background-color: #fe0;`, scope.row );
+      /* 调用计算方法 */
+      this.computedAmount(scope)
     },
     computedAmount(scope) {
         const { signUnitPriceInclTax, signCount, signTaxRate } = scope.row
