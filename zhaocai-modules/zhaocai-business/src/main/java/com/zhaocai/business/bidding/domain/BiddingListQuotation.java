@@ -48,6 +48,12 @@ public class BiddingListQuotation extends BaseEntity {
     @ApiModelProperty(value =  "税率")
     private BigDecimal taxRate;
 
+    @ApiModelProperty(value = "税率编码")
+    private String taxRateCode;
+
+    @ApiModelProperty(value = "税率名称")
+    private String taxRateName;
+
     /** 发票类型（1增值税专用发票/2增值税普通发票） */
     @ApiModelProperty(value =  "发票类型")
     private Integer billType;

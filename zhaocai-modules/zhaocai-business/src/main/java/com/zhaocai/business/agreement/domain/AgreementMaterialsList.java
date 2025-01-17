@@ -103,6 +103,18 @@ public class AgreementMaterialsList extends BaseEntity {
     private BigDecimal signTaxRate;
 
     /**
+     * 签订税率编码
+     */
+    @ApiModelProperty(value = "签订税率编码")
+    private String signTaxRateCode;
+
+    /**
+     * 签订税率名称
+     */
+    @ApiModelProperty(value = "签订税率名称")
+    private String signTaxRateName;
+
+    /**
      * 签订单价（含税）
      */
     @ApiModelProperty(value = "签订单价（含税）")

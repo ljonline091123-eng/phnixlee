@@ -147,6 +147,18 @@ public class MaterialsList extends BaseEntity {
     private BigDecimal taxRate;
 
     /**
+     * 增值税税率 财务用的标志VATR2。。
+     */
+    @ApiModelProperty(value = "税率编码")
+    private String taxRateCode;
+
+    /**
+     * 增值税税率名称
+     */
+    @ApiModelProperty(value = "税率名称")
+    private String taxRateName;
+
+    /**
      * 单价(不含税)
      */
     @NotNull(message = "采购清单的单价(不含税)不能为空")
