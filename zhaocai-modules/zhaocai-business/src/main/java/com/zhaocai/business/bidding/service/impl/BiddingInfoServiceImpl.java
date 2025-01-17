@@ -817,6 +817,17 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
             throw new ParamValidateException("投标公告状态已变更，请确认当前招标公告状态");
         }
 
+
+        /* 评标结束前先进行结束二次报价操作 */
+        TwiceBidConOverVO twiceBidConfVO = new TwiceBidConOverVO();
+        twiceBidConfVO.setNoticeId(evaluatBidVO.getNoticeId());
+        try{
+            twiceBidFinish(twiceBidConfVO);
+        }catch (Exception e){
+            log.error("[评标结束前先进行结束二次报价操作]");
+            log.error(e.getMessage());
+        }
+
         TenderNoticeSchemeInfoVO detailVO = tenderNoticeService.getTenderNoticeSchemeInfo(evaluatBidVO.getNoticeId());
         Integer nextNoticeStatus = tenderNoticeService.nextTenderNoticeStatus(detailVO.getSchemeType(), detailVO.getNoticeStatus());
 
