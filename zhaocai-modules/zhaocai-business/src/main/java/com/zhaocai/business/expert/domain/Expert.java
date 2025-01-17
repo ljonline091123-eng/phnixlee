@@ -51,7 +51,7 @@ public class Expert extends BaseEntity
     private String businessType;
 
     /** 专家类别（1技术类 2经济类） */
-    @ApiModelProperty(value =  "专家类别（1技术类 2经济类）")
+    @ApiModelProperty(value =  "专家类别（1技术类 2经济类  1,2技术类&经济类 ）")
     private String expertType;
 
     /** 专家状态 */

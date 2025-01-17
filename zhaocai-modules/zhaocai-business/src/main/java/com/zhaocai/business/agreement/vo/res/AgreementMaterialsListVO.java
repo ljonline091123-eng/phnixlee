@@ -125,6 +125,12 @@ public class AgreementMaterialsListVO extends AdviceObject {
     @ApiModelProperty(value = "签订税率")
     private BigDecimal signTaxRate;
 
+    @ApiModelProperty(value = "签订税率编码")
+    private String signTaxRateCode;
+
+    @ApiModelProperty(value = "签订税率名称")
+    private String signTaxRateName;
+
     @ApiModelProperty(value = "签订单价（含税）")
     private BigDecimal signUnitPriceInclTax;
 

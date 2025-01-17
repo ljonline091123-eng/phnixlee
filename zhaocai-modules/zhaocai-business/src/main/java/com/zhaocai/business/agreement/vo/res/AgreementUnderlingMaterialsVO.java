@@ -62,6 +62,12 @@ public class AgreementUnderlingMaterialsVO {
     @ApiModelProperty(value =  "税率")
     private BigDecimal taxRate;
 
+    @ApiModelProperty(value =  "税率编码")
+    private String taxRateCode;
+
+    @ApiModelProperty(value =  "税率编码名称")
+    private String taxRateName;
+
     @ApiModelProperty(value = "税额")
     private BigDecimal taxAmount;
 

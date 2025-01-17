@@ -25,4 +25,7 @@ public class DictListVO {
 
     @JsonIgnore
     private Integer sort;
+
+    @ApiModelProperty(value = "备注")
+    private String remark;
 }

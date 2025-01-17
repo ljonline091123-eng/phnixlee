@@ -24,6 +24,8 @@
         <result property="count" column="count"/>
         <result property="usedCount" column="used_count"/>
         <result property="taxRate" column="tax_rate"/>
+        <result property="taxRateCode" column="tax_rate_code"/>
+        <result property="taxRateName" column="tax_rate_name"/>
         <result property="unitPriceExclTax" column="unit_price_excl_tax"/>
         <result property="unitPriceInclTax" column="unit_price_incl_tax"/>
         <result property="amountExclTax" column="amount_excl_tax"/>

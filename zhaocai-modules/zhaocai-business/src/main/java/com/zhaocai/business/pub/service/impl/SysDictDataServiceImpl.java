@@ -66,7 +66,7 @@ public class SysDictDataServiceImpl implements ISysDictDataService {
 
         if (CollectionUtil.isNotEmpty(result)) {
             return result.stream()
-                    .map(x -> new DictListVO(x.getDictLabel(),x.getDictValue(),0)).collect(Collectors.toList());
+                    .map(x -> new DictListVO(x.getDictLabel(),x.getDictValue(),0, x.getRemark())).collect(Collectors.toList());
         }
         return new ArrayList<>();
     }
