@@ -21,6 +21,9 @@ public interface IAttachmentService extends IService<Attachment> {
     //修改附件的文件名和文件URL
     void  ModifyFileNameAndFileURL(Long attachmentId) throws IOException;
 
+    //把上传的文件之前的修订记录去除，上传到minio，替换该附件的fileUrl为无修订记录的newfileUrl
+    void  RemoverAmendmentRecord(Long attachmentId) throws IOException;
+
     //文档中台——获取预览word文件URL,显示修订记录
     String  viewWordFileUrlWithRevise(String fileName, String fileUrl);
 

@@ -97,4 +97,30 @@ public class BookmarkUtils {
         }
         return map;
     }
+
+    //接受修订记录，不显示线下修订记录
+    public String AcceptanceAmendmentRecord(String fileUrl,String fileName) {
+        Path path = yozOfileUtils.downloadFile(fileUrl, yozOfileUtils.createTempFilePath(fileName));
+        ConvertParams params = new ConvertParams();
+        // 设置要处理的文档模版
+        try {
+            params.setFilePath(path.toString());
+            params.setAccepTracks(false);   //显示修订记录
+
+            // 提交处理文档
+            String response = sender.post(ConvertParams.URL_CONVERT, ConvertParams.CONVERT_TYPE_CONVERT_DOCUMENT, params.getRequestBody());
+            System.out.println("转换文件响应结果：");
+            System.out.println("response:" + response);
+            String viewUrl = new JSONObject(response).optJSONObject("data").optString("viewUrl");
+            System.out.println("填充书签后生成的文件下载地址:" + viewUrl);
+            return viewUrl;
+        } catch (Exception e) {
+            throw new RuntimeException("书签位置填充数据失败," + e.getMessage(), e);
+        }
+        finally {
+            //删除生成的临时文件
+            System.out.println("删除文件路径:" + path);
+            yozOfileUtils.deleteTempFilePath(path.toString());
+        }
+    }
 }
