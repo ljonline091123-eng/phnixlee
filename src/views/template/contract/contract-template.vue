@@ -445,6 +445,7 @@ import {
   getContractTypeList,
   getPreviewFileUrl,
   editFile,
+  removerAmendmentRecord,
 } from "@/api/template/file";
 import Treeselect from "@riophae/vue-treeselect";
 import "@riophae/vue-treeselect/dist/vue-treeselect.css";
@@ -622,6 +623,12 @@ export default {
       try {
         const res = await addAttachment({ fileName: name, fileUrl: url });
         this.attachmentId = res.data;
+      } catch (err) {
+        console.log(err);
+      }
+      //上传文件后，先去除文档原来的修订记录
+      try {
+        const res = await removerAmendmentRecord({attachmentId: this.attachmentId});
       } catch (err) {
         console.log(err);
       }
