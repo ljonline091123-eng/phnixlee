@@ -66,11 +66,14 @@ public class BPMProcessService implements IBPMProcessService {
         String customProcessKey = variables.get("customProcessKey") == null ? null : variables.get("customProcessKey").toString();
         requestDTO.setBusinessId(variables.get("businessId").toString());
         requestDTO.setProcessKey(StrUtil.isBlank(customProcessKey) ? processKey : customProcessKey);
-        requestDTO.setBusinessContent(
-                variables.get("businessContent") == null ? null : variables.get("businessContent").toString());
-        //variables.get("businessTitle").toString()
+        requestDTO.setBusinessContent(variables.get("businessContent") == null ? null : variables.get("businessContent").toString());
+
         // 目前就暂时按这里这样统一的叫法
         requestDTO.setBusinessTitle("流程审批");
+        /* 覆盖 */
+        if (variables.get("businessTitle") != null) {
+            requestDTO.setBusinessTitle(variables.get("businessTitle").toString());
+        }
         requestDTO.setState(variables.get("detailUrl") == null ? IdUtil.getSnowflakeNextId() + "" : variables.get("detailUrl").toString());
         requestDTO.setUserObj(variables.get("userObj") == null ? null : variables.get("userObj").toString());
         String operateComment = variables.get("operateComment") == null ? null : variables.get("operateComment").toString();
@@ -114,13 +117,18 @@ public class BPMProcessService implements IBPMProcessService {
             PropertyListRequestDTO.addPropertyToList(propertyList, "contractMoney", new BigDecimal(variables.get("contractMoney").toString()));
             requestDTO.setPropertyList(propertyList);
         }
+        /* 项目名称 */
+        if (variables.get("projectAsName") != null) {
+            PropertyListRequestDTO.addPropertyToList(propertyList, "projectAsName", variables.get("projectAsName").toString());
+            requestDTO.setPropertyList(propertyList);
+        }
         /* 最小核算项目编码 */
         String projectCode = variables.get("projectCode") == null ? null : variables.get("projectCode").toString();
         if (StrUtil.isNotBlank(projectCode)) {
             /* 最小核算项目 */
             MinProjectVO minProjectVO = minProjectService.getMinProjectByMinAccountCode(projectCode);
             if (null != minProjectVO) {
-
+                PropertyListRequestDTO.addPropertyToList(propertyList, "projectAsName", minProjectVO.getMinAccountCode());
                 PropertyListRequestDTO.addPropertyToList(propertyList, "parentProjectCode", minProjectVO.getParentCode());
                 PropertyListRequestDTO.addPropertyToList(propertyList, "responsibilityDeptId", minProjectVO.getDutyUnit());
                 PropertyListRequestDTO.addPropertyToList(propertyList, "groupId", UserConstants.GROUP_DEPT_ID);

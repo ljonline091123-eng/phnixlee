@@ -1,7 +1,9 @@
 package com.zhaocai.business.procurement.vo.res;
 
+import com.zhaocai.business.common.annotations.DictCache;
 import com.zhaocai.business.common.annotations.MoneyFormat;
 import com.zhaocai.business.common.base.AdviceObject;
+import com.zhaocai.business.common.enums.DictBizEnum;
 import com.zhaocai.business.common.enums.ProcurementPlanTypeEnum;
 import com.zhaocai.business.manager.http.dto.res.ContractPlanMaterialListDTO;
 import com.zhaocai.common.core.utils.NumberUtil;
@@ -58,6 +60,14 @@ public class ContractMaterialsListVO extends AdviceObject {
 
     @ApiModelProperty(value = "税率")
     private BigDecimal taxRate;
+
+    @ApiModelProperty(value = "税率编码")
+    private String taxRateCode;
+
+
+    @DictCache(dictBizEnum = DictBizEnum.RAX_ARCHIVES,filedName = "taxRateCode")
+    @ApiModelProperty(value = "税率名称")
+    private String taxRateName;
 
     @ApiModelProperty(value = "单价(不含税)")
     private BigDecimal unitPriceExclTax;
@@ -195,6 +205,7 @@ public class ContractMaterialsListVO extends AdviceObject {
         this.costAccountCode = dto.getSubjectCode();
         this.costAccountName = dto.getSubjectName();
         this.taxRate = dto.getTaxRate();
+        this.taxRateCode = dto.getTaxRateCode();
         this.unitPriceExclTax = dto.getNtaxPrice();
         this.unitPriceInclTax = dto.getTaxPrice();
         this.amountExclTax = dto.getNtaxAmount();

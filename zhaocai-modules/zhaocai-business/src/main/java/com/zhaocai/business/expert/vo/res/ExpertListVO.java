@@ -44,7 +44,7 @@ public class ExpertListVO extends AdviceObject {
     @ApiModelProperty(value =  "业态")
     private String businessType;
 
-    @ApiModelProperty(value =  "专家类别（1技术类 2经济类）")
+    @ApiModelProperty(value =  "专家类别（1技术类  2经济类  1,2技术类&经济类 ）")
     private String expertType;
 
     @ApiModelProperty(value =  "专家状态(0账号审批中|1启用|2禁用)")

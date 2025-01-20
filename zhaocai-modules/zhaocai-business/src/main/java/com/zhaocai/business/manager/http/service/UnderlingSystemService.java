@@ -40,7 +40,7 @@ public class UnderlingSystemService {
         if (CollectionUtil.isNotEmpty(dictList)) {
             resultList = dictList.stream()
                     .filter(f -> f.getEnable() && !"0".equals(f.getParentId()))
-                    .map( x -> new DictListVO(x.getDictName(),x.getDictValue(),x.getSort()))
+                    .map( x -> new DictListVO(x.getDictName(),x.getDictValue(),x.getSort(),x.getRemark()))
                     .collect(Collectors.toList());
         }
 

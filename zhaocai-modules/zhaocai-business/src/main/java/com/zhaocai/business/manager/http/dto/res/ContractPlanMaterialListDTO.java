@@ -1,5 +1,6 @@
 package com.zhaocai.business.manager.http.dto.res;
 
+import io.swagger.annotations.ApiModelProperty;
 import lombok.Data;
 
 import java.math.BigDecimal;
@@ -132,6 +133,16 @@ public class ContractPlanMaterialListDTO {
      * 增值税税率
      */
     private BigDecimal taxRate;
+
+    /**
+     * 增值税税率 财务用的标志VATR2。。
+     */
+    private String taxRateCode;
+
+    /**
+     * 税率名称
+     */
+    private String taxRateName;
 
     /**
      * 转换数量

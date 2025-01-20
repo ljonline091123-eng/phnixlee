@@ -309,7 +309,7 @@ public class VendorChangeServiceImpl extends ServiceImpl<VendorChangeMapper,Vend
             //接入底层逻辑平台流程
             Map<String,Object> paramMap = new HashMap<>();
             paramMap.put("businessId", vendorChange.getId());
-            paramMap.put("businessTitle", "供应商-修改信息审批");
+            paramMap.put("businessTitle", "招标采购/供应商管理/供应商基本信息 修改信息审批");
             paramMap.put("businessContent", String.format(ApproveFlowPromptTemplateEnum.VENDOR_CHANGE_APPROVE.getDesc(), vendor.getEnterpriseName()));
             paramMap.put("detailUrl", "/vendor/vendor-detail/"+ Base64.encodeStr(("\""+vendor.getId().toString()+"\"").getBytes(),true,true));
             UserObj userObj = UserObj.builder().businessType(ProcessKeyEnum.ZHAOCAI_VENDOR_UPDATEINFO.name()).

@@ -1,7 +1,9 @@
 package com.zhaocai.business.procurement.vo.res;
 
+import com.zhaocai.business.common.annotations.DictCache;
 import com.zhaocai.business.common.annotations.MoneyFormat;
 import com.zhaocai.business.common.base.AdviceObject;
+import com.zhaocai.business.common.enums.DictBizEnum;
 import io.swagger.annotations.ApiModelProperty;
 import lombok.Data;
 
@@ -69,6 +71,13 @@ public class MaterialsVO extends AdviceObject {
 
     @ApiModelProperty(value = "税率")
     private BigDecimal taxRate;
+
+    @ApiModelProperty(value = "税率编码")
+    private String taxRateCode;
+
+    @DictCache(dictBizEnum = DictBizEnum.RAX_ARCHIVES,filedName = "taxRateCode")
+    @ApiModelProperty(value = "税率名称")
+    private String taxRateName;
 
     @ApiModelProperty(value = "单价(不含税)")
     private BigDecimal unitPriceExclTax;

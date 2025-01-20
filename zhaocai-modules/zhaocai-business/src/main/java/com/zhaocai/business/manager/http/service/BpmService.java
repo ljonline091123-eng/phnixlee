@@ -1,11 +1,14 @@
 package com.zhaocai.business.manager.http.service;
 
 import cn.hutool.core.util.StrUtil;
+import cn.hutool.json.JSONUtil;
 import com.zhaocai.business.common.enums.ProcessKeyEnum;
 import com.zhaocai.business.common.exception.BusinessException;
 import com.zhaocai.business.manager.http.common.config.UnderlingPlatformUrlEnum;
 import com.zhaocai.business.manager.http.dto.req.*;
 import com.zhaocai.business.manager.http.dto.res.*;
+import com.zhaocai.business.process.domain.BpmLog;
+import com.zhaocai.business.process.service.IBpmLogService;
 import com.zhaocai.business.procurement.service.IMinProjectService;
 import com.zhaocai.business.procurement.vo.res.MinProjectVO;
 import com.zhaocai.common.core.constant.SecurityConstants;
@@ -29,6 +32,8 @@ public class BpmService {
 
     @Autowired
     private RemoteSystemService remoteSystemService;
+    @Autowired
+    private IBpmLogService bpmLogService;
 
     @Autowired
     private  UnderlingSystemService underlingSystemService;
@@ -46,6 +51,17 @@ public class BpmService {
         requestDTO.setOrgPenetrate(true);
         BpmInitializeResponseDTO responseDTO = UnderlingRestTemplateService.postForObject(UnderlingPlatformUrlEnum.BPM_OPERATE_INITIALIZE,
                 BpmInitializeResponseDTO.class,requestDTO);
+        try{
+            /* 流程操作记录 */
+            bpmLogService.save(BpmLog.builder()
+                    .bpmType("初始化接口")
+                    .businessId(requestDTO.getBusinessId())
+                    .wfProcessId(requestDTO.getProcessId())
+                    .bpmUrl(UnderlingPlatformUrlEnum.BPM_OPERATE_INITIALIZE.getUrl())
+                    .bpmParam(JSONUtil.parse(requestDTO).toString())
+                    .bpmResponse(JSONUtil.parse(responseDTO).toString())
+                    .build());
+        }catch (Exception e){log.error("[  bpmLogService报错  ]{}",e.getMessage());}
         return  responseDTO;
 
     }
@@ -58,6 +74,17 @@ public class BpmService {
     public List<BpmListProcessLogResponseDTO> listProcessLog(BpmListProcessLogRequestDTO requestDTO) {
         List<BpmListProcessLogResponseDTO> responseDTO = UnderlingRestTemplateService.listForObject(UnderlingPlatformUrlEnum.BPM_OPERATE_LISTPROCESSLOG,
                 BpmListProcessLogResponseDTO.class,requestDTO);
+        try{
+            /* 流程操作记录 */
+            bpmLogService.save(BpmLog.builder()
+                    .bpmType("流程操作日志列表接口")
+                    .businessId(requestDTO.getBusinessId())
+                    .wfProcessId(requestDTO.getProcessId())
+                    .bpmUrl(UnderlingPlatformUrlEnum.BPM_OPERATE_LISTPROCESSLOG.getUrl())
+                    .bpmParam(JSONUtil.parse(requestDTO).toString())
+                    .bpmResponse(JSONUtil.parse(responseDTO).toString())
+                    .build());
+        }catch (Exception e){log.error("[  bpmLogService报错  ]{}",e.getMessage());}
         return  responseDTO;
     }
 
@@ -69,6 +96,17 @@ public class BpmService {
     public BpmDisCardResponseDTO disCard(BpmDisCardRequestDTO requestDTO) {
         BpmDisCardResponseDTO responseDTO = UnderlingRestTemplateService.postForObject(UnderlingPlatformUrlEnum.BPM_OPERATE_DISCARD,
                 BpmDisCardResponseDTO.class,requestDTO);
+        try{
+            /* 流程操作记录 */
+            bpmLogService.save(BpmLog.builder()
+                    .bpmType("弃审接口")
+                    .businessId(requestDTO.getBusinessId())
+                    .wfProcessId(requestDTO.getProcessId())
+                    .bpmUrl(UnderlingPlatformUrlEnum.BPM_OPERATE_DISCARD.getUrl())
+                    .bpmParam(JSONUtil.parse(requestDTO).toString())
+                    .bpmResponse(JSONUtil.parse(responseDTO).toString())
+                    .build());
+        }catch (Exception e){log.error("[  bpmLogService报错  ]{}",e.getMessage());}
         return  responseDTO;
     }
 
@@ -80,6 +118,17 @@ public class BpmService {
     public BpmRevokeResponseDTO revoke(BpmRevokeRequestDTO requestDTO) {
         BpmRevokeResponseDTO responseDTO = UnderlingRestTemplateService.postForObject(UnderlingPlatformUrlEnum.BPM_OPERATE_REVOKE,
                 BpmRevokeResponseDTO.class,requestDTO);
+        try{
+            /* 流程操作记录 */
+            bpmLogService.save(BpmLog.builder()
+                    .bpmType("撤销接口")
+                    .businessId(requestDTO.getBusinessId())
+                    .wfProcessId(requestDTO.getProcessId())
+                    .bpmUrl(UnderlingPlatformUrlEnum.BPM_OPERATE_REVOKE.getUrl())
+                    .bpmParam(JSONUtil.parse(requestDTO).toString())
+                    .bpmResponse(JSONUtil.parse(responseDTO).toString())
+                    .build());
+        }catch (Exception e){log.error("[  bpmLogService报错  ]{}",e.getMessage());}
         return  responseDTO;
     }
 
@@ -91,6 +140,17 @@ public class BpmService {
     public BpmDeleteResponseDTO delete(BpmDeleteRequestDTO requestDTO) {
         BpmDeleteResponseDTO responseDTO = UnderlingRestTemplateService.postForObject(UnderlingPlatformUrlEnum.BPM_OPERATE_DELETE,
                 BpmDeleteResponseDTO.class,requestDTO);
+        try{
+            /* 流程操作记录 */
+            bpmLogService.save(BpmLog.builder()
+                    .bpmType("作废接口")
+                    .businessId(requestDTO.getBusinessId())
+                    .wfProcessId(requestDTO.getProcessId())
+                    .bpmUrl(UnderlingPlatformUrlEnum.BPM_OPERATE_DELETE.getUrl())
+                    .bpmParam(JSONUtil.parse(requestDTO).toString())
+                    .bpmResponse(JSONUtil.parse(responseDTO).toString())
+                    .build());
+        }catch (Exception e){log.error("[  bpmLogService报错  ]{}",e.getMessage());}
         return  responseDTO;
     }
 
@@ -104,6 +164,17 @@ public class BpmService {
         requestDTO.setOrgPenetrate(true);
         BpmAuditResponseDTO responseDTO = UnderlingRestTemplateService.postForObject(UnderlingPlatformUrlEnum.BPM_OPERATE_AUDIT,
                 BpmAuditResponseDTO.class,requestDTO);
+        try{
+            /* 流程操作记录 */
+            bpmLogService.save(BpmLog.builder()
+                    .bpmType("审批接口")
+                    .businessId(requestDTO.getBusinessId())
+                    .wfProcessId(requestDTO.getProcessId())
+                    .bpmUrl(UnderlingPlatformUrlEnum.BPM_OPERATE_AUDIT.getUrl())
+                    .bpmParam(JSONUtil.parse(requestDTO).toString())
+                    .bpmResponse(JSONUtil.parse(responseDTO).toString())
+                    .build());
+        }catch (Exception e){log.error("[  bpmLogService报错  ]{}",e.getMessage());}
         return  responseDTO;
     }
 
@@ -116,28 +187,6 @@ public class BpmService {
         requestDTO.setOrgPenetrate(true);
         log.info("[流程提交参数对象]{}",requestDTO);
 
-//        String projectCode = "SG20012024000002-2";
-//        if (StrUtil.isNotBlank(projectCode)) {
-//            MinProjectVO minProjectVO = minProjectService.getMinProjectByMinAccountCode(projectCode);
-//                if (null != minProjectVO) {
-//                    List<PropertyListRequestDTO> propertyList = new ArrayList<>();
-//                    PropertyListRequestDTO propertyListRequestDTO =
-//                            new PropertyListRequestDTO("parentProjectCode", minProjectVO.getParentCode());
-//                    propertyList.add(propertyListRequestDTO);
-//                    PropertyListRequestDTO propertyListRequestDTO1 =
-//                            new PropertyListRequestDTO("responsibilityDeptId", minProjectVO.getDutyUnit());
-//                    propertyList.add(propertyListRequestDTO1);
-//                    PropertyListRequestDTO propertyListRequestDTO2 =
-//                            new PropertyListRequestDTO("companyId", "2013000000");
-//                    propertyList.add(propertyListRequestDTO2);
-//                    PropertyListRequestDTO propertyListRequestDTO3 =
-//                            new PropertyListRequestDTO("groupId", "1000000000");
-//                    propertyList.add(propertyListRequestDTO3);
-//
-//
-//                requestDTO.setPropertyList(propertyList);
-//            }
-//        }
 
         String processKeyReplace = requestDTO.getProcessKey();
         String processKey = requestDTO.getProcessKey();
@@ -170,6 +219,18 @@ public class BpmService {
         requestDTO.setProcessKey(processKey);
         BpmSubmitResponseDTO responseDTO = UnderlingRestTemplateService.postForObject(UnderlingPlatformUrlEnum.BPM_OPERATE_SUBMIT,
                 BpmSubmitResponseDTO.class,requestDTO);
+        try{
+            /* 流程操作记录 */
+            bpmLogService.save(BpmLog.builder()
+                    .bpmType("提交接口")
+                    .businessId(requestDTO.getBusinessId())
+                    .wfProcessId(requestDTO.getProcessId())
+                    .bpmKey(requestDTO.getProcessKey())
+                    .bpmUrl(UnderlingPlatformUrlEnum.BPM_OPERATE_SUBMIT.getUrl())
+                    .bpmParam(JSONUtil.parse(requestDTO).toString())
+                    .bpmResponse(JSONUtil.parse(responseDTO).toString())
+                    .build());
+        }catch (Exception e){log.error("[  bpmLogService报错  ]{}",e.getMessage());}
         return  responseDTO;
     }
 
@@ -182,6 +243,18 @@ public class BpmService {
         requestDTO.setOrgPenetrate(true);
         List<BpmLoadTaskDefResponseDTO> responseDTO = UnderlingRestTemplateService.postForList(UnderlingPlatformUrlEnum.BPM_OPERATE_LOADTASKDEF,
                 BpmLoadTaskDefResponseDTO.class,requestDTO);
+        try{
+            /* 流程操作记录 */
+            bpmLogService.save(BpmLog.builder()
+                    .bpmType("加载定义接口")
+                    .businessId(requestDTO.getBusinessId())
+                    .wfProcessId(requestDTO.getProcessId())
+                    .bpmKey(requestDTO.getProcessKey())
+                    .bpmUrl(UnderlingPlatformUrlEnum.BPM_OPERATE_LOADTASKDEF.getUrl())
+                    .bpmParam(JSONUtil.parse(requestDTO).toString())
+                    .bpmResponse(JSONUtil.parse(responseDTO).toString())
+                    .build());
+        }catch (Exception e){log.error("[  bpmLogService报错  ]{}",e.getMessage());}
         return  responseDTO;
     }
 

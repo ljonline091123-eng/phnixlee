@@ -269,7 +269,9 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
 
             //设置综合得分
             BigDecimal score = null;
+            /* 商务评分分数 */
             BigDecimal avgBusTotalScore = BigDecimal.ZERO;
+            /* 技术评分分数 */
             BigDecimal avgTechTotalScore = BigDecimal.ZERO;
 
             //1.倒序循环quotationDataVOList
@@ -279,13 +281,12 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
             //5.计算综合得分
             for (int i = quotationDataVOList.size()-1; i >= 0; i--) {
                 List<ExpertScoreExtraVO> expertScores = new ArrayList<>();
-                //投标单id
-                Long biddingInfoId = quotationDataVOList.get(i).getId();
                 ExpertScoreExtraVO expertScoreExtraVO;
                 for (BiddingEvaluatExpert evaluatExpert : expertList) {
                     //查询评标专家产生的评分数据
                     ExpertScore expertScore = expertScoreService.getOne(new LambdaQueryWrapper<ExpertScore>()
-                            .eq(ExpertScore::getBiddingInfoId, biddingInfoId)
+                            .eq(ExpertScore::getNoticeId, queryVO.getNoticeId())
+                            .eq(ExpertScore::getVendorId, vendorId)
                             .eq(ExpertScore::getExpertId, evaluatExpert.getExpertId())
                             .orderByDesc(ExpertScore::getCreateTime).last("limit 1"));
                     if (!ObjectUtils.isEmpty(expertScore)){
@@ -293,10 +294,6 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
                         expertScoreExtraVO.setExpertType(evaluatExpert.getExpertType());
                         //产生评分数据
                         expertScores.add(expertScoreExtraVO);
-                    } else {
-                        //没有产生评分数据
-                        expertScores.clear();
-                        break;
                     }
                 }
 
@@ -460,6 +457,8 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
                             contentVO.setTaxPrice(biddingListQuotation.getTaxPrice());
                             contentVO.setNotTaxPrice(biddingListQuotation.getNotTaxPrice());
                             contentVO.setTaxRate(biddingListQuotation.getTaxRate());
+                            contentVO.setTaxRateCode(biddingListQuotation.getTaxRateCode());
+                            contentVO.setTaxRateName(biddingListQuotation.getTaxRateName());
                         } else {
                             contentVO.setTaxUnitPrice(null);
                             contentVO.setNotTaxUnitPrice(null);
@@ -818,6 +817,17 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
             throw new ParamValidateException("投标公告状态已变更，请确认当前招标公告状态");
         }
 
+
+        /* 评标结束前先进行结束二次报价操作 */
+        TwiceBidConOverVO twiceBidConfVO = new TwiceBidConOverVO();
+        twiceBidConfVO.setNoticeId(evaluatBidVO.getNoticeId());
+        try{
+            twiceBidFinish(twiceBidConfVO);
+        }catch (Exception e){
+            log.error("[评标结束前先进行结束二次报价操作]");
+            log.error(e.getMessage());
+        }
+
         TenderNoticeSchemeInfoVO detailVO = tenderNoticeService.getTenderNoticeSchemeInfo(evaluatBidVO.getNoticeId());
         Integer nextNoticeStatus = tenderNoticeService.nextTenderNoticeStatus(detailVO.getSchemeType(), detailVO.getNoticeStatus());
 
@@ -1107,6 +1117,8 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
         List<BiddingQuotationListVO> list = baseMapper.findBiddingQuotationList(queryVO);
 
         for (BiddingQuotationListVO vo : list) {
+
+
 
             BigDecimal busTotalScore = BigDecimal.ZERO;
             BigDecimal techTotalScore = BigDecimal.ZERO;

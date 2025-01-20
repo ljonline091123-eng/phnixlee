@@ -76,6 +76,14 @@ public class VendorBiddingListQuotationListVO extends AdviceObject {
     @ApiModelProperty(value =  "税率")
     private BigDecimal taxRate;
 
+    @ApiModelProperty(value = "税率编码")
+    private String taxRateCode;
+
+
+    @DictCache(dictBizEnum = DictBizEnum.RAX_ARCHIVES,filedName = "taxRateCode")
+    @ApiModelProperty(value = "税率名称")
+    private String taxRateName;
+
     @ApiModelProperty(value =  "税额")
     private BigDecimal taxAmount;
 

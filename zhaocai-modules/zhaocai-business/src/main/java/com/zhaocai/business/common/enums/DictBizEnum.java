@@ -39,6 +39,7 @@ public enum DictBizEnum {
 	CONTRACT_BIDDING_METHOD("contract_bidding_method","合约规划-招标方式"),
 
 	PRICE_TYPE("price_type","价格类型"),
+	RAX_ARCHIVES("rax_archives","税率"),
 
 	CURRENCY("currency","币种"),
 	EXTERNAL("is_external","是否外部客商"),

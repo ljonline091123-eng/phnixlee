@@ -151,6 +151,7 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
             queryDTO.setDeptIdList(deptIdList);
         }
         IPage<ExpertListVO> iPage = new Page<>();
+        /* 判断是否随机抽取专家 */
         if (ObjectUtils.isEmpty(queryDTO.getDrawVO())){
             iPage = baseMapper.page(queryDTO.toMybatisPage(), queryDTO);
         } else {
@@ -159,6 +160,7 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
 
             //如果抽取条件不等于空
             if (!ObjectUtils.isEmpty(queryDTO.getDrawVO())){
+                /* 根据条件随机抽取专家 */
                 expertList = new ArrayList<>(randomDraw(expertList, queryDTO.getDrawVO()));
             }
 
@@ -216,21 +218,36 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
     /**
      * 根据条件随机抽取专家
      * */
-    private List<ExpertListVO> randomDraw(List<ExpertListVO> expertList, ExpertRandomDrawVO drawVO){
+    private List<ExpertListVO> randomDraw(List<ExpertListVO> expertList, ExpertRandomDrawVO drawVO) {
         Set<ExpertListVO> drawExpertList = new HashSet<>();
         // 使用洗牌算法打乱列表中的元素
         Collections.shuffle(expertList);
-        List<ExpertListVO> techExpertList = expertList.stream().filter(item -> item.getExpertType().contains("1") || (item.getExpertType().contains("1")&&item.getExpertType().contains("2")) ).collect(Collectors.toList());
-        List<ExpertListVO> econExpertList = expertList.stream().filter(item -> item.getExpertType().contains("2") || (item.getExpertType().contains("1")&&item.getExpertType().contains("2"))).collect(Collectors.toList());
+        // 抽取经济类专家人数
         Integer econExpertNum = drawVO.getEconExpertNum();
+        // 抽取技术类专家人数
         Integer techExpertNum = drawVO.getTechExpertNum();
 
-        //获取抽取人数
-        for (int i = 0; i < Math.min(techExpertList.size(), techExpertNum); i++) {
-            drawExpertList.add(techExpertList.get(i));
+        // 用于记录已经抽取的专家，避免重复抽取
+        Set<ExpertListVO> selectedExperts = new HashSet<>();
+        // 抽取技术专家
+        int techCount = 0;
+        for (ExpertListVO expert : expertList) {
+            if (techCount >= techExpertNum) break;
+            if (expert.getExpertType().contains("1") && !selectedExperts.contains(expert)) {
+                drawExpertList.add(expert);
+                selectedExperts.add(expert);
+                techCount++;
+            }
         }
-        for (int j = 0; j < Math.min(econExpertList.size(), econExpertNum); j++) {
-            drawExpertList.add(econExpertList.get(j));
+        // 抽取经济专家
+        int econCount = 0;
+        for (ExpertListVO expert : expertList) {
+            if (econCount >= econExpertNum) break;
+            if (expert.getExpertType().contains("2") && !selectedExperts.contains(expert)) {
+                drawExpertList.add(expert);
+                selectedExperts.add(expert);
+                econCount++;
+            }
         }
         return new ArrayList<>(drawExpertList);
     }
@@ -448,11 +465,11 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
             Map<String,Object> paramMap = new HashMap<>();
             if(expert.getProcessType().equals(ExpertProcessTypeEnum.EXPERT_ADD.getState())){
                 paramMap.put("businessId", expert.getId());
-                paramMap.put("businessTitle", "新增专家审批");
+                paramMap.put("businessTitle", "招标采购/专家管理/专家列表 新增专家审批");
                 paramMap.put("businessContent", String.format(ApproveFlowPromptTemplateEnum.EXPERT_ADD_APPROVE.getDesc(), expert.getExpertName()));
             }else{
                 paramMap.put("businessId", expertChange==null?null:expertChange.getId());
-                paramMap.put("businessTitle", "专家信息修改审批");
+                paramMap.put("businessTitle", "招标采购/专家管理/专家列表 专家信息修改审批");
                 paramMap.put("businessContent", String.format(ApproveFlowPromptTemplateEnum.EXPERT_CHANGE_APPROVE.getDesc(), expert.getExpertName()));
             }
 
