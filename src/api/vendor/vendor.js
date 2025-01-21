@@ -141,3 +141,26 @@ export const listBankAccountContact=(upId)=> {
     },
   })
 }
+// 获取账户列表查
+export const listAccountBank = (params)=> {
+  return request({
+    url: "/business/account/list",
+    method: "get",
+    params: {
+      /* 供应商id */
+      upId: params.vendorId,
+      /* 银行名称 */
+      openingBranch: params.name,
+      /* 支行名称 */
+      affiliatedBank: params.parentName,
+    },
+  })
+}
+// 获取所有银行支行开户账户信息(数据库隔一段时间会同步一次数据)
+export function getBankList(params) {
+  return request({
+    url: "/business/bank/list",
+    method: "get",
+    params
+  })
+}

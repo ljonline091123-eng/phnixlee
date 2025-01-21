@@ -425,7 +425,7 @@
                 <template slot-scope="scope">
                   <el-form-item label-width="0" :prop="'agreementPartyInfoLists.' + scope.$index + '.signerBankAccount'"
                                 :rules="[{ required: true, trigger: 'blur', message: '请输入签约单位银行账号' }]">
-                    <el-input v-model="scope.row.signerBankAccount" clearable />
+                    <el-input v-model="scope.row.signerBankAccount" placeholder="点击选择银行账号" @focus="getBankListVisible(scope)" :class="scope.row.roleType == 1 ? 'cursor_pointer':''"/>
                   </el-form-item>
                 </template>
               </el-table-column>
@@ -433,7 +433,7 @@
                 <template slot-scope="scope">
                   <el-form-item label-width="0" :prop="'agreementPartyInfoLists.' + scope.$index + '.signerBankName'"
                                 :rules="[{ required: true, trigger: 'blur', message: '请输入签约单位银行账户名称' }]">
-                    <el-input v-model="scope.row.signerBankName" clearable />
+                    <el-input v-model="scope.row.signerBankName" placeholder="点击选择银行账户名称" @focus="getBankListVisible(scope)" :class="scope.row.roleType == 1 ? 'cursor_pointer':''"/>
                   </el-form-item>
                 </template>
               </el-table-column>
@@ -441,7 +441,7 @@
                 <template slot-scope="scope">
                   <el-form-item label-width="0" :prop="'agreementPartyInfoLists.' + scope.$index + '.signerBankOpen'"
                                 :rules="[{ required: true, trigger: 'blur', message: '请输入签约单位开户支行' }]">
-                    <el-input v-model="scope.row.signerBankOpen" clearable />
+                    <el-input v-model="scope.row.signerBankOpen" placeholder="点击选择开户支行" @focus="getBankListVisible(scope)" :class="scope.row.roleType == 1 ? 'cursor_pointer':''"/>
                   </el-form-item>
                 </template>
               </el-table-column>
@@ -1322,6 +1322,83 @@
     </div>
     </el-form>
     </div>
+
+<!--  选择开户银行等信息  -->
+    <el-dialog title="选择开户银行" :visible.sync="bankVisible">
+      <el-form
+        :model="queryParams"
+        ref="queryForm"
+        :inline="true"
+        label-width="100px"
+      >
+        <el-form-item label="支行名称" prop="name">
+          <el-input
+            v-model="queryParams.name"
+            style="width: 200px"
+            placeholder="请输入支行名称"
+            clearable
+          />
+        </el-form-item>
+        <el-form-item label="银行名称" prop="parentName">
+          <el-input
+            v-model="queryParams.parentName"
+            style="width: 200px"
+            placeholder="请输入银行名称"
+            clearable
+          />
+        </el-form-item>
+
+        <el-form-item>
+          <el-button type="primary" @click="queryParams.pageNumber = 1;getBankListVisible(null)">搜索</el-button>
+        </el-form-item>
+      </el-form>
+      <el-table
+        :data="bankList"
+        empty-text="暂无数据"
+        border
+        v-loading="bankLoading"
+        element-loading-text="加载中..."
+      >
+        <el-table-column
+          label="支行名称"
+          align="center"
+          prop="name"
+        />
+        <el-table-column
+          label="银行名称"
+          prop="parentName"
+          width="180"
+          align="center"
+          show-overflow-tooltip
+        />
+        <el-table-column
+          label="银联号"
+          prop="code"
+          width="150"
+          align="center"
+          show-overflow-tooltip
+        />
+        <el-table-column
+          label="操作"
+          type="index"
+          width="80"
+          align="center">
+          <template slot-scope="scope">
+            <el-button type="primary" size="mini" plain @click="rowClickBank(scope)">选择</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+
+      <pagination
+        v-show="totalBank > 0"
+        :total="totalBank"
+        :page.sync="queryParams.pageNumber"
+        :limit.sync="queryParams.pageSize"
+        @pagination="getBankListVisible(null)"
+        :page-sizes="[10, 20, 40, 100]"
+      />
+    </el-dialog>
+
     <!-- 添加 -->
     <el-dialog
       :title="dialogTitle"
@@ -1422,6 +1499,7 @@ import { Base64 } from "js-base64";
 import { create, all } from "mathjs"
 import commonTitle from "@/views/procurement/components/common-title.vue";
 import { getAgreementEditURL,getAgreementCreateInfo,getAgreementAttachmentId,getAgreementDetail,getLabelAttachmentId, saveAgreement, listUnderlingDict, listDeviceClass, listDevice, listMaterialsClass, listMaterials, deviceFeatureList, deviceFeatureValueList, listMaterialsFeature, listMaterialsFeatureValue,  avoidSubmitByMarket} from "@/api/procurement/contract";
+import {listAccountBank, getBankList} from "@/api/vendor/vendor";
 import { offerService, offerRepo } from "@/utils/const"
 import {getEditFileUrlByID} from "@/api/template/file";
 import { cardid, isvalidatemobile, validatenull } from "@/utils/validate"
@@ -1510,9 +1588,11 @@ export default {
         label: "name",
       },
       attachmentMessage: "合同附件正在生成中，请稍后",
+      totalBank: 0,
+      bankList: [],
+      bankLoading: false,
+      bankVisible: false,
       queryParams: {
-        queryId: undefined,
-        queryName:undefined,
         pageNumber: 1,
         pageSize: 10,
       },
@@ -1552,7 +1632,69 @@ export default {
       next();
     },
   methods: {
-
+    /* 点击显示银行账户列表 */
+    getBankListVisible(scope) {
+      /* 如果是甲方就打开选择弹窗 */
+      if( (!scope && this.queryParams.roleType === 1) || (scope && scope.row && scope.row.roleType == 1)){
+        this.bankVisible = true;
+        this.queryParams.roleType = 1;
+        this.getBankListFn();
+      }else if( (!scope && this.queryParams.roleType === 2) || (scope && scope.row && scope.row.roleType == 2)){
+        this.bankVisible = true;
+        this.queryParams.roleType = 2;
+        this.listAccountBank();
+      }else{
+        this.bankVisible = false;
+      }
+    },
+    /* 获取甲方银行账户列表 */
+    async getBankListFn() {
+      this.bankLoading = true;
+      const res = await getBankList(this.queryParams)
+      this.bankLoading = false;
+      this.bankList = res.data.rows
+      this.totalBank = res.data.total
+    },
+    /* 获取乙方银行账户列表 */
+    async listAccountBank() {
+      this.bankLoading = true;
+      this.queryParams.vendorId = "1807385485136494593"
+      const res = await listAccountBank(this.queryParams)
+      this.bankLoading = false;
+      this.bankList = res.data.rows
+      this.bankList.map(account => {
+        account.name = account.openingBranch;
+        account.parentName = account.affiliatedBank;
+        account.code = account.interbankNumber;
+        return account;
+      })
+      this.totalBank = res.data.total
+    },
+    /* 点击选中银行 */
+    rowClickBank(scope) {
+      this.bankVisible = false;
+      this.firstForm.agreementPartyInfoLists.map((obj, index) =>{
+        /* 甲方 银行账号赋值 */
+        if(obj.roleType == 1 && this.queryParams.roleType == 1){
+          this.$set(obj, 'signerBankAccount', scope.row.name);
+          this.$set(obj, 'signerBankOpen', scope.row.code);
+          this.$set(obj, 'signerBankName', scope.row.parentName);
+          this.$refs.firstForm.clearValidate(`agreementPartyInfoLists.${index}.signerBankAccount`);
+          this.$refs.firstForm.clearValidate(`agreementPartyInfoLists.${index}.signerBankOpen`);
+          this.$refs.firstForm.clearValidate(`agreementPartyInfoLists.${index}.signerBankName`);
+        }
+        /* 乙方 供应商银行账号赋值 */
+        if(obj.roleType == 2 && this.queryParams.roleType == 2){
+          this.$set(obj, 'signerBankAccount', scope.row.name);
+          this.$set(obj, 'signerBankOpen', scope.row.code);
+          this.$set(obj, 'signerBankName', scope.row.parentName);
+          this.$refs.firstForm.clearValidate(`agreementPartyInfoLists.${index}.signerBankAccount`);
+          this.$refs.firstForm.clearValidate(`agreementPartyInfoLists.${index}.signerBankOpen`);
+          this.$refs.firstForm.clearValidate(`agreementPartyInfoLists.${index}.signerBankName`);
+        }
+        return obj;
+      });
+    },
     async loadAgreementAttachmentId() {
       const agreementId = this.id;
       if (agreementId) {
@@ -2518,6 +2660,9 @@ export default {
   margin: 0 auto !important;
   height: 72vh;
   overflow: auto;
+}
+::v-deep .cursor_pointer .el-input__inner{
+  cursor: pointer!important;
 }
 .engineering_visa {
   margin-bottom: 20px;

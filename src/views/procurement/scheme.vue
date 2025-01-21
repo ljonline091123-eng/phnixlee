@@ -118,6 +118,15 @@
           fixed="right"
         >
           <template slot-scope="scope">
+<!--
+    采购方案流程状态state
+    DRAFT(0,"自由态"),
+    IN_APPROVAL(1,"审批中"),
+    CANCELLATION(2,"已作废"),
+    APPROVE(3,"已完成"),
+    REJECT(4,"已驳回"),
+    REVOKED(5,"已撤回"),
+           -->
             <div
               v-if="
                 Number(scope.row.state) === 0 || Number(scope.row.state) === 5
