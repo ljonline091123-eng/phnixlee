@@ -29,7 +29,10 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <where>
             <if test="tAccountInfo.bankAccount != null  and tAccountInfo.bankAccount != ''"> and t_account_info like concat('%', #{tAccountInfo.bankAccount}, '%')</if>
             <if test="tAccountInfo.upId != null  and tAccountInfo.upId != ''"> and up_id =#{tAccountInfo.upId}</if>
+            <if test="tAccountInfo.openingBranch != null  and tAccountInfo.openingBranch != ''"> and opening_branch like concat('%', #{tAccountInfo.openingBranch}, '%')</if>
+            <if test="tAccountInfo.affiliatedBank != null  and tAccountInfo.affiliatedBank != ''"> and affiliated_bank like concat('%', #{tAccountInfo.affiliatedBank}, '%')</if>
         </where>
+        order by status
     </select>
     
     <select id="selectAccountById" parameterType="Long" resultMap="AccountResult">

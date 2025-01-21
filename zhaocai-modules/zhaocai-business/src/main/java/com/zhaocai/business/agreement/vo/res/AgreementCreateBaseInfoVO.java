@@ -3,6 +3,7 @@ package com.zhaocai.business.agreement.vo.res;
 import com.zhaocai.business.bidding.vo.res.VendorBiddingListQuotationListVO;
 import com.zhaocai.business.common.annotations.MoneyFormat;
 import com.zhaocai.business.common.base.AdviceObject;
+import com.zhaocai.business.vendor.vo.res.VendorVO;
 import io.swagger.annotations.ApiModelProperty;
 import lombok.Data;
 
@@ -43,6 +44,9 @@ public class AgreementCreateBaseInfoVO extends AdviceObject {
 
     @ApiModelProperty(value = "甲方机构id")
     private String partyAOrgId;
+
+    @ApiModelProperty(value = "甲方纳税识别号")
+    private String taxpayerNo;
 
     @ApiModelProperty(value = "甲方名称")
     private String partyAName;
@@ -114,4 +118,7 @@ public class AgreementCreateBaseInfoVO extends AdviceObject {
 
     @ApiModelProperty(value = "是否关联我的钢铁网价格-是否显示")
     private String isRelatedMySteelView;
+
+    @ApiModelProperty(value = "供应商基本信息")
+    private VendorVO vendorVO;
 }

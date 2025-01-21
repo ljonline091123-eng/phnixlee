@@ -52,10 +52,7 @@ import com.zhaocai.business.vendor.domain.VendorContact;
 import com.zhaocai.business.vendor.service.IVendorContactService;
 import com.zhaocai.business.vendor.service.IVendorService;
 import com.zhaocai.business.vendor.vo.req.VendorAgreementListQueryVO;
-import com.zhaocai.business.vendor.vo.res.DownloadAgreementVO;
-import com.zhaocai.business.vendor.vo.res.VendorAgreementDetailVO;
-import com.zhaocai.business.vendor.vo.res.VendorAgreementListVO;
-import com.zhaocai.business.vendor.vo.res.VendorAgreementVO;
+import com.zhaocai.business.vendor.vo.res.*;
 import com.zhaocai.common.core.bean.PageResult;
 import com.zhaocai.common.core.constant.SecurityConstants;
 import com.zhaocai.common.core.constant.UserConstants;
@@ -298,10 +295,15 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
         baseInfoVO.setAgreementPerformDistrict(getAgreementPerformDistrict(projectDetail.getPrjAddr()));
         baseInfoVO.setPartyAOrgId(projectDetail.getManagementOrgId());
         baseInfoVO.setPartyAName(getDeptName(projectDetail.getManagementOrgId()));
+        /* 甲方纳税人识别号 */
+        baseInfoVO.setTaxpayerNo(projectDetail.getTaxpayerNo());
 
         // 供应商
         Vendor biddingVendor = vendorService.getById(requestVO.getVendorId());
         ValidateUtils.isNullException(biddingVendor,"未获取到该采购方案的中标供应商");
+        /* 供应商基本信息 */
+        VendorVO vendorVO = BeanCopierUtil.copyBean(biddingVendor,VendorVO.class);
+        baseInfoVO.setVendorVO(vendorVO);
         baseInfoVO.setPartyBName(biddingVendor.getEnterpriseName());
         baseInfoVO.setPartyBLegalName(biddingVendor.getLegalRepresentative());
         baseInfoVO.setPartyBLegalPhone(biddingVendor.getLegalPhone());
