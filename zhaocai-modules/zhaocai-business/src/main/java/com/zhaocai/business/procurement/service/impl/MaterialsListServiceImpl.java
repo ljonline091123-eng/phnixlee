@@ -36,6 +36,7 @@ import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -124,6 +125,17 @@ public class MaterialsListServiceImpl extends ServiceImpl<MaterialsListMapper, M
             // 税额 = 含税金额 - 不含税金额
             materials.setTaxAmount(AmountCalUtil.calTaxAmount(materials.getAmountInclTax(),materials.getAmountExclTax()));
             materials.setCount(materials.getCount());
+
+            // 合计 总价
+            if (materials.getCount() != null && materials.getUnitPriceInclTax() != null) {
+                BigDecimal total = materials.getCount().multiply(materials.getUnitPriceInclTax());
+                /* 保留两位小数，不进行四舍五入，直接截取 */
+                total = total.setScale(2, RoundingMode.DOWN);
+                materials.setTotalPrice(total);
+            }else{
+                materials.setTotalPrice(BigDecimal.ZERO);
+            }
+
             baseMapper.insert(materials);
             System.out.println("materials:"+materials);
         });

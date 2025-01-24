@@ -8,6 +8,7 @@ import io.swagger.annotations.ApiModelProperty;
 import lombok.Data;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 
 /**
  * @author ssy
@@ -173,5 +174,8 @@ public class CompMaterialsContentVO extends AdviceObject {
 
     @ApiModelProperty(value = "价格类型")
     private Integer priceType;
+
+    @ApiModelProperty(value = "备注")
+    private String remark;
 
 }

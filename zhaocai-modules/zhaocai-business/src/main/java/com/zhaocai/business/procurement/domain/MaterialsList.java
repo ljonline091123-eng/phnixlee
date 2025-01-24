@@ -2,6 +2,7 @@ package com.zhaocai.business.procurement.domain;
 
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.zhaocai.business.common.annotations.MoneyFormat;
 import com.zhaocai.common.core.web.domain.BaseEntity;
 import io.swagger.annotations.ApiModelProperty;
 import lombok.Getter;
@@ -10,6 +11,7 @@ import lombok.Setter;
 import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.NotNull;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 
 /**
  * 采购物料清单对象 tb_materials_list
@@ -287,4 +289,19 @@ public class MaterialsList extends BaseEntity {
     @ApiModelProperty(hidden = true)
     @TableField(exist = false)
     private String isSelect;
+
+    @ApiModelProperty(value = "总价(含税)")
+    private BigDecimal totalPrice;
+
+    public BigDecimal getTotalPrice() {
+        if (count == null || unitPriceInclTax == null) {
+            /* 如果count或unitPriceInclTax为空，返回null */
+            return null;
+        }
+        BigDecimal total = count.multiply(unitPriceInclTax);
+        /* 保留两位小数，不进行四舍五入，直接截取 */
+        total = total.setScale(2, RoundingMode.DOWN);
+        return total;
+    }
+
 }

@@ -457,8 +457,11 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
                             contentVO.setTaxPrice(biddingListQuotation.getTaxPrice());
                             contentVO.setNotTaxPrice(biddingListQuotation.getNotTaxPrice());
                             contentVO.setTaxRate(biddingListQuotation.getTaxRate());
+                            /* 财务税率编码 */
                             contentVO.setTaxRateCode(biddingListQuotation.getTaxRateCode());
                             contentVO.setTaxRateName(biddingListQuotation.getTaxRateName());
+                            /* 清单备注 */
+                            contentVO.setRemark(biddingListQuotation.getRemark());
                         } else {
                             contentVO.setTaxUnitPrice(null);
                             contentVO.setNotTaxUnitPrice(null);

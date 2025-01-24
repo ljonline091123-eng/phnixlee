@@ -13,6 +13,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 
 /**
  * 合约清单
@@ -191,6 +192,16 @@ public class ContractMaterialsListVO extends AdviceObject {
 
     @ApiModelProperty(value = "易料市集商品id")
     private String skuId;
+
+    @ApiModelProperty(value = "总价(含税)")
+    private BigDecimal totalPrice;
+
+    @MoneyFormat(filedName = "totalPrice",scale = 2)
+    @ApiModelProperty(value = "总价(含税)")
+    private String totalPriceText;
+
+    @ApiModelProperty(value = "备注")
+    private String remark;
 
     public ContractMaterialsListVO(ContractPlanMaterialListDTO dto,Integer procurementType) {
         this.materialsId = dto.getId();

@@ -266,7 +266,11 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
     public ContractPlanMaterialListVO listContractMaterials(ContractPlanMaterialListQueryVO queryVO) {
         List<ContractMaterialsListVO> materialsList = contractPlanService.getContractMaterialsList(queryVO);
         // 根据查询的合约清单去查询易料商品信息
-        materialsList = this.selectMarketMaterials(materialsList, queryVO);
+        try{
+            materialsList = this.selectMarketMaterials(materialsList, queryVO);
+        }catch (Exception e){
+            log.error(e.getMessage());
+        }
 
         // 计算上限价
         BigDecimal upperLimitPrice = BigDecimal.ZERO;
