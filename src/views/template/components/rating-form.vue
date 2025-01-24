@@ -99,7 +99,10 @@
                     <el-table-column label="序号" type="index" width="50" align="center" />
                     <el-table-column label="清单编码" width="200" align="center" prop="materialsCode" />
                     <el-table-column label="清单名称" width="200" align="center" prop="materialsName" />
-                    <el-table-column label="规格型号" align="center" prop="specification" />
+<!--                    <el-table-column label="规格型号" align="center" prop="specification" />-->
+                    <el-table-column label="特征值特征项" min-width="150" prop="specification" show-overflow-tooltip/>
+                    <el-table-column label="计量规则" min-width="150" align="center" prop="measurementRules" />
+                    <el-table-column label="工作内容" align="center" prop="workContent" />
                     <el-table-column label="计量单位" align="center" prop="unitMeasurement" />
                     <el-table-column label="清单数量" align="center" prop="count"/>
                     <el-table-column label="单价（含税）" align="center" prop="priceIncludingTax" />
@@ -141,7 +144,10 @@
         <el-table-column label="序号" type="index" width="50" align="center" />
         <el-table-column label="清单编码" width="200" align="center" prop="materialsCode" />
         <el-table-column label="清单名称" width="200" align="center" prop="materialsName" />
-        <el-table-column label="规格型号" align="center" prop="specification" />
+<!--        <el-table-column label="规格型号" align="center" prop="specification" />-->
+        <el-table-column label="特征值特征项" min-width="150" prop="specification" show-overflow-tooltip/>
+        <el-table-column label="计量规则" min-width="150" align="center" prop="measurementRules" />
+        <el-table-column label="工作内容" align="center" prop="workContent" />
         <el-table-column label="计量单位" align="center" prop="unitMeasurement" />
         <el-table-column label="测算数量" align="center" prop="count" />
         <el-table-column label="已使用数量" align="center" prop="usedCount" />
@@ -230,7 +236,7 @@ export default {
         procurementPlanType: 'all'
       },
       inventoryVisible: false,
-      splitVisible: false, //是否显示拆分合同 
+      splitVisible: false, //是否显示拆分合同
       splitForm: {
         num: ''
       }, //拆分合同数表单

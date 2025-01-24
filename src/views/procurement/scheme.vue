@@ -180,7 +180,16 @@
               </el-button
               >
             </div>
-            <span v-else>-</span>
+            <span v-else>
+              <el-button
+                type="text"
+                @click="
+                  goCancellation(scope.row.id, scope.row.procurementSchemeName)
+                "
+                icon="el-icon-document-delete"
+                size="small"
+              >作废</el-button
+              ></span>
           </template>
         </el-table-column>
       </el-table>
@@ -484,6 +493,7 @@ export default {
       };
       try {
         console.log('%c👽 getSchemeList(query==) ', `font-size: 20px;background-color: #f00;`, query);
+        delete query.projectCode;
         const res = await getSchemeList(query);
         this.loading = false;
         if (res.data) {

@@ -99,6 +99,8 @@
               size="small"
               :data="row.materialsLists || []"
               :style="{ width: 'calc(100% - 1px)' }"
+              show-summary
+              :summary-method="getSummaries"
             >
               <el-table-column
                 label="序号"
@@ -117,31 +119,34 @@
               />
               <el-table-column
                 label="价格类型"
-                width="200"
+                width="100"
                 align="left"
                 prop="priceType"
                 fixed="left"
                 :formatter="formatterPriceType"
                 show-overflow-tooltip
               />
-              <el-table-column
-                label="交易标的物"
-                width="150"
-                align="left"
-                prop="subjectMatterName"
-              />
+<!--              <el-table-column-->
+<!--                label="交易标的物"-->
+<!--                width="150"-->
+<!--                align="left"-->
+<!--                prop="subjectMatterName"-->
+<!--              />-->
               <el-table-column
                 label="清单编码"
                 width="200"
                 align="left"
                 prop="materialsCode"
               />
-              <el-table-column
-                label="规格型号"
-                align="center"
-                width="150"
-                prop="specification"
-              />
+<!--              <el-table-column-->
+<!--                label="规格型号"-->
+<!--                align="center"-->
+<!--                width="150"-->
+<!--                prop="specification"-->
+<!--              />-->
+              <el-table-column label="特征值特征项" min-width="150" prop="specification" show-overflow-tooltip/>
+              <el-table-column label="计量规则" min-width="150" align="center" prop="measurementRules" />
+              <el-table-column label="工作内容" align="center" prop="workContent" />
               <el-table-column
                 label="计量单位"
                 align="center"
@@ -275,6 +280,7 @@
                   <span>{{ getInvoiceType(row.billType) }}</span>
                 </template>
               </el-table-column>
+              <el-table-column label="备注" align="center" prop="remark"/>
             </el-table>
           </span>
         </template>
@@ -324,6 +330,85 @@ export default {
     },
   },
   methods: {
+    /* 合计列计算 */
+    getSummaries(param) {
+      const { columns, data } = param;
+      const sums = [];
+      columns.forEach((column, index) => {
+        if (index === 0) {
+          sums[index] = '合计';
+          return;
+        }
+        /* 只显示含税总价 */
+        if(column.property === "taxPrice") {
+          const values = data.map(item => {
+            return Number(item['taxPriceText'].replace(',',''));
+          });
+          if (!values.every(value => isNaN(value))) {
+            sums[index] = values.reduce((prev, curr) => {
+              const value = Number(curr);
+              if (!isNaN(value)) {
+                return prev + curr;
+              } else {
+                return prev;
+              }
+            }, 0);
+            sums[index] = this.formatNumberDynamicDecimalWithSeparator(sums[index]);
+          } else {
+            sums[index] = '';
+          }
+        }else{
+          sums[index] = '';
+        }
+
+      });
+
+      return sums;
+    },
+    /**
+     * 格式化数字：动态保留小数位数并添加千分位分隔符
+     * @param {number|string} num - 要格式化的数字
+     * @param {number} maxDecimalPlaces - 最大保留的小数位数（例如 2 位）
+     * @returns {string} - 格式化后的字符串
+     */
+    formatNumberDynamicDecimalWithSeparator(num, maxDecimalPlaces = 2) {
+      // 将数字转换为字符串
+      const numStr = num.toString();
+
+      // 找到小数点的位置
+      const decimalIndex = numStr.indexOf('.');
+
+      // 截取整数部分和小数部分
+      let integerPart = numStr;
+      let decimalPart = '';
+
+      if (decimalIndex !== -1) {
+        integerPart = numStr.slice(0, decimalIndex);
+        decimalPart = numStr.slice(decimalIndex + 1);
+      }
+
+      // 如果小数位数超过最大位数，则截取
+      if (decimalPart.length > maxDecimalPlaces) {
+        decimalPart = decimalPart.slice(0, maxDecimalPlaces);
+      }
+
+      // 添加千分位分隔符到整数部分
+      integerPart = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+
+      // 拼接整数部分和小数部分
+      let formattedNumber = integerPart;
+      if (decimalPart.length > 0) {
+        if (decimalPart.length <= 1) {
+          formattedNumber += '.' + decimalPart + '0';
+        }else{
+          formattedNumber += '.' + decimalPart;
+        }
+      }else{
+        formattedNumber += '.00';
+      }
+
+      return formattedNumber;
+    },
     formatterPriceType(_row,_column,cellValue) {
       const findObj= PRICETYPELIST.find((item) => item.value === cellValue);
       return findObj? findObj.label: "未知价格类型";
@@ -365,8 +450,8 @@ export default {
         const { data } = res;
         this.assignRowIds(data.materialsList);
         // splitContractName，contractScope
-       
-       
+
+
         this.backBidList = data.materialsList.map((materialList) => {
           return {
             ...materialList,
