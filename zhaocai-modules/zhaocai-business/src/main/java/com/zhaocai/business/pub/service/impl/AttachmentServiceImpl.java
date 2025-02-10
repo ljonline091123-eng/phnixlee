@@ -270,6 +270,8 @@ public class AttachmentServiceImpl extends ServiceImpl<AttachmentMapper, Attachm
             params.setCopy(false);
             // 只允许打开一次
             params.setPreviewNumber(5);
+            //不走缓存
+            params.setNocache(true);
             // 设置水印
             WaterMark wm = new WaterMark(WaterMark.TYPE_TXT, waterMarkContent);
             params.setWaterMark(wm);
