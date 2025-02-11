@@ -512,6 +512,10 @@ public class SysDeptServiceImpl extends ServiceImpl<SysDeptMapper, SysDept> impl
     public  SysDept getTwoLevelDeptByDeptId(Long deptId){
         return deptMapper.getTwoLevelDeptByDeptId(deptId);
     }
+    @Override
+    public  SysDept getDeptByDeptId(Long deptId){
+        return deptMapper.getDeptByDeptId(deptId);
+    }
 
     @Override
     public List<SysDept> getTwoLevelDepts() {

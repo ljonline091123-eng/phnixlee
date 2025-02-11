@@ -143,6 +143,7 @@ public interface SysDeptMapper extends MyBaseMapper<SysDept>
     List<SysDept> getBySwitchListThridDeptId(@Param("thridDeptId") String thridDeptId);
 
     SysDept getTwoLevelDeptByDeptId(@Param("deptId") Long deptId);
+    SysDept getDeptByDeptId(@Param("deptId") Long deptId);
 
     List<SysDept> getTwoLevelDepts();
 

@@ -170,6 +170,7 @@ public interface ISysDeptService extends IService<SysDept>
     List<SysDept> selectOrgInfoList(OrgInfoQueryDTO queryDTO);
 
     SysDept getTwoLevelDeptByDeptId(Long deptId);
+    SysDept getDeptByDeptId(Long deptId);
 
     List<SysDept> getTwoLevelDepts();
 
