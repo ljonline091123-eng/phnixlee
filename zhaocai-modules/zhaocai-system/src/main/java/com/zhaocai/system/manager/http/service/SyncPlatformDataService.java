@@ -49,6 +49,7 @@ public class SyncPlatformDataService {
 
     @Transactional(rollbackFor = Exception.class)
     public Boolean syncDept(){
+        log.info("同步部门数据中。");
         //获取全量部门信息
         List<PlatDept> depts = platOrgService.allDepts();
 
@@ -60,6 +61,7 @@ public class SyncPlatformDataService {
 
         List<List<PlatDept>> splitList = ListUtil.splitList(depts, 1000);
         for (List<PlatDept> platDepts : splitList){
+            log.info("同步部门数据中。。。。");
 
             //新增获取到的全量部门数据
             List<SysDept> sysDeptsAdd = new ArrayList<>();
@@ -68,7 +70,9 @@ public class SyncPlatformDataService {
             /* 根据第三方部门id查询 我们自己数据库已经同步的数据 */
             List<SysDept> sysDepts = sysDeptService.getListByThridDeptId(deptIdList);
             /* 我们的部门数据，对第三方部门id去重。 */
-            Map<String, SysDept> deptMap = sysDepts.stream().collect(Collectors.toMap(SysDept::getThridDeptId, Function.identity()));
+            Map<String, SysDept> deptMap = sysDepts.stream().collect(Collectors.toMap(SysDept::getThridDeptId, Function.identity(),
+                    (existing, replacement) -> existing // 选择保留已存在的值，忽略新的值
+            ));
             platDepts.forEach(item -> {
                 SysDept sysDept;
                 /* 对比的是第三方的部门id */
@@ -172,6 +176,7 @@ public class SyncPlatformDataService {
 
     @Transactional(rollbackFor = Exception.class)
     public Boolean syncUser(){
+        log.info("同步用户数据中。");
         //获取全量用户信息
         List<PlatUser> users = platUserService.getPlatUser();
 
@@ -184,6 +189,7 @@ public class SyncPlatformDataService {
 
         List<List<PlatUser>> splitList = ListUtil.splitList(users, 1000);
         for (List<PlatUser> platUsers : splitList){
+            log.info("同步用户数据中。。。。");
 
             //新增获取到的全量用户数据
             List<SysUser> sysUsersAdd = new ArrayList<>();
@@ -191,12 +197,17 @@ public class SyncPlatformDataService {
             List<String> deptIdList = platUsers.stream().map(PlatUser::getDeptId).collect(Collectors.toList());
             //批量获取到部门信息
             List<SysDept> sysDepts = sysDeptService.getListByThridDeptId(deptIdList);
-            Map<String, SysDept> deptMap = sysDepts.stream().collect(Collectors.toMap(SysDept::getThridDeptId, Function.identity()));
+            Map<String, SysDept> deptMap = sysDepts.stream().collect(Collectors.toMap(SysDept::getThridDeptId, Function.identity(),
+                    (existing, replacement) -> existing // 选择保留已存在的值，忽略新的值
+                    ));
 
             List<String> userIdList = platUsers.stream().map(PlatUser::getUserId).collect(Collectors.toList());
             //批量获取到用户信息
             List<SysUser> sysUsers = sysUserService.getListByThridUserId(userIdList);
-            Map<String, SysUser> userMap = sysUsers.stream().collect(Collectors.toMap(SysUser::getThridUserId, Function.identity()));
+
+            Map<String, SysUser> userMap = sysUsers.stream().collect(Collectors.toMap(SysUser::getThridUserId, Function.identity(),
+                    (existing, replacement) -> existing // 选择保留已存在的值，忽略新的值
+                     ));
 
             platUsers.stream().forEach(item -> {
                 SysUser sysUser;
