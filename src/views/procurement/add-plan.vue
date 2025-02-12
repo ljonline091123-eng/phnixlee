@@ -1603,7 +1603,7 @@ console.log("-2222--"+JSON.stringify(this.materialsLists))
         })
         console.log(this.planList, 'this.planList');
         /* 采购方案类型(购买材料,劳务分包....) */
-        this.procurementType = procurementPlanType || '';
+        this.procurementType = procurementPlanType || (this.procurementType || '');
       } catch (err) {
         console.log(err);
       }
