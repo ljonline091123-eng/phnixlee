@@ -1893,7 +1893,9 @@ console.log("-2222--"+JSON.stringify(this.materialsLists))
 
       /* 删除了默认赋值为0 */
       if(row.floatingPrice === ''){
-        row.floatingPrice = 0;
+        // row.floatingPrice = 0;
+        event.target.style = "border: 1px solid red;";
+        this.$message.error("请输入正确值");
       }else if(!regexN1.test(row.floatingPrice)  ){
         event.target.style = "border: 1px solid red;"
         this.$message.error("请输入正确的值");
@@ -1934,14 +1936,19 @@ console.log("-2222--"+JSON.stringify(this.materialsLists))
     changeFloatingRate(event, row) {
       let { basePrice, taxRate, count } = row;
 
-      const regexPercentage = /^-?(100(\.00?)?|(\d{1,2}(\.\d{1,2})?))$/;
+      // const regexPercentage = /^-?(100(\.00?)?|(\d{1,2}(\.\d{1,2})?))$/;
+      const regexPercentage = /^-?(100(\.00?)?|(\d{1,2}(\.\d{1,2})?)?(\.\d+)?)$/;
+
 
       /* 删除了默认赋值为0 */
       if (row.floatingRate === '') {
-        row.floatingRate = 0;
+        // row.floatingRate = 0;
+        event.target.style = "border: 1px solid red;";
+        this.$message.error("请输入正确值");
+        return;
       } else if (!regexPercentage.test(row.floatingRate)) {
         event.target.style = "border: 1px solid red;";
-        this.$message.error("请输入正确的浮动率百分比值，范围为 -100.00 到 100.00，最多保留两位小数");
+        this.$message.error("【"+row.floatingRate+"】请输入正确的浮动率百分比值，范围为 -100.00 到 100.00，最多保留两位小数");
         return;
       }
 
