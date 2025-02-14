@@ -493,7 +493,6 @@ export default {
       };
       try {
         console.log('%c👽 getSchemeList(query==) ', `font-size: 20px;background-color: #f00;`, query);
-        delete query.projectCode;
         const res = await getSchemeList(query);
         this.loading = false;
         if (res.data) {
