@@ -53,6 +53,7 @@
         <result property="pushFlag" column="push_flag"/>
         <result property="skuId" column="sku_id"/>
         <result property="totalPrice" column="total_price"/>
+        <result property="floatingRate" column="floating_rate"/>
     </resultMap>
 
     <resultMap id="materialsListVO" type="com.zhaocai.business.procurement.dto.MaterialsListDTO" extends="MaterialsListResult">

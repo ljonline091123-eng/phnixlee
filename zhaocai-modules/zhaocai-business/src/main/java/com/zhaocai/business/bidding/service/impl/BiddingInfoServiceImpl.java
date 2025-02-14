@@ -454,6 +454,7 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
                             contentVO.setNotTaxUnitPrice(biddingListQuotation.getNotTaxUnitPrice());
                             contentVO.setBillType(biddingListQuotation.getBillType());
                             contentVO.setFloatingPrice(biddingListQuotation.getFloatingPrice());
+                            contentVO.setFloatingRate(biddingListQuotation.getFloatingRate());
                             contentVO.setTaxPrice(biddingListQuotation.getTaxPrice());
                             contentVO.setNotTaxPrice(biddingListQuotation.getNotTaxPrice());
                             contentVO.setTaxRate(biddingListQuotation.getTaxRate());
@@ -466,6 +467,7 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
                             contentVO.setTaxUnitPrice(null);
                             contentVO.setNotTaxUnitPrice(null);
                             contentVO.setFloatingPrice(null);
+                            contentVO.setFloatingRate(null);
                             contentVO.setTaxPrice(null);
                             contentVO.setNotTaxPrice(null);
                         }

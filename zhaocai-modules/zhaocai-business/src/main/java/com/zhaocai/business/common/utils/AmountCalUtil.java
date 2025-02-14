@@ -62,6 +62,20 @@ public class AmountCalUtil {
         return totalAmountExclTax.setScale(2,RoundingMode.DOWN);
     }
 
+
+    /**
+     * 计算含税单价 = 基价 * (1 + 浮动率) ，保留两位小数，多余部分舍弃
+     * @param basePrice
+     * @param floatPriceRate
+     * @return
+     */
+    public static BigDecimal calTotalAmountIncTax(BigDecimal basePrice,BigDecimal floatPriceRate) {
+        BigDecimal calTaxRate = NumberUtil.add(new BigDecimal("1"),NumberUtil.divide(floatPriceRate,new BigDecimal("100")));
+
+        BigDecimal totalAmountExclTax = NumberUtil.multiply(basePrice,calTaxRate,5);
+        return totalAmountExclTax.setScale(2,RoundingMode.DOWN);
+    }
+
     /**
      * 计算税额 = 含税单价 - 不含税搭建，保留 2 位小数
      * @param amountInclTax

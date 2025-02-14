@@ -200,6 +200,13 @@ public class ContractMaterialsListVO extends AdviceObject {
     @ApiModelProperty(value = "总价(含税)")
     private String totalPriceText;
 
+    @ApiModelProperty(value = "浮动率")
+    private BigDecimal floatingRate;
+
+    @MoneyFormat(filedName = "floatingRate",scale = 2)
+    @ApiModelProperty(value = "浮动率")
+    private String floatingRateText;
+
     @ApiModelProperty(value = "备注")
     private String remark;
 

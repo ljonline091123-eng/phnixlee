@@ -109,4 +109,7 @@ public class AgreementUnderlingMaterialsVO {
 
     @ApiModelProperty(value = "总价(含税)")
     private BigDecimal totalPrice;
+
+    @ApiModelProperty(value = "浮动率")
+    private BigDecimal floatingRate;
 }

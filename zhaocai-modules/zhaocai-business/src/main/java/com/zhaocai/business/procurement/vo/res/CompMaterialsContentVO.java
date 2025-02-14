@@ -90,6 +90,9 @@ public class CompMaterialsContentVO extends AdviceObject {
     @ApiModelProperty(value = "浮动价")
     private BigDecimal floatingPrice;
 
+    @ApiModelProperty(value = "浮动率")
+    private BigDecimal floatingRate;
+
     @ApiModelProperty(value = "卸费")
     private BigDecimal unloadingFee;
 
@@ -120,6 +123,10 @@ public class CompMaterialsContentVO extends AdviceObject {
     @MoneyFormat(filedName = "floatingPrice")
     @ApiModelProperty(value = "浮动价-文本")
     private String floatingPriceText;
+
+    @MoneyFormat(filedName = "floatingRate")
+    @ApiModelProperty(value = "浮动率-文本")
+    private String floatingRateText;
 
     @MoneyFormat(filedName = "unloadingFee")
     @ApiModelProperty(value = "卸费-文本")

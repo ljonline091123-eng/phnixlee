@@ -293,6 +293,9 @@ public class MaterialsList extends BaseEntity {
     @ApiModelProperty(value = "总价(含税)")
     private BigDecimal totalPrice;
 
+    @ApiModelProperty(value = "浮动率")
+    private BigDecimal floatingRate;
+
     public BigDecimal getTotalPrice() {
         if (count == null || unitPriceInclTax == null) {
             /* 如果count或unitPriceInclTax为空，返回null */

@@ -354,17 +354,36 @@ public class VendorBidServiceImpl implements IVendorBidService {
                     //浮动价计算方式
                     BigDecimal floatingPrice = quotationVO.getFloatingPrice();
                     //卸费
-                    BigDecimal unloadingFee = quotationVO.getUnloadingFee();
+//                    BigDecimal unloadingFee = quotationVO.getUnloadingFee();
                     //基价
                     BigDecimal basePrice = quotationVO.getBasePrice();
                     //含税单价
-                    BigDecimal taxUnitPrice = NumberUtil.add(4, basePrice, floatingPrice, unloadingFee);
+                    BigDecimal taxUnitPrice = NumberUtil.add(4, basePrice, floatingPrice);
                     //计算不含税单价
                     BigDecimal notTaxUnitPrice = AmountCalUtil.calUnitPriceExclTax(taxUnitPrice, taxRateVal);
-                    //计算含税总价C（每项（基价±浮动价+运费+卸费）*每项清单数量）
+                    //计算含税总价C（每项（基价±浮动价）*每项清单数量）
                     taxPrice = AmountCalUtil.calTotalAmountInclTax(amount, taxUnitPrice);
                     //计算不含税总价
                     notTaxPrice = AmountCalUtil.calTotalAmountExclTax(taxPrice, taxRateVal);
+                    quotation.setTaxUnitPrice(taxUnitPrice);
+                    quotation.setNotTaxUnitPrice(notTaxUnitPrice);
+                    quotation.setTaxPrice(taxPrice);
+                    quotation.setNotTaxPrice(notTaxPrice);
+                    quotations.add(quotation);
+                }else if(materialsListMap.get(quotationVO.getMaterialsId()).getPriceType().equals(PriceTypeEnum.FLOAT_RATE.getType())){
+                    /* 如果合约规划拆分的清单是 浮动率 */
+                    BigDecimal floatingRate = quotationVO.getFloatingRate();
+                    //基价
+                    BigDecimal basePrice = quotationVO.getBasePrice();
+                    //含税单价 基价 * 浮动率
+                    BigDecimal taxUnitPrice = AmountCalUtil.calTotalAmountIncTax(basePrice, floatingRate);
+                    //计算不含税单价
+                    BigDecimal notTaxUnitPrice = AmountCalUtil.calUnitPriceExclTax(taxUnitPrice, taxRateVal);
+                    //计算含税总价C（每项（基价±浮动价）*每项清单数量）
+                    taxPrice = AmountCalUtil.calTotalAmountInclTax(amount, taxUnitPrice);
+                    //计算不含税总价
+                    notTaxPrice = AmountCalUtil.calTotalAmountExclTax(taxPrice, taxRateVal);
+                    bidTaxPrice = bidTaxPrice.add(taxPrice);
                     quotation.setTaxUnitPrice(taxUnitPrice);
                     quotation.setNotTaxUnitPrice(notTaxUnitPrice);
                     quotation.setTaxPrice(taxPrice);
@@ -715,12 +734,26 @@ public class VendorBidServiceImpl implements IVendorBidService {
                         /* 如果合约规划拆分的清单是 浮动价 */
                         BigDecimal floatingPrice = quotationVO.getFloatingPrice();
                         //卸费
-                        BigDecimal unloadingFee = quotationVO.getUnloadingFee();
+//                        BigDecimal unloadingFee = quotationVO.getUnloadingFee();
                         //基价
                         BigDecimal basePrice = quotationVO.getBasePrice();
                         //含税单价
-                        BigDecimal taxUnitPrice = NumberUtil.add(4, basePrice, floatingPrice, unloadingFee);
-                        //计算含税总价C（每项（基价±浮动价+运费+卸费）*每项清单数量）
+//                        BigDecimal taxUnitPrice = NumberUtil.add(4, basePrice, floatingPrice, unloadingFee);
+                        BigDecimal taxUnitPrice = NumberUtil.add(4, basePrice, floatingPrice);
+                        //计算含税总价C（每项（基价±浮动价）*每项清单数量）
+                        taxPrice = AmountCalUtil.calTotalAmountInclTax(amount, taxUnitPrice);
+                        bidTaxPrice = bidTaxPrice.add(taxPrice);
+                        /** 校验含税单价 */
+                        //校验含税单价
+                        checkTaxUnitPrice(newestBiddingInfo==null?biddingInfo:newestBiddingInfo, quotationVO, taxUnitPrice);
+                    }else if(materialsListMap.get(quotationVO.getMaterialsId()).getPriceType().equals(PriceTypeEnum.FLOAT_RATE.getType())){
+                        /* 如果合约规划拆分的清单是 浮动率 */
+                        BigDecimal floatingRate = quotationVO.getFloatingRate();
+                        //基价
+                        BigDecimal basePrice = quotationVO.getBasePrice();
+                        //含税单价 基价 * 浮动率
+                        BigDecimal taxUnitPrice = AmountCalUtil.calTotalAmountIncTax(basePrice, floatingRate);
+                        //计算含税总价C（每项（基价±浮动价）*每项清单数量）
                         taxPrice = AmountCalUtil.calTotalAmountInclTax(amount, taxUnitPrice);
                         bidTaxPrice = bidTaxPrice.add(taxPrice);
                         /** 校验含税单价 */
