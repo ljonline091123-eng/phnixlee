@@ -303,6 +303,19 @@ public class SysDeptController extends BaseController
     }
 
     /**
+     * 根据单位id查询对应的部门
+     * @param deptId
+     * @return
+     */
+    @GetMapping("/getDeptByDeptId")
+    public SysDept getDeptByDeptId(@RequestParam Long deptId) {
+        if (null == deptId) {
+            throw new RuntimeException("部门 id 不能为空");
+        }
+        return deptService.getDeptByDeptId(deptId);
+    }
+
+    /**
      * 根据第三方部门 id 获取组织机构信息(本部门及以下部门，不含项目部、部门)
      * @param thridDeptId
      * @return

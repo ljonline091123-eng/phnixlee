@@ -28,6 +28,7 @@ import com.zhaocai.business.vendor.vo.res.DownloadAgreementVO;
 import com.zhaocai.common.core.utils.NumberUtil;
 import com.zhaocai.common.core.utils.StringUtils;
 import com.zhaocai.common.core.utils.bean.BeanCopierUtil;
+import com.zhaocai.common.core.web.bean.ResultData;
 import com.zhaocai.common.security.utils.SecurityUtils;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -93,6 +94,35 @@ public class AttachmentServiceImpl extends ServiceImpl<AttachmentMapper, Attachm
         //删除生成的临时文件
         System.out.println("删除文件路径:" + path);
         yozOfileUtils.deleteTempFilePath(path.toString());
+    }
+
+    //把上传的文件之前的修订记录去除，上传到minio，替换该附件的fileUrl为无修订记录的newfileUrl
+    @Override
+    public void  RemoverAmendmentRecord(Long attachmentId) throws IOException {
+        if(attachmentId == null){
+            throw new NotFoundException("修改文件名失败，attachmentId为空，请检查！");
+        }
+        AttachmentVO attachmentVO = getAttachmentById(attachmentId);
+        String fileName = attachmentVO.getFileName();
+        String fileUrl = attachmentVO.getFileUrl();
+        if(StringUtils.isEmpty(fileUrl) || StringUtils.isEmpty(fileName)){
+            throw new NotFoundException("去除线下修订记录失败，该附件存储的fileUrl或者fileName为空！");
+        }
+        //去除以前的修订记录，生成新的文件下载URL(无修订记录)
+        String newFileUrl = bookmarkUtils.AcceptanceAmendmentRecord(fileUrl,fileName);
+        //读取新文件，下载到临时文件夹
+        Path path =  yozOfileUtils.downloadFile(newFileUrl,yozOfileUtils.createTempFilePath(fileName));
+        File file = new File(path.toString());
+        if (!file.exists()) {
+            throw new IOException("文档不存在: " + fileUrl);
+        }
+        // 转换为InputStream，上传到文档中台，生成新文件的minio文件URL
+        FileInputStream fis = new FileInputStream(file);
+        String NewMinioFileUrl = sysFileService.uploadFile(fis, fileName);
+        updateFileNameANDFileUrl(attachmentId,NewMinioFileUrl,fileName);
+//        //删除生成的临时文件
+//        System.out.println("删除文件路径:" + path);
+//        yozOfileUtils.deleteTempFilePath(path.toString());
     }
 
     //文档中台——获取预览word文件URL,显示修订记录
@@ -240,6 +270,8 @@ public class AttachmentServiceImpl extends ServiceImpl<AttachmentMapper, Attachm
             params.setCopy(false);
             // 只允许打开一次
             params.setPreviewNumber(5);
+            //不走缓存
+            params.setNocache(true);
             // 设置水印
             WaterMark wm = new WaterMark(WaterMark.TYPE_TXT, waterMarkContent);
             params.setWaterMark(wm);

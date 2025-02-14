@@ -163,6 +163,15 @@ public class PreviewParams {
 			extraParam.put("acceptTracks", 0);
 		}
 	}
+
+	public void setNocache(boolean flag) throws JSONException {
+		if(flag) {
+			extraParam.put("noCache", 1);
+		}else {
+			extraParam.put("noCache", 0);
+		}
+	}
+
 	/**
 	 * 设置压缩文件预览是否开启高清
 	 * @param hd true高清，false标清

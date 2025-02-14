@@ -79,8 +79,11 @@ public class TemplateController extends BladeController {
     @ApiModelProperty(value = "文档中台的文件编辑URL")
     public ResultData<String> getEditFileURL(AttachmentVO requestVO) {
         Long attachmentId = requestVO.getId();
-        String fileName = requestVO.getFileName();
-        String fileUrl = requestVO.getFileUrl();
+//        String fileName = requestVO.getFileName();
+//        String fileUrl = requestVO.getFileUrl();
+        AttachmentVO attachmentVO = attachmentService.getAttachmentById(attachmentId);
+        String fileName = attachmentVO.getFileName();
+        String fileUrl = attachmentVO.getFileUrl();
         if(yozOfileUtils.isNULLFileURL(fileUrl)){
             return ResultData.fail("该文件存储的fileUrl为空，无法编辑文件！！！");
         }

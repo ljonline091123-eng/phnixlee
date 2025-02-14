@@ -252,6 +252,15 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
 		order by thrid_org_level desc limit 1;
 	</select>
 
+	<select id="getDeptByDeptId" resultType="com.zhaocai.system.api.domain.SysDept">
+		<include refid="selectDeptVo"/>
+		WHERE (
+		FIND_IN_SET( d.dept_id, ( SELECT ancestors FROM sys_dept s1 WHERE s1.dept_id = #{deptId} ) )
+        OR  d.dept_id =  #{deptId}
+		)
+		order by thrid_org_level desc limit 1;
+	</select>
+
 	<select id="getTwoLevelDepts" resultType="com.zhaocai.system.api.domain.SysDept">
 		<include refid="selectDeptVo"/>
 		WHERE

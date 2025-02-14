@@ -7,6 +7,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.zhaocai.common.core.constant.NumberConstant;
 import com.zhaocai.system.api.domain.OrgInfoQueryDTO;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import com.zhaocai.common.core.constant.UserConstants;
@@ -32,6 +33,7 @@ import org.springframework.util.ObjectUtils;
  * @author ruoyi
  */
 @Service
+@Slf4j
 public class SysDeptServiceImpl extends ServiceImpl<SysDeptMapper, SysDept> implements ISysDeptService {
     @Autowired
     private SysDeptMapper deptMapper;
@@ -309,6 +311,7 @@ public class SysDeptServiceImpl extends ServiceImpl<SysDeptMapper, SysDept> impl
 
     @Override
     public Boolean structDept() {
+        log.info("结构化的部门数据。。。。");
 
         //获取到需要结构化的部门数据
         List<SysDept> depts = baseMapper.findSyncThridDept();
@@ -511,6 +514,10 @@ public class SysDeptServiceImpl extends ServiceImpl<SysDeptMapper, SysDept> impl
     @Override
     public  SysDept getTwoLevelDeptByDeptId(Long deptId){
         return deptMapper.getTwoLevelDeptByDeptId(deptId);
+    }
+    @Override
+    public  SysDept getDeptByDeptId(Long deptId){
+        return deptMapper.getDeptByDeptId(deptId);
     }
 
     @Override

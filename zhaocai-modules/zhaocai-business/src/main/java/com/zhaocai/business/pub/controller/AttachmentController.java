@@ -123,6 +123,16 @@ public class AttachmentController extends BladeController {
         return ResultData.success();
     }
 
+    /**
+     * 去除文件之前的修订记录
+     */
+    @GetMapping("/RemoverAmendmentRecord")
+    @ApiOperation(value = "去除文件之前的修订记录")
+    public ResultData<Boolean> RemoverAmendmentRecord(@RequestParam("attachmentId") Long attachmentId) throws IOException {
+        attachmentService.RemoverAmendmentRecord(attachmentId);
+        return ResultData.success();
+    }
+
     /*
     * 预览文件-据文件名和文件URL
     * */
