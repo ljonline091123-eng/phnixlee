@@ -1919,8 +1919,9 @@ console.log("-2222--"+JSON.stringify(this.materialsLists))
       const unitPriceInclTaxBig = add(bignumber(basePrice), bignumber(row.floatingPrice));
       row.unitPriceInclTax = this.formatNumberDynamicDecimalWithSeparator(unitPriceInclTaxBig);
 
+      const priceInclTax = (row.unitPriceInclTax+'').replaceAll(',','');
       /* 单价不含税：含税单价 * (1 + (税率  先除100得出百分比)) */
-      const onePlusTaxRate = multiply(bignumber(row.unitPriceInclTax), add(1, divide(bignumber(taxRate), 100)));
+      const onePlusTaxRate = multiply(bignumber(priceInclTax), add(1, divide(bignumber(taxRate), 100)));
       row.unitPriceExclTax = this.formatNumberDynamicDecimalWithSeparator(onePlusTaxRate)
 
       /* 行含税总价：含税单价 * 数量 */
@@ -1964,9 +1965,9 @@ console.log("-2222--"+JSON.stringify(this.materialsLists))
       /* 单价含税:    基价  * (1 + (浮动率 先除100得出百分比)) */
       const unitPriceInclTaxBig = multiply(bignumber(basePrice), add(1,divide(bignumber(row.floatingRate), 100)));
       row.unitPriceInclTax = this.formatNumberDynamicDecimalWithSeparator(unitPriceInclTaxBig);
-
+      const priceInclTax = (row.unitPriceInclTax+'').replaceAll(',','');
       /* 单价不含税：含税单价 * (1 + (税率  先除100得出百分比)) */
-      const onePlusTaxRate = multiply(bignumber(row.unitPriceInclTax), add(1, divide(bignumber(taxRate), 100)));
+      const onePlusTaxRate = multiply(bignumber(priceInclTax), add(1, divide(bignumber(taxRate), 100)));
       row.unitPriceExclTax = this.formatNumberDynamicDecimalWithSeparator(onePlusTaxRate)
 
       /* 行含税总价：含税单价 * 数量 */
