@@ -553,11 +553,16 @@
           <commonTitle>合同清单</commonTitle>
           <!-- 物资采购类 -->
           <div style="margin-bottom: 24px" v-if="contractType == 1">
-            <el-table :data="firstForm.agreementMaterialsLists" style="width: 100%">
+            <el-table :data="firstForm.agreementMaterialsLists" style="width: 100%"
+                      show-summary
+                      :summary-method="getSummaries">
               <el-table-column prop="materialsCode" label="物资编码" width="150" show-overflow-tooltip/>
               <el-table-column prop="materialsName" label="物资名称" width="150" show-overflow-tooltip/>
-              <el-table-column prop="subjectMatterName" label="交易标的物" width="150" show-overflow-tooltip/>
-              <el-table-column prop="specification" label="规格型号" width="150" show-overflow-tooltip/>
+<!--              <el-table-column prop="subjectMatterName" label="交易标的物" width="150" show-overflow-tooltip/>-->
+<!--              <el-table-column prop="specification" label="规格型号" width="150" show-overflow-tooltip/>-->
+              <el-table-column label="特征值特征项" min-width="150" prop="specification" show-overflow-tooltip/>
+              <el-table-column label="计量规则" min-width="150" align="center" prop="measurementRules" />
+              <el-table-column label="工作内容" align="center" prop="workContent" />
               <el-table-column prop="unitMeasurement" label="计量单位" width="100"/>
               <el-table-column prop="brand" label="品牌" align="center" width="180">
                 <template slot-scope="scope">
@@ -669,11 +674,16 @@
           </div>
           <!-- 物资租赁类 / 机械租赁类 -->
           <div style="margin-bottom: 24px" v-if="contractType == 2 || contractType == 3">
-            <el-table :data="firstForm.agreementMaterialsLists" style="width: 100%">
+            <el-table :data="firstForm.agreementMaterialsLists" style="width: 100%"
+                      show-summary
+                      :summary-method="getSummaries">
               <el-table-column prop="materialsCode" label="物资编码" width="100" show-overflow-tooltip/>
               <el-table-column prop="materialsName" label="物资名称" width="150" show-overflow-tooltip/>
-              <el-table-column prop="subjectMatterName" label="交易标的物" width="150" show-overflow-tooltip/>
-              <el-table-column prop="specification" label="规格型号" />
+<!--              <el-table-column prop="subjectMatterName" label="交易标的物" width="150" show-overflow-tooltip/>-->
+<!--              <el-table-column prop="specification" label="规格型号" />-->
+              <el-table-column label="特征值特征项" min-width="150" prop="specification" show-overflow-tooltip/>
+              <el-table-column label="计量规则" min-width="150" align="center" prop="measurementRules" />
+              <el-table-column label="工作内容" align="center" prop="workContent" />
               <el-table-column prop="unitMeasurement" label="计量单位" />
               <el-table-column prop="brand" align="center" label="品牌" width="180">
                 <template slot-scope="scope">
@@ -782,7 +792,9 @@
           </div>
           <!-- 专业分包类 / 劳务分包类 -->
           <div style="margin-bottom: 24px" v-if="contractType == 4 || contractType == 5">
-            <el-table :data="firstForm.agreementMaterialsLists" style="width: 100%">
+            <el-table :data="firstForm.agreementMaterialsLists" style="width: 100%"
+                      show-summary
+                      :summary-method="getSummaries">
               <el-table-column prop="materialsCode" label="清单编码" width="150" show-overflow-tooltip/>
               <el-table-column prop="materialsName" label="清单名称" width="150" show-overflow-tooltip/>
               <el-table-column prop="subjectMatterName" label="交易标的物" width="150" show-overflow-tooltip/>
@@ -855,7 +867,9 @@
           </div>
           <!-- 其它类 -->
           <div style="margin-bottom: 24px" v-if="contractType == 6">
-            <el-table :data="firstForm.agreementMaterialsLists" style="width: 100%">
+            <el-table :data="firstForm.agreementMaterialsLists" style="width: 100%"
+                      show-summary
+                      :summary-method="getSummaries">
               <el-table-column prop="materialsCode" label="清单编码" width="150" show-overflow-tooltip/>
               <el-table-column prop="materialsName" label="清单名称" width="150" show-overflow-tooltip/>
               <el-table-column prop="subjectMatterName" label="交易标的物" width="150" show-overflow-tooltip/>
@@ -1004,7 +1018,10 @@
               </div>
               <el-table :data="firstForm.agreementMachineShifts" style="width: 100%">
                 <el-table-column prop="equipmentName" label="设备名称" show-overflow-tooltip/>
-                <el-table-column prop="specification" label="规格型号" show-overflow-tooltip/>
+<!--                <el-table-column prop="specification" label="规格型号" show-overflow-tooltip/>-->
+                <el-table-column label="特征值特征项" min-width="150" prop="specification" show-overflow-tooltip/>
+                <el-table-column label="计量规则" min-width="150" align="center" prop="measurementRules" />
+                <el-table-column label="工作内容" align="center" prop="workContent" />
                 <el-table-column prop="unitMeasurement" label="计量单位" show-overflow-tooltip/>
                 <el-table-column prop="taxRate" align="center" label="税率(%)">
                   <template slot-scope="scope">
@@ -1061,7 +1078,10 @@
             </commonTitle>
             <el-table :data="firstForm.agreementEquipmentSupplies" style="width: 100%">
               <el-table-column prop="equipmentName" label="设备名称" show-overflow-tooltip/>
-              <el-table-column prop="specification" label="规格型号" show-overflow-tooltip/>
+<!--              <el-table-column prop="specification" label="规格型号" show-overflow-tooltip/>-->
+              <el-table-column label="特征值特征项" min-width="150" prop="specification" show-overflow-tooltip/>
+              <el-table-column label="计量规则" min-width="150" align="center" prop="measurementRules" />
+              <el-table-column label="工作内容" align="center" prop="workContent" />
               <el-table-column prop="unitMeasurement" label="计量单位" show-overflow-tooltip/>
               <el-table-column prop="estimatedCount" align="center" label="预估数量">
                 <template slot-scope="scope">
@@ -1136,7 +1156,10 @@
             </commonTitle>
             <el-table :data="firstForm.agreementMaterialSupplies" style="width: 100%">
               <el-table-column prop="materialName" label="物资名称" show-overflow-tooltip/>
-              <el-table-column prop="specification" label="规格型号" show-overflow-tooltip/>
+<!--              <el-table-column prop="specification" label="规格型号" show-overflow-tooltip/>-->
+              <el-table-column label="特征值特征项" min-width="150" prop="specification" show-overflow-tooltip/>
+              <el-table-column label="计量规则" min-width="150" align="center" prop="measurementRules" />
+              <el-table-column label="工作内容" align="center" prop="workContent" />
               <el-table-column prop="unitMeasurement" label="计量单位" show-overflow-tooltip/>
               <el-table-column prop="estimatedCount" align="center" label="预估数量">
                 <template slot-scope="scope">
@@ -1632,6 +1655,89 @@ export default {
       next();
     },
   methods: {
+    /* 合计列计算 */
+    getSummaries(param) {
+      const { columns, data } = param;
+      const sums = [];
+      columns.forEach((column, index) => {
+        if (index === 0) {
+          sums[index] = '合计';
+          return;
+        }
+        /* 只显示合计 */
+        if(column.property === "signAmountInclTaxText" || column.property === "taxPriceText") {
+          const values = data.map(item => {
+            return Number(item[column.property].replaceAll(',',''));
+          });
+          if (!values.every(value => isNaN(value))) {
+            sums[index] = values.reduce((prev, curr) => {
+              const value = Number(curr);
+              if (!isNaN(value)) {
+                return prev + curr;
+              } else {
+                return prev;
+              }
+            }, 0);
+            sums[index] = this.formatNumberDynamicDecimalWithSeparator(sums[index]);
+          } else {
+            sums[index] = '';
+          }
+        }else{
+          sums[index] = '';
+        }
+
+      });
+
+      return sums;
+    },
+    /**
+     * 格式化数字：动态保留小数位数并添加千分位分隔符
+     * @param {number|string} num - 要格式化的数字
+     * @param {number} maxDecimalPlaces - 最大保留的小数位数（例如 2 位）
+     * @returns {string} - 格式化后的字符串
+     */
+    formatNumberDynamicDecimalWithSeparator(num, maxDecimalPlaces = 2) {
+      // 将数字转换为字符串
+      const numStr = num.toString();
+
+      // 找到小数点的位置
+      const decimalIndex = numStr.indexOf('.');
+
+      // 截取整数部分和小数部分
+      let integerPart = numStr;
+      let decimalPart = '';
+
+      if (decimalIndex !== -1) {
+        integerPart = numStr.slice(0, decimalIndex);
+        decimalPart = numStr.slice(decimalIndex + 1);
+      }
+
+      // 如果小数位数超过最大位数，则截取
+      if (decimalPart.length > maxDecimalPlaces) {
+        decimalPart = decimalPart.slice(0, maxDecimalPlaces);
+      }
+
+      // 添加千分位分隔符到整数部分
+      integerPart = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+
+      // 拼接整数部分和小数部分
+      let formattedNumber = integerPart;
+      if (decimalPart.length > 0) {
+        if (decimalPart.length <= 1) {
+          formattedNumber += '.' + decimalPart + '0';
+        }else{
+          if (decimalPart.length <= 1) {
+            formattedNumber += '.' + decimalPart + '0';
+          }else{
+            formattedNumber += '.' + decimalPart;
+          }
+        }
+      }else{
+        formattedNumber += '.00';
+      }
+
+      return formattedNumber;
+    },
     /* 点击显示银行账户列表 */
     getBankListVisible(scope) {
       /* 如果是甲方就打开选择弹窗 */

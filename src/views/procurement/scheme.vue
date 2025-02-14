@@ -180,7 +180,16 @@
               </el-button
               >
             </div>
-            <span v-else>-</span>
+            <span v-else>
+              <el-button
+                type="text"
+                @click="
+                  goCancellation(scope.row.id, scope.row.procurementSchemeName)
+                "
+                icon="el-icon-document-delete"
+                size="small"
+              >作废</el-button
+              ></span>
           </template>
         </el-table-column>
       </el-table>
