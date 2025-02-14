@@ -266,7 +266,11 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
     public ContractPlanMaterialListVO listContractMaterials(ContractPlanMaterialListQueryVO queryVO) {
         List<ContractMaterialsListVO> materialsList = contractPlanService.getContractMaterialsList(queryVO);
         // 根据查询的合约清单去查询易料商品信息
-        materialsList = this.selectMarketMaterials(materialsList, queryVO);
+        try{
+            materialsList = this.selectMarketMaterials(materialsList, queryVO);
+        }catch (Exception e){
+            log.error(e.getMessage());
+        }
 
         // 计算上限价
         BigDecimal upperLimitPrice = BigDecimal.ZERO;
@@ -371,6 +375,7 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
     @Transactional(propagation = Propagation.REQUIRED,rollbackFor = Exception.class)
     public MaterialProcurementPushRequestVO saveProcurementPlan(ProcurementPlanRequestVO requestVO) {
         MaterialProcurementPushRequestVO vo = new MaterialProcurementPushRequestVO();
+        /* 数据校验 */
         checkMaterialsList(requestVO);
         System.out.println("保存采购计划："+ requestVO.getSplitRequestList());
         if (NumberUtil.isNullOrZero(requestVO.getProcurementPlan().getId())) {
@@ -907,9 +912,9 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
                     materials.setRentQuantity(null);
                 }
 
-                // 非浮动价，将浮动价相关字段全部设置为 null
+                // 非浮动价、浮动率，将浮动价相关字段全部设置为 null
 //                if (!PriceTypeEnum.FLOAT_PRICE.equalsType(priceType)) {
-                if (!PriceTypeEnum.FLOAT_PRICE.equalsType(materials.getPriceType())) {
+                if (!PriceTypeEnum.FLOAT_PRICE.equalsType(materials.getPriceType())  && !PriceTypeEnum.FLOAT_RATE.equalsType(materials.getPriceType())) {
                     materials.setBasePrice(null);
                     materials.setFloatingPrice(null);
                     materials.setUnloadingFee(null);

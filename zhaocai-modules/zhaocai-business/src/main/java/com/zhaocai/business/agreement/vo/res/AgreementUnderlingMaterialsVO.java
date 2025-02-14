@@ -106,4 +106,10 @@ public class AgreementUnderlingMaterialsVO {
 
     @ApiModelProperty(value = "租赁数量")
     private BigDecimal rentQuantity;
+
+    @ApiModelProperty(value = "总价(含税)")
+    private BigDecimal totalPrice;
+
+    @ApiModelProperty(value = "浮动率")
+    private BigDecimal floatingRate;
 }

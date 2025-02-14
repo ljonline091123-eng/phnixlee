@@ -27,7 +27,7 @@ public class BiddingListQuotationController extends BladeController {
     private IBiddingListQuotationService biddingListQuotationService;
 
     /**
-     * 获取供应商的报价清单
+     * 获取供应商的报价清单 在 新增合同签订 时使用到了
      */
     @ApiOperation("获取供应商的报价清单")
     @GetMapping("/listVendorBiddingListQuotation")

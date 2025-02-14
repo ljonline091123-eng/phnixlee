@@ -56,6 +56,9 @@ public class BidQuotationVO implements Serializable {
     @ApiModelProperty(value = "浮动价")
     private BigDecimal floatingPrice;
 
+    @ApiModelProperty(value = "浮动率")
+    private BigDecimal floatingRate;
+
     @ApiModelProperty(value = "卸费")
     private BigDecimal unloadingFee;
 

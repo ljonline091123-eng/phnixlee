@@ -57,12 +57,15 @@ public class ProcurementPlanContractSplitVO extends AdviceObject {
     private String priceTypeText;
 
     public String getPriceTypeText() {
-        if (PriceTypeEnum.FLOAT_PRICE.equalsType(this.getPriceType())) {
-            this.priceTypeText = "浮动价";
-        } else if (PriceTypeEnum.FIXED_FLOAT_PRICE.equalsType(this.getPriceType())) {
-            this.priceTypeText = "固定、浮动价";
-        }else{
-            this.priceTypeText = "固定价";
+        this.priceTypeText = "固定价";
+        if(priceType!=null){
+            if(priceType == PriceTypeEnum.FIXED_PRICE.getType())this.priceTypeText = PriceTypeEnum.FIXED_PRICE.getDesc();
+            if(priceType == PriceTypeEnum.FLOAT_PRICE.getType())this.priceTypeText = PriceTypeEnum.FLOAT_PRICE.getDesc();
+            if(priceType == PriceTypeEnum.FIXED_FLOAT_PRICE.getType())this.priceTypeText = PriceTypeEnum.FIXED_FLOAT_PRICE.getDesc();
+            if(priceType == PriceTypeEnum.FLOAT_RATE.getType())this.priceTypeText = PriceTypeEnum.FLOAT_RATE.getDesc();
+            if(priceType == PriceTypeEnum.FIXED_FLOAT_RATE.getType())this.priceTypeText = PriceTypeEnum.FIXED_FLOAT_RATE.getDesc();
+            if(priceType == PriceTypeEnum.FLOAT_FLOAT_RATE.getType())this.priceTypeText = PriceTypeEnum.FLOAT_FLOAT_RATE.getDesc();
+            if(priceType == PriceTypeEnum.FIXED_FLOAT_FLOAT_RATE.getType())this.priceTypeText = PriceTypeEnum.FIXED_FLOAT_FLOAT_RATE.getDesc();
         }
         return priceTypeText;
     }

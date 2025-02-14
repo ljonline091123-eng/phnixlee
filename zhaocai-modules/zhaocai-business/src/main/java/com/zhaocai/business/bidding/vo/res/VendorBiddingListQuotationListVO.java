@@ -238,4 +238,7 @@ public class VendorBiddingListQuotationListVO extends AdviceObject {
     @MoneyFormat(filedName = "signAmountExclTax")
     @ApiModelProperty(value = "签订金额（不含税）-文本")
     private String signAmountExclTaxText;
+
+    @ApiModelProperty(value = "备注")
+    private String remark;
 }

@@ -36,6 +36,7 @@ import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -74,10 +75,10 @@ public class MaterialsListServiceImpl extends ServiceImpl<MaterialsListMapper, M
     private String subjectMatterConcreteCode;
 
     @Override
-    public List<MaterialsList> saveMaterialsList(List<MaterialsList> materialsLists, Long contractSplitId, Long planId, ProcurementPlan procurementPlan,Integer[] floatCount,Integer[] fixedCount) {
-//        Integer[] floatCount = {0};
-//        Integer[] fixedCount = {0};
-        System.out.println("List<MaterialsList>:"+materialsLists);
+    public List<MaterialsList> saveMaterialsList(List<MaterialsList> materialsLists, Long contractSplitId, Long planId, ProcurementPlan procurementPlan) {
+        Integer[] floatCount = {0};
+        Integer[] floatRateCount = {0};
+        Integer[] fixedCount = {0};
         materialsLists.forEach(materials -> {
             materials.setPlanId(planId);
             materials.setContractSplitId(contractSplitId);
@@ -87,30 +88,21 @@ public class MaterialsListServiceImpl extends ServiceImpl<MaterialsListMapper, M
             if(procurementPlan.getProcurementPlanType().equals(NumberConstant.ONE)){
                 /* 使用清单内每一条设置的 价格类型 */
                 if (PriceTypeEnum.FLOAT_PRICE.equalsType(materials.getPriceType())) {
-                    // 浮动价 >>> 含税单价 = 基价 + 浮动价 + 卸费
-                    BigDecimal unitPriceInclTax = AmountCalUtil.addAmount(materials.getBasePrice(),materials.getBasePrice(),materials.getFloatingPrice(),materials.getUnloadingFee());
+                    // 浮动价 >>> 含税单价 = 基价 + 浮动价
+                    BigDecimal unitPriceInclTax = AmountCalUtil.addAmount(materials.getBasePrice(),materials.getBasePrice(),materials.getFloatingPrice());
                     /* 单价(含税) */
                     materials.setUnitPriceInclTax(unitPriceInclTax);
                     floatCount[0]++;
+                }else if (PriceTypeEnum.FLOAT_RATE.equalsType(materials.getPriceType())) {
+                    // 浮动率 >>> 含税单价 = 基价 * 浮动率
+                    BigDecimal unitPriceInclTax = AmountCalUtil.calTotalAmountIncTax(materials.getBasePrice(),materials.getFloatingRate());
+                    /* 单价(含税) */
+                    materials.setUnitPriceInclTax(unitPriceInclTax);
+                    floatRateCount[0]++;
                 }else{
                     fixedCount[0]++;
                 }
-            }else{
-                /* 使用 采购计划 设置的 价格类型 */
-                if (PriceTypeEnum.FLOAT_PRICE.equalsType(procurementPlan.getPriceType())) {
-                    // 浮动价 >>> 含税单价 = 基价 + 浮动价 + 卸费
-                    BigDecimal unitPriceInclTax = AmountCalUtil.addAmount(materials.getBasePrice(),materials.getBasePrice(),materials.getFloatingPrice(),materials.getUnloadingFee());
-                    /* 单价(含税) */
-                    materials.setUnitPriceInclTax(unitPriceInclTax);
-                }
             }
-//            /* 使用 采购计划 设置的 价格类型 */
-//            if (PriceTypeEnum.FLOAT_PRICE.equalsType(procurementPlan.getPriceType())) {
-//                // 浮动价 >>> 含税单价 = 基价 + 浮动价 + 卸费
-//                BigDecimal unitPriceInclTax = AmountCalUtil.addAmount(materials.getBasePrice(),materials.getBasePrice(),materials.getFloatingPrice(),materials.getUnloadingFee());
-//                /* 单价(含税) */
-//                materials.setUnitPriceInclTax(unitPriceInclTax);
-//            }
 
             // 不含税单价 = 含税单价 / (1 + 税率%)
             materials.setUnitPriceExclTax(AmountCalUtil.calUnitPriceExclTax(materials.getUnitPriceInclTax(),materials.getTaxRate()));
@@ -124,19 +116,44 @@ public class MaterialsListServiceImpl extends ServiceImpl<MaterialsListMapper, M
             // 税额 = 含税金额 - 不含税金额
             materials.setTaxAmount(AmountCalUtil.calTaxAmount(materials.getAmountInclTax(),materials.getAmountExclTax()));
             materials.setCount(materials.getCount());
+
+            // 合计 总价
+            if (materials.getCount() != null && materials.getUnitPriceInclTax() != null) {
+                BigDecimal total = materials.getCount().multiply(materials.getUnitPriceInclTax());
+                /* 保留两位小数，不进行四舍五入，直接截取 */
+                total = total.setScale(2, RoundingMode.DOWN);
+                materials.setTotalPrice(total);
+            }else{
+                materials.setTotalPrice(BigDecimal.ZERO);
+            }
+
             baseMapper.insert(materials);
-            System.out.println("materials:"+materials);
         });
         /* 是否是 “购买材料” */
         if(procurementPlan.getProcurementPlanType().equals(NumberConstant.ONE)){
-            if(floatCount[0]>0 && fixedCount[0]>0){
-                /* 固定、浮动价 */
+            if (floatCount[0] > 0 && fixedCount[0] > 0 && floatRateCount[0] > 0) {
+                // 固定价、浮动价、浮动率
+                procurementPlan.setPriceType(PriceTypeEnum.FIXED_FLOAT_FLOAT_RATE.getType());
+            } else if (fixedCount[0] > 0 && floatCount[0] > 0) {
+                // 固定价、浮动价
                 procurementPlan.setPriceType(PriceTypeEnum.FIXED_FLOAT_PRICE.getType());
-            }else if(floatCount[0]>0){
-                /* 浮动价 */
+            } else if (floatRateCount[0] > 0 && fixedCount[0] > 0) {
+                // 固定价、浮动率
+                procurementPlan.setPriceType(PriceTypeEnum.FIXED_FLOAT_RATE.getType());
+            } else if (floatRateCount[0] > 0 && floatCount[0] > 0) {
+                // 浮动价、浮动率
+                procurementPlan.setPriceType(PriceTypeEnum.FLOAT_FLOAT_RATE.getType());
+            } else if (floatCount[0] > 0) {
+                // 浮动价
                 procurementPlan.setPriceType(PriceTypeEnum.FLOAT_PRICE.getType());
-            }else{
-                /* 固定价 */
+            } else if (floatRateCount[0] > 0) {
+                // 浮动率
+                procurementPlan.setPriceType(PriceTypeEnum.FLOAT_RATE.getType());
+            } else if (fixedCount[0] > 0) {
+                // 固定价
+                procurementPlan.setPriceType(PriceTypeEnum.FIXED_PRICE.getType());
+            } else {
+                // 固定价
                 procurementPlan.setPriceType(PriceTypeEnum.FIXED_PRICE.getType());
             }
             /* 更新采购计划 */

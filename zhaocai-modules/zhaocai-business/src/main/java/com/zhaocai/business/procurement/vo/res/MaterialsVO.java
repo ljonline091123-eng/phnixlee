@@ -8,6 +8,7 @@ import io.swagger.annotations.ApiModelProperty;
 import lombok.Data;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 
 /**
  * 物料清单vo
@@ -176,6 +177,23 @@ public class MaterialsVO extends AdviceObject {
 
     @ApiModelProperty(value = "易料市集商品id")
     private String skuId;
+
+    @ApiModelProperty(value = "备注")
+    private String remark;
+
+    @ApiModelProperty(value = "总价(含税)")
+    private BigDecimal totalPrice;
+
+    @MoneyFormat(filedName = "totalPrice",scale = 2)
+    @ApiModelProperty(value = "总价(含税)")
+    private String totalPriceText;
+
+    @ApiModelProperty(value = "浮动率")
+    private BigDecimal floatingRate;
+
+    @MoneyFormat(filedName = "floatingRate",scale = 2)
+    @ApiModelProperty(value = "浮动率")
+    private String floatingRateText;
 
     public BigDecimal getTransferQuantity() {
         return this.getCount();

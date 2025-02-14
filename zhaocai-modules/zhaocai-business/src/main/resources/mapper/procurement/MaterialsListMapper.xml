@@ -52,10 +52,11 @@
         <result property="quantity" column="quantity"/>
         <result property="pushFlag" column="push_flag"/>
         <result property="skuId" column="sku_id"/>
+        <result property="totalPrice" column="total_price"/>
+        <result property="floatingRate" column="floating_rate"/>
     </resultMap>
 
-    <resultMap id="materialsListVO" type="com.zhaocai.business.procurement.dto.MaterialsListDTO"
-               extends="MaterialsListResult">
+    <resultMap id="materialsListVO" type="com.zhaocai.business.procurement.dto.MaterialsListDTO" extends="MaterialsListResult">
         <result property="splitId" column="split_id"/>
         <result property="splitContractName" column="split_contract_name"/>
         <result property="contractScope" column="contract_scope"/>
