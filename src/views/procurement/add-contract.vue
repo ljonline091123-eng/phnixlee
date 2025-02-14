@@ -589,9 +589,9 @@
               <el-table-column prop="materialsName" label="物资名称" width="150" show-overflow-tooltip/>
 <!--              <el-table-column prop="subjectMatterName" label="交易标的物" width="150" show-overflow-tooltip/>-->
 <!--              <el-table-column prop="specification" label="规格型号" width="150" show-overflow-tooltip/>-->
-              <el-table-column label="特征值特征项" min-width="150" prop="specification"/>
-              <el-table-column label="计量规则" min-width="150" align="center" prop="measurementRules" />
-              <el-table-column label="工作内容" align="center" prop="workContent" />
+              <el-table-column label="特征值特征项" min-width="150" prop="specification"  show-overflow-tooltip/>
+              <el-table-column label="计量规则" min-width="150" align="center" prop="measurementRules"  show-overflow-tooltip/>
+              <el-table-column label="工作内容" align="center" prop="workContent"  show-overflow-tooltip/>
               <el-table-column prop="unitMeasurement" label="计量单位" width="100"/>
               <el-table-column prop="brand" label="品牌" align="center" width="180" show-overflow-tooltip>
                 <template slot-scope="scope">
@@ -637,9 +637,9 @@
               <el-table-column prop="materialsName" label="物资名称" width="150" show-overflow-tooltip/>
 <!--              <el-table-column prop="subjectMatterName" label="交易标的物/" width="150" show-overflow-tooltip/>-->
 <!--              <el-table-column prop="specification" label="规格型号" width="150" show-overflow-tooltip/>-->
-              <el-table-column label="特征值特征项" min-width="150" prop="specification"/>
-              <el-table-column label="计量规则" min-width="150" align="center" prop="measurementRules" />
-              <el-table-column label="工作内容" align="center" prop="workContent" />
+              <el-table-column label="特征值特征项" min-width="150" prop="specification"  show-overflow-tooltip/>
+              <el-table-column label="计量规则" min-width="150" align="center" prop="measurementRules"  show-overflow-tooltip/>
+              <el-table-column label="工作内容" align="center" prop="workContent" show-overflow-tooltip />
               <el-table-column prop="unitMeasurement" label="计量单位" width="100"/>
               <el-table-column prop="brand" label="品牌" align="center" width="180" show-overflow-tooltip>
                 <template slot-scope="scope">
@@ -717,9 +717,9 @@
               <el-table-column prop="materialsName" label="物资名称" width="150" show-overflow-tooltip/>
 <!--              <el-table-column prop="subjectMatterName" label="交易标的物" width="150" show-overflow-tooltip/>-->
 <!--              <el-table-column prop="specification" label="规格型号" width="150" show-overflow-tooltip/>-->
-              <el-table-column label="特征值特征项" min-width="150" prop="specification"/>
-              <el-table-column label="计量规则" min-width="150" align="center" prop="measurementRules" />
-              <el-table-column label="工作内容" align="center" prop="workContent" />
+              <el-table-column label="特征值特征项" min-width="150" prop="specification" show-overflow-tooltip/>
+              <el-table-column label="计量规则" min-width="150" align="center" prop="measurementRules"  show-overflow-tooltip/>
+              <el-table-column label="工作内容" align="center" prop="workContent"  show-overflow-tooltip/>
               <el-table-column prop="unitMeasurement" label="计量单位" />
               <el-table-column prop="brand" align="center" label="品牌" width="180">
                 <template slot-scope="scope">
@@ -947,9 +947,9 @@
               <el-table :data="firstForm.agreementMachineShifts" style="width: 100%">
                 <el-table-column prop="equipmentName" label="设备名称" show-overflow-tooltip/>
 <!--                <el-table-column prop="specification" label="规格型号" show-overflow-tooltip/>-->
-                <el-table-column label="特征值特征项" min-width="150" prop="specification"/>
-                <el-table-column label="计量规则" min-width="150" align="center" prop="measurementRules" />
-                <el-table-column label="工作内容" align="center" prop="workContent" />
+                <el-table-column label="特征值特征项" min-width="150" prop="specification"  show-overflow-tooltip/>
+                <el-table-column label="计量规则" min-width="150" align="center" prop="measurementRules" show-overflow-tooltip />
+                <el-table-column label="工作内容" align="center" prop="workContent"  show-overflow-tooltip/>
                 <el-table-column prop="unitMeasurement" label="计量单位" show-overflow-tooltip/>
                 <el-table-column prop="taxRate" align="right" label="税率(%)">
                   <template slot-scope="scope">
@@ -1007,9 +1007,9 @@
             <el-table :data="firstForm.agreementEquipmentSupplies" style="width: 100%">
               <el-table-column prop="equipmentName" label="设备名称" show-overflow-tooltip/>
 <!--              <el-table-column prop="specification" label="规格型号" show-overflow-tooltip/>-->
-              <el-table-column label="特征值特征项" min-width="150" prop="specification"/>
-              <el-table-column label="计量规则" min-width="150" align="center" prop="measurementRules" />
-              <el-table-column label="工作内容" align="center" prop="workContent" />
+              <el-table-column label="特征值特征项" min-width="150" prop="specification" show-overflow-tooltip/>
+              <el-table-column label="计量规则" min-width="150" align="center" prop="measurementRules" show-overflow-tooltip />
+              <el-table-column label="工作内容" align="center" prop="workContent"  show-overflow-tooltip/>
               <el-table-column prop="unitMeasurement" label="计量单位" show-overflow-tooltip/>
               <el-table-column prop="estimatedCount" align="center" label="预估数量">
                 <template slot-scope="scope">
@@ -1085,9 +1085,9 @@
             <el-table :data="firstForm.agreementMaterialSupplies" style="width: 100%">
               <el-table-column prop="materialName" label="物资名称" show-overflow-tooltip/>
 <!--              <el-table-column prop="specification" label="规格型号" show-overflow-tooltip/>-->
-              <el-table-column label="特征值特征项" min-width="150" prop="specification"/>
-              <el-table-column label="计量规则" min-width="150" align="center" prop="measurementRules" />
-              <el-table-column label="工作内容" align="center" prop="workContent" />
+              <el-table-column label="特征值特征项" min-width="150" prop="specification" show-overflow-tooltip/>
+              <el-table-column label="计量规则" min-width="150" align="center" prop="measurementRules"  show-overflow-tooltip/>
+              <el-table-column label="工作内容" align="center" prop="workContent"  show-overflow-tooltip/>
               <el-table-column prop="unitMeasurement" label="计量单位" show-overflow-tooltip/>
               <el-table-column prop="estimatedCount" align="center" label="预估数量">
                 <template slot-scope="scope">

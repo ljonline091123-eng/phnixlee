@@ -199,8 +199,8 @@
 <!--                        </template>-->
 <!--                      </el-table-column>-->
                       <el-table-column label="特征值特征项" min-width="150" prop="specification" show-overflow-tooltip/>
-                      <el-table-column label="计量规则" align="center" prop="measurementRules" />
-                      <el-table-column label="工作内容" align="center" prop="workContent" />
+                      <el-table-column label="计量规则" align="center" prop="measurementRules"  show-overflow-tooltip/>
+                      <el-table-column label="工作内容" align="center" prop="workContent"  show-overflow-tooltip/>
                       <el-table-column label="计量单位" align="center" prop="unitMeasurement" />
                       <el-table-column label="价格类型" align="center" prop="priceType" width="200" v-if="procurementType === 1">
                         <template slot-scope="scope">
@@ -449,8 +449,8 @@
           <el-table-column label="清单编码" min-width="100" prop="materialsCode" show-overflow-tooltip/>
           <el-table-column label="清单名称" min-width="200" prop="materialsName" show-overflow-tooltip/>
           <el-table-column label="特征值特征项" min-width="150" prop="specification" show-overflow-tooltip/>
-          <el-table-column label="计量规则" align="center" prop="measurementRules" />
-          <el-table-column label="工作内容" align="center" prop="workContent" />
+          <el-table-column label="计量规则" align="center" prop="measurementRules"  show-overflow-tooltip/>
+          <el-table-column label="工作内容" align="center" prop="workContent"  show-overflow-tooltip/>
           <el-table-column label="计量单位" align="center" prop="unitMeasurement" />
           <el-table-column v-if="currentContract.contractPlanningCategory != 1 && currentContract.contractPlanningCategory != 2" label="工程量" align="right" prop="quantityText" />
           <el-table-column label="已用数量" align="right" prop="usedCountText" />
