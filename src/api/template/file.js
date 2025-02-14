@@ -9,6 +9,16 @@ export function ModifyFileNameAndFileURL(data) {
   });
 }
 
+
+// 上传文件后，去除文件修订记录
+export function removerAmendmentRecord(params) {
+  return request({
+    url: "/business/attachment/RemoverAmendmentRecord",
+    method: "get",
+    params,
+  });
+}
+
 // 范本管理-查询模板附件的-文档中台的预览url
 export function getPreviewFileUrl(id) {
   return request({

@@ -319,7 +319,7 @@ import {
   getContractTypeList,
   getPreviewFileUrl,
   editFile,
-
+  removerAmendmentRecord,
 } from "@/api/template/file";
 import { uploadFileUrl, offerService, offerRepo } from "@/utils/const";
 import Treeselect from "@riophae/vue-treeselect";
@@ -452,7 +452,7 @@ export default {
     async handleAdd() {
       // this.$router.push(`/template/add-rating`);
       this.fileTemplateVisible = true;
-      this.listOrganization4Company();
+      // this.listOrganization4Company();  //注释
     },
     /** 删除按钮操作 */
     handleDelete() {
@@ -484,6 +484,12 @@ export default {
       try {
         const res = await addAttachment({ fileName: name, fileUrl: url });
         this.attachmentId = res.data;
+      } catch (err) {
+        console.log(err);
+      }
+      //上传文件后，先去除文档原来的修订记录
+      try {
+        const res = await removerAmendmentRecord({attachmentId: this.attachmentId});
       } catch (err) {
         console.log(err);
       }
@@ -554,7 +560,7 @@ export default {
       });
     },
     async handleUpdate() {
-      await this.listOrganization4Company();
+      // await this.listOrganization4Company();   //注释
       const { id } = this.selectTemplateData;
       this.fileTemplateVisible = true;
       try {

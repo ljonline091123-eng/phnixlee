@@ -1100,7 +1100,7 @@ import { getContractTypeList } from "@/api/template/file";
 import FileModule from "@/components/FileModule/index.vue";
 import { isvalidatemobile, validEmail, validatenum } from "@/utils/validate";
 import BackButton from "@/components/BackButton/index.vue";
-import { addAttachment , getEditFileUrlByID, ModifyFileNameAndFileURL} from "@/api/template/file";
+import { addAttachment , getEditFileUrlByID, ModifyFileNameAndFileURL, removerAmendmentRecord} from "@/api/template/file";
 import {showSecretRelatedTips} from "@/utils/MyUtils";
 import {offerRepo, offerService, uploadFileUrl} from "@/utils/const";
 import { listUnderlingDict } from "@/api/procurement/contract";
@@ -2207,12 +2207,13 @@ export default {
         this.$set(this.procurementSchemeTempObject.biddingTemplate, "fileUrl", url);
         this.$set(this.procurementSchemeTempObject.biddingTemplate, "templateName", this.formData.biddingTemplateName);
         this.$set(this.procurementSchemeTempObject.biddingTemplate, "templateId", this.formData.biddingTemplateId);
-        /* 调起联想文档 */
+        /* 保存需要编辑的文档ID */
         this.viewAttachmentId = res.data;
-
+        //上传文件后，先去除文档原来的修订记录
+        const res2 = await removerAmendmentRecord({attachmentId: this.viewAttachmentId});
         //据viewAttachmentId获取文件的文档中台的编辑URL
         if (this.viewAttachmentId) {
-          console.log('Attachment ID:', this.viewAttachmentId);
+          console.log('viewAttachmentId:', this.viewAttachmentId);
           //获取文档中台的文档编辑URL
           this.loadEditFileUrl();
         } else {
@@ -2260,7 +2261,8 @@ export default {
         this.$set(this.procurementSchemeTempObject.contractTemplate, "templateId", this.formData.contractTemplateId);
         /* 调起联想文档 */
         this.viewAttachmentId = res.data;
-
+        //上传文件后，先去除文档原来的修订记录
+        const res2 = await removerAmendmentRecord({attachmentId: this.viewAttachmentId});
         //据viewAttachmentId获取文件的文档中台的编辑URL
         if (this.viewAttachmentId) {
           console.log('Attachment ID:', this.viewAttachmentId);
