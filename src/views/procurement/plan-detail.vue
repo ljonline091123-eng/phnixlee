@@ -211,7 +211,7 @@
                 label="基价"
                 align="right"
                 prop="basePriceText"
-                v-if="isShow && procurementPlan.priceType == 2"
+                v-if="isShow && [2,3,4,5,6,7].includes(procurementPlan.priceType)"
               />
               <el-table-column
                 width="150"
@@ -225,14 +225,14 @@
                 label="浮动价"
                 align="right"
                 prop="floatingPriceText"
-                v-if="isShow && procurementPlan.priceType == 2"
+                v-if="isShow && [2,3,6,7].includes(procurementPlan.priceType)"
               />
               <el-table-column
                 width="150"
                 label="装卸费"
                 align="right"
-                prop="unloadingFeeText"
-                v-if="isShow && procurementPlan.priceType == 2"
+                prop="floatingRateText"
+                v-if="isShow && [4,5,6,7].includes(procurementPlan.priceType)"
               />
               <el-table-column
               v-if="contractPlanning.contractPlanningCategory == 1"
