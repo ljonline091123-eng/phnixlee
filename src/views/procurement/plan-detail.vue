@@ -229,7 +229,7 @@
               />
               <el-table-column
                 width="150"
-                label="装卸费"
+                label="浮动率"
                 align="right"
                 prop="floatingRateText"
                 v-if="isShow && [4,5,6,7].includes(procurementPlan.priceType)"

@@ -320,35 +320,35 @@
                 label="不含税单价(元)"
                 width="120"
                 align="right"
-                v-if="showInfo.priceType == 1"
+                v-if="[1,3,5,7].includes(showInfo.priceType)"
               />
               <el-table-column
                 prop="taxUnitPriceText"
                 label="含税单价(元)"
                 width="120"
                 align="right"
-                v-if="showInfo.priceType == 1"
+                v-if="[1,3,5,7].includes(showInfo.priceType)"
               />
               <el-table-column
                 prop="basePriceText"
                 label="基价(元)"
                 width="120"
                 align="right"
-                v-if="showInfo.priceType == 2"
+                v-if="[2,3,4,5,6,7].includes(showInfo.priceType)"
               />
               <el-table-column
                 prop="floatingPriceText"
                 label="浮动价(元)"
                 width="120"
                 align="right"
-                v-if="showInfo.priceType == 2"
+                v-if="[2,3,6,7].includes(showInfo.priceType)"
               />
               <el-table-column
-                prop="unloadingFeeText"
-                label="装卸费"
+                prop="floatingRateText"
+                label="浮动率(%)"
                 width="120"
                 align="right"
-                v-if="showInfo.priceType == 2"
+                v-if="[4,5,6,7].includes(showInfo.priceType)"
               />
               <el-table-column
                 prop="notTaxPriceText"

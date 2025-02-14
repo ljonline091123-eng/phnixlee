@@ -179,14 +179,14 @@
                 </template>
               </el-table-column>
               <el-table-column
-                label="装卸费"
+                label="浮动率(%)"
                 width="100"
                 align="right"
-                prop="unloadingFeeText"
+                prop="floatingRateText"
                 v-if="
                   (vendorInfo.subjectMatterType === 1 ||
                     vendorInfo.subjectMatterType === 2) &&
-                  vendorInfo.priceType === 2
+                  vendorInfo.priceType === 4
                 "
               >
               </el-table-column>

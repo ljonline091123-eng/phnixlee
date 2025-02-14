@@ -582,7 +582,7 @@
                 />
                 <el-table-column
                   label="基价(元)"
-                  v-if="formData.priceType == 2"
+                  v-if="[2,3,4,5,6,7].includes(formData.priceType)"
                   align="right"
                   prop="basePriceText"
                 />
@@ -595,15 +595,15 @@
                 />
                 <el-table-column
                   label="浮动价(元)"
-                  v-if="formData.priceType == 2"
+                  v-if="[2,3,4,5,6,7].includes(formData.priceType)"
                   align="right"
                   prop="floatingPriceText"
                 />
                 <el-table-column
-                  label="装卸费(元)"
-                  v-if="formData.priceType == 2"
+                  label="浮动率(%)"
+                  v-if="[2,3,4,5,6,7].includes(formData.priceType)"
                   align="right"
-                  prop="unloadingFeeText"
+                  prop="floatingRateText"
                 />
                 <el-table-column
                   v-if="isLease"

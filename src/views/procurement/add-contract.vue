@@ -664,21 +664,21 @@
                 <!-- 基价(元) -->
                 <el-table-column prop="basePriceText" label="基价(元)" width="120" align="right">
                   <template #default="{ row }">
-                    {{ priceType === 2 || row.priceType === 2 || row.priceType === 3 ? row.basePriceText : '/' }}
+                    {{ [2,3,4,5,6,7].includes(priceType) ? row.basePriceText : '/' }}
                   </template>
                 </el-table-column>
 
                 <!-- 浮动价(元) -->
                 <el-table-column prop="floatingPriceText" label="浮动价(元)" width="120" align="right">
                   <template #default="{ row }">
-                    {{ priceType === 2 || row.priceType === 2 || row.priceType === 3 ? row.floatingPriceText : '/' }}
+                    {{ [2,3,4,5,6,7].includes(priceType) && row.priceType === 2 ? row.floatingPriceText : '/' }}
                   </template>
                 </el-table-column>
 
                 <!-- 装卸费(元) -->
-                <el-table-column prop="unloadingFeeText" label="装卸费(元)" width="120" align="right">
+                <el-table-column prop="floatingRateText" label="浮动率(%)" width="120" align="right">
                   <template #default="{ row }">
-                    {{ priceType === 2 || row.priceType === 2 || row.priceType === 3 ? row.unloadingFeeText : '/' }}
+                    {{ [2,3,4,5,6,7].includes(priceType) && row.priceType === 4 ? row.floatingRateText : '/' }}
                   </template>
                 </el-table-column>
 
