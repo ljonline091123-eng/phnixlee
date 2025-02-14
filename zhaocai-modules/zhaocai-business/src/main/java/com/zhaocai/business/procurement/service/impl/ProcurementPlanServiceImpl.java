@@ -917,6 +917,15 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
                 if (!PriceTypeEnum.FLOAT_PRICE.equalsType(materials.getPriceType())  && !PriceTypeEnum.FLOAT_RATE.equalsType(materials.getPriceType())) {
                     materials.setBasePrice(null);
                     materials.setFloatingPrice(null);
+                    materials.setFloatingRate(null);
+                    materials.setUnloadingFee(null);
+                }
+                if (PriceTypeEnum.FLOAT_PRICE.equalsType(materials.getPriceType())) {
+                    materials.setFloatingRate(null);
+                    materials.setUnloadingFee(null);
+                }
+                if (PriceTypeEnum.FLOAT_RATE.equalsType(materials.getPriceType())) {
+                    materials.setFloatingPrice(null);
                     materials.setUnloadingFee(null);
                 }
 
