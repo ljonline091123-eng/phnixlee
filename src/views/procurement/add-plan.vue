@@ -236,8 +236,8 @@
                         <template slot-scope="scope">
                           <span v-if="scope.row.priceType === 1">/</span>
                           <div v-else>
-                            <el-input v-if="!scope.row.isbasePriceNotLegal"  v-model="scope.row.basePrice"  v-thousandth @input.native="checkOtherPrice(scope.row,'basePrice',$event)"/>
-                            <el-input v-else  v-model="scope.row.basePrice" :disabled="isSubmit" v-thousandth  @input.native="checkOtherPrice(scope.row,'basePrice',$event)" class="checkInput"/>
+                            <el-input v-if="!scope.row.isbasePriceNotLegal"  v-model="scope.row.basePrice"  v-thousandth @input.native="checkOtherPrice($event,scope.row)"/>
+                            <el-input v-else  v-model="scope.row.basePrice" :disabled="isSubmit" v-thousandth  @input.native="checkOtherPrice($event,scope.row)" class="checkInput"/>
                           </div>
 
                         </template>
@@ -275,16 +275,6 @@
                         </template>
                       </el-table-column>
 
-<!--                      <el-table-column label="装卸费" align="right" width="130" prop="unloadingFee"  v-if="procurementType === 1 && formData.priceType !== 1">-->
-<!--                        <template slot-scope="scope">-->
-<!--                          <span v-if="scope.row.priceType === 1">/</span>-->
-<!--                          <div v-else>-->
-<!--                            <el-input v-if="!scope.row.isunloadingFeeNotLegal"  v-model="scope.row.unloadingFee" :disabled="isSubmit" v-thousandth  @blur="checkOtherPrice(scope.row,'unloadingFee',$event)"/>-->
-<!--                            <el-input v-else  v-model="scope.row.unloadingFee" :disabled="isSubmit" v-thousandth  @blur="checkOtherPrice(scope.row,'unloadingFee',$event)" class="checkInput"/>-->
-<!--                          </div>-->
-<!--                        </template>-->
-<!--                      </el-table-column>-->
-
                       <el-table-column width="120" label="租赁时间" align="right" prop="rentTime" v-if="currentContract.contractPlanningCategory == 2 || currentContract.contractPlanningCategory == 3">
                         <template slot-scope="scope">
                           <el-input v-if="scope.row.rentMode == 1 || scope.row.rentMode == 2" v-model="scope.row.rentTime" @blur="changeWorkload(inventory.$index,scope)" :disabled="isSubmit" v-thousandth/>
@@ -321,7 +311,11 @@
                           <el-input v-model="scope.row.offerPrice" disabled v-thousandth/>
                         </template> -->
                       </el-table-column>
-                      <el-table-column label="合计(含税)" align="right" prop="totalPriceText" min-width="150"/>
+                      <el-table-column label="合计(含税)" align="right" prop="totalPriceText" min-width="150">
+                        <template slot-scope="scope">
+                          <span>{{scope.row.totalPriceText}}</span>
+                        </template>
+                      </el-table-column>
                       <el-table-column label="备注" align="center" prop="remark" min-width="300">
                         <template slot-scope="scope">
                           <el-input v-model="scope.row.remark" :disabled="isSubmit || scope.row.belongOffer || scope.row.pushFlag === 'Y'"/>
@@ -1677,11 +1671,7 @@ console.log("-2222--"+JSON.stringify(this.materialsLists))
       const regexN1 = /^-?(?:[1-9]\d*|0)(\.\d+)?$/;
       const regexN2 = /^-?\d+(\.\d{0,4})?$/;
 
-      // 判断为空则默认设置为0
-      if (row.count === '' || row.count == null) {
-        this.$set(row, 'count', 0);
-        row.count = 0;  // 将其值设为0
-      }
+
 
       if(row.count === ''){
         event.target.style = "border: 1px solid red;"
@@ -1783,24 +1773,23 @@ console.log("-2222--"+JSON.stringify(this.materialsLists))
       console.log('%c👽 格式化之后row.totalPriceText \n', `font-size: 14px;background-color: #fa8;`, row.totalPriceText );
 
     },
-    checkOtherPrice(row,key,event) {
-      // 如果为空，设置为0
-      if (!row[key]) {
-        this.$set(row, key, 0);
-        row[key] = 0;
-      }
-
+    checkOtherPrice(event,row) {
       const regexN1 = /^-?(?:[1-9]\d*|0)(\.\d+)?$/;
       const regexN2 = /^-?\d+(\.\d{0,4})?$/;
-      if(!regexN2.test(row[key])){
+      if(!regexN2.test(row.basePrice)){
         event.target.style = "border: 1px solid red;"
         this.$message.error("请输入小于4位的小数");
-        this.$set(row, `is${key}NotLegal`, true)
+        this.$set(row, `isbasePriceNotLegal`, true)
+        return;
       }else {
         event.target.style = "border: 1px solid #C0C4CC;"
-        this.$set(row, `is${key}NotLegal`, false)
+        this.$set(row, `isbasePriceNotLegal`, false)
       }
 
+      if(row.priceType === 1){
+        /* 计算固定价 */
+        this.calculateFixedPrice(row);
+      }
       if(row.priceType === 2){
         /* 计算浮动价 */
         this.calculateFloatingPrice(row);
@@ -1896,6 +1885,7 @@ console.log("-2222--"+JSON.stringify(this.materialsLists))
         // row.floatingPrice = 0;
         event.target.style = "border: 1px solid red;";
         this.$message.error("请输入正确值");
+        return
       }else if(!regexN1.test(row.floatingPrice)  ){
         event.target.style = "border: 1px solid red;"
         this.$message.error("请输入正确的值");
@@ -1918,6 +1908,29 @@ console.log("-2222--"+JSON.stringify(this.materialsLists))
       /* 单价含税:    基价  * (1 + (浮动率 先除100得出百分比)) */
       const unitPriceInclTaxBig = add(bignumber(basePrice), bignumber(row.floatingPrice));
       row.unitPriceInclTax = this.formatNumberDynamicDecimalWithSeparator(unitPriceInclTaxBig);
+
+      const priceInclTax = (row.unitPriceInclTax+'').replaceAll(',','');
+      /* 单价不含税：含税单价 * (1 + (税率  先除100得出百分比)) */
+      const onePlusTaxRate = multiply(bignumber(priceInclTax), add(1, divide(bignumber(taxRate), 100)));
+      row.unitPriceExclTax = this.formatNumberDynamicDecimalWithSeparator(onePlusTaxRate)
+
+      /* 行含税总价：含税单价 * 数量 */
+      const totalPrice = multiply(unitPriceInclTaxBig, bignumber(count));
+      this.$set(row,'totalPriceText', this.formatNumberDynamicDecimalWithSeparator(totalPrice));
+      this.$set(row,'totalPrice', row.totalPriceText.replaceAll(',', ''));
+      console.log('%c👽 格式化之前totalPrice \n', `font-size: 14px;background-color: #fa8;`, totalPrice.toString() );
+      console.log('%c👽 格式化之后row.totalPrice \n', `font-size: 14px;background-color: #fa8;`, row.totalPrice );
+      console.log('%c👽 格式化之后row.totalPriceText \n', `font-size: 14px;background-color: #fa8;`, row.totalPriceText );
+      console.log('%c👽 row.unitPriceExclTax ', `font-size: 14px;background-color: #f00;`, row.unitPriceExclTax);
+    },
+    /* 计算固定价 */
+    calculateFixedPrice(row){
+      let {  taxRate, count } = row;
+      const { multiply, add, divide, bignumber, format } = this.mathjs;
+
+      if(!row.unitPriceInclTax || count || taxRate){
+        return
+      }
 
       const priceInclTax = (row.unitPriceInclTax+'').replaceAll(',','');
       /* 单价不含税：含税单价 * (1 + (税率  先除100得出百分比)) */
