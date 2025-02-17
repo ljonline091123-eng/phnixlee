@@ -210,7 +210,7 @@ public class ContractPlanService {
     public MinProjectDetailResponseDTO getMinProjectDetail(String projectCode) {
         MinProjectDetailRequestDTO reqDTO = new MinProjectDetailRequestDTO(projectCode);
 
-        return UnderlingRestTemplateService.getForObject(UnderlingPlatformUrlEnum.GET_MIN_PROJECT,MinProjectDetailResponseDTO.class,reqDTO);
+        return UnderlingRestTemplateService. getForObject(UnderlingPlatformUrlEnum.GET_MIN_PROJECT,MinProjectDetailResponseDTO.class,reqDTO);
     }
 
     /**
