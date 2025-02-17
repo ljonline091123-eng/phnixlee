@@ -44,6 +44,15 @@
             >查询</el-button
           >
         </el-form-item>
+        <el-form-item>
+          <el-button
+            type="primary"
+            icon="el-icon-search"
+            size="small"
+            @click="inint"
+          >初始化供应商编号</el-button
+          >
+        </el-form-item>
       </el-form>
       <el-radio-group
         v-if="queryParams.vendorClass == '1'"
@@ -294,6 +303,7 @@ import {
   getVendorList,
   getVendorCooperativePartner,
   listVendorPerformance,
+  initCode,
 } from "@/api/vendor/vendor";
 
 export default {
@@ -380,6 +390,10 @@ export default {
     handleQuery() {
       this.queryParams.pageNumber = 1;
       this.getVendorList();
+    },
+
+    async inint() {
+      await initCode();
     },
     /** 跳转方案详情 */
     goDetail(id,vendorClass) {

@@ -133,6 +133,7 @@ export const getCooperationList = (params) => {
 }
 // 获取账户列表查
 export const listBankAccountContact=(upId)=> {
+
   return request({
     url: "/business/account/list",
     method: "get",
@@ -140,6 +141,14 @@ export const listBankAccountContact=(upId)=> {
       upId,
     },
   })
+}
+
+// 初始化供应商列表
+export const initCode=()=> {
+  return request({
+    url: "/business/vendor/initializeCode",
+    method: "post",
+  });
 }
 // 获取账户列表查
 export const listAccountBank = (params)=> {
