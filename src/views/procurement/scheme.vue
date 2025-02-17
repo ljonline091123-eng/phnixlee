@@ -83,6 +83,12 @@
           show-overflow-tooltip
         />
         <el-table-column
+          label="项目名称"
+          min-width="250"
+          prop="projectName"
+          show-overflow-tooltip
+        />
+        <el-table-column
           min-width="100"
           label="采购方式"
           align="center"
