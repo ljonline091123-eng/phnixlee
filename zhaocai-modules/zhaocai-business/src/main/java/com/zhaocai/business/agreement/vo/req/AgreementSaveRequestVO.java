@@ -1,6 +1,7 @@
 package com.zhaocai.business.agreement.vo.req;
 
 import com.zhaocai.business.agreement.domain.*;
+import com.zhaocai.business.pub.domain.Attachment;
 import io.swagger.annotations.ApiModelProperty;
 import lombok.Data;
 
@@ -50,4 +51,7 @@ public class AgreementSaveRequestVO {
 
     @ApiModelProperty(value = "易料采购合同id")
     private String marketMaterialContractId;
+
+    @ApiModelProperty(value = "合同附件对象")
+    private List<Attachment> agreementAttachmentList;
 }

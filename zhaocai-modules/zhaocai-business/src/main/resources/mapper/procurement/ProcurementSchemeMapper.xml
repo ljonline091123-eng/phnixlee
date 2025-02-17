@@ -43,12 +43,15 @@
         <result property="procurementType" column="procurement_type"/>
         <result property="state" column="state"/>
         <result property="createTime" column="create_time"/>
+        <result property="projectCode" column="project_code"/>
+        <result property="projectName" column="min_account_full_name"/>
     </resultMap>
 
 
     <select id="selectPageList" resultMap="ProcurementSchemeListResult">
-        select tps.*
+        select tps.*,tmp.min_account_full_name
         from tb_procurement_scheme tps
+        left join tb_min_project tmp on tps.project_code = tmp.min_account_code
         <where>
             tps.state != 2
             <if test="queryVO.projectCode != null and queryVO.projectCode != ''">

@@ -2,6 +2,7 @@ package com.zhaocai.business.agreement.vo.res;
 
 import com.zhaocai.business.agreement.vo.res.AgreementPartyInfoVO;
 import com.zhaocai.business.common.base.AdviceObject;
+import com.zhaocai.business.pub.domain.Attachment;
 import io.swagger.annotations.ApiModelProperty;
 import lombok.Builder;
 import lombok.Data;
@@ -47,4 +48,7 @@ public class AgreementDetailVO extends AdviceObject {
 
     @ApiModelProperty(value = "合同-甲供材料清单对象")
     private List<AgreementMaterialSupplyVO> agreementMaterialSupplies;
+
+    @ApiModelProperty(value = "合同附件对象")
+    private List<Attachment> agreementAttachmentList;
 }
