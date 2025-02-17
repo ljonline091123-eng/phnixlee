@@ -987,6 +987,17 @@
             >
             </el-table-column>
           </el-table>
+
+          <!-- 合同附件 -->
+          <commonTitle style="margin-top: 20px"> 合同附件 </commonTitle>
+          <el-table :data="agreementAttachmentList" style="width: 100%">
+            <el-table-column prop="fileName" label="文件名" align="center" />
+            <el-table-column label="操作" align="center" width="200">
+              <template slot-scope="scope">
+                <el-button size="mini" type="text" @click="handleView(scope.row.fileName, scope.row.fileUrl)" >预览</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
         </el-tab-pane>
         <el-tab-pane label="合同附件" name="second">
           <!-- <FileModule
@@ -1162,6 +1173,15 @@
         <el-button type="primary" @click="submitReview">确认</el-button>
       </div>
     </el-dialog>
+
+    <el-dialog title="合同附件预览" :visible.sync="viewFileDialog" width="80%">
+      <iframe allowfullscreen="true"
+              :src= this.viewOtherFileUrl
+              width="100%"
+              height="600px"
+              frameborder="0"
+      ></iframe>
+    </el-dialog>
   </div>
 </template>
 
@@ -1193,8 +1213,7 @@ import {
   getLoadTaskDefAgreement,
   getProcessLogList, getOrgByUserId, postAuditProcessAgreement,
 } from "@/api/procurement/manage";
-import { getViewAttachmentURLByID } from "@/api/template/file";
-
+import { getViewAttachmentURLByID, getViweFileURL} from "@/api/template/file";
 export default {
   components: {
     commonTitle,
@@ -1207,6 +1226,8 @@ export default {
 
   data() {
     return {
+      viewFileDialog: false,
+      viewOtherFileUrl: "",
       viewFileUrl:"", //预览合同附件的url
       partyAName:"", //获取甲方名称，设置水印
       activeName: "first",
@@ -2182,6 +2203,7 @@ export default {
       agreementPaymentLists: [], //结算与付款节点
       agreementPartyInfoLists: [], //合同签约方信息
       agreementDeposits: [], // 押金、保证金信息
+      agreementAttachmentList: [], // 合同附件
       // * 基本信息
       showInfo: {},
       baseItemList: {
@@ -3563,6 +3585,18 @@ export default {
       }
     },
 
+    /** 合同其他文件预览 */
+    async handleView(fileName, fileUrl) {
+      this.viewFileDialog = true;
+      try {
+        const param = {fileName: fileName, fileUrl: fileUrl}
+        const res = await getViweFileURL(param);
+        this.viewOtherFileUrl = res.data;
+      } catch (ex) {
+        console.log("预览文件出错", ex);
+      }
+    },
+
     getContractDetail() {
       this.fullLoading = true;
       getAgreementDetail({
@@ -3581,7 +3615,7 @@ export default {
           this.agreementMaterialsLists = res.data.materialsList;
           this.agreementPaymentLists = res.data.agreementPaymentLists;
           this.agreementPartyInfoLists = res.data.agreementPartyInfoLists || [];
-
+          this.agreementAttachmentList = res.data.agreementAttachmentList || [];
           /* 填充字典值，和默认甲乙方 this.dictObj.con_role_type */
           const updatedLists = this.agreementPartyInfoLists.map(item => {
             if (item.roleType === '1') {

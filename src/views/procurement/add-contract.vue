@@ -1256,6 +1256,37 @@
               </el-table-column>
             </el-table>
           </div>
+
+          <!-- 合同附件 -->
+          <commonTitle>
+            合同附件
+            <template #right>
+              <el-upload
+                :action="uploadFileUrl"
+                :on-success="handleSuccessContract"
+                :before-upload="handleBeforeUpload"
+                :on-remove="handleRemoveContract"
+                :file-list="fileList"
+                multiple
+                ref="uploadRef"
+                :show-file-list="false"
+              >
+                <el-button type="success" icon="el-icon-plus" size="mini">上传附件</el-button>
+              </el-upload>
+            </template>
+          </commonTitle>
+            <div style="margin-bottom: 8px">
+                <el-table :data="firstForm.agreementAttachmentList" style="width: 100%">
+                  <el-table-column prop="fileName" label="文件名" align="center" />
+                  <el-table-column label="操作" align="center" width="200">
+                    <template slot-scope="scope">
+                      <el-button size="mini" type="text" @click="handleRemoveContract(scope.$index)" >删除</el-button>
+                      <el-button size="mini" type="text" @click="handleReUpload(scope.$index)" >重新上传</el-button>
+                      <el-button size="mini" type="text" @click="handleView(scope.row.fileName, scope.row.fileUrl)" >预览</el-button>
+                    </template>
+                  </el-table-column>
+                </el-table>
+            </div>
           </el-tab-pane>
             <el-tab-pane label="合同附件" name="second" />
           </el-tabs>
@@ -1667,6 +1698,15 @@
        >
      </div>
    </el-dialog>
+
+    <el-dialog title="合同附件预览" :visible.sync="viewFileDialog" width="80%">
+      <iframe allowfullscreen="true"
+              :src= this.viewFileUrl
+              width="100%"
+              height="600px"
+              frameborder="0"
+      ></iframe>
+    </el-dialog>
   </div>
 </template>
 <script>
@@ -1680,18 +1720,26 @@ import { cardid, isvalidatemobile, validatenull } from "@/utils/validate"
 import BackButton from "@/components/BackButton/index.vue"
 import FileModule from '@/components/FileModule/index.vue'
 import Drag from '@/components/Drag/index.vue'
-import { getContractTypeList ,getEditFileUrlByID} from "@/api/template/file";
+import {addAttachment, getContractTypeList, getEditFileUrlByID} from "@/api/template/file";
 import {
   getTemplateSwitchList,
 } from "@/api/procurement/scheme";
 import {getLoadTaskDef, getOrgByUserId, getProcessLogList, getSwitchPageList} from "@/api/procurement/manage";
 import {showSecretRelatedTips} from "@/utils/MyUtils";
+import {uploadFileUrl} from "@/utils/const";
+import { getViweFileURL } from "@/api/template/file";
+
 export default {
   name: "add-contract",
   components: { commonTitle, BackButton, FileModule, Drag },
   dicts: ["sys_yes_no", "expenditureBusinessType"],
   data() {
     return {
+      viewFileDialog: false,
+      viewFileUrl: "",
+      uploadFileUrl, // 替换为实际的上传地址
+      fileList: [], // el-upload 组件的文件列表
+      reuploadIndex: '', // 重新上传索引
       editFileUrl:"", //编辑合同附件URL
       //模板
       isAvoidSubmit:false,
@@ -1750,6 +1798,7 @@ export default {
         agreementMachineShifts: [], // 合同-机械台班对象
         agreementEquipmentSupplies: [], // 合同-甲供设备清单对象
         agreementMaterialSupplies: [], // 合同-甲供材料清单对象
+        agreementAttachmentList: [], // 合同附件
       },
       agreementFileName: "",
       agreementFileUrl: "",
@@ -1914,6 +1963,80 @@ export default {
       });
       this.$forceUpdate(); // 强制刷新视图
     },
+    /** 上传附件成功后回调 */
+    async handleSuccessContract(res) {
+      const { url, name } = res.data;
+      try {
+        /* 保存到文件表获取返回id */
+        const res = await addAttachment({ fileName: name, fileUrl: url });
+        if (this.reuploadIndex !== '') {
+          // 替换指定索引的附件
+          this.$set(this.firstForm.agreementAttachmentList, this.reuploadIndex, {
+            businessId: res.data,
+            fileName: name,
+            fileUrl: url
+          });
+          this.reuploadIndex = ''; // 清除索引
+        }else{
+          // 新增附件
+          this.firstForm.agreementAttachmentList.push({
+            businessId: res.data,
+            fileName: name,
+            fileUrl: url,
+          });}
+      } catch (err) {
+        console.log(err);
+      }
+    },
+
+    /** 上传附件前校验 */
+    handleBeforeUpload(file) {
+      //限制上传的文件名长度
+      const fileName = file.name;
+      if (fileName.length > 80) {
+        this.$message.error('文件名不能超过80个字符');
+        return false; // 阻止上传
+      }
+      return true;  // 返回 true 表示允许继续上传
+    },
+
+    /** 删除其他附件 */
+    handleRemoveContract(index) {
+      this.$confirm("是否删除该附件？", "提示", {
+        confirmButtonText: "确定",
+        cancelButtonText: "取消",
+        type: "warning",
+      }).then(() => {
+        this.firstForm.agreementAttachmentList.splice(index, 1);
+        this.$message.success('删除成功');
+      }).catch(() => {});
+    },
+
+    /** 重新上传文件 */
+    handleReUpload(index) {
+      this.$confirm("是否重新上传该附件？", "提示", {
+        confirmButtonText: "确定",
+        cancelButtonText: "取消",
+        type: "warning"
+      }).then(() => {
+        this.$refs.uploadRef.clearFiles(); // 清空上传组件的文件列表
+        this.reuploadIndex = index; // 记录当前索引
+        this.$refs.uploadRef.$refs["upload-inner"].handleClick(); // 触发文件选择器
+      }).catch(() => {});
+    },
+
+    /** 合同其他文件预览 */
+    async handleView(fileName, fileUrl) {
+      this.viewFileDialog = true;
+      try {
+        const param = {fileName: fileName, fileUrl: fileUrl}
+        const res = await getViweFileURL(param);
+        this.viewFileUrl = res.data;
+      } catch (ex) {
+        console.log("预览文件出错", ex);
+      }
+    },
+
     //切换页签到合同附件时
     attachmenthandleTabClick(tab){
       // tab.name 是被点击的标签页的 name 属性值
