@@ -152,4 +152,8 @@ public interface IVendorService  extends IService<Vendor> , IProcessBusinessBase
      * @param vendorId
      */
     String checkEnterpriseNameAndId(String enterpriseName, Long vendorId);
+
+    void pushVendor(Long vendorId, String logTypeModify, Integer isBlack);
+
+    void initializeCode();
 }

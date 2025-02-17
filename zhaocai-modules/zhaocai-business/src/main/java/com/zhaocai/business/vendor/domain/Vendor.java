@@ -25,6 +25,26 @@ public class Vendor extends BaseEntity {
     private static final long serialVersionUID = 1L;
 
     /**
+     * 新增
+     */
+    public static final String LOG_TYPE_ADD = "add";
+    /**
+     * 修改
+     */
+    public static final String LOG_TYPE_MODIFY = "modify";
+    /**
+     * 删除
+     */
+    public static final String LOG_TYPE_REMOVE = "remove";
+    /**
+     * 启用
+     */
+    public static final String LOG_TYPE_ENABLE = "enable";
+    /**
+     * 禁用
+     */
+    public static final String LOG_TYPE_DISABLE = "disable";
+    /**
      * 企业名称
      */
     @ApiModelProperty(value = "企业名称")
@@ -128,6 +148,7 @@ public class Vendor extends BaseEntity {
      */
     @ApiModelProperty(value = "增值税纳税人类型")
     private Integer taxpayerType;
+
 
     /**
      * 发票类型
@@ -285,5 +306,7 @@ public class Vendor extends BaseEntity {
     @ApiModelProperty(value = "开户支行名称")
     private String bankName;
 
+    @ApiModelProperty(value = "客商编号")
+    private String middleVendorCode;
 
 }

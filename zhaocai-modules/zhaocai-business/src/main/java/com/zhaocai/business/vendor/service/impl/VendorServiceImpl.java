@@ -7,6 +7,8 @@ import cn.hutool.core.util.IdUtil;
 import cn.hutool.crypto.KeyUtil;
 import com.alibaba.csp.sentinel.util.StringUtil;
 import com.alibaba.fastjson.JSON;
+import com.alibaba.fastjson2.JSONArray;
+import com.alibaba.fastjson2.JSONObject;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
@@ -26,14 +28,13 @@ import com.zhaocai.business.manager.http.service.UnderlingSystemService;
 import com.zhaocai.business.process.service.IBPMProcessService;
 import com.zhaocai.business.pub.domain.DwCdBank;
 import com.zhaocai.business.pub.domain.TAccountInfo;
-import com.zhaocai.business.pub.service.IAccountService;
-import com.zhaocai.business.pub.service.IAttachmentService;
-import com.zhaocai.business.pub.service.IBankService;
-import com.zhaocai.business.pub.service.ISystemUserService;
+import com.zhaocai.business.pub.service.*;
 import com.zhaocai.business.pub.vo.req.TAccountInfoVo;
+import com.zhaocai.business.vendor.config.DataMiddlePlatformConfig;
 import com.zhaocai.business.vendor.domain.*;
 import com.zhaocai.business.vendor.mapper.VendorMapper;
 import com.zhaocai.business.vendor.service.*;
+import com.zhaocai.business.vendor.util.DataCenterUtil;
 import com.zhaocai.business.vendor.vo.req.*;
 import com.zhaocai.business.vendor.vo.res.*;
 import com.zhaocai.common.core.bean.PageResult;
@@ -50,6 +51,7 @@ import com.zhaocai.common.signature.dto.command.CompanyAuthCommandRequestBuilder
 import com.zhaocai.common.signature.dto.sign.SignatureResponse;
 import com.zhaocai.common.signature.service.SignatureCommandFactory;
 import com.zhaocai.common.signature.service.command.CompanyAuthCommand;
+import com.zhaocai.system.api.domain.SysDept;
 import com.zhaocai.system.api.domain.SysUser;
 import com.zhaocai.system.api.system.RemoteSystemService;
 import com.zhaocai.system.api.system.RemoteUserService;
@@ -65,7 +67,10 @@ import org.springframework.util.CollectionUtils;
 import org.springframework.util.ObjectUtils;
 
 import java.io.Serializable;
+import java.math.BigDecimal;
 import java.util.*;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 
 /**
@@ -113,7 +118,8 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
     @Autowired
     private IAccountService accountService;
 
-
+    @Autowired
+    private ISysDictDataService sysDictDataService;
 
     @Autowired
     private IBankService bankService;
@@ -122,6 +128,12 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
     private RemoteUserService remoteUserService;
     @Autowired
     private RemoteSystemService remoteSystemService;
+
+    @Autowired
+    private DataCenterUtil dataCenterUtil;
+
+    @Autowired
+    private DataMiddlePlatformConfig dataMiddlePlatformConfig;
 
 
 
@@ -1006,16 +1018,99 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
                 .set(Vendor::getRegisterApprovalTime, new Date())
                 .eq(Vendor::getId, businessId));
         //推送供应商信息
-        pushVendor(Long.parseLong(businessId),"add");
+        pushVendor(Long.parseLong(businessId),"add",null);
 
     }
 
 
-    private void pushVendor(Long id,String type){
-         Vendor vendor = this.getById(id);
-
-
-
+    @Override
+    public void pushVendor(Long id,String type, Integer isBlack){
+        ExecutorService executor = Executors.newCachedThreadPool();
+        executor.execute(() -> {
+            Vendor bean = this.getById(id);
+            if(bean != null){
+                Map<String, Object> map = new HashMap<>();
+                map.put("internal_id", bean.getId() + "");
+                map.put("dept_id",  bean.getFirstCooperationCompanyCode());
+                //map.put("cust_mercht_id",  "");
+                map.put("cust_mercht_full_name",  bean.getEnterpriseName());
+                map.put("cust_mercht_cdtfy",  "供应商");
+                map.put("cust_mercht_cdtfy_cd",  "G");
+                map.put("is_ext_cust_mercht_cate", sysDictDataService.getRemark("is_external",bean.getIsExternal()+"","label"));
+                map.put("is_ext_cust_mercht_cate_cd",  sysDictDataService.getRemark("is_external",bean.getIsExternal()+"",null));
+                map.put("cust_mercht_attr",  "法人单位");
+                map.put("cust_mercht_attr_cd",  "1");
+                //map.put("cust_mercht_modif_pre_name",  );//客商变更前名称(曾用名)
+                map.put("corp_princ_legal_rep",  bean.getLegalRepresentative());
+                map.put("unified_soci_crdt_cd",  bean.getSocialCreditCode());
+                map.put("rgst_cap", bean.getRegisteredCapital()==null? new BigDecimal(0):bean.getRegisteredCapital().multiply(new BigDecimal(10000)) );
+                map.put("oper_range",  bean.getBusinessScope());
+                //map.put("fdg_tm",  "");//成立时间
+                map.put("czp_zone_rgst_name",  "中国");
+                map.put("czp_zone_rgst_cd",  "156");
+                map.put("admin_region_prov_city_county_rgst_nm",  bean.getEnterpriseCityName());
+                map.put("admin_region_prov_city_county_rgst_cd",  bean.getEnterpriseCityCode());
+                map.put("dtl_addr",  bean.getEnterpriseAddress());
+                if(isBlack != null && isBlack == 1){
+                    map.put("cust_mercht_status",  "黑名单");
+                    map.put("cust_mercht_status_cd",  "5");//客商状态
+                }else{
+                    map.put("cust_mercht_status",  "正常");
+                    map.put("cust_mercht_status_cd",  "1");//客商状态
+                }
+                map.put("cust_mercht_char",   sysDictDataService.getRemark("enterprise_nature", bean.getEnterpriseNature()+"","label"));
+                map.put("cust_mercht_char_cd", sysDictDataService.getRemark("enterprise_nature", bean.getEnterpriseNature()+"",null));//企业性质
+                map.put("addvl_pay_tax_type",  sysDictDataService.getRemark("taxpayer_type", bean.getTaxpayerType()+"","label"));//????
+                map.put("addvl_pay_tax_type_cd",  sysDictDataService.getRemark("taxpayer_type", bean.getTaxpayerType()+"",null));//增值税纳税人类型
+                map.put("setup_dt",  bean.getCreateTime());
+                if(StringUtil.isNotEmpty(bean.getFirstCooperationCompanyCode())){
+                    SysDept dept = remoteSystemService.getByThridDeptId(bean.getFirstCooperationCompanyCode(),SecurityConstants.INNER);
+                    if(dept != null){
+                        map.put("setup_corp_org_name",  dept.getDeptName());//创建单位
+                        map.put("setup_corp_org_id",  dept.getInterialId());//创建单位ID
+                    }
+                }
+                map.put("setup_corp_org_code",  bean.getFirstCooperationCompanyCode());//创建单位编码
+                map.put("cust_mercht_cont_tel",  bean.getContactPhone());
+                if(StringUtil.isNotEmpty(bean.getEnterpriseType())){
+                    String[] split = bean.getEnterpriseType().split(",");
+                    VendorClassify classify = vendorClassifyService.getById(Long.valueOf(split[0]));
+                    if(classify != null){
+                        map.put("provi_type",  classify.getMiddleName());
+                        map.put("provi_type_cd",  classify.getMiddleCode());//供应商主业类型
+                    }
+                }
+                JSONObject jsonObject = new JSONObject(map);
+                if(bean != null && StringUtil.isEmpty(bean.getMiddleVendorCode())){
+                    //如果没有中台code就要走中台新增方法
+                    JSONObject object = dataCenterUtil.postCommonInfo(jsonObject, dataMiddlePlatformConfig.getVendorAdd(), Vendor.LOG_TYPE_ADD, SecurityUtils.getUsername(), null);
+                    if (object != null && object.containsKey("code") && object.getInteger("code") == 200) {
+                        //成功的
+                        JSONObject data = object.getJSONObject("data");
+                        if(data != null && data.containsKey("added")) {
+                            JSONArray added = data.getJSONArray("added");
+                            if (added != null && added.size() >0) {
+                                JSONObject obj = added.getJSONObject(0);
+                                String custMerchtId = obj.getString("cust_mercht_id");
+                                super.update(new LambdaUpdateWrapper<Vendor>()
+                                        .set(Vendor::getMiddleVendorCode, custMerchtId)
+                                        .eq(Vendor::getId, id));
+                                List<TAccountInfo> list = accountService.list(new LambdaUpdateWrapper<TAccountInfo>()
+                                        .eq(TAccountInfo::getUpId, bean.getId()));
+                                if (!list.isEmpty()) {
+                                    list.stream().forEach(p -> {
+                                        accountService.pushAcct(p,bean, custMerchtId, Vendor.LOG_TYPE_ADD);
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }else{
+                    dataCenterUtil.postCommonInfo(jsonObject,dataMiddlePlatformConfig.getVendorUpdate(),type, SecurityUtils.getUsername(),null);
+                }
+            }
+        });
+        executor.shutdown();
     }
 
 
@@ -1255,5 +1350,20 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
             return "企业名称已存在，请联系 " + mainContact.getContactName() + "-" + mainContact.getContactPhone();
         }
         return "成功";
+    }
+
+    @Override
+    public void initializeCode() {
+        List<Vendor> list = super.list(new LambdaQueryWrapper<Vendor>()
+                .eq(Vendor::getState, VendorStateEnum.APPROVE.getState())
+                .eq(Vendor::getDelFlag,"0")
+                .isNull(Vendor::getMiddleVendorCode));
+        if(CollectionUtil.isNotEmpty(list)){
+            list.stream().forEach(p->{
+                this.pushVendor(p.getId(),Vendor.LOG_TYPE_ADD,p.getIsBlack());
+            });
+            //this.pushVendor(list.get(0).getId(),Vendor.LOG_TYPE_ADD,list.get(0).getIsBlack());
+        }
+
     }
 }

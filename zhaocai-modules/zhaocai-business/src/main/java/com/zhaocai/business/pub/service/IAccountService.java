@@ -3,6 +3,7 @@ package com.zhaocai.business.pub.service;
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.zhaocai.business.pub.domain.TAccountInfo;
 import com.zhaocai.business.pub.vo.req.TAccountInfoVo;
+import com.zhaocai.business.vendor.domain.Vendor;
 import com.zhaocai.common.core.bean.PageResult;
 
 /**
@@ -65,4 +66,6 @@ public interface IAccountService extends IService<TAccountInfo>
     void push(TAccountInfo accountInfo,Integer type);
 
     int updateByVendorId(Long id, Long uuid);
+
+    void pushAcct(TAccountInfo bean, Vendor vendor, String custMerchtId, String type);
 }

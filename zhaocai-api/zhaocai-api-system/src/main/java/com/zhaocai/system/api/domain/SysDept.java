@@ -1,19 +1,21 @@
 package com.zhaocai.system.api.domain;
 
-import java.io.Serializable;
-import java.util.*;
-import javax.validation.constraints.Email;
-import javax.validation.constraints.NotBlank;
-import javax.validation.constraints.NotNull;
-import javax.validation.constraints.Size;
-
-import com.baomidou.mybatisplus.annotation.*;
+import com.baomidou.mybatisplus.annotation.FieldFill;
+import com.baomidou.mybatisplus.annotation.TableField;
+import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableLogic;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import io.swagger.annotations.ApiModelProperty;
 import org.apache.commons.lang3.builder.ToStringBuilder;
 import org.apache.commons.lang3.builder.ToStringStyle;
-import com.zhaocai.common.core.web.domain.BaseEntity;
+
+import javax.validation.constraints.Email;
+import javax.validation.constraints.NotBlank;
+import javax.validation.constraints.NotNull;
+import javax.validation.constraints.Size;
+import java.io.Serializable;
+import java.util.*;
 
 /**
  * 部门表 sys_dept
@@ -51,6 +53,27 @@ public class SysDept implements Serializable
 
     /** 部门状态:0正常,1停用 */
     private String status;
+
+
+    private String simpleName;
+
+    private String interialId;
+
+    public String getInterialId() {
+        return interialId;
+    }
+
+    public void setInterialId(String interialId) {
+        this.interialId = interialId;
+    }
+
+    public String getSimpleName() {
+        return simpleName;
+    }
+
+    public void setSimpleName(String simpleName) {
+        this.simpleName = simpleName;
+    }
 
     /** 父部门名称 */
     @TableField(exist = false)
@@ -337,25 +360,25 @@ public class SysDept implements Serializable
     @Override
     public String toString() {
         return new ToStringBuilder(this,ToStringStyle.MULTI_LINE_STYLE)
-            .append("deptId", getDeptId())
-            .append("parentId", getParentId())
-            .append("ancestors", getAncestors())
-            .append("deptName", getDeptName())
-            .append("orderNum", getOrderNum())
-            .append("leader", getLeader())
-            .append("phone", getPhone())
-            .append("email", getEmail())
-            .append("status", getStatus())
-            .append("delFlag", getDelFlag())
-            .append("createBy", getCreateBy())
-            .append("createTime", getCreateTime())
-            .append("updateBy", getUpdateBy())
-            .append("updateTime", getUpdateTime())
-            .append("origin", getOrigin())
-            .append("thridDeptId", getThridDeptId())
-            .append("thridParentId", getThridParentId())
-            .append("thridOrgType", getThridOrgType())
-            .append("thridOrgLevel", getThridOrgLevel())
-            .toString();
+                .append("deptId", getDeptId())
+                .append("parentId", getParentId())
+                .append("ancestors", getAncestors())
+                .append("deptName", getDeptName())
+                .append("orderNum", getOrderNum())
+                .append("leader", getLeader())
+                .append("phone", getPhone())
+                .append("email", getEmail())
+                .append("status", getStatus())
+                .append("delFlag", getDelFlag())
+                .append("createBy", getCreateBy())
+                .append("createTime", getCreateTime())
+                .append("updateBy", getUpdateBy())
+                .append("updateTime", getUpdateTime())
+                .append("origin", getOrigin())
+                .append("thridDeptId", getThridDeptId())
+                .append("thridParentId", getThridParentId())
+                .append("thridOrgType", getThridOrgType())
+                .append("thridOrgLevel", getThridOrgLevel())
+                .toString();
     }
 }

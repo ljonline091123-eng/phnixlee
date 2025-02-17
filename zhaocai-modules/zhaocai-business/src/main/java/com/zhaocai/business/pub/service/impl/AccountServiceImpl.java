@@ -1,14 +1,27 @@
 package com.zhaocai.business.pub.service.impl;
 
+import cn.hutool.core.collection.CollectionUtil;
+import com.alibaba.fastjson2.JSONObject;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.zhaocai.business.pub.domain.TAccountInfo;
 import com.zhaocai.business.pub.mapper.AccountMapper;
 import com.zhaocai.business.pub.service.IAccountService;
+import com.zhaocai.business.pub.service.ISysDictDataService;
 import com.zhaocai.business.pub.vo.req.TAccountInfoVo;
+import com.zhaocai.business.vendor.config.DataMiddlePlatformConfig;
+import com.zhaocai.business.vendor.domain.TInterfaceLog;
+import com.zhaocai.business.vendor.domain.Vendor;
+import com.zhaocai.business.vendor.service.ITInterfaceLogService;
+import com.zhaocai.business.vendor.util.DataCenterUtil;
 import com.zhaocai.common.core.bean.PageResult;
+import com.zhaocai.common.security.utils.SecurityUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * 银行账户Service业务层处理
@@ -21,6 +34,18 @@ public class AccountServiceImpl extends ServiceImpl<AccountMapper, TAccountInfo>
         {
     @Autowired
     private AccountMapper accountMapper;
+
+            @Autowired
+            private ISysDictDataService sysDictDataService;
+
+            @Autowired
+            private DataCenterUtil dataCenterUtil;
+
+            @Autowired
+            private DataMiddlePlatformConfig dataMiddlePlatformConfig;
+
+            @Autowired
+            private ITInterfaceLogService tInterfaceLogService;
 
 
 
@@ -121,4 +146,48 @@ public class AccountServiceImpl extends ServiceImpl<AccountMapper, TAccountInfo>
         return baseMapper.deleteSyncAccount();
     }
 
+            @Override
+            public void pushAcct(TAccountInfo bean, Vendor vendor, String custMerchtId, String type) {
+                Map<String, Object> mapAcct = new HashMap<>();
+                mapAcct.put("internal_id", bean.getId() + "");
+                mapAcct.put("internal_ref_id", bean.getUpId()+"");
+                mapAcct.put("dept_id",  vendor.getFirstCooperationCompanyCode());
+                mapAcct.put("cust_mercht_code",  custMerchtId);//客商编码
+                mapAcct.put("cust_mercht_full_name",  vendor.getEnterpriseName());//所属客商全称
+                mapAcct.put("cust_mercht_id",  vendor.getId()+"");//所属客商ID
+                mapAcct.put("bank_acct_nm",  vendor.getEnterpriseName());//户名
+                mapAcct.put("bank_acct",  bean.getBankAccount());//银行账号
+                mapAcct.put("unified_soci_crdt_cd",  vendor.getSocialCreditCode());//客商-统一社会信用编码
+                mapAcct.put("open_branch_bank_nme",  bean.getOpeningBranch());//开户支行名称
+                mapAcct.put("linenumber",  bean.getInterbankNumber());//联行号
+                mapAcct.put("belg_bank_nme",  bean.getAffiliatedBank());//所属银行名称
+                mapAcct.put("curr_cd_cd",  sysDictDataService.getRemark("currency",bean.getCurrency()+"",null));//币种cd
+                mapAcct.put("curr_cd",  sysDictDataService.getRemark("currency",bean.getCurrency()+"","label"));//币种名称
+                mapAcct.put("acct_type",  "对公账号");//账户类型
+                mapAcct.put("acct_type_cd",  "1");//账户类型cd
+                mapAcct.put("is_default_acct_cd",  bean.getStatus() == 1 ? "Y": "N");//默认银行账号cd
+                mapAcct.put("is_default_acct",  bean.getStatus() == 1 ? "是": "否");//默认银行账号
+                JSONObject jsonObject = new JSONObject(mapAcct);
+                if(Vendor.LOG_TYPE_MODIFY.equals(type)){
+                    //修改要看是否有新增数据没有就要走新增方法
+                    TInterfaceLog log = new TInterfaceLog();
+                    log.setBusinessId(bean.getId() + "");
+                    log.setFlag("true");
+                    List<TInterfaceLog> logList = tInterfaceLogService.selectTInterfaceLogList(log);
+                    if (CollectionUtil.isNotEmpty(logList)) {
+                        //修改
+                        dataCenterUtil.postCommonInfo(jsonObject,dataMiddlePlatformConfig.getVendorAcctUpdate(),Vendor.LOG_TYPE_MODIFY, SecurityUtils.getUsername(),null);
+                    } else {
+                        //新增
+                        dataCenterUtil.postCommonInfo(jsonObject,dataMiddlePlatformConfig.getVendorAcctAdd(),Vendor.LOG_TYPE_ADD, SecurityUtils.getUsername(),null);
+                    }
+
+                }else if(Vendor.LOG_TYPE_REMOVE.equals(type)){
+                    dataCenterUtil.postCommonInfo(jsonObject,dataMiddlePlatformConfig.getVendorAcctRemove(),type, SecurityUtils.getUsername(),null);
+                }else{
+                    dataCenterUtil.postCommonInfo(jsonObject,dataMiddlePlatformConfig.getVendorAcctAdd(),Vendor.LOG_TYPE_ADD, SecurityUtils.getUsername(),null);
+                }
+            }
         }
+
+

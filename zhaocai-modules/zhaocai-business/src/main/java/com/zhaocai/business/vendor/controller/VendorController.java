@@ -276,4 +276,12 @@ public class VendorController extends BladeController {
         vendorService.registerSave(requestVO);
         return ResultData.success();
     }
+
+    @Log(title = "初始化客商中台code", businessType = BusinessType.UPDATE)
+    @PostMapping("/initializeCode")
+    @ApiOperation("初始化客商中台code")
+    public ResultData<Boolean> initializeCode() {
+        vendorService.initializeCode();
+        return ResultData.success();
+    }
 }

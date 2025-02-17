@@ -29,4 +29,8 @@ public class VendorClassify extends BaseEntity {
     @ApiModelProperty(value = "层级")
     private String level;
 
+    private String middleCode;
+
+    private String middleName;
+
 }
