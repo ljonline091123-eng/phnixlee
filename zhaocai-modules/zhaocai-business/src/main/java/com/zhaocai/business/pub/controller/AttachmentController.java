@@ -195,7 +195,16 @@ public class AttachmentController extends BladeController {
         if(yozOfileUtils.isNULLFileURL(fileUrl)){
             return ResultData.fail("该文件存储的fileUrl为空，无法编辑文件！！！");
         }
-        return ResultData.data(attachmentService.editWordURL(attachmentId,fileName,fileUrl));
+        String suffix = yozOfileUtils.getSuffix(fileName).toLowerCase();
+        if (yozOfileUtils.isWordExtension(suffix)) {
+            return ResultData.data(attachmentService.editWordURL(attachmentId,fileName,fileUrl));
+        } else if(yozOfileUtils.isPdfExtension(suffix)){
+            return ResultData.data(attachmentService.viewPDFFileURL(fileName,fileUrl));
+        } else if (yozOfileUtils.isImageExtension(suffix)) {
+            return ResultData.data(attachmentService.viewImageURL(fileName,fileUrl));
+        }else {
+            return ResultData.fail("无法预览该文件格式！");
+        }
     }
 
 
