@@ -3,7 +3,8 @@
     <BackButton path="/procurement/plan" :title="currentContract.type === 'update'? '修改采购计划' : '新增采购计划'">
       <div>
           <el-button type="primary" plain size="mini" :disabled="isSubmit" @click="$router.replace('/procurement/plan')">取消</el-button>
-          <el-button type="primary" size="mini" @click="submitForm('form')" :disabled="isSubmit" :loading="isSubmit">{{ isSubmit? '提交中...' : '保存' }}</el-button>
+          <el-button type="primary" size="mini" @click="submitForm('form')" :disabled="isSubmit" :loading="isSubmit">{{ isSubmit? '保存中...' : '保存' }}</el-button>
+          <el-button type="primary" size="mini" @click="submitPlan('form')" :disabled="isPlanSubmit" :loading="isPlanSubmit">{{ isPlanSubmit? '提交中...' : '提交' }}</el-button>
         </div>
     </BackButton>
     <div class="context">
@@ -546,6 +547,7 @@ import PageTitle from "@/components/PageTitle/index.vue"
 import {PRICETYPELIST, PRICETYPEOPTIONS} from "@/utils/constants";
 import VirtualScroll from 'el-table-virtual-scroll'
 import {getTwoLevelDeptByDeptId} from "@/api/system/dept";
+import { submitProcurementPlan } from "@/api/procurement/plan";
 export default {
   name: "add-plan",
   dicts: ['plan_type','price_type','procurement_counting_type','procurement_payment_type'],
@@ -709,6 +711,7 @@ export default {
         },
         currentContract: {},
         isSubmit: false,
+        isPlanSubmit: false,
         // indexs:[],
         operatorList:[],
         isUpdate:false,
@@ -944,201 +947,279 @@ export default {
         return '';
       },
 
-    //提交
+    //保存
     submitForm(formName) {
-      console.log(this.planList,'ppp');
-      const { add, subtract,divide,multiply, bignumber, format,floor } = this.mathjs;
-      this.isSubmit = true;
-      this.$refs[formName].validate(async (valid,done) => {
-        if (valid) {
-          // * 首先先判断类型为浮动价的单行是否存在数据不合法的情况
-          let amount = 0
-          if(this.planList.length>0) {
-            for(let firstItem of this.planList) {
-              for(let secondItem of firstItem.children) {
-                for(let thirdItem of secondItem.children) {
+      return new Promise((resolve, reject) => {
+        console.log(this.planList,'ppp');
+        const { add, subtract,divide,multiply, bignumber, format,floor } = this.mathjs;
+        this.isSubmit = true;
+        this.$refs[formName].validate(async (valid,done) => {
+          if (valid) {
+            // * 首先先判断类型为浮动价的单行是否存在数据不合法的情况
+            let amount = 0
+            if(this.planList.length>0) {
+              for(let firstItem of this.planList) {
+                for(let secondItem of firstItem.children) {
+                  for(let thirdItem of secondItem.children) {
 
-                  const regexN2 = /^-?\d+(\.\d{0,4})?$/;
-                  /* 固定价 */
-                  if(thirdItem.priceType === 1) {
-                    if(!regexN2.test(thirdItem.unitPriceInclTax)){
-                      this.isSubmit = false;
-                      return this.$message({
-                        message: '请检查清单中含税单价是否输入正确',
-                        type: 'error'
-                      });
+                    const regexN2 = /^-?\d+(\.\d{0,4})?$/;
+                    /* 固定价 */
+                    if(thirdItem.priceType === 1) {
+                      if(!regexN2.test(thirdItem.unitPriceInclTax)){
+                        this.isSubmit = false;
+                        return this.$message({
+                          message: '请检查清单中含税单价是否输入正确',
+                          type: 'error'
+                        });
+                      }
+
+                    }
+                    /* 浮动价、浮动率 */
+                    if(thirdItem.priceType === 2 || thirdItem.priceType === 4) {
+                      if(!regexN2.test(thirdItem.basePrice)){
+                        this.isSubmit = false;
+                        return this.$message({
+                          message: '请检查清单中基价是否输入正确',
+                          type: 'error'
+                        });
+                      }
                     }
 
-                  }
-                  /* 浮动价、浮动率 */
-                  if(thirdItem.priceType === 2 || thirdItem.priceType === 4) {
-                    if(!regexN2.test(thirdItem.basePrice)){
-                      this.isSubmit = false;
-                      return this.$message({
-                        message: '请检查清单中基价是否输入正确',
-                        type: 'error'
-                      });
-                    }
-                  }
+                    /* 计算价格 */
+                    this.calculatePrice(thirdItem);
 
-                  /* 计算价格 */
-                  this.calculatePrice(thirdItem);
-
-                  amount = format(add(bignumber(amount), bignumber(Number(thirdItem.totalPrice))))
+                    amount = format(add(bignumber(amount), bignumber(Number(thirdItem.totalPrice))))
+                  }
                 }
               }
-            }
-            if(Number(amount)>Number(this.planList[0].planningBalance)) {
-              this.isSubmit = false;
+              if(Number(amount)>Number(this.planList[0].planningBalance)) {
+                this.isSubmit = false;
 
-              /* 更新表格的布局 */
-              this.$nextTick(() => {
-                this.$refs.tableRef.doLayout();
-              });
+                /* 更新表格的布局 */
+                this.$nextTick(() => {
+                  this.$refs.tableRef.doLayout();
+                });
 
-              return this.$message({
-                message: '拆分合约清单中的总金额不能大于规划余量',
-                type: 'error'
-              });
-            }
-          }
-          const { planList } = this
-          console.log(planList,'planListplanList--planListplanList-planListplanList');
-          if(!planList[0].children || !planList[0].children.length){
-            this.isSubmit = false;
-            this.$message({
-              message: '拆分合约不能为空',
-              type: 'error'
-            });
-            return false;
-          }
-
-          const isAll = planList[0]?.children.every(item => item.splitContractName && item.splitContractName!="null" && item.contractScope && item.contractScope!="null")
-              //判断长度大于1
-          if(planList[0].children.length>1){
-            if(!isAll){
-              this.isSubmit = false;
-              if(planList[0].children.length!=1){
-                this.$message({
-                  message: '拆分合约规划名称/拟签约合同承包范围不能为空',
+                return this.$message({
+                  message: '拆分合约清单中的总金额不能大于规划余量',
                   type: 'error'
                 });
               }
+            }
+            const { planList } = this
+            console.log(planList,'planListplanList--planListplanList-planListplanList');
+            if(!planList[0].children || !planList[0].children.length){
+              this.isSubmit = false;
+              this.$message({
+                message: '拆分合约不能为空',
+                type: 'error'
+              });
               return false;
             }
-          }
 
-          const loading = this.$loading({
-            lock: true,
-            text: '数据提交中...',
-            background: 'rgba(0, 0, 0, 0.7)'
-          });
-          const { procurementPlanName, beginDate, endDate, arrivalDate, procurementOfficer, procurementOfficerName,projectId,projectName,projectCode, priceType,basePrice, regionProvinceCode, regionCityCode, paymentType, countingType } = this.formData;
-          const { contractPlanningCategory, biddingMethodCode, biddingMethodName, contractPlanningCategoryName, contractPlanningId, contractPlanningName, incurredPlannedAmount, incurredPlannedAmountText, plannedAmountInclTax, plannedAmountInclTaxText, planningBalance, planningBalanceText,bidResponsibleOrg, bidResponsibleOrgName, id, contractPlanningCode,brand } = this.currentContract
-          const splitRequestList = this.planList[0]?.children.map(item => {
-            return {
-              splitContractName:item.splitContractName,
-              contractScope:item.contractScope,
-              materialsLists:item.children
+            const isAll = planList[0]?.children.every(item => item.splitContractName && item.splitContractName!="null" && item.contractScope && item.contractScope!="null")
+                //判断长度大于1
+            if(planList[0].children.length>1){
+              if(!isAll){
+                this.isSubmit = false;
+                if(planList[0].children.length!=1){
+                  this.$message({
+                    message: '拆分合约规划名称/拟签约合同承包范围不能为空',
+                    type: 'error'
+                  });
+                }
+                return false;
+              }
             }
-          })
-          const formData = {
-            procurementPlan:{
-              id: id || '',
-              procurementPlanName,
-              procurementPlanType:contractPlanningCategory,
-              procurementType:biddingMethodCode,
-              projectHierarchy:bidResponsibleOrgName,
-              beginDate,
-              endDate,
-              arrivalDate,
-              procurementOfficer,
-              procurementOfficerName,
-              //priceType:priceType !== 'undefined'?priceType:'',
-              regionProvinceCode,
-              /* 基价 （前端用来统一刷新列表清单的基价使用。） */
-              basePrice,
-              regionCityCode,
-              paymentType:paymentType !== 'undefined'?paymentType:'',
-              countingType:countingType !== 'undefined'?countingType:'',
-            },
-            splitRequestList,
-            contractPlanning:{
-              contractPlanningCategory, biddingMethodCode, biddingMethodName, contractPlanningCategoryName, contractPlanningId, contractPlanningName, incurredPlannedAmount, incurredPlannedAmountText, plannedAmountInclTax, plannedAmountInclTaxText, planningBalance, planningBalanceText,
-              projectId,projectName,projectCode,bidResponsibleOrg,bidResponsibleOrgName,subjectMatter:this.subjectMatter,contractPlanningCode,brand
-            }
-          }
-          console.log('%c👽 提交数据 ', `font-size: 14px;background-color: #f00;`, formData);
-          /* 对象递归需要处理 千分位的属性 处理提交给Java后台对应的BigDecimal类型 */
-          const targetKeys = [
-            /* 租赁数量 */
-            "rentQuantity",
-            /* 租赁时间 */
-            "rentTime",
-            /* 基价 */
-            "basePrice",
-            /* 浮动率 */
-            "floatingRate",
-            /* 卸费 */
-            // "unloadingFee",
-            /* 浮动价 */
-            "floatingPrice",
-            /* 税额 */
-            "taxAmount",
-            /* 金额(含税) */
-            "amountInclTax",
-            /* 金额(不含税) */
-            "amountExclTax",
-            /* 单价(含税) */
-            "unitPriceInclTax",
-            /* 单价(不含税) */
-            "unitPriceExclTax",
-            /* 税率 */
-            "taxRate",
-            /* 已使用数量 */
-            "usedCount",
-            /* 数量 */
-            "count",
-            /* 规划金额（含税） */
-            "plannedAmountInclTax",
-            /* 已发生规划金额 */
-            "incurredPlannedAmount",
-            /* 规划余量 */
-            "planningBalance",
-            /* 基价 */
-            "basePrice",
-            /* 指导价 */
-            "guidancePrice"
-          ];
-          let formDataHandle = this.removeThousandsSeparator(formData,targetKeys);
-          console.log('%c👽 提交数据处理后 ', `font-size: 14px;background-color: #f00;`, formDataHandle);
-          try{
-            const res = await saveProcurementPlan(formDataHandle);
-            loading.close();
-            this.$message({
-              message: '保存成功',
-              type: 'success'
+
+            const loading = this.$loading({
+              lock: true,
+              text: '数据提交中...',
+              background: 'rgba(0, 0, 0, 0.7)'
             });
+            const { procurementPlanName, beginDate, endDate, arrivalDate, procurementOfficer, procurementOfficerName,projectId,projectName,projectCode, priceType,basePrice, regionProvinceCode, regionCityCode, paymentType, countingType } = this.formData;
+            const { contractPlanningCategory, biddingMethodCode, biddingMethodName, contractPlanningCategoryName, contractPlanningId, contractPlanningName, incurredPlannedAmount, incurredPlannedAmountText, plannedAmountInclTax, plannedAmountInclTaxText, planningBalance, planningBalanceText,bidResponsibleOrg, bidResponsibleOrgName, id, contractPlanningCode,brand } = this.currentContract
+            const splitRequestList = this.planList[0]?.children.map(item => {
+              return {
+                splitContractName:item.splitContractName,
+                contractScope:item.contractScope,
+                materialsLists:item.children
+              }
+            })
+            const formData = {
+              procurementPlan:{
+                id: id || '',
+                procurementPlanName,
+                procurementPlanType:contractPlanningCategory,
+                procurementType:biddingMethodCode,
+                projectHierarchy:bidResponsibleOrgName,
+                beginDate,
+                endDate,
+                arrivalDate,
+                procurementOfficer,
+                procurementOfficerName,
+                //priceType:priceType !== 'undefined'?priceType:'',
+                regionProvinceCode,
+                /* 基价 （前端用来统一刷新列表清单的基价使用。） */
+                basePrice,
+                regionCityCode,
+                paymentType:paymentType !== 'undefined'?paymentType:'',
+                countingType:countingType !== 'undefined'?countingType:'',
+              },
+              splitRequestList,
+              contractPlanning:{
+                contractPlanningCategory, biddingMethodCode, biddingMethodName, contractPlanningCategoryName, contractPlanningId, contractPlanningName, incurredPlannedAmount, incurredPlannedAmountText, plannedAmountInclTax, plannedAmountInclTaxText, planningBalance, planningBalanceText,
+                projectId,projectName,projectCode,bidResponsibleOrg,bidResponsibleOrgName,subjectMatter:this.subjectMatter,contractPlanningCode,brand
+              }
+            }
+            console.log('%c👽 提交数据 ', `font-size: 14px;background-color: #f00;`, formData);
+            /* 对象递归需要处理 千分位的属性 处理提交给Java后台对应的BigDecimal类型 */
+            const targetKeys = [
+              /* 租赁数量 */
+              "rentQuantity",
+              /* 租赁时间 */
+              "rentTime",
+              /* 基价 */
+              "basePrice",
+              /* 浮动率 */
+              "floatingRate",
+              /* 卸费 */
+              // "unloadingFee",
+              /* 浮动价 */
+              "floatingPrice",
+              /* 税额 */
+              "taxAmount",
+              /* 金额(含税) */
+              "amountInclTax",
+              /* 金额(不含税) */
+              "amountExclTax",
+              /* 单价(含税) */
+              "unitPriceInclTax",
+              /* 单价(不含税) */
+              "unitPriceExclTax",
+              /* 税率 */
+              "taxRate",
+              /* 已使用数量 */
+              "usedCount",
+              /* 数量 */
+              "count",
+              /* 规划金额（含税） */
+              "plannedAmountInclTax",
+              /* 已发生规划金额 */
+              "incurredPlannedAmount",
+              /* 规划余量 */
+              "planningBalance",
+              /* 基价 */
+              "basePrice",
+              /* 指导价 */
+              "guidancePrice"
+            ];
+            let formDataHandle = this.removeThousandsSeparator(formData,targetKeys);
+            console.log('%c👽 提交数据处理后 ', `font-size: 14px;background-color: #f00;`, formDataHandle);
+            try{
+              const res = await saveProcurementPlan(formDataHandle);
+              loading.close();
+              this.$message({
+                message: '保存成功',
+                type: 'success'
+              });
+              this.isSubmit = false;
+              console.log(res,'r~~~~~~~~~~~~~~~~~');
+              this.currentContract.id=res.data.id
+              this.getPlanDetail()
+              resolve(res); // 保存成功，返回结果
+              // this.$tab.closePage().then(() => {
+                // 执行结束的逻辑
+                // let param = Base64.encode(JSON.stringify(res.data))
+                // this.$router.replace(`/procurement/plan-detail/${param}`);
+              // })
+            }catch(err){
+              console.log(err);
+              this.isSubmit = false;
+              loading.close();
+              reject(err); // 保存失败，返回错误
+            }
+          } else {
             this.isSubmit = false;
-            console.log(res,'r~~~~~~~~~~~~~~~~~');
-            this.currentContract.id=res.data.id
-            this.getPlanDetail()
-            // this.$tab.closePage().then(() => {
-              // 执行结束的逻辑
-              // let param = Base64.encode(JSON.stringify(res.data))
-              // this.$router.replace(`/procurement/plan-detail/${param}`);
-            // })
-          }catch(err){
-            console.log(err);
-            this.isSubmit = false;
-            loading.close();
+            reject(new Error('Form validation failed')); // 验证失败，返回错误
+            return false;
           }
-        } else {
-          this.isSubmit = false;
-          return false;
-        }
+        });
       });
     },
+
+    //提交采购计划
+    // async submitPlan(formName){
+    //   this.submit(formName);
+    //   const id = this.currentContract.id;
+    //   console.log("提交的plan的id：", id);
+    //   if (!id) {
+    //     this.$message.error("采购计划ID不存在，无法提交");
+    //     return;
+    //   }
+
+    //   try {
+    //     await submitProcurementPlan(id);
+    //     this.$message.success("提交成功");
+    //     this.getPlanList();
+    //   } catch (error) {
+    //     console.error("提交采购计划失败：", error);
+    //     this.$message.error("提交采购计划失败，请稍后重试");
+    //   }
+    // },
+    async submitPlan(formName) {
+      try {
+        this.$refs[formName].validate(async (valid) => {
+          if (valid) {
+            this.isPlanSubmit = true; // 设置提交状态为 true，禁用按钮并显示加载状态
+            // 等待保存表单数据的方法完成
+            try {
+              await this.submitForm(formName);
+            } catch (error) {
+              // 如果保存失败，直接返回，不再继续执行提交逻辑
+              console.error("保存表单数据失败：", error);
+              this.isPlanSubmit = false; // 取消加载状态
+              return;
+            }
+
+            const id = this.currentContract.id;
+            console.log("提交的 plan 的 id：", id);
+            if (!id) {
+              this.isPlanSubmit = false; // 如果 id 不存在，取消加载状态
+              this.$message.error("采购计划 ID 不存在，无法提交");
+              return;
+            }
+
+            try {
+              const loading = this.$loading({
+                lock: true,
+                text: '提交中...',
+                background: 'rgba(0, 0, 0, 0.7)'
+              });
+              await submitProcurementPlan(id);
+              loading.close();
+              this.isPlanSubmit = false; // 提交成功后，取消加载状态
+              this.$message.success("提交成功");
+              this.getPlanDetail();
+            } catch (error) {
+              console.error("提交采购计划失败：", error);
+              this.isPlanSubmit = false; // 提交失败后，取消加载状态
+              loading.close();
+              this.$message.error("提交采购计划失败，请稍后重试");
+            }
+          } else {
+            this.isPlanSubmit = false; // 校验失败后，取消加载状态
+            return false;
+          }
+        });
+      } catch (error) {
+        console.error("提交表单失败：", error);
+        this.isPlanSubmit = false; // 提交表单失败后，取消加载状态
+        this.$message.error("提交表单失败，请稍后重试");
+      }
+    },
+
+
     /* 批量替换对象中指定属性的,号，用于金额校验，提交对象数据给后台时将金额格式化。 */
     removeThousandsSeparator(obj, targetKeys = []) {
         // 检查传入的数据类型
@@ -1300,7 +1381,7 @@ export default {
               this.id=res.data.id
               this.materialsLists=res.data.materialsLists
             }
-console.log("-2222--"+JSON.stringify(this.materialsLists))
+            console.log("-2222--"+JSON.stringify(this.materialsLists))
             loading.close();
             this.$message({
               message: '保存成功',

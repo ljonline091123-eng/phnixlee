@@ -280,7 +280,7 @@
             </el-row>
 
             <el-row class="custom-row" style="height: 180px">
-              <el-col :span="8" class="custom-col"  style="height: 180px">
+              <el-col :span="6" class="custom-col"  style="height: 180px">
                 <el-form-item label="评分模板" class="custom-form-item">
                   <a
                     class="link-type"
@@ -297,7 +297,7 @@
                   </a>
                 </el-form-item>
               </el-col>
-              <el-col :span="8" class="custom-col" style="height: 180px">
+              <el-col :span="6" class="custom-col" style="height: 180px">
                 <el-form-item
                   label="招标文件"
                   label-width="140px"
@@ -316,7 +316,7 @@
                   </a>
                 </el-form-item>
               </el-col>
-              <el-col :span="8" class="custom-col" style="height: 180px">
+              <el-col :span="6" class="custom-col" style="height: 180px">
                 <el-form-item label="合同模板" class="custom-form-item">
                   <a
                     class="link-type"
@@ -332,6 +332,23 @@
                   </a>
                 </el-form-item>
               </el-col>
+              <el-col :span="6" class="custom-col" style="height: 180px">
+                <el-form-item label="其他文件" class="custom-form-item">
+                  <a
+                    class="link-type"
+                    @click="
+                      showTemplate(procurementSchemeBidding.otherFile,'otherFile')
+                    "
+                    href="javascript:;"
+                  >
+                    {{
+                      procurementSchemeBidding.otherFile &&
+                      procurementSchemeBidding.otherFile.fileName
+                    }}
+                  </a>
+                </el-form-item>
+              </el-col>
+
             </el-row>
           </el-form>
         </el-tab-pane>
@@ -696,7 +713,7 @@
       </div>
     </el-drawer>
 
-    //预览文件弹窗
+    <!-- 预览文件弹窗 -->
     <el-dialog
       :title="templateDialogTitle"
       :visible.sync="templateDialogVisible"

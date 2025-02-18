@@ -468,8 +468,39 @@
                       </div>
                     </el-form-item>
                   </el-col>
-
-
+                  <el-col :span="8" class="grid-cell">
+                    <el-form-item label=" 其他文件" prop="otherAttachmentName">
+                      <template v-if="formData.otherAttachmentName">
+                        <a href="javascript:;" >{{
+                          formData.otherAttachmentName
+                        }}</a>
+                      </template>
+                      <el-button
+                        v-if="formData.otherAttachmentId"
+                        size="mini"
+                        @click="modifyTempFile(3)"
+                      >修改文件</el-button>
+                      <el-button
+                        size="small"
+                        type="primary"
+                        @click="uploadOtherFileClick"
+                        >上传文件</el-button>
+                      <br>
+                      <div style="margin-left: -90px;width: 300px;">
+                        <el-upload
+                          style="margin-left: 90px;margin-top: -50px;"
+                          :action="uploadFileUrl"
+                          :limit="1"
+                          :on-success="fileSuccessOther"
+                          :file-list="formData.fileListOther"
+                          :on-remove="fileRemoveOther"
+                          ref="uploadOther"
+                          :before-upload="otherBeforeUpload"
+                        >
+                        </el-upload>
+                      </div>
+                    </el-form-item>
+                  </el-col>
                 </el-row>
                 <!-- 在线预览 -->
                 <div class="previewFile"
@@ -1720,6 +1751,7 @@ export default {
             evaluationTemplateId,
             biddingAttachmentId,
             contractAttachmentId,
+            otherAttachmentId,
             contractTemplateId,
             biddingTemplateId,
             procurementSchemeId,
@@ -1746,6 +1778,7 @@ export default {
               contractAttachmentId,
               contractTemplateId,
               biddingTemplateId,
+              otherAttachmentId,
               id: procurementSchemeBiddingId || "",
             },
           };
@@ -1997,10 +2030,10 @@ export default {
           /* 调起联想文档 */
           this.viewAttachmentId = res.data;
 
-          //据viewAttachmentId获取文件的文档中台的编辑URL
+          // 据viewAttachmentId获取文件的文档中台的编辑URL
           if (this.viewAttachmentId) {
             console.log('点击修改附件后的Attachment ID:', this.viewAttachmentId);
-            //获取文档中台的文档编辑URL
+            // 获取文档中台的文档编辑URL
             this.loadEditFileUrl();
           } else {
             console.warn('attachmentId 数据未正确加载');
@@ -2039,6 +2072,38 @@ export default {
           this.$set(this.procurementSchemeTempObject.contractTemplate, "fileUrl", fileUrl);
           this.$set(this.procurementSchemeTempObject.contractTemplate, "templateName", templateName);
           this.$set(this.procurementSchemeTempObject.contractTemplate, "templateId", templateId);
+          /* 调起联想文档 */
+          this.viewAttachmentId = res.data;
+
+          //据viewAttachmentId获取文件的文档中台的编辑URL
+          if (this.viewAttachmentId) {
+            console.log('点击修改附件后的Attachment ID:', this.viewAttachmentId);
+            //获取文档中台的文档编辑URL
+            this.loadEditFileUrl();
+          } else {
+            console.warn('attachmentId 数据未正确加载');
+          }
+        } catch (err) {
+          console.log(err);
+        }
+      }else if (type === 3) {
+        /* 3 其他文件 */
+        let {attachmentId , fileName , fileUrl} = this.procurementSchemeTempObject.otherFile;
+        try {
+          let res = {};
+          res.data = this.formData.otherAttachmentId;
+
+          /* 同步更新页面的模板附件对象(附件修改按钮) */
+          if (!this.procurementSchemeTempObject) {
+            this.$set(this, 'procurementSchemeTempObject', {});
+          }
+          if (!this.procurementSchemeTempObject.otherFile) {
+            this.$set(this.procurementSchemeTempObject, 'otherFile', {});
+          }
+          this.$set(this.procurementSchemeTempObject.otherFile, "attachmentId", res.data);
+          this.$set(this.procurementSchemeTempObject.otherFile, "fileName", fileName);
+          this.$set(this.procurementSchemeTempObject.otherFile, "fileUrl", fileUrl);
+
           /* 调起联想文档 */
           this.viewAttachmentId = res.data;
 
@@ -2233,8 +2298,70 @@ export default {
       //  this.attachmentId = row.attachmentId;
     },
 
+    /**
+     * 上传其他文件点击事件
+     */
+    uploadOtherFileClick() {
+      showSecretRelatedTips(() => {
+        this.$refs['uploadOther'].clearFiles(); // 清除现有文件列表
+        this.$refs['uploadOther'].$refs['upload-inner'].handleClick(); // 触发文件选择器打开
+      });
+    },
 
-    /* 手动合同模板附件上传 */
+    /**
+     * 其他文件上传成功
+     */
+    async fileSuccessOther(res) {
+      const { url, name } = res.data;
+      try {
+        // 保存到文件表获取返回id
+        const res = await addAttachment({ fileName: name, fileUrl: url });
+        // 设置新的附件返回的附件id
+        this.$set(this.formData, "otherAttachmentId", res.data);
+        this.$set(this.formData, "otherAttachmentName", name);
+        // 同步更新页面的附件对象
+        if (!this.procurementSchemeTempObject) {
+          this.$set(this, 'procurementSchemeTempObject', {});
+        }
+        if (!this.procurementSchemeTempObject.otherFile) {
+          this.$set(this.procurementSchemeTempObject, 'otherFile', {});
+        }
+        this.$set(this.procurementSchemeTempObject.otherFile, "attachmentId", res.data);
+        this.$set(this.procurementSchemeTempObject.otherFile, "fileName", name);
+        this.$set(this.procurementSchemeTempObject.otherFile, "fileUrl", url);
+        /* 保存需要编辑的文档ID */
+        this.viewAttachmentId = res.data;
+        //上传文件后，先去除文档原来的修订记录
+        const res2 = await removerAmendmentRecord({attachmentId: this.viewAttachmentId});
+        //据viewAttachmentId获取文件的文档中台的编辑URL
+        if (this.viewAttachmentId) {
+          console.log('其他文件编辑viewAttachmentId:', this.viewAttachmentId);
+          //获取文档中台的文档编辑URL
+          this.loadEditFileUrl();
+        } else {
+          console.warn('attachmentId 数据未正确加载');
+        }
+      } catch (err) {
+        console.log(err);
+      }
+    },
+
+    /**
+     * 其他文件手动上传文件删除
+     */
+    fileRemoveOther() {
+      this.$set(this.formData, "otherAttachmentId", null);
+      this.$set(this.formData, "otherAttachmentName", null);
+      this.$set(this.procurementSchemeTempObject.otherFile, "attachmentId", null);
+      this.$set(this.procurementSchemeTempObject.otherFile, "fileName", null);
+      this.$set(this.procurementSchemeTempObject.otherFile, "fileUrl", null);
+      this.$forceUpdate();
+      /* 调起联想文档 */
+      this.viewAttachmentId = null;
+      this.editFileUrl = ""; //删除文档后，文档中台的文档编辑URL设为空
+    },
+
+    /* 手动招标文件附件上传 */
     uploadBiddingClick() {
       showSecretRelatedTips(()=>{
          // 清除现有文件列表
@@ -2258,6 +2385,18 @@ export default {
       }
       return true;  // 返回 true 表示允许继续上传
     },
+
+    /* 在其他文件上传前处理逻辑 */
+    otherBeforeUpload(file) {
+      //限制上传的文件名长度
+      const fileName = file.name;
+        if (fileName.length > 80) {
+            this.$message.error('文件名不能超过80个字符');
+            return false; // 阻止上传
+      }
+      return true;  // 返回 true 表示允许继续上传
+    },
+
     /* 手动合同模板附件上传 */
     uploadContractClick() {
       showSecretRelatedTips(()=>{
@@ -2427,6 +2566,7 @@ export default {
           bidContactEmail,
           biddingTemplate,
           contractTemplate,
+          otherFile,
           evaluationTemplate,
           id: procurementSchemeBiddingId,
         } = procurementSchemeBidding;
@@ -2460,6 +2600,14 @@ export default {
           this.formData.fileListContract = [{
             name: procurementSchemeBidding.contractTemplate.fileName,  // 文件名
             url: procurementSchemeBidding.contractTemplate.fileUrl,  // 文件的 URL（如果是已上传的文件）
+            status: 'success',  // 上传状态，可以是 'success' | 'failure' | 'uploading'
+            uid: Date.now()  // 文件的唯一标识符
+          }];
+        }
+        if(procurementSchemeBidding.otherFile){
+          this.formData.fileListOther = [{
+            name: procurementSchemeBidding.otherFile.fileName,  // 文件名
+            url: procurementSchemeBidding.otherFile.fileUrl,  // 文件的 URL（如果是已上传的文件）
             status: 'success',  // 上传状态，可以是 'success' | 'failure' | 'uploading'
             uid: Date.now()  // 文件的唯一标识符
           }];
