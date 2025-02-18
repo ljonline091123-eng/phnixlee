@@ -2334,6 +2334,7 @@ export default {
         //上传文件后，先去除文档原来的修订记录
         const res2 = await removerAmendmentRecord({attachmentId: this.viewAttachmentId});
         //据viewAttachmentId获取文件的文档中台的编辑URL
+        console.log("其他文件的编辑this.viewAttachmentId：",this.viewAttachmentId);
         if (this.viewAttachmentId) {
           console.log('其他文件编辑viewAttachmentId:', this.viewAttachmentId);
           //获取文档中台的文档编辑URL
