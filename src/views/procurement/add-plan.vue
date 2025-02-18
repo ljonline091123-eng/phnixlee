@@ -2139,15 +2139,15 @@ console.log("-2222--"+JSON.stringify(this.materialsLists))
           return row;
         }else{
           const priceInclTax = (row.unitPriceInclTax+'').replaceAll(',','');
-          /* 单价不含税：含税单价 * (1 + (税率  先除100得出百分比)) */
-          const onePlusTaxRate = multiply(bignumber(priceInclTax), add(1, divide(bignumber(row.taxRate), 100)));
+          /* 单价不含税：含税单价 / (1 + (税率  先除100得出百分比)) */
+          const onePlusTaxRate = divide(bignumber(priceInclTax), add(1, divide(bignumber(row.taxRate), 100)));
           row.unitPriceExclTax = this.formatNumberDynamicDecimalWithSeparator(onePlusTaxRate)
           /* 行含税总价：含税单价 * 数量 */
           const totalPrice = multiply(onePlusTaxRate, bignumber(row.count));
           row.totalPriceText = this.formatNumberDynamicDecimalWithSeparator(totalPrice);
           row.totalPrice = row.totalPriceText.replaceAll(',', '');
         }
-        console.log('%c🪴 固定价计算结果row \n', `font-size: 14px;background-color: #f00;`, row );
+        console.log('%c⏩ 固定价计算结果row \n', `font-size: 14px;background-color: #f00;`, row );
       }
 
       /* 浮动价 */
@@ -2158,8 +2158,8 @@ console.log("-2222--"+JSON.stringify(this.materialsLists))
           /* 单价含税:    基价  * (1 + (浮动率 先除100得出百分比)) */
           const unitPriceInclTaxBig = add(bignumber(row.basePrice), bignumber(row.floatingPrice));
           row.unitPriceInclTax = this.formatNumberDynamicDecimalWithSeparator(unitPriceInclTaxBig);
-          /* 单价不含税：含税单价 * (1 + (税率  先除100得出百分比)) */
-          const onePlusTaxRate = multiply(bignumber(unitPriceInclTaxBig), add(1, divide(bignumber(row.taxRate), 100)));
+          /* 单价不含税：含税单价 / (1 + (税率  先除100得出百分比)) */
+          const onePlusTaxRate = divide(bignumber(unitPriceInclTaxBig), add(1, divide(bignumber(row.taxRate), 100)));
           row.unitPriceExclTax = this.formatNumberDynamicDecimalWithSeparator(onePlusTaxRate)
           /* 行含税总价：含税单价 * 数量 */
           const totalPrice = multiply(unitPriceInclTaxBig, bignumber(row.count));
@@ -2179,15 +2179,15 @@ console.log("-2222--"+JSON.stringify(this.materialsLists))
           const unitPriceInclTaxBig = multiply(bignumber(row.basePrice), add(1,divide(bignumber(row.floatingRate), 100)));
           row.unitPriceInclTax = this.formatNumberDynamicDecimalWithSeparator(unitPriceInclTaxBig);
           const priceInclTax = (row.unitPriceInclTax+'').replaceAll(',','');
-          /* 单价不含税：含税单价 * (1 + (税率  先除100得出百分比)) */
-          const onePlusTaxRate = multiply(bignumber(priceInclTax), add(1, divide(bignumber(row.taxRate), 100)));
+          /* 单价不含税：含税单价 / (1 + (税率  先除100得出百分比)) */
+          const onePlusTaxRate = divide(bignumber(priceInclTax), add(1, divide(bignumber(row.taxRate), 100)));
           row.unitPriceExclTax = this.formatNumberDynamicDecimalWithSeparator(onePlusTaxRate)
           /* 行含税总价：含税单价 * 数量 */
           const totalPrice = multiply(unitPriceInclTaxBig, bignumber(row.count));
           row.totalPriceText = this.formatNumberDynamicDecimalWithSeparator(totalPrice);
           row.totalPrice = row.totalPriceText.replaceAll(',', '');
         }
-        console.log('%c🪴 浮动率计算结果row \n', `font-size: 14px;background-color: #f00;`, row );
+        console.log('%c🏀 浮动率计算结果row \n', `font-size: 14px;background-color: #f00;`, row );
       }
 
       /* 在 DOM 更新完成后，重新布局表格 (为了刷新表格列的'总计') */
