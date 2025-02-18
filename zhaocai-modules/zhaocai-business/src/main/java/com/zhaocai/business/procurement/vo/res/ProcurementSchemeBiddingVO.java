@@ -47,4 +47,7 @@ public class ProcurementSchemeBiddingVO {
 
     @ApiModelProperty(value =  "合同模板")
     private ProcurementSchemeTemplateVO contractTemplate;
+
+    @ApiModelProperty(value =  "其他文件")
+    private ProcurementSchemeOtherFileVO otherFile;
 }
