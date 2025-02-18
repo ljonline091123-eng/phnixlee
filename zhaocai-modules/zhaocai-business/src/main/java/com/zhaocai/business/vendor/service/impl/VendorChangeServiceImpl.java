@@ -3,6 +3,8 @@ package com.zhaocai.business.vendor.service.impl;
 import cn.hutool.core.codec.Base64;
 import com.alibaba.csp.sentinel.util.StringUtil;
 import com.alibaba.fastjson.JSON;
+import com.alibaba.fastjson2.JSONArray;
+import com.alibaba.fastjson2.JSONObject;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
@@ -16,12 +18,17 @@ import com.zhaocai.business.process.service.IBPMProcessService;
 import com.zhaocai.business.process.service.IPBMOverrideService;
 import com.zhaocai.business.pub.domain.Attachment;
 import com.zhaocai.business.pub.domain.DwCdBank;
+import com.zhaocai.business.pub.domain.TAccountInfo;
+import com.zhaocai.business.pub.service.IAccountService;
 import com.zhaocai.business.pub.service.IAttachmentService;
 import com.zhaocai.business.pub.service.IBankService;
+import com.zhaocai.business.pub.service.ISysDictDataService;
 import com.zhaocai.business.pub.vo.req.AttachmentRequestVO;
+import com.zhaocai.business.vendor.config.DataMiddlePlatformConfig;
 import com.zhaocai.business.vendor.domain.*;
 import com.zhaocai.business.vendor.mapper.VendorChangeMapper;
 import com.zhaocai.business.vendor.service.*;
+import com.zhaocai.business.vendor.util.DataCenterUtil;
 import com.zhaocai.business.vendor.vo.req.VendorBlackRequestVO;
 import com.zhaocai.business.vendor.vo.req.VendorChangeRequestVO;
 import com.zhaocai.business.vendor.vo.res.*;
@@ -31,8 +38,11 @@ import com.zhaocai.common.core.utils.bean.BeanCopierUtil;
 import com.zhaocai.common.core.utils.bean.BeanUtils;
 import com.zhaocai.common.core.web.bean.ResultData;
 import com.zhaocai.common.core.web.domain.BaseEntity;
+import com.zhaocai.common.security.utils.SecurityUtils;
+import com.zhaocai.system.api.domain.SysDept;
 import com.zhaocai.system.api.system.RemoteSystemService;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.aop.aspectj.annotation.AnnotationAwareAspectJAutoProxyCreator;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -41,10 +51,13 @@ import org.springframework.util.CollectionUtils;
 import org.springframework.util.ObjectUtils;
 
 import java.io.Serializable;
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 
 /**
@@ -89,6 +102,18 @@ public class VendorChangeServiceImpl extends ServiceImpl<VendorChangeMapper,Vend
     private UnderlingSystemService underlingSystemService;
     @Autowired
     private RemoteSystemService remoteSystemService;
+
+    @Autowired
+    private ISysDictDataService sysDictDataService;
+
+    @Autowired
+    private DataCenterUtil dataCenterUtil;
+
+    @Autowired
+    private DataMiddlePlatformConfig dataMiddlePlatformConfig;
+
+    @Autowired
+    private IAccountService accountService;
 
     /**
      * 获取供应商修改详情
@@ -467,6 +492,9 @@ public class VendorChangeServiceImpl extends ServiceImpl<VendorChangeMapper,Vend
                 .orderByDesc(VendorChange::getVersion));
         // 不存在变更版本时，创建一份VO版本
         if (!CollectionUtils.isEmpty(vendorChangeList)) {
+            if(vendorChangeList.get(0).getVersion().equals(Integer.valueOf(0))){
+                return id;
+            }
             return vendorChangeList.get(0).getId();
         }
         return null;
@@ -616,6 +644,109 @@ public class VendorChangeServiceImpl extends ServiceImpl<VendorChangeMapper,Vend
         certificationChangeService.handleApprove(vendorChange);
         // 更新供应商联系人
         contactChangeService.handleApprove(vendorChange);
+        //推送供应商信息
+        pushVendor(vendorChange.getVendorId(),Vendor.LOG_TYPE_MODIFY);
+        vendorService.pushMarketVendor(vendorChange.getVendorId());
+    }
+
+    private void pushVendor(Long id, String type) {
+        ExecutorService executor = Executors.newCachedThreadPool();
+        executor.execute(() -> {
+        Vendor bean = vendorService.getById(id);
+        if(bean != null){
+            Map<String, Object> map = new HashMap<>();
+            map.put("internal_id", bean.getId() + "");
+            map.put("dept_id",  bean.getFirstCooperationCompanyCode());
+            //map.put("cust_mercht_id",  "");
+            map.put("cust_mercht_full_name",  bean.getEnterpriseName());
+            map.put("cust_mercht_cdtfy",  "供应商");
+            map.put("cust_mercht_cdtfy_cd",  "G");
+            map.put("is_ext_cust_mercht_cate", sysDictDataService.getRemark("is_external",bean.getIsExternal()+"","label"));
+            map.put("is_ext_cust_mercht_cate_cd",  sysDictDataService.getRemark("is_external",bean.getIsExternal()+"",null));
+            map.put("cust_mercht_attr",  "法人单位");
+            map.put("cust_mercht_attr_cd",  "1");
+            //map.put("cust_mercht_modif_pre_name",  );//客商变更前名称(曾用名)
+            map.put("corp_princ_legal_rep",  bean.getLegalRepresentative());
+            map.put("unified_soci_crdt_cd",  bean.getSocialCreditCode());
+            map.put("rgst_cap", bean.getRegisteredCapital()==null? new BigDecimal(0):bean.getRegisteredCapital().multiply(new BigDecimal(10000)) );
+            map.put("oper_range",  bean.getBusinessScope());
+            //map.put("fdg_tm",  "");//成立时间
+            map.put("czp_zone_rgst_name",  "中国");
+            map.put("czp_zone_rgst_cd",  "156");
+            map.put("admin_region_prov_city_county_rgst_nm",  bean.getEnterpriseCityName());
+            map.put("admin_region_prov_city_county_rgst_cd",  bean.getEnterpriseCityCode());
+            map.put("dtl_addr",  bean.getEnterpriseAddress());
+            map.put("cust_mercht_status",  "正常");
+            map.put("cust_mercht_status_cd",  "1");//客商状态
+            map.put("cust_mercht_char",   sysDictDataService.getRemark("enterprise_nature", bean.getEnterpriseNature()+"","label"));
+            map.put("cust_mercht_char_cd", sysDictDataService.getRemark("enterprise_nature", bean.getEnterpriseNature()+"",null));//企业性质
+            map.put("addvl_pay_tax_type",  sysDictDataService.getRemark("taxpayer_type", bean.getTaxpayerType()+"","label"));//????
+            map.put("addvl_pay_tax_type_cd",  sysDictDataService.getRemark("taxpayer_type", bean.getTaxpayerType()+"",null));//增值税纳税人类型
+            map.put("setup_dt",  bean.getCreateTime());
+            if(StringUtil.isNotEmpty(bean.getFirstCooperationCompanyCode())){
+                SysDept dept = remoteSystemService.getByThridDeptId(bean.getFirstCooperationCompanyCode(),SecurityConstants.INNER);
+                if(dept != null){
+                    map.put("setup_corp_org_name",  dept.getDeptName());//创建单位
+                    map.put("setup_corp_org_id",  dept.getInterialId());//创建单位ID
+                }
+            }
+            map.put("setup_corp_org_code",  bean.getFirstCooperationCompanyCode());//创建单位编码
+            map.put("cust_mercht_cont_tel",  bean.getContactPhone());
+            if(StringUtil.isNotEmpty(bean.getEnterpriseType())){
+                String[] split = bean.getEnterpriseType().split(",");
+                VendorClassify classify = vendorClassifyService.getById(Long.valueOf(split[0]));
+                if(classify != null){
+                    map.put("provi_type",  classify.getMiddleName());
+                    map.put("provi_type_cd",  classify.getMiddleCode());//供应商主业类型
+                }
+            }
+            //map.put("setup_person",  "胡杰");//创建人
+            //map.put("setup_person_id",  "201700209");
+            JSONObject jsonObject = new JSONObject(map);
+            if(bean != null && StringUtil.isEmpty(bean.getMiddleVendorCode())){
+                //如果没有中台code就要走中台新增方法
+                JSONObject object = dataCenterUtil.postCommonInfo(jsonObject, dataMiddlePlatformConfig.getVendorAdd(), Vendor.LOG_TYPE_ADD, SecurityUtils.getUsername(), null);
+                if (object != null && object.containsKey("code") && object.getInteger("code") == 200) {
+                    //成功的
+                    JSONObject data = object.getJSONObject("data");
+                    if(data != null && data.containsKey("added")) {
+                        JSONArray added = data.getJSONArray("added");
+                        if (added != null && added.size() >0) {
+                            JSONObject obj = added.getJSONObject(0);
+                            String custMerchtId = obj.getString("cust_mercht_id");
+                            vendorService.update(new LambdaUpdateWrapper<Vendor>()
+                                    .set(Vendor::getMiddleVendorCode, custMerchtId)
+                                    .eq(Vendor::getId, id));
+                            List<TAccountInfo> list = accountService.list(new LambdaUpdateWrapper<TAccountInfo>()
+                                    .eq(TAccountInfo::getUpId, bean.getId()));
+                            if (!list.isEmpty()) {
+                                list.stream().forEach(p -> {
+                                    accountService.pushAcct(p,bean, custMerchtId, Vendor.LOG_TYPE_ADD);
+                                });
+                            }
+                        }
+                    }
+                }
+            }else{
+                dataCenterUtil.postCommonInfo(jsonObject,dataMiddlePlatformConfig.getVendorUpdate(),type, SecurityUtils.getUsername(),null);
+                /*JSONObject object =dataCenterUtil.postCommonInfo(jsonObject,dataMiddlePlatformConfig.getVendorUpdate(),type, SecurityUtils.getUsername(),null);
+                if (object != null && object.containsKey("code") && object.getInteger("code") == 200) {
+                    //成功的
+                    JSONObject data = object.getJSONObject("data");
+                    if(data != null && data.containsKey("updated")) {
+                        JSONArray added = data.getJSONArray("updated");
+                        if (added != null && added.size() >0) {
+                            JSONObject obj = added.getJSONObject(0);
+                            String custMerchtId = obj.getString("cust_mercht_id");
+                            System.out.println("custMerchtId:"+custMerchtId);
+                        }
+                    }
+                }*/
+            }
+
+        }
+        });
+        executor.shutdown();
     }
 
     /**

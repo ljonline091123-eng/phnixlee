@@ -156,4 +156,6 @@ public interface IVendorService  extends IService<Vendor> , IProcessBusinessBase
     void pushVendor(Long vendorId, String logTypeModify, Integer isBlack);
 
     void initializeCode();
+
+    void pushMarketVendor(Long vendorId);
 }

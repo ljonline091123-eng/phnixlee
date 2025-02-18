@@ -23,18 +23,30 @@ public class VendorRegisterRequestVO {
     @ApiModelProperty(value = "供应商联系人")
     private VendorContact vendorContact;
 
-    @NotNull(message = "请上传营业执照")
+
     @ApiModelProperty(value = "营业执照")
     private VendorCertificationRequestVO businessLicense;
 
-    @NotNull(message = "请上传诚信合规材料")
+
     @ApiModelProperty(value = "诚信合规材料")
     private VendorCertificationRequestVO integrity;
 
-    @NotNull(message = "请上传法人授权书")
+
     @ApiModelProperty(value = "法人授权书")
     private VendorCertificationRequestVO legalAuthorization;
 
     @ApiModelProperty(value = "相关资质")
     private List<VendorCertificationRequestVO> relevantCertificationList;
+
+    @NotNull(message = "请上传营业执照")
+    @ApiModelProperty(value = "营业执照")
+    private List<VendorCertificationRequestVO> businessLicenseList;
+
+    @NotNull(message = "请上传诚信合规材料")
+    @ApiModelProperty(value = "诚信合规材料")
+    private List<VendorCertificationRequestVO> integrityList;
+
+    @NotNull(message = "请上传法人授权书")
+    @ApiModelProperty(value = "法人授权书")
+    private List<VendorCertificationRequestVO> legalAuthorizationList;
 }

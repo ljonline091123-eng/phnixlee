@@ -67,6 +67,7 @@ public enum UnderlingPlatformUrlEnum {
 
     MARKET_QUOTE_PRICE("/rest/open/queryQuotePrice","查询易料市集清单最新价格"),
     MARKET_MATERIAL_LIST_PUSH("/rest/open/receiveMaterialList","采购清单数据推送，用于生成合同"),
+    MARKET_SUPPLIER_PUSH("/rest/open/receiveSupplier","推送供应商信息给易料"),
 
     ;
 
