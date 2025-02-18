@@ -783,7 +783,9 @@ export default {
       },
       contractTotal: 1,
       planLoading: false,
-      procurementPlanMode: "masterPlan",
+      /* 默认不进入采购总计划，因为涉及接口数据请求，页面会缓慢。 */
+      // procurementPlanMode: "masterPlan",
+      procurementPlanMode: "plan",
       queryParamsMaster:{
         pageNumber: 1,
         pageSize: 10,
