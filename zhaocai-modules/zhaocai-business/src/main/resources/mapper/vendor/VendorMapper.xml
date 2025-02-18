@@ -78,6 +78,7 @@
         <result property="isBlack" column="is_black"/>
         <result property="state" column="state"/>
         <result property="cooperationAmount" column="total_amount_inc_tax"/>
+        <result property="cooperationNum" column="cooperation_num"/>
         <result property="excellentNum" column="tvp_excellent_num"/>
         <result property="processType" column="process_type"/>
         <result property="firstCooperationCompanyCode" column="first_cooperation_company_code"/>
@@ -93,18 +94,18 @@
         select tv.id ,tv.enterprise_name,tv.is_external,tv.vendor_attribute,tv.establish_date,tv.vendor_status,tv.created_unit,tv.enterprise_code,tv.social_credit_code,tvc.contact_name,tvc.contact_phone,tv.registered_capital,
         concat(tv.enterprise_province_name,'-',tv.enterprise_city_name) as vendor_location,tv.enterprise_type,tv.create_time,
         tv.is_black,tv.vendor_class,tv.state,tv.process_type,tar.total_amount_inc_tax,tvpr.tvp_excellent_num,
-        tv.first_cooperation_company_code,tv.first_cooperation_company_name , tv.register_approval_time
+        tv.first_cooperation_company_code,tv.first_cooperation_company_name , tar.cooperation_num,tv.register_approval_time
         from  tb_vendor tv
         inner join tb_vendor_contact tvc on tv.id = tvc.vendor_id and tvc.is_main_contact = 1
         left join (
-            select ta.vendor_id as ta_vendor_id,sum(ta.total_amount_inc_tax) as total_amount_inc_tax
-            from tb_agreement ta
-            group by ta.vendor_id
+        select ta.vendor_id as ta_vendor_id ,ROUND(sum(ta.total_amount_inc_tax)/10000 ,2) as total_amount_inc_tax , count(1) as cooperation_num
+        from tb_agreement ta
+        group by ta.vendor_id
         ) tar on tar.ta_vendor_id = tv.id
         left join (
-            select tvp.vendor_id as tvp_vendor_id,sum(tvp.excellent_num) as tvp_excellent_num
-            from tb_vendor_performance_evaluation tvp
-            group by tvp.vendor_id
+        select tvp.vendor_id as tvp_vendor_id,sum(tvp.excellent_num) as tvp_excellent_num
+        from tb_vendor_performance_evaluation tvp
+        group by tvp.vendor_id
         ) tvpr on tvpr.tvp_vendor_id = tv.id
         <where>
             tv.del_flag = 0
