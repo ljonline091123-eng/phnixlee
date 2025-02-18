@@ -1036,6 +1036,7 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
                 map.put("cust_mercht_full_name",  bean.getEnterpriseName());
                 map.put("cust_mercht_cdtfy",  "供应商");
                 map.put("cust_mercht_cdtfy_cd",  "G");
+                System.out.println("is_ext_cust_mercht_cate:"+bean.getIsExternal());
                 map.put("is_ext_cust_mercht_cate", sysDictDataService.getRemark("is_external",bean.getIsExternal()+"","label"));
                 map.put("is_ext_cust_mercht_cate_cd",  sysDictDataService.getRemark("is_external",bean.getIsExternal()+"",null));
                 map.put("cust_mercht_attr",  "法人单位");
