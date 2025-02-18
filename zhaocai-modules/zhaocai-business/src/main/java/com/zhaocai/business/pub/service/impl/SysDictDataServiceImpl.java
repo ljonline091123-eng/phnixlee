@@ -70,4 +70,21 @@ public class SysDictDataServiceImpl implements ISysDictDataService {
         }
         return new ArrayList<>();
     }
+
+    @Override
+    public String getRemark(String type, String value ,String classVaule) {
+        if (StringUtils.isBlank(type) || StringUtils.isBlank(value)) {
+            return null;
+        }
+        List<SysDictData> result = remoteSystemDictDataService.listDictDataLabel(type,value, SecurityConstants.INNER);
+        if (CollectionUtil.isNotEmpty(result))  {
+            if("label".equals(classVaule)){
+                String label = CollectionUtil.isNotEmpty(result) ? result.get(0).getDictLabel() : null;
+                return label;
+            }
+            String remark = CollectionUtil.isNotEmpty(result) ? result.get(0).getRemark() : null;
+            return remark;
+        }
+        return null;
+    }
 }

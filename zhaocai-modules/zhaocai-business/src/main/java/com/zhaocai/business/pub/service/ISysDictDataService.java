@@ -26,4 +26,12 @@ public interface ISysDictDataService {
      * @return
      */
     List<DictListVO> listDictByType(String type);
+
+    /**
+     * 获取字典值
+     * @param type
+     * @param value
+     * @return
+     */
+    String getRemark(String type, String value,String classVaule);
 }

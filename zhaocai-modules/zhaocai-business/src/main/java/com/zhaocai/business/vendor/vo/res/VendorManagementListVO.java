@@ -8,6 +8,7 @@ import io.swagger.annotations.ApiModelProperty;
 import lombok.Data;
 
 import java.math.BigDecimal;
+import java.util.Date;
 
 /**
  * 供应商管理列表v
@@ -79,6 +80,9 @@ public class VendorManagementListVO extends AdviceObject {
     @ApiModelProperty(value = "供应商合作金额")
     private String cooperationAmountText;
 
+    @ApiModelProperty(value = "供应商合作记录")
+    private Long cooperationNum;
+
     @ApiModelProperty(value = "流程类型")
     private Integer processType;
 
@@ -88,7 +92,38 @@ public class VendorManagementListVO extends AdviceObject {
     @ApiModelProperty(value = "首次合作单位名称")
     private String firstCooperationCompanyName;
 
+    @JsonFormat(pattern = "yyyy-MM-dd",timezone = "GMT+8")
+    @ApiModelProperty(value =  "注册时间")
+    private String registerApprovalTime;
+
+    @ApiModelProperty(hidden = true)
+    private String vendorState;
+
+    @ApiModelProperty(hidden = true)
+    private String regionCityCode;
+
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss",timezone = "GMT+8")
+    @ApiModelProperty(hidden = true)
+    private String startDate;
+
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss",timezone = "GMT+8")
+    @ApiModelProperty(hidden = true)
+    private String endDate;
+
+    @ApiModelProperty(hidden = true)
+    private BigDecimal registeredCapitalStart;
+
+    @ApiModelProperty(hidden = true)
+    private BigDecimal registeredCapitalEnd;
+
+    @ApiModelProperty(value =  "是否外部客商")
+    private String isExternal;
+
     public Long getExcellentNum() {
         return excellentNum == null ? 0 : excellentNum;
+    }
+
+    public Long getCooperationNum() {
+        return cooperationNum == null ? 0 : cooperationNum;
     }
 }

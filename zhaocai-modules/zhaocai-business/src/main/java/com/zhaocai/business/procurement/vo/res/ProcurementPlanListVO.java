@@ -70,6 +70,9 @@ public class ProcurementPlanListVO extends AdviceObject {
     @ApiModelProperty(value = "招标进展")
     private String noticeStatus;
 
+    @ApiModelProperty(value = "项目名称")
+    private String projectName;
+
     @ApiModelProperty(value =  "采购计划类别")
     @DictCache(dictBizEnum = DictBizEnum.PROCUREMENT_PLAN_TYPE,filedName = "procurementPlanType")
     private String procurementPlanTypeText;

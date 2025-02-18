@@ -119,6 +119,8 @@ public class SyncPlatformDataService {
                 sysDept.setEmail(item.getEmail());
                 sysDept.setLeader(item.getLeader());
                 sysDept.setOrigin(Constants.SYNC_THIRD);
+                sysDept.setSimpleName(item.getSimpleName());
+                sysDept.setInterialId(item.getInterialId());
                 //部门状态:0正常,1停用
                 sysDept.setStatus("0");
                 //删除标志（0代表存在 2代表删除）

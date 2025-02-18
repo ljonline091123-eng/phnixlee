@@ -532,6 +532,10 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
         // 是否关联我的钢铁网价格-是否显示
         agreementVO.setIsRelatedMySteelView(this.getIsRelatedMySteelDetail(materialsLists));
 
+        // 合同其他附件信息
+        List<AttachmentVO> attachmentList = attachmentService.listAttachment(AttachmentTypeEnum.AGREEMENT_OTHER, agreement.getId());
+        List<Attachment> attachment = BeanCopierUtil.copyList(attachmentList,Attachment.class);
+
         return AgreementDetailVO.builder()
                 .agreement(agreementVO)
                 .agreementPaymentItem(agreementPaymentItemVO)
@@ -543,6 +547,7 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
                 .agreementMachineShifts(agreementMachineShifts)
                 .agreementEquipmentSupplies(agreementEquipmentSupplies)
                 .agreementMaterialSupplies(agreementMaterialSupplies)
+                .agreementAttachmentList(attachment)
                 .build();
     }
 
@@ -1542,7 +1547,14 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
         // 接入联想文档
 //        agreementFileZService.setAgreementLabel(agreement, requestVO.getAgreementMaterialsLists(), requestVO.getTemplateEditFlag());
 
-
+        // 保存合同其他附件信息
+        if (CollectionUtil.isNotEmpty(requestVO.getAgreementAttachmentList())) {
+            requestVO.getAgreementAttachmentList().forEach(i->{
+                i.setBusinessId(agreement.getId());
+                i.setBusinessType(AttachmentTypeEnum.AGREEMENT_OTHER.getType());
+            });
+            attachmentService.saveOrUpdateBatch(requestVO.getAgreementAttachmentList());
+        }
 
         AgreementSaveVO saveVO = new AgreementSaveVO();
         saveVO.setId(agreement.getId());
@@ -1841,6 +1853,21 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
             contractPlanningSplitService.updateContractPlanningSplitUseAddByMarket(agreementMaterialsInfo.getMaterialsLists(),requestVO.getAgreementMaterialsLists(),agreementMaterialsLists);
         }
 
+        // 保存合同其他附件信息
+        if (CollectionUtil.isNotEmpty(requestVO.getAgreementAttachmentList())) {
+            requestVO.getAgreementAttachmentList().forEach(i->{
+                i.setBusinessId(agreement.getId());
+                i.setBusinessType(AttachmentTypeEnum.AGREEMENT_OTHER.getType());
+            });
+            attachmentService.saveOrUpdateBatch(requestVO.getAgreementAttachmentList());
+        }
+        // 删除其他附件
+        List<Long> ids = requestVO.getAgreementAttachmentList().stream().map(BaseEntity::getId).collect(Collectors.toList());
+        attachmentService.update(new LambdaUpdateWrapper<Attachment>()
+                .set(BaseEntity::getDelFlag,"2")
+                .eq(Attachment::getBusinessType, AttachmentTypeEnum.AGREEMENT_OTHER.getType())
+                .eq(Attachment::getBusinessId, agreement.getId())
+                .notIn(BaseEntity::getId, ids));
 
         AgreementSaveVO saveVO = new AgreementSaveVO();
         saveVO.setId(agreement.getId());
