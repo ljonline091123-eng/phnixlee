@@ -104,6 +104,7 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
     @Autowired
     private IBPMProcessService processService;
 
+
     @Lazy
     @Autowired
     private IVendorChangeService vendorChangeService;
@@ -126,6 +127,7 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
 
     @Autowired
     private RemoteUserService remoteUserService;
+
     @Autowired
     private RemoteSystemService remoteSystemService;
 
@@ -1031,7 +1033,8 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
             if(bean != null){
                 Map<String, Object> map = new HashMap<>();
                 map.put("internal_id", bean.getId() + "");
-                map.put("dept_id",  bean.getFirstCooperationCompanyCode());
+                SysDept   newdept= remoteSystemService.getByThridDeptId(bean.getFirstCooperationCompanyCode(),"inner");
+                map.put("dept_id",  newdept.getZtDeptId());
                 //map.put("cust_mercht_id",  "");
                 map.put("cust_mercht_full_name",  bean.getEnterpriseName());
                 map.put("cust_mercht_cdtfy",  "供应商");
@@ -1105,6 +1108,9 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
                                 }
                             }
                         }
+                    }else{
+                        //如果没有中台code就要走中台新增方法
+                        JSONObject objectOne = dataCenterUtil.postCommonInfo(jsonObject,dataMiddlePlatformConfig.getVendorUpdate(),Vendor.LOG_TYPE_MODIFY, SecurityUtils.getUsername(),null);
                     }
                 }else{
                     dataCenterUtil.postCommonInfo(jsonObject,dataMiddlePlatformConfig.getVendorUpdate(),type, SecurityUtils.getUsername(),null);
@@ -1357,8 +1363,10 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
     public void initializeCode() {
         List<Vendor> list = super.list(new LambdaQueryWrapper<Vendor>()
                 .eq(Vendor::getState, VendorStateEnum.APPROVE.getState())
-                .eq(Vendor::getDelFlag,"0")
-                .isNull(Vendor::getMiddleVendorCode));
+                .eq(Vendor::getDelFlag,"0"));
+
+
+               // .isNull(Vendor::getMiddleVendorCode));
         if(CollectionUtil.isNotEmpty(list)){
             list.stream().forEach(p->{
                 this.pushVendor(p.getId(),Vendor.LOG_TYPE_ADD,p.getIsBlack());
