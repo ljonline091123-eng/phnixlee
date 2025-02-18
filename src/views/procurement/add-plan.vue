@@ -187,8 +187,6 @@
                 <el-table-column label="清单" align="center" prop="inventory">
                   <template slot-scope="inventory">
                     <el-table
-                      show-summary
-                      :summary-method="getSummaries"
                       size="small"
                       :data="inventory.row.children"
                       border
@@ -323,7 +321,8 @@
                       </el-table-column>
                       <el-table-column label="合计(含税)" align="right" prop="totalPriceText" min-width="150">
                         <template slot-scope="scope">
-                          <span title="合计(含税)">{{getTotalPriceText(scope.row)}}</span>
+                          <span title="合计(含税)">{{getTotalPriceText(scope.row,inventory.$index)}}</span>
+                          <span> {{ getTotalPriceTableText(inventory.$index) }} </span>
                         </template>
                       </el-table-column>
                       <el-table-column label="备注" align="center" prop="remark" min-width="300">
@@ -331,8 +330,10 @@
                           <el-input v-model="scope.row.remark" :disabled="isSubmit || scope.row.belongOffer || scope.row.pushFlag === 'Y'"/>
                         </template>
                       </el-table-column>
-
-
+                      <template slot="append">
+                        <!-- 通过样式选择器赋值，靠谱一些... -->
+                        <span :class="'total-price-sum-table-class totalPriceSumTable' + inventory.$index"></span>
+                      </template>
 
                     </el-table>
                   </template>
@@ -1849,46 +1850,6 @@ console.log("-2222--"+JSON.stringify(this.materialsLists))
 
       event.target.style = "border: 1px solid #C0C4CC;";
     },
-    /* 合计列计算 */
-    getSummaries(param) {
-      const { columns, data } = param;
-      const sums = [];
-      columns.forEach((column, index) => {
-        /* 第一列显示合计 */
-        if (index === 0) {
-          sums[index] = '合计';
-          return;
-        }
-        /* 只显示合计 */
-        if(column.property === "totalPriceText") {
-          const values = data.map(item => {
-            if(item[column.property]){
-              return Number(item[column.property].replaceAll(',',''));
-            }else{
-              return item[column.property];
-            }
-          });
-          if (!values.every(value => isNaN(value))) {
-            sums[index] = values.reduce((prev, curr) => {
-              const value = Number(curr);
-              if (!isNaN(value)) {
-                return prev + curr;
-              } else {
-                return prev;
-              }
-            }, 0);
-            /* 金额值格式化，小数位数截取 */
-            sums[index] = this.formatNumberDynamicDecimalWithSeparator(sums[index]);
-          } else {
-            sums[index] = '';
-          }
-        }else{
-          sums[index] = '';
-        }
-      });
-
-      return sums;
-    },
     /**
      * 格式化数字：动态保留小数位数并添加千分位分隔符
      * @param {number|string} num - 要格式化的数字
@@ -2140,61 +2101,83 @@ console.log("-2222--"+JSON.stringify(this.materialsLists))
       const { multiply, add, divide, bignumber, format } = this.mathjs;
       /* 固定价 */
       if(row.priceType === 1){
-        if(!row.unitPriceInclTax || !row.count || !row.taxRate){
-          return row;
-        }else{
-          /* 单价含税(手填) */
-          const priceInclTax = (row.unitPriceInclTax+'').replaceAll(',','');
-          /* 单价不含税：含税单价 / (1 + (税率  先除100得出百分比)) */
-          const onePlusTaxRate = divide(bignumber(priceInclTax), add(1, divide(bignumber(row.taxRate), 100)));
-          row.unitPriceExclTax = this.formatNumberDynamicDecimalWithSeparator(onePlusTaxRate)
-          /* 行含税总价：含税单价 * 数量 */
-          const totalPrice = multiply(bignumber(priceInclTax), bignumber(row.count));
-          row.totalPriceText = this.formatNumberDynamicDecimalWithSeparator(totalPrice);
-          row.totalPrice = row.totalPriceText.replaceAll(',', '');
+        if(!row.unitPriceInclTax){
+          row.unitPriceInclTax = 0.0;
         }
+        if(!row.count){
+          row.count = 0.0;
+        }
+        if(!row.taxRate){
+          row.taxRate = 0.0;
+        }
+        /* 单价含税(手填) */
+        const priceInclTax = (row.unitPriceInclTax+'').replaceAll(',','');
+        /* 单价不含税：含税单价 / (1 + (税率  先除100得出百分比)) */
+        const onePlusTaxRate = divide(bignumber(priceInclTax), add(1, divide(bignumber(row.taxRate), 100)));
+        row.unitPriceExclTax = this.formatNumberDynamicDecimalWithSeparator(onePlusTaxRate)
+        /* 行含税总价：含税单价 * 数量 */
+        const totalPrice = multiply(bignumber(priceInclTax), bignumber(row.count));
+        row.totalPriceText = this.formatNumberDynamicDecimalWithSeparator(totalPrice);
+        row.totalPrice = row.totalPriceText.replaceAll(',', '');
         console.log('%c⏩ 固定价计算结果row \n', `font-size: 14px;background-color: #f00;`, row );
       }
 
       /* 浮动价 */
       if(row.priceType === 2){
-        if(!row.floatingPrice ||!row.basePrice || !row.count || !row.taxRate){
-          return row;
-        }else{
-          /* 单价含税:    基价  * (1 + (浮动率 先除100得出百分比)) */
-          const unitPriceInclTaxBig = add(bignumber(row.basePrice), bignumber(row.floatingPrice));
-          row.unitPriceInclTax = this.formatNumberDynamicDecimalWithSeparator(unitPriceInclTaxBig);
-          /* 单价不含税：含税单价 / (1 + (税率  先除100得出百分比)) */
-          const onePlusTaxRate = divide(bignumber(unitPriceInclTaxBig), add(1, divide(bignumber(row.taxRate), 100)));
-          row.unitPriceExclTax = this.formatNumberDynamicDecimalWithSeparator(onePlusTaxRate)
-          /* 行含税总价：含税单价 * 数量 */
-          const totalPrice = multiply(unitPriceInclTaxBig, bignumber(row.count));
-          row.totalPriceText = this.formatNumberDynamicDecimalWithSeparator(totalPrice);
-          row.totalPrice = row.totalPriceText.replaceAll(',', '');
+        if(!row.floatingPrice){
+          row.floatingPrice = 0.0;
         }
+        if(!row.basePrice){
+          row.basePrice = 0.0;
+        }
+        if(!row.count){
+          row.count = 0.0;
+        }
+        if(!row.taxRate){
+          row.taxRate = 0.0;
+        }
+        /* 单价含税:    基价  * (1 + (浮动率 先除100得出百分比)) */
+        const unitPriceInclTaxBig = add(bignumber(row.basePrice), bignumber(row.floatingPrice));
+        row.unitPriceInclTax = this.formatNumberDynamicDecimalWithSeparator(unitPriceInclTaxBig);
+        /* 单价不含税：含税单价 / (1 + (税率  先除100得出百分比)) */
+        const onePlusTaxRate = divide(bignumber(unitPriceInclTaxBig), add(1, divide(bignumber(row.taxRate), 100)));
+        row.unitPriceExclTax = this.formatNumberDynamicDecimalWithSeparator(onePlusTaxRate)
+        /* 行含税总价：含税单价 * 数量 */
+        const totalPrice = multiply(unitPriceInclTaxBig, bignumber(row.count));
+        row.totalPriceText = this.formatNumberDynamicDecimalWithSeparator(totalPrice);
+        row.totalPrice = row.totalPriceText.replaceAll(',', '');
         console.log('%c🪴 浮动价计算结果row \n', `font-size: 14px;background-color: #f00;`, row );
       }
 
 
       /* 浮动率 */
       if(row.priceType === 4){
-        if(!row.floatingRate ||!row.basePrice || !row.count || !row.taxRate){
-          return row;
-        }else{
-          /* 单价含税:    基价  * (1 + (浮动率 先除100得出百分比)) */
-          const unitPriceInclTaxBig = multiply(bignumber(row.basePrice), add(1,divide(bignumber(row.floatingRate), 100)));
-          row.unitPriceInclTax = this.formatNumberDynamicDecimalWithSeparator(unitPriceInclTaxBig);
-          const priceInclTax = (row.unitPriceInclTax+'').replaceAll(',','');
-          /* 单价不含税：含税单价 / (1 + (税率  先除100得出百分比)) */
-          const onePlusTaxRate = divide(bignumber(priceInclTax), add(1, divide(bignumber(row.taxRate), 100)));
-          row.unitPriceExclTax = this.formatNumberDynamicDecimalWithSeparator(onePlusTaxRate)
-          /* 行含税总价：含税单价 * 数量 */
-          const totalPrice = multiply(unitPriceInclTaxBig, bignumber(row.count));
-          row.totalPriceText = this.formatNumberDynamicDecimalWithSeparator(totalPrice);
-          row.totalPrice = row.totalPriceText.replaceAll(',', '');
+        if(!row.floatingRate){
+          row.floatingRate = 0.0;
         }
+        if(!row.basePrice){
+          row.basePrice = 0.0;
+        }
+        if(!row.count){
+          row.count = 0.0;
+        }
+        if(!row.taxRate){
+          row.taxRate = 0.0;
+        }
+        /* 单价含税:    基价  * (1 + (浮动率 先除100得出百分比)) */
+        const unitPriceInclTaxBig = multiply(bignumber(row.basePrice), add(1,divide(bignumber(row.floatingRate), 100)));
+        row.unitPriceInclTax = this.formatNumberDynamicDecimalWithSeparator(unitPriceInclTaxBig);
+        const priceInclTax = (row.unitPriceInclTax+'').replaceAll(',','');
+        /* 单价不含税：含税单价 / (1 + (税率  先除100得出百分比)) */
+        const onePlusTaxRate = divide(bignumber(priceInclTax), add(1, divide(bignumber(row.taxRate), 100)));
+        row.unitPriceExclTax = this.formatNumberDynamicDecimalWithSeparator(onePlusTaxRate)
+        /* 行含税总价：含税单价 * 数量 */
+        const totalPrice = multiply(unitPriceInclTaxBig, bignumber(row.count));
+        row.totalPriceText = this.formatNumberDynamicDecimalWithSeparator(totalPrice);
+        row.totalPrice = row.totalPriceText.replaceAll(',', '');
         console.log('%c🏀 浮动率计算结果row \n', `font-size: 14px;background-color: #f00;`, row );
       }
+
 
       /* 在 DOM 更新完成后，重新布局表格 (为了刷新表格列的'总计') */
       /* 更新表格的布局 */
@@ -2203,7 +2186,7 @@ console.log("-2222--"+JSON.stringify(this.materialsLists))
       });
 
       return row;
-    }
+    },
   },
   computed: {
     ...mapGetters(['project']),
@@ -2225,10 +2208,35 @@ console.log("-2222--"+JSON.stringify(this.materialsLists))
     },
     /* 计算行含税总价 */
     getTotalPriceText() {
-      return ( row ) => {
+      return ( row , index) => {
         /* 计算 含税单价 不含税单价 行合计价 */
         this.calculatePrice(row);
+
         return row.totalPriceText ? (row.totalPriceText) : (0.00);
+      }
+    },
+    /* 计算列含税总价 */
+    getTotalPriceTableText() {
+      return ( index) => {
+        const { add } = this.mathjs;
+        this.planList.forEach((item) => {
+          if (item.children && Array.isArray(item.children)) {
+            item.children.forEach((itemChildren , i) => {
+              /* 计算表合计列合计计算合计列 */
+              let totalPriceTable = 0.0;
+
+              if (itemChildren.children && Array.isArray(itemChildren.children)) {
+                itemChildren.children.forEach((children) => {
+                  totalPriceTable = add(children.totalPrice ? children.totalPrice : 0.0 , totalPriceTable);
+                });
+              }
+              let totalPriceTableText = this.formatNumberDynamicDecimalWithSeparator(totalPriceTable,2);
+              /* total-price-sum-table-class */
+              document.querySelector('.totalPriceSumTable'+i).textContent = '标包含税总价：'+totalPriceTableText+' (元)';
+            });
+          }
+        });
+        return '';
       }
     },
     unitPriceExclTaxComputed() {
@@ -2356,6 +2364,10 @@ console.log("-2222--"+JSON.stringify(this.materialsLists))
   //.el-input__inner {
   //  border: 1px solid #ff0000
   //}
+}
+.total-price-sum-table-class{
+  float: right;
+  position: unset;
 }
 .page-title {
   width: 100%;
