@@ -51,6 +51,8 @@ public class ProcurementSchemeBiddingServiceImpl extends ServiceImpl<Procurement
         attachmentService.updateBusiness(procurementSchemeBidding.getBiddingAttachmentId(), AttachmentTypeEnum.SCHEME_BIDDING,procurementSchemeBidding.getSchemeId());
         // 更新合同模板附件
         attachmentService.updateBusiness(procurementSchemeBidding.getContractAttachmentId(), AttachmentTypeEnum.SCHEME_CONTRACT,procurementSchemeBidding.getSchemeId());
+        // 更新招标公告附件
+        attachmentService.updateBusiness(procurementSchemeBidding.getNoticeAttachmentId(), AttachmentTypeEnum.BIDING_NOTICE_MSG_DOC,procurementSchemeBidding.getSchemeId());
 
     }
 
@@ -65,6 +67,8 @@ public class ProcurementSchemeBiddingServiceImpl extends ServiceImpl<Procurement
         attachmentService.updateBusiness(procurementSchemeBidding.getBiddingAttachmentId(), AttachmentTypeEnum.SCHEME_BIDDING,procurementSchemeBidding.getSchemeId());
         // 更新合同模板附件
         attachmentService.updateBusiness(procurementSchemeBidding.getContractAttachmentId(), AttachmentTypeEnum.SCHEME_CONTRACT,procurementSchemeBidding.getSchemeId());
+        // 更新招标公告附件
+        attachmentService.updateBusiness(procurementSchemeBidding.getNoticeAttachmentId(), AttachmentTypeEnum.BIDING_NOTICE_MSG_DOC,procurementSchemeBidding.getSchemeId());
     }
 
     @Override
@@ -145,6 +149,17 @@ public class ProcurementSchemeBiddingServiceImpl extends ServiceImpl<Procurement
                 }
             }
         }
+        // 招标公告
+        if(schemeBidding.getNoticeAttachmentId()!=null){
+            Attachment noticeAttachment = attachmentService.getById(schemeBidding.getNoticeAttachmentId());
+            if(noticeAttachment!=null){
+                ProcurementSchemeTemplateVO schemeTemplate = new ProcurementSchemeTemplateVO(noticeAttachment.getId(), noticeAttachment.getFileName());
+                schemeTemplate.setAttachmentId(noticeAttachment.getId());
+                schemeTemplate.setFileName(noticeAttachment.getFileName());
+                schemeTemplate.setFileUrl(noticeAttachment.getFileUrl());
+                schemeBiddingVO.setNoticeAttachment(schemeTemplate);
+            }
+        }
 
         return schemeBiddingVO;
     }
@@ -173,6 +188,12 @@ public class ProcurementSchemeBiddingServiceImpl extends ServiceImpl<Procurement
         Attachment contractAttachment = attachmentService.getById(schemeBidding.getContractAttachmentId());
         if (ObjectUtils.isNotEmpty(contractAttachment)){
             schemeBiddingVO.setContractTemplate((new ProcurementSchemeTemplateVO(contractAttachment.getId(),contractAttachment.getFileUrl(),contractAttachment.getFileName())));
+        }
+
+        // 招标公告附件
+        Attachment noticeAttachment = attachmentService.getById(schemeBidding.getNoticeAttachmentId());
+        if (ObjectUtils.isNotEmpty(noticeAttachment)){
+            schemeBiddingVO.setNoticeAttachment((new ProcurementSchemeTemplateVO(noticeAttachment.getId(),noticeAttachment.getFileUrl(),noticeAttachment.getFileName())));
         }
 
         return schemeBiddingVO;

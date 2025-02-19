@@ -47,4 +47,11 @@ public class ProcurementSchemeBiddingVO {
 
     @ApiModelProperty(value =  "合同模板")
     private ProcurementSchemeTemplateVO contractTemplate;
+
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss",timezone = "GMT+8")
+    @ApiModelProperty(value =  "发布公告报名截止时间")
+    private Date applyTimeNotice;
+
+    @ApiModelProperty(value =  "招标公告附件")
+    private ProcurementSchemeTemplateVO noticeAttachment;
 }

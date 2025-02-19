@@ -90,4 +90,10 @@ public class BiddingSchemeListVO extends AdviceObject {
     @ApiModelProperty(value =  "是否为采购经办人")
     private Boolean purchaseOfficer;
 
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss",timezone = "GMT+8")
+    @ApiModelProperty(value =  "发布公告报名截止时间")
+    private Date applyTimeNotice;
+
+    @ApiModelProperty(value =  "招标公告附件")
+    private ProcurementSchemeTemplateVO noticeAttachment;
 }
