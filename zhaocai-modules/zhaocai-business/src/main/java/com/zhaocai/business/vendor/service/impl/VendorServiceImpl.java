@@ -104,6 +104,7 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
     @Autowired
     private IBPMProcessService processService;
 
+
     @Lazy
     @Autowired
     private IVendorChangeService vendorChangeService;
@@ -126,6 +127,7 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
 
     @Autowired
     private RemoteUserService remoteUserService;
+
     @Autowired
     private RemoteSystemService remoteSystemService;
 
@@ -1031,11 +1033,13 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
             if(bean != null){
                 Map<String, Object> map = new HashMap<>();
                 map.put("internal_id", bean.getId() + "");
-                map.put("dept_id",  bean.getFirstCooperationCompanyCode());
+                SysDept   newdept= remoteSystemService.getByThridDeptId(bean.getFirstCooperationCompanyCode(),"inner");
+                map.put("dept_id",  newdept.getZtDeptId());
                 //map.put("cust_mercht_id",  "");
                 map.put("cust_mercht_full_name",  bean.getEnterpriseName());
                 map.put("cust_mercht_cdtfy",  "供应商");
                 map.put("cust_mercht_cdtfy_cd",  "G");
+                System.out.println("is_ext_cust_mercht_cate:"+bean.getIsExternal());
                 map.put("is_ext_cust_mercht_cate", sysDictDataService.getRemark("is_external",bean.getIsExternal()+"","label"));
                 map.put("is_ext_cust_mercht_cate_cd",  sysDictDataService.getRemark("is_external",bean.getIsExternal()+"",null));
                 map.put("cust_mercht_attr",  "法人单位");
@@ -1101,6 +1105,29 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
                                     list.stream().forEach(p -> {
                                         accountService.pushAcct(p,bean, custMerchtId, Vendor.LOG_TYPE_ADD);
                                     });
+                                }
+                            }
+                        }
+                    }else{
+                        JSONObject objectOne = dataCenterUtil.postCommonInfo(jsonObject,dataMiddlePlatformConfig.getVendorUpdate(),Vendor.LOG_TYPE_MODIFY, SecurityUtils.getUsername(),null);
+                        if (objectOne != null && objectOne.containsKey("code") && objectOne.getInteger("code") == 200) {
+                            //成功的
+                            JSONObject data = objectOne.getJSONObject("data");
+                            if(data != null && data.containsKey("updated")) {
+                                JSONArray added = data.getJSONArray("updated");
+                                if (added != null && added.size() >0) {
+                                    JSONObject obj = added.getJSONObject(0);
+                                    String custMerchtId = obj.getString("cust_mercht_id");
+                                    super.update(new LambdaUpdateWrapper<Vendor>()
+                                            .set(Vendor::getMiddleVendorCode, custMerchtId)
+                                            .eq(Vendor::getId, id));
+                                    List<TAccountInfo> list = accountService.list(new LambdaUpdateWrapper<TAccountInfo>()
+                                            .eq(TAccountInfo::getUpId, bean.getId()));
+                                    if (!list.isEmpty()) {
+                                        list.stream().forEach(p -> {
+                                            accountService.pushAcct(p,bean, custMerchtId, Vendor.LOG_TYPE_ADD);
+                                        });
+                                    }
                                 }
                             }
                         }
@@ -1357,7 +1384,11 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
         List<Vendor> list = super.list(new LambdaQueryWrapper<Vendor>()
                 .eq(Vendor::getState, VendorStateEnum.APPROVE.getState())
                 .eq(Vendor::getDelFlag,"0")
-                .isNull(Vendor::getMiddleVendorCode));
+                .eq(Vendor::getId,1860175151084933122L))
+                ;
+
+
+               // .isNull(Vendor::getMiddleVendorCode));
         if(CollectionUtil.isNotEmpty(list)){
             list.stream().forEach(p->{
                 this.pushVendor(p.getId(),Vendor.LOG_TYPE_ADD,p.getIsBlack());

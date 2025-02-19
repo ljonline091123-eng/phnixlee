@@ -45,6 +45,9 @@ public class PlatDept implements Serializable {
     @ApiModelProperty(value = "联系电话")
     private String phone;
 
+    @ApiModelProperty(value = "ztDeptId")
+    private String ztDeptId;
+
     @ApiModelProperty(value = "")
     private String simpleName;
 
@@ -155,6 +158,14 @@ public class PlatDept implements Serializable {
 
     public String getPhone() {
         return phone;
+    }
+
+    public String getZtDeptId() {
+        return ztDeptId;
+    }
+
+    public void setZtDeptId(String ztDeptId) {
+        this.ztDeptId = ztDeptId;
     }
 
     public void setPhone(String phone) {
