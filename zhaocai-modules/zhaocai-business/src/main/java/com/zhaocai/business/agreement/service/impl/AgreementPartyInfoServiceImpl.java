@@ -37,7 +37,9 @@ public class AgreementPartyInfoServiceImpl extends ServiceImpl<AgreementPartyInf
                  * 前端已经隐藏该字段，暂不清楚是否有意义，防止支出合同接口报错先赋值一个值
                  * Time:2025/1/10 下午5:05
                  * */
-                partyInfo.setSignerCode("6666666666");
+                if(partyInfo.getSignerCode().isEmpty()){
+                    partyInfo.setSignerCode("6666666666");
+                }
                 partyInfo.setAgreementId(agreementId);
             }
             super.saveBatch(agreementPartyInfoLists);

@@ -61,7 +61,7 @@ public class AgreementMaterialsList extends BaseEntity {
     private String brand;
 
     /**
-     * 价款类型
+     * 价款类型 {@link com.zhaocai.business.common.enums.PriceTypeEnum} 注意：清单列表数据的只有三种(固定价、浮动价、浮动率)
      */
     @ApiModelProperty(value = "价款类型")
     private String paymentType;

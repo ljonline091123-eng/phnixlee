@@ -73,6 +73,7 @@ public class BiddingListQuotation extends BaseEntity {
     @ApiModelProperty(value = "拆分id")
     private Long splitId;
 
+    /* 本系统tb_materials_list表的id */
     @ApiModelProperty(value = "物料id")
     private Long materialsId;
 
