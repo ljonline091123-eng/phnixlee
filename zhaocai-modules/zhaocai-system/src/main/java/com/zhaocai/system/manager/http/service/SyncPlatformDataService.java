@@ -116,6 +116,7 @@ public class SyncPlatformDataService {
                 }
                 sysDept.setOrderNum(Integer.valueOf(item.getOrderNum()));
                 sysDept.setPhone(item.getPhone());
+                sysDept.setZtDeptId(item.getZtDeptId());
                 sysDept.setEmail(item.getEmail());
                 sysDept.setLeader(item.getLeader());
                 sysDept.setOrigin(Constants.SYNC_THIRD);

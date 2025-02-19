@@ -45,6 +45,9 @@ public class SysDept implements Serializable
     /** 负责人 */
     private String leader;
 
+    /** ztDeptId */
+    private String ztDeptId;
+
     /** 联系电话 */
     private String phone;
 
@@ -54,6 +57,13 @@ public class SysDept implements Serializable
     /** 部门状态:0正常,1停用 */
     private String status;
 
+    public String getZtDeptId() {
+        return ztDeptId;
+    }
+
+    public void setZtDeptId(String ztDeptId) {
+        this.ztDeptId = ztDeptId;
+    }
 
     private String simpleName;
 
