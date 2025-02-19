@@ -1109,11 +1109,10 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
                             }
                         }
                     }else{
-                        //如果没有中台code就要走中台新增方法
                         JSONObject objectOne = dataCenterUtil.postCommonInfo(jsonObject,dataMiddlePlatformConfig.getVendorUpdate(),Vendor.LOG_TYPE_MODIFY, SecurityUtils.getUsername(),null);
-                        if (object != null && object.containsKey("code") && object.getInteger("code") == 200) {
+                        if (objectOne != null && objectOne.containsKey("code") && objectOne.getInteger("code") == 200) {
                             //成功的
-                            JSONObject data = object.getJSONObject("data");
+                            JSONObject data = objectOne.getJSONObject("data");
                             if(data != null && data.containsKey("updated")) {
                                 JSONArray added = data.getJSONArray("updated");
                                 if (added != null && added.size() >0) {
@@ -1384,7 +1383,9 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
     public void initializeCode() {
         List<Vendor> list = super.list(new LambdaQueryWrapper<Vendor>()
                 .eq(Vendor::getState, VendorStateEnum.APPROVE.getState())
-                .eq(Vendor::getDelFlag,"0"));
+                .eq(Vendor::getDelFlag,"0")
+                .eq(Vendor::getId,1860175151084933122L))
+                ;
 
 
                // .isNull(Vendor::getMiddleVendorCode));
