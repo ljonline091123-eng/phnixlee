@@ -496,8 +496,8 @@
 
 
                 </el-row>
-                <el-row :gutter="40" v-if="formData.procurementType == 1">
-                  <el-col :span="8" class="grid-cell">
+                <el-row :gutter="40">
+                  <el-col :span="8" class="grid-cell" v-if="formData.procurementType == 1">
                     <el-form-item label="招标公告" prop="noticeAttachmentId">
                       <template>
                         <a href="javascript:;" @click="uploadNoticeClick">{{
@@ -1258,7 +1258,7 @@ export default {
       ) {
         selectableRange =new Date().getHours() + ':' + (new Date().getMinutes() + 1) + ':00 - 23:59:00'
       }
-      else if(newVal (newVal.getFullYear() >= originalDate.getFullYear() ||
+      else if(newVal && (newVal.getFullYear() >= originalDate.getFullYear() ||
         (newVal.getFullYear() === originalDate.getFullYear() && newVal.getMonth() > originalDate.getMonth()) ||
         (newVal.getFullYear() === originalDate.getFullYear() && newVal.getMonth() === originalDate.getMonth() && newVal.getDate() > originalDate.getDate())
       )){

@@ -341,6 +341,20 @@
                   </a>
                 </el-form-item>
               </el-col>
+
+            </el-row>
+            <el-row class="custom-row" style="height: 180px">
+              <el-col :span="8" class="custom-col"  style="height: 180px" v-if="procurementScheme.procurementType == 1">
+                <el-form-item
+                  label="招标公告"
+                  label-width="140px"
+                  class="custom-form-item"
+                >
+                  <a class="link-type" @click=" showTemplate(procurementSchemeBidding.noticeAttachment,'biddingTemplate')">
+                    {{ procurementSchemeBidding.noticeAttachment && (procurementSchemeBidding.noticeAttachment.templateName)}}
+                  </a>
+                </el-form-item>
+              </el-col>
               <el-col :span="6" class="custom-col" style="height: 180px">
                 <el-form-item label="其他文件" class="custom-form-item">
                   <a
@@ -354,20 +368,6 @@
                       procurementSchemeBidding.otherFile &&
                       procurementSchemeBidding.otherFile.fileName
                     }}
-                  </a>
-                </el-form-item>
-              </el-col>
-
-            </el-row>
-            <el-row class="custom-row" style="height: 180px">
-              <el-col :span="8" class="custom-col"  style="height: 180px">
-                <el-form-item
-                  label="招标公告"
-                  label-width="140px"
-                  class="custom-form-item"
-                >
-                  <a class="link-type" @click=" showTemplate(procurementSchemeBidding.noticeAttachment,'biddingTemplate')">
-                    {{ procurementSchemeBidding.noticeAttachment && (procurementSchemeBidding.noticeAttachment.templateName)}}
                   </a>
                 </el-form-item>
               </el-col>
