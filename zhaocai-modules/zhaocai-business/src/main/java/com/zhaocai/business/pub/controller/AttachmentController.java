@@ -129,7 +129,19 @@ public class AttachmentController extends BladeController {
     @GetMapping("/RemoverAmendmentRecord")
     @ApiOperation(value = "去除文件之前的修订记录")
     public ResultData<Boolean> RemoverAmendmentRecord(@RequestParam("attachmentId") Long attachmentId) throws IOException {
-        attachmentService.RemoverAmendmentRecord(attachmentId);
+        if(attachmentId == null){
+            return ResultData.fail("去除文件之前的修订记录失败,attachmentId为空，请检查！");
+        }
+        AttachmentVO attachmentVO = attachmentService.getAttachmentById(attachmentId);
+        String fileName = attachmentVO.getFileName();
+        String fileUrl = attachmentVO.getFileUrl();
+        if(StringUtils.isEmpty(fileUrl) || StringUtils.isEmpty(fileName)){
+            return ResultData.fail("该文件存储的fileUrl或者fileName为空，去除文件之前的修订记录失败！！！");
+        }
+        String suffix = yozOfileUtils.getSuffix(fileName).toLowerCase();
+        if (yozOfileUtils.isWordExtension(suffix)) {
+            attachmentService.RemoverAmendmentRecord(attachmentId);
+        }
         return ResultData.success();
     }
 
