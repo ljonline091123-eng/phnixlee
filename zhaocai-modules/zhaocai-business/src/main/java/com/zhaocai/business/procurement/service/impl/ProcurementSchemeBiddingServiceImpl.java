@@ -43,7 +43,7 @@ public class ProcurementSchemeBiddingServiceImpl extends ServiceImpl<Procurement
     private IAttachmentService attachmentService;
 
     @Override
-    public void saveProcurementSchemeBidding(ProcurementSchemeBidding procurementSchemeBidding, Long schemeId) {
+    public void saveProcurementSchemeBidding(ProcurementSchemeBidding procurementSchemeBidding, Long schemeId, Integer procurementType) {
         procurementSchemeBidding.setSchemeId(schemeId);
 
         super.save(procurementSchemeBidding);
@@ -53,12 +53,13 @@ public class ProcurementSchemeBiddingServiceImpl extends ServiceImpl<Procurement
         // 更新合同模板附件
         attachmentService.updateBusiness(procurementSchemeBidding.getContractAttachmentId(), AttachmentTypeEnum.SCHEME_CONTRACT,procurementSchemeBidding.getSchemeId());
         // 更新招标公告附件
-        attachmentService.updateBusiness(procurementSchemeBidding.getNoticeAttachmentId(), AttachmentTypeEnum.BIDING_NOTICE_MSG_DOC,procurementSchemeBidding.getSchemeId());
-
+        if (procurementType == 1) {
+            attachmentService.updateBusiness(procurementSchemeBidding.getNoticeAttachmentId(), AttachmentTypeEnum.BIDING_NOTICE_MSG_DOC,procurementSchemeBidding.getSchemeId());
+        }
     }
 
     @Override
-    public void updateProcurementSchemeBidding(ProcurementSchemeBidding procurementSchemeBidding, Long schemeId) {
+    public void updateProcurementSchemeBidding(ProcurementSchemeBidding procurementSchemeBidding, Long schemeId, Integer procurementType) {
         if (NumberUtil.isNullOrZero(procurementSchemeBidding.getId())) {
             throw new ParamValidateException("采购方案编辑时，需要传招标文件 id");
         }
@@ -69,7 +70,9 @@ public class ProcurementSchemeBiddingServiceImpl extends ServiceImpl<Procurement
         // 更新合同模板附件
         attachmentService.updateBusiness(procurementSchemeBidding.getContractAttachmentId(), AttachmentTypeEnum.SCHEME_CONTRACT,procurementSchemeBidding.getSchemeId());
         // 更新招标公告附件
-        attachmentService.updateBusiness(procurementSchemeBidding.getNoticeAttachmentId(), AttachmentTypeEnum.BIDING_NOTICE_MSG_DOC,procurementSchemeBidding.getSchemeId());
+        if (procurementType == 1) {
+            attachmentService.updateBusiness(procurementSchemeBidding.getNoticeAttachmentId(), AttachmentTypeEnum.BIDING_NOTICE_MSG_DOC, procurementSchemeBidding.getSchemeId());
+        }
     }
 
     @Override
