@@ -1027,8 +1027,6 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
 
     @Override
     public void pushVendor(Long id,String type, Integer isBlack){
-        ExecutorService executor = Executors.newCachedThreadPool();
-        executor.execute(() -> {
             Vendor bean = this.getById(id);
             if(bean != null){
                 Map<String, Object> map = new HashMap<>();
@@ -1136,8 +1134,6 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
                     dataCenterUtil.postCommonInfo(jsonObject,dataMiddlePlatformConfig.getVendorUpdate(),type, SecurityUtils.getUsername(),null);
                 }
             }
-        });
-        executor.shutdown();
     }
 
 
@@ -1386,10 +1382,9 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
                 .eq(Vendor::getDelFlag,"0")
                .isNull(Vendor::getMiddleVendorCode));
         if(CollectionUtil.isNotEmpty(list)){
-            this.pushVendor(list.get(0).getId(),Vendor.LOG_TYPE_ADD,list.get(0).getIsBlack());
-           /* list.stream().forEach(p->{
+            list.stream().forEach(p->{
                 this.pushVendor(p.getId(),Vendor.LOG_TYPE_ADD,p.getIsBlack());
-            });*/
+            });
             //this.pushVendor(list.get(0).getId(),Vendor.LOG_TYPE_ADD,list.get(0).getIsBlack());
         }
 
