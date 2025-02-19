@@ -1111,6 +1111,27 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
                     }else{
                         //如果没有中台code就要走中台新增方法
                         JSONObject objectOne = dataCenterUtil.postCommonInfo(jsonObject,dataMiddlePlatformConfig.getVendorUpdate(),Vendor.LOG_TYPE_MODIFY, SecurityUtils.getUsername(),null);
+                        if (object != null && object.containsKey("code") && object.getInteger("code") == 200) {
+                            //成功的
+                            JSONObject data = object.getJSONObject("data");
+                            if(data != null && data.containsKey("updated")) {
+                                JSONArray added = data.getJSONArray("updated");
+                                if (added != null && added.size() >0) {
+                                    JSONObject obj = added.getJSONObject(0);
+                                    String custMerchtId = obj.getString("cust_mercht_id");
+                                    super.update(new LambdaUpdateWrapper<Vendor>()
+                                            .set(Vendor::getMiddleVendorCode, custMerchtId)
+                                            .eq(Vendor::getId, id));
+                                    List<TAccountInfo> list = accountService.list(new LambdaUpdateWrapper<TAccountInfo>()
+                                            .eq(TAccountInfo::getUpId, bean.getId()));
+                                    if (!list.isEmpty()) {
+                                        list.stream().forEach(p -> {
+                                            accountService.pushAcct(p,bean, custMerchtId, Vendor.LOG_TYPE_ADD);
+                                        });
+                                    }
+                                }
+                            }
+                        }
                     }
                 }else{
                     dataCenterUtil.postCommonInfo(jsonObject,dataMiddlePlatformConfig.getVendorUpdate(),type, SecurityUtils.getUsername(),null);
