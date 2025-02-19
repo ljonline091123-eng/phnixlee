@@ -11,6 +11,7 @@ import com.zhaocai.business.procurement.domain.ProcurementSchemeBidding;
 import com.zhaocai.business.procurement.mapper.ProcurementSchemeBiddingMapper;
 import com.zhaocai.business.procurement.service.IProcurementSchemeBiddingService;
 import com.zhaocai.business.procurement.vo.res.ProcurementSchemeBiddingVO;
+import com.zhaocai.business.procurement.vo.res.ProcurementSchemeOtherFileVO;
 import com.zhaocai.business.procurement.vo.res.ProcurementSchemeTemplateVO;
 import com.zhaocai.business.pub.domain.Attachment;
 import com.zhaocai.business.pub.domain.Template;
@@ -160,6 +161,21 @@ public class ProcurementSchemeBiddingServiceImpl extends ServiceImpl<Procurement
                 schemeBiddingVO.setNoticeAttachment(schemeTemplate);
             }
         }
+
+        //其他文件
+        schemeBiddingVO.setOtherFile(null);
+        /* 也可以编辑使用合同模板自己编辑过的附件 */
+        if(schemeBidding.getOtherAttachmentId()!=null){
+            ProcurementSchemeOtherFileVO otherFileVO = new ProcurementSchemeOtherFileVO(null,null,null);
+            Attachment OtherAttachment = attachmentService.getById(schemeBidding.getOtherAttachmentId());
+            if(OtherAttachment!=null){
+                otherFileVO.setAttachmentId(OtherAttachment.getId());
+                otherFileVO.setFileName(OtherAttachment.getFileName());
+                otherFileVO.setFileUrl(OtherAttachment.getFileUrl());
+                schemeBiddingVO.setOtherFile(otherFileVO);
+            }
+        }
+
 
         return schemeBiddingVO;
     }
