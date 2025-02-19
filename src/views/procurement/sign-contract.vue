@@ -954,7 +954,7 @@
                   align="right"
                   prop="basePriceText"
                   width="150"
-                  v-if="priceType == 2"
+                  v-if="[2,3,4,5,6,7].includes(priceType)"
                   :key="'basePriceText'"
                 />
                 <el-table-column
@@ -962,16 +962,16 @@
                   align="right"
                   width="150"
                   prop="floatingPriceText"
-                  v-if="priceType == 2"
+                  v-if="[2,3,6,7].includes(priceType)"
                   :key="'floatingPriceText'"
                 />
                 <el-table-column
-                  label="装卸费"
+                  label="浮动率"
                   align="right"
                   width="150"
-                  prop="unloadingFeeText"
-                  :key="'unloadingFeeText'"
-                  v-if="priceType == 2"
+                  prop="floatingRateText"
+                  :key="'floatingRateText'"
+                  v-if="[4,5,6,7].includes(priceType)"
                 />
                   <el-table-column
                     label="含税单价(元)"
@@ -1020,7 +1020,6 @@
                 style="font-weight: bold"
                 v-thousands="totalTaxPriceTotal"
               ></span> -->
-            </span>
             <span>
               本次不含税总计：<span
                 style="font-weight: bold"
@@ -2154,8 +2153,7 @@ export default {
           count = add(count, bignumber(item.notTaxedTotal));
         }
       });
-      const newCount = (Math.floor(count * 100) / 100).toFixed(2);
-      return newCount.toString().slice(0, newCount.toString().indexOf(".") + 3);
+      return count.toString().slice(0, count.toString().indexOf(".") + 3);
     },
   },
 };
