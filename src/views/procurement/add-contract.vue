@@ -515,15 +515,17 @@
                   </el-form-item>
                 </template>
               </el-table-column>
-              <el-table-column prop="paymentBasis" label="付款基数">
+              <el-table-column prop="paymentBasis" label="付款基数（元）">
                 <template slot-scope="scope">
                   <el-form-item label-width="0" :prop="'agreementPaymentLists.' + scope.$index + '.paymentBasis'"
-                    :rules="[{ required: true, trigger: 'change', message: '请选择付款基数' }]">
-                    <el-select style="width: 100%" v-model="scope.row.paymentBasis" @change="value => changePaymentBasis(scope, value)">
+                    :rules="[{ required: true, trigger: 'blur', message: '请填写付款基数' }, {validator: validateFigure, trigger: 'blur'}]">
+                    <!-- <el-select style="width: 100%" v-model="scope.row.paymentBasis" @change="value => changePaymentBasis(scope, value)">
                       <el-option v-for="dict in dictObj.payment_basis" :key="dict.value" :label="dict.label"
                         :value="dict.value">
                       </el-option>
-                    </el-select>
+                    </el-select> -->
+                    <el-input v-model="scope.row.paymentBasis" clearable>
+                    </el-input>
                   </el-form-item>
                 </template>
               </el-table-column>
@@ -2469,6 +2471,28 @@ export default {
     },
     validateNumber(rule, value, callback) {
       const reg = /^\d+(\.\d{1,2})?$/;
+      if (value === "" || value === undefined) {
+        callback();
+      } else if (!reg.test(value)) {
+        // callback(new Error("请输入正确的值"));
+        callback(new Error("请输入正确的数值且小数点保留两位"));
+      } else {
+        callback();
+      }
+    },
+    validateNumber(rule, value, callback) {
+      const reg = /^\d+(\.\d{1,2})?$/;
+      if (value === "" || value === undefined) {
+        callback();
+      } else if (!reg.test(value)) {
+        // callback(new Error("请输入正确的值"));
+        callback(new Error("请输入正确的数值且小数点保留两位"));
+      } else {
+        callback();
+      }
+    },
+    validateFigure(rule, value, callback) {
+      const reg =  /^-?\d+(\.\d{1,2})?$/;
       if (value === "" || value === undefined) {
         callback();
       } else if (!reg.test(value)) {

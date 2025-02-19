@@ -3,7 +3,8 @@
     <BackButton path="/procurement/plan" :title="currentContract.type === 'update'? '修改采购计划' : '新增采购计划'">
       <div>
           <el-button type="primary" plain size="mini" :disabled="isSubmit" @click="$router.replace('/procurement/plan')">取消</el-button>
-          <el-button type="primary" size="mini" @click="submitForm('form')" :disabled="isSubmit" :loading="isSubmit">{{ isSubmit? '提交中...' : '保存' }}</el-button>
+          <el-button type="primary" size="mini" @click="submitForm('form')" :disabled="isSubmit" :loading="isSubmit">{{ isSubmit? '保存中...' : '保存' }}</el-button>
+          <el-button type="primary" size="mini" @click="submitPlan('form')" :disabled="isPlanSubmit" :loading="isPlanSubmit">{{ isPlanSubmit? '提交中...' : '提交' }}</el-button>
         </div>
     </BackButton>
     <div class="context">
@@ -187,8 +188,6 @@
                 <el-table-column label="清单" align="center" prop="inventory">
                   <template slot-scope="inventory">
                     <el-table
-                      show-summary
-                      :summary-method="getSummaries"
                       size="small"
                       :data="inventory.row.children"
                       border
@@ -214,7 +213,7 @@
                       <el-table-column label="计量单位" align="center" prop="unitMeasurement" />
                       <el-table-column label="价格类型" align="center" prop="priceType" width="200" v-if="procurementType === 1">
                         <template slot-scope="scope">
-                          <el-select style="width: 100%" v-model="scope.row.priceType" placeholder="请选择" @change="changePriceType(inventory.$index,scope,$event)">
+                          <el-select style="width: 100%" v-model="scope.row.priceType" placeholder="请选择" @change="changePriceType(inventory.$index,scope.row,$event)">
                             <el-option v-for="dict in PRICETYPEOPTIONS" :label="dict.label"
                               :value="dict.value">
                             </el-option>
@@ -238,7 +237,7 @@
                       </el-table-column>
                       <el-table-column label="清单数量" align="right" prop="count" width="150" v-else>
                         <template slot-scope="scope">
-                          <el-input v-model="scope.row.count" :disabled="isSubmit || scope.row.belongOffer || scope.row.pushFlag === 'Y'" @input.native="changeCount($event,inventory.$index,scope.row)" v-thousandth/>
+                          <el-input title="清单数量" v-model="scope.row.count" :disabled="isSubmit || scope.row.belongOffer || scope.row.pushFlag === 'Y'" @input.native="changeCount($event,inventory.$index,scope.row)" v-thousandth/>
                         </template>
                       </el-table-column>
 <!--                      基价由原来浮动价不可编辑，变成了可以编辑-->
@@ -246,8 +245,8 @@
                         <template slot-scope="scope">
                           <span v-if="scope.row.priceType === 1">/</span>
                           <div v-else>
-                            <el-input v-if="!scope.row.isbasePriceNotLegal"  v-model="scope.row.basePrice"  v-thousandth @input.native="checkOtherPrice($event,scope.row)"/>
-                            <el-input v-else  v-model="scope.row.basePrice" :disabled="isSubmit" v-thousandth  @input.native="checkOtherPrice($event,scope.row)" class="checkInput"/>
+                            <el-input title="基价" v-if="!scope.row.isbasePriceNotLegal"  v-model="scope.row.basePrice"  v-thousandth @input.native="checkOtherPrice($event,scope.row)"/>
+                            <el-input title="基价" v-else  v-model="scope.row.basePrice" :disabled="isSubmit" v-thousandth  @input.native="checkOtherPrice($event,scope.row)" class="checkInput"/>
                           </div>
 
                         </template>
@@ -255,22 +254,22 @@
                       <el-table-column label="单价(含税)" align="right" prop="unitPriceInclTax" width="180" >
                         <template slot-scope="scope">
                           <span v-if="scope.row.priceType !== 1">
-                            {{ getUnitPriceInclTax(scope.row) }}
+                          <span title="单价(含税)">{{ getUnitPriceInclTax(scope.row) }}</span>
                           </span>
-                          <el-input v-else v-model="scope.row.unitPriceInclTax" :disabled="isSubmit || scope.row.belongOffer || scope.row.pushFlag === 'Y'" @input.native="changePrice($event,scope.row)" v-thousandth/>
+                          <el-input title="单价(含税)" v-else v-model="scope.row.unitPriceInclTax" :disabled="isSubmit || scope.row.belongOffer || scope.row.pushFlag === 'Y'" @input.native="changePrice($event,scope.row)" v-thousandth/>
                         </template>
                       </el-table-column>
                       <el-table-column label="税率(%)" align="right" prop="taxRate"/>
                       <el-table-column label="单价(不含税)" align="right" prop="unitPriceExclTax" width="150">
                         <template slot-scope="scope">
-                          {{ getUnitPriceExclTax(scope.row) }}
+                          <span title="单价(不含税)">{{ getUnitPriceExclTax(scope.row) }}</span>
                         </template>
                       </el-table-column>
                       <el-table-column label="浮动价" align="right" width="130" prop="floatingPrice"  v-if="procurementType === 1 && [2,3,6,7].includes(formData.priceType)">
                         <template slot-scope="scope">
                           <span v-if="scope.row.priceType !== 2">/</span>
                           <div v-else>
-                            <el-input v-model="scope.row.floatingPrice" :disabled="isSubmit" v-thousandth  @input.native="changeFloatingPrice($event,scope.row)" class="checkInput"/>
+                            <el-input title="浮动价" v-model="scope.row.floatingPrice" :disabled="isSubmit" v-thousandth  @input.native="changeFloatingPrice($event,scope.row)" class="checkInput"/>
                           </div>
 
                         </template>
@@ -280,7 +279,7 @@
                         <template slot-scope="scope">
                           <span v-if="scope.row.priceType !== 4">/</span>
                           <div v-else>
-                            <el-input v-model="scope.row.floatingRate" :disabled="isSubmit" v-thousandth  @input.native="changeFloatingRate($event,scope.row)" class="checkInput"/>
+                            <el-input title="浮动率(%)" v-model="scope.row.floatingRate" :disabled="isSubmit" v-thousandth  @input.native="changeFloatingRate($event,scope.row)" class="checkInput"/>
                           </div>
                         </template>
                       </el-table-column>
@@ -323,7 +322,8 @@
                       </el-table-column>
                       <el-table-column label="合计(含税)" align="right" prop="totalPriceText" min-width="150">
                         <template slot-scope="scope">
-                          <span>{{getTotalPriceText(scope.row)}}</span>
+                          <span title="合计(含税)">{{getTotalPriceText(scope.row,inventory.$index)}}</span>
+                          <span> {{ getTotalPriceTableText(inventory.$index) }} </span>
                         </template>
                       </el-table-column>
                       <el-table-column label="备注" align="center" prop="remark" min-width="300">
@@ -331,8 +331,10 @@
                           <el-input v-model="scope.row.remark" :disabled="isSubmit || scope.row.belongOffer || scope.row.pushFlag === 'Y'"/>
                         </template>
                       </el-table-column>
-
-
+                      <template slot="append">
+                        <!-- 通过样式选择器赋值，靠谱一些... -->
+                        <span :class="'total-price-sum-table-class totalPriceSumTable' + inventory.$index"></span>
+                      </template>
 
                     </el-table>
                   </template>
@@ -546,6 +548,7 @@ import PageTitle from "@/components/PageTitle/index.vue"
 import {PRICETYPELIST, PRICETYPEOPTIONS} from "@/utils/constants";
 import VirtualScroll from 'el-table-virtual-scroll'
 import {getTwoLevelDeptByDeptId} from "@/api/system/dept";
+import { submitProcurementPlan } from "@/api/procurement/plan";
 export default {
   name: "add-plan",
   dicts: ['plan_type','price_type','procurement_counting_type','procurement_payment_type'],
@@ -709,6 +712,7 @@ export default {
         },
         currentContract: {},
         isSubmit: false,
+        isPlanSubmit: false,
         // indexs:[],
         operatorList:[],
         isUpdate:false,
@@ -944,237 +948,279 @@ export default {
         return '';
       },
 
-    //提交
+    //保存
     submitForm(formName) {
-      console.log(this.planList,'ppp');
-      const { add, subtract,divide,multiply, bignumber, format,floor } = this.mathjs;
-      this.isSubmit = true;
-      this.$refs[formName].validate(async (valid,done) => {
-        if (valid) {
-          // * 首先先判断类型为浮动价的单行是否存在数据不合法的情况
-          let amount = 0
-          if(this.planList.length>0) {
-            for(let firstItem of this.planList) {
-              for(let secondItem of firstItem.children) {
-                for(let thirdItem of secondItem.children) {
-                  if(thirdItem.priceType === 2) {
-                    if(thirdItem.isbasePriceNotLegal) {
-                      this.isSubmit = false;
-                      return this.$message({
-                        message: '请检查输入项是否输入正确',
-                        type: 'error'
-                      });
+      return new Promise((resolve, reject) => {
+        console.log(this.planList,'ppp');
+        const { add, subtract,divide,multiply, bignumber, format,floor } = this.mathjs;
+        this.isSubmit = true;
+        this.$refs[formName].validate(async (valid,done) => {
+          if (valid) {
+            // * 首先先判断类型为浮动价的单行是否存在数据不合法的情况
+            let amount = 0
+            if(this.planList.length>0) {
+              for(let firstItem of this.planList) {
+                for(let secondItem of firstItem.children) {
+                  for(let thirdItem of secondItem.children) {
+
+                    const regexN2 = /^-?\d+(\.\d{0,4})?$/;
+                    /* 固定价 */
+                    if(thirdItem.priceType === 1) {
+                      if(!regexN2.test(thirdItem.unitPriceInclTax)){
+                        this.isSubmit = false;
+                        return this.$message({
+                          message: '请检查清单中含税单价是否输入正确',
+                          type: 'error'
+                        });
+                      }
+
                     }
-                    const {basePrice,floatingPrice,floatingRate} = thirdItem
-                    const basePriceText_bigDecimal = bignumber(Number(basePrice||0))
-                    const floatingPrice_bigDecimal = bignumber(Number(floatingPrice||0))
-                    const floatingRate_bigDecimal = bignumber(Number(floatingRate||0))
-                    let itemAmount = format(multiply(add(add(basePriceText_bigDecimal,floatingPrice_bigDecimal),floatingRate_bigDecimal), thirdItem.count))
-                    itemAmount = (Number(itemAmount)+'').toString().replace(/([0-9]+.[0-9]{2})[0-9]*/,"$1")
-                    console.log('%c 🚀 ~ file:add-plan --method: --line:795 --variable:===>itemAmount', `font-size:16px; font-weight:bold; color:#fff; padding:4px; border-radius:4px; background:linear-gradient(90deg, ${["#ff005a", "#ff9900", "#33cc33", "#0099ff", "#ffc300"][Math.floor(Math.random() * 5)]}, ${["#ff005a", "#ff9900", "#33cc33", "#0099ff", "#ffc300"][Math.floor(Math.random() * 5)]});`,
-                      itemAmount);
-                    amount = format(add(bignumber(amount),bignumber(Number(itemAmount))))
-                    console.log('%c 🚀 ~ file:add-plan --method: --line:795 --variable:amount2===>', `font-size:16px; font-weight:bold; color:#fff; padding:4px; border-radius:4px; background:linear-gradient(90deg, ${["#ff005a", "#ff9900", "#33cc33", "#0099ff", "#ffc300"][Math.floor(Math.random() * 5)]}, ${["#ff005a", "#ff9900", "#33cc33", "#0099ff", "#ffc300"][Math.floor(Math.random() * 5)]});`,
-                      amount);
-                  // .toString().replace(/([0-9]+.[0-9]{2})[0-9]*/,"$1")
-                  }else {
-                    console.log('%c 🚀 ~ file:add-plan --method: --line:799 --variable:bignumber(thirdItem.count),bignumber(Number(thirdItem.unitPriceInclTax||0)===>', `font-size:16px; font-weight:bold; color:#fff; padding:4px; border-radius:4px; background:linear-gradient(90deg, ${["#ff005a", "#ff9900", "#33cc33", "#0099ff", "#ffc300"][Math.floor(Math.random() * 5)]}, ${["#ff005a", "#ff9900", "#33cc33", "#0099ff", "#ffc300"][Math.floor(Math.random() * 5)]});`,
-                      amount,bignumber(thirdItem.count),bignumber(Number(thirdItem.unitPriceInclTax||0)),format(multiply(bignumber(thirdItem.count),bignumber(Number(thirdItem.unitPriceInclTax||0)))));
-                    console.log('%c 🚀 ~ file:add-plan --method: --line:798 --variable:amount1===>', `font-size:16px; font-weight:bold; color:#fff; padding:4px; border-radius:4px; background:linear-gradient(90deg, ${["#ff005a", "#ff9900", "#33cc33", "#0099ff", "#ffc300"][Math.floor(Math.random() * 5)]}, ${["#ff005a", "#ff9900", "#33cc33", "#0099ff", "#ffc300"][Math.floor(Math.random() * 5)]});`,
-                      amount);
-                    console.log('%c 🚀 ~ file:add-plan --method: --line:803 --variable:===>', `font-size:16px; font-weight:bold; color:#fff; padding:4px; border-radius:4px; background:linear-gradient(90deg, ${["#ff005a", "#ff9900", "#33cc33", "#0099ff", "#ffc300"][Math.floor(Math.random() * 5)]}, ${["#ff005a", "#ff9900", "#33cc33", "#0099ff", "#ffc300"][Math.floor(Math.random() * 5)]});`,
-                      format(add(bignumber(1.991719900414e+8),bignumber(99462))));
-                    let itemAmount = format(multiply(bignumber(thirdItem.count),bignumber(Number(thirdItem.unitPriceInclTax||0))))
-                    // * 保留两位小数（处理科学计数法截取位数有误的问题）
-                    itemAmount = (Number(itemAmount)+'').toString().replace(/([0-9]+.[0-9]{2})[0-9]*/,"$1")
-                    console.log('%c 🚀 ~ file:add-plan --method: --line:806 --variable:===>', `font-size:16px; font-weight:bold; color:#fff; padding:4px; border-radius:4px; background:linear-gradient(90deg, ${["#ff005a", "#ff9900", "#33cc33", "#0099ff", "#ffc300"][Math.floor(Math.random() * 5)]}, ${["#ff005a", "#ff9900", "#33cc33", "#0099ff", "#ffc300"][Math.floor(Math.random() * 5)]});`,
-                      itemAmount);
-                    amount = format(add(bignumber(amount), bignumber(Number(itemAmount))))
-                    console.log('%c 🚀 ~ file:add-plan --method: --line:809 --variable:result1===>', `font-size:16px; font-weight:bold; color:#fff; padding:4px; border-radius:4px; background:linear-gradient(90deg, ${["#ff005a", "#ff9900", "#33cc33", "#0099ff", "#ffc300"][Math.floor(Math.random() * 5)]}, ${["#ff005a", "#ff9900", "#33cc33", "#0099ff", "#ffc300"][Math.floor(Math.random() * 5)]});`,
-                      amount);
+                    /* 浮动价、浮动率 */
+                    if(thirdItem.priceType === 2 || thirdItem.priceType === 4) {
+                      if(!regexN2.test(thirdItem.basePrice)){
+                        this.isSubmit = false;
+                        return this.$message({
+                          message: '请检查清单中基价是否输入正确',
+                          type: 'error'
+                        });
+                      }
+                    }
+
+                    /* 计算价格 */
+                    this.calculatePrice(thirdItem);
+
+                    amount = format(add(bignumber(amount), bignumber(Number(thirdItem.totalPrice))))
                   }
                 }
               }
+              if(Number(amount)>Number(this.planList[0].planningBalance)) {
+                this.isSubmit = false;
+
+                /* 更新表格的布局 */
+                this.$nextTick(() => {
+                  this.$refs.tableRef.doLayout();
+                });
+
+                return this.$message({
+                  message: '拆分合约清单中的总金额不能大于规划余量',
+                  type: 'error'
+                });
+              }
             }
-            if(Number(amount)>Number(this.planList[0].planningBalance)) {
-              return this.$message({
-                message: '拆分合约清单中的总金额不能大于规划余量',
+            const { planList } = this
+            console.log(planList,'planListplanList--planListplanList-planListplanList');
+            if(!planList[0].children || !planList[0].children.length){
+              this.isSubmit = false;
+              this.$message({
+                message: '拆分合约不能为空',
                 type: 'error'
               });
+              return false;
             }
-          }
-          const { planList } = this
-          console.log(planList,'planListplanList--planListplanList-planListplanList');
-          if(!planList[0].children || !planList[0].children.length){
-            this.isSubmit = false;
-            this.$message({
-              message: '拆分合约不能为空',
-              type: 'error'
-            });
-            return false;
-          }
 
-          const isAll = planList[0]?.children.every(item => item.splitContractName && item.splitContractName!="null" && item.contractScope && item.contractScope!="null")
-              //判断长度大于1
-          if(planList[0].children.length>1){
-          if(!isAll){
-            this.isSubmit = false;
-            if(planList[0].children.length!=1){
+            const isAll = planList[0]?.children.every(item => item.splitContractName && item.splitContractName!="null" && item.contractScope && item.contractScope!="null")
+                //判断长度大于1
+            if(planList[0].children.length>1){
+              if(!isAll){
+                this.isSubmit = false;
+                if(planList[0].children.length!=1){
+                  this.$message({
+                    message: '拆分合约规划名称/拟签约合同承包范围不能为空',
+                    type: 'error'
+                  });
+                }
+                return false;
+              }
+            }
+
+            const loading = this.$loading({
+              lock: true,
+              text: '数据提交中...',
+              background: 'rgba(0, 0, 0, 0.7)'
+            });
+            const { procurementPlanName, beginDate, endDate, arrivalDate, procurementOfficer, procurementOfficerName,projectId,projectName,projectCode, priceType,basePrice, regionProvinceCode, regionCityCode, paymentType, countingType } = this.formData;
+            const { contractPlanningCategory, biddingMethodCode, biddingMethodName, contractPlanningCategoryName, contractPlanningId, contractPlanningName, incurredPlannedAmount, incurredPlannedAmountText, plannedAmountInclTax, plannedAmountInclTaxText, planningBalance, planningBalanceText,bidResponsibleOrg, bidResponsibleOrgName, id, contractPlanningCode,brand } = this.currentContract
+            const splitRequestList = this.planList[0]?.children.map(item => {
+              return {
+                splitContractName:item.splitContractName,
+                contractScope:item.contractScope,
+                materialsLists:item.children
+              }
+            })
+            const formData = {
+              procurementPlan:{
+                id: id || '',
+                procurementPlanName,
+                procurementPlanType:contractPlanningCategory,
+                procurementType:biddingMethodCode,
+                projectHierarchy:bidResponsibleOrgName,
+                beginDate,
+                endDate,
+                arrivalDate,
+                procurementOfficer,
+                procurementOfficerName,
+                //priceType:priceType !== 'undefined'?priceType:'',
+                regionProvinceCode,
+                /* 基价 （前端用来统一刷新列表清单的基价使用。） */
+                basePrice,
+                regionCityCode,
+                paymentType:paymentType !== 'undefined'?paymentType:'',
+                countingType:countingType !== 'undefined'?countingType:'',
+              },
+              splitRequestList,
+              contractPlanning:{
+                contractPlanningCategory, biddingMethodCode, biddingMethodName, contractPlanningCategoryName, contractPlanningId, contractPlanningName, incurredPlannedAmount, incurredPlannedAmountText, plannedAmountInclTax, plannedAmountInclTaxText, planningBalance, planningBalanceText,
+                projectId,projectName,projectCode,bidResponsibleOrg,bidResponsibleOrgName,subjectMatter:this.subjectMatter,contractPlanningCode,brand
+              }
+            }
+            console.log('%c👽 提交数据 ', `font-size: 14px;background-color: #f00;`, formData);
+            /* 对象递归需要处理 千分位的属性 处理提交给Java后台对应的BigDecimal类型 */
+            const targetKeys = [
+              /* 租赁数量 */
+              "rentQuantity",
+              /* 租赁时间 */
+              "rentTime",
+              /* 基价 */
+              "basePrice",
+              /* 浮动率 */
+              "floatingRate",
+              /* 卸费 */
+              // "unloadingFee",
+              /* 浮动价 */
+              "floatingPrice",
+              /* 税额 */
+              "taxAmount",
+              /* 金额(含税) */
+              "amountInclTax",
+              /* 金额(不含税) */
+              "amountExclTax",
+              /* 单价(含税) */
+              "unitPriceInclTax",
+              /* 单价(不含税) */
+              "unitPriceExclTax",
+              /* 税率 */
+              "taxRate",
+              /* 已使用数量 */
+              "usedCount",
+              /* 数量 */
+              "count",
+              /* 规划金额（含税） */
+              "plannedAmountInclTax",
+              /* 已发生规划金额 */
+              "incurredPlannedAmount",
+              /* 规划余量 */
+              "planningBalance",
+              /* 基价 */
+              "basePrice",
+              /* 指导价 */
+              "guidancePrice"
+            ];
+            let formDataHandle = this.removeThousandsSeparator(formData,targetKeys);
+            console.log('%c👽 提交数据处理后 ', `font-size: 14px;background-color: #f00;`, formDataHandle);
+            try{
+              const res = await saveProcurementPlan(formDataHandle);
+              loading.close();
               this.$message({
-              message: '拆分合约规划名称/拟签约合同承包范围不能为空',
-              type: 'error'
-            });
+                message: '保存成功',
+                type: 'success'
+              });
+              this.isSubmit = false;
+              console.log(res,'r~~~~~~~~~~~~~~~~~');
+              this.currentContract.id=res.data.id
+              this.getPlanDetail()
+              resolve(res); // 保存成功，返回结果
+              // this.$tab.closePage().then(() => {
+                // 执行结束的逻辑
+                // let param = Base64.encode(JSON.stringify(res.data))
+                // this.$router.replace(`/procurement/plan-detail/${param}`);
+              // })
+            }catch(err){
+              console.log(err);
+              this.isSubmit = false;
+              loading.close();
+              reject(err); // 保存失败，返回错误
             }
+          } else {
+            this.isSubmit = false;
+            reject(new Error('Form validation failed')); // 验证失败，返回错误
             return false;
           }
-        }
-          // if(!isAll){
-          //   this.isSubmit = false;
-          //   this.$message({
-          //     message: '拆分合约规划名称/拟签约合同承包范围不能为空',
-          //     type: 'error'
-          //   });
-          //   return false;
-          // }
-
-          // const isZero = planList[0]?.children.some(item => {
-          //   let isLoop = true;
-          //   if (isLoop) {
-          //     const hasZeroCount = item.children.some(child => {
-          //       if (Number(child.count) === 0) {
-          //         this.$message({
-          //           message: `拆分合规规划名称为${item.splitContractName}的清单中名称为“${child.materialsName}”的数量不能为0`,
-          //           type: 'error'
-          //         });
-          //         return true; // 结束循环
-          //       }
-          //       return false;
-          //     });
-          //     return hasZeroCount; // 终止外层循环
-          //   }
-          //   return false;
-          // });
-
-          // if(isZero) {
-          //   this.isSubmit = false;
-          //   return false;
-          // }
-
-          const loading = this.$loading({
-            lock: true,
-            text: '数据提交中...',
-            background: 'rgba(0, 0, 0, 0.7)'
-          });
-          const { procurementPlanName, beginDate, endDate, arrivalDate, procurementOfficer, procurementOfficerName,projectId,projectName,projectCode, priceType,basePrice, regionProvinceCode, regionCityCode, paymentType, countingType } = this.formData;
-          const { contractPlanningCategory, biddingMethodCode, biddingMethodName, contractPlanningCategoryName, contractPlanningId, contractPlanningName, incurredPlannedAmount, incurredPlannedAmountText, plannedAmountInclTax, plannedAmountInclTaxText, planningBalance, planningBalanceText,bidResponsibleOrg, bidResponsibleOrgName, id, contractPlanningCode,brand } = this.currentContract
-          const splitRequestList = this.planList[0]?.children.map(item => {
-            return {
-              splitContractName:item.splitContractName,
-              contractScope:item.contractScope,
-              materialsLists:item.children.map(child => {
-                child.unitPriceInclTax = format(Number(child.unitPriceInclTax), { notation: 'fixed', precision: 4 }).toString().replace(/\.?0+$/, '') || '';
-                child.count = format(Number(child.count), { notation: 'fixed', precision: 4 }).toString().replace(/\.?0+$/, '') || '';
-                return child
-              })
-            }
-          })
-          const formData = {
-            procurementPlan:{
-              id: id || '',
-              procurementPlanName,
-              procurementPlanType:contractPlanningCategory,
-              procurementType:biddingMethodCode,
-              projectHierarchy:bidResponsibleOrgName,
-              beginDate,
-              endDate,
-              arrivalDate,
-              procurementOfficer,
-              procurementOfficerName,
-              //priceType:priceType !== 'undefined'?priceType:'',
-              regionProvinceCode,
-              /* 基价 （前端用来统一刷新列表清单的基价使用。） */
-              basePrice,
-              regionCityCode,
-              paymentType:paymentType !== 'undefined'?paymentType:'',
-              countingType:countingType !== 'undefined'?countingType:'',
-            },
-            splitRequestList,
-            contractPlanning:{
-              contractPlanningCategory, biddingMethodCode, biddingMethodName, contractPlanningCategoryName, contractPlanningId, contractPlanningName, incurredPlannedAmount, incurredPlannedAmountText, plannedAmountInclTax, plannedAmountInclTaxText, planningBalance, planningBalanceText,
-              projectId,projectName,projectCode,bidResponsibleOrg,bidResponsibleOrgName,subjectMatter:this.subjectMatter,contractPlanningCode,brand
-            }
-          }
-          console.log('%c👽 提交数据 ', `font-size: 14px;background-color: #f00;`, formData);
-          /* 对象递归需要处理 千分位的属性 处理提交给Java后台对应的BigDecimal类型 */
-          const targetKeys = [
-            /* 租赁数量 */
-            "rentQuantity",
-            /* 租赁时间 */
-            "rentTime",
-            /* 基价 */
-            "basePrice",
-            /* 浮动率 */
-            "floatingRate",
-            /* 卸费 */
-            // "unloadingFee",
-            /* 浮动价 */
-            "floatingPrice",
-            /* 税额 */
-            "taxAmount",
-            /* 金额(含税) */
-            "amountInclTax",
-            /* 金额(不含税) */
-            "amountExclTax",
-            /* 单价(含税) */
-            "unitPriceInclTax",
-            /* 单价(不含税) */
-            "unitPriceExclTax",
-            /* 税率 */
-            "taxRate",
-            /* 已使用数量 */
-            "usedCount",
-            /* 数量 */
-            "count",
-            /* 规划金额（含税） */
-            "plannedAmountInclTax",
-            /* 已发生规划金额 */
-            "incurredPlannedAmount",
-            /* 规划余量 */
-            "planningBalance",
-            /* 基价 */
-            "basePrice",
-            /* 指导价 */
-            "guidancePrice"
-          ];
-          let formDataHandle = this.removeThousandsSeparator(formData,targetKeys);
-          console.log('%c👽 提交数据处理后 ', `font-size: 14px;background-color: #f00;`, formDataHandle);
-          try{
-            const res = await saveProcurementPlan(formDataHandle);
-            loading.close();
-            this.$message({
-              message: '保存成功',
-              type: 'success'
-            });
-            this.isSubmit = false;
-            console.log(res,'r~~~~~~~~~~~~~~~~~');
-            this.currentContract.id=res.data.id
-            this.getPlanDetail()
-            // this.$tab.closePage().then(() => {
-              // 执行结束的逻辑
-              // let param = Base64.encode(JSON.stringify(res.data))
-              // this.$router.replace(`/procurement/plan-detail/${param}`);
-            // })
-          }catch(err){
-            console.log(err);
-            this.isSubmit = false;
-            loading.close();
-          }
-        } else {
-          this.isSubmit = false;
-          return false;
-        }
+        });
       });
     },
+
+    //提交采购计划
+    // async submitPlan(formName){
+    //   this.submit(formName);
+    //   const id = this.currentContract.id;
+    //   console.log("提交的plan的id：", id);
+    //   if (!id) {
+    //     this.$message.error("采购计划ID不存在，无法提交");
+    //     return;
+    //   }
+
+    //   try {
+    //     await submitProcurementPlan(id);
+    //     this.$message.success("提交成功");
+    //     this.getPlanList();
+    //   } catch (error) {
+    //     console.error("提交采购计划失败：", error);
+    //     this.$message.error("提交采购计划失败，请稍后重试");
+    //   }
+    // },
+    async submitPlan(formName) {
+      try {
+        this.$refs[formName].validate(async (valid) => {
+          if (valid) {
+            this.isPlanSubmit = true; // 设置提交状态为 true，禁用按钮并显示加载状态
+            // 等待保存表单数据的方法完成
+            try {
+              await this.submitForm(formName);
+            } catch (error) {
+              // 如果保存失败，直接返回，不再继续执行提交逻辑
+              console.error("保存表单数据失败：", error);
+              this.isPlanSubmit = false; // 取消加载状态
+              return;
+            }
+
+            const id = this.currentContract.id;
+            console.log("提交的 plan 的 id：", id);
+            if (!id) {
+              this.isPlanSubmit = false; // 如果 id 不存在，取消加载状态
+              this.$message.error("采购计划 ID 不存在，无法提交");
+              return;
+            }
+
+            try {
+              const loading = this.$loading({
+                lock: true,
+                text: '提交中...',
+                background: 'rgba(0, 0, 0, 0.7)'
+              });
+              await submitProcurementPlan(id);
+              loading.close();
+              this.isPlanSubmit = false; // 提交成功后，取消加载状态
+              this.$message.success("提交成功");
+              this.getPlanDetail();
+            } catch (error) {
+              console.error("提交采购计划失败：", error);
+              this.isPlanSubmit = false; // 提交失败后，取消加载状态
+              loading.close();
+              this.$message.error("提交采购计划失败，请稍后重试");
+            }
+          } else {
+            this.isPlanSubmit = false; // 校验失败后，取消加载状态
+            return false;
+          }
+        });
+      } catch (error) {
+        console.error("提交表单失败：", error);
+        this.isPlanSubmit = false; // 提交表单失败后，取消加载状态
+        this.$message.error("提交表单失败，请稍后重试");
+      }
+    },
+
+
     /* 批量替换对象中指定属性的,号，用于金额校验，提交对象数据给后台时将金额格式化。 */
     removeThousandsSeparator(obj, targetKeys = []) {
         // 检查传入的数据类型
@@ -1189,14 +1235,22 @@ export default {
               if (obj.hasOwnProperty(key)) {
                 // 仅处理目标属性名
                 if (targetKeys.includes(key)) {
-                  newObj[key] = typeof obj[key] === "string"
-                    ? obj[key].replace(/,/g, '')
-                    : this.removeThousandsSeparator(obj[key], targetKeys);
-                  try{
-                    if(Number(newObj[key])){
-                      newObj[key] = Number(newObj[key]);
-                    }
-                  }catch (e) {}
+                  if(typeof obj[key] === "string"){
+                    // 字符直接替换
+                    const tempObj = obj[key].replaceAll(/,/g, '');
+                    newObj[key] = tempObj;
+                  } else if (typeof obj[key] === "object" && Array.isArray(obj[key])) {
+                    // 如果是数组，递归处理
+                    const tempObj = this.removeThousandsSeparator(obj[key], targetKeys);
+                    newObj[key] = tempObj;
+                  } else if (typeof obj[key] === "object" && obj[key] !== null) {
+                    // 如果是对象，递归处理
+                    const tempObj = this.removeThousandsSeparator(obj[key], targetKeys);
+                    newObj[key] = tempObj;
+                  } else {
+                    // 其他情况直接赋值
+                    newObj[key] = obj[key];
+                  }
                 } else {
                   newObj[key] = this.removeThousandsSeparator(obj[key], targetKeys);
                 }
@@ -1328,7 +1382,7 @@ export default {
               this.id=res.data.id
               this.materialsLists=res.data.materialsLists
             }
-console.log("-2222--"+JSON.stringify(this.materialsLists))
+            console.log("-2222--"+JSON.stringify(this.materialsLists))
             loading.close();
             this.$message({
               message: '保存成功',
@@ -1425,26 +1479,10 @@ console.log("-2222--"+JSON.stringify(this.materialsLists))
           })
         }
 
-        /* 重新计算行 合计 */
-        const { add, subtract,divide,multiply, bignumber, format,floor } = this.mathjs;
-        for (let i = 0; i < this.planList[0].children.length; i++) {
-          for (let j = 0; j < this.planList[0].children[i].children.length; j++) {
-            debugger
-            let obj = this.planList[0].children[i].children[j];
-            const taxUnitPriceBig = bignumber(this.planList[0].children[i].children[j].unitPriceInclTax);
-            const countBig = bignumber(this.planList[0].children[i].children[j].count);
-            // 含税总价
-            const totalPrice = multiply(taxUnitPriceBig, countBig);
-            /* 合计总计计算， 赋值千分位 */
-            this.$set(this.planList[0].children[i].children[j],'totalPriceText', this.formatNumberDynamicDecimalWithSeparator(totalPrice));
-            obj = this.planList[0].children[i].children[j];
-            this.$set(this.planList[0].children[i].children[j],'totalPrice', this.planList[0].children[i].children[j].totalPriceText.replaceAll(',', ''));
-            obj = this.planList[0].children[i].children[j];
-          }
-        }
-
-        // 强制Vue重新渲染
-        this.$forceUpdate();
+        /* 更新表格的布局 */
+        this.$nextTick(() => {
+          this.$refs.tableRef.doLayout();
+        });
       });
 
 
@@ -1635,7 +1673,7 @@ console.log("-2222--"+JSON.stringify(this.materialsLists))
       });
     },
     /* 每个清单的价格类型监听，用来给采购计划的价格类型赋值，如果清单出现多种价格类型，就给采购计划赋值为=3 固定、浮动价。 */
-    changePriceType(splitIndex, scope, event) {
+    changePriceType(splitIndex, row, event) {
       // 初始化一个 Map 来存储各类型的数量
       const priceTypeCountMap = new Map();
       // 遍历数据结构，统计各 priceType 的数量
@@ -1672,6 +1710,11 @@ console.log("-2222--"+JSON.stringify(this.materialsLists))
         this.$set(this.formData, 'priceType',  1 );
       }
       // 采购计划表单的this.formData.priceType如果清单的priceType存在多种。就设置为3，只有一种就设置为那一种的priceType
+
+
+      /* 计算 含税单价 不含税单价 行合计价 */
+      this.calculatePrice(row)
+
     },
     //数量计算
     changeCount(event,splitIndex,row){
@@ -1784,8 +1827,6 @@ console.log("-2222--"+JSON.stringify(this.materialsLists))
     },
     //不含税计算
     changePrice(event,row){
-      console.log('%c 🚀 ~ file:add-plan --method:changePrice --line:1226 --variable:row,event===>', `font-size:16px; font-weight:bold; color:#fff; padding:4px; border-radius:4px; background:linear-gradient(90deg, ${["#ff005a", "#ff9900", "#33cc33", "#0099ff", "#ffc300"][Math.floor(Math.random() * 5)]}, ${["#ff005a", "#ff9900", "#33cc33", "#0099ff", "#ffc300"][Math.floor(Math.random() * 5)]});`,
-        row,event);
       const { unitPriceInclTax, taxRate, count} = row
 
       const regexN1 = /^-?(?:[1-9]\d*|0)(\.\d+)?$/;
@@ -1890,46 +1931,6 @@ console.log("-2222--"+JSON.stringify(this.materialsLists))
 
       event.target.style = "border: 1px solid #C0C4CC;";
     },
-    /* 合计列计算 */
-    getSummaries(param) {
-      const { columns, data } = param;
-      const sums = [];
-      columns.forEach((column, index) => {
-        /* 第一列显示合计 */
-        if (index === 0) {
-          sums[index] = '合计';
-          return;
-        }
-        /* 只显示合计 */
-        if(column.property === "totalPriceText") {
-          const values = data.map(item => {
-            if(item[column.property]){
-              return Number(item[column.property].replaceAll(',',''));
-            }else{
-              return item[column.property];
-            }
-          });
-          if (!values.every(value => isNaN(value))) {
-            sums[index] = values.reduce((prev, curr) => {
-              const value = Number(curr);
-              if (!isNaN(value)) {
-                return prev + curr;
-              } else {
-                return prev;
-              }
-            }, 0);
-            /* 金额值格式化，小数位数截取 */
-            sums[index] = this.formatNumberDynamicDecimalWithSeparator(sums[index]);
-          } else {
-            sums[index] = '';
-          }
-        }else{
-          sums[index] = '';
-        }
-      });
-
-      return sums;
-    },
     /**
      * 格式化数字：动态保留小数位数并添加千分位分隔符
      * @param {number|string} num - 要格式化的数字
@@ -1973,11 +1974,6 @@ console.log("-2222--"+JSON.stringify(this.materialsLists))
       }
 
       return formattedNumber;
-    },
-    calculateTotal(prop) {
-      debugger
-      console.log('%c⏩ prop \n', `font-size: 14px;background-color: #fb0;`, prop );
-      return prop;
     },
     countDecimalPlaces(num) {
         // 将数字转换为字符串
@@ -2186,49 +2182,83 @@ console.log("-2222--"+JSON.stringify(this.materialsLists))
       const { multiply, add, divide, bignumber, format } = this.mathjs;
       /* 固定价 */
       if(row.priceType === 1){
-        if(!row.unitPriceInclTax || !row.count || !row.taxRate){
-          return
-        }else{
-          const priceInclTax = (row.unitPriceInclTax+'').replaceAll(',','');
-          /* 单价不含税：含税单价 * (1 + (税率  先除100得出百分比)) */
-          const onePlusTaxRate = multiply(bignumber(priceInclTax), add(1, divide(bignumber(row.taxRate), 100)));
-          row.unitPriceExclTax = this.formatNumberDynamicDecimalWithSeparator(onePlusTaxRate)
-          /* 行含税总价：含税单价 * 数量 */
-          const totalPrice = multiply(onePlusTaxRate, bignumber(row.count));
-          row.totalPriceText = this.formatNumberDynamicDecimalWithSeparator(totalPrice);
-          row.totalPrice = row.totalPriceText.replaceAll(',', '');
+        if(!row.unitPriceInclTax){
+          row.unitPriceInclTax = 0.0;
         }
+        if(!row.count){
+          row.count = 0.0;
+        }
+        if(!row.taxRate){
+          row.taxRate = 0.0;
+        }
+        /* 单价含税(手填) */
+        const priceInclTax = (row.unitPriceInclTax+'').replaceAll(',','');
+        /* 单价不含税：含税单价 / (1 + (税率  先除100得出百分比)) */
+        const onePlusTaxRate = divide(bignumber(priceInclTax), add(1, divide(bignumber(row.taxRate), 100)));
+        row.unitPriceExclTax = this.formatNumberDynamicDecimalWithSeparator(onePlusTaxRate)
+        /* 行含税总价：含税单价 * 数量 */
+        const totalPrice = multiply(bignumber(priceInclTax), bignumber(row.count));
+        row.totalPriceText = this.formatNumberDynamicDecimalWithSeparator(totalPrice);
+        row.totalPrice = row.totalPriceText.replaceAll(',', '');
+        console.log('%c⏩ 固定价计算结果row \n', `font-size: 14px;background-color: #f00;`, row );
       }
 
       /* 浮动价 */
       if(row.priceType === 2){
+        if(!row.floatingPrice){
+          row.floatingPrice = 0.0;
+        }
+        if(!row.basePrice){
+          row.basePrice = 0.0;
+        }
+        if(!row.count){
+          row.count = 0.0;
+        }
+        if(!row.taxRate){
+          row.taxRate = 0.0;
+        }
         /* 单价含税:    基价  * (1 + (浮动率 先除100得出百分比)) */
         const unitPriceInclTaxBig = add(bignumber(row.basePrice), bignumber(row.floatingPrice));
         row.unitPriceInclTax = this.formatNumberDynamicDecimalWithSeparator(unitPriceInclTaxBig);
-        /* 单价不含税：含税单价 * (1 + (税率  先除100得出百分比)) */
-        const onePlusTaxRate = multiply(bignumber(unitPriceInclTaxBig), add(1, divide(bignumber(row.taxRate), 100)));
+        /* 单价不含税：含税单价 / (1 + (税率  先除100得出百分比)) */
+        const onePlusTaxRate = divide(bignumber(unitPriceInclTaxBig), add(1, divide(bignumber(row.taxRate), 100)));
         row.unitPriceExclTax = this.formatNumberDynamicDecimalWithSeparator(onePlusTaxRate)
         /* 行含税总价：含税单价 * 数量 */
         const totalPrice = multiply(unitPriceInclTaxBig, bignumber(row.count));
         row.totalPriceText = this.formatNumberDynamicDecimalWithSeparator(totalPrice);
         row.totalPrice = row.totalPriceText.replaceAll(',', '');
+        console.log('%c🪴 浮动价计算结果row \n', `font-size: 14px;background-color: #f00;`, row );
       }
 
 
       /* 浮动率 */
       if(row.priceType === 4){
+        if(!row.floatingRate){
+          row.floatingRate = 0.0;
+        }
+        if(!row.basePrice){
+          row.basePrice = 0.0;
+        }
+        if(!row.count){
+          row.count = 0.0;
+        }
+        if(!row.taxRate){
+          row.taxRate = 0.0;
+        }
         /* 单价含税:    基价  * (1 + (浮动率 先除100得出百分比)) */
         const unitPriceInclTaxBig = multiply(bignumber(row.basePrice), add(1,divide(bignumber(row.floatingRate), 100)));
         row.unitPriceInclTax = this.formatNumberDynamicDecimalWithSeparator(unitPriceInclTaxBig);
         const priceInclTax = (row.unitPriceInclTax+'').replaceAll(',','');
-        /* 单价不含税：含税单价 * (1 + (税率  先除100得出百分比)) */
-        const onePlusTaxRate = multiply(bignumber(priceInclTax), add(1, divide(bignumber(row.taxRate), 100)));
+        /* 单价不含税：含税单价 / (1 + (税率  先除100得出百分比)) */
+        const onePlusTaxRate = divide(bignumber(priceInclTax), add(1, divide(bignumber(row.taxRate), 100)));
         row.unitPriceExclTax = this.formatNumberDynamicDecimalWithSeparator(onePlusTaxRate)
         /* 行含税总价：含税单价 * 数量 */
         const totalPrice = multiply(unitPriceInclTaxBig, bignumber(row.count));
         row.totalPriceText = this.formatNumberDynamicDecimalWithSeparator(totalPrice);
         row.totalPrice = row.totalPriceText.replaceAll(',', '');
+        console.log('%c🏀 浮动率计算结果row \n', `font-size: 14px;background-color: #f00;`, row );
       }
+
 
       /* 在 DOM 更新完成后，重新布局表格 (为了刷新表格列的'总计') */
       /* 更新表格的布局 */
@@ -2237,7 +2267,7 @@ console.log("-2222--"+JSON.stringify(this.materialsLists))
       });
 
       return row;
-    }
+    },
   },
   computed: {
     ...mapGetters(['project']),
@@ -2259,10 +2289,35 @@ console.log("-2222--"+JSON.stringify(this.materialsLists))
     },
     /* 计算行含税总价 */
     getTotalPriceText() {
-      return ( row ) => {
+      return ( row , index) => {
         /* 计算 含税单价 不含税单价 行合计价 */
         this.calculatePrice(row);
+
         return row.totalPriceText ? (row.totalPriceText) : (0.00);
+      }
+    },
+    /* 计算列含税总价 */
+    getTotalPriceTableText() {
+      return ( index) => {
+        const { add } = this.mathjs;
+        this.planList.forEach((item) => {
+          if (item.children && Array.isArray(item.children)) {
+            item.children.forEach((itemChildren , i) => {
+              /* 计算表合计列合计计算合计列 */
+              let totalPriceTable = 0.0;
+
+              if (itemChildren.children && Array.isArray(itemChildren.children)) {
+                itemChildren.children.forEach((children) => {
+                  totalPriceTable = add(children.totalPrice ? children.totalPrice : 0.0 , totalPriceTable);
+                });
+              }
+              let totalPriceTableText = this.formatNumberDynamicDecimalWithSeparator(totalPriceTable,2);
+              /* total-price-sum-table-class */
+              document.querySelector('.totalPriceSumTable'+i).textContent = '标包含税总价：'+totalPriceTableText+' (元)';
+            });
+          }
+        });
+        return '';
       }
     },
     unitPriceExclTaxComputed() {
@@ -2390,6 +2445,10 @@ console.log("-2222--"+JSON.stringify(this.materialsLists))
   //.el-input__inner {
   //  border: 1px solid #ff0000
   //}
+}
+.total-price-sum-table-class{
+  float: right;
+  position: unset;
 }
 .page-title {
   width: 100%;

@@ -1947,8 +1947,8 @@ export default {
         },
         {
           id: 2,
-          label: "付款基数",
-          prop: "paymentBasisText",
+          label: "付款基数（元）",
+          prop: "paymentBasis",
         },
         {
           id: 3,
