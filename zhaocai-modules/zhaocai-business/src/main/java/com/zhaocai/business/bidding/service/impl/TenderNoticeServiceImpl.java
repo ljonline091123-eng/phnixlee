@@ -199,7 +199,7 @@ public class TenderNoticeServiceImpl extends ServiceImpl<TenderNoticeMapper,Tend
         boolean res = this.save(tenderNotice);
 
         //保存招标公告文件附件
-        attachmentService.addAttachment(tenderNoticeVO.getBiddingDocAttachList(), AttachmentTypeEnum.BIDING_NOTICE_MSG_DOC,tenderNotice.getId());
+//        attachmentService.addAttachment(tenderNoticeVO.getBiddingDocAttachList(), AttachmentTypeEnum.BIDING_NOTICE_MSG_DOC,tenderNotice.getId());
 
         //保存供应商范围表
         if (flag) {
