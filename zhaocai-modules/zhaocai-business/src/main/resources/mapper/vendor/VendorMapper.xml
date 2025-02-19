@@ -94,7 +94,7 @@
         select tv.id ,tv.enterprise_name,tv.is_external,tv.vendor_attribute,tv.establish_date,tv.vendor_status,tv.created_unit,tv.enterprise_code,tv.social_credit_code,tvc.contact_name,tvc.contact_phone,tv.registered_capital,
         concat(tv.enterprise_province_name,'-',tv.enterprise_city_name) as vendor_location,tv.enterprise_type,tv.create_time,
         tv.is_black,tv.vendor_class,tv.state,tv.process_type,tar.total_amount_inc_tax,tvpr.tvp_excellent_num,
-        tv.first_cooperation_company_code,tv.first_cooperation_company_name , tar.cooperation_num,tv.register_approval_time
+        tv.first_cooperation_company_code,tv.first_cooperation_company_name , tar.cooperation_num,tv.register_approval_time,tv.middle_vendor_code
         from  tb_vendor tv
         inner join tb_vendor_contact tvc on tv.id = tvc.vendor_id and tvc.is_main_contact = 1
         left join (
