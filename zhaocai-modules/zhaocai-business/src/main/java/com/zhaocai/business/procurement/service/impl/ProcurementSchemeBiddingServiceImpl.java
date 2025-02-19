@@ -1,6 +1,7 @@
 package com.zhaocai.business.procurement.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.zhaocai.business.bidding.domain.BiddingMarkTemplate;
 import com.zhaocai.business.bidding.service.IBiddingMarkTemplateService;
@@ -62,7 +63,14 @@ public class ProcurementSchemeBiddingServiceImpl extends ServiceImpl<Procurement
         }
         procurementSchemeBidding.setSchemeId(schemeId);
         super.updateById(procurementSchemeBidding);
+        //更新其他附件(置空)
+        if(procurementSchemeBidding.getOtherAttachmentId() == null){
+            super.update(new LambdaUpdateWrapper<ProcurementSchemeBidding>()
+                    .set(ProcurementSchemeBidding::getOtherAttachmentId, null)
+                    .eq(ProcurementSchemeBidding::getId,procurementSchemeBidding.getId()));
+        }
 
+        // 更新招标文件附件
         attachmentService.updateBusiness(procurementSchemeBidding.getBiddingAttachmentId(), AttachmentTypeEnum.SCHEME_BIDDING,procurementSchemeBidding.getSchemeId());
         // 更新合同模板附件
         attachmentService.updateBusiness(procurementSchemeBidding.getContractAttachmentId(), AttachmentTypeEnum.SCHEME_CONTRACT,procurementSchemeBidding.getSchemeId());
