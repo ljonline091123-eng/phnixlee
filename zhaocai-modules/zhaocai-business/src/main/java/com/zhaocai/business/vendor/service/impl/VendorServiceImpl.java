@@ -1044,8 +1044,12 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
                 //map.put("cust_mercht_modif_pre_name",  );//客商变更前名称(曾用名)
                 map.put("corp_princ_legal_rep",  bean.getLegalRepresentative());
                 map.put("unified_soci_crdt_cd",  bean.getSocialCreditCode());
-                map.put("rgst_cap", bean.getRegisteredCapital()==null? new BigDecimal(0):bean.getRegisteredCapital().multiply(new BigDecimal(10000)) );
-                map.put("oper_range",  bean.getBusinessScope());
+                map.put("rgst_cap", bean.getRegisteredCapital()==null? new BigDecimal(0):bean.getRegisteredCapital().multiply(new BigDecimal(10000)) );\
+                String range = bean.getBusinessScope();
+                if(range !=null &&range.length()>0){
+                    range = range.replace("\n","");
+                }
+                map.put("oper_range", range);
                 //map.put("fdg_tm",  "");//成立时间
                 map.put("czp_zone_rgst_name",  "中国");
                 map.put("czp_zone_rgst_cd",  "156");
