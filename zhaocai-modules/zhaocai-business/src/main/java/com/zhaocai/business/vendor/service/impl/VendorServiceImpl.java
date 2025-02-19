@@ -1047,7 +1047,7 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
                 map.put("rgst_cap", bean.getRegisteredCapital()==null? new BigDecimal(0):bean.getRegisteredCapital().multiply(new BigDecimal(10000)) );\
                 String range = bean.getBusinessScope();
                 if(range !=null &&range.length()>0){
-                    range = range.replace("\n","");
+                    range = range.replaceAll("\\n|\\r\\n", "");
                 }
                 map.put("oper_range", range);
                 //map.put("fdg_tm",  "");//成立时间
