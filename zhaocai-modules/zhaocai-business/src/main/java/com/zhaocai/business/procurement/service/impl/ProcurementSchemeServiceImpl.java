@@ -705,7 +705,7 @@ public class ProcurementSchemeServiceImpl extends ServiceImpl<ProcurementSchemeM
         baseMapper.insert(procurementScheme);
 
         // 招标文件
-        procurementSchemeBiddingService.saveProcurementSchemeBidding(requestVO.getProcurementSchemeBidding(), procurementScheme.getId());
+        procurementSchemeBiddingService.saveProcurementSchemeBidding(requestVO.getProcurementSchemeBidding(), procurementScheme.getId(), procurementScheme.getProcurementType());
 
         // 关联关系
         procurementSchemePlanRelateService.saveRelate(requestVO.getContractSplitIds(), procurementScheme.getId());
@@ -738,7 +738,7 @@ public class ProcurementSchemeServiceImpl extends ServiceImpl<ProcurementSchemeM
         baseMapper.updateById(procurementScheme);
 
         // 招标文件模板附件 合同模板附件
-        procurementSchemeBiddingService.updateProcurementSchemeBidding(requestVO.getProcurementSchemeBidding(), procurementScheme.getId());
+        procurementSchemeBiddingService.updateProcurementSchemeBidding(requestVO.getProcurementSchemeBidding(), procurementScheme.getId(), procurementScheme.getProcurementType());
     }
 
     /**

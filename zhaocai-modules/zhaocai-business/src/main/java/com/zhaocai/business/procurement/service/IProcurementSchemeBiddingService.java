@@ -17,14 +17,14 @@ public interface IProcurementSchemeBiddingService  extends IService<ProcurementS
      * @param requestVO
      * @param schemeId
      */
-    void saveProcurementSchemeBidding(ProcurementSchemeBidding requestVO, Long schemeId);
+    void saveProcurementSchemeBidding(ProcurementSchemeBidding requestVO, Long schemeId, Integer procurementType);
 
     /**
      * 修改采购方案 - 招标信息
      * @param procurementSchemeBidding
      * @param schemeId
      */
-    void updateProcurementSchemeBidding(ProcurementSchemeBidding procurementSchemeBidding, Long schemeId);
+    void updateProcurementSchemeBidding(ProcurementSchemeBidding procurementSchemeBidding, Long schemeId, Integer procurementType);
 
     /**
      * 根据采购方案获取
