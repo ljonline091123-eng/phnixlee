@@ -36,7 +36,7 @@ public class DataCenterUtil {
     /**
      * 超时时间
      */
-    private static final Integer TIME_OUT = 30000;
+    private static final Integer TIME_OUT = 3000000;
 
     public String sendFileDataCenter(String files, String TYDTC_API_KEY, String type, String createBy, Long jobId) {
         boolean flag = false;

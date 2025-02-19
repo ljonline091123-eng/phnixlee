@@ -98,14 +98,14 @@
         from  tb_vendor tv
         inner join tb_vendor_contact tvc on tv.id = tvc.vendor_id and tvc.is_main_contact = 1
         left join (
-            select ta.vendor_id as ta_vendor_id ,sum(ta.total_amount_inc_tax) as total_amount_inc_tax
-            from tb_agreement ta
-            group by ta.vendor_id
+        select ta.vendor_id as ta_vendor_id ,ROUND(sum(ta.total_amount_inc_tax)/10000 ,2) as total_amount_inc_tax , count(1) as cooperation_num
+        from tb_agreement ta
+        group by ta.vendor_id
         ) tar on tar.ta_vendor_id = tv.id
         left join (
-            select tvp.vendor_id as tvp_vendor_id,sum(tvp.excellent_num) as tvp_excellent_num
-            from tb_vendor_performance_evaluation tvp
-            group by tvp.vendor_id
+        select tvp.vendor_id as tvp_vendor_id,sum(tvp.excellent_num) as tvp_excellent_num
+        from tb_vendor_performance_evaluation tvp
+        group by tvp.vendor_id
         ) tvpr on tvpr.tvp_vendor_id = tv.id
         <where>
             tv.del_flag = 0

@@ -985,6 +985,8 @@ public class VendorBidServiceImpl implements IVendorBidService {
             BiddingListQuotation quotationRecent = biddingListQuotationService.getOne(new LambdaQueryWrapper<BiddingListQuotation>()
                     .eq(BiddingListQuotation::getBiddingInfoId, biddingInfoRecent.getId())
                     .eq(BiddingListQuotation::getMaterialsCode, quotationVO.getMaterialsCode())
+                    /* 如果存在两份拆分清单就会查重,加一个物料id对比上次的。 */
+                    .eq(BiddingListQuotation::getMaterialsId, quotationVO.getMaterialsId())
                     .lt(BiddingListQuotation::getTaxUnitPrice, taxUnitPrice));
             if (ObjectUtils.isNotEmpty(quotationRecent)){
                 throw new ParamValidateException(quotationVO.getMaterialsName()

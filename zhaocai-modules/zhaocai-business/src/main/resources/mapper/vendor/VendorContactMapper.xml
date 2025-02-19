@@ -48,6 +48,7 @@
                 tvcf.effective_begin_date,tvcf.effective_end_date,tvc.login_user_id
         from tb_vendor_contact tvc
         inner join tb_vendor tv on tvc.vendor_id = tv.id
+        and tv.state != 0 and tv.del_flag = '0' and (tv.process_type != 1 or tv.state = 3)
         left join tb_vendor_certification tvcf on tvcf.id = tvc.certification_id
         <where>
             <if test="queryVO.vendorName != null and queryVO.vendorName != ''">
