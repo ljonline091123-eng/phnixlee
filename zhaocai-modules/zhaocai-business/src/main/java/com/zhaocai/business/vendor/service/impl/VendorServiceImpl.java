@@ -1037,7 +1037,6 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
                 map.put("cust_mercht_full_name",  bean.getEnterpriseName());
                 map.put("cust_mercht_cdtfy",  "供应商");
                 map.put("cust_mercht_cdtfy_cd",  "G");
-                System.out.println("is_ext_cust_mercht_cate:"+bean.getIsExternal());
                 map.put("is_ext_cust_mercht_cate", sysDictDataService.getRemark("is_external",bean.getIsExternal()+"","label"));
                 map.put("is_ext_cust_mercht_cate_cd",  sysDictDataService.getRemark("is_external",bean.getIsExternal()+"",null));
                 map.put("cust_mercht_attr",  "法人单位");
@@ -1102,6 +1101,7 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
                                 if (!list.isEmpty()) {
                                     list.stream().forEach(p -> {
                                         accountService.pushAcct(p,bean, custMerchtId, Vendor.LOG_TYPE_ADD);
+                                        accountService.pushAcct(p,bean, custMerchtId, Vendor.LOG_TYPE_MODIFY);
                                     });
                                 }
                             }
@@ -1124,6 +1124,7 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
                                     if (!list.isEmpty()) {
                                         list.stream().forEach(p -> {
                                             accountService.pushAcct(p,bean, custMerchtId, Vendor.LOG_TYPE_ADD);
+                                            accountService.pushAcct(p,bean, custMerchtId, Vendor.LOG_TYPE_MODIFY);
                                         });
                                     }
                                 }
@@ -1379,8 +1380,7 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
     public void initializeCode() {
         List<Vendor> list = super.list(new LambdaQueryWrapper<Vendor>()
                 .eq(Vendor::getState, VendorStateEnum.APPROVE.getState())
-                .eq(Vendor::getDelFlag,"0")
-               .isNull(Vendor::getMiddleVendorCode));
+                .eq(Vendor::getDelFlag,"0"));
         if(CollectionUtil.isNotEmpty(list)){
             list.stream().forEach(p->{
                 this.pushVendor(p.getId(),Vendor.LOG_TYPE_ADD,p.getIsBlack());

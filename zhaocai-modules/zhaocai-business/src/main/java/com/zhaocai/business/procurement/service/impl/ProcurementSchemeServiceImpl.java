@@ -142,6 +142,8 @@ public class ProcurementSchemeServiceImpl extends ServiceImpl<ProcurementSchemeM
                 item.setBidContactPhone(procurementSchemeBidding.getBidContactPhone());
                 item.setBidContactEmail(procurementSchemeBidding.getBidContactEmail());
                 item.setBidDeadline(procurementSchemeBidding.getBidDeadline());
+                item.setApplyTimeNotice(procurementSchemeBidding.getApplyTimeNotice());
+                item.setNoticeAttachment(procurementSchemeBidding.getNoticeAttachment());
             }
 
             Boolean purchaseOfficerVal = Boolean.FALSE;
