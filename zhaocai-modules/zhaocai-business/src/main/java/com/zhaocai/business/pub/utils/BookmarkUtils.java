@@ -112,10 +112,10 @@ public class BookmarkUtils {
             System.out.println("转换文件响应结果：");
             System.out.println("response:" + response);
             String viewUrl = new JSONObject(response).optJSONObject("data").optString("viewUrl");
-            System.out.println("填充书签后生成的文件下载地址:" + viewUrl);
+            System.out.println("去除线下修订记录的文件下载地址:" + viewUrl);
             return viewUrl;
         } catch (Exception e) {
-            throw new RuntimeException("书签位置填充数据失败," + e.getMessage(), e);
+            throw new RuntimeException("去除线下修订记录," + e.getMessage(), e);
         }
         finally {
             //删除生成的临时文件

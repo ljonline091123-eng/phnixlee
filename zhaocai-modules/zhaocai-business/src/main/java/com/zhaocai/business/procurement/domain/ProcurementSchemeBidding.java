@@ -87,4 +87,10 @@ public class ProcurementSchemeBidding extends BaseEntity {
      */
     @ApiModelProperty(value = "合同模板id")
     private Long contractTemplateId;
+
+    /**
+     * 其他文件模板id（招标公告、招标方案、招标控制价）
+     */
+    @ApiModelProperty(value = "其他文件模板id")
+    private Long otherAttachmentId;
 }

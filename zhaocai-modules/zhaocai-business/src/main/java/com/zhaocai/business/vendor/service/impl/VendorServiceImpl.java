@@ -1027,8 +1027,6 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
 
     @Override
     public void pushVendor(Long id,String type, Integer isBlack){
-        ExecutorService executor = Executors.newCachedThreadPool();
-        executor.execute(() -> {
             Vendor bean = this.getById(id);
             if(bean != null){
                 Map<String, Object> map = new HashMap<>();
@@ -1097,7 +1095,7 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
                                 JSONObject obj = added.getJSONObject(0);
                                 String custMerchtId = obj.getString("cust_mercht_id");
                                 super.update(new LambdaUpdateWrapper<Vendor>()
-                                        .set(Vendor::getMiddleVendorCode, custMerchtId)
+                                        .set(Vendor::getEnterpriseCode, custMerchtId)
                                         .eq(Vendor::getId, id));
                                 List<TAccountInfo> list = accountService.list(new LambdaUpdateWrapper<TAccountInfo>()
                                         .eq(TAccountInfo::getUpId, bean.getId()));
@@ -1119,7 +1117,7 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
                                     JSONObject obj = added.getJSONObject(0);
                                     String custMerchtId = obj.getString("cust_mercht_id");
                                     super.update(new LambdaUpdateWrapper<Vendor>()
-                                            .set(Vendor::getMiddleVendorCode, custMerchtId)
+                                            .set(Vendor::getEnterpriseCode, custMerchtId)
                                             .eq(Vendor::getId, id));
                                     List<TAccountInfo> list = accountService.list(new LambdaUpdateWrapper<TAccountInfo>()
                                             .eq(TAccountInfo::getUpId, bean.getId()));
@@ -1136,8 +1134,6 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
                     dataCenterUtil.postCommonInfo(jsonObject,dataMiddlePlatformConfig.getVendorUpdate(),type, SecurityUtils.getUsername(),null);
                 }
             }
-        });
-        executor.shutdown();
     }
 
 
@@ -1384,11 +1380,7 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
         List<Vendor> list = super.list(new LambdaQueryWrapper<Vendor>()
                 .eq(Vendor::getState, VendorStateEnum.APPROVE.getState())
                 .eq(Vendor::getDelFlag,"0")
-                .eq(Vendor::getId,1860175151084933122L))
-                ;
-
-
-               // .isNull(Vendor::getMiddleVendorCode));
+               .isNull(Vendor::getMiddleVendorCode));
         if(CollectionUtil.isNotEmpty(list)){
             list.stream().forEach(p->{
                 this.pushVendor(p.getId(),Vendor.LOG_TYPE_ADD,p.getIsBlack());
