@@ -1193,7 +1193,7 @@ export default {
           if (!newVal.attachmentNotice) {
             this.attachmentId = this.scheme.noticeAttachment.attachmentId
             this.$set(this.formData, "fileList", [{name: this.scheme.noticeAttachment.fileName,url: this.scheme.noticeAttachment.fileUrl}]);
-            this.$set(this.formData, "fileTemplate", this.scheme.noticeAttachment);
+            this.$set(this.formData, "fileTemplate", [this.scheme.noticeAttachment]);
             this.$set(this.formData, "attachIdNotice", this.scheme.noticeAttachment.attachmentId);
           }
           this.getViewNoticeURL()
