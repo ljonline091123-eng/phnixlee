@@ -318,7 +318,32 @@
                          popper-class="date-clear"
                         :picker-options="endTimeOptions"
                         value-format="yyyy-MM-dd HH:mm:ss"
-                        @change="handleChange"
+                        @change="(value) => handleChange(value, 'bid')"
+                      />
+                    </el-form-item>
+                  </el-col>
+                  <el-col :span="8" class="grid-cell">
+                    <el-form-item
+                      label="招标报名截止时间"
+                      prop="applyTimeNotice"
+                      class="required label-right-align"
+                      v-if="formData.procurementType == 1"
+                    >
+                      <template #label>
+                        报名截止时间
+                        <el-tooltip content="报名截止时间从当天24点开始计算至少120个小时(5天)！" placement="top">
+                          <i class="el-icon-question"></i>
+                        </el-tooltip>
+                      </template>
+                      <el-date-picker
+                        v-model="formData.applyTimeNotice"
+                        type="datetime"
+                        style="width: 100%"
+                        placeholder="(说明:截止时间不能少于5天)"
+                        popper-class="date-clear"
+                        :picker-options="endTimeOptionsNotice"
+                        value-format="yyyy-MM-dd HH:mm:ss"
+                        @change="(value) => handleChange(value, 'notice')"
                       />
                     </el-form-item>
                   </el-col>
@@ -471,6 +496,31 @@
 
 
                 </el-row>
+                <el-row :gutter="40" v-if="formData.procurementType == 1">
+                  <el-col :span="8" class="grid-cell">
+                    <el-form-item label="招标公告" prop="noticeAttachmentId">
+                      <template>
+                        <a href="javascript:;" @click="uploadNoticeClick">{{
+                            formData.noticeAttachmentName
+                          }}</a>
+                      </template>
+                      <el-button v-show="formData.noticeAttachmentId" size="mini" @click="handleViewNotice(formData.noticeAttachmentName,formData.noticeAttachmentUrl)" >预览附件</el-button>
+                      <br>
+                      <div style="margin-left: -90px;width: 300px;">
+                      <el-button size="mini" type="primary" v-show="(state === null || (state !== 1 && state !== 2 && state !== 3))" @click="uploadNoticeClick">手动上传</el-button>
+                      <el-upload
+                        style="margin-left: 90px;margin-top: -75px;"
+                        :action="uploadFileUrl"
+                        :limit="1"
+                        :on-success="fileSuccessNotice"
+                        :file-list="formData.fileListNotice"
+                        :on-remove="fileRemoveNotice"
+                        ref="uploadNotice"
+                      ></el-upload>
+                      </div>
+                    </el-form-item>
+                  </el-col>
+                </el-row>
                 <!-- 在线预览 -->
                 <div class="previewFile"
                      ref="lianXiangWenDangIframe">
@@ -491,7 +541,13 @@
                     height="500px"
                     frameborder="0"
                   ></iframe>
-
+                  <iframe allowfullscreen="true"
+                          v-if="noticeViewAttachment"
+                          :src= this.viewFileUrl
+                          width="100%"
+                          height="500px"
+                          frameborder="0"
+                  ></iframe>
                 </div>
               </div>
             </el-tab-pane>
@@ -1103,7 +1159,7 @@ import {
   getSchemeEditFileUrl,
 } from "@/api/procurement/scheme";
 import { getSwitchPageList } from "@/api/procurement/manage";
-import { getContractTypeList } from "@/api/template/file";
+import {getContractTypeList, getViweFileURL} from "@/api/template/file";
 import FileModule from "@/components/FileModule/index.vue";
 import { isvalidatemobile, validEmail, validatenum } from "@/utils/validate";
 import BackButton from "@/components/BackButton/index.vue";
@@ -1152,6 +1208,31 @@ export default {
     this.$set(this.formData, "procurementType", param.procurementType + "");
   },
   computed: {
+    endTimeOptionsNotice() {
+      //这里判断是不是今天
+      console.log( this.formData.applyTimeNotice+"---")
+      let newVal = new Date(this.formData.applyTimeNotice)
+      let    selectableRange =new Date().getHours() + ':' + (new Date().getMinutes() + 1) + ':00 - 23:59:00'
+      // 将日期字符串转换为JavaScript日期对象
+      let originalDate = new Date();
+      // 对日期对象进行加5天操作
+      originalDate.setDate(originalDate.getDate() + 5);
+      if (
+        newVal &&
+        newVal.getDate() == originalDate.getDate()
+      ) {
+        selectableRange =new Date().getHours() + ':' + (new Date().getMinutes() + 1) + ':00 - 23:59:00'
+      }
+      else if(newVal && newVal.getDate() > originalDate.getDate()){
+        selectableRange = '00:00:00 - 23:59:00' //默认的时间范围
+      }
+      return {
+        selectableRange,
+        disabledDate(time) {
+          return time.getTime() < Date.now() + (4 * 24 * 3600 * 1000); // 禁用小于当前日期的日期
+        }
+      }
+    },
     endTimeOptions() {
       //这里判断是不是今天
        console.log( this.formData.bidDeadline+"---")
@@ -1167,7 +1248,7 @@ export default {
       ) {
        selectableRange =new Date().getHours() + ':' + (new Date().getMinutes() + 1) + ':00 - 23:59:00'
       }
-      else if(newVal.getDate() > originalDate.getDate()){
+      else if(newVal && newVal.getDate() > originalDate.getDate()){
         selectableRange = '00:00:00 - 23:59:00' //默认的时间范围
       }
       return {
@@ -1194,6 +1275,55 @@ export default {
       next();
     },
   methods: {
+    /** 招标文件预览 */
+    async handleViewNotice(fileName, fileUrl) {
+      this.noticeViewAttachment = true
+      this.viewAttachmentId = ""
+      try {
+        const param = {fileName: fileName, fileUrl: fileUrl}
+        const res = await getViweFileURL(param);
+        this.viewFileUrl = res.data;
+      } catch (ex) {
+        console.log("预览文件出错", ex);
+      }
+    },
+    /** 招标文件删除 */
+    fileRemoveNotice() {
+      this.$set(this.formData, "noticeAttachmentId", null);
+      this.$set(this.formData, "noticeAttachmentName", null);
+      this.$set(this.formData, "noticeAttachmentUrl", null);
+      this.$forceUpdate();
+      // 清除文件预览
+      this.noticeViewAttachment = false;
+      this.viewFileUrl = ""
+      // 新增校验规则
+      this.rules.noticeAttachmentId = [{required: true,message: "请上传招标公告文件",}]
+    },
+    /** 招标文件附件上传成功 */
+    async fileSuccessNotice(res) {
+      const { url, name } = res.data;
+      try {
+        /* 保存到文件表获取返回id */
+        const res = await addAttachment({ fileName: name, fileUrl: url });
+        /* 设置新的附件返回的附件id */
+        this.$set(this.formData, "noticeAttachmentId", res.data);
+        this.$set(this.formData, "noticeAttachmentName", name);
+        this.$set(this.formData, "noticeAttachmentUrl", url);
+        this.$forceUpdate();
+        // 清除校验规则
+        this.$refs.form.clearValidate("noticeAttachmentId");
+        this.rules.noticeAttachmentId = [];
+      } catch (err) {
+        console.log(err);
+      }
+    },
+    /** 招标文件附件上传 */
+    uploadNoticeClick() {
+      showSecretRelatedTips(()=>{
+        this.$refs['uploadNotice'].clearFiles();  // 使用 clearFiles 方法清除文件列表
+        this.$refs['uploadNotice'].$refs['upload-inner'].handleClick() // 触发文件选择器打开
+      })
+    },
     /* 合计列计算 */
     getSummaries(param) {
       const { columns, data } = param;
@@ -1319,6 +1449,8 @@ export default {
         }
       };
       return {
+        noticeViewAttachment: false,
+        viewFileUrl: "",
         //数据字典
         dictObj: {
           procurement_type:"",
@@ -1386,6 +1518,12 @@ export default {
               message: "请选择计划投标截止时间",
             },
           ],
+          applyTimeNotice: [
+            {
+              required: true,
+              message: "请选择招标报名截止时间",
+            },
+          ],
           bidContactPerson: [
             {
               required: true,
@@ -1436,6 +1574,12 @@ export default {
             {
               required: true,
               message: "请选择模板",
+            },
+          ],
+          noticeAttachmentId: [
+            {
+              required: true,
+              message: "请上传招标公告文件",
             },
           ],
           /* 现在都是将模板生成一个附件(手动上传不用)，使用附件id */
@@ -1607,12 +1751,16 @@ export default {
       this.officerLoading = false;
     },
     /* 计划投标截止时间监听 */
-    handleChange(value) {
+    handleChange(value,type) {
       let newVal = new Date(value);
       let currentDate = Date.now(); // 获取当前时间戳
       // 比较当前日期是否小于5天后的日期
       if (newVal && newVal < currentDate + 5 * 24 * 60 * 60 * 1000) {
-        this.formData.bidDeadline = null; // 设置为null
+        if (type === 'bid') {
+          this.formData.bidDeadline = null; // 设置为null
+        } else if(type === 'notice'){
+          this.formData.applyTimeNotice = null; // 设置为null
+        }
       }
     },
     handleTabClick(tab) {
@@ -1724,6 +1872,8 @@ export default {
             biddingTemplateId,
             procurementSchemeId,
             procurementSchemeBiddingId,
+            applyTimeNotice,
+            noticeAttachmentId,
           } = this.formData;
           const formData = {
             contractSplitIds: this.procurementPlanIds,
@@ -1747,6 +1897,8 @@ export default {
               contractTemplateId,
               biddingTemplateId,
               id: procurementSchemeBiddingId || "",
+              applyTimeNotice,
+              noticeAttachmentId,
             },
           };
           console.log(formData, "formData--formData--formData");
@@ -1778,6 +1930,8 @@ export default {
             "templateName",
             "biddingAttachmentId",
             "contractAttachmentId",
+            "applyTimeNotice",
+            "noticeAttachmentId"
           ];
           const [[firstKey]] = Object.entries(object);
           const messageName = object[firstKey][0].field;
@@ -1961,6 +2115,8 @@ export default {
     },
     /* 修改不同的模板 2 招标文件模板 ，1 合同模板 联想文档绑定文件id对象名称viewAttachmentId  */
     async modifyTempFile(type){
+      /* 隐藏招标文件预览 */
+      this.noticeViewAttachment = false
       console.log('%c modifyTempFile(2 招标文件模板 ，1 合同模板)', `font-size: 20px;background-color: #f00;`, type);
       console.log('%c procurementSchemeTempObject', `font-size: 20px;background-color: #f00;`, this.procurementSchemeTempObject);
       console.log('%c formData', `font-size: 20px;background-color: #f00;`, this.formData);
@@ -2429,6 +2585,8 @@ export default {
           contractTemplate,
           evaluationTemplate,
           id: procurementSchemeBiddingId,
+          applyTimeNotice,
+          noticeAttachment,
         } = procurementSchemeBidding;
         this.deptId = projectDeptId;
         await this.getFinanceList();
@@ -2446,7 +2604,7 @@ export default {
         this.$set(this.formData, "bidContactEmail", bidContactEmail);
         this.$set(this.formData, "financeConfirmId", financeConfirmId);
         this.$set(this.formData, "financeConfirmName", financeConfirmName);
-
+        this.$set(this.formData, "applyTimeNotice", applyTimeNotice);
         /* 填充el-upload的值 */
         if(procurementSchemeBidding.biddingTemplate){
           this.formData.fileListBidding = [{
@@ -2464,7 +2622,14 @@ export default {
             uid: Date.now()  // 文件的唯一标识符
           }];
         }
-
+        if(procurementSchemeBidding.noticeAttachment){
+          this.formData.fileListNotice = [{
+            name: procurementSchemeBidding.noticeAttachment.fileName,  // 文件名
+            url: procurementSchemeBidding.noticeAttachment.fileUrl,  // 文件的 URL（如果是已上传的文件）
+            status: 'success',  // 上传状态，可以是 'success' | 'failure' | 'uploading'
+            uid: Date.now()  // 文件的唯一标识符
+          }];
+        }
         this.formData.countingTypeText = countingTypeText;
         this.formData.procurementPlanType = procurementPlanType;
         this.formData.paymentTypeText = paymentTypeText;
@@ -2476,11 +2641,14 @@ export default {
         this.formData.evaluationTemplateId = evaluationTemplate.templateId;
         this.formData.templateName = evaluationTemplate.templateName;
         this.formData.biddingAttachmentId = !biddingTemplate?null:biddingTemplate.attachmentId;
-        this.formData.biddingTemplateName = !biddingTemplate?null:biddingTemplate.templateName;
+        this.formData.biddingTemplateName = !biddingTemplate?null:biddingTemplate.fileName;
         this.formData.biddingTemplateId = !biddingTemplate?null:biddingTemplate.templateId;
         this.formData.contractAttachmentId = !contractTemplate?null:contractTemplate.attachmentId;
         this.formData.contractTemplateId = !contractTemplate?null:contractTemplate.templateId;
-        this.formData.contractTemplateName = !contractTemplate?null:contractTemplate.templateName;
+        this.formData.contractTemplateName = !contractTemplate?null:contractTemplate.fileName;
+        this.formData.noticeAttachmentName = !noticeAttachment?null:noticeAttachment.fileName;
+        this.formData.noticeAttachmentUrl = !noticeAttachment?null:noticeAttachment.fileUrl;
+        this.formData.noticeAttachmentId = !noticeAttachment?null:noticeAttachment.attachmentId;
         this.formData.procurementSchemeId = procurementSchemeId;
         this.formData.procurementSchemeBiddingId = procurementSchemeBiddingId;
         this.formData.procurementSchemeCode = procurementSchemeCode;

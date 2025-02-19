@@ -255,6 +255,15 @@
                   <span>{{ procurementSchemeBidding.bidDeadline }}</span>
                 </el-form-item>
               </el-col>
+              <el-col :span="24" class="custom-col" v-if="procurementScheme.procurementType == 1">
+                <el-form-item
+                  label="招标报名截止时间"
+                  label-width="140px"
+                  class="custom-form-item"
+                >
+                  <span>{{ procurementSchemeBidding.applyTimeNotice }}</span>
+                </el-form-item>
+              </el-col>
             </el-row>
 
             <el-row class="custom-row">
@@ -329,6 +338,19 @@
                       procurementSchemeBidding.contractTemplate &&
                       (procurementSchemeBidding.contractTemplate.templateName || procurementSchemeBidding.contractTemplate.fileName)
                     }}
+                  </a>
+                </el-form-item>
+              </el-col>
+            </el-row>
+            <el-row class="custom-row" style="height: 180px">
+              <el-col :span="8" class="custom-col"  style="height: 180px">
+                <el-form-item
+                  label="招标公告"
+                  label-width="140px"
+                  class="custom-form-item"
+                >
+                  <a class="link-type" @click=" showTemplate(procurementSchemeBidding.noticeAttachment,'biddingTemplate')">
+                    {{ procurementSchemeBidding.noticeAttachment && (procurementSchemeBidding.noticeAttachment.templateName)}}
                   </a>
                 </el-form-item>
               </el-col>

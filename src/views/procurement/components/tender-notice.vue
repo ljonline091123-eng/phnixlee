@@ -108,7 +108,7 @@
                 popper-class="date-clear"
                 :picker-options="endTimeOptions"
                 value-format="yyyy-MM-dd HH:mm:ss"
-                :disabled="!!(formData.id || isSubmit)"
+                disabled
                 @change="handleChange"
               />
             </el-form-item>
@@ -161,14 +161,14 @@
           </el-col>
           <el-col :span="12" class="grid-cell">
             <el-form-item label=" 招标公告" prop="fileTemplate" class="uploadItem">
-              <el-button size="small" type="primary" :disabled="!!(formData.id || isSubmit)" @click="showSecretTips">点击上传</el-button>
+<!--              <el-button size="small" type="primary" :disabled="!!(formData.id || isSubmit)" @click="showSecretTips">点击上传</el-button>-->
               <el-upload
                 :action="uploadFileUrl"
                 :limit="1"
                 :on-success="fileSuccess"
                 :file-list="formData.fileList"
                 :on-remove="fileRemove"
-                :disabled="(!!(formData.id || isSubmit))"
+                disabled
                 ref="upload"
               >
               </el-upload>
@@ -1187,6 +1187,16 @@ export default {
             ...value,
           };
           this.formData = formData;
+          if (!this.formData.applyTimeNotice) {
+            this.$set(this.formData,"applyTimeNotice",this.scheme.applyTimeNotice)
+          }
+          if (!newVal.attachmentNotice) {
+            this.attachmentId = this.scheme.noticeAttachment.attachmentId
+            this.$set(this.formData, "fileList", [{name: this.scheme.noticeAttachment.fileName,url: this.scheme.noticeAttachment.fileUrl}]);
+            this.$set(this.formData, "fileTemplate", this.scheme.noticeAttachment);
+            this.$set(this.formData, "attachIdNotice", this.scheme.noticeAttachment.attachmentId);
+          }
+          this.getViewNoticeURL()
         }
       },
       deep: true,
