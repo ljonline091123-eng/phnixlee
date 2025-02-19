@@ -188,8 +188,6 @@
                 <el-table-column label="清单" align="center" prop="inventory">
                   <template slot-scope="inventory">
                     <el-table
-                      show-summary
-                      :summary-method="getSummaries"
                       size="small"
                       :data="inventory.row.children"
                       border
@@ -215,7 +213,7 @@
                       <el-table-column label="计量单位" align="center" prop="unitMeasurement" />
                       <el-table-column label="价格类型" align="center" prop="priceType" width="200" v-if="procurementType === 1">
                         <template slot-scope="scope">
-                          <el-select style="width: 100%" v-model="scope.row.priceType" placeholder="请选择" @change="changePriceType(inventory.$index,scope,$event)">
+                          <el-select style="width: 100%" v-model="scope.row.priceType" placeholder="请选择" @change="changePriceType(inventory.$index,scope.row,$event)">
                             <el-option v-for="dict in PRICETYPEOPTIONS" :label="dict.label"
                               :value="dict.value">
                             </el-option>
@@ -239,7 +237,7 @@
                       </el-table-column>
                       <el-table-column label="清单数量" align="right" prop="count" width="150" v-else>
                         <template slot-scope="scope">
-                          <el-input v-model="scope.row.count" :disabled="isSubmit || scope.row.belongOffer || scope.row.pushFlag === 'Y'" @input.native="changeCount($event,inventory.$index,scope.row)" v-thousandth/>
+                          <el-input title="清单数量" v-model="scope.row.count" :disabled="isSubmit || scope.row.belongOffer || scope.row.pushFlag === 'Y'" @input.native="changeCount($event,inventory.$index,scope.row)" v-thousandth/>
                         </template>
                       </el-table-column>
 <!--                      基价由原来浮动价不可编辑，变成了可以编辑-->
@@ -247,8 +245,8 @@
                         <template slot-scope="scope">
                           <span v-if="scope.row.priceType === 1">/</span>
                           <div v-else>
-                            <el-input v-if="!scope.row.isbasePriceNotLegal"  v-model="scope.row.basePrice"  v-thousandth @input.native="checkOtherPrice($event,scope.row)"/>
-                            <el-input v-else  v-model="scope.row.basePrice" :disabled="isSubmit" v-thousandth  @input.native="checkOtherPrice($event,scope.row)" class="checkInput"/>
+                            <el-input title="基价" v-if="!scope.row.isbasePriceNotLegal"  v-model="scope.row.basePrice"  v-thousandth @input.native="checkOtherPrice($event,scope.row)"/>
+                            <el-input title="基价" v-else  v-model="scope.row.basePrice" :disabled="isSubmit" v-thousandth  @input.native="checkOtherPrice($event,scope.row)" class="checkInput"/>
                           </div>
 
                         </template>
@@ -256,22 +254,22 @@
                       <el-table-column label="单价(含税)" align="right" prop="unitPriceInclTax" width="180" >
                         <template slot-scope="scope">
                           <span v-if="scope.row.priceType !== 1">
-                            {{ getUnitPriceInclTax(scope.row) }}
+                          <span title="单价(含税)">{{ getUnitPriceInclTax(scope.row) }}</span>
                           </span>
-                          <el-input v-else v-model="scope.row.unitPriceInclTax" :disabled="isSubmit || scope.row.belongOffer || scope.row.pushFlag === 'Y'" @input.native="changePrice($event,scope.row)" v-thousandth/>
+                          <el-input title="单价(含税)" v-else v-model="scope.row.unitPriceInclTax" :disabled="isSubmit || scope.row.belongOffer || scope.row.pushFlag === 'Y'" @input.native="changePrice($event,scope.row)" v-thousandth/>
                         </template>
                       </el-table-column>
                       <el-table-column label="税率(%)" align="right" prop="taxRate"/>
                       <el-table-column label="单价(不含税)" align="right" prop="unitPriceExclTax" width="150">
                         <template slot-scope="scope">
-                          {{ getUnitPriceExclTax(scope.row) }}
+                          <span title="单价(不含税)">{{ getUnitPriceExclTax(scope.row) }}</span>
                         </template>
                       </el-table-column>
                       <el-table-column label="浮动价" align="right" width="130" prop="floatingPrice"  v-if="procurementType === 1 && [2,3,6,7].includes(formData.priceType)">
                         <template slot-scope="scope">
                           <span v-if="scope.row.priceType !== 2">/</span>
                           <div v-else>
-                            <el-input v-model="scope.row.floatingPrice" :disabled="isSubmit" v-thousandth  @input.native="changeFloatingPrice($event,scope.row)" class="checkInput"/>
+                            <el-input title="浮动价" v-model="scope.row.floatingPrice" :disabled="isSubmit" v-thousandth  @input.native="changeFloatingPrice($event,scope.row)" class="checkInput"/>
                           </div>
 
                         </template>
@@ -281,7 +279,7 @@
                         <template slot-scope="scope">
                           <span v-if="scope.row.priceType !== 4">/</span>
                           <div v-else>
-                            <el-input v-model="scope.row.floatingRate" :disabled="isSubmit" v-thousandth  @input.native="changeFloatingRate($event,scope.row)" class="checkInput"/>
+                            <el-input title="浮动率(%)" v-model="scope.row.floatingRate" :disabled="isSubmit" v-thousandth  @input.native="changeFloatingRate($event,scope.row)" class="checkInput"/>
                           </div>
                         </template>
                       </el-table-column>
@@ -324,7 +322,8 @@
                       </el-table-column>
                       <el-table-column label="合计(含税)" align="right" prop="totalPriceText" min-width="150">
                         <template slot-scope="scope">
-                          <span>{{getTotalPriceText(scope.row)}}</span>
+                          <span title="合计(含税)">{{getTotalPriceText(scope.row,inventory.$index)}}</span>
+                          <span> {{ getTotalPriceTableText(inventory.$index) }} </span>
                         </template>
                       </el-table-column>
                       <el-table-column label="备注" align="center" prop="remark" min-width="300">
@@ -332,8 +331,10 @@
                           <el-input v-model="scope.row.remark" :disabled="isSubmit || scope.row.belongOffer || scope.row.pushFlag === 'Y'"/>
                         </template>
                       </el-table-column>
-
-
+                      <template slot="append">
+                        <!-- 通过样式选择器赋值，靠谱一些... -->
+                        <span :class="'total-price-sum-table-class totalPriceSumTable' + inventory.$index"></span>
+                      </template>
 
                     </el-table>
                   </template>
@@ -1672,7 +1673,7 @@ export default {
       });
     },
     /* 每个清单的价格类型监听，用来给采购计划的价格类型赋值，如果清单出现多种价格类型，就给采购计划赋值为=3 固定、浮动价。 */
-    changePriceType(splitIndex, scope, event) {
+    changePriceType(splitIndex, row, event) {
       // 初始化一个 Map 来存储各类型的数量
       const priceTypeCountMap = new Map();
       // 遍历数据结构，统计各 priceType 的数量
@@ -1709,6 +1710,11 @@ export default {
         this.$set(this.formData, 'priceType',  1 );
       }
       // 采购计划表单的this.formData.priceType如果清单的priceType存在多种。就设置为3，只有一种就设置为那一种的priceType
+
+
+      /* 计算 含税单价 不含税单价 行合计价 */
+      this.calculatePrice(row)
+
     },
     //数量计算
     changeCount(event,splitIndex,row){
@@ -1924,46 +1930,6 @@ export default {
       }
 
       event.target.style = "border: 1px solid #C0C4CC;";
-    },
-    /* 合计列计算 */
-    getSummaries(param) {
-      const { columns, data } = param;
-      const sums = [];
-      columns.forEach((column, index) => {
-        /* 第一列显示合计 */
-        if (index === 0) {
-          sums[index] = '合计';
-          return;
-        }
-        /* 只显示合计 */
-        if(column.property === "totalPriceText") {
-          const values = data.map(item => {
-            if(item[column.property]){
-              return Number(item[column.property].replaceAll(',',''));
-            }else{
-              return item[column.property];
-            }
-          });
-          if (!values.every(value => isNaN(value))) {
-            sums[index] = values.reduce((prev, curr) => {
-              const value = Number(curr);
-              if (!isNaN(value)) {
-                return prev + curr;
-              } else {
-                return prev;
-              }
-            }, 0);
-            /* 金额值格式化，小数位数截取 */
-            sums[index] = this.formatNumberDynamicDecimalWithSeparator(sums[index]);
-          } else {
-            sums[index] = '';
-          }
-        }else{
-          sums[index] = '';
-        }
-      });
-
-      return sums;
     },
     /**
      * 格式化数字：动态保留小数位数并添加千分位分隔符
@@ -2216,60 +2182,83 @@ export default {
       const { multiply, add, divide, bignumber, format } = this.mathjs;
       /* 固定价 */
       if(row.priceType === 1){
-        if(!row.unitPriceInclTax || !row.count || !row.taxRate){
-          return row;
-        }else{
-          const priceInclTax = (row.unitPriceInclTax+'').replaceAll(',','');
-          /* 单价不含税：含税单价 / (1 + (税率  先除100得出百分比)) */
-          const onePlusTaxRate = divide(bignumber(priceInclTax), add(1, divide(bignumber(row.taxRate), 100)));
-          row.unitPriceExclTax = this.formatNumberDynamicDecimalWithSeparator(onePlusTaxRate)
-          /* 行含税总价：含税单价 * 数量 */
-          const totalPrice = multiply(onePlusTaxRate, bignumber(row.count));
-          row.totalPriceText = this.formatNumberDynamicDecimalWithSeparator(totalPrice);
-          row.totalPrice = row.totalPriceText.replaceAll(',', '');
+        if(!row.unitPriceInclTax){
+          row.unitPriceInclTax = 0.0;
         }
+        if(!row.count){
+          row.count = 0.0;
+        }
+        if(!row.taxRate){
+          row.taxRate = 0.0;
+        }
+        /* 单价含税(手填) */
+        const priceInclTax = (row.unitPriceInclTax+'').replaceAll(',','');
+        /* 单价不含税：含税单价 / (1 + (税率  先除100得出百分比)) */
+        const onePlusTaxRate = divide(bignumber(priceInclTax), add(1, divide(bignumber(row.taxRate), 100)));
+        row.unitPriceExclTax = this.formatNumberDynamicDecimalWithSeparator(onePlusTaxRate)
+        /* 行含税总价：含税单价 * 数量 */
+        const totalPrice = multiply(bignumber(priceInclTax), bignumber(row.count));
+        row.totalPriceText = this.formatNumberDynamicDecimalWithSeparator(totalPrice);
+        row.totalPrice = row.totalPriceText.replaceAll(',', '');
         console.log('%c⏩ 固定价计算结果row \n', `font-size: 14px;background-color: #f00;`, row );
       }
 
       /* 浮动价 */
       if(row.priceType === 2){
-        if(!row.floatingPrice ||!row.basePrice || !row.count || !row.taxRate){
-          return row;
-        }else{
-          /* 单价含税:    基价  * (1 + (浮动率 先除100得出百分比)) */
-          const unitPriceInclTaxBig = add(bignumber(row.basePrice), bignumber(row.floatingPrice));
-          row.unitPriceInclTax = this.formatNumberDynamicDecimalWithSeparator(unitPriceInclTaxBig);
-          /* 单价不含税：含税单价 / (1 + (税率  先除100得出百分比)) */
-          const onePlusTaxRate = divide(bignumber(unitPriceInclTaxBig), add(1, divide(bignumber(row.taxRate), 100)));
-          row.unitPriceExclTax = this.formatNumberDynamicDecimalWithSeparator(onePlusTaxRate)
-          /* 行含税总价：含税单价 * 数量 */
-          const totalPrice = multiply(unitPriceInclTaxBig, bignumber(row.count));
-          row.totalPriceText = this.formatNumberDynamicDecimalWithSeparator(totalPrice);
-          row.totalPrice = row.totalPriceText.replaceAll(',', '');
+        if(!row.floatingPrice){
+          row.floatingPrice = 0.0;
         }
+        if(!row.basePrice){
+          row.basePrice = 0.0;
+        }
+        if(!row.count){
+          row.count = 0.0;
+        }
+        if(!row.taxRate){
+          row.taxRate = 0.0;
+        }
+        /* 单价含税:    基价  * (1 + (浮动率 先除100得出百分比)) */
+        const unitPriceInclTaxBig = add(bignumber(row.basePrice), bignumber(row.floatingPrice));
+        row.unitPriceInclTax = this.formatNumberDynamicDecimalWithSeparator(unitPriceInclTaxBig);
+        /* 单价不含税：含税单价 / (1 + (税率  先除100得出百分比)) */
+        const onePlusTaxRate = divide(bignumber(unitPriceInclTaxBig), add(1, divide(bignumber(row.taxRate), 100)));
+        row.unitPriceExclTax = this.formatNumberDynamicDecimalWithSeparator(onePlusTaxRate)
+        /* 行含税总价：含税单价 * 数量 */
+        const totalPrice = multiply(unitPriceInclTaxBig, bignumber(row.count));
+        row.totalPriceText = this.formatNumberDynamicDecimalWithSeparator(totalPrice);
+        row.totalPrice = row.totalPriceText.replaceAll(',', '');
         console.log('%c🪴 浮动价计算结果row \n', `font-size: 14px;background-color: #f00;`, row );
       }
 
 
       /* 浮动率 */
       if(row.priceType === 4){
-        if(!row.floatingRate ||!row.basePrice || !row.count || !row.taxRate){
-          return row;
-        }else{
-          /* 单价含税:    基价  * (1 + (浮动率 先除100得出百分比)) */
-          const unitPriceInclTaxBig = multiply(bignumber(row.basePrice), add(1,divide(bignumber(row.floatingRate), 100)));
-          row.unitPriceInclTax = this.formatNumberDynamicDecimalWithSeparator(unitPriceInclTaxBig);
-          const priceInclTax = (row.unitPriceInclTax+'').replaceAll(',','');
-          /* 单价不含税：含税单价 / (1 + (税率  先除100得出百分比)) */
-          const onePlusTaxRate = divide(bignumber(priceInclTax), add(1, divide(bignumber(row.taxRate), 100)));
-          row.unitPriceExclTax = this.formatNumberDynamicDecimalWithSeparator(onePlusTaxRate)
-          /* 行含税总价：含税单价 * 数量 */
-          const totalPrice = multiply(unitPriceInclTaxBig, bignumber(row.count));
-          row.totalPriceText = this.formatNumberDynamicDecimalWithSeparator(totalPrice);
-          row.totalPrice = row.totalPriceText.replaceAll(',', '');
+        if(!row.floatingRate){
+          row.floatingRate = 0.0;
         }
+        if(!row.basePrice){
+          row.basePrice = 0.0;
+        }
+        if(!row.count){
+          row.count = 0.0;
+        }
+        if(!row.taxRate){
+          row.taxRate = 0.0;
+        }
+        /* 单价含税:    基价  * (1 + (浮动率 先除100得出百分比)) */
+        const unitPriceInclTaxBig = multiply(bignumber(row.basePrice), add(1,divide(bignumber(row.floatingRate), 100)));
+        row.unitPriceInclTax = this.formatNumberDynamicDecimalWithSeparator(unitPriceInclTaxBig);
+        const priceInclTax = (row.unitPriceInclTax+'').replaceAll(',','');
+        /* 单价不含税：含税单价 / (1 + (税率  先除100得出百分比)) */
+        const onePlusTaxRate = divide(bignumber(priceInclTax), add(1, divide(bignumber(row.taxRate), 100)));
+        row.unitPriceExclTax = this.formatNumberDynamicDecimalWithSeparator(onePlusTaxRate)
+        /* 行含税总价：含税单价 * 数量 */
+        const totalPrice = multiply(unitPriceInclTaxBig, bignumber(row.count));
+        row.totalPriceText = this.formatNumberDynamicDecimalWithSeparator(totalPrice);
+        row.totalPrice = row.totalPriceText.replaceAll(',', '');
         console.log('%c🏀 浮动率计算结果row \n', `font-size: 14px;background-color: #f00;`, row );
       }
+
 
       /* 在 DOM 更新完成后，重新布局表格 (为了刷新表格列的'总计') */
       /* 更新表格的布局 */
@@ -2278,7 +2267,7 @@ export default {
       });
 
       return row;
-    }
+    },
   },
   computed: {
     ...mapGetters(['project']),
@@ -2300,10 +2289,35 @@ export default {
     },
     /* 计算行含税总价 */
     getTotalPriceText() {
-      return ( row ) => {
+      return ( row , index) => {
         /* 计算 含税单价 不含税单价 行合计价 */
         this.calculatePrice(row);
+
         return row.totalPriceText ? (row.totalPriceText) : (0.00);
+      }
+    },
+    /* 计算列含税总价 */
+    getTotalPriceTableText() {
+      return ( index) => {
+        const { add } = this.mathjs;
+        this.planList.forEach((item) => {
+          if (item.children && Array.isArray(item.children)) {
+            item.children.forEach((itemChildren , i) => {
+              /* 计算表合计列合计计算合计列 */
+              let totalPriceTable = 0.0;
+
+              if (itemChildren.children && Array.isArray(itemChildren.children)) {
+                itemChildren.children.forEach((children) => {
+                  totalPriceTable = add(children.totalPrice ? children.totalPrice : 0.0 , totalPriceTable);
+                });
+              }
+              let totalPriceTableText = this.formatNumberDynamicDecimalWithSeparator(totalPriceTable,2);
+              /* total-price-sum-table-class */
+              document.querySelector('.totalPriceSumTable'+i).textContent = '标包含税总价：'+totalPriceTableText+' (元)';
+            });
+          }
+        });
+        return '';
       }
     },
     unitPriceExclTaxComputed() {
@@ -2431,6 +2445,10 @@ export default {
   //.el-input__inner {
   //  border: 1px solid #ff0000
   //}
+}
+.total-price-sum-table-class{
+  float: right;
+  position: unset;
 }
 .page-title {
   width: 100%;
