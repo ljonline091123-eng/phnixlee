@@ -1027,8 +1027,6 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
 
     @Override
     public void pushVendor(Long id,String type, Integer isBlack){
-        ExecutorService executor = Executors.newCachedThreadPool();
-        executor.execute(() -> {
             Vendor bean = this.getById(id);
             if(bean != null){
                 Map<String, Object> map = new HashMap<>();
@@ -1109,15 +1107,33 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
                             }
                         }
                     }else{
-                        //如果没有中台code就要走中台新增方法
                         JSONObject objectOne = dataCenterUtil.postCommonInfo(jsonObject,dataMiddlePlatformConfig.getVendorUpdate(),Vendor.LOG_TYPE_MODIFY, SecurityUtils.getUsername(),null);
+                        if (objectOne != null && objectOne.containsKey("code") && objectOne.getInteger("code") == 200) {
+                            //成功的
+                            JSONObject data = objectOne.getJSONObject("data");
+                            if(data != null && data.containsKey("updated")) {
+                                JSONArray added = data.getJSONArray("updated");
+                                if (added != null && added.size() >0) {
+                                    JSONObject obj = added.getJSONObject(0);
+                                    String custMerchtId = obj.getString("cust_mercht_id");
+                                    super.update(new LambdaUpdateWrapper<Vendor>()
+                                            .set(Vendor::getMiddleVendorCode, custMerchtId)
+                                            .eq(Vendor::getId, id));
+                                    List<TAccountInfo> list = accountService.list(new LambdaUpdateWrapper<TAccountInfo>()
+                                            .eq(TAccountInfo::getUpId, bean.getId()));
+                                    if (!list.isEmpty()) {
+                                        list.stream().forEach(p -> {
+                                            accountService.pushAcct(p,bean, custMerchtId, Vendor.LOG_TYPE_ADD);
+                                        });
+                                    }
+                                }
+                            }
+                        }
                     }
                 }else{
                     dataCenterUtil.postCommonInfo(jsonObject,dataMiddlePlatformConfig.getVendorUpdate(),type, SecurityUtils.getUsername(),null);
                 }
             }
-        });
-        executor.shutdown();
     }
 
 
@@ -1363,10 +1379,8 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
     public void initializeCode() {
         List<Vendor> list = super.list(new LambdaQueryWrapper<Vendor>()
                 .eq(Vendor::getState, VendorStateEnum.APPROVE.getState())
-                .eq(Vendor::getDelFlag,"0"));
-
-
-               // .isNull(Vendor::getMiddleVendorCode));
+                .eq(Vendor::getDelFlag,"0")
+               .isNull(Vendor::getMiddleVendorCode));
         if(CollectionUtil.isNotEmpty(list)){
             list.stream().forEach(p->{
                 this.pushVendor(p.getId(),Vendor.LOG_TYPE_ADD,p.getIsBlack());

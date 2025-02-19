@@ -383,7 +383,7 @@ public class VendorBidServiceImpl implements IVendorBidService {
                     taxPrice = AmountCalUtil.calTotalAmountInclTax(amount, taxUnitPrice);
                     //计算不含税总价
                     notTaxPrice = AmountCalUtil.calTotalAmountExclTax(taxPrice, taxRateVal);
-                    bidTaxPrice = bidTaxPrice.add(taxPrice);
+
                     quotation.setTaxUnitPrice(taxUnitPrice);
                     quotation.setNotTaxUnitPrice(notTaxUnitPrice);
                     quotation.setTaxPrice(taxPrice);
@@ -1006,7 +1006,7 @@ public class VendorBidServiceImpl implements IVendorBidService {
                 //获取多个物料清单
                 List<CompMaterialsContentVO> materialsLists = splitMaterialsVO.getMaterialsLists();
                 for (CompMaterialsContentVO compMaterialsContentVO : materialsLists) {
-                    if (compMaterialsContentVO.getFloatingPrice() != null || compMaterialsContentVO.getTaxUnitPrice() != null){
+                    if (compMaterialsContentVO.getFloatingPrice() != null || compMaterialsContentVO.getFloatingRate() != null || compMaterialsContentVO.getTaxUnitPrice() != null){
                         //如果投标的时候，物资的浮动价或含税单价不为空（也就是说物资有投标数据），那就保存进投标单
                         bidQuotationVO = BeanCopierUtil.copyBean(compMaterialsContentVO, BidQuotationVO.class);
                         //设置拆分id
