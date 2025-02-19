@@ -1384,15 +1384,12 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
         List<Vendor> list = super.list(new LambdaQueryWrapper<Vendor>()
                 .eq(Vendor::getState, VendorStateEnum.APPROVE.getState())
                 .eq(Vendor::getDelFlag,"0")
-                .eq(Vendor::getId,1860175151084933122L))
-                ;
-
-
-               // .isNull(Vendor::getMiddleVendorCode));
+               .isNull(Vendor::getMiddleVendorCode));
         if(CollectionUtil.isNotEmpty(list)){
-            list.stream().forEach(p->{
+            this.pushVendor(list.get(0).getId(),Vendor.LOG_TYPE_ADD,list.get(0).getIsBlack());
+           /* list.stream().forEach(p->{
                 this.pushVendor(p.getId(),Vendor.LOG_TYPE_ADD,p.getIsBlack());
-            });
+            });*/
             //this.pushVendor(list.get(0).getId(),Vendor.LOG_TYPE_ADD,list.get(0).getIsBlack());
         }
 
