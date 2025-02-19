@@ -1637,6 +1637,10 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
             agreementMaterialsList.setVendorAmountInclTax(biddingListQuotation.getTaxPrice());
             agreementMaterialsList.setVendorAmountExclTax(biddingListQuotation.getNotTaxPrice());
 
+            agreementMaterialsList.setBasePrice(biddingListQuotation.getBasePrice());
+            agreementMaterialsList.setFloatingPrice(biddingListQuotation.getFloatingPrice());
+            agreementMaterialsList.setFloatingRate(biddingListQuotation.getFloatingRate());
+
             // 如果是新增，则使用供应商投标税率
             if (NumberUtil.isNullOrZero(agreementId)) {
                 agreementMaterialsList.setSignTaxRate(biddingListQuotation.getTaxRate());

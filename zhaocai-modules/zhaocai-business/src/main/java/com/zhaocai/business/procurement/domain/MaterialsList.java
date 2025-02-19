@@ -283,6 +283,9 @@ public class MaterialsList extends BaseEntity {
     @ApiModelProperty(value = "易料市集商品id")
     private String skuId;
 
+    @ApiModelProperty(value = "备注")
+    private String remark;
+
     /**
      * 是否选择推送易料
      */

@@ -66,6 +66,15 @@ public class AgreementMaterialsList extends BaseEntity {
     @ApiModelProperty(value = "价款类型")
     private String paymentType;
 
+    @ApiModelProperty(value = "基价")
+    private BigDecimal basePrice;
+
+    @ApiModelProperty(value = "浮动价")
+    private BigDecimal floatingPrice;
+
+    @ApiModelProperty(value = "浮动率")
+    private BigDecimal floatingRate;
+
     /**
      * 租赁方式
      */

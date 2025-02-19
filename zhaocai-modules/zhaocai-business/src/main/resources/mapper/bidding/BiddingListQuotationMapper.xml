@@ -23,6 +23,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="updateTime" column="update_time"/>
         <result property="delFlag" column="del_flag"/>
         <result property="floatingPrice" column="floating_price"/>
+        <result property="floatingRate" column="floating_rate"/>
         <result property="unloadingFee" column="unloading_fee"/>
         <result property="basePrice" column="base_price"/>
         <result property="splitId" column="split_id"/>
@@ -52,6 +53,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="billType" column="bill_type"/>
         <result property="biddingListQuotationId" column="bidding_list_quotation_id"/>
         <result property="floatingPrice" column="floating_price"/>
+        <result property="floatingRate" column="floating_rate"/>
         <result property="unloadingFee" column="unloading_fee"/>
         <result property="basePrice" column="base_price"/>
         <result property="rentMode" column="rent_mode"/>
@@ -63,14 +65,14 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     <!-- 合同签订新增合同时查询获取供应商的报价清单 -->
     <select id="selectVendorBiddingListQuotation" resultMap="BiddingMaterialsListResult">
         select tml.id as materials_id, tml.materials_code,tml.materials_name,tml.subject_matter_code,tml.subject_matter_name,tml.specification,tml.unit_measurement,
-                tml.count,tml.used_count,tlr.tax_rate,tlr.tax_rate_code,tlr.tax_rate_name,tlr.floating_price,tlr.unloading_fee,tlr.base_price,
+                tml.count,tml.used_count,tlr.tax_rate,tlr.tax_rate_code,tlr.tax_rate_name,tlr.floating_price,tlr.floating_rate,tlr.unloading_fee,tlr.base_price,
                 tlr.tax_price,tlr.tax_unit_price,tlr.not_tax_unit_price,tlr.not_tax_price,tlr.bill_type,tlr.id as bidding_list_quotation_id,
                 tml.cost_account_name,tml.measurement_rules,tml.work_content,tml.rent_mode,
                 tml.rent_time,tml.rent_quantity,tml.price_type
         from tb_materials_list tml
         inner join (
             select tbl.id,tbl.split_id,tbl.materials_id, tbl.materials_code,tbl.tax_rate,tbl.tax_rate_code,tbl.tax_rate_name,tbl.tax_unit_price,tbl.not_tax_unit_price,tbl.tax_price,
-                    tbl.not_tax_price,tbl.bill_type,tbl.floating_price,tbl.unloading_fee,tbl.base_price
+                    tbl.not_tax_price,tbl.bill_type,tbl.floating_price,tbl.floating_rate,tbl.unloading_fee,tbl.base_price
             from tb_bidding_list_quotation tbl
             inner join (
                     select tbi.id from tb_bidding_info tbi
