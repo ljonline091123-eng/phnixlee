@@ -1095,7 +1095,7 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
                                 JSONObject obj = added.getJSONObject(0);
                                 String custMerchtId = obj.getString("cust_mercht_id");
                                 super.update(new LambdaUpdateWrapper<Vendor>()
-                                        .set(Vendor::getMiddleVendorCode, custMerchtId)
+                                        .set(Vendor::getEnterpriseCode, custMerchtId)
                                         .eq(Vendor::getId, id));
                                 List<TAccountInfo> list = accountService.list(new LambdaUpdateWrapper<TAccountInfo>()
                                         .eq(TAccountInfo::getUpId, bean.getId()));
@@ -1117,7 +1117,7 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
                                     JSONObject obj = added.getJSONObject(0);
                                     String custMerchtId = obj.getString("cust_mercht_id");
                                     super.update(new LambdaUpdateWrapper<Vendor>()
-                                            .set(Vendor::getMiddleVendorCode, custMerchtId)
+                                            .set(Vendor::getEnterpriseCode, custMerchtId)
                                             .eq(Vendor::getId, id));
                                     List<TAccountInfo> list = accountService.list(new LambdaUpdateWrapper<TAccountInfo>()
                                             .eq(TAccountInfo::getUpId, bean.getId()));
