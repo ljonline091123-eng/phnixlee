@@ -246,7 +246,7 @@
             label-suffix=":"
           >
             <el-row class="custom-row">
-              <el-col :span="24" class="custom-col">
+              <el-col :span="8" class="custom-col">
                 <el-form-item
                   label="计划投标截止时间"
                   label-width="140px"
@@ -255,7 +255,7 @@
                   <span>{{ procurementSchemeBidding.bidDeadline }}</span>
                 </el-form-item>
               </el-col>
-              <el-col :span="24" class="custom-col" v-if="procurementScheme.procurementType == 1">
+              <el-col :span="8" class="custom-col" v-if="procurementScheme.procurementType == 1">
                 <el-form-item
                   label="招标报名截止时间"
                   label-width="140px"

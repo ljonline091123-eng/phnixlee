@@ -1219,11 +1219,16 @@ export default {
       originalDate.setDate(originalDate.getDate() + 5);
       if (
         newVal &&
-        newVal.getDate() == originalDate.getDate()
+        newVal.getFullYear() === originalDate.getFullYear() &&
+        newVal.getMonth() === originalDate.getMonth() &&
+        newVal.getDate() === originalDate.getDate()
       ) {
         selectableRange =new Date().getHours() + ':' + (new Date().getMinutes() + 1) + ':00 - 23:59:00'
       }
-      else if(newVal && newVal.getDate() > originalDate.getDate()){
+      else if(newVal (newVal.getFullYear() >= originalDate.getFullYear() ||
+        (newVal.getFullYear() === originalDate.getFullYear() && newVal.getMonth() > originalDate.getMonth()) ||
+        (newVal.getFullYear() === originalDate.getFullYear() && newVal.getMonth() === originalDate.getMonth() && newVal.getDate() > originalDate.getDate())
+      )){
         selectableRange = '00:00:00 - 23:59:00' //默认的时间范围
       }
       return {
@@ -1244,11 +1249,16 @@ export default {
         originalDate.setDate(originalDate.getDate() + 5);
       if (
         newVal &&
-        newVal.getDate() == originalDate.getDate()
+        newVal.getFullYear() === originalDate.getFullYear() &&
+        newVal.getMonth() === originalDate.getMonth() &&
+        newVal.getDate() === originalDate.getDate()
       ) {
        selectableRange =new Date().getHours() + ':' + (new Date().getMinutes() + 1) + ':00 - 23:59:00'
       }
-      else if(newVal && newVal.getDate() > originalDate.getDate()){
+      else if(newVal && (newVal.getFullYear() >= originalDate.getFullYear() ||
+          (newVal.getFullYear() === originalDate.getFullYear() && newVal.getMonth() > originalDate.getMonth()) ||
+          (newVal.getFullYear() === originalDate.getFullYear() && newVal.getMonth() === originalDate.getMonth() && newVal.getDate() > originalDate.getDate())
+        )) {
         selectableRange = '00:00:00 - 23:59:00' //默认的时间范围
       }
       return {
