@@ -232,9 +232,9 @@ public class MaterialsList extends BaseEntity {
     private BigDecimal rentQuantity;
 
     /**
-     * 价格类型 {@link com.zhaocai.business.common.enums.PriceTypeEnum}
+     * 价格类型 {@link com.zhaocai.business.common.enums.PriceTypeEnum} 注意：清单列表数据的只有三种(固定价、浮动价、浮动率)
      */
-//    @NotNull(message = "采购清单的价格类型不能为空")
+    @NotNull(message = "采购清单的价格类型不能为空")
     @ApiModelProperty(value = "价格类型")
     private Integer priceType;
 
@@ -282,6 +282,9 @@ public class MaterialsList extends BaseEntity {
 
     @ApiModelProperty(value = "易料市集商品id")
     private String skuId;
+
+    @ApiModelProperty(value = "备注")
+    private String remark;
 
     /**
      * 是否选择推送易料

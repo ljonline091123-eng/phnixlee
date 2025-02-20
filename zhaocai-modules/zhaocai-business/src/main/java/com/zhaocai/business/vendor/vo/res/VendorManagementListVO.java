@@ -22,6 +22,9 @@ public class VendorManagementListVO extends AdviceObject {
     @ApiModelProperty(value =  "id")
     private Long id;
 
+    @ApiModelProperty(value =  "enterpriseCode")
+    private String enterpriseCode;
+
     @ApiModelProperty(value =  "企业名称")
     private String enterpriseName;
 

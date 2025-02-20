@@ -142,6 +142,8 @@ public class ProcurementSchemeServiceImpl extends ServiceImpl<ProcurementSchemeM
                 item.setBidContactPhone(procurementSchemeBidding.getBidContactPhone());
                 item.setBidContactEmail(procurementSchemeBidding.getBidContactEmail());
                 item.setBidDeadline(procurementSchemeBidding.getBidDeadline());
+                item.setApplyTimeNotice(procurementSchemeBidding.getApplyTimeNotice());
+                item.setNoticeAttachment(procurementSchemeBidding.getNoticeAttachment());
             }
 
             Boolean purchaseOfficerVal = Boolean.FALSE;
@@ -703,7 +705,7 @@ public class ProcurementSchemeServiceImpl extends ServiceImpl<ProcurementSchemeM
         baseMapper.insert(procurementScheme);
 
         // 招标文件
-        procurementSchemeBiddingService.saveProcurementSchemeBidding(requestVO.getProcurementSchemeBidding(), procurementScheme.getId());
+        procurementSchemeBiddingService.saveProcurementSchemeBidding(requestVO.getProcurementSchemeBidding(), procurementScheme.getId(), procurementScheme.getProcurementType());
 
         // 关联关系
         procurementSchemePlanRelateService.saveRelate(requestVO.getContractSplitIds(), procurementScheme.getId());
@@ -736,7 +738,7 @@ public class ProcurementSchemeServiceImpl extends ServiceImpl<ProcurementSchemeM
         baseMapper.updateById(procurementScheme);
 
         // 招标文件模板附件 合同模板附件
-        procurementSchemeBiddingService.updateProcurementSchemeBidding(requestVO.getProcurementSchemeBidding(), procurementScheme.getId());
+        procurementSchemeBiddingService.updateProcurementSchemeBidding(requestVO.getProcurementSchemeBidding(), procurementScheme.getId(), procurementScheme.getProcurementType());
     }
 
     /**

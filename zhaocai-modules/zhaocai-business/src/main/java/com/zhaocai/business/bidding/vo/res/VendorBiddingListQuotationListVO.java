@@ -196,6 +196,13 @@ public class VendorBiddingListQuotationListVO extends AdviceObject {
     @ApiModelProperty(value = "浮动价")
     private String floatingPriceText;
 
+    @ApiModelProperty(value = "浮动率")
+    private BigDecimal floatingRate;
+
+    @MoneyFormat(filedName = "floatingRate")
+    @ApiModelProperty(value = "浮动价")
+    private String floatingRateText;
+
     @MoneyFormat(filedName = "unloadingFee")
     @ApiModelProperty(value = "卸费")
     private String unloadingFeeText;

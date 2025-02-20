@@ -1637,6 +1637,10 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
             agreementMaterialsList.setVendorAmountInclTax(biddingListQuotation.getTaxPrice());
             agreementMaterialsList.setVendorAmountExclTax(biddingListQuotation.getNotTaxPrice());
 
+            agreementMaterialsList.setBasePrice(biddingListQuotation.getBasePrice());
+            agreementMaterialsList.setFloatingPrice(biddingListQuotation.getFloatingPrice());
+            agreementMaterialsList.setFloatingRate(biddingListQuotation.getFloatingRate());
+
             // 如果是新增，则使用供应商投标税率
             if (NumberUtil.isNullOrZero(agreementId)) {
                 agreementMaterialsList.setSignTaxRate(biddingListQuotation.getTaxRate());
@@ -1653,6 +1657,11 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
 
             // 设置物料的使用数量
             materialsList.setUsedCount(NumberUtil.add(materialsList.getUsedCount(),agreementMaterialsList.getSignCount()));
+
+            /* 设置合同清单行的价格类型 为采购计划时保存的价格类型 */
+            if(materialsList.getPriceType() != null){
+                agreementMaterialsList.setPaymentType(materialsList.getPriceType().toString());
+            }
         }
 
         // 计算交易标的物

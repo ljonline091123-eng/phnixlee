@@ -93,4 +93,11 @@ public class ProcurementSchemeBidding extends BaseEntity {
      */
     @ApiModelProperty(value = "其他文件模板id")
     private Long otherAttachmentId;
+
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss",timezone = "GMT+8")
+    @ApiModelProperty(value =  "发布公告报名截止时间")
+    private Date applyTimeNotice;
+
+    @ApiModelProperty(value =  "招标公告附件id")
+    private Long noticeAttachmentId;
 }

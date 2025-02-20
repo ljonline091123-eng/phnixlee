@@ -54,6 +54,7 @@
         <result property="skuId" column="sku_id"/>
         <result property="totalPrice" column="total_price"/>
         <result property="floatingRate" column="floating_rate"/>
+        <result property="remark" column="remark"/>
     </resultMap>
 
     <resultMap id="materialsListVO" type="com.zhaocai.business.procurement.dto.MaterialsListDTO" extends="MaterialsListResult">

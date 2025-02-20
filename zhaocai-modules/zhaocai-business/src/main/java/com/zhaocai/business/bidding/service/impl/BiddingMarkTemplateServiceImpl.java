@@ -121,10 +121,10 @@ public class BiddingMarkTemplateServiceImpl extends ServiceImpl<BiddingMarkTempl
 
     @Nullable
     private IPage<BiddingMarkTemplateListVO> fanList(BiddingMarkTemplateQueryVO queryVO,String group) {
-        String currUserTowLevelThridDeptId =  remoteSystemService.getTwoLevelDeptByDeptId
-                (SecurityUtils.getSysUser().getDeptId(),SecurityConstants.INNER).getThridDeptId();
+//        String currUserTowLevelThridDeptId =  remoteSystemService.getTwoLevelDeptByDeptId
+//                (SecurityUtils.getSysUser().getDeptId(),SecurityConstants.INNER).getThridDeptId();
         // 获取所有二级组织及集团
-        List<SysDept> sysDeptList = remoteSystemService.getTwoLevelDepts(SecurityConstants.INNER);
+//        List<SysDept> sysDeptList = remoteSystemService.getTwoLevelDepts(SecurityConstants.INNER);
 //        if (!currUserTowLevelThridDeptId.equals(UserConstants.GROUP_DEPT_ID)) {
 //            //通用模板
 //            if (group.equals("2")) {
