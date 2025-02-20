@@ -1282,7 +1282,8 @@ export default {
           },
           {
             id: 3,
-            label: "规格型号",
+            // label: "规格型号",
+            label: "特征值特征项",
             prop: "specification",
             width: "100",
             overflow: true,
@@ -1382,7 +1383,8 @@ export default {
           },
           {
             id: 3,
-            label: "规格型号",
+            // label: "规格型号",
+            label: "特征值特征项",
             prop: "specification",
             width: "100",
             overflow: true,
@@ -1503,7 +1505,8 @@ export default {
           },
           {
             id: 3,
-            label: "规格型号",
+            // label: "规格型号",
+            label: "特征值特征项",
             prop: "specification",
             width: "100",
             overflow: true,
@@ -2050,7 +2053,8 @@ export default {
         },
         {
           id: 2,
-          label: "规格型号",
+          // label: "规格型号",
+          label: "特征值特征项",
           prop: "specification",
         },
         {
@@ -2089,7 +2093,8 @@ export default {
         },
         {
           id: 2,
-          label: "规格型号",
+          // label: "规格型号",
+          label: "特征值特征项",
           prop: "specification",
         },
         {
@@ -2148,7 +2153,8 @@ export default {
         },
         {
           id: 2,
-          label: "规格型号",
+          // label: "规格型号",
+          label: "特征值特征项",
           prop: "specification",
         },
         {
