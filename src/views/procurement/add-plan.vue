@@ -256,7 +256,7 @@
                           <span v-if="scope.row.priceType !== 1">
                           <span title="单价(含税)">{{ getUnitPriceInclTax(scope.row) }}</span>
                           </span>
-                          <el-input title="单价(含税)" v-else v-model="scope.row.unitPriceInclTax" :disabled="isSubmit || scope.row.belongOffer || scope.row.pushFlag === 'Y'" @input.native="changePrice($event,scope.row)" v-thousandth/>
+                          <el-input title="单价(含税)" v-else v-model="scope.row.unitPriceInclTax" :disabled="isSubmit || scope.row.belongOffer || scope.row.pushFlag === 'Y'" @input.native="changeUnitPriceInclTax($event,scope.row)" v-thousandth/>
                         </template>
                       </el-table-column>
                       <el-table-column label="税率(%)" align="right" prop="taxRate"/>
@@ -1716,19 +1716,18 @@ export default {
       this.calculatePrice(row)
 
     },
-    //数量计算
+    /* 数量计算校验 */
     changeCount(event,splitIndex,row){
-      console.log('%c 🚀 ~ file:add-plan --method:changeCount --line:1135 --variable:splitIndex,scope,event===>', `font-size:16px; font-weight:bold; color:#fff; padding:4px; border-radius:4px; background:linear-gradient(90deg, ${["#ff005a", "#ff9900", "#33cc33", "#0099ff", "#ffc300"][Math.floor(Math.random() * 5)]}, ${["#ff005a", "#ff9900", "#33cc33", "#0099ff", "#ffc300"][Math.floor(Math.random() * 5)]});`,
-        splitIndex,row,event);
-      console.log(event,'~~~~~~~~~~~~~~~~~~');
       const regexN1 = /^-?(?:[1-9]\d*|0)(\.\d+)?$/;
       const regexN2 = /^-?\d+(\.\d{0,4})?$/;
-
-
 
       if(row.count === ''){
         event.target.style = "border: 1px solid red;"
         this.$message.error("请输入数量");
+        return
+      }else if (row.count === '-') {
+        /* 跳过 开放限制 允许为负数 */
+        event.target.style = "border: 1px solid red;"
         return
       }else if(!regexN1.test(row.count)  ){
         event.target.style = "border: 1px solid red;"
@@ -1744,6 +1743,7 @@ export default {
 
       const { multiply, add, subtract, bignumber, format } = this.mathjs;
       console.log(this.inventoryList,'this.inventoryList');
+      /* 该map存储实际每条清单条目对应的规划的数量 */
       const countMap = new Map();
       this.inventoryList.forEach(item => {
         countMap.set(item.materialsId, item.count);
@@ -1760,8 +1760,6 @@ export default {
       //获取总数量
       this.planList[0]?.children.forEach(item => {
         item.children.forEach(subItem => {
-          console.log('%c 🚀 ~ file:add-plan --method: --line:1207 --variable:进来了===>', `font-size:16px; font-weight:bold; color:#fff; padding:4px; border-radius:4px; background:linear-gradient(90deg, ${["#ff005a", "#ff9900", "#33cc33", "#0099ff", "#ffc300"][Math.floor(Math.random() * 5)]}, ${["#ff005a", "#ff9900", "#33cc33", "#0099ff", "#ffc300"][Math.floor(Math.random() * 5)]});`,
-            );
           count = add(count, subItem.materialsId === currentMaterialsId? format(Number(subItem.count), { notation: 'fixed', precision: 4 }) : 0)
         })
       })
@@ -1782,8 +1780,9 @@ export default {
       if(splitLength > 1){
         this.planList[0]?.children.forEach(item => {
           item.children.forEach(subItem => {
+            /* 判断是否时同级的当前行 */
             if(subItem.materialsId === currentMaterialsId){
-              if(subItem.count == ''){
+              if(subItem.count == ""){
                 zeroNumber++;
               }
             }
@@ -1791,27 +1790,28 @@ export default {
         })
       }
 
-      // 数量为空的个数为1个时执行以下逻辑
+      /* 逻辑就是给 最后未填写量的清单 赋值(实际总理减去已填写的总量=余量)计算后的余量 */
+      // 如果拆分后 该条目存在多条清单时，并且只有一个清单的量未填写了，就给该清单该行对应的量赋上 计算后的余量 数量为空的个数为1个时执行以下逻辑
       if(zeroNumber === 1){
         this.planList[0]?.children.forEach(item => {
           item.children.forEach(subItem => {
-            if(subItem.materialsId === currentMaterialsId && (subItem.count == "" || subItem.count == 0 || subItem.count == 0.00)){
-              console.log('go go go go go');
-              const subItemCount = subtract(countMap.get(currentMaterialsId) , count)
-              console.log(JSON.parse(JSON.stringify(subItemCount)),'subItemCount##############');
-              if(this.countDecimalPlaces(subItemCount) < 2){
-                subItem.count =  subItemCount.toFixed(2)
-                console.log(subItem.count,typeof subItem.count, 'subItem.count=====================');
-              }else if(this.countDecimalPlaces(subItemCount) > 4){
-                subItem.count =  format(subItemCount, { notation: 'fixed', precision: 4 }).toString().replace(/\.?0+$/, '')
-              }else{
-                subItem.count = subItemCount.toString()
+            /* 变量拆分后确定是当前行，并且数量为0 */
+            if(subItem.materialsId === currentMaterialsId){
+              console.log('%c💎 subItem.count \n', `font-size: 14px;background-color: #f99;`, subItem.count );
+              if(subItem.count === ""  || subItem.count === 0 || subItem.count === 0.00){
+                /* 规划量 减去 填写的量 得出 余量 */
+                const subItemCount = subtract(countMap.get(currentMaterialsId) , count)
+                /* 如果余量大于0才赋值，负数就不赋值了。 */
+                if(subItemCount > 0){
+                  subItem.count = subItemCount.toString()
+                }
               }
             }
           })
         })
       }
     },
+    /* 基价校验 */
     checkOtherPrice(event,row) {
       const regexN1 = /^-?(?:[1-9]\d*|0)(\.\d+)?$/;
       const regexN2 = /^-?\d+(\.\d{0,4})?$/;
@@ -1825,14 +1825,18 @@ export default {
         this.$set(row, `isbasePriceNotLegal`, false)
       }
     },
-    //不含税计算
-    changePrice(event,row){
-      const { unitPriceInclTax, taxRate, count} = row
+    /* 含税单价校验 */
+    changeUnitPriceInclTax(event,row){
+      const { unitPriceInclTax} = row
 
       const regexN1 = /^-?(?:[1-9]\d*|0)(\.\d+)?$/;
       const regexN2 = /^-?\d+(\.\d{0,4})?$/;
 
-      if(unitPriceInclTax == ''){
+      if (unitPriceInclTax === '-') {
+        /* 跳过 开放限制 允许为负数 */
+        event.target.style = "border: 1px solid red;"
+        return
+      }else if(unitPriceInclTax === ''){
           event.target.style = "border: 1px solid red;"
           this.$message.error("请输入数量");
           return
@@ -1847,61 +1851,28 @@ export default {
       }
 
       event.target.style = "border: 1px solid #C0C4CC;"
-
-      const { multiply, add, divide, bignumber, format } = this.mathjs;
-
-      const taxUnitPriceBig = bignumber(unitPriceInclTax);
-      const taxRateBig = bignumber(taxRate);
-
-      // 计算税率百分比
-      const taxRatePercent = divide(taxRateBig, 100);
-
-      // 计算 (1 + 税率百分比)
-      const onePlusTaxRate = add(1, taxRatePercent);
-
-      // 计算不含税价格
-      const result = divide(taxUnitPriceBig, onePlusTaxRate);
-
-      let formattedResult;
-      console.log(unitPriceInclTax,'unitPriceInclTax---------------');
-      let newRes = unitPriceInclTax.toString().replace(/\.?0+$/, '')
-      if(this.countDecimalPlaces(newRes) <= 2){
-          formattedResult = format(result, {
-            notation: "fixed",
-            precision: 2,
-          })
-      }else if(this.countDecimalPlaces(newRes) >= 3){
-        let resultLength = this.countDecimalPlaces(result.toString())
-        if(resultLength === 3){
-          formattedResult = format(result, {
-            notation: "fixed",
-            precision: 3,
-          })
-        }else{
-          formattedResult = format(result, {
-            notation: "fixed",
-            precision: 4,
-          })
-        }
-      }
     },
     /* 浮动价监听 */
     changeFloatingPrice(event,row){
 
-      const regexN1 = /^-?(?:[1-9]\d*|0)(\.\d+)?$/;
       const regexN2 = /^-?\d+(\.\d{0,4})?$/;
+      const regexN1 = /^-?(?:[1-9]\d*|0)(\.\d+)?$/;
 
-      /* 删除了默认赋值为0 */
-      if(row.floatingPrice === ''){
+      if (row.floatingPrice === '-') {
+        /* 跳过 开放限制 允许为负数 */
+        event.target.style = "border: 1px solid red;"
+        return
+      }else if(row.floatingPrice === ''){
+        /* 删除了默认赋值为0 */
         // row.floatingPrice = 0;
         event.target.style = "border: 1px solid red;";
         this.$message.error("请输入正确值");
         return
-      }else if(!regexN1.test(row.floatingPrice)  ){
+      }else if(!regexN2.test(row.floatingPrice)  ){
         event.target.style = "border: 1px solid red;"
         this.$message.error("请输入正确的值");
         return
-      }else if(!regexN2.test(row.floatingPrice)){
+      }else if(!regexN1.test(row.floatingPrice)){
         event.target.style = "border: 1px solid red;"
         this.$message.error("请输入小于4位的小数");
         return
@@ -1911,14 +1882,15 @@ export default {
     },
     /* 浮动率校验 */
     changeFloatingRate(event, row) {
-      let { basePrice, taxRate, count } = row;
-
       // const regexPercentage = /^-?(100(\.00?)?|(\d{1,2}(\.\d{1,2})?))$/;
       const regexPercentage = /^-?(100(\.00?)?|(\d{1,2}(\.\d{1,2})?)?(\.\d+)?)$/;
 
-
-      /* 删除了默认赋值为0 */
-      if (row.floatingRate === '') {
+      if (row.floatingRate === '-') {
+        /* 跳过 开放限制 允许为负数 */
+        event.target.style = "border: 1px solid red;"
+        return
+      }else if (row.floatingRate === '') {
+        /* 删除了默认赋值为0 */
         // row.floatingRate = 0;
         event.target.style = "border: 1px solid red;";
         this.$message.error("请输入正确值");
@@ -2182,81 +2154,104 @@ export default {
       const { multiply, add, divide, bignumber, format } = this.mathjs;
       /* 固定价 */
       if(row.priceType === 1){
-        if(!row.unitPriceInclTax){
-          row.unitPriceInclTax = 0.0;
+        // if(!row.unitPriceInclTax){
+        //   row.unitPriceInclTax = 0.0;
+        // }
+        // if(!row.count){
+        //   row.count = 0.0;
+        // }
+        // if(!row.taxRate){
+        //   row.taxRate = 0.0;
+        // }
+        if(!row.unitPriceInclTax || !row.count || !row.taxRate ||
+          row.unitPriceInclTax === '-' || row.count === '-' || row.taxRate === '-' ){
+          row.unitPriceExclTax = ''
+          row.totalPriceText = ''
+          row.totalPrice = ''
+        }else{
+          /* 单价含税(手填) */
+          const priceInclTax = (row.unitPriceInclTax+'').replaceAll(',','');
+          /* 单价不含税：含税单价 / (1 + (税率  先除100得出百分比)) */
+          const onePlusTaxRate = divide(bignumber(priceInclTax), add(1, divide(bignumber(row.taxRate), 100)));
+          row.unitPriceExclTax = this.formatNumberDynamicDecimalWithSeparator(onePlusTaxRate)
+          /* 行含税总价：含税单价 * 数量 */
+          const totalPrice = multiply(bignumber(priceInclTax), bignumber(row.count));
+          row.totalPriceText = this.formatNumberDynamicDecimalWithSeparator(totalPrice);
+          row.totalPrice = row.totalPriceText.replaceAll(',', '');
+          console.log('%c⏩ 固定价计算结果row \n', `font-size: 14px;background-color: #f00;`, row );
         }
-        if(!row.count){
-          row.count = 0.0;
-        }
-        if(!row.taxRate){
-          row.taxRate = 0.0;
-        }
-        /* 单价含税(手填) */
-        const priceInclTax = (row.unitPriceInclTax+'').replaceAll(',','');
-        /* 单价不含税：含税单价 / (1 + (税率  先除100得出百分比)) */
-        const onePlusTaxRate = divide(bignumber(priceInclTax), add(1, divide(bignumber(row.taxRate), 100)));
-        row.unitPriceExclTax = this.formatNumberDynamicDecimalWithSeparator(onePlusTaxRate)
-        /* 行含税总价：含税单价 * 数量 */
-        const totalPrice = multiply(bignumber(priceInclTax), bignumber(row.count));
-        row.totalPriceText = this.formatNumberDynamicDecimalWithSeparator(totalPrice);
-        row.totalPrice = row.totalPriceText.replaceAll(',', '');
-        console.log('%c⏩ 固定价计算结果row \n', `font-size: 14px;background-color: #f00;`, row );
       }
 
       /* 浮动价 */
       if(row.priceType === 2){
-        if(!row.floatingPrice){
-          row.floatingPrice = 0.0;
+        // if(!row.floatingPrice){
+        //   row.floatingPrice = 0.0;
+        // }
+        // if(!row.basePrice){
+        //   row.basePrice = 0.0;
+        // }
+        // if(!row.count){
+        //   row.count = 0.0;
+        // }
+        // if(!row.taxRate){
+        //   row.taxRate = 0.0;
+        // }
+        if(!row.floatingPrice || !row.basePrice || !row.count || !row.taxRate ||
+          row.floatingPrice === '-' || row.basePrice === '-' || row.count === '-' || row.taxRate === '-' ){
+          row.unitPriceInclTax = ''
+          row.unitPriceExclTax = ''
+          row.totalPriceText = ''
+          row.totalPrice = ''
+        }else{
+          /* 单价含税:    基价  * (1 + (浮动率 先除100得出百分比)) */
+          const unitPriceInclTaxBig = add(bignumber(row.basePrice), bignumber(row.floatingPrice));
+          row.unitPriceInclTax = this.formatNumberDynamicDecimalWithSeparator(unitPriceInclTaxBig);
+          /* 单价不含税：含税单价 / (1 + (税率  先除100得出百分比)) */
+          const onePlusTaxRate = divide(bignumber(unitPriceInclTaxBig), add(1, divide(bignumber(row.taxRate), 100)));
+          row.unitPriceExclTax = this.formatNumberDynamicDecimalWithSeparator(onePlusTaxRate)
+          /* 行含税总价：含税单价 * 数量 */
+          const totalPrice = multiply(unitPriceInclTaxBig, bignumber(row.count));
+          row.totalPriceText = this.formatNumberDynamicDecimalWithSeparator(totalPrice);
+          row.totalPrice = row.totalPriceText.replaceAll(',', '');
+          console.log('%c🪴 浮动价计算结果row \n', `font-size: 14px;background-color: #f00;`, row );
         }
-        if(!row.basePrice){
-          row.basePrice = 0.0;
-        }
-        if(!row.count){
-          row.count = 0.0;
-        }
-        if(!row.taxRate){
-          row.taxRate = 0.0;
-        }
-        /* 单价含税:    基价  * (1 + (浮动率 先除100得出百分比)) */
-        const unitPriceInclTaxBig = add(bignumber(row.basePrice), bignumber(row.floatingPrice));
-        row.unitPriceInclTax = this.formatNumberDynamicDecimalWithSeparator(unitPriceInclTaxBig);
-        /* 单价不含税：含税单价 / (1 + (税率  先除100得出百分比)) */
-        const onePlusTaxRate = divide(bignumber(unitPriceInclTaxBig), add(1, divide(bignumber(row.taxRate), 100)));
-        row.unitPriceExclTax = this.formatNumberDynamicDecimalWithSeparator(onePlusTaxRate)
-        /* 行含税总价：含税单价 * 数量 */
-        const totalPrice = multiply(unitPriceInclTaxBig, bignumber(row.count));
-        row.totalPriceText = this.formatNumberDynamicDecimalWithSeparator(totalPrice);
-        row.totalPrice = row.totalPriceText.replaceAll(',', '');
-        console.log('%c🪴 浮动价计算结果row \n', `font-size: 14px;background-color: #f00;`, row );
       }
 
 
       /* 浮动率 */
       if(row.priceType === 4){
-        if(!row.floatingRate){
-          row.floatingRate = 0.0;
+        // if(!row.floatingRate){
+        //   row.floatingRate = 0.0;
+        // }
+        // if(!row.basePrice){
+        //   row.basePrice = 0.0;
+        // }
+        // if(!row.count){
+        //   row.count = 0.0;
+        // }
+        // if(!row.taxRate){
+        //   row.taxRate = 0.0;
+        // }
+        if(!row.floatingRate || !row.basePrice || !row.count || !row.taxRate ||
+          row.floatingRate === '-' || row.basePrice === '-' || row.count === '-' || row.taxRate === '-' ){
+          row.unitPriceInclTax = ''
+          row.unitPriceExclTax = ''
+          row.totalPriceText = ''
+          row.totalPrice = ''
+        }else{
+          /* 单价含税:    基价  * (1 + (浮动率 先除100得出百分比)) */
+          const unitPriceInclTaxBig = multiply(bignumber(row.basePrice), add(1,divide(bignumber(row.floatingRate), 100)));
+          row.unitPriceInclTax = this.formatNumberDynamicDecimalWithSeparator(unitPriceInclTaxBig);
+          const priceInclTax = (row.unitPriceInclTax+'').replaceAll(',','');
+          /* 单价不含税：含税单价 / (1 + (税率  先除100得出百分比)) */
+          const onePlusTaxRate = divide(bignumber(priceInclTax), add(1, divide(bignumber(row.taxRate), 100)));
+          row.unitPriceExclTax = this.formatNumberDynamicDecimalWithSeparator(onePlusTaxRate)
+          /* 行含税总价：含税单价 * 数量 */
+          const totalPrice = multiply(unitPriceInclTaxBig, bignumber(row.count));
+          row.totalPriceText = this.formatNumberDynamicDecimalWithSeparator(totalPrice);
+          row.totalPrice = row.totalPriceText.replaceAll(',', '');
+          console.log('%c🏀 浮动率计算结果row \n', `font-size: 14px;background-color: #f00;`, row );
         }
-        if(!row.basePrice){
-          row.basePrice = 0.0;
-        }
-        if(!row.count){
-          row.count = 0.0;
-        }
-        if(!row.taxRate){
-          row.taxRate = 0.0;
-        }
-        /* 单价含税:    基价  * (1 + (浮动率 先除100得出百分比)) */
-        const unitPriceInclTaxBig = multiply(bignumber(row.basePrice), add(1,divide(bignumber(row.floatingRate), 100)));
-        row.unitPriceInclTax = this.formatNumberDynamicDecimalWithSeparator(unitPriceInclTaxBig);
-        const priceInclTax = (row.unitPriceInclTax+'').replaceAll(',','');
-        /* 单价不含税：含税单价 / (1 + (税率  先除100得出百分比)) */
-        const onePlusTaxRate = divide(bignumber(priceInclTax), add(1, divide(bignumber(row.taxRate), 100)));
-        row.unitPriceExclTax = this.formatNumberDynamicDecimalWithSeparator(onePlusTaxRate)
-        /* 行含税总价：含税单价 * 数量 */
-        const totalPrice = multiply(unitPriceInclTaxBig, bignumber(row.count));
-        row.totalPriceText = this.formatNumberDynamicDecimalWithSeparator(totalPrice);
-        row.totalPrice = row.totalPriceText.replaceAll(',', '');
-        console.log('%c🏀 浮动率计算结果row \n', `font-size: 14px;background-color: #f00;`, row );
       }
 
 
