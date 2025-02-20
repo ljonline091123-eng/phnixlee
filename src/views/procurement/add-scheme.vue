@@ -496,7 +496,7 @@
 
 
                 </el-row>
-                <el-row :gutter="40">
+                <el-row :gutter="40" style="margin-top: 20px;">
                   <el-col :span="8" class="grid-cell" v-if="formData.procurementType == 1">
                     <el-form-item label="招标公告" prop="noticeAttachmentId">
                       <template>
@@ -516,6 +516,7 @@
                         :file-list="formData.fileListNotice"
                         :on-remove="fileRemoveNotice"
                         ref="uploadNotice"
+                        :before-upload="otherBeforeUpload"
                       ></el-upload>
                       </div>
                     </el-form-item>
@@ -532,15 +533,15 @@
                         size="mini"
                         @click="modifyTempFile(3)"
                       >修改文件</el-button>
+                      <br>
+                      <div style="margin-left: -90px;width: 300px;">
                       <el-button
                         size="small"
                         type="primary"
                         @click="uploadOtherFileClick"
                         >上传文件</el-button>
-                      <br>
-                      <div style="margin-left: -90px;width: 300px;">
                         <el-upload
-                          style="margin-left: 90px;margin-top: -50px;"
+                          style="margin-left: 90px;margin-top: -75px;"
                           :action="uploadFileUrl"
                           :limit="1"
                           :on-success="fileSuccessOther"
@@ -2808,6 +2809,8 @@ export default {
         this.formData.contractAttachmentId = !contractTemplate?null:contractTemplate.attachmentId;
         this.formData.contractTemplateId = !contractTemplate?null:contractTemplate.templateId;
         this.formData.contractTemplateName = !contractTemplate?null:contractTemplate.fileName;
+        this.formData.otherAttachmentName = !otherFile?null:otherFile.fileName;
+        this.formData.otherAttachmentId = !otherFile?null:otherFile.attachmentId;
         this.formData.noticeAttachmentName = !noticeAttachment?null:noticeAttachment.fileName;
         this.formData.noticeAttachmentUrl = !noticeAttachment?null:noticeAttachment.fileUrl;
         this.formData.noticeAttachmentId = !noticeAttachment?null:noticeAttachment.attachmentId;
