@@ -233,6 +233,25 @@
                       ></el-input>
                     </el-form-item>
                   </el-col>
+                  <el-col
+                    :span="8"
+                    class="grid-cell"
+                  >
+                  <el-form-item
+                    label="项目名称"
+                    prop="projectName"
+                    class="required label-right-align"
+                  >
+                    <el-tooltip :content="projectName" placement="top">
+                      <el-input
+                        v-model="projectName"
+                        type="text"
+                        clearable
+                        disabled
+                      ></el-input>
+                    </el-tooltip>
+                  </el-form-item>
+                  </el-col>
                 </el-row>
               </div>
               <div class="page-title">
@@ -401,6 +420,11 @@
                         }}</a>
                       </template>
                       <el-button
+                        v-if="formData.evaluationTemplateId"
+                        size="mini"
+                        @click="viewEvaluationTemplate(formData.evaluationTemplateId)"
+                      >查看模板</el-button>
+                      <el-button
                         v-else
                         size="small"
                         type="primary"
@@ -493,8 +517,6 @@
                       </div>
                     </el-form-item>
                   </el-col>
-
-
                 </el-row>
                 <el-row :gutter="40" style="margin-top: 20px;">
                   <el-col :span="8" class="grid-cell" v-if="formData.procurementType == 1">
@@ -539,7 +561,7 @@
                         size="small"
                         type="primary"
                         @click="uploadOtherFileClick"
-                        >上传文件</el-button>
+                        >手动上传</el-button>
                         <el-upload
                           style="margin-left: 90px;margin-top: -75px;"
                           :action="uploadFileUrl"
@@ -576,12 +598,82 @@
                     frameborder="0"
                   ></iframe>
                   <iframe allowfullscreen="true"
-                          v-if="noticeViewAttachment"
-                          :src= this.viewFileUrl
-                          width="100%"
-                          height="500px"
-                          frameborder="0"
+                      v-if="noticeViewAttachment"
+                      :src= this.viewFileUrl
+                      width="100%"
+                      height="500px"
+                      frameborder="0"
                   ></iframe>
+                  <!-- 显示评分模板详情 -->
+                  <div v-if="showPreview" class="template-detail">
+                    <h3>评分模板预览</h3>
+                    <el-form :model="templateFormData" label-width="120px">
+                      <el-row :gutter="40">
+                        <el-col :span="12">
+                          <el-form-item label="模板名称">
+                            <span>{{ templateFormData.name }}</span>
+                          </el-form-item>
+                        </el-col>
+                        <el-col :span="12">
+                          <el-form-item label="评分类型">
+                            <el-checkbox-group v-model="templateFormData.selectedTypes">
+                              <el-checkbox
+                                v-for="dict in dict.type.mark_item_type"
+                                :label="dict.value"
+                                :key="dict.value"
+                                disabled
+                              >
+                                {{ dict.label }}
+                              </el-checkbox>
+                            </el-checkbox-group>
+                          </el-form-item>
+                        </el-col>
+                      </el-row>
+                      <el-row :gutter="40">
+                        <el-col :span="12" class="grid-cell" prop="createUser">
+                          <el-form-item
+                            label="维护人"
+                            prop="projectCode"
+                            class="required label-right-align"
+                          >
+                            <template slot-scope>
+                              {{ templateFormData.createUser }}
+                            </template>
+                          </el-form-item>
+                        </el-col>
+                      </el-row>
+                      <PageTitle title="评分模板内容" />
+                      <div
+                        v-for="(table, index) in templateFormData.biddingMarkCategoryVOList"
+                        :key="index"
+                        class="table-section"
+                      >
+                        <el-row :gutter="40">
+                          <el-col :span="12">
+                            <el-form-item label="评分项类型">
+                              <span>{{ table.itemTypeName }}</span>
+                            </el-form-item>
+                          </el-col>
+                          <el-col :span="12">
+                            <el-form-item label="总分">
+                              <span>{{ table.totalScore }}</span>
+                            </el-form-item>
+                          </el-col>
+                        </el-row>
+                        <el-row :gutter="40">
+                          <el-col :span="24">
+                            <el-form-item label="评分项">
+                              <el-table :data="table.biddingMarkItemVOList">
+                                <el-table-column prop="name" label="评分项名称" />
+                                <el-table-column prop="lowRange" label="最低分" />
+                                <el-table-column prop="highRange" label="最高分" />
+                              </el-table>
+                            </el-form-item>
+                          </el-col>
+                        </el-row>
+                      </div>
+                    </el-form>
+                  </div>
                 </div>
               </div>
             </el-tab-pane>
@@ -777,7 +869,17 @@
                 width="50"
                 align="center"
               />
-              <el-table-column label="模板名称" prop="name" width="200" />
+              <!-- <el-table-column label="模板名称" prop="name" width="200" /> -->
+              <el-table-column label="模板名称" prop="name" width="200">
+                <template slot-scope="scope">
+                  <a
+                    class="link-type"
+                    @click="handleCheck(scope.row.id)"
+                  >
+                    {{ scope.row.name }}
+                  </a>
+                </template>
+              </el-table-column>
               <el-table-column label="维护人" align="center" prop="createBy" />
               <el-table-column
                 label="创建日期"
@@ -836,7 +938,17 @@
                 width="50"
                 align="center"
               />
-              <el-table-column label="模板名称" prop="name" width="200" />
+              <!-- <el-table-column label="模板名称" prop="name" width="200" /> -->
+              <el-table-column label="模板名称" prop="name" width="200">
+                <template slot-scope="scope">
+                  <a
+                    class="link-type"
+                    @click="handleCheck(scope.row.id)"
+                  >
+                    {{ scope.row.name }}
+                  </a>
+                </template>
+              </el-table-column>
               <el-table-column label="维护人" align="center" prop="createBy" />
               <el-table-column
                 label="创建日期"
@@ -870,6 +982,83 @@
             >确 定</el-button
           >
         </div>
+      </el-dialog>
+
+      <!-- 评分模板详情 -->
+      <el-dialog
+        :title="templateFormData.name"
+        :visible.sync="templateDialogVisible"
+        width="80%"
+        @close="templateDialogVisible = false"
+      >
+        <el-form :model="templateFormData" label-width="120px">
+          <el-row :gutter="40">
+            <el-col :span="12">
+              <el-form-item label="模板名称">
+                <span>{{ templateFormData.name }}</span>
+              </el-form-item>
+            </el-col>
+            <el-col :span="12">
+              <el-form-item label="评分类型">
+                <el-checkbox-group v-model="templateFormData.selectedTypes">
+                  <el-checkbox
+                    v-for="dict in dict.type.mark_item_type"
+                    :label="dict.value"
+                    :key="dict.value"
+                    disabled
+                  >
+                    {{ dict.label }}
+                  </el-checkbox>
+                </el-checkbox-group>
+              </el-form-item>
+            </el-col>
+          </el-row>
+          <el-row :gutter="40">
+            <el-col :span="12" class="grid-cell" prop="createUser">
+              <el-form-item
+                label="维护人"
+                prop="projectCode"
+                class="required label-right-align"
+              >
+                <template slot-scope>
+                  {{ templateFormData.createUser }}
+                </template>
+              </el-form-item>
+            </el-col>
+          </el-row>
+
+          <PageTitle title="评分模板内容" />
+
+          <div
+            v-for="(table, index) in templateFormData.biddingMarkCategoryVOList"
+            :key="index"
+            class="table-section"
+          >
+            <el-row :gutter="40">
+              <el-col :span="12">
+                <el-form-item label="评分项类型">
+                  <span>{{ table.itemTypeName }}</span>
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item label="总分">
+                  <span>{{ table.totalScore }}</span>
+                </el-form-item>
+              </el-col>
+            </el-row>
+            <el-row :gutter="40">
+              <el-col :span="24">
+                <el-form-item label="评分项">
+                  <el-table :data="table.biddingMarkItemVOList">
+                    <el-table-column prop="name" label="评分项名称" />
+                    <el-table-column prop="lowRange" label="最低分" />
+                    <el-table-column prop="highRange" label="最高分" />
+                  </el-table>
+                </el-form-item>
+              </el-col>
+            </el-row>
+          </div>
+        </el-form>
       </el-dialog>
 
       <!-- 选择招标文件模板 -->
@@ -1089,8 +1278,6 @@
         </div>
       </el-dialog>
 
-
-
       <!-- 选择财务确认人员 -->
       <el-dialog title="财务确认人员" :visible.sync="officerDialog" width="55%">
         <el-form
@@ -1192,6 +1379,8 @@ import {
   getSchemeDetail,
   getSchemeEditFileUrl,
 } from "@/api/procurement/scheme";
+import {getMinProject} from "@/api/procurement/plan";
+import { getRating } from "@/api/template/rating";
 import { getSwitchPageList } from "@/api/procurement/manage";
 import {getContractTypeList, getViweFileURL} from "@/api/template/file";
 import FileModule from "@/components/FileModule/index.vue";
@@ -1202,6 +1391,7 @@ import {showSecretRelatedTips} from "@/utils/MyUtils";
 import {offerRepo, offerService, uploadFileUrl} from "@/utils/const";
 import { listUnderlingDict } from "@/api/procurement/contract";
 import VirtualScroll from 'el-table-virtual-scroll'
+import { getPlanDetail } from "../../api/procurement/plan";
 
 export default {
   name: "add-scheme",
@@ -1210,6 +1400,7 @@ export default {
   //   "procurement_counting_type",
   //   "procurement_payment_type",
   // ],
+  dicts: ["purchase_type", "mark_item_type"],
   components: {
     FileModule,
     BackButton,
@@ -1230,6 +1421,7 @@ export default {
     const param = JSON.parse(Base64.decode(this.$route.params.params));
     this.getContractTypeList();
     console.log('%c👽 采购方案url入参 ', `font-size: 14px;background-color: #f00;`, param);
+    this.projectName = this.project.name;
     if (param?.type === "update") {
       this.isEdit = true;
       this.getSchemeDetail(param.id);
@@ -1321,8 +1513,9 @@ export default {
   methods: {
     /** 招标文件预览 */
     async handleViewNotice(fileName, fileUrl) {
-      this.noticeViewAttachment = true
-      this.viewAttachmentId = ""
+      this.noticeViewAttachment = true;
+      this.viewAttachmentId = "";
+      this.showPreview = false;
       try {
         const param = {fileName: fileName, fileUrl: fileUrl}
         const res = await getViweFileURL(param);
@@ -1495,6 +1688,9 @@ export default {
       return {
         noticeViewAttachment: false,
         viewFileUrl: "",
+        templateFormData: {}, // 用于存储评分模板详情的数据
+        templateDialogVisible: false, // 控制评分模板详情弹框的显示与隐藏
+        showPreview: false,
         //数据字典
         dictObj: {
           procurement_type:"",
@@ -1685,6 +1881,8 @@ export default {
         generalTemplateTotal: 0,
         reusableTemplateTotal: 0,
         procurementPlanIds: [], //计划id
+        projectCode: "", // 项目编码
+        projectName: "", 
         expireTimeOption: {
           // 设置日期时间显示格式，只显示年月日时分
           format: "yyyy-MM-dd HH:mm:ss",
@@ -2022,6 +2220,75 @@ export default {
       this.templateQuery.pageNumber = 1;
       this.getReusableScoreTemplateList();
     },
+    /**
+     * 查看评分模板详情（选择评分模板时）
+     */
+    async handleCheck(id) {
+      try {
+        const res = await getRating({ id });
+        const templateData = res.data;
+
+        // 处理评分模板数据
+        templateData.selectedTypes = templateData.markCategoryDatailVOList.map(obj => String(obj.itemType));
+        templateData.biddingMarkCategoryVOList = templateData.markCategoryDatailVOList.map((obj, index) => {
+          templateData.markCategoryDatailVOList[index].itemType = String(obj.itemType);
+          const itemTypeFind = this.dict.type.mark_item_type.find(item => item.value === String(obj.itemType));
+          templateData.markCategoryDatailVOList[index].itemTypeName = itemTypeFind.label;
+          templateData.markCategoryDatailVOList[index].biddingMarkItemVOList = obj.markItemDetailVOList;
+          return obj;
+        });
+
+        // 将模板数据赋值给表单数据
+        this.templateFormData = templateData;
+
+        // 显示模板详情弹框
+        this.templateDialogVisible = true;
+      } catch (error) {
+        console.error("获取模板详情失败", error);
+      }
+    },
+
+    /**
+     * 查看评分模板详情（选择后，在详情展示）
+     */
+    async viewEvaluationTemplate(id) {
+      /* 隐藏招标公告预览 */
+      this.noticeViewAttachment = false;
+      /* 隐藏招标文件预览 */
+      this.viewAttachmentId = "";
+      this.editFileUrl = "";
+      this.viewFileUrl = "";
+      try {
+        const res = await getRating({ id });
+        const templateData = res.data;
+
+        // 处理评分模板数据
+        templateData.selectedTypes = templateData.markCategoryDatailVOList.map(obj => String(obj.itemType));
+        templateData.biddingMarkCategoryVOList = templateData.markCategoryDatailVOList.map((obj, index) => {
+          templateData.markCategoryDatailVOList[index].itemType = String(obj.itemType);
+          const itemTypeFind = this.dict.type.mark_item_type.find(item => item.value === String(obj.itemType));
+          templateData.markCategoryDatailVOList[index].itemTypeName = itemTypeFind.label;
+          templateData.markCategoryDatailVOList[index].biddingMarkItemVOList = obj.markItemDetailVOList;
+          return obj;
+        });
+
+        // 将模板数据赋值给预览区域
+        this.templateFormData = templateData;
+
+        // 显示预览区域
+        this.showPreview = true;
+      } catch (error) {
+        console.error("获取模板详情失败", error);
+      }
+    },
+    /**
+     * 关闭评分模板详情
+     */
+    closePreviewEvaluation() {
+      this.showPreview = false;
+    },
+    
+
     /** 重置按钮操作 */
     resetQuery() {
       this.resetForm("queryForm");
@@ -2161,6 +2428,8 @@ export default {
     },
     /* 修改不同的模板 2 招标文件模板 ，1 合同模板 联想文档绑定文件id对象名称viewAttachmentId  */
     async modifyTempFile(type){
+      /* 关闭评分模板预览 */
+      this.closePreviewEvaluation();
       /* 隐藏招标文件预览 */
       this.noticeViewAttachment = false
       console.log('%c modifyTempFile(2 招标文件模板 ，1 合同模板)', `font-size: 20px;background-color: #f00;`, type);
@@ -2481,6 +2750,7 @@ export default {
      * 其他文件上传成功
      */
     async fileSuccessOther(res) {
+      this.noticeViewAttachment = false;
       const { url, name } = res.data;
       try {
         // 保存到文件表获取返回id
@@ -2859,6 +3129,23 @@ export default {
         this.bcTemplateQuery.pageSize = 10;
         this.reusableTemplateTotal = 0;
         this.generalTemplateTotal = 0;
+      }
+    },
+    // 监听 viewAttachmentId 的变化
+    viewAttachmentId(newVal) {
+      if (newVal) {
+        this.closePreviewEvaluation();
+        this.noticeViewAttachment = false;
+        console.log("预览文件的viewAttachmentId有新值");
+        console.log("noticeViewAttachment:",this.noticeViewAttachment);
+        console.log("showPreview:",this.showPreview);
+      }
+    },
+    // 监听 noticeViewAttachment 的变化
+    noticeViewAttachment(newVal) {
+      if (newVal) {
+        this.closePreviewEvaluation();
+        console.log("预览公告的noticeViewAttachment有新值");
       }
     },
     async activeTab(newTab) {

@@ -253,9 +253,11 @@ export default {
         },
         {
           prop: "specs",
-          label: "规格型号",
+          // label: "规格型号",
+          label: "特征值特征项",
           type: "input",
-          placeholder: "请输入规格型号",
+          // placeholder: "请输入规格型号",
+          placeholder: "请输入特征值特征项",
         },
         {
           prop: "measureUnit",
@@ -297,7 +299,8 @@ export default {
         },
         {
           prop: "specs",
-          label: "规格型号",
+          // label: "规格型号",
+          label: "特征值特征项",
           width: 120,
           showOverflowTooltip: true,
         },
