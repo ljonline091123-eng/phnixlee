@@ -172,6 +172,11 @@
                   <span>{{ procurementScheme.createTime }}</span>
                 </el-form-item>
               </el-col>
+              <el-col :span="8">
+                <el-form-item label="项目名称" class="custom-form-item">
+                  <span>{{ projectName }}</span>
+                </el-form-item>
+              </el-col>
             </el-row>
           </el-form>
 
@@ -813,6 +818,7 @@ export default {
       contractSplitIdList: [],
       skeletonLoading: true,
       param: "",
+      projectName:"",
       isAll:false,
       activeTabs: "base",
       contractPlanList: [],
@@ -891,6 +897,9 @@ export default {
   created() {
     const param = JSON.parse(Base64.decode(this.$route.params.params));
     this.param = param;
+    console.log('%c👽 采购方案url入参 ', `font-size: 14px;background-color: #f00;`, param);
+    this.projectName = this.project.name;
+    console.log('%c👽 projectName ', `font-size: 14px;background-color: #f00;`, this.project.name);
     this.getSchemeDetail();
   },
   methods: {

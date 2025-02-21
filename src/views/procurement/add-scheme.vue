@@ -233,6 +233,25 @@
                       ></el-input>
                     </el-form-item>
                   </el-col>
+                  <el-col
+                    :span="8"
+                    class="grid-cell"
+                  >
+                  <el-form-item
+                    label="项目名称"
+                    prop="projectName"
+                    class="required label-right-align"
+                  >
+                    <el-tooltip :content="projectName" placement="top">
+                      <el-input
+                        v-model="projectName"
+                        type="text"
+                        clearable
+                        disabled
+                      ></el-input>
+                    </el-tooltip>
+                  </el-form-item>
+                  </el-col>
                 </el-row>
               </div>
               <div class="page-title">
@@ -1360,6 +1379,7 @@ import {
   getSchemeDetail,
   getSchemeEditFileUrl,
 } from "@/api/procurement/scheme";
+import {getMinProject} from "@/api/procurement/plan";
 import { getRating } from "@/api/template/rating";
 import { getSwitchPageList } from "@/api/procurement/manage";
 import {getContractTypeList, getViweFileURL} from "@/api/template/file";
@@ -1371,6 +1391,7 @@ import {showSecretRelatedTips} from "@/utils/MyUtils";
 import {offerRepo, offerService, uploadFileUrl} from "@/utils/const";
 import { listUnderlingDict } from "@/api/procurement/contract";
 import VirtualScroll from 'el-table-virtual-scroll'
+import { getPlanDetail } from "../../api/procurement/plan";
 
 export default {
   name: "add-scheme",
@@ -1400,6 +1421,7 @@ export default {
     const param = JSON.parse(Base64.decode(this.$route.params.params));
     this.getContractTypeList();
     console.log('%c👽 采购方案url入参 ', `font-size: 14px;background-color: #f00;`, param);
+    this.projectName = this.project.name;
     if (param?.type === "update") {
       this.isEdit = true;
       this.getSchemeDetail(param.id);
@@ -1859,6 +1881,8 @@ export default {
         generalTemplateTotal: 0,
         reusableTemplateTotal: 0,
         procurementPlanIds: [], //计划id
+        projectCode: "", // 项目编码
+        projectName: "", 
         expireTimeOption: {
           // 设置日期时间显示格式，只显示年月日时分
           format: "yyyy-MM-dd HH:mm:ss",
