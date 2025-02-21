@@ -74,6 +74,12 @@ public class MaterialsListServiceImpl extends ServiceImpl<MaterialsListMapper, M
     @Value(value = "${subject-matter.concrete}")
     private String subjectMatterConcreteCode;
 
+    /**
+     * 交易标的物为砂石
+     */
+    @Value(value = "${subject-matter.sandStone}")
+    private String subjectMatterSandStoneCode;
+
     @Override
     public List<MaterialsList> saveMaterialsList(List<MaterialsList> materialsLists, Long contractSplitId, Long planId, ProcurementPlan procurementPlan) {
         Integer[] floatCount = {0};
@@ -339,7 +345,9 @@ public class MaterialsListServiceImpl extends ServiceImpl<MaterialsListMapper, M
                 subjectMatterValueSet.add(1);
             } else if (subjectMatterConcreteCode.contains(code)) {
                 subjectMatterValueSet.add(2);
-            } else {
+            } else if (subjectMatterSandStoneCode.contains(code)) {
+                subjectMatterValueSet.add(3);
+            }else {
                 subjectMatterValueSet.add(0);
             }
         }
@@ -349,6 +357,8 @@ public class MaterialsListServiceImpl extends ServiceImpl<MaterialsListMapper, M
                     return "钢筋";
                 } else if (val == 2) {
                     return "砼";
+                } else if (val == 3) {
+                    return "砂石";
                 } else {
                     return "其他";
                 }

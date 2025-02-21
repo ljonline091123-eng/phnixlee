@@ -78,7 +78,7 @@ public interface IMaterialsListService  extends IService<MaterialsList> {
     SubjectMatterDTO getSubjectMatter(Integer procurementPlanType,String materialsCode,String contractPlanCode);
 
     /**
-     * 获取交易标的物类型 0其它 1 钢筋采购 2 商品砼采购
+     * 获取交易标的物类型 0其它 1 钢筋采购 2 商品砼采购 3 砂石采购
      * @param subjectMatterCode
      * @return
      */

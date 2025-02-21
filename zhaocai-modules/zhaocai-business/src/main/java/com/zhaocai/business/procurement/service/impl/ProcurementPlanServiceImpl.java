@@ -312,7 +312,7 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
         contractPlanMaterialLis.setSubjectMatterCode(subjectMatterCode);
 
         if (ProcurementPlanTypeEnum.PURCHASE_MATERIALS.equalsType(queryVO.getProcurementType())) {
-            //购买材料需要确认交易标的物值   0其它 1 钢筋采购 2 商品砼采购
+            //购买材料需要确认交易标的物值   0其它 1 钢筋采购 2 商品砼采购 3砂石采购
             contractPlanMaterialLis.setSubjectMatter(materialsListService.getSubjectMatterType(subjectMatterCode));
         }
 
