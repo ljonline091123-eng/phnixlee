@@ -1882,7 +1882,7 @@ export default {
         reusableTemplateTotal: 0,
         procurementPlanIds: [], //计划id
         projectCode: "", // 项目编码
-        projectName: "", 
+        projectName: "",
         expireTimeOption: {
           // 设置日期时间显示格式，只显示年月日时分
           format: "yyyy-MM-dd HH:mm:ss",
@@ -2287,7 +2287,7 @@ export default {
     closePreviewEvaluation() {
       this.showPreview = false;
     },
-    
+
 
     /** 重置按钮操作 */
     resetQuery() {
@@ -2380,6 +2380,8 @@ export default {
           priceTypeText,
           procurementPlanType,
           procurementSchemeName,
+          bidContactPerson,
+          bidContactPhone,
         } = res.data;
         this.deptId = res.data.projectDeptId;
         this.$set(this.formData, "ceilingPrice", ceilingPrice);
@@ -2400,6 +2402,8 @@ export default {
         this.formData.subjectMatterType = subjectMatterType;
         this.formData.priceType = priceType;
         this.formData.priceTypeText = priceTypeText;
+        this.$set(this.formData,"bidContactPerson",bidContactPerson);
+        this.$set(this.formData,"bidContactPhone",bidContactPhone);
         await this.getFinanceList();
       } catch (err) {
         console.log(err);
