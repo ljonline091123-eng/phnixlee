@@ -94,7 +94,7 @@
     </resultMap>
 
     <select id="selectAgreementMaterialsList" resultMap="AgreementMaterialsListVOResult">
-        select taml.agreement_id,taml.materials_list_id,taml.bidding_list_quotation_id, tml.materials_code,tml.materials_name,tml.subject_matter_code,tml.subject_matter_name,
+        select taml.agreement_id,taml.materials_list_id,taml.bidding_list_quotation_id, tml.materials_code,tml.materials_name,tml.materials_name_import,tml.subject_matter_code,tml.subject_matter_name,
                 tml.specification,tml.unit_measurement,tml.measurement_rules,tml.work_content,tml.cost_account_name,
                 tml.count,tblq.tax_unit_price,tblq.not_tax_unit_price,tblq.tax_price,tblq.not_tax_price,tblq.tax_rate,tblq.bill_type,taml.brand,taml.payment_type,
                 taml.rental_unit,taml.workload,taml.remark,taml.floating_price,taml.floating_rate,tml.unloading_fee,taml.base_price,tml.rent_mode,tml.rent_time,tml.rent_quantity,taml.sign_count,
@@ -164,7 +164,7 @@
     </select>
 
     <select id="listAgreementMaterialsByMarket" resultMap="AgreementMaterialsListVOResult">
-        select taml.agreement_id,taml.materials_list_id,taml.bidding_list_quotation_id, tml.materials_code,tml.materials_name,tml.subject_matter_code,tml.subject_matter_name,
+        select taml.agreement_id,taml.materials_list_id,taml.bidding_list_quotation_id, tml.materials_code,tml.materials_name,tml.materials_name_import,tml.subject_matter_code,tml.subject_matter_name,
                tml.specification,tml.unit_measurement,tml.measurement_rules,tml.work_content,tml.cost_account_name,
                tml.count,tmml.no_tax_price as not_tax_unit_price,tmml.tax_rate,taml.brand,taml.payment_type,
                taml.rental_unit,taml.workload,taml.remark,tml.floating_price,tml.floating_rate,tml.unloading_fee,tml.base_price,tml.rent_mode,tml.rent_time,tml.rent_quantity,taml.sign_count,

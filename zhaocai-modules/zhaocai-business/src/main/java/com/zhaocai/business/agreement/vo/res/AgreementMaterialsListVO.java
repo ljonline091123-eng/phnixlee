@@ -35,6 +35,9 @@ public class AgreementMaterialsListVO extends AdviceObject {
     @ApiModelProperty(value = "物料名称")
     private String materialsName;
 
+    @ApiModelProperty(value = "物料名称(导入)")
+    private String materialsNameImport;
+
     @ApiModelProperty(value = "交易标的物编码")
     private String subjectMatterCode;
 

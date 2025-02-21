@@ -536,6 +536,20 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
         List<AttachmentVO> attachmentList = attachmentService.listAttachment(AttachmentTypeEnum.AGREEMENT_OTHER, agreement.getId());
         List<Attachment> attachment = BeanCopierUtil.copyList(attachmentList,Attachment.class);
 
+        AgreementDetailVO agreementDetailVO = AgreementDetailVO.builder()
+                .agreement(agreementVO)
+                .agreementPaymentItem(agreementPaymentItemVO)
+                .agreementPaymentLists(agreementPaymentLists)
+                .agreementPartyInfoLists(agreementPartyInfoLists)
+                .materialsList(materialsLists)
+                .agreementDeposits(agreementDeposits)
+                .agreementDailyWageList(agreementDailyWageList)
+                .agreementMachineShifts(agreementMachineShifts)
+                .agreementEquipmentSupplies(agreementEquipmentSupplies)
+                .agreementMaterialSupplies(agreementMaterialSupplies)
+                .agreementAttachmentList(attachment)
+                .build();
+
         return AgreementDetailVO.builder()
                 .agreement(agreementVO)
                 .agreementPaymentItem(agreementPaymentItemVO)
