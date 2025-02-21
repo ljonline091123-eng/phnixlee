@@ -68,4 +68,10 @@ public class ProcurementSchemeCreateVO extends AdviceObject {
     @DictCache(dictBizEnum = DictBizEnum.PROCUREMENT_PAYMENT_TYPE,filedName = "paymentType")
     @ApiModelProperty(value = "付款方式")
     private String paymentTypeText;
+
+    @ApiModelProperty(value = "投标联系人")
+    private String bidContactPerson;
+
+    @ApiModelProperty(value = "投标联系电话")
+    private String bidContactPhone;
 }
