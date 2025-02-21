@@ -1428,6 +1428,14 @@ export default {
       this.formData.subjectMatterText = res.data.subjectMatterText || '';
       this.formData.subjectMatterCode = res.data.subjectMatterCode || '';
       this.subjectMatter = res.data.subjectMatter || '';
+      if(this.subjectMatter == 1 || this.subjectMatter == 3){
+        this.rules.countingType = [
+          { required: true, message: "计数方式不能为空", trigger: "blur" },
+        ];
+      } else {
+        // 如果类型为其他值，则付款方式非必填
+        this.rules.countingType = [];
+      }
       /* 采购方案类型(购买材料,劳务分包....) */
       this.procurementType = contractPlanningCategory || (this.procurementType||'');
       /** 根据分类判断是否可拆分编辑 */
@@ -1624,6 +1632,14 @@ export default {
         this.projectCode=procurementPlan.projectCode
         this.currentContract.contractPlanningCategory = contractPlanning.contractPlanningCategory
         this.subjectMatter = procurementPlan.subjectMatterType;
+        if(this.subjectMatter == 1 || this.subjectMatter == 3){
+          this.rules.countingType = [
+            { required: true, message: "计数方式不能为空", trigger: "blur" },
+          ];
+        } else {
+          // 如果类型为其他值，则付款方式非必填
+          this.rules.countingType = [];
+        }
         this.formData = {...this.formData, ...procurementPlan, upperLimitPrice:contractPlanning.plannedAmountInclTaxText}
         console.log(this.formData, 'this.formData');
         // this.wfProcessId = procurementPlan.wfProcessId

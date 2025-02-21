@@ -82,12 +82,12 @@
             </el-form-item>
           </el-col>
           <el-col :span="8">
-            <el-form-item label="付款方式：" v-if="procurementPlan.subjectMatterType == 1" class="custom-form-item">
+            <el-form-item label="付款方式：" v-if="procurementPlan.procurementType == 1" class="custom-form-item">
               <span>{{ procurementPlan.paymentTypeText }}</span>
             </el-form-item>
           </el-col>
           <el-col :span="8">
-            <el-form-item label="计数方式：" v-if="procurementPlan.subjectMatterType == 1" class="custom-form-item">
+            <el-form-item label="计数方式：" v-if="procurementPlan.procurementType == 1" class="custom-form-item">
               <span>{{ procurementPlan.countingTypeText }}</span>
             </el-form-item>
           </el-col>
