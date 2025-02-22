@@ -1406,6 +1406,7 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
     public void initializeCode() {
         List<Vendor> list = super.list(new LambdaQueryWrapper<Vendor>()
                 .eq(Vendor::getState, VendorStateEnum.APPROVE.getState())
+                .eq(Vendor::getMiddleVendorCode,"1")
                 .eq(Vendor::getDelFlag,"0"));
         if(CollectionUtil.isNotEmpty(list)){
             list.stream().forEach(p->{
