@@ -170,17 +170,17 @@ public class AccountServiceImpl extends ServiceImpl<AccountMapper, TAccountInfo>
                 JSONObject jsonObject = new JSONObject(mapAcct);
                 if(Vendor.LOG_TYPE_MODIFY.equals(type)){
                     //修改要看是否有新增数据没有就要走新增方法
-                    TInterfaceLog log = new TInterfaceLog();
-                    log.setBusinessId(bean.getId() + "");
-                    log.setFlag("true");
-                    List<TInterfaceLog> logList = tInterfaceLogService.selectTInterfaceLogList(log);
-                    if (CollectionUtil.isNotEmpty(logList)) {
+                   // TInterfaceLog log = new TInterfaceLog();
+                   // log.setBusinessId(bean.getId() + "");
+                   // log.setFlag("true");
+                   // List<TInterfaceLog> logList = tInterfaceLogService.selectTInterfaceLogList(log);
+                   // if (CollectionUtil.isNotEmpty(logList)) {
                         //修改
                         dataCenterUtil.postCommonInfo(jsonObject,dataMiddlePlatformConfig.getVendorAcctUpdate(),Vendor.LOG_TYPE_MODIFY, SecurityUtils.getUsername(),null);
-                    } else {
+                   // } else {
                         //新增
-                        dataCenterUtil.postCommonInfo(jsonObject,dataMiddlePlatformConfig.getVendorAcctAdd(),Vendor.LOG_TYPE_ADD, SecurityUtils.getUsername(),null);
-                    }
+                     //   dataCenterUtil.postCommonInfo(jsonObject,dataMiddlePlatformConfig.getVendorAcctAdd(),Vendor.LOG_TYPE_ADD, SecurityUtils.getUsername(),null);
+                  //  }
 
                 }else if(Vendor.LOG_TYPE_REMOVE.equals(type)){
                     dataCenterUtil.postCommonInfo(jsonObject,dataMiddlePlatformConfig.getVendorAcctRemove(),type, SecurityUtils.getUsername(),null);
