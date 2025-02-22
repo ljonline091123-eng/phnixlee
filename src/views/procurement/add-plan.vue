@@ -1736,9 +1736,9 @@ export default {
     changeWorkload(splitIndex,row){
       const { multiply, round } = this.mathjs;
       if(row.rentTime && row.rentQuantity){
-        const count = multiply(row.rentTime, row.rentQuantity);
-        row.count = this.formatNumberDynamicDecimalWithSeparator(count);
-        this.$set(row,'count', count);
+        const count = this.formatNumberDynamicDecimalWithSeparator(multiply(row.rentTime, row.rentQuantity));
+        row.count = count.replaceAll(',', '');
+        this.$set(row,'count', count.replaceAll(',', ''));
       }
       console.log('%c👽 工作量计算changeWorkload \n', `font-size: 14px;background-color: #fa8;`, row.count );
     },
