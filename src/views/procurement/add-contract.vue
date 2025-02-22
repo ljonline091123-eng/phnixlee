@@ -1924,7 +1924,6 @@ export default {
     async listAccountBank() {
       this.bankLoading = true;
       this.queryParams.vendorId = this.firstForm.agreement.vendorId;
-      this.queryParams.vendorId = "1807385485136494593"
       const res = await listAccountBank(this.queryParams)
       this.bankLoading = false;
       this.bankList = res.data.rows
