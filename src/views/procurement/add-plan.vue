@@ -286,13 +286,13 @@
 
                       <el-table-column width="120" label="租赁时间" align="right" prop="rentTime" v-if="currentContract.contractPlanningCategory == 2 || currentContract.contractPlanningCategory == 3">
                         <template slot-scope="scope">
-                          <el-input v-if="scope.row.rentMode == 1 || scope.row.rentMode == 2" v-model="scope.row.rentTime" @blur="changeWorkload(inventory.$index,scope)" :disabled="isSubmit" v-thousandth/>
+                          <el-input v-if="scope.row.rentMode == 1 || scope.row.rentMode == 2" v-model="scope.row.rentTime" @blur="changeWorkload(inventory.$index,scope.row)" :disabled="isSubmit" v-thousandth/>
                           <span v-else>-</span>
                         </template>
                       </el-table-column>
                       <el-table-column width="120" label="租赁数量" align="right" prop="rentQuantity" v-if="currentContract.contractPlanningCategory == 2 || currentContract.contractPlanningCategory == 3">
                         <template slot-scope="scope">
-                          <el-input v-if="scope.row.rentMode == 1 || scope.row.rentMode == 2" v-model="scope.row.rentQuantity" @blur="changeWorkload(inventory.$index,scope)" :disabled="isSubmit" v-thousandth/>
+                          <el-input v-if="scope.row.rentMode == 1 || scope.row.rentMode == 2" v-model="scope.row.rentQuantity" @blur="changeWorkload(inventory.$index,scope.row)" :disabled="isSubmit" v-thousandth/>
                           <span v-else>-</span>
                         </template>
                       </el-table-column>
@@ -1732,6 +1732,16 @@ export default {
       this.calculatePrice(row)
 
     },
+    //工作量校验
+    changeWorkload(splitIndex,row){
+      const { multiply, round } = this.mathjs;
+      if(row.rentTime && row.rentQuantity){
+        const count = multiply(row.rentTime, row.rentQuantity);
+        row.count = this.formatNumberDynamicDecimalWithSeparator(count);
+        this.$set(row,'count', count);
+      }
+      console.log('%c👽 工作量计算changeWorkload \n', `font-size: 14px;background-color: #fa8;`, row.count );
+    },
     /* 数量计算校验 */
     changeCount(event,splitIndex,row){
       const regexN1 = /^-?(?:[1-9]\d*|0)(\.\d+)?$/;
@@ -1975,17 +1985,6 @@ export default {
         // 如果没有小数点，返回 0
         return 0;
       },
-    //工作量计算
-    changeWorkload(splitIndex,scope){
-      const { multiply, round } = this.mathjs;
-      console.log(splitIndex,'splitIndex----');
-      console.log(scope,'scope+++++++');
-      if(scope.row.rentTime && scope.row.rentQuantity){
-        // this.planList[0].children[splitIndex].children[scope.$index].workload = multiply(scope.row.rentTime, scope.row.rentQuantity);
-        this.$set(this.planList[0].children[splitIndex].children[scope.$index],'count', round(multiply(scope.row.rentTime, scope.row.rentQuantity)), 2);
-      }
-      console.log(this.planList[0].children[splitIndex].children[scope.$index],'this.planList[0].children[splitIndex].children[scope.$index]-this.planList[0].children[splitIndex].children[scope.$index]');
-    },
     //获取省市区
     async listAreaDivisionTree(){
       try{
@@ -2179,9 +2178,10 @@ export default {
         // if(!row.taxRate){
         //   row.taxRate = 0.0;
         // }
-        if(!row.unitPriceInclTax || !row.count || !row.taxRate ||
+
+        if('' === row.unitPriceInclTax || '' === row.count || '' === row.taxRate ||
           row.unitPriceInclTax === '-' || row.count === '-' || row.taxRate === '-' ){
-          row.unitPriceExclTax = ''
+          row.unitPriceExclTax = 0.0
           row.totalPriceText = ''
           row.totalPrice = ''
         }else{
@@ -2212,10 +2212,10 @@ export default {
         // if(!row.taxRate){
         //   row.taxRate = 0.0;
         // }
-        if(!row.floatingPrice || !row.basePrice || !row.count || !row.taxRate ||
+        if('' === row.floatingPrice || '' === row.basePrice || '' === row.count || '' === row.taxRate ||
           row.floatingPrice === '-' || row.basePrice === '-' || row.count === '-' || row.taxRate === '-' ){
           row.unitPriceInclTax = ''
-          row.unitPriceExclTax = ''
+          row.unitPriceExclTax = 0.0
           row.totalPriceText = ''
           row.totalPrice = ''
         }else{
@@ -2248,10 +2248,10 @@ export default {
         // if(!row.taxRate){
         //   row.taxRate = 0.0;
         // }
-        if(!row.floatingRate || !row.basePrice || !row.count || !row.taxRate ||
+        if('' === row.floatingRate || '' === row.basePrice || '' === row.count || '' === row.taxRate ||
           row.floatingRate === '-' || row.basePrice === '-' || row.count === '-' || row.taxRate === '-' ){
           row.unitPriceInclTax = ''
-          row.unitPriceExclTax = ''
+          row.unitPriceExclTax = 0.0
           row.totalPriceText = ''
           row.totalPrice = ''
         }else{
