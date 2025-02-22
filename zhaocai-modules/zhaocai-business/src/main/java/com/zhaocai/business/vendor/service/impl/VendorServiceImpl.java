@@ -1105,6 +1105,8 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
                                 if (!list.isEmpty()) {
                                     list.stream().forEach(p -> {
                                         accountService.pushAcct(p,bean, custMerchtId, Vendor.LOG_TYPE_ADD);
+                                    });
+                                    list.stream().forEach(p -> {
                                         accountService.pushAcct(p,bean, custMerchtId, Vendor.LOG_TYPE_MODIFY);
                                     });
                                 }
@@ -1128,6 +1130,8 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
                                     if (!list.isEmpty()) {
                                         list.stream().forEach(p -> {
                                             accountService.pushAcct(p,bean, custMerchtId, Vendor.LOG_TYPE_ADD);
+                                        });
+                                        list.stream().forEach(p -> {
                                             accountService.pushAcct(p,bean, custMerchtId, Vendor.LOG_TYPE_MODIFY);
                                         });
                                     }
@@ -1153,6 +1157,8 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
                                 if (!list.isEmpty()) {
                                     list.stream().forEach(p -> {
                                         accountService.pushAcct(p,bean, custMerchtId, Vendor.LOG_TYPE_ADD);
+                                    });
+                                    list.stream().forEach(p -> {
                                         accountService.pushAcct(p,bean, custMerchtId, Vendor.LOG_TYPE_MODIFY);
                                     });
                                 }
