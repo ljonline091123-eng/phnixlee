@@ -16,6 +16,8 @@ import com.zhaocai.business.vendor.service.ITInterfaceLogService;
 import com.zhaocai.business.vendor.util.DataCenterUtil;
 import com.zhaocai.common.core.bean.PageResult;
 import com.zhaocai.common.security.utils.SecurityUtils;
+import com.zhaocai.system.api.domain.SysDept;
+import com.zhaocai.system.api.system.RemoteSystemService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -46,6 +48,9 @@ public class AccountServiceImpl extends ServiceImpl<AccountMapper, TAccountInfo>
 
             @Autowired
             private ITInterfaceLogService tInterfaceLogService;
+
+            @Autowired
+            private RemoteSystemService remoteSystemService;
 
 
 
@@ -151,7 +156,9 @@ public class AccountServiceImpl extends ServiceImpl<AccountMapper, TAccountInfo>
                 Map<String, Object> mapAcct = new HashMap<>();
                 mapAcct.put("internal_id", bean.getId() + "");
                 mapAcct.put("internal_ref_id", bean.getUpId()+"");
-                mapAcct.put("dept_id",  vendor.getFirstCooperationCompanyCode());
+                SysDept newdept= remoteSystemService.getByThridDeptId(vendor.getFirstCooperationCompanyCode(),"inner");
+                mapAcct.put("dept_id",  newdept.getZtDeptId());
+               // mapAcct.put("dept_id",  vendor.getFirstCooperationCompanyCode());
                 mapAcct.put("cust_mercht_code",  custMerchtId);//客商编码
                 mapAcct.put("cust_mercht_full_name",  vendor.getEnterpriseName());//所属客商全称
                 mapAcct.put("cust_mercht_id",  vendor.getId()+"");//所属客商ID
