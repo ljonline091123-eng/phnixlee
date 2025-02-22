@@ -1877,7 +1877,7 @@ export default {
     /* 获取乙方银行账户列表 */
     async listAccountBank() {
       this.bankLoading = true;
-      this.queryParams.vendorId = "1807385485136494593"
+      this.queryParams.vendorId = this.firstForm.agreement.vendorId;
       const res = await listAccountBank(this.queryParams)
       this.bankLoading = false;
       this.bankList = res.data.rows
