@@ -15,7 +15,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 支出合同合同登记引用招采合同接口
+ * 支出合同合同登记引用招采合同接口 支出合同引用招采引用 合同登记
  */
 @Api(value = "第三方-合同接口")
 @RestController

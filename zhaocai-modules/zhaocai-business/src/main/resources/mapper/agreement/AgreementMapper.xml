@@ -95,8 +95,9 @@
         left join sys_dept sd on sd.thrid_dept_id = ta.party_a_org_id
         left join tb_tender_notice notice on notice.scheme_id = ta.scheme_id and notice.notice_status = 8 and notice.del_flag = 0
         <where>
+            ta.agreement_state != 2
             <if test="queryVO.agreementCode != null and queryVO.agreementCode != ''">
-                ta.agreement_code like concat('%',#{queryVO.agreementCode,jdbcType=VARCHAR},'%')
+                and ta.agreement_code like concat('%',#{queryVO.agreementCode,jdbcType=VARCHAR},'%')
             </if>
             <if test="queryVO.agreementName != null and queryVO.agreementName != ''">
                 and ta.agreement_name like concat('%',#{queryVO.agreementName,jdbcType=VARCHAR},'%')
@@ -118,6 +119,7 @@
         from tb_agreement ta
         left join sys_dept sd on sd.thrid_dept_id = ta.party_a_org_id
         <where>
+            ta.agreement_state != 2 and
             ta.market_material_contract_id is not null and ta.belong_accounting_item_code = #{queryVO.projectCode,jdbcType=VARCHAR}
             <if test="queryVO.agreementCode != null and queryVO.agreementCode != ''">
                 and ta.agreement_code like concat('%',#{queryVO.agreementCode,jdbcType=VARCHAR},'%')

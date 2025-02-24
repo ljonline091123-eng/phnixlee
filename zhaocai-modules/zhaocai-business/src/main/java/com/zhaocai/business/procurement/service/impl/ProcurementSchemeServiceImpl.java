@@ -31,6 +31,7 @@ import com.zhaocai.business.procurement.vo.res.*;
 import com.zhaocai.business.pub.domain.Attachment;
 import com.zhaocai.business.pub.service.IAttachmentService;
 import com.zhaocai.business.pub.service.IBusinessCodeService;
+import com.zhaocai.business.pub.service.ISystemUserService;
 import com.zhaocai.business.pub.service.ITemplateService;
 import com.zhaocai.business.pub.vo.res.AttachmentVO;
 import com.zhaocai.common.core.bean.PageResult;
@@ -40,6 +41,7 @@ import com.zhaocai.common.core.utils.NumberUtil;
 import com.zhaocai.common.core.utils.bean.BeanCopierUtil;
 import com.zhaocai.common.core.web.bean.ResultData;
 import com.zhaocai.common.security.utils.SecurityUtils;
+import com.zhaocai.system.api.domain.SysUser;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
@@ -103,6 +105,9 @@ public class ProcurementSchemeServiceImpl extends ServiceImpl<ProcurementSchemeM
 
     @Autowired
     private IAttachmentService attachmentService;
+
+    @Autowired
+    private ISystemUserService systemUserService;
 
 
     @Override
@@ -589,6 +594,13 @@ public class ProcurementSchemeServiceImpl extends ServiceImpl<ProcurementSchemeM
      schemeCreateVO.setProcurementOfficerName(procurementPlans.get(0).getProcurementOfficerName());
      schemeCreateVO.setFirstProcurementPlanId(planIdList.get(0));
      schemeCreateVO.setProcurementSchemeName(procurementPlans.get(0).getProcurementPlanName());
+     schemeCreateVO.setBidContactPerson(procurementPlans.get(0).getProcurementOfficerName());
+     if(procurementPlans.get(0).getProcurementOfficer() != null){
+         SysUser user = systemUserService.getUserById(procurementPlans.get(0).getProcurementOfficer());
+         if(user!=null){
+             schemeCreateVO.setBidContactPhone(user.getPhonenumber());
+         }
+     }
 
      /*
       * 购买材料需要做一些校验
