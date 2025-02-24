@@ -29,12 +29,12 @@ public class UserObj {
     /**
      * 通知id
      */
-    private  Long noticeId;
+    private  String noticeId;
 
     /**
      * 采购方案id
      */
-    private  Long schemeId;
+    private  String schemeId;
 
 
 

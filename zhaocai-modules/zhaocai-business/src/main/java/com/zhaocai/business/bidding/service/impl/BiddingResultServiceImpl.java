@@ -151,7 +151,7 @@ public class BiddingResultServiceImpl extends ServiceImpl<BiddingResultMapper,Bi
                 String.format(ApproveFlowPromptTemplateEnum.BID_CALIBRATION.getDesc(),detailVO.getProcurementSchemeName()));
         paramMap.put("operateComment", entranceVO.getOperateComment());
         UserObj userObj = UserObj.builder().businessType(ProcessKeyEnum.ZHAOCAI_TENDER_CALIBRATE.name()).
-                businessId(noticeId.toString()).noticeId(noticeId).schemeId(tenderNotice.getSchemeId())
+                businessId(noticeId.toString()).noticeId(noticeId.toString()).schemeId(tenderNotice.getSchemeId().toString())
                 .toDoType(ToDoTypeEnum.EXAMINE.name()).build();
         paramMap.put("userObj", JSON.toJSONString(userObj));
 
