@@ -293,10 +293,10 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
                     vendorCertificationService.addCertification(requestVO.getBusinessLicenseList(), CertificationTypeEnum.BUSINESS_LICENSE,vendor.getId());
                 }
                 if (CollUtil.isNotEmpty(requestVO.getIntegrityList())){
-                    legalAuthorizationId = vendorCertificationService.addCertificationList(requestVO.getIntegrityList(), CertificationTypeEnum.INTEGRITY,vendor.getId());
+                    vendorCertificationService.addCertification(requestVO.getIntegrityList(), CertificationTypeEnum.INTEGRITY,vendor.getId());
                 }
                 if (CollUtil.isNotEmpty(requestVO.getLegalAuthorizationList())){
-                    vendorCertificationService.addCertification(requestVO.getLegalAuthorizationList(), CertificationTypeEnum.LEGAL_AUTHORIZATION,vendor.getId());
+                    legalAuthorizationId = vendorCertificationService.addCertificationList(requestVO.getLegalAuthorizationList(), CertificationTypeEnum.LEGAL_AUTHORIZATION,vendor.getId());
                 }
                 /*vendorCertificationService.addCertification(requestVO.getBusinessLicense(), CertificationTypeEnum.BUSINESS_LICENSE,vendor.getId());
                 vendorCertificationService.addCertification(requestVO.getIntegrity(), CertificationTypeEnum.INTEGRITY,vendor.getId());
@@ -384,10 +384,10 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
                 vendorCertificationService.addCertification(requestVO.getBusinessLicenseList(), CertificationTypeEnum.BUSINESS_LICENSE,vendor.getId());
             }
             if (CollUtil.isNotEmpty(requestVO.getIntegrityList())){
-                legalAuthorizationId = vendorCertificationService.addCertificationList(requestVO.getIntegrityList(), CertificationTypeEnum.INTEGRITY,vendor.getId());
+                vendorCertificationService.addCertification(requestVO.getIntegrityList(), CertificationTypeEnum.INTEGRITY,vendor.getId());
             }
             if (CollUtil.isNotEmpty(requestVO.getLegalAuthorizationList())){
-                vendorCertificationService.addCertification(requestVO.getLegalAuthorizationList(), CertificationTypeEnum.LEGAL_AUTHORIZATION,vendor.getId());
+                legalAuthorizationId = vendorCertificationService.addCertificationList(requestVO.getLegalAuthorizationList(), CertificationTypeEnum.LEGAL_AUTHORIZATION,vendor.getId());
             }
             /*vendorCertificationService.addCertification(requestVO.getBusinessLicense(), CertificationTypeEnum.BUSINESS_LICENSE,vendor.getId());
             vendorCertificationService.addCertification(requestVO.getIntegrity(), CertificationTypeEnum.INTEGRITY,vendor.getId());
@@ -635,7 +635,7 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
                     vendorCertificationService.addCertification(requestVO.getIntegrityList(), CertificationTypeEnum.INTEGRITY,vendor.getId());
                 }
                 if (CollUtil.isNotEmpty(requestVO.getLegalAuthorizationList())){
-                    vendorCertificationService.addCertification(requestVO.getLegalAuthorizationList(), CertificationTypeEnum.LEGAL_AUTHORIZATION,vendor.getId());
+                    legalAuthorizationId = vendorCertificationService.addCertificationList(requestVO.getLegalAuthorizationList(), CertificationTypeEnum.LEGAL_AUTHORIZATION, vendor.getId());
                 }
                 // 主要联系人
                 VendorContact contact = requestVO.getVendorContact();
@@ -696,7 +696,7 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
                 legalAuthorizationId = vendorCertificationService.addCertificationList(requestVO.getIntegrityList(), CertificationTypeEnum.INTEGRITY,vendor.getId());
             }
             if (CollUtil.isNotEmpty(requestVO.getLegalAuthorizationList())){
-                vendorCertificationService.addCertification(requestVO.getLegalAuthorizationList(), CertificationTypeEnum.LEGAL_AUTHORIZATION,vendor.getId());
+                legalAuthorizationId = vendorCertificationService.addCertificationList(requestVO.getLegalAuthorizationList(), CertificationTypeEnum.LEGAL_AUTHORIZATION,vendor.getId());
             }
             // 主要联系人
             VendorContact contact = requestVO.getVendorContact();

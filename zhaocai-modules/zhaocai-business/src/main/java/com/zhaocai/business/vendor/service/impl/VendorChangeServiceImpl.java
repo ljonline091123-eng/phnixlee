@@ -52,10 +52,7 @@ import org.springframework.util.ObjectUtils;
 
 import java.io.Serializable;
 import java.math.BigDecimal;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
@@ -228,11 +225,32 @@ public class VendorChangeServiceImpl extends ServiceImpl<VendorChangeMapper,Vend
     private VendorChangeRequestVO handleReturnInfo(VendorChangeRequestVO requestVO) {
         // 企业资质分类
         List<VendorCertificationChange> certificationChangeList = requestVO.getCertificationChangeList();
+        Date integrityistDate = null;
         for(VendorCertificationChange certification : certificationChangeList){
             if(CertificationTypeEnum.BUSINESS_LICENSE.equalsType(certification.getBusinessCode()))  {
-                requestVO.setBusinessLicense(certification);
+                List<VendorCertificationChange> list = requestVO.getBusinessLicenseList();
+                if (list == null) {
+                    list = new ArrayList<>();
+                }
+                list.add(certification);
+                requestVO.setBusinessLicenseList(list);
+                //requestVO.setBusinessLicense(certification);
             }  else if (CertificationTypeEnum.INTEGRITY.equalsType(certification.getBusinessCode())) {
-                requestVO.setIntegrity(certification);
+                List<VendorCertificationChange> list = requestVO.getIntegrityList();
+                if (list == null) {
+                    list = new ArrayList<>();
+                }
+                list.add(certification);
+                requestVO.setIntegrityList(list);
+                if(integrityistDate == null){
+                    integrityistDate = certification.getEffectiveEndDate();
+                    requestVO.setIntegrity(certification);
+                }else if(certification.getEffectiveEndDate() != null
+                        && certification.getEffectiveEndDate().compareTo(integrityistDate) < 0){
+                    integrityistDate = certification.getEffectiveEndDate();
+                    requestVO.setIntegrity(certification);
+                }
+                //requestVO.setIntegrity(certification);
             }else if (CertificationTypeEnum.LEGAL_AUTHORIZATION.equalsType(certification.getBusinessCode())) {
                 List<VendorCertificationChange> list = requestVO.getLegalAuthorizationList();
                 if (list == null) {
