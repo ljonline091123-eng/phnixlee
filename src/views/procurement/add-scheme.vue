@@ -1451,7 +1451,7 @@ export default {
       ) {
         selectableRange =new Date().getHours() + ':' + (new Date().getMinutes() + 1) + ':00 - 23:59:00'
       }
-      else if(newVal && (newVal.getFullYear() >= originalDate.getFullYear() ||
+      else if(newVal && (newVal.getFullYear() > originalDate.getFullYear() ||
         (newVal.getFullYear() === originalDate.getFullYear() && newVal.getMonth() > originalDate.getMonth()) ||
         (newVal.getFullYear() === originalDate.getFullYear() && newVal.getMonth() === originalDate.getMonth() && newVal.getDate() > originalDate.getDate())
       )){
@@ -1481,7 +1481,7 @@ export default {
       ) {
        selectableRange =new Date().getHours() + ':' + (new Date().getMinutes() + 1) + ':00 - 23:59:00'
       }
-      else if(newVal && (newVal.getFullYear() >= originalDate.getFullYear() ||
+      else if(newVal && (newVal.getFullYear() > originalDate.getFullYear() ||
           (newVal.getFullYear() === originalDate.getFullYear() && newVal.getMonth() > originalDate.getMonth()) ||
           (newVal.getFullYear() === originalDate.getFullYear() && newVal.getMonth() === originalDate.getMonth() && newVal.getDate() > originalDate.getDate())
         )) {
