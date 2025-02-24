@@ -687,45 +687,25 @@
                     label="评分项"
                     class="required label-right-align"
                   >
-                    <el-table :data="table.biddingMarkItemVOList">
-                      <!-- <el-table-column type="expand" v-if="table.biddingMarkItemVOList">
-                        <template slot-scope="scope">
-                          <div class="subItems">
-                            <el-table :data="scope.row.subItems">
-                              <el-table-column  prop="name"  label="子评分项名称">
-                                <template slot-scope>
-                                  {{ scope.row.subItems.name }}
-                                </template>
-                              </el-table-column>
-                              <el-table-column  label="最低分">
-                                <template slot-scope>
-                                  {{ scope.row.subItems.minScore }}
-                                </template>
-                              </el-table-column>
-                              <el-table-column  label="最高分">
-                                <template slot-scope>
-                                  {{ scope.row.subItems.maxScore }}
-                                </template>
-                              </el-table-column>
-                            </el-table>
-                          </div>
-                        </template>
-                      </el-table-column> -->
-                      <el-table-column prop="name" label="评分项名称">
-                        <template slot-scope="scope">
-                          {{ scope.row.name }}
-                        </template>
-                      </el-table-column>
-                      <el-table-column prop="lowRange" label="最低分">
-                        <template slot-scope="scope">
-                          {{ scope.row.lowRange }}
-                        </template>
-                      </el-table-column>
-                      <el-table-column prop="highRange" label="最高分">
-                        <template slot-scope="scope">
-                          {{ scope.row.highRange }}
-                        </template>
-                      </el-table-column>
+                    <el-table
+                      :data="table.biddingMarkItemVOList"
+                      default-expand-all
+                      row-key="id"
+                      stripe
+                      border
+                      :tree-props="{ children: 'subBiddingMarkItemDetailVOList' }"
+                    >
+                      <el-table-column prop="name" label="评分项名称" />
+                      <el-table-column
+                        prop="highRange"
+                        align="center"
+                        label="评分项"
+                      />
+                      <el-table-column
+                        prop="contant"
+                        align="center"
+                        label="评分描述"
+                      />
                     </el-table>
                   </el-form-item>
                 </el-col>

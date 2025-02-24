@@ -663,10 +663,25 @@
                         <el-row :gutter="40">
                           <el-col :span="24">
                             <el-form-item label="评分项">
-                              <el-table :data="table.biddingMarkItemVOList">
+                              <el-table
+                                :data="table.biddingMarkItemVOList"
+                                default-expand-all
+                                row-key="id"
+                                stripe
+                                border
+                                :tree-props="{ children: 'subBiddingMarkItemDetailVOList' }"
+                              >
                                 <el-table-column prop="name" label="评分项名称" />
-                                <el-table-column prop="lowRange" label="最低分" />
-                                <el-table-column prop="highRange" label="最高分" />
+                                <el-table-column
+                                  prop="highRange"
+                                  align="center"
+                                  label="评分项"
+                                />
+                                <el-table-column
+                                  prop="contant"
+                                  align="center"
+                                  label="评分描述"
+                                />
                               </el-table>
                             </el-form-item>
                           </el-col>
@@ -1049,10 +1064,25 @@
             <el-row :gutter="40">
               <el-col :span="24">
                 <el-form-item label="评分项">
-                  <el-table :data="table.biddingMarkItemVOList">
+                  <el-table
+                    :data="table.biddingMarkItemVOList"
+                    default-expand-all
+                    row-key="id"
+                    stripe
+                    border
+                    :tree-props="{ children: 'subBiddingMarkItemDetailVOList' }"
+                  >
                     <el-table-column prop="name" label="评分项名称" />
-                    <el-table-column prop="lowRange" label="最低分" />
-                    <el-table-column prop="highRange" label="最高分" />
+                    <el-table-column
+                      prop="highRange"
+                      align="center"
+                      label="评分项"
+                    />
+                    <el-table-column
+                      prop="contant"
+                      align="center"
+                      label="评分描述"
+                    />
                   </el-table>
                 </el-form-item>
               </el-col>
