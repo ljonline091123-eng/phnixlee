@@ -95,6 +95,9 @@ public class TenderNoticeDetailVO {
     @ApiModelProperty(value =  "是否为采购经办人")
     private Boolean purchaseOfficer;
 
+    @ApiModelProperty(value =  "采购计划类别（1购买材料 2租赁材料 3租赁机械（设备） 4专业分包 5劳务分包 6其他）")
+    private Integer procurementPlanType;
+
 /*    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
     @ApiModelProperty(value =  "当前时间")
     @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss")

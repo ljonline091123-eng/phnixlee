@@ -100,5 +100,7 @@ public class TenderNoticeSchemeInfoVO {
     @ApiModelProperty(value =  "二次报价状态")
     private Integer twiceQuotState;
 
+    @ApiModelProperty(value =  "采购计划类别（1购买材料 2租赁材料 3租赁机械（设备） 4专业分包 5劳务分包 6其他）")
+    private Integer procurementPlanType;
 
 }

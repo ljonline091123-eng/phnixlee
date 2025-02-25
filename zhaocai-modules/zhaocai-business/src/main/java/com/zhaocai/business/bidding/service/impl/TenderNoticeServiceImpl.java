@@ -742,8 +742,8 @@ public class TenderNoticeServiceImpl extends ServiceImpl<TenderNoticeMapper,Tend
         }
         TenderNotice tenderNotice = BeanCopierUtil.copyBean(tenderNoticeSchemeInfo, TenderNotice.class);
 
-
-
+        /* 采购方案类型（采购计划类别（1购买材料 2租赁材料 3租赁机械（设备） 4专业分包 5劳务分包 6其他）） */
+        vo.setProcurementPlanType(tenderNoticeSchemeInfo.getProcurementPlanType());
         /* 采购方案类型（1公开招标 2邀请招标 3询价采购 4单一来源） */
         vo.setSchemeType(tenderNoticeSchemeInfo.getSchemeType());
         /* 招标公告变更记录对象 */
