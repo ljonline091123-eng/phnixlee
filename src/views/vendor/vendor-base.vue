@@ -107,6 +107,14 @@
           </template>
         </el-table-column>
         <el-table-column
+          label="企业编号"
+          min-width="130"
+          align="center"
+          prop="enterpriseCode"
+          v-if="['0', '2', '3', '4'].includes(queryParams.vendorClass)"
+          show-overflow-tooltip
+        >
+        <el-table-column
           label="统一社会信用代码"
           min-width="200"
           align="center"

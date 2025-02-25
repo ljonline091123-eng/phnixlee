@@ -142,6 +142,16 @@
                   vendor.contactPhone
                 }}</el-form-item>
               </el-col>
+              <el-col :span="8">
+                <el-form-item label="是否外部客商">{{
+                  vendor.isExternalText
+                  }}</el-form-item>
+              </el-col>
+              <el-col :span="8">
+                <el-form-item label="企业编号">{{
+                  vendor.enterpriseCode
+                  }}</el-form-item>
+              </el-col>
               <el-col :span="24">
                 <el-form-item label="详细地址">{{
                   vendor.enterpriseAddress
