@@ -610,7 +610,7 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
     @Override
     public String sendSmsCode(String phoneNumber) {
 
-        SysUser sysUser = this.selectUserByUserNameAndUserType(phoneNumber, UserTypeEnum.VENDOR.getName());
+        SysUser sysUser = this.selectUserByUserNameAndUserType(phoneNumber, null);
         if (null == sysUser) {
             throw new ServiceException("手机号输入有误,未查询到用户");
         }

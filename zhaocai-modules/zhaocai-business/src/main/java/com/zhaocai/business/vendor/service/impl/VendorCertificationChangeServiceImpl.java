@@ -180,7 +180,7 @@ public class VendorCertificationChangeServiceImpl extends ServiceImpl<VendorCert
     @Override
     public void addCertification(VendorCertificationChange requestVO, Long id, Integer version, CertificationTypeEnum certificationType) {
         if (NumberUtil.isNullOrZero(requestVO.getId())) {
-            if (CertificationTypeEnum.BUSINESS_LICENSE.equalsType(certificationType.getType())
+            /*if (CertificationTypeEnum.BUSINESS_LICENSE.equalsType(certificationType.getType())
                     || CertificationTypeEnum.INTEGRITY.equalsType(certificationType.getType())) {
                 // 判断是否唯一
                 long count = super.count(new LambdaQueryWrapper<VendorCertificationChange>()
@@ -191,7 +191,7 @@ public class VendorCertificationChangeServiceImpl extends ServiceImpl<VendorCert
                 if (count >= 1) {
                     throw new BusinessException(certificationType.getDesc() + "已经存在一个了，请勿重新添加");
                 }
-            }
+            }*/
             requestVO.setVendorId(id);
             requestVO.setBusinessId(id);
             requestVO.setVersion(version);
@@ -231,9 +231,21 @@ public class VendorCertificationChangeServiceImpl extends ServiceImpl<VendorCert
             VendorCertificationVO vendorCertificationVo = BeanCopierUtil.copyBean(certification, VendorCertificationVO.class);
 
             if (CertificationTypeEnum.BUSINESS_LICENSE.equalsType(certification.getBusinessCode())) {
-                listVO.setBusinessLicense(vendorCertificationVo);
+                List<VendorCertificationVO> businessLicenseList = listVO.getBusinessLicenseList();
+                if (businessLicenseList == null) {
+                    businessLicenseList = new ArrayList<>();
+                }
+                businessLicenseList.add(vendorCertificationVo);
+                listVO.setBusinessLicenseList(businessLicenseList);
+                //listVO.setBusinessLicense(vendorCertificationVo);
             } else if (CertificationTypeEnum.INTEGRITY.equalsType(certification.getBusinessCode())) {
-                listVO.setIntegrity(vendorCertificationVo);
+                List<VendorCertificationVO> integrityList = listVO.getIntegrityList();
+                if (integrityList == null) {
+                    integrityList = new ArrayList<>();
+                }
+                integrityList.add(vendorCertificationVo);
+                listVO.setIntegrityList(integrityList);
+                //listVO.setIntegrity(vendorCertificationVo);
             } else if (CertificationTypeEnum.LEGAL_AUTHORIZATION.equalsType(certification.getBusinessCode())) {
                 List<VendorCertificationVO> list = listVO.getLegalAuthorizationList();
                 if (list == null) {
@@ -290,7 +302,7 @@ public class VendorCertificationChangeServiceImpl extends ServiceImpl<VendorCert
      */
     private void updateCertification(VendorCertification certification, Long vendorId, CertificationTypeEnum certificationType) {
         if (NumberUtil.isNullOrZero(certification.getId())) {
-            if (CertificationTypeEnum.BUSINESS_LICENSE.equalsType(certificationType.getType()) || CertificationTypeEnum.INTEGRITY.equalsType(certificationType.getType())) {
+            /*if (CertificationTypeEnum.BUSINESS_LICENSE.equalsType(certificationType.getType()) || CertificationTypeEnum.INTEGRITY.equalsType(certificationType.getType())) {
                 // 判断是否唯一
                 long count = vendorCertificationService.count(new LambdaQueryWrapper<VendorCertification>()
                         .eq(VendorCertification::getBusinessCode, certificationType.getType())
@@ -298,7 +310,7 @@ public class VendorCertificationChangeServiceImpl extends ServiceImpl<VendorCert
                 if (count >= 1) {
                     throw new BusinessException(certificationType.getDesc() + "已经存在一个了，请勿重新添加");
                 }
-            }
+            }*/
             certification.setVendorId(vendorId);
             certification.setBusinessId(vendorId);
             certification.setBusinessCode(certificationType.getType());

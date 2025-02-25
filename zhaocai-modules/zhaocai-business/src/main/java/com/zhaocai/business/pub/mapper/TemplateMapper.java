@@ -5,7 +5,9 @@ import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.zhaocai.business.pub.domain.Template;
 import com.zhaocai.business.pub.vo.req.TemplateListQueryVO;
+import com.zhaocai.business.pub.vo.req.UnderlingTemplateListQueryVO;
 import com.zhaocai.business.pub.vo.res.TemplateListVO;
+import com.zhaocai.business.pub.vo.res.UnderlingTemplateListVO;
 import org.apache.ibatis.annotations.Param;
 
 import java.util.List;
@@ -25,6 +27,14 @@ public interface TemplateMapper extends BaseMapper<Template> {
      * @return
      */
     IPage<TemplateListVO> selectList(Page mybatisPage, @Param("queryVO") TemplateListQueryVO queryVO);
+
+    /**
+     * 列表查询
+     * @param mybatisPage
+     * @param queryVO
+     * @return
+     */
+    IPage<UnderlingTemplateListVO> UnderlingselectList(Page mybatisPage, @Param("queryVO") UnderlingTemplateListQueryVO queryVO);
 
     /**
      * 复用模板列表

@@ -36,6 +36,7 @@ public enum AttachmentTypeEnum {
 
     TEMPLATE_AGREEMENT("template_agreement","合同模板"),
     TEMPLATE_BIDDING("template_bidding","招标文件模板"),
+    TEMPLATE_SUPPLEMENTAL("template_supplemental","补充协议模板"),
 
     FILE_Z_DOWNLOAD("file-z-download","联想文档下载"),
 
