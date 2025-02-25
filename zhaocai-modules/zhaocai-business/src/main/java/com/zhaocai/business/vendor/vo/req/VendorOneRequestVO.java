@@ -34,4 +34,13 @@ public class VendorOneRequestVO {
 
     @ApiModelProperty(value = "相关资质")
     private List<VendorCertificationRequestVO> relevantCertificationList;
+
+    @ApiModelProperty(value = "营业执照")
+    private List<VendorCertificationRequestVO> businessLicenseList;
+
+    @ApiModelProperty(value = "诚信合规材料")
+    private List<VendorCertificationRequestVO> integrityList;
+
+    @ApiModelProperty(value = "法人授权书")
+    private List<VendorCertificationRequestVO> legalAuthorizationList;
 }
