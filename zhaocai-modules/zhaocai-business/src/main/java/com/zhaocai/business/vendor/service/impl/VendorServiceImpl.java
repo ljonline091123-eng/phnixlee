@@ -1196,6 +1196,7 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
                                 String custMerchtId = obj.getString("cust_mercht_id");
                                 super.update(new LambdaUpdateWrapper<Vendor>()
                                         .set(Vendor::getEnterpriseCode, custMerchtId)
+                                        .set(Vendor::getMiddleVendorCode, custMerchtId)
                                         .eq(Vendor::getId, id));
                                 List<TAccountInfo> list = accountService.list(new LambdaUpdateWrapper<TAccountInfo>()
                                         .eq(TAccountInfo::getUpId, bean.getId()));
@@ -1221,6 +1222,7 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
                                     String custMerchtId = obj.getString("cust_mercht_id");
                                     super.update(new LambdaUpdateWrapper<Vendor>()
                                             .set(Vendor::getEnterpriseCode, custMerchtId)
+                                            .set(Vendor::getMiddleVendorCode, custMerchtId)
                                             .eq(Vendor::getId, id));
                                     List<TAccountInfo> list = accountService.list(new LambdaUpdateWrapper<TAccountInfo>()
                                             .eq(TAccountInfo::getUpId, bean.getId()));
@@ -1248,6 +1250,7 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
                                 String custMerchtId = obj.getString("cust_mercht_id");
                                 super.update(new LambdaUpdateWrapper<Vendor>()
                                         .set(Vendor::getEnterpriseCode, custMerchtId)
+                                        .set(Vendor::getMiddleVendorCode, custMerchtId)
                                         .eq(Vendor::getId, id));
                                 List<TAccountInfo> list = accountService.list(new LambdaUpdateWrapper<TAccountInfo>()
                                         .eq(TAccountInfo::getUpId, bean.getId()));

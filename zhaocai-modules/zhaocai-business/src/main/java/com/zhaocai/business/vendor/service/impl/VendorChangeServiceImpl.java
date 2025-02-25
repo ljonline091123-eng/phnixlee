@@ -646,7 +646,7 @@ public class VendorChangeServiceImpl extends ServiceImpl<VendorChangeMapper,Vend
         contactChangeService.handleApprove(vendorChange);
         //推送供应商信息
         pushVendor(vendorChange.getVendorId(),Vendor.LOG_TYPE_MODIFY);
-        vendorService.pushMarketVendor(vendorChange.getVendorId());
+        //vendorService.pushMarketVendor(vendorChange.getVendorId());
     }
 
     private void pushVendor(Long id, String type) {
@@ -656,7 +656,8 @@ public class VendorChangeServiceImpl extends ServiceImpl<VendorChangeMapper,Vend
         if(bean != null){
             Map<String, Object> map = new HashMap<>();
             map.put("internal_id", bean.getId() + "");
-            map.put("dept_id",  bean.getFirstCooperationCompanyCode());
+            SysDept   newdept= remoteSystemService.getByThridDeptId(bean.getFirstCooperationCompanyCode(),"inner");
+            map.put("dept_id",  newdept.getZtDeptId());
             //map.put("cust_mercht_id",  "");
             map.put("cust_mercht_full_name",  bean.getEnterpriseName());
             map.put("cust_mercht_cdtfy",  "供应商");
@@ -669,7 +670,11 @@ public class VendorChangeServiceImpl extends ServiceImpl<VendorChangeMapper,Vend
             map.put("corp_princ_legal_rep",  bean.getLegalRepresentative());
             map.put("unified_soci_crdt_cd",  bean.getSocialCreditCode());
             map.put("rgst_cap", bean.getRegisteredCapital()==null? new BigDecimal(0):bean.getRegisteredCapital().multiply(new BigDecimal(10000)) );
-            map.put("oper_range",  bean.getBusinessScope());
+            String range = bean.getBusinessScope();
+            if(range !=null &&range.length()>0){
+                range = range.replaceAll("\\n|\\r\\n", "");
+            }
+            map.put("oper_range", range);
             //map.put("fdg_tm",  "");//成立时间
             map.put("czp_zone_rgst_name",  "中国");
             map.put("czp_zone_rgst_cd",  "156");
@@ -703,7 +708,7 @@ public class VendorChangeServiceImpl extends ServiceImpl<VendorChangeMapper,Vend
             //map.put("setup_person",  "胡杰");//创建人
             //map.put("setup_person_id",  "201700209");
             JSONObject jsonObject = new JSONObject(map);
-            if(bean != null && StringUtil.isEmpty(bean.getMiddleVendorCode())){
+            if(bean != null && StringUtil.isEmpty(bean.getEnterpriseCode())){
                 //如果没有中台code就要走中台新增方法
                 JSONObject object = dataCenterUtil.postCommonInfo(jsonObject, dataMiddlePlatformConfig.getVendorAdd(), Vendor.LOG_TYPE_ADD, SecurityUtils.getUsername(), null);
                 if (object != null && object.containsKey("code") && object.getInteger("code") == 200) {
@@ -715,6 +720,7 @@ public class VendorChangeServiceImpl extends ServiceImpl<VendorChangeMapper,Vend
                             JSONObject obj = added.getJSONObject(0);
                             String custMerchtId = obj.getString("cust_mercht_id");
                             vendorService.update(new LambdaUpdateWrapper<Vendor>()
+                                    .set(Vendor::getEnterpriseCode, custMerchtId)
                                     .set(Vendor::getMiddleVendorCode, custMerchtId)
                                     .eq(Vendor::getId, id));
                             List<TAccountInfo> list = accountService.list(new LambdaUpdateWrapper<TAccountInfo>()
@@ -722,6 +728,9 @@ public class VendorChangeServiceImpl extends ServiceImpl<VendorChangeMapper,Vend
                             if (!list.isEmpty()) {
                                 list.stream().forEach(p -> {
                                     accountService.pushAcct(p,bean, custMerchtId, Vendor.LOG_TYPE_ADD);
+                                });
+                                list.stream().forEach(p -> {
+                                    accountService.pushAcct(p,bean, custMerchtId, Vendor.LOG_TYPE_MODIFY);
                                 });
                             }
                         }
