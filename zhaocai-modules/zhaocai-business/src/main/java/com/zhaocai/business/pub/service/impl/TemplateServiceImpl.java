@@ -148,8 +148,8 @@ public class TemplateServiceImpl extends ServiceImpl<TemplateMapper,Template> im
         }
 
         // 处理合同模板
-//        if (requestVO.getTemplateType() == 1) {
-//            // 合同模板，必须要有合同签章信息
+//        if (requestVO.getTemplateType() == 1 || requestVO.getTemplateType() == 3) {
+//            // 合同模板，补充协议模板，必须要有合同签章信息
 //            if (CollectionUtil.isEmpty(requestVO.getAgreementSignStamperList())) {
 //                throw new BusinessException("合同签章签署位置信息不能为空");
 //            }
@@ -183,7 +183,7 @@ public class TemplateServiceImpl extends ServiceImpl<TemplateMapper,Template> im
             }
         }
 
-        if (template.getTemplateType() == 1) {
+        if (template.getTemplateType() == 1 || template.getTemplateType() == 3) {
             List<AgreementSignStamper> signStampers = agreementSignStamperService.listByTemplateId(id);
             templateVO.setAgreementSignStamperList(BeanCopierUtil.copyList(signStampers, AgreementSignStamperVO.class));
         }
@@ -242,7 +242,10 @@ public class TemplateServiceImpl extends ServiceImpl<TemplateMapper,Template> im
     private void updateAttachment(long templateId,int templateType,long attachmentId) {
         Attachment attachment = attachmentService.getById(attachmentId);
         ValidateUtils.isNullException(attachment,"上传的附件不存在,请确认");
-        AttachmentTypeEnum typeEnum = templateType == 1 ? AttachmentTypeEnum.TEMPLATE_AGREEMENT : AttachmentTypeEnum.TEMPLATE_BIDDING;
+        AttachmentTypeEnum typeEnum =
+                templateType == 1 ? AttachmentTypeEnum.TEMPLATE_AGREEMENT :
+                templateType == 2 ? AttachmentTypeEnum.TEMPLATE_BIDDING :
+                AttachmentTypeEnum.TEMPLATE_SUPPLEMENTAL;
         attachmentService.updateBusiness(attachment.getId(),typeEnum,templateId);
     }
 }
