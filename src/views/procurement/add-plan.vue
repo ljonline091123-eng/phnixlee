@@ -1374,8 +1374,51 @@ export default {
           }
           console.log(formData,'this.formData');
           console.log("---"+JSON.stringify(this.materialsLists))
+          /* 对象递归需要处理 千分位的属性 处理提交给Java后台对应的BigDecimal类型 */
+          const targetKeys = [
+            /* 租赁数量 */
+            "rentQuantity",
+            /* 租赁时间 */
+            "rentTime",
+            /* 基价 */
+            "basePrice",
+            /* 浮动率 */
+            "floatingRate",
+            /* 卸费 */
+            // "unloadingFee",
+            /* 浮动价 */
+            "floatingPrice",
+            /* 税额 */
+            "taxAmount",
+            /* 金额(含税) */
+            "amountInclTax",
+            /* 金额(不含税) */
+            "amountExclTax",
+            /* 单价(含税) */
+            "unitPriceInclTax",
+            /* 单价(不含税) */
+            "unitPriceExclTax",
+            /* 税率 */
+            "taxRate",
+            /* 已使用数量 */
+            "usedCount",
+            /* 数量 */
+            "count",
+            /* 规划金额（含税） */
+            "plannedAmountInclTax",
+            /* 已发生规划金额 */
+            "incurredPlannedAmount",
+            /* 规划余量 */
+            "planningBalance",
+            /* 基价 */
+            "basePrice",
+            /* 指导价 */
+            "guidancePrice"
+          ];
+          let formDataHandle = this.removeThousandsSeparator(formData,targetKeys);
+          console.log('%c👽 提交数据处理后111 ', `font-size: 14px;background-color: #f00;`, formDataHandle);
           try{
-            const res = await saveProcurementPlan(formData);
+            const res = await saveProcurementPlan(formDataHandle);
             if(!this.isUpdate && res?.data?.materialsLists.length>0){
               console.log("-//--"+JSON.stringify(this.materialsLists))
               this.projectCode=res.data.projectCode
