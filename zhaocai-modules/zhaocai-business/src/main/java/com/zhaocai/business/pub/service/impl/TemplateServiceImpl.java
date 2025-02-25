@@ -1,5 +1,6 @@
 package com.zhaocai.business.pub.service.impl;
 
+import cn.hutool.core.collection.CollectionUtil;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.zhaocai.business.agreement.domain.AgreementSignStamper;
@@ -16,9 +17,8 @@ import com.zhaocai.business.pub.service.IAttachmentService;
 import com.zhaocai.business.pub.service.ITemplateService;
 import com.zhaocai.business.pub.vo.req.TemplateListQueryVO;
 import com.zhaocai.business.pub.vo.req.TemplateSaveRequestVO;
-import com.zhaocai.business.pub.vo.res.AttachmentVO;
-import com.zhaocai.business.pub.vo.res.TemplateListVO;
-import com.zhaocai.business.pub.vo.res.TemplateVO;
+import com.zhaocai.business.pub.vo.req.UnderlingTemplateListQueryVO;
+import com.zhaocai.business.pub.vo.res.*;
 import com.zhaocai.common.core.bean.PageResult;
 import com.zhaocai.common.core.utils.NumberUtil;
 import com.zhaocai.common.core.utils.StringUtils;
@@ -54,6 +54,12 @@ public class TemplateServiceImpl extends ServiceImpl<TemplateMapper,Template> im
     @Override
     public PageResult<TemplateListVO> listPage(TemplateListQueryVO queryVO) {
         IPage<TemplateListVO> pages = baseMapper.selectList(queryVO.toMybatisPage(),queryVO);
+        return new PageResult<>(pages);
+    }
+
+    @Override
+    public PageResult<UnderlingTemplateListVO> UnderlinglistPage(UnderlingTemplateListQueryVO queryVO) {
+        IPage<UnderlingTemplateListVO> pages = baseMapper.UnderlingselectList(queryVO.toMybatisPage(),queryVO);
         return new PageResult<>(pages);
     }
 
@@ -184,6 +190,35 @@ public class TemplateServiceImpl extends ServiceImpl<TemplateMapper,Template> im
         }
 
         if (template.getTemplateType() == 1 || template.getTemplateType() == 3) {
+            List<AgreementSignStamper> signStampers = agreementSignStamperService.listByTemplateId(id);
+            templateVO.setAgreementSignStamperList(BeanCopierUtil.copyList(signStampers, AgreementSignStamperVO.class));
+        }
+
+        templateVO.setFileName(attachment.getFileName());
+        templateVO.setFileUrl(attachment.getFileUrl());
+        templateVO.setAttachmentId(attachment.getId());
+        return templateVO;
+    }
+
+    @Override
+    public UnderlingTemplateDetailVO UnderlingDetail(Long id) {
+        Template template = this.getById(id);
+        ValidateUtils.isNullException(template,"该模板不存在");
+
+        UnderlingTemplateDetailVO templateVO = BeanCopierUtil.copyBean(template,UnderlingTemplateDetailVO.class);
+
+        // 获取附件
+        Attachment attachment = attachmentService.getById(template.getAttachmentId());
+        //合同类型
+        for (ProcurementPlanTypeEnum value : ProcurementPlanTypeEnum.values()) {
+            if (StringUtils.isNotEmpty(templateVO.getContractType())) {
+                if (templateVO.getContractType().equals(String.valueOf(value.getType()))) {
+                    templateVO.setContractName(value.getDesc());
+                }
+            }
+        }
+
+        if (template.getTemplateType() == 1 ||template.getTemplateType() == 3) {
             List<AgreementSignStamper> signStampers = agreementSignStamperService.listByTemplateId(id);
             templateVO.setAgreementSignStamperList(BeanCopierUtil.copyList(signStampers, AgreementSignStamperVO.class));
         }

@@ -59,6 +59,22 @@
         order by tt.create_time desc
     </select>
 
+    <select id="UnderlingselectList" resultMap="TemplateListResult">
+        select tt.id,tt.template_name,tt.template_type,tt.using_unit_name,tt.contract_type,tt.create_by,tt.create_time,ta.file_name,ta.file_url,tt.attachment_id
+        from tb_template tt
+        left join tb_attachment ta on tt.attachment_id = ta.id
+        <where>
+            <if test="queryVO.templateType != null">
+                tt.template_type = #{queryVO.templateType,jdbcType=INTEGER}
+            </if>
+            <if test="queryVO.templateName != null and queryVO.templateName != ''">
+                and tt.template_name like concat('%',#{queryVO.templateName,jdbcType=VARCHAR},'%')
+            </if>
+            and tt.del_flag = 0
+        </where>
+        order by tt.create_time desc
+    </select>
+
 
     <select id="switchList" resultMap="TemplateListResult">
         select tt.id,tt.template_name,tt.template_type,tt.using_unit_name,tt.contract_type,tt.create_by,tt.create_time,ta.file_name,ta.file_url,tt.attachment_id

@@ -4,9 +4,8 @@ import com.baomidou.mybatisplus.extension.service.IService;
 import com.zhaocai.business.pub.domain.Template;
 import com.zhaocai.business.pub.vo.req.TemplateListQueryVO;
 import com.zhaocai.business.pub.vo.req.TemplateSaveRequestVO;
-import com.zhaocai.business.pub.vo.res.AttachmentVO;
-import com.zhaocai.business.pub.vo.res.TemplateListVO;
-import com.zhaocai.business.pub.vo.res.TemplateVO;
+import com.zhaocai.business.pub.vo.req.UnderlingTemplateListQueryVO;
+import com.zhaocai.business.pub.vo.res.*;
 import com.zhaocai.common.core.bean.PageResult;
 
 /**
@@ -23,6 +22,8 @@ public interface ITemplateService  extends IService<Template> {
      * @return
      */
     PageResult<TemplateListVO> listPage(TemplateListQueryVO queryVO);
+
+    PageResult<UnderlingTemplateListVO> UnderlinglistPage(UnderlingTemplateListQueryVO queryVO);
 
     /**
      * 模板列表查询
@@ -56,6 +57,8 @@ public interface ITemplateService  extends IService<Template> {
      * @return
      */
     TemplateVO detail(Long id);
+
+    UnderlingTemplateDetailVO UnderlingDetail(Long id);
 
     /**
      * 获取模板的附件相关信息
