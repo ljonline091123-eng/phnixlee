@@ -142,6 +142,16 @@
                   vendor.contactPhone
                 }}</el-form-item>
               </el-col>
+              <el-col :span="8">
+                <el-form-item label="是否外部客商">{{
+                  vendor.isExternalText
+                  }}</el-form-item>
+              </el-col>
+              <el-col :span="8">
+                <el-form-item label="企业编号">{{
+                  vendor.enterpriseCode
+                  }}</el-form-item>
+              </el-col>
               <el-col :span="24">
                 <el-form-item label="详细地址">{{
                   vendor.enterpriseAddress
@@ -262,7 +272,7 @@
           name="aptitude"
           style="overflow: auto; height: auto"
         >
-          <el-row>
+          <!--<el-row>
             <el-col :span="6">
               <div class="img-box">
                 <div class="img-title">营业执照</div>
@@ -290,12 +300,12 @@
                        <div style="font-size: 12px;margin: 30px 0 0 8px;">{{ businessLicense.attachmentFileName }}</div>
                     </div>
                 </template>
-<!--                <el-image-->
-<!--                  style="width: 200px; height: 200px"-->
-<!--                  :src="businessLicense.attachmentFileUrl"-->
-<!--                  :preview-src-list="businessLicense.srcList"-->
-<!--                >-->
-<!--                </el-image>-->
+&lt;!&ndash;                <el-image&ndash;&gt;
+&lt;!&ndash;                  style="width: 200px; height: 200px"&ndash;&gt;
+&lt;!&ndash;                  :src="businessLicense.attachmentFileUrl"&ndash;&gt;
+&lt;!&ndash;                  :preview-src-list="businessLicense.srcList"&ndash;&gt;
+&lt;!&ndash;                >&ndash;&gt;
+&lt;!&ndash;                </el-image>&ndash;&gt;
                 <div class="img-text">
                   有效期：{{ businessLicense.effectiveBeginDate }}-{{ businessLicense.effectiveEndDate }}
                 </div>
@@ -312,9 +322,9 @@
                   >
                   </el-image>
                 </template>
-                <!-- <template v-else>
+                &lt;!&ndash; <template v-else>
                   <div style="width: 200px; height: 200px; color: #0c7fe1;"><br>{{ integrity.attachmentFileName }}</div>
-                </template> -->
+                </template> &ndash;&gt;
                  <template v-else>
                   <div style="width: 180px; height: 200px; color: #2b4acb; border: 1px solid #999999; ">
                     <div style="margin: 60px 0 0 15px;">
@@ -332,16 +342,126 @@
                        <div style="font-size: 12px;margin: 30px 0 0 8px;">{{ integrity.attachmentFileName }}</div>
                     </div>
                 </template>
-<!--                <el-image-->
-<!--                  style="width: 200px; height: 200px"-->
-<!--                  :src="integrity.attachmentFileUrl"-->
-<!--                  :preview-src-list="integrity.srcList"-->
-<!--                >-->
-<!--                </el-image>-->
+&lt;!&ndash;                <el-image&ndash;&gt;
+&lt;!&ndash;                  style="width: 200px; height: 200px"&ndash;&gt;
+&lt;!&ndash;                  :src="integrity.attachmentFileUrl"&ndash;&gt;
+&lt;!&ndash;                  :preview-src-list="integrity.srcList"&ndash;&gt;
+&lt;!&ndash;                >&ndash;&gt;
+&lt;!&ndash;                </el-image>&ndash;&gt;
                 <div class="img-text">
                   有效期：{{ integrity.effectiveBeginDate }}-{{
                     integrity.effectiveEndDate
                   }}
+                </div>
+              </div>
+            </el-col>
+          </el-row>-->
+          <el-row>
+            <el-col :span="24">
+              <div class="img-box">
+                <div class="img-title">营业执照</div>
+                <div style="display: flex">
+                  <div
+                    class="img-box-item"
+                    v-for="(item, index) in businessLicenseList"
+                    :key="index"
+                    style="margin: 0px 60px 0px 0px"
+                  >
+                    <template v-if="item.attachmentFileType">
+                      <el-image
+                        style="width: 200px; height: 200px"
+                        :src="item.attachmentFileUrl"
+                        :preview-src-list="item.srcList"
+                      >
+                      </el-image>
+                    </template>
+                    <!-- <template v-else>
+                      <div style="width: 200px; height: 200px; color: #0c7fe1;"><br>{{ item.attachmentFileName }}</div>
+                    </template> -->
+                    <template v-else>
+                      <div style="width: 180px; height: 200px; color: #2b4acb; border: 1px solid #999999; ">
+                        <div style="margin: 60px 0 0 15px;">
+                          <el-button
+                            size="medium"
+                            type="primary"
+                            @click="checkAttachment(item.attachmentFileUrl)"
+                          >预览</el-button>
+                          <el-button
+                            type="primary"
+                            size="medium"
+                            @click="downAttachment(item.attachmentFileUrl, item.attachmentFileName)"
+                          >下载</el-button>
+                        </div>
+                        <div style="font-size: 12px;margin: 30px 0 0 8px;">{{ item.attachmentFileName }}</div>
+                      </div>
+                    </template>
+                    <!--                    <el-image-->
+                    <!--                      style="width: 200px; height: 200px"-->
+                    <!--                      :src="item.attachmentFileUrl"-->
+                    <!--                      :preview-src-list="item.srcList"-->
+                    <!--                    >-->
+                    <!--                    </el-image>-->
+                    <div class="img-text">
+                      有效期：{{ item.effectiveBeginDate }}-{{
+                      item.effectiveEndDate
+                      }}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </el-col>
+          </el-row>
+          <el-row>
+            <el-col :span="24">
+              <div class="img-box">
+                <div class="img-title">诚信合规材料</div>
+                <div style="display: flex">
+                  <div
+                    class="img-box-item"
+                    v-for="(item, index) in integrityList"
+                    :key="index"
+                    style="margin: 0px 60px 0px 0px"
+                  >
+                    <template v-if="item.attachmentFileType">
+                      <el-image
+                        style="width: 200px; height: 200px"
+                        :src="item.attachmentFileUrl"
+                        :preview-src-list="item.srcList"
+                      >
+                      </el-image>
+                    </template>
+                    <!-- <template v-else>
+                      <div style="width: 200px; height: 200px; color: #0c7fe1;"><br>{{ item.attachmentFileName }}</div>
+                    </template> -->
+                    <template v-else>
+                      <div style="width: 180px; height: 200px; color: #2b4acb; border: 1px solid #999999; ">
+                        <div style="margin: 60px 0 0 15px;">
+                          <el-button
+                            size="medium"
+                            type="primary"
+                            @click="checkAttachment(item.attachmentFileUrl)"
+                          >预览</el-button>
+                          <el-button
+                            type="primary"
+                            size="medium"
+                            @click="downAttachment(item.attachmentFileUrl, item.attachmentFileName)"
+                          >下载</el-button>
+                        </div>
+                        <div style="font-size: 12px;margin: 30px 0 0 8px;">{{ item.attachmentFileName }}</div>
+                      </div>
+                    </template>
+                    <!--                    <el-image-->
+                    <!--                      style="width: 200px; height: 200px"-->
+                    <!--                      :src="item.attachmentFileUrl"-->
+                    <!--                      :preview-src-list="item.srcList"-->
+                    <!--                    >-->
+                    <!--                    </el-image>-->
+                    <div class="img-text">
+                      有效期：{{ item.effectiveBeginDate }}-{{
+                      item.effectiveEndDate
+                      }}
+                    </div>
+                  </div>
                 </div>
               </div>
             </el-col>
@@ -798,6 +918,8 @@ export default {
       //资质材料
       businessLicense: {}, //营业执照
       integrity: {}, //诚信合规材料
+      businessLicenseList:  [], //营业执照
+      integrityList:  [], //诚信合规材料
       legalAuthorizationList: [], //法人授权书
       bankList:[],
       relevantCertificationList: [], //相关资质
@@ -875,7 +997,10 @@ export default {
        this.dialogVisible=true
     },
     ifPdf(url){
-      return url.toLowerCase().endsWith(".pdf")
+       if(url){
+         return url.toLowerCase().endsWith(".pdf")
+       }
+      return false
     },
     showSecretTips(type) {
       showSecretRelatedTips(()=>{
@@ -960,6 +1085,24 @@ export default {
             )
           : [];
         this.relevantCertificationList.forEach((item,index)=>{
+          item.attachmentFileType = this.ifPdf(item.attachmentFileUrl) ? false : true
+        })
+        this.businessLicenseList = res.data.certificationList
+          ?.businessLicenseList?.length
+          ? res.data.certificationList.businessLicenseList.map(
+            (item) => ({ ...item, srcList: [item.attachmentFileUrl] })
+          )
+          : [];
+        this.businessLicenseList.forEach((item,index)=>{
+          item.attachmentFileType = this.ifPdf(item.attachmentFileUrl) ? false : true
+        })
+        this.integrityList = res.data.certificationList
+          ?.integrityList?.length
+          ? res.data.certificationList.integrityList.map(
+            (item) => ({ ...item, srcList: [item.attachmentFileUrl] })
+          )
+          : [];
+        this.integrityList.forEach((item,index)=>{
           item.attachmentFileType = this.ifPdf(item.attachmentFileUrl) ? false : true
         })
         console.log(res, "res-res");
