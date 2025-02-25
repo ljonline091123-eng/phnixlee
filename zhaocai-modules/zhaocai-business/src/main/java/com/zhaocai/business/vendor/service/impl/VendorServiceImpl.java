@@ -26,6 +26,7 @@ import com.zhaocai.business.manager.http.dto.res.BpmInitializeResponseDTO;
 import com.zhaocai.business.manager.http.dto.res.BpmListProcessLogResponseDTO;
 import com.zhaocai.business.manager.http.dto.res.BpmLoadTaskDefResponseDTO;
 import com.zhaocai.business.manager.http.dto.res.ListCataLogDTO;
+import com.zhaocai.business.manager.http.service.UnderlingRestTemplateService;
 import com.zhaocai.business.manager.http.service.UnderlingSystemService;
 import com.zhaocai.business.process.service.IBPMProcessService;
 import com.zhaocai.business.procurement.vo.res.ContractPlanningListVO;
@@ -142,9 +143,6 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
 
     @Autowired
     private DataMiddlePlatformConfig dataMiddlePlatformConfig;
-
-    @Autowired
-    private ISysDictDataService sysDictDataService;
 
     @Autowired
     private IVendorCertificationChangeService certificationChangeService;
@@ -1096,6 +1094,33 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
 
     }
 
+    @Override
+    public void pushMarketVendor(Long id){
+        ExecutorService executor = Executors.newCachedThreadPool();
+        executor.execute(() -> {
+            VendorManagementDetailVO bean = this.getVendorManagementDetail(id);
+            if(bean != null && bean.getVendor() != null){
+                MarketSupplierRequestDTO requestDTO = new MarketSupplierRequestDTO();
+                requestDTO.setName(bean.getVendor().getEnterpriseName());
+                requestDTO.setUnifiedSocialCreditCode(bean.getVendor().getSocialCreditCode());
+                requestDTO.setProvinceName(bean.getVendor().getEnterpriseProvinceName());
+                requestDTO.setCityName(bean.getVendor().getEnterpriseCityName());
+                //requestDTO.setdistrictName
+                requestDTO.setAddress(bean.getVendor().getEnterpriseAddress());
+                requestDTO.setBusinessScope(bean.getVendor().getBusinessScope());
+                if(bean.getMainContact() != null){
+                    requestDTO.setContactName(bean.getMainContact().getContactName());
+                    requestDTO.setContactPhone(bean.getMainContact().getContactPhone());
+                }
+                if(bean.getCertificationList().getBusinessLicense() != null){
+                    requestDTO.setBusinessLicense(bean.getCertificationList().getBusinessLicense().getAttachmentFileUrl());
+                }
+                UnderlingRestTemplateService.postForObject(UnderlingPlatformUrlEnum.MARKET_SUPPLIER_PUSH,
+                        MarketSupplierRequestDTO.class, requestDTO);
+            }
+        });
+        executor.shutdown();
+    }
 
     @Override
     public void pushVendor(Long id,String type, Integer isBlack){
