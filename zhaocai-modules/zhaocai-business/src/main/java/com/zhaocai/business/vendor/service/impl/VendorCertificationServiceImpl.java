@@ -1,5 +1,6 @@
 package com.zhaocai.business.vendor.service.impl;
 
+import cn.hutool.core.collection.CollectionUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.zhaocai.business.common.enums.CertificationTypeEnum;
@@ -20,6 +21,7 @@ import com.zhaocai.common.core.utils.StringUtils;
 import com.zhaocai.common.core.utils.bean.BeanCopierUtil;
 import org.springframework.stereotype.Service;
 
+import javax.validation.constraints.NotNull;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -97,11 +99,23 @@ public class VendorCertificationServiceImpl extends ServiceImpl<VendorCertificat
             VendorCertificationVO vendorCertificationVo = BeanCopierUtil.copyBean(certification,VendorCertificationVO.class);
 
             if(CertificationTypeEnum.BUSINESS_LICENSE.equalsType(certification.getBusinessCode()))  {
-                listVO.setBusinessLicense(vendorCertificationVo);
+                List<VendorCertificationVO> businessLicenseList = listVO.getBusinessLicenseList();
+                if (businessLicenseList == null) {
+                    businessLicenseList = new ArrayList<>();
+                }
+                businessLicenseList.add(vendorCertificationVo);
+                listVO.setBusinessLicenseList(businessLicenseList);
+                //listVO.setBusinessLicense(vendorCertificationVo);
             }  else if (CertificationTypeEnum.INTEGRITY.equalsType(certification.getBusinessCode())) {
-                listVO.setIntegrity(vendorCertificationVo);
+                List<VendorCertificationVO> integrityList = listVO.getIntegrityList();
+                if (integrityList == null) {
+                    integrityList = new ArrayList<>();
+                }
+                integrityList.add(vendorCertificationVo);
+                listVO.setIntegrityList(integrityList);
+                //listVO.setIntegrity(vendorCertificationVo);
             }else if (CertificationTypeEnum.LEGAL_AUTHORIZATION.equalsType(certification.getBusinessCode())
-                    && mainContactId.equals(certification.getBusinessId())) {
+                    && (mainContactId.equals(certification.getBusinessId())||vendorId.equals(certification.getBusinessId()))) {
                 // 只显示主要联系人的授权书
                 List<VendorCertificationVO> list = listVO.getLegalAuthorizationList();
                 if (list == null) {
@@ -135,13 +149,31 @@ public class VendorCertificationServiceImpl extends ServiceImpl<VendorCertificat
         for(VendorCertification certification : attachments){
             VendorCertificationRequestVO vendorCertificationVo = BeanCopierUtil.copyBean(certification,VendorCertificationRequestVO.class);
             if(CertificationTypeEnum.BUSINESS_LICENSE.equalsType(certification.getBusinessCode()))  {
-                vendorRequestVO.setBusinessLicense(vendorCertificationVo);
+                List<VendorCertificationRequestVO> businessLicenseList = vendorRequestVO.getBusinessLicenseList();
+                if (businessLicenseList == null) {
+                    businessLicenseList = new ArrayList<>();
+                }
+                businessLicenseList.add(vendorCertificationVo);
+                vendorRequestVO.setBusinessLicenseList(businessLicenseList);
+                //vendorRequestVO.setBusinessLicense(vendorCertificationVo);
             }  else if (CertificationTypeEnum.INTEGRITY.equalsType(certification.getBusinessCode())) {
-                vendorRequestVO.setIntegrity(vendorCertificationVo);
+                List<VendorCertificationRequestVO> integrityList = vendorRequestVO.getIntegrityList();
+                if (integrityList == null) {
+                    integrityList = new ArrayList<>();
+                }
+                integrityList.add(vendorCertificationVo);
+                vendorRequestVO.setIntegrityList(integrityList);
+                //vendorRequestVO.setIntegrity(vendorCertificationVo);
             }else if (CertificationTypeEnum.LEGAL_AUTHORIZATION.equalsType(certification.getBusinessCode())
-                    && mainContactId.equals(certification.getBusinessId())) {
+                    && (mainContactId.equals(certification.getBusinessId())||vendorId.equals(certification.getBusinessId()))) {
                 // 只显示主要联系人的授权书
-                vendorRequestVO.setLegalAuthorization(vendorCertificationVo);
+                List<VendorCertificationRequestVO> legalAuthorizationList = vendorRequestVO.getLegalAuthorizationList();
+                if (legalAuthorizationList == null) {
+                    legalAuthorizationList = new ArrayList<>();
+                }
+                legalAuthorizationList.add(vendorCertificationVo);
+                vendorRequestVO.setLegalAuthorizationList(legalAuthorizationList);
+                //vendorRequestVO.setLegalAuthorization(vendorCertificationVo);
                 //资质信息
             }else if (CertificationTypeEnum.RELEVANT_CERTIFICATION.equalsType(certification.getBusinessCode())) {
                 List<VendorCertificationRequestVO> list = vendorRequestVO.getRelevantCertificationList();
@@ -170,7 +202,7 @@ public class VendorCertificationServiceImpl extends ServiceImpl<VendorCertificat
     @Override
     public void addCertification(VendorCertificationRequestVO requestVO, Long vendorId,CertificationTypeEnum certificationType) {
         if (NumberUtil.isNullOrZero(requestVO.getId())) {
-            if (CertificationTypeEnum.BUSINESS_LICENSE.equalsType(certificationType.getType())
+            /*if (CertificationTypeEnum.BUSINESS_LICENSE.equalsType(certificationType.getType())
                     || CertificationTypeEnum.INTEGRITY.equalsType(certificationType.getType())) {
                 // 判断是否唯一
                 long count = super.count(new LambdaQueryWrapper<VendorCertification>()
@@ -179,7 +211,7 @@ public class VendorCertificationServiceImpl extends ServiceImpl<VendorCertificat
                 if (count >= 1) {
                     throw new BusinessException(certificationType.getDesc() + "已经存在一个了，请勿重新添加");
                 }
-            }
+            }*/
             VendorCertification vendorCertification  = BeanCopierUtil.copyBean(requestVO,VendorCertification.class);
             vendorCertification.setVendorId(vendorId);
             vendorCertification.setBusinessId(vendorId);
@@ -218,6 +250,31 @@ public class VendorCertificationServiceImpl extends ServiceImpl<VendorCertificat
         return baseMapper.updateByVendorId(id,uuid);
     }
 
+    @Override
+    public Long addCertificationList(List<VendorCertificationRequestVO> requestList, CertificationTypeEnum certificationType, Long vendorId) {
+        super.remove(new LambdaQueryWrapper<VendorCertification>()
+                .eq(VendorCertification::getVendorId,vendorId)
+                .eq(VendorCertification::getDelFlag,0)
+                .eq(VendorCertification::getBusinessCode,certificationType));
+        List<VendorCertification> list = requestList.stream()
+                .map(x ->{
+                    VendorCertification certification = new VendorCertification();
+                    certification.setVendorId(vendorId);
+                    certification.setBusinessCode(certificationType.getType());
+                    certification.setBusinessId(vendorId);
+                    certification.setAttachmentFileUrl(x.getAttachmentFileUrl());
+                    certification.setAttachmentFileName(x.getAttachmentFileName());
+                    certification.setEffectiveBeginDate(x.getEffectiveBeginDate());
+                    certification.setEffectiveEndDate(x.getEffectiveEndDate());
+                    return  certification;
+                }).collect(Collectors.toList());
+        super.saveBatch(list);
+        if(CollectionUtil.isNotEmpty(list)){
+            return list.get(0).getId();
+        }
+        return null;
+    }
+
 
     @Override
     public VendorOneRequestVO listCertification(VendorOneRequestVO vo, Long vendorId, Long mainContactId) {
@@ -233,13 +290,31 @@ public class VendorCertificationServiceImpl extends ServiceImpl<VendorCertificat
         for(VendorCertification certification : attachments){
             VendorCertificationRequestVO vendorCertificationVo = BeanCopierUtil.copyBean(certification,VendorCertificationRequestVO.class);
             if(CertificationTypeEnum.BUSINESS_LICENSE.equalsType(certification.getBusinessCode()))  {
-                vo.setBusinessLicense(vendorCertificationVo);
+                List<VendorCertificationRequestVO> businessLicenseList = vo.getBusinessLicenseList();
+                if (businessLicenseList == null) {
+                    businessLicenseList = new ArrayList<>();
+                }
+                businessLicenseList.add(vendorCertificationVo);
+                vo.setBusinessLicenseList(businessLicenseList);
+                //vo.setBusinessLicense(vendorCertificationVo);
             }  else if (CertificationTypeEnum.INTEGRITY.equalsType(certification.getBusinessCode())) {
-                vo.setIntegrity(vendorCertificationVo);
+                List<VendorCertificationRequestVO> integrityList = vo.getIntegrityList();
+                if (integrityList == null) {
+                    integrityList = new ArrayList<>();
+                }
+                integrityList.add(vendorCertificationVo);
+                vo.setIntegrityList(integrityList);
+                //vo.setIntegrity(vendorCertificationVo);
             }else if (CertificationTypeEnum.LEGAL_AUTHORIZATION.equalsType(certification.getBusinessCode())
-                    && mainContactId.equals(certification.getBusinessId())) {
+                    && (mainContactId.equals(certification.getBusinessId())||vendorId.equals(certification.getBusinessId()))) {
                 // 只显示主要联系人的授权书
-                vo.setLegalAuthorization(vendorCertificationVo);
+                List<VendorCertificationRequestVO> legalAuthorizationList = vo.getLegalAuthorizationList();
+                if (legalAuthorizationList == null) {
+                    legalAuthorizationList = new ArrayList<>();
+                }
+                legalAuthorizationList.add(vendorCertificationVo);
+                vo.setLegalAuthorizationList(legalAuthorizationList);
+               // vo.setLegalAuthorization(vendorCertificationVo);
                 //资质信息
             }else if (CertificationTypeEnum.RELEVANT_CERTIFICATION.equalsType(certification.getBusinessCode())) {
                 List<VendorCertificationRequestVO> list = vo.getRelevantCertificationList();

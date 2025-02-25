@@ -14,21 +14,26 @@ import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.deepoove.poi.data.Numberings;
+import com.zhaocai.business.common.conver.ProcurementPlanTypeConver;
 import com.zhaocai.business.common.enums.*;
 import com.zhaocai.business.common.exception.BusinessException;
 import com.zhaocai.business.common.exception.NotFoundException;
 import com.zhaocai.business.common.exception.ParamValidateException;
 import com.zhaocai.business.common.utils.ValidateUtils;
+import com.zhaocai.business.manager.http.common.config.UnderlingPlatformUrlEnum;
 import com.zhaocai.business.manager.http.dto.req.*;
 import com.zhaocai.business.manager.http.dto.res.BpmInitializeResponseDTO;
 import com.zhaocai.business.manager.http.dto.res.BpmListProcessLogResponseDTO;
 import com.zhaocai.business.manager.http.dto.res.BpmLoadTaskDefResponseDTO;
 import com.zhaocai.business.manager.http.dto.res.ListCataLogDTO;
+import com.zhaocai.business.manager.http.service.UnderlingRestTemplateService;
 import com.zhaocai.business.manager.http.service.UnderlingSystemService;
 import com.zhaocai.business.process.service.IBPMProcessService;
+import com.zhaocai.business.procurement.vo.res.ContractPlanningListVO;
 import com.zhaocai.business.pub.domain.DwCdBank;
 import com.zhaocai.business.pub.domain.TAccountInfo;
 import com.zhaocai.business.pub.service.*;
+import com.zhaocai.business.pub.service.impl.SysDictDataServiceImpl;
 import com.zhaocai.business.pub.vo.req.TAccountInfoVo;
 import com.zhaocai.business.vendor.config.DataMiddlePlatformConfig;
 import com.zhaocai.business.vendor.domain.*;
@@ -52,6 +57,7 @@ import com.zhaocai.common.signature.dto.sign.SignatureResponse;
 import com.zhaocai.common.signature.service.SignatureCommandFactory;
 import com.zhaocai.common.signature.service.command.CompanyAuthCommand;
 import com.zhaocai.system.api.domain.SysDept;
+import com.zhaocai.system.api.domain.SysDictData;
 import com.zhaocai.system.api.domain.SysUser;
 import com.zhaocai.system.api.system.RemoteSystemService;
 import com.zhaocai.system.api.system.RemoteUserService;
@@ -66,9 +72,11 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.ObjectUtils;
 
+import javax.annotation.Resource;
 import java.io.Serializable;
 import java.math.BigDecimal;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
@@ -104,7 +112,6 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
     @Autowired
     private IBPMProcessService processService;
 
-
     @Lazy
     @Autowired
     private IVendorChangeService vendorChangeService;
@@ -137,8 +144,11 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
     @Autowired
     private DataMiddlePlatformConfig dataMiddlePlatformConfig;
 
+    @Autowired
+    private IVendorCertificationChangeService certificationChangeService;
 
-
+    @Autowired
+    private IVendorContactChangeService contactChangeService;
 
     @Override
     @Transactional(propagation = Propagation.REQUIRED,rollbackFor = Exception.class)
@@ -267,12 +277,33 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
                 acount.setAcountType(AccountEnum.GYS_TYPE.getType());
                 accountService.save(acount);*/
                 // 保存供应商资质
-                vendorCertificationService.addCertification(requestVO.getBusinessLicense(), CertificationTypeEnum.BUSINESS_LICENSE,vendor.getId());
+                if(requestVO.getBusinessLicense() != null){
+                    vendorCertificationService.addCertification(requestVO.getBusinessLicense(), CertificationTypeEnum.BUSINESS_LICENSE,vendor.getId());
+                }
+                if(requestVO.getIntegrity() != null){
+                    vendorCertificationService.addCertification(requestVO.getIntegrity(), CertificationTypeEnum.INTEGRITY,vendor.getId());
+                }
+                if(requestVO.getLegalAuthorization() != null){
+                    legalAuthorizationId = vendorCertificationService.addCertification(requestVO.getLegalAuthorization(),CertificationTypeEnum.LEGAL_AUTHORIZATION,vendor.getId());
+                }
+                if (CollUtil.isNotEmpty(requestVO.getRelevantCertificationList())){
+                    vendorCertificationService.addCertification(requestVO.getRelevantCertificationList(), CertificationTypeEnum.RELEVANT_CERTIFICATION,vendor.getId());
+                }
+                if (CollUtil.isNotEmpty(requestVO.getBusinessLicenseList())){
+                    vendorCertificationService.addCertification(requestVO.getBusinessLicenseList(), CertificationTypeEnum.BUSINESS_LICENSE,vendor.getId());
+                }
+                if (CollUtil.isNotEmpty(requestVO.getIntegrityList())){
+                    vendorCertificationService.addCertification(requestVO.getIntegrityList(), CertificationTypeEnum.INTEGRITY,vendor.getId());
+                }
+                if (CollUtil.isNotEmpty(requestVO.getLegalAuthorizationList())){
+                    legalAuthorizationId = vendorCertificationService.addCertificationList(requestVO.getLegalAuthorizationList(), CertificationTypeEnum.LEGAL_AUTHORIZATION,vendor.getId());
+                }
+                /*vendorCertificationService.addCertification(requestVO.getBusinessLicense(), CertificationTypeEnum.BUSINESS_LICENSE,vendor.getId());
                 vendorCertificationService.addCertification(requestVO.getIntegrity(), CertificationTypeEnum.INTEGRITY,vendor.getId());
                 legalAuthorizationId = vendorCertificationService.addCertification(requestVO.getLegalAuthorization(),CertificationTypeEnum.LEGAL_AUTHORIZATION,vendor.getId());
                 if (CollUtil.isNotEmpty(requestVO.getRelevantCertificationList())){
                     vendorCertificationService.addCertification(requestVO.getRelevantCertificationList(), CertificationTypeEnum.RELEVANT_CERTIFICATION,vendor.getId());
-                }
+                }*/
                 // 主要联系人
                VendorContact contact = requestVO.getVendorContact();
                 // 新增供应商账号
@@ -337,12 +368,33 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
             acount.setId(IdUtil.getSnowflakeNextId());
             accountService.save(acount);
             // 保存供应商资质
-            vendorCertificationService.addCertification(requestVO.getBusinessLicense(), CertificationTypeEnum.BUSINESS_LICENSE,vendor.getId());
+            if(requestVO.getBusinessLicense() != null){
+                vendorCertificationService.addCertification(requestVO.getBusinessLicense(), CertificationTypeEnum.BUSINESS_LICENSE,vendor.getId());
+            }
+            if(requestVO.getIntegrity() != null){
+                vendorCertificationService.addCertification(requestVO.getIntegrity(), CertificationTypeEnum.INTEGRITY,vendor.getId());
+            }
+            if(requestVO.getLegalAuthorization() != null){
+                legalAuthorizationId = vendorCertificationService.addCertification(requestVO.getLegalAuthorization(),CertificationTypeEnum.LEGAL_AUTHORIZATION,vendor.getId());
+            }
+            if (CollUtil.isNotEmpty(requestVO.getRelevantCertificationList())){
+                vendorCertificationService.addCertification(requestVO.getRelevantCertificationList(), CertificationTypeEnum.RELEVANT_CERTIFICATION,vendor.getId());
+            }
+            if (CollUtil.isNotEmpty(requestVO.getBusinessLicenseList())){
+                vendorCertificationService.addCertification(requestVO.getBusinessLicenseList(), CertificationTypeEnum.BUSINESS_LICENSE,vendor.getId());
+            }
+            if (CollUtil.isNotEmpty(requestVO.getIntegrityList())){
+                vendorCertificationService.addCertification(requestVO.getIntegrityList(), CertificationTypeEnum.INTEGRITY,vendor.getId());
+            }
+            if (CollUtil.isNotEmpty(requestVO.getLegalAuthorizationList())){
+                legalAuthorizationId = vendorCertificationService.addCertificationList(requestVO.getLegalAuthorizationList(), CertificationTypeEnum.LEGAL_AUTHORIZATION,vendor.getId());
+            }
+            /*vendorCertificationService.addCertification(requestVO.getBusinessLicense(), CertificationTypeEnum.BUSINESS_LICENSE,vendor.getId());
             vendorCertificationService.addCertification(requestVO.getIntegrity(), CertificationTypeEnum.INTEGRITY,vendor.getId());
             legalAuthorizationId = vendorCertificationService.addCertification(requestVO.getLegalAuthorization(),CertificationTypeEnum.LEGAL_AUTHORIZATION,vendor.getId());
             if (CollUtil.isNotEmpty(requestVO.getRelevantCertificationList())){
                 vendorCertificationService.addCertification(requestVO.getRelevantCertificationList(), CertificationTypeEnum.RELEVANT_CERTIFICATION,vendor.getId());
-            }
+            }*/
             // 主要联系人
             VendorContact contact = requestVO.getVendorContact();
             // 新增供应商账号
@@ -576,6 +628,15 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
                 if (CollUtil.isNotEmpty(requestVO.getRelevantCertificationList())){
                     vendorCertificationService.addCertification(requestVO.getRelevantCertificationList(), CertificationTypeEnum.RELEVANT_CERTIFICATION,vendor.getId());
                 }
+                if (CollUtil.isNotEmpty(requestVO.getBusinessLicenseList())){
+                    vendorCertificationService.addCertification(requestVO.getBusinessLicenseList(), CertificationTypeEnum.BUSINESS_LICENSE,vendor.getId());
+                }
+                if (CollUtil.isNotEmpty(requestVO.getIntegrityList())){
+                    vendorCertificationService.addCertification(requestVO.getIntegrityList(), CertificationTypeEnum.INTEGRITY,vendor.getId());
+                }
+                if (CollUtil.isNotEmpty(requestVO.getLegalAuthorizationList())){
+                    legalAuthorizationId = vendorCertificationService.addCertificationList(requestVO.getLegalAuthorizationList(), CertificationTypeEnum.LEGAL_AUTHORIZATION, vendor.getId());
+                }
                 // 主要联系人
                 VendorContact contact = requestVO.getVendorContact();
                 // 新增供应商账号
@@ -627,6 +688,15 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
             }
             if (CollUtil.isNotEmpty(requestVO.getRelevantCertificationList())){
                 vendorCertificationService.addCertification(requestVO.getRelevantCertificationList(), CertificationTypeEnum.RELEVANT_CERTIFICATION,vendor.getId());
+            }
+            if (CollUtil.isNotEmpty(requestVO.getBusinessLicenseList())){
+                vendorCertificationService.addCertification(requestVO.getBusinessLicenseList(), CertificationTypeEnum.BUSINESS_LICENSE,vendor.getId());
+            }
+            if (CollUtil.isNotEmpty(requestVO.getIntegrityList())){
+                legalAuthorizationId = vendorCertificationService.addCertificationList(requestVO.getIntegrityList(), CertificationTypeEnum.INTEGRITY,vendor.getId());
+            }
+            if (CollUtil.isNotEmpty(requestVO.getLegalAuthorizationList())){
+                legalAuthorizationId = vendorCertificationService.addCertificationList(requestVO.getLegalAuthorizationList(), CertificationTypeEnum.LEGAL_AUTHORIZATION,vendor.getId());
             }
             // 主要联系人
             VendorContact contact = requestVO.getVendorContact();
@@ -1024,6 +1094,33 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
 
     }
 
+    @Override
+    public void pushMarketVendor(Long id){
+        ExecutorService executor = Executors.newCachedThreadPool();
+        executor.execute(() -> {
+            VendorManagementDetailVO bean = this.getVendorManagementDetail(id);
+            if(bean != null && bean.getVendor() != null){
+                MarketSupplierRequestDTO requestDTO = new MarketSupplierRequestDTO();
+                requestDTO.setName(bean.getVendor().getEnterpriseName());
+                requestDTO.setUnifiedSocialCreditCode(bean.getVendor().getSocialCreditCode());
+                requestDTO.setProvinceName(bean.getVendor().getEnterpriseProvinceName());
+                requestDTO.setCityName(bean.getVendor().getEnterpriseCityName());
+                //requestDTO.setdistrictName
+                requestDTO.setAddress(bean.getVendor().getEnterpriseAddress());
+                requestDTO.setBusinessScope(bean.getVendor().getBusinessScope());
+                if(bean.getMainContact() != null){
+                    requestDTO.setContactName(bean.getMainContact().getContactName());
+                    requestDTO.setContactPhone(bean.getMainContact().getContactPhone());
+                }
+                if(bean.getCertificationList().getBusinessLicense() != null){
+                    requestDTO.setBusinessLicense(bean.getCertificationList().getBusinessLicense().getAttachmentFileUrl());
+                }
+                UnderlingRestTemplateService.postForObject(UnderlingPlatformUrlEnum.MARKET_SUPPLIER_PUSH,
+                        MarketSupplierRequestDTO.class, requestDTO);
+            }
+        });
+        executor.shutdown();
+    }
 
     @Override
     public void pushVendor(Long id,String type, Integer isBlack){
@@ -1099,6 +1196,7 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
                                 String custMerchtId = obj.getString("cust_mercht_id");
                                 super.update(new LambdaUpdateWrapper<Vendor>()
                                         .set(Vendor::getEnterpriseCode, custMerchtId)
+                                        .set(Vendor::getMiddleVendorCode, custMerchtId)
                                         .eq(Vendor::getId, id));
                                 List<TAccountInfo> list = accountService.list(new LambdaUpdateWrapper<TAccountInfo>()
                                         .eq(TAccountInfo::getUpId, bean.getId()));
@@ -1124,6 +1222,7 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
                                     String custMerchtId = obj.getString("cust_mercht_id");
                                     super.update(new LambdaUpdateWrapper<Vendor>()
                                             .set(Vendor::getEnterpriseCode, custMerchtId)
+                                            .set(Vendor::getMiddleVendorCode, custMerchtId)
                                             .eq(Vendor::getId, id));
                                     List<TAccountInfo> list = accountService.list(new LambdaUpdateWrapper<TAccountInfo>()
                                             .eq(TAccountInfo::getUpId, bean.getId()));
@@ -1151,6 +1250,7 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
                                 String custMerchtId = obj.getString("cust_mercht_id");
                                 super.update(new LambdaUpdateWrapper<Vendor>()
                                         .set(Vendor::getEnterpriseCode, custMerchtId)
+                                        .set(Vendor::getMiddleVendorCode, custMerchtId)
                                         .eq(Vendor::getId, id));
                                 List<TAccountInfo> list = accountService.list(new LambdaUpdateWrapper<TAccountInfo>()
                                         .eq(TAccountInfo::getUpId, bean.getId()));

@@ -35,6 +35,12 @@ public class VendorChangeRequestVO {
     @ApiModelProperty(value = "诚信合规材料")
     private VendorCertificationChange integrity;
 
+    @ApiModelProperty(value = "营业执照")
+    private List<VendorCertificationChange> businessLicenseList;
+
+    @ApiModelProperty(value = "诚信合规材料")
+    private List<VendorCertificationChange> integrityList;
+
     @ApiModelProperty(value = "法人授权书")
     private List<VendorCertificationChange> legalAuthorizationList;
 
