@@ -265,7 +265,7 @@
                           <span title="单价(不含税)">{{ getUnitPriceExclTax(scope.row) }}</span>
                         </template>
                       </el-table-column>
-                      <el-table-column label="浮动价" align="right" width="130" prop="floatingPrice"  v-if="procurementType === 1 && [2,3,6,7].includes(formData.priceType)">
+                      <el-table-column label="浮动价" align="right" width="130" prop="floatingPrice"  v-if="procurementType === 1 && [2,3,4,5,6,7].includes(formData.priceType)">
                         <template slot-scope="scope">
                           <span v-if="scope.row.priceType !== 2">/</span>
                           <div v-else>
@@ -275,7 +275,7 @@
                         </template>
                       </el-table-column>
 
-                      <el-table-column label="浮动率(%)" align="right" width="130" prop="floatingRate"  v-if="procurementType === 1 && [4,5,6,7].includes(formData.priceType)">
+                      <el-table-column label="浮动率(%)" align="right" width="130" prop="floatingRate"  v-if="procurementType === 1 && [2,3,4,5,6,7].includes(formData.priceType)">
                         <template slot-scope="scope">
                           <span v-if="scope.row.priceType !== 4">/</span>
                           <div v-else>
