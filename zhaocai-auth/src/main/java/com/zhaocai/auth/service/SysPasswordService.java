@@ -62,7 +62,7 @@ public class SysPasswordService
             retryCount = retryCount + 1;
             recordLogService.recordLogininfor(username, Constants.LOGIN_FAIL, String.format("密码输入错误%s次", retryCount));
             redisService.setCacheObject(getCacheKey(username), retryCount, lockTime, TimeUnit.MINUTES);
-            throw new ServiceException("用户不存在/密码错误");
+            throw new ServiceException("密码错误");
         }
         else
         {
