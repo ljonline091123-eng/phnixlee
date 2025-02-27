@@ -28,6 +28,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
 		<result property="thridOrgDeptId"  column="thridOrgDeptId"/>
 		<result property="thridOrgId"  column="thrid_org_id"/>
 		<result property="orgDeptName"  column="orgDeptName"/>
+		<result property="isStore"  column="is_store"/>
 		<association property="dept"    javaType="SysDept"         resultMap="deptResult" />
         <collection  property="roles"   javaType="java.util.List"  resultMap="RoleResult" />
 	</resultMap>
@@ -66,10 +67,11 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
 
     <select id="selectUserList" parameterType="SysUser" resultMap="SysUserResult">
 		select u.user_id, u.dept_id, u.nick_name, u.user_name, u.email, u.avatar, u.phonenumber, u.sex, u.status, u.del_flag, u.login_ip, u.login_date, u.create_by, u.create_time, u.remark, u.thrid_org_name,
-		d.dept_name, d.leader, d2.dept_name orgDeptName
+		d.dept_name, d.leader, d2.dept_name orgDeptName, if(te.user_id is null,0,1) as is_store
 		from sys_user u
 		left join sys_dept d on u.dept_id = d.dept_id
 		left join sys_dept d2 on u.thrid_org_id = d2.thrid_dept_id
+		left join tb_expert te on te.user_id = u.user_id  and te.del_flag = '0'
 		where u.del_flag = '0'
 		<if test="userId != null and userId != 0">
 			AND u.user_id = #{userId}
