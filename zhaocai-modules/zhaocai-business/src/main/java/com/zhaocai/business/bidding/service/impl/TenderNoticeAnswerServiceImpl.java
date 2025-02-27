@@ -75,9 +75,9 @@ public class TenderNoticeAnswerServiceImpl extends ServiceImpl<TenderNoticeAnswe
     public List<TenderNoticeAnswerListVO> getList(TenderNoticeAnswerQueryVO queryVO) {
         LambdaQueryWrapper<TenderNoticeAnswer> queryWrapper = new LambdaQueryWrapper<>();
         queryWrapper.eq(TenderNoticeAnswer::getBusId, queryVO.getBusId());
-        if (queryVO.getQuestionUser() != null){
-            queryWrapper.eq(TenderNoticeAnswer::getQuestionUser, queryVO.getQuestionUser());
-        }
+//        if (queryVO.getQuestionUser() != null){
+//            queryWrapper.eq(TenderNoticeAnswer::getQuestionUser, queryVO.getQuestionUser());
+//        }
         /* 招标对应节点 */
         queryWrapper.and(q -> q.eq(TenderNoticeAnswer::getNoticeStatus, null)
                 .or().eq(TenderNoticeAnswer::getNoticeStatus, TenderNoticeStatusEnum.TENDER_ISSUE.getState()));
