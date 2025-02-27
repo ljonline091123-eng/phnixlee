@@ -174,6 +174,18 @@ public class SysUser implements Serializable {
     /** 所属第三方组织id */
     private String thridOrgId;
 
+    /** 是否专家入库 */
+    @TableField(exist = false)
+    private String isStore;
+
+    public String getIsStore() {
+        return isStore;
+    }
+
+    public void setIsStore(String isStore) {
+        this.isStore = isStore;
+    }
+
     public SysUser()
     {
 
