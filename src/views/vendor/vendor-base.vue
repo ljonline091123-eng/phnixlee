@@ -23,38 +23,117 @@
         :inline="true"
         v-show="showSearch"
       >
-        <el-form-item
-          label="供应商名称"
-          prop="enterpriseName"
-          label-width="90px"
-        >
-          <el-input
-            v-model="queryParams.enterpriseName"
-            placeholder="请输入供应商名称"
-            clearable
-            @keyup.enter.native="handleQuery"
-          />
-        </el-form-item>
-        <el-form-item>
-          <el-button
-            type="primary"
-            icon="el-icon-search"
-            size="small"
-            @click="handleQuery"
+        <el-row>
+          <el-form-item label="供应商名称" prop="enterpriseName" label-width="100px">
+            <el-input v-model="queryParams.enterpriseName" placeholder="请输入供应商名称" style="width: 220px" clearable/>
+          </el-form-item>
+          <el-form-item label="首次注册合作单位" prop="firstCooperationCompanyCode" label-width="130px">
+            <el-cascader
+              v-model="queryParams.firstCooperationCompanyCode"
+              :options="organizationList"
+              :show-all-levels="true"
+              :props="{
+                  label: 'organizationName',
+                  value: 'organizationCode',
+                  checkStrictly: true,
+                  emitPath: false,
+                }"
+              filterable
+              clearable
+            >
+            </el-cascader>
+            <!--<el-input v-model="queryParams.enterpriseName" placeholder="请输入供应商名称" clearable/>-->
+          </el-form-item>
+          <el-form-item label="企业所在地" prop="vendorLocation" label-width="90px">
+            <!--<el-input v-model="queryParams.enterpriseName" placeholder="请输入供应商名称" clearable/>-->
+            <el-cascader
+              v-model="queryParams.region"
+              :options="regionOptions"
+              :props="{label:'divisionName',value:'divisionCode'}"
+              @change="cityChange"
+              style="width: 100%;"
+              clearable
+            >
+            </el-cascader>
+          </el-form-item>
+          <el-form-item label="企业分类" prop="enterpriseType" label-width="90px">
+            <!--<el-input v-model="queryParams.enterpriseName" placeholder="请输入供应商名称" clearable/>-->
+            <el-cascader
+              v-model="queryParams.enterpriseType"
+              :options="enterpriseTypeList"
+              change-on-select
+              :show-all-levels="false"
+              :props="{
+                  label: 'name',
+                  value: 'id',
+                  multiple: false,
+                  checkStrictly: true,
+                  emitPath: false,
+                }"
+              filterable
+              clearable
+            >
+            </el-cascader>
+          </el-form-item>
+          <el-form-item>
+            <el-button
+              type="primary"
+              icon="el-icon-search"
+              size="small"
+              @click="handleQuery"
             >查询</el-button
-          >
-        </el-form-item>
-        <el-form-item>
-          <el-button
-            type="primary"
-            icon="el-icon-search"
-            size="small"
-            @click="inint"
-          >初始化供应商编号</el-button
-          >
-        </el-form-item>
+            >
+            <el-button size="small" type="warning" icon="el-icon-refresh" @click="resetQuery">重置</el-button>
+            <el-button size="small" type="warning" icon="el-icon-refresh" @click="handleQuery">重置</el-button>
+            <el-form-item>
+              <el-button
+                type="primary"
+                icon="el-icon-search"
+                size="small"
+                @click="inint"
+              >初始化供应商编号</el-button
+              >
+            </el-form-item>
+          </el-form-item>
+        </el-row>
+        <el-row>
+          <el-form-item :label="queryParams.vendorClass == 1 ? '注册申请时间' : '注册时间'" prop="startEndDate" label-width="100px">
+            <el-date-picker
+              style="width: 220px"
+              v-model="queryParams.startEndDate"
+              type="daterange"
+              range-separator="-"
+              start-placeholder="开始日期"
+              end-placeholder="结束日期"
+              :size="size"
+              @change="startEndDateFn"
+            />
+            <!--<el-input v-model="queryParams.enterpriseName" placeholder="请输入供应商名称" clearable/>-->
+          </el-form-item>
+          <el-form-item label="注册资金(万元)" prop="registeredCapital" label-width="130px">
+              <el-input v-model="queryParams.registeredCapitalStart" type="number"  style="width: 101px" />
+            -
+            <el-input v-model="queryParams.registeredCapitalEnd" type="number" style="width: 100px" />
+          </el-form-item>
+          <el-form-item label="状态" prop="vendorState" label-width="90px" v-if="queryParams.vendorClass == 2">
+            <el-select v-model="queryParams.vendorState" clearable>
+              <el-option v-for="dict in dict.type.vendor_state.filter(item => (item.value != '1' && item.value != '5'))" :key="dict.value" :label="dict.label"
+                         :value="dict.value">
+              </el-option>
+            </el-select>
+          </el-form-item>
+          <el-form-item label="状态" prop="vendorState" label-width="90px" v-if="queryParams.vendorClass == 0 || queryParams.vendorClass == 4">
+            <!--<el-input v-model="queryParams.vendorState" placeholder="请输入供应商名称" clearable/>-->
+            <el-select v-model="queryParams.vendorState" clearable>
+              <el-option v-for="dict in dict.type.vendor_state.filter(item => queryParams.vendorClass == 0 ? item.value != '5' : (item.value == '0' || item.value == '5'))" :key="dict.value" :label="dict.label"
+                         :value="dict.value">
+              </el-option>
+            </el-select>
+          </el-form-item>
+        </el-row>
+
       </el-form>
-      <el-radio-group
+      <!--<el-radio-group
         v-if="queryParams.vendorClass == '1'"
         v-model="queryParams.processType"
         size="small"
@@ -68,7 +147,7 @@
         >
           {{ dict.label }}
         </el-radio-button>
-      </el-radio-group>
+      </el-radio-group>-->
       <el-table
         v-loading="vendorLoading"
         :data="vendorList"
@@ -81,7 +160,7 @@
         <el-table-column
           label="供应商名称"
           align="left"
-          width="250"
+          min-width="250"
           prop="enterpriseName"
           show-overflow-tooltip
         >
@@ -93,16 +172,16 @@
         </el-table-column>
         <el-table-column
           label="合作记录"
-          min-width="100"
+          width="80"
           align="center"
-          v-if="['0', '2', '3'].includes(queryParams.vendorClass)"
+          v-if="['0', '2', '3', '4'].includes(queryParams.vendorClass)"
         >
           <template
             slot-scope="{ row }"
-            v-if="['0', '2', '3'].includes(queryParams.vendorClass)"
+            v-if="['0', '2', '3', '4'].includes(queryParams.vendorClass)"
           >
             <el-button type="text" size="small" @click="viewRecord(row.id)"
-              >查看详情</el-button
+              >{{ row.cooperationNum }}</el-button
             >
           </template>
         </el-table-column>
@@ -116,16 +195,11 @@
         >
         </el-table-column>
         <el-table-column
-          label="统一社会信用代码"
-          min-width="200"
-          align="center"
-          prop="socialCreditCode"
-        />
-        <el-table-column
-          width="120"
-          label="注册资金(万元)"
+          width="140"
+          label="合作金额（万元）"
           align="right"
-          prop="registeredCapitalText"
+          prop="cooperationAmountText"
+          v-if="['0', '2', '3', '4'].includes(queryParams.vendorClass)"
         />
         <el-table-column
           width="150"
@@ -134,38 +208,56 @@
           prop="vendorLocation"
         />
         <el-table-column
-          width="150"
+          min-width="180"
           label="企业分类"
           prop="enterpriseTypeText"
           show-overflow-tooltip
         />
-        <el-table-column
-          width="180"
-          label="提交申请时间"
+        <!--<el-table-column
+          label="统一社会信用代码"
+          min-width="200"
           align="center"
-          prop="createTime"
-        />
+          prop="socialCreditCode"
+        />-->
         <el-table-column
           width="120"
-          label="供应商库类型"
-          align="center"
-          prop="vendorLibraryText"
+          label="注册资金(万元)"
+          align="right"
+          prop="registeredCapitalText"
         />
         <el-table-column
           width="180"
           label="首次注册合作单位"
-          align="center"
+          align="left"
           prop="firstCooperationCompanyName"
-          show-overflow-tooltip
+          show-overflow-tooltip="true"
+        >
+        </el-table-column>
+        <el-table-column
+          width="180"
+          label="注册申请时间"
+          align="center"
+          prop="createTime"
+          v-if="['1'].includes(queryParams.vendorClass)"
         />
+        <el-table-column
+          width="180"
+          label="注册时间"
+          align="center"
+          prop="registerApprovalTime"
+          v-if="['2', '3', '4', '0'].includes(queryParams.vendorClass)"
+        />
+
         <el-table-column
           width="120"
-          label="供应商合作金额"
-          align="right"
-          prop="cooperationAmountText"
-          v-if="['0', '2', '3'].includes(queryParams.vendorClass)"
+          label="供应商类型"
+          align="center"
+          prop="vendorLibraryText"
+          v-if="['0'].includes(queryParams.vendorClass)"
         />
-        <el-table-column
+
+
+        <!--<el-table-column
           width="120"
           label="供应商评价"
           align="center"
@@ -194,7 +286,20 @@
               >查看详情</el-button
             >
           </template>
-        </el-table-column>
+        </el-table-column>-->
+        <el-table-column
+          width="120"
+          label="状态"
+          align="center"
+          prop="vendorState"
+          v-if="['2', '3','4', '0'].includes(queryParams.vendorClass)"
+        />
+        <!--<el-table-column
+          width="150"
+          label="待审人（待开发）"
+          align="center"
+          prop="enterpriseName"
+        />-->
       </el-table>
     </div>
     <div class="pagination_item">
@@ -312,21 +417,28 @@ import {
   getVendorList,
   getVendorCooperativePartner,
   listVendorPerformance,
+  listOrganization4Company,
   initCode,
 } from "@/api/vendor/vendor";
+import {getVendorClassifyTree,listAreaDivisionTree} from "@/api/procurement/manage";
+
 
 export default {
   name: "vendor-base",
+  dicts: ["vendor_state"],
   data() {
     return {
       vendorLoading: false,
       vendorList: [],
+      organizationList: null,
+      enterpriseTypeList: [],
+      regionOptions:[],
       vendorState: [
-        { label: "供应商名录", value: "0" },
-        { label: "战略供应商", value: "3" },
+        { label: "注册待审供应商", value: "1" },
         { label: "合格供应商", value: "2" },
-        { label: "待审供应商", value: "1" },
-        { label: "黑名单", value: "4" },
+        { label: "战略供应商", value: "3" },
+        { label: "黑名单供应商", value: "4" },
+        { label: "全部供应商", value: "0" },
       ],
       pendingVendorState: [
         { label: "注册待审", value: "10" },
@@ -346,7 +458,18 @@ export default {
         enterpriseName: undefined,
         contactName: undefined,
         contactPhone: undefined,
-        vendorClass: "0",
+        firstCooperationCompanyCode: undefined,
+        region: undefined,
+        regionProvinceCode: undefined,
+        regionCityCode: undefined,
+        vendorLocation: undefined,
+        startEndDate: undefined,
+        startDate: undefined,
+        endDate: undefined,
+        registeredCapitalStart: undefined,
+        registeredCapitalEnd: undefined,
+        vendorState: undefined,
+        vendorClass: "1",
         processType: "10",
       },
       //合约规划查询参数
@@ -377,6 +500,9 @@ export default {
       this.queryParams.vendorClass=this.$route.query?.vendorClass || ""
     }
     this.getVendorList();
+    this.getOrganization4CompanyList();
+    this.getVendorClassifyTreeFn();
+    this.listAreaDivisionTree();
   },
   methods: {
     /** 查询采购计划列表 */
@@ -395,6 +521,68 @@ export default {
         console.log(err);
       }
     },
+    async getOrganization4CompanyList() {
+      try {
+        const res = await listOrganization4Company()
+        this.organizationList = res.data
+      } catch (err) {
+        console.log(err)
+      }
+    },
+//获取企业类型
+    async getVendorClassifyTreeFn() {
+      try {
+        const res = await getVendorClassifyTree()
+        this.enterpriseTypeList = res.data.map((item) => {
+          if (item.children?.length) {
+            item.disabled = true
+          }
+          return item
+        })
+        console.log(res, "分类")
+      } catch (err) {
+        console.log(err)
+      }
+    },
+    //获取省市区
+    async listAreaDivisionTree(){
+      try{
+        const res = await listAreaDivisionTree()
+        this.regionOptions = res.data.map( item => ({
+          divisionName:item.divisionName,
+          divisionCode:item.divisionCode,
+          children:item.children.map( subItem => ({
+            divisionName:subItem.divisionName,
+            divisionCode:subItem.divisionCode,
+          }))
+        }))
+        console.log(res,'省市树');
+      }catch(err){
+        console.log(err);
+      }
+    },
+    formatDate(dateString) {
+      const date = new Date(dateString)
+      const year = date.getFullYear()
+      const month = String(date.getMonth() + 1).padStart(2, "0")
+      const day = String(date.getDate()).padStart(2, "0")
+      return `${year}-${month}-${day}`
+    },
+    cityChange(value) {
+      this.queryParams.regionProvinceCode = value[0]
+      this.queryParams.regionCityCode = value[1]
+    },
+    startEndDateFn(value) {
+      if (value) {
+        this.queryParams.startDate = this.formatDate(value[0])
+        this.queryParams.endDate = this.formatDate(value[1])
+        /*this.queryParams.startDate = value[0]
+        this.queryParams.endDate = value[1]*/
+      } else {
+        this.queryParams.startDate = null
+        this.queryParams.endDate = null
+      }
+    },
     /** 搜索按钮操作 */
     handleQuery() {
       this.queryParams.pageNumber = 1;
@@ -403,6 +591,19 @@ export default {
 
     async inint() {
       await initCode();
+    },
+    resetQuery() {
+      this.resetForm("queryForm");
+      this.queryParams.region = null;
+      this.queryParams.regionProvinceCode = null;
+      this.queryParams.regionCityCode = null;
+      this.queryParams.vendorLocation = null;
+        this.queryParams.startEndDate = null;
+        this.queryParams.startDate = null;
+        this.queryParams.endDate = null;
+        this.queryParams.registeredCapitalStart = null;
+        this.queryParams.registeredCapitalEnd = null;
+      this.handleQuery();
     },
     /** 跳转方案详情 */
     goDetail(id,vendorClass) {
@@ -455,7 +656,8 @@ export default {
     "queryParams.vendorClass": {
       handler(val) {
         console.log(JSON.stringify(val) + "vendorClass");
-        this.getVendorList();
+        this.resetQuery();
+        //this.getVendorList();
       },
     },
     "queryParams.processType": {

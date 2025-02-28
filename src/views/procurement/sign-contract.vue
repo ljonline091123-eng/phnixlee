@@ -58,6 +58,7 @@
             @click="handleQuery"
             >查询</el-button
           >
+          <el-badge :value="total_procurement" :max="99" style="margin-left: 12px;margin-top: -1px;">
           <el-button
             type="success"
             icon="el-icon-plus"
@@ -66,6 +67,7 @@
             v-hasPermi="['procurement:contract:add']"
             >新增</el-button
           >
+          </el-badge>
           <el-badge :value="total_procurement_yl" style="margin-left: 12px;margin-top: -1px;">
               <el-button
               type="success"
@@ -1737,6 +1739,7 @@ export default {
         this.planList = res.data.rows;
         this.total = res.data.total;
       });
+      this.getList_procurement();
     },
     handleQuery_procurement() {
       this.queryParams_procurement.pageNumber = 1;

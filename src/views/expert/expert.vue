@@ -376,6 +376,14 @@
                   prop="nickName"
                 />
                 <el-table-column
+                  label="是否入库"
+                  align="center"
+                  prop="isStore">
+                  <template #default="{ row }">
+                    <span>{{ row.isStore == 1 ? '是': '否'}}</span>
+                  </template>
+                </el-table-column>
+                <el-table-column
                   label="手机号码"
                   align="center"
                   key="phonenumber"
