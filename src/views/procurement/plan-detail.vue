@@ -139,6 +139,7 @@
               highlight-current-row
               show-summary
               :summary-method="getSummaries"
+              height="380"
             >
               <el-table-column
                 label="序号"

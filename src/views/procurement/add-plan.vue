@@ -194,7 +194,8 @@
                       @select="handleSelect"
                       :row-key="getRowKeys2"
                       :ref="inventory.row.planTable"
-                      :row-class-name="tableRowClassName">
+                      :row-class-name="tableRowClassName"
+                      height="180">
                       <el-table-column type="selection" width="55" :reserve-selection="true"/>
                       <el-table-column label="序号" type="index" width="50" align="center" fixed/>
                       <el-table-column label="清单编码" min-width="150" prop="materialsCode" fixed show-overflow-tooltip/>
