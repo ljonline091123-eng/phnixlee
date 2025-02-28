@@ -398,24 +398,208 @@
             </el-form>
           </el-tab-pane>
           <el-tab-pane label="资质材料" name="aptitude">
-            <div v-for="(item, i) in companyAptitude" :key="i">
-              <div class="aptitued-title">{{ item.title }}</div>
-              <div class="aptitued-img">
-                <el-row :gutter="20">
-                  <el-col :span="6" v-for="(subItem, k) in item.list" :key="k">
-                    <el-image
-                      style="width: 230px; height: 100px"
-                      fit="cover"
-                      :src="subItem.attachmentFileUrl"
-                      :preview-src-list="item.srcList"
+            <el-row>
+              <el-col :span="24">
+                <div class="img-box">
+                  <div class="img-title">营业执照</div>
+                  <div style="display: flex">
+                    <div
+                      class="img-box-item"
+                      v-for="(item, index) in businessLicenseList"
+                      :key="index"
+                      style="margin: 0px 60px 0px 0px"
                     >
-                    </el-image>
-                  </el-col>
-                </el-row>
-              </div>
-            </div>
+                      <template v-if="item.attachmentFileType">
+                        <el-image
+                          style="width: 200px; height: 200px"
+                          :src="item.attachmentFileUrl"
+                          :preview-src-list="item.srcList"
+                        >
+                        </el-image>
+                      </template>
+                      <template v-else>
+                        <div style="width: 180px; height: 200px; color: #2b4acb; border: 1px solid #999999; ">
+                          <div style="margin: 60px 0 0 15px;">
+                            <el-button
+                              size="medium"
+                              type="primary"
+                              @click="checkAttachment(item.attachmentFileUrl)"
+                            >预览</el-button>
+                            <el-button
+                              type="primary"
+                              size="medium"
+                              @click="downAttachment(item.attachmentFileUrl, item.attachmentFileName)"
+                            >下载</el-button>
+                          </div>
+                          <div style="font-size: 12px;margin: 30px 0 0 8px;">{{ item.attachmentFileName }}</div>
+                        </div>
+                      </template>
+                      <div class="img-text">
+                        有效期：{{ item.effectiveBeginDate }}-{{
+                          item.effectiveEndDate
+                        }}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </el-col>
+            </el-row>
+            <el-row>
+              <el-col :span="24">
+                <div class="img-box">
+                  <div class="img-title">诚信合规材料</div>
+                  <div style="display: flex">
+                    <div
+                      class="img-box-item"
+                      v-for="(item, index) in integrityList"
+                      :key="index"
+                      style="margin: 0px 60px 0px 0px"
+                    >
+                      <template v-if="item.attachmentFileType">
+                        <el-image
+                          style="width: 200px; height: 200px"
+                          :src="item.attachmentFileUrl"
+                          :preview-src-list="item.srcList"
+                        >
+                        </el-image>
+                      </template>
+                      <template v-else>
+                        <div style="width: 180px; height: 200px; color: #2b4acb; border: 1px solid #999999; ">
+                          <div style="margin: 60px 0 0 15px;">
+                            <el-button
+                              size="medium"
+                              type="primary"
+                              @click="checkAttachment(item.attachmentFileUrl)"
+                            >预览</el-button>
+                            <el-button
+                              type="primary"
+                              size="medium"
+                              @click="downAttachment(item.attachmentFileUrl, item.attachmentFileName)"
+                            >下载</el-button>
+                          </div>
+                          <div style="font-size: 12px;margin: 30px 0 0 8px;">{{ item.attachmentFileName }}</div>
+                        </div>
+                      </template>
+                      <div class="img-text">
+                        有效期：{{ item.effectiveBeginDate }}-{{
+                          item.effectiveEndDate
+                        }}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </el-col>
+            </el-row>
+            <el-row>
+              <el-col :span="24">
+                <div class="img-box">
+                  <div class="img-title">法人授权书</div>
+                  <div style="display: flex">
+                    <div
+                      class="img-box-item"
+                      v-for="(item, index) in legalAuthorizationList"
+                      :key="index"
+                      style="margin: 0px 60px 0px 0px"
+                    >
+                      <template v-if="item.attachmentFileType">
+                        <el-image
+                          style="width: 200px; height: 200px"
+                          :src="item.attachmentFileUrl"
+                          :preview-src-list="item.srcList"
+                        >
+                        </el-image>
+                      </template>
+                      <template v-else>
+                        <div style="width: 180px; height: 200px; color: #2b4acb; border: 1px solid #999999; ">
+                          <div style="margin: 60px 0 0 15px;">
+                            <el-button
+                              size="medium"
+                              type="primary"
+                              @click="checkAttachment(item.attachmentFileUrl)"
+                            >预览</el-button>
+                            <el-button
+                              type="primary"
+                              size="medium"
+                              @click="downAttachment(item.attachmentFileUrl, item.attachmentFileName)"
+                            >下载</el-button>
+                          </div>
+                          <div style="font-size: 12px;margin: 30px 0 0 8px;">{{ item.attachmentFileName }}</div>
+                        </div>
+                      </template>
+                      <div class="img-text">
+                        有效期：{{ item.effectiveBeginDate }}-{{
+                          item.effectiveEndDate
+                        }}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </el-col>
+            </el-row>
+            <el-row>
+              <el-col :span="24">
+                <div class="img-title">相关资质</div>
+                <div style="display: flex">
+                  <div
+                    class="img-box"
+                    v-for="(item, index) in relevantCertificationList"
+                    :key="index"
+                    style="margin-right: 20px"
+                  >
+                    <template v-if="item.attachmentFileType">
+                      <el-image
+                        style="width: 200px; height: 200px"
+                        :src="item.attachmentFileUrl"
+                        :preview-src-list="item.srcList"
+                      >
+                      </el-image>
+                    </template>
+                    <template v-else>
+                      <div style="width: 180px; height: 200px; color: #2b4acb; border: 1px solid #999999; ">
+                        <div style="margin: 60px 0 0 15px;">
+                          <el-button
+                            size="medium"
+                            type="primary"
+                            @click="checkAttachment(item.attachmentFileUrl)"
+                          >预览</el-button>
+                          <el-button
+                            type="primary"
+                            size="medium"
+                            @click="downAttachment(item.attachmentFileUrl, item.attachmentFileName)"
+                          >下载</el-button>
+                        </div>
+                        <div style="font-size: 12px;margin: 30px 0 0 8px;">{{ item.attachmentFileName }}</div>
+                      </div>
+                    </template>
+                    <div class="img-text">
+                      有效期：{{ item.effectiveBeginDate }}-{{
+                        item.effectiveEndDate
+                      }}
+                    </div>
+                  </div>
+                </div>
+              </el-col>
+            </el-row>
           </el-tab-pane>
         </el-tabs>
+      </el-dialog>
+
+
+      <!-- 文件预览弹窗 -->
+      <el-dialog
+        :show-close="true"
+        :visible.sync="dialogVisible"
+        title="附件"
+        modal
+        center
+        :append-to-body="false"
+        destroy-on-close
+        width="1200px"
+      >
+        <!-- 直接用iframe嵌套pdf预览模式 "#toolbar=0"是为了隐藏pdf的按钮  -->
+        <div class="dialogtext">
+          <iframe width="100%"  :style="{ minHeight: '700px' }" :src="this.iframeUrls + '#toolbar=0'" />
+        </div>
       </el-dialog>
     </div>
   </div>
@@ -502,6 +686,14 @@ export default {
           srcList: [],
         },
       ],
+      businessLicense: {}, //营业执照
+      integrity: {}, //诚信合规材料
+      businessLicenseList:  [], //营业执照
+      integrityList:  [], //诚信合规材料
+      legalAuthorizationList: [], //法人授权书
+      relevantCertificationList: [], //相关资质
+      dialogVisible:false,
+      iframeUrls:'',
     };
   },
   mounted() {
@@ -678,27 +870,113 @@ export default {
       this.companyAptitude.forEach((item) => {
         console.log(item.code, "oiiii");
         if (item.code === "businessLicense") {
-          item.list = [certificationList.businessLicense];
-          item.srcList = [certificationList.businessLicense.attachmentFileUrl];
+          if(certificationList.businessLicense){
+            if(certificationList.businessLicense.attachmentFileUrl){
+              item.list = [certificationList.businessLicense];
+              item.srcList = [certificationList.businessLicense.attachmentFileUrl];
+            }
+          }
         } else if (item.code === "integrity") {
-          item.list = [certificationList.integrity];
-          item.srcList = [certificationList.integrity.attachmentFileUrl];
+          if(certificationList.integrity){
+            if(certificationList.integrity.attachmentFileUrl) {
+              item.list = [certificationList.integrity];
+              item.srcList = [certificationList.integrity.attachmentFileUrl];
+            }
+          }
         } else if (item.code === "legalAuthorizationList") {
-          item.list = certificationList.legalAuthorizationList;
-          item.srcList = certificationList.legalAuthorizationList.map(
-            (item) => item.attachmentFileUrl
-          );
+          if(certificationList.legalAuthorizationList){
+            item.list = certificationList.legalAuthorizationList;
+            item.srcList = certificationList.legalAuthorizationList.map(
+              (item) => item.attachmentFileUrl
+            );
+          }
         } else if (item.code === "relevantCertificationList") {
-          item.list = certificationList.relevantCertificationList;
-          item.srcList = certificationList.relevantCertificationList.map(
-            (item) => item.attachmentFileUrl
-          );
+          if(certificationList.relevantCertificationList){
+            item.list = certificationList.relevantCertificationList;
+            item.srcList = certificationList.relevantCertificationList.map(
+              (item) => item.attachmentFileUrl
+            );
+          }
         }
+
+        this.businessLicense = res.data.certificationList?.businessLicense
+          ?.attachmentFileUrl
+          ? {
+            ...res.data.certificationList.businessLicense,
+            srcList: [
+              res.data.certificationList.businessLicense.attachmentFileUrl,
+            ],
+          }
+          : {};
+        this.businessLicense.attachmentFileType = this.ifPdf(this.businessLicense.attachmentFileUrl) ? false : true
+        this.integrity = res.data.certificationList?.integrity
+          ? {
+            ...res.data.certificationList.integrity,
+            srcList: [res.data.certificationList.integrity.attachmentFileUrl],
+          }
+          : {};
+        this.integrity.attachmentFileType = this.ifPdf(this.integrity.attachmentFileUrl) ? false : true
+        this.legalAuthorizationList = res.data.certificationList
+          ?.legalAuthorizationList?.length
+          ? res.data.certificationList.legalAuthorizationList.map((item) => ({
+            ...item,
+            srcList: [item.attachmentFileUrl],
+          }))
+          : [];
+        this.legalAuthorizationList.forEach((item,index)=>{
+          item.attachmentFileType = this.ifPdf(item.attachmentFileUrl) ? false : true
+        })
+        this.relevantCertificationList = res.data.certificationList
+          ?.relevantCertificationList?.length
+          ? res.data.certificationList.relevantCertificationList.map(
+            (item) => ({ ...item, srcList: [item.attachmentFileUrl] })
+          )
+          : [];
+        this.relevantCertificationList.forEach((item,index)=>{
+          item.attachmentFileType = this.ifPdf(item.attachmentFileUrl) ? false : true
+        })
+        this.businessLicenseList = res.data.certificationList
+          ?.businessLicenseList?.length
+          ? res.data.certificationList.businessLicenseList.map(
+            (item) => ({ ...item, srcList: [item.attachmentFileUrl] })
+          )
+          : [];
+        this.businessLicenseList.forEach((item,index)=>{
+          item.attachmentFileType = this.ifPdf(item.attachmentFileUrl) ? false : true
+        })
+        this.integrityList = res.data.certificationList
+          ?.integrityList?.length
+          ? res.data.certificationList.integrityList.map(
+            (item) => ({ ...item, srcList: [item.attachmentFileUrl] })
+          )
+          : [];
+        this.integrityList.forEach((item,index)=>{
+          item.attachmentFileType = this.ifPdf(item.attachmentFileUrl) ? false : true
+        })
       });
       console.log(
         this.companyAptitude,
         "this.companyAptitude-this.companyAptitude"
       );
+    },
+    downAttachment(file,uelFileName) {
+      const a = document.createElement("a")
+      a.href = file
+      a.download = uelFileName
+      a.target = "_blank"
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+    },
+    checkAttachment(url){
+      this.iframeUrls=url,
+        this.dialogVisible=true
+    },
+    ifPdf(url){
+      if(url){
+        return url.toLowerCase().endsWith(".pdf")
+      }
+      return false
     },
     disabledHandle(row) {
       return Number(row.biddingStatus) === 3 ? false : true;
