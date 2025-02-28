@@ -58,6 +58,7 @@
             @click="handleQuery"
             >查询</el-button
           >
+          <el-badge :value="total_procurement" :max="99" style="margin-left: 12px;margin-top: -1px;">
           <el-button
             type="success"
             icon="el-icon-plus"
@@ -66,6 +67,7 @@
             v-hasPermi="['procurement:contract:add']"
             >新增</el-button
           >
+          </el-badge>
           <el-badge :value="total_procurement_yl" style="margin-left: 12px;margin-top: -1px;">
               <el-button
               type="success"
@@ -659,7 +661,7 @@
                 <el-option
                   v-for="item in contractSplitOptions"
                   :key="item.splitId"
-                  :label="item.splitContractName"
+                  :label="item.splitContractName ? item.splitContractName : item.schemeName"
                   :value="item.splitId"
                 >
                 </el-option>
@@ -733,19 +735,22 @@
               show-overflow-tooltip
               fixed
             />
-            <el-table-column
-              label="交易标的物"
-              prop="subjectMatterName"
-              width="150"
-              show-overflow-tooltip
-              fixed
-            />
-            <el-table-column
-              label="规格型号"
-              prop="specification"
-              show-overflow-tooltip
-              fixed
-            />
+<!--            <el-table-column-->
+<!--              label="交易标的物"-->
+<!--              prop="subjectMatterName"-->
+<!--              width="150"-->
+<!--              show-overflow-tooltip-->
+<!--              fixed-->
+<!--            />-->
+<!--            <el-table-column-->
+<!--              label="规格型号"-->
+<!--              prop="specification"-->
+<!--              show-overflow-tooltip-->
+<!--              fixed-->
+<!--            />-->
+            <el-table-column label="特征值特征项" min-width="150" prop="specification" show-overflow-tooltip/>
+            <el-table-column label="计量规则" min-width="150" align="center" prop="measurementRules"  show-overflow-tooltip/>
+            <el-table-column label="工作内容" align="center" prop="workContent"  show-overflow-tooltip/>
             <el-table-column
               label="计量单位"
               align="center"
@@ -951,7 +956,7 @@
                   align="right"
                   prop="basePriceText"
                   width="150"
-                  v-if="priceType == 2"
+                  v-if="[2,3,4,5,6,7].includes(priceType)"
                   :key="'basePriceText'"
                 />
                 <el-table-column
@@ -959,16 +964,16 @@
                   align="right"
                   width="150"
                   prop="floatingPriceText"
-                  v-if="priceType == 2"
+                  v-if="[2,3,6,7].includes(priceType)"
                   :key="'floatingPriceText'"
                 />
                 <el-table-column
-                  label="装卸费"
+                  label="浮动率"
                   align="right"
                   width="150"
-                  prop="unloadingFeeText"
-                  :key="'unloadingFeeText'"
-                  v-if="priceType == 2"
+                  prop="floatingRateText"
+                  :key="'floatingRateText'"
+                  v-if="[4,5,6,7].includes(priceType)"
                 />
                   <el-table-column
                     label="含税单价(元)"
@@ -1017,7 +1022,6 @@
                 style="font-weight: bold"
                 v-thousands="totalTaxPriceTotal"
               ></span> -->
-            </span>
             <span>
               本次不含税总计：<span
                 style="font-weight: bold"
@@ -1094,7 +1098,7 @@
       :visible.sync="signAgreementDialog"
       width="1500px"
     >
-      <iframe 
+      <iframe
         v-if="signAgreementUrl"
         :src="signAgreementUrl"
         width="100%"
@@ -1501,6 +1505,7 @@ export default {
     "form.vendorId": {
       handler(newV) {
         if (newV) {
+          /* 获取供应商的报价清单 */
           this.listVendorBiddingListQuotation();
         }
       },
@@ -1582,6 +1587,7 @@ export default {
         }
       });
     },
+    /* 获取供应商的报价清单 */
     listVendorBiddingListQuotation() {
       if (this.schemeId && this.form.vendorId && this.form.splitId) {
         this.loading_tax = true;
@@ -1595,7 +1601,7 @@ export default {
           this.form.vendorBiddingListQuotationList =
             res.data.vendorBiddingListQuotationList.map(item=>{
               this.$set(item,'signCount',item.surplusCount)
-              this.$set(item,'signUnitPriceInclTax',item.taxUnitPriceText)
+              this.$set(item,'signUnitPriceInclTax',item.taxUnitPrice)
               return item
             });
           (this.subjectMatter = res?.data.subjectMatter),
@@ -1664,6 +1670,7 @@ export default {
         id: this.schemeId,
       }).then((res) => {
         this.contractSplitOptions = res?.data;
+        console.log('%c🏀 新增合同弹窗-采购方案列表数据-this.contractSplitOptions \n', `font-size: 14px;background-color: #fe0;`, this.contractSplitOptions );
       });
     },
     handleSelectionChange(val) {
@@ -1732,6 +1739,7 @@ export default {
         this.planList = res.data.rows;
         this.total = res.data.total;
       });
+      this.getList_procurement();
     },
     handleQuery_procurement() {
       this.queryParams_procurement.pageNumber = 1;
@@ -2090,7 +2098,7 @@ export default {
 
         let formattedResult;
 
-        let newRes = taxUnitPrice.replace(/\.?0+$/, "");
+        let newRes = (taxUnitPrice.toString()).replace(/\.?0+$/, "");
 
         if (type === "excludingTax") {
           if (this.countDecimalPlaces(newRes) <= 2) {
@@ -2138,6 +2146,7 @@ export default {
       const newCount = (Math.floor(count * 100) / 100).toFixed(2);
       return newCount.toString().slice(0, newCount.toString().indexOf(".") + 3);
     },
+    /* 计算本次不含税总计 */
     totalNotTaxPriceTotal() {
       if (this.form.vendorBiddingListQuotationList?.length === 0) return 0.0;
       const { add, bignumber } = this.mathjs;
@@ -2147,8 +2156,7 @@ export default {
           count = add(count, bignumber(item.notTaxedTotal));
         }
       });
-      const newCount = (Math.floor(count * 100) / 100).toFixed(2);
-      return newCount.toString().slice(0, newCount.toString().indexOf(".") + 3);
+      return count.toString().slice(0, count.toString().indexOf(".") + 3);
     },
   },
 };

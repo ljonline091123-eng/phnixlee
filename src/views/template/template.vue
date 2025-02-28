@@ -16,6 +16,7 @@
       </el-radio-group>
       <FileTemplate v-if="procurementPlanType === 'file'" />
       <ContractTemplate v-if="procurementPlanType === 'contract'" />
+      <SupplementalTemplate v-if="procurementPlanType === 'supplemental'" />
       <RatingTemplate v-if="procurementPlanType === 'rating'" />
     </div>
   </div>
@@ -24,12 +25,14 @@
 import RatingTemplate from "./rating.vue";
 import FileTemplate from "./file/file-template.vue";
 import ContractTemplate from "./contract/contract-template.vue";
+import SupplementalTemplate from "./supplemental/supplemental-template.vue";
 export default {
   name: "template-index",
   components: {
     RatingTemplate,
     FileTemplate,
     ContractTemplate,
+    SupplementalTemplate,
   },
   data() {
     return {
@@ -37,6 +40,7 @@ export default {
       tabList: [
         { label: "招标文件模板", value: "file" },
         { label: "合同模板", value: "contract" },
+        { label: "补充协议", value: "supplemental" },
         { label: "评分模板", value: "rating" },
       ],
     };

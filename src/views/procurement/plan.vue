@@ -507,23 +507,29 @@
             prop="projectHierarchy"
           />
           <el-table-column
-            label="开始时间"
-            min-width="100"
+            label="项目名称"
+            min-width="250"
             align="center"
-            prop="beginDate"
+            prop="projectName"
           />
-          <el-table-column
-            label="完成时间"
-            min-width="100"
-            align="center"
-            prop="endDate"
-          />
-          <el-table-column
-            label="进场时间"
-            min-width="100"
-            align="center"
-            prop="arrivalDate"
-          />
+<!--          <el-table-column-->
+<!--            label="开始时间"-->
+<!--            min-width="100"-->
+<!--            align="center"-->
+<!--            prop="beginDate"-->
+<!--          />-->
+<!--          <el-table-column-->
+<!--            label="完成时间"-->
+<!--            min-width="100"-->
+<!--            align="center"-->
+<!--            prop="endDate"-->
+<!--          />-->
+<!--          <el-table-column-->
+<!--            label="进场时间"-->
+<!--            min-width="100"-->
+<!--            align="center"-->
+<!--            prop="arrivalDate"-->
+<!--          />-->
           <el-table-column
             label="采购人"
             min-width="100"
@@ -777,7 +783,9 @@ export default {
       },
       contractTotal: 1,
       planLoading: false,
-      procurementPlanMode: "masterPlan",
+      /* 默认不进入采购总计划，因为涉及接口数据请求，页面会缓慢。 */
+      // procurementPlanMode: "masterPlan",
+      procurementPlanMode: "plan",
       queryParamsMaster:{
         pageNumber: 1,
         pageSize: 10,

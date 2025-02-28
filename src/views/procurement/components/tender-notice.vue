@@ -108,8 +108,8 @@
                 popper-class="date-clear"
                 :picker-options="endTimeOptions"
                 value-format="yyyy-MM-dd HH:mm:ss"
-                :disabled="!!(formData.id || isSubmit)"
-                @change="handleChange"
+                disabled
+                @change="(value) => handleChange(value, 'applyTime')"
               />
             </el-form-item>
           </el-col>
@@ -161,14 +161,14 @@
           </el-col>
           <el-col :span="12" class="grid-cell">
             <el-form-item label=" 招标公告" prop="fileTemplate" class="uploadItem">
-              <el-button size="small" type="primary" :disabled="!!(formData.id || isSubmit)" @click="showSecretTips">点击上传</el-button>
+<!--              <el-button size="small" type="primary" :disabled="!!(formData.id || isSubmit)" @click="showSecretTips">点击上传</el-button>-->
               <el-upload
                 :action="uploadFileUrl"
                 :limit="1"
                 :on-success="fileSuccess"
                 :file-list="formData.fileList"
                 :on-remove="fileRemove"
-                :disabled="(!!(formData.id || isSubmit))"
+                disabled
                 ref="upload"
               >
               </el-upload>
@@ -450,9 +450,10 @@
                     type="datetime"
                     style="width: 100%"
                     placeholder="选择日期"
-                    :picker-options="updateAfterTimeOption"
+                    :picker-options="changeTimeOption"
                     value-format="yyyy-MM-dd HH:mm:ss"
                     :popper-class="'currentDatePickerClass'"
+                    @change="(value) => handleChange(value, 'change')"
                   />
                 </template>
                 <template v-else>
@@ -810,12 +811,21 @@ export default {
   },
   methods: {
     /* 报名截止时间监听 */
-    handleChange(value) {
+    handleChange(value, type) {
       let newVal = new Date(value);
-      let currentDate = Date.now(); // 获取当前时间戳
-      // 比较当前日期是否小于5天后的日期
-      if (newVal && newVal < currentDate + 5 * 24 * 60 * 60 * 1000) {
-        this.formData.applyTimeNotice = null; // 设置为null
+      if (type === 'applyTime') {
+        let currentDate = Date.now(); // 获取当前时间戳
+        // 比较当前日期是否小于5天后的日期
+        if (newVal && newVal < currentDate + 5 * 24 * 60 * 60 * 1000) {
+          this.formData.applyTimeNotice = null; // 设置为null
+        }
+      } else if(type === 'change'){
+        let currentDate = new Date(this.formData.createTime);
+        currentDate.setDate(currentDate.getDate() + 5);
+        // 比较当前日期是否小于5天后的日期
+        if (newVal && newVal < currentDate) {
+          this.modifyForm.updateAfter = null; // 设置为null
+        }
       }
     },
     async getViewNoticeURL(){
@@ -1187,6 +1197,16 @@ export default {
             ...value,
           };
           this.formData = formData;
+          if (!this.formData.applyTimeNotice) {
+            this.$set(this.formData,"applyTimeNotice",this.scheme.applyTimeNotice)
+          }
+          if (!newVal.attachmentNotice) {
+            this.attachmentId = this.scheme.noticeAttachment.attachmentId
+            this.$set(this.formData, "fileList", [{name: this.scheme.noticeAttachment.fileName,url: this.scheme.noticeAttachment.fileUrl}]);
+            this.$set(this.formData, "fileTemplate", [this.scheme.noticeAttachment]);
+            this.$set(this.formData, "attachIdNotice", this.scheme.noticeAttachment.attachmentId);
+          }
+          this.getViewNoticeURL()
         }
       },
       deep: true,
@@ -1246,6 +1266,36 @@ export default {
         };
       }
       return obj;
+    },
+    changeTimeOption() {
+      let newVal = new Date(this.modifyForm.updateAfter)
+      // 将日期字符串转换为JavaScript日期对象
+      let minAllowedDate = new Date(this.formData.createTime);
+      let selectableRange =new Date(minAllowedDate).getHours() + ':' + (new Date(minAllowedDate).getMinutes() + 1) + ':00 - 23:59:00'
+      // 对日期对象进行加5天操作
+      minAllowedDate.setDate(minAllowedDate.getDate() + 5);
+      if (
+        newVal &&
+        newVal.getFullYear() === minAllowedDate.getFullYear() &&
+        newVal.getMonth() === minAllowedDate.getMonth() &&
+        newVal.getDate() === minAllowedDate.getDate()
+      ) {
+        selectableRange =minAllowedDate.getHours() + ':' + (minAllowedDate.getMinutes() + 1) + ':00 - 23:59:00'
+      }
+      else if(newVal && (newVal.getFullYear() > minAllowedDate.getFullYear() ||
+          (newVal.getFullYear() === minAllowedDate.getFullYear() && newVal.getMonth() > minAllowedDate.getMonth()) ||
+          (newVal.getFullYear() === minAllowedDate.getFullYear() && newVal.getMonth() === minAllowedDate.getMonth() && newVal.getDate() > minAllowedDate.getDate())
+          )){
+        selectableRange = '00:00:00 - 23:59:00' //默认的时间范围
+      }
+      return {
+        selectableRange,
+        disabledDate(time) {
+          let allowedDate = new Date(minAllowedDate)
+          allowedDate.setHours(0, 0, 0, 0);
+          return time.getTime() < allowedDate.getTime();
+        }
+      }
     },
   },
 };

@@ -83,6 +83,12 @@
           show-overflow-tooltip
         />
         <el-table-column
+          label="项目名称"
+          min-width="250"
+          prop="projectName"
+          show-overflow-tooltip
+        />
+        <el-table-column
           min-width="100"
           label="采购方式"
           align="center"
@@ -118,6 +124,15 @@
           fixed="right"
         >
           <template slot-scope="scope">
+<!--
+    采购方案流程状态state
+    DRAFT(0,"自由态"),
+    IN_APPROVAL(1,"审批中"),
+    CANCELLATION(2,"已作废"),
+    APPROVE(3,"已完成"),
+    REJECT(4,"已驳回"),
+    REVOKED(5,"已撤回"),
+           -->
             <div
               v-if="
                 Number(scope.row.state) === 0 || Number(scope.row.state) === 5
@@ -171,7 +186,16 @@
               </el-button
               >
             </div>
-            <span v-else>-</span>
+            <span v-else>
+              <el-button
+                type="text"
+                @click="
+                  goCancellation(scope.row.id, scope.row.procurementSchemeName)
+                "
+                icon="el-icon-document-delete"
+                size="small"
+              >作废</el-button
+              ></span>
           </template>
         </el-table-column>
       </el-table>

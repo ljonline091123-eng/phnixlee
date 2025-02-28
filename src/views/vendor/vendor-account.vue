@@ -229,9 +229,9 @@ import ApprovalForm from "@/components/Approval/approvalForm.vue";
 import ApprovalDetailsDialog from "@/components/Approval/approvalDetailsDialog.vue";
 import { Base64 } from "js-base64";
 import {
-  getPermissionButton,
-  postAuditProcess,
-  getLoadTaskDef,
+  getPermissionButtonVendorContact,
+  postAuditProcessVendorContact,
+  getLoadTaskDefVendorContact,
   getProcessLogList, getOrgByUserId,
 } from "@/api/procurement/manage";
 import {
@@ -313,15 +313,15 @@ export default {
         };
         let res = null;
         if (this.businessId && this.processId) {
-          res = await getLoadTaskDef(params);
+          res = await getLoadTaskDefVendorContact(params);
         }else{
           /* 未提交时查看流程执行流程，根据登录人id 获取流程分组 */
           res = await getOrgByUserId(this.$store.state.user.id);
           params = {
             processKey: "jiantou-zhaocai:"+res.data+":ZHAOCAI_VENDOR_ADDCONTACT",
-            businessId: 8888888888,
+            businessId: this.businessId,
           };
-          res = await getLoadTaskDef(params);
+          res = await getLoadTaskDefVendorContact(params);
         }
           this.processInformationList = res.data;
           function getActive(nodes) {
@@ -375,7 +375,7 @@ export default {
         curTaskId: this.taskPresentId,
         processKey: "jiantou-zhaocai:{org}:ZHAOCAI_VENDOR_ADDCONTACT",
       };
-      postAuditProcess(params).then(() => {
+      postAuditProcessVendorContact(params).then(() => {
         this.$message.success("提交成功");
         this.$modal.closeLoading();
         this.vendorVisible = false;
@@ -402,7 +402,7 @@ export default {
       this.processId = row.wfProcessId;
       try {
         if (row.id) {
-          const res = await getPermissionButton({
+          const res = await getPermissionButtonVendorContact({
             businessId: row.id, //联系人id
             processId: row.wfProcessId, //流程id
           });

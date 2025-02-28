@@ -82,12 +82,12 @@
             </el-form-item>
           </el-col>
           <el-col :span="8">
-            <el-form-item label="付款方式：" v-if="procurementPlan.subjectMatterType == 1" class="custom-form-item">
+            <el-form-item label="付款方式：" v-if="procurementPlan.procurementType == 1" class="custom-form-item">
               <span>{{ procurementPlan.paymentTypeText }}</span>
             </el-form-item>
           </el-col>
           <el-col :span="8">
-            <el-form-item label="计数方式：" v-if="procurementPlan.subjectMatterType == 1" class="custom-form-item">
+            <el-form-item label="计数方式：" v-if="procurementPlan.procurementType == 1" class="custom-form-item">
               <span>{{ procurementPlan.countingTypeText }}</span>
             </el-form-item>
           </el-col>
@@ -137,6 +137,8 @@
               :data="inventory.row.materialsLists"
               stripe
               highlight-current-row
+              show-summary
+              :summary-method="getSummaries"
             >
               <el-table-column
                 label="序号"
@@ -157,18 +159,15 @@
                 prop="materialsName"
                 show-overflow-tooltip
               />
-              <el-table-column
-                width="150"
-                label="交易标的物"
-                prop="subjectMatterName"
-                show-overflow-tooltip
-              />
-              <el-table-column
-                width="200"
-                label="规格型号"
-                prop="specification"
-                show-overflow-tooltip
-              />
+<!--              <el-table-column-->
+<!--                width="150"-->
+<!--                label="交易标的物"-->
+<!--                prop="subjectMatterName"-->
+<!--                show-overflow-tooltip-->
+<!--              />-->
+              <el-table-column label="特征值特征项" min-width="150" prop="specification" show-overflow-tooltip/>
+              <el-table-column label="计量规则" align="center" prop="measurementRules"  show-overflow-tooltip/>
+              <el-table-column label="工作内容" align="center" prop="workContent"  show-overflow-tooltip/>
               <el-table-column
                 width="100"
                 label="计量单位"
@@ -212,7 +211,7 @@
                 label="基价"
                 align="right"
                 prop="basePriceText"
-                v-if="isShow && procurementPlan.priceType == 2"
+                v-if="isShow && [2,3,4,5,6,7].includes(procurementPlan.priceType)"
               />
               <el-table-column
                 width="150"
@@ -226,41 +225,43 @@
                 label="浮动价"
                 align="right"
                 prop="floatingPriceText"
-                v-if="isShow && procurementPlan.priceType == 2"
+                v-if="isShow && [2,3,6,7].includes(procurementPlan.priceType)"
               />
               <el-table-column
                 width="150"
-                label="装卸费"
+                label="浮动率"
                 align="right"
-                prop="unloadingFeeText"
-                v-if="isShow && procurementPlan.priceType == 2"
+                prop="floatingRateText"
+                v-if="isShow && [4,5,6,7].includes(procurementPlan.priceType)"
               />
               <el-table-column
               v-if="contractPlanning.contractPlanningCategory == 1"
               label="易料商品编码"
               align="center"
               min-width="150" prop="skuId" show-overflow-tooltip
-            >
-              <template slot-scope="scope">
-                <a class="link-type" @click="goDetail(scope.row.skuId)">
-                  {{ scope.row.skuId }}
-                </a>
-              </template>
-            </el-table-column>
-          <el-table-column v-if="contractPlanning.contractPlanningCategory == 1" label="易料商品名称" prop="name" width="150">
-            <template slot-scope="scope">
-              {{ scope.row.name }}
-            </template>
-          </el-table-column>
-   
-          <el-table-column v-if="contractPlanning.contractPlanningCategory == 1" label="易料品牌" min-width="120" prop="offerBrand" show-overflow-tooltip/>
-          <el-table-column v-if="contractPlanning.contractPlanningCategory == 1" label="易料初始报价"  width="150" prop="offerPrice" />
-          
+              >
+                <template slot-scope="scope">
+                  <a class="link-type" @click="goDetail(scope.row.skuId)">
+                    {{ scope.row.skuId }}
+                  </a>
+                </template>
+              </el-table-column>
+              <el-table-column v-if="contractPlanning.contractPlanningCategory == 1" label="易料商品名称" prop="name" width="150">
+                <template slot-scope="scope">
+                  {{ scope.row.name }}
+                </template>
+              </el-table-column>
+
+              <el-table-column v-if="contractPlanning.contractPlanningCategory == 1" label="易料品牌" min-width="120" prop="offerBrand" show-overflow-tooltip/>
+              <el-table-column v-if="contractPlanning.contractPlanningCategory == 1" label="易料初始报价"  width="150" prop="offerPrice" />
+
+              <el-table-column label="合计(含税)" align="right" prop="totalPriceText" min-width="150"/>
+              <el-table-column label="备注" align="center" prop="remark"/>
             </el-table>
           </template>
         </el-table-column>
 
-<!-- 
+<!--
         <el-table-column  v-if="contractPlanning.contractPlanningCategory ==1 " label="易料市集清单" align="center"  width="400">
           <template slot-scope="inventory">
             <el-table size="small" style="position: absolute;top: 8px;" :data="inventory.row.materialsLists"  border ref="planTable"   >
@@ -286,14 +287,14 @@
                     {{ scope.row.name }}
                   </template>
                 </el-table-column>
-         
+
                 <el-table-column label="品牌" min-width="100" prop="offerBrand" show-overflow-tooltip/>
                 <el-table-column label="含税单价" prop="offerPrice" width="100">
                   <template slot-scope="scope">
                     {{ scope.row.offerPrice }}
                   </template>
                 </el-table-column>
-            
+
               </el-table>
             </template>
         </el-table-column> -->
@@ -358,11 +359,90 @@ export default {
     this.getPlanDetail();
   },
   methods: {
+    /* 合计列计算 */
+    getSummaries(param) {
+      const { columns, data } = param;
+      const sums = [];
+      columns.forEach((column, index) => {
+        if (index === 0) {
+          sums[index] = '合计';
+          return;
+        }
+        /* 只显示合计 */
+        if(column.property === "totalPriceText") {
+          const values = data.map(item => {
+            return Number(item[column.property].replaceAll(',',''));
+          });
+          if (!values.every(value => isNaN(value))) {
+            sums[index] = values.reduce((prev, curr) => {
+              const value = Number(curr);
+              if (!isNaN(value)) {
+                return prev + curr;
+              } else {
+                return prev;
+              }
+            }, 0);
+            sums[index] = this.formatNumberDynamicDecimalWithSeparator(sums[index]);
+          } else {
+            sums[index] = '';
+          }
+        }else{
+          sums[index] = '';
+        }
+
+      });
+
+      return sums;
+    },
+    /**
+     * 格式化数字：动态保留小数位数并添加千分位分隔符
+     * @param {number|string} num - 要格式化的数字
+     * @param {number} maxDecimalPlaces - 最大保留的小数位数（例如 2 位）
+     * @returns {string} - 格式化后的字符串
+     */
+    formatNumberDynamicDecimalWithSeparator(num, maxDecimalPlaces = 2) {
+      // 将数字转换为字符串
+      const numStr = num.toString();
+
+      // 找到小数点的位置
+      const decimalIndex = numStr.indexOf('.');
+
+      // 截取整数部分和小数部分
+      let integerPart = numStr;
+      let decimalPart = '';
+
+      if (decimalIndex !== -1) {
+        integerPart = numStr.slice(0, decimalIndex);
+        decimalPart = numStr.slice(decimalIndex + 1);
+      }
+
+      // 如果小数位数超过最大位数，则截取
+      if (decimalPart.length > maxDecimalPlaces) {
+        decimalPart = decimalPart.slice(0, maxDecimalPlaces);
+      }
+
+      // 添加千分位分隔符到整数部分
+      integerPart = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+
+      // 拼接整数部分和小数部分
+      let formattedNumber = integerPart;
+      if (decimalPart.length > 0) {
+        if (decimalPart.length <= 1) {
+          formattedNumber += '.' + decimalPart + '0';
+        }else{
+          formattedNumber += '.' + decimalPart;
+        }
+      }else{
+        formattedNumber += '.00';
+      }
+
+      return formattedNumber;
+    },
            /** 跳转方案详情 */
            async goDetail(code) {
       // this.dialogVisible=true
       // console.log(JSON.stringify(code))
-     
+
         const res = await getYjtUrl(code);
         this.yjtUrl=res.data || ''
         window.open(this.yjtUrl)

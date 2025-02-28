@@ -335,11 +335,12 @@
               <el-table-column label="评标附件上传" align="center" width="150">
                 <template slot-scope="{ row }">
                   <a
-                    :href="row.attachments[0].fileUrl"
                     target="_blank"
-                    class="link-type"
+                    class="link-type ellipsis-text"
                     v-if="row.attachments.length"
-                    >下载</a
+                    @click="viewFile(row.attachments[0].fileName, row.attachments[0].fileUrl)"
+                    :title="row.attachments[0].fileName"
+                    >{{row.attachments[0].fileName}}</a
                   >
                   <el-upload
                     :action="uploadFileUrl"
@@ -1225,6 +1226,20 @@
           :scheme="scheme"
         />
       </el-dialog>
+
+      <!-- 文件预览 -->
+      <el-dialog
+        title="文件预览"
+        :visible.sync="viewFileDialog"
+        width="80%"
+      >
+        <iframe allowfullscreen="true"
+                :src= this.viewFileUrl
+                width="100%"
+                height="700px"
+                frameborder="0"
+        ></iframe>
+      </el-dialog>
     </div>
   </div>
 </template>
@@ -1255,6 +1270,7 @@ import Drag from "@/components/Drag/index.vue";
 import Treeselect from "@riophae/vue-treeselect";
 import "@riophae/vue-treeselect/dist/vue-treeselect.css";
 import {PRICECHANGESTATEOPTIONS} from "@/utils/constants";
+import {getViweFileURL} from "@/api/template/file";
 export default {
   name: "evaluate-bid",
   dicts: [
@@ -1280,6 +1296,8 @@ export default {
   data() {
     const _that = this
     return {
+      viewFileDialog: false,
+      viewFileUrl: '',
       isSubmitEval: false,
       needTime: true,
       timer: null,
@@ -1441,6 +1459,17 @@ export default {
 
   },
   methods: {
+    /** 文件预览 */
+    async viewFile(fileName, fileUrl) {
+      this.viewFileDialog = true;
+      try {
+        const param = {fileName: fileName, fileUrl: fileUrl}
+        const res = await getViweFileURL(param);
+        this.viewFileUrl = res.data;
+      } catch (ex) {
+        console.log("预览文件出错", ex);
+      }
+    },
     formatterPriceChangeState(row,_column,cellvalue){
       if(this.noticeDetail.tenderNotice?.twiceQuotVersion === 1){
         return '-'
@@ -2204,6 +2233,13 @@ export default {
 };
 </script>
 <style lang="scss" scoped>
+/* 单行省略 */
+.ellipsis-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
 .page-title {
   width: 100%;
   border-bottom: solid 1px #ccc;

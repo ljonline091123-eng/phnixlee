@@ -1,7 +1,7 @@
 <template>
   <div class="app-container">
     <div class="context flex flex-column">
-    
+
     <el-radio-group
         v-model="radioType"
         size="small"
@@ -9,7 +9,7 @@
       >
         <el-radio-button
           :label="dict.value"
-          :name="dict.value" 
+          :name="dict.value"
           v-for="dict in radioList"
           :key="dict.value"
           >{{ dict.label }}</el-radio-button
@@ -92,6 +92,9 @@
               label="规格型号/项目特征"
             >
             </el-table-column>
+<!--            <el-table-column label="特征值特征项" min-width="150" prop="specification" show-overflow-tooltip/>-->
+<!--            <el-table-column label="计量规则" min-width="150" align="center" prop="measurementRules" />-->
+<!--            <el-table-column label="工作内容" align="center" prop="workContent" />-->
             <el-table-column
               prop="costItemUnit"
               label="单位"
@@ -116,7 +119,7 @@
       :radioType="radioType"
       @query="handleQuery"
       :loading="loading"
-      :exportFlag=true 
+      :exportFlag=true
       @export="handleExport"
     >
 
@@ -160,32 +163,32 @@ export default {
         {
           value: 'C',
           label: "物资采购价格",
-       
+
         },
         {
           value: 'B',
           label: "专业分包价格",
-       
+
         },
         {
           value: 'A',
           label: "劳务分包价格分",
-       
+
         },
         {
           value: 'D',
           label: "租赁材料价格",
-       
+
         },
         {
           value: 'G',
           label: "租赁设备（机械）价格",
-       
+
         },
         {
           value: 'Z',
           label: "其他价格",
-       
+
         },
       ],
       // * 成本子目form
@@ -250,9 +253,11 @@ export default {
         },
         {
           prop: "specs",
-          label: "规格型号",
+          // label: "规格型号",
+          label: "特征值特征项",
           type: "input",
-          placeholder: "请输入规格型号",
+          // placeholder: "请输入规格型号",
+          placeholder: "请输入特征值特征项",
         },
         {
           prop: "measureUnit",
@@ -277,7 +282,7 @@ export default {
           label: "合同时间范围",
           type: "dateRange",
         },
-        
+
       ],
       tableHeaderList: [
         {
@@ -294,7 +299,8 @@ export default {
         },
         {
           prop: "specs",
-          label: "规格型号",
+          // label: "规格型号",
+          label: "特征值特征项",
           width: 120,
           showOverflowTooltip: true,
         },

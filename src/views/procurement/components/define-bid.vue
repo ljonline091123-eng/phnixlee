@@ -70,7 +70,7 @@
           <el-col :span="24">
             <el-form-item label="决策依据：" class="custom-form-item">
               <div class="file-list">
-                <a class="link-type" @click="templateDialogVisible = true"
+                <a class="link-type" @click="getbiddingTemplate"
                   >招标文件</a
                 >
                 <a
@@ -124,7 +124,7 @@
                 <el-button
                   type="text"
                   v-if="uploadedFileName"
-                  @click="downloadFile"
+                  @click="viewFile(uploadedFileName, uploadedFileUrl)"
                 >
                   {{ uploadedFileName }}
                 </el-button>
@@ -132,7 +132,7 @@
                 <el-button
                   type="text"
                   v-else-if="attachmentDetails && attachmentDetails.length > 0"
-                  @click="downloadFileDetail(attachmentDetails[0])"
+                  @click="viewFile(attachmentDetails[0].fileName, attachmentDetails[0].fileUrl)"
                   style="margin-right: 10px"
                 >
                   {{ attachmentDetails[0].fileName }}
@@ -514,7 +514,6 @@
         height="600px"
       /> -->
       <iframe allowfullscreen="true"
-        v-if="scheme.biddingTemplate"
         :src= this.viewFileUrl
         width="100%"
         height="500px"
@@ -756,7 +755,7 @@ export default {
 
   created() {
     this.getBiddingQuotationList();
-    this.getbiddingTemplate();
+    // this.getbiddingTemplate();
   },
   // mounted() {
   //   this.$nextTick(() => {
@@ -809,6 +808,7 @@ export default {
     //获取招标文件的预览url
     async getbiddingTemplate(){
       //解构biddingTemplate，获取招标文件的属性
+      this.templateDialogVisible = true
       if (this.scheme && this.scheme.biddingTemplate) {
         const { attachmentId = '', fileName = '', fileUrl = '' } = this.scheme.biddingTemplate;
         console.log('Attachment ID:', attachmentId);
@@ -926,6 +926,16 @@ export default {
       );
       console.log("[ d888889999666 ] >", this.selectedRowList);
     },
+    async viewFile(fileName, fileUrl) {
+      this.templateDialogVisible = true
+      try {
+        const param = {fileName: fileName, fileUrl: fileUrl}
+        const res = await getViweFileURL(param);
+        this.viewFileUrl = res.data;
+      } catch (ex) {
+        console.log("预览文件出错", ex);
+      }
+    },
     downloadFile() {
       const url = this.uploadedFileUrl;
       const name = this.uploadedFileName;
@@ -952,6 +962,7 @@ export default {
         document.body.removeChild(a);
       }
     },
+    /* 定标提交按钮 */
     async submitForm() {
       debugger
       this.isSubmit = true;
@@ -979,6 +990,7 @@ export default {
               spinner: "el-icon-loading",
               background: "rgba(0, 0, 0, 0.7)",
             });
+            /* 定标提交方法 */
             const res = await calibration({
               calibrationVOList: this.evaluateList,
               detailUrl: detailUrl,
@@ -1001,6 +1013,7 @@ export default {
         this.isSubmit = false;
       }else{
         try {
+          /* 定标提交方法 */
           const res = await calibration({
             calibrationVOList: this.evaluateList,
             detailUrl: detailUrl,
@@ -1123,7 +1136,7 @@ export default {
       this.bidDetailVisiable = true;
       this.biddingInfoId = id;
     },
-    // 审批流程
+    /* 审批详情点击 */
     async handelCalibrationApproval() {
       try {
         this.calibrateVisible = true;

@@ -28,25 +28,6 @@
     </el-form>
 
     <el-row :gutter="10" class="mb8">
-      <!-- <el-col :span="1.5">
-          <el-button type="success" icon="el-icon-plus" size="mini" @click="handleAdd"
-            v-hasPermi="['template:rating:add']">新增</el-button>
-        </el-col>
-        <el-col :span="1.5">
-          <el-button type="primary" icon="el-icon-edit" size="mini" @click="handleUpdate"
-            v-hasPermi="['template:rating:update']" :disabled="!selectTemplateData.id? true : false">修改</el-button>
-        </el-col>
-        <el-col :span="1.5">
-          <el-button
-            type="danger"
-            plain
-            icon="el-icon-delete"
-            size="mini"
-            @click="handleDelete"
-            :disabled="!selectTemplateData.id? true : false"
-            v-hasPermi="['template:rating:remove']"
-          >删除</el-button>
-        </el-col> -->
       <el-col :span="1.5">
         <el-button
           type="success"
@@ -114,16 +95,6 @@
         show-overflow-tooltip
       ></el-table-column>
       <el-table-column prop="contractName" label="合同类型"></el-table-column>
-      <!-- <el-table-column label="操作" align="center" class-name="small-padding fixed-width">
-          <template slot-scope="scope">
-            <el-button size="mini" type="text" icon="el-icon-edit" @click="handleCheck(scope.row)"
-              v-hasPermi="['template:rating:check']">查看</el-button>
-            <el-button size="mini" type="text" icon="el-icon-edit" @click="handleUpdate(scope.row)"
-              v-hasPermi="['template:rating:edit']">修改</el-button>
-            <el-button size="mini" type="text" icon="el-icon-delete" @click="handleDelete(scope.row)"
-              v-hasPermi="['template:rating:remove']">删除</el-button>
-          </template>
-        </el-table-column> -->
     </el-table>
     <div class="pagination_item">
       <pagination
@@ -136,7 +107,7 @@
     </div>
     <!-- 新增模板 -->
     <el-dialog
-      title="合同模板"
+      title="补充协议模板"
       :visible.sync="fileTemplateVisible"
       width="70%"
       class="view-dialog"
@@ -148,10 +119,10 @@
         style="padding-bottom: 15px"
       >
         <el-radio-button label="baseInfo" name="baseInfo"
-          >合同基本信息</el-radio-button
+          >补充协议基本信息</el-radio-button
         >
         <el-radio-button label="stamp" name="stamp"
-          >合同盖章位置</el-radio-button
+          >补充协议盖章位置</el-radio-button
         >
       </el-radio-group>
 
@@ -185,7 +156,7 @@
               <el-select
                 style="width: 100%"
                 v-model="fileForm.contractType"
-                placeholder="请选择"
+                placeholder="请选择合同类型"
               >
                 <el-option
                   v-for="dict in contractTypeList"
@@ -268,7 +239,7 @@
                   clearable
                 >
                   <el-option label="甲方" value="1" />
-                  <el-option label="已方" value="2" />
+                  <el-option label="乙方" value="2" />
                 </el-select>
               </el-form-item>
             </template>
@@ -318,12 +289,6 @@
       </el-form>
 
       <div class="file-box" v-if="attachmentId">
-        <!-- <FileModule
-          v-if="attachmentId"
-          :attachmentId="attachmentId"
-          height="500px"
-          type="edit"
-        /> -->
         <iframe allowfullscreen="true"
           v-if="attachmentId"
           :src= this.editFileUrl
@@ -350,7 +315,7 @@
     </el-dialog>
     <!-- 详细 -->
     <el-drawer
-      title="查看模板"
+      title="查看补充协议模板"
       :visible.sync="openView"
       size="60%"
       direction="rtl"
@@ -359,25 +324,6 @@
       <div class="view-box">
         <PageTitle title="基本信息" />
         <div class="form-body">
-          <!-- <el-descriptions :column="3">
-            <el-descriptions-item label="模板名称">{{
-              templateInfo.templateName
-            }}</el-descriptions-item>
-            <el-descriptions-item label="使用单位">{{
-              templateInfo.a
-            }}</el-descriptions-item>
-            <el-descriptions-item label="维护人">{{
-              templateInfo.name
-            }}</el-descriptions-item>
-            <el-descriptions-item label="文件名"
-              ><a
-                :href="templateInfo.fileUrl"
-                class="link-type"
-                target="_blank"
-                >{{ templateInfo.fileName }}</a
-              ></el-descriptions-item
-            >
-          </el-descriptions> -->
           <el-form
             label-position="right"
             label-width="110px"
@@ -416,11 +362,6 @@
 
         <PageTitle title="模板内容" marginBottom="15px" />
         <div class="file-box">
-          <!-- <FileModule
-            v-if="templateInfo.attachmentId"
-            :attachmentId="templateInfo.attachmentId"
-            height="500px"
-          /> -->
           <iframe allowfullscreen="true"
             v-if="templateInfo.attachmentId"
             :src= this.PreviewFileUrl
@@ -469,7 +410,7 @@ export default {
       queryParams: {
         pageNumber: 1,
         pageSize: 10,
-        templateType: 1,
+        templateType: 3,
         templateName: undefined,
       },
       fileLoading: false,
@@ -485,7 +426,7 @@ export default {
       },
       fileRules: {
         templateName: [{ required: true, message: "模板名称不能为空" }],
-        usingUnitNo: [{ required: true, message: "请选择使用单位" }],
+        usingUnitNo: [{ required: true, message: "请选择使用单位" }], //注释
         fileTemplate: [{ required: true, message: "请选择模板文件" }],
         contractType: [{ required: true, message: "请选择合同类型" }],
       },
@@ -515,7 +456,6 @@ export default {
   methods: {
     showSecretTips() {
       showSecretRelatedTips(()=>{
-        // 清除现有文件列表
         this.$refs['upload'].clearFiles();  // 使用 clearFiles 方法清除文件列表
         this.$refs['upload'].$refs['upload-inner'].handleClick()
       })
@@ -589,7 +529,7 @@ export default {
     async handleAdd() {
       // this.$router.push(`/template/add-rating`);
       this.fileTemplateVisible = true;
-      this.listOrganization4Company();
+      this.listOrganization4Company();   //注释
     },
     /** 删除按钮操作 */
     handleDelete() {
@@ -677,7 +617,7 @@ export default {
             agreementSignStamperList,
           } = this.fileForm;
           const formData = {
-            templateType: 1,
+            templateType: 3,
             templateName,
             attachmentId,
             contractType,
@@ -703,7 +643,7 @@ export default {
     async handleUpdate() {
       const { id } = this.selectTemplateData;
       this.fileTemplateVisible = true;
-      await this.listOrganization4Company();
+      await this.listOrganization4Company(); //注释
       try {
         const res = await getTemplateDetail(id);
         const { templateName, fileName, fileUrl, attachmentId, usingUnitNo } =

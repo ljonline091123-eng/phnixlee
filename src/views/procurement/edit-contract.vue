@@ -425,7 +425,7 @@
                 <template slot-scope="scope">
                   <el-form-item label-width="0" :prop="'agreementPartyInfoLists.' + scope.$index + '.signerBankAccount'"
                                 :rules="[{ required: true, trigger: 'blur', message: '请输入签约单位银行账号' }]">
-                    <el-input v-model="scope.row.signerBankAccount" clearable />
+                    <el-input v-model="scope.row.signerBankAccount" placeholder="点击选择银行账号" @focus="getBankListVisible(scope)" :class="scope.row.roleType == 1 ? 'cursor_pointer':''"/>
                   </el-form-item>
                 </template>
               </el-table-column>
@@ -433,7 +433,7 @@
                 <template slot-scope="scope">
                   <el-form-item label-width="0" :prop="'agreementPartyInfoLists.' + scope.$index + '.signerBankName'"
                                 :rules="[{ required: true, trigger: 'blur', message: '请输入签约单位银行账户名称' }]">
-                    <el-input v-model="scope.row.signerBankName" clearable />
+                    <el-input v-model="scope.row.signerBankName" placeholder="点击选择银行账户名称" @focus="getBankListVisible(scope)" :class="scope.row.roleType == 1 ? 'cursor_pointer':''"/>
                   </el-form-item>
                 </template>
               </el-table-column>
@@ -441,7 +441,7 @@
                 <template slot-scope="scope">
                   <el-form-item label-width="0" :prop="'agreementPartyInfoLists.' + scope.$index + '.signerBankOpen'"
                                 :rules="[{ required: true, trigger: 'blur', message: '请输入签约单位开户支行' }]">
-                    <el-input v-model="scope.row.signerBankOpen" clearable />
+                    <el-input v-model="scope.row.signerBankOpen" placeholder="点击选择开户支行" @focus="getBankListVisible(scope)" :class="scope.row.roleType == 1 ? 'cursor_pointer':''"/>
                   </el-form-item>
                 </template>
               </el-table-column>
@@ -487,12 +487,9 @@
               <el-table-column prop="paymentBasis" label="付款基数">
                 <template slot-scope="scope">
                   <el-form-item label-width="0" :prop="'agreementPaymentLists.' + scope.$index + '.paymentBasis'"
-                    :rules="[{ required: true, trigger: 'change', message: '请选择付款基数' }]">
-                    <el-select style="width: 100%" v-model="scope.row.paymentBasis" @change="value => changePaymentBasis(scope, value)">
-                      <el-option v-for="dict in dictObj.payment_basis" :key="dict.value" :label="dict.label"
-                        :value="dict.value">
-                      </el-option>
-                    </el-select>
+                    :rules="[{ required: true, trigger: 'blur', message: '请填写付款基数' }, {validator: validateFigure, trigger: 'blur'}]">
+                    <el-input v-model="scope.row.paymentBasis" clearable>
+                    </el-input>
                   </el-form-item>
                 </template>
               </el-table-column>
@@ -553,11 +550,16 @@
           <commonTitle>合同清单</commonTitle>
           <!-- 物资采购类 -->
           <div style="margin-bottom: 24px" v-if="contractType == 1">
-            <el-table :data="firstForm.agreementMaterialsLists" style="width: 100%">
+            <el-table :data="firstForm.agreementMaterialsLists" style="width: 100%"
+                      show-summary
+                      :summary-method="getSummaries">
               <el-table-column prop="materialsCode" label="物资编码" width="150" show-overflow-tooltip/>
               <el-table-column prop="materialsName" label="物资名称" width="150" show-overflow-tooltip/>
-              <el-table-column prop="subjectMatterName" label="交易标的物" width="150" show-overflow-tooltip/>
-              <el-table-column prop="specification" label="规格型号" width="150" show-overflow-tooltip/>
+<!--              <el-table-column prop="subjectMatterName" label="交易标的物" width="150" show-overflow-tooltip/>-->
+<!--              <el-table-column prop="specification" label="规格型号" width="150" show-overflow-tooltip/>-->
+              <el-table-column label="特征值特征项" min-width="150" prop="specification" show-overflow-tooltip/>
+              <el-table-column label="计量规则" min-width="150" align="center" prop="measurementRules"  show-overflow-tooltip/>
+              <el-table-column label="工作内容" align="center" prop="workContent" show-overflow-tooltip />
               <el-table-column prop="unitMeasurement" label="计量单位" width="100"/>
               <el-table-column prop="brand" label="品牌" align="center" width="180">
                 <template slot-scope="scope">
@@ -574,7 +576,19 @@
                 <el-table-column prop="signTaxRate" label="签订税率(%)" width="130" align="right">
                   <template slot-scope="scope">
                     <el-form-item label-width="0" :prop="'agreementMaterialsLists.' + scope.$index + '.signTaxRate'">
-                      <el-input v-model="scope.row.signTaxRate" v-thousandth clearable @blur="computedAmount(scope)"/>
+<!--                      <el-input v-model="scope.row.signTaxRate" v-thousandth clearable @blur="computedAmount(scope)"/>-->
+                      <el-select
+                        v-model="scope.row.signTaxRateName"
+                        @change="handleTaxRateChange(scope)"
+                        v-thousandth clearable
+                      >
+                        <el-option
+                          v-for="dict in dictObj.rax_archives"
+                          :key="dict.value"
+                          :label="dict.label"
+                          :value="dict.value"
+                        />
+                      </el-select>
                     </el-form-item>
                   </template>
                 </el-table-column>
@@ -606,21 +620,21 @@
                 <!-- 基价(元) -->
                 <el-table-column prop="basePriceText" label="基价(元)" width="120" align="right">
                   <template #default="{ row }">
-                    {{ priceType === 2 || row.priceType === 2 || row.priceType === 3 ? row.basePriceText : '/' }}
+                    {{ [2,3,4,5,6,7].includes(priceType) && [2,3,4].includes(row.priceType) ? row.basePriceText : '/' }}
                   </template>
                 </el-table-column>
 
                 <!-- 浮动价(元) -->
                 <el-table-column prop="floatingPriceText" label="浮动价(元)" width="120" align="right">
                   <template #default="{ row }">
-                    {{ priceType === 2 || row.priceType === 2 || row.priceType === 3 ? row.floatingPriceText : '/' }}
+                    {{ [2,3,4,5,6,7].includes(priceType) && [2,3,6,7].includes(row.priceType)  ? row.floatingPriceText : '/' }}
                   </template>
                 </el-table-column>
 
                 <!-- 装卸费(元) -->
-                <el-table-column prop="unloadingFeeText" label="装卸费(元)" width="120" align="right">
+                <el-table-column prop="unloadingFeeText" label="浮动率(%)" width="120" align="right">
                   <template #default="{ row }">
-                    {{ priceType === 2 || row.priceType === 2 || row.priceType === 3 ? row.unloadingFeeText : '/' }}
+                    {{ [2,3,4,5,6,7].includes(priceType) && [4,5,6,7].includes(row.priceType) ? row.floatingRateText : '/' }}
                   </template>
                 </el-table-column>
 
@@ -657,11 +671,16 @@
           </div>
           <!-- 物资租赁类 / 机械租赁类 -->
           <div style="margin-bottom: 24px" v-if="contractType == 2 || contractType == 3">
-            <el-table :data="firstForm.agreementMaterialsLists" style="width: 100%">
+            <el-table :data="firstForm.agreementMaterialsLists" style="width: 100%"
+                      show-summary
+                      :summary-method="getSummaries">
               <el-table-column prop="materialsCode" label="物资编码" width="100" show-overflow-tooltip/>
               <el-table-column prop="materialsName" label="物资名称" width="150" show-overflow-tooltip/>
-              <el-table-column prop="subjectMatterName" label="交易标的物" width="150" show-overflow-tooltip/>
-              <el-table-column prop="specification" label="规格型号" />
+<!--              <el-table-column prop="subjectMatterName" label="交易标的物" width="150" show-overflow-tooltip/>-->
+<!--              <el-table-column prop="specification" label="规格型号" />-->
+              <el-table-column label="特征值特征项" min-width="150" prop="specification" show-overflow-tooltip/>
+              <el-table-column label="计量规则" min-width="150" align="center" prop="measurementRules"  show-overflow-tooltip/>
+              <el-table-column label="工作内容" align="center" prop="workContent"  show-overflow-tooltip/>
               <el-table-column prop="unitMeasurement" label="计量单位" />
               <el-table-column prop="brand" align="center" label="品牌" width="180">
                 <template slot-scope="scope">
@@ -711,7 +730,19 @@
                 <el-table-column prop="signTaxRate" label="签订税率(%)" width="130" align="right">
                   <template slot-scope="scope">
                     <el-form-item label-width="0" :prop="'agreementMaterialsLists.' + scope.$index + '.signTaxRate'">
-                      <el-input v-model="scope.row.signTaxRate" v-thousandth clearable @blur="computedAmount(scope)"/>
+<!--                      <el-input v-model="scope.row.signTaxRate" v-thousandth clearable @blur="computedAmount(scope)"/>-->
+                      <el-select
+                        v-model="scope.row.signTaxRateName"
+                        @change="handleTaxRateChange(scope)"
+                        v-thousandth clearable
+                      >
+                        <el-option
+                          v-for="dict in dictObj.rax_archives"
+                          :key="dict.value"
+                          :label="dict.label"
+                          :value="dict.value"
+                        />
+                      </el-select>
                     </el-form-item>
                   </template>
                 </el-table-column>
@@ -758,7 +789,9 @@
           </div>
           <!-- 专业分包类 / 劳务分包类 -->
           <div style="margin-bottom: 24px" v-if="contractType == 4 || contractType == 5">
-            <el-table :data="firstForm.agreementMaterialsLists" style="width: 100%">
+            <el-table :data="firstForm.agreementMaterialsLists" style="width: 100%"
+                      show-summary
+                      :summary-method="getSummaries">
               <el-table-column prop="materialsCode" label="清单编码" width="150" show-overflow-tooltip/>
               <el-table-column prop="materialsName" label="清单名称" width="150" show-overflow-tooltip/>
               <el-table-column prop="subjectMatterName" label="交易标的物" width="150" show-overflow-tooltip/>
@@ -772,7 +805,19 @@
                 <el-table-column prop="signTaxRate" label="签订税率(%)" width="130" align="right">
                   <template slot-scope="scope">
                     <el-form-item label-width="0" :prop="'agreementMaterialsLists.' + scope.$index + '.signTaxRate'">
-                      <el-input v-model="scope.row.signTaxRate" v-thousandth clearable @blur="computedAmount(scope)"/>
+<!--                      <el-input v-model="scope.row.signTaxRate" v-thousandth clearable @blur="computedAmount(scope)"/>-->
+                      <el-select
+                        v-model="scope.row.signTaxRateName"
+                        @change="handleTaxRateChange(scope)"
+                        v-thousandth clearable
+                      >
+                        <el-option
+                          v-for="dict in dictObj.rax_archives"
+                          :key="dict.value"
+                          :label="dict.label"
+                          :value="dict.value"
+                        />
+                      </el-select>
                     </el-form-item>
                   </template>
                 </el-table-column>
@@ -819,7 +864,9 @@
           </div>
           <!-- 其它类 -->
           <div style="margin-bottom: 24px" v-if="contractType == 6">
-            <el-table :data="firstForm.agreementMaterialsLists" style="width: 100%">
+            <el-table :data="firstForm.agreementMaterialsLists" style="width: 100%"
+                      show-summary
+                      :summary-method="getSummaries">
               <el-table-column prop="materialsCode" label="清单编码" width="150" show-overflow-tooltip/>
               <el-table-column prop="materialsName" label="清单名称" width="150" show-overflow-tooltip/>
               <el-table-column prop="subjectMatterName" label="交易标的物" width="150" show-overflow-tooltip/>
@@ -831,7 +878,19 @@
                 <el-table-column prop="signTaxRate" label="签订税率(%)" width="130" align="right">
                   <template slot-scope="scope">
                     <el-form-item label-width="0" :prop="'agreementMaterialsLists.' + scope.$index + '.signTaxRate'">
-                      <el-input v-model="scope.row.signTaxRate" v-thousandth clearable @blur="computedAmount(scope)"/>
+<!--                      <el-input v-model="scope.row.signTaxRate" v-thousandth clearable @blur="computedAmount(scope)"/>-->
+                      <el-select
+                        v-model="scope.row.signTaxRateName"
+                        @change="handleTaxRateChange(scope)"
+                        v-thousandth clearable
+                      >
+                        <el-option
+                          v-for="dict in dictObj.rax_archives"
+                          :key="dict.value"
+                          :label="dict.label"
+                          :value="dict.value"
+                        />
+                      </el-select>
                     </el-form-item>
                   </template>
                 </el-table-column>
@@ -956,7 +1015,10 @@
               </div>
               <el-table :data="firstForm.agreementMachineShifts" style="width: 100%">
                 <el-table-column prop="equipmentName" label="设备名称" show-overflow-tooltip/>
-                <el-table-column prop="specification" label="规格型号" show-overflow-tooltip/>
+<!--                <el-table-column prop="specification" label="规格型号" show-overflow-tooltip/>-->
+                <el-table-column label="特征值特征项" min-width="150" prop="specification" show-overflow-tooltip/>
+                <el-table-column label="计量规则" min-width="150" align="center" prop="measurementRules"  show-overflow-tooltip/>
+                <el-table-column label="工作内容" align="center" prop="workContent"  show-overflow-tooltip/>
                 <el-table-column prop="unitMeasurement" label="计量单位" show-overflow-tooltip/>
                 <el-table-column prop="taxRate" align="center" label="税率(%)">
                   <template slot-scope="scope">
@@ -1013,7 +1075,10 @@
             </commonTitle>
             <el-table :data="firstForm.agreementEquipmentSupplies" style="width: 100%">
               <el-table-column prop="equipmentName" label="设备名称" show-overflow-tooltip/>
-              <el-table-column prop="specification" label="规格型号" show-overflow-tooltip/>
+<!--              <el-table-column prop="specification" label="规格型号" show-overflow-tooltip/>-->
+              <el-table-column label="特征值特征项" min-width="150" prop="specification" show-overflow-tooltip/>
+              <el-table-column label="计量规则" min-width="150" align="center" prop="measurementRules"  show-overflow-tooltip/>
+              <el-table-column label="工作内容" align="center" prop="workContent"  show-overflow-tooltip/>
               <el-table-column prop="unitMeasurement" label="计量单位" show-overflow-tooltip/>
               <el-table-column prop="estimatedCount" align="center" label="预估数量">
                 <template slot-scope="scope">
@@ -1088,7 +1153,10 @@
             </commonTitle>
             <el-table :data="firstForm.agreementMaterialSupplies" style="width: 100%">
               <el-table-column prop="materialName" label="物资名称" show-overflow-tooltip/>
-              <el-table-column prop="specification" label="规格型号" show-overflow-tooltip/>
+<!--              <el-table-column prop="specification" label="规格型号" show-overflow-tooltip/>-->
+              <el-table-column label="特征值特征项" min-width="150" prop="specification" show-overflow-tooltip/>
+              <el-table-column label="计量规则" min-width="150" align="center" prop="measurementRules"  show-overflow-tooltip/>
+              <el-table-column label="工作内容" align="center" prop="workContent"  show-overflow-tooltip/>
               <el-table-column prop="unitMeasurement" label="计量单位" show-overflow-tooltip/>
               <el-table-column prop="estimatedCount" align="center" label="预估数量">
                 <template slot-scope="scope">
@@ -1257,6 +1325,37 @@
               </el-table-column>
             </el-table>
           </div>
+
+          <!-- 合同附件 -->
+          <commonTitle>
+            合同附件
+            <template #right>
+              <el-upload
+                :action="uploadFileUrl"
+                :on-success="handleSuccessContract"
+                :before-upload="handleBeforeUpload"
+                :on-remove="handleRemoveContract"
+                :file-list="fileList"
+                multiple
+                ref="uploadRef"
+                :show-file-list="false"
+              >
+                <el-button type="success" icon="el-icon-plus" size="mini">上传附件</el-button>
+              </el-upload>
+            </template>
+          </commonTitle>
+          <div style="margin-bottom: 8px">
+            <el-table :data="firstForm.agreementAttachmentList" style="width: 100%">
+              <el-table-column prop="fileName" label="文件名" align="center" />
+              <el-table-column label="操作" align="center" width="200">
+                <template slot-scope="scope">
+                  <el-button size="mini" type="text" @click="handleRemoveContract(scope.$index)" >删除</el-button>
+                  <el-button size="mini" type="text" @click="handleReUpload(scope.$index)" >重新上传</el-button>
+                  <el-button size="mini" type="text" @click="handleView(scope.row.fileName, scope.row.fileUrl)" >预览</el-button>
+                </template>
+              </el-table-column>
+            </el-table>
+          </div>
         </el-tab-pane>
         <el-tab-pane label="合同附件" name="second"/>
       </el-tabs>
@@ -1274,6 +1373,83 @@
     </div>
     </el-form>
     </div>
+
+<!--  选择开户银行等信息  -->
+    <el-dialog title="选择开户银行" :visible.sync="bankVisible">
+      <el-form
+        :model="queryParams"
+        ref="queryForm"
+        :inline="true"
+        label-width="100px"
+      >
+        <el-form-item label="支行名称" prop="name">
+          <el-input
+            v-model="queryParams.name"
+            style="width: 200px"
+            placeholder="请输入支行名称"
+            clearable
+          />
+        </el-form-item>
+        <el-form-item label="银行名称" prop="parentName">
+          <el-input
+            v-model="queryParams.parentName"
+            style="width: 200px"
+            placeholder="请输入银行名称"
+            clearable
+          />
+        </el-form-item>
+
+        <el-form-item>
+          <el-button type="primary" @click="queryParams.pageNumber = 1;getBankListVisible(null)">搜索</el-button>
+        </el-form-item>
+      </el-form>
+      <el-table
+        :data="bankList"
+        empty-text="暂无数据"
+        border
+        v-loading="bankLoading"
+        element-loading-text="加载中..."
+      >
+        <el-table-column
+          label="支行名称"
+          align="center"
+          prop="name"
+        />
+        <el-table-column
+          label="银行名称"
+          prop="parentName"
+          width="180"
+          align="center"
+          show-overflow-tooltip
+        />
+        <el-table-column
+          label="银联号"
+          prop="code"
+          width="150"
+          align="center"
+          show-overflow-tooltip
+        />
+        <el-table-column
+          label="操作"
+          type="index"
+          width="80"
+          align="center">
+          <template slot-scope="scope">
+            <el-button type="primary" size="mini" plain @click="rowClickBank(scope)">选择</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+
+      <pagination
+        v-show="totalBank > 0"
+        :total="totalBank"
+        :page.sync="queryParams.pageNumber"
+        :limit.sync="queryParams.pageSize"
+        @pagination="getBankListVisible(null)"
+        :page-sizes="[10, 20, 40, 100]"
+      />
+    </el-dialog>
+
     <!-- 添加 -->
     <el-dialog
       :title="dialogTitle"
@@ -1366,6 +1542,15 @@
         >
       </div>
     </el-dialog>
+
+    <el-dialog title="合同附件预览" :visible.sync="viewFileDialog" width="80%">
+      <iframe allowfullscreen="true"
+              :src= this.viewFileUrl
+              width="100%"
+              height="600px"
+              frameborder="0"
+      ></iframe>
+    </el-dialog>
   </div>
 
 </template>
@@ -1374,8 +1559,9 @@ import { Base64 } from "js-base64";
 import { create, all } from "mathjs"
 import commonTitle from "@/views/procurement/components/common-title.vue";
 import { getAgreementEditURL,getAgreementCreateInfo,getAgreementAttachmentId,getAgreementDetail,getLabelAttachmentId, saveAgreement, listUnderlingDict, listDeviceClass, listDevice, listMaterialsClass, listMaterials, deviceFeatureList, deviceFeatureValueList, listMaterialsFeature, listMaterialsFeatureValue,  avoidSubmitByMarket} from "@/api/procurement/contract";
-import { offerService, offerRepo } from "@/utils/const"
-import {getEditFileUrlByID} from "@/api/template/file";
+import {offerService, offerRepo, uploadFileUrl} from "@/utils/const"
+import {addAttachment, getEditFileUrlByID, getViweFileURL} from "@/api/template/file";
+import {listAccountBank, getBankList} from "@/api/vendor/vendor";
 import { cardid, isvalidatemobile, validatenull } from "@/utils/validate"
 import BackButton from "@/components/BackButton/index.vue"
 import FileModule from '@/components/FileModule/index.vue'
@@ -1386,6 +1572,11 @@ export default {
   dicts: [ 'sys_yes_no', 'expenditureBusinessType'],
   data() {
     return {
+      viewFileDialog: false,
+      viewFileUrl: "",
+      uploadFileUrl, // 替换为实际的上传地址
+      fileList: [], // el-upload 组件的文件列表
+      reuploadIndex: '', // 重新上传索引
       editFileUrl:"", //编辑合同附件URL
       isAvoidSubmit:false,
       id:null,
@@ -1407,7 +1598,8 @@ export default {
         agreementDailyWageList: [],  // 合同-计日工对象
         agreementMachineShifts: [],  // 合同-机械台班对象
         agreementEquipmentSupplies: [],  // 合同-甲供设备清单对象
-        agreementMaterialSupplies: []  // 合同-甲供材料清单对象
+        agreementMaterialSupplies: [],  // 合同-甲供材料清单对象
+        agreementAttachmentList: [], // 合同附件
       },
       paymentWayArr:[],
       agreementFileName: '',
@@ -1432,7 +1624,8 @@ export default {
         deposit_base_amount:'',  // 保证金基数
         jobTitleCode:'',  // 工种
         rentalType:'',  // 租赁方式
-        rentalUnit:''  // 租赁单位
+        rentalUnit:'',  // 租赁单位
+        rax_archives:''  // 税率
       },
       dictObjMap:{
         PAYMENT_CYCLE: 'payment_cycle',  //支付周期
@@ -1448,7 +1641,8 @@ export default {
         DEPOSIT_MODE: 'deposit_way', //押金/保证金方式
         DATALLER_WORK_TYPE: 'jobTitleCode', //工种
         RENT_MODE:'rentalType', //租赁方式
-        RENT_UNIT:'rentalUnit' //租赁单位
+        RENT_UNIT:'rentalUnit', //租赁单位
+        RAX_ARCHIVES:'rax_archives' //税率
       },
       dialogOpen:false,
       dialogTitle:'',
@@ -1460,9 +1654,11 @@ export default {
         label: "name",
       },
       attachmentMessage: "合同附件正在生成中，请稍后",
+      totalBank: 0,
+      bankList: [],
+      bankLoading: false,
+      bankVisible: false,
       queryParams: {
-        queryId: undefined,
-        queryName:undefined,
         pageNumber: 1,
         pageSize: 10,
       },
@@ -1502,7 +1698,222 @@ export default {
       next();
     },
   methods: {
+    /** 上传附件成功后回调 */
+    async handleSuccessContract(res) {
+      const { url, name } = res.data;
+      try {
+        /* 保存到文件表获取返回id */
+        const res = await addAttachment({ fileName: name, fileUrl: url });
+        if (this.reuploadIndex !== '') {
+          // 替换指定索引的附件
+          this.$set(this.firstForm.agreementAttachmentList, this.reuploadIndex, {
+            businessId: res.data,
+            fileName: name,
+            fileUrl: url
+          });
+          this.reuploadIndex = ''; // 清除索引
+        }else{
+          // 新增附件
+          this.firstForm.agreementAttachmentList.push({
+            businessId: res.data,
+            fileName: name,
+            fileUrl: url,
+          });}
+      } catch (err) {
+        console.log(err);
+      }
+    },
+    /** 上传附件前校验 */
+    handleBeforeUpload(file) {
+      //限制上传的文件名长度
+      const fileName = file.name;
+      if (fileName.length > 80) {
+        this.$message.error('文件名不能超过80个字符');
+        return false; // 阻止上传
+      }
+      return true;  // 返回 true 表示允许继续上传
+    },
+    /** 删除其他附件 */
+    handleRemoveContract(index) {
+      this.$confirm("是否删除该附件？", "提示", {
+        confirmButtonText: "确定",
+        cancelButtonText: "取消",
+        type: "warning",
+      }).then(() => {
+        this.firstForm.agreementAttachmentList.splice(index, 1);
+        this.$message.success('删除成功');
+      }).catch(() => {});
+    },
+    /** 重新上传文件 */
+    handleReUpload(index) {
+      this.$confirm("是否重新上传该附件？", "提示", {
+        confirmButtonText: "确定",
+        cancelButtonText: "取消",
+        type: "warning"
+      }).then(() => {
+        this.$refs.uploadRef.clearFiles(); // 清空上传组件的文件列表
+        this.reuploadIndex = index; // 记录当前索引
+        this.$refs.uploadRef.$refs["upload-inner"].handleClick(); // 触发文件选择器
+      }).catch(() => {});
+    },
+    /** 合同其他文件预览 */
+    async handleView(fileName, fileUrl) {
+      this.viewFileDialog = true;
+      try {
+        const param = {fileName: fileName, fileUrl: fileUrl}
+        const res = await getViweFileURL(param);
+        this.viewFileUrl = res.data;
+      } catch (ex) {
+        console.log("预览文件出错", ex);
+      }
+    },
 
+    /* 合计列计算 */
+    getSummaries(param) {
+      const { columns, data } = param;
+      const sums = [];
+      columns.forEach((column, index) => {
+        if (index === 0) {
+          sums[index] = '合计';
+          return;
+        }
+        /* 只显示合计 */
+        if(column.property === "signAmountInclTaxText" || column.property === "taxPriceText") {
+          const values = data.map(item => {
+            return Number(item[column.property].replaceAll(',',''));
+          });
+          if (!values.every(value => isNaN(value))) {
+            sums[index] = values.reduce((prev, curr) => {
+              const value = Number(curr);
+              if (!isNaN(value)) {
+                return prev + curr;
+              } else {
+                return prev;
+              }
+            }, 0);
+            sums[index] = this.formatNumberDynamicDecimalWithSeparator(sums[index]);
+          } else {
+            sums[index] = '';
+          }
+        }else{
+          sums[index] = '';
+        }
+
+      });
+
+      return sums;
+    },
+    /**
+     * 格式化数字：动态保留小数位数并添加千分位分隔符
+     * @param {number|string} num - 要格式化的数字
+     * @param {number} maxDecimalPlaces - 最大保留的小数位数（例如 2 位）
+     * @returns {string} - 格式化后的字符串
+     */
+    formatNumberDynamicDecimalWithSeparator(num, maxDecimalPlaces = 2) {
+      // 将数字转换为字符串
+      const numStr = num.toString();
+
+      // 找到小数点的位置
+      const decimalIndex = numStr.indexOf('.');
+
+      // 截取整数部分和小数部分
+      let integerPart = numStr;
+      let decimalPart = '';
+
+      if (decimalIndex !== -1) {
+        integerPart = numStr.slice(0, decimalIndex);
+        decimalPart = numStr.slice(decimalIndex + 1);
+      }
+
+      // 如果小数位数超过最大位数，则截取
+      if (decimalPart.length > maxDecimalPlaces) {
+        decimalPart = decimalPart.slice(0, maxDecimalPlaces);
+      }
+
+      // 添加千分位分隔符到整数部分
+      integerPart = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+
+      // 拼接整数部分和小数部分
+      let formattedNumber = integerPart;
+      if (decimalPart.length > 0) {
+        if (decimalPart.length <= 1) {
+          formattedNumber += '.' + decimalPart + '0';
+        }else{
+          if (decimalPart.length <= 1) {
+            formattedNumber += '.' + decimalPart + '0';
+          }else{
+            formattedNumber += '.' + decimalPart;
+          }
+        }
+      }else{
+        formattedNumber += '.00';
+      }
+
+      return formattedNumber;
+    },
+    /* 点击显示银行账户列表 */
+    getBankListVisible(scope) {
+      /* 如果是甲方就打开选择弹窗 */
+      if( (!scope && this.queryParams.roleType === 1) || (scope && scope.row && scope.row.roleType == 1)){
+        this.bankVisible = true;
+        this.queryParams.roleType = 1;
+        this.getBankListFn();
+      }else if( (!scope && this.queryParams.roleType === 2) || (scope && scope.row && scope.row.roleType == 2)){
+        this.bankVisible = true;
+        this.queryParams.roleType = 2;
+        this.listAccountBank();
+      }else{
+        this.bankVisible = false;
+      }
+    },
+    /* 获取甲方银行账户列表 */
+    async getBankListFn() {
+      this.bankLoading = true;
+      const res = await getBankList(this.queryParams)
+      this.bankLoading = false;
+      this.bankList = res.data.rows
+      this.totalBank = res.data.total
+    },
+    /* 获取乙方银行账户列表 */
+    async listAccountBank() {
+      this.bankLoading = true;
+      this.queryParams.vendorId = this.firstForm.agreement.vendorId;
+      const res = await listAccountBank(this.queryParams)
+      this.bankLoading = false;
+      this.bankList = res.data.rows
+      this.bankList.map(account => {
+        account.name = account.openingBranch;
+        account.parentName = account.affiliatedBank;
+        account.code = account.interbankNumber;
+        return account;
+      })
+      this.totalBank = res.data.total
+    },
+    /* 点击选中银行 */
+    rowClickBank(scope) {
+      this.bankVisible = false;
+      this.firstForm.agreementPartyInfoLists.map((obj, index) =>{
+        /* 甲方 银行账号赋值 */
+        if(obj.roleType == 1 && this.queryParams.roleType == 1){
+          this.$set(obj, 'signerBankAccount', scope.row.name);
+          this.$set(obj, 'signerBankOpen', scope.row.code);
+          this.$set(obj, 'signerBankName', scope.row.parentName);
+          this.$refs.firstForm.clearValidate(`agreementPartyInfoLists.${index}.signerBankAccount`);
+          this.$refs.firstForm.clearValidate(`agreementPartyInfoLists.${index}.signerBankOpen`);
+          this.$refs.firstForm.clearValidate(`agreementPartyInfoLists.${index}.signerBankName`);
+        }
+        /* 乙方 供应商银行账号赋值 */
+        if(obj.roleType == 2 && this.queryParams.roleType == 2){
+          this.$set(obj, 'signerBankAccount', scope.row.name);
+          this.$set(obj, 'signerBankOpen', scope.row.code);
+          this.$set(obj, 'signerBankName', scope.row.parentName);
+          this.$refs.firstForm.clearValidate(`agreementPartyInfoLists.${index}.signerBankAccount`);
+          this.$refs.firstForm.clearValidate(`agreementPartyInfoLists.${index}.signerBankOpen`);
+          this.$refs.firstForm.clearValidate(`agreementPartyInfoLists.${index}.signerBankName`);
+        }
+        return obj;
+      });
+    },
     async loadAgreementAttachmentId() {
       const agreementId = this.id;
       if (agreementId) {
@@ -1594,6 +2005,7 @@ export default {
           this.firstForm.agreementPaymentItem = res.data.agreementPaymentItem || {} // 合同款项信息
           this.firstForm.agreementPaymentLists = res.data.agreementPaymentLists || [] // 结算与付款节点信息
           this.firstForm.agreementPartyInfoLists = res.data.agreementPartyInfoLists || [] // 合同签约方信息
+          this.firstForm.agreementAttachmentList = res.data.agreementAttachmentList || [] // 合同其他附件
 
           if(!this.firstForm.agreementPartyInfoLists || this.firstForm.agreementPartyInfoLists.length <= 0 ){
             /* 如果历史数据该选项为空，该修改页需要补充 */
@@ -1813,6 +2225,17 @@ export default {
         callback()
       }
     },
+    validateFigure(rule, value, callback) {
+      const reg =  /^-?\d+(\.\d{1,2})?$/;
+      if (value === "" || value === undefined) {
+        callback();
+      } else if (!reg.test(value)) {
+        // callback(new Error("请输入正确的值"));
+        callback(new Error("请输入正确的数值且小数点保留两位"));
+      } else {
+        callback();
+      }
+    },
     validateFloat (rule, value, callback) {
       const reg = /^([+-]?(?:\d+(\.\d{1,2})?)|([+-]?(?:[0-5]?\d|6)(?:\.\d)?|9(?:\.0)?))%?$/
       if (value === '' || value === undefined) {
@@ -1826,7 +2249,7 @@ export default {
     //获取字典
     async getListUnderlingDict(type){
       const res = await listUnderlingDict(type)
-      const resMap = res.data.map(item => ({value:item.dictValue,label:item.dictLabel}))
+      const resMap = res.data.map(item => ({value:item.dictValue,label:item.dictLabel, remark: item.remark}))
       const dictType = this.dictObjMap[type]
       this.dictObj[dictType] = resMap
     },
@@ -2204,6 +2627,21 @@ export default {
         ? `${formattedIntegerPart}.${decimalPart}`
         : formattedIntegerPart;
     },
+    /* 税率下拉监听 */
+    handleTaxRateChange(scope) {
+      console.log('%c🪴 税率字典rax_archives \n', `font-size: 14px;background-color: #f00;`, this.dictObj.rax_archives );
+      const selectedDict = this.dictObj.rax_archives.find(dict => dict.value === scope.row.signTaxRateName);
+      console.log('%c👽 选择的税率字典 \n', `font-size: 14px;background-color: #fa8;`, selectedDict);
+      /* 税率值 */
+      scope.row.signTaxRate = selectedDict.remark;
+      /* 税率编码 */
+      scope.row.signTaxRateCode = selectedDict.value;
+      /* 税率名称 */
+      scope.row.signTaxRateName = selectedDict.label;
+      console.log('%c🏀 更新后当前行的值scope.row \n', `font-size: 14px;background-color: #fe0;`, scope.row );
+      /* 调用计算方法 */
+      this.computedAmount(scope)
+    },
     computedAmount(scope) {
         const { signUnitPriceInclTax, signCount, signTaxRate } = scope.row
 
@@ -2453,6 +2891,9 @@ export default {
   margin: 0 auto !important;
   height: 72vh;
   overflow: auto;
+}
+::v-deep .cursor_pointer .el-input__inner{
+  cursor: pointer!important;
 }
 .engineering_visa {
   margin-bottom: 20px;

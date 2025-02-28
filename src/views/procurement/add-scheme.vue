@@ -233,6 +233,25 @@
                       ></el-input>
                     </el-form-item>
                   </el-col>
+                  <el-col
+                    :span="8"
+                    class="grid-cell"
+                  >
+                  <el-form-item
+                    label="项目名称"
+                    prop="projectName"
+                    class="required label-right-align"
+                  >
+                    <el-tooltip :content="projectName" placement="top">
+                      <el-input
+                        v-model="projectName"
+                        type="text"
+                        clearable
+                        disabled
+                      ></el-input>
+                    </el-tooltip>
+                  </el-form-item>
+                  </el-col>
                 </el-row>
               </div>
               <div class="page-title">
@@ -318,7 +337,32 @@
                          popper-class="date-clear"
                         :picker-options="endTimeOptions"
                         value-format="yyyy-MM-dd HH:mm:ss"
-                        @change="handleChange"
+                        @change="(value) => handleChange(value, 'bid')"
+                      />
+                    </el-form-item>
+                  </el-col>
+                  <el-col :span="8" class="grid-cell">
+                    <el-form-item
+                      label="招标报名截止时间"
+                      prop="applyTimeNotice"
+                      class="required label-right-align"
+                      v-if="formData.procurementType == 1"
+                    >
+                      <template #label>
+                        报名截止时间
+                        <el-tooltip content="报名截止时间从当天24点开始计算至少120个小时(5天)！" placement="top">
+                          <i class="el-icon-question"></i>
+                        </el-tooltip>
+                      </template>
+                      <el-date-picker
+                        v-model="formData.applyTimeNotice"
+                        type="datetime"
+                        style="width: 100%"
+                        placeholder="(说明:截止时间不能少于5天)"
+                        popper-class="date-clear"
+                        :picker-options="endTimeOptionsNotice"
+                        value-format="yyyy-MM-dd HH:mm:ss"
+                        @change="(value) => handleChange(value, 'notice')"
                       />
                     </el-form-item>
                   </el-col>
@@ -375,6 +419,11 @@
                           formData.templateName
                         }}</a>
                       </template>
+                      <el-button
+                        v-if="formData.evaluationTemplateId"
+                        size="mini"
+                        @click="viewEvaluationTemplate(formData.evaluationTemplateId)"
+                      >查看模板</el-button>
                       <el-button
                         v-else
                         size="small"
@@ -468,11 +517,69 @@
                       </div>
                     </el-form-item>
                   </el-col>
-
-
+                </el-row>
+                <el-row :gutter="40" style="margin-top: 20px;">
+                  <el-col :span="8" class="grid-cell" v-if="formData.procurementType == 1">
+                    <el-form-item label="招标公告" prop="noticeAttachmentId">
+                      <template>
+                        <a href="javascript:;" @click="uploadNoticeClick">{{
+                            formData.noticeAttachmentName
+                          }}</a>
+                      </template>
+                      <el-button v-show="formData.noticeAttachmentId" size="mini" @click="handleViewNotice(formData.noticeAttachmentName,formData.noticeAttachmentUrl)" >预览附件</el-button>
+                      <br>
+                      <div style="margin-left: -90px;width: 300px;">
+                      <el-button size="mini" type="primary" v-show="(state === null || (state !== 1 && state !== 2 && state !== 3))" @click="uploadNoticeClick">手动上传</el-button>
+                      <el-upload
+                        style="margin-left: 90px;margin-top: -75px;"
+                        :action="uploadFileUrl"
+                        :limit="1"
+                        :on-success="fileSuccessNotice"
+                        :file-list="formData.fileListNotice"
+                        :on-remove="fileRemoveNotice"
+                        ref="uploadNotice"
+                        :before-upload="otherBeforeUpload"
+                      ></el-upload>
+                      </div>
+                    </el-form-item>
+                  </el-col>
+                  <el-col :span="8" class="grid-cell">
+                    <el-form-item label=" 其他文件" prop="otherAttachmentName">
+                      <template v-if="formData.otherAttachmentName">
+                        <a href="javascript:;" >{{
+                          formData.otherAttachmentName
+                        }}</a>
+                      </template>
+                      <el-button
+                        v-if="formData.otherAttachmentId"
+                        size="mini"
+                        @click="modifyTempFile(3)"
+                      >修改文件</el-button>
+                      <br>
+                      <div style="margin-left: -90px;width: 300px;">
+                      <el-button
+                        size="small"
+                        type="primary"
+                        @click="uploadOtherFileClick"
+                        >手动上传</el-button>
+                        <el-upload
+                          style="margin-left: 90px;margin-top: -75px;"
+                          :action="uploadFileUrl"
+                          :limit="1"
+                          :on-success="fileSuccessOther"
+                          :file-list="formData.fileListOther"
+                          :on-remove="fileRemoveOther"
+                          ref="uploadOther"
+                          :before-upload="otherBeforeUpload"
+                        >
+                        </el-upload>
+                      </div>
+                    </el-form-item>
+                  </el-col>
                 </el-row>
                 <!-- 在线预览 -->
-                <div class="previewFile">
+                <div class="previewFile"
+                     ref="lianXiangWenDangIframe">
                   <div class="page-title">
                     <span>文件预览</span>
                   </div>
@@ -490,7 +597,98 @@
                     height="500px"
                     frameborder="0"
                   ></iframe>
-
+                  <iframe allowfullscreen="true"
+                      v-if="noticeViewAttachment"
+                      :src= this.viewFileUrl
+                      width="100%"
+                      height="500px"
+                      frameborder="0"
+                  ></iframe>
+                  <!-- 显示评分模板详情 -->
+                  <div v-if="showPreview" class="template-detail">
+                    <h3>评分模板预览</h3>
+                    <el-form :model="templateFormData" label-width="120px">
+                      <el-row :gutter="40">
+                        <el-col :span="12">
+                          <el-form-item label="模板名称">
+                            <span>{{ templateFormData.name }}</span>
+                          </el-form-item>
+                        </el-col>
+                        <el-col :span="12">
+                          <el-form-item label="评分类型">
+                            <el-checkbox-group v-model="templateFormData.selectedTypes">
+                              <el-checkbox
+                                v-for="dict in dict.type.mark_item_type"
+                                :label="dict.value"
+                                :key="dict.value"
+                                disabled
+                              >
+                                {{ dict.label }}
+                              </el-checkbox>
+                            </el-checkbox-group>
+                          </el-form-item>
+                        </el-col>
+                      </el-row>
+                      <el-row :gutter="40">
+                        <el-col :span="12" class="grid-cell" prop="createUser">
+                          <el-form-item
+                            label="维护人"
+                            prop="projectCode"
+                            class="required label-right-align"
+                          >
+                            <template slot-scope>
+                              {{ templateFormData.createUser }}
+                            </template>
+                          </el-form-item>
+                        </el-col>
+                      </el-row>
+                      <PageTitle title="评分模板内容" />
+                      <div
+                        v-for="(table, index) in templateFormData.biddingMarkCategoryVOList"
+                        :key="index"
+                        class="table-section"
+                      >
+                        <el-row :gutter="40">
+                          <el-col :span="12">
+                            <el-form-item label="评分项类型">
+                              <span>{{ table.itemTypeName }}</span>
+                            </el-form-item>
+                          </el-col>
+                          <el-col :span="12">
+                            <el-form-item label="总分">
+                              <span>{{ table.totalScore }}</span>
+                            </el-form-item>
+                          </el-col>
+                        </el-row>
+                        <el-row :gutter="40">
+                          <el-col :span="24">
+                            <el-form-item label="评分项">
+                              <el-table
+                                :data="table.biddingMarkItemVOList"
+                                default-expand-all
+                                row-key="id"
+                                stripe
+                                border
+                                :tree-props="{ children: 'subBiddingMarkItemDetailVOList' }"
+                              >
+                                <el-table-column prop="name" label="评分项名称" />
+                                <el-table-column
+                                  prop="highRange"
+                                  align="center"
+                                  label="评分项"
+                                />
+                                <el-table-column
+                                  prop="contant"
+                                  align="center"
+                                  label="评分描述"
+                                />
+                              </el-table>
+                            </el-form-item>
+                          </el-col>
+                        </el-row>
+                      </div>
+                    </el-form>
+                  </div>
                 </div>
               </div>
             </el-tab-pane>
@@ -527,6 +725,8 @@
                 size="small"
                 :data="inventory.row.materialsLists"
                 border
+                show-summary
+                :summary-method="getSummaries"
               >
                 <el-table-column
                   label="序号"
@@ -553,11 +753,14 @@
                   prop="subjectMatterName"
                   show-overflow-tooltip
                 />
-                <el-table-column
-                  label="规格型号"
-                  prop="specification"
-                  show-overflow-tooltip
-                />
+<!--                <el-table-column-->
+<!--                  label="规格型号"-->
+<!--                  prop="specification"-->
+<!--                  show-overflow-tooltip-->
+<!--                />-->
+                <el-table-column label="特征值特征项" min-width="150" prop="specification" show-overflow-tooltip/>
+                <el-table-column label="计量规则" min-width="150" align="center" prop="measurementRules" show-overflow-tooltip />
+                <el-table-column label="工作内容" align="center" prop="workContent" show-overflow-tooltip />
                 <el-table-column
                   label="计量单位"
                   align="center"
@@ -576,7 +779,7 @@
                 />
                 <el-table-column
                   label="基价(元)"
-                  v-if="formData.priceType == 2"
+                  v-if="[2,3,4,5,6,7].includes(formData.priceType)"
                   align="right"
                   prop="basePriceText"
                 />
@@ -589,15 +792,15 @@
                 />
                 <el-table-column
                   label="浮动价(元)"
-                  v-if="formData.priceType == 2"
+                  v-if="[2,3,4,5,6,7].includes(formData.priceType)"
                   align="right"
                   prop="floatingPriceText"
                 />
                 <el-table-column
-                  label="装卸费(元)"
-                  v-if="formData.priceType == 2"
+                  label="浮动率(%)"
+                  v-if="[2,3,4,5,6,7].includes(formData.priceType)"
                   align="right"
-                  prop="unloadingFeeText"
+                  prop="floatingRateText"
                 />
                 <el-table-column
                   v-if="isLease"
@@ -619,6 +822,8 @@
                     {{ row.rentMode == 3 ? "-" : row.rentQuantityText }}
                   </template>
                 </el-table-column>
+                <el-table-column label="合计(含税)" align="right" prop="totalPriceText" min-width="150"/>
+                <el-table-column label="备注" align="center" prop="remark"/>
               </el-table>
             </template>
           </el-table-column>
@@ -679,7 +884,17 @@
                 width="50"
                 align="center"
               />
-              <el-table-column label="模板名称" prop="name" width="200" />
+              <!-- <el-table-column label="模板名称" prop="name" width="200" /> -->
+              <el-table-column label="模板名称" prop="name" width="200">
+                <template slot-scope="scope">
+                  <a
+                    class="link-type"
+                    @click="handleCheck(scope.row.id)"
+                  >
+                    {{ scope.row.name }}
+                  </a>
+                </template>
+              </el-table-column>
               <el-table-column label="维护人" align="center" prop="createBy" />
               <el-table-column
                 label="创建日期"
@@ -738,7 +953,17 @@
                 width="50"
                 align="center"
               />
-              <el-table-column label="模板名称" prop="name" width="200" />
+              <!-- <el-table-column label="模板名称" prop="name" width="200" /> -->
+              <el-table-column label="模板名称" prop="name" width="200">
+                <template slot-scope="scope">
+                  <a
+                    class="link-type"
+                    @click="handleCheck(scope.row.id)"
+                  >
+                    {{ scope.row.name }}
+                  </a>
+                </template>
+              </el-table-column>
               <el-table-column label="维护人" align="center" prop="createBy" />
               <el-table-column
                 label="创建日期"
@@ -772,6 +997,98 @@
             >确 定</el-button
           >
         </div>
+      </el-dialog>
+
+      <!-- 评分模板详情 -->
+      <el-dialog
+        :title="templateFormData.name"
+        :visible.sync="templateDialogVisible"
+        width="80%"
+        @close="templateDialogVisible = false"
+      >
+        <el-form :model="templateFormData" label-width="120px">
+          <el-row :gutter="40">
+            <el-col :span="12">
+              <el-form-item label="模板名称">
+                <span>{{ templateFormData.name }}</span>
+              </el-form-item>
+            </el-col>
+            <el-col :span="12">
+              <el-form-item label="评分类型">
+                <el-checkbox-group v-model="templateFormData.selectedTypes">
+                  <el-checkbox
+                    v-for="dict in dict.type.mark_item_type"
+                    :label="dict.value"
+                    :key="dict.value"
+                    disabled
+                  >
+                    {{ dict.label }}
+                  </el-checkbox>
+                </el-checkbox-group>
+              </el-form-item>
+            </el-col>
+          </el-row>
+          <el-row :gutter="40">
+            <el-col :span="12" class="grid-cell" prop="createUser">
+              <el-form-item
+                label="维护人"
+                prop="projectCode"
+                class="required label-right-align"
+              >
+                <template slot-scope>
+                  {{ templateFormData.createUser }}
+                </template>
+              </el-form-item>
+            </el-col>
+          </el-row>
+
+          <PageTitle title="评分模板内容" />
+
+          <div
+            v-for="(table, index) in templateFormData.biddingMarkCategoryVOList"
+            :key="index"
+            class="table-section"
+          >
+            <el-row :gutter="40">
+              <el-col :span="12">
+                <el-form-item label="评分项类型">
+                  <span>{{ table.itemTypeName }}</span>
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item label="总分">
+                  <span>{{ table.totalScore }}</span>
+                </el-form-item>
+              </el-col>
+            </el-row>
+            <el-row :gutter="40">
+              <el-col :span="24">
+                <el-form-item label="评分项">
+                  <el-table
+                    :data="table.biddingMarkItemVOList"
+                    default-expand-all
+                    row-key="id"
+                    stripe
+                    border
+                    :tree-props="{ children: 'subBiddingMarkItemDetailVOList' }"
+                  >
+                    <el-table-column prop="name" label="评分项名称" />
+                    <el-table-column
+                      prop="highRange"
+                      align="center"
+                      label="评分项"
+                    />
+                    <el-table-column
+                      prop="contant"
+                      align="center"
+                      label="评分描述"
+                    />
+                  </el-table>
+                </el-form-item>
+              </el-col>
+            </el-row>
+          </div>
+        </el-form>
       </el-dialog>
 
       <!-- 选择招标文件模板 -->
@@ -991,8 +1308,6 @@
         </div>
       </el-dialog>
 
-
-
       <!-- 选择财务确认人员 -->
       <el-dialog title="财务确认人员" :visible.sync="officerDialog" width="55%">
         <el-form
@@ -1094,16 +1409,19 @@ import {
   getSchemeDetail,
   getSchemeEditFileUrl,
 } from "@/api/procurement/scheme";
+import {getMinProject} from "@/api/procurement/plan";
+import { getRating } from "@/api/template/rating";
 import { getSwitchPageList } from "@/api/procurement/manage";
-import { getContractTypeList } from "@/api/template/file";
+import {getContractTypeList, getViweFileURL} from "@/api/template/file";
 import FileModule from "@/components/FileModule/index.vue";
 import { isvalidatemobile, validEmail, validatenum } from "@/utils/validate";
 import BackButton from "@/components/BackButton/index.vue";
-import { addAttachment , getEditFileUrlByID, ModifyFileNameAndFileURL} from "@/api/template/file";
+import { addAttachment , getEditFileUrlByID, ModifyFileNameAndFileURL, removerAmendmentRecord} from "@/api/template/file";
 import {showSecretRelatedTips} from "@/utils/MyUtils";
 import {offerRepo, offerService, uploadFileUrl} from "@/utils/const";
 import { listUnderlingDict } from "@/api/procurement/contract";
 import VirtualScroll from 'el-table-virtual-scroll'
+import { getPlanDetail } from "../../api/procurement/plan";
 
 export default {
   name: "add-scheme",
@@ -1112,6 +1430,7 @@ export default {
   //   "procurement_counting_type",
   //   "procurement_payment_type",
   // ],
+  dicts: ["purchase_type", "mark_item_type"],
   components: {
     FileModule,
     BackButton,
@@ -1132,6 +1451,7 @@ export default {
     const param = JSON.parse(Base64.decode(this.$route.params.params));
     this.getContractTypeList();
     console.log('%c👽 采购方案url入参 ', `font-size: 14px;background-color: #f00;`, param);
+    this.projectName = this.project.name;
     if (param?.type === "update") {
       this.isEdit = true;
       this.getSchemeDetail(param.id);
@@ -1144,6 +1464,36 @@ export default {
     this.$set(this.formData, "procurementType", param.procurementType + "");
   },
   computed: {
+    endTimeOptionsNotice() {
+      //这里判断是不是今天
+      console.log( this.formData.applyTimeNotice+"---")
+      let newVal = new Date(this.formData.applyTimeNotice)
+      let    selectableRange =new Date().getHours() + ':' + (new Date().getMinutes() + 1) + ':00 - 23:59:00'
+      // 将日期字符串转换为JavaScript日期对象
+      let originalDate = new Date();
+      // 对日期对象进行加5天操作
+      originalDate.setDate(originalDate.getDate() + 5);
+      if (
+        newVal &&
+        newVal.getFullYear() === originalDate.getFullYear() &&
+        newVal.getMonth() === originalDate.getMonth() &&
+        newVal.getDate() === originalDate.getDate()
+      ) {
+        selectableRange =new Date().getHours() + ':' + (new Date().getMinutes() + 1) + ':00 - 23:59:00'
+      }
+      else if(newVal && (newVal.getFullYear() > originalDate.getFullYear() ||
+        (newVal.getFullYear() === originalDate.getFullYear() && newVal.getMonth() > originalDate.getMonth()) ||
+        (newVal.getFullYear() === originalDate.getFullYear() && newVal.getMonth() === originalDate.getMonth() && newVal.getDate() > originalDate.getDate())
+      )){
+        selectableRange = '00:00:00 - 23:59:00' //默认的时间范围
+      }
+      return {
+        selectableRange,
+        disabledDate(time) {
+          return time.getTime() < Date.now() + (4 * 24 * 3600 * 1000); // 禁用小于当前日期的日期
+        }
+      }
+    },
     endTimeOptions() {
       //这里判断是不是今天
        console.log( this.formData.bidDeadline+"---")
@@ -1155,11 +1505,16 @@ export default {
         originalDate.setDate(originalDate.getDate() + 5);
       if (
         newVal &&
-        newVal.getDate() == originalDate.getDate()
+        newVal.getFullYear() === originalDate.getFullYear() &&
+        newVal.getMonth() === originalDate.getMonth() &&
+        newVal.getDate() === originalDate.getDate()
       ) {
        selectableRange =new Date().getHours() + ':' + (new Date().getMinutes() + 1) + ':00 - 23:59:00'
       }
-      else if(newVal.getDate() > originalDate.getDate()){
+      else if(newVal && (newVal.getFullYear() > originalDate.getFullYear() ||
+          (newVal.getFullYear() === originalDate.getFullYear() && newVal.getMonth() > originalDate.getMonth()) ||
+          (newVal.getFullYear() === originalDate.getFullYear() && newVal.getMonth() === originalDate.getMonth() && newVal.getDate() > originalDate.getDate())
+        )) {
         selectableRange = '00:00:00 - 23:59:00' //默认的时间范围
       }
       return {
@@ -1186,6 +1541,135 @@ export default {
       next();
     },
   methods: {
+    /** 招标文件预览 */
+    async handleViewNotice(fileName, fileUrl) {
+      this.noticeViewAttachment = true;
+      this.viewAttachmentId = "";
+      this.showPreview = false;
+      try {
+        const param = {fileName: fileName, fileUrl: fileUrl}
+        const res = await getViweFileURL(param);
+        this.viewFileUrl = res.data;
+      } catch (ex) {
+        console.log("预览文件出错", ex);
+      }
+    },
+    /** 招标文件删除 */
+    fileRemoveNotice() {
+      this.$set(this.formData, "noticeAttachmentId", null);
+      this.$set(this.formData, "noticeAttachmentName", null);
+      this.$set(this.formData, "noticeAttachmentUrl", null);
+      this.$forceUpdate();
+      // 清除文件预览
+      this.noticeViewAttachment = false;
+      this.viewFileUrl = ""
+      // 新增校验规则
+      this.rules.noticeAttachmentId = [{required: true,message: "请上传招标公告文件",}]
+    },
+    /** 招标文件附件上传成功 */
+    async fileSuccessNotice(res) {
+      const { url, name } = res.data;
+      try {
+        /* 保存到文件表获取返回id */
+        const res = await addAttachment({ fileName: name, fileUrl: url });
+        /* 设置新的附件返回的附件id */
+        this.$set(this.formData, "noticeAttachmentId", res.data);
+        this.$set(this.formData, "noticeAttachmentName", name);
+        this.$set(this.formData, "noticeAttachmentUrl", url);
+        this.$forceUpdate();
+        // 清除校验规则
+        this.$refs.form.clearValidate("noticeAttachmentId");
+        this.rules.noticeAttachmentId = [];
+      } catch (err) {
+        console.log(err);
+      }
+    },
+    /** 招标文件附件上传 */
+    uploadNoticeClick() {
+      showSecretRelatedTips(()=>{
+        this.$refs['uploadNotice'].clearFiles();  // 使用 clearFiles 方法清除文件列表
+        this.$refs['uploadNotice'].$refs['upload-inner'].handleClick() // 触发文件选择器打开
+      })
+    },
+    /* 合计列计算 */
+    getSummaries(param) {
+      const { columns, data } = param;
+      const sums = [];
+      columns.forEach((column, index) => {
+        if (index === 0) {
+          sums[index] = '合计';
+          return;
+        }
+        /* 只显示合计 */
+        if(column.property === "totalPriceText") {
+          const values = data.map(item => {
+            return Number(item[column.property].replaceAll(',',''));
+          });
+          if (!values.every(value => isNaN(value))) {
+            sums[index] = values.reduce((prev, curr) => {
+              const value = Number(curr);
+              if (!isNaN(value)) {
+                return prev + curr;
+              } else {
+                return prev;
+              }
+            }, 0);
+            sums[index] = this.formatNumberDynamicDecimalWithSeparator(sums[index]);
+          } else {
+            sums[index] = '';
+          }
+        }else{
+          sums[index] = '';
+        }
+
+      });
+
+      return sums;
+    },
+    /**
+     * 格式化数字：动态保留小数位数并添加千分位分隔符
+     * @param {number|string} num - 要格式化的数字
+     * @param {number} maxDecimalPlaces - 最大保留的小数位数（例如 2 位）
+     * @returns {string} - 格式化后的字符串
+     */
+    formatNumberDynamicDecimalWithSeparator(num, maxDecimalPlaces = 2) {
+      // 将数字转换为字符串
+      const numStr = num.toString();
+
+      // 找到小数点的位置
+      const decimalIndex = numStr.indexOf('.');
+
+      // 截取整数部分和小数部分
+      let integerPart = numStr;
+      let decimalPart = '';
+
+      if (decimalIndex !== -1) {
+        integerPart = numStr.slice(0, decimalIndex);
+        decimalPart = numStr.slice(decimalIndex + 1);
+      }
+
+      // 如果小数位数超过最大位数，则截取
+      if (decimalPart.length > maxDecimalPlaces) {
+        decimalPart = decimalPart.slice(0, maxDecimalPlaces);
+      }
+
+      // 添加千分位分隔符到整数部分
+      integerPart = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+
+      // 拼接整数部分和小数部分
+      let formattedNumber = integerPart;
+      if (decimalPart.length > 0) {
+        if (decimalPart.length <= 1) {
+          formattedNumber += '.' + decimalPart + '0';
+        }else{
+          formattedNumber += '.' + decimalPart;
+        }
+      }else{
+        formattedNumber += '.00';
+      }
+
+      return formattedNumber;
+    },
     //获取字典
     async getListUnderlingDict(type) {
       const res = await listUnderlingDict(type);
@@ -1232,6 +1716,11 @@ export default {
         }
       };
       return {
+        noticeViewAttachment: false,
+        viewFileUrl: "",
+        templateFormData: {}, // 用于存储评分模板详情的数据
+        templateDialogVisible: false, // 控制评分模板详情弹框的显示与隐藏
+        showPreview: false,
         //数据字典
         dictObj: {
           procurement_type:"",
@@ -1299,6 +1788,12 @@ export default {
               message: "请选择计划投标截止时间",
             },
           ],
+          applyTimeNotice: [
+            {
+              required: true,
+              message: "请选择招标报名截止时间",
+            },
+          ],
           bidContactPerson: [
             {
               required: true,
@@ -1351,13 +1846,21 @@ export default {
               message: "请选择模板",
             },
           ],
-          biddingTemplateName: [
+          noticeAttachmentId: [
+            {
+              required: true,
+              message: "请上传招标公告文件",
+            },
+          ],
+          /* 现在都是将模板生成一个附件(手动上传不用)，使用附件id */
+          biddingAttachmentId: [
             {
               required: true,
               message: "请选择招标文件模板",
             },
           ],
-          contractTemplateName: [
+          /* 现在都是将模板生成一个附件(手动上传不用)，使用附件id */
+          contractAttachmentId: [
             {
               required: true,
               message: "请选择合同模板",
@@ -1408,6 +1911,8 @@ export default {
         generalTemplateTotal: 0,
         reusableTemplateTotal: 0,
         procurementPlanIds: [], //计划id
+        projectCode: "", // 项目编码
+        projectName: "",
         expireTimeOption: {
           // 设置日期时间显示格式，只显示年月日时分
           format: "yyyy-MM-dd HH:mm:ss",
@@ -1518,12 +2023,16 @@ export default {
       this.officerLoading = false;
     },
     /* 计划投标截止时间监听 */
-    handleChange(value) {
+    handleChange(value,type) {
       let newVal = new Date(value);
       let currentDate = Date.now(); // 获取当前时间戳
       // 比较当前日期是否小于5天后的日期
       if (newVal && newVal < currentDate + 5 * 24 * 60 * 60 * 1000) {
-        this.formData.bidDeadline = null; // 设置为null
+        if (type === 'bid') {
+          this.formData.bidDeadline = null; // 设置为null
+        } else if(type === 'notice'){
+          this.formData.applyTimeNotice = null; // 设置为null
+        }
       }
     },
     handleTabClick(tab) {
@@ -1631,10 +2140,13 @@ export default {
             evaluationTemplateId,
             biddingAttachmentId,
             contractAttachmentId,
+            otherAttachmentId,
             contractTemplateId,
             biddingTemplateId,
             procurementSchemeId,
             procurementSchemeBiddingId,
+            applyTimeNotice,
+            noticeAttachmentId,
           } = this.formData;
           const formData = {
             contractSplitIds: this.procurementPlanIds,
@@ -1657,7 +2169,10 @@ export default {
               contractAttachmentId,
               contractTemplateId,
               biddingTemplateId,
+              otherAttachmentId,
               id: procurementSchemeBiddingId || "",
+              applyTimeNotice,
+              noticeAttachmentId,
             },
           };
           console.log(formData, "formData--formData--formData");
@@ -1687,8 +2202,10 @@ export default {
             "bidContactPhone",
             "bidContactEmail",
             "templateName",
-            "biddingTemplateName",
-            "contractTemplateName",
+            "biddingAttachmentId",
+            "contractAttachmentId",
+            "applyTimeNotice",
+            "noticeAttachmentId"
           ];
           const [[firstKey]] = Object.entries(object);
           const messageName = object[firstKey][0].field;
@@ -1733,6 +2250,75 @@ export default {
       this.templateQuery.pageNumber = 1;
       this.getReusableScoreTemplateList();
     },
+    /**
+     * 查看评分模板详情（选择评分模板时）
+     */
+    async handleCheck(id) {
+      try {
+        const res = await getRating({ id });
+        const templateData = res.data;
+
+        // 处理评分模板数据
+        templateData.selectedTypes = templateData.markCategoryDatailVOList.map(obj => String(obj.itemType));
+        templateData.biddingMarkCategoryVOList = templateData.markCategoryDatailVOList.map((obj, index) => {
+          templateData.markCategoryDatailVOList[index].itemType = String(obj.itemType);
+          const itemTypeFind = this.dict.type.mark_item_type.find(item => item.value === String(obj.itemType));
+          templateData.markCategoryDatailVOList[index].itemTypeName = itemTypeFind.label;
+          templateData.markCategoryDatailVOList[index].biddingMarkItemVOList = obj.markItemDetailVOList;
+          return obj;
+        });
+
+        // 将模板数据赋值给表单数据
+        this.templateFormData = templateData;
+
+        // 显示模板详情弹框
+        this.templateDialogVisible = true;
+      } catch (error) {
+        console.error("获取模板详情失败", error);
+      }
+    },
+
+    /**
+     * 查看评分模板详情（选择后，在详情展示）
+     */
+    async viewEvaluationTemplate(id) {
+      /* 隐藏招标公告预览 */
+      this.noticeViewAttachment = false;
+      /* 隐藏招标文件预览 */
+      this.viewAttachmentId = "";
+      this.editFileUrl = "";
+      this.viewFileUrl = "";
+      try {
+        const res = await getRating({ id });
+        const templateData = res.data;
+
+        // 处理评分模板数据
+        templateData.selectedTypes = templateData.markCategoryDatailVOList.map(obj => String(obj.itemType));
+        templateData.biddingMarkCategoryVOList = templateData.markCategoryDatailVOList.map((obj, index) => {
+          templateData.markCategoryDatailVOList[index].itemType = String(obj.itemType);
+          const itemTypeFind = this.dict.type.mark_item_type.find(item => item.value === String(obj.itemType));
+          templateData.markCategoryDatailVOList[index].itemTypeName = itemTypeFind.label;
+          templateData.markCategoryDatailVOList[index].biddingMarkItemVOList = obj.markItemDetailVOList;
+          return obj;
+        });
+
+        // 将模板数据赋值给预览区域
+        this.templateFormData = templateData;
+
+        // 显示预览区域
+        this.showPreview = true;
+      } catch (error) {
+        console.error("获取模板详情失败", error);
+      }
+    },
+    /**
+     * 关闭评分模板详情
+     */
+    closePreviewEvaluation() {
+      this.showPreview = false;
+    },
+
+
     /** 重置按钮操作 */
     resetQuery() {
       this.resetForm("queryForm");
@@ -1824,6 +2410,8 @@ export default {
           priceTypeText,
           procurementPlanType,
           procurementSchemeName,
+          bidContactPerson,
+          bidContactPhone,
         } = res.data;
         this.deptId = res.data.projectDeptId;
         this.$set(this.formData, "ceilingPrice", ceilingPrice);
@@ -1844,6 +2432,8 @@ export default {
         this.formData.subjectMatterType = subjectMatterType;
         this.formData.priceType = priceType;
         this.formData.priceTypeText = priceTypeText;
+        this.$set(this.formData,"bidContactPerson",bidContactPerson);
+        this.$set(this.formData,"bidContactPhone",bidContactPhone);
         await this.getFinanceList();
       } catch (err) {
         console.log(err);
@@ -1872,6 +2462,10 @@ export default {
     },
     /* 修改不同的模板 2 招标文件模板 ，1 合同模板 联想文档绑定文件id对象名称viewAttachmentId  */
     async modifyTempFile(type){
+      /* 关闭评分模板预览 */
+      this.closePreviewEvaluation();
+      /* 隐藏招标文件预览 */
+      this.noticeViewAttachment = false
       console.log('%c modifyTempFile(2 招标文件模板 ，1 合同模板)', `font-size: 20px;background-color: #f00;`, type);
       console.log('%c procurementSchemeTempObject', `font-size: 20px;background-color: #f00;`, this.procurementSchemeTempObject);
       console.log('%c formData', `font-size: 20px;background-color: #f00;`, this.formData);
@@ -1887,7 +2481,7 @@ export default {
               fileUrl: fileUrl,
             });
             //复制模板后，修改文件名和文件URL
-            await ModifyFileNameAndFileURL({attachmentId: res.data})
+            ModifyFileNameAndFileURL({attachmentId: res.data})
           }else{
             res.data = this.formData.biddingAttachmentId;
           }
@@ -1908,17 +2502,11 @@ export default {
           /* 调起联想文档 */
           this.viewAttachmentId = res.data;
 
-          //据viewAttachmentId获取文件的文档中台的编辑URL
+          // 据viewAttachmentId获取文件的文档中台的编辑URL
           if (this.viewAttachmentId) {
             console.log('点击修改附件后的Attachment ID:', this.viewAttachmentId);
-            //获取文档中台的文档编辑URL
-            try {
-              const res = await getEditFileUrlByID({attachmentId: this.viewAttachmentId});
-              this.editFileUrl = res.data;
-              console.log("editFileUrl:", this.editFileUrl);
-            } catch (err) {
-              console.log(err);
-            }
+            // 获取文档中台的文档编辑URL
+            this.loadEditFileUrl();
           } else {
             console.warn('attachmentId 数据未正确加载');
           }
@@ -1938,7 +2526,7 @@ export default {
               fileUrl: fileUrl,
             });
             //复制模板后，修改文件名和文件URL
-            await ModifyFileNameAndFileURL({attachmentId: res.data})
+            ModifyFileNameAndFileURL({attachmentId: res.data})
           }else{
             res.data = this.formData.contractAttachmentId;
           }
@@ -1963,13 +2551,39 @@ export default {
           if (this.viewAttachmentId) {
             console.log('点击修改附件后的Attachment ID:', this.viewAttachmentId);
             //获取文档中台的文档编辑URL
-            try {
-              const res = await getEditFileUrlByID({attachmentId: this.viewAttachmentId});
-              this.editFileUrl = res.data;
-              console.log("editFileUrl:", this.editFileUrl);
-            } catch (err) {
-              console.log(err);
-            }
+            this.loadEditFileUrl();
+          } else {
+            console.warn('attachmentId 数据未正确加载');
+          }
+        } catch (err) {
+          console.log(err);
+        }
+      }else if (type === 3) {
+        /* 3 其他文件 */
+        let {attachmentId , fileName , fileUrl} = this.procurementSchemeTempObject.otherFile;
+        try {
+          let res = {};
+          res.data = this.formData.otherAttachmentId;
+
+          /* 同步更新页面的模板附件对象(附件修改按钮) */
+          if (!this.procurementSchemeTempObject) {
+            this.$set(this, 'procurementSchemeTempObject', {});
+          }
+          if (!this.procurementSchemeTempObject.otherFile) {
+            this.$set(this.procurementSchemeTempObject, 'otherFile', {});
+          }
+          this.$set(this.procurementSchemeTempObject.otherFile, "attachmentId", res.data);
+          this.$set(this.procurementSchemeTempObject.otherFile, "fileName", fileName);
+          this.$set(this.procurementSchemeTempObject.otherFile, "fileUrl", fileUrl);
+
+          /* 调起联想文档 */
+          this.viewAttachmentId = res.data;
+
+          //据viewAttachmentId获取文件的文档中台的编辑URL
+          if (this.viewAttachmentId) {
+            console.log('点击修改附件后的Attachment ID:', this.viewAttachmentId);
+            //获取文档中台的文档编辑URL
+            this.loadEditFileUrl();
           } else {
             console.warn('attachmentId 数据未正确加载');
           }
@@ -2008,7 +2622,7 @@ export default {
       })
 
     },
-
+    /* 确定招标文件模板 */
     async confirmBcTemplate() {
       console.log("选择模板的确认按钮-》》》》");
 
@@ -2030,7 +2644,7 @@ export default {
           fileUrl: fileUrl,
         });
         //复制模板后，修改文件名和文件URL
-        await ModifyFileNameAndFileURL({attachmentId: res.data})
+        ModifyFileNameAndFileURL({attachmentId: res.data})
 
           /* 2 招标文件模板 ，1 合同模板 */
           if (this.bcTemplatetType === 2) {
@@ -2057,13 +2671,7 @@ export default {
             if (this.viewAttachmentId) {
               console.log('Attachment ID:', this.viewAttachmentId);
               //获取文档中台的文档编辑URL
-              try {
-                const res = await getEditFileUrlByID({attachmentId: this.viewAttachmentId});
-                this.editFileUrl = res.data;
-                console.log("editFileUrl:", this.editFileUrl);
-              } catch (err) {
-                console.log(err);
-              }
+              this.loadEditFileUrl();
             } else {
               console.warn('attachmentId 数据未正确加载');
             }
@@ -2091,13 +2699,7 @@ export default {
             if (this.viewAttachmentId) {
               console.log('Attachment ID:', this.viewAttachmentId);
               //获取文档中台的文档编辑URL
-              try {
-                const res = await getEditFileUrlByID({attachmentId: this.viewAttachmentId});
-                this.editFileUrl = res.data;
-                console.log("editFileUrl:", this.editFileUrl);
-              } catch (err) {
-                console.log(err);
-              }
+              this.loadEditFileUrl();
             } else {
               console.warn('attachmentId 数据未正确加载');
             }
@@ -2118,7 +2720,7 @@ export default {
             fileUrl: fileUrl,
           });
           //复制模板后，修改文件名和文件URL
-          await ModifyFileNameAndFileURL({attachmentId: res.data})
+          ModifyFileNameAndFileURL({attachmentId: res.data})
           this.$set(this.formData, "biddingAttachmentId", res.data);
           this.viewAttachmentId = res.data;
           console.log("viewAttachmentId:", this.viewAttachmentId);
@@ -2130,18 +2732,32 @@ export default {
         if (this.viewAttachmentId) {
           console.log('Attachment ID:', this.viewAttachmentId);
           //获取文档中台的文档编辑URL
-          try {
-            const res = await getEditFileUrlByID({attachmentId: this.viewAttachmentId});
-            this.editFileUrl = res.data;
-            console.log("editFileUrl:", this.editFileUrl);
-          } catch (err) {
-            console.log(err);
-          }
+          this.loadEditFileUrl();
         } else {
           console.warn('attachmentId 数据未正确加载');
         }
       }
       this.bcTemplateVisable = false;
+    },
+
+
+    /* 加载在线文档 单独拿出来异步加载。 */
+    async loadEditFileUrl() {
+      const loading = this.$loading({
+        lock: true,
+        text: "加载中...",
+        background: "rgba(0, 0, 0, 0.7)",
+        target: this.$refs.lianXiangWenDangIframe,
+      });
+      try {
+        const res = await getEditFileUrlByID({ attachmentId: this.viewAttachmentId });
+        this.editFileUrl = res.data;
+        console.log("editFileUrl:", this.editFileUrl);
+        loading.close();
+      } catch (err) {
+        console.log(err);
+        loading.close();
+      }
     },
 
     selectBcTemplate(row) {
@@ -2154,8 +2770,72 @@ export default {
       //  this.attachmentId = row.attachmentId;
     },
 
+    /**
+     * 上传其他文件点击事件
+     */
+    uploadOtherFileClick() {
+      showSecretRelatedTips(() => {
+        this.$refs['uploadOther'].clearFiles(); // 清除现有文件列表
+        this.$refs['uploadOther'].$refs['upload-inner'].handleClick(); // 触发文件选择器打开
+      });
+    },
 
-    /* 手动合同模板附件上传 */
+    /**
+     * 其他文件上传成功
+     */
+    async fileSuccessOther(res) {
+      this.noticeViewAttachment = false;
+      const { url, name } = res.data;
+      try {
+        // 保存到文件表获取返回id
+        const res = await addAttachment({ fileName: name, fileUrl: url });
+        // 设置新的附件返回的附件id
+        this.$set(this.formData, "otherAttachmentId", res.data);
+        this.$set(this.formData, "otherAttachmentName", name);
+        // 同步更新页面的附件对象
+        if (!this.procurementSchemeTempObject) {
+          this.$set(this, 'procurementSchemeTempObject', {});
+        }
+        if (!this.procurementSchemeTempObject.otherFile) {
+          this.$set(this.procurementSchemeTempObject, 'otherFile', {});
+        }
+        this.$set(this.procurementSchemeTempObject.otherFile, "attachmentId", res.data);
+        this.$set(this.procurementSchemeTempObject.otherFile, "fileName", name);
+        this.$set(this.procurementSchemeTempObject.otherFile, "fileUrl", url);
+        /* 保存需要编辑的文档ID */
+        this.viewAttachmentId = res.data;
+        //上传文件后，先去除文档原来的修订记录
+        const res2 = await removerAmendmentRecord({attachmentId: this.viewAttachmentId});
+        //据viewAttachmentId获取文件的文档中台的编辑URL
+        console.log("其他文件的编辑this.viewAttachmentId：",this.viewAttachmentId);
+        if (this.viewAttachmentId) {
+          console.log('其他文件编辑viewAttachmentId:', this.viewAttachmentId);
+          //获取文档中台的文档编辑URL
+          this.loadEditFileUrl();
+        } else {
+          console.warn('attachmentId 数据未正确加载');
+        }
+      } catch (err) {
+        console.log(err);
+      }
+    },
+
+    /**
+     * 其他文件手动上传文件删除
+     */
+    fileRemoveOther() {
+      this.$set(this.formData, "otherAttachmentId", null);
+      this.$set(this.formData, "otherAttachmentName", null);
+      this.$set(this.procurementSchemeTempObject.otherFile, "attachmentId", null);
+      this.$set(this.procurementSchemeTempObject.otherFile, "fileName", null);
+      this.$set(this.procurementSchemeTempObject.otherFile, "fileUrl", null);
+      this.$forceUpdate();
+      /* 调起联想文档 */
+      this.viewAttachmentId = null;
+      this.editFileUrl = ""; //删除文档后，文档中台的文档编辑URL设为空
+    },
+
+    /* 手动招标文件附件上传 */
     uploadBiddingClick() {
       showSecretRelatedTips(()=>{
          // 清除现有文件列表
@@ -2179,6 +2859,18 @@ export default {
       }
       return true;  // 返回 true 表示允许继续上传
     },
+
+    /* 在其他文件上传前处理逻辑 */
+    otherBeforeUpload(file) {
+      //限制上传的文件名长度
+      const fileName = file.name;
+        if (fileName.length > 80) {
+            this.$message.error('文件名不能超过80个字符');
+            return false; // 阻止上传
+      }
+      return true;  // 返回 true 表示允许继续上传
+    },
+
     /* 手动合同模板附件上传 */
     uploadContractClick() {
       showSecretRelatedTips(()=>{
@@ -2214,20 +2906,15 @@ export default {
         this.$set(this.procurementSchemeTempObject.biddingTemplate, "fileUrl", url);
         this.$set(this.procurementSchemeTempObject.biddingTemplate, "templateName", this.formData.biddingTemplateName);
         this.$set(this.procurementSchemeTempObject.biddingTemplate, "templateId", this.formData.biddingTemplateId);
-        /* 调起联想文档 */
+        /* 保存需要编辑的文档ID */
         this.viewAttachmentId = res.data;
-
+        //上传文件后，先去除文档原来的修订记录
+        const res2 = await removerAmendmentRecord({attachmentId: this.viewAttachmentId});
         //据viewAttachmentId获取文件的文档中台的编辑URL
         if (this.viewAttachmentId) {
-          console.log('Attachment ID:', this.viewAttachmentId);
+          console.log('viewAttachmentId:', this.viewAttachmentId);
           //获取文档中台的文档编辑URL
-          try {
-            const res = await getEditFileUrlByID({attachmentId: this.viewAttachmentId});
-            this.editFileUrl = res.data;
-            console.log("editFileUrl:", this.editFileUrl);
-          } catch (err) {
-            console.log(err);
-          }
+          this.loadEditFileUrl();
         } else {
           console.warn('attachmentId 数据未正确加载');
         }
@@ -2273,18 +2960,13 @@ export default {
         this.$set(this.procurementSchemeTempObject.contractTemplate, "templateId", this.formData.contractTemplateId);
         /* 调起联想文档 */
         this.viewAttachmentId = res.data;
-
+        //上传文件后，先去除文档原来的修订记录
+        const res2 = await removerAmendmentRecord({attachmentId: this.viewAttachmentId});
         //据viewAttachmentId获取文件的文档中台的编辑URL
         if (this.viewAttachmentId) {
           console.log('Attachment ID:', this.viewAttachmentId);
           //获取文档中台的文档编辑URL
-          try {
-            const res = await getEditFileUrlByID({attachmentId: this.viewAttachmentId});
-            this.editFileUrl = res.data;
-            console.log("editFileUrl:", this.editFileUrl);
-          } catch (err) {
-            console.log(err);
-          }
+          this.loadEditFileUrl();
         } else {
           console.warn('attachmentId 数据未正确加载');
         }
@@ -2358,8 +3040,11 @@ export default {
           bidContactEmail,
           biddingTemplate,
           contractTemplate,
+          otherFile,
           evaluationTemplate,
           id: procurementSchemeBiddingId,
+          applyTimeNotice,
+          noticeAttachment,
         } = procurementSchemeBidding;
         this.deptId = projectDeptId;
         await this.getFinanceList();
@@ -2377,7 +3062,7 @@ export default {
         this.$set(this.formData, "bidContactEmail", bidContactEmail);
         this.$set(this.formData, "financeConfirmId", financeConfirmId);
         this.$set(this.formData, "financeConfirmName", financeConfirmName);
-
+        this.$set(this.formData, "applyTimeNotice", applyTimeNotice);
         /* 填充el-upload的值 */
         if(procurementSchemeBidding.biddingTemplate){
           this.formData.fileListBidding = [{
@@ -2395,6 +3080,22 @@ export default {
             uid: Date.now()  // 文件的唯一标识符
           }];
         }
+        if(procurementSchemeBidding.noticeAttachment){
+          this.formData.fileListNotice = [{
+            name: procurementSchemeBidding.noticeAttachment.fileName,  // 文件名
+            url: procurementSchemeBidding.noticeAttachment.fileUrl,  // 文件的 URL（如果是已上传的文件）
+            status: 'success',  // 上传状态，可以是 'success' | 'failure' | 'uploading'
+            uid: Date.now()  // 文件的唯一标识符
+          }];
+        }
+        if(procurementSchemeBidding.otherFile){
+          this.formData.fileListOther = [{
+            name: procurementSchemeBidding.otherFile.fileName,  // 文件名
+            url: procurementSchemeBidding.otherFile.fileUrl,  // 文件的 URL（如果是已上传的文件）
+            status: 'success',  // 上传状态，可以是 'success' | 'failure' | 'uploading'
+            uid: Date.now()  // 文件的唯一标识符
+          }];
+        }
 
         this.formData.countingTypeText = countingTypeText;
         this.formData.procurementPlanType = procurementPlanType;
@@ -2407,11 +3108,16 @@ export default {
         this.formData.evaluationTemplateId = evaluationTemplate.templateId;
         this.formData.templateName = evaluationTemplate.templateName;
         this.formData.biddingAttachmentId = !biddingTemplate?null:biddingTemplate.attachmentId;
-        this.formData.biddingTemplateName = !biddingTemplate?null:biddingTemplate.templateName;
+        this.formData.biddingTemplateName = !biddingTemplate?null:biddingTemplate.fileName;
         this.formData.biddingTemplateId = !biddingTemplate?null:biddingTemplate.templateId;
         this.formData.contractAttachmentId = !contractTemplate?null:contractTemplate.attachmentId;
         this.formData.contractTemplateId = !contractTemplate?null:contractTemplate.templateId;
-        this.formData.contractTemplateName = !contractTemplate?null:contractTemplate.templateName;
+        this.formData.contractTemplateName = !contractTemplate?null:contractTemplate.fileName;
+        this.formData.otherAttachmentName = !otherFile?null:otherFile.fileName;
+        this.formData.otherAttachmentId = !otherFile?null:otherFile.attachmentId;
+        this.formData.noticeAttachmentName = !noticeAttachment?null:noticeAttachment.fileName;
+        this.formData.noticeAttachmentUrl = !noticeAttachment?null:noticeAttachment.fileUrl;
+        this.formData.noticeAttachmentId = !noticeAttachment?null:noticeAttachment.attachmentId;
         this.formData.procurementSchemeId = procurementSchemeId;
         this.formData.procurementSchemeBiddingId = procurementSchemeBiddingId;
         this.formData.procurementSchemeCode = procurementSchemeCode;
@@ -2457,6 +3163,23 @@ export default {
         this.bcTemplateQuery.pageSize = 10;
         this.reusableTemplateTotal = 0;
         this.generalTemplateTotal = 0;
+      }
+    },
+    // 监听 viewAttachmentId 的变化
+    viewAttachmentId(newVal) {
+      if (newVal) {
+        this.closePreviewEvaluation();
+        this.noticeViewAttachment = false;
+        console.log("预览文件的viewAttachmentId有新值");
+        console.log("noticeViewAttachment:",this.noticeViewAttachment);
+        console.log("showPreview:",this.showPreview);
+      }
+    },
+    // 监听 noticeViewAttachment 的变化
+    noticeViewAttachment(newVal) {
+      if (newVal) {
+        this.closePreviewEvaluation();
+        console.log("预览公告的noticeViewAttachment有新值");
       }
     },
     async activeTab(newTab) {

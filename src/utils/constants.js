@@ -19,6 +19,9 @@ export const PRICETYPEOPTIONS = [{
 },{
   label: '浮动价',
   value: 2
+},{
+  label: '浮动率',
+  value: 4
 }]
 
 /**
@@ -32,8 +35,20 @@ export const PRICETYPELIST = [{
   label: '浮动价',
   value: 2
 },{
-  label: '固定浮动价',
+  label: '固定价、浮动价',
   value: 3
+},{
+  label: '浮动率',
+  value: 4
+},{
+  label: '固定价、浮动率',
+  value: 5
+},{
+  label: '浮动价、浮动率',
+  value: 6
+},{
+  label: '固定价、浮动价、浮动率',
+  value: 7
 }]
 
 export const CONTRACTTYPE = [{

@@ -59,6 +59,15 @@
             >查询</el-button
             >
             <el-button size="small" type="warning" icon="el-icon-refresh" @click="handleQuery">重置</el-button>
+            <el-form-item>
+              <el-button
+                type="primary"
+                icon="el-icon-search"
+                size="small"
+                @click="inint"
+              >初始化供应商编号</el-button
+              >
+            </el-form-item>
           </el-form-item>
         </el-row>
         <el-row>
@@ -125,6 +134,15 @@
               >{{ row.cooperationNum }}</el-button
             >
           </template>
+        </el-table-column>
+        <el-table-column
+          label="企业编号"
+          min-width="130"
+          align="center"
+          prop="enterpriseCode"
+          v-if="['0', '2', '3', '4'].includes(queryParams.vendorClass)"
+          show-overflow-tooltip
+        >
         </el-table-column>
         <el-table-column
           width="140"
@@ -349,6 +367,7 @@ import {
   getVendorCooperativePartner,
   listVendorPerformance,
   listOrganization4Company,
+  initCode,
 } from "@/api/vendor/vendor";
 
 export default {
@@ -446,6 +465,10 @@ export default {
     handleQuery() {
       this.queryParams.pageNumber = 1;
       this.getVendorList();
+    },
+
+    async inint() {
+      await initCode();
     },
     /** 跳转方案详情 */
     goDetail(id,vendorClass) {

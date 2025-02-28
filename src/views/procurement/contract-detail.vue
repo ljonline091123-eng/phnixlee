@@ -202,6 +202,8 @@
             :header-cell-style="{ background: '#F3F2F8' }"
             style="width: 100%"
             v-if="Number(param.type) === 1"
+            show-summary
+            :summary-method="getSummaries"
           >
             <el-table-column
               label="序号"
@@ -221,18 +223,21 @@
               width="150"
               show-overflow-tooltip
             />
-            <el-table-column
-              prop="subjectMatterName"
-              label="交易标的物"
-              width="150"
-              show-overflow-tooltip
-            />
-            <el-table-column
-              prop="specification"
-              label="规格型号"
-              width="100"
-              show-overflow-tooltip
-            />
+<!--            <el-table-column-->
+<!--              prop="subjectMatterName"-->
+<!--              label="交易标的物"-->
+<!--              width="150"-->
+<!--              show-overflow-tooltip-->
+<!--            />-->
+<!--            <el-table-column-->
+<!--              prop="specification"-->
+<!--              label="规格型号"-->
+<!--              width="100"-->
+<!--              show-overflow-tooltip-->
+<!--            />-->
+            <el-table-column label="特征值特征项" min-width="150" prop="specification" show-overflow-tooltip/>
+            <el-table-column label="计量规则" min-width="150" align="center" prop="measurementRules"  show-overflow-tooltip/>
+            <el-table-column label="工作内容" align="center" prop="workContent"  show-overflow-tooltip/>
             <el-table-column prop="unitMeasurement" label="计量单位" />
             <el-table-column
               prop="brand"
@@ -315,35 +320,35 @@
                 label="不含税单价(元)"
                 width="120"
                 align="right"
-                v-if="showInfo.priceType == 1"
+                v-if="[1,3,5,7].includes(showInfo.priceType)"
               />
               <el-table-column
                 prop="taxUnitPriceText"
                 label="含税单价(元)"
                 width="120"
                 align="right"
-                v-if="showInfo.priceType == 1"
+                v-if="[1,3,5,7].includes(showInfo.priceType)"
               />
               <el-table-column
                 prop="basePriceText"
                 label="基价(元)"
                 width="120"
                 align="right"
-                v-if="showInfo.priceType == 2"
+                v-if="[2,3,4,5,6,7].includes(showInfo.priceType)"
               />
               <el-table-column
                 prop="floatingPriceText"
                 label="浮动价(元)"
                 width="120"
                 align="right"
-                v-if="showInfo.priceType == 2"
+                v-if="[2,3,6,7].includes(showInfo.priceType)"
               />
               <el-table-column
-                prop="unloadingFeeText"
-                label="装卸费"
+                prop="floatingRateText"
+                label="浮动率(%)"
                 width="120"
                 align="right"
-                v-if="showInfo.priceType == 2"
+                v-if="[4,5,6,7].includes(showInfo.priceType)"
               />
               <el-table-column
                 prop="notTaxPriceText"
@@ -384,6 +389,8 @@
             :header-cell-style="{ background: '#F3F2F8' }"
             style="width: 100%"
             v-if="Number(param.type) === 2 || Number(param.type) === 3"
+            show-summary
+            :summary-method="getSummaries"
           >
             <el-table-column
               label="序号"
@@ -403,18 +410,21 @@
               width="150"
               show-overflow-tooltip
             />
-            <el-table-column
-              prop="subjectMatterName"
-              label="交易标的物"
-              width="150"
-              show-overflow-tooltip
-            />
-            <el-table-column
-              prop="specification"
-              label="规格型号"
-              width="100"
-              show-overflow-tooltip
-            />
+<!--            <el-table-column-->
+<!--              prop="subjectMatterName"-->
+<!--              label="交易标的物"-->
+<!--              width="150"-->
+<!--              show-overflow-tooltip-->
+<!--            />-->
+<!--            <el-table-column-->
+<!--              prop="specification"-->
+<!--              label="规格型号"-->
+<!--              width="100"-->
+<!--              show-overflow-tooltip-->
+<!--            />-->
+            <el-table-column label="特征值特征项" min-width="150" prop="specification" show-overflow-tooltip/>
+            <el-table-column label="计量规则" min-width="150" align="center" prop="measurementRules"  show-overflow-tooltip/>
+            <el-table-column label="工作内容" align="center" prop="workContent"  show-overflow-tooltip/>
             <el-table-column prop="unitMeasurement" label="计量单位" />
             <el-table-column
               prop="brand"
@@ -559,6 +569,8 @@
             :header-cell-style="{ background: '#F3F2F8' }"
             style="width: 100%"
             v-if="Number(param.type) === 4 || Number(param.type) === 5"
+            show-summary
+            :summary-method="getSummaries"
           >
             <el-table-column
               label="序号"
@@ -578,12 +590,12 @@
               width="150"
               show-overflow-tooltip
             />
-            <el-table-column
-              prop="subjectMatterName"
-              label="交易标的物"
-              width="150"
-              show-overflow-tooltip
-            />
+<!--            <el-table-column-->
+<!--              prop="subjectMatterName"-->
+<!--              label="交易标的物"-->
+<!--              width="150"-->
+<!--              show-overflow-tooltip-->
+<!--            />-->
             <el-table-column
               prop="specification"
               label="特征值及特征项"
@@ -719,6 +731,8 @@
             :header-cell-style="{ background: '#F3F2F8' }"
             style="width: 100%"
             v-if="Number(param.type) === 6"
+            show-summary
+            :summary-method="getSummaries"
           >
             <el-table-column
               label="序号"
@@ -738,12 +752,12 @@
               width="150"
               show-overflow-tooltip
             />
-            <el-table-column
-              prop="subjectMatterName"
-              label="交易标的物"
-              width="150"
-              show-overflow-tooltip
-            />
+<!--            <el-table-column-->
+<!--              prop="subjectMatterName"-->
+<!--              label="交易标的物"-->
+<!--              width="150"-->
+<!--              show-overflow-tooltip-->
+<!--            />-->
             <el-table-column
               prop="specification"
               label="特征值及特征项"
@@ -973,6 +987,17 @@
             >
             </el-table-column>
           </el-table>
+
+          <!-- 合同附件 -->
+          <commonTitle style="margin-top: 20px"> 合同附件 </commonTitle>
+          <el-table :data="agreementAttachmentList" style="width: 100%">
+            <el-table-column prop="fileName" label="文件名" align="center" />
+            <el-table-column label="操作" align="center" width="200">
+              <template slot-scope="scope">
+                <el-button size="mini" type="text" @click="handleView(scope.row.fileName, scope.row.fileUrl)" >预览</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
         </el-tab-pane>
         <el-tab-pane label="合同附件" name="second">
           <!-- <FileModule
@@ -1148,6 +1173,15 @@
         <el-button type="primary" @click="submitReview">确认</el-button>
       </div>
     </el-dialog>
+
+    <el-dialog title="合同附件预览" :visible.sync="viewFileDialog" width="80%">
+      <iframe allowfullscreen="true"
+              :src= this.viewOtherFileUrl
+              width="100%"
+              height="600px"
+              frameborder="0"
+      ></iframe>
+    </el-dialog>
   </div>
 </template>
 
@@ -1175,13 +1209,11 @@ import Roam from "@/components/Roam";
 import ApprovalForm from "@/components/Approval/approvalForm.vue";
 import ApprovalDetailsDialog from "@/components/Approval/approvalDetailsDialog.vue";
 import {
-  getPermissionButton,
-  postAuditProcess,
-  getLoadTaskDef,
-  getProcessLogList, getOrgByUserId,
+  getPermissionButtonAgreement,
+  getLoadTaskDefAgreement,
+  getProcessLogList, getOrgByUserId, postAuditProcessAgreement,
 } from "@/api/procurement/manage";
-import { getViewAttachmentURLByID } from "@/api/template/file";
-
+import { getViewAttachmentURLByID, getViweFileURL} from "@/api/template/file";
 export default {
   components: {
     commonTitle,
@@ -1194,6 +1226,8 @@ export default {
 
   data() {
     return {
+      viewFileDialog: false,
+      viewOtherFileUrl: "",
       viewFileUrl:"", //预览合同附件的url
       partyAName:"", //获取甲方名称，设置水印
       activeName: "first",
@@ -1248,7 +1282,8 @@ export default {
           },
           {
             id: 3,
-            label: "规格型号",
+            // label: "规格型号",
+            label: "特征值特征项",
             prop: "specification",
             width: "100",
             overflow: true,
@@ -1348,7 +1383,8 @@ export default {
           },
           {
             id: 3,
-            label: "规格型号",
+            // label: "规格型号",
+            label: "特征值特征项",
             prop: "specification",
             width: "100",
             overflow: true,
@@ -1469,7 +1505,8 @@ export default {
           },
           {
             id: 3,
-            label: "规格型号",
+            // label: "规格型号",
+            label: "特征值特征项",
             prop: "specification",
             width: "100",
             overflow: true,
@@ -1913,8 +1950,8 @@ export default {
         },
         {
           id: 2,
-          label: "付款基数",
-          prop: "paymentBasisText",
+          label: "付款基数（元）",
+          prop: "paymentBasis",
         },
         {
           id: 3,
@@ -2016,7 +2053,8 @@ export default {
         },
         {
           id: 2,
-          label: "规格型号",
+          // label: "规格型号",
+          label: "特征值特征项",
           prop: "specification",
         },
         {
@@ -2055,7 +2093,8 @@ export default {
         },
         {
           id: 2,
-          label: "规格型号",
+          // label: "规格型号",
+          label: "特征值特征项",
           prop: "specification",
         },
         {
@@ -2114,7 +2153,8 @@ export default {
         },
         {
           id: 2,
-          label: "规格型号",
+          // label: "规格型号",
+          label: "特征值特征项",
           prop: "specification",
         },
         {
@@ -2169,6 +2209,7 @@ export default {
       agreementPaymentLists: [], //结算与付款节点
       agreementPartyInfoLists: [], //合同签约方信息
       agreementDeposits: [], // 押金、保证金信息
+      agreementAttachmentList: [], // 合同附件
       // * 基本信息
       showInfo: {},
       baseItemList: {
@@ -3420,6 +3461,89 @@ export default {
   },
 
   methods: {
+    /* 合计列计算 */
+    getSummaries(param) {
+      const { columns, data } = param;
+      const sums = [];
+      columns.forEach((column, index) => {
+        if (index === 0) {
+          sums[index] = '合计';
+          return;
+        }
+        /* 只显示合计 */
+        if(column.property === "signAmountInclTaxText" || column.property === "taxPriceText") {
+          const values = data.map(item => {
+            return Number(item[column.property].replaceAll(',',''));
+          });
+          if (!values.every(value => isNaN(value))) {
+            sums[index] = values.reduce((prev, curr) => {
+              const value = Number(curr);
+              if (!isNaN(value)) {
+                return prev + curr;
+              } else {
+                return prev;
+              }
+            }, 0);
+            sums[index] = this.formatNumberDynamicDecimalWithSeparator(sums[index]);
+          } else {
+            sums[index] = '';
+          }
+        }else{
+          sums[index] = '';
+        }
+
+      });
+
+      return sums;
+    },
+    /**
+     * 格式化数字：动态保留小数位数并添加千分位分隔符
+     * @param {number|string} num - 要格式化的数字
+     * @param {number} maxDecimalPlaces - 最大保留的小数位数（例如 2 位）
+     * @returns {string} - 格式化后的字符串
+     */
+    formatNumberDynamicDecimalWithSeparator(num, maxDecimalPlaces = 2) {
+      // 将数字转换为字符串
+      const numStr = num.toString();
+
+      // 找到小数点的位置
+      const decimalIndex = numStr.indexOf('.');
+
+      // 截取整数部分和小数部分
+      let integerPart = numStr;
+      let decimalPart = '';
+
+      if (decimalIndex !== -1) {
+        integerPart = numStr.slice(0, decimalIndex);
+        decimalPart = numStr.slice(decimalIndex + 1);
+      }
+
+      // 如果小数位数超过最大位数，则截取
+      if (decimalPart.length > maxDecimalPlaces) {
+        decimalPart = decimalPart.slice(0, maxDecimalPlaces);
+      }
+
+      // 添加千分位分隔符到整数部分
+      integerPart = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+
+      // 拼接整数部分和小数部分
+      let formattedNumber = integerPart;
+      if (decimalPart.length > 0) {
+        if (decimalPart.length <= 1) {
+          formattedNumber += '.' + decimalPart + '0';
+        }else{
+          if (decimalPart.length <= 1) {
+            formattedNumber += '.' + decimalPart + '0';
+          }else{
+            formattedNumber += '.' + decimalPart;
+          }
+        }
+      }else{
+        formattedNumber += '.00';
+      }
+
+      return formattedNumber;
+    },
     //切换页签到合同附件时
     attachmenthandleTabClick(tab){
       this.loadAgreementAttachmentId();
@@ -3467,6 +3591,18 @@ export default {
       }
     },
 
+    /** 合同其他文件预览 */
+    async handleView(fileName, fileUrl) {
+      this.viewFileDialog = true;
+      try {
+        const param = {fileName: fileName, fileUrl: fileUrl}
+        const res = await getViweFileURL(param);
+        this.viewOtherFileUrl = res.data;
+      } catch (ex) {
+        console.log("预览文件出错", ex);
+      }
+    },
+
     getContractDetail() {
       this.fullLoading = true;
       getAgreementDetail({
@@ -3485,7 +3621,7 @@ export default {
           this.agreementMaterialsLists = res.data.materialsList;
           this.agreementPaymentLists = res.data.agreementPaymentLists;
           this.agreementPartyInfoLists = res.data.agreementPartyInfoLists || [];
-
+          this.agreementAttachmentList = res.data.agreementAttachmentList || [];
           /* 填充字典值，和默认甲乙方 this.dictObj.con_role_type */
           const updatedLists = this.agreementPartyInfoLists.map(item => {
             if (item.roleType === '1') {
@@ -3564,7 +3700,7 @@ export default {
       try {
         this.purchaserId = this.param.id;
         if (this.purchaserId && this.exampleId) {
-          const res = await getPermissionButton({
+          const res = await getPermissionButtonAgreement({
             businessId: this.purchaserId,
             processId: this.exampleId,
           });
@@ -3596,7 +3732,7 @@ export default {
         text: "正在提交...",
         background: "rgba(0, 0, 0, 0.7)",
       });
-      postAuditProcess(params).then(() => {
+      postAuditProcessAgreement(params).then(() => {
         this.$message.success("提交成功");
         this.sanctionVisible = false;
         this.getContractDetail();
@@ -3618,15 +3754,15 @@ export default {
         };
         let res = null;
         if (this.purchaserId && this.exampleId) {
-          res = await getLoadTaskDef(params);
+          res = await getLoadTaskDefAgreement(params);
         }else{
           /* 未提交时查看流程执行流程，根据登录人id 获取流程分组 */
           res = await getOrgByUserId(this.$store.state.user.id);
           params = {
             processKey: "jiantou-zhaocai:"+res.data+":ZHAOCAI_AGREEMENT_SIGN",
-            businessId: 8888888888,
+            businessId: this.purchaserId,
           };
-          res = await getLoadTaskDef(params);
+          res = await getLoadTaskDefAgreement(params);
         }
           this.processInformationList = res.data;
           function getActive(nodes) {

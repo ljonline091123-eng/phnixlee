@@ -172,6 +172,11 @@
                   <span>{{ procurementScheme.createTime }}</span>
                 </el-form-item>
               </el-col>
+              <el-col :span="8">
+                <el-form-item label="项目名称" class="custom-form-item">
+                  <span>{{ projectName }}</span>
+                </el-form-item>
+              </el-col>
             </el-row>
           </el-form>
 
@@ -246,13 +251,22 @@
             label-suffix=":"
           >
             <el-row class="custom-row">
-              <el-col :span="24" class="custom-col">
+              <el-col :span="8" class="custom-col">
                 <el-form-item
                   label="计划投标截止时间"
                   label-width="140px"
                   class="custom-form-item"
                 >
                   <span>{{ procurementSchemeBidding.bidDeadline }}</span>
+                </el-form-item>
+              </el-col>
+              <el-col :span="8" class="custom-col" v-if="procurementScheme.procurementType == 1">
+                <el-form-item
+                  label="招标报名截止时间"
+                  label-width="140px"
+                  class="custom-form-item"
+                >
+                  <span>{{ procurementSchemeBidding.applyTimeNotice }}</span>
                 </el-form-item>
               </el-col>
             </el-row>
@@ -280,7 +294,7 @@
             </el-row>
 
             <el-row class="custom-row" style="height: 180px">
-              <el-col :span="8" class="custom-col"  style="height: 180px">
+              <el-col :span="6" class="custom-col"  style="height: 180px">
                 <el-form-item label="评分模板" class="custom-form-item">
                   <a
                     class="link-type"
@@ -297,7 +311,7 @@
                   </a>
                 </el-form-item>
               </el-col>
-              <el-col :span="8" class="custom-col" style="height: 180px">
+              <el-col :span="6" class="custom-col" style="height: 180px">
                 <el-form-item
                   label="招标文件"
                   label-width="140px"
@@ -316,7 +330,7 @@
                   </a>
                 </el-form-item>
               </el-col>
-              <el-col :span="8" class="custom-col" style="height: 180px">
+              <el-col :span="6" class="custom-col" style="height: 180px">
                 <el-form-item label="合同模板" class="custom-form-item">
                   <a
                     class="link-type"
@@ -328,6 +342,36 @@
                     {{
                       procurementSchemeBidding.contractTemplate &&
                       (procurementSchemeBidding.contractTemplate.templateName || procurementSchemeBidding.contractTemplate.fileName)
+                    }}
+                  </a>
+                </el-form-item>
+              </el-col>
+
+            </el-row>
+            <el-row class="custom-row" style="height: 180px">
+              <el-col :span="8" class="custom-col"  style="height: 180px" v-if="procurementScheme.procurementType == 1">
+                <el-form-item
+                  label="招标公告"
+                  label-width="140px"
+                  class="custom-form-item"
+                >
+                  <a class="link-type" @click=" showTemplate(procurementSchemeBidding.noticeAttachment,'biddingTemplate')">
+                    {{ procurementSchemeBidding.noticeAttachment && (procurementSchemeBidding.noticeAttachment.templateName)}}
+                  </a>
+                </el-form-item>
+              </el-col>
+              <el-col :span="6" class="custom-col" style="height: 180px">
+                <el-form-item label="其他文件" class="custom-form-item">
+                  <a
+                    class="link-type"
+                    @click="
+                      showTemplate(procurementSchemeBidding.otherFile,'otherFile')
+                    "
+                    href="javascript:;"
+                  >
+                    {{
+                      procurementSchemeBidding.otherFile &&
+                      procurementSchemeBidding.otherFile.fileName
                     }}
                   </a>
                 </el-form-item>
@@ -441,6 +485,8 @@
                 size="small"
                 :data="inventory.row.materialsLists"
                 border
+                show-summary
+                :summary-method="getSummaries"
               >
                 <el-table-column
                   label="序号"
@@ -466,11 +512,14 @@
                   prop="subjectMatterName"
                   show-overflow-tooltip
                 />
-                <el-table-column
-                  label="规格型号"
-                  prop="specification"
-                  show-overflow-tooltip
-                />
+<!--                <el-table-column-->
+<!--                  label="规格型号"-->
+<!--                  prop="specification"-->
+<!--                  show-overflow-tooltip-->
+<!--                />-->
+                <el-table-column label="特征值特征项" min-width="150" prop="specification" show-overflow-tooltip/>
+                <el-table-column label="计量规则" min-width="150" align="center" prop="measurementRules"  show-overflow-tooltip/>
+                <el-table-column label="工作内容" align="center" prop="workContent" show-overflow-tooltip />
                 <el-table-column
                   label="计量单位"
                   align="center"
@@ -488,7 +537,7 @@
                 />
                 <el-table-column
                   label="基价(元)"
-                  v-if="procurementScheme.priceType == 2"
+                  v-if="[2,3,4,5,6,7].includes(procurementScheme.priceType)"
                   align="right"
                   prop="basePriceText"
                 />
@@ -501,15 +550,15 @@
                 />
                 <el-table-column
                   label="浮动价(元)"
-                  v-if="procurementScheme.priceType == 2"
+                  v-if="[2,3,6,7].includes(procurementScheme.priceType)"
                   align="right"
                   prop="floatingPriceText"
                 />
                 <el-table-column
-                  label="装卸费(元)"
-                  v-if="procurementScheme.priceType == 2"
+                  label="浮动率(%)"
+                  v-if="[4,5,6,7].includes(procurementScheme.priceType)"
                   align="right"
-                  prop="unloadingFeeText"
+                  prop="floatingRateText"
                 />
                 <el-table-column
                   v-if="isLease"
@@ -531,6 +580,8 @@
                     {{ row.rentMode == 3 ? "-" : row.rentQuantityText }}
                   </template>
                 </el-table-column>
+                <el-table-column label="合计(含税)" align="right" prop="totalPriceText" min-width="150"/>
+                <el-table-column label="备注" align="center" prop="remark"/>
               </el-table>
             </template>
           </el-table-column>
@@ -636,45 +687,25 @@
                     label="评分项"
                     class="required label-right-align"
                   >
-                    <el-table :data="table.biddingMarkItemVOList">
-                      <!-- <el-table-column type="expand" v-if="table.biddingMarkItemVOList">
-                        <template slot-scope="scope">
-                          <div class="subItems">
-                            <el-table :data="scope.row.subItems">
-                              <el-table-column  prop="name"  label="子评分项名称">
-                                <template slot-scope>
-                                  {{ scope.row.subItems.name }}
-                                </template>
-                              </el-table-column>
-                              <el-table-column  label="最低分">
-                                <template slot-scope>
-                                  {{ scope.row.subItems.minScore }}
-                                </template>
-                              </el-table-column>
-                              <el-table-column  label="最高分">
-                                <template slot-scope>
-                                  {{ scope.row.subItems.maxScore }}
-                                </template>
-                              </el-table-column>
-                            </el-table>
-                          </div>
-                        </template>
-                      </el-table-column> -->
-                      <el-table-column prop="name" label="评分项名称">
-                        <template slot-scope="scope">
-                          {{ scope.row.name }}
-                        </template>
-                      </el-table-column>
-                      <el-table-column prop="lowRange" label="最低分">
-                        <template slot-scope="scope">
-                          {{ scope.row.lowRange }}
-                        </template>
-                      </el-table-column>
-                      <el-table-column prop="highRange" label="最高分">
-                        <template slot-scope="scope">
-                          {{ scope.row.highRange }}
-                        </template>
-                      </el-table-column>
+                    <el-table
+                      :data="table.biddingMarkItemVOList"
+                      default-expand-all
+                      row-key="id"
+                      stripe
+                      border
+                      :tree-props="{ children: 'subBiddingMarkItemDetailVOList' }"
+                    >
+                      <el-table-column prop="name" label="评分项名称" />
+                      <el-table-column
+                        prop="highRange"
+                        align="center"
+                        label="评分项"
+                      />
+                      <el-table-column
+                        prop="contant"
+                        align="center"
+                        label="评分描述"
+                      />
                     </el-table>
                   </el-form-item>
                 </el-col>
@@ -689,7 +720,7 @@
       </div>
     </el-drawer>
 
-    //预览文件弹窗
+    <!-- 预览文件弹窗 -->
     <el-dialog
       :title="templateDialogTitle"
       :visible.sync="templateDialogVisible"
@@ -767,6 +798,7 @@ export default {
       contractSplitIdList: [],
       skeletonLoading: true,
       param: "",
+      projectName:"",
       isAll:false,
       activeTabs: "base",
       contractPlanList: [],
@@ -845,9 +877,91 @@ export default {
   created() {
     const param = JSON.parse(Base64.decode(this.$route.params.params));
     this.param = param;
+    console.log('%c👽 采购方案url入参 ', `font-size: 14px;background-color: #f00;`, param);
+    this.projectName = this.project.name;
+    console.log('%c👽 projectName ', `font-size: 14px;background-color: #f00;`, this.project.name);
     this.getSchemeDetail();
   },
   methods: {
+    /* 合计列计算 */
+    getSummaries(param) {
+      const { columns, data } = param;
+      const sums = [];
+      columns.forEach((column, index) => {
+        if (index === 0) {
+          sums[index] = '合计';
+          return;
+        }
+        /* 只显示合计 */
+        if(column.property === "totalPriceText") {
+          const values = data.map(item => {
+            return Number(item[column.property].replaceAll(',',''));
+          });
+          if (!values.every(value => isNaN(value))) {
+            sums[index] = values.reduce((prev, curr) => {
+              const value = Number(curr);
+              if (!isNaN(value)) {
+                return prev + curr;
+              } else {
+                return prev;
+              }
+            }, 0);
+            sums[index] = this.formatNumberDynamicDecimalWithSeparator(sums[index]);
+          } else {
+            sums[index] = '';
+          }
+        }else{
+          sums[index] = '';
+        }
+
+      });
+
+      return sums;
+    },
+    /**
+     * 格式化数字：动态保留小数位数并添加千分位分隔符
+     * @param {number|string} num - 要格式化的数字
+     * @param {number} maxDecimalPlaces - 最大保留的小数位数（例如 2 位）
+     * @returns {string} - 格式化后的字符串
+     */
+    formatNumberDynamicDecimalWithSeparator(num, maxDecimalPlaces = 2) {
+      // 将数字转换为字符串
+      const numStr = num.toString();
+
+      // 找到小数点的位置
+      const decimalIndex = numStr.indexOf('.');
+
+      // 截取整数部分和小数部分
+      let integerPart = numStr;
+      let decimalPart = '';
+
+      if (decimalIndex !== -1) {
+        integerPart = numStr.slice(0, decimalIndex);
+        decimalPart = numStr.slice(decimalIndex + 1);
+      }
+
+      // 如果小数位数超过最大位数，则截取
+      if (decimalPart.length > maxDecimalPlaces) {
+        decimalPart = decimalPart.slice(0, maxDecimalPlaces);
+      }
+
+      // 添加千分位分隔符到整数部分
+      integerPart = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+
+      // 拼接整数部分和小数部分
+      let formattedNumber = integerPart;
+      if (decimalPart.length > 0) {
+        if (decimalPart.length <= 1) {
+          formattedNumber += '.' + decimalPart + '0';
+        }else{
+          formattedNumber += '.' + decimalPart;
+        }
+      }else{
+        formattedNumber += '.00';
+      }
+
+      return formattedNumber;
+    },
     async getSchemeDetail() {
       try {
         const res = await getSchemeDetail(this.param);
@@ -1025,7 +1139,7 @@ export default {
         } catch (error) {}
       });
     },
-    // 撤回
+    /* 撤回按钮点击 */
     handelWithdrawalPlan() {
       const { procurementSchemeName, id } = this.procurementScheme;
       this.$confirm("是否确定撤回采购方案：" + procurementSchemeName, "提示", {
@@ -1040,6 +1154,7 @@ export default {
             spinner: "el-icon-loading",
             background: "rgba(0, 0, 0, 0.7)",
           });
+          /* 请求流程撤回方法 */
           withdrawalPlan(id)
             .then((res) => {
               if (res.code == 200) {
@@ -1052,24 +1167,31 @@ export default {
         } catch (error) {}
       });
     },
+    /* 审批按钮点击后获取流程基础信息 */
     async getPermissionButtonScheme() {
       try {
         if (this.purchaserId && this.exampleId) {
+          /* 大汉要求初始化接口initialize也需要传参数，所以参数在java后台拼接 */
           const res = await getPermissionButtonScheme({
             businessId: this.purchaserId,
             processId: this.exampleId,
           });
+          /* 初始化流程基础信息回调数据 */
           this.bpmInitData = res.data;
+          /* 驳回节点 */
           this.rejectNodeList = res.data.completedTaskList;
           /* 下一步审批人列表 */
           this.nextCandidateList = res.data.nextCandidateList;
           /* 下一步审批人是否可选 */
           this.nextAppointable = res.data.nextAppointable;
+          /* 任务阶段 */
           this.taskPresentId = res.data.curTaskId;
+          /* 是否可以审批 */
           this.isShowButton = res.data.auditable;
         }
       } catch (error) {}
     },
+    /* 审批按钮 */
     handelSanction() {
       this.sanctionVisible = true;
       this.getPermissionButtonScheme();
@@ -1091,6 +1213,7 @@ export default {
         this.$modal.closeLoading();
       });
     },
+    /* 审批详情 */
     async handelCalibrationApproval() {
       try {
         this.calibrateVisible = true;
@@ -1100,17 +1223,22 @@ export default {
           processId: this.exampleId,
         };
         let res = null;
+        /* 判断业务id和流程id是否同时存在(判断是否已经提交工作流) */
         if (this.purchaserId && this.exampleId) {
+          /* 存在就去获取x轴列表的工作流执行环节 */
           res = await getLoadTaskDefScheme(params);
         }else{
+          /* 采购方案是使用提交人的组织机构来确定走哪个公司层级的流程Key */
           /* 未提交时查看流程执行流程，根据登录人id 获取流程分组 */
           res = await getOrgByUserId(this.$store.state.user.id);
           params = {
             processKey: "jiantou-zhaocai:"+res.data+":ZHAOCAI_PROCUREMENT_SCHEME",
             businessId: this.purchaserId,
           };
+          /* 不存在就去获取x轴列表的工作流执行环节 */
           res = await getLoadTaskDefScheme(params);
         }
+        /* 审批流程接口(大汉流程)返回的数据 */
         this.processInformationList = res.data;
         function getActive(nodes) {
           let allFalse = true;
@@ -1129,6 +1257,7 @@ export default {
         this.calibrateActive = getActive(this.processInformationList);
 
         if (this.purchaserId && this.exampleId) {
+          /* 流程操作日志 /listProcessLog */
           const response = await getProcessLogList(params);
           this.approveArr = response.data;
         }
