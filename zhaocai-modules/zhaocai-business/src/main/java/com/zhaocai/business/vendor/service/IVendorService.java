@@ -160,8 +160,4 @@ public interface IVendorService  extends IService<Vendor> , IProcessBusinessBase
     void pushMarketVendor(Long vendorId);
 
     boolean removeBlacklist();
-
-    void pushVendor(Long vendorId, String logTypeModify, Integer isBlack);
-
-    void initializeCode();
 }

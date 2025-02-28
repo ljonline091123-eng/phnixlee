@@ -294,11 +294,4 @@ public class VendorController extends BladeController {
         return ResultData.data(vendorService.removeBlacklist());
     }
 
-    @Log(title = "初始化客商中台code", businessType = BusinessType.UPDATE)
-    @PostMapping("/initializeCode")
-    @ApiOperation("初始化客商中台code")
-    public ResultData<Boolean> initializeCode() {
-        vendorService.initializeCode();
-        return ResultData.success();
-    }
 }
