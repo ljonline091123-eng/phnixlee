@@ -721,13 +721,11 @@
                 highlight-current-row
                 border
               >
-                <el-table-column
-                  label="序号"
-                  type="index"
-                  width="50"
-                  align="center"
-                  fixed
-                />
+                <el-table-column label="序号" width="50" align="center">
+                  <template #default="scope">
+                    {{ form.vendorBiddingListQuotationList.findIndex(item => item.materialsId === scope.row.materialsId) + 1 }}
+                  </template>
+                </el-table-column>
                 <el-table-column
                   label="清单编码"
                   width="150"

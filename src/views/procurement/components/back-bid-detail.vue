@@ -108,13 +108,11 @@
                   show-summary
                   :summary-method="getSummaries"
                 >
-                  <el-table-column
-                    label="序号"
-                    type="index"
-                    width="50"
-                    align="center"
-                    fixed="left"
-                  />
+                  <el-table-column label="序号" width="50" align="center" fixed="left">
+                    <template #default="scope">
+                      {{ row.materialsLists.findIndex(item => item.materialsId === scope.row.materialsId) + 1 }}
+                    </template>
+                  </el-table-column>
                   <el-table-column
                     label="清单名称"
                     width="200"

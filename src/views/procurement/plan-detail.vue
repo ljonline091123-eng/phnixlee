@@ -147,12 +147,12 @@
                   :summary-method="getSummaries"
                   height="380"
                 >
-                  <el-table-column
-                    label="序号"
-                    type="index"
-                    width="50"
-                    align="center"
-                  />
+                  <el-table-column label="序号" width="50" align="center" fixed>
+                    <template #default="scope">
+                      {{ inventory.row.materialsLists.findIndex(item => item.materialsId === scope.row.materialsId) + 1 }}
+                    </template>
+                  </el-table-column>
+
                   <el-table-column
                     min-width="200"
                     label="清单编码"
@@ -381,22 +381,18 @@ export default {
         }
         /* 只显示合计 */
         if(column.property === "totalPriceText") {
-          const values = data.map(item => {
-            return Number(item[column.property].replaceAll(',',''));
-          });
-          if (!values.every(value => isNaN(value))) {
-            sums[index] = values.reduce((prev, curr) => {
-              const value = Number(curr);
-              if (!isNaN(value)) {
-                return prev + curr;
-              } else {
-                return prev;
-              }
-            }, 0);
-            sums[index] = this.formatNumberDynamicDecimalWithSeparator(sums[index]);
-          } else {
-            sums[index] = '';
-          }
+          const { add } = this.mathjs;
+          this.splitMaterials.forEach((item) => {
+            /* 计算表合计列合计计算合计列 */
+            let totalPriceTable = 0.0;
+            if (item.materialsLists && Array.isArray(item.materialsLists)) {
+              item.materialsLists.forEach((children,i) => {
+                totalPriceTable = add(children.totalPrice ? children.totalPrice : 0.0 , totalPriceTable);
+              });
+            }
+            let totalPriceTableText = this.formatNumberDynamicDecimalWithSeparator(totalPriceTable,2);
+            sums[index] = totalPriceTableText;
+          })
         }else{
           sums[index] = '';
         }

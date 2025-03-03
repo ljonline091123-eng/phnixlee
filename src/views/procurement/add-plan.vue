@@ -205,7 +205,12 @@
                       height="600px"
                       :row-class-name="tableRowClassName">
                       <el-table-column type="selection" width="55" :reserve-selection="true"/>
-                      <el-table-column label="序号" type="index" width="50" align="center" fixed/>
+<!--                      <el-table-column label="序号" type="index" width="50" align="center" fixed/>-->
+                      <el-table-column label="序号" width="50" align="center" fixed>
+                        <template #default="scope">
+                          {{ scope.row.indexNumber }}
+                        </template>
+                      </el-table-column>
                       <el-table-column label="清单编码" min-width="150" prop="materialsCode" fixed show-overflow-tooltip/>
                       <el-table-column label="清单名称" min-width="150" prop="materialsName" fixed show-overflow-tooltip/>
 <!--                      <el-table-column label="交易标的物" min-width="100" prop="subjectMatterName" show-overflow-tooltip>-->
@@ -1050,10 +1055,16 @@ export default {
                 return false;
               }
             }
+            let msgCount = 0;
+            this.planList[0]?.children.map(item => {
+              item?.children.map(ttt => {
+                msgCount++;
+              });
+            });
 
             const loading = this.$loading({
               lock: true,
-              text: '数据提交中...',
+              text: (msgCount<200)?'数据提交中...':'您好，系统识别到清单量大，正在提交，请耐心等待！',
               background: 'rgba(0, 0, 0, 0.7)'
             });
             const { procurementPlanName, beginDate, endDate, arrivalDate, procurementOfficer, procurementOfficerName,projectId,projectName,projectCode, priceType,basePrice, regionProvinceCode, regionCityCode, paymentType, countingType } = this.formData;
@@ -1345,9 +1356,16 @@ export default {
           //   return false;
           // }
 
+          let msgCount = 0;
+          this.planList[0]?.children.map(item => {
+            item?.children.map(ttt => {
+              msgCount++;
+            });
+          });
+
           const loading = this.$loading({
             lock: true,
-            text: '数据提交中...',
+            text: (msgCount<200)?'数据提交中...':'您好，系统识别到清单量大，正在提交，请耐心等待！',
             background: 'rgba(0, 0, 0, 0.7)'
           });
           const { procurementPlanName, beginDate, endDate, arrivalDate, procurementOfficer, procurementOfficerName,projectId,projectName,projectCode, priceType, regionProvinceCode, regionCityCode, paymentType, countingType } = this.formData;
@@ -1709,7 +1727,7 @@ export default {
         splitMaterials.forEach((item,index) => {
           item.$index = index;
           item.planTable='planTable'+index
-          let children = item.materialsLists.map((child,k) => ({...child, $index:k,planTable:item.planTable}))
+          let children = item.materialsLists.map((child,k) => ({...child, $index:k, indexNumber:(k+1),planTable:item.planTable}))
           item.children = children;
         })
         console.log(JSON.stringify(contractPlanning),'contractPlanning--contractPlanning--contractPlanning')
@@ -2174,8 +2192,9 @@ export default {
         if (item.children && Array.isArray(item.children)) {
           item.children.forEach((itemChildren) => {
             if (itemChildren.children && Array.isArray(itemChildren.children)) {
-              itemChildren.children.forEach((children) => {
+              itemChildren.children.forEach((children,index) => {
                 this.$set(children, 'priceType', val);
+                this.$set(children, 'indexNumber', (index+1));
 
                 // 判断 'floatingPrice' 和 'floatingRate' 浮动价，浮动率 是否为空，如果为空则设置为0
                 if (!children.floatingPrice) {
