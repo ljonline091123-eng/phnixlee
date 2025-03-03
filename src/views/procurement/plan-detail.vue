@@ -132,133 +132,140 @@
         />
         <el-table-column label="清单"  align="center">
           <template slot-scope="inventory">
-            <el-table
-              size="small"
+            <virtual-scroll
               :data="inventory.row.materialsLists"
-              stripe
-              highlight-current-row
-              show-summary
-              :summary-method="getSummaries"
-              height="380"
-            >
-              <el-table-column
-                label="序号"
-                type="index"
-                width="50"
-                align="center"
-              />
-              <el-table-column
-                min-width="200"
-                label="清单编码"
-                prop="materialsCode"
-                show-overflow-tooltip
-              />
-              <el-table-column
-                label="清单名称"
-                min-width="200"
-                align="left"
-                prop="materialsName"
-                show-overflow-tooltip
-              />
-<!--              <el-table-column-->
-<!--                width="150"-->
-<!--                label="交易标的物"-->
-<!--                prop="subjectMatterName"-->
-<!--                show-overflow-tooltip-->
-<!--              />-->
-              <el-table-column label="特征值特征项" min-width="150" prop="specification" show-overflow-tooltip/>
-              <el-table-column label="计量规则" align="center" prop="measurementRules"  show-overflow-tooltip/>
-              <el-table-column label="工作内容" align="center" prop="workContent"  show-overflow-tooltip/>
-              <el-table-column
-                width="100"
-                label="计量单位"
-                prop="unitMeasurement"
-              />
-              <el-table-column
-                width="100"
-                label="租赁方式"
-                align="center"
-                prop="rentModeText"
-                v-if="procurementPlan.procurementPlanType == 2 || procurementPlan.procurementPlanType == 3"
-              />
-              <el-table-column
-                width="100"
-                :label="procurementPlan.procurementPlanType == 2 || procurementPlan.procurementPlanType == 3? '工作量' : '清单数量'"
-                align="right"
-                prop="countText"
-              />
-              <el-table-column
-                width="100"
-                label="租赁时间"
-                align="center"
-                prop="rentTimeText"
-                v-if="procurementPlan.procurementPlanType == 2 || procurementPlan.procurementPlanType == 3">
-                <template slot-scope="{row}">
-                  {{ row.rentMode == 3? '-' : row.rentTimeText }}
-                </template>
-              </el-table-column>
-              <el-table-column
-                width="100"
-                label="租赁数量"
-                align="center"
-                prop="rentQuantityText"
-                v-if="procurementPlan.procurementPlanType == 2 || procurementPlan.procurementPlanType == 3">
-                <template slot-scope="{row}">
-                  {{ row.rentMode == 3? '-' : row.rentQuantityText }}
-                </template>
-              </el-table-column>
-              <el-table-column
-                width="150"
-                label="基价"
-                align="right"
-                prop="basePriceText"
-                v-if="isShow && [2,3,4,5,6,7].includes(procurementPlan.priceType)"
-              />
-              <el-table-column
-                width="150"
-                label="单价(含税)"
-                align="right"
-                prop="unitPriceInclTaxText"
-                v-else
-              />
-              <el-table-column
-                width="150"
-                label="浮动价"
-                align="right"
-                prop="floatingPriceText"
-                v-if="isShow && [2,3,6,7].includes(procurementPlan.priceType)"
-              />
-              <el-table-column
-                width="150"
-                label="浮动率"
-                align="right"
-                prop="floatingRateText"
-                v-if="isShow && [4,5,6,7].includes(procurementPlan.priceType)"
-              />
-              <el-table-column
-              v-if="contractPlanning.contractPlanningCategory == 1"
-              label="易料商品编码"
-              align="center"
-              min-width="150" prop="skuId" show-overflow-tooltip
-              >
-                <template slot-scope="scope">
-                  <a class="link-type" @click="goDetail(scope.row.skuId)">
-                    {{ scope.row.skuId }}
-                  </a>
-                </template>
-              </el-table-column>
-              <el-table-column v-if="contractPlanning.contractPlanningCategory == 1" label="易料商品名称" prop="name" width="150">
-                <template slot-scope="scope">
-                  {{ scope.row.name }}
-                </template>
-              </el-table-column>
+              :item-size="62"
+              key-prop="materialsId"
+              ref="virScrollRefDialog"
+              @change="(renderData) => virtualData = renderData">
+                <el-table
+                  size="small"
+                  :data="virtualData"
+                  stripe
+                  highlight-current-row
+                  show-summary
+                  :summary-method="getSummaries"
+                  height="380"
+                >
+                  <el-table-column
+                    label="序号"
+                    type="index"
+                    width="50"
+                    align="center"
+                  />
+                  <el-table-column
+                    min-width="200"
+                    label="清单编码"
+                    prop="materialsCode"
+                    show-overflow-tooltip
+                  />
+                  <el-table-column
+                    label="清单名称"
+                    min-width="200"
+                    align="left"
+                    prop="materialsName"
+                    show-overflow-tooltip
+                  />
+    <!--              <el-table-column-->
+    <!--                width="150"-->
+    <!--                label="交易标的物"-->
+    <!--                prop="subjectMatterName"-->
+    <!--                show-overflow-tooltip-->
+    <!--              />-->
+                  <el-table-column label="特征值特征项" min-width="150" prop="specification" show-overflow-tooltip/>
+                  <el-table-column label="计量规则" align="center" prop="measurementRules"  show-overflow-tooltip/>
+                  <el-table-column label="工作内容" align="center" prop="workContent"  show-overflow-tooltip/>
+                  <el-table-column
+                    width="100"
+                    label="计量单位"
+                    prop="unitMeasurement"
+                  />
+                  <el-table-column
+                    width="100"
+                    label="租赁方式"
+                    align="center"
+                    prop="rentModeText"
+                    v-if="procurementPlan.procurementPlanType == 2 || procurementPlan.procurementPlanType == 3"
+                  />
+                  <el-table-column
+                    width="100"
+                    :label="procurementPlan.procurementPlanType == 2 || procurementPlan.procurementPlanType == 3? '工作量' : '清单数量'"
+                    align="right"
+                    prop="countText"
+                  />
+                  <el-table-column
+                    width="100"
+                    label="租赁时间"
+                    align="center"
+                    prop="rentTimeText"
+                    v-if="procurementPlan.procurementPlanType == 2 || procurementPlan.procurementPlanType == 3">
+                    <template slot-scope="{row}">
+                      {{ row.rentMode == 3? '-' : row.rentTimeText }}
+                    </template>
+                  </el-table-column>
+                  <el-table-column
+                    width="100"
+                    label="租赁数量"
+                    align="center"
+                    prop="rentQuantityText"
+                    v-if="procurementPlan.procurementPlanType == 2 || procurementPlan.procurementPlanType == 3">
+                    <template slot-scope="{row}">
+                      {{ row.rentMode == 3? '-' : row.rentQuantityText }}
+                    </template>
+                  </el-table-column>
+                  <el-table-column
+                    width="150"
+                    label="基价"
+                    align="right"
+                    prop="basePriceText"
+                    v-if="isShow && [2,3,4,5,6,7].includes(procurementPlan.priceType)"
+                  />
+                  <el-table-column
+                    width="150"
+                    label="单价(含税)"
+                    align="right"
+                    prop="unitPriceInclTaxText"
+                    v-else
+                  />
+                  <el-table-column
+                    width="150"
+                    label="浮动价"
+                    align="right"
+                    prop="floatingPriceText"
+                    v-if="isShow && [2,3,6,7].includes(procurementPlan.priceType)"
+                  />
+                  <el-table-column
+                    width="150"
+                    label="浮动率"
+                    align="right"
+                    prop="floatingRateText"
+                    v-if="isShow && [4,5,6,7].includes(procurementPlan.priceType)"
+                  />
+                  <el-table-column
+                  v-if="contractPlanning.contractPlanningCategory == 1"
+                  label="易料商品编码"
+                  align="center"
+                  min-width="150" prop="skuId" show-overflow-tooltip
+                  >
+                    <template slot-scope="scope">
+                      <a class="link-type" @click="goDetail(scope.row.skuId)">
+                        {{ scope.row.skuId }}
+                      </a>
+                    </template>
+                  </el-table-column>
+                  <el-table-column v-if="contractPlanning.contractPlanningCategory == 1" label="易料商品名称" prop="name" width="150">
+                    <template slot-scope="scope">
+                      {{ scope.row.name }}
+                    </template>
+                  </el-table-column>
 
-              <el-table-column v-if="contractPlanning.contractPlanningCategory == 1" label="易料品牌" min-width="120" prop="offerBrand" show-overflow-tooltip/>
-              <el-table-column v-if="contractPlanning.contractPlanningCategory == 1" label="易料初始报价"  width="150" prop="offerPrice" />
+                  <el-table-column v-if="contractPlanning.contractPlanningCategory == 1" label="易料品牌" min-width="120" prop="offerBrand" show-overflow-tooltip/>
+                  <el-table-column v-if="contractPlanning.contractPlanningCategory == 1" label="易料初始报价"  width="150" prop="offerPrice" />
 
-              <el-table-column label="合计(含税)" align="right" prop="totalPriceText" min-width="150"/>
-              <el-table-column label="备注" align="center" prop="remark"/>
-            </el-table>
+                  <el-table-column label="合计(含税)" align="right" prop="totalPriceText" min-width="150"/>
+                  <el-table-column label="备注" align="center" prop="remark"/>
+                </el-table>
+            </virtual-scroll>
           </template>
         </el-table-column>
 
@@ -315,6 +322,7 @@ import {
 import Roam from "@/components/Roam";
 import BackButton from "@/components/BackButton/index.vue";
 import PageTitle from "@/components/PageTitle/index.vue";
+import VirtualScroll from "el-table-virtual-scroll";
 export default {
   name: "plan-detail",
   dicts: ["purchase_type"],
@@ -328,6 +336,7 @@ export default {
       approveNodeInfos: [], //审批人信息
       approveLists: [], //审批信息
       splitMaterials: [], //拆分清单
+      virtualData: [], // 虚拟列表渲染的数据
       contractPlanning: {},
       skeletonLoading: true,
       param: "",
@@ -335,6 +344,7 @@ export default {
     };
   },
   components: {
+    VirtualScroll,
     Roam,
     BackButton,
     PageTitle,

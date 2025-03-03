@@ -167,6 +167,7 @@
 
 
 
+
         <el-table v-loading="loading" :row-key="getRowKeys" :data="planList" ref="tableRef"  size="small"  border default-expand-all>
           <el-table-column type="expand" v-if="planList[0] && planList[0].children && planList[0].children.length">
             <template slot-scope="props">
@@ -187,9 +188,16 @@
                 </el-table-column>
                 <el-table-column label="清单" align="center" prop="inventory">
                   <template slot-scope="inventory">
+
+                    <virtual-scroll
+                      :data="inventory.row.children"
+                      :item-size="62"
+                      key-prop="materialsId"
+                      ref="virScrollRef"
+                      @change="(renderData) => virtualData = renderData">
                     <el-table
                       size="small"
-                      :data="inventory.row.children"
+                      :data="virtualData"
                       border
                       @select="handleSelect"
                       :row-key="getRowKeys2"
@@ -337,6 +345,7 @@
                       </template>
 
                     </el-table>
+                    </virtual-scroll>
                   </template>
                 </el-table-column>
 
@@ -358,6 +367,7 @@
           </el-table-column>
 
         </el-table>
+
         <pagination v-show="total > 0" :total="total" :page.sync="queryParams.pageNum" :limit.sync="queryParams.pageSize"
                     @pagination="getList" />
 
@@ -450,25 +460,32 @@
 
       <!-- 选择项目合约规划 -->
       <el-dialog title="清单" :visible.sync="inventoryVisible" width="70%">
-        <el-table v-loading="loading" :data="inventoryList" stripe border size="small">
-          <el-table-column label="序号" type="index" width="50" align="center" />
-          <el-table-column label="清单编码" min-width="100" prop="materialsCode" show-overflow-tooltip/>
-          <el-table-column label="清单名称" min-width="200" prop="materialsName" show-overflow-tooltip/>
-          <el-table-column label="特征值特征项" min-width="150" prop="specification" show-overflow-tooltip/>
-          <el-table-column label="计量规则" align="center" prop="measurementRules"  show-overflow-tooltip/>
-          <el-table-column label="工作内容" align="center" prop="workContent"  show-overflow-tooltip/>
-          <el-table-column label="计量单位" align="center" prop="unitMeasurement" />
-          <el-table-column v-if="currentContract.contractPlanningCategory != 1 && currentContract.contractPlanningCategory != 2" label="工程量" align="right" prop="quantityText" />
-          <el-table-column label="已用数量" align="right" prop="usedCountText" />
-          <el-table-column label="剩余量" align="right" prop="surplusQuantityText" />
-          <el-table-column v-if="currentContract.contractPlanningCategory == 1 || currentContract.contractPlanningCategory == 2" label="转换数量" align="right" prop="transferQuantityText" />
-          <!-- <el-table-column label="基准价" align="center" prop="basePrice" />
-          <el-table-column label="浮动值" align="center" prop="floatingValue" /> -->
-          <el-table-column label="税率(%)" align="right" prop="taxRateText" />
-          <el-table-column label="单价(含税)" align="right" prop="unitPriceInclTaxText" min-width="150"/>
-          <el-table-column label="合计(含税)" align="right" prop="totalPriceText" min-width="150"/>
-          <el-table-column label="备注" align="center" prop="remark" min-width="200"/>
-        </el-table>
+        <virtual-scroll
+          :data="inventoryList"
+          :item-size="62"
+          key-prop="materialsId"
+          ref="virScrollRefDialog"
+          @change="(renderData) => virtualData = renderData">
+          <el-table v-loading="loading" :data="virtualData" stripe border size="small">
+            <el-table-column label="序号" type="index" width="50" align="center" />
+            <el-table-column label="清单编码" min-width="100" prop="materialsCode" show-overflow-tooltip/>
+            <el-table-column label="清单名称" min-width="200" prop="materialsName" show-overflow-tooltip/>
+            <el-table-column label="特征值特征项" min-width="150" prop="specification" show-overflow-tooltip/>
+            <el-table-column label="计量规则" align="center" prop="measurementRules"  show-overflow-tooltip/>
+            <el-table-column label="工作内容" align="center" prop="workContent"  show-overflow-tooltip/>
+            <el-table-column label="计量单位" align="center" prop="unitMeasurement" />
+            <el-table-column v-if="currentContract.contractPlanningCategory != 1 && currentContract.contractPlanningCategory != 2" label="工程量" align="right" prop="quantityText" />
+            <el-table-column label="已用数量" align="right" prop="usedCountText" />
+            <el-table-column label="剩余量" align="right" prop="surplusQuantityText" />
+            <el-table-column v-if="currentContract.contractPlanningCategory == 1 || currentContract.contractPlanningCategory == 2" label="转换数量" align="right" prop="transferQuantityText" />
+            <!-- <el-table-column label="基准价" align="center" prop="basePrice" />
+            <el-table-column label="浮动值" align="center" prop="floatingValue" /> -->
+            <el-table-column label="税率(%)" align="right" prop="taxRateText" />
+            <el-table-column label="单价(含税)" align="right" prop="unitPriceInclTaxText" min-width="150"/>
+            <el-table-column label="合计(含税)" align="right" prop="totalPriceText" min-width="150"/>
+            <el-table-column label="备注" align="center" prop="remark" min-width="200"/>
+          </el-table>
+        </virtual-scroll>
       </el-dialog>
 
       <!-- 合约拆分弹出层 -->
@@ -590,8 +607,8 @@ export default {
         this.handleSplitInit();
         /* 同步将清单内所有的价格类型改成一致的（固定价） */
         this.updateMaterialsFloat(1);
-        /* 计算清单内所有的合计列 */
-        this.updateMaterialsTotalPrice();
+        // /* 计算清单内所有的合计列 */
+        // this.updateMaterialsTotalPrice();
       })
     }
     /* 获取省市区 */
@@ -632,6 +649,7 @@ export default {
           priceType:1
         }, //form表单数据
         planList: [],
+        virtualData: [], // 虚拟列表渲染的数据
         accountTable:'accountTable',
         projectCode:'',
         id:'',
@@ -951,7 +969,6 @@ export default {
     //保存
     submitForm(formName) {
       return new Promise((resolve, reject) => {
-        console.log(this.planList,'ppp');
         const { add, subtract,divide,multiply, bignumber, format,floor } = this.mathjs;
         this.isSubmit = true;
         this.$refs[formName].validate(async (valid,done) => {
@@ -1335,7 +1352,6 @@ export default {
           const { procurementPlanName, beginDate, endDate, arrivalDate, procurementOfficer, procurementOfficerName,projectId,projectName,projectCode, priceType, regionProvinceCode, regionCityCode, paymentType, countingType } = this.formData;
           const { contractPlanningCategory, biddingMethodCode, biddingMethodName, contractPlanningCategoryName, contractPlanningId, contractPlanningName, incurredPlannedAmount, incurredPlannedAmountText, plannedAmountInclTax, plannedAmountInclTaxText, planningBalance, planningBalanceText,bidResponsibleOrg, bidResponsibleOrgName, id, contractPlanningCode,brand } = this.currentContract
           const splitRequestList = this.planList[0]?.children.map(item => {
-            console.log(JSON.stringify(item))
             return {
 
               splitContractName:item.splitContractName,
@@ -1464,9 +1480,7 @@ export default {
       const { currentContract, formData } = this
       this.planList.push(currentContract)
       const { contractPlanningId, contractPlanningCategory, contractPlanningCode } = this.currentContract
-      console.log(this.currentContract,'this.currentContract!!!!!!!!!!');
       const res = await getContractMaterials(contractPlanningId, formData.projectId,contractPlanningCategory,contractPlanningCode,formData.projectName)
-      console.log(res.data,'res.data~~~~~~~~~~~~~');
       this.inventoryList = res.data.contractMaterialsList;
       this.formData.subjectMatterText = res.data.subjectMatterText || '';
       this.formData.subjectMatterCode = res.data.subjectMatterCode || '';
@@ -1598,8 +1612,6 @@ export default {
             //     unitPriceInclTaxText:item.unitPriceInclTaxText
             //   })),
             // })
-            console.log(this.planList[0].children.length)
-            console.log(index)
             if(index+1>this.planList[0].children.length){
             children.push({
               index,
@@ -1620,7 +1632,6 @@ export default {
             if(this.planList[0].children[index].contractScope=="null"){
                 this.planList[0].children[index].contractScope=''
             }
-            console.log("this.planList[0].children[index]"+JSON.stringify(this.planList[0].children[index]))
             children.push(this.planList[0].children[index])
           }
           });
@@ -1700,25 +1711,20 @@ export default {
           let children = item.materialsLists.map((child,k) => ({...child, $index:k,planTable:item.planTable}))
           item.children = children;
         })
+        console.log(JSON.stringify(contractPlanning),'contractPlanning--contractPlanning--contractPlanning')
         console.log(JSON.stringify(splitMaterials),'splitMaterials--splitMaterials--splitMaterials')
 
         this.planList[0] = {...contractPlanning, children: splitMaterials};
-        console.log(JSON.stringify(this.planList[0]),'this.planList[0]--this.planList[0]--this.planList[0]')
         // 在数据加载完成后手动展开所有行
         this.$nextTick(() => {
           this.expandAllRows();
         });
-        console.log(this.planList[0],'this.planList[0]-this.planList[0]');
-        // this.planList = splitMaterials.map((item,index) => {
-        //   return {...contractPlanning, children:[{...item, $index:index, children: item.materialsLists.map((child,k) => ({...child, $index:k}))}]}
-        // });
         Object.assign(this.currentContract, contractPlanning)
 
         const { projectId } = this.formData
         getContractMaterials(contractPlanning.contractPlanningId, projectId,contractPlanning.contractPlanningCategory,contractPlanning.contractPlanningCode).then(res => {
           this.inventoryList = res.data.contractMaterialsList;
         })
-        console.log(this.planList, 'this.planList');
         /* 采购方案类型(购买材料,劳务分包....) */
         this.procurementType = procurementPlanType || (this.procurementType || '');
       } catch (err) {
@@ -2187,26 +2193,26 @@ export default {
       });
     },
     /* 计算清单内所有的合计列 */
-    updateMaterialsTotalPrice(){
-      this.planList.forEach((item) => {
-        if (item.children && Array.isArray(item.children)) {
-          item.children.forEach((itemChildren) => {
-            if (itemChildren.children && Array.isArray(itemChildren.children)) {
-              itemChildren.children.forEach((children) => {
-                const { multiply, bignumber } = this.mathjs;
-                const taxUnitPriceBig = bignumber(children.unitPriceInclTax);
-                const countBig = bignumber(children.count);
-                // 含税总价
-                const totalPrice = multiply(taxUnitPriceBig, countBig);
-                /* 合计总计计算， 赋值千分位 */
-                children.totalPriceText = this.formatNumberDynamicDecimalWithSeparator(totalPrice);
-                children.totalPrice = children.totalPriceText.replaceAll(',', '');
-              });
-            }
-          });
-        }
-      });
-    },
+    // updateMaterialsTotalPrice(){
+    //   this.planList.forEach((item) => {
+    //     if (item.children && Array.isArray(item.children)) {
+    //       item.children.forEach((itemChildren) => {
+    //         if (itemChildren.children && Array.isArray(itemChildren.children)) {
+    //           itemChildren.children.forEach((children) => {
+    //             const { multiply, bignumber } = this.mathjs;
+    //             const taxUnitPriceBig = bignumber(children.unitPriceInclTax);
+    //             const countBig = bignumber(children.count);
+    //             // 含税总价
+    //             const totalPrice = multiply(taxUnitPriceBig, countBig);
+    //             /* 合计总计计算， 赋值千分位 */
+    //             children.totalPriceText = this.formatNumberDynamicDecimalWithSeparator(totalPrice);
+    //             children.totalPrice = children.totalPriceText.replaceAll(',', '');
+    //           });
+    //         }
+    //       });
+    //     }
+    //   });
+    // },
     /* 计算 含税单价 不含税单价 行合计价 */
     calculatePrice(row){
       const { multiply, add, divide, bignumber, format } = this.mathjs;
@@ -2237,7 +2243,6 @@ export default {
           const totalPrice = multiply(bignumber(priceInclTax), bignumber(row.count));
           row.totalPriceText = this.formatNumberDynamicDecimalWithSeparator(totalPrice);
           row.totalPrice = row.totalPriceText.replaceAll(',', '');
-          console.log('%c⏩ 固定价计算结果row \n', `font-size: 14px;background-color: #f00;`, row );
         }
       }
 
@@ -2272,7 +2277,6 @@ export default {
           const totalPrice = multiply(unitPriceInclTaxBig, bignumber(row.count));
           row.totalPriceText = this.formatNumberDynamicDecimalWithSeparator(totalPrice);
           row.totalPrice = row.totalPriceText.replaceAll(',', '');
-          console.log('%c🪴 浮动价计算结果row \n', `font-size: 14px;background-color: #f00;`, row );
         }
       }
 
@@ -2309,16 +2313,8 @@ export default {
           const totalPrice = multiply(unitPriceInclTaxBig, bignumber(row.count));
           row.totalPriceText = this.formatNumberDynamicDecimalWithSeparator(totalPrice);
           row.totalPrice = row.totalPriceText.replaceAll(',', '');
-          console.log('%c🏀 浮动率计算结果row \n', `font-size: 14px;background-color: #f00;`, row );
         }
       }
-
-
-      /* 在 DOM 更新完成后，重新布局表格 (为了刷新表格列的'总计') */
-      /* 更新表格的布局 */
-      this.$nextTick(() => {
-        this.$refs.tableRef.doLayout();
-      });
 
       return row;
     },
