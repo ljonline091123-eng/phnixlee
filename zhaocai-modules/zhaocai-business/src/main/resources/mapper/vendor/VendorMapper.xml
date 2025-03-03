@@ -333,7 +333,7 @@
     <select id="selectVendorJkpthtListPage" resultType="com.zhaocai.business.vendor.vo.res.VendorVO">
         select tv.id,tv.enterprise_name,tv.social_credit_code,tv.legal_representative,
         tv.legal_phone,tv.legal_id_card,
-        tv.bank_account,dcb.parent_name as affiliated_bank,dcb.name as opening_branch
+        tv.bank_account,dcb.parent_name as affiliated_bank,dcb.name as opening_branch,tv.enterprise_code
         from tb_vendor tv left join dw_cd_bank dcb
         on   dcb.id=tv.account_branch
         <where>
