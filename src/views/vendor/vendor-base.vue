@@ -84,7 +84,6 @@
             >查询</el-button
             >
             <el-button size="small" type="warning" icon="el-icon-refresh" @click="resetQuery">重置</el-button>
-            <el-button size="small" type="warning" icon="el-icon-refresh" @click="handleQuery">重置</el-button>
             <el-form-item>
               <el-button
                 type="primary"
