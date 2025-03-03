@@ -79,7 +79,8 @@ export default {
       if (!userList || userList.length === 0) {
         return "";
       }
-      return userList.map((user) => user.userName).join(", ");
+      /* 已执行的加个 ✔ */
+      return userList.map((user) => user.completed ? ("✔ "+user.userName) : user.userName).join(", ");
     },
     // getPostNames(taskPost) {
     //   if (!taskPost || taskPost.length === 0) {
