@@ -433,156 +433,118 @@
             prop="contractScope"
             show-overflow-tooltip
           />
-          <!-- <el-table-column label="清单" align="center">
-            <template slot-scope="inventory">
-              <el-table
-                size="small"
-                :data="inventory.row.materialsLists"
-                stripe
-              >
-                <el-table-column
-                  label="序号"
-                  type="index"
-                  width="50"
-                  align="center"
-                />
-                <el-table-column
-                  label="清单编码"
-                  width="200"
-                  align="center"
-                  prop="materialsCode"
-                />
-                <el-table-column
-                  label="清单名称"
-                  width="200"
-                  align="center"
-                  prop="materialsName"
-                  show-overflow-tooltip
-                />
-                <el-table-column
-                  label="规格型号"
-                  align="center"
-                  prop="specification"
-                  show-overflow-tooltip
-                />
-                <el-table-column
-                  label="计量单位"
-                  align="center"
-                  prop="unitMeasurement"
-                />
-                <el-table-column label="清单数量" align="center" prop="count" />
-                <el-table-column
-                  label="单价（含税）"
-                  align="center"
-                  prop="unitPriceInclTaxText"
-                />
-              </el-table>
-            </template>
-          </el-table-column> -->
           <el-table-column label="清单" align="center">
             <template slot-scope="inventory">
-              <el-table
-                size="small"
+
+              <virtual-scroll
                 :data="inventory.row.materialsLists"
-                border
-                show-summary
-                :summary-method="getSummaries"
-              >
-                <el-table-column
-                  label="序号"
-                  type="index"
-                  width="50"
-                  align="center"
-                />
-                <el-table-column
-                  label="清单编码"
-                  width="150"
-                  prop="materialsCode"
-                  show-overflow-tooltip
-                />
-                <el-table-column
-                  label="清单名称"
-                  width="150"
-                  prop="materialsName"
-                  show-overflow-tooltip
-                />
-                <el-table-column
-                  label="交易标的物"
-                  width="150"
-                  prop="subjectMatterName"
-                  show-overflow-tooltip
-                />
-<!--                <el-table-column-->
-<!--                  label="规格型号"-->
-<!--                  prop="specification"-->
-<!--                  show-overflow-tooltip-->
-<!--                />-->
-                <el-table-column label="特征值特征项" min-width="150" prop="specification" show-overflow-tooltip/>
-                <el-table-column label="计量规则" min-width="150" align="center" prop="measurementRules"  show-overflow-tooltip/>
-                <el-table-column label="工作内容" align="center" prop="workContent" show-overflow-tooltip />
-                <el-table-column
-                  label="计量单位"
-                  align="center"
-                  prop="unitMeasurement"
-                />
-                <el-table-column
-                  v-if="isLease"
-                  label="租赁方式"
-                  prop="rentModeText"
-                />
-                <el-table-column
-                  :label="isLease ? '工作量' : '清单数量'"
-                  align="right"
-                  prop="countText"
-                />
-                <el-table-column
-                  label="基价(元)"
-                  v-if="[2,3,4,5,6,7].includes(procurementScheme.priceType)"
-                  align="right"
-                  prop="basePriceText"
-                />
-                <el-table-column
-                  label="单价(含税)"
-                  v-else
-                  align="right"
-                  prop="unitPriceInclTaxText"
-                  width="100"
-                />
-                <el-table-column
-                  label="浮动价(元)"
-                  v-if="[2,3,6,7].includes(procurementScheme.priceType)"
-                  align="right"
-                  prop="floatingPriceText"
-                />
-                <el-table-column
-                  label="浮动率(%)"
-                  v-if="[4,5,6,7].includes(procurementScheme.priceType)"
-                  align="right"
-                  prop="floatingRateText"
-                />
-                <el-table-column
-                  v-if="isLease"
-                  label="租赁时间"
-                  align="right"
-                  prop="rentTimeText"
-                >
-                  <template slot-scope="{ row }">
-                    {{ row.rentMode == 3 ? "-" : row.rentTimeText }}
-                  </template>
-                </el-table-column>
-                <el-table-column
-                  v-if="isLease"
-                  label="租赁数量"
-                  align="right"
-                  prop="rentQuantityText"
-                >
-                  <template slot-scope="{ row }">
-                    {{ row.rentMode == 3 ? "-" : row.rentQuantityText }}
-                  </template>
-                </el-table-column>
-                <el-table-column label="合计(含税)" align="right" prop="totalPriceText" min-width="150"/>
-                <el-table-column label="备注" align="center" prop="remark"/>
-              </el-table>
+                :item-size="62"
+                key-prop="materialsId"
+                ref="virScrollRef"
+                @change="(renderData) => virtualData = renderData">
+                  <el-table
+                    size="small"
+                    :data="virtualData"
+                    border
+                    show-summary
+                    :summary-method="getSummaries"
+                  >
+                    <el-table-column
+                      label="序号"
+                      type="index"
+                      width="50"
+                      align="center"
+                    />
+                    <el-table-column
+                      label="清单编码"
+                      width="150"
+                      prop="materialsCode"
+                      show-overflow-tooltip
+                    />
+                    <el-table-column
+                      label="清单名称"
+                      width="150"
+                      prop="materialsName"
+                      show-overflow-tooltip
+                    />
+                    <el-table-column
+                      label="交易标的物"
+                      width="150"
+                      prop="subjectMatterName"
+                      show-overflow-tooltip
+                    />
+    <!--                <el-table-column-->
+    <!--                  label="规格型号"-->
+    <!--                  prop="specification"-->
+    <!--                  show-overflow-tooltip-->
+    <!--                />-->
+                    <el-table-column label="特征值特征项" min-width="150" prop="specification" show-overflow-tooltip/>
+                    <el-table-column label="计量规则" min-width="150" align="center" prop="measurementRules"  show-overflow-tooltip/>
+                    <el-table-column label="工作内容" align="center" prop="workContent" show-overflow-tooltip />
+                    <el-table-column
+                      label="计量单位"
+                      align="center"
+                      prop="unitMeasurement"
+                    />
+                    <el-table-column
+                      v-if="isLease"
+                      label="租赁方式"
+                      prop="rentModeText"
+                    />
+                    <el-table-column
+                      :label="isLease ? '工作量' : '清单数量'"
+                      align="right"
+                      prop="countText"
+                    />
+                    <el-table-column
+                      label="基价(元)"
+                      v-if="[2,3,4,5,6,7].includes(procurementScheme.priceType)"
+                      align="right"
+                      prop="basePriceText"
+                    />
+                    <el-table-column
+                      label="单价(含税)"
+                      v-else
+                      align="right"
+                      prop="unitPriceInclTaxText"
+                      width="100"
+                    />
+                    <el-table-column
+                      label="浮动价(元)"
+                      v-if="[2,3,6,7].includes(procurementScheme.priceType)"
+                      align="right"
+                      prop="floatingPriceText"
+                    />
+                    <el-table-column
+                      label="浮动率(%)"
+                      v-if="[4,5,6,7].includes(procurementScheme.priceType)"
+                      align="right"
+                      prop="floatingRateText"
+                    />
+                    <el-table-column
+                      v-if="isLease"
+                      label="租赁时间"
+                      align="right"
+                      prop="rentTimeText"
+                    >
+                      <template slot-scope="{ row }">
+                        {{ row.rentMode == 3 ? "-" : row.rentTimeText }}
+                      </template>
+                    </el-table-column>
+                    <el-table-column
+                      v-if="isLease"
+                      label="租赁数量"
+                      align="right"
+                      prop="rentQuantityText"
+                    >
+                      <template slot-scope="{ row }">
+                        {{ row.rentMode == 3 ? "-" : row.rentQuantityText }}
+                      </template>
+                    </el-table-column>
+                    <el-table-column label="合计(含税)" align="right" prop="totalPriceText" min-width="150"/>
+                    <el-table-column label="备注" align="center" prop="remark"/>
+                  </el-table>
+              </virtual-scroll>
             </template>
           </el-table-column>
         </el-table>
@@ -782,6 +744,7 @@ import Roam from "@/components/Roam";
 import PageTitle from "@/components/PageTitle/index.vue";
 import ApprovalForm from "@/components/Approval/approvalForm.vue";
 import ApprovalDetailsDialog from "@/components/Approval/approvalDetailsDialog.vue";
+import VirtualScroll from "el-table-virtual-scroll";
 export default {
   name: "scheme-detail",
   dicts: ["purchase_type", "mark_item_type"],
@@ -789,6 +752,7 @@ export default {
     return {
       loading: false,
       inventoryList: [],
+      virtualData: [], // 虚拟列表渲染的数据
       isSubmit: false,
       procurementScheme: {}, //基本信息
       procurementSchemeBidding: {}, // 招标文件
@@ -850,6 +814,7 @@ export default {
     };
   },
   components: {
+    VirtualScroll,
     FileModule,
     BackButton,
     Roam,

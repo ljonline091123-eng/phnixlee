@@ -7,8 +7,7 @@
       if (el.tagName.toLocaleUpperCase() !== "INPUT") {
         el = el.getElementsByTagName("input")[0];
       }
-      console.log(el.value,'------------------------------');
-      
+
       // 千分位
       el.value = isNumber(el.value) && countDecimalPlaces(el.value) <= 4? (el.value && parseFloat(el.value).toLocaleString("zh", {
         minimumFractionDigits: digit(),
@@ -17,7 +16,6 @@
       // 聚焦转化为数字格式（去除千分位）
       el.onfocus = e => {
         let a = el.value && el.value.replace(/,/g, "") || ''; //去除千分号的','
-        console.log(el.value, isNumber(el.value),'isNumber(el.value)---------------');
         el.value = isNumber(a) && countDecimalPlaces(a) <= 4? parseFloat(a) : el.value || ''
       };
       el.onblur = e => {

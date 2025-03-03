@@ -202,6 +202,7 @@
                       @select="handleSelect"
                       :row-key="getRowKeys2"
                       :ref="inventory.row.planTable"
+                      height="600px"
                       :row-class-name="tableRowClassName">
                       <el-table-column type="selection" width="55" :reserve-selection="true"/>
                       <el-table-column label="序号" type="index" width="50" align="center" fixed/>

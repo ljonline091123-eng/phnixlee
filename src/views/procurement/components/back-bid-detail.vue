@@ -95,193 +95,200 @@
       <el-table-column prop="materialsLists" label="清单" align="center">
         <template #default="{ row }">
           <span v-if="!row.compVOList">
-            <el-table
-              size="small"
-              :data="row.materialsLists || []"
-              :style="{ width: 'calc(100% - 1px)' }"
-              show-summary
-              :summary-method="getSummaries"
-            >
-              <el-table-column
-                label="序号"
-                type="index"
-                width="50"
-                align="center"
-                fixed="left"
-              />
-              <el-table-column
-                label="清单名称"
-                width="200"
-                align="left"
-                prop="materialsName"
-                fixed="left"
-                show-overflow-tooltip
-              />
-              <el-table-column
-                label="价格类型"
-                width="100"
-                align="left"
-                prop="priceType"
-                fixed="left"
-                :formatter="formatterPriceType"
-                show-overflow-tooltip
-              />
-<!--              <el-table-column-->
-<!--                label="交易标的物"-->
-<!--                width="150"-->
-<!--                align="left"-->
-<!--                prop="subjectMatterName"-->
-<!--              />-->
-              <el-table-column
-                label="清单编码"
-                width="200"
-                align="left"
-                prop="materialsCode"
-              />
-<!--              <el-table-column-->
-<!--                label="规格型号"-->
-<!--                align="center"-->
-<!--                width="150"-->
-<!--                prop="specification"-->
-<!--              />-->
-              <el-table-column label="特征值特征项" min-width="150" prop="specification" show-overflow-tooltip/>
-              <el-table-column label="计量规则" min-width="150" align="center" prop="measurementRules"  show-overflow-tooltip/>
-              <el-table-column label="工作内容" align="center" prop="workContent" show-overflow-tooltip />
-              <el-table-column
-                label="计量单位"
-                align="center"
-                prop="unitMeasurement"
-              />
-              <el-table-column label="清单数量" align="center" prop="count" />
-              <el-table-column
-                label="税率（%）"
-                align="center"
-                prop="taxRate"
-                width="100"
-              >
-              </el-table-column>
+              <virtual-scroll
+                :data="row.materialsLists || []"
+                :item-size="62"
+                key-prop="materialsId"
+                ref="virScrollRef"
+                @change="(renderData) => virtualData = renderData">
+                <el-table
+                  size="small"
+                  :data="virtualData"
+                  :style="{ width: 'calc(100% - 1px)' }"
+                  show-summary
+                  :summary-method="getSummaries"
+                >
+                  <el-table-column
+                    label="序号"
+                    type="index"
+                    width="50"
+                    align="center"
+                    fixed="left"
+                  />
+                  <el-table-column
+                    label="清单名称"
+                    width="200"
+                    align="left"
+                    prop="materialsName"
+                    fixed="left"
+                    show-overflow-tooltip
+                  />
+                  <el-table-column
+                    label="价格类型"
+                    width="100"
+                    align="left"
+                    prop="priceType"
+                    fixed="left"
+                    :formatter="formatterPriceType"
+                    show-overflow-tooltip
+                  />
+    <!--              <el-table-column-->
+    <!--                label="交易标的物"-->
+    <!--                width="150"-->
+    <!--                align="left"-->
+    <!--                prop="subjectMatterName"-->
+    <!--              />-->
+                  <el-table-column
+                    label="清单编码"
+                    width="200"
+                    align="left"
+                    prop="materialsCode"
+                  />
+    <!--              <el-table-column-->
+    <!--                label="规格型号"-->
+    <!--                align="center"-->
+    <!--                width="150"-->
+    <!--                prop="specification"-->
+    <!--              />-->
+                  <el-table-column label="特征值特征项" min-width="150" prop="specification" show-overflow-tooltip/>
+                  <el-table-column label="计量规则" min-width="150" align="center" prop="measurementRules"  show-overflow-tooltip/>
+                  <el-table-column label="工作内容" align="center" prop="workContent" show-overflow-tooltip />
+                  <el-table-column
+                    label="计量单位"
+                    align="center"
+                    prop="unitMeasurement"
+                  />
+                  <el-table-column label="清单数量" align="center" prop="count" />
+                  <el-table-column
+                    label="税率（%）"
+                    align="center"
+                    prop="taxRate"
+                    width="100"
+                  >
+                  </el-table-column>
 
-              <el-table-column
-                label="浮动价"
-                width="100"
-                align="right"
-                prop="floatingPriceText"
-                v-if="
-                  (vendorInfo.subjectMatterType === 1 ||
-                    vendorInfo.subjectMatterType === 2) &&
-                  vendorInfo.priceType === 2
-                "
-              >
-                <template #default="{ row }">
-                  <span>{{
-                    row.floatingPriceText ? row.floatingPriceText : "/"
-                  }}</span>
-                </template>
-              </el-table-column>
-              <el-table-column
-                label="浮动率(%)"
-                width="100"
-                align="right"
-                prop="floatingRateText"
-                v-if="
-                  (vendorInfo.subjectMatterType === 1 ||
-                    vendorInfo.subjectMatterType === 2) &&
-                  vendorInfo.priceType === 4
-                "
-              >
-              </el-table-column>
-              <el-table-column
-                label="基价"
-                width="100"
-                align="right"
-                prop="basePriceText"
-                v-if="
-                  (vendorInfo.subjectMatterType === 1 ||
-                    vendorInfo.subjectMatterType === 2) &&
-                  vendorInfo.priceType === 2
-                "
-              >
-              </el-table-column>
-              <el-table-column
-                label="含税单价(元)"
-                width="100"
-                align="right"
-                prop="taxUnitPrice"
-              >
-                <template #default="{ row }">
-                  <span
-                    style="
-                      display: inline-block;
-                      text-align: center;
-                      width: 100%;
-                    "
+                  <el-table-column
+                    label="浮动价"
+                    width="100"
+                    align="right"
+                    prop="floatingPriceText"
                     v-if="
                       (vendorInfo.subjectMatterType === 1 ||
                         vendorInfo.subjectMatterType === 2) &&
                       vendorInfo.priceType === 2
                     "
-                    >/</span
                   >
-                  <span v-else>{{ row.taxUnitPriceText }}</span>
-                </template>
-              </el-table-column>
-              <el-table-column
-                label="不含税单价(元)"
-                width="150"
-                align="right"
-                prop="notTaxUnitPrice"
-              >
-                <template #default="{ row }">
-                  <span
-                    style="
-                      display: inline-block;
-                      text-align: center;
-                      width: 100%;
+                    <template #default="{ row }">
+                      <span>{{
+                        row.floatingPriceText ? row.floatingPriceText : "/"
+                      }}</span>
+                    </template>
+                  </el-table-column>
+                  <el-table-column
+                    label="浮动率(%)"
+                    width="100"
+                    align="right"
+                    prop="floatingRateText"
+                    v-if="
+                      (vendorInfo.subjectMatterType === 1 ||
+                        vendorInfo.subjectMatterType === 2) &&
+                      vendorInfo.priceType === 4
                     "
+                  >
+                  </el-table-column>
+                  <el-table-column
+                    label="基价"
+                    width="100"
+                    align="right"
+                    prop="basePriceText"
                     v-if="
                       (vendorInfo.subjectMatterType === 1 ||
                         vendorInfo.subjectMatterType === 2) &&
                       vendorInfo.priceType === 2
                     "
-                    >/</span
                   >
-                  <span v-else>{{ row.notTaxUnitPriceText }}</span>
-                </template>
-              </el-table-column>
-              <el-table-column
-                label="含税总价(元)"
-                width="150"
-                align="right"
-                prop="taxPrice"
-              >
-                <template #default="{ row }">
-                  <span>{{ row.taxPriceText ? row.taxPriceText : "/" }}</span>
-                </template>
-              </el-table-column>
-              <el-table-column
-                label="不含税总价(元)"
-                width="150"
-                align="right"
-                prop="notTaxPrice"
-              >
-                <template #default="{ row }">
-                  <span>{{
-                    row.notTaxPriceText ? row.notTaxPriceText : "/"
-                  }}</span>
-                </template>
-              </el-table-column>
-              <el-table-column
-                label="发票类型"
-                align="center"
-                prop="billType"
-                width="170"
-              >
-                <template #default="{ row }">
-                  <span>{{ getInvoiceType(row.billType) }}</span>
-                </template>
-              </el-table-column>
-              <el-table-column label="备注" align="center" prop="remark"/>
-            </el-table>
+                  </el-table-column>
+                  <el-table-column
+                    label="含税单价(元)"
+                    width="100"
+                    align="right"
+                    prop="taxUnitPrice"
+                  >
+                    <template #default="{ row }">
+                      <span
+                        style="
+                          display: inline-block;
+                          text-align: center;
+                          width: 100%;
+                        "
+                        v-if="
+                          (vendorInfo.subjectMatterType === 1 ||
+                            vendorInfo.subjectMatterType === 2) &&
+                          vendorInfo.priceType === 2
+                        "
+                        >/</span
+                      >
+                      <span v-else>{{ row.taxUnitPriceText }}</span>
+                    </template>
+                  </el-table-column>
+                  <el-table-column
+                    label="不含税单价(元)"
+                    width="150"
+                    align="right"
+                    prop="notTaxUnitPrice"
+                  >
+                    <template #default="{ row }">
+                      <span
+                        style="
+                          display: inline-block;
+                          text-align: center;
+                          width: 100%;
+                        "
+                        v-if="
+                          (vendorInfo.subjectMatterType === 1 ||
+                            vendorInfo.subjectMatterType === 2) &&
+                          vendorInfo.priceType === 2
+                        "
+                        >/</span
+                      >
+                      <span v-else>{{ row.notTaxUnitPriceText }}</span>
+                    </template>
+                  </el-table-column>
+                  <el-table-column
+                    label="含税总价(元)"
+                    width="150"
+                    align="right"
+                    prop="taxPrice"
+                  >
+                    <template #default="{ row }">
+                      <span>{{ row.taxPriceText ? row.taxPriceText : "/" }}</span>
+                    </template>
+                  </el-table-column>
+                  <el-table-column
+                    label="不含税总价(元)"
+                    width="150"
+                    align="right"
+                    prop="notTaxPrice"
+                  >
+                    <template #default="{ row }">
+                      <span>{{
+                        row.notTaxPriceText ? row.notTaxPriceText : "/"
+                      }}</span>
+                    </template>
+                  </el-table-column>
+                  <el-table-column
+                    label="发票类型"
+                    align="center"
+                    prop="billType"
+                    width="170"
+                  >
+                    <template #default="{ row }">
+                      <span>{{ getInvoiceType(row.billType) }}</span>
+                    </template>
+                  </el-table-column>
+                  <el-table-column label="备注" align="center" prop="remark"/>
+                </el-table>
+              </virtual-scroll>
           </span>
         </template>
       </el-table-column>
@@ -297,11 +304,13 @@
 import { getBidInfo } from "@/api/procurement/manage";
 import FileModule from "@/components/FileModule/index.vue";
 import {PRICETYPELIST} from "@/utils/constants";
+import VirtualScroll from "el-table-virtual-scroll";
 export default {
   data() {
     return {
       backBidLoading: false,
       backBidList: [],
+      virtualData: [], // 虚拟列表渲染的数据
       isAll:false,
       vendorInfo: {},
       // templateDialogVisible:false
@@ -313,6 +322,7 @@ export default {
     };
   },
   components: {
+    VirtualScroll,
     FileModule,
   },
   props: {

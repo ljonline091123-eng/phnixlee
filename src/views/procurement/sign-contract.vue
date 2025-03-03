@@ -707,313 +707,321 @@
           </el-col>
         </el-row>
         <div>
-          <el-table
-            v-loading="loading_tax"
+          <virtual-scroll
             :data="form.vendorBiddingListQuotationList"
-            stripe
-            highlight-current-row
-            border
-          >
-            <el-table-column
-              label="序号"
-              type="index"
-              width="50"
-              align="center"
-              fixed
-            />
-            <el-table-column
-              label="清单编码"
-              width="150"
-              prop="materialsCode"
-              show-overflow-tooltip
-              fixed
-            />
-            <el-table-column
-              label="清单名称"
-              prop="materialsName"
-              width="150"
-              show-overflow-tooltip
-              fixed
-            />
-<!--            <el-table-column-->
-<!--              label="交易标的物"-->
-<!--              prop="subjectMatterName"-->
-<!--              width="150"-->
-<!--              show-overflow-tooltip-->
-<!--              fixed-->
-<!--            />-->
-<!--            <el-table-column-->
-<!--              label="规格型号"-->
-<!--              prop="specification"-->
-<!--              show-overflow-tooltip-->
-<!--              fixed-->
-<!--            />-->
-            <el-table-column label="特征值特征项" min-width="150" prop="specification" show-overflow-tooltip/>
-            <el-table-column label="计量规则" min-width="150" align="center" prop="measurementRules"  show-overflow-tooltip/>
-            <el-table-column label="工作内容" align="center" prop="workContent"  show-overflow-tooltip/>
-            <el-table-column
-              label="计量单位"
-              align="center"
-              prop="unitMeasurement"
-              fixed
-            />
-            <el-table-column
-              label="投标总量"
-              align="right"
-              prop="countText"
-              :key="'count'"
-              width="150"
-              v-if="procurementType != 2 && procurementType != 3"
-              fixed
-            />
-            <el-table-column
-              label="剩余可用量"
-              align="right"
-              prop="surplusCountText"
-              width="150"
-            />
-            <el-table-column
-              header-align="center"
-              align="center"
-              label="合同价"
-            >
-                    <el-table-column
-                      label="签订量"
-                      align="center"
-                      prop="signCount"
-                      width="150"
-                      :key="'signCount'"
-                    >
-                      <template slot-scope="scope">
-                        <el-form-item
-                          label-width="0"
-                          :prop="
-                          'vendorBiddingListQuotationList.' +
-                          scope.$index +
-                          '.signCount'
-                        "
-                          :rules="[
-                          {
-                            required: true,
-                            trigger: 'blur',
-                            message: '请输入签订量',
-                          },
-                          {
-                            pattern: /^(?:[1-9]\d*|0)(\.\d+)?$/,
-                            trigger: 'blur',
-                            message: '请输入正确的值',
-                          },
-                          {
-                            pattern: /^\d+(\.\d{0,4})?$/,
-                            trigger: 'blur',
-                            message: '请输入小于4位的小数',
-                          },
-                        ]"
+            :item-size="62"
+            key-prop="materialsId"
+            ref="virScrollRef"
+            @change="(renderData) => virtualData = renderData">
+              <el-table
+                v-loading="loading_tax"
+                :data="virtualData"
+                class="translateYisZero"
+                stripe
+                highlight-current-row
+                border
+              >
+                <el-table-column
+                  label="序号"
+                  type="index"
+                  width="50"
+                  align="center"
+                  fixed
+                />
+                <el-table-column
+                  label="清单编码"
+                  width="150"
+                  prop="materialsCode"
+                  show-overflow-tooltip
+                  fixed
+                />
+                <el-table-column
+                  label="清单名称"
+                  prop="materialsName"
+                  width="150"
+                  show-overflow-tooltip
+                  fixed
+                />
+    <!--            <el-table-column-->
+    <!--              label="交易标的物"-->
+    <!--              prop="subjectMatterName"-->
+    <!--              width="150"-->
+    <!--              show-overflow-tooltip-->
+    <!--              fixed-->
+    <!--            />-->
+    <!--            <el-table-column-->
+    <!--              label="规格型号"-->
+    <!--              prop="specification"-->
+    <!--              show-overflow-tooltip-->
+    <!--              fixed-->
+    <!--            />-->
+                <el-table-column label="特征值特征项" min-width="150" prop="specification" show-overflow-tooltip/>
+                <el-table-column label="计量规则" min-width="150" align="center" prop="measurementRules"  show-overflow-tooltip/>
+                <el-table-column label="工作内容" align="center" prop="workContent"  show-overflow-tooltip/>
+                <el-table-column
+                  label="计量单位"
+                  align="center"
+                  prop="unitMeasurement"
+                  fixed
+                />
+                <el-table-column
+                  label="投标总量"
+                  align="right"
+                  prop="countText"
+                  :key="'count'"
+                  width="150"
+                  v-if="procurementType != 2 && procurementType != 3"
+                  fixed
+                />
+                <el-table-column
+                  label="剩余可用量"
+                  align="right"
+                  prop="surplusCountText"
+                  width="150"
+                />
+                <el-table-column
+                  header-align="center"
+                  align="center"
+                  label="合同价"
+                >
+                        <el-table-column
+                          label="签订量"
+                          align="center"
+                          prop="signCount"
+                          width="150"
+                          :key="'signCount'"
                         >
-                          <el-input
-                            v-model="scope.row.signCount"
-                            placeholder="请输入"
-                            v-thousandth
-                          />
-                        </el-form-item>
-                      </template>
-                    </el-table-column>
-                    <el-table-column
-                      label="签订含税单价(元)"
-                      align="center"
-                    prop="signUnitPriceInclTax"
-                      width="150"
-                      :key="'signUnitPriceInclTax'"
-                    >
-                      <template slot-scope="scope">
-                        <el-form-item
-                          label-width="0"
-                          :prop="
-                          'vendorBiddingListQuotationList.' +
-                          scope.$index +
-                          '.signUnitPriceInclTax'
-                        "
-                          :rules="[
-                          {
-                            required: true,
-                            trigger: 'blur',
-                            message: '请输入签订含税单价',
-                          },
-                          {
-                            pattern: /^(?:[1-9]\d*|0)(\.\d+)?$/,
-                            trigger: 'blur',
-                            message: '请输入正确的值',
-                          },
-                          {
-                            pattern: /^\d+(\.\d{0,4})?$/,
-                            trigger: 'blur',
-                            message: '请输入小于4位的小数',
-                          },
-                        ]"
+                          <template slot-scope="scope">
+                            <el-form-item
+                              label-width="0"
+                              :prop="
+                              'vendorBiddingListQuotationList.' +
+                              scope.$index +
+                              '.signCount'
+                            "
+                              :rules="[
+                              {
+                                required: true,
+                                trigger: 'blur',
+                                message: '请输入签订量',
+                              },
+                              {
+                                pattern: /^(?:[1-9]\d*|0)(\.\d+)?$/,
+                                trigger: 'blur',
+                                message: '请输入正确的值',
+                              },
+                              {
+                                pattern: /^\d+(\.\d{0,4})?$/,
+                                trigger: 'blur',
+                                message: '请输入小于4位的小数',
+                              },
+                            ]"
+                            >
+                              <el-input
+                                v-model="scope.row.signCount"
+                                placeholder="请输入"
+                                v-thousandth
+                              />
+                            </el-form-item>
+                          </template>
+                        </el-table-column>
+                        <el-table-column
+                          label="签订含税单价(元)"
+                          align="center"
+                        prop="signUnitPriceInclTax"
+                          width="150"
+                          :key="'signUnitPriceInclTax'"
                         >
-                          <el-input
-                            v-model="scope.row.signUnitPriceInclTax"
-                            placeholder="请输入"
-                            v-thousandth
-                          />
-                        </el-form-item>
-                      </template>
-                    </el-table-column>
-                    <el-table-column
-                      label="签订不含税单价(元)"
-                      align="right"
-                      width="170"
-                    >
-                      <template slot-scope="scope">
-                        {{
-                          countComputed(
-                            scope.row,
-                            scope.row.signUnitPriceInclTax,
-                            scope.row.taxRate,
-                            scope.row.signCount,
-                            "excludingTax"
-                          )
-                        }}
-                      </template>
-                    </el-table-column>
-                    <el-table-column label="含税总价(元)" align="right" width="150">
-                      <template slot-scope="scope">
-                        {{
-                          countComputed(
-                            scope.row,
-                            scope.row.signUnitPriceInclTax,
-                            scope.row.taxRate,
-                            scope.row.signCount,
-                            "taxIncludedTotal"
-                          )
-                        }}
-                      </template>
-                    </el-table-column>
-                    <el-table-column
-                      label="不含税总价(元)"
-                      align="right"
-                      width="150"
-                    >
-                      <template slot-scope="scope">
-                        {{
-                          countComputed(
-                            scope.row,
-                            scope.row.signUnitPriceInclTax,
-                            scope.row.taxRate,
-                            scope.row.signCount
-                          )
-                        }}
-                      </template>
-                    </el-table-column>
+                          <template slot-scope="scope">
+                            <el-form-item
+                              label-width="0"
+                              :prop="
+                              'vendorBiddingListQuotationList.' +
+                              scope.$index +
+                              '.signUnitPriceInclTax'
+                            "
+                              :rules="[
+                              {
+                                required: true,
+                                trigger: 'blur',
+                                message: '请输入签订含税单价',
+                              },
+                              {
+                                pattern: /^(?:[1-9]\d*|0)(\.\d+)?$/,
+                                trigger: 'blur',
+                                message: '请输入正确的值',
+                              },
+                              {
+                                pattern: /^\d+(\.\d{0,4})?$/,
+                                trigger: 'blur',
+                                message: '请输入小于4位的小数',
+                              },
+                            ]"
+                            >
+                              <el-input
+                                v-model="scope.row.signUnitPriceInclTax"
+                                placeholder="请输入"
+                                v-thousandth
+                              />
+                            </el-form-item>
+                          </template>
+                        </el-table-column>
+                        <el-table-column
+                          label="签订不含税单价(元)"
+                          align="right"
+                          width="170"
+                        >
+                          <template slot-scope="scope">
+                            {{
+                              countComputed(
+                                scope.row,
+                                scope.row.signUnitPriceInclTax,
+                                scope.row.taxRate,
+                                scope.row.signCount,
+                                "excludingTax"
+                              )
+                            }}
+                          </template>
+                        </el-table-column>
+                        <el-table-column label="含税总价(元)" align="right" width="150">
+                          <template slot-scope="scope">
+                            {{
+                              countComputed(
+                                scope.row,
+                                scope.row.signUnitPriceInclTax,
+                                scope.row.taxRate,
+                                scope.row.signCount,
+                                "taxIncludedTotal"
+                              )
+                            }}
+                          </template>
+                        </el-table-column>
+                        <el-table-column
+                          label="不含税总价(元)"
+                          align="right"
+                          width="150"
+                        >
+                          <template slot-scope="scope">
+                            {{
+                              countComputed(
+                                scope.row,
+                                scope.row.signUnitPriceInclTax,
+                                scope.row.taxRate,
+                                scope.row.signCount
+                              )
+                            }}
+                          </template>
+                        </el-table-column>
 
+                        <el-table-column
+                          label="租赁方式"
+                          align="right"
+                          prop="rentModeText"
+                          :key="'rentModeText'"
+                          v-if="procurementType == 2 || procurementType == 3"
+                        />
+                        <el-table-column
+                          label="租赁时间"
+                          align="right"
+                          prop="rentTimeText"
+                          width="150"
+                          :key="'rentTimeText'"
+                          v-if="procurementType == 2 || procurementType == 3"
+                        >
+                          <template slot-scope="scope">
+                            {{ scope.row.rentTimeText || "-" }}
+                          </template>
+                        </el-table-column>
+                        <el-table-column
+                          label="租赁数量"
+                          align="right"
+                          prop="rentQuantityText"
+                          width="150"
+                          :key="'rentQuantityText'"
+                          v-if="procurementType == 2 || procurementType == 3"
+                        >
+                          <template slot-scope="scope">
+                            {{ scope.row.rentQuantityText || "-" }}
+                          </template>
+                        </el-table-column>
+                        <el-table-column
+                          label="工作量"
+                          align="right"
+                          prop="countText"
+                          width="150"
+                          :key="'countText'"
+                          v-if="procurementType == 2 || procurementType == 3"
+                        />
+                </el-table-column>
+                <el-table-column
+                  header-align="center"
+                  align="center"
+                  label="中标价"
+                >
                     <el-table-column
-                      label="租赁方式"
+                      label="基价(元)"
                       align="right"
-                      prop="rentModeText"
-                      :key="'rentModeText'"
-                      v-if="procurementType == 2 || procurementType == 3"
+                      prop="basePriceText"
+                      width="150"
+                      v-if="[2,3,4,5,6,7].includes(priceType)"
+                      :key="'basePriceText'"
                     />
                     <el-table-column
-                      label="租赁时间"
+                      label="浮动价(元)"
                       align="right"
-                      prop="rentTimeText"
                       width="150"
-                      :key="'rentTimeText'"
-                      v-if="procurementType == 2 || procurementType == 3"
-                    >
-                      <template slot-scope="scope">
-                        {{ scope.row.rentTimeText || "-" }}
-                      </template>
-                    </el-table-column>
-                    <el-table-column
-                      label="租赁数量"
-                      align="right"
-                      prop="rentQuantityText"
-                      width="150"
-                      :key="'rentQuantityText'"
-                      v-if="procurementType == 2 || procurementType == 3"
-                    >
-                      <template slot-scope="scope">
-                        {{ scope.row.rentQuantityText || "-" }}
-                      </template>
-                    </el-table-column>
-                    <el-table-column
-                      label="工作量"
-                      align="right"
-                      prop="countText"
-                      width="150"
-                      :key="'countText'"
-                      v-if="procurementType == 2 || procurementType == 3"
+                      prop="floatingPriceText"
+                      v-if="[2,3,6,7].includes(priceType)"
+                      :key="'floatingPriceText'"
                     />
-            </el-table-column>
-            <el-table-column
-              header-align="center"
-              align="center"
-              label="中标价"
-            >
-                <el-table-column
-                  label="基价(元)"
-                  align="right"
-                  prop="basePriceText"
-                  width="150"
-                  v-if="[2,3,4,5,6,7].includes(priceType)"
-                  :key="'basePriceText'"
-                />
-                <el-table-column
-                  label="浮动价(元)"
-                  align="right"
-                  width="150"
-                  prop="floatingPriceText"
-                  v-if="[2,3,6,7].includes(priceType)"
-                  :key="'floatingPriceText'"
-                />
-                <el-table-column
-                  label="浮动率"
-                  align="right"
-                  width="150"
-                  prop="floatingRateText"
-                  :key="'floatingRateText'"
-                  v-if="[4,5,6,7].includes(priceType)"
-                />
-                  <el-table-column
-                    label="含税单价(元)"
-                    align="right"
-                    width="150"
-                    prop="taxUnitPriceText"
-                    :key="'taxUnitPriceText'"
-                    v-if="subjectMatter != 1 && subjectMatter != 2"
-                  />
-                  <el-table-column
-                    label="不含税单价(元)"
-                    align="right"
-                    width="150"
-                    prop="notTaxUnitPriceText"
-                    :key="'notTaxUnitPriceText'"
-                    v-if="subjectMatter != 1 && subjectMatter != 2"
-                  />
-                  <el-table-column
-                    label="含税总价(元)"
-                    align="right"
-                    width="150"
-                    prop="taxPriceText"
-                  />
-                  <el-table-column
-                    label="不含税总价(元)"
-                    align="right"
-                    width="150"
-                    prop="notTaxPriceText"
-                  />
-                  <el-table-column label="税率(%)" align="center" prop="taxRate" />
-            </el-table-column>
+                    <el-table-column
+                      label="浮动率"
+                      align="right"
+                      width="150"
+                      prop="floatingRateText"
+                      :key="'floatingRateText'"
+                      v-if="[4,5,6,7].includes(priceType)"
+                    />
+                      <el-table-column
+                        label="含税单价(元)"
+                        align="right"
+                        width="150"
+                        prop="taxUnitPriceText"
+                        :key="'taxUnitPriceText'"
+                        v-if="subjectMatter != 1 && subjectMatter != 2"
+                      />
+                      <el-table-column
+                        label="不含税单价(元)"
+                        align="right"
+                        width="150"
+                        prop="notTaxUnitPriceText"
+                        :key="'notTaxUnitPriceText'"
+                        v-if="subjectMatter != 1 && subjectMatter != 2"
+                      />
+                      <el-table-column
+                        label="含税总价(元)"
+                        align="right"
+                        width="150"
+                        prop="taxPriceText"
+                      />
+                      <el-table-column
+                        label="不含税总价(元)"
+                        align="right"
+                        width="150"
+                        prop="notTaxPriceText"
+                      />
+                      <el-table-column label="税率(%)" align="center" prop="taxRate" />
+                </el-table-column>
 
-            <el-table-column
-              label="发票类型"
-              align="center"
-              prop="billTypeText"
-              width="150"
-              show-overflow-tooltip
-            />
-          </el-table>
+                <el-table-column
+                  label="发票类型"
+                  align="center"
+                  prop="billTypeText"
+                  width="150"
+                  show-overflow-tooltip
+                />
+              </el-table>
+          </virtual-scroll>
           <div
             style="display: flex; justify-content: flex-end; margin-top: 20px"
           >
@@ -1307,9 +1315,11 @@ import {
 import { getContractTypeList } from "@/api/template/file";
 
 import { validatenull } from "@/utils/validate";
+import VirtualScroll from "el-table-virtual-scroll";
 
 export default {
   name: "sign-contract",
+  components: {VirtualScroll},
   dicts: ["plan_type", "procurement_plan_type"],
 
   data() {
@@ -1412,6 +1422,7 @@ export default {
       // 是否显示弹出层
       open: false,
       form: {},
+      virtualData: [], // 虚拟列表渲染的数据
       // 查询参数
       queryParams: {
         pageNumber: 1,
@@ -2161,6 +2172,12 @@ export default {
   },
 };
 </script>
+<style>
+/* 取消虚拟列表的偏移 */
+.translateYisZero div{
+  transform: translateY(0px) !important;
+}
+</style>
 <style lang="scss" scoped>
 .el-table .el-form-item {
   margin-bottom: 0;
