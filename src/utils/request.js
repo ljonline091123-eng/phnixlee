@@ -22,8 +22,8 @@ const service = axios.create({
     // version: "cs",
     version: "lsn",
   },
-  // 超时
-  timeout: 100000,
+  // 超时 10分钟 6*10*1000
+  timeout: 600000,
 });
 
 // request拦截器
