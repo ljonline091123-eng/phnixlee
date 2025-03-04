@@ -103,6 +103,9 @@ public class VendorManagementListVO extends AdviceObject {
     private String vendorState;
 
     @ApiModelProperty(hidden = true)
+    private String vendorStateTwo;
+
+    @ApiModelProperty(hidden = true)
     private String regionCityCode;
 
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss",timezone = "GMT+8")
