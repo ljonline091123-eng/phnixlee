@@ -473,7 +473,12 @@
           ref="virScrollRefDialog"
           @change="(renderData) => virtualData = renderData">
           <el-table v-loading="loading" :data="virtualData" stripe border size="small">
-            <el-table-column label="序号" type="index" width="50" align="center" />
+<!--            <el-table-column label="序号" type="index" width="50" align="center" />-->
+            <el-table-column label="序号" width="50" align="center" fixed>
+              <template #default="scope">
+                {{ inventory.row.materialsLists.findIndex(item => item.materialsId === scope.row.materialsId) + 1 }}
+              </template>
+            </el-table-column>
             <el-table-column label="清单编码" min-width="100" prop="materialsCode" show-overflow-tooltip/>
             <el-table-column label="清单名称" min-width="200" prop="materialsName" show-overflow-tooltip/>
             <el-table-column label="特征值特征项" min-width="150" prop="specification" show-overflow-tooltip/>
