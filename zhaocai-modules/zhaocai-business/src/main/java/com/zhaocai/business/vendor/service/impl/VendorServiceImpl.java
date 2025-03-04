@@ -773,6 +773,11 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
                                 && VendorProcessTypeEnum.VENDOR_REGISTER.getState().equals(vo.getProcessType())){
                             vo.setVendorState("注册供应商待审");
                         }
+                        if (vo.getState() == 0) {
+                            vo.setVendorStateTwo("保存");
+                        } else if (vo.getState() == 2 ) {
+                            vo.setVendorStateTwo("驳回");
+                        }
                         // 处理企业分类
                         if (StringUtils.isNotBlank(vo.getEnterpriseType())) {
                             vo.setEnterpriseTypeText(vendorClassifyService.getVendorClassifyName(vo.getEnterpriseType()));

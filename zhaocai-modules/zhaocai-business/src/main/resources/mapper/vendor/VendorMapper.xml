@@ -109,6 +109,9 @@
         ) tvpr on tvpr.tvp_vendor_id = tv.id
         <where>
             tv.del_flag = 0
+            <if  test="queryVO.state != null">
+                and tv.state = #{queryVO.state}
+            </if>
             <if test="queryVO.enterpriseName != null and queryVO.enterpriseName != ''">
                and tv.enterprise_name like concat('%',#{queryVO.enterpriseName,jdbcType=VARCHAR},'%')
             </if>
@@ -171,6 +174,10 @@
             <if test="queryVO.vendorClass == 4">
                 <!--黑名单 -->
                 and tv.is_black = 1
+            </if>
+            <if test="queryVO.vendorClass == 5">
+                <!-- 待审供应商-供应商修改等级 -->
+                and (tv.state = 0 or tv.state = 2)  and tv.process_type = 1
             </if>
             <if  test="queryVO.firstCooperationCompanyCode != null and queryVO.firstCooperationCompanyCode != ''">
                 and tv.first_cooperation_company_code = #{queryVO.firstCooperationCompanyCode, jdbcType=VARCHAR}

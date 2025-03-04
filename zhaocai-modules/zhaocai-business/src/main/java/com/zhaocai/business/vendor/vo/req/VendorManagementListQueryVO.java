@@ -82,5 +82,6 @@ public class VendorManagementListQueryVO extends PageRecive {
     @ApiModelProperty(hidden = true)
     private BigDecimal registeredCapitalEnd;
 
-
+    @ApiModelProperty(hidden = true)
+    private Integer state;
 }
