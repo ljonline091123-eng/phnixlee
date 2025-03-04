@@ -105,8 +105,6 @@
                   size="small"
                   :data="virtualData"
                   :style="{ width: 'calc(100% - 1px)' }"
-                  show-summary
-                  :summary-method="getSummaries"
                 >
                   <el-table-column label="序号" width="50" align="center" fixed="left">
                     <template #default="scope">
@@ -130,24 +128,12 @@
                     :formatter="formatterPriceType"
                     show-overflow-tooltip
                   />
-    <!--              <el-table-column-->
-    <!--                label="交易标的物"-->
-    <!--                width="150"-->
-    <!--                align="left"-->
-    <!--                prop="subjectMatterName"-->
-    <!--              />-->
                   <el-table-column
                     label="清单编码"
                     width="200"
                     align="left"
                     prop="materialsCode"
                   />
-    <!--              <el-table-column-->
-    <!--                label="规格型号"-->
-    <!--                align="center"-->
-    <!--                width="150"-->
-    <!--                prop="specification"-->
-    <!--              />-->
                   <el-table-column label="特征值特征项" min-width="150" prop="specification" show-overflow-tooltip/>
                   <el-table-column label="计量规则" min-width="150" align="center" prop="measurementRules"  show-overflow-tooltip/>
                   <el-table-column label="工作内容" align="center" prop="workContent" show-overflow-tooltip />
@@ -285,6 +271,10 @@
                     </template>
                   </el-table-column>
                   <el-table-column label="备注" align="center" prop="remark"/>
+                  <template slot="append">
+                    <!-- 通过样式选择器赋值，靠谱一些... -->
+                    <span :class="'total-price-sum-table-class totalPriceSumTable' + getParentIndex(row)">  </span>
+                  </template>
                 </el-table>
               </virtual-scroll>
           </span>
@@ -338,40 +328,37 @@ export default {
     },
   },
   methods: {
-    /* 合计列计算 */
-    getSummaries(param) {
-      const { columns, data } = param;
-      const sums = [];
-      columns.forEach((column, index) => {
-        if (index === 0) {
-          sums[index] = '合计';
-          return;
-        }
-        /* 只显示含税总价 */
-        if(column.property === "taxPrice") {
-          const values = data.map(item => {
-            return Number(item['taxPriceText'].replace(',',''));
-          });
-          if (!values.every(value => isNaN(value))) {
-            sums[index] = values.reduce((prev, curr) => {
-              const value = Number(curr);
-              if (!isNaN(value)) {
-                return prev + curr;
-              } else {
-                return prev;
-              }
-            }, 0);
-            sums[index] = this.formatNumberDynamicDecimalWithSeparator(sums[index]);
-          } else {
-            sums[index] = '';
+
+    /* 第三级获取自己所在的第二层index */
+    getParentIndex(row) {
+      let index = -1;
+      this.backBidList.forEach((item, i) => {
+        item.compVOList.forEach((c, ii) => {
+          if(c.rowId && c.rowId === (row.rowId)){
+            index = ii;
           }
-        }else{
-          sums[index] = '';
-        }
-
+        })
       });
-
-      return sums;
+      return index;
+    },
+    /* 计算列含税总价 */
+    getTotalPriceTableText() {
+      const { add, bignumber } = this.mathjs;
+      this.backBidList.forEach((item,i) => {
+        if (item.compVOList && Array.isArray(item.compVOList)) {
+          item.compVOList.forEach((children,ii) => {
+            /* 计算表合计列合计计算合计列 */
+            let totalPriceTable = bignumber(0.0);
+              children.materialsLists.forEach((c) => {
+                totalPriceTable = add(c.taxPrice ? c.taxPrice : 0.0 , totalPriceTable);
+              });
+            let totalPriceTableText = this.formatNumberDynamicDecimalWithSeparator(totalPriceTable,2);
+            /* total-price-sum-table-class */
+            document.querySelector('.totalPriceSumTable'+ii).textContent = '标包含税总价：'+totalPriceTableText+' (元)';
+          });
+        }
+      })
+      return '';
     },
     /**
      * 格式化数字：动态保留小数位数并添加千分位分隔符
@@ -490,6 +477,12 @@ export default {
           priceType: data.priceType,
         };
         console.log(this.vendorInfo, "详情");
+
+        this.$nextTick(() => {
+          console.log("DOM 更新完成！");
+          /* 获取含税总计 */
+          this.getTotalPriceTableText();
+        });
       } catch (err) {
         console.log(err);
       }
@@ -507,6 +500,10 @@ export default {
 };
 </script>
 <style scoped lang="scss">
+.total-price-sum-table-class{
+  float: right;
+  position: unset;
+}
 .page-title {
   width: 100%;
   border-bottom: solid 1px #ccc;

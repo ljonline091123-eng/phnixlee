@@ -2374,12 +2374,12 @@ export default {
     /* 计算列含税总价 */
     getTotalPriceTableText() {
       return ( index) => {
-        const { add } = this.mathjs;
+        const { add, bignumber } = this.mathjs;
         this.planList.forEach((item) => {
           if (item.children && Array.isArray(item.children)) {
             item.children.forEach((itemChildren , i) => {
               /* 计算表合计列合计计算合计列 */
-              let totalPriceTable = 0.0;
+              let totalPriceTable = bignumber(0.0);
 
               if (itemChildren.children && Array.isArray(itemChildren.children)) {
                 itemChildren.children.forEach((children) => {

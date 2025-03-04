@@ -381,10 +381,10 @@ export default {
         }
         /* 只显示合计 */
         if(column.property === "totalPriceText") {
-          const { add } = this.mathjs;
+          const { add, bignumber } = this.mathjs;
           this.splitMaterials.forEach((item) => {
             /* 计算表合计列合计计算合计列 */
-            let totalPriceTable = 0.0;
+            let totalPriceTable = bignumber(0.0);
             if (item.materialsLists && Array.isArray(item.materialsLists)) {
               item.materialsLists.forEach((children,i) => {
                 totalPriceTable = add(children.totalPrice ? children.totalPrice : 0.0 , totalPriceTable);
