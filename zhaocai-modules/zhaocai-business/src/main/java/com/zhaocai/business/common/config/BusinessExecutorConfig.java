@@ -22,6 +22,7 @@ public class BusinessExecutorConfig {
     @Bean(name = "businessExecutor")
     public Executor asyncServiceExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        /* 使用机器cpu核心 */
         int cpuCount = Runtime.getRuntime().availableProcessors();
         //配置核心线程数
         executor.setCorePoolSize(cpuCount);
