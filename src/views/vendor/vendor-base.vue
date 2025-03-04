@@ -96,7 +96,7 @@
           </el-form-item>
         </el-row>
         <el-row>
-          <el-form-item :label="queryParams.vendorClass == 1 ? '注册申请时间' : '注册时间'" prop="startEndDate" label-width="100px">
+          <el-form-item :label="queryParams.vendorClass == 1 ? '注册申请时间' : '注册时间'" v-if="queryParams.vendorClass != 5 " prop="startEndDate" label-width="100px">
             <el-date-picker
               style="width: 220px"
               v-model="queryParams.startEndDate"
@@ -109,7 +109,7 @@
             />
             <!--<el-input v-model="queryParams.enterpriseName" placeholder="请输入供应商名称" clearable/>-->
           </el-form-item>
-          <el-form-item label="注册资金(万元)" prop="registeredCapital" label-width="130px">
+          <el-form-item label="注册资金(万元)" prop="registeredCapital" v-if="queryParams.vendorClass != 5 " label-width="130px">
               <el-input v-model="queryParams.registeredCapitalStart" type="number"  style="width: 101px" />
             -
             <el-input v-model="queryParams.registeredCapitalEnd" type="number" style="width: 100px" />
@@ -126,6 +126,14 @@
             <el-select v-model="queryParams.vendorState" clearable>
               <el-option v-for="dict in dict.type.vendor_state.filter(item => queryParams.vendorClass == 0 ? item.value != '5' : (item.value == '0' || item.value == '5'))" :key="dict.value" :label="dict.label"
                          :value="dict.value">
+              </el-option>
+            </el-select>
+          </el-form-item>
+          <el-form-item label="状态" prop="vendorStateTwo" label-width="100px" v-if="queryParams.vendorClass == 5">
+            <!--<el-input v-model="queryParams.vendorState" placeholder="请输入供应商名称" clearable/>-->
+            <el-select v-model="queryParams.state" style="width: 220px" clearable>
+              <el-option v-for="dict in vendorStateTwo" :key="dict.value" :label="dict.label"
+                         :value="dict.value" >
               </el-option>
             </el-select>
           </el-form-item>
@@ -293,6 +301,13 @@
           prop="vendorState"
           v-if="['2', '3','4', '0'].includes(queryParams.vendorClass)"
         />
+        <el-table-column
+          width="120"
+          label="状态"
+          align="center"
+          prop="vendorStateTwo"
+          v-if="['5'].includes(queryParams.vendorClass)"
+        />
         <!--<el-table-column
           width="150"
           label="待审人（待开发）"
@@ -434,6 +449,7 @@ export default {
       regionOptions:[],
       vendorState: [
         { label: "注册待审供应商", value: "1" },
+        { label: "未提交供应商", value: "5" },
         { label: "合格供应商", value: "2" },
         { label: "战略供应商", value: "3" },
         { label: "黑名单供应商", value: "4" },
@@ -444,6 +460,10 @@ export default {
         { label: "修改信息待审", value: "2" },
         { label: "修改等级", value: "9" },
         { label: "移入移出黑名单待审", value: "3" },
+      ],
+      vendorStateTwo: [
+        { label: "保存", value: 0 },
+        { label: "驳回", value: 2 }
       ],
       contractList: [],
       // 显示搜索条件
@@ -468,6 +488,7 @@ export default {
         registeredCapitalStart: undefined,
         registeredCapitalEnd: undefined,
         vendorState: undefined,
+        state: undefined,
         vendorClass: "1",
         processType: "10",
       },
@@ -602,6 +623,7 @@ export default {
         this.queryParams.endDate = null;
         this.queryParams.registeredCapitalStart = null;
         this.queryParams.registeredCapitalEnd = null;
+      this.queryParams.state = null;
       this.handleQuery();
     },
     /** 跳转方案详情 */
