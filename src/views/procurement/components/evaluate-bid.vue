@@ -1832,13 +1832,13 @@ export default {
         return this.$message.error("还有"+joinedExpertTypeIsNull.length+"名专家未指定类别，请手动指定专家类别");
       }
 
-      const hasTechExpert = joinedExperts.some((item) => item.expertType == 1);
-      const hasEconExpert = joinedExperts.some((item) => item.expertType == 2);
-
-      console.log('%c👽 hasTechExpert ', `font-size: 20px;background-color: #f00;`, hasTechExpert);
-      console.log('%c👽 hasEconExpert ', `font-size: 20px;background-color: #f00;`, hasEconExpert);
-      if (!hasTechExpert || !hasEconExpert)
-        return this.$message.error("评标专家必须包括经济、技术两类专家");
+      // const hasTechExpert = joinedExperts.some((item) => item.expertType == 1);
+      // const hasEconExpert = joinedExperts.some((item) => item.expertType == 2);
+      //
+      // console.log('%c👽 hasTechExpert ', `font-size: 20px;background-color: #f00;`, hasTechExpert);
+      // console.log('%c👽 hasEconExpert ', `font-size: 20px;background-color: #f00;`, hasEconExpert);
+      // if (!hasTechExpert || !hasEconExpert)
+      //   return this.$message.error("评标专家必须包括经济、技术两类专家");
       const { id: schemeId } = this.scheme;
       const { id: noticeId } = this.noticeDetail?.tenderNotice || {};
       const formData = {
