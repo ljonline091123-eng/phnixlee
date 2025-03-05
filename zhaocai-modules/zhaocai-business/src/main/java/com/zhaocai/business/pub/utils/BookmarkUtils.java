@@ -115,7 +115,8 @@ public class BookmarkUtils {
             System.out.println("去除线下修订记录的文件下载地址:" + viewUrl);
             return viewUrl;
         } catch (Exception e) {
-            throw new RuntimeException("去除线下修订记录," + e.getMessage(), e);
+//            throw new RuntimeException("去除线下修订记录," + e.getMessage(), e);
+            return null;
         }
         finally {
             //删除生成的临时文件
