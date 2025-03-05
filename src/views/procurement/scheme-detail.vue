@@ -293,11 +293,16 @@
               </el-col>
             </el-row>
 
-            <el-row class="custom-row" style="height: 180px">
-              <el-col :span="6" class="custom-col"  style="height: 180px">
+            <el-row class="custom-row">
+              <el-col :span="8" class="custom-col">
                 <el-form-item label="评分模板" class="custom-form-item">
                   <a
                     class="link-type"
+                    style="display: inline-block;
+                            width: 100%;
+                            white-space: nowrap;
+                            overflow: hidden;
+                            text-overflow: ellipsis;"
                     @click="
                       handleCheck(
                         procurementSchemeBidding.evaluationTemplate.templateId
@@ -311,37 +316,65 @@
                   </a>
                 </el-form-item>
               </el-col>
-              <el-col :span="6" class="custom-col" style="height: 180px">
+              <el-col :span="8" class="custom-col">
                 <el-form-item
                   label="招标文件"
                   label-width="140px"
                   class="custom-form-item"
                 >
-                  <a
+                  <!-- <a
                     class="link-type"
+                    style="display: inline-block;
+                            width: 100%;
+                            white-space: nowrap;
+                            overflow: hidden;
+                            text-overflow: ellipsis;"
                     @click="
                       showTemplate(procurementSchemeBidding.biddingTemplate,'biddingTemplate')
                     "
+                  > -->
+                  <a
+                    class="link-type"
+                    style="display: inline-block;
+                            width: 100%;
+                            white-space: nowrap;
+                            overflow: hidden;
+                            text-overflow: ellipsis;"
+                    @click="downloadFile(procurementSchemeBidding.biddingTemplate.fileUrl)"
                   >
                     {{
                       procurementSchemeBidding.biddingTemplate &&
-                      (procurementSchemeBidding.biddingTemplate.templateName || procurementSchemeBidding.biddingTemplate.fileName)
+                      procurementSchemeBidding.biddingTemplate.templateName
                     }}
                   </a>
                 </el-form-item>
               </el-col>
-              <el-col :span="6" class="custom-col" style="height: 180px">
+              <el-col :span="8" class="custom-col">
                 <el-form-item label="合同模板" class="custom-form-item">
-                  <a
+                  <!-- <a
                     class="link-type"
+                    style="display: inline-block;
+                            width: 100%;
+                            white-space: nowrap;
+                            overflow: hidden;
+                            text-overflow: ellipsis;"
                     @click="
                       showTemplate(procurementSchemeBidding.contractTemplate,'contractTemplate')
                     "
                     href="javascript:;"
+                  > -->
+                  <a
+                    class="link-type"
+                    style="display: inline-block;
+                            width: 100%;
+                            white-space: nowrap;
+                            overflow: hidden;
+                            text-overflow: ellipsis;"
+                    @click="downloadFile(procurementSchemeBidding.contractTemplate.fileUrl)"
                   >
                     {{
                       procurementSchemeBidding.contractTemplate &&
-                      (procurementSchemeBidding.contractTemplate.templateName || procurementSchemeBidding.contractTemplate.fileName)
+                      procurementSchemeBidding.contractTemplate.templateName
                     }}
                   </a>
                 </el-form-item>
@@ -680,20 +713,18 @@
       </div>
     </el-drawer>
 
-    <!-- 预览文件弹窗 -->
-    <el-dialog
+    <!-- <el-dialog
       :title="templateDialogTitle"
       :visible.sync="templateDialogVisible"
       width="80%"
     >
-    <!-- <FileModule :attachmentId="templateAttachmentId" height="500px" /> -->
       <iframe allowfullscreen="true"
         :src= this.viewFileUrl
         width="100%"
         height="700px"
         frameborder="0"
       ></iframe>
-    </el-dialog>
+    </el-dialog> -->
 
     <ApprovalForm
       :visible.sync="sanctionVisible"
@@ -733,6 +764,9 @@ import {
   getPermissionButtonScheme,
   postAuditProcessScheme,
   getLoadTaskDefScheme,
+    getPermissionButton,
+    postAuditProcess,
+    getLoadTaskDef,
   getProcessLogList, getOrgByUserId,
 } from "@/api/procurement/manage";
 import { getRating } from "@/api/template/rating";
@@ -754,6 +788,7 @@ export default {
       isSubmit: false,
       procurementScheme: {}, //基本信息
       procurementSchemeBidding: {}, // 招标文件
+      materialsLists: {}, // 清单
       approveNodeInfos: [], //审批人信息
       approveLists: [], //审批信息
       planMaterialsList: [], //拆分清单
@@ -774,9 +809,9 @@ export default {
         { value: "unit3", label: "单位三" },
       ],
       /* 合同模板联想文档预览 */
-      templateDialogTitle: "",
-      templateDialogVisible: false,
-      templateAttachmentId: "",
+      // templateDialogTitle: "",
+      // templateDialogVisible: false,
+      // templateAttachmentId: "",
       /* 招标文件模板联想文档预览 */
       templateBiddingDialogTitle: "",
       templateBiddingDialogVisible: false,
@@ -808,7 +843,7 @@ export default {
       selectedTag: null,
       tags: ["拟同意", "同意", "请修改, 再传至我处理", "阅"],
       //预览招标文件和合同模板的Url
-      viewFileUrl:"",
+      // viewFileUrl:"",
     };
   },
   components: {
@@ -921,6 +956,11 @@ export default {
 
       return formattedNumber;
     },
+    /** 下载模板文件 */
+    downloadFile(fileUrl) {
+      window.open(fileUrl, '_blank');
+    },
+    /* 获取采购方案采购事项详情 */
     async getSchemeDetail() {
       try {
         const res = await getSchemeDetail(this.param);
@@ -1016,28 +1056,28 @@ export default {
       console.log("已关闭");
     },
     //展示预览文件方法
-    async showTemplate(row,tmp) {
-      this.templateDialogTitle = row.fileName + "预览";
-      this.templateAttachmentId = row.attachmentId;
-      this.templateDialogVisible = true;
-      console.log("this.templateAttachmentId",this.templateAttachmentId);
+    // async showTemplate(row,tmp) {
+    //   this.templateDialogTitle = row.fileName + "预览";
+    //   this.templateAttachmentId = row.attachmentId;
+    //   this.templateDialogVisible = true;
+    //   console.log("this.templateAttachmentId",this.templateAttachmentId);
 
-      //获取附件的预览URL
-      if (this.templateAttachmentId) {
-        console.log('预览的Attachment ID:', this.templateAttachmentId);
-        //获取文档中台的文档编辑URL
-        try {
-          // const res = await getViewAttachmentURLByID({ attachmentId: this.templateAttachmentId }); //无修订记录
-          const res = await ViweProcurementSchemeFile({ attachmentId: this.templateAttachmentId }); //有修订记录
-          this.viewFileUrl = res.data;
-          console.log("viewFileUrl:",this.viewFileUrl);
-        } catch (err) {
-          console.log(err);
-        }
-      } else {
-        console.warn('attachmentId 数据未正确加载');
-      }
-    },
+      // //获取附件的预览URL
+      // if (this.templateAttachmentId) {
+      //   console.log('预览的Attachment ID:', this.templateAttachmentId);
+      //   //获取文档中台的文档编辑URL
+      //   try {
+      //     const res = await getViewAttachmentURLByID({ attachmentId: this.templateAttachmentId });
+      //     this.viewFileUrl = res.data;
+      //     console.log("viewFileUrl:",this.viewFileUrl);
+      //   } catch (err) {
+      //     console.log(err);
+      //   }
+      // } else {
+      //   console.warn('attachmentId 数据未正确加载');
+      // }
+    // },
+
     // 判断是否可以预览（仅支持图片和 PDF）
     isPreviewable(fileName) {
       const fileType = fileName.split('.').pop().toLowerCase(); // 获取文件后缀
@@ -1053,11 +1093,12 @@ export default {
       param = encodeURIComponent(param); //避免base64编码中出现"/"时路由404
       this.$router.push(`/procurement/add-scheme/${param}`);
     },
+    // 审批 批语 点击赋值
     setTag(tag) {
       this.selectedTag = tag;
       this.reviewText = tag; // 将选中的标签文本填入文本框
     },
-    //提交
+    //提交 按钮
     goSubmit() {
       this.submitDialogVisible = true;
       // this.$confirm("确定是否提交采购方案：" + procurementSchemeName, "提示", {
@@ -1072,6 +1113,7 @@ export default {
       //   } catch (error) {}
       // });
     },
+    /* 提交审批 */
     async submitReview() {
       if (!this.reviewText.trim()) {
         ElMessage.error("批语不能为空");
@@ -1176,6 +1218,7 @@ export default {
       this.sanctionVisible = true;
       this.getPermissionButtonScheme();
     },
+    /* 审批提交 */
     handleSubmit() {
       const params = {
         ...this.sanctionForm,
