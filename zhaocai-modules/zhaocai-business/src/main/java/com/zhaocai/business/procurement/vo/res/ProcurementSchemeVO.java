@@ -121,4 +121,7 @@ public class ProcurementSchemeVO extends AdviceObject {
 
     @ApiModelProperty(value = "交易标的物")
     private String subjectMatterText;
+
+    @ApiModelProperty(value = "项目简称")
+    private String minAccountSimpleName;
 }

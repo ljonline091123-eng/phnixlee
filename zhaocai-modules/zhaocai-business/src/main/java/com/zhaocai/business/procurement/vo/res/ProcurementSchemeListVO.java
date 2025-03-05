@@ -57,6 +57,9 @@ public class ProcurementSchemeListVO extends AdviceObject {
     @ApiModelProperty(value = "项目名称")
     private String projectName;
 
+    @ApiModelProperty(value = "项目简称")
+    private String minAccountSimpleName;
+
     @ApiModelProperty(value = "状态-文本")
     @DictCache(dictBizEnum = DictBizEnum.PROCUREMENT_SCHEME_STATE,filedName = "state")
     private String stateText;

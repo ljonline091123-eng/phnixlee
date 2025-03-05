@@ -45,11 +45,12 @@
         <result property="createTime" column="create_time"/>
         <result property="projectCode" column="project_code"/>
         <result property="projectName" column="min_account_full_name"/>
+        <result property="minAccountSimpleName" column="min_account_simple_name"/>
     </resultMap>
 
 
     <select id="selectPageList" resultMap="ProcurementSchemeListResult">
-        select tps.*,tmp.min_account_full_name
+        select tps.*,tmp.min_account_full_name,tmp.min_account_simple_name
         from tb_procurement_scheme tps
         left join tb_min_project tmp on tps.project_code = tmp.min_account_code
         <where>

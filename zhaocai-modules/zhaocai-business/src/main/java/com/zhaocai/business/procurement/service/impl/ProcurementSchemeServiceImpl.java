@@ -235,6 +235,8 @@ public class ProcurementSchemeServiceImpl extends ServiceImpl<ProcurementSchemeM
         // 获取项目基本信息
         MinProjectVO minProjectVO = minProjectService.getMinProjectByMinAccountCode(procurementScheme.getProjectCode());
         procurementSchemeVO.setProjectDeptId(minProjectVO.getDeptId());
+        /* 增加显示简称 */
+        procurementSchemeVO.setMinAccountSimpleName(minProjectVO.getMinAccountSimpleName());
 
         return ProcurementSchemeDetailVO.builder()
                 .procurementScheme(procurementSchemeVO)
