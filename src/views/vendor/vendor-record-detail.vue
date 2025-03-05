@@ -1,7 +1,7 @@
 <template>
   <div class="app-container">
     <!--<BackButton path="/vendor/vendor-base" title="供应商合作记录详情"/>-->
-    <BackButton path="/vendor/vendor-base" :title="titleMy"/>
+    <BackButton :path="path" :title="titleMy"/>
     <div class="context">
       <el-radio-group v-model="queryParams.expenditureBusinessType" size="small" style="padding: 15px 0;">
         <el-radio-button label="all">全部</el-radio-button>
@@ -63,6 +63,7 @@ export default {
       vendorLoading: false,
       vendorList: [],
       titleMy: '供应商合作记录详情',
+      path:'/vendor/vendor-base',
       // 查询参数
       queryParams: {
         expenditureBusinessType: 'all',
@@ -75,7 +76,15 @@ export default {
   },
   created() {
     const param = JSON.parse(Base64.decode(this.$route.params.params))
-    this.queryParams.vendorId = param
+    if(param?.id){
+      this.queryParams.vendorId = param.id;
+      this.vendorClass=param.vendorClass;
+      this.path=this.path+'?vendorClass='+this.vendorClass;
+    }else if(param?.vendorId){
+      this.queryParams.vendorId = param.vendorId;
+      this.vendorClass=param.vendorClass;
+      this.path=this.path+'?vendorClass='+this.vendorClass;
+    }
     this.getCooperationList()
   },
   methods: {
@@ -100,7 +109,8 @@ export default {
       }
     },
     goDetail(id, type) {
-      let param = Base64.encode(JSON.stringify({ id, type }));
+      let myPath = this.$route.path;
+      let param = Base64.encode(JSON.stringify({ id, type ,myPath}));
       param = encodeURIComponent(param); //避免base64编码中出现"/"时路由404
       this.$router.push(`/procurement/contract-detail/${param}`);
     },

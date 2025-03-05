@@ -187,7 +187,7 @@
             slot-scope="{ row }"
             v-if="['0', '2', '3', '4'].includes(queryParams.vendorClass)"
           >
-            <el-button type="text" size="small" @click="viewRecord(row.id)"
+            <el-button type="text" size="small" @click="viewRecord(row.id,queryParams.vendorClass)"
               >{{ row.cooperationNum }}</el-button
             >
           </template>
@@ -633,8 +633,8 @@ export default {
       this.$router.push(`/vendor/vendor-detail/${param}`);
     },
     /** 合作记录 **/
-    viewRecord(id) {
-      let param = Base64.encode(JSON.stringify(id));
+    viewRecord(id,vendorClass) {
+      let param = Base64.encode(JSON.stringify({id,vendorClass}));
       param = encodeURIComponent(param); //避免base64编码中出现"/"时路由404
       this.$router.push(`/vendor/vendor-record-detail/${param}`);
     },

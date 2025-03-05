@@ -4,7 +4,7 @@
     v-loading="fullLoading"
     element-loading-text="正在处理中..."
   >
-    <BackButton path="/procurement/sign-contract" title="合同签订详情">
+    <BackButton :path="path" title="合同签订详情">
       <div class="button-container">
         <div
           v-if="
@@ -1226,6 +1226,7 @@ export default {
 
   data() {
     return {
+      path:'/procurement/sign-contract',
       viewFileDialog: false,
       viewOtherFileUrl: "",
       viewFileUrl:"", //预览合同附件的url
@@ -3454,6 +3455,9 @@ export default {
   },
   mounted() {
     const param = JSON.parse(Base64.decode(this.$route.params.params));
+    if(param?.myPath){
+      this.path=param.myPath;
+    }
     this.param = param;
     this.getContractDetail();
     this.intervalId = setInterval(this.loadAgreementAttachmentId, 3000);
