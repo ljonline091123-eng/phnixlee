@@ -176,7 +176,7 @@
                 type="text"
                 size="small"
                 @click="editExpert(scope.row)"
-                >编辑</el-button>
+                >修改</el-button>
 <!--                <el-button-->
 <!--                v-if="[1].includes(scope.row.state)"-->
 <!--                type="text"-->

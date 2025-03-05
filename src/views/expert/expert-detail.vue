@@ -401,6 +401,39 @@
               </el-form-item>
             </el-col>
           </el-row>
+
+          <el-row :gutter="40">
+            <el-col :span="8" class="grid-cell" v-if="formData.updateBy">
+              <el-form-item
+                label="修改人"
+                prop="updateBy"
+                class="required label-right-align"
+              >
+                <el-input
+                  type="text"
+                  clearable
+                  :readonly="true"
+                  disabled
+                  v-model="formData.updateBy"
+                />
+              </el-form-item>
+            </el-col>
+            <el-col :span="8" class="grid-cell" v-if="formData.updateTime">
+              <el-form-item
+                label=" 修改时间"
+                prop="updateTime"
+                class="required label-right-align"
+              >
+                <el-input
+                  v-model="formData.updateTime"
+                  disabled
+                  type="date"
+                  value-format="yyyy-MM-dd"
+                  clearable
+                />
+              </el-form-item>
+            </el-col>
+          </el-row>
         </div>
       </el-form>
     </div>

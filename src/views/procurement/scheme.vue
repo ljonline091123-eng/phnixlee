@@ -85,7 +85,7 @@
         <el-table-column
           label="项目名称"
           min-width="250"
-          prop="projectName"
+          prop="minAccountSimpleName"
           show-overflow-tooltip
         />
         <el-table-column

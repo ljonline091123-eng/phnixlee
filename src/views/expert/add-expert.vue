@@ -17,7 +17,7 @@
         @click="saveForm('form')"
         :disabled="isSubmit"
         :loading="isSubmit"
-        >{{ isSubmit ? "保存中..." : "保存" }}</el-button
+        >{{ isSubmit ? "保存修改中..." : "修改" }}</el-button
       >
 <!--   审批通过不显示提交     -->
         <el-button
@@ -414,6 +414,40 @@
                   ref="upload"
                 >
                 </el-upload>
+              </el-form-item>
+            </el-col>
+          </el-row>
+
+
+          <el-row :gutter="40">
+            <el-col :span="8" class="grid-cell" v-if="formData.updateBy">
+              <el-form-item
+                label="修改人"
+                prop="updateBy"
+                class="required label-right-align"
+              >
+                <el-input
+                  type="text"
+                  clearable
+                  :readonly="true"
+                  disabled
+                  v-model="formData.updateBy"
+                />
+              </el-form-item>
+            </el-col>
+            <el-col :span="8" class="grid-cell" v-if="formData.updateTime">
+              <el-form-item
+                label=" 修改时间"
+                prop="updateTime"
+                class="required label-right-align"
+              >
+                <el-input
+                  v-model="formData.updateTime"
+                  disabled
+                  type="date"
+                  value-format="yyyy-MM-dd"
+                  clearable
+                />
               </el-form-item>
             </el-col>
           </el-row>
@@ -835,37 +869,43 @@ export default {
       },
     //保存
     saveForm(formName){
-      this.isSubmit = true;
-         this.formData.businessType=this.businessTypeList.join(",");
-         this.formData.expertType=this.expertTypeList.join(",");
-      this.$refs[formName].validate(async (valid) => {
-        if (valid) {
-          console.log(this.formData, "this.formData");
-          const loading = this.$loading({
-            lock: true,
-            text: "数据提交中...",
-            background: "rgba(0, 0, 0, 0.7)",
-          });
-          try {
+      this.$confirm("审批通过的专家修改后需要重新提交流程才能被选中，是否修改？", "提示", {
+        confirmButtonText: "确定",
+        cancelButtonText: "取消",
+        type: "warning",
+      }).then(() => {
+        this.isSubmit = true;
+        this.formData.businessType=this.businessTypeList.join(",");
+        this.formData.expertType=this.expertTypeList.join(",");
+        this.$refs[formName].validate(async (valid) => {
+          if (valid) {
+            console.log(this.formData, "this.formData");
+            const loading = this.$loading({
+              lock: true,
+              text: "数据提交中...",
+              background: "rgba(0, 0, 0, 0.7)",
+            });
+            try {
 
-            await saveExpert(this.formData);
-            this.$message({
-              message: "保存成功",
-              type: "success",
-            });
-            this.$tab.closePage().then(() => {
-              // 执行结束的逻辑
-              this.$router.push("/tender-procurement/expert/expert");
-            });
-          } catch (err) {
-            console.log(err);
+              await saveExpert(this.formData);
+              this.$message({
+                message: "保存成功",
+                type: "success",
+              });
+              this.$tab.closePage().then(() => {
+                // 执行结束的逻辑
+                this.$router.push("/tender-procurement/expert/expert");
+              });
+            } catch (err) {
+              console.log(err);
+            }
+            loading.close();
+            this.isSubmit = false;
+          } else {
+            this.isSubmit = false;
+            return false;
           }
-          loading.close();
-          this.isSubmit = false;
-        } else {
-          this.isSubmit = false;
-          return false;
-        }
+        });
       });
     },
     //提交

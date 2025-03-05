@@ -174,7 +174,7 @@
               </el-col>
               <el-col :span="8">
                 <el-form-item label="项目名称" class="custom-form-item">
-                  <span>{{ projectName }}</span>
+                  <span>{{ procurementScheme.minAccountSimpleName }}</span>
                 </el-form-item>
               </el-col>
             </el-row>
