@@ -1,0 +1,104 @@
+package com.zhaocai.business.procurement.vo.req;
+
+import com.fasterxml.jackson.annotation.JsonFormat;
+import com.zhaocai.business.pub.domain.Attachment;
+import com.zhaocai.common.core.web.domain.BaseEntity;
+import io.swagger.annotations.ApiModelProperty;
+import lombok.Data;
+
+import javax.validation.constraints.NotBlank;
+import javax.validation.constraints.NotNull;
+import java.util.Date;
+import java.util.List;
+
+/* 招标文件保存对象 */
+@Data
+public class ProcurementSchemeBiddingSaveVo extends BaseEntity {
+    private static final long serialVersionUID = 1L;
+
+    /**
+     * 采购方案id
+     */
+    @ApiModelProperty(value = "采购方案id")
+    private Long schemeId;
+
+    /**
+     * 投标截止时间
+     */
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
+    @ApiModelProperty(value = "投标截止时间")
+    @NotNull(message = "投标截止时间不能为空")
+    private Date bidDeadline;
+
+    /**
+     * 投标联系人
+     */
+    @ApiModelProperty(value = "投标联系人")
+    @NotBlank(message = "不能为空")
+    private String bidContactPerson;
+
+    /**
+     * 投标联系电话
+     */
+    @ApiModelProperty(value = "投标联系电话")
+    @NotBlank(message = "投标联系电话不能为空")
+    private String bidContactPhone;
+
+    /**
+     * 投标联系邮箱
+     */
+    @ApiModelProperty(value = "投标联系邮箱")
+    @NotBlank(message = "投标联系邮箱不能为空")
+    private String bidContactEmail;
+
+    /**
+     * 评分模板id
+     */
+    @ApiModelProperty(value = "评分模板id")
+    private Long evaluationTemplateId;
+
+    /**
+     * 招标文件模板id
+     */
+    @ApiModelProperty(value = "招标文件附件id")
+    private Long biddingAttachmentId;
+
+    /**
+     * 招标文件模板 id
+     */
+    @ApiModelProperty(value = "招标文件模板 id")
+    private Long biddingTemplateId;
+
+    /**
+     * 合同模板id
+     */
+    @ApiModelProperty(value = "合同模板附件id")
+    private Long contractAttachmentId;
+
+    /**
+     * 合同模板id
+     */
+    @ApiModelProperty(value = "合同模板id")
+    private Long contractTemplateId;
+
+    /**
+     * 其他文件模板id（招标公告、招标方案、招标控制价）
+     */
+    @ApiModelProperty(value = "其他文件模板id")
+    private Long otherAttachmentId;
+
+    /**
+     * 其他文件模板id（招标公告、招标方案、招标控制价）
+     */
+    @ApiModelProperty(value = "其他文件模板list")
+    private List<Attachment> otherAttachmentList;
+
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss",timezone = "GMT+8")
+    @ApiModelProperty(value =  "发布公告报名截止时间")
+    private Date applyTimeNotice;
+
+    @ApiModelProperty(value =  "招标公告附件id")
+    private Long noticeAttachmentId;
+}
+
+

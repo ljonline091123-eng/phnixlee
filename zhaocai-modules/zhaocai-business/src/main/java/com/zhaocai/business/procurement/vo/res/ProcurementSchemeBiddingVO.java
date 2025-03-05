@@ -2,11 +2,13 @@ package com.zhaocai.business.procurement.vo.res;
 
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.fasterxml.jackson.annotation.JsonFormat;
+import com.zhaocai.business.pub.domain.Attachment;
 import io.swagger.annotations.ApiModelProperty;
 import lombok.Getter;
 import lombok.Setter;
 
 import java.util.Date;
+import java.util.List;
 
 /**
  * 采购方案-招标信息对象 tb_procurement_scheme_bidding
@@ -50,6 +52,12 @@ public class ProcurementSchemeBiddingVO {
 
     @ApiModelProperty(value =  "其他文件")
     private ProcurementSchemeOtherFileVO otherFile;
+
+    /**
+     * 其他文件模板id（招标公告、招标方案、招标控制价）
+     */
+    @ApiModelProperty(value = "其他文件模板list")
+    private List<Attachment> otherAttachmentList;
 
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss",timezone = "GMT+8")
     @ApiModelProperty(value =  "发布公告报名截止时间")

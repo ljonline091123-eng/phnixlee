@@ -1,5 +1,6 @@
 package com.zhaocai.business.procurement.service.impl;
 
+import cn.hutool.core.collection.CollectionUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
@@ -11,6 +12,7 @@ import com.zhaocai.business.common.utils.ValidateUtils;
 import com.zhaocai.business.procurement.domain.ProcurementSchemeBidding;
 import com.zhaocai.business.procurement.mapper.ProcurementSchemeBiddingMapper;
 import com.zhaocai.business.procurement.service.IProcurementSchemeBiddingService;
+import com.zhaocai.business.procurement.vo.req.ProcurementSchemeBiddingSaveVo;
 import com.zhaocai.business.procurement.vo.res.ProcurementSchemeBiddingVO;
 import com.zhaocai.business.procurement.vo.res.ProcurementSchemeOtherFileVO;
 import com.zhaocai.business.procurement.vo.res.ProcurementSchemeTemplateVO;
@@ -21,9 +23,13 @@ import com.zhaocai.business.pub.service.ITemplateService;
 import com.zhaocai.business.pub.vo.res.AttachmentVO;
 import com.zhaocai.common.core.utils.NumberUtil;
 import com.zhaocai.common.core.utils.bean.BeanCopierUtil;
+import com.zhaocai.common.core.web.domain.BaseEntity;
 import org.apache.commons.lang3.ObjectUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+
+import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * 采购方案-招标信息Service业务层处理
@@ -44,15 +50,27 @@ public class ProcurementSchemeBiddingServiceImpl extends ServiceImpl<Procurement
     private IAttachmentService attachmentService;
 
     @Override
-    public void saveProcurementSchemeBidding(ProcurementSchemeBidding procurementSchemeBidding, Long schemeId, Integer procurementType) {
+    public void saveProcurementSchemeBidding(ProcurementSchemeBiddingSaveVo procurementSchemeBidding, Long schemeId, Integer procurementType) {
         procurementSchemeBidding.setSchemeId(schemeId);
-
-        super.save(procurementSchemeBidding);
+        ProcurementSchemeBidding schemeBidding = BeanCopierUtil.copyBean(procurementSchemeBidding, ProcurementSchemeBidding.class);
+        super.save(schemeBidding);
 
         // 更新招标文件附件
         attachmentService.updateBusiness(procurementSchemeBidding.getBiddingAttachmentId(), AttachmentTypeEnum.SCHEME_BIDDING,procurementSchemeBidding.getSchemeId());
         // 更新合同模板附件
         attachmentService.updateBusiness(procurementSchemeBidding.getContractAttachmentId(), AttachmentTypeEnum.SCHEME_CONTRACT,procurementSchemeBidding.getSchemeId());
+
+
+        // 保存方案其他附件信息
+        if (CollectionUtil.isNotEmpty(procurementSchemeBidding.getOtherAttachmentList())) {
+            procurementSchemeBidding.getOtherAttachmentList().forEach(i->{
+                i.setBusinessId(schemeId);
+                i.setBusinessType(AttachmentTypeEnum.SCHEME_OTHER.getType());
+            });
+            attachmentService.saveOrUpdateBatch(procurementSchemeBidding.getOtherAttachmentList());
+        }
+
+
         // 更新招标公告附件
         if (procurementType == 1) {
             attachmentService.updateBusiness(procurementSchemeBidding.getNoticeAttachmentId(), AttachmentTypeEnum.BIDING_NOTICE_MSG_DOC,procurementSchemeBidding.getSchemeId());
@@ -60,18 +78,35 @@ public class ProcurementSchemeBiddingServiceImpl extends ServiceImpl<Procurement
     }
 
     @Override
-    public void updateProcurementSchemeBidding(ProcurementSchemeBidding procurementSchemeBidding, Long schemeId, Integer procurementType) {
+    public void updateProcurementSchemeBidding(ProcurementSchemeBiddingSaveVo procurementSchemeBidding, Long schemeId, Integer procurementType) {
         if (NumberUtil.isNullOrZero(procurementSchemeBidding.getId())) {
             throw new ParamValidateException("采购方案编辑时，需要传招标文件 id");
         }
         procurementSchemeBidding.setSchemeId(schemeId);
-        super.updateById(procurementSchemeBidding);
+        ProcurementSchemeBidding schemeBidding = BeanCopierUtil.copyBean(procurementSchemeBidding, ProcurementSchemeBidding.class);
+        super.updateById(schemeBidding);
         //更新其他附件(置空)
         if(procurementSchemeBidding.getOtherAttachmentId() == null){
             super.update(new LambdaUpdateWrapper<ProcurementSchemeBidding>()
                     .set(ProcurementSchemeBidding::getOtherAttachmentId, null)
                     .eq(ProcurementSchemeBidding::getId,procurementSchemeBidding.getId()));
         }
+        // 保存方案其他附件信息
+        if (CollectionUtil.isNotEmpty(procurementSchemeBidding.getOtherAttachmentList())) {
+            procurementSchemeBidding.getOtherAttachmentList().forEach(i->{
+                i.setBusinessId(schemeId);
+                i.setBusinessType(AttachmentTypeEnum.SCHEME_OTHER.getType());
+            });
+            attachmentService.saveOrUpdateBatch(procurementSchemeBidding.getOtherAttachmentList());
+        }
+
+        // 删除方案其他附件信息
+        List<Long> ids = procurementSchemeBidding.getOtherAttachmentList().stream().map(BaseEntity::getId).collect(Collectors.toList());
+        attachmentService.update(new LambdaUpdateWrapper<Attachment>()
+                .set(BaseEntity::getDelFlag,"2")
+                .eq(Attachment::getBusinessType, AttachmentTypeEnum.SCHEME_OTHER.getType())
+                .eq(Attachment::getBusinessId, schemeId)
+                .notIn(BaseEntity::getId, ids));
 
         // 更新招标文件附件
         attachmentService.updateBusiness(procurementSchemeBidding.getBiddingAttachmentId(), AttachmentTypeEnum.SCHEME_BIDDING,procurementSchemeBidding.getSchemeId());
@@ -187,6 +222,10 @@ public class ProcurementSchemeBiddingServiceImpl extends ServiceImpl<Procurement
             }
         }
 
+        //其他文件列表
+        List<AttachmentVO> attachmentList = attachmentService.listAttachment(AttachmentTypeEnum.SCHEME_OTHER, schemeId);
+        List<Attachment> attachment = BeanCopierUtil.copyList(attachmentList,Attachment.class);
+        schemeBiddingVO.setOtherAttachmentList(attachment);
 
         return schemeBiddingVO;
     }

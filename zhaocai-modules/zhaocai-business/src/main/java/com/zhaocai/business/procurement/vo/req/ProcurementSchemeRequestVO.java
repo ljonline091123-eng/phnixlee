@@ -20,7 +20,7 @@ public class ProcurementSchemeRequestVO {
     private ProcurementScheme procurementScheme;
 
     @ApiModelProperty(value = "采购方案招标信息")
-    private ProcurementSchemeBidding procurementSchemeBidding;
+    private ProcurementSchemeBiddingSaveVo procurementSchemeBidding;
 
     @ApiModelProperty(value = "选择的合约拆分id")
     private List<Long> contractSplitIds;

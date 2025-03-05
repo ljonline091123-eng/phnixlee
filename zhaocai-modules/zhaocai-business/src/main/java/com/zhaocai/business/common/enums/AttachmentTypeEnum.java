@@ -22,6 +22,7 @@ public enum AttachmentTypeEnum {
 
     SCHEME_BIDDING("scheme_bidding","采购方案-招标文件"),
     SCHEME_CONTRACT("scheme_contract","采购方案-合同"),
+    SCHEME_OTHER("scheme_other","采购方案-其它合同"),
 
     /** 招投标附件 */
     BIDING_DOCUMENT("biding_document","投标标书附件"),

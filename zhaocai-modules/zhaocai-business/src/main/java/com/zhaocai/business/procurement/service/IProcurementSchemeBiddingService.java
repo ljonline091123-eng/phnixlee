@@ -2,6 +2,7 @@ package com.zhaocai.business.procurement.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.zhaocai.business.procurement.domain.ProcurementSchemeBidding;
+import com.zhaocai.business.procurement.vo.req.ProcurementSchemeBiddingSaveVo;
 import com.zhaocai.business.procurement.vo.res.ProcurementSchemeBiddingVO;
 
 /**
@@ -17,14 +18,14 @@ public interface IProcurementSchemeBiddingService  extends IService<ProcurementS
      * @param requestVO
      * @param schemeId
      */
-    void saveProcurementSchemeBidding(ProcurementSchemeBidding requestVO, Long schemeId, Integer procurementType);
+    void saveProcurementSchemeBidding(ProcurementSchemeBiddingSaveVo requestVO, Long schemeId, Integer procurementType);
 
     /**
      * 修改采购方案 - 招标信息
      * @param procurementSchemeBidding
      * @param schemeId
      */
-    void updateProcurementSchemeBidding(ProcurementSchemeBidding procurementSchemeBidding, Long schemeId, Integer procurementType);
+    void updateProcurementSchemeBidding(ProcurementSchemeBiddingSaveVo procurementSchemeBidding, Long schemeId, Integer procurementType);
 
     /**
      * 根据采购方案获取
