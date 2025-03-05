@@ -201,9 +201,9 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
         vendorCertificationService.addCertification(requestVO.getBusinessLicense(), CertificationTypeEnum.BUSINESS_LICENSE,vendor.getId());
         vendorCertificationService.addCertification(requestVO.getIntegrity(), CertificationTypeEnum.INTEGRITY,vendor.getId());
         Long legalAuthorizationId = vendorCertificationService.addCertification(requestVO.getLegalAuthorization(),CertificationTypeEnum.LEGAL_AUTHORIZATION,vendor.getId());
-        if (CollUtil.isNotEmpty(requestVO.getRelevantCertificationList())){
+        /*if (CollUtil.isNotEmpty(requestVO.getRelevantCertificationList())){*/
             vendorCertificationService.addCertification(requestVO.getRelevantCertificationList(), CertificationTypeEnum.RELEVANT_CERTIFICATION,vendor.getId());
-        }
+        /*}*/
 
         // 主要联系人
         VendorContact contact = requestVO.getVendorContact();
@@ -289,9 +289,9 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
                 if(requestVO.getLegalAuthorization() != null){
                     legalAuthorizationId = vendorCertificationService.addCertification(requestVO.getLegalAuthorization(),CertificationTypeEnum.LEGAL_AUTHORIZATION,vendor.getId());
                 }
-                if (CollUtil.isNotEmpty(requestVO.getRelevantCertificationList())){
+                /*if (CollUtil.isNotEmpty(requestVO.getRelevantCertificationList())){*/
                     vendorCertificationService.addCertification(requestVO.getRelevantCertificationList(), CertificationTypeEnum.RELEVANT_CERTIFICATION,vendor.getId());
-                }
+                /*}*/
                 if (CollUtil.isNotEmpty(requestVO.getBusinessLicenseList())){
                     vendorCertificationService.addCertification(requestVO.getBusinessLicenseList(), CertificationTypeEnum.BUSINESS_LICENSE,vendor.getId());
                 }
@@ -380,9 +380,9 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
             if(requestVO.getLegalAuthorization() != null){
                 legalAuthorizationId = vendorCertificationService.addCertification(requestVO.getLegalAuthorization(),CertificationTypeEnum.LEGAL_AUTHORIZATION,vendor.getId());
             }
-            if (CollUtil.isNotEmpty(requestVO.getRelevantCertificationList())){
+            /*if (CollUtil.isNotEmpty(requestVO.getRelevantCertificationList())){*/
                 vendorCertificationService.addCertification(requestVO.getRelevantCertificationList(), CertificationTypeEnum.RELEVANT_CERTIFICATION,vendor.getId());
-            }
+            /*}*/
             if (CollUtil.isNotEmpty(requestVO.getBusinessLicenseList())){
                 vendorCertificationService.addCertification(requestVO.getBusinessLicenseList(), CertificationTypeEnum.BUSINESS_LICENSE,vendor.getId());
             }
@@ -628,9 +628,9 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
                 if(requestVO.getLegalAuthorization() != null){
                     legalAuthorizationId = vendorCertificationService.addCertification(requestVO.getLegalAuthorization(),CertificationTypeEnum.LEGAL_AUTHORIZATION,vendor.getId());
                 }
-                if (CollUtil.isNotEmpty(requestVO.getRelevantCertificationList())){
+                /*if (CollUtil.isNotEmpty(requestVO.getRelevantCertificationList())){*/
                     vendorCertificationService.addCertification(requestVO.getRelevantCertificationList(), CertificationTypeEnum.RELEVANT_CERTIFICATION,vendor.getId());
-                }
+                /*}*/
                 if (CollUtil.isNotEmpty(requestVO.getBusinessLicenseList())){
                     vendorCertificationService.addCertification(requestVO.getBusinessLicenseList(), CertificationTypeEnum.BUSINESS_LICENSE,vendor.getId());
                 }
@@ -689,9 +689,9 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
             if(requestVO.getLegalAuthorization() != null){
                 legalAuthorizationId = vendorCertificationService.addCertification(requestVO.getLegalAuthorization(),CertificationTypeEnum.LEGAL_AUTHORIZATION,vendor.getId());
             }
-            if (CollUtil.isNotEmpty(requestVO.getRelevantCertificationList())){
+            /*if (CollUtil.isNotEmpty(requestVO.getRelevantCertificationList())){*/
                 vendorCertificationService.addCertification(requestVO.getRelevantCertificationList(), CertificationTypeEnum.RELEVANT_CERTIFICATION,vendor.getId());
-            }
+            /*}*/
             if (CollUtil.isNotEmpty(requestVO.getBusinessLicenseList())){
                 vendorCertificationService.addCertification(requestVO.getBusinessLicenseList(), CertificationTypeEnum.BUSINESS_LICENSE,vendor.getId());
             }
