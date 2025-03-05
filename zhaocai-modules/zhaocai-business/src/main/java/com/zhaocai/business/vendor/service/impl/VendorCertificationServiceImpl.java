@@ -67,19 +67,21 @@ public class VendorCertificationServiceImpl extends ServiceImpl<VendorCertificat
                 .eq(VendorCertification::getVendorId,vendorId)
                 .eq(VendorCertification::getDelFlag,0)
                 .eq(VendorCertification::getBusinessCode,certificationType));
-        List<VendorCertification> list = requestList.stream()
-                .map(x ->{
-                    VendorCertification certification = new VendorCertification();
-                    certification.setVendorId(vendorId);
-                    certification.setBusinessCode(certificationType.getType());
-                    certification.setBusinessId(vendorId);
-                    certification.setAttachmentFileUrl(x.getAttachmentFileUrl());
-                    certification.setAttachmentFileName(x.getAttachmentFileName());
-                    certification.setEffectiveBeginDate(x.getEffectiveBeginDate());
-                    certification.setEffectiveEndDate(x.getEffectiveEndDate());
-                    return  certification;
-                }).collect(Collectors.toList());
-        super.saveBatch(list);
+        if(CollectionUtil.isNotEmpty(requestList)){
+            List<VendorCertification> list = requestList.stream()
+                    .map(x ->{
+                        VendorCertification certification = new VendorCertification();
+                        certification.setVendorId(vendorId);
+                        certification.setBusinessCode(certificationType.getType());
+                        certification.setBusinessId(vendorId);
+                        certification.setAttachmentFileUrl(x.getAttachmentFileUrl());
+                        certification.setAttachmentFileName(x.getAttachmentFileName());
+                        certification.setEffectiveBeginDate(x.getEffectiveBeginDate());
+                        certification.setEffectiveEndDate(x.getEffectiveEndDate());
+                        return  certification;
+                    }).collect(Collectors.toList());
+            super.saveBatch(list);
+        }
     }
 
     @Override
