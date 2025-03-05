@@ -128,7 +128,8 @@ public class BPMProcessService implements IBPMProcessService {
             /* 最小核算项目 */
             MinProjectVO minProjectVO = minProjectService.getMinProjectByMinAccountCode(projectCode);
             if (null != minProjectVO) {
-                PropertyListRequestDTO.addPropertyToList(propertyList, "projectAsName", minProjectVO.getMinAccountCode());
+                /* 项目名称，项目简称 */
+                PropertyListRequestDTO.addPropertyToList(propertyList, "projectAsName", minProjectVO.getMinAccountSimpleName());
                 PropertyListRequestDTO.addPropertyToList(propertyList, "parentProjectCode", minProjectVO.getParentCode());
                 PropertyListRequestDTO.addPropertyToList(propertyList, "responsibilityDeptId", minProjectVO.getDutyUnit());
                 PropertyListRequestDTO.addPropertyToList(propertyList, "groupId", UserConstants.GROUP_DEPT_ID);
