@@ -866,14 +866,6 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
         paramMap.put("contractType", ProcurementPlanTypeEnum.getProcessType(agreement.getExpenditureBusinessType()));/* 合同签订流程 合同类型 */
         paramMap.put("contractMoney", agreement.getTotalAmountIncTax());/* 合同签订流程 价格 */
 
-        /* startProcessInstance方法内根据projectCode拿到了层级数据了 */
-//        MinProject minProject = minProjectService.getOne(new LambdaQueryWrapper<MinProject>().eq(MinProject::getMinAccountCode, agreement.getBelongAccountingItemCode()).eq(MinProject::getDelFlag, NumberConstant.ZERO));
-////        ValidateUtils.isNullException(minProject,"该合同最小核算项目不存在，请确认");
-//        SysDept sysDept = remoteSystemService.getByThridDeptId(agreement.getPartyAOrgId(), SecurityConstants.INNER);
-//        paramMap.put("parentProjectCode", minProject==null?null:minProject.getBelongingOrgId()==null?null:minProject.getBelongingOrgId());/* 项目部 */
-//        paramMap.put("responsibilityDeptId", minProject==null?null:minProject.getDutyUnit()==null?null:minProject.getDutyUnit());/* 责任单位 */
-//        paramMap.put("companyId", sysDept==null?null:sysDept.getThridParentId()==null?null:sysDept.getThridParentId());/* 公司 */
-
         processService.startProcessInstance(ProcessKeyEnum.ZHAOCAI_AGREEMENT_SIGN.getIdentifying(),paramMap);
     }
 

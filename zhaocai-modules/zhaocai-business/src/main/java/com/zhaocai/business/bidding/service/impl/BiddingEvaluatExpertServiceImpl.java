@@ -24,7 +24,9 @@ import com.zhaocai.business.manager.http.dto.req.PushThirdPartyTodoTaskRequestDT
 import com.zhaocai.business.manager.http.dto.req.PushThirdPartyTodoTaskSonRequestDTO;
 import com.zhaocai.business.manager.http.service.ThridPartyTodoTaskService;
 import com.zhaocai.business.procurement.domain.ProcurementScheme;
+import com.zhaocai.business.procurement.service.IMinProjectService;
 import com.zhaocai.business.procurement.service.IProcurementSchemeService;
+import com.zhaocai.business.procurement.vo.res.MinProjectVO;
 import com.zhaocai.common.core.bean.PageResult;
 import com.zhaocai.common.core.constant.HttpStatus;
 import com.zhaocai.common.core.constant.NumberConstant;
@@ -59,6 +61,8 @@ public class BiddingEvaluatExpertServiceImpl extends ServiceImpl<BiddingEvaluatE
     private IProcurementSchemeService procurementSchemeService;
     @Autowired
     private IExpertService expertService;
+    @Autowired
+    private IMinProjectService minProjectService;
     @Autowired
     private ThridPartyTodoTaskService thridPartyTodoTaskService;
     @Autowired
@@ -128,11 +132,14 @@ public class BiddingEvaluatExpertServiceImpl extends ServiceImpl<BiddingEvaluatE
         PushThirdPartyTodoTaskRequestDTO parentRequestDTO = new PushThirdPartyTodoTaskRequestDTO();
         List<PushThirdPartyTodoTaskSonRequestDTO> messageList = new ArrayList<>();
 
+        MinProjectVO project = minProjectService.getMinProjectByMinAccountCode(procurementScheme.getProjectCode());
+
         for (BiddingExpertListVO biddingExpertListVO : expertListVO) {
             Expert expert = expertService.getById(biddingExpertListVO.getExpertId());
 
             PushThirdPartyTodoTaskSonRequestDTO requestDTO = new PushThirdPartyTodoTaskSonRequestDTO();
             requestDTO.setTitle("评标人员待办信息");
+            requestDTO.setPrjName((project==null?"":project.getMinAccountSimpleName()==null?"":project.getMinAccountSimpleName()));
             requestDTO.setContent(String.format(ApproveFlowPromptTemplateEnum.BID_EVAL.getDesc(), procurementScheme.getProcurementSchemeName()));
             requestDTO.setArrivalTime(formatDate(new Date()));
             requestDTO.setCreateTime(formatDate(new Date()));

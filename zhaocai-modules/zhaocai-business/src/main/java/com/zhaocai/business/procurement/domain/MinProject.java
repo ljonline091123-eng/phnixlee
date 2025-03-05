@@ -45,16 +45,22 @@ public class MinProject extends BaseEntity {
     private String projectCode;
 
     /**
+     * 最小核算项目编码
+     */
+    @ApiModelProperty(value = "最小核算项目编码")
+    private String minAccountCode;
+
+    /**
      * 项目全称
      */
     @ApiModelProperty(value = "项目全称")
-    private String minAccountCode;
+    private String minAccountFullName;
 
     /**
      * 项目简称
      */
     @ApiModelProperty(value = "项目简称")
-    private String minAccountFullName;
+    private String minAccountSimpleName;
 
     /**
      * 归属项目部

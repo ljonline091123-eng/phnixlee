@@ -1,5 +1,7 @@
 package com.zhaocai.business.expert.vo.res;
 
+import com.baomidou.mybatisplus.annotation.FieldFill;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.zhaocai.business.common.annotations.DictCache;
 import com.zhaocai.business.common.base.AdviceObject;
@@ -135,5 +137,33 @@ public class ExpertInfoVO extends AdviceObject {
 
     @ApiModelProperty(value =  "工作简历附件")
     private List<AttachmentVO> resumeAttachList;
+
+
+
+    /** 创建者 */
+    @ApiModelProperty(value = "创建者")
+    private String createBy;
+
+    /** 创建人 id */
+    @ApiModelProperty(value =  "创建人 id")
+    private Long createId;
+
+    /** 创建时间 */
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss",timezone = "GMT+8")
+    @ApiModelProperty(value = "创建时间")
+    private Date createTime;
+
+    /** 修改人 id */
+    @ApiModelProperty(value =  "修改人 id")
+    private Long updateId;
+
+    /** 更新者 */
+    @ApiModelProperty(value = "更新者")
+    private String updateBy;
+
+    /** 更新时间 */
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss",timezone = "GMT+8")
+    @ApiModelProperty(value = "更新时间")
+    private Date updateTime;
 
 }

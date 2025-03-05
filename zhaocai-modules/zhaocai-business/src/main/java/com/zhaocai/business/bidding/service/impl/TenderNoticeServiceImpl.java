@@ -452,6 +452,7 @@ public class TenderNoticeServiceImpl extends ServiceImpl<TenderNoticeMapper,Tend
 
         log.info("[财务人员待办信息][xm] {}",xm);
         requestDTO.setContent(xm);
+        requestDTO.setPrjName((project==null?"":project.getMinAccountSimpleName()==null?"":project.getMinAccountSimpleName()));
         requestDTO.setArrivalTime(formatDate(new Date()));
         requestDTO.setCreateTime(formatDate(new Date()));
         String thridUserId = SecurityUtils.getThridUserId();

@@ -26,7 +26,9 @@ import com.zhaocai.business.manager.http.dto.req.PushThirdPartyTodoTaskRequestDT
 import com.zhaocai.business.manager.http.dto.req.PushThirdPartyTodoTaskSonRequestDTO;
 import com.zhaocai.business.manager.http.service.ThridPartyTodoTaskService;
 import com.zhaocai.business.procurement.domain.ProcurementScheme;
+import com.zhaocai.business.procurement.service.IMinProjectService;
 import com.zhaocai.business.procurement.service.IProcurementSchemeService;
+import com.zhaocai.business.procurement.vo.res.MinProjectVO;
 import com.zhaocai.common.core.constant.HttpStatus;
 import com.zhaocai.common.core.constant.NumberConstant;
 import com.zhaocai.common.core.constant.SecurityConstants;
@@ -68,6 +70,8 @@ public class BiddingOpenPeopleServiceImpl extends ServiceImpl<BiddingOpenPeopleM
     private IBiddingInfoService biddingInfoService;
     @Autowired
     private IProcurementSchemeService procurementSchemeService;
+    @Autowired
+    private IMinProjectService minProjectService;
     @Autowired
     private ThridPartyTodoTaskService thridPartyTodoTaskService;
     @Autowired
@@ -158,9 +162,11 @@ public class BiddingOpenPeopleServiceImpl extends ServiceImpl<BiddingOpenPeopleM
         PushThirdPartyTodoTaskRequestDTO parentRequestDTO = new PushThirdPartyTodoTaskRequestDTO();
         List<PushThirdPartyTodoTaskSonRequestDTO> messageList = new ArrayList<>();
 
+        MinProjectVO project = minProjectService.getMinProjectByMinAccountCode(procurementScheme.getProjectCode());
         for (BiddingOpenPeople openPeople : openPeoples) {
             PushThirdPartyTodoTaskSonRequestDTO requestDTO = new PushThirdPartyTodoTaskSonRequestDTO();
             requestDTO.setTitle("开标人员待办信息");
+            requestDTO.setPrjName((project==null?"":project.getMinAccountSimpleName()==null?"":project.getMinAccountSimpleName()));
             requestDTO.setContent(String.format(ApproveFlowPromptTemplateEnum.BID_OPEN.getDesc(), procurementScheme.getProcurementSchemeName()));
             requestDTO.setArrivalTime(formatDate(new Date()));
             requestDTO.setCreateTime(formatDate(new Date()));

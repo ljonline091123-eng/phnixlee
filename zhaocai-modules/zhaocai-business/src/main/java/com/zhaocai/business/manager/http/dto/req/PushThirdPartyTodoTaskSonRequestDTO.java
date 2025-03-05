@@ -55,4 +55,7 @@ public class PushThirdPartyTodoTaskSonRequestDTO {
     @ApiModelProperty(value =  "用户自定义信息")
     private String userObj;
 
+    @ApiModelProperty(value =  "项目简称")
+    private String prjName;
+
 }

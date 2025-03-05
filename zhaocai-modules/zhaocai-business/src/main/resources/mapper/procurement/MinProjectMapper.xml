@@ -11,6 +11,7 @@
         <result property="projectCode" column="project_code"/>
         <result property="minAccountCode" column="min_account_code"/>
         <result property="minAccountFullName" column="min_account_full_name"/>
+        <result property="minAccountSimpleName" column="min_account_simple_name"/>
         <result property="projectDepartment" column="project_department"/>
         <result property="prjState" column="prj_state"/>
         <result property="prgType" column="prg_type"/>

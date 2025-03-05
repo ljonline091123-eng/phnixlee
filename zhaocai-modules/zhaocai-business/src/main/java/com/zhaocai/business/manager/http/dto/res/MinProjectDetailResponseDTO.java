@@ -41,9 +41,14 @@ public class MinProjectDetailResponseDTO {
     private String minAccountCode;
 
     /**
-     * 项目简称
+     * 项目全称
      */
     private String minAccountFullName;
+
+    /**
+     * 项目简称
+     */
+    private String minAccountSimpleName;
 
     /**
      * 归属项目部

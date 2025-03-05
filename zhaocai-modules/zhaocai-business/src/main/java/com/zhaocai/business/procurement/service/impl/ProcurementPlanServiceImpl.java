@@ -674,23 +674,28 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
         Long thridUserId = StringUtils.isNotEmpty(SecurityUtils.getThridUserId()) ? Long.parseLong(SecurityUtils.getThridUserId()) : null;
 
 
+        /* 获取已有的合约规划 */
+        ContractPlanning contractPlanning = contractPlanningService.getOne(new LambdaQueryWrapper<ContractPlanning>()
+                .eq(ContractPlanning::getContractPlanningCode,planPushVO.getContractPlanningCode())
+                .eq(ContractPlanning::getContractPlanningId,planPushVO.getContractPlanningId())
+                .eq(ContractPlanning::getProjectCode,planPushVO.getProjectCode())
+                .last("limit 1"));
+        /* 查询采购计划 */
+        ProcurementPlan procurementPlan = null;
+        if(contractPlanning!=null&&contractPlanning.getPlanId()!=null){
+            procurementPlan = procurementPlanService.getById(contractPlanning.getPlanId());
+        }
+
+        MinProjectVO project = null;
+        if (contractPlanning != null) {
+            project = minProjectService.getMinProjectByMinAccountCode(contractPlanning.getProjectCode());
+        }
 
         for (ProcurementPlanPushUserVO userData : planPushVO.getUserList()){
             PushThirdPartyTodoTaskSonRequestDTO requestDTO = new PushThirdPartyTodoTaskSonRequestDTO();
             requestDTO.setTitle("采购计划合约拆分信息");
 //            requestDTO.setContent(String.format(ApproveFlowPromptTemplateEnum.PROCUREMENT_PLAN_PUSH.getDesc(), planPushVO.getContractPlanningName()));
 
-            /* 获取已有的合约规划 */
-            ContractPlanning contractPlanning = contractPlanningService.getOne(new LambdaQueryWrapper<ContractPlanning>()
-                    .eq(ContractPlanning::getContractPlanningCode,planPushVO.getContractPlanningCode())
-                    .eq(ContractPlanning::getContractPlanningId,planPushVO.getContractPlanningId())
-                    .eq(ContractPlanning::getProjectCode,planPushVO.getProjectCode())
-                    .last("limit 1"));
-            /* 查询采购计划 */
-            ProcurementPlan procurementPlan = null;
-            if(contractPlanning!=null&&contractPlanning.getPlanId()!=null){
-                procurementPlan = procurementPlanService.getById(contractPlanning.getPlanId());
-            }
 
             /* 设置省、市名称 */
             String provinceName = "";
@@ -723,6 +728,7 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
                     ((procurementPlan==null?false:procurementPlan.getProcurementPlanType().equals(ProcurementPlanTypeEnum.PURCHASE_MATERIALS.getType()) && !(provinceName + cityName).isEmpty())?
                             "，区域为"+(provinceName + cityName):"");
             requestDTO.setContent(content);/* 推送内容 */
+            requestDTO.setPrjName((project==null?"":project.getMinAccountSimpleName()==null?"":project.getMinAccountSimpleName()));
             log.info("[推送合约规划推动采购计划拆包推送内容:{}],",content);
 
             requestDTO.setArrivalTime(nowTime);
