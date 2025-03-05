@@ -362,18 +362,16 @@
               </el-col>
               <el-col :span="6" class="custom-col" style="height: 180px">
                 <el-form-item label="其他文件" class="custom-form-item">
-                  <a
-                    class="link-type"
-                    @click="
-                      showTemplate(procurementSchemeBidding.otherFile,'otherFile')
-                    "
-                    href="javascript:;"
-                  >
-                    {{
-                      procurementSchemeBidding.otherFile &&
-                      procurementSchemeBidding.otherFile.fileName
-                    }}
-                  </a>
+
+
+                  <!-- 设定文件列表最大高度，超出后滚动 -->
+                  <div class="file-list-container">
+                    <div v-for="(file, index) in procurementSchemeBidding.otherAttachmentList" :key="file.uid" class="file-item">
+                      <span class="file-name">{{ file.fileName }}</span>
+                      <span class="file-action preview" v-if="isPreviewable(file.fileName)" @click="showTemplate({...file,attachmentId: file.id},'otherFile')">预览</span>
+                    </div>
+                  </div>
+
                 </el-form-item>
               </el-col>
             </el-row>
@@ -1024,6 +1022,12 @@ export default {
         console.warn('attachmentId 数据未正确加载');
       }
     },
+    // 判断是否可以预览（仅支持图片和 PDF）
+    isPreviewable(fileName) {
+      const fileType = fileName.split('.').pop().toLowerCase(); // 获取文件后缀
+      const previewableTypes = ['jpg', 'jpeg', 'png', 'gif', 'pdf'];
+      return previewableTypes.includes(fileType);
+    },
     //修改按钮
     goUpdate() {
       const { procurementType, id } = this.procurementScheme;
@@ -1237,6 +1241,68 @@ export default {
 };
 </script>
 <style lang="scss" scoped>
+
+
+/* 文件列表容器，限制最大高度 */
+.file-list-container {
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 5px;
+  margin-bottom: 10px;
+}
+/* 文件列表样式 */
+.file-item {
+  height: 25px;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 5px 0;
+  border-bottom: 1px solid #eee;
+}
+
+/* 文件名样式，超长省略 */
+.file-name {
+  flex: 1; /* 占满剩余空间 */
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  padding-right: 10px; /* 预留空间给操作按钮 */
+}
+
+/* 预览 & 删除按钮样式 */
+.file-action {
+  margin-left: 10px;
+  padding: 1px 2px;
+  border-radius: 2px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.3s;
+  height: 20px;
+  line-height: 16px;
+}
+
+/* 预览按钮样式 */
+.file-action.preview {
+  color: #409eff;
+  border: 1px solid #409eff;
+}
+
+.file-action.preview:hover {
+  background-color: #409eff;
+  color: white;
+}
+
+/* 删除按钮样式 */
+.file-action.delete {
+  color: #f56c6c;
+  border: 1px solid #f56c6c;
+}
+
+.file-action.delete:hover {
+  background-color: #f56c6c;
+  color: white;
+}
+
 .form-body {
   padding: 20px;
 }

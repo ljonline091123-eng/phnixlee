@@ -543,36 +543,38 @@
                       </div>
                     </el-form-item>
                   </el-col>
+
+
                   <el-col :span="8" class="grid-cell">
                     <el-form-item label=" 其他文件" prop="otherAttachmentName">
-                      <template v-if="formData.otherAttachmentName">
-                        <a href="javascript:;" >{{
-                          formData.otherAttachmentName
-                        }}</a>
-                      </template>
-                      <el-button
-                        v-if="formData.otherAttachmentId"
-                        size="mini"
-                        @click="modifyTempFile(3)"
-                      >修改文件</el-button>
                       <br>
-                      <div style="margin-left: -90px;width: 300px;">
-                      <el-button
-                        size="small"
-                        type="primary"
-                        @click="uploadOtherFileClick"
-                        >手动上传</el-button>
-                        <el-upload
-                          style="margin-left: 90px;margin-top: -75px;"
-                          :action="uploadFileUrl"
-                          :limit="1"
-                          :on-success="fileSuccessOther"
-                          :file-list="formData.fileListOther"
-                          :on-remove="fileRemoveOther"
-                          ref="uploadOther"
-                          :before-upload="otherBeforeUpload"
-                        >
-                        </el-upload>
+                      <!--  隐藏el-upload自带的file-list使用hide-file-list样式来隐藏   -->
+                      <div style="margin-left: -90px;width: 300px;" class="hide-file-list">
+                        <el-button
+                          size="small"
+                          type="primary"
+                          @click="uploadOtherFileClick"
+                          >手动上传</el-button>
+                          <el-upload
+                            style="margin-left: 90px;margin-top: -75px;"
+                            :action="uploadFileUrl"
+                            :limit="5"
+                            :on-success="fileSuccessOther"
+                            :file-list="formData.fileListOther"
+                            :on-remove="fileRemoveOther"
+                            ref="uploadOther"
+                            :before-upload="otherBeforeUpload"
+                            multiple
+                          >
+                          </el-upload>
+                      </div>
+                      <!-- 设定文件列表最大高度，超出后滚动 -->
+                      <div class="file-list-container">
+                        <div v-for="(file, index) in formData.fileListOther" :key="file.uid" class="file-item">
+                          <span class="file-name" :title="file.name">{{ file.name }}</span>
+                          <span class="file-action preview" v-if="isPreviewable(file.name)" @click="previewFile(file)">预览</span>
+                          <span class="file-action delete" @click="removeFile(index, file)">删除</span>
+                        </div>
                       </div>
                     </el-form-item>
                   </el-col>
@@ -1758,7 +1760,11 @@ export default {
         procurementSchemeTempObject: null,
         fileList: [],
         fileList2: [],
-        formData: {}, //form表单数据
+        formData: {
+          fileListOther: [],
+          otherAttachmentList: [],
+        }, //form表单数据
+        otherAttachmentNumber: null,
         planList: [],
         inventoryList: [],
         isAll:false,
@@ -2141,6 +2147,7 @@ export default {
             biddingAttachmentId,
             contractAttachmentId,
             otherAttachmentId,
+            otherAttachmentList,
             contractTemplateId,
             biddingTemplateId,
             procurementSchemeId,
@@ -2170,6 +2177,7 @@ export default {
               contractTemplateId,
               biddingTemplateId,
               otherAttachmentId,
+              otherAttachmentList,
               id: procurementSchemeBiddingId || "",
               applyTimeNotice,
               noticeAttachmentId,
@@ -2774,23 +2782,54 @@ export default {
      * 上传其他文件点击事件
      */
     uploadOtherFileClick() {
-      showSecretRelatedTips(() => {
+      this.$confirm('禁止上传涉密文件！<br>最多上传<b>5</b>份文件,每份不能超过<b>100M</b>大小<br>非<b>.PDF</b>格式文件不能在线预览', '提示', {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning',
+        dangerouslyUseHTMLString: true, // 允许解析 HTML
+      }).then(() => {
         this.$refs['uploadOther'].clearFiles(); // 清除现有文件列表
         this.$refs['uploadOther'].$refs['upload-inner'].handleClick(); // 触发文件选择器打开
+      }).catch(() => {
+        this.$message({
+          type: 'info',
+          message: '已取消'
+        });
       });
     },
 
     /**
      * 其他文件上传成功
      */
-    async fileSuccessOther(res) {
+    async fileSuccessOther(res, file) {
       this.noticeViewAttachment = false;
       const { url, name } = res.data;
       try {
         // 保存到文件表获取返回id
         const res = await addAttachment({ fileName: name, fileUrl: url });
+
+
+        // 添加到文件列表（用于 UI 显示）
+        this.formData.fileListOther.push({
+          id: res.data,
+          name,
+          url,
+          uid: file.uid // 保留唯一标识
+        });
+
+        // 添加到提交表单的附件列表
+        this.formData.otherAttachmentList.push({
+          id: res.data,
+          fileName: name,
+          fileUrl: url,
+          uid: file.uid // 保留唯一标识
+        });
+        /* 校正数量 */
+        this.otherAttachmentNumber = this.formData.otherAttachmentList.length;
+
         // 设置新的附件返回的附件id
         this.$set(this.formData, "otherAttachmentId", res.data);
+
         this.$set(this.formData, "otherAttachmentName", name);
         // 同步更新页面的附件对象
         if (!this.procurementSchemeTempObject) {
@@ -2819,7 +2858,44 @@ export default {
         console.log(err);
       }
     },
-
+    // 预览文件
+    previewFile(file) {
+      this.viewAttachmentId = file.id;
+      //据viewAttachmentId获取文件的文档中台的编辑URL
+      if (this.viewAttachmentId) {
+        console.log('点击修改附件后的Attachment ID:', this.viewAttachmentId);
+        //获取文档中台的文档编辑URL
+        this.loadEditFileUrl();
+      } else {
+        console.warn('attachmentId 数据未正确加载');
+      }
+    },
+    // 判断是否可以预览（仅支持图片和 PDF）
+    isPreviewable(fileName) {
+      const fileType = fileName.split('.').pop().toLowerCase(); // 获取文件后缀
+      const previewableTypes = ['jpg', 'jpeg', 'png', 'gif', 'pdf'];
+      return previewableTypes.includes(fileType);
+    },
+    // 自定义删除文件逻辑
+    removeFile(index, file) {
+      this.$confirm(`确定要删除 ${file.name} 吗？`, '提示', {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }).then(() => {
+        if (index !== null) {
+          this.formData.fileListOther.splice(index, 1);
+        } else {
+          this.formData.fileListOther = this.formData.fileListOther.filter(f => f.uid !== file.uid);
+        }
+        this.formData.otherAttachmentList = this.formData.otherAttachmentList.filter(f => f.fileUrl !== file.url);
+        this.$message.success('文件已删除');
+        /* 校正数量 */
+        this.otherAttachmentNumber = this.formData.otherAttachmentList.length;
+      }).catch(() => {
+        this.$message.info('取消删除');
+      });
+    },
     /**
      * 其他文件手动上传文件删除
      */
@@ -2862,13 +2938,27 @@ export default {
 
     /* 在其他文件上传前处理逻辑 */
     otherBeforeUpload(file) {
-      //限制上传的文件名长度
-      const fileName = file.name;
-        if (fileName.length > 80) {
-            this.$message.error('文件名不能超过80个字符');
-            return false; // 阻止上传
+      let aaa = this.otherAttachmentNumber;
+      debugger
+      if(this.otherAttachmentNumber === null){
+        /* 校正数量 */
+        this.otherAttachmentNumber = this.formData.otherAttachmentList.length;
       }
-      return true;  // 返回 true 表示允许继续上传
+      this.otherAttachmentNumber+=1;
+      aaa = this.otherAttachmentNumber;
+      if (file.name.length > 80) {
+          this.$message.error('文件名不能超过80个字符');
+          return false; // 阻止上传
+      }
+      if (file.size > 100 * 1024 * 1024) {
+        this.$message.error('文件大小不能超过100MB，上传失败！');
+        return false; // 阻止上传
+      }
+      if(this.formData.otherAttachmentList.length > 4 || this.otherAttachmentNumber > 5){
+        this.$message.error('文件数量不能超过5份，【'+file.name+'】上传失败！');
+        return false; // 阻止上传
+      }
+      return true; // 允许上传
     },
 
     /* 手动合同模板附件上传 */
@@ -3041,6 +3131,7 @@ export default {
           biddingTemplate,
           contractTemplate,
           otherFile,
+          otherAttachmentList,
           evaluationTemplate,
           id: procurementSchemeBiddingId,
           applyTimeNotice,
@@ -3096,6 +3187,18 @@ export default {
             uid: Date.now()  // 文件的唯一标识符
           }];
         }
+        /* 其他文件列表 */
+        if(procurementSchemeBidding.otherAttachmentList){
+          this.formData.fileListOther = procurementSchemeBidding.otherAttachmentList.map(item => {
+            return {
+              id: item.id,
+              name: item.fileName,  // 文件名
+              url: item.fileUrl,  // 文件的 URL（如果是已上传的文件）
+              status: 'success',  // 上传状态，可以是 'success' | 'failure' | 'uploading'
+              uid: Date.now()  // 文件的唯一标识符
+            };
+          });
+        }
 
         this.formData.countingTypeText = countingTypeText;
         this.formData.procurementPlanType = procurementPlanType;
@@ -3115,6 +3218,8 @@ export default {
         this.formData.contractTemplateName = !contractTemplate?null:contractTemplate.fileName;
         this.formData.otherAttachmentName = !otherFile?null:otherFile.fileName;
         this.formData.otherAttachmentId = !otherFile?null:otherFile.attachmentId;
+        /* 其他文件列表 */
+        this.formData.otherAttachmentList = procurementSchemeBidding.otherAttachmentList;
         this.formData.noticeAttachmentName = !noticeAttachment?null:noticeAttachment.fileName;
         this.formData.noticeAttachmentUrl = !noticeAttachment?null:noticeAttachment.fileUrl;
         this.formData.noticeAttachmentId = !noticeAttachment?null:noticeAttachment.attachmentId;
@@ -3201,6 +3306,73 @@ export default {
 };
 </script>
 <style lang="scss" scoped>
+/* 隐藏el-upload自带的文件列表 */
+.hide-file-list>div{
+  display: none;
+}
+
+/* 文件列表容器，限制最大高度 */
+.file-list-container {
+  max-height: 180px; /* 设置最大高度 */
+  overflow-y: auto; /* 超出高度后滚动 */
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 5px;
+  margin-bottom: 10px;
+  margin-top: -65px;
+}
+/* 文件列表样式 */
+.file-item {
+  height: 25px;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 5px 0;
+  border-bottom: 1px solid #eee;
+}
+
+/* 文件名样式，超长省略 */
+.file-name {
+  flex: 1; /* 占满剩余空间 */
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  padding-right: 10px; /* 预留空间给操作按钮 */
+}
+
+/* 预览 & 删除按钮样式 */
+.file-action {
+  margin-left: 10px;
+  padding: 1px 2px;
+  border-radius: 2px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.3s;
+  height: 20px;
+  line-height: 16px;
+}
+
+/* 预览按钮样式 */
+.file-action.preview {
+  color: #409eff;
+  border: 1px solid #409eff;
+}
+
+.file-action.preview:hover {
+  background-color: #409eff;
+  color: white;
+}
+
+/* 删除按钮样式 */
+.file-action.delete {
+  color: #f56c6c;
+  border: 1px solid #f56c6c;
+}
+
+.file-action.delete:hover {
+  background-color: #f56c6c;
+  color: white;
+}
 .page-title {
   width: 100%;
   border-bottom: solid 1px #ccc;
