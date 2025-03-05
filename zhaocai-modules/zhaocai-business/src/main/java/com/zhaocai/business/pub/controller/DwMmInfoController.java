@@ -38,7 +38,7 @@ public class DwMmInfoController extends BladeController {
     @GetMapping("/synchronizeDm071Data")
     @ApiOperation(value = "同步 dm071 数据")
     public ResultData<Boolean> synchronizeDm071Data() {
-        dwMmAssetInfService.synchronizeData();
+//        dwMmAssetInfService.synchronizeData();
         return ResultData.data(true);
     }
 
