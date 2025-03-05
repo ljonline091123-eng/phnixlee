@@ -368,7 +368,7 @@
           <el-table-column label="拟定招标方式" align="center" prop="biddingMethodName" />
           <el-table-column label="清单" align="center" class-name="small-padding fixed-width">
             <template slot-scope="scope">
-              <el-button size="mini" type="text" icon="el-icon-view" @click="handelInventory(scope.row)">查看清单</el-button>
+              <el-button size="mini" type="text" icon="el-icon-view" @click="handelInventory()">查看清单</el-button>
             </template>
           </el-table-column>
 
@@ -476,7 +476,7 @@
 <!--            <el-table-column label="序号" type="index" width="50" align="center" />-->
             <el-table-column label="序号" width="50" align="center" fixed>
               <template #default="scope">
-                {{ inventory.row.materialsLists.findIndex(item => item.materialsId === scope.row.materialsId) + 1 }}
+                {{ inventoryList.findIndex(item => item.materialsId === scope.row.materialsId) + 1 }}
               </template>
             </el-table-column>
             <el-table-column label="清单编码" min-width="100" prop="materialsCode" show-overflow-tooltip/>
@@ -1519,21 +1519,6 @@ export default {
       }
       /* 采购方案类型(购买材料,劳务分包....) */
       this.procurementType = contractPlanningCategory || (this.procurementType||'');
-      /** 根据分类判断是否可拆分编辑 */
-      // if([1,2,3,6].includes(contractPlanningCategory)){
-      //     this.isEdit = true;
-      //     const children = []
-      //     Array.from({ length: 1 }).forEach((_, index) => {
-      //       children.push({
-      //         index,
-      //         // children: this.inventoryList.map(item => ({...item, count:10}))
-      //         children: this.inventoryList
-      //       })
-      //     });
-      //     this.$set(this.planList[0], 'children', JSON.parse(JSON.stringify(children)));
-      // }else {
-      //   this.isEdit = false;
-      // }
     },
     //切换tab类型
     handleTypeClick(tab) {
@@ -1593,7 +1578,7 @@ export default {
       this.handleQuery();
     },
     //查看清单
-    handelInventory(id) {
+    handelInventory() {
       this.inventoryVisible = true;
     },
     // 初始化拆分合同
@@ -1625,17 +1610,6 @@ export default {
           if(Number(num) > 10) return this.$message.error('最多可拆分10份');
           const children = []
           Array.from({ length: num }).forEach((_, index) => {
-            // children.push({
-            //   index,
-            //   children: this.inventoryList.map(item => ({
-            //     materialsCode: item.materialsCode,
-            //     materialsName: item.materialsName,
-            //     specification: item.specification,
-            //     unitMeasurement: item.unitMeasurement,
-            //     count: item.count,
-            //     unitPriceInclTaxText:item.unitPriceInclTaxText
-            //   })),
-            // })
             if(index+1>this.planList[0].children.length){
             children.push({
               index,
