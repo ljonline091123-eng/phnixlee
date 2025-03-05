@@ -444,8 +444,6 @@
                 <el-input
                   v-model="formData.updateTime"
                   disabled
-                  type="date"
-                  value-format="yyyy-MM-dd"
                   clearable
                 />
               </el-form-item>
