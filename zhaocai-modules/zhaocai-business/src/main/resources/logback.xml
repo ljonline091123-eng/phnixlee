@@ -14,7 +14,6 @@
 
     <!-- 系统日志输出 -->
 	<appender name="file_info" class="ch.qos.logback.core.rolling.RollingFileAppender">
-	    <file>${log.path}/info.log</file>
         <!-- 循环政策：基于时间创建日志文件 -->
 		<rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
             <!-- 日志文件名格式 -->
@@ -24,6 +23,7 @@
 		</rollingPolicy>
 		<encoder>
 			<pattern>${log.pattern}</pattern>
+            <immediateFlush>true</immediateFlush>
 		</encoder>
 		<filter class="ch.qos.logback.classic.filter.LevelFilter">
             <!-- 过滤的级别 -->
@@ -36,7 +36,6 @@
 	</appender>
 
     <appender name="file_error" class="ch.qos.logback.core.rolling.RollingFileAppender">
-	    <file>${log.path}/error.log</file>
         <!-- 循环政策：基于时间创建日志文件 -->
         <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
             <!-- 日志文件名格式 -->
@@ -46,6 +45,7 @@
         </rollingPolicy>
         <encoder>
             <pattern>${log.pattern}</pattern>
+            <immediateFlush>true</immediateFlush>
         </encoder>
         <filter class="ch.qos.logback.classic.filter.LevelFilter">
             <!-- 过滤的级别 -->
