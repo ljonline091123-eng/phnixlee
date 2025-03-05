@@ -867,7 +867,7 @@ export default {
       },
     //保存
     saveForm(formName){
-      this.$confirm("审批通过的专家修改后需要重新提交流程才能被选中，是否修改？", "提示", {
+      this.$confirm("审批通过的专家修改后需要重新审批通过才能被选中，是否修改？", "提示", {
         confirmButtonText: "确定",
         cancelButtonText: "取消",
         type: "warning",
