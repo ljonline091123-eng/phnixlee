@@ -13,6 +13,7 @@ import com.zhaocai.business.pub.service.ICountryService;
 import com.zhaocai.common.core.constant.Constants;
 import com.zhaocai.common.core.constant.SecurityConstants;
 import com.zhaocai.common.core.exception.ServiceException;
+import com.zhaocai.common.core.utils.ListUtil;
 import com.zhaocai.common.security.utils.SecurityUtils;
 import com.zhaocai.system.api.domain.SysDept;
 import com.zhaocai.system.api.domain.SysUser;
@@ -269,8 +270,13 @@ public class SyncPlatformBasicDataService {
         if (CollectionUtils.isEmpty(bankLIst)){
             throw new ServiceException("获取支行信息数据不成功");
         }
+        log.info("同步支行数据中。。。。");
         bankService.deleteSyncBank();
-        Boolean addRes = bankService.saveBatch(bankLIst, bankLIst.size());
+        List<List<DwCdBank>> splitList = ListUtil.splitList(bankLIst, 1000);
+        for (List<DwCdBank> platBanks : splitList) {
+             bankService.saveOrUpdateBatch(platBanks,platBanks.size());
+        }
+        log.info("同步支行结束。。。。");
         return true;
     }
 }
