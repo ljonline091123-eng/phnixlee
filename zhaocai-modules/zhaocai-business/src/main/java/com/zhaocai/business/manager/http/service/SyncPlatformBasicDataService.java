@@ -270,12 +270,13 @@ public class SyncPlatformBasicDataService {
         if (CollectionUtils.isEmpty(bankLIst)){
             throw new ServiceException("获取支行信息数据不成功");
         }
+        log.info("同步支行数据中。。。。");
         bankService.deleteSyncBank();
         List<List<DwCdBank>> splitList = ListUtil.splitList(bankLIst, 1000);
         for (List<DwCdBank> platBanks : splitList) {
-            log.info("同步支行数据中。。。。");
              bankService.saveOrUpdateBatch(platBanks,platBanks.size());
         }
+        log.info("同步支行结束。。。。");
         return true;
     }
 }
