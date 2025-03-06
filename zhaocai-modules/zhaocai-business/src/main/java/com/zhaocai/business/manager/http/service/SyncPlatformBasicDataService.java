@@ -273,7 +273,7 @@ public class SyncPlatformBasicDataService {
         bankService.deleteSyncBank();
         List<List<DwCdBank>> splitList = ListUtil.splitList(bankLIst, 1000);
         for (List<DwCdBank> platBanks : splitList) {
-            log.info("同步用户数据中。。。。");
+            log.info("同步支行数据中。。。。");
              bankService.saveBatch(platBanks, platBanks.size());
         }
         return true;
