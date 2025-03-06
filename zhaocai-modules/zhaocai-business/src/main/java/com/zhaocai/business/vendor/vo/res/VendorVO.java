@@ -108,6 +108,9 @@ public class VendorVO extends AdviceObject {
     @ApiModelProperty(value = "首次合作单位名称")
     private String firstCooperationCompanyName;
 
+    @ApiModelProperty(value = "首次合作单位组织")
+    private String firstCooperationCompanyCode;
+
     @ApiModelProperty(value = "首次合作单位联系人名称")
     private String firstCooperationContactName;
 
