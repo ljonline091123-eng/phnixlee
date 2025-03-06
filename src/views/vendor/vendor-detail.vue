@@ -1292,14 +1292,12 @@ export default {
     },
     async handelCalibrationApproval() {
       if(!this.vendor.changeId || this.vendor.processType == 1){
-          this.purchaserId=this.purchaserId
-          }else{
-          this.purchaserId=this.vendor.changeId
-          }
+        this.purchaserId=this.purchaserId
+      }else{
+        this.purchaserId=this.vendor.changeId
+      }
 
       try {
-        this.calibrateVisible = true;
-        this.calibrateLoading = true;
         let params = {
           businessId: this.purchaserId,
           processId: this.exampleId,
@@ -1312,8 +1310,18 @@ export default {
         if (this.purchaserId && this.exampleId) {
           res = await getLoadTaskDefVendor(params);
         }else{
-          /* 未提交时查看流程执行流程，根据首次合作单位 获取流程分组 */
-          res = await getOrgByUserId(this.vendor.firstCooperationCompanyCode);
+          try{
+            /* 未提交时查看流程执行流程，根据首次合作单位 获取流程分组 */
+            res = await getOrgByUserId(this.vendor.firstCooperationCompanyCode);
+            if(!res.data)throw new Error("没有二三级单位流程");
+          } catch (error) {
+            await this.$confirm('根据【' + this.vendor.firstCooperationCompanyCode + '】未查询到二三级单位流程，<br>' +
+              '请确认【' + this.vendor.firstCooperationCompanyName + '】<br>' +
+              '是否创建二三级单位流程', '提示', {
+              type: 'warning',
+              dangerouslyUseHTMLString: true, // 允许解析 HTML
+            });
+          }
           //修改
           if (this.vendor.processType == 2) {
             this.processKey = "jiantou-zhaocai:"+res.data+":ZHAOCAI_VENDOR_UPDATEINFO";
@@ -1332,7 +1340,7 @@ export default {
           }
           params = {
             processKey: this.processKey,
-            businessId: 8888888888,
+            businessId: this.purchaserId,
           };
           res = await getLoadTaskDef(params);
         }
@@ -1357,6 +1365,8 @@ export default {
           const response = await getProcessLogList(getProcessLogListParams);
           this.approveArr = response.data;
         }
+        this.calibrateVisible = true;
+        this.calibrateLoading = true;
       } catch (error) {}
 
       /* 修改流程数据[发起人]名称为[供应商名称] */
