@@ -100,13 +100,15 @@ public class ProcurementSchemeBiddingServiceImpl extends ServiceImpl<Procurement
             attachmentService.saveOrUpdateBatch(procurementSchemeBidding.getOtherAttachmentList());
         }
 
-        // 删除方案其他附件信息
-        List<Long> ids = procurementSchemeBidding.getOtherAttachmentList().stream().map(BaseEntity::getId).collect(Collectors.toList());
-        attachmentService.update(new LambdaUpdateWrapper<Attachment>()
-                .set(BaseEntity::getDelFlag,"2")
-                .eq(Attachment::getBusinessType, AttachmentTypeEnum.SCHEME_OTHER.getType())
-                .eq(Attachment::getBusinessId, schemeId)
-                .notIn(BaseEntity::getId, ids));
+        if (CollectionUtil.isNotEmpty(procurementSchemeBidding.getOtherAttachmentList())) {
+            // 删除方案其他附件信息
+            List<Long> ids = procurementSchemeBidding.getOtherAttachmentList().stream().map(BaseEntity::getId).collect(Collectors.toList());
+            attachmentService.update(new LambdaUpdateWrapper<Attachment>()
+                    .set(BaseEntity::getDelFlag,"2")
+                    .eq(Attachment::getBusinessType, AttachmentTypeEnum.SCHEME_OTHER.getType())
+                    .eq(Attachment::getBusinessId, schemeId)
+                    .notIn(BaseEntity::getId, ids));
+        }
 
         // 更新招标文件附件
         attachmentService.updateBusiness(procurementSchemeBidding.getBiddingAttachmentId(), AttachmentTypeEnum.SCHEME_BIDDING,procurementSchemeBidding.getSchemeId());
@@ -224,8 +226,10 @@ public class ProcurementSchemeBiddingServiceImpl extends ServiceImpl<Procurement
 
         //其他文件列表
         List<AttachmentVO> attachmentList = attachmentService.listAttachment(AttachmentTypeEnum.SCHEME_OTHER, schemeId);
-        List<Attachment> attachment = BeanCopierUtil.copyList(attachmentList,Attachment.class);
-        schemeBiddingVO.setOtherAttachmentList(attachment);
+        if (CollectionUtil.isNotEmpty(attachmentList)) {
+            List<Attachment> attachment = BeanCopierUtil.copyList(attachmentList,Attachment.class);
+            schemeBiddingVO.setOtherAttachmentList(attachment);
+        }
 
         return schemeBiddingVO;
     }
