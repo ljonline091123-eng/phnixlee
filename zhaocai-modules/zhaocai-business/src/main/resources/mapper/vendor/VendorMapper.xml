@@ -177,7 +177,7 @@
             </if>
             <if test="queryVO.vendorClass == 5">
                 <!-- 待审供应商-供应商修改等级 -->
-                and (tv.state = 0 or tv.state = 2)  and tv.process_type = 1
+                and (tv.state = 0 or tv.state = 2)  and (tv.process_type = 1 or tv.process_type is null)
             </if>
             <if  test="queryVO.firstCooperationCompanyCode != null and queryVO.firstCooperationCompanyCode != ''">
                 and tv.first_cooperation_company_code = #{queryVO.firstCooperationCompanyCode, jdbcType=VARCHAR}
