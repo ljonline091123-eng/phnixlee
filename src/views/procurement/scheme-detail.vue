@@ -938,6 +938,18 @@ export default {
         this.isShowApprovalDetails = procurementScheme.wfProcessId
           ? true
           : false;
+
+        if(procurementSchemeBidding.otherFile){
+          if(!procurementSchemeBidding.otherAttachmentList)
+            procurementSchemeBidding.otherAttachmentList = [];
+          // 添加到提交表单的附件列表
+          procurementSchemeBidding.otherAttachmentList.push({
+            ...procurementSchemeBidding.otherFile,
+            id: procurementSchemeBidding.otherFile.attachmentId,
+            uid: Date.now()  // 文件的唯一标识符
+          });
+        }
+
         Object.assign(this, {
           procurementScheme,
           procurementSchemeBidding,
@@ -946,6 +958,9 @@ export default {
           approveLists,
           contractSplitIdList,
         });
+
+
+
         this.getPermissionButtonScheme();
       } catch (err) {
         console.log(err);

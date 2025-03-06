@@ -2828,9 +2828,9 @@ export default {
         this.otherAttachmentNumber = this.formData.otherAttachmentList.length;
 
         // 设置新的附件返回的附件id
-        this.$set(this.formData, "otherAttachmentId", res.data);
-
-        this.$set(this.formData, "otherAttachmentName", name);
+        // this.$set(this.formData, "otherAttachmentId", res.data);
+        //
+        // this.$set(this.formData, "otherAttachmentName", name);
         // 同步更新页面的附件对象
         if (!this.procurementSchemeTempObject) {
           this.$set(this, 'procurementSchemeTempObject', {});
@@ -3097,6 +3097,8 @@ export default {
           contractPlanList,
           contractSplitIdList
         } = res.data;
+
+
         /* 采购方案文件，通过getSchemeDetail方法请求procurementScheme/detail?id=获取的数据 */
         this.procurementSchemeTempObject = procurementSchemeBidding?procurementSchemeBidding:{};
         this.contractList = contractPlanList;
@@ -3179,16 +3181,33 @@ export default {
             uid: Date.now()  // 文件的唯一标识符
           }];
         }
+
+        /* 新老版本兼容处理 */
+        this.formData.otherAttachmentId = !otherFile?null:otherFile.attachmentId;
+        this.formData.noticeAttachmentName = !noticeAttachment?null:noticeAttachment.fileName;
+        /* 新版本多文件上传 */
+        this.formData.otherAttachmentList = !procurementSchemeBidding.otherAttachmentList?[]:procurementSchemeBidding.otherAttachmentList;
         if(procurementSchemeBidding.otherFile){
           this.formData.fileListOther = [{
+            id: procurementSchemeBidding.otherFile.attachmentId,
             name: procurementSchemeBidding.otherFile.fileName,  // 文件名
             url: procurementSchemeBidding.otherFile.fileUrl,  // 文件的 URL（如果是已上传的文件）
             status: 'success',  // 上传状态，可以是 'success' | 'failure' | 'uploading'
             uid: Date.now()  // 文件的唯一标识符
           }];
+          // 添加到提交表单的附件列表
+          this.formData.otherAttachmentList.push({
+            ...procurementSchemeBidding.otherFile,
+            id: procurementSchemeBidding.otherFile.attachmentId,
+            uid: Date.now()  // 文件的唯一标识符
+          });
+          this.$set(this.formData, "otherAttachmentId", null);
+          this.$set(this.formData, "otherAttachmentName", null);
+          delete this.formData.otherAttachmentId
+          delete this.formData.noticeAttachmentName
         }
         /* 其他文件列表 */
-        if(procurementSchemeBidding.otherAttachmentList){
+        if(procurementSchemeBidding.otherAttachmentList && procurementSchemeBidding.otherAttachmentList.length>0){
           this.formData.fileListOther = procurementSchemeBidding.otherAttachmentList.map(item => {
             return {
               id: item.id,
@@ -3199,6 +3218,8 @@ export default {
             };
           });
         }
+        /* 校正数量 */
+        this.otherAttachmentNumber = this.formData.otherAttachmentList.length;
 
         this.formData.countingTypeText = countingTypeText;
         this.formData.procurementPlanType = procurementPlanType;
@@ -3217,10 +3238,6 @@ export default {
         this.formData.contractTemplateId = !contractTemplate?null:contractTemplate.templateId;
         this.formData.contractTemplateName = !contractTemplate?null:contractTemplate.fileName;
         this.formData.otherAttachmentName = !otherFile?null:otherFile.fileName;
-        this.formData.otherAttachmentId = !otherFile?null:otherFile.attachmentId;
-        /* 其他文件列表 */
-        this.formData.otherAttachmentList = procurementSchemeBidding.otherAttachmentList;
-        this.formData.noticeAttachmentName = !noticeAttachment?null:noticeAttachment.fileName;
         this.formData.noticeAttachmentUrl = !noticeAttachment?null:noticeAttachment.fileUrl;
         this.formData.noticeAttachmentId = !noticeAttachment?null:noticeAttachment.attachmentId;
         this.formData.procurementSchemeId = procurementSchemeId;
