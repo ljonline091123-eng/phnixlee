@@ -5,6 +5,8 @@ import com.zhaocai.business.manager.http.dto.res.MinProjectDetailResponseDTO;
 import com.zhaocai.business.procurement.domain.MinProject;
 import com.zhaocai.business.procurement.vo.res.MinProjectVO;
 
+import java.util.List;
+
 /**
  * 最小核算项目信息Service接口
  *
@@ -25,4 +27,7 @@ public interface IMinProjectService  extends IService<MinProject> {
      * @return
      */
     MinProjectVO getMinProjectByMinAccountCode(String projectCode);
+
+
+    List<MinProjectVO> getMinProjectList(String managementOrgId);
 }

@@ -32,6 +32,21 @@ public class SysDeptController extends BaseController
     @Autowired
     private ISysDeptService deptService;
 
+
+
+    /**
+     * 获取一二级组织机构
+     *
+     * @param
+     * @return
+     */
+    @GetMapping("/getDeptTree")
+    public AjaxResult getDeptTree() {
+        return success(deptService.getDeptTree());
+    }
+
+
+
     /**
      * 获取部门列表
      */

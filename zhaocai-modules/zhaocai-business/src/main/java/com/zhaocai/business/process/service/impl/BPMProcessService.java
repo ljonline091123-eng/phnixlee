@@ -61,97 +61,97 @@ public class BPMProcessService implements IBPMProcessService {
     public String startProcessInstance(String processKey, Map<String, Object> variables) {
         log.info("[发起流程startProcessInstance] processKey:{}", processKey);
         log.info("[发起流程startProcessInstance] variables:{}", variables);
-        //1.实现调用第三方的提交接口
-        BpmSubmitRequestDTO requestDTO = new BpmSubmitRequestDTO();
-        String customProcessKey = variables.get("customProcessKey") == null ? null : variables.get("customProcessKey").toString();
-        requestDTO.setBusinessId(variables.get("businessId").toString());
-        requestDTO.setProcessKey(StrUtil.isBlank(customProcessKey) ? processKey : customProcessKey);
-        requestDTO.setBusinessContent(variables.get("businessContent") == null ? null : variables.get("businessContent").toString());
-
-        // 目前就暂时按这里这样统一的叫法
-        requestDTO.setBusinessTitle("流程审批");
-        /* 覆盖 */
-        if (variables.get("businessTitle") != null) {
-            requestDTO.setBusinessTitle(variables.get("businessTitle").toString());
-        }
-        requestDTO.setState(variables.get("detailUrl") == null ? IdUtil.getSnowflakeNextId() + "" : variables.get("detailUrl").toString());
-        requestDTO.setUserObj(variables.get("userObj") == null ? null : variables.get("userObj").toString());
-        String operateComment = variables.get("operateComment") == null ? null : variables.get("operateComment").toString();
-        requestDTO.setOperateComment(operateComment);
-        /* 下一个审批用户id */
-        System.out.println("[下一个审批用户id]" + variables.get("nextAuditUserId"));
-        requestDTO.setNextAuditUserId(variables.get("nextAuditUserId") == null ? null : variables.get("nextAuditUserId").toString());
-
-        /** propertyList:运行时属性对象：项目部（parentProjectCode），责任单位（responsibilityDeptId），公司（companyId），集团（groupId），合同类型（contractType），价格(contractMoney) */
-        /* 集团是顶级，公司是二级，责任单位是三级，项目部是四级 */
-        List<PropertyListRequestDTO<Object>> propertyList = new ArrayList<>();
-
-        /* 业务用到的 区分集团账号唯一编码 */
-        if (variables.get("groupId") != null) {
-            PropertyListRequestDTO.addPropertyToList(propertyList, "groupId", variables.get("groupId").toString());/* 1000000000 */
-            requestDTO.setPropertyList(propertyList);
-        }
-        /* 业务用到的 责任单位（responsibilityDeptId） */
-        if (variables.get("responsibilityDeptId") != null) {
-            PropertyListRequestDTO.addPropertyToList(propertyList, "responsibilityDeptId", variables.get("responsibilityDeptId").toString());
-            requestDTO.setPropertyList(propertyList);
-        }
-        /* 业务用到的 公司（companyId） */
-        if (variables.get("companyId") != null) {
-            PropertyListRequestDTO.addPropertyToList(propertyList, "companyId", variables.get("companyId").toString());
-            requestDTO.setPropertyList(propertyList);
-        }
-        /* 业务用到的 项目部（parentProjectCode） */
-        if (variables.get("parentProjectCode") != null) {
-            PropertyListRequestDTO.addPropertyToList(propertyList, "parentProjectCode", variables.get("parentProjectCode").toString());
-            requestDTO.setPropertyList(propertyList);
-        }
-        /* 合同类型 ：劳务分包 专业分包 购买材料 租赁材料 租赁机械（设备） 其他 */
-        if (variables.get("contractType") != null) {
-            PropertyListRequestDTO.addPropertyToList(propertyList, "contractType", variables.get("contractType").toString());
-            requestDTO.setPropertyList(propertyList);
-        }
-        /* 合同签订金额(含税) */
-        if (variables.get("contractMoney") != null) {
-            /** BigDecimal类型 */
-            PropertyListRequestDTO.addPropertyToList(propertyList, "contractMoney", new BigDecimal(variables.get("contractMoney").toString()));
-            requestDTO.setPropertyList(propertyList);
-        }
-        /* 项目名称 */
-        if (variables.get("projectAsName") != null) {
-            PropertyListRequestDTO.addPropertyToList(propertyList, "projectAsName", variables.get("projectAsName").toString());
-            requestDTO.setPropertyList(propertyList);
-        }
-        /* 最小核算项目编码 */
-        String projectCode = variables.get("projectCode") == null ? null : variables.get("projectCode").toString();
-        if (StrUtil.isNotBlank(projectCode)) {
-            /* 最小核算项目 */
-            MinProjectVO minProjectVO = minProjectService.getMinProjectByMinAccountCode(projectCode);
-            if (null != minProjectVO) {
-                /* 项目名称，项目简称 */
-                PropertyListRequestDTO.addPropertyToList(propertyList, "projectAsName", minProjectVO.getMinAccountSimpleName());
-                PropertyListRequestDTO.addPropertyToList(propertyList, "parentProjectCode", minProjectVO.getParentCode());
-                PropertyListRequestDTO.addPropertyToList(propertyList, "responsibilityDeptId", minProjectVO.getDutyUnit());
-                PropertyListRequestDTO.addPropertyToList(propertyList, "groupId", UserConstants.GROUP_DEPT_ID);
-                PropertyListRequestDTO.addPropertyToList(propertyList, "companyId", underlingSystemService.getL2OrgByOrgId(SecurityUtils.getThridOrgId()));
-                requestDTO.setPropertyList(propertyList);
-            }
-        }
-
-        BpmSubmitResponseDTO responseDTO = bpmService.submit(requestDTO);
-        String processId = responseDTO.getProcessId();
-        variables.put("processId", processId);
-
-        String completedFlag = "";
-        if (ProcessStateEnum.COMPLETED.getValue().equals(responseDTO.getProcessStatus())) {
-            completedFlag = ProcessStateEnum.COMPLETED.getDesc();
-        }
-        variables.put("completedFlag", completedFlag);
-
-        //2.处理业务的service
-        getProcessBusinessService(processKey).processStart(variables);
-
-        return processId;
+//        //1.实现调用第三方的提交接口
+//        BpmSubmitRequestDTO requestDTO = new BpmSubmitRequestDTO();
+//        String customProcessKey = variables.get("customProcessKey") == null ? null : variables.get("customProcessKey").toString();
+//        requestDTO.setBusinessId(variables.get("businessId").toString());
+//        requestDTO.setProcessKey(StrUtil.isBlank(customProcessKey) ? processKey : customProcessKey);
+//        requestDTO.setBusinessContent(variables.get("businessContent") == null ? null : variables.get("businessContent").toString());
+//
+//        // 目前就暂时按这里这样统一的叫法
+//        requestDTO.setBusinessTitle("流程审批");
+//        /* 覆盖 */
+//        if (variables.get("businessTitle") != null) {
+//            requestDTO.setBusinessTitle(variables.get("businessTitle").toString());
+//        }
+//        requestDTO.setState(variables.get("detailUrl") == null ? IdUtil.getSnowflakeNextId() + "" : variables.get("detailUrl").toString());
+//        requestDTO.setUserObj(variables.get("userObj") == null ? null : variables.get("userObj").toString());
+//        String operateComment = variables.get("operateComment") == null ? null : variables.get("operateComment").toString();
+//        requestDTO.setOperateComment(operateComment);
+//        /* 下一个审批用户id */
+//        System.out.println("[下一个审批用户id]" + variables.get("nextAuditUserId"));
+//        requestDTO.setNextAuditUserId(variables.get("nextAuditUserId") == null ? null : variables.get("nextAuditUserId").toString());
+//
+//        /** propertyList:运行时属性对象：项目部（parentProjectCode），责任单位（responsibilityDeptId），公司（companyId），集团（groupId），合同类型（contractType），价格(contractMoney) */
+//        /* 集团是顶级，公司是二级，责任单位是三级，项目部是四级 */
+//        List<PropertyListRequestDTO<Object>> propertyList = new ArrayList<>();
+//
+//        /* 业务用到的 区分集团账号唯一编码 */
+//        if (variables.get("groupId") != null) {
+//            PropertyListRequestDTO.addPropertyToList(propertyList, "groupId", variables.get("groupId").toString());/* 1000000000 */
+//            requestDTO.setPropertyList(propertyList);
+//        }
+//        /* 业务用到的 责任单位（responsibilityDeptId） */
+//        if (variables.get("responsibilityDeptId") != null) {
+//            PropertyListRequestDTO.addPropertyToList(propertyList, "responsibilityDeptId", variables.get("responsibilityDeptId").toString());
+//            requestDTO.setPropertyList(propertyList);
+//        }
+//        /* 业务用到的 公司（companyId） */
+//        if (variables.get("companyId") != null) {
+//            PropertyListRequestDTO.addPropertyToList(propertyList, "companyId", variables.get("companyId").toString());
+//            requestDTO.setPropertyList(propertyList);
+//        }
+//        /* 业务用到的 项目部（parentProjectCode） */
+//        if (variables.get("parentProjectCode") != null) {
+//            PropertyListRequestDTO.addPropertyToList(propertyList, "parentProjectCode", variables.get("parentProjectCode").toString());
+//            requestDTO.setPropertyList(propertyList);
+//        }
+//        /* 合同类型 ：劳务分包 专业分包 购买材料 租赁材料 租赁机械（设备） 其他 */
+//        if (variables.get("contractType") != null) {
+//            PropertyListRequestDTO.addPropertyToList(propertyList, "contractType", variables.get("contractType").toString());
+//            requestDTO.setPropertyList(propertyList);
+//        }
+//        /* 合同签订金额(含税) */
+//        if (variables.get("contractMoney") != null) {
+//            /** BigDecimal类型 */
+//            PropertyListRequestDTO.addPropertyToList(propertyList, "contractMoney", new BigDecimal(variables.get("contractMoney").toString()));
+//            requestDTO.setPropertyList(propertyList);
+//        }
+//        /* 项目名称 */
+//        if (variables.get("projectAsName") != null) {
+//            PropertyListRequestDTO.addPropertyToList(propertyList, "projectAsName", variables.get("projectAsName").toString());
+//            requestDTO.setPropertyList(propertyList);
+//        }
+//        /* 最小核算项目编码 */
+//        String projectCode = variables.get("projectCode") == null ? null : variables.get("projectCode").toString();
+//        if (StrUtil.isNotBlank(projectCode)) {
+//            /* 最小核算项目 */
+//            MinProjectVO minProjectVO = minProjectService.getMinProjectByMinAccountCode(projectCode);
+//            if (null != minProjectVO) {
+//                /* 项目名称，项目简称 */
+//                PropertyListRequestDTO.addPropertyToList(propertyList, "projectAsName", minProjectVO.getMinAccountSimpleName());
+//                PropertyListRequestDTO.addPropertyToList(propertyList, "parentProjectCode", minProjectVO.getParentCode());
+//                PropertyListRequestDTO.addPropertyToList(propertyList, "responsibilityDeptId", minProjectVO.getDutyUnit());
+//                PropertyListRequestDTO.addPropertyToList(propertyList, "groupId", UserConstants.GROUP_DEPT_ID);
+//                PropertyListRequestDTO.addPropertyToList(propertyList, "companyId", underlingSystemService.getL2OrgByOrgId(SecurityUtils.getThridOrgId()));
+//                requestDTO.setPropertyList(propertyList);
+//            }
+//        }
+//
+//        BpmSubmitResponseDTO responseDTO = bpmService.submit(requestDTO);
+//        String processId = responseDTO.getProcessId();
+//        variables.put("processId", processId);
+//
+//        String completedFlag = "";
+//        if (ProcessStateEnum.COMPLETED.getValue().equals(responseDTO.getProcessStatus())) {
+//            completedFlag = ProcessStateEnum.COMPLETED.getDesc();
+//        }
+//        variables.put("completedFlag", completedFlag);
+//
+//        //2.处理业务的service
+//        getProcessBusinessService(processKey).processStart(variables);
+        getProcessBusinessService(processKey).processAuditPass(variables);
+        return null;
     }
 
 

@@ -10,6 +10,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
+
 /**
  * 最小核算项目 Controller
  *
@@ -27,4 +29,10 @@ public class MinProjectController extends BladeController {
     public ResultData<MinProjectVO> getMinProject(@RequestParam String projectCode) {
         return ResultData.data(minProjectService.getMinProjectByMinAccountCode(projectCode));
     }
+
+    @GetMapping("/getMinProjectList")
+    public ResultData<List<MinProjectVO>> getMinProjectList(@RequestParam String managementOrgId) {
+        return ResultData.data(minProjectService.getMinProjectList(managementOrgId));
+    }
+
 }

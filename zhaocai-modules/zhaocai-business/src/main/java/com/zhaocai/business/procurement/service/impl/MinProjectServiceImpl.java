@@ -3,12 +3,12 @@ package com.zhaocai.business.procurement.service.impl;
 import cn.hutool.core.collection.CollectionUtil;
 import com.alibaba.fastjson.JSONArray;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.zhaocai.business.common.exception.ParamValidateException;
 import com.zhaocai.business.common.utils.ValidateUtils;
 import com.zhaocai.business.manager.http.dto.res.MinProjectDetailResponseDTO;
 import com.zhaocai.business.manager.http.service.ContractPlanService;
-import com.zhaocai.business.procurement.domain.ContractPlanning;
 import com.zhaocai.business.procurement.domain.MinProject;
 import com.zhaocai.business.procurement.mapper.MinProjectMapper;
 import com.zhaocai.business.procurement.service.IContractPlanningService;
@@ -22,6 +22,7 @@ import com.zhaocai.system.api.system.RemoteSystemService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -45,13 +46,13 @@ public class MinProjectServiceImpl extends ServiceImpl<MinProjectMapper, MinProj
     @Override
     public MinProject saveMinProject(MinProjectDetailResponseDTO projectDetail) {
         synchronized (projectDetail.getMinAccountCode()) {
-            MinProject saveMinProject = BeanCopierUtil.copyBean(projectDetail,MinProject.class);
+            MinProject saveMinProject = BeanCopierUtil.copyBean(projectDetail, MinProject.class);
 
-            if(null != projectDetail.getId()){
+            if (null != projectDetail.getId()) {
                 saveMinProject.setMinProjectId(projectDetail.getId());
             }
             if (StringUtils.isNoneBlank(projectDetail.getPrjAddr())) {
-                List<String> list = JSONArray.parseArray(projectDetail.getPrjAddr(),String.class);
+                List<String> list = JSONArray.parseArray(projectDetail.getPrjAddr(), String.class);
                 // TODO 省市区的需要再次确认
                 if (CollectionUtil.isNotEmpty(list) && list.size() > 2) {
                     // 有 3 位，为省、市、区
@@ -67,7 +68,7 @@ public class MinProjectServiceImpl extends ServiceImpl<MinProjectMapper, MinProj
             }
 
             MinProject minProject = super.getOne(new LambdaQueryWrapper<MinProject>()
-                    .eq(MinProject::getMinAccountCode,projectDetail.getMinAccountCode()));
+                    .eq(MinProject::getMinAccountCode, projectDetail.getMinAccountCode()));
             if (minProject != null) {
                 saveMinProject.setId(minProject.getId());
             } else {
@@ -81,7 +82,7 @@ public class MinProjectServiceImpl extends ServiceImpl<MinProjectMapper, MinProj
 
     @Override
     public MinProjectVO getMinProjectByMinAccountCode(String projectCode) {
-        if(StringUtils.isBlank(projectCode)) {
+        if (StringUtils.isBlank(projectCode)) {
             throw new ParamValidateException("最小核算项目编码不能为空");
         }
 
@@ -89,16 +90,31 @@ public class MinProjectServiceImpl extends ServiceImpl<MinProjectMapper, MinProj
         // 保存项目信息
         MinProject minProject = this.saveMinProject(detailResponseDTO);
 
-        MinProjectVO minProjectVO =  BeanCopierUtil.copyBean(minProject,MinProjectVO.class);
+        MinProjectVO minProjectVO = BeanCopierUtil.copyBean(minProject, MinProjectVO.class);
         if (StringUtils.isBlank(minProjectVO.getManagementOrgId())) {
             throw new ParamValidateException("该项目所归属管理组织为空，请确认");
         }
 
         // 获取我们系统里面对应的机构 id
         SysDept sysDept = remoteSystemService.getByThridDeptId(minProjectVO.getManagementOrgId(), SecurityConstants.INNER);
-        ValidateUtils.isNullException(sysDept,"该项目所归属管理组织对应的组织机构不存在，请确认");
+        ValidateUtils.isNullException(sysDept, "该项目所归属管理组织对应的组织机构不存在，请确认");
         minProjectVO.setDeptId(sysDept.getDeptId());
         return minProjectVO;
+    }
+
+
+    @Override
+    public List<MinProjectVO> getMinProjectList(String managementOrgId) {
+        QueryWrapper<MinProject> queryWrapper = new QueryWrapper<>();
+        queryWrapper.eq("management_org_id", managementOrgId);
+        queryWrapper.orderByAsc("min_account_code");
+        List<MinProject> minProjectList = super.list(queryWrapper);
+        List<MinProjectVO> minProjectVOS = new ArrayList<>();
+        for (MinProject minProject : minProjectList) {
+            MinProjectVO minProjectVO = BeanCopierUtil.copyBean(minProject, MinProjectVO.class);
+            minProjectVOS.add(minProjectVO);
+        }
+        return minProjectVOS;
     }
 
 }

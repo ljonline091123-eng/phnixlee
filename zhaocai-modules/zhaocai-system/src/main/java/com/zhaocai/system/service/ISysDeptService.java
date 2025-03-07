@@ -181,4 +181,6 @@ public interface ISysDeptService extends IService<SysDept>
     List<TreeSelect> getDeptTreeByThridDeptId(String thridDeptId);
 
     List<SysDept> getDeptByThridDeptIdNoBM(String thridDeptIdNew);
+
+    List<TreeSelect>  getDeptTree();
 }
