@@ -16,17 +16,24 @@ spring:
       password: nacos
       discovery:
         # 服务注册地址
-        server-addr: 192.168.240.13:30848
+        server-addr: 192.168.6.6:8848
+        namespace: f42de7a9-d7c1-4008-b859-fef8e7ed30a9
+        group: zhaocai
         metadata:
           version: cm
       config:
         # 配置中心地址
-        server-addr: 192.168.240.13:30848
+        server-addr: 192.168.6.6:8848
+        namespace: f42de7a9-d7c1-4008-b859-fef8e7ed30a9
+        group: DEFAULT_GROUP
+        prefix: zhaocai-system-dev
         # 配置文件格式
         file-extension: yml
         # 共享配置
         shared-configs:
-          - application-${spring.profiles.active}.${spring.cloud.nacos.config.file-extension}
+          - data-id: application-${spring.profiles.active}.${spring.cloud.nacos.config.file-extension}
+            group: DEFAULT_GROUP
+            refresh: true
 underPlat:
   # base地址
   baseUrl: http://192.168.240.17:30163/jkptht

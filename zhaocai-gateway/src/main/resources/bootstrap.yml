@@ -16,15 +16,22 @@ spring:
       password: nacos
       discovery:
         # 服务注册地址
-        server-addr: 192.168.240.13:30848
+        server-addr: 192.168.6.6:8848
+        namespace: f42de7a9-d7c1-4008-b859-fef8e7ed30a9
+        group: zhaocai
       config:
         # 配置中心地址
-        server-addr: 192.168.240.13:30848
+        server-addr: 192.168.6.6:8848
+        namespace: f42de7a9-d7c1-4008-b859-fef8e7ed30a9
+        group: DEFAULT_GROUP
+        prefix: zhaocai-gateway-dev
         # 配置文件格式
         file-extension: yml
         # 共享配置
         shared-configs:
-          - application-${spring.profiles.active}.${spring.cloud.nacos.config.file-extension}
+          - data-id: application-${spring.profiles.active}.${spring.cloud.nacos.config.file-extension}
+            group: DEFAULT_GROUP
+            refresh: true
     sentinel:
       # 取消控制台懒加载
       eager: true
@@ -35,7 +42,7 @@ spring:
       datasource:
         ds1:
           nacos:
-            server-addr: 192.168.240.13:30848
+            server-addr: 192.168.6.6:8848
             dataId: sentinel-zhaocai-gateway
             groupId: DEFAULT_GROUP
             data-type: json
