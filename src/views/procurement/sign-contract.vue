@@ -753,6 +753,7 @@
     <!--              show-overflow-tooltip-->
     <!--              fixed-->
     <!--            />-->
+                <el-table-column label="成本子目名称(导入)" min-width="150" prop="materialsNameImport" show-overflow-tooltip/>
                 <el-table-column label="特征值特征项" min-width="150" prop="specification" show-overflow-tooltip/>
                 <el-table-column label="计量规则" min-width="150" align="center" prop="measurementRules"  show-overflow-tooltip/>
                 <el-table-column label="工作内容" align="center" prop="workContent"  show-overflow-tooltip/>
