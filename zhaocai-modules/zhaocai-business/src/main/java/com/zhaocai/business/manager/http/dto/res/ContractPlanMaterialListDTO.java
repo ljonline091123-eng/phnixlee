@@ -110,6 +110,11 @@ public class ContractPlanMaterialListDTO {
     private String subjectName;
 
     /**
+     * 成本子目名称(导入)
+     */
+    private String subjectDtlNameImport;
+
+    /**
      * 剩余使用数量
      */
     private BigDecimal surplusQuantity;

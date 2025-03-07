@@ -11,6 +11,7 @@
         <result property="contractSplitId" column="contract_split_id"/>
         <result property="materialsCode" column="materials_code"/>
         <result property="materialsName" column="materials_name"/>
+        <result property="materialsNameImport" column="materials_name_import"/>
         <result property="brand" column="brand"/>
         <result property="paymentType" column="payment_type"/>
         <result property="rentalType" column="rental_type"/>
@@ -51,6 +52,7 @@
         <result property="biddingListQuotationId" column="bidding_list_quotation_id"/>
         <result property="materialsCode" column="materials_code"/>
         <result property="materialsName" column="materials_name"/>
+        <result property="materialsNameImport" column="materials_name_import"/>
         <result property="subjectMatterCode" column="subject_matter_code"/>
         <result property="subjectMatterName" column="subject_matter_name"/>
         <result property="specification" column="specification"/>
@@ -112,6 +114,7 @@
         <result property="materialsUniqueId" column="materials_unique_id"/>
         <result property="materialsCode" column="materials_code"/>
         <result property="materialsName" column="materials_name"/>
+        <result property="materialsNameImport" column="materials_name_import"/>
         <result property="specification" column="specification"/>
         <result property="unitMeasurement" column="unit_measurement"/>
         <result property="measurementRules" column="measurement_rules"/>
@@ -141,7 +144,7 @@
     </resultMap>
 
     <select id="selectUnderlingMaterialsList" resultMap="UnderlingMaterialsListResult">
-        select taml.id ,taml.agreement_id,taml.materials_code,taml.materials_name,tml.specification ,tml.unit_measurement ,tml.measurement_rules,
+        select taml.id ,taml.agreement_id,taml.materials_code,taml.materials_name,taml.materials_name_import,tml.specification ,tml.unit_measurement ,tml.measurement_rules,
                 tml.work_content,tml.cost_account_Id,tml.cost_account_code,tml.cost_account_name,taml.sign_count,taml.brand,taml.payment_type,taml.workload,
                 taml.remark,taml.sign_unit_price_incl_tax,taml.sign_unit_price_excl_tax,taml.sign_amount_incl_tax,taml.sign_amount_excl_tax,tblq.tax_rate,tblq.bill_type,tblq.floating_price,tblq.floating_rate,
                 tml.unloading_fee,tml.base_price,tml.rent_mode,tml.rent_time,tml.rent_quantity,taml.rental_unit,tml.materials_unique_id

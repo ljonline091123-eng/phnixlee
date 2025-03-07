@@ -218,6 +218,7 @@ public class ContractMaterialsListVO extends AdviceObject {
         this.materialsUniqueId = dto.getSubjectDtlUniqueId();
         this.materialsCode = dto.getSubjectDtlCode();
         this.materialsName = dto.getSubjectDtlName();
+        this.materialsNameImport = dto.getSubjectDtlNameImport();
         this.specification = dto.getSpecs();
         this.measurementRules = dto.getMetrologicalRules();
         this.unitMeasurement = dto.getMeasureUnit();

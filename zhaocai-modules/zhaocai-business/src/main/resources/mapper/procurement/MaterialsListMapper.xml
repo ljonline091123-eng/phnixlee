@@ -11,7 +11,7 @@
         <result property="materialsUniqueId" column="materials_unique_id"/>
         <result property="materialsCode" column="materials_code"/>
         <result property="materialsName" column="materials_name"/>
-        <result property="materialsNameImprot" column="materials_name_improt"/>
+        <result property="materialsNameImport" column="materials_name_import"/>
         <result property="subjectMatterCode" column="subject_matter_code"/>
         <result property="subjectMatterName" column="subject_matter_name"/>
         <result property="subjectMatterFlag" column="subject_matter_flag"/>

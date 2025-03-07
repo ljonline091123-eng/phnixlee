@@ -65,7 +65,7 @@ public class MaterialsList extends BaseEntity {
     private String materialsName;
 
     /**
-     * 物料清单名称（导入）
+     * 物料清单名称（导入） = 商务策划:成本子目名称(导入)
      */
     @ApiModelProperty(value = "物料清单名称（导入）")
     private String materialsNameImport;

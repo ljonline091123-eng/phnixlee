@@ -23,6 +23,9 @@ public class AgreementUnderlingMaterialsVO {
     @ApiModelProperty(value = "物料名称")
     private String materialsName;
 
+    @ApiModelProperty(value = "物料名称(导入) = 成本子目名称(导入)")
+    private String materialsNameImport;
+
     @ApiModelProperty(value = "规格型号")
     private String specification;
 
