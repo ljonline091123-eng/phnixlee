@@ -20,7 +20,7 @@ import java.util.List;
 @ApiModel(value = "TwiceBidConfVO", description = "二次洽商操作参数VO")
 public class TwiceBidConfVO {
 
-    @JsonFormat(pattern = "yyyy-MM-dd")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     @ApiModelProperty(value =  "二次报价截止时间")
     @NotNull(message = "二次报价截止时间不能为空")
     private Date twiceTime;
