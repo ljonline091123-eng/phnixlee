@@ -63,3 +63,28 @@ export function getTwoLevelDeptByDeptId(deptId) {
     params: {deptId}
   })
 }
+
+
+/**
+ * 获取获取部门一二级(公司)
+ * @param deptId
+ * @returns {*}
+ */
+export function getDeptTree() {
+  return request({
+    url: '/system/dept/getDeptTree',
+    method: 'get',
+  })
+}
+/**
+ * 获取获取部门一二级(公司)
+ * @param deptId
+ * @returns {*}
+ */
+export function getManagementOrgId(id) {
+  return request({
+    url: '/business/minProject/getMinProjectList?managementOrgId='+id,
+    method: 'get',
+  })
+}
+

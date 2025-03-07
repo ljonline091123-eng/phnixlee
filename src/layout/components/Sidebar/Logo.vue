@@ -10,7 +10,7 @@
         <!-- <h1 class="sidebar-title" :style="{ color: sideTheme === 'theme-dark' ? variables.logoTitleColor : variables.logoLightTitleColor }">{{ title }} </h1> -->
       </router-link>
     </transition>
-    
+
   </div>
 </template>
 
@@ -72,11 +72,11 @@ export default {
     width: 100%;
 
     & .sidebar-logo {
-      width: 150px;
+      width: 180px;
       height: 28px;
       vertical-align: middle;
-      margin-right: 20px;
-      margin-top: 12px;
+      margin-right: 8px;
+      margin-top: 6px;
     }
  & .sidebar-logo-off {
       width: 28px;

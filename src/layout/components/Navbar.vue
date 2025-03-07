@@ -1,34 +1,70 @@
 <template>
   <div class="navbar">
-    <hamburger id="hamburger-container" :is-active="sidebar.opened" class="hamburger-container" @toggleClick="toggleSideBar" />
+    <hamburger id="hamburger-container" :is-active="sidebar.opened" class="hamburger-container"
+               @toggleClick="toggleSideBar"/>
 
     <breadcrumb id="breadcrumb-container" class="breadcrumb-container" v-if="!topNav"/>
     <top-nav id="topmenu-container" class="topmenu-container" v-if="topNav"/>
 
     <div class="right-menu">
       <template v-if="device!=='mobile'">
-        <search id="header-search" class="right-menu-item" />
+        <div class="right-menu1">
+          <!-- <treeselect
+          v-model="deptId"
+          style="width: 150px; z-index: 9999;height: 40px;"
+          :options="deptOptions"
+          placeholder="请选择"
+          /> -->
+          <!-- <el-cascader
+          ref="refHandle"
+          v-model="thridDeptId"
+          :props="{label:'label',value:'thridDeptId'}"
+          :options="deptOptions" :show-all-levels="false"  @change="handleChange"></el-cascader> -->
+          <el-cascader
+            v-model="thridDeptId"
+            :options="deptOptions"
+            :show-all-levels="false"
+            :props="{
+          label: 'label',
+          value: 'thridDeptId',
+        }"
+            @change="handleChange"
+          >
+          </el-cascader>
+        </div>
+        <div>
+          <el-select @change="bclxChange" v-model="value" placeholder="请选择"
+                     style="width: 150px; z-index: 9999;height: 40px;">
+            <el-option
+              v-for="item in options"
+              :key="item.belongingOrgId"
+              :label="item.minAccountFullName"
+              :value="item.belongingOrgId">
+            </el-option>
+          </el-select>
+        </div>
+        <search id="header-search" class="right-menu-item"/>
 
-<!--        <el-tooltip content="源码地址" effect="dark" placement="bottom">-->
-<!--          <ruo-yi-git id="ruoyi-git" class="right-menu-item hover-effect" />-->
-<!--        </el-tooltip>-->
+        <!--        <el-tooltip content="源码地址" effect="dark" placement="bottom">-->
+        <!--          <ruo-yi-git id="ruoyi-git" class="right-menu-item hover-effect" />-->
+        <!--        </el-tooltip>-->
 
-<!--        <el-tooltip content="文档地址" effect="dark" placement="bottom">-->
-<!--          <ruo-yi-doc id="ruoyi-doc" class="right-menu-item hover-effect" />-->
-<!--        </el-tooltip>-->
+        <!--        <el-tooltip content="文档地址" effect="dark" placement="bottom">-->
+        <!--          <ruo-yi-doc id="ruoyi-doc" class="right-menu-item hover-effect" />-->
+        <!--        </el-tooltip>-->
 
-        <screenfull id="screenfull" class="right-menu-item hover-effect" />
+        <screenfull id="screenfull" class="right-menu-item hover-effect"/>
 
-<!--        <el-tooltip content="布局大小" effect="dark" placement="bottom">-->
-<!--          <size-select id="size-select" class="right-menu-item hover-effect" />-->
-<!--        </el-tooltip>-->
+        <!--        <el-tooltip content="布局大小" effect="dark" placement="bottom">-->
+        <!--          <size-select id="size-select" class="right-menu-item hover-effect" />-->
+        <!--        </el-tooltip>-->
 
       </template>
 
       <el-dropdown class="avatar-container right-menu-item hover-effect" trigger="click">
         <div class="avatar-wrapper">
           <img :src="avatar" class="user-avatar">
-          <i class="el-icon-caret-bottom" />
+          <i class="el-icon-caret-bottom"/>
         </div>
         <el-dropdown-menu slot="dropdown">
           <router-link to="/user/profile">
@@ -47,7 +83,7 @@
 </template>
 
 <script>
-import { mapGetters } from 'vuex'
+import {mapGetters} from 'vuex'
 import Breadcrumb from '@/components/Breadcrumb'
 import TopNav from '@/components/TopNav'
 import Hamburger from '@/components/Hamburger'
@@ -56,6 +92,9 @@ import SizeSelect from '@/components/SizeSelect'
 import Search from '@/components/HeaderSearch'
 import RuoYiGit from '@/components/RuoYi/Git'
 import RuoYiDoc from '@/components/RuoYi/Doc'
+import Treeselect from "@riophae/vue-treeselect";
+import "@riophae/vue-treeselect/dist/vue-treeselect.css";
+import {getDeptTree, getManagementOrgId} from "@/api/system/dept";
 
 export default {
   components: {
@@ -66,13 +105,39 @@ export default {
     SizeSelect,
     Search,
     RuoYiGit,
-    RuoYiDoc
+    RuoYiDoc,
+    Treeselect
+  },
+  data() {
+    return {
+      options: [{
+        value: '选项1',
+        label: '黄金糕'
+      }, {
+        value: '选项2',
+        label: '双皮奶'
+      }, {
+        value: '选项3',
+        label: '蚵仔煎'
+      }, {
+        value: '选项4',
+        label: '龙须面'
+      }, {
+        value: '选项5',
+        label: '北京烤鸭'
+      }],
+      value: '',
+      thridDeptId: '',
+      deptOptions: [],
+    };
   },
   computed: {
     ...mapGetters([
       'sidebar',
       'avatar',
-      'device'
+      'device',
+      'project',
+      'org'
     ]),
     setting: {
       get() {
@@ -91,7 +156,65 @@ export default {
       }
     }
   },
+  created() {
+    this.getDeptTree()
+    // this.thridDeptId=this.org
+    // this.getManagementOrgId(this.thridDeptId)
+    this.value= this.project.name
+    // * 取登录后用户的信息 userInfo // * org ,project
+    // * thridDeptId,project
+
+  },
+  watch: {
+    // org: {
+    //   handler(val) {
+    //     console.log(val)
+    //     this.thridDeptId = val
+    //   },
+    //   immediate: true
+    // },
+    thridDeptId: {
+      handler(val) {
+        this.value = null
+        this.getManagementOrgId(val)
+        this.$store.commit("SET_ORG", val);
+      },
+      immediate: false
+    }
+  },
   methods: {
+    //下拉选择监听
+    bclxChange(selectValue) {
+      let obj = {};
+      obj = this.locations.find((item) => {
+        return item.belongingOrgId === val;
+      });
+      this.$store.commit("SET_PROJECT", {
+        code: obj.minAccountCode,
+        id: obj.belongingOrgId,
+        name: obj.minAccountFullName
+      });
+    },
+    handleChange(value) {
+      this.$store.commit("SET_ORG", value);
+    },
+    /** 查询部门下拉树结构 */
+    getDeptTree() {
+      getDeptTree().then((response) => {
+        this.deptOptions = response.data;
+        this.thridDeptId = [response.data[0].thridDeptId,response.data[0].children[0].thridDeptId];
+      });
+    },
+    // 查询项目
+    getManagementOrgId(id) {
+      const needId = id[id.length - 1]
+      getManagementOrgId(needId).then((response) => {
+        this.options = response.data;
+        this.value = this.options[0]?.belongingOrgId;
+        // * 同步要去加到vuex
+        this.$store.commit("SET_PROJECT", {code:this.options[0].minAccountCode,id:this.value,name:this.options[0].minAccountFullName});
+      });
+    },
     toggleSideBar() {
       this.$store.dispatch('app/toggleSideBar')
     },
@@ -104,7 +227,8 @@ export default {
         this.$store.dispatch('LogOut').then(() => {
           location.href = '/index';
         })
-      }).catch(() => {});
+      }).catch(() => {
+      });
     }
   }
 }
@@ -116,7 +240,7 @@ export default {
   overflow: hidden;
   position: relative;
   background: #fff;
-  box-shadow: 0 1px 4px rgba(0,21,41,.08);
+  box-shadow: 0 1px 4px rgba(0, 21, 41, .08);
 
   .hamburger-container {
     line-height: 46px;
@@ -124,7 +248,7 @@ export default {
     float: left;
     cursor: pointer;
     transition: background .3s;
-    -webkit-tap-highlight-color:transparent;
+    -webkit-tap-highlight-color: transparent;
 
     &:hover {
       background: rgba(0, 0, 0, .025)
@@ -145,9 +269,15 @@ export default {
     vertical-align: top;
   }
 
+  .right-menu1 {
+    width: 180px;
+    margin-right: 8px;
+  }
+
   .right-menu {
     float: right;
     height: 100%;
+    display: flex;
     line-height: 50px;
 
     &:focus {
