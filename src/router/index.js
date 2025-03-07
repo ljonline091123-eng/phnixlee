@@ -1,22 +1,21 @@
 import Vue from "vue";
 import Router from "vue-router";
 import store from "@/store";
-import { ssoLogin } from "@/api/login";
+import {ssoLogin} from "@/api/login";
 import {
-  setToken,
-  getToken,
-  setControlToken,
-  getZcToken,
   getControlToken,
-  removeToken,
+  getToken,
+  getZcToken,
   removeControlToken,
+  removeToken,
+  setControlToken,
+  setToken,
 } from "@/utils/auth"; // 获取token
-
-Vue.use(Router);
-
 /* Layout */
 import Layout from "@/layout";
 import appConstant from "@/appConstant";
+
+Vue.use(Router);
 
 /**
  * Note: 路由配置项
@@ -104,7 +103,7 @@ export const constantRoutes = [
         path: "definition/model/",
         component: () => import("@/views/flowable/definition/model"),
         name: "Model",
-        meta: { title: "model" },
+        meta: {title: "model"},
       },
     ],
   },
@@ -118,7 +117,7 @@ export const constantRoutes = [
         path: "task/record/index",
         component: () => import("@/views/flowable/task/record/index"),
         name: "Record",
-        meta: { title: "record" },
+        meta: {title: "record"},
       },
     ],
   },
@@ -132,7 +131,7 @@ export const constantRoutes = [
         path: "profile",
         component: () => import("@/views/system/user/profile/index"),
         name: "Profile",
-        meta: { title: "个人中心", icon: "user" },
+        meta: {title: "个人中心", icon: "user"},
       },
     ],
   },
@@ -146,31 +145,31 @@ export const constantRoutes = [
         path: "add-plan/:params",
         component: () => import("@/views/procurement/add-plan.vue"),
         name: "add-plan",
-        meta: { title: "新增采购计划", activeMenu: "/procurement/plan" },
+        meta: {title: "新增采购计划", activeMenu: "/procurement/plan"},
       },
       {
         path: "plan-detail/:params",
         component: () => import("@/views/procurement/plan-detail.vue"),
         name: "plan-detail",
-        meta: { title: "采购计划详情", activeMenu: "/procurement/plan" },
+        meta: {title: "采购计划详情", activeMenu: "/procurement/plan"},
       },
       {
         path: "add-scheme/:params",
         component: () => import("@/views/procurement/add-scheme.vue"),
         name: "add-scheme",
-        meta: { title: "新增采购方案", activeMenu: "/procurement/scheme" },
+        meta: {title: "新增采购方案", activeMenu: "/procurement/scheme"},
       },
       {
         path: "scheme-detail/:params",
         component: () => import("@/views/procurement/scheme-detail.vue"),
         name: "scheme-detail",
-        meta: { title: "采购方案详情", activeMenu: "/procurement/scheme" },
+        meta: {title: "采购方案详情", activeMenu: "/procurement/scheme"},
       },
       {
         path: "tendering/:params",
         component: () => import("@/views/procurement/tendering.vue"),
         name: "tendering",
-        meta: { title: "招标管理", activeMenu: "/procurement/bindding" },
+        meta: {title: "招标管理", activeMenu: "/procurement/bindding"},
       },
       {
         path: "add-contract",
@@ -212,13 +211,13 @@ export const constantRoutes = [
         path: "add-expert/:params",
         component: () => import("@/views/expert/add-expert.vue"),
         name: "add-expert",
-        meta: { title: "专家信息新增", activeMenu: "/expert/expert" },
+        meta: {title: "专家信息新增", activeMenu: "/expert/expert"},
       },
       {
         path: "expert-detail/:params",
         component: () => import("@/views/expert/expert-detail.vue"),
         name: "expert-detail",
-        meta: { title: "专家信息", activeMenu: "/expert/expert-detail" },
+        meta: {title: "专家信息", activeMenu: "/expert/expert-detail"},
       },
     ],
   },
@@ -260,7 +259,7 @@ export const constantRoutes = [
         path: "rating",
         component: () => import("@/views/template/rating.vue"),
         name: "rating",
-        meta: { title: "评分模板", activeMenu: "/template/rating" },
+        meta: {title: "评分模板", activeMenu: "/template/rating"},
       },
       // {
       //   path: 'rating-detail/:params',
@@ -272,13 +271,13 @@ export const constantRoutes = [
         path: "add-rating",
         component: () => import("@/views/template/add-rating.vue"),
         name: "add-rating",
-        meta: { title: "新增评分模板", activeMenu: "/template/rating" },
+        meta: {title: "新增评分模板", activeMenu: "/template/rating"},
       },
       {
         path: "edit-rating/:params",
         component: () => import("@/views/template/edit-rating.vue"),
         name: "edit-rating",
-        meta: { title: "修改评分模板", activeMenu: "/template/rating" },
+        meta: {title: "修改评分模板", activeMenu: "/template/rating"},
       },
     ],
   },
@@ -292,7 +291,7 @@ export const constantRoutes = [
         path: "vendor-detail/:params",
         component: () => import("@/views/vendor/vendor-detail.vue"),
         name: "vendor-detail",
-        meta: { title: "供应商详情", activeMenu: "/vendor/base" },
+        meta: {title: "供应商详情", activeMenu: "/vendor/base"},
       },
       {
         path: "vendor-record-detail/:params",
@@ -319,7 +318,7 @@ export const dynamicRoutes = [
         path: "role/:userId(\\d+)",
         component: () => import("@/views/system/user/authRole"),
         name: "AuthRole",
-        meta: { title: "分配角色", activeMenu: "/system/user" },
+        meta: {title: "分配角色", activeMenu: "/system/user"},
       },
     ],
   },
@@ -333,7 +332,7 @@ export const dynamicRoutes = [
         path: "user/:roleId(\\d+)",
         component: () => import("@/views/system/role/authUser"),
         name: "AuthUser",
-        meta: { title: "分配用户", activeMenu: "/system/role" },
+        meta: {title: "分配用户", activeMenu: "/system/role"},
       },
     ],
   },
@@ -347,7 +346,7 @@ export const dynamicRoutes = [
         path: "index/:dictId(\\d+)",
         component: () => import("@/views/system/dict/data"),
         name: "Data",
-        meta: { title: "字典数据", activeMenu: "/system/dict" },
+        meta: {title: "字典数据", activeMenu: "/system/dict"},
       },
     ],
   },
@@ -361,7 +360,7 @@ export const dynamicRoutes = [
         path: "index/:jobId(\\d+)",
         component: () => import("@/views/monitor/job/log"),
         name: "JobLog",
-        meta: { title: "调度日志", activeMenu: "/monitor/job" },
+        meta: {title: "调度日志", activeMenu: "/monitor/job"},
       },
     ],
   },
@@ -375,7 +374,7 @@ export const dynamicRoutes = [
         path: "index/:tableId(\\d+)",
         component: () => import("@/views/tool/gen/editTable"),
         name: "GenEdit",
-        meta: { title: "genEdit", activeMenu: "/tool/gen" },
+        meta: {title: "genEdit", activeMenu: "/tool/gen"},
       },
     ],
   },
@@ -396,7 +395,7 @@ Router.prototype.replace = function push(location) {
 const router = new Router({
   mode: "history", // 去掉url中的#
   base: "/zhaocai/", // 这里设置为/zhaocai/
-  scrollBehavior: () => ({ y: 0 }),
+  scrollBehavior: () => ({y: 0}),
   routes: constantRoutes,
 });
 
@@ -419,10 +418,7 @@ router.beforeEach((to, from, next) => {
     }
     console.log(wujie, "getZcToken");
   } else {
-    // wujie = window.$wujie?.props.token || "";
-    wujie =
-      window.$wujie?.props.token ||
-      "Bearer eyJhbGciOiJIUzUxMiJ9.eyJ1c2VyX2lkIjoxODI2OTEzNjUxODI5NDM2NDIwLCJ1c2VyX2tleSI6IjMxYjUzOGQ0LTY4NWEtNDc1ZS1hNjZmLWU5OTNkYTk3ZDRiMSIsInVzZXJuYW1lIjoiMTM3MDc0ODg4NjUifQ.WEvluIi6pmZ7sSKZoS71p7u7Q87PY8i6B3fHP0k5n22R7krzrIYDOtuMbr3g2Wz7xvdi-5aUkLcqfaVRtv7_7w";
+    wujie = window.$wujie?.props.token || "";
   }
   console.log(window.$wujie?.props, "window.$wujie?.props");
 
