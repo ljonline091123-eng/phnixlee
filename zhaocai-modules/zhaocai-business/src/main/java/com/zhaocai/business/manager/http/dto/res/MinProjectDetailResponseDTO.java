@@ -158,7 +158,7 @@ public class MinProjectDetailResponseDTO {
     /**
      * 中标时间
      */
-    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss",timezone = "GMT+8")
     private Date winningTime;
 
     /**
@@ -169,7 +169,7 @@ public class MinProjectDetailResponseDTO {
     /**
      * 立项时间
      */
-    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss",timezone = "GMT+8")
     private Date lxDate;
 
     /**

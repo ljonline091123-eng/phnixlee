@@ -58,7 +58,7 @@ public class ReceiptMaterialsTurnLedger extends BaseEntity {
     /**
      * 对账结束日期
      */
-    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss",timezone = "GMT+8")
     @ApiModelProperty("对账结束日期,yyyy-MM-dd HH:mm:ss")
     private Date endDate;
 
@@ -137,7 +137,7 @@ public class ReceiptMaterialsTurnLedger extends BaseEntity {
     /**
      * 结算日期
      */
-    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss",timezone = "GMT+8")
     @ApiModelProperty("结算日期,yyyy-MM-dd HH:mm:ss")
     private Date settleDate;
 
@@ -150,7 +150,7 @@ public class ReceiptMaterialsTurnLedger extends BaseEntity {
     /**
      * 对账开始日期
      */
-    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss",timezone = "GMT+8")
     @ApiModelProperty("对账开始日期,yyyy-MM-dd HH:mm:ss")
     private Date startDate;
 

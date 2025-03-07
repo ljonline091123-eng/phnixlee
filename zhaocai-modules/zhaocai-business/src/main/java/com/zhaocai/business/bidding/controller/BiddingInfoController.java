@@ -159,7 +159,7 @@ public class BiddingInfoController extends BladeController {
     }
 
     /**
-     * 开始调价（旧：二次洽商配置操作）
+     * 开始调价（旧：二次洽商配置操作） 采购端二次报价
      */
     @PostMapping("/twiceBidConf")
     public ResultData twiceBidConf(@RequestBody @Valid TwiceBidConfVO twiceBidConfVO) {

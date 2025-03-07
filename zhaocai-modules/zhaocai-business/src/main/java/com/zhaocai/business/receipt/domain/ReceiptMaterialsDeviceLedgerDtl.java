@@ -64,7 +64,7 @@ public class ReceiptMaterialsDeviceLedgerDtl extends BaseEntity {
     /**
      * 施工结束
      */
-    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss",timezone = "GMT+8")
     @ApiModelProperty("施工结束,yyyy-MM-dd HH:mm:ss")
     private Date endDatetime;
 
@@ -107,7 +107,7 @@ public class ReceiptMaterialsDeviceLedgerDtl extends BaseEntity {
     /**
      * 施工开始
      */
-    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss",timezone = "GMT+8")
     @ApiModelProperty("施工开始,yyyy-MM-dd HH:mm:ss")
     private Date startDatetime;
 

@@ -52,7 +52,7 @@ public class ReceiptMaterialsTurnLedgerDtlDtl extends BaseEntity {
     /**
      * 进场日期
      */
-    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss",timezone = "GMT+8")
     @ApiModelProperty("进场日期,yyyy-MM-dd HH:mm:ss")
     private Date inDate;
 

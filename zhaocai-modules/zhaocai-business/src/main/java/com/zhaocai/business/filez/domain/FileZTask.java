@@ -45,7 +45,7 @@ public class FileZTask extends BaseEntity {
     /**
      * 请求时间
      */
-    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss",timezone = "GMT+8")
     @ApiModelProperty(value = "请求时间")
     private Date requestTime;
 
@@ -82,7 +82,7 @@ public class FileZTask extends BaseEntity {
     /**
      * 响应时间
      */
-    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss",timezone = "GMT+8")
     @ApiModelProperty(value = "响应时间")
     private Date responseTime;
 
@@ -107,7 +107,7 @@ public class FileZTask extends BaseEntity {
     /**
      * 请求回调时间
      */
-    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss",timezone = "GMT+8")
     @ApiModelProperty(value = "请求回调时间")
     private Date callBackTime;
 
