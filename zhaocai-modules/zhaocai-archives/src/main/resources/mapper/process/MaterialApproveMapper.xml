@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhaocai.archives.process.mapper.MaterialApproveMapper">
+
+    <resultMap type="com.zhaocai.archives.process.domain.MaterialApprove" id="MaterialApproveResult">
+        <result property="id" column="id"/>
+        <result property="type" column="type"/>
+        <result property="state" column="state"/>
+        <result property="joinId" column="join_id"/>
+        <result property="createId" column="create_id"/>
+        <result property="createBy" column="create_by"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateBy" column="update_by"/>
+        <result property="updateId" column="update_id"/>
+        <result property="updateTime" column="update_time"/>
+        <result property="delFlag" column="del_flag"/>
+        <result property="wfProcessId" column="wf_process_id"/>
+    </resultMap>
+
+    <sql id="selectMaterialApproveVo">
+        select id,
+               type,
+               state,
+               join_id,
+               create_id,
+               create_time,
+               update_by,
+               update_id,
+               create_by,
+               update_time,
+               wf_process_id,
+               del_flag
+        from tb_material_approve
+    </sql>
+
+    <select id="selectMaterialApproveList" parameterType="MaterialApprove" resultMap="MaterialApproveResult">
+        <include refid="selectMaterialApproveVo"/>
+        <where>
+            <if test="type != null  and type != ''">and type = #{type}</if>
+            <if test="state != null ">and state = #{state}</if>
+            <if test="joinId != null ">and join_id = #{joinId}</if>
+            <if test="createId != null ">and create_id = #{createId}</if>
+            <if test="createBy != null ">and create_by = #{createBy}</if>
+            <if test="updateId != null ">and update_id = #{updateId}</if>
+            <if test="wfProcessId != null ">and wf_process_id = #{wfProcessId}</if>
+        </where>
+    </select>
+
+    <select id="selectMaterialApproveById" parameterType="Long" resultMap="MaterialApproveResult">
+        <include refid="selectMaterialApproveVo"/>
+        where id = #{id}
+    </select>
+
+    <insert id="insertMaterialApprove" parameterType="MaterialApprove">
+        insert into tb_material_approve
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="id != null">id,</if>
+            <if test="type != null">type,</if>
+            <if test="state != null">state,</if>
+            <if test="joinId != null">join_id,</if>
+            <if test="createId != null">create_id,</if>
+            <if test="createBy != null">create_by,</if>
+            <if test="createTime != null">create_time,</if>
+            <if test="updateBy != null">update_by,</if>
+            <if test="updateId != null">update_id,</if>
+            <if test="updateTime != null">update_time,</if>
+            <if test="delFlag != null">del_flag,</if>
+            <if test="wfProcessId != null">wf_process_id,</if>
+        </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="id != null">#{id},</if>
+            <if test="type != null">#{type},</if>
+            <if test="state != null">#{state},</if>
+            <if test="joinId != null">#{joinId},</if>
+            <if test="createId != null">#{createId},</if>
+            <if test="createBy != null">#{createBy},</if>
+            <if test="createTime != null">#{createTime},</if>
+            <if test="updateBy != null">#{updateBy},</if>
+            <if test="updateId != null">#{updateId},</if>
+            <if test="updateTime != null">#{updateTime},</if>
+            <if test="delFlag != null">#{delFlag},</if>
+            <if test="wfProcessId != null">#{wfProcessId},</if>
+        </trim>
+    </insert>
+
+    <update id="updateMaterialApprove" parameterType="MaterialApprove">
+        update tb_material_approve
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="type != null">type = #{type},</if>
+            <if test="state != null">state = #{state},</if>
+            <if test="joinId != null">join_id = #{joinId},</if>
+            <if test="createId != null">create_id = #{createId},</if>
+            <if test="createBy != null">create_by = #{createBy},</if>
+            <if test="createTime != null">create_time = #{createTime},</if>
+            <if test="updateBy != null">update_by = #{updateBy},</if>
+            <if test="updateId != null">update_id = #{updateId},</if>
+            <if test="updateTime != null">update_time = #{updateTime},</if>
+            <if test="delFlag != null">del_flag = #{delFlag},</if>
+            <if test="wfProcessId != null">wf_process_id = #{wfProcessId},</if>
+        </trim>
+        where id = #{id}
+    </update>
+
+    <delete id="deleteMaterialApproveById" parameterType="Long">
+        delete
+        from tb_material_approve
+        where id = #{id}
+    </delete>
+
+    <delete id="deleteMaterialApproveByIds" parameterType="String">
+        delete from tb_material_approve where id in
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+</mapper>

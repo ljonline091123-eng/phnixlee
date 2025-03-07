@@ -1,0 +1,153 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhaocai.archives.main.mapper.MajorSubcontractingFeatureValueMapper">
+
+    <resultMap type="com.zhaocai.archives.main.domain.MajorSubcontractingFeatureValue" id="MajorSubcontractingFeatureValueResult">
+        <result property="id" column="id"/>
+        <result property="majorSubcontractingFeatureId" column="major_subcontracting_feature_id"/>
+        <result property="featureValueName" column="feature_value_name"/>
+        <result property="featureValueCode" column="feature_value_code"/>
+        <result property="createId" column="create_id"/>
+        <result property="createBy" column="create_by"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateBy" column="update_by"/>
+        <result property="updateTime" column="update_time"/>
+        <result property="valid" column="valid"/>
+        <result property="sonId" column="son_id"/>
+    </resultMap>
+
+    <sql id="selectMajorSubcontractingFeatureValueVo">
+        select id,
+               major_subcontracting_feature_id,
+               feature_value_name,
+               feature_value_code,
+               create_id,
+               create_by,
+               create_time,
+               update_by,
+               update_time,
+               valid,
+               son_id
+        from major_subcontracting_feature_value
+    </sql>
+
+    <select id="selectMajorSubcontractingFeatureValueListCount" parameterType="com.zhaocai.archives.main.domain.MajorSubcontractingFeatureValue"
+            resultType="long">
+        select count(1)
+        from major_subcontracting_feature_value
+        <where>
+            <if test="majorSubcontractingFeatureId != null  and majorSubcontractingFeatureId != ''">and
+                major_subcontracting_feature_id = #{majorSubcontractingFeatureId}
+            </if>
+            <if test="featureValueName != null  and featureValueName != ''">and feature_value_name like concat('%',
+                #{featureValueName}, '%')
+            </if>
+            <if test="featureValueCode != null  and featureValueCode != ''">and feature_value_code =
+                #{featureValueCode}
+            </if>
+            <if test="createId != null  and createId != ''">and create_id = #{createId}</if>
+            <if test="valid != null ">and valid = #{valid}</if>
+            <if test="sonId != null ">and son_id = #{sonId}</if>
+        </where>
+    </select>
+
+
+    <select id="selectMajorSubcontractingFeatureValueList" parameterType="com.zhaocai.archives.main.domain.MajorSubcontractingFeatureValue"
+            resultMap="MajorSubcontractingFeatureValueResult">
+        <include refid="selectMajorSubcontractingFeatureValueVo"/>
+        <where>
+            <if test="majorSubcontractingFeatureId != null  and majorSubcontractingFeatureId != ''">and
+                major_subcontracting_feature_id = #{majorSubcontractingFeatureId}
+            </if>
+            <if test="featureValueName != null  and featureValueName != ''">and feature_value_name like concat('%',
+                #{featureValueName}, '%')
+            </if>
+            <if test="featureValueCode != null  and featureValueCode != ''">and feature_value_code =
+                #{featureValueCode}
+            </if>
+            <if test="createId != null  and createId != ''">and create_id = #{createId}</if>
+            <if test="valid != null ">and valid = #{valid}</if>
+            <if test="sonId != null ">and son_id = #{sonId}</if>
+        </where>
+        order by feature_value_code ASC
+    </select>
+
+    <select id="selectMajorSubcontractingFeatureValueById" parameterType="String"
+            resultMap="MajorSubcontractingFeatureValueResult">
+        <include refid="selectMajorSubcontractingFeatureValueVo"/>
+        where id = #{id}
+    </select>
+
+    <insert id="insertMajorSubcontractingFeatureValue" parameterType="com.zhaocai.archives.main.domain.MajorSubcontractingFeatureValue">
+        insert into major_subcontracting_feature_value
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="id != null">id,</if>
+            <if test="majorSubcontractingFeatureId != null">major_subcontracting_feature_id,</if>
+            <if test="featureValueName != null and featureValueName != ''">feature_value_name,</if>
+            <if test="featureValueCode != null and featureValueCode != ''">feature_value_code,</if>
+            <if test="createId != null">create_id,</if>
+            <if test="createBy != null">create_by,</if>
+            <if test="createTime != null">create_time,</if>
+            <if test="updateBy != null">update_by,</if>
+            <if test="updateTime != null">update_time,</if>
+            <if test="valid != null">valid,</if>
+            <if test="sonId != null">son_id,</if>
+        </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="id != null">#{id},</if>
+            <if test="majorSubcontractingFeatureId != null">#{majorSubcontractingFeatureId},</if>
+            <if test="featureValueName != null and featureValueName != ''">#{featureValueName},</if>
+            <if test="featureValueCode != null and featureValueCode != ''">#{featureValueCode},</if>
+            <if test="createId != null">#{createId},</if>
+            <if test="createBy != null">#{createBy},</if>
+            <if test="createTime != null">#{createTime},</if>
+            <if test="updateBy != null">#{updateBy},</if>
+            <if test="updateTime != null">#{updateTime},</if>
+            <if test="valid != null">#{valid},</if>
+            <if test="sonId != null">#{sonId},</if>
+        </trim>
+    </insert>
+
+    <update id="updateMajorSubcontractingFeatureValue" parameterType="com.zhaocai.archives.main.domain.MajorSubcontractingFeatureValue">
+        update major_subcontracting_feature_value
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="majorSubcontractingFeatureId != null">major_subcontracting_feature_id =
+                #{majorSubcontractingFeatureId},
+            </if>
+            <if test="featureValueName != null and featureValueName != ''">feature_value_name = #{featureValueName},
+            </if>
+            <if test="featureValueCode != null and featureValueCode != ''">feature_value_code = #{featureValueCode},
+            </if>
+            <if test="createId != null">create_id = #{createId},</if>
+            <if test="createBy != null">create_by = #{createBy},</if>
+            <if test="createTime != null">create_time = #{createTime},</if>
+            <if test="updateBy != null">update_by = #{updateBy},</if>
+            <if test="updateTime != null">update_time = #{updateTime},</if>
+            <if test="valid != null">valid = #{valid},</if>
+            <if test="sonId != null">son_id = #{sonId},</if>
+        </trim>
+        where id = #{id}
+    </update>
+
+    <delete id="deleteMajorSubcontractingFeatureValueById" parameterType="String">
+        delete
+        from major_subcontracting_feature_value
+        where id = #{id}
+    </delete>
+
+    <delete id="deleteMajorSubcontractingFeatureValueByIds" parameterType="String">
+        delete from major_subcontracting_feature_value where id in
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+
+    <select id="getMaxCode" parameterType="String" resultType="String">
+        select max(feature_value_code)
+        from major_subcontracting_feature_value
+        where major_subcontracting_feature_id = #{id}
+          and valid = '0'
+    </select>
+</mapper>

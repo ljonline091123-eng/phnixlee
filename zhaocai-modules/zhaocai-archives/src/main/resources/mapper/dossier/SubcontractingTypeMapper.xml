@@ -1,0 +1,327 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhaocai.archives.dossier.mapper.SubcontractingTypeMapper">
+
+    <resultMap type="com.zhaocai.archives.dossier.domain.SubcontractingType" id="SubcontractingTypeResult">
+        <result property="id" column="id"/>
+        <result property="upId" column="up_id"/>
+        <result property="subcontractingName" column="subcontracting_name"/>
+        <result property="subcontractingType" column="subcontracting_type"/>
+        <result property="subcontractingCode" column="subcontracting_code"/>
+        <result property="createBy" column="create_by"/>
+        <result property="createId" column="create_id"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateBy" column="update_by"/>
+        <result property="updateId" column="update_id"/>
+        <result property="updateTime" column="update_time"/>
+        <result property="unit" column="unit"/>
+        <result property="isTransaction" column="is_transaction"/>
+        <result property="deptId" column="dept_id"/>
+        <result property="subcontractingLevel" column="subcontracting_level"/>
+        <result property="subcontractingLevelCd" column="subcontracting_level_cd"/>
+        <result property="state" column="state"/>
+        <result property="wfProcessId" column="wf_process_id"/>
+        <result property="wfBatch" column="wf_batch"/>
+        <result property="mainId" column="main_id"/>
+        <result property="isMain" column="is_main"/>
+        <result property="hostId" column="host_id"/>
+        <result property="organCode" column="organ_code"/>
+        <result property="delFlag" column="del_flag"/>
+    </resultMap>
+
+    <sql id="selectSubcontractingTypeVo">
+        select id,
+               up_id,
+               subcontracting_name,
+               subcontracting_type,
+               subcontracting_code,
+               create_by,
+               create_id,
+               create_time,
+               update_by,
+               update_id,
+               update_time,
+               unit,
+               is_transaction,
+               dept_id,
+               subcontracting_level,
+               subcontracting_level_cd,
+               state,
+               wf_process_id,
+               wf_batch,
+               main_id,
+               is_main,
+               host_id,
+               del_flag,
+               organ_code
+        from tb_subcontracting_type
+    </sql>
+
+    <select id="selectSubcontractingTypeList" parameterType="com.zhaocai.archives.dossier.domain.SubcontractingType"
+            resultMap="SubcontractingTypeResult">
+        <include refid="selectSubcontractingTypeVo"/>
+        <where>
+            <if test="upId != null ">and up_id = #{upId}</if>
+            <if test="subcontractingName != null  and subcontractingName != ''">and subcontracting_name like concat('%',
+                #{subcontractingName}, '%')
+            </if>
+            <if test="subcontractingType != null  and subcontractingType != ''">and subcontracting_type =
+                #{subcontractingType}
+            </if>
+            <if test="subcontractingCode != null  and subcontractingCode != ''">and subcontracting_code =
+                #{subcontractingCode}
+            </if>
+            <if test="createId != null ">and create_id = #{createId}</if>
+            <if test="updateId != null ">and update_id = #{updateId}</if>
+            <if test="unit != null  and unit != ''">and unit = #{unit}</if>
+            <if test="isTransaction != null  and isTransaction != ''">and is_transaction = #{isTransaction}</if>
+            <if test="deptId != null ">and dept_id = #{deptId}</if>
+            <if test="subcontractingLevel != null and subcontractingLevel != ''">and subcontracting_level =
+                #{subcontractingLevel}
+            </if>
+            <if test="subcontractingLevelCd != null and subcontractingLevelCd != '' ">and subcontracting_level_cd =
+                #{subcontractingLevelCd}
+            </if>
+            <if test="state != null ">and state = #{state}</if>
+            <if test="wfProcessId != null  and wfProcessId != ''">and wf_process_id = #{wfProcessId}</if>
+            <if test="wfBatch != null  and wfBatch != ''">and wf_batch = #{wfBatch}</if>
+            <if test="mainId != null  and mainId != ''">and main_id = #{mainId}</if>
+            <if test="isMain != null  and isMain != ''">and is_main = #{isMain}</if>
+            <if test="hostId != null  and hostId != ''">and host_id = #{hostId}</if>
+            <if test="organCode != null  and organCode != ''">and organ_code = #{organCode}</if>
+            <if test="delFlag != null  and delFlag != ''">and del_flag = #{delFlag}</if>
+        </where>
+        order by subcontracting_code ASC
+    </select>
+
+
+    <select id="selectSubcontractingTypeListCount"
+            parameterType="com.zhaocai.archives.dossier.domain.SubcontractingType" resultType="long">
+        select count(1)
+        from tb_subcontracting_type
+        <where>
+            <if test="upId != null ">and up_id = #{upId}</if>
+            <if test="subcontractingName != null  and subcontractingName != ''">and subcontracting_name like concat('%',
+                #{subcontractingName}, '%')
+            </if>
+            <if test="subcontractingType != null  and subcontractingType != ''">and subcontracting_type =
+                #{subcontractingType}
+            </if>
+            <if test="subcontractingCode != null  and subcontractingCode != ''">and subcontracting_code =
+                #{subcontractingCode}
+            </if>
+            <if test="createId != null ">and create_id = #{createId}</if>
+            <if test="updateId != null ">and update_id = #{updateId}</if>
+            <if test="unit != null  and unit != ''">and unit = #{unit}</if>
+            <if test="isTransaction != null  and isTransaction != ''">and is_transaction = #{isTransaction}</if>
+            <if test="deptId != null ">and dept_id = #{deptId}</if>
+            <if test="subcontractingLevel != null and subcontractingLevel != ''">and subcontracting_level =
+                #{subcontractingLevel}
+            </if>
+            <if test="subcontractingLevelCd != null and subcontractingLevelCd != '' ">and subcontracting_level_cd =
+                #{subcontractingLevelCd}
+            </if>
+            <if test="state != null ">and state = #{state}</if>
+            <if test="wfProcessId != null  and wfProcessId != ''">and wf_process_id = #{wfProcessId}</if>
+            <if test="wfBatch != null  and wfBatch != ''">and wf_batch = #{wfBatch}</if>
+            <if test="mainId != null  and mainId != ''">and main_id = #{mainId}</if>
+            <if test="isMain != null  and isMain != ''">and is_main = #{isMain}</if>
+            <if test="hostId != null  and hostId != ''">and host_id = #{hostId}</if>
+            <if test="organCode != null  and organCode != ''">and organ_code = #{organCode}</if>
+            <if test="delFlag != null  and delFlag != ''">and del_flag = #{delFlag}</if>
+        </where>
+    </select>
+
+    <select id="selectSubcontractingTypeById" parameterType="Long" resultMap="SubcontractingTypeResult">
+        <include refid="selectSubcontractingTypeVo"/>
+        where id = #{id}
+    </select>
+
+    <insert id="insertSubcontractingType" parameterType="com.zhaocai.archives.dossier.domain.SubcontractingType">
+        insert into tb_subcontracting_type
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="id != null">id,</if>
+            <if test="upId != null">up_id,</if>
+            <if test="subcontractingName != null">subcontracting_name,</if>
+            <if test="subcontractingType != null">subcontracting_type,</if>
+            <if test="subcontractingCode != null">subcontracting_code,</if>
+            <if test="createBy != null">create_by,</if>
+            <if test="createId != null">create_id,</if>
+            <if test="createTime != null">create_time,</if>
+            <if test="updateBy != null">update_by,</if>
+            <if test="updateId != null">update_id,</if>
+            <if test="updateTime != null">update_time,</if>
+            <if test="unit != null">unit,</if>
+            <if test="isTransaction != null">is_transaction,</if>
+            <if test="deptId != null">dept_id,</if>
+            <if test="subcontractingLevel != null">subcontracting_level,</if>
+            <if test="subcontractingLevelCd != null">subcontracting_level_cd,</if>
+            <if test="state != null">state,</if>
+            <if test="wfProcessId != null">wf_process_id,</if>
+            <if test="wfBatch != null">wf_batch,</if>
+            <if test="mainId != null">main_id,</if>
+            <if test="isMain != null">is_main,</if>
+            <if test="hostId != null">host_id,</if>
+            <if test="organCode != null">organ_code,</if>
+        </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="id != null">#{id},</if>
+            <if test="upId != null">#{upId},</if>
+            <if test="subcontractingName != null">#{subcontractingName},</if>
+            <if test="subcontractingType != null">#{subcontractingType},</if>
+            <if test="subcontractingCode != null">#{subcontractingCode},</if>
+            <if test="createBy != null">#{createBy},</if>
+            <if test="createId != null">#{createId},</if>
+            <if test="createTime != null">#{createTime},</if>
+            <if test="updateBy != null">#{updateBy},</if>
+            <if test="updateId != null">#{updateId},</if>
+            <if test="updateTime != null">#{updateTime},</if>
+            <if test="unit != null">#{unit},</if>
+            <if test="isTransaction != null">#{isTransaction},</if>
+            <if test="deptId != null">#{deptId},</if>
+            <if test="subcontractingLevel != null">#{subcontractingLevel},</if>
+            <if test="subcontractingLevelCd != null">#{subcontractingLevelCd},</if>
+            <if test="state != null">#{state},</if>
+            <if test="wfProcessId != null">#{wfProcessId},</if>
+            <if test="wfBatch != null">#{wfBatch},</if>
+            <if test="mainId != null">#{mainId},</if>
+            <if test="isMain != null">#{isMain},</if>
+            <if test="hostId != null">#{hostId},</if>
+            <if test="organCode != null">#{organCode},</if>
+        </trim>
+    </insert>
+
+    <update id="updateSubcontractingType" parameterType="com.zhaocai.archives.dossier.domain.SubcontractingType">
+        update tb_subcontracting_type
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="upId != null">up_id = #{upId},</if>
+            <if test="subcontractingName != null">subcontracting_name = #{subcontractingName},</if>
+            <if test="subcontractingType != null">subcontracting_type = #{subcontractingType},</if>
+            <if test="subcontractingCode != null">subcontracting_code = #{subcontractingCode},</if>
+            <if test="createBy != null">create_by = #{createBy},</if>
+            <if test="createId != null">create_id = #{createId},</if>
+            <if test="createTime != null">create_time = #{createTime},</if>
+            <if test="updateBy != null">update_by = #{updateBy},</if>
+            <if test="updateId != null">update_id = #{updateId},</if>
+            <if test="updateTime != null">update_time = #{updateTime},</if>
+            <if test="unit != null">unit = #{unit},</if>
+            <if test="isTransaction != null">is_transaction = #{isTransaction},</if>
+            <if test="deptId != null">dept_id = #{deptId},</if>
+            <if test="subcontractingLevel != null">subcontracting_level = #{subcontractingLevel},</if>
+            <if test="subcontractingLevelCd != null">subcontracting_level_cd = #{subcontractingLevelCd},</if>
+            <if test="state != null">state = #{state},</if>
+            <if test="wfProcessId != null">wf_process_id = #{wfProcessId},</if>
+            <if test="wfBatch != null">wf_batch = #{wfBatch},</if>
+            <if test="mainId != null">main_id = #{mainId},</if>
+            <if test="isMain != null">is_main = #{isMain},</if>
+            <if test="hostId != null">host_id = #{hostId},</if>
+            <if test="organCode != null">organ_code = #{organCode},</if>
+        </trim>
+        where id = #{id}
+    </update>
+
+    <delete id="deleteSubcontractingTypeById" parameterType="Long">
+        delete
+        from tb_subcontracting_type
+        where id = #{id}
+    </delete>
+
+    <delete id="deleteSubcontractingTypeByIds" parameterType="String">
+        delete from tb_subcontracting_type where id in
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+
+    <select id="getMaxCode" resultType="integer">
+        select max(CONVERT(replace(subcontracting_code, #{upCode}, ''), SIGNED)) as code
+        from tb_subcontracting_type
+        where up_id = #{upId}
+          and del_flag = '0'
+          and organ_code = #{organCode}
+    </select>
+
+
+    <select id="getReuseTowCode" resultType="integer">
+        WITH RECURSIVE numbers AS (SELECT 1 AS n
+                                   UNION ALL
+                                   SELECT n + 1
+                                   FROM numbers
+                                   WHERE n &lt; #{pdz})
+        SELECT n AS missing_num
+        FROM numbers
+                 LEFT JOIN (select CONVERT(replace(subcontracting_code, #{upCode}, ''), SIGNED) as code
+                            from tb_subcontracting_type
+                            where up_id = #{upId}
+                              and del_flag = '0'
+                              and organ_code = #{organCode}) t ON numbers.n = t.code
+        WHERE t.code IS NULL
+        ORDER BY n limit 1
+    </select>
+
+    <select id="getMaterialJoinNoMy" parameterType="long" resultType="int">
+        select sum(a.sl)
+        from (select count(1) as sl
+              from tb_subcontracting_details
+              where type_id = #{id}
+                and del_flag = '0'
+              union all
+              select count(1) as sl
+              from tb_subcontracting_item
+              where type_id = #{id}
+                and del_flag = '0'
+              union all
+              select count(1) as sl
+              from tb_subcontracting_type
+              where up_id = #{id}
+                and del_flag = '0') as a
+    </select>
+
+    <select id="getMaterialJoin" parameterType="long" resultType="int">
+        select sum(a.sl)
+        from (select count(1) as sl
+              from tb_subcontracting_item t
+              where t.type_id = #{id}
+                and t.is_main = 'N'
+                and t.del_flag = '0'
+                and t.state in ('0', '5')
+              union all
+              select count(1) as sl
+              from tb_subcontracting_eigenvalue t1
+              where t1.type_id = #{id}
+                and t1.is_main = 'N'
+                and t1.del_flag = '0'
+                and t1.state in ('0', '5')
+              union all
+              select count(1) as sl
+              from tb_subcontracting_details t2
+              where t2.type_id = #{id}
+                and t2.is_main = 'N'
+                and t2.del_flag = '0'
+                and t2.state in ('0', '5')
+              union all
+              select count(1) as sl
+              from tb_subcontracting_type t3
+              where t3.id = #{id}
+                and t3.is_main = 'N'
+                and t3.del_flag = '0'
+                and t3.state in ('0', '5')) as a
+    </select>
+
+
+    <select id="getProcessed" resultMap="SubcontractingTypeResult" parameterType="string">
+        select t1.*
+        from major_subcontracting_class t,
+             tb_subcontracting_type t1
+        where t.son_id = t1.id
+          and t.son_id != null
+            and t1.organ_code = #{organCode}
+        union all
+        select t1.*
+        from tb_subcontracting_type t1
+        where main_id != '0' and t1.organ_code = #{organCode}
+    </select>
+
+</mapper>

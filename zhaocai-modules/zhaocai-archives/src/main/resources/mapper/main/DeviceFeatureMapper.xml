@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhaocai.archives.main.mapper.DeviceFeatureMapper">
+
+    <resultMap type="com.zhaocai.archives.main.domain.DeviceFeature" id="DeviceFeatureResult">
+        <result property="id" column="id"/>
+        <result property="deviceClassId" column="device_class_id"/>
+        <result property="featureCode" column="feature_code"/>
+        <result property="featureName" column="feature_name"/>
+        <result property="createId" column="create_id"/>
+        <result property="createBy" column="create_by"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateBy" column="update_by"/>
+        <result property="updateTime" column="update_time"/>
+        <result property="valid" column="valid"/>
+        <result property="sonId" column="son_id"/>
+        <result property="isTb" column="is_tb"/>
+    </resultMap>
+
+    <sql id="selectDeviceFeatureVo">
+        select id,
+               device_class_id,
+               feature_code,
+               feature_name,
+               create_id,
+               create_by,
+               create_time,
+               update_by,
+               update_time,
+               valid,
+               is_tb,
+               son_id
+        from device_feature
+    </sql>
+
+    <select id="selectDeviceFeatureListCount" parameterType="com.zhaocai.archives.main.domain.DeviceFeature" resultType="long">
+        select count(1)
+        from device_feature
+        <where>
+            <if test="deviceClassId != null  and deviceClassId != ''">and device_class_id = #{deviceClassId}</if>
+            <if test="featureCode != null  and featureCode != ''">and feature_code = #{featureCode}</if>
+            <if test="featureName != null  and featureName != ''">and feature_name like concat('%', #{featureName},
+                '%')
+            </if>
+            <if test="createId != null  and createId != ''">and create_id = #{createId}</if>
+            <if test="valid != null ">and valid = #{valid}</if>
+            <if test="sonId != null ">and son_id = #{sonId}</if>
+        </where>
+    </select>
+
+    <select id="selectDeviceFeatureList" parameterType="com.zhaocai.archives.main.domain.DeviceFeature" resultMap="DeviceFeatureResult">
+        <include refid="selectDeviceFeatureVo"/>
+        <where>
+            <if test="deviceClassId != null  and deviceClassId != ''">and device_class_id = #{deviceClassId}</if>
+            <if test="featureCode != null  and featureCode != ''">and feature_code = #{featureCode}</if>
+            <if test="featureName != null  and featureName != ''">and feature_name like concat('%', #{featureName},
+                '%')
+            </if>
+            <if test="createId != null  and createId != ''">and create_id = #{createId}</if>
+            <if test="valid != null ">and valid = #{valid}</if>
+            <if test="sonId != null ">and son_id = #{sonId}</if>
+            <if test="isTb != null ">and is_tb = #{isTb}</if>
+        </where>
+        order by feature_code ASC
+    </select>
+
+    <select id="selectDeviceFeatureById" parameterType="String" resultMap="DeviceFeatureResult">
+        <include refid="selectDeviceFeatureVo"/>
+        where id = #{id}
+    </select>
+
+    <insert id="insertDeviceFeature" parameterType="com.zhaocai.archives.main.domain.DeviceFeature">
+        insert into device_feature
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="id != null">id,</if>
+            <if test="deviceClassId != null">device_class_id,</if>
+            <if test="featureCode != null and featureCode != ''">feature_code,</if>
+            <if test="featureName != null and featureName != ''">feature_name,</if>
+            <if test="createId != null">create_id,</if>
+            <if test="createBy != null">create_by,</if>
+            <if test="createTime != null">create_time,</if>
+            <if test="updateBy != null">update_by,</if>
+            <if test="updateTime != null">update_time,</if>
+            <if test="valid != null">valid,</if>
+            <if test="sonId != null">son_id,</if>
+            <if test="isTb != null">is_tb,</if>
+        </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="id != null">#{id},</if>
+            <if test="deviceClassId != null">#{deviceClassId},</if>
+            <if test="featureCode != null and featureCode != ''">#{featureCode},</if>
+            <if test="featureName != null and featureName != ''">#{featureName},</if>
+            <if test="createId != null">#{createId},</if>
+            <if test="createBy != null">#{createBy},</if>
+            <if test="createTime != null">#{createTime},</if>
+            <if test="updateBy != null">#{updateBy},</if>
+            <if test="updateTime != null">#{updateTime},</if>
+            <if test="valid != null">#{valid},</if>
+            <if test="sonId != null">#{sonId},</if>
+            <if test="isTb != null">#{isTb},</if>
+        </trim>
+    </insert>
+
+    <update id="updateDeviceFeature" parameterType="com.zhaocai.archives.main.domain.DeviceFeature">
+        update device_feature
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="deviceClassId != null">device_class_id = #{deviceClassId},</if>
+            <if test="featureCode != null and featureCode != ''">feature_code = #{featureCode},</if>
+            <if test="featureName != null and featureName != ''">feature_name = #{featureName},</if>
+            <if test="createId != null">create_id = #{createId},</if>
+            <if test="createBy != null">create_by = #{createBy},</if>
+            <if test="createTime != null">create_time = #{createTime},</if>
+            <if test="updateBy != null">update_by = #{updateBy},</if>
+            <if test="updateTime != null">update_time = #{updateTime},</if>
+            <if test="valid != null">valid = #{valid},</if>
+            <if test="sonId != null">son_id = #{sonId},</if>
+            <if test="isTb != null">is_tb = #{isTb},</if>
+        </trim>
+        where id = #{id}
+    </update>
+
+    <delete id="deleteDeviceFeatureById" parameterType="String">
+        delete
+        from device_feature
+        where id = #{id}
+    </delete>
+
+    <delete id="deleteDeviceFeatureByIds" parameterType="String">
+        delete from device_feature where id in
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+</mapper>

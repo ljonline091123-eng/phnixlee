@@ -1,0 +1,199 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhaocai.archives.main.mapper.MtrClassMapper">
+
+    <resultMap type="com.zhaocai.archives.main.domain.MtrClass" id="MtrClassResult">
+        <result property="id" column="id"/>
+        <result property="mtrClassCode" column="mtr_class_code"/>
+        <result property="mtrClassName" column="mtr_class_name"/>
+        <result property="mtrClassType" column="mtr_class_type"/>
+        <result property="measureUnit" column="measure_unit"/>
+        <result property="subjectMatter" column="subject_matter"/>
+        <result property="parentId" column="parent_id"/>
+        <result property="classLevel" column="class_level"/>
+        <result property="classLevelCd" column="class_level_cd"/>
+        <result property="createId" column="create_id"/>
+        <result property="createBy" column="create_by"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateBy" column="update_by"/>
+        <result property="updateTime" column="update_time"/>
+        <result property="valid" column="valid"/>
+        <result property="sonId" column="son_id"/>
+        <result property="isTb" column="is_tb"/>
+    </resultMap>
+
+    <sql id="selectMtrClassVo">
+        select id,
+               mtr_class_code,
+               mtr_class_name,
+               mtr_class_type,
+               measure_unit,
+               subject_matter,
+               parent_id,
+               class_level,
+               class_level_cd,
+               create_id,
+               create_by,
+               create_time,
+               update_by,
+               update_time,
+               valid,
+               is_tb,
+               son_id
+        from mtr_class
+    </sql>
+
+
+    <select id="selectMtrClassListCount" parameterType="com.zhaocai.archives.main.domain.MtrClass" resultType="long">
+        select count(1)
+        from mtr_class
+        <where>
+            <if test="mtrClassCode != null  and mtrClassCode != ''">and mtr_class_code = #{mtrClassCode}</if>
+            <if test="mtrClassName != null  and mtrClassName != ''">and mtr_class_name like concat('%', #{mtrClassName},
+                '%')
+            </if>
+            <if test="mtrClassType != null  and mtrClassType != ''">and mtr_class_type = #{mtrClassType}</if>
+            <if test="measureUnit != null  and measureUnit != ''">and measure_unit = #{measureUnit}</if>
+            <if test="subjectMatter != null ">and subject_matter = #{subjectMatter}</if>
+            <if test="parentId != null  and parentId != ''">and parent_id = #{parentId}</if>
+            <if test="classLevel != null  and classLevel != ''">and class_level = #{classLevel}</if>
+            <if test="classLevelCd != null  and classLevelCd != ''">and class_level_cd = #{classLevelCd}</if>
+            <if test="createId != null  and createId != ''">and create_id = #{createId}</if>
+            <if test="valid != null ">and valid = #{valid}</if>
+            <if test="sonId != null ">and son_id = #{sonId}</if>
+            <if test="isTb != null ">and is_tb = #{isTb}</if>
+        </where>
+        order by mtr_class_code asc
+    </select>
+
+    <select id="selectMtrClassList" parameterType="com.zhaocai.archives.main.domain.MtrClass" resultMap="MtrClassResult">
+        <include refid="selectMtrClassVo"/>
+        <where>
+            <if test="mtrClassCode != null  and mtrClassCode != ''">and mtr_class_code = #{mtrClassCode}</if>
+            <if test="mtrClassName != null  and mtrClassName != ''">and mtr_class_name like concat('%', #{mtrClassName},
+                '%')
+            </if>
+            <if test="mtrClassType != null  and mtrClassType != ''">and mtr_class_type = #{mtrClassType}</if>
+            <if test="measureUnit != null  and measureUnit != ''">and measure_unit = #{measureUnit}</if>
+            <if test="subjectMatter != null ">and subject_matter = #{subjectMatter}</if>
+            <if test="parentId != null  and parentId != ''">and parent_id = #{parentId}</if>
+            <if test="classLevel != null  and classLevel != ''">and class_level = #{classLevel}</if>
+            <if test="classLevelCd != null  and classLevelCd != ''">and class_level_cd = #{classLevelCd}</if>
+            <if test="createId != null  and createId != ''">and create_id = #{createId}</if>
+            <if test="valid != null ">and valid = #{valid}</if>
+            <if test="sonId != null ">and son_id = #{sonId}</if>
+            <if test="isTb != null ">and is_tb = #{isTb}</if>
+        </where>
+        order by mtr_class_code asc
+    </select>
+
+    <select id="selectMtrClassById" parameterType="String" resultMap="MtrClassResult">
+        <include refid="selectMtrClassVo"/>
+        where id = #{id}
+    </select>
+
+    <insert id="insertMtrClass" parameterType="com.zhaocai.archives.main.domain.MtrClass">
+        insert into mtr_class
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="id != null">id,</if>
+            <if test="mtrClassCode != null and mtrClassCode != ''">mtr_class_code,</if>
+            <if test="mtrClassName != null and mtrClassName != ''">mtr_class_name,</if>
+            <if test="mtrClassType != null and mtrClassType != ''">mtr_class_type,</if>
+            <if test="measureUnit != null">measure_unit,</if>
+            <if test="subjectMatter != null">subject_matter,</if>
+            <if test="parentId != null">parent_id,</if>
+            <if test="classLevel != null">class_level,</if>
+            <if test="classLevelCd != null">class_level_cd,</if>
+            <if test="createId != null">create_id,</if>
+            <if test="createBy != null">create_by,</if>
+            <if test="createTime != null">create_time,</if>
+            <if test="updateBy != null">update_by,</if>
+            <if test="updateTime != null">update_time,</if>
+            <if test="valid != null">valid,</if>
+            <if test="sonId != null">son_id,</if>
+            <if test="isTb != null">is_tb,</if>
+        </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="id != null">#{id},</if>
+            <if test="mtrClassCode != null and mtrClassCode != ''">#{mtrClassCode},</if>
+            <if test="mtrClassName != null and mtrClassName != ''">#{mtrClassName},</if>
+            <if test="mtrClassType != null and mtrClassType != ''">#{mtrClassType},</if>
+            <if test="measureUnit != null">#{measureUnit},</if>
+            <if test="subjectMatter != null">#{subjectMatter},</if>
+            <if test="parentId != null">#{parentId},</if>
+            <if test="classLevel != null">#{classLevel},</if>
+            <if test="classLevelCd != null">#{classLevelCd},</if>
+            <if test="createId != null">#{createId},</if>
+            <if test="createBy != null">#{createBy},</if>
+            <if test="createTime != null">#{createTime},</if>
+            <if test="updateBy != null">#{updateBy},</if>
+            <if test="updateTime != null">#{updateTime},</if>
+            <if test="valid != null">#{valid},</if>
+            <if test="sonId != null">#{sonId},</if>
+            <if test="isTb != null">#{isTb},</if>
+        </trim>
+    </insert>
+
+    <update id="updateMtrClass" parameterType="com.zhaocai.archives.main.domain.MtrClass">
+        update mtr_class
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="mtrClassCode != null and mtrClassCode != ''">mtr_class_code = #{mtrClassCode},</if>
+            <if test="mtrClassName != null and mtrClassName != ''">mtr_class_name = #{mtrClassName},</if>
+            <if test="mtrClassType != null and mtrClassType != ''">mtr_class_type = #{mtrClassType},</if>
+            <if test="measureUnit != null">measure_unit = #{measureUnit},</if>
+            <if test="subjectMatter != null">subject_matter = #{subjectMatter},</if>
+            <if test="parentId != null">parent_id = #{parentId},</if>
+            <if test="classLevel != null">class_level = #{classLevel},</if>
+            <if test="classLevelCd != null">class_level_cd = #{classLevelCd},</if>
+            <if test="createId != null">create_id = #{createId},</if>
+            <if test="createBy != null">create_by = #{createBy},</if>
+            <if test="createTime != null">create_time = #{createTime},</if>
+            <if test="updateBy != null">update_by = #{updateBy},</if>
+            <if test="updateTime != null">update_time = #{updateTime},</if>
+            <if test="valid != null">valid = #{valid},</if>
+            <if test="sonId != null">son_id = #{sonId},</if>
+            <if test="isTb != null">is_tb = #{isTb},</if>
+        </trim>
+        where id = #{id}
+    </update>
+
+    <delete id="deleteMtrClassById" parameterType="String">
+        delete
+        from mtr_class
+        where id = #{id}
+    </delete>
+
+    <delete id="deleteMtrClassByIds" parameterType="String">
+        delete from mtr_class where id in
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+
+    <select id="getMaxCode" resultType="integer">
+        select max(CONVERT(replace(mtr_class_code, #{upCode}, ''), SIGNED)) as code
+        from mtr_class
+        where parent_id = #{upId}
+          and valid = '0'
+    </select>
+
+    <select id="getMaterialJoinNoMy" parameterType="string" resultType="int">
+        select sum(a.sl)
+        from (select count(1) as sl
+              from mtr_archives
+              where mtr_class_id = #{id}
+                and valid = '0'
+              union all
+              select count(1) as sl
+              from mtr_feature
+              where mtr_class_id = #{id}
+                and valid = '0'
+              union all
+              select count(1) as sl
+              from mtr_class
+              where parent_id = #{id}
+                and valid = '0') as a
+    </select>
+</mapper>

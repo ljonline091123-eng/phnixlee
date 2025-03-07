@@ -1,0 +1,146 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhaocai.archives.main.mapper.MtrFeatureMapper">
+
+    <resultMap type="com.zhaocai.archives.main.domain.MtrFeature" id="MtrFeatureResult">
+        <result property="id" column="id"/>
+        <result property="mtrClassId" column="mtr_class_id"/>
+        <result property="featureCode" column="feature_code"/>
+        <result property="featureName" column="feature_name"/>
+        <result property="createId" column="create_id"/>
+        <result property="createBy" column="create_by"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateBy" column="update_by"/>
+        <result property="updateTime" column="update_time"/>
+        <result property="valid" column="valid"/>
+        <result property="sonId" column="son_id"/>
+        <result property="isTb" column="is_tb"/>
+    </resultMap>
+
+    <sql id="selectMtrFeatureVo">
+        select id,
+               mtr_class_id,
+               feature_code,
+               feature_name,
+               create_id,
+               create_by,
+               create_time,
+               update_by,
+               update_time,
+               valid,
+               is_tb,
+               son_id
+        from mtr_feature
+    </sql>
+
+    <select id="selectMtrFeatureListCount" parameterType="com.zhaocai.archives.main.domain.MtrFeature" resultType="long">
+        select count(1)
+        from mtr_feature
+        <where>
+            <if test="mtrClassId != null  and mtrClassId != ''">and mtr_class_id = #{mtrClassId}</if>
+            <if test="featureCode != null  and featureCode != ''">and feature_code = #{featureCode}</if>
+            <if test="featureName != null  and featureName != ''">and feature_name like concat('%', #{featureName},
+                '%')
+            </if>
+            <if test="createId != null  and createId != ''">and create_id = #{createId}</if>
+            <if test="valid != null ">and valid = #{valid}</if>
+            <if test="sonId != null ">and son_id = #{sonId}</if>
+            <if test="isTb != null ">and is_tb = #{isTb}</if>
+        </where>
+    </select>
+
+    <select id="selectMtrFeatureList" parameterType="com.zhaocai.archives.main.domain.MtrFeature" resultMap="MtrFeatureResult">
+        <include refid="selectMtrFeatureVo"/>
+        <where>
+            <if test="mtrClassId != null  and mtrClassId != ''">and mtr_class_id = #{mtrClassId}</if>
+            <if test="featureCode != null  and featureCode != ''">and feature_code = #{featureCode}</if>
+            <if test="featureName != null  and featureName != ''">and feature_name like concat('%', #{featureName},
+                '%')
+            </if>
+            <if test="createId != null  and createId != ''">and create_id = #{createId}</if>
+            <if test="valid != null ">and valid = #{valid}</if>
+            <if test="sonId != null ">and son_id = #{sonId}</if>
+            <if test="isTb != null ">and is_tb = #{isTb}</if>
+        </where>
+        order by feature_code ASC
+    </select>
+
+    <select id="selectMtrFeatureById" parameterType="String" resultMap="MtrFeatureResult">
+        <include refid="selectMtrFeatureVo"/>
+        where id = #{id}
+    </select>
+
+    <insert id="insertMtrFeature" parameterType="com.zhaocai.archives.main.domain.MtrFeature">
+        insert into mtr_feature
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="id != null">id,</if>
+            <if test="mtrClassId != null">mtr_class_id,</if>
+            <if test="featureCode != null and featureCode != ''">feature_code,</if>
+            <if test="featureName != null and featureName != ''">feature_name,</if>
+            <if test="createId != null">create_id,</if>
+            <if test="createBy != null">create_by,</if>
+            <if test="createTime != null">create_time,</if>
+            <if test="updateBy != null">update_by,</if>
+            <if test="updateTime != null">update_time,</if>
+            <if test="valid != null">valid,</if>
+            <if test="sonId != null">son_id,</if>
+            <if test="isTb != null">is_tb,</if>
+        </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="id != null">#{id},</if>
+            <if test="mtrClassId != null">#{mtrClassId},</if>
+            <if test="featureCode != null and featureCode != ''">#{featureCode},</if>
+            <if test="featureName != null and featureName != ''">#{featureName},</if>
+            <if test="createId != null">#{createId},</if>
+            <if test="createBy != null">#{createBy},</if>
+            <if test="createTime != null">#{createTime},</if>
+            <if test="updateBy != null">#{updateBy},</if>
+            <if test="updateTime != null">#{updateTime},</if>
+            <if test="valid != null">#{valid},</if>
+            <if test="sonId != null">#{sonId},</if>
+            <if test="isTb != null">#{isTb},</if>
+        </trim>
+    </insert>
+
+    <update id="updateMtrFeature" parameterType="com.zhaocai.archives.main.domain.MtrFeature">
+        update mtr_feature
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="mtrClassId != null">mtr_class_id = #{mtrClassId},</if>
+            <if test="featureCode != null and featureCode != ''">feature_code = #{featureCode},</if>
+            <if test="featureName != null and featureName != ''">feature_name = #{featureName},</if>
+            <if test="createId != null">create_id = #{createId},</if>
+            <if test="createBy != null">create_by = #{createBy},</if>
+            <if test="createTime != null">create_time = #{createTime},</if>
+            <if test="updateBy != null">update_by = #{updateBy},</if>
+            <if test="updateTime != null">update_time = #{updateTime},</if>
+            <if test="valid != null">valid = #{valid},</if>
+            <if test="sonId != null">son_id = #{sonId},</if>
+            <if test="isTb != null">is_tb = #{isTb},</if>
+        </trim>
+        where id = #{id}
+    </update>
+
+    <delete id="deleteMtrFeatureById" parameterType="String">
+        delete
+        from mtr_feature
+        where id = #{id}
+    </delete>
+
+    <delete id="deleteMtrFeatureByIds" parameterType="String">
+        delete from mtr_feature where id in
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+
+
+    <select id="getMaxCode" parameterType="String" resultType="String">
+        select max(feature_code)
+        from mtr_feature mf
+        where mtr_class_id = #{id}
+          and valid = '0'
+    </select>
+
+</mapper>

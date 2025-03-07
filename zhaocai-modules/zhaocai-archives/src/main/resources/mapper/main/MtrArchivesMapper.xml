@@ -1,0 +1,148 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhaocai.archives.main.mapper.MtrArchivesMapper">
+
+    <resultMap type="com.zhaocai.archives.main.domain.MtrArchives" id="MtrArchivesResult">
+        <result property="id" column="id"/>
+        <result property="mtrClassId" column="mtr_class_id"/>
+        <result property="mtrCode" column="mtr_code"/>
+        <result property="mtrName" column="mtr_name"/>
+        <result property="specs" column="specs"/>
+        <result property="measureUnit" column="measure_unit"/>
+        <result property="createId" column="create_id"/>
+        <result property="createBy" column="create_by"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateBy" column="update_by"/>
+        <result property="updateTime" column="update_time"/>
+        <result property="valid" column="valid"/>
+        <result property="sonId" column="son_id"/>
+    </resultMap>
+
+    <sql id="selectMtrArchivesVo">
+        select id,
+               mtr_class_id,
+               mtr_code,
+               mtr_name,
+               specs,
+               measure_unit,
+               create_id,
+               create_by,
+               create_time,
+               update_by,
+               update_time,
+               valid,
+               son_id
+        from mtr_archives
+    </sql>
+
+    <select id="selectMtrArchivesListCount" parameterType="com.zhaocai.archives.main.domain.MtrArchives" resultType="long">
+        select count(1)
+        from mtr_archives
+        <where>
+            <if test="mtrClassId != null  and mtrClassId != ''">and mtr_class_id = #{mtrClassId}</if>
+            <if test="mtrCode != null  and mtrCode != ''">and mtr_code = #{mtrCode}</if>
+            <if test="mtrName != null  and mtrName != ''">and mtr_name like concat('%', #{mtrName}, '%')</if>
+            <if test="specs != null  and specs != ''">and specs = #{specs}</if>
+            <if test="measureUnit != null  and measureUnit != ''">and measure_unit = #{measureUnit}</if>
+            <if test="createId != null  and createId != ''">and create_id = #{createId}</if>
+            <if test="valid != null ">and valid = #{valid}</if>
+            <if test="sonId != null ">and son_id = #{sonId}</if>
+        </where>
+    </select>
+
+    <select id="selectMtrArchivesList" parameterType="com.zhaocai.archives.main.domain.MtrArchives" resultMap="MtrArchivesResult">
+        <include refid="selectMtrArchivesVo"/>
+        <where>
+            <if test="mtrClassId != null  and mtrClassId != ''">and mtr_class_id = #{mtrClassId}</if>
+            <if test="mtrCode != null  and mtrCode != ''">and mtr_code = #{mtrCode}</if>
+            <if test="mtrName != null  and mtrName != ''">and mtr_name like concat('%', #{mtrName}, '%')</if>
+            <if test="specs != null  and specs != ''">and specs = #{specs}</if>
+            <if test="measureUnit != null  and measureUnit != ''">and measure_unit = #{measureUnit}</if>
+            <if test="createId != null  and createId != ''">and create_id = #{createId}</if>
+            <if test="valid != null ">and valid = #{valid}</if>
+            <if test="sonId != null ">and son_id = #{sonId}</if>
+        </where>
+        order by mtr_code ASC
+    </select>
+
+    <select id="selectMtrArchivesById" parameterType="String" resultMap="MtrArchivesResult">
+        <include refid="selectMtrArchivesVo"/>
+        where id = #{id}
+    </select>
+
+    <insert id="insertMtrArchives" parameterType="com.zhaocai.archives.main.domain.MtrArchives">
+        insert into mtr_archives
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="id != null">id,</if>
+            <if test="mtrClassId != null and mtrClassId != ''">mtr_class_id,</if>
+            <if test="mtrCode != null and mtrCode != ''">mtr_code,</if>
+            <if test="mtrName != null and mtrName != ''">mtr_name,</if>
+            <if test="specs != null">specs,</if>
+            <if test="measureUnit != null">measure_unit,</if>
+            <if test="createId != null">create_id,</if>
+            <if test="createBy != null">create_by,</if>
+            <if test="createTime != null">create_time,</if>
+            <if test="updateBy != null">update_by,</if>
+            <if test="updateTime != null">update_time,</if>
+            <if test="valid != null">valid,</if>
+            <if test="sonId != null">son_id,</if>
+        </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="id != null">#{id},</if>
+            <if test="mtrClassId != null and mtrClassId != ''">#{mtrClassId},</if>
+            <if test="mtrCode != null and mtrCode != ''">#{mtrCode},</if>
+            <if test="mtrName != null and mtrName != ''">#{mtrName},</if>
+            <if test="specs != null">#{specs},</if>
+            <if test="measureUnit != null">#{measureUnit},</if>
+            <if test="createId != null">#{createId},</if>
+            <if test="createBy != null">#{createBy},</if>
+            <if test="createTime != null">#{createTime},</if>
+            <if test="updateBy != null">#{updateBy},</if>
+            <if test="updateTime != null">#{updateTime},</if>
+            <if test="valid != null">#{valid},</if>
+            <if test="sonId != null">#{sonId},</if>
+        </trim>
+    </insert>
+
+    <update id="updateMtrArchives" parameterType="com.zhaocai.archives.main.domain.MtrArchives">
+        update mtr_archives
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="mtrClassId != null and mtrClassId != ''">mtr_class_id = #{mtrClassId},</if>
+            <if test="mtrCode != null and mtrCode != ''">mtr_code = #{mtrCode},</if>
+            <if test="mtrName != null and mtrName != ''">mtr_name = #{mtrName},</if>
+            <if test="specs != null">specs = #{specs},</if>
+            <if test="measureUnit != null">measure_unit = #{measureUnit},</if>
+            <if test="createId != null">create_id = #{createId},</if>
+            <if test="createBy != null">create_by = #{createBy},</if>
+            <if test="createTime != null">create_time = #{createTime},</if>
+            <if test="updateBy != null">update_by = #{updateBy},</if>
+            <if test="updateTime != null">update_time = #{updateTime},</if>
+            <if test="valid != null">valid = #{valid},</if>
+            <if test="sonId != null">son_id = #{sonId},</if>
+        </trim>
+        where id = #{id}
+    </update>
+
+    <delete id="deleteMtrArchivesById" parameterType="String">
+        delete
+        from mtr_archives
+        where id = #{id}
+    </delete>
+
+    <delete id="deleteMtrArchivesByIds" parameterType="String">
+        delete from mtr_archives where id in
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+
+    <select id="getMaxCode" parameterType="String" resultType="String">
+        select max(mtr_code)
+        from mtr_archives
+        where mtr_class_id = #{id}
+          and valid = '0'
+    </select>
+
+</mapper>

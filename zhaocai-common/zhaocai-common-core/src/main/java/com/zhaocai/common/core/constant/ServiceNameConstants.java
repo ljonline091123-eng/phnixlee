@@ -5,8 +5,7 @@ package com.zhaocai.common.core.constant;
  *
  * @author ruoyi
  */
-public class ServiceNameConstants
-{
+public class ServiceNameConstants {
     /**
      * 认证服务的serviceid
      */
@@ -31,4 +30,9 @@ public class ServiceNameConstants
      * 审批流
      */
     public static final String FLOWABLE_SERVICE = "zhaocai-flowable";
+
+    /**
+     * 业务系统-档案
+     */
+    public static final String ARCHIVES_SERVICE = "zhaocai-archives";
 }
