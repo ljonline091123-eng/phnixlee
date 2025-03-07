@@ -1502,9 +1502,10 @@ export default {
         if(this.noticeDetail?.tenderNotice?.twiceQuotState === 1){
           const { id: noticeId } = this.noticeDetail?.tenderNotice || {};
           try {
-            if(this.noticeDetail.tenderNotice.noticeStatus === 3){
-              const res = await twiceBidFinish(noticeId);
-            }
+            /* 评标中 允许二次报价 */
+            // if(this.noticeDetail.tenderNotice.noticeStatus === 3){
+            //   const res = await twiceBidFinish(noticeId);
+            // }
           } catch (err) {
             console.log(err);
           }
