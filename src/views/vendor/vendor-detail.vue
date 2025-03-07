@@ -896,7 +896,7 @@ import {
   getPermissionButton, getPermissionButtonVendor,
   postAuditProcess, postAuditProcessVendor,
   getLoadTaskDef, getLoadTaskDefVendor,
-  getProcessLogList, getOrgByUserId,
+  getProcessLogList, getOrgByUserId, postGetOrg,
 } from "@/api/procurement/manage";
 import ApprovalForm from "@/components/Approval/approvalForm.vue";
 import ApprovalDetailsDialog from "@/components/Approval/approvalDetailsDialog.vue";
@@ -1312,7 +1312,7 @@ export default {
         }else{
           try{
             /* 未提交时查看流程执行流程，根据首次合作单位 获取流程分组 */
-            res = await getOrgByUserId(this.vendor.firstCooperationCompanyCode);
+            res = await postGetOrg(this.vendor.firstCooperationCompanyCode);
             if(!res.data)throw new Error("没有二三级单位流程");
           } catch (error) {
             await this.$confirm('根据【' + this.vendor.firstCooperationCompanyCode + '】未查询到二三级单位流程，<br>' +
