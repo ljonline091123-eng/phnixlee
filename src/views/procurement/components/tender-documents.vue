@@ -217,20 +217,14 @@
           </el-form-item>
         </el-row>
 
-        <PageTitle title="招标文件内容" marginBottom="15px" />
-        <!-- <FileModule
-          :attachmentId="
-            scheme.biddingTemplate && scheme.biddingTemplate.attachmentId
-          "
-          height="500px"
-        /> -->
+        <!-- <PageTitle title="招标文件内容" marginBottom="15px" />
         <iframe allowfullscreen="true"
           v-if="scheme.biddingTemplate"
           :src= this.viewFileUrl
           width="100%"
           height="700px"
           frameborder="0"
-        ></iframe>
+        ></iframe> -->
       </el-form>
       <!-- 选择供应商 -->
       <el-dialog
@@ -639,7 +633,7 @@ export default {
       }
     };
     return {
-      viewFileUrl:"",  //预览招标文件url
+      // viewFileUrl:"",  //预览招标文件url
       // * 方案名称
       schemeName: '',
       formatApplyTime: '',
@@ -830,15 +824,15 @@ export default {
         console.log('File Name:', fileName);
         console.log('File URL:', fileUrl);
         //获取文档中台的文档编辑URL
-        try {
-          const query1 = { fileName: fileName, fileUrl: fileUrl };
-          console.log('query1:', query1);
-          const res = await getViweFileURL(query1);
-          this.viewFileUrl = res.data;
-          console.log("viewFileUrl:",this.viewFileUrl);
-        } catch (err) {
-          console.log(err);
-        }
+        // try {
+        //   const query1 = { fileName: fileName, fileUrl: fileUrl };
+        //   console.log('query1:', query1);
+        //   const res = await getViweFileURL(query1);
+        //   this.viewFileUrl = res.data;
+        //   console.log("viewFileUrl:",this.viewFileUrl);
+        // } catch (err) {
+        //   console.log(err);
+        // }
       } else {
         console.warn('biddingTemplate 数据未正确加载');
       }

@@ -344,7 +344,7 @@
                   >
                     {{
                       procurementSchemeBidding.biddingTemplate &&
-                      procurementSchemeBidding.biddingTemplate.templateName
+                      procurementSchemeBidding.biddingTemplate.fileName
                     }}
                   </a>
                 </el-form-item>
@@ -374,7 +374,7 @@
                   >
                     {{
                       procurementSchemeBidding.contractTemplate &&
-                      procurementSchemeBidding.contractTemplate.templateName
+                      procurementSchemeBidding.contractTemplate.fileName
                     }}
                   </a>
                 </el-form-item>
@@ -400,8 +400,12 @@
                   <!-- 设定文件列表最大高度，超出后滚动 -->
                   <div class="file-list-container">
                     <div v-for="(file, index) in procurementSchemeBidding.otherAttachmentList" :key="file.uid" class="file-item">
-                      <span class="file-name">{{ file.fileName }}</span>
-                      <span class="file-action preview" v-if="isPreviewable(file.fileName)" @click="showTemplate({...file,attachmentId: file.id},'otherFile')">预览</span>
+                      <!-- <span class="file-name">{{ file.fileName }}</span> -->
+                      <a class="link-type"
+                        @click="downloadFile(file.fileUrl)">
+                        {{ file.fileName }}
+                      </a>
+                      <!-- <span class="file-action preview" v-if="isPreviewable(file.fileName)" @click="showTemplate({...file,attachmentId: file.id},'otherFile')">预览</span> -->
                     </div>
                   </div>
 
@@ -974,6 +978,7 @@ export default {
           approveLists,
           contractSplitIdList,
         } = res.data;
+        console.log("详情其他文件;",procurementSchemeBidding.otherAttachmentList);
         this.purchaserId = procurementScheme.id;
         this.exampleId = procurementScheme.wfProcessId;
         this.isShowApprovalDetails = procurementScheme.wfProcessId
@@ -987,6 +992,7 @@ export default {
           procurementSchemeBidding.otherAttachmentList.push({
             ...procurementSchemeBidding.otherFile,
             id: procurementSchemeBidding.otherFile.attachmentId,
+            url:procurementSchemeBidding.otherFile.fileUrl,
             uid: Date.now()  // 文件的唯一标识符
           });
         }

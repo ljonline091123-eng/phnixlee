@@ -173,6 +173,11 @@
               >
               </el-upload>
             </el-form-item>
+            <span v-if="formData.fileTemplate && formData.fileTemplate.length > 0" class="file-name">
+              <a class="link-type" @click="downloadFile(formData.fileTemplate[0].fileUrl)">
+                {{ formData.fileTemplate[0].fileName }}
+              </a>
+            </span>
           </el-col>
         </el-row>
         <!-- <el-row v-if="selectVendorsInfo.length">
@@ -190,19 +195,14 @@
           </el-form-item>
         </el-row> -->
 
-        <PageTitle title="招标公告内容" marginBottom="15px"/>
-        <!-- <FileModule
-          :attachmentId="attachmentId"
-          v-if="attachmentId"
-          height="500px"
-        /> -->
+        <!-- <PageTitle title="招标公告内容" marginBottom="15px"/>
         <iframe allowfullscreen="true"
             v-if="attachmentId"
             :src= this.viewFileUrl
             width="100%"
             height="700px"
             frameborder="0"
-          ></iframe>
+          ></iframe> -->
       </el-form>
       <!-- 选择供应商 -->
       <el-dialog
@@ -603,7 +603,6 @@ export default {
   dicts: ["vendor_level"],
   data() {
     return {
-      viewFileUrl:"",  //预览招标公告url
       secretTipsFlag: false,
       attachmentId: '',
       offerService,
@@ -804,8 +803,9 @@ export default {
       this.$set(this.formData, "fileList", [{name: attachmentNotice.fileName,url: attachmentNotice.fileUrl}]);
       this.$set(this.formData, "fileTemplate", [attachmentNotice]);
     }
+    console.log("this.formData.fileTemplate:",this.formData.fileTemplate);
 
-    this.getViewNoticeURL();  //获取预览招标公告的URL
+    // this.getViewNoticeURL();  //获取预览招标公告的URL
     this.getQAList(0);
     this.getNoticeUpdateList();
   },
@@ -828,21 +828,26 @@ export default {
         }
       }
     },
-    async getViewNoticeURL(){
-      //获取招标公告的-》文档中台的该文件的预览url
-      if (this.attachmentId) {
-        console.log('created预览招标公告Attachment ID:', this.attachmentId);
-        //获取文档中台的文档编辑URL
-        try {
-          const res = await getViewAttachmentURLByID({ attachmentId: this.attachmentId });
-          this.viewFileUrl = res.data;
-          console.log("viewFileUrl:",this.viewFileUrl);
-        } catch (err) {
-          console.log(err);
-        }
-      } else {
-        console.warn('attachmentId 数据未正确加载');
-      }
+    // async getViewNoticeURL(){
+    //   //获取招标公告的-》文档中台的该文件的预览url
+    //   if (this.attachmentId) {
+    //     console.log('created预览招标公告Attachment ID:', this.attachmentId);
+    //     //获取文档中台的文档编辑URL
+    //     try {
+    //       const res = await getViewAttachmentURLByID({ attachmentId: this.attachmentId });
+    //       this.viewFileUrl = res.data;
+    //       console.log("viewFileUrl:",this.viewFileUrl);
+    //     } catch (err) {
+    //       console.log(err);
+    //     }
+    //   } else {
+    //     console.warn('attachmentId 数据未正确加载');
+    //   }
+    // },
+    /** 下载模板文件 */
+    downloadFile(fileUrl) {
+      console.log("下载文件---fileUrl：",fileUrl)
+      window.open(fileUrl, '_blank');
     },
     showSecretTips() {
       showSecretRelatedTips(()=>{
@@ -853,7 +858,7 @@ export default {
       this.$set(this.formData, "fileList", []);
       this.$set(this.formData, "fileTemplate", []);
       this.attachmentId = "";
-      this.viewFileUrl = ""; //删除上传的文件后，清空文档预览url
+
     },
     /**
      * 文件上传后钩子函数
@@ -870,20 +875,6 @@ export default {
         this.formData.attachIdNotice = res.data
       } catch (err) {
         console.log(err);
-      }
-      //上传文件成功后，获取文档中台的该文件的预览url
-      if (this.attachmentId) {
-        console.log('预览招标公告Attachment ID:', this.attachmentId);
-        //获取文档中台的文档编辑URL
-        try {
-          const res = await getViewAttachmentURLByID({ attachmentId: this.attachmentId });
-          this.viewFileUrl = res.data;
-          console.log("viewFileUrl:",this.viewFileUrl);
-        } catch (err) {
-          console.log(err);
-        }
-      } else {
-        console.warn('attachmentId 数据未正确加载');
       }
 
     },
@@ -1206,7 +1197,7 @@ export default {
             this.$set(this.formData, "fileTemplate", [this.scheme.noticeAttachment]);
             this.$set(this.formData, "attachIdNotice", this.scheme.noticeAttachment.attachmentId);
           }
-          this.getViewNoticeURL()
+          // this.getViewNoticeURL()
         }
       },
       deep: true,
@@ -1377,5 +1368,12 @@ export default {
   .el-picker-panel__footer .el-button--text:first-child{
     display: none !important;
   }
+}
+.file-name {
+  margin-left: 10px;
+  font-size: 14px;
+  color: #409EFF;
+  cursor: pointer;
+  text-decoration: underline;
 }
 </style>

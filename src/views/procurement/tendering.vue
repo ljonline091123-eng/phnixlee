@@ -192,6 +192,7 @@ export default {
     );
     console.log('%c👽 [解码Base64招标对象] ', `font-size: 20px;background-color: #f00;`, param);
     this.scheme = param;
+    console.log("跳转参数this.scheme",this.scheme);
     this.getDicts("procurement_type").then(res => {
       const procurementType = param.procurementType;
       const findObj = res.data.find(item=>item.dictValue == procurementType);
@@ -311,6 +312,7 @@ export default {
       //noticeStatus 7  结果发布
       //noticeStatus 8  完成
       const noticeStatus = this.noticeDetail?.tenderNotice?.noticeStatus || 0;
+      console.log(noticeStatus, "goStep时的noticeStatus值");
       const {procurementType} = this.scheme;
       if (steps === 0) {
         if(procurementType === 1) {
