@@ -19,12 +19,12 @@
           >{{ vendor.isBlack == 1 ? "移出黑名单" : "移入黑名单" }}</el-button
         >
 
-        <el-button
-          type="primary"
-          size="mini"
-          v-if="isShowButton"
-          @click="handelSanction"
-          >审批</el-button>
+<!--        <el-button-->
+<!--          type="primary"-->
+<!--          size="mini"-->
+<!--          v-if="isShowButton"-->
+<!--          @click="handelSanction"-->
+<!--          >审批</el-button>-->
         <!-- <el-button
         type="primary"
         size="mini"
