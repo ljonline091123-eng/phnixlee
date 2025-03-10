@@ -5,7 +5,7 @@ import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONArray;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.zhaocai.business.common.exception.BusinessException;
-import com.zhaocai.business.manager.http.common.config.UnderlingPlatformUrlEnum;
+//import com.zhaocai.business.manager.http.common.config.UnderlingPlatformUrlEnum;
 import com.zhaocai.business.manager.http.dto.req.*;
 import com.zhaocai.business.manager.http.dto.res.*;
 import com.zhaocai.business.pub.vo.req.DeviceQueryVO;
@@ -34,7 +34,8 @@ public class UnderlingSystemService {
         }
 
         BaseDictListRequestDTO requestDTO = new BaseDictListRequestDTO(type);
-        List<BaseDictListDTO> dictList = UnderlingRestTemplateService.listForObject(UnderlingPlatformUrlEnum.DICT_LIST_MAP,BaseDictListDTO.class,requestDTO);
+//        List<BaseDictListDTO> dictList = UnderlingRestTemplateService.listForObject(UnderlingPlatformUrlEnum.DICT_LIST_MAP,BaseDictListDTO.class,requestDTO);
+        List<BaseDictListDTO> dictList = new ArrayList<>();
 
         List<DictListVO> resultList = Collections.emptyList();
         if (CollectionUtil.isNotEmpty(dictList)) {
@@ -72,8 +73,8 @@ public class UnderlingSystemService {
     public List<DeviceClassVO> listDeviceClass() {
         DeviceClassRequestDTO requestDTO = new DeviceClassRequestDTO();
 
-        List<DeviceClassListResponseDTO> responseList = UnderlingRestTemplateService.listForObject(UnderlingPlatformUrlEnum.DEVICE_CLASS_LIST,DeviceClassListResponseDTO.class,requestDTO);
-
+//        List<DeviceClassListResponseDTO> responseList = UnderlingRestTemplateService.listForObject(UnderlingPlatformUrlEnum.DEVICE_CLASS_LIST,DeviceClassListResponseDTO.class,requestDTO);
+        List<DeviceClassListResponseDTO> responseList = new ArrayList<>();
         return convertToTree4DeviceClass(responseList);
     }
 
@@ -89,8 +90,9 @@ public class UnderlingSystemService {
 
         DeviceFeatureRequestDTO requestDTO = new DeviceFeatureRequestDTO(queryVO.getQueryId());
 
-        List<DeviceFeatureResponseDTO> resultList = UnderlingRestTemplateService.listForObject(UnderlingPlatformUrlEnum.DEVICE_FEATURE_LIST,
-                DeviceFeatureResponseDTO.class,requestDTO);
+//        List<DeviceFeatureResponseDTO> resultList = UnderlingRestTemplateService.listForObject(UnderlingPlatformUrlEnum.DEVICE_FEATURE_LIST,
+//                DeviceFeatureResponseDTO.class,requestDTO);
+        List<DeviceFeatureResponseDTO> resultList = new ArrayList<>();
 
         return BeanCopierUtil.copyList(resultList,DeviceFeatureVO.class);
     }
@@ -107,8 +109,10 @@ public class UnderlingSystemService {
 
         DeviceFeatureValueRequestDTO requestDTO = new DeviceFeatureValueRequestDTO(queryVO.getQueryId());
 
-        List<DeviceFeatureValueResponseDTO> resultList = UnderlingRestTemplateService.listForObject(UnderlingPlatformUrlEnum.DEVICE_FEATURE_VALUE_LIST,
-                DeviceFeatureValueResponseDTO.class,requestDTO);
+//        List<DeviceFeatureValueResponseDTO> resultList = UnderlingRestTemplateService.listForObject(UnderlingPlatformUrlEnum.DEVICE_FEATURE_VALUE_LIST,
+//                DeviceFeatureValueResponseDTO.class,requestDTO);
+
+        List<DeviceFeatureValueResponseDTO> resultList = new ArrayList<>();
         return BeanCopierUtil.copyList(resultList,DeviceFeatureValueVO.class);
     }
 
@@ -118,8 +122,9 @@ public class UnderlingSystemService {
      */
     public List<MaterialsClassVO> listMaterialsClass() {
         MaterialsClassRequestDTO requestDTO = new MaterialsClassRequestDTO();
-        List<MaterialsClassResponseDTO> responseList = UnderlingRestTemplateService.listForObject(UnderlingPlatformUrlEnum.MATERIALS_CLASS_LIST,
-                MaterialsClassResponseDTO.class,requestDTO);
+//        List<MaterialsClassResponseDTO> responseList = UnderlingRestTemplateService.listForObject(UnderlingPlatformUrlEnum.MATERIALS_CLASS_LIST,
+//                MaterialsClassResponseDTO.class,requestDTO);
+        List<MaterialsClassResponseDTO> responseList = new ArrayList<>();
 
         return convertToTree4MaterialsClass(responseList);
     }
@@ -136,8 +141,10 @@ public class UnderlingSystemService {
 
         MaterialsFeatureRequestDTO requestDTO = new MaterialsFeatureRequestDTO(queryVO.getQueryId());
 
-        List<MaterialsFeatureResponseDTO> resultList = UnderlingRestTemplateService.listForObject(UnderlingPlatformUrlEnum.MATERIALS_FEATURE_LIST,
-                MaterialsFeatureResponseDTO.class,requestDTO);
+//        List<MaterialsFeatureResponseDTO> resultList = UnderlingRestTemplateService.listForObject(UnderlingPlatformUrlEnum.MATERIALS_FEATURE_LIST,
+//                MaterialsFeatureResponseDTO.class,requestDTO);
+
+        List<MaterialsFeatureResponseDTO> resultList = new ArrayList<>();
 
         return BeanCopierUtil.copyList(resultList,MaterialsFeatureVO.class);
     }
@@ -154,8 +161,9 @@ public class UnderlingSystemService {
 
         MaterialsFeatureValueRequestDTO requestDTO = new MaterialsFeatureValueRequestDTO(queryVO.getQueryId());
 
-        List<MaterialsFeatureValueResponseDTO> resultList = UnderlingRestTemplateService.listForObject(UnderlingPlatformUrlEnum.MATERIALS_FEATURE_VALUE_LIST,
-                MaterialsFeatureValueResponseDTO.class,requestDTO);
+//        List<MaterialsFeatureValueResponseDTO> resultList = UnderlingRestTemplateService.listForObject(UnderlingPlatformUrlEnum.MATERIALS_FEATURE_VALUE_LIST,
+//                MaterialsFeatureValueResponseDTO.class,requestDTO);
+        List<MaterialsFeatureValueResponseDTO> resultList = new ArrayList<>();
 
         return BeanCopierUtil.copyList(resultList,MaterialsFeatureValueVO.class);
     }
@@ -164,8 +172,9 @@ public class UnderlingSystemService {
         String l2Org = "2001000000000";
         GetL2OrgByOrgIdRequestDTO reqDTO = new GetL2OrgByOrgIdRequestDTO();
         reqDTO.setOrgId(orgId);
-        String responseStr =  UnderlingRestTemplateService.getForObject
-                (UnderlingPlatformUrlEnum.GET_L2_ORG_BY_ORGID,String.class,reqDTO);
+//        String responseStr =  UnderlingRestTemplateService.getForObject
+//                (UnderlingPlatformUrlEnum.GET_L2_ORG_BY_ORGID,String.class,reqDTO);
+        String responseStr =  null;
         if (null != responseStr){
             l2Org = responseStr;
         }
@@ -175,7 +184,8 @@ public class UnderlingSystemService {
     public String getL3OrgByOrgId(String orgId){
         GetL3OrgByOrgIdRequestDTO reqDTO = new GetL3OrgByOrgIdRequestDTO();
         reqDTO.setOrgId(orgId);
-        JsonNode dataNode = UnderlingRestTemplateService.getForObject(UnderlingPlatformUrlEnum.GET_L3_ORG_BY_ORGID,reqDTO);
+//        JsonNode dataNode = UnderlingRestTemplateService.getForObject(UnderlingPlatformUrlEnum.GET_L3_ORG_BY_ORGID,reqDTO);
+        JsonNode dataNode = null;
         if (dataNode == null || dataNode.isNull()) {
             log.info("[获取到的三级单位]-[getL3OrgByOrgId] param:{}, response: null", orgId);
             return null;
@@ -201,14 +211,16 @@ public class UnderlingSystemService {
      * Time:2024/10/29 下午6:13
      * */
     public List<ListCataLogDTO> listCatalog(){
-        return UnderlingRestTemplateService.listForObject(UnderlingPlatformUrlEnum.LIST_CATA_LOG,ListCataLogDTO.class,new ListCataLogRequestDTO());
+//        return UnderlingRestTemplateService.listForObject(UnderlingPlatformUrlEnum.LIST_CATA_LOG,ListCataLogDTO.class,new ListCataLogRequestDTO());
+        return new ArrayList<>();
     }
     /**
      * 获取 dm071 数据
      * @return
      */
     public List<DwMmAssetInfResponseDTO> listDwMmAssetInf() {
-        return UnderlingRestTemplateService.listForObject(UnderlingPlatformUrlEnum.DW_MM_ASSET_INF,DwMmAssetInfResponseDTO.class,new DwMmInfRequestDTO());
+//        return UnderlingRestTemplateService.listForObject(UnderlingPlatformUrlEnum.DW_MM_ASSET_INF,DwMmAssetInfResponseDTO.class,new DwMmInfRequestDTO());
+        return new ArrayList<>();
     }
 
     /**
@@ -216,7 +228,8 @@ public class UnderlingSystemService {
      * @return
      */
     public List<DwMmServiceInfResponseDTO> listDwMmServiceInf() {
-        return UnderlingRestTemplateService.listForObject(UnderlingPlatformUrlEnum.DW_MM_SERVICE_INF,DwMmServiceInfResponseDTO.class,new DwMmInfRequestDTO());
+//        return UnderlingRestTemplateService.listForObject(UnderlingPlatformUrlEnum.DW_MM_SERVICE_INF,DwMmServiceInfResponseDTO.class,new DwMmInfRequestDTO());
+        return new ArrayList<>();
     }
 
     /**

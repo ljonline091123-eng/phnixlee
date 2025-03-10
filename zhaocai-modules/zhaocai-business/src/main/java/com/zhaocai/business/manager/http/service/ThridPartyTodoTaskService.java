@@ -1,7 +1,7 @@
 package com.zhaocai.business.manager.http.service;
 
 import com.alibaba.fastjson2.JSON;
-import com.zhaocai.business.manager.http.common.config.UnderlingPlatformUrlEnum;
+//import com.zhaocai.business.manager.http.common.config.UnderlingPlatformUrlEnum;
 import com.zhaocai.business.manager.http.dto.req.PushThirdPartyTodoTaskRequestDTO;
 import com.zhaocai.business.manager.http.dto.req.PushThirdPartyTodoTaskSonRequestDTO;
 import com.zhaocai.business.manager.http.dto.res.PushThirdPartyTodoTaskResponseDTO;
@@ -36,9 +36,9 @@ public class ThridPartyTodoTaskService {
     }
 
     public void pushTask(PushThirdPartyTodoTaskRequestDTO requestDTO){
-        PushThirdPartyTodoTaskResponseDTO responseDTO = UnderlingRestTemplateService.postForObject(UnderlingPlatformUrlEnum.WAIT_HDL_HANDLE,
-                PushThirdPartyTodoTaskResponseDTO.class, requestDTO, requestDTO.getMessageList());
-        log.info("[推送第三方待办数据传输] - 请求结果为:{}", JSON.toJSONString(responseDTO));
+//        PushThirdPartyTodoTaskResponseDTO responseDTO = UnderlingRestTemplateService.postForObject(UnderlingPlatformUrlEnum.WAIT_HDL_HANDLE,
+//                PushThirdPartyTodoTaskResponseDTO.class, requestDTO, requestDTO.getMessageList());
+//        log.info("[推送第三方待办数据传输] - 请求结果为:{}", JSON.toJSONString(responseDTO));
     }
 
     /** 组装请求参数 */

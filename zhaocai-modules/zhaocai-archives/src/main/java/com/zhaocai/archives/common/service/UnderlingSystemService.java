@@ -2,7 +2,7 @@ package com.zhaocai.archives.common.service;
 
 import cn.hutool.core.collection.CollectionUtil;
 import com.fasterxml.jackson.databind.JsonNode;
-import com.zhaocai.archives.common.config.UnderlingPlatformUrlEnum;
+//import com.zhaocai.archives.common.config.UnderlingPlatformUrlEnum;
 import com.zhaocai.archives.common.vo.req.BaseDictListRequestDTO;
 import com.zhaocai.archives.common.vo.req.GetL2OrgByOrgIdRequestDTO;
 import com.zhaocai.archives.common.vo.req.GetL3OrgByOrgIdRequestDTO;
@@ -31,7 +31,8 @@ public class UnderlingSystemService {
         }
 
         BaseDictListRequestDTO requestDTO = new BaseDictListRequestDTO(type);
-        List<BaseDictListDTO> dictList = UnderlingRestTemplateService.listForObject(UnderlingPlatformUrlEnum.DICT_LIST_MAP, BaseDictListDTO.class, requestDTO);
+//        List<BaseDictListDTO> dictList = UnderlingRestTemplateService.listForObject(UnderlingPlatformUrlEnum.DICT_LIST_MAP, BaseDictListDTO.class, requestDTO);
+        List<BaseDictListDTO> dictList = new ArrayList<>();
 
         List<DictListVO> resultList = Collections.emptyList();
         if (CollectionUtil.isNotEmpty(dictList)) {
@@ -68,8 +69,9 @@ public class UnderlingSystemService {
         String l2Org = "2001000000000";
         GetL2OrgByOrgIdRequestDTO reqDTO = new GetL2OrgByOrgIdRequestDTO();
         reqDTO.setOrgId(orgId);
-        String responseStr = UnderlingRestTemplateService.getForObject
-                (UnderlingPlatformUrlEnum.GET_L2_ORG_BY_ORGID, String.class, reqDTO);
+//        String responseStr = UnderlingRestTemplateService.getForObject
+//                (UnderlingPlatformUrlEnum.GET_L2_ORG_BY_ORGID, String.class, reqDTO);
+        String responseStr = null;
         if (null != responseStr) {
             l2Org = responseStr;
         }
@@ -79,7 +81,8 @@ public class UnderlingSystemService {
     public String getL3OrgByOrgId(String orgId) {
         GetL3OrgByOrgIdRequestDTO reqDTO = new GetL3OrgByOrgIdRequestDTO();
         reqDTO.setOrgId(orgId);
-        JsonNode dataNode = UnderlingRestTemplateService.getForObject(UnderlingPlatformUrlEnum.GET_L3_ORG_BY_ORGID, reqDTO);
+//        JsonNode dataNode = UnderlingRestTemplateService.getForObject(UnderlingPlatformUrlEnum.GET_L3_ORG_BY_ORGID, reqDTO);
+        JsonNode dataNode = null;
         if (dataNode == null || dataNode.isNull()) {
             log.info("[获取到的三级单位]-[getL3OrgByOrgId] param:{}, response: null", orgId);
             return null;

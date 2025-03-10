@@ -1,6 +1,6 @@
 package com.zhaocai.business.agreement.enums;
 
-import com.zhaocai.business.manager.http.common.config.UnderlingPlatformUrlEnum;
+//import com.zhaocai.business.manager.http.common.config.UnderlingPlatformUrlEnum;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 

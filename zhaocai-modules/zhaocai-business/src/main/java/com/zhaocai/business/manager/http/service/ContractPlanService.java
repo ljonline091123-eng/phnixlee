@@ -6,7 +6,6 @@ import com.zhaocai.business.common.conver.ProcurementPlanTypeConver;
 import com.zhaocai.business.common.enums.ProcurementPlanTypeEnum;
 import com.zhaocai.business.common.enums.RentModeEnum;
 import com.zhaocai.business.common.utils.ValidationUtils;
-import com.zhaocai.business.manager.http.common.config.UnderlingPlatformUrlEnum;
 import com.zhaocai.business.manager.http.dto.req.*;
 import com.zhaocai.business.manager.http.dto.res.ContractPlanListDTO;
 import com.zhaocai.business.manager.http.dto.res.ContractPlanMaterialListDTO;
@@ -54,9 +53,11 @@ public class ContractPlanService {
         reqDTO.setPageNum(1);
         reqDTO.setPageSize(10000);
 
+//        // 发送请求
+//        PageResult<ContractPlanListDTO> pageList =  UnderlingRestTemplateService.pageForObject(UnderlingPlatformUrlEnum.CONTRACT_PLAN_LIST,
+//                ContractPlanListDTO.class,reqDTO,"total","list");
         // 发送请求
-        PageResult<ContractPlanListDTO> pageList =  UnderlingRestTemplateService.pageForObject(UnderlingPlatformUrlEnum.CONTRACT_PLAN_LIST,
-                ContractPlanListDTO.class,reqDTO,"total","list");
+        PageResult<ContractPlanListDTO> pageList = new PageResult<>();
 
         PageResult<ContractPlanningListVO> pageResult = new PageResult<>();
         pageResult.setTotal(pageList.getTotal());
@@ -90,11 +91,12 @@ public class ContractPlanService {
                         requestDTO.setAuthorization(token);
 
                         // 使用异步方法查询数据
-                        List<ContractPlanMaterialListDTO> list = UnderlingRestTemplateService.listForObject(
-                                UnderlingPlatformUrlEnum.LIST_BY_PROJECT_CONTRACT,
-                                ContractPlanMaterialListDTO.class,
-                                requestDTO
-                        );
+                        List<ContractPlanMaterialListDTO> list = new ArrayList<>();
+//                        List<ContractPlanMaterialListDTO> list = UnderlingRestTemplateService.listForObject(
+//                                UnderlingPlatformUrlEnum.LIST_BY_PROJECT_CONTRACT,
+//                                ContractPlanMaterialListDTO.class,
+//                                requestDTO
+//                        );
 
                         // 计算总剩余可用量
                         listVO.setSurplusQuantity(
@@ -158,7 +160,8 @@ public class ContractPlanService {
 
         ContractPlanMaterialListRequestDTO requestDTO = BeanCopierUtil.copyBean(queryVO,ContractPlanMaterialListRequestDTO.class);
 
-        List<ContractPlanMaterialListDTO> list = UnderlingRestTemplateService.listForObject(UnderlingPlatformUrlEnum.LIST_BY_PROJECT_CONTRACT,ContractPlanMaterialListDTO.class,requestDTO);
+//        List<ContractPlanMaterialListDTO> list = UnderlingRestTemplateService.listForObject(UnderlingPlatformUrlEnum.LIST_BY_PROJECT_CONTRACT,ContractPlanMaterialListDTO.class,requestDTO);
+        List<ContractPlanMaterialListDTO> list = new ArrayList<>();
 
         /* 排序一下 根据 物料编码 */
         list.stream().sorted(Comparator.comparing(ContractPlanMaterialListDTO::getSubjectDtlCode).reversed()).collect(Collectors.toList());
@@ -196,10 +199,10 @@ public class ContractPlanService {
         List<UpdatePlanQuantityAmount4SubjectDtlQuantity> subjectDtlQuantityUpdates = buildSubjectDtlQuantity(procurementId,procurementPlanType,materialsLists,operateFlag);
         requestDTO.setSubjectDtlQuantityUpdates(subjectDtlQuantityUpdates);
 
-        log.info("[回写合约拆分数据] - 开始发送请求...");
-        UpdatePlanQuantityAmountResponseDTO responseDTO = UnderlingRestTemplateService.postForObject(UnderlingPlatformUrlEnum.UPDATE_PLAN_QUANTITY_AMOUNT,
-                UpdatePlanQuantityAmountResponseDTO.class,requestDTO);
-        log.info("[回写合约拆分数据] - 请求结果为:{}", JSON.toJSONString(responseDTO));
+//        log.info("[回写合约拆分数据] - 开始发送请求...");
+//        UpdatePlanQuantityAmountResponseDTO responseDTO = UnderlingRestTemplateService.postForObject(UnderlingPlatformUrlEnum.UPDATE_PLAN_QUANTITY_AMOUNT,
+//                UpdatePlanQuantityAmountResponseDTO.class,requestDTO);
+//        log.info("[回写合约拆分数据] - 请求结果为:{}", JSON.toJSONString(responseDTO));
     }
 
     /**
@@ -210,7 +213,8 @@ public class ContractPlanService {
     public MinProjectDetailResponseDTO getMinProjectDetail(String projectCode) {
         MinProjectDetailRequestDTO reqDTO = new MinProjectDetailRequestDTO(projectCode);
 
-        return UnderlingRestTemplateService. getForObject(UnderlingPlatformUrlEnum.GET_MIN_PROJECT,MinProjectDetailResponseDTO.class,reqDTO);
+//        return UnderlingRestTemplateService. getForObject(UnderlingPlatformUrlEnum.GET_MIN_PROJECT,MinProjectDetailResponseDTO.class,reqDTO);
+        return null;
     }
 
     /**

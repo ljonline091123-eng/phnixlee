@@ -10,7 +10,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.type.CollectionType;
 import com.zhaocai.archives.common.config.RestTemplateUtils;
 import com.zhaocai.archives.common.config.UnderlingPlatformConfig;
-import com.zhaocai.archives.common.config.UnderlingPlatformUrlEnum;
+//import com.zhaocai.archives.common.config.UnderlingPlatformUrlEnum;
 import com.zhaocai.archives.common.exception.BusinessException;
 import com.zhaocai.archives.common.vo.req.UnderlyingPlatformBaseDTO;
 import com.zhaocai.common.core.bean.PageResult;
@@ -78,187 +78,187 @@ public class UnderlingRestTemplateService {
         objectMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
     }
 
-    /**
-     * 发送 get 请求，获取为实体类
-     *
-     * @param platformUrl
-     * @param responseType
-     * @param <T>
-     * @return
-     */
-    public static <T> T getForObject(UnderlingPlatformUrlEnum platformUrl, Class<T> responseType, UnderlyingPlatformBaseDTO requestDTO) {
-        return toObject(sendForGet(platformUrl, requestDTO), responseType);
-    }
-
-    /**
-     * 发送 get 请求，获取为实体类
-     *
-     * @param platformUrl
-     * @return
-     */
-    public static JsonNode getForObject(UnderlingPlatformUrlEnum platformUrl, UnderlyingPlatformBaseDTO requestDTO) {
-        return sendForGet(platformUrl, requestDTO);
-    }
-
-    /**
-     * 发送 get 请求，获取为 List
-     *
-     * @param platformUrl
-     * @param responseType
-     * @param requestDTO
-     * @return
-     */
-    public static <T> List<T> listForObject(UnderlingPlatformUrlEnum platformUrl, Class<?> responseType, UnderlyingPlatformBaseDTO requestDTO) {
-        return toList(sendForGet(platformUrl, requestDTO), responseType);
-    }
-
-
-    /**
-     * 发送 post 请求
-     *
-     * @param platformUrl
-     * @param responseType
-     * @param requestDTO
-     * @param <T>
-     * @return
-     */
-    public static <T> T postForObject(UnderlingPlatformUrlEnum platformUrl, Class<T> responseType, UnderlyingPlatformBaseDTO requestDTO) {
-        // 请求头
-        HttpHeaders headers = getHttpHeaders(requestDTO);
-        headers.setContentType(MediaType.APPLICATION_JSON);
-
-        HttpEntity<UnderlyingPlatformBaseDTO> requestEntity = new HttpEntity<>(requestDTO, headers);
-
-        // 请求 url
-        String postUrl = PLATFORM_CONFIG.getBaseUrl() + platformUrl.getUrl() + "?authCode=" + PLATFORM_CONFIG.getAuthCode();
-
-        log.info("[调用底层逻辑平台] -[{}]，开始发送 POSt 请求，url:{},params:{}", platformUrl.getDesc(), postUrl, JSON.toJSONString(requestDTO));
-
-        String responseStr = RestTemplateUtils.postForObject(postUrl, requestEntity, String.class);
-
-        log.info("[调用底层逻辑平台] -[{}]，请求发送成功，响应结果为:{}", platformUrl.getDesc(), responseStr);
-
-        JsonNode responseNode = getJsonNode(responseStr);
-
-        int responseCode = responseNode.get(RESPONSE_RESULT_CODE).asInt();
-        if (responseCode == ThridResultCode.SUCCESS.getCode()) {
-            log.info("[调用底层逻辑平台] -[{}]，响应结果成功，结果为:{}", platformUrl.getDesc(), responseNode.get("data").toString());
-            return toObject(responseNode.get(RESPONSE_RESULT_DATA_CODE), responseType);
-        }
-
-        // 请求失败则获取错误信息
-        String message = getResponseMessage(responseNode);
-        throw new BusinessException("请求底层逻辑平台失败:" + message);
-    }
-
-    public static <T, U> T postForObject(UnderlingPlatformUrlEnum platformUrl, Class<T> responseType, UnderlyingPlatformBaseDTO requestDTO, List<U> dataList) {
-        // 请求头
-        HttpHeaders headers = getHttpHeaders(requestDTO);
-        headers.setContentType(MediaType.APPLICATION_JSON);
-
-        HttpEntity<List<U>> requestEntity = new HttpEntity<>(dataList, headers);
-
-        // 请求 url
-        String postUrl = PLATFORM_CONFIG.getBaseUrl() + platformUrl.getUrl() + "?authCode=" + PLATFORM_CONFIG.getAuthCode();
-
-        log.info("[调用底层逻辑平台] -[{}]，开始发送 POSt 请求，url:{},params:{}", platformUrl.getDesc(), postUrl, JSON.toJSONString(requestDTO));
-
-        String responseStr = RestTemplateUtils.postForObject(postUrl, requestEntity, String.class);
-
-        log.info("[调用底层逻辑平台] -[{}]，请求发送成功，响应结果为:{}", platformUrl.getDesc(), responseStr);
-
-        JsonNode responseNode = getJsonNode(responseStr);
-
-        int responseCode = responseNode.get(RESPONSE_RESULT_CODE).asInt();
-        if (responseCode == ThridResultCode.SUCCESS.getCode()) {
-            log.info("[调用底层逻辑平台] -[{}]，响应结果成功，结果为:{}", platformUrl.getDesc(), responseNode.get("data") == null ?
-                    null : responseNode.get("data").toString());
-            return toObject(responseNode.get(RESPONSE_RESULT_DATA_CODE), responseType);
-        }
-
-        // 请求失败则获取错误信息
-        String message = getResponseMessage(responseNode);
-        throw new BusinessException("请求底层逻辑平台失败:" + message);
-    }
-
-    /**
-     * 发送 get 请求，获取为 Page
-     *
-     * @param platformUrl
-     * @param responseType
-     * @param requestDTO
-     * @return
-     */
-    public static <T> PageResult<T> pageForObject(UnderlingPlatformUrlEnum platformUrl, Class<?> responseType, UnderlyingPlatformBaseDTO requestDTO,
-                                                  String totalFieldName, String listFieldName) {
-        // 获取结果
-        JsonNode jsonNode = sendForGet(platformUrl, requestDTO);
-
-        // 构建结果集
-        PageResult<T> pageResult = new PageResult<>();
-
-        // 获取总数
-        Integer total = jsonNode.get(totalFieldName).asInt();
-        pageResult.setTotal(total);
-
-        // 获取数据
-        JsonNode listNode = jsonNode.get(listFieldName);
-        if (listNode != null && listNode.isArray()) {
-            pageResult.setRows(toList(listNode, responseType));
-        }
-        return pageResult;
-    }
-
-    /**
-     * 发送
-     *
-     * @param platformUrl
-     * @param requestDTO
-     * @return
-     */
-    public static JsonNode sendForGet(UnderlingPlatformUrlEnum platformUrl, UnderlyingPlatformBaseDTO requestDTO) {
-        // 参数转换
-        Map<String, ?> paramsMap = JacksonUtil.object2Map(requestDTO);
-
-        // 拼接请求
-        UriComponentsBuilder uriComponentsBuilder = UriComponentsBuilder.fromUriString(PLATFORM_CONFIG.getBaseUrl() + platformUrl.getUrl());
-        uriComponentsBuilder.queryParam("authCode", PLATFORM_CONFIG.getAuthCode());
-
-        // 拼接参数
-        for (Map.Entry<String, ?> entry : paramsMap.entrySet()) {
-            if (entry.getValue() != null) {
-                uriComponentsBuilder.queryParam(entry.getKey(), entry.getValue());
-            }
-        }
-        UriComponents uriComponents = uriComponentsBuilder.build();
-
-        log.info("[调用底层逻辑平台] -[{}]，开始发送 GET 请求，url:{}，请求参数:{}", platformUrl.getDesc(), uriComponents.toUriString(), JSON.toJSONString(requestDTO));
-        HttpHeaders headers = getHttpHeaders(requestDTO);
-        String responseStr = RestTemplateUtils.getForObject2Header(uriComponents.toString(), String.class, headers);
-
-        if (requestDTO.getLogResponseData()) {
-            log.info("[调用底层逻辑平台] -[{}]，请求发送成功，响应结果为:{}", platformUrl.getDesc(), responseStr);
-        } else {
-            log.info("[调用底层逻辑平台] -[{}]，请求发送成功", platformUrl.getDesc());
-        }
-
-        JsonNode responseNode = getJsonNode(responseStr);
-        int responseCode = responseNode.get(RESPONSE_RESULT_CODE).asInt();
-
-        if (responseCode == ThridResultCode.SUCCESS.getCode()) {
-            if (requestDTO.getLogResponseData()) {
-                log.info("[调用底层逻辑平台] -[{}]，响应结果成功，结果为:{}", platformUrl.getDesc(), responseNode.get("data").toString());
-            }
-
-            return responseNode.get(RESPONSE_RESULT_DATA_CODE);
-        }
-
-        // 请求失败则获取错误信息
-        String message = getResponseMessage(responseNode);
-
-        log.error("[调用底层逻辑平台] -[{}]，响应失败失败，errorCode:{},errorMsg:{}", platformUrl.getDesc(), responseCode, message);
-        throw new BusinessException("请求底层逻辑平台失败:" + message);
-    }
+//    /**
+//     * 发送 get 请求，获取为实体类
+//     *
+//     * @param platformUrl
+//     * @param responseType
+//     * @param <T>
+//     * @return
+//     */
+//    public static <T> T getForObject(UnderlingPlatformUrlEnum platformUrl, Class<T> responseType, UnderlyingPlatformBaseDTO requestDTO) {
+//        return toObject(sendForGet(platformUrl, requestDTO), responseType);
+//    }
+//
+//    /**
+//     * 发送 get 请求，获取为实体类
+//     *
+//     * @param platformUrl
+//     * @return
+//     */
+//    public static JsonNode getForObject(UnderlingPlatformUrlEnum platformUrl, UnderlyingPlatformBaseDTO requestDTO) {
+//        return sendForGet(platformUrl, requestDTO);
+//    }
+//
+//    /**
+//     * 发送 get 请求，获取为 List
+//     *
+//     * @param platformUrl
+//     * @param responseType
+//     * @param requestDTO
+//     * @return
+//     */
+//    public static <T> List<T> listForObject(UnderlingPlatformUrlEnum platformUrl, Class<?> responseType, UnderlyingPlatformBaseDTO requestDTO) {
+//        return toList(sendForGet(platformUrl, requestDTO), responseType);
+//    }
+//
+//
+//    /**
+//     * 发送 post 请求
+//     *
+//     * @param platformUrl
+//     * @param responseType
+//     * @param requestDTO
+//     * @param <T>
+//     * @return
+//     */
+//    public static <T> T postForObject(UnderlingPlatformUrlEnum platformUrl, Class<T> responseType, UnderlyingPlatformBaseDTO requestDTO) {
+//        // 请求头
+//        HttpHeaders headers = getHttpHeaders(requestDTO);
+//        headers.setContentType(MediaType.APPLICATION_JSON);
+//
+//        HttpEntity<UnderlyingPlatformBaseDTO> requestEntity = new HttpEntity<>(requestDTO, headers);
+//
+//        // 请求 url
+//        String postUrl = PLATFORM_CONFIG.getBaseUrl() + platformUrl.getUrl() + "?authCode=" + PLATFORM_CONFIG.getAuthCode();
+//
+//        log.info("[调用底层逻辑平台] -[{}]，开始发送 POSt 请求，url:{},params:{}", platformUrl.getDesc(), postUrl, JSON.toJSONString(requestDTO));
+//
+//        String responseStr = RestTemplateUtils.postForObject(postUrl, requestEntity, String.class);
+//
+//        log.info("[调用底层逻辑平台] -[{}]，请求发送成功，响应结果为:{}", platformUrl.getDesc(), responseStr);
+//
+//        JsonNode responseNode = getJsonNode(responseStr);
+//
+//        int responseCode = responseNode.get(RESPONSE_RESULT_CODE).asInt();
+//        if (responseCode == ThridResultCode.SUCCESS.getCode()) {
+//            log.info("[调用底层逻辑平台] -[{}]，响应结果成功，结果为:{}", platformUrl.getDesc(), responseNode.get("data").toString());
+//            return toObject(responseNode.get(RESPONSE_RESULT_DATA_CODE), responseType);
+//        }
+//
+//        // 请求失败则获取错误信息
+//        String message = getResponseMessage(responseNode);
+//        throw new BusinessException("请求底层逻辑平台失败:" + message);
+//    }
+//
+//    public static <T, U> T postForObject(UnderlingPlatformUrlEnum platformUrl, Class<T> responseType, UnderlyingPlatformBaseDTO requestDTO, List<U> dataList) {
+//        // 请求头
+//        HttpHeaders headers = getHttpHeaders(requestDTO);
+//        headers.setContentType(MediaType.APPLICATION_JSON);
+//
+//        HttpEntity<List<U>> requestEntity = new HttpEntity<>(dataList, headers);
+//
+//        // 请求 url
+//        String postUrl = PLATFORM_CONFIG.getBaseUrl() + platformUrl.getUrl() + "?authCode=" + PLATFORM_CONFIG.getAuthCode();
+//
+//        log.info("[调用底层逻辑平台] -[{}]，开始发送 POSt 请求，url:{},params:{}", platformUrl.getDesc(), postUrl, JSON.toJSONString(requestDTO));
+//
+//        String responseStr = RestTemplateUtils.postForObject(postUrl, requestEntity, String.class);
+//
+//        log.info("[调用底层逻辑平台] -[{}]，请求发送成功，响应结果为:{}", platformUrl.getDesc(), responseStr);
+//
+//        JsonNode responseNode = getJsonNode(responseStr);
+//
+//        int responseCode = responseNode.get(RESPONSE_RESULT_CODE).asInt();
+//        if (responseCode == ThridResultCode.SUCCESS.getCode()) {
+//            log.info("[调用底层逻辑平台] -[{}]，响应结果成功，结果为:{}", platformUrl.getDesc(), responseNode.get("data") == null ?
+//                    null : responseNode.get("data").toString());
+//            return toObject(responseNode.get(RESPONSE_RESULT_DATA_CODE), responseType);
+//        }
+//
+//        // 请求失败则获取错误信息
+//        String message = getResponseMessage(responseNode);
+//        throw new BusinessException("请求底层逻辑平台失败:" + message);
+//    }
+//
+//    /**
+//     * 发送 get 请求，获取为 Page
+//     *
+//     * @param platformUrl
+//     * @param responseType
+//     * @param requestDTO
+//     * @return
+//     */
+//    public static <T> PageResult<T> pageForObject(UnderlingPlatformUrlEnum platformUrl, Class<?> responseType, UnderlyingPlatformBaseDTO requestDTO,
+//                                                  String totalFieldName, String listFieldName) {
+//        // 获取结果
+//        JsonNode jsonNode = sendForGet(platformUrl, requestDTO);
+//
+//        // 构建结果集
+//        PageResult<T> pageResult = new PageResult<>();
+//
+//        // 获取总数
+//        Integer total = jsonNode.get(totalFieldName).asInt();
+//        pageResult.setTotal(total);
+//
+//        // 获取数据
+//        JsonNode listNode = jsonNode.get(listFieldName);
+//        if (listNode != null && listNode.isArray()) {
+//            pageResult.setRows(toList(listNode, responseType));
+//        }
+//        return pageResult;
+//    }
+//
+//    /**
+//     * 发送
+//     *
+//     * @param platformUrl
+//     * @param requestDTO
+//     * @return
+//     */
+//    public static JsonNode sendForGet(UnderlingPlatformUrlEnum platformUrl, UnderlyingPlatformBaseDTO requestDTO) {
+//        // 参数转换
+//        Map<String, ?> paramsMap = JacksonUtil.object2Map(requestDTO);
+//
+//        // 拼接请求
+//        UriComponentsBuilder uriComponentsBuilder = UriComponentsBuilder.fromUriString(PLATFORM_CONFIG.getBaseUrl() + platformUrl.getUrl());
+//        uriComponentsBuilder.queryParam("authCode", PLATFORM_CONFIG.getAuthCode());
+//
+//        // 拼接参数
+//        for (Map.Entry<String, ?> entry : paramsMap.entrySet()) {
+//            if (entry.getValue() != null) {
+//                uriComponentsBuilder.queryParam(entry.getKey(), entry.getValue());
+//            }
+//        }
+//        UriComponents uriComponents = uriComponentsBuilder.build();
+//
+//        log.info("[调用底层逻辑平台] -[{}]，开始发送 GET 请求，url:{}，请求参数:{}", platformUrl.getDesc(), uriComponents.toUriString(), JSON.toJSONString(requestDTO));
+//        HttpHeaders headers = getHttpHeaders(requestDTO);
+//        String responseStr = RestTemplateUtils.getForObject2Header(uriComponents.toString(), String.class, headers);
+//
+//        if (requestDTO.getLogResponseData()) {
+//            log.info("[调用底层逻辑平台] -[{}]，请求发送成功，响应结果为:{}", platformUrl.getDesc(), responseStr);
+//        } else {
+//            log.info("[调用底层逻辑平台] -[{}]，请求发送成功", platformUrl.getDesc());
+//        }
+//
+//        JsonNode responseNode = getJsonNode(responseStr);
+//        int responseCode = responseNode.get(RESPONSE_RESULT_CODE).asInt();
+//
+//        if (responseCode == ThridResultCode.SUCCESS.getCode()) {
+//            if (requestDTO.getLogResponseData()) {
+//                log.info("[调用底层逻辑平台] -[{}]，响应结果成功，结果为:{}", platformUrl.getDesc(), responseNode.get("data").toString());
+//            }
+//
+//            return responseNode.get(RESPONSE_RESULT_DATA_CODE);
+//        }
+//
+//        // 请求失败则获取错误信息
+//        String message = getResponseMessage(responseNode);
+//
+//        log.error("[调用底层逻辑平台] -[{}]，响应失败失败，errorCode:{},errorMsg:{}", platformUrl.getDesc(), responseCode, message);
+//        throw new BusinessException("请求底层逻辑平台失败:" + message);
+//    }
 
     /**
      * 获取响应消息
@@ -284,33 +284,33 @@ public class UnderlingRestTemplateService {
     }
 
 
-    public static <T> List<T> postForList(UnderlingPlatformUrlEnum platformUrl, Class<T> responseType, UnderlyingPlatformBaseDTO requestDTO) {
-        // 请求头
-        HttpHeaders headers = getHttpHeaders(requestDTO);
-        headers.setContentType(MediaType.APPLICATION_JSON);
-
-        HttpEntity<UnderlyingPlatformBaseDTO> requestEntity = new HttpEntity<>(requestDTO, headers);
-
-        // 请求 url
-        String postUrl = PLATFORM_CONFIG.getBaseUrl() + platformUrl.getUrl() + "?authCode=" + PLATFORM_CONFIG.getAuthCode();
-
-        log.info("[调用底层逻辑平台] -[{}]，开始发送 POSt 请求，url:{},params:{}", platformUrl.getDesc(), postUrl, JSON.toJSONString(requestDTO));
-
-        String responseStr = RestTemplateUtils.postForObject(postUrl, requestEntity, String.class);
-
-        log.info("[调用底层逻辑平台] -[{}]，请求发送成功，响应结果为:{}", platformUrl.getDesc(), responseStr);
-
-        JsonNode responseNode = getJsonNode(responseStr);
-
-        int responseCode = responseNode.get(RESPONSE_RESULT_CODE).asInt();
-        if (responseCode == ThridResultCode.SUCCESS.getCode()) {
-            log.info("[调用底层逻辑平台] -[{}]，响应结果成功，结果为:{}", platformUrl.getDesc(), responseNode.get("data").toString());
-            return toList(responseNode.get(RESPONSE_RESULT_DATA_CODE), responseType);
-        }
-        // 请求失败则获取错误信息
-        String message = getResponseMessage(responseNode);
-        throw new BusinessException("请求底层逻辑平台失败:" + message);
-    }
+//    public static <T> List<T> postForList(UnderlingPlatformUrlEnum platformUrl, Class<T> responseType, UnderlyingPlatformBaseDTO requestDTO) {
+//        // 请求头
+//        HttpHeaders headers = getHttpHeaders(requestDTO);
+//        headers.setContentType(MediaType.APPLICATION_JSON);
+//
+//        HttpEntity<UnderlyingPlatformBaseDTO> requestEntity = new HttpEntity<>(requestDTO, headers);
+//
+//        // 请求 url
+//        String postUrl = PLATFORM_CONFIG.getBaseUrl() + platformUrl.getUrl() + "?authCode=" + PLATFORM_CONFIG.getAuthCode();
+//
+//        log.info("[调用底层逻辑平台] -[{}]，开始发送 POSt 请求，url:{},params:{}", platformUrl.getDesc(), postUrl, JSON.toJSONString(requestDTO));
+//
+//        String responseStr = RestTemplateUtils.postForObject(postUrl, requestEntity, String.class);
+//
+//        log.info("[调用底层逻辑平台] -[{}]，请求发送成功，响应结果为:{}", platformUrl.getDesc(), responseStr);
+//
+//        JsonNode responseNode = getJsonNode(responseStr);
+//
+//        int responseCode = responseNode.get(RESPONSE_RESULT_CODE).asInt();
+//        if (responseCode == ThridResultCode.SUCCESS.getCode()) {
+//            log.info("[调用底层逻辑平台] -[{}]，响应结果成功，结果为:{}", platformUrl.getDesc(), responseNode.get("data").toString());
+//            return toList(responseNode.get(RESPONSE_RESULT_DATA_CODE), responseType);
+//        }
+//        // 请求失败则获取错误信息
+//        String message = getResponseMessage(responseNode);
+//        throw new BusinessException("请求底层逻辑平台失败:" + message);
+//    }
 
     /**
      * 转换为单一 Object 对象
