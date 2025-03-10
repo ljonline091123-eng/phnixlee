@@ -34,7 +34,7 @@
         </div>
         <div>
           <el-select @change="bclxChange" v-model="value" placeholder="请选择"
-                     style="width: 150px; z-index: 9999;height: 40px;">
+                     style="width: 150px; height: 40px;">
             <el-option
               v-for="item in options"
               :key="item.belongingOrgId"
@@ -164,7 +164,7 @@ export default {
     this.getDeptTree()
     // this.thridDeptId=this.org
     // this.getManagementOrgId(this.thridDeptId)
-    this.value= this.project.name
+    this.value = this.project.name
     // * 取登录后用户的信息 userInfo // * org ,project
     // * thridDeptId,project
 
@@ -204,20 +204,30 @@ export default {
       this.$store.commit("SET_ORG", value);
     },
     /** 查询部门下拉树结构 */
-    async getDeptTree() {
-      const res =  await getDeptTree().then((response) => {
+    getDeptTree() {
+      getDeptTree().then((response) => {
         this.deptOptions = response.data;
-        this.thridDeptId = [response.data[0].thridDeptId,response.data[0].children[0].thridDeptId];
+        if (response.data[0] != null) {
+          if (response.data[0].children != null) {
+            this.thridDeptId = [response.data[0]?.thridDeptId, response.data[0]?.children[0]?.thridDeptId];
+          } else {
+            this.thridDeptId = [response.data[0]?.thridDeptId];
+          }
+        }
       });
     },
     // 查询项目
     async getManagementOrgId(id) {
       const needId = id[id.length - 1]
-     const res = await getManagementOrgId(needId).then((response) => {
+      const res = await getManagementOrgId(needId).then((response) => {
         this.options = response.data;
         this.value = this.options[0]?.belongingOrgId;
         // * 同步要去加到vuex
-        this.$store.commit("SET_PROJECT", {code:this.options[0].minAccountCode,id:this.value,name:this.options[0].minAccountFullName});
+        this.$store.commit("SET_PROJECT", {
+          code: this.options[0]?.minAccountCode,
+          id: this.value,
+          name: this.options[0]?.minAccountFullName
+        });
       });
     },
     toggleSideBar() {

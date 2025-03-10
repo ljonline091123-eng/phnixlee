@@ -1,6 +1,6 @@
-import { login, logout, getInfo, refreshToken } from '@/api/login'
-import { getToken, setToken, setExpiresIn, removeToken } from '@/utils/auth'
-import {getManagementOrgId} from "@/api/system/dept";
+import {getInfo, login, logout, refreshToken} from '@/api/login'
+import {getToken, removeToken, setExpiresIn, setToken} from '@/utils/auth'
+import {getDeptTree,getManagementOrgId} from "@/api/system/dept";
 import store from '@/store'
 
 const user = {
@@ -46,12 +46,12 @@ const user = {
 
   actions: {
     // 登录
-    Login({ commit }, userInfo) {
+    Login({commit}, userInfo) {
       const username = userInfo.username.trim()
       const password = userInfo.password
       const code = userInfo.code
       const uuid = userInfo.uuid
-      const userType = userInfo.userType? 'expert' : 'purchase'
+      const userType = userInfo.userType ? 'expert' : 'purchase'
       return new Promise((resolve, reject) => {
         login(username, password, code, uuid, userType).then(res => {
           let data = res.data
@@ -67,15 +67,30 @@ const user = {
     },
 
     // 获取用户信息
-   async GetInfo({ commit, state }) {
-      return new Promise( (resolve, reject) => {
+    async GetInfo({commit, state}) {
+      return new Promise((resolve, reject) => {
         getInfo().then(async res => {
           const user = res.user
-          const result = await getManagementOrgId(user.thridOrgId);
+          const rds = await getDeptTree();
+          let a = '0000000000';
+          if (rds.data[0] != null) {
+            if (rds.data[0].children != null) {
+              this.thridDeptId = [rds.data[0]?.thridDeptId, rds.data[0]?.children[0]?.thridDeptId];
+              a = rds.data[0]?.children[0]?.thridDeptId;
+            } else {
+              this.thridDeptId = [rds.data[0]?.thridDeptId];
+              a = rds.data[0]?.thridDeptId;
+            }
+          }
+          const result = await getManagementOrgId(a);
           this.options = result.data;
           this.value = this.options[0]?.belongingOrgId;
           // * 同步要去加到vuex
-          store.commit("SET_PROJECT", {code:this.options[0].minAccountCode,id:this.value,name:this.options[0].minAccountFullName});
+          store.commit("SET_PROJECT", {
+            code: this.options[0]?.minAccountCode,
+            id: this.value,
+            name: this.options[0]?.minAccountFullName
+          });
           const avatar = (user.avatar == "" || user.avatar == null) ? require("@/assets/images/profile.jpg") : user.avatar;
           if (res.roles && res.roles.length > 0) { // 验证返回的roles是否是一个非空数组
             commit('SET_ROLES', res.roles)
@@ -109,7 +124,7 @@ const user = {
     },
 
     // 退出系统
-    LogOut({ commit, state }) {
+    LogOut({commit, state}) {
       return new Promise((resolve, reject) => {
         logout(state.token).then(() => {
           commit('SET_TOKEN', '')
@@ -124,7 +139,7 @@ const user = {
     },
 
     // 前端 登出
-    FedLogOut({ commit }) {
+    FedLogOut({commit}) {
       return new Promise(resolve => {
         commit('SET_TOKEN', '')
         commit('SET_ROLES', [])
