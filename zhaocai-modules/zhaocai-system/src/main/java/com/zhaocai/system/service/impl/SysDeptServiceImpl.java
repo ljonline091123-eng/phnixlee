@@ -572,6 +572,9 @@ public class SysDeptServiceImpl extends ServiceImpl<SysDeptMapper, SysDept> impl
                         listDept.add(map1.get(Long.parseLong(s)));
                     }
                 }
+                if (map1.get(dept1.getDeptId()) != null) {
+                    listDept.add(map1.get(dept1.getDeptId()));
+                }
             }
             Map<Long, TreeSelect> map = new HashMap<>();
             listDept.forEach(item -> {
