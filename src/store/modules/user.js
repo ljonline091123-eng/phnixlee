@@ -1,5 +1,7 @@
 import { login, logout, getInfo, refreshToken } from '@/api/login'
 import { getToken, setToken, setExpiresIn, removeToken } from '@/utils/auth'
+import {getManagementOrgId} from "@/api/system/dept";
+import store from '@/store'
 
 const user = {
   state: {
@@ -65,10 +67,15 @@ const user = {
     },
 
     // 获取用户信息
-    GetInfo({ commit, state }) {
-      return new Promise((resolve, reject) => {
-        getInfo().then(res => {
+   async GetInfo({ commit, state }) {
+      return new Promise( (resolve, reject) => {
+        getInfo().then(async res => {
           const user = res.user
+          const result = await getManagementOrgId(user.thridOrgId);
+          this.options = result.data;
+          this.value = this.options[0]?.belongingOrgId;
+          // * 同步要去加到vuex
+          store.commit("SET_PROJECT", {code:this.options[0].minAccountCode,id:this.value,name:this.options[0].minAccountFullName});
           const avatar = (user.avatar == "" || user.avatar == null) ? require("@/assets/images/profile.jpg") : user.avatar;
           if (res.roles && res.roles.length > 0) { // 验证返回的roles是否是一个非空数组
             commit('SET_ROLES', res.roles)

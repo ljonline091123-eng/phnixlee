@@ -139,6 +139,10 @@ export default {
       'project',
       'org'
     ]),
+    // thridDeptId() {
+    //   return [1000000，200001]
+    // },
+    // project:
     setting: {
       get() {
         return this.$store.state.settings.showSettings
@@ -184,9 +188,9 @@ export default {
   },
   methods: {
     //下拉选择监听
-    bclxChange(selectValue) {
+    bclxChange(val) {
       let obj = {};
-      obj = this.locations.find((item) => {
+      obj = this.options.find((item) => {
         return item.belongingOrgId === val;
       });
       this.$store.commit("SET_PROJECT", {
@@ -194,21 +198,22 @@ export default {
         id: obj.belongingOrgId,
         name: obj.minAccountFullName
       });
+      // this.$store.commit("SET_PROJECT", {code:this.options[0].minAccountCode,id:this.value,name:this.options[0].minAccountFullName});
     },
     handleChange(value) {
       this.$store.commit("SET_ORG", value);
     },
     /** 查询部门下拉树结构 */
-    getDeptTree() {
-      getDeptTree().then((response) => {
+    async getDeptTree() {
+      const res =  await getDeptTree().then((response) => {
         this.deptOptions = response.data;
         this.thridDeptId = [response.data[0].thridDeptId,response.data[0].children[0].thridDeptId];
       });
     },
     // 查询项目
-    getManagementOrgId(id) {
+    async getManagementOrgId(id) {
       const needId = id[id.length - 1]
-      getManagementOrgId(needId).then((response) => {
+     const res = await getManagementOrgId(needId).then((response) => {
         this.options = response.data;
         this.value = this.options[0]?.belongingOrgId;
         // * 同步要去加到vuex
