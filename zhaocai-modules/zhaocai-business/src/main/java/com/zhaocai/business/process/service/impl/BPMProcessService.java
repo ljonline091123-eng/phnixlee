@@ -1,7 +1,5 @@
 package com.zhaocai.business.process.service.impl;
 
-import cn.hutool.core.util.IdUtil;
-import cn.hutool.core.util.StrUtil;
 import cn.hutool.extra.spring.SpringUtil;
 import com.zhaocai.business.common.enums.ProcessStateEnum;
 import com.zhaocai.business.common.enums.RejectTaskKeyEnum;
@@ -13,9 +11,8 @@ import com.zhaocai.business.manager.http.service.UnderlingSystemService;
 import com.zhaocai.business.process.service.IBPMProcessService;
 import com.zhaocai.business.process.service.IProcessBusinessBaseService;
 import com.zhaocai.business.procurement.service.IMinProjectService;
-import com.zhaocai.business.procurement.vo.res.MinProjectVO;
 import com.zhaocai.business.pub.service.ISystemUserService;
-import com.zhaocai.common.core.constant.UserConstants;
+import com.zhaocai.business.utils.KeyUtils;
 import com.zhaocai.common.core.utils.bean.BeanCopierUtil;
 import com.zhaocai.common.core.web.bean.ResultData;
 import com.zhaocai.common.security.utils.SecurityUtils;
@@ -26,6 +23,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.ObjectUtils;
+import sun.security.util.KeyUtil;
 
 import java.math.BigDecimal;
 import java.util.*;
@@ -149,7 +147,8 @@ public class BPMProcessService implements IBPMProcessService {
 //        variables.put("completedFlag", completedFlag);
 //
 //        //2.处理业务的service
-//        getProcessBusinessService(processKey).processStart(variables);
+        variables.put("processId", KeyUtils.generateId() + "");
+        getProcessBusinessService(processKey).processStart(variables);
         getProcessBusinessService(processKey).processAuditPass(variables);
         return null;
     }
@@ -344,7 +343,7 @@ public class BPMProcessService implements IBPMProcessService {
 
 
     @Override
-    public String getOrg(String org){
+    public String getOrg(String org) {
         String result = null;
         /* 根据组织获取对应的二级单位 */
         String orgTwo = underlingSystemService.getL2OrgByOrgId(org);
@@ -372,9 +371,9 @@ public class BPMProcessService implements IBPMProcessService {
     }
 
     @Override
-    public String getOrgByUserId(String userId){
+    public String getOrgByUserId(String userId) {
         SysUser sysUser = systemUserService.getUserById(Long.parseLong(userId));
-        if(sysUser==null)return null;
+        if (sysUser == null) return null;
         return getOrg(sysUser.getThridOrgId());
     }
 

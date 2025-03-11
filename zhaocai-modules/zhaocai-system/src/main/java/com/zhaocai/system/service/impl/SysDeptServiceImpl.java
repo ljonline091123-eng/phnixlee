@@ -564,9 +564,16 @@ public class SysDeptServiceImpl extends ServiceImpl<SysDeptMapper, SysDept> impl
             });
             String[] split = dept1.getAncestors().split(",");
             List<SysDept> listDept = new ArrayList<>();
-            for (String s : split) {
-                if(map1.get(Long.parseLong(s)) != null){
-                    listDept.add(map1.get(Long.parseLong(s)));
+            if (split.length == 1) {
+                listDept.addAll(sysDepts);
+            } else {
+                for (String s : split) {
+                    if (map1.get(Long.parseLong(s)) != null) {
+                        listDept.add(map1.get(Long.parseLong(s)));
+                    }
+                }
+                if (map1.get(dept1.getDeptId()) != null) {
+                    listDept.add(map1.get(dept1.getDeptId()));
                 }
             }
             Map<Long, TreeSelect> map = new HashMap<>();

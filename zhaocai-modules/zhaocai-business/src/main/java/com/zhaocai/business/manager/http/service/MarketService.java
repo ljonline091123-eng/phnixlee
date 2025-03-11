@@ -2,7 +2,7 @@ package com.zhaocai.business.manager.http.service;
 
 import com.alibaba.fastjson2.JSON;
 import com.zhaocai.business.agreement.service.IMarketMaterialContractService;
-import com.zhaocai.business.manager.http.common.config.UnderlingPlatformUrlEnum;
+//import com.zhaocai.business.manager.http.common.config.UnderlingPlatformUrlEnum;
 import com.zhaocai.business.manager.http.dto.req.MarketMaterialListQuoteRequestDTO;
 import com.zhaocai.business.manager.http.dto.req.MarketMaterialListRequestDTO;
 import com.zhaocai.business.manager.http.dto.req.MarketQuotePriceRequestDTO;
@@ -11,6 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -26,15 +27,17 @@ public class MarketService {
     private IMarketMaterialContractService marketMaterialContractService;
 
     public List<MarketQuotePriceResponseDTO> queryMarketQuotePrice(MarketQuotePriceRequestDTO requestDTO) {
-        List<MarketQuotePriceResponseDTO> responseDTO = UnderlingRestTemplateService.postForList(UnderlingPlatformUrlEnum.MARKET_QUOTE_PRICE,
-                MarketQuotePriceResponseDTO.class, requestDTO);
+//        List<MarketQuotePriceResponseDTO> responseDTO = UnderlingRestTemplateService.postForList(UnderlingPlatformUrlEnum.MARKET_QUOTE_PRICE,
+//                MarketQuotePriceResponseDTO.class, requestDTO);
+
+        List<MarketQuotePriceResponseDTO> responseDTO = new ArrayList<>();
         log.info("[查询易料市集清单最新价格] - 请求结果为:{}", JSON.toJSONString(responseDTO));
         return responseDTO;
     }
 
     public void pushMarketMaterialList(MarketMaterialListRequestDTO requestDTO){
-        UnderlingRestTemplateService.postForObject(UnderlingPlatformUrlEnum.MARKET_MATERIAL_LIST_PUSH,
-                MarketMaterialListRequestDTO.class, requestDTO);
+//        UnderlingRestTemplateService.postForObject(UnderlingPlatformUrlEnum.MARKET_MATERIAL_LIST_PUSH,
+//                MarketMaterialListRequestDTO.class, requestDTO);
         log.info("[推送采购清单数据] - 请求结果为:{}","success");
     }
 

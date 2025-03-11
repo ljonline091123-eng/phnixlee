@@ -1,7 +1,7 @@
 package com.zhaocai.business.receipt.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
-import com.zhaocai.business.manager.http.common.config.UnderlingPlatformUrlEnum;
+//import com.zhaocai.business.manager.http.common.config.UnderlingPlatformUrlEnum;
 import com.zhaocai.business.manager.http.service.UnderlingRestTemplateService;
 import com.zhaocai.business.receipt.domain.ReceiptReconciliation;
 import com.zhaocai.business.receipt.service.IPushReceiptService;
@@ -76,8 +76,9 @@ public class PushReceiptServiceImpl implements IPushReceiptService {
         ReceiptMaterialsDeviceLedgerVO materialsDeviceLedgerVO=new ReceiptMaterialsDeviceLedgerVO();
         materialsDeviceLedgerVO.setThirdId(deviceLedgerVO.getId());
         materialsDeviceLedgerVO.setState(deviceLedgerVO.getSupplierStatus());
-        UnderlingRestTemplateService.postForObject(UnderlingPlatformUrlEnum.LEASE_WRITE_BACK_SUPPLIER_STATUS,
-                ReceiptThirdResponseVO.class, deviceLedgerVO);
+//        UnderlingRestTemplateService.postForObject(UnderlingPlatformUrlEnum.LEASE_WRITE_BACK_SUPPLIER_STATUS,
+//                ReceiptThirdResponseVO.class, deviceLedgerVO);
+
         return deviceLedgerService.modifyDeviceLedgerState(materialsDeviceLedgerVO);
     }
 
@@ -87,8 +88,8 @@ public class PushReceiptServiceImpl implements IPushReceiptService {
         ReceiptMaterialsTurnLedgerVO turnLedgerVO=new ReceiptMaterialsTurnLedgerVO();
         turnLedgerVO.setThirdId(deviceLedgerVO.getId());
         turnLedgerVO.setState(deviceLedgerVO.getSupplierStatus());
-        UnderlingRestTemplateService.postForObject(UnderlingPlatformUrlEnum.TURNLEDGER_WRITE_BACK_SUPPLIER_STATUS,
-                ReceiptThirdResponseVO.class,deviceLedgerVO);
+//        UnderlingRestTemplateService.postForObject(UnderlingPlatformUrlEnum.TURNLEDGER_WRITE_BACK_SUPPLIER_STATUS,
+//                ReceiptThirdResponseVO.class,deviceLedgerVO);
         return turnLedgerService.modifyMaterialsTurnLedgerState(turnLedgerVO);
     }
 
@@ -97,9 +98,9 @@ public class PushReceiptServiceImpl implements IPushReceiptService {
         String id = deviceLedgerVO.getId();
         String supplierStatus = deviceLedgerVO.getSupplierStatus();
         //推送供应商状态至成控
-        UnderlingRestTemplateService.postForObject(
-                UnderlingPlatformUrlEnum.RECONCILIATION_WRITE_BACK_SUPPLIER_STATUS,
-                ReceiptThirdResponseVO.class,deviceLedgerVO);
+//        UnderlingRestTemplateService.postForObject(
+//                UnderlingPlatformUrlEnum.RECONCILIATION_WRITE_BACK_SUPPLIER_STATUS,
+//                ReceiptThirdResponseVO.class,deviceLedgerVO);
         //修改材料对账单中供应商状态
         return reconciliationService.update(
                 new LambdaUpdateWrapper<ReceiptReconciliation>()

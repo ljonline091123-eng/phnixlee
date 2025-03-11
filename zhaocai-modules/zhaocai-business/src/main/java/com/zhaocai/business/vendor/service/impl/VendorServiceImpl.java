@@ -20,7 +20,7 @@ import com.zhaocai.business.common.exception.BusinessException;
 import com.zhaocai.business.common.exception.NotFoundException;
 import com.zhaocai.business.common.exception.ParamValidateException;
 import com.zhaocai.business.common.utils.ValidateUtils;
-import com.zhaocai.business.manager.http.common.config.UnderlingPlatformUrlEnum;
+//import com.zhaocai.business.manager.http.common.config.UnderlingPlatformUrlEnum;
 import com.zhaocai.business.manager.http.dto.req.*;
 import com.zhaocai.business.manager.http.dto.res.BpmInitializeResponseDTO;
 import com.zhaocai.business.manager.http.dto.res.BpmListProcessLogResponseDTO;
@@ -1168,8 +1168,8 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
                 if(bean.getCertificationList().getBusinessLicense() != null){
                     requestDTO.setBusinessLicense(bean.getCertificationList().getBusinessLicense().getAttachmentFileUrl());
                 }
-                UnderlingRestTemplateService.postForObject(UnderlingPlatformUrlEnum.MARKET_SUPPLIER_PUSH,
-                        MarketSupplierRequestDTO.class, requestDTO);
+//                UnderlingRestTemplateService.postForObject(UnderlingPlatformUrlEnum.MARKET_SUPPLIER_PUSH,
+//                        MarketSupplierRequestDTO.class, requestDTO);
             }
         });
         executor.shutdown();

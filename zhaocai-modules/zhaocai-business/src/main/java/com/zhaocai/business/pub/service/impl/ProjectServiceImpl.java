@@ -14,7 +14,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import com.zhaocai.business.manager.http.common.config.RestTemplateUtils;
-import com.zhaocai.business.manager.http.common.config.UnderlingPlatformUrlEnum;
+//import com.zhaocai.business.manager.http.common.config.UnderlingPlatformUrlEnum;
 import com.zhaocai.business.manager.http.dto.PlatAreaDivision;
 import com.zhaocai.business.manager.http.dto.req.UnderlyingPlatformBaseDTO;
 import com.zhaocai.business.manager.http.dto.res.UnderlingResultData;
@@ -77,9 +77,11 @@ public class ProjectServiceImpl extends ServiceImpl<ProjectMapper,Project> imple
     @Transactional(propagation = Propagation.REQUIRES_NEW,rollbackFor = Exception.class)
     public boolean receiptProject() {
         boolean flat=true;
-        UriComponents uriComponents = UriComponentsBuilder.fromUriString(underlingPlatformConfig.getBaseUrl() + UnderlingPlatformUrlEnum.GET_PROJECT_ALL.getUrl())
-                .queryParam("authCode", underlingPlatformConfig.getAuthCode())
-                .build();
+//        UriComponents uriComponents = UriComponentsBuilder.fromUriString(underlingPlatformConfig.getBaseUrl() + UnderlingPlatformUrlEnum.GET_PROJECT_ALL.getUrl())
+//                .queryParam("authCode", underlingPlatformConfig.getAuthCode())
+//                .build();
+
+        UriComponents uriComponents = null;
         try {
             UnderlyingPlatformBaseDTO requestDTO = new UnderlyingPlatformBaseDTO();
             HttpHeaders headers = new HttpHeaders();
