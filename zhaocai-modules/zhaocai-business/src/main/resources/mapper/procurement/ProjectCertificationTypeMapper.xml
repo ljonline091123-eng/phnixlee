@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhaocai.business.procurement.mapper.ProjectCertificationTypeMapper">
+    <resultMap type="com.zhaocai.business.procurement.domain.ProjectCertificationType" id="ProjectCertificationResult">
+        <result property="id" column="id"/>
+        <result property="parentCode" column="parent_code"/>
+        <result property="name" column="name"/>
+        <result property="code" column="code"/>
+        <result property="type" column="type"/>
+        <result property="createBy" column="create_by"/>
+        <result property="createId" column="create_id"/>
+        <result property="createTime" column="create_time"/>
+        <result property="delFlag" column="del_flag"/>
+    </resultMap>
+
+</mapper>

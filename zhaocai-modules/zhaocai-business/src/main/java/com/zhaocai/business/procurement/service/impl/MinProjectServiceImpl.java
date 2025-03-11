@@ -4,19 +4,26 @@ import cn.hutool.core.collection.CollectionUtil;
 import com.alibaba.fastjson.JSONArray;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.zhaocai.business.common.exception.ParamValidateException;
 import com.zhaocai.business.common.utils.ValidateUtils;
+import com.zhaocai.business.manager.http.dto.req.MinProjectListRequestDTO;
 import com.zhaocai.business.manager.http.dto.res.MinProjectDetailResponseDTO;
 import com.zhaocai.business.manager.http.service.ContractPlanService;
 import com.zhaocai.business.procurement.domain.MinProject;
 import com.zhaocai.business.procurement.mapper.MinProjectMapper;
 import com.zhaocai.business.procurement.service.IContractPlanningService;
 import com.zhaocai.business.procurement.service.IMinProjectService;
+import com.zhaocai.business.procurement.vo.res.MinProjectListVO;
 import com.zhaocai.business.procurement.vo.res.MinProjectVO;
+import com.zhaocai.business.procurement.vo.res.ProcurementSchemeListVO;
+import com.zhaocai.common.core.bean.PageResult;
 import com.zhaocai.common.core.constant.SecurityConstants;
 import com.zhaocai.common.core.utils.StringUtils;
 import com.zhaocai.common.core.utils.bean.BeanCopierUtil;
+import com.zhaocai.common.core.web.domain.AjaxResult;
 import com.zhaocai.system.api.domain.SysDept;
 import com.zhaocai.system.api.system.RemoteSystemService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,6 +31,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * 最小核算项目信息Service业务层处理
@@ -42,6 +50,7 @@ public class MinProjectServiceImpl extends ServiceImpl<MinProjectMapper, MinProj
 
     @Autowired
     private IContractPlanningService contractPlanningService;
+
 
     @Override
     public MinProject saveMinProject(MinProjectDetailResponseDTO projectDetail) {
@@ -115,6 +124,24 @@ public class MinProjectServiceImpl extends ServiceImpl<MinProjectMapper, MinProj
             minProjectVOS.add(minProjectVO);
         }
         return minProjectVOS;
+    }
+
+    @Override
+    public PageResult<MinProjectListVO> getProjectListByQuery(MinProjectListRequestDTO requestDTO) {
+        SysDept sysDept = remoteSystemService.getInfo(requestDTO.getDeptId(),SecurityConstants.INNER);
+
+        requestDTO.setManagementOrgId(sysDept.getThridDeptId());
+
+        // 执行分页查询
+        IPage<MinProject> minProjectPage = baseMapper.selectListPage(requestDTO.toMybatisPage(), requestDTO);
+
+        // 将查询结果转换为 VO 对象
+        List<MinProjectListVO> minProjectVOS = minProjectPage.getRecords().stream()
+                .map(minProject -> BeanCopierUtil.copyBean(minProject, MinProjectListVO.class))
+                .collect(Collectors.toList());
+
+        // 返回分页结果
+        return new PageResult<>(minProjectVOS, (int) minProjectPage.getTotal());
     }
 
 }

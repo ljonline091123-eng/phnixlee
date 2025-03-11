@@ -120,7 +120,7 @@ public interface RemoteSystemService {
     List<SysDept> getBySwitchListThridDeptId(@RequestParam(value = "thridDeptId") String thridDeptId, @RequestHeader(SecurityConstants.FROM_SOURCE) String source);
 
     @GetMapping(value = "/dept/{deptId}")
-    AjaxResult getInfo(@PathVariable("deptId") Long deptId, @RequestHeader(SecurityConstants.FROM_SOURCE) String source);
+    SysDept getInfo(@PathVariable("deptId") Long deptId, @RequestHeader(SecurityConstants.FROM_SOURCE) String source);
 
     @GetMapping(value = "/dept/selectChildrenDept")
     List<SysDept> selectChildrenDept(@RequestParam("kyeVal") String kyeVal, @RequestParam("group") String group

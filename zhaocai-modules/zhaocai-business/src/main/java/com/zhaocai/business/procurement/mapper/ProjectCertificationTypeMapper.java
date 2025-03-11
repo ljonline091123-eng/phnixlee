@@ -5,8 +5,8 @@ import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.zhaocai.business.manager.http.dto.req.MinProjectListRequestDTO;
 import com.zhaocai.business.procurement.domain.MinProject;
-import com.zhaocai.business.procurement.vo.req.ProcurementPlanListQueryVO;
-import com.zhaocai.business.procurement.vo.res.ProcurementPlanListVO;
+import com.zhaocai.business.procurement.domain.ProjectCertificationType;
+import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
 /**
@@ -15,13 +15,6 @@ import org.apache.ibatis.annotations.Param;
  * @author WH
  * @date 2024-07-16
  */
-public interface MinProjectMapper extends BaseMapper<MinProject> {
-    /**
-     * 分页查询
-     * @param mybatisPage
-     * @param requestDTO
-     * @return
-     */
-    IPage<MinProject> selectListPage(Page mybatisPage, @Param("requestDTO") MinProjectListRequestDTO requestDTO);
-
+@Mapper
+public interface ProjectCertificationTypeMapper extends BaseMapper<ProjectCertificationType> {
 }

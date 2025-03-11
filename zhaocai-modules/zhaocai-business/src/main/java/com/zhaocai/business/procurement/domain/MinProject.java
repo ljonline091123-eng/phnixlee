@@ -131,7 +131,7 @@ public class MinProject extends BaseEntity {
     /**
      * construtionUnit
      */
-    @ApiModelProperty(value = "construtionUnit")
+    @ApiModelProperty(value = "建设单位")
     private String construtionUnit;
 
     /**

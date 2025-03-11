@@ -63,4 +63,24 @@
         <result property="delFlag" column="del_flag"/>
         <result property="minProjectId" column="min_project_id"/>
     </resultMap>
+
+    <select id="selectListPage" resultMap="MinProjectResult">
+        SELECT * FROM tb_min_project
+        <where>
+            <!-- 根据 management_org_id 查询 -->
+            <if test="requestDTO.managementOrgId != null and requestDTO.managementOrgId != ''">
+                AND management_org_id = #{requestDTO.managementOrgId}
+            </if>
+            <!-- 根据 min_account_code 查询 -->
+            <if test="requestDTO.minAccountCode != null and requestDTO.minAccountCode != ''">
+                AND min_account_code = #{requestDTO.minAccountCode}
+            </if>
+            <!-- 根据 min_account_full_name 模糊查询 -->
+            <if test="requestDTO.minAccountFullName != null and requestDTO.minAccountFullName != ''">
+                AND min_account_full_name LIKE CONCAT('%', #{requestDTO.minAccountFullName}, '%')
+            </if>
+        </where>
+        <!-- 按照 min_account_code 升序排序 -->
+        ORDER BY min_account_code ASC
+    </select>
 </mapper>
