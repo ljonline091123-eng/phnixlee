@@ -16,6 +16,7 @@ public enum BusinessCodeEnum {
     PROCUREMENT_PLAN("CGJH","采购计划",9),
     PROCUREMENT_SCHEME("CGRW","采购方案",9),
     AGREEMENT("CGHT","采购合同",6),
+    Project("SG","最小核算项目",9),
 
     ;
 

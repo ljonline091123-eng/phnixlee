@@ -98,6 +98,11 @@ public enum DictBizEnum {
 	UNDERLING_SETTLE_STATUS("SETTLE_STATUS","结算状态"),
 	UNDERLING_MTR_MACH_TYPE("MTR_MACH_TYPE","台班类型"),
 	UNDERLING_PROJECT_FORMAT("PROJECT_FORMAT","项目业态"),
+	PROJECT_MANAGE_MODEL("project_manage_model","项目管理模式"),
+	PROJECT_CONTRACTING_MODEL("sys_contracting_mode","承包模式"),
+	sys_project_status("sys_project_status","项目状态"),
+	project_funds_source("project_funds_source","项目资金来源"),
+	sys_contracting_method("sys_contracting_method","承揽方式（招标方式）"),
 	UNDERLING_CONTRACT_TYPE("CONTRACT_TYPE","合同/合约类型"),
 	UNDERLING_CON_ROLE_TYPE("CON_ROLE_TYPE","合同/角色类型"),
 	;

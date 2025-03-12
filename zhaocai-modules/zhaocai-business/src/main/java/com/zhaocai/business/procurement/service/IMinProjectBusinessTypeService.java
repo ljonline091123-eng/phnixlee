@@ -8,7 +8,8 @@ import com.zhaocai.business.procurement.vo.res.MinProjectBusinessTypeVO;
 import java.util.List;
 
 public interface IMinProjectBusinessTypeService extends IService<MinProjectBusinessType> {
-    List<MinProjectBusinessTypeVO> getVendorClassifyTree();
+
+    List<MinProjectBusinessTypeVO> getBusinessTypeTree();
 
     /*
     * 查询工程类型对应的工程类别名

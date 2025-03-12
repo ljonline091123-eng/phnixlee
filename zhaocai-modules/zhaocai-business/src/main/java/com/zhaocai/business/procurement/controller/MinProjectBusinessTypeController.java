@@ -32,7 +32,7 @@ public class MinProjectBusinessTypeController {
     @GetMapping("/getMinProjectBusinessTypeTree")
     @ApiOperation("获取业务分类分类树")
     public ResultData<List<MinProjectBusinessTypeVO>> getMinProjectBusinessTypeTree() {
-        return ResultData.data(minProjectBusinessTypeService.getVendorClassifyTree());
+        return ResultData.data(minProjectBusinessTypeService.getBusinessTypeTree());
     }
 
 }

@@ -3,6 +3,7 @@ package com.zhaocai.business.manager.http.dto.res;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.Data;
 
+import javax.validation.constraints.NotNull;
 import java.math.BigDecimal;
 import java.util.Date;
 
@@ -106,7 +107,7 @@ public class MinProjectDetailResponseDTO {
     private String dutyUnit;
 
     /**
-     * construtionUnit
+     * 建设单位
      */
     private String construtionUnit;
 
@@ -158,7 +159,8 @@ public class MinProjectDetailResponseDTO {
     /**
      * 中标时间
      */
-    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss",timezone = "GMT+8")
+
+    @JsonFormat(pattern = "yyyy-MM-dd", timezone = "GMT+8")
     private Date winningTime;
 
     /**
@@ -169,7 +171,7 @@ public class MinProjectDetailResponseDTO {
     /**
      * 立项时间
      */
-    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss",timezone = "GMT+8")
+    @JsonFormat(pattern = "yyyy-MM-dd", timezone = "GMT+8")
     private Date lxDate;
 
     /**

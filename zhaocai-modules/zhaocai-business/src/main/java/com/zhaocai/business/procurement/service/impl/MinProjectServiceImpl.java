@@ -7,6 +7,8 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.zhaocai.business.common.enums.BusinessCodeEnum;
+import com.zhaocai.business.common.enums.DictBizEnum;
 import com.zhaocai.business.common.exception.ParamValidateException;
 import com.zhaocai.business.common.utils.ValidateUtils;
 import com.zhaocai.business.manager.http.dto.req.MinProjectListRequestDTO;
@@ -15,12 +17,16 @@ import com.zhaocai.business.manager.http.service.ContractPlanService;
 import com.zhaocai.business.procurement.domain.MinProject;
 import com.zhaocai.business.procurement.mapper.MinProjectMapper;
 import com.zhaocai.business.procurement.service.IContractPlanningService;
+import com.zhaocai.business.procurement.service.IMinProjectDictProjectTypeService;
 import com.zhaocai.business.procurement.service.IMinProjectService;
+import com.zhaocai.business.procurement.vo.res.MinProjectDetailVO;
 import com.zhaocai.business.procurement.vo.res.MinProjectListVO;
 import com.zhaocai.business.procurement.vo.res.MinProjectVO;
-import com.zhaocai.business.procurement.vo.res.ProcurementSchemeListVO;
+import com.zhaocai.business.pub.service.IBusinessCodeService;
+import com.zhaocai.business.pub.service.ISysDictDataService;
 import com.zhaocai.common.core.bean.PageResult;
 import com.zhaocai.common.core.constant.SecurityConstants;
+import com.zhaocai.common.core.utils.NumberUtil;
 import com.zhaocai.common.core.utils.StringUtils;
 import com.zhaocai.common.core.utils.bean.BeanCopierUtil;
 import com.zhaocai.common.core.web.domain.AjaxResult;
@@ -29,6 +35,7 @@ import com.zhaocai.system.api.system.RemoteSystemService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
 import javax.annotation.Resource;
 import java.util.ArrayList;
 import java.util.List;
@@ -52,8 +59,37 @@ public class MinProjectServiceImpl extends ServiceImpl<MinProjectMapper, MinProj
     @Autowired
     private IContractPlanningService contractPlanningService;
 
+    @Autowired
+    private IMinProjectDictProjectTypeService minProjectDictProjectTypeService;
+
+    @Autowired
+    private IBusinessCodeService businessCodeService;
+
+    @Autowired
+    private ISysDictDataService sysDictDataService;
+
     @Resource
     private MinProjectMapper minProjectMapper;
+
+
+    /*
+    * 新增、修改项目-保存项目信息
+    * */
+    @Override
+    public MinProject saveProjectInfo(MinProjectDetailResponseDTO projectDetail) {
+        //新增项目时时，生成最小核算项目编号
+        if(StringUtils.isEmpty(projectDetail.getMinAccountCode())){
+            projectDetail.setMinAccountCode(getMinAccountdCode());
+        }
+        if(projectDetail.getProjectDepartmentId() != null) {
+            SysDept sysDept = remoteSystemService.getByThridDeptId(projectDetail.getProjectDepartmentId(), SecurityConstants.INNER);
+            ValidateUtils.isNullException(sysDept, "该项目所归属项目部对应的组织机构不存在，请确认");
+            projectDetail.setProjectDepartment(sysDept.getDeptName());
+        }
+
+        return saveMinProject(projectDetail);
+    }
+
 
     @Override
     public MinProject saveMinProject(MinProjectDetailResponseDTO projectDetail) {
@@ -90,6 +126,52 @@ public class MinProjectServiceImpl extends ServiceImpl<MinProjectMapper, MinProj
             super.saveOrUpdate(saveMinProject);
             return saveMinProject;
         }
+    }
+
+    /**
+     * 获取采项目编码
+     * @return
+     */
+    private String getMinAccountdCode() {
+        return "SG" + LocalDate.now().getYear() + businessCodeService.getBusinessCode(BusinessCodeEnum.Project);
+    }
+
+    /**
+     * 查询项目详情
+     * @return
+     */
+    @Override
+    public MinProjectDetailVO getMinProjectById(Long id) {
+        if (NumberUtil.isNullOrZero(id)) {
+            throw new ParamValidateException("项目id不能为空");
+        }
+
+        MinProject minProject = super.getOne(new LambdaQueryWrapper<MinProject>()
+                .eq(MinProject::getId, id));
+
+        MinProjectDetailVO minProjectDetailVO = BeanCopierUtil.copyBean(minProject, MinProjectDetailVO.class);
+        if (StringUtils.isBlank(minProjectDetailVO.getManagementOrgId())) {
+            throw new ParamValidateException("该项目所归属管理组织为空，请确认");
+        }
+
+//        // 获取我们系统里面对应的机构 id
+//        SysDept sysDept = remoteSystemService.getByThridDeptId(minProjectDetailVO.getManagementOrgId(), SecurityConstants.INNER);
+//        ValidateUtils.isNullException(sysDept, "该项目所归属管理组织对应的组织机构不存在，请确认");
+//        minProjectDetailVO.setDeptId(sysDept.getDeptId());
+        String prjStateText = sysDictDataService.getLabel(DictBizEnum.UNDERLING_PROJECT_FORMAT.getName(),minProjectDetailVO.getPrjState());
+        String prjManageModelText = sysDictDataService.getLabel(DictBizEnum.PROJECT_MANAGE_MODEL.getName(),minProjectDetailVO.getPrjManageModel());
+        String contractingModelText = sysDictDataService.getLabel(DictBizEnum.PROJECT_CONTRACTING_MODEL.getName(),minProjectDetailVO.getContractingModel());
+        String stateText = sysDictDataService.getLabel(DictBizEnum.sys_project_status.getName(),minProjectDetailVO.getState());
+        String moneySecText = sysDictDataService.getLabel(DictBizEnum.project_funds_source.getName(),minProjectDetailVO.getMoneySec());
+        String zbTypeText = sysDictDataService.getLabel(DictBizEnum.sys_contracting_method.getName(),minProjectDetailVO.getZbType());
+        minProjectDetailVO.setPrjStateText(prjStateText);
+        minProjectDetailVO.setPrjManageModelText(prjManageModelText);
+        minProjectDetailVO.setContractingModelText(contractingModelText);
+        minProjectDetailVO.setStateText(stateText);
+        minProjectDetailVO.setMoneySecText(moneySecText);
+        minProjectDetailVO.setZbTypeText(zbTypeText);
+
+        return minProjectDetailVO;
     }
 
     @Override
@@ -133,18 +215,35 @@ public class MinProjectServiceImpl extends ServiceImpl<MinProjectMapper, MinProj
     public PageResult<MinProjectListVO> getProjectListByQuery(MinProjectListRequestDTO requestDTO) {
         SysDept sysDept = remoteSystemService.getInfo(requestDTO.getDeptId(),SecurityConstants.INNER);
 
-        requestDTO.setManagementOrgId(sysDept.getThridDeptId());
+        if(NumberUtil.isNotNullAndZero(requestDTO.getDeptId())){
+            requestDTO.setManagementOrgId(requestDTO.getDeptId().toString());
+        }
 
         // 执行分页查询
         IPage<MinProject> minProjectPage = baseMapper.selectListPage(requestDTO.toMybatisPage(), requestDTO);
+
+
 
         // 将查询结果转换为 VO 对象
         List<MinProjectListVO> minProjectVOS = minProjectPage.getRecords().stream()
                 .map(minProject -> BeanCopierUtil.copyBean(minProject, MinProjectListVO.class))
                 .collect(Collectors.toList());
 
+        for (MinProjectListVO minProjectListVO : minProjectVOS){
+            String prgTypeText = minProjectDictProjectTypeService.getDictProjectTypeName(minProjectListVO.getPrgType());
+            minProjectListVO.setPrgTypeText(prgTypeText);
+        }
+
         // 返回分页结果
         return new PageResult<>(minProjectVOS, (int) minProjectPage.getTotal());
     }
+
+    @Override
+    public void deleteProject(Long id) {
+        super.removeById(id);
+
+    }
+
+
 
 }

@@ -23,7 +23,7 @@ import java.util.stream.Collectors;
 public class MinProjectBusinessTypeServiceImpl extends ServiceImpl<MinProjectBusinessTypeMapper, MinProjectBusinessType> implements IMinProjectBusinessTypeService {
 
     @Override
-    public List<MinProjectBusinessTypeVO> getVendorClassifyTree() {
+    public List<MinProjectBusinessTypeVO> getBusinessTypeTree() {
         //查询全部供应商分类数据
         List<MinProjectBusinessTypeVO> BusinessTypeVOList = this.list(new LambdaQueryWrapper<>()).stream().map(MinProjectBusinessType ->
                 new MinProjectBusinessTypeVO(

@@ -35,6 +35,9 @@ public class MinProjectListVO extends AdviceObject {
     @ApiModelProperty(value = "工程类型")
     private String prgType;
 
+    @ApiModelProperty(value = "工程类型文本")
+    private String prgTypeText;
+
     @ApiModelProperty(value = "项目资金来源")
     private String moneySec;
 

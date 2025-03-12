@@ -2,16 +2,16 @@ package com.zhaocai.business.procurement.controller;
 
 import com.zhaocai.business.common.base.BladeController;
 import com.zhaocai.business.manager.http.dto.req.MinProjectListRequestDTO;
+import com.zhaocai.business.manager.http.dto.res.MinProjectDetailResponseDTO;
+import com.zhaocai.business.procurement.domain.MinProject;
 import com.zhaocai.business.procurement.service.IMinProjectService;
 import com.zhaocai.business.procurement.vo.res.MinProjectListVO;
 import com.zhaocai.business.procurement.vo.res.MinProjectVO;
 import com.zhaocai.common.core.bean.PageResult;
 import com.zhaocai.common.core.web.bean.ResultData;
+import io.swagger.annotations.ApiOperation;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
@@ -42,5 +42,19 @@ public class MinProjectController extends BladeController {
     public ResultData<PageResult<MinProjectListVO>> getProjectListByQuery(MinProjectListRequestDTO requestDTO) {
         return ResultData.data(minProjectService.getProjectListByQuery(requestDTO));
     }
+
+    @PostMapping("/saveMinProjectInfo")
+    public ResultData<Boolean> saveMinProjectInfo(@RequestBody MinProjectDetailResponseDTO requestDTO) {
+        minProjectService.saveProjectInfo(requestDTO);
+        return ResultData.success();
+    }
+
+    @PostMapping("/deleteProject")
+    @ApiOperation(value = "删除项目")
+    public ResultData<Boolean> deleteProject(@RequestParam Long id) {
+        minProjectService.deleteProject(id);
+        return ResultData.success();
+    }
+
 
 }

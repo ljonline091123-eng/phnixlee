@@ -1,15 +1,20 @@
 package com.zhaocai.business.procurement.service.impl;
 
+import cn.hutool.core.collection.CollectionUtil;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.zhaocai.business.procurement.domain.MinProjectDictProjectType;
 import com.zhaocai.business.procurement.mapper.MinProjectDictProjectTypeMapper;
 import com.zhaocai.business.procurement.service.IMinProjectDictProjectTypeService;
+import com.zhaocai.business.procurement.vo.res.MinProjectDictProjectTypeVO;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Service;
+import org.springframework.util.CollectionUtils;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -19,22 +24,21 @@ import java.util.stream.Collectors;
 @Service
 public class MinProjectDictProjectTypeServiceImpl extends ServiceImpl<MinProjectDictProjectTypeMapper, MinProjectDictProjectType> implements IMinProjectDictProjectTypeService {
 
-//    @Override
-//    public List<VendorClassifyTreeVO> getVendorClassifyTree() {
-//        //查询全部供应商分类数据
-//        List<VendorClassifyTreeVO> classifyTreeVOList = this.list(new LambdaQueryWrapper<>()).stream().map(vendorClassifie ->
-//                new VendorClassifyTreeVO(
-//                        vendorClassifie.getId(),
-//                        vendorClassifie.getParentId(),
-//                        vendorClassifie.getName(),
-//                        vendorClassifie.getCode(),
-//                        vendorClassifie.getLevel()))
-//                .collect(Collectors.toList());
-//        if (!CollectionUtils.isEmpty(classifyTreeVOList)){
-//            classifyTreeVOList = buildTreeNode(classifyTreeVOList, 0L);
-//        }
-//        return classifyTreeVOList;
-//    }
+    @Override
+    public List<MinProjectDictProjectTypeVO> getMinProjectDictProjectTypeTree() {
+        //查询全部供应商分类数据
+        List<MinProjectDictProjectTypeVO> BusinessTypeVOList = this.list(new LambdaQueryWrapper<>()).stream().map(MinProjectDictProjectType ->
+                        new MinProjectDictProjectTypeVO(
+                                MinProjectDictProjectType.getId(),
+                                MinProjectDictProjectType.getParentId(),
+                                MinProjectDictProjectType.getName(),
+                                MinProjectDictProjectType.getCode()))
+                .collect(Collectors.toList());
+        if (!CollectionUtils.isEmpty(BusinessTypeVOList)){
+            BusinessTypeVOList = buildTreeNode(BusinessTypeVOList, 0L);
+        }
+        return BusinessTypeVOList;
+    }
 
     /*
     * 查询工程类型对应的工程类别名
@@ -45,6 +49,7 @@ public class MinProjectDictProjectTypeServiceImpl extends ServiceImpl<MinProject
             return null;
         }
 
+        codes = codes.replaceAll("[\\[\\]\"]", "");
         List<String> codeList = Arrays.asList(codes.split(","));
 
         // 查询数据库，根据 code 获取对应的 MinProjectDictProjectType 对象
@@ -77,36 +82,35 @@ public class MinProjectDictProjectTypeServiceImpl extends ServiceImpl<MinProject
 //        return classifyList;
 //    }
 //
-//
-//    public static List<VendorClassifyTreeVO> buildTreeNode(List<VendorClassifyTreeVO> treeNodeList,Long rootId) {
-//        // 获取跟节点
-//        List<VendorClassifyTreeVO>  rootList = treeNodeList.stream()
-//                .filter(item -> item.getParentId().equals(rootId)).map(item ->
-//                        new VendorClassifyTreeVO(
-//                        item.getId(), item.getParentId(), item.getName(), item.getCode(), item.getLevel()))
-//                .collect(Collectors.toList());
-//
-//        // 根据 parentId 分组
-//        Map<String,List<VendorClassifyTreeVO>> treeNodeMap = treeNodeList.stream()
-//                .collect(Collectors.groupingBy(item -> item.getParentId().toString()));
-//
-//        // 构建树结构
-//        recursionFnTree(rootList,treeNodeMap);
-//
-//        return rootList;
-//    }
-//
-//    private static void recursionFnTree(List<VendorClassifyTreeVO> rootList, Map<String, List<VendorClassifyTreeVO>> treeNodeMap) {
-//        List<VendorClassifyTreeVO> childList;
-//        for (VendorClassifyTreeVO treeNode : rootList) {
-//            childList = treeNodeMap.get(treeNode.getId().toString());
-//            if (CollectionUtil.isNotEmpty(childList)) {
-//                treeNode.setChildren(childList);
-//
-//                recursionFnTree(childList, treeNodeMap);
-//            }
-//        }
-//    }
+    public static List<MinProjectDictProjectTypeVO> buildTreeNode(List<MinProjectDictProjectTypeVO> treeNodeList,Long rootId) {
+        // 获取跟节点
+        List<MinProjectDictProjectTypeVO>  rootList = treeNodeList.stream()
+                .filter(item -> item.getParentId().equals(rootId)).map(item ->
+                        new MinProjectDictProjectTypeVO(
+                                item.getId(), item.getParentId(), item.getName(), item.getCode()))
+                .collect(Collectors.toList());
+
+        // 根据 parentId 分组
+        Map<String,List<MinProjectDictProjectTypeVO>> treeNodeMap = treeNodeList.stream()
+                .collect(Collectors.groupingBy(item -> item.getParentId().toString()));
+
+        // 构建树结构
+        recursionFnTree(rootList,treeNodeMap);
+
+        return rootList;
+    }
+
+    private static void recursionFnTree(List<MinProjectDictProjectTypeVO> rootList, Map<String, List<MinProjectDictProjectTypeVO>> treeNodeMap) {
+        List<MinProjectDictProjectTypeVO> childList;
+        for (MinProjectDictProjectTypeVO treeNode : rootList) {
+            childList = treeNodeMap.get(treeNode.getId().toString());
+            if (CollectionUtil.isNotEmpty(childList)) {
+                treeNode.setChildren(childList);
+
+                recursionFnTree(childList, treeNodeMap);
+            }
+        }
+    }
 
 
 
