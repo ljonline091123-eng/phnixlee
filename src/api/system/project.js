@@ -9,3 +9,47 @@ export function listProject(query) {
       params: query,
     });
 }
+
+// 保存项目
+export function saveMinProjectInfo(data) {
+  return request({
+    url: "/business/minProject/saveMinProjectInfo",
+    method: "post",
+    data: data,
+  });
+}
+
+
+export function deleteProject(id) {
+  return request({
+    url: "/business/minProject/deleteProject",
+    method: "post",
+    params: {
+      id,
+    },
+  });
+}
+
+// 查询业务分类树
+export function BusinessTypeTreeSelect(roleId) {
+  return request({
+    url: '/business/MinProjectBusinessType/getMinProjectBusinessTypeTree' ,
+    method: 'get'
+  })
+}
+
+// 查询资质分类树
+export function CertificationTypeTreeSelect(roleId) {
+  return request({
+    url: '/business/ProjectCertificationType/getProjectCertificationTypeTree',
+    method: 'get'
+  })
+}
+
+// 查询工程分类树
+export function dictProjectTypeTreeSelect(roleId) {
+  return request({
+    url: '/business/MinProjectDictProjectType/getMinProjectDictProjectTypeTree',
+    method: 'get'
+  })
+}
