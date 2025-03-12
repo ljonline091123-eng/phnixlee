@@ -44,8 +44,8 @@
           icon="el-icon-plus"
           size="mini"
           @click="handleAdd"
-          v-hasPermi="['monitor:job:add']"
         >新增</el-button>
+<!--        v-hasPermi="['monitor:job:add']"-->
       </el-col>
       <el-col :span="1.5">
         <el-button
@@ -55,8 +55,8 @@
           size="mini"
           :disabled="single"
           @click="handleUpdate"
-          v-hasPermi="['monitor:job:edit']"
         >修改</el-button>
+<!--        v-hasPermi="['monitor:job:edit']"-->
       </el-col>
       <el-col :span="1.5">
         <el-button
@@ -66,8 +66,8 @@
           size="mini"
           :disabled="multiple"
           @click="handleDelete"
-          v-hasPermi="['monitor:job:remove']"
         >删除</el-button>
+<!--        v-hasPermi="['monitor:job:remove']"-->
       </el-col>
       <el-col :span="1.5">
         <el-button
@@ -76,8 +76,8 @@
           icon="el-icon-download"
           size="mini"
           @click="handleExport"
-          v-hasPermi="['monitor:job:export']"
         >导出</el-button>
+<!--        v-hasPermi="['monitor:job:export']"-->
       </el-col>
       <el-col :span="1.5">
         <el-button
@@ -86,15 +86,15 @@
           icon="el-icon-s-operation"
           size="mini"
           @click="handleJobLog"
-          v-hasPermi="['monitor:job:query']"
         >日志</el-button>
+<!--        v-hasPermi="['monitor:job:query']"-->
       </el-col>
       <right-toolbar :showSearch.sync="showSearch" @queryTable="getList"></right-toolbar>
     </el-row>
 
     <el-table v-loading="loading" :data="jobList" @selection-change="handleSelectionChange"
      highlight-current-row
-        height="calc(100vh - 268px)"  
+        height="calc(100vh - 268px)"
         :header-cell-style="{background:'#F3F2F8',}">
       <el-table-column type="selection" width="55" align="center" />
       <el-table-column label="任务编号" width="100" align="center" prop="jobId" />
@@ -123,16 +123,17 @@
             type="text"
             icon="el-icon-edit"
             @click="handleUpdate(scope.row)"
-            v-hasPermi="['monitor:job:edit']"
           >修改</el-button>
+<!--          v-hasPermi="['monitor:job:edit']"-->
           <el-button
             size="mini"
             type="text"
             icon="el-icon-delete"
             @click="handleDelete(scope.row)"
-            v-hasPermi="['monitor:job:remove']"
           >删除</el-button>
-          <el-dropdown size="mini" @command="(command) => handleCommand(command, scope.row)" v-hasPermi="['monitor:job:changeStatus', 'monitor:job:query']">
+<!--          v-hasPermi="['monitor:job:remove']"-->
+          <el-dropdown size="mini" @command="(command) => handleCommand(command, scope.row)" >
+<!--            v-hasPermi="['monitor:job:changeStatus', 'monitor:job:query']"-->
             <el-button size="mini" type="text" icon="el-icon-d-arrow-right">更多</el-button>
             <el-dropdown-menu slot="dropdown">
               <el-dropdown-item command="handleRun" icon="el-icon-caret-right"
@@ -147,7 +148,7 @@
       </el-table-column>
     </el-table>
 
-    
+
 
     <!-- 添加或修改定时任务对话框 -->
     <el-dialog :title="title" :visible.sync="open" width="800px" append-to-body>

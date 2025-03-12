@@ -24,7 +24,7 @@
           <el-button icon="el-icon-refresh" size="mini" @click="resetQuery">{{ $t('common.reset') }}</el-button>
         </el-form-item>
       </el-form>
-  
+
       <el-row :gutter="10" class="mb8">
         <el-col :span="1.5">
           <el-button
@@ -33,8 +33,8 @@
             icon="el-icon-plus"
             size="mini"
             @click="handleAdd"
-            v-hasPermi="['flowable:listener:add']"
           >{{ $t('common.add') }}</el-button>
+<!--          v-hasPermi="['flowable:listener:add']"-->
         </el-col>
         <el-col :span="1.5">
           <el-button
@@ -44,8 +44,8 @@
             size="mini"
             :disabled="single"
             @click="handleUpdate"
-            v-hasPermi="['flowable:listener:edit']"
           >{{ $t('common.edit') }}</el-button>
+<!--          v-hasPermi="['flowable:listener:edit']"-->
         </el-col>
         <el-col :span="1.5">
           <el-button
@@ -55,8 +55,8 @@
             size="mini"
             :disabled="multiple"
             @click="handleDelete"
-            v-hasPermi="['flowable:listener:remove']"
           >{{ $t('common.del') }}</el-button>
+<!--          v-hasPermi="['flowable:listener:remove']"-->
         </el-col>
         <el-col :span="1.5">
           <el-button
@@ -65,12 +65,12 @@
             icon="el-icon-download"
             size="mini"
             @click="handleExport"
-            v-hasPermi="['flowable:listener:export']"
           >{{ $t('common.export') }}</el-button>
+<!--          v-hasPermi="['flowable:listener:export']"-->
         </el-col>
         <right-toolbar :showSearch.sync="showSearch" @queryTable="getList"></right-toolbar>
       </el-row>
-  
+
       <el-table v-loading="loading" :data="listenerList" @selection-change="handleSelectionChange">
         <el-table-column type="selection" width="55" align="center" />
         <el-table-column label="名称" align="center" prop="name" />
@@ -105,7 +105,7 @@
           </template>
         </el-table-column>
       </el-table>
-  
+
       <pagination
         v-show="total>0"
         :total="total"
@@ -113,7 +113,7 @@
         :limit.sync="queryParams.pageSize"
         @pagination="getList"
       />
-  
+
       <!-- 添加或修改流程监听对话框 -->
       <el-dialog :title="title" :visible.sync="open" width="500px" append-to-body>
         <el-form ref="form" :model="form" :rules="rules" label-width="80px">
@@ -170,10 +170,10 @@
       </el-dialog>
     </div>
   </template>
-  
+
   <script>
   import { listListener, getListener, delListener, addListener, updateListener } from "@/api/flowable/listener";
-  
+
   export default {
     name: "Listener",
     dicts: ['sys_listener_value_type', 'sys_listener_type', 'common_status', 'sys_listener_event_type'],
@@ -333,4 +333,3 @@
     }
   };
   </script>
-  

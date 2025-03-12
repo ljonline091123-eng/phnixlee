@@ -25,8 +25,8 @@
           icon="el-icon-upload"
           size="mini"
           @click="handleImport"
-          v-hasPermi="['flowable:definition:export']"
         >导入</el-button>
+        <!--          v-hasPermi="['flowable:definition:export']"-->
       </el-col>
       <el-col :span="1.5">
         <el-button
@@ -45,8 +45,8 @@
           size="mini"
           :disabled="multiple"
           @click="handleDelete"
-          v-hasPermi="['flowable:instance:del']"
         >删除</el-button>
+        <!--          v-hasPermi="['flowable:instance:del']"-->
       </el-col>
       <right-toolbar :showSearch.sync="showSearch" @queryTable="getList"></right-toolbar>
     </el-row>
@@ -95,11 +95,17 @@
       <el-table-column label="部署时间" align="center" prop="deploymentTime" width="180"/>
       <el-table-column label="操作" width="250" fixed="right" class-name="small-padding fixed-width">
         <template slot-scope="scope">
-          <el-button @click="handleLoadXml(scope.row)" icon="el-icon-edit-outline" type="text" v-hasPermi="['flowable:definition:edit']" size="small">设计</el-button>
-          <el-button @click="handleAddForm(scope.row)" icon="el-icon-edit-el-icon-s-promotion" type="text" v-hasPermi="['flowable:definition:configureform']" size="small">挂载表单</el-button>
-          <el-button @click="handleUpdateSuspensionState(scope.row)" icon="el-icon-video-pause" type="text" v-hasPermi="['flowable:definition:state']" size="small" v-if="scope.row.suspensionState === 1">挂起</el-button>
-          <el-button @click="handleUpdateSuspensionState(scope.row)" icon="el-icon-video-play" type="text" v-hasPermi="['flowable:definition:state']" size="small" v-if="scope.row.suspensionState === 2">激活</el-button>
-          <el-button @click="handleDelete(scope.row)" icon="el-icon-delete" type="text" size="small" v-hasPermi="['flowable:definition:del']">删除</el-button>
+          <el-button @click="handleLoadXml(scope.row)" icon="el-icon-edit-outline" type="text" size="small">设计</el-button>
+<!--                     v-hasPermi="['flowable:definition:edit']"-->
+
+          <el-button @click="handleAddForm(scope.row)" icon="el-icon-edit-el-icon-s-promotion" type="text"  size="small">挂载表单</el-button>
+<!--          v-hasPermi="['flowable:definition:configureform']"-->
+          <el-button @click="handleUpdateSuspensionState(scope.row)" icon="el-icon-video-pause" type="text"  size="small" v-if="scope.row.suspensionState === 1">挂起</el-button>
+<!--          v-hasPermi="['flowable:definition:state']"-->
+          <el-button @click="handleUpdateSuspensionState(scope.row)" icon="el-icon-video-play" type="text"  size="small" v-if="scope.row.suspensionState === 2">激活</el-button>
+<!--          v-hasPermi="['flowable:definition:state']"-->
+          <el-button @click="handleDelete(scope.row)" icon="el-icon-delete" type="text" size="small">删除</el-button>
+<!--          v-hasPermi="['flowable:definition:del']"-->
         </template>
       </el-table-column>
     </el-table>
@@ -195,7 +201,7 @@
     </el-dialog>
   </div>
    <div class="pagination_item">
-          
+
           <pagination
             small
             layout="prev, pager, next"
@@ -207,7 +213,7 @@
           />
       </div>
        </div>
-  
+
 </template>
 
 <script>

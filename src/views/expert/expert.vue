@@ -92,9 +92,9 @@
                   icon="el-icon-plus"
                   size="small"
                   @click="handleAdd"
-                  v-hasPermi="['expert:expert:add']"
                   >新增</el-button
                 >
+<!--                v-hasPermi="['expert:expert:add']"-->
               </el-form-item>
             </el-form>
 
@@ -204,8 +204,8 @@
                         'expert:expert:setting'
                       ) && !$store.getters.permissions.includes('*:*:*')
                     "
-                    v-hasPermi="['expert:expert:setting']"
                   >
+                    <!--                    v-hasPermi="['expert:expert:setting']"-->
                   </el-switch>
                 </template>
               </el-table-column>

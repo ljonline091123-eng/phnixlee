@@ -7,17 +7,16 @@
           size="mini"
           @click="openDialog('gradeVisible')"
           v-if="!vendor.isBlack && vendor.state == 3 "
-          v-hasPermi="['vendor:detail:edit']"
-          >修改等级</el-button
-        >
+          >修改等级</el-button>
+<!--        v-hasPermi="['vendor:detail:edit']"-->
         <el-button
           type="primary"
           size="mini"
           @click="openDialog('blackVisible')"
           v-if="vendor.state == 3"
-          v-hasPermi="['vendor:black:operation']"
           >{{ vendor.isBlack == 1 ? "移出黑名单" : "移入黑名单" }}</el-button
         >
+<!--        v-hasPermi="['vendor:black:operation']"-->
 
 <!--        <el-button-->
 <!--          type="primary"-->

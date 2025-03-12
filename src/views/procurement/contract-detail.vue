@@ -16,7 +16,6 @@
             type="primary"
             size="mini"
             @click="goSave"
-            v-hasPermi="['procurement:contract:edit']"
             :disabled="isSubmit"
             :loading="isSubmit"
           >

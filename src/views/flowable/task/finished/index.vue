@@ -1,5 +1,5 @@
 <template>
-    <div class="app-container"> 
+    <div class="app-container">
       <div class="context flex flex-column" >
     <el-form :model="queryParams" ref="queryForm" :inline="true" v-show="showSearch" label-width="68px" size="small">
       <el-form-item label="流程标题" prop="processTitle">
@@ -82,15 +82,15 @@
             size="mini"
             type="text"
             icon="el-icon-refresh-left"
-            v-hasPermi="['flowable:finished:revokeProcess']"
             @click="handleRevoke(scope.row)"
           >撤回
           </el-button>
+<!--          v-hasPermi="['flowable:finished:revokeProcess']"-->
         </template>
       </el-table-column>
     </el-table>
 
-   
+
   </div>
   <pagination
       v-show="total>0"
