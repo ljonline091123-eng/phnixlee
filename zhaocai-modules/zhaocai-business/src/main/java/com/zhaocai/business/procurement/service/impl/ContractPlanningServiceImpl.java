@@ -3,7 +3,6 @@ package com.zhaocai.business.procurement.service.impl;
 import cn.hutool.core.collection.CollectionUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import com.zhaocai.business.common.exception.BusinessException;
 import com.zhaocai.business.manager.http.service.ContractPlanService;
 import com.zhaocai.business.procurement.domain.ContractPlanning;
 import com.zhaocai.business.procurement.domain.ContractPlanningSplit;
@@ -60,13 +59,13 @@ public class ContractPlanningServiceImpl extends ServiceImpl<ContractPlanningMap
     @Override
     public ContractPlanning getByContractPlanningId(String contractPlanningId) {
         return super.getOne(new LambdaQueryWrapper<ContractPlanning>()
-                .eq(ContractPlanning::getContractPlanningId,contractPlanningId));
+                .eq(ContractPlanning::getContractPlanningId, contractPlanningId));
     }
 
     @Override
     public ContractPlanningListVO getByProcurementIdFromUnderling(Long procurementPlanId) {
         ContractPlanning contractPlanning = super.getOne(new LambdaQueryWrapper<ContractPlanning>()
-                .eq(ContractPlanning::getPlanId,procurementPlanId));
+                .eq(ContractPlanning::getPlanId, procurementPlanId));
 
         // 去商务策划查询最新的合约规划数据
         ContractPlanningListQueryVO queryVO = new ContractPlanningListQueryVO();
@@ -75,7 +74,7 @@ public class ContractPlanningServiceImpl extends ServiceImpl<ContractPlanningMap
         queryVO.setProjectId(contractPlanning.getProjectId());
         queryVO.setPageSize(100);
 
-        ContractPlanningListVO contractPlanningList = getContractPlanningFromList(queryVO,contractPlanning.getContractPlanningId());
+        ContractPlanningListVO contractPlanningList = getContractPlanningFromList(queryVO, contractPlanning.getContractPlanningId());
         contractPlanningList.setProjectCode(contractPlanning.getProjectCode());
         contractPlanningList.setProjectName(contractPlanning.getProjectName());
         return contractPlanningList;
@@ -89,14 +88,14 @@ public class ContractPlanningServiceImpl extends ServiceImpl<ContractPlanningMap
     @Override
     public ContractPlanning getByProcurementId(Long procurementPlanId) {
         return super.getOne(new LambdaQueryWrapper<ContractPlanning>()
-                .eq(ContractPlanning::getPlanId,procurementPlanId));
+                .eq(ContractPlanning::getPlanId, procurementPlanId));
     }
 
     @Override
     public void updateContractPlanning(ContractPlanning contractPlanning, Long planId) {
         baseMapper.deleteByPlanId(planId);
 
-        this.addContractPlanning(contractPlanning,planId);
+        this.addContractPlanning(contractPlanning, planId);
     }
 
     @Override
@@ -106,22 +105,22 @@ public class ContractPlanningServiceImpl extends ServiceImpl<ContractPlanningMap
 
     /**
      * 从
+     *
      * @param queryVO
      */
-    private ContractPlanningListVO getContractPlanningFromList(ContractPlanningListQueryVO queryVO,String contractPlanningId) {
-        PageResult<ContractPlanningListVO> pageResult = contractPlanService.getContractPlanningList(queryVO,false);
+    private ContractPlanningListVO getContractPlanningFromList(ContractPlanningListQueryVO queryVO, String contractPlanningId) {
+        PageResult<ContractPlanningListVO> pageResult = contractPlanService.getContractPlanningList(queryVO, false);
         if (CollectionUtil.isNotEmpty(pageResult.getRows())) {
-            for(ContractPlanningListVO planningListVO : pageResult.getRows()) {
+            for (ContractPlanningListVO planningListVO : pageResult.getRows()) {
                 if (planningListVO.getContractPlanningId().equals(contractPlanningId)) {
                     return planningListVO;
                 }
             }
-            log.warn("第[{}]页无[{}]的合约规划",String.valueOf(queryVO.getPageNumber()),queryVO.getContractName());
+            log.warn("第[{}]页无[{}]的合约规划", String.valueOf(queryVO.getPageNumber()), queryVO.getContractName());
             queryVO.setPageNumber(queryVO.getPageNumber() + 1);
-            return getContractPlanningFromList(queryVO,contractPlanningId);
-        } else {
-            throw new BusinessException("从底层逻辑获取合约规划数据失败");
+            return getContractPlanningFromList(queryVO, contractPlanningId);
         }
+        return new ContractPlanningListVO();
     }
 
 }

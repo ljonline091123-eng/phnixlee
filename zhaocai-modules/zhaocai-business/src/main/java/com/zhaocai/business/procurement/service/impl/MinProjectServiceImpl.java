@@ -29,6 +29,7 @@ import com.zhaocai.system.api.system.RemoteSystemService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import javax.annotation.Resource;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -51,6 +52,8 @@ public class MinProjectServiceImpl extends ServiceImpl<MinProjectMapper, MinProj
     @Autowired
     private IContractPlanningService contractPlanningService;
 
+    @Resource
+    private MinProjectMapper minProjectMapper;
 
     @Override
     public MinProject saveMinProject(MinProjectDetailResponseDTO projectDetail) {
@@ -94,10 +97,10 @@ public class MinProjectServiceImpl extends ServiceImpl<MinProjectMapper, MinProj
         if (StringUtils.isBlank(projectCode)) {
             throw new ParamValidateException("最小核算项目编码不能为空");
         }
-
-        MinProjectDetailResponseDTO detailResponseDTO = contractPlanService.getMinProjectDetail(projectCode);
-        // 保存项目信息
-        MinProject minProject = this.saveMinProject(detailResponseDTO);
+        QueryWrapper<MinProject> queryWrapper = new QueryWrapper<>();
+        queryWrapper.eq("min_account_code",projectCode);
+        queryWrapper.eq("del_flag","0");
+        MinProject minProject = minProjectMapper.selectOne(queryWrapper);
 
         MinProjectVO minProjectVO = BeanCopierUtil.copyBean(minProject, MinProjectVO.class);
         if (StringUtils.isBlank(minProjectVO.getManagementOrgId())) {
