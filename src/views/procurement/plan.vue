@@ -7,7 +7,7 @@
         style="padding-bottom: 15px"
       >
         <!-- <el-radio-button label="masterPlan" name="masterPlan">采购总计划</el-radio-button> -->
-        <el-radio-button label="plan" name="plan">采购计划</el-radio-button>
+        <el-radio-button label="plan" name="plan">采购计划111</el-radio-button>
       </el-radio-group>
 
       <!-- 总计划 -->
@@ -438,7 +438,7 @@
               icon="el-icon-plus"
               size="small"
               @click="handleAdd"
-              
+
               >新增</el-button
             >
             <!-- <el-button
@@ -711,7 +711,7 @@
             :limit.sync="contractQuery.pageSize"
             @pagination="getContractList"
           />
-        </el-dialog> 
+        </el-dialog>
         <pagination
           v-show="total > 0"
           :total="total"
