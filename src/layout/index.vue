@@ -3,7 +3,6 @@
     :class="classObj"
     class="app-wrapper"
     :style="{ '--current-color': theme }"
-    v-if="isDev"
   >
     <div
       v-if="device === 'mobile' && sidebar.opened"
