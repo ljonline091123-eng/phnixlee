@@ -40,7 +40,7 @@ public class MaterialsList extends BaseEntity {
     /**
      * 物料 id {@link com.zhaocai.business.manager.http.service.ContractPlanService#getContractMaterialsList}
      */
-    @NotBlank(message = "采购清单的物料 id不能为空")
+    // @NotBlank(message = "采购清单的物料 id不能为空")
     @ApiModelProperty(value = "物料 id")
     private String materialsId;
 
@@ -53,14 +53,14 @@ public class MaterialsList extends BaseEntity {
     /**
      * 物料清单编码
      */
-    @NotBlank(message = "采购清单的物料清单编码不能为空")
+    // @NotBlank(message = "采购清单的物料清单编码不能为空")
     @ApiModelProperty(value = "物料清单编码")
     private String materialsCode;
 
     /**
      * 物料清单名称
      */
-    @NotBlank(message = "采购清单的物料清单名称不能为空")
+    // @NotBlank(message = "采购清单的物料清单名称不能为空")
     @ApiModelProperty(value = "物料清单名称")
     private String materialsName;
 
@@ -73,21 +73,21 @@ public class MaterialsList extends BaseEntity {
     /**
      * 交易标的物编码
      */
-    @NotBlank(message = "交易标的物编码不能为空")
+//    // @NotBlank(message = "交易标的物编码不能为空")
     @ApiModelProperty(value = "交易标的物编码")
     private String subjectMatterCode;
 
     /**
      * 交易标的物名称
      */
-    @NotBlank(message = "交易标的物名称不能为空")
+//    // @NotBlank(message = "交易标的物名称不能为空")
     @ApiModelProperty(value = "交易标的物名称")
     private String subjectMatterName;
 
     /**
      * 交易标的物标识
      */
-    @NotBlank(message = "交易标的物标识不能为空")
+//    // @NotBlank(message = "交易标的物标识不能为空")
     @ApiModelProperty(value = "交易标的物标识")
     private String subjectMatterFlag;
 
@@ -124,14 +124,14 @@ public class MaterialsList extends BaseEntity {
     /**
      * 成本科目编码
      */
-    @NotBlank(message = "采购清单的成本科目编码不能为空")
+    // @NotBlank(message = "采购清单的成本科目编码不能为空")
     @ApiModelProperty(value = "成本科目编码")
     private String costAccountCode;
 
     /**
      * 成本科目名称
      */
-    @NotBlank(message = "采购清单的成本科目名称不能为空")
+    // @NotBlank(message = "采购清单的成本科目名称不能为空")
     @ApiModelProperty(value = "成本科目名称")
     private String costAccountName;
 
@@ -150,7 +150,7 @@ public class MaterialsList extends BaseEntity {
     /**
      * 税率
      */
-    @NotNull(message = "采购清单的税率不能为空")
+    // @NotNull(message = "采购清单的税率不能为空")
     @ApiModelProperty(value = "税率")
     private BigDecimal taxRate;
 
@@ -169,35 +169,35 @@ public class MaterialsList extends BaseEntity {
     /**
      * 单价(不含税)
      */
-    @NotNull(message = "采购清单的单价(不含税)不能为空")
+    // @NotNull(message = "采购清单的单价(不含税)不能为空")
     @ApiModelProperty(value = "单价(不含税)")
     private BigDecimal unitPriceExclTax;
 
     /**
      * 单价(含税)
      */
-    @NotNull(message = "采购清单的单价(含税) 不能为空")
+    // @NotNull(message = "采购清单的单价(含税) 不能为空")
     @ApiModelProperty(value = "单价(含税) ")
     private BigDecimal unitPriceInclTax;
 
     /**
      * 金额(不含税)
      */
-    @NotNull(message = "采购清单的金额(不含税)不能为空")
+    // @NotNull(message = "采购清单的金额(不含税)不能为空")
     @ApiModelProperty(value = "金额(不含税)")
     private BigDecimal amountExclTax;
 
     /**
      * 金额(含税)
      */
-    @NotNull(message = "采购清单的金额(含税)不能为空")
+    // @NotNull(message = "采购清单的金额(含税)不能为空")
     @ApiModelProperty(value = "金额(含税)")
     private BigDecimal amountInclTax;
 
     /**
      * 税额
      */
-    @NotNull(message = "采购清单的税额不能为空")
+    // @NotNull(message = "采购清单的税额不能为空")
     @ApiModelProperty(value = "税额")
     private BigDecimal taxAmount;
 
@@ -240,7 +240,7 @@ public class MaterialsList extends BaseEntity {
     /**
      * 价格类型 {@link com.zhaocai.business.common.enums.PriceTypeEnum} 注意：清单列表数据的只有三种(固定价、浮动价、浮动率)
      */
-    @NotNull(message = "采购清单的价格类型不能为空")
+    // @NotNull(message = "采购清单的价格类型不能为空")
     @ApiModelProperty(value = "价格类型")
     private Integer priceType;
 

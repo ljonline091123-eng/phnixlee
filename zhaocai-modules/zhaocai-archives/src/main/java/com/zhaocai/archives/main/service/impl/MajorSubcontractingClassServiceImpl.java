@@ -41,11 +41,13 @@ public class MajorSubcontractingClassServiceImpl extends ServiceImpl<MajorSubcon
     @Override
     public MajorSubcontractingClass selectMajorSubcontractingClassById(String id) {
         MajorSubcontractingClass aClass = majorSubcontractingClassMapper.selectMajorSubcontractingClassById(id);
-        if (aClass.getParentId() != null && !"0".equals(aClass.getParentId())) {
-            MajorSubcontractingClass aClass1 = majorSubcontractingClassMapper.selectMajorSubcontractingClassById(aClass.getParentId());
-            aClass.setBelongingLevel(aClass1.getMajorSubcontractingClassName());
-        } else {
-            aClass.setBelongingLevel("顶级");
+        if (aClass != null) {
+            if (aClass.getParentId() != null && !"0".equals(aClass.getParentId())) {
+                MajorSubcontractingClass aClass1 = majorSubcontractingClassMapper.selectMajorSubcontractingClassById(aClass.getParentId());
+                aClass.setBelongingLevel(aClass1.getMajorSubcontractingClassName());
+            } else {
+                aClass.setBelongingLevel("顶级");
+            }
         }
         return aClass;
     }

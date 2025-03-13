@@ -1,17 +1,19 @@
 package com.zhaocai.archives.main.controller;
 
 import com.zhaocai.archives.common.exception.BusinessException;
-import com.zhaocai.archives.main.domain.DeviceClass;
-import com.zhaocai.archives.main.domain.MtrClass;
-import com.zhaocai.archives.main.service.IDeviceClassService;
-import com.zhaocai.archives.main.service.ILaborServicesClassService;
-import com.zhaocai.archives.main.service.IMajorSubcontractingClassService;
-import com.zhaocai.archives.main.service.IMtrClassService;
+import com.zhaocai.archives.main.domain.*;
+import com.zhaocai.archives.main.service.*;
+import com.zhaocai.archives.main.vo.req.ArchivesDetailQueryVO;
+import com.zhaocai.archives.main.vo.res.ArchivesDetail;
 import com.zhaocai.archives.pub.ArchivesTypeEnum;
 import com.zhaocai.common.core.web.controller.BaseController;
 import com.zhaocai.common.core.web.domain.AjaxResult;
+import com.zhaocai.common.core.web.page.TableDataInfo;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * 设备分类主Controller
@@ -34,6 +36,9 @@ public class archivesController extends BaseController {
     @Autowired
     private IMajorSubcontractingClassService majorSubcontractingClassService;
 
+    @Autowired
+    private IArchivesService archivesService;
+
 
     /**
      * 树
@@ -42,18 +47,25 @@ public class archivesController extends BaseController {
      */
     @GetMapping("/getArchivesTree")
     public AjaxResult getArchivesTree(String type) {
-        if(type.equals(ArchivesTypeEnum.Mtr_Class)){
+        if(type.equals(ArchivesTypeEnum.Mtr_Class.getType())){
             MtrClass mtrClass = new MtrClass();
             return success(mtrClassService.getMtrClassTree(mtrClass));
-        } else if (type.equals(ArchivesTypeEnum.Device_Feature)) {
+        } else if (type.equals(ArchivesTypeEnum.Device_Feature.getType())) {
             return success(deviceClassService.getDeviceClassTree());
-        } else if (type.equals(ArchivesTypeEnum.Labor_Services)) {
+        } else if (type.equals(ArchivesTypeEnum.Labor_Services.getType())) {
             return success(laborServicesClassService.getLaborServicesClassTree());
-        } else if (type.equals(ArchivesTypeEnum.Major_Subcontracting)) {
+        } else if (type.equals(ArchivesTypeEnum.Major_Subcontracting.getType())) {
             return success(majorSubcontractingClassService.getMajorSubcontractingClassTree());
         }else {
             throw new BusinessException("该物料类别不存在，请检查！");
         }
+    }
+
+    @GetMapping("/getArchivesDetailList")
+    public TableDataInfo getArchivesDetailList(ArchivesDetailQueryVO queryVO) {
+        startPage();
+        List<ArchivesDetail> list = archivesService.getArchivesDetailList(queryVO);
+        return getDataTable(list);
     }
 
 

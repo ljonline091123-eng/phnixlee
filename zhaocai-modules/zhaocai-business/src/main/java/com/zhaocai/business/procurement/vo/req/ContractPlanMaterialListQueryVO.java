@@ -14,19 +14,19 @@ import javax.validation.constraints.NotNull;
 @Data
 public class ContractPlanMaterialListQueryVO{
 
-    @NotBlank(message = "合约规划 id 不能为空")
+    //@NotBlank(message = "合约规划 id 不能为空")
     @ApiModelProperty(value = "合约规划 id")
     private String conPlanId;
 
     @ApiModelProperty(value = "项目 id")
-    @NotBlank(message = "项目 id 不能为空")
+    //@NotBlank(message = "项目 id 不能为空")
     private String projectId;
 
-    @NotNull(message = "采购方案类型 不能为空")
+    //@NotNull(message = "采购方案类型 不能为空")
     @ApiModelProperty(value = "采购方案类型")
     private Integer procurementType;
 
-    @NotNull(message = "合约规划编码不能为空")
+    //@NotNull(message = "合约规划编码不能为空")
     @ApiModelProperty(value = "合约规划编码")
     private String conPlanCode;
 }

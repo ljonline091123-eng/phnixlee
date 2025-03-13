@@ -46,6 +46,7 @@ import com.zhaocai.common.core.utils.bean.BeanCopierUtil;
 import com.zhaocai.common.core.web.domain.BaseEntity;
 import com.zhaocai.common.security.utils.SecurityUtils;
 import com.zhaocai.system.api.domain.SetConfigValueDTO;
+import com.zhaocai.system.api.domain.SysUser;
 import com.zhaocai.system.api.system.RemoteSystemService;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
@@ -376,7 +377,7 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
     public MaterialProcurementPushRequestVO saveProcurementPlan(ProcurementPlanRequestVO requestVO) {
         MaterialProcurementPushRequestVO vo = new MaterialProcurementPushRequestVO();
         /* 数据校验 */
-        checkMaterialsList(requestVO);
+//        checkMaterialsList(requestVO);
         System.out.println("保存采购计划："+ requestVO.getSplitRequestList());
         if (NumberUtil.isNullOrZero(requestVO.getProcurementPlan().getId())) {
             // 新增
@@ -802,7 +803,7 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
         ProcurementPlan procurementPlan = requestVO.getProcurementPlan();
         procurementPlan.setProcurementPlanCode(getProcurementPlanCode());
         procurementPlan.setProcurementReporter(SecurityUtils.getUserId());
-        procurementPlan.setProcurementReporterName(SecurityUtils.getLoginUser().getSysUser().getNickName());
+        procurementPlan.setProcurementReporterName(SecurityUtils.getLoginUser()==null?"":SecurityUtils.getLoginUser().getSysUser().getNickName());
         procurementPlan.setState(ProcurementPlanStateEnum.DRAFT.getState());
 
         baseMapper.insert(procurementPlan);
@@ -950,64 +951,64 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
             }
         }
 
-        // 交易标的物名称
-        String subjectMatterName = subjectMatterNameList.stream()
-                .filter(StringUtils::isNotBlank)
-                .distinct()
-                .collect(Collectors.joining(","));
-        procurementPlan.setSubjectMatterName(subjectMatterName);
-
-        // 交易标的物编码
-        String subjectMatterCode = subjectMatterCodeList.stream()
-                .filter(StringUtils::isNotBlank)
-                .distinct()
-                .collect(Collectors.joining(","));
-        procurementPlan.setSubjectMatter(subjectMatterCode);
-        // 交易标的物类型，只有购买材料的需要计算
-        if (ProcurementPlanTypeEnum.PURCHASE_MATERIALS.equalsType(procurementPlan.getProcurementPlanType())) {
-            /* 校验交易标的物是否存在多种 */
-            Integer subjectMatterType = materialsListService.getSubjectMatterType(subjectMatterCode);
-            procurementPlan.setSubjectMatterType(subjectMatterType);
-        } else {
-            // 非购买材料 去掉固定价和浮动价相关字段值
-            procurementPlan.setPriceType(null);
-            procurementPlan.setRegionProvinceCode(null);
-            procurementPlan.setRegionCityCode(null);
-            procurementPlan.setCountingType(null);
-            procurementPlan.setPaymentType(null);
-        }
+//        // 交易标的物名称
+//        String subjectMatterName = subjectMatterNameList.stream()
+//                .filter(StringUtils::isNotBlank)
+//                .distinct()
+//                .collect(Collectors.joining(","));
+//        procurementPlan.setSubjectMatterName(subjectMatterName);
+//
+//        // 交易标的物编码
+//        String subjectMatterCode = subjectMatterCodeList.stream()
+//                .filter(StringUtils::isNotBlank)
+//                .distinct()
+//                .collect(Collectors.joining(","));
+//        procurementPlan.setSubjectMatter(subjectMatterCode);
+//        // 交易标的物类型，只有购买材料的需要计算
+//        if (ProcurementPlanTypeEnum.PURCHASE_MATERIALS.equalsType(procurementPlan.getProcurementPlanType())) {
+//            /* 校验交易标的物是否存在多种 */
+//            Integer subjectMatterType = materialsListService.getSubjectMatterType(subjectMatterCode);
+//            procurementPlan.setSubjectMatterType(subjectMatterType);
+//        } else {
+//            // 非购买材料 去掉固定价和浮动价相关字段值
+//            procurementPlan.setPriceType(null);
+//            procurementPlan.setRegionProvinceCode(null);
+//            procurementPlan.setRegionCityCode(null);
+//            procurementPlan.setCountingType(null);
+//            procurementPlan.setPaymentType(null);
+//        }
 
         /*
          * 校验同种清单的租赁方式必须为一致
          */
-        if (ProcurementPlanTypeEnum.isRent(procurementPlanType)) {
-            Map<String,Set<String>> rentModeMap = requestVO.getSplitRequestList().stream().flatMap(list -> list.getMaterialsLists().stream())
-                    .collect(Collectors.groupingBy(
-                            MaterialsList::getMaterialsUniqueId,
-                            Collectors.mapping(MaterialsList::getRentMode, Collectors.toSet())
-                    ));
-            for (Map.Entry<String,Set<String>> entry : rentModeMap.entrySet()) {
-                if (entry.getValue().size() > 1) {
-                    throw new BusinessException("清单[" + entry.getKey() + "]的租赁方式存在多种，请重新选择");
-                }
-            }
-        }
+//        if (ProcurementPlanTypeEnum.isRent(procurementPlanType)) {
+//            Map<String,Set<String>> rentModeMap = requestVO.getSplitRequestList().stream().flatMap(list -> list.getMaterialsLists().stream())
+//                    .collect(Collectors.groupingBy(
+//                            MaterialsList::getMaterialsUniqueId,
+//                            Collectors.mapping(MaterialsList::getRentMode, Collectors.toSet())
+//                    ));
+//            for (Map.Entry<String,Set<String>> entry : rentModeMap.entrySet()) {
+//                if (entry.getValue().size() > 1) {
+//                    throw new BusinessException("清单[" + entry.getKey() + "]的租赁方式存在多种，请重新选择");
+//                }
+//            }
+//        }
 
-        /*
-         * 校验上限价
-         */
-        plannedPrice = NumberUtil.round(plannedPrice,2);
-        if (plannedPrice.compareTo(contractPlanning.getPlanningBalance()) > 0) {
-            throw new ParamValidateException(String.format("您的合约拆分总价[%s]已超规划余量[%s]无法提交，请重新调整",
-                                NumberUtil.decimalFormat(plannedPrice,2),NumberUtil.decimalFormat(contractPlanning.getPlanningBalance(),2)));
-        }
-        // 校验数量
-        for (ContractMaterialsListVO materialsListVO : materialsListList) {
-            BigDecimal materialsCount = materialsCountMap.get(materialsListVO.getMaterialsUniqueId());
-            if (materialsListVO.getCount().compareTo(materialsCount) < 0) {
-                throw new BusinessException("清单[" + materialsListVO.getMaterialsName() + "]，您输入的清单数量[" + materialsCount + "]大于商务策划的剩余量[" + materialsListVO.getCount() + "]，请重新输入");
-            }
-        }
+//        /*
+//         * 校验上限价
+//         */
+//        plannedPrice = NumberUtil.round(plannedPrice,2);
+//        if (plannedPrice.compareTo(contractPlanning.getPlanningBalance()) > 0) {
+//            throw new ParamValidateException(String.format("您的合约拆分总价[%s]已超规划余量[%s]无法提交，请重新调整",
+//                                NumberUtil.decimalFormat(plannedPrice,2),NumberUtil.decimalFormat(contractPlanning.getPlanningBalance(),2)));
+//        }
+//        // 校验数量
+//        for (ContractMaterialsListVO materialsListVO : materialsListList) {
+//            BigDecimal materialsCount = materialsCountMap.get(materialsListVO.getMaterialsUniqueId());
+//            if (materialsListVO.getCount().compareTo(materialsCount) < 0) {
+//                throw new BusinessException("清单[" + materialsListVO.getMaterialsName() + "]，您输入的清单数量[" + materialsCount + "]大于商务策划的剩余量[" + materialsListVO.getCount() + "]，请重新输入");
+//            }
+//        }
     }
 
     /**

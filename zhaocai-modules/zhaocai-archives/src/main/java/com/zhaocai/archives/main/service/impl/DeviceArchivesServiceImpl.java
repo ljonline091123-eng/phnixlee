@@ -62,10 +62,12 @@ public class DeviceArchivesServiceImpl extends ServiceImpl<DeviceArchivesMapper,
         if (deviceArchives.getDeviceClassId() != null) {
             aClass = iDeviceClassService.selectDeviceClassById(deviceArchives.getDeviceClassId());
         }
-        String name = aClass.getDeviceClassName();
-        deviceArchives1.forEach(item -> {
-            item.setDeviceClassName(name);
-        });
+        if (aClass != null) {
+            String name = aClass.getDeviceClassName();
+            deviceArchives1.forEach(item -> {
+                item.setDeviceClassName(name);
+            });
+        }
         return deviceArchives1;
     }
 
@@ -152,18 +154,18 @@ public class DeviceArchivesServiceImpl extends ServiceImpl<DeviceArchivesMapper,
             throw new RuntimeException("id不能为空");
         }
         List<DeviceArchives> mtrFeatures = this.listByIds(Arrays.asList(ids));
-        Map<Long,Long> oldIdMaps = new HashMap<>();
+        Map<Long, Long> oldIdMaps = new HashMap<>();
         if (mtrFeatures != null && !mtrFeatures.isEmpty()) {
             mtrFeatures.forEach(item -> {
                 item.setValid(System.currentTimeMillis() / 1000L);
-                if(item.getSonId() != null){
-                    oldIdMaps.put(item.getSonId(),item.getSonId());
+                if (item.getSonId() != null) {
+                    oldIdMaps.put(item.getSonId(), item.getSonId());
                 }
             });
         }
         boolean b = this.updateBatchById(mtrFeatures);
         if (b) {
-            iDeviceDetailsService.deleteByHostId(ids,oldIdMaps);
+            iDeviceDetailsService.deleteByHostId(ids, oldIdMaps);
         }
         return b;
     }

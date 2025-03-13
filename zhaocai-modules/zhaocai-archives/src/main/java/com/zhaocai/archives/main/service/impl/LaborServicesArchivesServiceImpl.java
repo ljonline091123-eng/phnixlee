@@ -66,10 +66,12 @@ public class LaborServicesArchivesServiceImpl extends ServiceImpl<LaborServicesA
         if (laborServicesArchives.getLaborServicesClassId() != null) {
             aClass = laborServicesClassService.selectLaborServicesClassById(laborServicesArchives.getLaborServicesClassId());
         }
-        String name = aClass.getLaborServicesClassName();
-        laborServicesArchives1.forEach(laborServicesArchives1Item -> {
-            laborServicesArchives1Item.setLaborServicesClassName(name);
-        });
+        if(aClass !=null) {
+            String name = aClass.getLaborServicesClassName();
+            laborServicesArchives1.forEach(laborServicesArchives1Item -> {
+                laborServicesArchives1Item.setLaborServicesClassName(name);
+            });
+        }
         return laborServicesArchives1;
     }
 

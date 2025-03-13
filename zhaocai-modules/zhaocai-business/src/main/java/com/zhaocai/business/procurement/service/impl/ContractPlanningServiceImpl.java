@@ -38,7 +38,16 @@ public class ContractPlanningServiceImpl extends ServiceImpl<ContractPlanningMap
 
     @Override
     public void addContractPlanning(ContractPlanning contractPlanning, Long planId) {
+        //plannedAmountInclTaxText: item.plannedAmountInclTaxText, // 用户填写的计划金额
+        //                bidResponsibleOrgName:
         contractPlanning.setPlanId(planId);
+        if(contractPlanning.getContractPlanningName() != null ){
+            contractPlanning.setContractPlanningName(contractPlanning.getContractPlanningName());
+        }
+        if(contractPlanning.getContractPlanningName() != null ){
+            contractPlanning.setBidResponsibleOrgName(contractPlanning.getContractPlanningName());
+        }
+
 
         super.save(contractPlanning);
     }

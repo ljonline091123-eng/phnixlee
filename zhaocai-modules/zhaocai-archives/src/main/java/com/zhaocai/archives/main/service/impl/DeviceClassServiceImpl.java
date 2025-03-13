@@ -40,11 +40,13 @@ public class DeviceClassServiceImpl extends ServiceImpl<DeviceClassMapper, Devic
     @Override
     public DeviceClass selectDeviceClassById(String id) {
         DeviceClass aClass = deviceClassMapper.selectDeviceClassById(id);
-        if (aClass.getParentId() != null && !"0".equals(aClass.getParentId())) {
-            DeviceClass aClass1 = deviceClassMapper.selectDeviceClassById(aClass.getParentId());
-            aClass.setBelongingLevel(aClass1.getDeviceClassName());
-        } else {
-            aClass.setBelongingLevel("顶级");
+        if (aClass != null) {
+            if (aClass.getParentId() != null && !"0".equals(aClass.getParentId())) {
+                DeviceClass aClass1 = deviceClassMapper.selectDeviceClassById(aClass.getParentId());
+                aClass.setBelongingLevel(aClass1.getDeviceClassName());
+            } else {
+                aClass.setBelongingLevel("顶级");
+            }
         }
         return aClass;
     }

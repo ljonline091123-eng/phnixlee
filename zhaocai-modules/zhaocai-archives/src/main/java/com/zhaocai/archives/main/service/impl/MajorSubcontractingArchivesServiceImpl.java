@@ -66,10 +66,14 @@ public class MajorSubcontractingArchivesServiceImpl extends ServiceImpl<MajorSub
         if (majorSubcontractingArchives.getMajorSubcontractingClassId() != null) {
             aClass = iMajorSubcontractingClassService.selectMajorSubcontractingClassById(majorSubcontractingArchives.getMajorSubcontractingClassId());
         }
-        String name = aClass.getMajorSubcontractingClassName();
-        majorSubcontractingArchives1.forEach(item -> {
-            item.setMajorSubcontractingClassName(name);
-        });
+        if(aClass !=null){
+            String name = aClass.getMajorSubcontractingClassName();
+            majorSubcontractingArchives1.forEach(item -> {
+                item.setMajorSubcontractingClassName(name);
+            });
+        }
+
+
         return majorSubcontractingArchives1;
     }
 
