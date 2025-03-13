@@ -54,7 +54,7 @@ public class PerformanceEvaluationService {
                 return String.valueOf(response.getData());
             }
         } catch (Exception ex) {
-            log.error("第三方用户列表接口获取失败:{}", ex.getMessage());
+//            log.error("第三方用户列表接口获取失败:{}", ex.getMessage());
         }
         return null;
     }
