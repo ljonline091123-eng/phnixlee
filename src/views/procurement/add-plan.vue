@@ -38,7 +38,7 @@
             </el-col>
             <el-col :span="8" class="grid-cell">
               <el-form-item label="  采购层级" prop="projectHierarchy" class="required label-right-align">
-                <el-input v-model="formData.projectHierarchy" type="text" disabled clearable />
+                <el-input v-model="formData.projectHierarchy" type="text" :disabled="isSubmit" clearable />
               </el-form-item>
             </el-col>
             <el-col :span="8" class="grid-cell">
@@ -84,7 +84,7 @@
             </el-col>
             <el-col :span="8" class="grid-cell">
               <el-form-item label="上限价(元)" prop="upperLimitPrice" class="required label-right-align">
-                <el-input type="text" clearable :readonly="true" disabled v-model="formData.upperLimitPrice" />
+                <el-input type="text" clearable :readonly="true" :disabled="isSubmit" v-model="formData.upperLimitPrice" />
               </el-form-item>
             </el-col>
             <el-col :span="8" class="grid-cell" v-if="(procurementType == 1)">
@@ -151,21 +151,12 @@
 
         <PageTitle :title="currentContract.contractPlanningCategoryName">
           <div class="page-title-right">
-            <el-button  v-if="currentContract.contractPlanningCategory == 1 " type="success" size="small"  @click="pushPlan">易料市集采购</el-button>
+            <!-- <el-button  v-if="currentContract.contractPlanningCategory == 1 " type="success" size="small"  @click="pushPlan">易料市集采购</el-button>
             <el-button v-if="currentContract.contractPlanningCategory == 1 "  type="success" size="small"  @click="revokePushPlan">撤销易料市集采购</el-button>
-            <el-button type="success" size="small" v-if="formData.isPushData!='Y'" :disabled="isSubmit" @click="splitVisible = true">合约拆分</el-button>
+            <el-button type="success" size="small" v-if="formData.isPushData!='Y'" :disabled="isSubmit" @click="splitVisible = true">合约拆分</el-button> -->
+            <el-button type="success" size="small"  :disabled="isSubmit" @click="handleSelectMaterial">选取物料</el-button>
           </div>
         </PageTitle>
-
-
-
-
-
-
-
-
-
-
 
 
         <el-table v-loading="loading" :row-key="getRowKeys" :data="planList" ref="tableRef"  size="small"  border default-expand-all>
@@ -173,7 +164,7 @@
             <template slot-scope="props">
               <el-table :data="props.row.children" size="small"    border>
                 <!-- <el-table-column type="selection"></el-table-column> -->
-                <el-table-column  v-if="planList[0].children.length>1"  label="拆分合约规划名称" prop="splitContractName" width="150">
+                <!-- <el-table-column  v-if="planList[0].children.length>1"  label="拆分合约规划名称" prop="splitContractName" width="150">
                   <template slot-scope="scope">
                     <el-input v-model="scope.row.splitContractName" :disabled="isSubmit"/>
                   </template>
@@ -185,10 +176,9 @@
                     </div>
                     <el-input v-model="scope.row.contractScope" :disabled="isSubmit"/>
                   </template>
-                </el-table-column>
+                </el-table-column> -->
                 <el-table-column label="清单" align="center" prop="inventory">
                   <template slot-scope="inventory">
-
                     <virtual-scroll
                       :data="inventory.row.children"
                       :item-size="62"
@@ -205,7 +195,6 @@
                       height="600px"
                       :row-class-name="tableRowClassName">
                       <el-table-column type="selection" width="55" :reserve-selection="true"/>
-<!--                      <el-table-column label="序号" type="index" width="50" align="center" fixed/>-->
                       <el-table-column label="序号" width="50" align="center" fixed>
                         <template #default="scope">
                           {{ scope.row.indexNumber }}
@@ -213,14 +202,6 @@
                       </el-table-column>
                       <el-table-column label="清单编码" min-width="150" prop="materialsCode" fixed show-overflow-tooltip/>
                       <el-table-column label="清单名称" min-width="150" prop="materialsName" fixed show-overflow-tooltip/>
-<!--                      <el-table-column label="交易标的物" min-width="100" prop="subjectMatterName" show-overflow-tooltip>-->
-<!--                        <template slot-scope="scope">-->
-<!--                          <el-tooltip effect="dark" :content="scope.row.subjectMatterName || '-'" placement="top" v-if="scope.row.subjectMatterFlag == 1">-->
-<!--                            <el-input v-model="scope.row.subjectMatterName" :disabled="isSubmit" readonly @focus="matterFocus(scope.row.materialsId)"/>-->
-<!--                          </el-tooltip>-->
-<!--                          <span v-else>{{ scope.row.subjectMatterName }}</span>-->
-<!--                        </template>-->
-<!--                      </el-table-column>-->
                       <el-table-column label="成本子目名称(导入)" min-width="150" prop="materialsNameImport" show-overflow-tooltip/>
                       <el-table-column label="特征值特征项" min-width="150" prop="specification" show-overflow-tooltip/>
                       <el-table-column label="计量规则" align="center" prop="measurementRules"  show-overflow-tooltip/>
@@ -362,11 +343,11 @@
             </template>
           </el-table-column>
           <el-table-column label="序号" type="index" width="50" align="center" />
-          <el-table-column label="合约规划名称" min-width="300" prop="contractPlanningName" show-overflow-tooltip/>
-          <el-table-column label="规划金额（含税）" align="right" prop="plannedAmountInclTaxText" />
-          <el-table-column label="已发生规划金额（含税）" align="right" prop="incurredPlannedAmountText" />
+          <el-table-column label="合约名称" min-width="300" prop="contractPlanningName" show-overflow-tooltip/>
+          <el-table-column label="计划金额" align="right" prop="plannedAmountInclTaxText" />
+          <!-- <el-table-column label="已发生规划金额（含税）" align="right" prop="incurredPlannedAmountText" />
           <el-table-column label="规划余量(元)" align="right" prop="planningBalanceText" />
-          <el-table-column label="拟定招标方式" align="center" prop="biddingMethodName" />
+          <el-table-column label="拟定招标方式" align="center" prop="biddingMethodName" /> -->
           <el-table-column label="清单" align="center" class-name="small-padding fixed-width">
             <template slot-scope="scope">
               <el-button size="mini" type="text" icon="el-icon-view" @click="handelInventory()">查看清单</el-button>
@@ -379,6 +360,20 @@
                     @pagination="getList" />
 
       </el-form>
+
+      <!-- 物料类型选择对话框 -->
+      <el-dialog title="选取物料" :visible.sync="materialDialogVisible" width="30%"  @before-close="handleMaterialDialogClose">
+        <el-table
+          :data="materialCategories"
+          style="width: 100%"
+          border
+          highlight-current-row
+          @row-click="handleMaterialCategorySelect"
+        >
+          <el-table-column prop="categoryName" label="分类名称"></el-table-column>
+          <el-table-column prop="categoryCode" label="分类代码"></el-table-column>
+        </el-table>
+      </el-dialog>
 
       <!-- 选择采购经办人 -->
       <el-dialog title="采购人" :visible.sync="officerDialog" width="55%">
@@ -555,6 +550,7 @@
         allowfullscreen
       ></iframe>
     </el-dialog>
+
   </div>
 </template>
 
@@ -568,7 +564,8 @@ import {
   getMinProject,
   getPlanDetail,
   listDwMmServiceSubjectMatter,
-  getContractPlanSplitFlag,pushMaterialProcurementList,revokePushMaterialProcurementList,getYjtUrl
+  getContractPlanSplitFlag,pushMaterialProcurementList,revokePushMaterialProcurementList,getYjtUrl,
+  getArchiveClass
 } from '@/api/procurement/plan'
 import { listUnderlingDict } from "@/api/procurement/contract";
 import { listAreaDivisionTree } from '@/api/procurement/manage'
@@ -600,12 +597,12 @@ export default {
     // this.getList();
     const param = JSON.parse(Base64.decode(this.$route.params.params))
     console.log(param,'param--param--param!!!!!!!!!!!!!!!!!!!!!!!');
-    this.currentContract = param;
-    console.log(JSON.stringify(this.currentContract),'获取到的params');
+    // this.currentContract = param;
+    console.log(JSON.stringify(param),'获取到的params');
     this.isUpdate = param.type === 'update'? true : false;
     console.log(this.isUpdate,'isUpdate-isUpdate');
-    this.formData.projectHierarchy = param.bidResponsibleOrgName;
-    this.formData.upperLimitPrice = param.plannedAmountInclTaxText;
+    // this.formData.projectHierarchy = param.bidResponsibleOrgName;
+    // this.formData.upperLimitPrice = param.plannedAmountInclTaxText;
     this.formData.projectName = this.project.name;
     this.formData.projectCode = this.project.code;
     this.formData.projectId = this.project.id;
@@ -614,15 +611,15 @@ export default {
     if(this.isUpdate){
       this.getPlanDetail()
     }else{
-      this.getContractMaterials().then(()=>{
-        // 获取合约规划清单后，默认合约拆分一份
-        // this.$set(this.splitForm,"num",1);
-        this.handleSplitInit();
-        /* 同步将清单内所有的价格类型改成一致的（固定价） */
-        this.updateMaterialsFloat(1);
-        // /* 计算清单内所有的合计列 */
-        // this.updateMaterialsTotalPrice();
-      })
+      // this.getContractMaterials().then(()=>{
+      //   // 获取合约规划清单后，默认合约拆分一份
+      //   // this.$set(this.splitForm,"num",1);
+      //   this.handleSplitInit();
+      //   /* 同步将清单内所有的价格类型改成一致的（固定价） */
+      //   this.updateMaterialsFloat(1);
+      //   // /* 计算清单内所有的合计列 */
+      //   // this.updateMaterialsTotalPrice();
+      // })
     }
     /* 获取省市区 */
     this.listAreaDivisionTree()
@@ -646,6 +643,15 @@ export default {
         }
       }
       return {
+        materialDialogVisible: false, // 控制物料选择对话框的显示和隐藏
+        // 物料分类列表
+        materialCategories: [
+        { categoryName: '材料类', categoryCode: '1' },
+        { categoryName: '设备类', categoryCode: '2' },
+        { categoryName: '劳务类', categoryCode: '3' },
+        { categoryName: '专业分包类', categoryCode: '4' },
+        ], 
+        selectedCategory: null, 
         // 选择采购经办人
         officerDialog: false, // 控制对话框的显示隐藏
         officerLoading: false,
@@ -799,6 +805,34 @@ export default {
         numDisable:false,
       };
     },
+
+    // 打开物料选择对话框
+    handleSelectMaterial() {
+      this.materialDialogVisible = true;
+    },
+
+    // 处理物料分类选择
+    async handleMaterialCategorySelect(selectedCategory) {
+      console.log(selectedCategory, '选中的物料分类');
+      // 根据选中的分类进行后续操作
+      // 例如，可以将选中的分类添加到某个列表中
+      try {
+        const type = selectedCategory.categoryCode;
+        res = await getArchiveClass(type);
+        console.log("物料分类树：", res.data);
+      } catch (error) {
+        console.error("获取物料库分类树失败：", error);
+        this.$message.error("获取物料库分类树失败");
+      }
+      this.materialDialogVisible = false;
+    },
+
+    // 关闭物料选择对话框
+    handleMaterialDialogClose() {
+      this.materialDialogVisible = false;
+      this.selectedCategory = null;
+    },
+
     /** 选择采购人-点击行 */
     selectOfficer(val){
       this.selectedUser = val
@@ -2537,6 +2571,11 @@ export default {
 }
 ::v-deep  .el-table__row   .not-pushed {
   background: #F9F9FB !important;
+}
+
+/* 物料高亮显示选中的行 */
+::v-deep .el-table__row.current-row {
+  background-color: #f0f9eb !important;
 }
 
 </style>
