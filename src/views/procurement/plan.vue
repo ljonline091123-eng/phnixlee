@@ -7,7 +7,7 @@
         style="padding-bottom: 15px"
       >
         <!-- <el-radio-button label="masterPlan" name="masterPlan">采购总计划</el-radio-button> -->
-        <el-radio-button label="plan" name="plan">采购计划111</el-radio-button>
+        <el-radio-button label="plan" name="plan">采购计划</el-radio-button>
       </el-radio-group>
 
       <!-- 总计划 -->
