@@ -179,22 +179,22 @@
                 </el-table-column> -->
                 <el-table-column label="清单" align="center" prop="inventory">
                   <template slot-scope="inventory">
-                    <virtual-scroll
+                    <!-- <virtual-scroll
                       :data="inventory.row.children"
                       :item-size="62"
                       key-prop="materialsId"
                       ref="virScrollRef"
-                      @change="(renderData) => virtualData = renderData">
+                      @change="(renderData) => virtualData = renderData"> -->
                     <el-table
                       size="small"
-                      :data="virtualData"
+                      :data="inventory.row.children"
                       border
                       @select="handleSelect"
                       :row-key="getRowKeys2"
                       :ref="inventory.row.planTable"
                       height="600px"
                       :row-class-name="tableRowClassName">
-                      <el-table-column type="selection" width="55" :reserve-selection="true"/>
+                      <!-- <el-table-column type="selection" width="55" :reserve-selection="true"/> -->
                       <el-table-column label="序号" width="50" align="center" fixed>
                         <template #default="scope">
                           {{ scope.row.indexNumber }}
@@ -202,7 +202,7 @@
                       </el-table-column>
                       <el-table-column label="清单编码" min-width="150" prop="materialsCode" fixed show-overflow-tooltip/>
                       <el-table-column label="清单名称" min-width="150" prop="materialsName" fixed show-overflow-tooltip/>
-                      <el-table-column label="成本子目名称(导入)" min-width="150" prop="materialsNameImport" show-overflow-tooltip/>
+                      <!-- <el-table-column label="成本子目名称(导入)" min-width="150" prop="materialsNameImport" show-overflow-tooltip/> -->
                       <el-table-column label="特征值特征项" min-width="150" prop="specification" show-overflow-tooltip/>
                       <el-table-column label="计量规则" align="center" prop="measurementRules"  show-overflow-tooltip/>
                       <el-table-column label="工作内容" align="center" prop="workContent"  show-overflow-tooltip/>
@@ -249,16 +249,20 @@
                       </el-table-column>
                       <el-table-column label="单价(含税)" align="right" prop="unitPriceInclTax" width="180" >
                         <template slot-scope="scope">
-                          <span v-if="scope.row.priceType !== 1">
-                          <span title="单价(含税)">{{ getUnitPriceInclTax(scope.row) }}</span>
-                          </span>
-                          <el-input title="单价(含税)" v-else v-model="scope.row.unitPriceInclTax" :disabled="isSubmit || scope.row.belongOffer || scope.row.pushFlag === 'Y'" @input.native="changeUnitPriceInclTax($event,scope.row)" v-thousandth/>
+                      
+                          <el-input title="单价(含税)" v-model="scope.row.unitPriceInclTax" :disabled="isSubmit || scope.row.belongOffer || scope.row.pushFlag === 'Y'" @input.native="changeUnitPriceInclTax($event,scope.row)" v-thousandth/>
                         </template>
                       </el-table-column>
-                      <el-table-column label="税率(%)" align="right" prop="taxRate"/>
+                      <el-table-column label="税率(%)" align="right" prop="taxRate">
+                        <template slot-scope="scope">
+                      
+                          <el-input title="税率(%)" v-model="scope.row.taxRate"  @input.native="changeUnitPriceInclTax($event,scope.row)" v-thousandth/>
+                        </template>
+                      </el-table-column>
                       <el-table-column label="单价(不含税)" align="right" prop="unitPriceExclTax" width="150">
                         <template slot-scope="scope">
-                          <span title="单价(不含税)">{{ getUnitPriceExclTax(scope.row) }}</span>
+                          <!-- <span title="单价(不含税)">{{ getUnitPriceExclTax(scope.row) }}</span> -->
+                          <el-input title="单价(不含税)" v-model="scope.row.unitPriceExclTax"  @input.native="changeUnitPriceInclTax($event,scope.row)" v-thousandth/>
                         </template>
                       </el-table-column>
                       <el-table-column label="浮动价" align="right" width="130" prop="floatingPrice"  v-if="procurementType === 1 && [2,3,4,5,6,7].includes(formData.priceType)">
@@ -318,8 +322,10 @@
                       </el-table-column>
                       <el-table-column label="合计(含税)" align="right" prop="totalPriceText" min-width="150">
                         <template slot-scope="scope">
-                          <span title="合计(含税)">{{getTotalPriceText(scope.row,inventory.$index)}}</span>
-                          <span> {{ getTotalPriceTableText(inventory.$index) }} </span>
+                          <!-- <span title="合计(含税)">{{getTotalPriceText(scope.row,inventory.$index)}}</span>
+                          <span> {{ getTotalPriceTableText(inventory.$index) }} </span> -->
+                          <el-input title="浮动价" v-model="scope.row.totalPriceText" :disabled="isSubmit" v-thousandth  @input.native="changeFloatingPrice($event,scope.row)" class="checkInput"/>
+                         
                         </template>
                       </el-table-column>
                       <el-table-column label="备注" align="center" prop="remark" min-width="300">
@@ -333,7 +339,7 @@
                       </template>
 
                     </el-table>
-                    </virtual-scroll>
+                    <!-- </virtual-scroll> -->
                   </template>
                 </el-table-column>
 
@@ -343,16 +349,27 @@
             </template>
           </el-table-column>
           <el-table-column label="序号" type="index" width="50" align="center" />
-          <el-table-column label="合约名称" min-width="300" prop="contractPlanningName" show-overflow-tooltip/>
-          <el-table-column label="计划金额" align="right" prop="plannedAmountInclTaxText" />
+          <!-- <el-table-column label="合约名称" min-width="300" prop="contractPlanningName" show-overflow-tooltip/>
+          <el-table-column label="计划金额" align="right" prop="plannedAmountInclTaxText" /> -->
+
+          <el-table-column label="合约名称" align="center" prop="contractPlanningName" min-width="300">
+            <template slot-scope="scope">
+              <el-input v-model="scope.row.contractPlanningName" />
+            </template>
+          </el-table-column>
+          <el-table-column label="计划金额" align="center" prop="plannedAmountInclTaxText" min-width="300">
+            <template slot-scope="scope">
+              <el-input v-model="scope.row.plannedAmountInclTaxText" />
+            </template>
+          </el-table-column>
           <!-- <el-table-column label="已发生规划金额（含税）" align="right" prop="incurredPlannedAmountText" />
           <el-table-column label="规划余量(元)" align="right" prop="planningBalanceText" />
           <el-table-column label="拟定招标方式" align="center" prop="biddingMethodName" /> -->
-          <el-table-column label="清单" align="center" class-name="small-padding fixed-width">
+          <!-- <el-table-column label="清单" align="center" class-name="small-padding fixed-width">
             <template slot-scope="scope">
               <el-button size="mini" type="text" icon="el-icon-view" @click="handelInventory()">查看清单</el-button>
             </template>
-          </el-table-column>
+          </el-table-column> -->
 
         </el-table>
 
@@ -362,8 +379,11 @@
       </el-form>
 
       <!-- 物料类型选择对话框 -->
-      <el-dialog title="选取物料" :visible.sync="materialDialogVisible" width="30%"  @before-close="handleMaterialDialogClose">
-        <el-table
+      <el-dialog title="选取物料" :visible.sync="materialDialogVisible" width="45%" >
+        <treeMenu class="treeMenu" style="margin: 12px; " :dept-options="deptOptions" :queryType="true" ref="orgTree"
+        :levelExpand="2"   @query="getListMenu" @treeClick="treeClickMain"
+         :defaultExpandedKeys="defaultExpandedKeys" :loading="loading" :currentNodeKey="waitCurrentNodeKey"  ></treeMenu>
+        <!-- <el-table
           :data="materialCategories"
           style="width: 100%"
           border
@@ -372,7 +392,7 @@
         >
           <el-table-column prop="categoryName" label="分类名称"></el-table-column>
           <el-table-column prop="categoryCode" label="分类代码"></el-table-column>
-        </el-table>
+        </el-table> -->
       </el-dialog>
 
       <!-- 选择采购经办人 -->
@@ -565,7 +585,7 @@ import {
   getPlanDetail,
   listDwMmServiceSubjectMatter,
   getContractPlanSplitFlag,pushMaterialProcurementList,revokePushMaterialProcurementList,getYjtUrl,
-  getArchiveClass
+  getArchiveClass,getArchivesDetailList
 } from '@/api/procurement/plan'
 import { listUnderlingDict } from "@/api/procurement/contract";
 import { listAreaDivisionTree } from '@/api/procurement/manage'
@@ -576,6 +596,7 @@ import {PRICETYPELIST, PRICETYPEOPTIONS} from "@/utils/constants";
 import VirtualScroll from 'el-table-virtual-scroll'
 import {getTwoLevelDeptByDeptId} from "@/api/system/dept";
 import { submitProcurementPlan } from "@/api/procurement/plan";
+import treeMenu from '@/components/tree/treeMenu.vue'
 export default {
   name: "add-plan",
   dicts: ['plan_type','price_type','procurement_counting_type','procurement_payment_type'],
@@ -585,7 +606,8 @@ export default {
   components:{
     BackButton,
     PageTitle,
-    VirtualScroll
+    VirtualScroll,
+    treeMenu
   },
   created() {
     console.log('param--param--param!------------------');
@@ -633,6 +655,39 @@ export default {
     next();
   },
   methods: {
+    treeClickMain(data,node,queryParams){
+      let rData  = data || {};
+  
+      getArchivesDetailList(rData.id,queryParams.type).then(response => {
+        
+        this.inventoryList = response.rows || [];
+        this.planList[0] = {contractPlanning:'',plannedAmountInclTaxText:'', children: []};
+           const num = 1
+            const children = []
+            Array.from({ length: num }).forEach((_, index) => {
+
+              children.push({
+                index,
+                planTable:'planTable'+index,
+                children: this.inventoryList.map(item => ({
+                  ...item,
+                  count: index === 0 ? item.count : 0.00,
+                  rentTime: index === 0 ? item.rentTime : '',
+                  rentQuantity:index === 0 ? item.rentQuantity : '',
+
+                }))
+              })
+            });
+            
+            // this.planList[0].children=children
+      this.$set(this.planList[0], 'children', JSON.parse(JSON.stringify(children)));
+      console.log(JSON.stringify(this.planList[0]))
+      this.materialDialogVisible=false
+        });
+  }, 
+    getListMenu(queryParams){
+      this.handleMaterialCategorySelect(queryParams)
+    },
     /* 代替data初始化 */
     getInitialData() {
       let checkNum = (rule, value, callback) => {
@@ -643,6 +698,9 @@ export default {
         }
       }
       return {
+        deptOptions:[],
+        defaultExpandedKeys:[],
+        waitCurrentNodeKey:'1826912577508798466',
         materialDialogVisible: false, // 控制物料选择对话框的显示和隐藏
         // 物料分类列表
         materialCategories: [
@@ -812,19 +870,18 @@ export default {
     },
 
     // 处理物料分类选择
-    async handleMaterialCategorySelect(selectedCategory) {
-      console.log(selectedCategory, '选中的物料分类');
+    async handleMaterialCategorySelect(queryParams) {
+      console.log(JSON.stringify(queryParams), '选中的物料分类');
       // 根据选中的分类进行后续操作
       // 例如，可以将选中的分类添加到某个列表中
       try {
-        const type = selectedCategory.categoryCode;
-        res = await getArchiveClass(type);
+     let   res = await getArchiveClass(queryParams.type);
+     this.deptOptions=res.data || []
         console.log("物料分类树：", res.data);
       } catch (error) {
         console.error("获取物料库分类树失败：", error);
         this.$message.error("获取物料库分类树失败");
       }
-      this.materialDialogVisible = false;
     },
 
     // 关闭物料选择对话框

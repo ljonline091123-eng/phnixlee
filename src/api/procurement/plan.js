@@ -10,6 +10,16 @@ export const getArchiveClass = (type) => {
     }
   })
 }
+// 选取物料
+export const getArchivesDetailList = (classId,type) => {
+  return request({
+     url: '/archives/archivesClass/getArchivesDetailList',
+      method: 'get',
+      params:{
+          classId,type
+      }
+      })
+      }
 
 // 采购计划列表
 export const getPlanList = (params) => {
