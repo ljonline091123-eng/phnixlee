@@ -62,7 +62,7 @@
           >新增</el-button
         >
       </el-col>
-      <el-col :span="1.5">
+      <!-- <el-col :span="1.5">
         <el-button
           type="primary"
           icon="el-icon-edit"
@@ -71,7 +71,7 @@
           :disabled="!selectProjectData.id ? true : false"
           >修改</el-button
         >
-      </el-col>
+      </el-col> -->
       <el-col :span="1.5">
         <el-button
           type="danger"
@@ -330,7 +330,6 @@
 </template>
 
 <script>
-import moment from 'moment';
 import {deptTreeSelect} from "@/api/system/user";
 import {listProject,saveMinProjectInfo,deleteProject,BusinessTypeTreeSelect,CertificationTypeTreeSelect,dictProjectTypeTreeSelect} from "@/api/system/project";
 import { getDicts as getDicts } from '@/api/system/dict/data'

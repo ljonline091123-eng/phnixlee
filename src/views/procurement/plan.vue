@@ -6,12 +6,12 @@
         size="small"
         style="padding-bottom: 15px"
       >
-        <el-radio-button label="masterPlan" name="masterPlan">采购总计划</el-radio-button>
+        <!-- <el-radio-button label="masterPlan" name="masterPlan">采购总计划</el-radio-button> -->
         <el-radio-button label="plan" name="plan">采购计划</el-radio-button>
       </el-radio-group>
 
       <!-- 总计划 -->
-      <template v-if="procurementPlanMode === 'masterPlan'">
+      <!-- <template v-if="procurementPlanMode === 'masterPlan'">
         <el-form
           :model="queryParamsMaster"
           ref="queryForm"
@@ -223,7 +223,7 @@
               </template>
             </el-table-column>
           </el-table>
-          <!-- 推送 -->
+
         <el-dialog
           title="推送"
           :visible.sync="pushStateDialog"
@@ -361,7 +361,7 @@
           >
         </div>
         </el-dialog>
-      </template>
+      </template> -->
       <!-- 计划 -->
       <template v-if="procurementPlanMode === 'plan'">
         <el-form
@@ -438,10 +438,10 @@
               icon="el-icon-plus"
               size="small"
               @click="handleAdd"
-              v-hasPermi="['procurement:plan:add']"
+              
               >新增</el-button
             >
-            <el-button
+            <!-- <el-button
               type="warning"
               icon="el-icon-setting"
               size="small"
@@ -449,7 +449,7 @@
               v-hasPermi="['procurement:plan:add']"
               v-if="splitValue !== '2'"
             >{{splitValue === "1" ? "设置合约不可拆分" : "设置合约可拆分"}}</el-button
-            >
+            > -->
           </el-form-item>
         </el-form>
 
@@ -595,7 +595,7 @@
         </el-table>
 
         <!-- 选择项目合约规划 -->
-        <el-dialog
+       <el-dialog
           title="选择项目合约规划"
           :visible.sync="contractVisible"
           width="70%"
@@ -711,7 +711,7 @@
             :limit.sync="contractQuery.pageSize"
             @pagination="getContractList"
           />
-        </el-dialog>
+        </el-dialog> 
         <pagination
           v-show="total > 0"
           :total="total"
@@ -895,10 +895,15 @@ export default {
     },
     /** 新增按钮操作 */
     async handleAdd() {
-      this.contractVisible = true;
-      this.contractLoading = true;
-      this.$set(this.contractQuery, 'contractType', '')
-      this.getContractList();
+      // this.contractVisible = true; //合约规划
+      // this.contractLoading = true; //合约规划加载
+      // this.$set(this.contractQuery, 'contractType', '')
+      // this.getContractList();
+      let param = Base64.encode(
+        JSON.stringify({
+          type: 'add',
+        }));
+      this.$router.push(`/procurement/add-plan/${param}`);
     },
     rowClick(row){
       this.$refs.pushTable.clearSelection()
@@ -910,7 +915,7 @@ export default {
       }else{
         /* 增加随机数时间来更新跳转后的组件数据 */
         row.nowDate = new Date();
-        this.contractVisible = false;
+        // this.contractVisible = false;
        let param = Base64.encode(JSON.stringify(row));
        param = encodeURIComponent(param); //避免base64编码中出现"/"时路由404
        this.$router.push(`/procurement/add-plan/${param}`);
@@ -1190,6 +1195,7 @@ export default {
       handler(newVal, oldVal) {
         if (oldVal === undefined || newVal.id !== oldVal.id) {
           this.contractQuery.projectId = newVal.id;
+          console.log("切换新的项目：",newVal);
           this.queryParams = {
             pageNumber: 1,
             pageSize: 10,

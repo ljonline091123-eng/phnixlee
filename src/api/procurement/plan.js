@@ -1,5 +1,16 @@
 import request from '@/utils/request'
 
+// 查询物料分类树
+export const getArchiveClass = (type) => {
+  return request({
+    url: '/archives/archivesClass/getArchivesTree',
+    method: 'get',
+    params:{
+      type
+    }
+  })
+}
+
 // 采购计划列表
 export const getPlanList = (params) => {
   return request({
