@@ -273,7 +273,7 @@ export const cancelledSignAgreement = (data) => {
 //获取合同字典
 export const listUnderlingDict = (type) => {
   return request({
-    url: "/business/dict/listUnderlingDict",
+    url: "/business/dict/listDict",
     method: "get",
     params: {
       type,

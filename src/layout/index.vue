@@ -24,7 +24,6 @@
       </right-panel>
     </div>
   </div>
-  <app-main v-else/>
 </template>
 
 <script>
