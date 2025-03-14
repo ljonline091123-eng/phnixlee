@@ -84,9 +84,10 @@
             </el-col>
             <el-col :span="8" class="grid-cell">
               <el-form-item label="上限价(元)" prop="upperLimitPrice" class="required label-right-align">
-                <el-input type="text" clearable :readonly="true" :disabled="isSubmit" v-model="formData.upperLimitPrice" />
+                <el-input type="text" clearable  :disabled="isSubmit" v-model="formData.upperLimitPrice" />
               </el-form-item>
             </el-col>
+
             <el-col :span="8" class="grid-cell" v-if="(procurementType == 1)">
               <el-form-item label="指导价" prop="upperLimitPrice" class="required label-right-align">
                 <el-input type="text" clearable :readonly="true" disabled v-model="formData.guidance_price" placeholder="对接易料市集"/>
@@ -322,9 +323,9 @@
                       </el-table-column>
                       <el-table-column label="合计(含税)" align="right" prop="totalPriceText" min-width="150">
                         <template slot-scope="scope">
-                          <!-- <span title="合计(含税)">{{getTotalPriceText(scope.row,inventory.$index)}}</span>
-                          <span> {{ getTotalPriceTableText(inventory.$index) }} </span> -->
-                          <el-input title="浮动价" v-model="scope.row.totalPriceText" :disabled="isSubmit"  class="checkInput"/>
+                          <span title="合计(含税)">{{getTotalPriceText(scope.row,inventory.$index)}}</span>
+                          <span> {{ getTotalPriceTableText(inventory.$index) }} </span>
+                          <!-- <el-input title="浮动价" v-model="scope.row.totalPriceText" :disabled="isSubmit"  class="checkInput"/> -->
                          
                         </template>
                       </el-table-column>
@@ -362,6 +363,8 @@
               <el-input v-model="scope.row.plannedAmountInclTax" />
             </template>
           </el-table-column>
+
+
           <!-- <el-table-column label="已发生规划金额（含税）" align="right" prop="incurredPlannedAmountText" />
           <el-table-column label="规划余量(元)" align="right" prop="planningBalanceText" />
           <el-table-column label="拟定招标方式" align="center" prop="biddingMethodName" /> -->
@@ -619,7 +622,7 @@ export default {
     // this.getList();
     const param = JSON.parse(Base64.decode(this.$route.params.params))
     console.log(param,'param--param--param!!!!!!!!!!!!!!!!!!!!!!!');
-    // this.currentContract = param;
+    this.currentContract = param;
     console.log(JSON.stringify(param),'获取到的params');
     this.isUpdate = param.type === 'update'? true : false;
     console.log(this.isUpdate,'isUpdate-isUpdate');
@@ -716,6 +719,7 @@ export default {
         { categoryName: '专业分包类', categoryCode: '4' },
         ], 
         selectedCategory: null, 
+        selecteArchivesClass: null,
         // 选择采购经办人
         officerDialog: false, // 控制对话框的显示隐藏
         officerLoading: false,
@@ -878,8 +882,7 @@ export default {
     // 处理物料分类选择
     async handleMaterialCategorySelect(queryParams) {
       console.log(JSON.stringify(queryParams), '选中的物料分类');
-      // 根据选中的分类进行后续操作
-      // 例如，可以将选中的分类添加到某个列表中
+      this.selecteArchivesClass = queryParams.type;
       try {
      let   res = await getArchiveClass(queryParams.type);
      this.deptOptions=res.data || []
@@ -1078,63 +1081,216 @@ export default {
       },
 
     //保存
+    // submitForm(formName) {
+    //   return new Promise((resolve, reject) => {
+    //     const { add, subtract,divide,multiply, bignumber, format,floor } = this.mathjs;
+    //     this.isSubmit = true;
+    //     this.$refs[formName].validate(async (valid,done) => {
+    //       if (valid) {
+    //         // * 首先先判断类型为浮动价的单行是否存在数据不合法的情况
+    //         let amount = 0
+    //         if(this.planList.length>0) {
+    //           for(let firstItem of this.planList) {
+    //             for(let secondItem of firstItem.children) {
+    //               for(let thirdItem of secondItem.children) {
+
+    //                 const regexN2 = /^-?\d+(\.\d{0,4})?$/;
+    //                 /* 固定价 */
+    //                 if(thirdItem.priceType === 1) {
+    //                   if(!regexN2.test(thirdItem.unitPriceInclTax)){
+    //                     this.isSubmit = false;
+    //                     return this.$message({
+    //                       message: '请检查清单中含税单价是否输入正确',
+    //                       type: 'error'
+    //                     });
+    //                   }
+
+    //                 }
+    //                 /* 浮动价、浮动率 */
+    //                 if(thirdItem.priceType === 2 || thirdItem.priceType === 4) {
+    //                   if(!regexN2.test(thirdItem.basePrice)){
+    //                     this.isSubmit = false;
+    //                     return this.$message({
+    //                       message: '请检查清单中基价是否输入正确',
+    //                       type: 'error'
+    //                     });
+    //                   }
+    //                 }
+
+    //                 /* 计算价格 */
+    //                 this.calculatePrice(thirdItem);
+
+    //                 amount = format(add(bignumber(amount), bignumber(Number(thirdItem.totalPrice))))
+    //               }
+    //             }
+    //           }
+    //           if(Number(amount)>Number(this.planList[0].planningBalance)) {
+    //             this.isSubmit = false;
+
+    //             /* 更新表格的布局 */
+    //             this.$nextTick(() => {
+    //               this.$refs.tableRef.doLayout();
+    //             });
+
+    //             return this.$message({
+    //               message: '拆分合约清单中的总金额不能大于规划余量',
+    //               type: 'error'
+    //             });
+    //           }
+    //         }
+    //         const { planList } = this
+    //         console.log(planList,'planListplanList--planListplanList-planListplanList');
+    //         if(!planList[0].children || !planList[0].children.length){
+    //           this.isSubmit = false;
+    //           this.$message({
+    //             message: '拆分合约不能为空',
+    //             type: 'error'
+    //           });
+    //           return false;
+    //         }
+
+    //         const isAll = planList[0]?.children.every(item => item.splitContractName && item.splitContractName!="null" && item.contractScope && item.contractScope!="null")
+    //             //判断长度大于1
+    //         if(planList[0].children.length>1){
+    //           if(!isAll){
+    //             this.isSubmit = false;
+    //             if(planList[0].children.length!=1){
+    //               this.$message({
+    //                 message: '拆分合约规划名称/拟签约合同承包范围不能为空',
+    //                 type: 'error'
+    //               });
+    //             }
+    //             return false;
+    //           }
+    //         }
+    //         let msgCount = 0;
+    //         this.planList[0]?.children.map(item => {
+    //           item?.children.map(ttt => {
+    //             msgCount++;
+    //           });
+    //         });
+
+    //         const loading = this.$loading({
+    //           lock: true,
+    //           text: (msgCount<200)?'数据提交中...':'您好，系统识别到清单量大，正在提交，请耐心等待！',
+    //           background: 'rgba(0, 0, 0, 0.7)'
+    //         });
+    //         const { procurementPlanName, beginDate, endDate, arrivalDate, procurementOfficer, procurementOfficerName,projectId,projectName,projectCode, priceType,basePrice, regionProvinceCode, regionCityCode, paymentType, countingType } = this.formData;
+    //         const { contractPlanningCategory, biddingMethodCode, biddingMethodName, contractPlanningCategoryName, contractPlanningId, contractPlanningName, incurredPlannedAmount, incurredPlannedAmountText, plannedAmountInclTax, plannedAmountInclTaxText, planningBalance, planningBalanceText,bidResponsibleOrg, bidResponsibleOrgName, id, contractPlanningCode,brand } = this.currentContract
+    //         const splitRequestList = this.planList[0]?.children.map(item => {
+    //           return {
+    //             splitContractName:item.splitContractName,
+    //             contractScope:item.contractScope,
+    //             materialsLists:item.children
+    //           }
+    //         })
+    //         const formData = {
+    //           procurementPlan:{
+    //             id: id || '',
+    //             procurementPlanName,
+    //             procurementPlanType:contractPlanningCategory,
+    //             procurementType:biddingMethodCode,
+    //             projectHierarchy:bidResponsibleOrgName,
+    //             beginDate,
+    //             endDate,
+    //             arrivalDate,
+    //             procurementOfficer,
+    //             procurementOfficerName,
+    //             //priceType:priceType !== 'undefined'?priceType:'',
+    //             regionProvinceCode,
+    //             /* 基价 （前端用来统一刷新列表清单的基价使用。） */
+    //             basePrice,
+    //             regionCityCode,
+    //             paymentType:paymentType !== 'undefined'?paymentType:'',
+    //             countingType:countingType !== 'undefined'?countingType:'',
+    //           },
+    //           splitRequestList,
+    //           contractPlanning:{
+    //             contractPlanningCategory, biddingMethodCode, biddingMethodName, contractPlanningCategoryName, contractPlanningId, contractPlanningName, incurredPlannedAmount, incurredPlannedAmountText, plannedAmountInclTax, plannedAmountInclTaxText, planningBalance, planningBalanceText,
+    //             projectId,projectName,projectCode,bidResponsibleOrg,bidResponsibleOrgName,subjectMatter:this.subjectMatter,contractPlanningCode,brand
+    //           }
+    //         }
+    //         console.log('%c👽 提交数据 ', `font-size: 14px;background-color: #f00;`, formData);
+    //         /* 对象递归需要处理 千分位的属性 处理提交给Java后台对应的BigDecimal类型 */
+    //         const targetKeys = [
+    //           /* 租赁数量 */
+    //           "rentQuantity",
+    //           /* 租赁时间 */
+    //           "rentTime",
+    //           /* 基价 */
+    //           "basePrice",
+    //           /* 浮动率 */
+    //           "floatingRate",
+    //           /* 卸费 */
+    //           // "unloadingFee",
+    //           /* 浮动价 */
+    //           "floatingPrice",
+    //           /* 税额 */
+    //           "taxAmount",
+    //           /* 金额(含税) */
+    //           "amountInclTax",
+    //           /* 金额(不含税) */
+    //           "amountExclTax",
+    //           /* 单价(含税) */
+    //           "unitPriceInclTax",
+    //           /* 单价(不含税) */
+    //           "unitPriceExclTax",
+    //           /* 税率 */
+    //           "taxRate",
+    //           /* 已使用数量 */
+    //           "usedCount",
+    //           /* 数量 */
+    //           "count",
+    //           /* 规划金额（含税） */
+    //           "plannedAmountInclTax",
+    //           /* 已发生规划金额 */
+    //           "incurredPlannedAmount",
+    //           /* 规划余量 */
+    //           "planningBalance",
+    //           /* 基价 */
+    //           "basePrice",
+    //           /* 指导价 */
+    //           "guidancePrice"
+    //         ];
+    //         let formDataHandle = this.removeThousandsSeparator(formData,targetKeys);
+    //         console.log('%c👽 提交数据处理后 ', `font-size: 14px;background-color: #f00;`, formDataHandle);
+    //         try{
+    //           const res = await saveProcurementPlan(formDataHandle);
+    //           loading.close();
+    //           this.$message({
+    //             message: '保存成功',
+    //             type: 'success'
+    //           });
+    //           this.isSubmit = false;
+    //           console.log(res,'r~~~~~~~~~~~~~~~~~');
+    //           this.currentContract.id=res.data.id
+    //           this.getPlanDetail()
+    //           resolve(res); // 保存成功，返回结果
+    //           // this.$tab.closePage().then(() => {
+    //             // 执行结束的逻辑
+    //             // let param = Base64.encode(JSON.stringify(res.data))
+    //             // this.$router.replace(`/procurement/plan-detail/${param}`);
+    //           // })
+    //         }catch(err){
+    //           console.log(err);
+    //           this.isSubmit = false;
+    //           loading.close();
+    //           reject(err); // 保存失败，返回错误
+    //         }
+    //       } else {
+    //         this.isSubmit = false;
+    //         reject(new Error('Form validation failed')); // 验证失败，返回错误
+    //         return false;
+    //       }
+    //     });
+    //   });
+    // },
     submitForm(formName) {
       return new Promise((resolve, reject) => {
         const { add, subtract,divide,multiply, bignumber, format,floor } = this.mathjs;
         this.isSubmit = true;
         this.$refs[formName].validate(async (valid,done) => {
           if (valid) {
-            // * 首先先判断类型为浮动价的单行是否存在数据不合法的情况
-            let amount = 0
-            if(this.planList.length>0) {
-              for(let firstItem of this.planList) {
-                for(let secondItem of firstItem.children) {
-                  for(let thirdItem of secondItem.children) {
-
-                    const regexN2 = /^-?\d+(\.\d{0,4})?$/;
-                    /* 固定价 */
-                    if(thirdItem.priceType === 1) {
-                      if(!regexN2.test(thirdItem.unitPriceInclTax)){
-                        this.isSubmit = false;
-                        return this.$message({
-                          message: '请检查清单中含税单价是否输入正确',
-                          type: 'error'
-                        });
-                      }
-
-                    }
-                    /* 浮动价、浮动率 */
-                    if(thirdItem.priceType === 2 || thirdItem.priceType === 4) {
-                      if(!regexN2.test(thirdItem.basePrice)){
-                        this.isSubmit = false;
-                        return this.$message({
-                          message: '请检查清单中基价是否输入正确',
-                          type: 'error'
-                        });
-                      }
-                    }
-
-                    /* 计算价格 */
-                    this.calculatePrice(thirdItem);
-
-                    amount = format(add(bignumber(amount), bignumber(Number(thirdItem.totalPrice))))
-                  }
-                }
-              }
-              if(Number(amount)>Number(this.planList[0].planningBalance)) {
-                this.isSubmit = false;
-
-                /* 更新表格的布局 */
-                this.$nextTick(() => {
-                  this.$refs.tableRef.doLayout();
-                });
-
-                return this.$message({
-                  message: '拆分合约清单中的总金额不能大于规划余量',
-                  type: 'error'
-                });
-              }
-            }
             const { planList } = this
             console.log(planList,'planListplanList--planListplanList-planListplanList');
             if(!planList[0].children || !planList[0].children.length){
@@ -1146,34 +1302,54 @@ export default {
               return false;
             }
 
-            const isAll = planList[0]?.children.every(item => item.splitContractName && item.splitContractName!="null" && item.contractScope && item.contractScope!="null")
+            const isAll = planList[0]?.children.every(item => item.splitContractName && item.splitContractName!="null" )
                 //判断长度大于1
             if(planList[0].children.length>1){
               if(!isAll){
                 this.isSubmit = false;
                 if(planList[0].children.length!=1){
                   this.$message({
-                    message: '拆分合约规划名称/拟签约合同承包范围不能为空',
+                    message: '拆分合约规划名称不能为空',
                     type: 'error'
                   });
                 }
                 return false;
               }
             }
-            let msgCount = 0;
-            this.planList[0]?.children.map(item => {
-              item?.children.map(ttt => {
-                msgCount++;
-              });
-            });
 
             const loading = this.$loading({
               lock: true,
-              text: (msgCount<200)?'数据提交中...':'您好，系统识别到清单量大，正在提交，请耐心等待！',
               background: 'rgba(0, 0, 0, 0.7)'
             });
-            const { procurementPlanName, beginDate, endDate, arrivalDate, procurementOfficer, procurementOfficerName,projectId,projectName,projectCode, priceType,basePrice, regionProvinceCode, regionCityCode, paymentType, countingType } = this.formData;
-            const { contractPlanningCategory, biddingMethodCode, biddingMethodName, contractPlanningCategoryName, contractPlanningId, contractPlanningName, incurredPlannedAmount, incurredPlannedAmountText, plannedAmountInclTax, plannedAmountInclTaxText, planningBalance, planningBalanceText,bidResponsibleOrg, bidResponsibleOrgName, id, contractPlanningCode,brand } = this.currentContract
+            const { procurementPlanName, projectHierarchy,beginDate, endDate, arrivalDate, procurementOfficer, procurementOfficerName,projectId,projectName,projectCode, priceType,basePrice, regionProvinceCode, regionCityCode, paymentType, countingType } = this.formData;
+            // 合同类型(1、劳务分包 2、专业分包 3、购买材料 4、租赁材料 5、租赁机械(设备)6、其他)
+            //1:'材料类';2:'设备类';了:'劳务类';4:'专业分包类”
+            let contractPlanningCategory;
+            if(this.selecteArchivesClass == 1){
+              contractPlanningCategory = 3;
+            }else if(this.selecteArchivesClass == 2){
+              contractPlanningCategory = 5;
+            }else if(this.selecteArchivesClass == 3){
+              contractPlanningCategory = 1;
+            }else if(this.selecteArchivesClass == 4){
+              contractPlanningCategory = 2;
+            }
+            if(!this.selecteArchivesClass){
+              contractPlanningCategory = this.procurementType;
+              
+            }
+            console.log("contractPlanningCategory",contractPlanningCategory);
+            // const contractPlanningCategory ;
+            // const {contractPlanningName, plannedAmountInclTaxText, bidResponsibleOrgName} = this.currentContract
+                    // 获取用户填写的合约名称和计划金额
+            const userModifiedData = {
+                contractPlanningName: this.planList[0].contractPlanningName, // 用户填写的合约名称
+                plannedAmountInclTaxText: this.planList[0].plannedAmountInclTax, // 用户填写的计划金额
+            }
+            console.log("this.planList[0]",this.planList[0]);
+            console.log("合约规划111userModifiedData:", userModifiedData);
+            // const {contractPlanningName, plannedAmountInclTaxText, bidResponsibleOrgName} = userModifiedData
+
             const splitRequestList = this.planList[0]?.children.map(item => {
               return {
                 splitContractName:item.splitContractName,
@@ -1183,11 +1359,11 @@ export default {
             })
             const formData = {
               procurementPlan:{
-                id: id || '',
+                id: '',
                 procurementPlanName,
                 procurementPlanType:contractPlanningCategory,
-                procurementType:biddingMethodCode,
-                projectHierarchy:bidResponsibleOrgName,
+                procurementType: null,
+                projectHierarchy,
                 beginDate,
                 endDate,
                 arrivalDate,
@@ -1203,9 +1379,12 @@ export default {
               },
               splitRequestList,
               contractPlanning:{
-                contractPlanningCategory, biddingMethodCode, biddingMethodName, contractPlanningCategoryName, contractPlanningId, contractPlanningName, incurredPlannedAmount, incurredPlannedAmountText, plannedAmountInclTax, plannedAmountInclTaxText, planningBalance, planningBalanceText,
-                projectId,projectName,projectCode,bidResponsibleOrg,bidResponsibleOrgName,subjectMatter:this.subjectMatter,contractPlanningCode,brand
+                contractPlanningName: userModifiedData.contractPlanningName, 
+                plannedAmountInclTaxText :userModifiedData.plannedAmountInclTaxText, 
+                bidResponsibleOrgName: projectHierarchy,
+                projectId,projectName,projectCode
               }
+              
             }
             console.log('%c👽 提交数据 ', `font-size: 14px;background-color: #f00;`, formData);
             /* 对象递归需要处理 千分位的属性 处理提交给Java后台对应的BigDecimal类型 */
@@ -1824,7 +2003,7 @@ export default {
           this.inventoryList = res.data.contractMaterialsList;
         })
         /* 采购方案类型(购买材料,劳务分包....) */
-        this.procurementType = procurementPlanType || (this.procurementType || '');
+        this.procurementType = procurementPlanType || (this.procurementType || '') || procurementPlan.procurementPlanType;
       } catch (err) {
         console.log(err);
       }
@@ -1890,100 +2069,100 @@ export default {
       console.log('%c👽 工作量计算changeWorkload \n', `font-size: 14px;background-color: #fa8;`, row.count );
     },
     /* 数量计算校验 */
-    changeCount(event,splitIndex,row){
-      const regexN1 = /^-?(?:[1-9]\d*|0)(\.\d+)?$/;
-      const regexN2 = /^-?\d+(\.\d{0,4})?$/;
+    // changeCount(event,splitIndex,row){
+    //   const regexN1 = /^-?(?:[1-9]\d*|0)(\.\d+)?$/;
+    //   const regexN2 = /^-?\d+(\.\d{0,4})?$/;
 
-      if(row.count === ''){
-        event.target.style = "border: 1px solid red;"
-        this.$message.error("请输入数量");
-        return
-      }else if (row.count === '-') {
-        /* 跳过 开放限制 允许为负数 */
-        event.target.style = "border: 1px solid red;"
-        return
-      }else if(!regexN1.test(row.count)  ){
-        event.target.style = "border: 1px solid red;"
-        this.$message.error("请输入正确的值");
-        return
-      }else if(!regexN2.test(row.count)){
-        event.target.style = "border: 1px solid red;"
-        this.$message.error("请输入小于4位的小数");
-        return
-      }
+    //   if(row.count === ''){
+    //     event.target.style = "border: 1px solid red;"
+    //     this.$message.error("请输入数量");
+    //     return
+    //   }else if (row.count === '-') {
+    //     /* 跳过 开放限制 允许为负数 */
+    //     event.target.style = "border: 1px solid red;"
+    //     return
+    //   }else if(!regexN1.test(row.count)  ){
+    //     event.target.style = "border: 1px solid red;"
+    //     this.$message.error("请输入正确的值");
+    //     return
+    //   }else if(!regexN2.test(row.count)){
+    //     event.target.style = "border: 1px solid red;"
+    //     this.$message.error("请输入小于4位的小数");
+    //     return
+    //   }
 
-      event.target.style = "border: 1px solid #C0C4CC;"
+    //   event.target.style = "border: 1px solid #C0C4CC;"
 
-      const { multiply, add, subtract, bignumber, format } = this.mathjs;
-      console.log(this.inventoryList,'this.inventoryList');
-      /* 该map存储实际每条清单条目对应的规划的数量 */
-      const countMap = new Map();
-      this.inventoryList.forEach(item => {
-        countMap.set(item.materialsId, item.count);
-        this.initCountObj[item.materialsId] = item.count
-      })
+    //   const { multiply, add, subtract, bignumber, format } = this.mathjs;
+    //   console.log(this.inventoryList,'this.inventoryList');
+    //   /* 该map存储实际每条清单条目对应的规划的数量 */
+    //   const countMap = new Map();
+    //   this.inventoryList.forEach(item => {
+    //     countMap.set(item.materialsId, item.count);
+    //     this.initCountObj[item.materialsId] = item.count
+    //   })
 
-      console.log(this.initCountObj,'initCountObj~~~~~~~~~~~~~~~~~~~~~~')
+    //   console.log(this.initCountObj,'initCountObj~~~~~~~~~~~~~~~~~~~~~~')
 
-      let splitLength = this.planList[0]?.children.length; //拆分的份数
-      let currentMaterialsId = row.materialsId //当前物料id
-      let count = bignumber(0); //总数量
-      let zeroNumber = 0; //数量为空的个数
+    //   let splitLength = this.planList[0]?.children.length; //拆分的份数
+    //   let currentMaterialsId = row.materialsId //当前物料id
+    //   let count = bignumber(0); //总数量
+    //   let zeroNumber = 0; //数量为空的个数
 
-      //获取总数量
-      this.planList[0]?.children.forEach(item => {
-        item.children.forEach(subItem => {
-          count = add(count, subItem.materialsId === currentMaterialsId? format(Number(subItem.count), { notation: 'fixed', precision: 4 }) : 0)
-        })
-      })
+    //   //获取总数量
+    //   this.planList[0]?.children.forEach(item => {
+    //     item.children.forEach(subItem => {
+    //       count = add(count, subItem.materialsId === currentMaterialsId? format(Number(subItem.count), { notation: 'fixed', precision: 4 }) : 0)
+    //     })
+    //   })
 
-      let difference = subtract(countMap.get(currentMaterialsId) , count); //差值
-      console.log(JSON.parse(JSON.stringify(difference)),'差值');
+    //   let difference = subtract(countMap.get(currentMaterialsId) , count); //差值
+    //   console.log(JSON.parse(JSON.stringify(difference)),'差值');
 
-      //判断数量是否大于库存数量
-      if(count > countMap.get(currentMaterialsId)){
-        this.$message({
-          type: 'error',
-          message: `清单名称为"${row.materialsName}"的数量超过库存数量`
-        });
-        return false;
-      }
+    //   //判断数量是否大于库存数量
+    //   if(count > countMap.get(currentMaterialsId)){
+    //     this.$message({
+    //       type: 'error',
+    //       message: `清单名称为"${row.materialsName}"的数量超过库存数量`
+    //     });
+    //     return false;
+    //   }
 
-      //判断拆分份数是否大于1
-      if(splitLength > 1){
-        this.planList[0]?.children.forEach(item => {
-          item.children.forEach(subItem => {
-            /* 判断是否时同级的当前行 */
-            if(subItem.materialsId === currentMaterialsId){
-              if(subItem.count == ""){
-                zeroNumber++;
-              }
-            }
-          })
-        })
-      }
+    //   //判断拆分份数是否大于1
+    //   if(splitLength > 1){
+    //     this.planList[0]?.children.forEach(item => {
+    //       item.children.forEach(subItem => {
+    //         /* 判断是否时同级的当前行 */
+    //         if(subItem.materialsId === currentMaterialsId){
+    //           if(subItem.count == ""){
+    //             zeroNumber++;
+    //           }
+    //         }
+    //       })
+    //     })
+    //   }
 
-      /* 逻辑就是给 最后未填写量的清单 赋值(实际总理减去已填写的总量=余量)计算后的余量 */
-      // 如果拆分后 该条目存在多条清单时，并且只有一个清单的量未填写了，就给该清单该行对应的量赋上 计算后的余量 数量为空的个数为1个时执行以下逻辑
-      if(zeroNumber === 1){
-        this.planList[0]?.children.forEach(item => {
-          item.children.forEach(subItem => {
-            /* 变量拆分后确定是当前行，并且数量为0 */
-            if(subItem.materialsId === currentMaterialsId){
-              console.log('%c💎 subItem.count \n', `font-size: 14px;background-color: #f99;`, subItem.count );
-              if(subItem.count === ""  || subItem.count === 0 || subItem.count === 0.00){
-                /* 规划量 减去 填写的量 得出 余量 */
-                const subItemCount = subtract(countMap.get(currentMaterialsId) , count)
-                /* 如果余量大于0才赋值，负数就不赋值了。 */
-                if(subItemCount > 0){
-                  subItem.count = subItemCount.toString()
-                }
-              }
-            }
-          })
-        })
-      }
-    },
+    //   /* 逻辑就是给 最后未填写量的清单 赋值(实际总理减去已填写的总量=余量)计算后的余量 */
+    //   // 如果拆分后 该条目存在多条清单时，并且只有一个清单的量未填写了，就给该清单该行对应的量赋上 计算后的余量 数量为空的个数为1个时执行以下逻辑
+    //   if(zeroNumber === 1){
+    //     this.planList[0]?.children.forEach(item => {
+    //       item.children.forEach(subItem => {
+    //         /* 变量拆分后确定是当前行，并且数量为0 */
+    //         if(subItem.materialsId === currentMaterialsId){
+    //           console.log('%c💎 subItem.count \n', `font-size: 14px;background-color: #f99;`, subItem.count );
+    //           if(subItem.count === ""  || subItem.count === 0 || subItem.count === 0.00){
+    //             /* 规划量 减去 填写的量 得出 余量 */
+    //             const subItemCount = subtract(countMap.get(currentMaterialsId) , count)
+    //             /* 如果余量大于0才赋值，负数就不赋值了。 */
+    //             if(subItemCount > 0){
+    //               subItem.count = subItemCount.toString()
+    //             }
+    //           }
+    //         }
+    //       })
+    //     })
+    //   }
+    // },
     /* 基价校验 */
     checkOtherPrice(event,row) {
       const regexN1 = /^-?(?:[1-9]\d*|0)(\.\d+)?$/;
@@ -1999,32 +2178,32 @@ export default {
       }
     },
     /* 含税单价校验 */
-    changeUnitPriceInclTax(event,row){
-      const { unitPriceInclTax} = row
+    // changeUnitPriceInclTax(event,row){
+    //   const { unitPriceInclTax} = row
 
-      const regexN1 = /^-?(?:[1-9]\d*|0)(\.\d+)?$/;
-      const regexN2 = /^-?\d+(\.\d{0,4})?$/;
+    //   const regexN1 = /^-?(?:[1-9]\d*|0)(\.\d+)?$/;
+    //   const regexN2 = /^-?\d+(\.\d{0,4})?$/;
 
-      if (unitPriceInclTax === '-') {
-        /* 跳过 开放限制 允许为负数 */
-        event.target.style = "border: 1px solid red;"
-        return
-      }else if(unitPriceInclTax === ''){
-          event.target.style = "border: 1px solid red;"
-          this.$message.error("请输入数量");
-          return
-      }else if(!regexN1.test(unitPriceInclTax)  ){
-        event.target.style = "border: 1px solid red;"
-        this.$message.error("请输入正确的值");
-        return
-      }else if(!regexN2.test(unitPriceInclTax)){
-        event.target.style = "border: 1px solid red;"
-        this.$message.error("请输入小于4位的小数");
-        return
-      }
+    //   if (unitPriceInclTax === '-') {
+    //     /* 跳过 开放限制 允许为负数 */
+    //     event.target.style = "border: 1px solid red;"
+    //     return
+    //   }else if(unitPriceInclTax === ''){
+    //       event.target.style = "border: 1px solid red;"
+    //       this.$message.error("请输入数量");
+    //       return
+    //   }else if(!regexN1.test(unitPriceInclTax)  ){
+    //     event.target.style = "border: 1px solid red;"
+    //     this.$message.error("请输入正确的值");
+    //     return
+    //   }else if(!regexN2.test(unitPriceInclTax)){
+    //     event.target.style = "border: 1px solid red;"
+    //     this.$message.error("请输入小于4位的小数");
+    //     return
+    //   }
 
-      event.target.style = "border: 1px solid #C0C4CC;"
-    },
+    //   event.target.style = "border: 1px solid #C0C4CC;"
+    // },
     /* 浮动价监听 */
     changeFloatingPrice(event,row){
 
@@ -2315,6 +2494,7 @@ export default {
     /* 计算 含税单价 不含税单价 行合计价 */
     calculatePrice(row){
       const { multiply, add, divide, bignumber, format } = this.mathjs;
+      console.log("计算 含税单价 不含税单价 行合计价,row:",row);
       /* 固定价 */
       if(row.priceType === 1){
         // if(!row.unitPriceInclTax){
@@ -2342,6 +2522,8 @@ export default {
           const totalPrice = multiply(bignumber(priceInclTax), bignumber(row.count));
           row.totalPriceText = this.formatNumberDynamicDecimalWithSeparator(totalPrice);
           row.totalPrice = row.totalPriceText.replaceAll(',', '');
+          console.log("计算 结束,row:",row);
+          console.log("计算 结束,row.totalPriceText",row);
         }
       }
 
@@ -2440,11 +2622,39 @@ export default {
     getTotalPriceText() {
       return ( row , index) => {
         /* 计算 含税单价 不含税单价 行合计价 */
-        this.calculatePrice(row);
+        // this.calculatePrice(row);
+
+        //暂时计算方式： 行含税总价：含税单价 * 数量
+        if (row.unitPriceInclTax && row.count) {
+          // 行含税总价：含税单价 * 数量
+          const totalPrice = row.unitPriceInclTax * row.count;
+          return totalPrice.toFixed(2); // 保留两位小数
+        }
 
         return row.totalPriceText ? (row.totalPriceText) : (0.00);
       }
     },
+      // 处理含税单价输入事件
+    changeUnitPriceInclTax(event, row) {
+      const value = event.target.value.replace(/,/g, ''); // 移除千分位符号
+      const parsedValue = parseFloat(value);
+      if (!isNaN(parsedValue)) {
+        row.unitPriceInclTax = parsedValue;
+        this.$set(row, 'totalPriceText', this.getTotalPriceText(row)); // 更新行含税总价
+      }
+    },
+    
+    // 处理数量输入事件
+    changeCount(event, index, row) {
+      const value = event.target.value.replace(/,/g, ''); // 移除千分位符号
+      const parsedValue = parseFloat(value);
+      if (!isNaN(parsedValue)) {
+        row.count = parsedValue;
+        this.$set(row, 'totalPriceText', this.getTotalPriceText(row)); // 更新行含税总价
+      }
+    },
+  
+
     /* 计算列含税总价 */
     getTotalPriceTableText() {
       return ( index) => {
