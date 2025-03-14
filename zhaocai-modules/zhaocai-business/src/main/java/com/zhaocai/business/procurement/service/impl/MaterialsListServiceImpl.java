@@ -140,7 +140,8 @@ public class MaterialsListServiceImpl extends ServiceImpl<MaterialsListMapper, M
                 materials.setTotalPrice(BigDecimal.ZERO);
             }
 
-            baseMapper.insert(materials);
+//            baseMapper.insert(materials);
+            super.saveOrUpdate(materials);
         });
         /* 是否是 “购买材料” */
         if (procurementPlan.getProcurementPlanType().equals(NumberConstant.ONE)) {

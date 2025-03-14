@@ -13,6 +13,7 @@ import com.zhaocai.business.procurement.vo.req.ContractPlanningListQueryVO;
 import com.zhaocai.business.procurement.vo.res.ContractPlanningListVO;
 import com.zhaocai.business.procurement.vo.res.ProcurementContractPlanListVO;
 import com.zhaocai.common.core.bean.PageResult;
+import com.zhaocai.common.core.utils.bean.BeanCopierUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -44,8 +45,8 @@ public class ContractPlanningServiceImpl extends ServiceImpl<ContractPlanningMap
         if(contractPlanning.getContractPlanningName() != null ){
             contractPlanning.setContractPlanningName(contractPlanning.getContractPlanningName());
         }
-        if(contractPlanning.getContractPlanningName() != null ){
-            contractPlanning.setBidResponsibleOrgName(contractPlanning.getContractPlanningName());
+        if(contractPlanning.getPlannedAmountInclTax() != null ){
+            contractPlanning.setPlannedAmountInclTax(contractPlanning.getPlannedAmountInclTax());
         }
 
 
@@ -83,9 +84,10 @@ public class ContractPlanningServiceImpl extends ServiceImpl<ContractPlanningMap
         queryVO.setProjectId(contractPlanning.getProjectId());
         queryVO.setPageSize(100);
 
-        ContractPlanningListVO contractPlanningList = getContractPlanningFromList(queryVO, contractPlanning.getContractPlanningId());
-        contractPlanningList.setProjectCode(contractPlanning.getProjectCode());
-        contractPlanningList.setProjectName(contractPlanning.getProjectName());
+//        ContractPlanningListVO contractPlanningList = getContractPlanningFromList(queryVO, contractPlanning.getContractPlanningId());
+//        contractPlanningList.setProjectCode(contractPlanning.getProjectCode());
+//        contractPlanningList.setProjectName(contractPlanning.getProjectName());
+        ContractPlanningListVO contractPlanningList = BeanCopierUtil.copyBean(contractPlanning,ContractPlanningListVO.class );
         return contractPlanningList;
     }
 
