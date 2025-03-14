@@ -731,7 +731,7 @@ public class VendorBidServiceImpl implements IVendorBidService {
                 BigDecimal amount = quotationVO.getAmount();
                 BigDecimal taxPrice;
                 if(materialsListMap.get(quotationVO.getMaterialsId()) != null){
-                    if(materialsListMap.get(quotationVO.getMaterialsId()).getPriceType().equals(PriceTypeEnum.FLOAT_PRICE.getType())){
+                    if(PriceTypeEnum.FLOAT_PRICE.getType().equals(materialsListMap.get(quotationVO.getMaterialsId()).getPriceType())){
                         /* 如果合约规划拆分的清单是 浮动价 */
                         BigDecimal floatingPrice = quotationVO.getFloatingPrice();
                         //卸费
@@ -747,7 +747,7 @@ public class VendorBidServiceImpl implements IVendorBidService {
                         /** 校验含税单价 */
                         //校验含税单价
                         checkTaxUnitPrice(newestBiddingInfo==null?biddingInfo:newestBiddingInfo, quotationVO, taxUnitPrice);
-                    }else if(materialsListMap.get(quotationVO.getMaterialsId()).getPriceType().equals(PriceTypeEnum.FLOAT_RATE.getType())){
+                    }else if(PriceTypeEnum.FLOAT_RATE.getType().equals(materialsListMap.get(quotationVO.getMaterialsId()).getPriceType())){
                         /* 如果合约规划拆分的清单是 浮动率 */
                         BigDecimal floatingRate = quotationVO.getFloatingRate();
                         //基价
@@ -760,7 +760,7 @@ public class VendorBidServiceImpl implements IVendorBidService {
                         /** 校验含税单价 */
                         //校验含税单价
                         checkTaxUnitPrice(newestBiddingInfo==null?biddingInfo:newestBiddingInfo, quotationVO, taxUnitPrice);
-                    }else if(materialsListMap.get(quotationVO.getMaterialsId()).getPriceType().equals(PriceTypeEnum.FIXED_PRICE.getType())){
+                    }else if(PriceTypeEnum.FIXED_PRICE.getType().equals(materialsListMap.get(quotationVO.getMaterialsId()).getPriceType())){
                         /* 如果合约规划拆分的清单是 固定价 */
                         //含税单价B
                         BigDecimal taxUnitPrice = quotationVO.getTaxUnitPrice() == null ? BigDecimal.ZERO : quotationVO.getTaxUnitPrice();
