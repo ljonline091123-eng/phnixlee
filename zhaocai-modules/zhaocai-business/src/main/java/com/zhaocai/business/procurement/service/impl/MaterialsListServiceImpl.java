@@ -98,7 +98,7 @@ public class MaterialsListServiceImpl extends ServiceImpl<MaterialsListMapper, M
             materials.setUsedCount(BigDecimal.ZERO);
 
             /* 是否是 “购买材料” */
-            if (procurementPlan.getProcurementPlanType().equals(NumberConstant.ONE)) {
+            if (Integer.valueOf(NumberConstant.ONE).equals(procurementPlan.getProcurementPlanType())) {
                 /* 使用清单内每一条设置的 价格类型 */
                 if (PriceTypeEnum.FLOAT_PRICE.equalsType(materials.getPriceType())) {
                     // 浮动价 >>> 含税单价 = 基价 + 浮动价
