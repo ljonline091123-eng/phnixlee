@@ -3,10 +3,10 @@
    <div >
           <img src="@/assets/images/login_tag.png" alt="" style="margin-top: 74px;margin-left: 85px;" >
         </div>
-   
+
   <div style="display: flex;">
    <div class="logo-img">
-          <img src="@/assets/images/login_name.png" alt="" style="position: absolute;width:40%;height:108px;top: 37%;margin-left: 17%;" >
+          <img src="@/assets/images/login_name.png" alt="" style="position: absolute;width:40%;height:112px;top: 37%;margin-left: 17%;" >
         </div>
   <div class="login">
     <el-form ref="loginForm" :model="loginForm" :rules="loginRules" class="login-form">
@@ -51,10 +51,10 @@
           <svg-icon slot="prefix" icon-class="validCode" class="el-input__icon input-icon" />
         </el-input>
         <div class="login-code" style="font-size: 16px;color: #2B4ACB;" @click="getMessageCode">
-          
+
           <span v-if="isButtonDisabled">{{secondsLeft }}秒后重试</span>
           <span v-else>获取验证码</span>
-          <!-- <img :src="codeUrl" @click="getCode" class="login-code-img"/> --> 
+          <!-- <img :src="codeUrl" @click="getCode" class="login-code-img"/> -->
         </div>
       </el-form-item>
       <el-checkbox v-model="loginForm.userType" style="margin:5px 0px 25px 0px;">专家</el-checkbox>
@@ -145,18 +145,18 @@ export default {
           if (this.isButtonDisabled) {
             return
           }
- 
+
           // 调用 API 获取验证码
           // this.$api.project.getMessageCode().then((res) => {
           //   if (res.code === '00000') {
           //     this.$message.success('获取验证码成功')
           //   }
           // })
- 
+
           // 禁用按钮并开始倒计时
           this.isButtonDisabled = true
           this.secondsLeft = 60
- 
+
           this.countdown = setInterval(() => {
             this.secondsLeft--
             if (this.secondsLeft <= 0) {
@@ -202,18 +202,18 @@ export default {
             Cookies.remove('rememberMe');
           }
           this.$store.dispatch("Login", this.loginForm).then(() => {
-            
+
             if(this.loginForm.userType){
                 this.$router.push({ path: '/evaluate-expert/evaluate-bids' || "/" }).catch(()=>{});
-                appConstant.platform='2' 
+                appConstant.platform='2'
             }else{
                 this.$router.push({ path: '/procurement/plan' || "/" }).catch(()=>{});
                   appConstant.platform='1'
            }
-            
+
             // this.$router.push({ path: this.redirect || "/" }).catch(()=>{});
-           
-           
+
+
           }).catch(() => {
             this.loading = false;
             if (this.captchaEnabled) {
@@ -232,7 +232,7 @@ export default {
  height: 100%;
  width: 100%;
   background-image: url("../assets/images/login_bg.png");
-  background-size:100% 100%; 
+  background-size:100% 100%;
   // position: absolute;
   font-family: Source Han Sans CN, Source Han Sans CN;
 }
@@ -240,14 +240,14 @@ export default {
   display: flex;
   justify-content: center;
   align-items: center;
-  
- 
+
+
 }
 .title {
   margin: 0px auto 30px auto;
   text-align: center;
   color: #707070;
-  
+
 }
 
 .login-form {
@@ -314,7 +314,7 @@ export default {
 .el-tabs__active-bar {
   background-color: #2B4ACB;
 }
-.el-tabs__nav-wrap::after { 
+.el-tabs__nav-wrap::after {
   background-color: transparent;
 }
 .el-button--primary {
