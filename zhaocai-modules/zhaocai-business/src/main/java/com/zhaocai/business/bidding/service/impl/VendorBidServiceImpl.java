@@ -146,18 +146,18 @@ public class VendorBidServiceImpl implements IVendorBidService {
         String unit = requstVO.getUnit();
         //判断是否已经存在该招标文件的pdf附件
         List<AttachmentVO> pdfList= attachmentService.listAttachment(AttachmentTypeEnum.BIDING_NOTICE_PDF, requstVO.getNoticeId());
-        if(CollectionUtils.isEmpty(pdfList)) {
-            //把招标文件的word文件转换为pdf附件
-            for (AttachmentVO attachmentVO : attachmentVOList) {
-                String yozoPdfFileUrl = attachmentService.convertOfficeToPdf(attachmentVO.getFileName(), attachmentVO.getFileUrl(), unit);
-                AttachmentRequestVO attachmentRequestVO = attachmentService.downloadYOZOFileAndUploadMINIO(attachmentVO.getFileName(), yozoPdfFileUrl);
-                //把招标公告 tb_tender_notice的id,设为pdf附件的businessId；
-                attachmentService.addAttachment(attachmentRequestVO, AttachmentTypeEnum.BIDING_NOTICE_PDF, requstVO.getNoticeId());
-            }
-        }
-        /* 查询招标文件的pdf附件 */
-        List<AttachmentVO> PdfAttachmentList = attachmentService.listAttachment(AttachmentTypeEnum.BIDING_NOTICE_PDF, requstVO.getNoticeId());
-        return   PdfAttachmentList;
+//        if(CollectionUtils.isEmpty(pdfList)) {
+//            //把招标文件的word文件转换为pdf附件
+//            for (AttachmentVO attachmentVO : attachmentVOList) {
+//                String yozoPdfFileUrl = attachmentService.convertOfficeToPdf(attachmentVO.getFileName(), attachmentVO.getFileUrl(), unit);
+//                AttachmentRequestVO attachmentRequestVO = attachmentService.downloadYOZOFileAndUploadMINIO(attachmentVO.getFileName(), yozoPdfFileUrl);
+//                //把招标公告 tb_tender_notice的id,设为pdf附件的businessId；
+//                attachmentService.addAttachment(attachmentRequestVO, AttachmentTypeEnum.BIDING_NOTICE_PDF, requstVO.getNoticeId());
+//            }
+//        }
+//        /* 查询招标文件的pdf附件 */
+//        List<AttachmentVO> PdfAttachmentList = attachmentService.listAttachment(AttachmentTypeEnum.BIDING_NOTICE_PDF, requstVO.getNoticeId());
+        return   pdfList;
     }
 
     @Override
