@@ -373,7 +373,8 @@ export default {
       this.vendorDetailVisiable = true;
       const res = await getVendorDetail(id);
       console.log(res.data, "供应商详情");
-      const { certificationList } = res.data;
+      const  certificationList= res.data.certificationList;
+      console.log("certificationList", certificationList);
       this.vendor = res.data.vendor;
       this.vendorState = res.data.vendorState;
       this.mainContact = res.data.mainContact;
@@ -381,20 +382,30 @@ export default {
       this.companyAptitude.forEach((item) => {
         console.log(item.code, "oiiii");
         if (item.code === "businessLicense") {
-          item.list = [certificationList.businessLicense];
-          item.srcList = [certificationList.businessLicense.attachmentFileUrl];
+          if (certificationList.businessLicenseList && certificationList.businessLicenseList.length > 0) {
+            item.list = [certificationList.businessLicenseList[0]];
+            item.srcList = [certificationList.businessLicenseList[0].attachmentFileUrl];
+          } else {
+            item.list = [];
+            item.srcList = [];
+          }
         } else if (item.code === "integrity") {
-          item.list = [certificationList.integrity];
-          item.srcList = [certificationList.integrity.attachmentFileUrl];
+          if (certificationList.integrityList && certificationList.integrityList.length > 0) {
+            item.list = [certificationList.integrityList[0]];
+            item.srcList = [certificationList.integrityList[0].attachmentFileUrl];
+          } else {
+            item.list = [];
+            item.srcList = [];
+          }
         } else if (item.code === "legalAuthorizationList") {
-          item.list = certificationList.legalAuthorizationList;
-          item.srcList = certificationList.legalAuthorizationList.map(
-            (item) => item.attachmentFileUrl
+          item.list = certificationList.legalAuthorizationList || [];
+          item.srcList = (certificationList.legalAuthorizationList || []).map(
+            (subItem) => subItem.attachmentFileUrl || ''
           );
         } else if (item.code === "relevantCertificationList") {
-          item.list = certificationList.relevantCertificationList;
-          item.srcList = certificationList.relevantCertificationList.map(
-            (item) => item.attachmentFileUrl
+          item.list = certificationList.relevantCertificationList || [];
+          item.srcList = (certificationList.relevantCertificationList || []).map(
+            (subItem) => subItem.attachmentFileUrl || ''
           );
         }
       });
