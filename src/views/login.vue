@@ -12,7 +12,7 @@
     <el-form ref="loginForm" :model="loginForm" :rules="loginRules" class="login-form">
       <div style="display: flex;justify-content: center;align-items: center;margin-bottom: 30px;">
          <img src="@/assets/images/login_mes.png" alt="" style="width:20px;height:20px;" >
-         <div style="font-weight: 400;font-size: 18px;color: #2B4ACB;">欢迎使用成控系统项目管理端！</div>
+         <div style="font-weight: 400;font-size: 18px;color: #2B4ACB;">欢迎使用招标采购管理平台！</div>
       </div>
 
     <el-tabs v-model="activeName" @tab-click="handleClick">
