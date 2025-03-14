@@ -57,7 +57,7 @@
           <!-- <img :src="codeUrl" @click="getCode" class="login-code-img"/> -->
         </div>
       </el-form-item>
-      <el-checkbox v-model="loginForm.userType" style="margin:5px 0px 25px 0px;">专家</el-checkbox>
+<!--      <el-checkbox v-model="loginForm.userType" style="margin:5px 0px 25px 0px;">专家</el-checkbox>-->
       <!-- <el-checkbox v-model="loginForm.rememberMe" style="margin:0px 0px 25px 0px;">记住密码</el-checkbox> -->
       <el-form-item style="width:100%;height: 34px;margin-top: 15px;background: #2B4ACB;border-radius: 2px 2px 2px 2px;">
         <el-button
