@@ -502,24 +502,19 @@
       </el-dialog>
     </div>
     <!-- 招标文件预览 -->
-    <el-dialog
+    <!-- <el-dialog
       title="招标文件预览"
       :visible.sync="templateDialogVisible"
       width="80%"
     >
-      <!-- <FileModule
-        :attachmentId="
-          scheme.biddingTemplate && scheme.biddingTemplate.attachmentId
-        "
-        height="600px"
-      /> -->
       <iframe allowfullscreen="true"
         :src= this.viewFileUrl
         width="100%"
         height="500px"
         frameborder="0"
       ></iframe>
-    </el-dialog>
+    </el-dialog> -->
+
     <!-- 定标审批流程详情 -->
     <el-dialog
       title="定标审批流程详情"
@@ -708,7 +703,7 @@ export default {
   },
   data() {
     return {
-      viewFileUrl :"",  //预览招标文件url
+      // viewFileUrl :"",  //预览招标文件url
       procurementScheme: {},
       isSubmit: false,
       evaluateList: [],
@@ -815,15 +810,16 @@ export default {
         console.log('File Name:', fileName);
         console.log('File URL:', fileUrl);
         //获取文档中台的文档编辑URL
-        try {
-          const query1 = { fileName: fileName, fileUrl: fileUrl };
-          console.log('query1:', query1);
-          const res = await getViweFileURL(query1);
-          this.viewFileUrl = res.data;
-          console.log("viewFileUrl:",this.viewFileUrl);
-        } catch (err) {
-          console.log(err);
-        }
+        // try {
+        //   const query1 = { fileName: fileName, fileUrl: fileUrl };
+        //   console.log('query1:', query1);
+        //   const res = await getViweFileURL(query1);
+        //   this.viewFileUrl = res.data;
+        //   console.log("viewFileUrl:",this.viewFileUrl);
+        // } catch (err) {
+        //   console.log(err);
+        // }
+        this.downloadFileLocal(fileUrl);
       } else {
         console.warn('biddingTemplate 数据未正确加载');
       }
@@ -935,6 +931,11 @@ export default {
       } catch (ex) {
         console.log("预览文件出错", ex);
       }
+    },
+    /** 下载招标文件 */
+    downloadFileLocal(fileUrl) {
+      console.log("下载文件---fileUrl：",fileUrl)
+      window.open(fileUrl, '_blank');
     },
     downloadFile() {
       const url = this.uploadedFileUrl;

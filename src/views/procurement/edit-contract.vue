@@ -1356,17 +1356,16 @@
                 <template slot-scope="scope">
                   <el-button size="mini" type="text" @click="handleRemoveContract(scope.$index)" >删除</el-button>
                   <el-button size="mini" type="text" @click="handleReUpload(scope.$index)" >重新上传</el-button>
-                  <el-button size="mini" type="text" @click="handleView(scope.row.fileName, scope.row.fileUrl)" >预览</el-button>
+                  <el-button size="mini" type="text" @click="downloadFileLocal(scope.row.fileUrl)" >下载</el-button>
                 </template>
               </el-table-column>
             </el-table>
           </div>
         </el-tab-pane>
-        <el-tab-pane label="合同附件" name="second"/>
+        <!-- <el-tab-pane label="合同附件" name="second"/> -->
       </el-tabs>
       <!-- 合同附件 -->
-      <div class="contract-box" :class="activeName !== 'second' && 'hide'">
-        <!-- <FileModule ref="file" v-if="attachmentId" :attachmentId="attachmentId" @submitFileZ="subForm" :isContract = true type="edit"/> -->
+      <!-- <div class="contract-box" :class="activeName !== 'second' && 'hide'">
         <iframe allowfullscreen="true"
           v-if="attachmentId"
           :src= this.editFileUrl
@@ -1374,7 +1373,7 @@
           height="700px"
           frameborder="0"
         ></iframe>
-      </div>
+      </div> -->
     </div>
     </el-form>
     </div>
@@ -1761,6 +1760,11 @@ export default {
         this.$refs.uploadRef.$refs["upload-inner"].handleClick(); // 触发文件选择器
       }).catch(() => {});
     },
+    /** 下载招标文件 */
+    downloadFileLocal(fileUrl) {
+      console.log("下载文件---fileUrl：",fileUrl)
+      window.open(fileUrl, '_blank');
+    },
     /** 合同其他文件预览 */
     async handleView(fileName, fileUrl) {
       this.viewFileDialog = true;
@@ -1932,7 +1936,7 @@ export default {
           }
         }
         this.editFileUrl = "";  //先把编辑的url清空
-        this.getAttachmentEditURL(); //获取合同附件的文档中台编辑URL
+        // this.getAttachmentEditURL(); //获取合同附件的文档中台编辑URL
 
       }
     },
@@ -1960,7 +1964,7 @@ export default {
       // tab.name 是被点击的标签页的 name 属性值
       this.editFileUrl=""; //先清空编辑文档的URL，在重新获取
       if (tab.name === 'second') {
-        this.getAttachmentEditURL();
+        // this.getAttachmentEditURL();
       }
     },
     // 获取合同附件的文档中台编辑URL
@@ -2039,7 +2043,7 @@ export default {
 
           // this.getLabelAttachmentId()
           this.editFileUrl = "";  //先把编辑的url清空
-          this.getAttachmentEditURL(); //获取合同附件编辑URL
+          // this.getAttachmentEditURL(); //获取合同附件编辑URL
        })
     },
     getLabelAttachmentId(){
@@ -2050,7 +2054,7 @@ export default {
           console.log(JSON.stringify(res))
       })
       this.editFileUrl = "";  //先把编辑的url清空
-      this.getAttachmentEditURL(); //获取合同附件编辑URL
+      // this.getAttachmentEditURL(); //获取合同附件编辑URL
     },
     visaAdd(type) {
       if (type == 1) {

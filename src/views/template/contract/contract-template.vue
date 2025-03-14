@@ -216,7 +216,7 @@
                 :accept="'.doc,.docx'"
                 :on-remove="fileRemove"
                 ref="upload"
-                :before-upload="handleBeforeUpload"  
+                :before-upload="handleBeforeUpload"
               >
               </el-upload>
             </el-form-item>
@@ -535,6 +535,10 @@ export default {
         return false;
       }
       return true;  // 返回 true 表示允许继续上传
+    },
+    /** 下载模板文件 */
+    downloadFile(fileUrl) {
+      window.open(fileUrl, '_blank');
     },
     /** 查询采购计划列表 */
     async getFileTemplate() {

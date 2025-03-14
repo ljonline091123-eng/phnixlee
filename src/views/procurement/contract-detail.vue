@@ -995,17 +995,13 @@
             <el-table-column prop="fileName" label="文件名" align="center" />
             <el-table-column label="操作" align="center" width="200">
               <template slot-scope="scope">
-                <el-button size="mini" type="text" @click="handleView(scope.row.fileName, scope.row.fileUrl)" >预览</el-button>
+                <!-- <el-button size="mini" type="text" @click="handleView(scope.row.fileName, scope.row.fileUrl)" >预览</el-button> -->
+                <el-button size="mini" type="text" @click="downloadFileLocal(scope.row.fileUrl)" >下载</el-button>
               </template>
             </el-table-column>
           </el-table>
         </el-tab-pane>
-        <el-tab-pane label="合同附件" name="second">
-          <!-- <FileModule
-            v-if="activeName === 'second' && this.attachmentId"
-            :attachmentId="this.attachmentId"
-            height="600px"
-          /> -->
+        <!-- <el-tab-pane label="合同附件" name="second">
           <iframe allowfullscreen="true"
             v-if="activeName === 'second' && this.attachmentId"
             :src= this.viewFileUrl
@@ -1017,7 +1013,7 @@
           <div v-else style="font-size: 14px; text-align: center">
             <span>{{ this.attachmentMessage }}</span>
           </div>
-        </el-tab-pane>
+        </el-tab-pane> -->
       </el-tabs>
     </div>
     <ApprovalForm
@@ -3555,7 +3551,7 @@ export default {
       // tab.name 是被点击的标签页的 name 属性值
       this.viewFileUrl=""; //先清空编辑文档的URL，在重新获取
       if (tab.name === 'second') {
-        this.getAgreementViewURLFn();
+        // this.getAgreementViewURLFn();
       }
     },
 
@@ -3607,6 +3603,11 @@ export default {
         console.log("预览文件出错", ex);
       }
     },
+    /** 下载招标文件 */
+    downloadFileLocal(fileUrl) {
+      console.log("下载文件---fileUrl：",fileUrl)
+      window.open(fileUrl, '_blank');
+    },
 
     getContractDetail() {
       this.fullLoading = true;
@@ -3654,7 +3655,7 @@ export default {
           //获取合同文件预览URl
           console.log("getDetail的:this.attachmentId-》：", this.attachmentId)
           this.loadAgreementAttachmentId();
-          this.getAgreementViewURLFn(this.attachmentId);
+          // this.getAgreementViewURLFn(this.attachmentId);
 
           (this.agreementDailyWageList =
             res.data?.agreementDailyWageList || []),
