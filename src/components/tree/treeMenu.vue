@@ -11,6 +11,7 @@
           @change="handleRadioChange"
         >
             <el-radio-button
+            :disabled="loading===true"
             :label="dict.value"
             :name="dict.value" 
             v-for="dict in radioList"
