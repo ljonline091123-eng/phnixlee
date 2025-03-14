@@ -592,7 +592,7 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
         agreementVO.setPartyBContactPhone(agreement.getPartyBLegalPhone());
         agreementVO.setIdentificationNumber(vendor.getSocialCreditCode());
 
-        agreementVO.setCreatePhone(systemUserService.getUserById(agreement.getCreateId()).getPhonenumber());
+//        agreementVO.setCreatePhone(systemUserService.getUserById(agreement.getCreateId()).getPhonenumber());
 
         // 合同附件文本
         agreementVO.setAttachmentName(agreement.getAgreementName());
@@ -601,6 +601,10 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
         } else {
             agreementVO.setFileType("docx");
         }
+        AttachmentVO attachmentVO =  attachmentService.getAttachmentById(agreement.getAttachmentId());
+        agreementVO.setAttachmentFileUrl(attachmentVO.getFileUrl());
+        agreementVO.setAgAttachmentFileName(attachmentVO.getFileName());
+
 
         // 合同款项信息
         AgreementPaymentItemVO agreementPaymentItemVO = agreementPaymentItemService.getByAgreementId(id);

@@ -9,9 +9,12 @@ import com.zhaocai.business.agreement.vo.res.AgreementPaymentItemVO;
 import com.zhaocai.business.common.enums.DictBizEnum;
 import com.zhaocai.business.common.exception.BusinessException;
 import com.zhaocai.business.manager.http.service.UnderlingSystemService;
+import com.zhaocai.business.pub.service.ISysDictDataService;
 import com.zhaocai.common.core.utils.bean.BeanCopierUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+
+import javax.annotation.Resource;
 
 /**
  * 合同款项信息Service业务层处理
@@ -24,6 +27,9 @@ public class AgreementPaymentItemServiceImpl extends ServiceImpl<AgreementPaymen
 
     @Autowired
     private UnderlingSystemService underlingSystemService;
+
+    @Resource
+    private ISysDictDataService sysDictDataService;
 
     @Override
     public void saveAgreementPaymentItem(AgreementPaymentItem agreementPaymentItem, Long agreementId) {
@@ -41,8 +47,10 @@ public class AgreementPaymentItemServiceImpl extends ServiceImpl<AgreementPaymen
                 .eq(AgreementPaymentItem::getAgreementId,agreementId));
 
         AgreementPaymentItemVO paymentItemVO = BeanCopierUtil.copyBean(paymentItem, AgreementPaymentItemVO.class);
-        paymentItemVO.setCurrencyText(underlingSystemService.listDictMap(DictBizEnum.UNDERLING_SYS_CURRENCY.getName()).get(paymentItem.getCurrency()));
-        paymentItemVO.setInvoiceTypeText(underlingSystemService.listDictMap(DictBizEnum.UNDERLING_INVOICE_TYPE.getName()).get(paymentItem.getInvoiceType()));
+//        paymentItemVO.setCurrencyText(underlingSystemService.listDictMap(DictBizEnum.UNDERLING_SYS_CURRENCY.getName()).get(paymentItem.getCurrency()));
+//        paymentItemVO.setInvoiceTypeText(underlingSystemService.listDictMap(DictBizEnum.UNDERLING_INVOICE_TYPE.getName()).get(paymentItem.getInvoiceType()));        paymentItemVO.setCurrencyText(underlingSystemService.listDictMap(DictBizEnum.UNDERLING_SYS_CURRENCY.getName()).get(paymentItem.getCurrency()));
+//        paymentItemVO.setCurrencyText(sysDictDataService.getLabel(DictBizEnum.UNDERLING_SYS_CURRENCY.getName(),paymentItem.getCurrency()));
+//        paymentItemVO.setInvoiceTypeText(sysDictDataService.getLabel(DictBizEnum.UNDERLING_INVOICE_TYPE.getName(),paymentItem.getInvoiceType()));
 
         return paymentItemVO;
     }

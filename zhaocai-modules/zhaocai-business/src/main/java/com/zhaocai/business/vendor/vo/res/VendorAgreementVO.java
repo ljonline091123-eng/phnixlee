@@ -61,6 +61,13 @@ public class VendorAgreementVO{
     @ApiModelProperty(value = "合同文件名称")
     private String attachmentName;
 
+    @ApiModelProperty(value = "合同文件url")
+    private String attachmentFileUrl;
+
+    @ApiModelProperty(value = "合同文件名")
+    private String AgAttachmentFileName;
+
+
     @ApiModelProperty(value = "合同文件下载类型")
     private String fileType;
 }
