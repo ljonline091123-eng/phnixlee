@@ -246,13 +246,13 @@
                       </el-table-column>
                       <el-table-column label="单价(含税)" align="right" prop="unitPriceInclTax" width="180" >
                         <template slot-scope="scope">
-                      
+
                           <el-input title="单价(含税)" v-model="scope.row.unitPriceInclTax" :disabled="isSubmit || scope.row.belongOffer || scope.row.pushFlag === 'Y'" @input.native="changeUnitPriceInclTax($event,scope.row)" v-thousandth/>
                         </template>
                       </el-table-column>
                       <el-table-column label="税率(%)" align="right" prop="taxRate">
                         <template slot-scope="scope">
-                      
+
                           <el-input title="税率(%)" v-model="scope.row.taxRate"  @input.native="changeUnitPriceInclTax($event,scope.row)" v-thousandth/>
                         </template>
                       </el-table-column>
@@ -322,7 +322,7 @@
                           <!-- <span title="合计(含税)">{{getTotalPriceText(scope.row,inventory.$index)}}</span>
                           <span> {{ getTotalPriceTableText(inventory.$index) }} </span> -->
                           <el-input title="浮动价" v-model="scope.row.totalPriceText" :disabled="isSubmit" v-thousandth  @input.native="changeFloatingPrice($event,scope.row)" class="checkInput"/>
-                         
+
                         </template>
                       </el-table-column>
                       <el-table-column label="备注" align="center" prop="remark" min-width="300">
@@ -651,9 +651,9 @@ export default {
   methods: {
     treeClickMain(data,node,queryParams){
       let rData  = data || {};
-  
+
       getArchivesDetailList(rData.id,queryParams.type).then(response => {
-        
+
         this.inventoryList = response.rows || [];
         this.planList[0] = {contractPlanning:'',plannedAmountInclTaxText:'', children: []};
            const num = 1
@@ -672,13 +672,13 @@ export default {
                 }))
               })
             });
-            
+
             // this.planList[0].children=children
       this.$set(this.planList[0], 'children', JSON.parse(JSON.stringify(children)));
       console.log(JSON.stringify(this.planList[0]))
       this.materialDialogVisible=false
         });
-  }, 
+  },
     getListMenu(queryParams){
       this.handleMaterialCategorySelect(queryParams)
     },
@@ -702,8 +702,8 @@ export default {
         { categoryName: '设备类', categoryCode: '2' },
         { categoryName: '劳务类', categoryCode: '3' },
         { categoryName: '专业分包类', categoryCode: '4' },
-        ], 
-        selectedCategory: null, 
+        ],
+        selectedCategory: null,
         selecteArchivesClass: null,
         // 选择采购经办人
         officerDialog: false, // 控制对话框的显示隐藏
@@ -1359,7 +1359,7 @@ export default {
               },
               splitRequestList,
               contractPlanning:{
-                contractPlanningName, plannedAmountInclTaxText, bidResponsibleOrgName, 
+                contractPlanningName, plannedAmountInclTaxText, bidResponsibleOrgName,
                 projectId,projectName,projectCode
               }
             }
@@ -2058,11 +2058,13 @@ export default {
         /* 跳过 开放限制 允许为负数 */
         event.target.style = "border: 1px solid red;"
         return
-      }else if(!regexN1.test(row.count)  ){
-        event.target.style = "border: 1px solid red;"
-        this.$message.error("请输入正确的值");
-        return
-      }else if(!regexN2.test(row.count)){
+      }
+      // else if(!regexN1.test(row.count)  ){
+      //   event.target.style = "border: 1px solid red;"
+      //   this.$message.error("请输入正确的值");
+      //   return
+      // }
+      else if(!regexN2.test(row.count)){
         event.target.style = "border: 1px solid red;"
         this.$message.error("请输入小于4位的小数");
         return
