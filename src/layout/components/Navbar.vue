@@ -240,7 +240,7 @@ export default {
         type: 'warning'
       }).then(() => {
         this.$store.dispatch('LogOut').then(() => {
-          location.href = '/zhaocai';
+          location.href = '/index';
         })
       }).catch(() => {
       });
