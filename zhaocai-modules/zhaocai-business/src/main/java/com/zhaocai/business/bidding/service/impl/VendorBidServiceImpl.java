@@ -349,7 +349,7 @@ public class VendorBidServiceImpl implements IVendorBidService {
             if(materialsListMap.get(quotationVO.getMaterialsId()) != null){
                 /* 使用清单带的备注信息，从采购计划录入的，传递到采购方案到招标管理。 */
                 quotation.setRemark(materialsListMap.get(quotationVO.getMaterialsId()).getRemark());
-                if(materialsListMap.get(quotationVO.getMaterialsId()).getPriceType().equals(PriceTypeEnum.FLOAT_PRICE.getType())){
+                if(PriceTypeEnum.FLOAT_PRICE.getType().equals(materialsListMap.get(quotationVO.getMaterialsId()).getPriceType())){
                     /* 如果合约规划拆分的清单是 浮动价 */
                     //浮动价计算方式
                     BigDecimal floatingPrice = quotationVO.getFloatingPrice();
@@ -370,7 +370,7 @@ public class VendorBidServiceImpl implements IVendorBidService {
                     quotation.setTaxPrice(taxPrice);
                     quotation.setNotTaxPrice(notTaxPrice);
                     quotations.add(quotation);
-                }else if(materialsListMap.get(quotationVO.getMaterialsId()).getPriceType().equals(PriceTypeEnum.FLOAT_RATE.getType())){
+                }else if(PriceTypeEnum.FLOAT_RATE.getType().equals(materialsListMap.get(quotationVO.getMaterialsId()).getPriceType())){
                     /* 如果合约规划拆分的清单是 浮动率 */
                     BigDecimal floatingRate = quotationVO.getFloatingRate();
                     //基价
@@ -389,7 +389,7 @@ public class VendorBidServiceImpl implements IVendorBidService {
                     quotation.setTaxPrice(taxPrice);
                     quotation.setNotTaxPrice(notTaxPrice);
                     quotations.add(quotation);
-                }else if(materialsListMap.get(quotationVO.getMaterialsId()).getPriceType().equals(PriceTypeEnum.FIXED_PRICE.getType())){
+                }else if(PriceTypeEnum.FIXED_PRICE.getType().equals(materialsListMap.get(quotationVO.getMaterialsId()).getPriceType())){
                     /* 如果合约规划拆分的清单是 固定价 */
                     //固定价计算方式
                     //含税单价B
