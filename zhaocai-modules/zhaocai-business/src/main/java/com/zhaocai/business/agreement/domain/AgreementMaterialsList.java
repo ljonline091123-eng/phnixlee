@@ -56,9 +56,9 @@ public class AgreementMaterialsList extends BaseEntity {
 
     /**
      * 物料名称(导入) = 成本子目名称(导入)
-     */
-    @ApiModelProperty(value = "物料名称(导入)")
-    private String materialsNameImport;
+//     */
+//    @ApiModelProperty(value = "物料名称(导入)")
+//    private String materialsNameImport;
 
     /**
      * 品牌
