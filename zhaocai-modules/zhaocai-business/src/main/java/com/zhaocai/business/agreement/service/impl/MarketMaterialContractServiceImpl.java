@@ -29,7 +29,9 @@ import com.zhaocai.business.manager.http.service.ContractPlanService;
 import com.zhaocai.business.procurement.domain.*;
 import com.zhaocai.business.procurement.service.IContractPlanningSplitService;
 import com.zhaocai.business.procurement.service.IMaterialsListService;
+import com.zhaocai.business.procurement.service.IMinProjectService;
 import com.zhaocai.business.procurement.service.IProcurementPlanService;
+import com.zhaocai.business.procurement.vo.res.MinProjectVO;
 import com.zhaocai.business.pub.domain.AreaDivision;
 import com.zhaocai.business.pub.service.IAreaDivisionService;
 import com.zhaocai.business.pub.service.IAttachmentService;
@@ -48,6 +50,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
+import javax.annotation.Resource;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.*;
@@ -89,6 +92,9 @@ public class MarketMaterialContractServiceImpl extends ServiceImpl<MarketMateria
 
     @Autowired
     private IContractPlanningSplitService contractPlanningSplitService;
+
+    @Resource
+    private IMinProjectService minProjectService;
 
     /**
      * 接收采购清单最终报价
@@ -144,7 +150,9 @@ public class MarketMaterialContractServiceImpl extends ServiceImpl<MarketMateria
         baseInfoVO.setPriceType(planInfo.getPriceType());
 
         // 查询项目详情
-        MinProjectDetailResponseDTO projectDetail = contractPlanService.getMinProjectDetail(contract.getBelongAccountingItemCode());
+//        MinProjectDetailResponseDTO projectDetail = contractPlanService.getMinProjectDetail(contract.getBelongAccountingItemCode());
+        MinProjectVO minProjectByMinAccountCode = minProjectService.getMinProjectByMinAccountCode(contract.getBelongAccountingItemCode());
+        MinProjectDetailResponseDTO projectDetail = BeanCopierUtil.copyBean(minProjectByMinAccountCode, MinProjectDetailResponseDTO.class);
         baseInfoVO.setBelongAccountingItem(projectDetail.getMinAccountFullName());
         baseInfoVO.setBelongOrganizationId(projectDetail.getBelongingOrgId());
         baseInfoVO.setBelongOrganizationName(getDeptName(projectDetail.getBelongingOrgId()));
@@ -303,7 +311,9 @@ public class MarketMaterialContractServiceImpl extends ServiceImpl<MarketMateria
         }
 
         // 校验最小核算项目相关数据
-        MinProjectDetailResponseDTO projectDetail = contractPlanService.getMinProjectDetail(marketContract.getBelongAccountingItemCode());
+//        MinProjectDetailResponseDTO projectDetail = contractPlanService.getMinProjectDetail(marketContract.getBelongAccountingItemCode());
+        MinProjectVO minProjectByMinAccountCode = minProjectService.getMinProjectByMinAccountCode(marketContract.getBelongAccountingItemCode());
+        MinProjectDetailResponseDTO projectDetail = BeanCopierUtil.copyBean(minProjectByMinAccountCode, MinProjectDetailResponseDTO.class);
         if (projectDetail == null) {
             throw new ParamValidateException("获取最小核算项目失败");
         }

@@ -13,7 +13,6 @@ import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.zhaocai.business.agreement.domain.*;
-import com.zhaocai.business.agreement.vo.res.AgreementPartyInfoVO;
 import com.zhaocai.business.agreement.dto.AgreementMaterialsInfoDTO;
 import com.zhaocai.business.agreement.mapper.AgreementMapper;
 import com.zhaocai.business.agreement.service.*;
@@ -34,7 +33,10 @@ import com.zhaocai.business.common.utils.AmountCalUtil;
 import com.zhaocai.business.common.utils.ValidateUtils;
 import com.zhaocai.business.filez.service.IFileZTaskService;
 import com.zhaocai.business.manager.http.dto.req.*;
-import com.zhaocai.business.manager.http.dto.res.*;
+import com.zhaocai.business.manager.http.dto.res.BpmInitializeResponseDTO;
+import com.zhaocai.business.manager.http.dto.res.BpmListProcessLogResponseDTO;
+import com.zhaocai.business.manager.http.dto.res.BpmLoadTaskDefResponseDTO;
+import com.zhaocai.business.manager.http.dto.res.MinProjectDetailResponseDTO;
 import com.zhaocai.business.manager.http.service.ContractPlanService;
 import com.zhaocai.business.manager.http.service.UnderlingSystemService;
 import com.zhaocai.business.process.service.IBPMProcessService;
@@ -66,9 +68,9 @@ import com.zhaocai.common.security.utils.SecurityUtils;
 import com.zhaocai.common.signature.common.enums.SignatureTypeEnum;
 import com.zhaocai.common.signature.dto.SignatureContact;
 import com.zhaocai.common.signature.dto.SignatureCreator;
-import com.zhaocai.common.signature.dto.sign.SignatureResponse;
 import com.zhaocai.common.signature.dto.SignatureStamper;
 import com.zhaocai.common.signature.dto.command.*;
+import com.zhaocai.common.signature.dto.sign.SignatureResponse;
 import com.zhaocai.common.signature.service.SignatureCommandFactory;
 import com.zhaocai.common.signature.service.command.CancelAgreementCommand;
 import com.zhaocai.common.signature.service.command.CreateAgreementDocumentCommand;
@@ -100,7 +102,7 @@ import java.util.stream.Collectors;
  * @date 2024-05-24
  */
 @Service
-public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement> implements IAgreementService {
+public class AgreementServiceImpl extends ServiceImpl<AgreementMapper, Agreement> implements IAgreementService {
 
     @Autowired
     private IProcurementSchemeService procurementSchemeService;
@@ -204,9 +206,9 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
 
     @Override
     public PageResult<AgreementListVO> listPage(AgreementListQueryVO queryVO) {
-        IPage<AgreementListVO> ipage = baseMapper.selectPageList(queryVO.toMybatisPage(),queryVO);
+        IPage<AgreementListVO> ipage = baseMapper.selectPageList(queryVO.toMybatisPage(), queryVO);
         for (AgreementListVO agreement : ipage.getRecords()) {
-            agreement.setIsOperate(getAgreementIsOperate(agreement.getAgreementState(),agreement.getCreateById(),agreement.getSignatureUserId()));
+            agreement.setIsOperate(getAgreementIsOperate(agreement.getAgreementState(), agreement.getCreateById(), agreement.getSignatureUserId()));
             if (null != agreement.getMarketMaterialContractId()) {
                 agreement.setProcurementTypeText("易料采购");
             }
@@ -218,22 +220,23 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
     public Boolean checkAgreementCreateInfo(AgreementCreateInfoRequestVO requestVO) {
         // 采购方案
         ProcurementScheme scheme = procurementSchemeService.getById(requestVO.getSchemeId());
-        ValidateUtils.isNullException(scheme,"该采购方案不存在，请确认");
+        ValidateUtils.isNullException(scheme, "该采购方案不存在，请确认");
 
         // 合约规划
         ContractPlanning contractPlanning = contractPlanningService.getByContractSplitId(requestVO.getSplitId());
-        ValidateUtils.isNullException(contractPlanning,"该采购方案对应的合约规划不存在，请确认");
+        ValidateUtils.isNullException(contractPlanning, "该采购方案对应的合约规划不存在，请确认");
 
         // 供应商
         Vendor biddingVendor = vendorService.getById(requestVO.getVendorId());
-        ValidateUtils.isNullException(biddingVendor,"该采购方案的中标供应商不存在，请确认");
+        ValidateUtils.isNullException(biddingVendor, "该采购方案的中标供应商不存在，请确认");
 
         if (StringUtils.isBlank(contractPlanning.getProjectName())) {
             throw new ParamValidateException("合同对应的归属最小核算项目为空，请确认");
         }
 
+        MinProjectVO minProjectByMinAccountCode = minProjectService.getMinProjectByMinAccountCode(contractPlanning.getProjectCode());
         // 校验最小核算项目相关数据
-        MinProjectDetailResponseDTO projectDetail = contractPlanService.getMinProjectDetail(contractPlanning.getProjectCode());
+        MinProjectDetailResponseDTO projectDetail = BeanCopierUtil.copyBean(minProjectByMinAccountCode, MinProjectDetailResponseDTO.class);
         if (projectDetail == null) {
             throw new ParamValidateException("获取最小核算项目失败");
         }
@@ -260,7 +263,7 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
         }
 
         // 校验清单数量
-        checkAgreementMaterials(requestVO.getAgreementMaterialsList(),requestVO.getSchemeId(),requestVO.getSplitId(),requestVO.getVendorId());
+        checkAgreementMaterials(requestVO.getAgreementMaterialsList(), requestVO.getSchemeId(), requestVO.getSplitId(), requestVO.getVendorId());
 
         return true;
     }
@@ -269,11 +272,11 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
     public AgreementCreateBaseInfoVO getAgreementCreateInfo(AgreementCreateInfoRequestVO requestVO) {
         // 采购方案
         ProcurementScheme scheme = procurementSchemeService.getById(requestVO.getSchemeId());
-        ValidateUtils.isNullException(scheme,"该采购方案不存在");
+        ValidateUtils.isNullException(scheme, "该采购方案不存在");
 
         // 合约规划
         ContractPlanning contractPlanning = contractPlanningService.getByContractSplitId(requestVO.getSplitId());
-        ValidateUtils.isNullException(contractPlanning,"该采购方案对应的合约规划不存在");
+        ValidateUtils.isNullException(contractPlanning, "该采购方案对应的合约规划不存在");
 
         AgreementCreateBaseInfoVO baseInfoVO = new AgreementCreateBaseInfoVO();
         baseInfoVO.setSchemeId(requestVO.getSchemeId());
@@ -286,7 +289,9 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
         baseInfoVO.setPriceType(scheme.getPriceType());
 
         // 查询项目详情
-        MinProjectDetailResponseDTO projectDetail = contractPlanService.getMinProjectDetail(contractPlanning.getProjectCode());
+//        MinProjectDetailResponseDTO projectDetail = contractPlanService.getMinProjectDetail(contractPlanning.getProjectCode());
+        MinProjectVO minProjectByMinAccountCode = minProjectService.getMinProjectByMinAccountCode(contractPlanning.getProjectCode());
+        MinProjectDetailResponseDTO projectDetail = BeanCopierUtil.copyBean(minProjectByMinAccountCode, MinProjectDetailResponseDTO.class);
         baseInfoVO.setBelongOrganizationId(projectDetail.getBelongingOrgId());
         baseInfoVO.setBelongOrganizationName(getDeptName(projectDetail.getBelongingOrgId()));
 
@@ -300,9 +305,9 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
 
         // 供应商
         Vendor biddingVendor = vendorService.getById(requestVO.getVendorId());
-        ValidateUtils.isNullException(biddingVendor,"未获取到该采购方案的中标供应商");
+        ValidateUtils.isNullException(biddingVendor, "未获取到该采购方案的中标供应商");
         /* 供应商基本信息 */
-        VendorVO vendorVO = BeanCopierUtil.copyBean(biddingVendor,VendorVO.class);
+        VendorVO vendorVO = BeanCopierUtil.copyBean(biddingVendor, VendorVO.class);
         baseInfoVO.setVendorVO(vendorVO);
         baseInfoVO.setPartyBName(biddingVendor.getEnterpriseName());
         baseInfoVO.setPartyBLegalName(biddingVendor.getLegalRepresentative());
@@ -310,7 +315,7 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
         baseInfoVO.setPartyBLegalIdCard(biddingVendor.getLegalIdCard());
 
         // 物料清单
-        VendorBiddingListQuotationVO listQuotation = biddingListQuotationService.getVendorBiddingListQuotation(requestVO.getSchemeId(),requestVO.getSplitId(),requestVO.getVendorId());
+        VendorBiddingListQuotationVO listQuotation = biddingListQuotationService.getVendorBiddingListQuotation(requestVO.getSchemeId(), requestVO.getSplitId(), requestVO.getVendorId());
 
         // 购买材料，设置价款类型、交易标的物类型
         if (ProcurementPlanTypeEnum.PURCHASE_MATERIALS.equalsType(scheme.getProcurementType())) {
@@ -318,7 +323,7 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
                 listVO.setPaymentType(scheme.getPriceType() == null ? PriceTypeEnum.FIXED_PRICE.getType().toString() : scheme.getPriceType().toString());
             }
             baseInfoVO.setSubjectMatterType(scheme.getSubjectMatterType());
-        }else {
+        } else {
             /* 购买材料之外的其它类型都是固定价1 */
             for (VendorBiddingListQuotationListVO listVO : listQuotation.getVendorBiddingListQuotationList()) {
                 listVO.setPaymentType(scheme.getPriceType() == null ? PriceTypeEnum.FIXED_PRICE.getType().toString() : scheme.getPriceType().toString());
@@ -328,23 +333,23 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
         // 处理清单数据
         BigDecimal totalAmountIncTax = BigDecimal.ZERO;
         BigDecimal totalAmountExcTax = BigDecimal.ZERO;
-        Map<Long,AgreementMaterialsRequestVO> materialsRequestMap = requestVO.getAgreementMaterialsList().stream()
-                .collect(Collectors.toMap(AgreementMaterialsRequestVO::getMaterialsListId,val -> val));
+        Map<Long, AgreementMaterialsRequestVO> materialsRequestMap = requestVO.getAgreementMaterialsList().stream()
+                .collect(Collectors.toMap(AgreementMaterialsRequestVO::getMaterialsListId, val -> val));
         for (VendorBiddingListQuotationListVO quotationList : listQuotation.getVendorBiddingListQuotationList()) {
             AgreementMaterialsRequestVO materialsRequestVO = materialsRequestMap.get(quotationList.getMaterialsListId());
             if (materialsRequestVO == null) {
-                throw new ParamValidateException(String.format("提交的清单中少了清单:%s,请确认",quotationList.getMaterialsName()));
+                throw new ParamValidateException(String.format("提交的清单中少了清单:%s,请确认", quotationList.getMaterialsName()));
             }
             quotationList.setBrand(contractPlanning.getBrand());
             quotationList.setSignCount(materialsRequestVO.getSignCount());
             quotationList.setSignTaxRate(quotationList.getTaxRate());
             quotationList.setSignUnitPriceInclTax(materialsRequestVO.getSignUnitPriceInclTax());
-            quotationList.setSignUnitPriceExclTax(AmountCalUtil.calUnitPriceExclTax(materialsRequestVO.getSignUnitPriceInclTax(),quotationList.getTaxRate()));
-            quotationList.setSignAmountInclTax(AmountCalUtil.calTotalAmountInclTax(materialsRequestVO.getSignCount(),materialsRequestVO.getSignUnitPriceInclTax()));
-            quotationList.setSignAmountExclTax(AmountCalUtil.calTotalAmountExclTax(quotationList.getSignAmountInclTax(),quotationList.getTaxRate()));
+            quotationList.setSignUnitPriceExclTax(AmountCalUtil.calUnitPriceExclTax(materialsRequestVO.getSignUnitPriceInclTax(), quotationList.getTaxRate()));
+            quotationList.setSignAmountInclTax(AmountCalUtil.calTotalAmountInclTax(materialsRequestVO.getSignCount(), materialsRequestVO.getSignUnitPriceInclTax()));
+            quotationList.setSignAmountExclTax(AmountCalUtil.calTotalAmountExclTax(quotationList.getSignAmountInclTax(), quotationList.getTaxRate()));
 
-            totalAmountIncTax = NumberUtil.add(totalAmountIncTax,quotationList.getSignAmountInclTax());
-            totalAmountExcTax = NumberUtil.add(totalAmountExcTax,quotationList.getSignAmountExclTax());
+            totalAmountIncTax = NumberUtil.add(totalAmountIncTax, quotationList.getSignAmountInclTax());
+            totalAmountExcTax = NumberUtil.add(totalAmountExcTax, quotationList.getSignAmountExclTax());
         }
 
         baseInfoVO.setBiddingListQuotation(listQuotation.getVendorBiddingListQuotationList());
@@ -364,13 +369,14 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
 
     /**
      * 是否关联我的钢铁网价格-是否显示
+     *
      * @param biddingListQuotation
      * @return
      */
     private String getIsRelatedMySteelCreate(List<VendorBiddingListQuotationListVO> biddingListQuotation) {
         String result = "N";
         for (VendorBiddingListQuotationListVO vo : biddingListQuotation) {
-            if(null != vo.getSubjectMatterCode() && vo.getSubjectMatterCode().startsWith("A101")){
+            if (null != vo.getSubjectMatterCode() && vo.getSubjectMatterCode().startsWith("A101")) {
                 result = "Y";
                 break;
             }
@@ -380,7 +386,7 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
 
     @Override
     public PageResult<VendorAgreementListVO> listVendorAgreement(VendorAgreementListQueryVO queryVO) {
-        IPage<VendorAgreementListVO> page = baseMapper.selectVendorAgreementList(queryVO.toMybatisPage(),queryVO);
+        IPage<VendorAgreementListVO> page = baseMapper.selectVendorAgreementList(queryVO.toMybatisPage(), queryVO);
 
         VendorContact vendorContact = vendorContactService.getVendorContactByLoginUser(SecurityUtils.getUserId());
         for (VendorAgreementListVO agreementList : page.getRecords()) {
@@ -395,14 +401,14 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
     }
 
     @Override
-    @Transactional(propagation = Propagation.REQUIRED,rollbackFor = Exception.class)
+    @Transactional(propagation = Propagation.REQUIRED, rollbackFor = Exception.class)
     public AgreementSaveVO saveAgreement(AgreementSaveRequestVO requestVO) {
         AgreementSaveVO agreementSave;
 
         if (NumberUtil.isNullOrZero(requestVO.getAgreement().getId())) {
             if (StringUtils.isEmpty(requestVO.getAgreement().getMarketMaterialContractId())) {
                 // 校验清单数据
-                checkSaveAgreementMaterialsList(requestVO.getAgreementMaterialsLists(),requestVO.getAgreement().getSchemeId(),requestVO.getAgreement().getContractSplitId(),
+                checkSaveAgreementMaterialsList(requestVO.getAgreementMaterialsLists(), requestVO.getAgreement().getSchemeId(), requestVO.getAgreement().getContractSplitId(),
                         requestVO.getAgreement().getVendorId());
             } else {
                 List<MarketMaterialList> list = requestVO.getAgreementMaterialsLists().stream()
@@ -440,36 +446,36 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
     @Override
     public AgreementDetailVO detail(Long id) {
         Agreement agreement = super.getById(id);
-        ValidateUtils.isNullException(agreement,"合同不存在,请确认");
+        ValidateUtils.isNullException(agreement, "合同不存在,请确认");
 
-        AgreementVO agreementVO = BeanCopierUtil.copyBean(agreement,AgreementVO.class);
+        AgreementVO agreementVO = BeanCopierUtil.copyBean(agreement, AgreementVO.class);
         agreementVO.setPartyBContactName(agreement.getPartyBLegalName());
         agreementVO.setPartyBContactPhone(agreement.getPartyBLegalPhone());
-        agreementVO.setExpenditureBusinessTypeText(DictBizCache.getValue(DictBizEnum.PROCUREMENT_PLAN_TYPE,String.valueOf(agreement.getExpenditureBusinessType())));
+        agreementVO.setExpenditureBusinessTypeText(DictBizCache.getValue(DictBizEnum.PROCUREMENT_PLAN_TYPE, String.valueOf(agreement.getExpenditureBusinessType())));
         agreementVO.setPaymentCycleText(underlingSystemService.listDictMap(DictBizEnum.UNDERLING_PAYMENT_CYCLE.getName()).get(agreement.getPaymentCycle()));
         agreementVO.setPriceFormText(underlingSystemService.listDictMap(DictBizEnum.UNDERLING_PRICE_FORM.getName()).get(agreement.getPriceForm()));
 
         //合同标签附件Url
-        if (null != agreement.getLabelAttachmentId()){
-         Attachment attachment = attachmentService.getById(agreement.getLabelAttachmentId());
-         if (attachment != null) {
-             agreementVO.setLabelAttachmentUrl(attachment.getFileUrl());
-         }
+        if (null != agreement.getLabelAttachmentId()) {
+            Attachment attachment = attachmentService.getById(agreement.getLabelAttachmentId());
+            if (attachment != null) {
+                agreementVO.setLabelAttachmentUrl(attachment.getFileUrl());
+            }
         }
 
         // 处理支付方式
         if (StringUtils.isNotBlank(agreement.getPaymentWay())) {
-            Map<String,String> paymentWayMap = underlingSystemService.listDictMap(DictBizEnum.UNDERLING_PAYMENT_TYPE.getName());
+            Map<String, String> paymentWayMap = underlingSystemService.listDictMap(DictBizEnum.UNDERLING_PAYMENT_TYPE.getName());
             String[] paymentWayS = agreement.getPaymentWay().split(",");
             agreementVO.setPaymentWayText(Arrays.stream(paymentWayS).map(paymentWayMap::get).collect(Collectors.joining(",")));
         }
         Integer priceType;
         Integer procurementPlanType;
 
-        if(StringUtils.isEmpty(agreement.getMarketMaterialContractId())){
+        if (StringUtils.isEmpty(agreement.getMarketMaterialContractId())) {
             // 获取采购方案
             ProcurementScheme procurementScheme = procurementSchemeService.getById(agreement.getSchemeId());
-            ValidateUtils.isNullException(procurementScheme,"该合同对应的采购方案不存在，请确认");
+            ValidateUtils.isNullException(procurementScheme, "该合同对应的采购方案不存在，请确认");
             agreementVO.setProcurementSchemeCode(procurementScheme.getProcurementSchemeCode());
             agreementVO.setProcurementSchemeName(procurementScheme.getProcurementSchemeName());
             priceType = procurementScheme.getPriceType();
@@ -478,14 +484,14 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
             MarketMaterialContract contract = marketMaterialContractService.getById(agreement.getMarketMaterialContractId());
             ValidateUtils.isNullException(contract, "该合同对应的易料采购合同为空");
             ProcurementPlan planInfo = procurementPlanService.getById(contract.getPlanId());
-            ValidateUtils.isNullException(planInfo,"该易料采购合同对应的采购计划不存在");
+            ValidateUtils.isNullException(planInfo, "该易料采购合同对应的采购计划不存在");
             priceType = planInfo.getPriceType();
             procurementPlanType = Integer.valueOf(contract.getExpenditureBusinessType());
         }
 
         agreementVO.setPriceType(priceType);
         agreementVO.setAttachmentName(agreement.getAgreementName() + ".docx");
-        agreementVO.setIsOperate(getAgreementIsOperate(agreement.getAgreementState(),agreement.getCreateId(),agreement.getSignatureUserId()));
+        agreementVO.setIsOperate(getAgreementIsOperate(agreement.getAgreementState(), agreement.getCreateId(), agreement.getSignatureUserId()));
 
         SysDept sysDept = remoteSystemService.getByThridDeptId(agreement.getPartyAOrgId(), SecurityConstants.INNER);
         agreementVO.setPartyADeptId(sysDept.getDeptId());
@@ -534,7 +540,7 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
 
         // 合同其他附件信息
         List<AttachmentVO> attachmentList = attachmentService.listAttachment(AttachmentTypeEnum.AGREEMENT_OTHER, agreement.getId());
-        List<Attachment> attachment = BeanCopierUtil.copyList(attachmentList,Attachment.class);
+        List<Attachment> attachment = BeanCopierUtil.copyList(attachmentList, Attachment.class);
 
         AgreementDetailVO agreementDetailVO = AgreementDetailVO.builder()
                 .agreement(agreementVO)
@@ -568,7 +574,7 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
     private String getIsRelatedMySteelDetail(List<AgreementMaterialsListVO> materialsLists) {
         String result = "N";
         for (AgreementMaterialsListVO vo : materialsLists) {
-            if(null != vo.getSubjectMatterCode() && vo.getSubjectMatterCode().startsWith("A101")){
+            if (null != vo.getSubjectMatterCode() && vo.getSubjectMatterCode().startsWith("A101")) {
                 result = "Y";
                 break;
             }
@@ -579,15 +585,15 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
     @Override
     public VendorAgreementDetailVO getVendorAgreementDetail(Long id) {
         Agreement agreement = super.getById(id);
-        ValidateUtils.isNullException(agreement,"该合同信息不存在，请确认");
+        ValidateUtils.isNullException(agreement, "该合同信息不存在，请确认");
 
         // 供应商
         Vendor vendor = vendorService.getById(agreement.getVendorId());
         if (!agreement.getVendorId().equals(vendor.getId())) {
-            throw new BusinessException(ResultCode.FAILURE,"该合同不是您的，您无权查看");
+            throw new BusinessException(ResultCode.FAILURE, "该合同不是您的，您无权查看");
         }
 
-        VendorAgreementVO agreementVO = BeanCopierUtil.copyBean(agreement,VendorAgreementVO.class);
+        VendorAgreementVO agreementVO = BeanCopierUtil.copyBean(agreement, VendorAgreementVO.class);
         agreementVO.setPartyBContactName(agreement.getPartyBLegalName());
         agreementVO.setPartyBContactPhone(agreement.getPartyBLegalPhone());
         agreementVO.setIdentificationNumber(vendor.getSocialCreditCode());
@@ -601,7 +607,7 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
         } else {
             agreementVO.setFileType("docx");
         }
-        AttachmentVO attachmentVO =  attachmentService.getAttachmentById(agreement.getAttachmentId());
+        AttachmentVO attachmentVO = attachmentService.getAttachmentById(agreement.getAttachmentId());
         agreementVO.setAttachmentFileUrl(attachmentVO.getFileUrl());
         agreementVO.setAgAttachmentFileName(attachmentVO.getFileName());
 
@@ -621,7 +627,7 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
     @Override
     public DownloadAgreementVO getAgreementFileInputStream(Long id) {
         Agreement agreement = super.getById(id);
-        ValidateUtils.isNullException(agreement,"该合同不存在，请确认后再操作");
+        ValidateUtils.isNullException(agreement, "该合同不存在，请确认后再操作");
         if (NumberUtil.isNullOrZero(agreement.getWatermarkAttachmentId())) {
             throw new BusinessException("合同文件正在生成中，请稍后重试");
         }
@@ -631,9 +637,9 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
             // 签署状态，从电子签章获取
             SysUser sysUser = systemUserService.getLoginUser();
             DownloadDocumentCommandRequest commandRequest = new DownloadDocumentCommandRequestBuilder()
-                    .builder("tb_agreement",agreement.getId(),sysUser.getNickName(),sysUser.getUserName())
+                    .builder("tb_agreement", agreement.getId(), sysUser.getNickName(), sysUser.getUserName())
                     .build();
-            SignatureResponse response = SignatureCommandFactory.getInstance().executeSignCommand(new DownloadDocumentCommand(commandRequest),null);
+            SignatureResponse response = SignatureCommandFactory.getInstance().executeSignCommand(new DownloadDocumentCommand(commandRequest), null);
             if (response.isSuccess()) {
                 InputStream inputStream = (InputStream) response.getResponseResult();
                 agreementVO = new DownloadAgreementVO();
@@ -643,15 +649,15 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
                 throw new BusinessException(response.getMessage());
             }
         } else {
-            agreementVO = attachmentService.getAttachmentInputStream(agreement.getWatermarkAttachmentId(),agreement.getAgreementName());
+            agreementVO = attachmentService.getAttachmentInputStream(agreement.getWatermarkAttachmentId(), agreement.getAgreementName());
         }
 
-        return  agreementVO;
+        return agreementVO;
     }
 
     @Override
     public PageResult<AgreementJkpthtListVO> listAgreementJkpthtPage(AgreementJkpthtListQueryVO queryVO) {
-        IPage<AgreementJkpthtListVO> pages = baseMapper.selectAgreementJkpthtList(queryVO.toMybatisPage(),queryVO);
+        IPage<AgreementJkpthtListVO> pages = baseMapper.selectAgreementJkpthtList(queryVO.toMybatisPage(), queryVO);
         return new PageResult<>(pages);
     }
 
@@ -659,26 +665,26 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
     public AgreementUnderlingDetailVO getAgreementUnderlingDetail(Long id) {
         // 获取合同
         Agreement agreement = super.getById(id);
-        ValidateUtils.isNullException(agreement,"该合同不存在");
+        ValidateUtils.isNullException(agreement, "该合同不存在");
 
         // 获取合同协议付款
         AgreementPaymentItemVO paymentItem = agreementPaymentItemService.getByAgreementId(id);
-        ValidateUtils.isNullException(paymentItem,"该合同对应的付款协议不存在");
+        ValidateUtils.isNullException(paymentItem, "该合同对应的付款协议不存在");
 
         AgreementUnderlingDetailVO underlingDetailVO;
         // 获取合约规划记录
-        if(StringUtils.isEmpty(agreement.getMarketMaterialContractId())){
+        if (StringUtils.isEmpty(agreement.getMarketMaterialContractId())) {
             ContractPlanning contractPlanning = contractPlanningService.getByContractSplitId(agreement.getContractSplitId());
-            ValidateUtils.isNullException(paymentItem,"该合同对应的合约规划记录不存在");
+            ValidateUtils.isNullException(paymentItem, "该合同对应的合约规划记录不存在");
 
             ProcurementScheme procurementScheme = procurementSchemeService.getById(agreement.getSchemeId());
-            ValidateUtils.isNullException(procurementScheme,"该合同对应的采购方案不存在");
+            ValidateUtils.isNullException(procurementScheme, "该合同对应的采购方案不存在");
 
             // 构建对象
-            underlingDetailVO = new AgreementUnderlingDetailVO(agreement,paymentItem,contractPlanning,procurementScheme);
+            underlingDetailVO = new AgreementUnderlingDetailVO(agreement, paymentItem, contractPlanning, procurementScheme);
         } else {
             // 构建对象
-            underlingDetailVO = new AgreementUnderlingDetailVO(agreement,paymentItem,new ContractPlanning(),new ProcurementScheme());
+            underlingDetailVO = new AgreementUnderlingDetailVO(agreement, paymentItem, new ContractPlanning(), new ProcurementScheme());
         }
 
         // 获取合同计日工信息
@@ -711,42 +717,42 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
 
         // 获取合同清单
         List<AgreementUnderlingMaterialsVO> underlingMaterialsList;
-        if(StringUtils.isEmpty(agreement.getMarketMaterialContractId())) {
+        if (StringUtils.isEmpty(agreement.getMarketMaterialContractId())) {
             underlingMaterialsList = agreementMaterialsListService.listUnderlingMaterials(id);
         } else {
             List<AgreementMaterialsList> lists = agreementMaterialsListService.list(new LambdaQueryWrapper<AgreementMaterialsList>()
                     .eq(AgreementMaterialsList::getAgreementId, id));
-            underlingMaterialsList = BeanCopierUtil.copyList(lists,AgreementUnderlingMaterialsVO.class);
+            underlingMaterialsList = BeanCopierUtil.copyList(lists, AgreementUnderlingMaterialsVO.class);
         }
-        underlingMaterialsList = underlingMaterialsList.stream().map(x ->{
-            if(x.getPaymentType()==null || x.getPaymentType().isEmpty()){
+        underlingMaterialsList = underlingMaterialsList.stream().map(x -> {
+            if (x.getPaymentType() == null || x.getPaymentType().isEmpty()) {
                 /* 未处理数据默认固定价1 */
                 x.setPaymentType(PriceTypeEnum.FIXED_PRICE.getType().toString());
             }
             return x;
         }).collect(Collectors.toList());
         switch (agreement.getExpenditureBusinessType()) {
-            case 1 :
+            case 1:
                 // 物资采购
                 underlingDetailVO.setContractListMaterialsList(underlingMaterialsList);
                 break;
-            case 2 :
+            case 2:
                 // 物资租赁
                 underlingDetailVO.setContractListLeasedMaterialsList(underlingMaterialsList);
                 break;
-            case 3 :
+            case 3:
                 // 机械租赁
                 underlingDetailVO.setContractListLeasedDeviceList(underlingMaterialsList);
                 break;
-            case 4 :
+            case 4:
                 // 专业分包
                 underlingDetailVO.setContractListSpecialtyList(underlingMaterialsList);
                 break;
-            case 5 :
+            case 5:
                 // 劳务分包
                 underlingDetailVO.setContractListLaborList(underlingMaterialsList);
                 break;
-            case 6 :
+            case 6:
                 // 其他
                 underlingDetailVO.setContractListOtherList(underlingMaterialsList);
                 break;
@@ -758,69 +764,66 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
     @Override
     public AgreementFileVO getAgreementAttachmentId(Long id) {
         Agreement agreement = this.getById(id);
-        ValidateUtils.isNullException(agreement,"该合同不存在");
+        ValidateUtils.isNullException(agreement, "该合同不存在");
         long attachmentId = 0L;
         String message = "获取成功";
         if (NumberUtil.isNotNullAndZero(agreement.getWatermarkAttachmentId())) {
             attachmentId = agreement.getWatermarkAttachmentId();
-        }
-        else if (NumberUtil.isNotNullAndZero(agreement.getLabelAttachmentId())) {
+        } else if (NumberUtil.isNotNullAndZero(agreement.getLabelAttachmentId())) {
             attachmentId = agreement.getLabelAttachmentId();
-        }
-        else if (NumberUtil.isNotNullAndZero(agreement.getAttachmentId())) {
+        } else if (NumberUtil.isNotNullAndZero(agreement.getAttachmentId())) {
             attachmentId = agreement.getAttachmentId();
-        }
-        else {
+        } else {
             message = "合同附件正在生成中，请稍后再查看";
         }
-        return new AgreementFileVO(attachmentId,message);
+        return new AgreementFileVO(attachmentId, message);
     }
 
     @Override
-    @Transactional(propagation = Propagation.REQUIRED,rollbackFor = Exception.class)
+    @Transactional(propagation = Propagation.REQUIRED, rollbackFor = Exception.class)
     public void cancellationAgreement(Long id) {
         Agreement agreement = super.getById(id);
-        ValidateUtils.isNullException(agreement,"该合同不存在，请确认");
+        ValidateUtils.isNullException(agreement, "该合同不存在，请确认");
         if (!AgreementStateEnum.isCancel(agreement.getAgreementState())) {
             throw new BusinessException("该状态下的合同不允许作废");
         }
 
         // 修改合同状态
         super.update(new LambdaUpdateWrapper<Agreement>()
-                .set(Agreement::getAgreementState,AgreementStateEnum.CANCELLATION.getState())
-                .eq(Agreement::getId,id));
+                .set(Agreement::getAgreementState, AgreementStateEnum.CANCELLATION.getState())
+                .eq(Agreement::getId, id));
 
         // 回写清单数量
         List<AgreementMaterialsList> agreementMaterialsLists = agreementMaterialsListService.listByAgreementId(id);
-        Map<Long,AgreementMaterialsList> agreementMaterialsListMap = agreementMaterialsLists.stream()
-                .collect(Collectors.toMap(AgreementMaterialsList::getMaterialsListId,val -> val));
+        Map<Long, AgreementMaterialsList> agreementMaterialsListMap = agreementMaterialsLists.stream()
+                .collect(Collectors.toMap(AgreementMaterialsList::getMaterialsListId, val -> val));
 
         // 获取合同对应的拆分合约的物理清单数据
         List<MaterialsList> materialsLists = new ArrayList<>();
-        if(StringUtils.isEmpty(agreement.getMarketMaterialContractId())){
+        if (StringUtils.isEmpty(agreement.getMarketMaterialContractId())) {
             materialsLists = materialsListService.listMaterialsListByContractSplitIds(CollectionUtil.newArrayList(agreement.getContractSplitId()));
         } else {
             List<Long> materialsListIds = agreementMaterialsLists.stream().map(AgreementMaterialsList::getMaterialsListId).collect(Collectors.toList());
-            materialsLists = materialsListService.list(new LambdaQueryWrapper<MaterialsList>().in(BaseEntity::getId,materialsListIds));
+            materialsLists = materialsListService.list(new LambdaQueryWrapper<MaterialsList>().in(BaseEntity::getId, materialsListIds));
         }
         for (MaterialsList materialsList : materialsLists) {
             AgreementMaterialsList agreementMaterialsList = agreementMaterialsListMap.get(materialsList.getId());
-            materialsList.setUsedCount(NumberUtil.subtract(materialsList.getUsedCount(),agreementMaterialsList.getSignCount()));
+            materialsList.setUsedCount(NumberUtil.subtract(materialsList.getUsedCount(), agreementMaterialsList.getSignCount()));
         }
         materialsListService.updateMaterialsListUsedCount(materialsLists);
 
         // 设置合约拆分记录为未使用完毕
-        if(StringUtils.isEmpty(agreement.getMarketMaterialContractId())){
-            contractPlanningSplitService.updateContractPlanningSplitUseSub(agreement.getContractSplitId(),agreementMaterialsLists);
+        if (StringUtils.isEmpty(agreement.getMarketMaterialContractId())) {
+            contractPlanningSplitService.updateContractPlanningSplitUseSub(agreement.getContractSplitId(), agreementMaterialsLists);
         } else {
             contractPlanningSplitService.updateContractPlanningSplitUseSubByMarket(agreementMaterialsLists);
         }
     }
 
     @Override
-    public void submitAgreement(Long id,String detailUrl,String operateComment) {
+    public void submitAgreement(Long id, String detailUrl, String operateComment) {
         Agreement agreement = super.getById(id);
-        ValidateUtils.isNullException(agreement,"该合同不存在，请确认");
+        ValidateUtils.isNullException(agreement, "该合同不存在，请确认");
         if (!(AgreementStateEnum.DRAFT.getState().equals(agreement.getAgreementState()) || AgreementStateEnum.REVOKED.getState().equals(agreement.getAgreementState()))) {
             throw new BusinessException("该状态下的合同不允许提交");
         }
@@ -828,19 +831,19 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
         //获取agreement的AttachmentId，复制文件名和文件url到LabelAttachmentId
         if (agreement.getAttachmentId() != null) {
             Attachment attachment = attachmentService.getById(agreement.getAttachmentId());
-            Long labelAttachmentId= attachmentService.addAttachment(new AttachmentRequestVO(attachment.getFileName(),attachment.getFileUrl()),AttachmentTypeEnum.AGREEMENT_ORIGINAL,id);
+            Long labelAttachmentId = attachmentService.addAttachment(new AttachmentRequestVO(attachment.getFileName(), attachment.getFileUrl()), AttachmentTypeEnum.AGREEMENT_ORIGINAL, id);
             // 只更新 LabelAttachmentId
             super.update(new LambdaUpdateWrapper<Agreement>()
-                    .set(Agreement::getLabelAttachmentId,labelAttachmentId)
-                    .eq(Agreement::getId,id));
+                    .set(Agreement::getLabelAttachmentId, labelAttachmentId)
+                    .eq(Agreement::getId, id));
         } else {
             throw new BusinessException("合同附件不存在，请稍后重试");
         }
 
         // 状态调整为审批中
         super.update(new LambdaUpdateWrapper<Agreement>()
-                .set(Agreement::getAgreementState,AgreementStateEnum.IN_APPROVAL.getState())
-                .eq(Agreement::getId,id));
+                .set(Agreement::getAgreementState, AgreementStateEnum.IN_APPROVAL.getState())
+                .eq(Agreement::getId, id));
 
 
 //        if (NumberUtil.isNullOrZero(agreement.getLabelAttachmentId())) {
@@ -855,7 +858,7 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
 
 
         //接入底层逻辑平台流程
-        Map<String,Object> paramMap = new HashMap<>();
+        Map<String, Object> paramMap = new HashMap<>();
         paramMap.put("businessId", agreement.getId());
         paramMap.put("projectCode", agreement.getBelongAccountingItemCode());
         paramMap.put("businessTitle", "招标采购/采购管理/合同签订 合同审批");
@@ -870,20 +873,20 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
         paramMap.put("contractType", ProcurementPlanTypeEnum.getProcessType(agreement.getExpenditureBusinessType()));/* 合同签订流程 合同类型 */
         paramMap.put("contractMoney", agreement.getTotalAmountIncTax());/* 合同签订流程 价格 */
 
-        processService.startProcessInstance(ProcessKeyEnum.ZHAOCAI_AGREEMENT_SIGN.getIdentifying(),paramMap);
+        processService.startProcessInstance(ProcessKeyEnum.ZHAOCAI_AGREEMENT_SIGN.getIdentifying(), paramMap);
     }
 
     @Override
     public void setAgreementFileLabelFinish(Long id, long attachmentId) {
         this.update(new LambdaUpdateWrapper<Agreement>()
-                .set(Agreement::getLabelAttachmentId,attachmentId)
-                .eq(Agreement::getId,id));
+                .set(Agreement::getLabelAttachmentId, attachmentId)
+                .eq(Agreement::getId, id));
     }
 
     @Override
     public Boolean checkAgreementUpdate(Long id) {
         Agreement agreement = super.getById(id);
-        ValidateUtils.isNullException(agreement,"该合同不存在");
+        ValidateUtils.isNullException(agreement, "该合同不存在");
         if (!(AgreementStateEnum.DRAFT.getState().equals(agreement.getAgreementState()) || AgreementStateEnum.REVOKED.getState().equals(agreement.getAgreementState()))) {
             throw new BusinessException("该状态下的合同不允许修改");
         }
@@ -902,8 +905,8 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
     @Override
     public void agreementWatermarkFinish(Long id, long attachmentId) {
         this.update(new LambdaUpdateWrapper<Agreement>()
-                .set(Agreement::getWatermarkAttachmentId ,attachmentId)
-                .eq(Agreement::getId,id));
+                .set(Agreement::getWatermarkAttachmentId, attachmentId)
+                .eq(Agreement::getId, id));
     }
 
     @Override
@@ -917,14 +920,14 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
         String processId = variables.get("processId").toString();
         String businessId = variables.get("businessId").toString();
         Object flagObj = variables.get("completedFlag");
-        Integer agreementState =  AgreementStateEnum.IN_APPROVAL.getState();
+        Integer agreementState = AgreementStateEnum.IN_APPROVAL.getState();
         if (!ObjectUtils.isEmpty(flagObj) && ProcessStateEnum.COMPLETED.getDesc().equals(flagObj.toString())) {
             agreementState = AgreementStateEnum.APPROVE.getState();
         }
         super.update(new LambdaUpdateWrapper<Agreement>()
-                .set(Agreement::getWfProcessId,processId)
-                .set(Agreement::getAgreementState,agreementState)
-                .eq(Agreement::getId,businessId));
+                .set(Agreement::getWfProcessId, processId)
+                .set(Agreement::getAgreementState, agreementState)
+                .eq(Agreement::getId, businessId));
     }
 
     @Override
@@ -938,13 +941,13 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
     @Override
     public void revokeAgreement(Long id) {
         Agreement agreement = super.getById(id);
-        ValidateUtils.isNullException(agreement,"该合同不存在");
-        ValidateUtils.validateStatusNotEquals(AgreementStateEnum.IN_APPROVAL::equalsState,agreement.getAgreementState(),"该状态下的合同不允许撤回");
+        ValidateUtils.isNullException(agreement, "该合同不存在");
+        ValidateUtils.validateStatusNotEquals(AgreementStateEnum.IN_APPROVAL::equalsState, agreement.getAgreementState(), "该状态下的合同不允许撤回");
         // 撤回流程
-        Map<String,Object> paramMap = new HashMap<>();
+        Map<String, Object> paramMap = new HashMap<>();
         paramMap.put("businessId", agreement.getId());
         paramMap.put("processId", agreement.getWfProcessId());
-        processService.revokeProcess(ProcessKeyEnum.ZHAOCAI_AGREEMENT_SIGN.getIdentifying(),paramMap);
+        processService.revokeProcess(ProcessKeyEnum.ZHAOCAI_AGREEMENT_SIGN.getIdentifying(), paramMap);
     }
 
     @Override
@@ -959,9 +962,9 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
         List<MaterialsList> materialsLists = materialsListService.listMaterialsListByContractSplitIds(CollectionUtil.newArrayList(contractSplitId));
         BigDecimal procurementUpperLimitPrice = BigDecimal.ZERO;
         for (MaterialsList materialsList : materialsLists) {
-            procurementUpperLimitPrice = procurementUpperLimitPrice.add(AmountCalUtil.calTotalAmountInclTax(materialsList.getCount(),materialsList.getUnitPriceInclTax()));
+            procurementUpperLimitPrice = procurementUpperLimitPrice.add(AmountCalUtil.calTotalAmountInclTax(materialsList.getCount(), materialsList.getUnitPriceInclTax()));
         }
-        biddingInfoVO.setProcurementUpperLimitPrice(NumberUtil.round(procurementUpperLimitPrice,2));
+        biddingInfoVO.setProcurementUpperLimitPrice(NumberUtil.round(procurementUpperLimitPrice, 2));
 
 
         ContractPlanningSplit contractPlanningSplit = contractPlanningSplitService.getById(contractSplitId);
@@ -969,7 +972,7 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
         biddingInfoVO.setUsedTotalAmount(contractPlanningSplit.getTotalUsedAmount());
 
         // 剩余总价
-        biddingInfoVO.setSurplusTotalAmount(NumberUtil.subtract(contractPlanningSplit.getTotalPlanAmount(),contractPlanningSplit.getTotalUsedAmount(),2));
+        biddingInfoVO.setSurplusTotalAmount(NumberUtil.subtract(contractPlanningSplit.getTotalPlanAmount(), contractPlanningSplit.getTotalUsedAmount(), 2));
 
         // 获取招标供应商
         List<ProcurementSchemeBiddingVendorVO> biddingVendorList = biddingResultService.listBiddingVendorBySchemeId(schemeId);
@@ -979,22 +982,21 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
     }
 
 
-
     @Override
     public void pushAgreementToVendor(Long id) {
         Agreement agreement = this.getById(id);
-        ValidateUtils.validateStatusNotEquals(AgreementStateEnum.APPROVE::equalsState,agreement.getAgreementState(),"该状态下的合同不允许推送至供应商");
+        ValidateUtils.validateStatusNotEquals(AgreementStateEnum.APPROVE::equalsState, agreement.getAgreementState(), "该状态下的合同不允许推送至供应商");
 
         //获取agreement的AttachmentId，复制文件名和文件url到WatermarkAttachmentId
-        if (NumberUtil.isNotNullAndZero(agreement.getAttachmentId()) ) {
+        if (NumberUtil.isNotNullAndZero(agreement.getAttachmentId())) {
             Attachment attachment = attachmentService.getById(agreement.getAttachmentId());
-            Long WatermarkAttachmentId= attachmentService.addAttachment(new AttachmentRequestVO(attachment.getFileName(),attachment.getFileUrl()),AttachmentTypeEnum.AGREEMENT_ORIGINAL,id);
+            Long WatermarkAttachmentId = attachmentService.addAttachment(new AttachmentRequestVO(attachment.getFileName(), attachment.getFileUrl()), AttachmentTypeEnum.AGREEMENT_ORIGINAL, id);
 //            agreement.setWatermarkAttachmentId(WatermarkAttachmentId);
             if (NumberUtil.isNullOrZero(agreement.getWatermarkAttachmentId())) {
                 // 只更新 WatermarkAttachmentId
                 super.update(new LambdaUpdateWrapper<Agreement>()
-                        .set(Agreement::getWatermarkAttachmentId,WatermarkAttachmentId)
-                        .eq(Agreement::getId,id));
+                        .set(Agreement::getWatermarkAttachmentId, WatermarkAttachmentId)
+                        .eq(Agreement::getId, id));
             }
         } else {
             throw new BusinessException("合同附件不存在，请联系开发确认！");
@@ -1005,8 +1007,8 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
         }
 
         boolean updateResult = this.update(new LambdaUpdateWrapper<Agreement>()
-                .set(Agreement::getAgreementState,AgreementStateEnum.VENDOR_VERIFY.getState())
-                .eq(Agreement::getId,id));
+                .set(Agreement::getAgreementState, AgreementStateEnum.VENDOR_VERIFY.getState())
+                .eq(Agreement::getId, id));
 
         if (!updateResult) {
             throw new BusinessException("推送合同至供应商失败");
@@ -1015,12 +1017,13 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
 
     /**
      * 供应商确认合同
+     *
      * @param id
      */
     @Override
     public void vendorAffirmAgreement(Long id) {
         Agreement agreement = this.getById(id);
-        ValidateUtils.validateStatusNotEquals(AgreementStateEnum.VENDOR_VERIFY::equalsState,agreement.getAgreementState(),"该状态下的合同不允许确认");
+        ValidateUtils.validateStatusNotEquals(AgreementStateEnum.VENDOR_VERIFY::equalsState, agreement.getAgreementState(), "该状态下的合同不允许确认");
         Vendor vendor = vendorService.getByLoginUser(SecurityUtils.getUserId());
         if (!vendor.getId().equals(agreement.getVendorId())) {
             throw new BusinessException("该合同不属于贵司，您无权操作");
@@ -1031,25 +1034,25 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
         // 生成 PDF（联想文档）
 //        agreementFileZService.agreementConvertToPdf(id,null,agreement.getAgreementName(),attachment.getFileUrl());
         //永中文档中台转PDF、
-        Long PdfAttachmentId= agreement.getConvertPdfAttachmentId();
-        String watermarkText  = agreement.getPartyAName();
-        Long ConvertPdfAttachmentId = agreementFileZService.agreementConvertToPdfYOZO(id, PdfAttachmentId,watermarkText,attachment.getFileName(),attachment.getFileUrl());
+        Long PdfAttachmentId = agreement.getConvertPdfAttachmentId();
+        String watermarkText = agreement.getPartyAName();
+        Long ConvertPdfAttachmentId = agreementFileZService.agreementConvertToPdfYOZO(id, PdfAttachmentId, watermarkText, attachment.getFileName(), attachment.getFileUrl());
         //更新保存pdf文件URl后的附件id（ConvertPdfAttachmentId）
-        coverToPdfFinish(id,ConvertPdfAttachmentId);
+        coverToPdfFinish(id, ConvertPdfAttachmentId);
     }
 
     @Override
     public void setConvertPdfFile(Long id, long attachmentId) {
         this.update(new LambdaUpdateWrapper<Agreement>()
-                .set(Agreement::getConvertPdfAttachmentId,attachmentId)
-                .eq(Agreement::getId,id));
+                .set(Agreement::getConvertPdfAttachmentId, attachmentId)
+                .eq(Agreement::getId, id));
     }
 
     @Override
     public void coverToPdfFinish(Long id, long attachmentId) {
         super.update(new LambdaUpdateWrapper<Agreement>()
                 .set(Agreement::getAgreementState, AgreementStateEnum.PUSH_SIGNATURE_PLATFORM.getState())
-                .set(Agreement::getConvertPdfAttachmentId,attachmentId)
+                .set(Agreement::getConvertPdfAttachmentId, attachmentId)
                 .eq(Agreement::getId, id));
     }
 
@@ -1063,14 +1066,14 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
     @Override
     public void pushAgreementToSignPlatform(PushAgreementToSignVO pushAgreementToSign) {
         Agreement agreement = this.getById(pushAgreementToSign.getId());
-        ValidateUtils.validateStatusNotEquals(AgreementStateEnum.PUSH_SIGNATURE_PLATFORM::equalsState,agreement.getAgreementState(),"该状态下的合同不允许推送至电子签章平台");
+        ValidateUtils.validateStatusNotEquals(AgreementStateEnum.PUSH_SIGNATURE_PLATFORM::equalsState, agreement.getAgreementState(), "该状态下的合同不允许推送至电子签章平台");
         if (NumberUtil.isNullOrZero(agreement.getConvertPdfAttachmentId())) {
             throw new ParamValidateException("该合同签订合同附件还没有生成，请联系开发确认");
         }
         // 获取合同附件
         Attachment attachment = attachmentService.getById(agreement.getConvertPdfAttachmentId());
         InputStream inputStream = null;
-        try{
+        try {
             inputStream = sysFileService.getFileByFileUrl(attachment.getFileUrl());
 
             // 获取甲方签订人
@@ -1121,7 +1124,7 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
 
             // 构建请求命令
             CreateAgreementDocumentCommandRequest commandRequest = new CreateAgreementDocumentCommandRequestBuilder()
-                    .builder("tb_agreement",agreement.getId(),sysUser.getNickName(),sysUser.getUserName())
+                    .builder("tb_agreement", agreement.getId(), sysUser.getNickName(), sysUser.getUserName())
                     .agreementName(agreement.getAgreementName())
                     .agreementCode(agreement.getAgreementCode())
                     .agreementFileType(FileUtil.getSuffix(attachment.getFileName()))
@@ -1132,12 +1135,12 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
                     .signatureStamperList(signatureStamperList)
                     .build();
 
-            SignatureCommandFactory.getInstance().executeSignCommand(new CreateAgreementDocumentCommand(commandRequest),null);
+            SignatureCommandFactory.getInstance().executeSignCommand(new CreateAgreementDocumentCommand(commandRequest), null);
 
             this.update(new LambdaUpdateWrapper<Agreement>()
-                    .set(Agreement::getSignatureUserId,pushAgreementToSign.getPartyAUserId())
-                    .set(Agreement::getAgreementState,AgreementStateEnum.PARTY_B_TO_SIGN.getState())
-                    .eq(Agreement::getId,pushAgreementToSign.getId()));
+                    .set(Agreement::getSignatureUserId, pushAgreementToSign.getPartyAUserId())
+                    .set(Agreement::getAgreementState, AgreementStateEnum.PARTY_B_TO_SIGN.getState())
+                    .eq(Agreement::getId, pushAgreementToSign.getId()));
         } catch (Exception e) {
             throw e;
         } finally {
@@ -1149,7 +1152,7 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
     @Override
     public String vendorSignAgreement(Long id) {
         Agreement agreement = this.getById(id);
-        ValidateUtils.validateStatusNotEquals(AgreementStateEnum.PARTY_B_TO_SIGN::equalsState,agreement.getAgreementState(),"该状态的合同不允许您签署，请确认后重新操作");
+        ValidateUtils.validateStatusNotEquals(AgreementStateEnum.PARTY_B_TO_SIGN::equalsState, agreement.getAgreementState(), "该状态的合同不允许您签署，请确认后重新操作");
 
         SysUser sysUser = systemUserService.getLoginUser();
         Vendor vendor = vendorService.getByLoginUser(SecurityUtils.getUserId());
@@ -1168,12 +1171,12 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
             throw new ParamValidateException("您还未进行企业认证授权，请先完成企业认证授权");
         }
 
-        GetSignUrlCommandRequest commandRequest = new GetSignUrlCommandRequestBuilder().builder("tb_agreement",id,sysUser.getNickName(),sysUser.getUserName())
+        GetSignUrlCommandRequest commandRequest = new GetSignUrlCommandRequestBuilder().builder("tb_agreement", id, sysUser.getNickName(), sysUser.getUserName())
                 .signatureName(vendor.getEnterpriseName())
                 .signatureType(SignatureTypeEnum.PARTY_B)
                 .build();
 
-        SignatureResponse signatureResponse = SignatureCommandFactory.getInstance().executeSignCommand(new GetSignUrlCommand(commandRequest),null);
+        SignatureResponse signatureResponse = SignatureCommandFactory.getInstance().executeSignCommand(new GetSignUrlCommand(commandRequest), null);
         ContractSignurlV3Response response = (ContractSignurlV3Response) signatureResponse.getResponseResult();
         return response.getSignUrl();
     }
@@ -1181,18 +1184,18 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
     @Override
     public String signAgreement(Long id) {
         Agreement agreement = this.getById(id);
-        ValidateUtils.validateStatusNotEquals(AgreementStateEnum.PARTY_A_TO_SIGN::equalsState,agreement.getAgreementState(),"该状态的合同不允许您签署，请确认后重新操作");
+        ValidateUtils.validateStatusNotEquals(AgreementStateEnum.PARTY_A_TO_SIGN::equalsState, agreement.getAgreementState(), "该状态的合同不允许您签署，请确认后重新操作");
         if (!agreement.getSignatureUserId().equals(SecurityUtils.getUserId())) {
             throw new ParamValidateException("您不是该合同的签署人，无权签署该合同");
         }
 
         SysUser sysUser = systemUserService.getLoginUser();
-        GetSignUrlCommandRequest commandRequest = new GetSignUrlCommandRequestBuilder().builder("tb_agreement",id,sysUser.getNickName(),sysUser.getUserName())
+        GetSignUrlCommandRequest commandRequest = new GetSignUrlCommandRequestBuilder().builder("tb_agreement", id, sysUser.getNickName(), sysUser.getUserName())
                 .signatureName(agreement.getPartyAName())
                 .signatureType(SignatureTypeEnum.PARTY_A)
                 .build();
 
-        SignatureResponse signatureResponse = SignatureCommandFactory.getInstance().executeSignCommand(new GetSignUrlCommand(commandRequest),null);
+        SignatureResponse signatureResponse = SignatureCommandFactory.getInstance().executeSignCommand(new GetSignUrlCommand(commandRequest), null);
         ContractSignurlV3Response response = (ContractSignurlV3Response) signatureResponse.getResponseResult();
         return response.getSignUrl();
     }
@@ -1200,21 +1203,21 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
     @Override
     public void cancelledSignAgreement(CancelledSignAgreementRequestVO requestVO) {
         Agreement agreement = this.getById(requestVO.getId());
-        ValidateUtils.validateStatusNotEquals(AgreementStateEnum.SIGN_SUCCESS::equalsState,agreement.getAgreementState(),"未完成签署的合同不允许作废");
+        ValidateUtils.validateStatusNotEquals(AgreementStateEnum.SIGN_SUCCESS::equalsState, agreement.getAgreementState(), "未完成签署的合同不允许作废");
         if (!agreement.getSignatureUserId().equals(SecurityUtils.getUserId())) {
             throw new ParamValidateException("该合同不是您签署的，您无权作废");
         }
 
         SysUser sysUser = systemUserService.getLoginUser();
-        CancelAgreementCommandRequest commandRequest = new CancelAgreementCommandRequestBuilder().builder("tb_agreement",agreement.getId(),sysUser.getNickName(),sysUser.getUserName())
+        CancelAgreementCommandRequest commandRequest = new CancelAgreementCommandRequestBuilder().builder("tb_agreement", agreement.getId(), sysUser.getNickName(), sysUser.getUserName())
                 .cancelReason(requestVO.getCancelledReason())
                 .build();
-        SignatureResponse signatureResponse = SignatureCommandFactory.getInstance().executeSignCommand(new CancelAgreementCommand(commandRequest),null);
+        SignatureResponse signatureResponse = SignatureCommandFactory.getInstance().executeSignCommand(new CancelAgreementCommand(commandRequest), null);
         if (signatureResponse.isSuccess()) {
             this.update(new LambdaUpdateWrapper<Agreement>()
-                    .set(Agreement::getAgreementState,AgreementStateEnum.CANCEL_SIGN.getState())
-                    .set(Agreement::getCancelledReason,requestVO.getCancelledReason())
-                    .eq(Agreement::getId,requestVO.getId()));
+                    .set(Agreement::getAgreementState, AgreementStateEnum.CANCEL_SIGN.getState())
+                    .set(Agreement::getCancelledReason, requestVO.getCancelledReason())
+                    .eq(Agreement::getId, requestVO.getId()));
         } else {
             throw new BusinessException(signatureResponse.getMessage());
         }
@@ -1222,13 +1225,14 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
 
     /**
      * 免审登录（易料合同）
+     *
      * @param id
      * @return
      */
     @Override
     public boolean avoidSubmitByMarket(Long id) {
         Agreement agreement = super.getById(id);
-        ValidateUtils.isNullException(agreement,"该合同不存在");
+        ValidateUtils.isNullException(agreement, "该合同不存在");
         return super.update(new LambdaUpdateWrapper<Agreement>()
                 .set(Agreement::getAgreementState, AgreementStateEnum.APPROVE.getState())
                 .eq(BaseEntity::getId, id));
@@ -1236,6 +1240,7 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
 
     /**
      * 审批驳回到发起人
+     *
      * @param variables
      */
     @Override
@@ -1248,6 +1253,7 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
 
     /**
      * 审批驳回
+     *
      * @param variables
      */
     @Override
@@ -1258,8 +1264,10 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
                 .eq(Agreement::getId, businessId));
 
     }
+
     /**
      * 审批撤销
+     *
      * @param variables
      */
     @Override
@@ -1284,8 +1292,8 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
             PropertyListRequestDTO.addPropertyToList(propertyList, "parentProjectCode", minProjectVO.getParentCode());/* 父项目编码(项目部) */
             requestDTO.setPropertyList(propertyList);
         }
-        PropertyListRequestDTO.addPropertyToList(propertyList,"contractType", ProcurementPlanTypeEnum.getProcessType(agreement.getExpenditureBusinessType()));/* 合同类型 */
-        PropertyListRequestDTO.addPropertyToList(propertyList,"contractMoney", agreement.getTotalAmountIncTax());/* 合同签订金额(含税) */
+        PropertyListRequestDTO.addPropertyToList(propertyList, "contractType", ProcurementPlanTypeEnum.getProcessType(agreement.getExpenditureBusinessType()));/* 合同类型 */
+        PropertyListRequestDTO.addPropertyToList(propertyList, "contractMoney", agreement.getTotalAmountIncTax());/* 合同签订金额(含税) */
         requestDTO.setPropertyList(propertyList);
         return processService.initialize(requestDTO);
     }
@@ -1304,8 +1312,8 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
             PropertyListRequestDTO.addPropertyToList(propertyList, "parentProjectCode", minProjectVO.getParentCode());/* 父项目编码(项目部) */
             requestDTO.setPropertyList(propertyList);
         }
-        PropertyListRequestDTO.addPropertyToList(propertyList,"contractType", ProcurementPlanTypeEnum.getProcessType(agreement.getExpenditureBusinessType()));/* 合同类型 */
-        PropertyListRequestDTO.addPropertyToList(propertyList,"contractMoney", agreement.getTotalAmountIncTax());/* 合同签订金额(含税) */
+        PropertyListRequestDTO.addPropertyToList(propertyList, "contractType", ProcurementPlanTypeEnum.getProcessType(agreement.getExpenditureBusinessType()));/* 合同类型 */
+        PropertyListRequestDTO.addPropertyToList(propertyList, "contractMoney", agreement.getTotalAmountIncTax());/* 合同签订金额(含税) */
         requestDTO.setPropertyList(propertyList);
         return processService.listProcessLog(requestDTO);
     }
@@ -1325,7 +1333,7 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
         /** 合同类型（contractType），价格(contractMoney)，项目部（parentProjectCode），责任单位（responsibilityDeptId），公司（companyId） */
         variables.put("contractType", ProcurementPlanTypeEnum.getProcessType(agreement.getExpenditureBusinessType()));/* 合同类型 */
         variables.put("contractMoney", agreement.getTotalAmountIncTax());/* 合同签订金额(含税) */
-        return processService.auditProcessInstance(ProcessKeyEnum.ZHAOCAI_AGREEMENT_SIGN.getIdentifying(),variables);
+        return processService.auditProcessInstance(ProcessKeyEnum.ZHAOCAI_AGREEMENT_SIGN.getIdentifying(), variables);
     }
 
     @Override
@@ -1342,14 +1350,15 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
             PropertyListRequestDTO.addPropertyToList(propertyList, "parentProjectCode", minProjectVO.getParentCode());/* 父项目编码(项目部) */
             requestDTO.setPropertyList(propertyList);
         }
-        PropertyListRequestDTO.addPropertyToList(propertyList,"contractType", ProcurementPlanTypeEnum.getProcessType(agreement.getExpenditureBusinessType()));/* 合同类型 */
-        PropertyListRequestDTO.addPropertyToList(propertyList,"contractMoney", agreement.getTotalAmountIncTax());/* 合同签订金额(含税) */
+        PropertyListRequestDTO.addPropertyToList(propertyList, "contractType", ProcurementPlanTypeEnum.getProcessType(agreement.getExpenditureBusinessType()));/* 合同类型 */
+        PropertyListRequestDTO.addPropertyToList(propertyList, "contractMoney", agreement.getTotalAmountIncTax());/* 合同签订金额(含税) */
         requestDTO.setPropertyList(propertyList);
         return processService.loadTaskDef(requestDTO);
     }
 
     /**
      * 获取机构名称
+     *
      * @param thridDeptId
      * @return
      */
@@ -1365,14 +1374,15 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
 
     /**
      * 获取合同行政区域
+     *
      * @param prjAddr
      * @return
      */
     private String getAgreementPerformDistrict(String prjAddr) {
         if (StringUtils.isNotBlank(prjAddr)) {
-            List<String> addrList = JSONArray.parseArray(prjAddr,String.class);
+            List<String> addrList = JSONArray.parseArray(prjAddr, String.class);
             StringBuilder agreementPerformDistrict = new StringBuilder();
-            for(String code : addrList) {
+            for (String code : addrList) {
                 AreaDivision areaDivision = areaDivisionService.getByCode(code);
                 if (areaDivision != null) {
                     agreementPerformDistrict.append(areaDivision.getAreaName()).append("/");
@@ -1380,20 +1390,21 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
             }
 
             return StringUtils.isNotBlank(agreementPerformDistrict.toString()) ?
-                    agreementPerformDistrict.substring(0,agreementPerformDistrict.length() - 1) : "";
+                    agreementPerformDistrict.substring(0, agreementPerformDistrict.length() - 1) : "";
         }
         return null;
     }
 
     /**
      * 获取合同编号
+     *
      * @param expenditureBusinessType
      * @param belongOrganizationId
      * @return
      */
-    private String getAgreementCode(Integer expenditureBusinessType,String belongOrganizationId) {
+    private String getAgreementCode(Integer expenditureBusinessType, String belongOrganizationId) {
         String numberCode = businessCodeService.getBusinessCode(BusinessCodeEnum.AGREEMENT);
-        belongOrganizationId = belongOrganizationId.substring(0,4);
+        belongOrganizationId = belongOrganizationId.substring(0, 4);
         String businessType = ProcurementPlanTypeConver.converFromProcurementPlanType(expenditureBusinessType);
 
         return "WZ" + belongOrganizationId + businessType + DateUtils.dateTimeNow("yyyyMM") + numberCode;
@@ -1403,6 +1414,7 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
      * 处理新增合同时的附件<br>
      * 1. 招标信息无合同附件时->为合同选定的合同模板新增一个附件; 有合同附件时->复制合同附件新增一个附件
      * 2. 新增附件时，修改文件名和文件URL
+     *
      * @param schemeId
      * @return
      */
@@ -1413,26 +1425,26 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
         AttachmentRequestVO attachmentRequestVO;
 
         //有合同附件ID使用合同附件ID，无合同附件ID时使用合同模板ID
-        if(contractAttachmentId != null){
+        if (contractAttachmentId != null) {
             //查询合同附件信息
             AttachmentVO agreementContractAttachment = procurementSchemeService.getAgreementContractAttachmentInfo(schemeId);
-            ValidateUtils.isNullException(agreementContractAttachment,"该合同没有保存合同附件信息，请确认");
+            ValidateUtils.isNullException(agreementContractAttachment, "该合同没有保存合同附件信息，请确认");
             // 复制采购方案的合同附件信息，新增一条附件记录
-            attachmentRequestVO = new AttachmentRequestVO(agreementContractAttachment.getFileName(),agreementContractAttachment.getFileUrl());
+            attachmentRequestVO = new AttachmentRequestVO(agreementContractAttachment.getFileName(), agreementContractAttachment.getFileUrl());
 
-        }else {
+        } else {
             //查询合同模板信息
             AttachmentVO agreementAttachment = procurementSchemeService.getAgreementTemplateAttachmentInfo(schemeId);
-            ValidateUtils.isNullException(agreementAttachment,"该合同没有选择模板，请确认");
+            ValidateUtils.isNullException(agreementAttachment, "该合同没有选择模板，请确认");
             // 复制采购方案的合同模板，新增附件
-            attachmentRequestVO = new AttachmentRequestVO(agreementAttachment.getFileName(),agreementAttachment.getFileUrl());
+            attachmentRequestVO = new AttachmentRequestVO(agreementAttachment.getFileName(), agreementAttachment.getFileUrl());
         }
-        long attachmentId = attachmentService.addAttachment(attachmentRequestVO,AttachmentTypeEnum.AGREEMENT_ORIGINAL,null);
+        long attachmentId = attachmentService.addAttachment(attachmentRequestVO, AttachmentTypeEnum.AGREEMENT_ORIGINAL, null);
         //新增合同签订复制采购方案的合同附件信息时，需要修改合同附件的文件名和文件URL
         try {
             attachmentService.ModifyFileNameAndFileURL(attachmentId);
         } catch (IOException e) {
-            throw new RuntimeException("新增合同时，修改文件名和文件URL失败" +e.getMessage(), e);
+            throw new RuntimeException("新增合同时，修改文件名和文件URL失败" + e.getMessage(), e);
         }
 
         // 新增任务(联想中台)
@@ -1443,6 +1455,7 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
 
     /**
      * 新增合同
+     *
      * @param requestVO
      * @return
      */
@@ -1454,13 +1467,13 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
             ProcurementScheme procurementScheme = procurementSchemeService.getById(requestVO.getAgreement().getSchemeId());
             ValidateUtils.isNullException(procurementScheme, "该合同对应的采购计划为空");
             procurementPlanType = procurementScheme.getProcurementPlanType();
-            agreement.setAgreementCode(getAgreementCode(procurementPlanType,agreement.getBelongOrganizationId()));
+            agreement.setAgreementCode(getAgreementCode(procurementPlanType, agreement.getBelongOrganizationId()));
         } else {
             MarketMaterialContract contract = marketMaterialContractService.getById(requestVO.getAgreement().getMarketMaterialContractId());
             ValidateUtils.isNullException(contract, "该合同对应的易料采购合同为空");
             procurementPlanType = Integer.valueOf(contract.getExpenditureBusinessType());
             //agreement.setAgreementCode(getAgreementCodeByMarket(procurementPlanType,agreement.getBelongOrganizationId()));
-            agreement.setAgreementCode(getAgreementCode(procurementPlanType,agreement.getBelongOrganizationId()));
+            agreement.setAgreementCode(getAgreementCode(procurementPlanType, agreement.getBelongOrganizationId()));
             agreement.setProcurementSchemeCode(getProcurementSchemeCodeByMarket());
         }
         // 合同基本信息
@@ -1470,10 +1483,10 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
          * 处理合同清单数据
          */
         if (StringUtils.isEmpty(requestVO.getAgreement().getMarketMaterialContractId())) {
-            agreementMaterialsInfo = handleAgreementMaterials(requestVO.getAgreementMaterialsLists(),agreement.getSchemeId(),agreement.getContractSplitId(),
-                    agreement.getVendorId(),agreement.getId());
+            agreementMaterialsInfo = handleAgreementMaterials(requestVO.getAgreementMaterialsLists(), agreement.getSchemeId(), agreement.getContractSplitId(),
+                    agreement.getVendorId(), agreement.getId());
         } else {
-            agreementMaterialsInfo = handleAgreementMaterialsByMarket(requestVO.getAgreementMaterialsLists(),agreement.getMarketMaterialContractId());
+            agreementMaterialsInfo = handleAgreementMaterialsByMarket(requestVO.getAgreementMaterialsLists(), agreement.getMarketMaterialContractId());
         }
 
         // 合同签订总金额
@@ -1487,11 +1500,11 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
         //agreement.setReporterName(SecurityUtils.getLoginUser().getSysUser().getNickName());
         agreement.setExpenditureBusinessType(procurementPlanType);
         if (agreement.getEntryDate() != null && agreement.getFinishDate() != null) {
-            long days = DateUtil.between(agreement.getEntryDate(),agreement.getFinishDate(), DateUnit.DAY);
+            long days = DateUtil.between(agreement.getEntryDate(), agreement.getFinishDate(), DateUnit.DAY);
             agreement.setDuration(days + "");
         }
         if (agreement.getContractStartDate() != null && agreement.getContractEndDate() != null) {
-            long days = DateUtil.between(agreement.getContractStartDate(),agreement.getContractEndDate(), DateUnit.DAY);
+            long days = DateUtil.between(agreement.getContractStartDate(), agreement.getContractEndDate(), DateUnit.DAY);
             agreement.setDuration(days + "");
         }
 
@@ -1501,56 +1514,56 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
 
         //复制合同地attachmentId附件到-》合同的labelAttachmentID附件和WatermarkAttachmentId；
         Attachment attachment = attachmentService.getById(agreement.getAttachmentId());
-        AttachmentRequestVO attachmentRequestVO = new AttachmentRequestVO(attachment.getFileName(),attachment.getFileUrl());
-        Long labelAttachmentId = attachmentService.addAttachment(attachmentRequestVO,AttachmentTypeEnum.AGREEMENT_ORIGINAL,agreement.getId());
-        Long WatermarkAttachmentId = attachmentService.addAttachment(attachmentRequestVO,AttachmentTypeEnum.AGREEMENT_ORIGINAL,agreement.getId());
+        AttachmentRequestVO attachmentRequestVO = new AttachmentRequestVO(attachment.getFileName(), attachment.getFileUrl());
+        Long labelAttachmentId = attachmentService.addAttachment(attachmentRequestVO, AttachmentTypeEnum.AGREEMENT_ORIGINAL, agreement.getId());
+        Long WatermarkAttachmentId = attachmentService.addAttachment(attachmentRequestVO, AttachmentTypeEnum.AGREEMENT_ORIGINAL, agreement.getId());
         agreement.setWatermarkAttachmentId(WatermarkAttachmentId);
         agreement.setLabelAttachmentId(labelAttachmentId);
 
         super.save(agreement);
 
         // 合同款项信息
-        agreementPaymentItemService.saveAgreementPaymentItem(requestVO.getAgreementPaymentItem(),agreement.getId());
+        agreementPaymentItemService.saveAgreementPaymentItem(requestVO.getAgreementPaymentItem(), agreement.getId());
 
         // 结算与付款节点信息
-        agreementPaymentListService.saveAgreementPaymentList(requestVO.getAgreementPaymentLists(),agreement.getId());
+        agreementPaymentListService.saveAgreementPaymentList(requestVO.getAgreementPaymentLists(), agreement.getId());
 
         // 合同签约方信息
-        agreementPartyInfoService.saveAgreementPartyInfo(requestVO.getAgreementPartyInfoLists(),agreement.getId());
+        agreementPartyInfoService.saveAgreementPartyInfo(requestVO.getAgreementPartyInfoLists(), agreement.getId());
 
         // 合同清单
-        agreementMaterialsListService.saveAgreementMaterialsList(requestVO.getAgreementMaterialsLists(),agreement.getId());
+        agreementMaterialsListService.saveAgreementMaterialsList(requestVO.getAgreementMaterialsLists(), agreement.getId());
 
         // 合同保证金
-        agreementDepositService.saveAgreementDeposit(requestVO.getAgreementDeposits(),agreement.getId());
+        agreementDepositService.saveAgreementDeposit(requestVO.getAgreementDeposits(), agreement.getId());
 
         // 合同-计日工
-        agreementDailyWageService.saveAgreementDailyWage(requestVO.getAgreementDailyWageList(),agreement.getId());
+        agreementDailyWageService.saveAgreementDailyWage(requestVO.getAgreementDailyWageList(), agreement.getId());
 
         // 合同-机械台班
-        agreementMachineShiftService.saveAgreementMachineShift(requestVO.getAgreementMachineShifts(),agreement.getId());
+        agreementMachineShiftService.saveAgreementMachineShift(requestVO.getAgreementMachineShifts(), agreement.getId());
 
         // 合同-甲供设备清单
-        agreementEquipmentSupplyService.saveAgreementEquipmentSupply(requestVO.getAgreementEquipmentSupplies(),agreement.getId());
+        agreementEquipmentSupplyService.saveAgreementEquipmentSupply(requestVO.getAgreementEquipmentSupplies(), agreement.getId());
 
         // 合同-甲供材料清单对象
-        agreementMaterialSupplyService.saveAgreementMaterialSupply(requestVO.getAgreementMaterialSupplies(),agreement.getId());
+        agreementMaterialSupplyService.saveAgreementMaterialSupply(requestVO.getAgreementMaterialSupplies(), agreement.getId());
 
         // 保存附件相关信息
-        attachmentService.updateBusiness(agreement.getAttachmentId(),AttachmentTypeEnum.AGREEMENT_ORIGINAL,agreement.getId());
+        attachmentService.updateBusiness(agreement.getAttachmentId(), AttachmentTypeEnum.AGREEMENT_ORIGINAL, agreement.getId());
 
         // 保存合同附件任务
-        fileZTaskService.setFileZBusinessId(agreement.getAttachmentId(),FileZTaskBusinessEnum.AGREEMENT_CREATE,agreement.getId(),requestVO.getTemplateEditFlag());
+        fileZTaskService.setFileZBusinessId(agreement.getAttachmentId(), FileZTaskBusinessEnum.AGREEMENT_CREATE, agreement.getId(), requestVO.getTemplateEditFlag());
 
         // 占用合同数据量
         materialsListService.updateMaterialsListUsedCount(agreementMaterialsInfo.getMaterialsLists());
 
         // 判断合约拆分是否已使用完毕
         if (agreement.getEntryDate() != null && agreement.getFinishDate() != null) {
-            if(StringUtils.isEmpty(requestVO.getAgreement().getMarketMaterialContractId())){
-                contractPlanningSplitService.updateContractPlanningSplitUseAdd(agreement.getContractSplitId(),agreementMaterialsInfo.getMaterialsLists(),requestVO.getAgreementMaterialsLists(),null);
-            }else {
-                contractPlanningSplitService.updateContractPlanningSplitUseAddByMarket(agreementMaterialsInfo.getMaterialsLists(),requestVO.getAgreementMaterialsLists(),null);
+            if (StringUtils.isEmpty(requestVO.getAgreement().getMarketMaterialContractId())) {
+                contractPlanningSplitService.updateContractPlanningSplitUseAdd(agreement.getContractSplitId(), agreementMaterialsInfo.getMaterialsLists(), requestVO.getAgreementMaterialsLists(), null);
+            } else {
+                contractPlanningSplitService.updateContractPlanningSplitUseAddByMarket(agreementMaterialsInfo.getMaterialsLists(), requestVO.getAgreementMaterialsLists(), null);
             }
         }
 
@@ -1559,7 +1572,7 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
 
         // 保存合同其他附件信息
         if (CollectionUtil.isNotEmpty(requestVO.getAgreementAttachmentList())) {
-            requestVO.getAgreementAttachmentList().forEach(i->{
+            requestVO.getAgreementAttachmentList().forEach(i -> {
                 i.setBusinessId(agreement.getId());
                 i.setBusinessType(AttachmentTypeEnum.AGREEMENT_OTHER.getType());
             });
@@ -1575,12 +1588,13 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
 
     /**
      * 获取合同招标编号(易料合同)
+     *
      * @return
      */
     private String getProcurementSchemeCodeByMarket() {
         List<Agreement> list = super.list(new LambdaQueryWrapper<Agreement>().isNotNull(Agreement::getMarketMaterialContractId).orderByDesc(BaseEntity::getCreateTime));
         String numberCode = null;
-        if(CollectionUtil.isEmpty(list)){
+        if (CollectionUtil.isEmpty(list)) {
             numberCode = "000000001";
         } else {
             String code = list.get(0).getProcurementSchemeCode();
@@ -1592,18 +1606,19 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
                 numberCode = "000000001";
             }
         }
-        return "YLCG"  + DateUtils.dateTimeNow("yyyy") + numberCode;
+        return "YLCG" + DateUtils.dateTimeNow("yyyy") + numberCode;
     }
 
     /**
      * 获取合同编号(易料合同)
+     *
      * @param expenditureBusinessType
      * @param belongOrganizationId
      * @return
      */
     private String getAgreementCodeByMarket(Integer expenditureBusinessType, String belongOrganizationId) {
         String numberCode = businessCodeService.getBusinessCode(BusinessCodeEnum.AGREEMENT);
-        belongOrganizationId = belongOrganizationId.substring(0,4);
+        belongOrganizationId = belongOrganizationId.substring(0, 4);
 //        String businessType = ProcurementPlanTypeConver.converFromProcurementPlanType(expenditureBusinessType);
 
         return "WZ" + belongOrganizationId + "Y" + DateUtils.dateTimeNow("yyyyMM") + numberCode;
@@ -1611,21 +1626,22 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
 
     /**
      * 处理合同清单数据
+     *
      * @param agreementMaterialsLists
      * @param schemeId
      * @param contractSplitId
      * @param vendorId
      */
-    private AgreementMaterialsInfoDTO handleAgreementMaterials(List<AgreementMaterialsList> agreementMaterialsLists, Long schemeId, Long contractSplitId, Long vendorId,Long agreementId) {
+    private AgreementMaterialsInfoDTO handleAgreementMaterials(List<AgreementMaterialsList> agreementMaterialsLists, Long schemeId, Long contractSplitId, Long vendorId, Long agreementId) {
         // 获取物料清单
         List<MaterialsList> materialsLists = materialsListService.listMaterialsListByContractSplitIds(CollectionUtil.newArrayList(contractSplitId));
-        Map<Long,MaterialsList> materialsListMap = materialsLists.stream()
-                .collect(Collectors.toMap(MaterialsList::getId,val -> val));
+        Map<Long, MaterialsList> materialsListMap = materialsLists.stream()
+                .collect(Collectors.toMap(MaterialsList::getId, val -> val));
 
         // 获取供应商的投标物料清单
-        List<BiddingListQuotation> biddingListQuotations = biddingListQuotationService.listVendorBiddingListQuotation(schemeId,contractSplitId,vendorId);
-        Map<Long,BiddingListQuotation> listQuotationMap = biddingListQuotations.stream()
-                .collect(Collectors.toMap(BiddingListQuotation::getMaterialsId,val -> val));
+        List<BiddingListQuotation> biddingListQuotations = biddingListQuotationService.listVendorBiddingListQuotation(schemeId, contractSplitId, vendorId);
+        Map<Long, BiddingListQuotation> listQuotationMap = biddingListQuotations.stream()
+                .collect(Collectors.toMap(BiddingListQuotation::getMaterialsId, val -> val));
 
         // 处理合同清单
         BiddingListQuotation biddingListQuotation;
@@ -1657,19 +1673,19 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
             }
 
             // 计算签订合同数据
-            agreementMaterialsList.setSignUnitPriceExclTax(AmountCalUtil.calUnitPriceExclTax(agreementMaterialsList.getSignUnitPriceInclTax(),agreementMaterialsList.getSignTaxRate()));
-            agreementMaterialsList.setSignAmountInclTax(AmountCalUtil.calTotalAmountInclTax(agreementMaterialsList.getSignCount(),agreementMaterialsList.getSignUnitPriceInclTax()));
-            agreementMaterialsList.setSignAmountExclTax(AmountCalUtil.calTotalAmountExclTax(agreementMaterialsList.getSignAmountInclTax(),agreementMaterialsList.getSignTaxRate()));
+            agreementMaterialsList.setSignUnitPriceExclTax(AmountCalUtil.calUnitPriceExclTax(agreementMaterialsList.getSignUnitPriceInclTax(), agreementMaterialsList.getSignTaxRate()));
+            agreementMaterialsList.setSignAmountInclTax(AmountCalUtil.calTotalAmountInclTax(agreementMaterialsList.getSignCount(), agreementMaterialsList.getSignUnitPriceInclTax()));
+            agreementMaterialsList.setSignAmountExclTax(AmountCalUtil.calTotalAmountExclTax(agreementMaterialsList.getSignAmountInclTax(), agreementMaterialsList.getSignTaxRate()));
 
             // 计算合同总金额
-            totalAmountInclTax = NumberUtil.add(totalAmountInclTax,agreementMaterialsList.getSignAmountInclTax());
-            totalAmountExclTax = NumberUtil.add(totalAmountExclTax,agreementMaterialsList.getSignAmountExclTax());
+            totalAmountInclTax = NumberUtil.add(totalAmountInclTax, agreementMaterialsList.getSignAmountInclTax());
+            totalAmountExclTax = NumberUtil.add(totalAmountExclTax, agreementMaterialsList.getSignAmountExclTax());
 
             // 设置物料的使用数量
-            materialsList.setUsedCount(NumberUtil.add(materialsList.getUsedCount(),agreementMaterialsList.getSignCount()));
+            materialsList.setUsedCount(NumberUtil.add(materialsList.getUsedCount(), agreementMaterialsList.getSignCount()));
 
             /* 设置合同清单行的价格类型 为采购计划时保存的价格类型 */
-            if(materialsList.getPriceType() != null){
+            if (materialsList.getPriceType() != null) {
                 agreementMaterialsList.setPaymentType(materialsList.getPriceType().toString());
             }
         }
@@ -1696,19 +1712,20 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
 
     /**
      * 处理合同清单数据(易料合同)
+     *
      * @param agreementMaterialsLists
      * @param contractId
      */
     private AgreementMaterialsInfoDTO handleAgreementMaterialsByMarket(List<AgreementMaterialsList> agreementMaterialsLists, String contractId) {
         // 获取物料清单(采购计划清单)
         List<Long> materialsListIds = agreementMaterialsLists.stream().map(AgreementMaterialsList::getMaterialsListId).collect(Collectors.toList());
-        List<MaterialsList> materialsLists = materialsListService.list(new LambdaQueryWrapper<MaterialsList>().in(BaseEntity::getId,materialsListIds));
-        Map<Long,MaterialsList> materialsListMap = materialsLists.stream()
-                .collect(Collectors.toMap(MaterialsList::getId,val -> val));
+        List<MaterialsList> materialsLists = materialsListService.list(new LambdaQueryWrapper<MaterialsList>().in(BaseEntity::getId, materialsListIds));
+        Map<Long, MaterialsList> materialsListMap = materialsLists.stream()
+                .collect(Collectors.toMap(MaterialsList::getId, val -> val));
         // 获取上一次合同清单
-        List<AgreementMaterialsList> agreementmaterialsOldLists = agreementMaterialsListService.list(new LambdaQueryWrapper<AgreementMaterialsList>().in(AgreementMaterialsList::getMaterialsListId,materialsListIds));
-        Map<Long,AgreementMaterialsList> agreementmaterialsOldMap = agreementmaterialsOldLists.stream()
-                .collect(Collectors.toMap(AgreementMaterialsList::getMaterialsListId,val -> val));
+        List<AgreementMaterialsList> agreementmaterialsOldLists = agreementMaterialsListService.list(new LambdaQueryWrapper<AgreementMaterialsList>().in(AgreementMaterialsList::getMaterialsListId, materialsListIds));
+        Map<Long, AgreementMaterialsList> agreementmaterialsOldMap = agreementmaterialsOldLists.stream()
+                .collect(Collectors.toMap(AgreementMaterialsList::getMaterialsListId, val -> val));
 
         // 获取供应商的投标物料清单
 //        List<BiddingListQuotation> biddingListQuotations = biddingListQuotationService.listVendorBiddingListQuotation(schemeId,contractSplitId,vendorId);
@@ -1742,19 +1759,19 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
 //            }
 
             // 计算签订合同数据
-            agreementMaterialsList.setSignUnitPriceExclTax(AmountCalUtil.calUnitPriceExclTax(agreementMaterialsList.getSignUnitPriceInclTax(),agreementMaterialsList.getSignTaxRate()));
-            agreementMaterialsList.setSignAmountInclTax(AmountCalUtil.calTotalAmountInclTax(agreementMaterialsList.getSignCount(),agreementMaterialsList.getSignUnitPriceInclTax()));
-            agreementMaterialsList.setSignAmountExclTax(AmountCalUtil.calTotalAmountExclTax(agreementMaterialsList.getSignAmountInclTax(),agreementMaterialsList.getSignTaxRate()));
+            agreementMaterialsList.setSignUnitPriceExclTax(AmountCalUtil.calUnitPriceExclTax(agreementMaterialsList.getSignUnitPriceInclTax(), agreementMaterialsList.getSignTaxRate()));
+            agreementMaterialsList.setSignAmountInclTax(AmountCalUtil.calTotalAmountInclTax(agreementMaterialsList.getSignCount(), agreementMaterialsList.getSignUnitPriceInclTax()));
+            agreementMaterialsList.setSignAmountExclTax(AmountCalUtil.calTotalAmountExclTax(agreementMaterialsList.getSignAmountInclTax(), agreementMaterialsList.getSignTaxRate()));
 
             // 计算合同总金额
-            totalAmountInclTax = NumberUtil.add(totalAmountInclTax,agreementMaterialsList.getSignAmountInclTax());
-            totalAmountExclTax = NumberUtil.add(totalAmountExclTax,agreementMaterialsList.getSignAmountExclTax());
+            totalAmountInclTax = NumberUtil.add(totalAmountInclTax, agreementMaterialsList.getSignAmountInclTax());
+            totalAmountExclTax = NumberUtil.add(totalAmountExclTax, agreementMaterialsList.getSignAmountExclTax());
 
             // 设置物料的使用数量
-            materialsList.setUsedCount(NumberUtil.add(materialsList.getUsedCount(),agreementMaterialsList.getSignCount()));
-            if(null != agreementmaterialsOldMap && null != agreementmaterialsOldMap.get(agreementMaterialsList.getMaterialsListId())){
+            materialsList.setUsedCount(NumberUtil.add(materialsList.getUsedCount(), agreementMaterialsList.getSignCount()));
+            if (null != agreementmaterialsOldMap && null != agreementmaterialsOldMap.get(agreementMaterialsList.getMaterialsListId())) {
                 AgreementMaterialsList old = agreementmaterialsOldMap.get(agreementMaterialsList.getMaterialsListId());
-                materialsList.setUsedCount(NumberUtil.subtract(materialsList.getUsedCount(),old.getSignCount()));
+                materialsList.setUsedCount(NumberUtil.subtract(materialsList.getUsedCount(), old.getSignCount()));
             }
         }
 
@@ -1780,28 +1797,29 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
 
     /**
      * 修改合同
+     *
      * @param requestVO
      * @return
      */
     private AgreementSaveVO updateAgreement(AgreementSaveRequestVO requestVO) {
         Agreement agreement = this.getById(requestVO.getAgreement().getId());
         ProcurementScheme procurementScheme = procurementSchemeService.getById(requestVO.getAgreement().getSchemeId());
-        ValidateUtils.isNullException(agreement,"该合同不存在，请确认后重试");
+        ValidateUtils.isNullException(agreement, "该合同不存在，请确认后重试");
         if (!(AgreementStateEnum.DRAFT.getState().equals(agreement.getAgreementState()) || AgreementStateEnum.REVOKED.getState().equals(agreement.getAgreementState()))) {
             throw new BusinessException("该状态下的合同不允许修改");
         }
 
         //获取agreement的AttachmentId，复制文件名和文件url到LabelAttachmentId
-        if (agreement.getAttachmentId() != null ) {
+        if (agreement.getAttachmentId() != null) {
             //LabelAttachmentId标签合同附件文件不存在的话，复制原始合同附件给它
             if (NumberUtil.isNullOrZero(agreement.getLabelAttachmentId())) {
                 Attachment attachment = attachmentService.getById(agreement.getAttachmentId());
-                Long labelAttachmentId= attachmentService.addAttachment(new AttachmentRequestVO(attachment.getFileName(),attachment.getFileUrl()),AttachmentTypeEnum.AGREEMENT_ORIGINAL,agreement.getId());
+                Long labelAttachmentId = attachmentService.addAttachment(new AttachmentRequestVO(attachment.getFileName(), attachment.getFileUrl()), AttachmentTypeEnum.AGREEMENT_ORIGINAL, agreement.getId());
                 agreement.setLabelAttachmentId(labelAttachmentId);
                 // 只更新 LabelAttachmentId
                 super.update(new LambdaUpdateWrapper<Agreement>()
-                        .set(Agreement::getLabelAttachmentId,labelAttachmentId)
-                        .eq(Agreement::getId,agreement.getId()));
+                        .set(Agreement::getLabelAttachmentId, labelAttachmentId)
+                        .eq(Agreement::getId, agreement.getId()));
             }
         } else {
             throw new BusinessException("原始合同附件不存在，请检查");
@@ -1819,8 +1837,8 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
          */
         AgreementMaterialsInfoDTO agreementMaterialsInfo;
         if (StringUtils.isEmpty(requestVO.getAgreement().getMarketMaterialContractId())) {
-            agreementMaterialsInfo = handleAgreementMaterials(requestVO.getAgreementMaterialsLists(),agreement.getSchemeId(),agreement.getContractSplitId(),
-                    agreement.getVendorId(),agreement.getId());
+            agreementMaterialsInfo = handleAgreementMaterials(requestVO.getAgreementMaterialsLists(), agreement.getSchemeId(), agreement.getContractSplitId(),
+                    agreement.getVendorId(), agreement.getId());
         } else {
             agreementMaterialsInfo = handleAgreementMaterialsByMarket(requestVO.getAgreementMaterialsLists(), String.valueOf(agreement.getId()));
         }
@@ -1834,31 +1852,31 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
         this.updateById(updateAgreement);
 
         // 合同款项信息
-        agreementPaymentItemService.updateAgreementPaymentItem(requestVO.getAgreementPaymentItem(),agreement.getId());
+        agreementPaymentItemService.updateAgreementPaymentItem(requestVO.getAgreementPaymentItem(), agreement.getId());
 
         // 结算与付款节点信息
-        agreementPaymentListService.updateAgreementPaymentList(requestVO.getAgreementPaymentLists(),agreement.getId());
+        agreementPaymentListService.updateAgreementPaymentList(requestVO.getAgreementPaymentLists(), agreement.getId());
 
         // 合同签约方信息
-        agreementPartyInfoService.updateAgreementPartyInfo(requestVO.getAgreementPartyInfoLists(),agreement.getId());
+        agreementPartyInfoService.updateAgreementPartyInfo(requestVO.getAgreementPartyInfoLists(), agreement.getId());
 
         // 合同清单
-        agreementMaterialsListService.updateAgreementMaterialsList(requestVO.getAgreementMaterialsLists(),agreement.getId());
+        agreementMaterialsListService.updateAgreementMaterialsList(requestVO.getAgreementMaterialsLists(), agreement.getId());
 
         // 合同保证金
-        agreementDepositService.updateAgreementDeposit(requestVO.getAgreementDeposits(),agreement.getId());
+        agreementDepositService.updateAgreementDeposit(requestVO.getAgreementDeposits(), agreement.getId());
 
         // 合同-计日工
-        agreementDailyWageService.updateAgreementDailyWage(requestVO.getAgreementDailyWageList(),agreement.getId());
+        agreementDailyWageService.updateAgreementDailyWage(requestVO.getAgreementDailyWageList(), agreement.getId());
 
         // 合同-机械台班
-        agreementMachineShiftService.updateAgreementMachineShift(requestVO.getAgreementMachineShifts(),agreement.getId());
+        agreementMachineShiftService.updateAgreementMachineShift(requestVO.getAgreementMachineShifts(), agreement.getId());
 
         // 合同-甲供设备清单
-        agreementEquipmentSupplyService.updateAgreementEquipmentSupply(requestVO.getAgreementEquipmentSupplies(),agreement.getId());
+        agreementEquipmentSupplyService.updateAgreementEquipmentSupply(requestVO.getAgreementEquipmentSupplies(), agreement.getId());
 
         // 合同-甲供材料清单对象
-        agreementMaterialSupplyService.updateAgreementMaterialSupply(requestVO.getAgreementMaterialSupplies(),agreement.getId());
+        agreementMaterialSupplyService.updateAgreementMaterialSupply(requestVO.getAgreementMaterialSupplies(), agreement.getId());
 
         // 更新方法 占用合同数据量
         materialsListService.updateMaterialsListUsedCount(agreementMaterialsInfo.getMaterialsLists());
@@ -1867,14 +1885,14 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
         List<AgreementMaterialsList> agreementMaterialsLists = agreementMaterialsListService.list(new LambdaQueryWrapper<AgreementMaterialsList>().eq(AgreementMaterialsList::getAgreementId, agreement.getId()));
         // 更新方法  合约拆分是否已使用完毕
         if (StringUtils.isEmpty(requestVO.getAgreement().getMarketMaterialContractId())) {
-            contractPlanningSplitService.updateContractPlanningSplitUseAdd(agreement.getContractSplitId(),agreementMaterialsInfo.getMaterialsLists(),requestVO.getAgreementMaterialsLists(),agreementMaterialsLists);
+            contractPlanningSplitService.updateContractPlanningSplitUseAdd(agreement.getContractSplitId(), agreementMaterialsInfo.getMaterialsLists(), requestVO.getAgreementMaterialsLists(), agreementMaterialsLists);
         } else {
-            contractPlanningSplitService.updateContractPlanningSplitUseAddByMarket(agreementMaterialsInfo.getMaterialsLists(),requestVO.getAgreementMaterialsLists(),agreementMaterialsLists);
+            contractPlanningSplitService.updateContractPlanningSplitUseAddByMarket(agreementMaterialsInfo.getMaterialsLists(), requestVO.getAgreementMaterialsLists(), agreementMaterialsLists);
         }
 
         // 保存合同其他附件信息
         if (CollectionUtil.isNotEmpty(requestVO.getAgreementAttachmentList())) {
-            requestVO.getAgreementAttachmentList().forEach(i->{
+            requestVO.getAgreementAttachmentList().forEach(i -> {
                 i.setBusinessId(agreement.getId());
                 i.setBusinessType(AttachmentTypeEnum.AGREEMENT_OTHER.getType());
             });
@@ -1883,7 +1901,7 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
         // 删除其他附件
         List<Long> ids = requestVO.getAgreementAttachmentList().stream().map(BaseEntity::getId).collect(Collectors.toList());
         attachmentService.update(new LambdaUpdateWrapper<Attachment>()
-                .set(BaseEntity::getDelFlag,"2")
+                .set(BaseEntity::getDelFlag, "2")
                 .eq(Attachment::getBusinessType, AttachmentTypeEnum.AGREEMENT_OTHER.getType())
                 .eq(Attachment::getBusinessId, agreement.getId())
                 .notIn(BaseEntity::getId, ids));
@@ -1894,7 +1912,7 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
             saveVO.setProcurementPlanType(procurementScheme.getProcurementPlanType());
         } else {
             MarketMaterialContract contract = marketMaterialContractService.getById(requestVO.getAgreement().getMarketMaterialContractId());
-            if(null != contract && null != contract.getExpenditureBusinessType()){
+            if (null != contract && null != contract.getExpenditureBusinessType()) {
                 saveVO.setProcurementPlanType(Integer.valueOf(contract.getExpenditureBusinessType()));
             }
         }
@@ -1903,6 +1921,7 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
 
     /**
      * 计算合同是否可操作
+     *
      * @param agreementState
      * @param createId
      * @param signatureUserId
@@ -1945,27 +1964,28 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
                     requestVO.setSignUnitPriceInclTax(x.getSignUnitPriceInclTax());/* 签订单价（含税） */
                     return requestVO;
                 }).collect(Collectors.toList());
-        checkAgreementMaterials(agreementMaterialsList,schemeId,contractSplitId,vendorId);
+        checkAgreementMaterials(agreementMaterialsList, schemeId, contractSplitId, vendorId);
     }
 
     /**
      * 校验合同清单数据
+     *
      * @param agreementMaterialsList
      * @param schemeId
      * @param splitId
      * @param vendorId
      */
-    private void checkAgreementMaterials(List<AgreementMaterialsRequestVO> agreementMaterialsList,Long schemeId,Long splitId,Long vendorId) {
+    private void checkAgreementMaterials(List<AgreementMaterialsRequestVO> agreementMaterialsList, Long schemeId, Long splitId, Long vendorId) {
         /* 物料清单id 集合 */
-        Map<Long,AgreementMaterialsRequestVO> materialsRequestMap = agreementMaterialsList.stream()
+        Map<Long, AgreementMaterialsRequestVO> materialsRequestMap = agreementMaterialsList.stream()
                 .collect(Collectors.toMap(AgreementMaterialsRequestVO::getMaterialsListId, val -> val));
 
         // 获取拆分清单 根据 合约采购拆分id 查询
         List<MaterialsList> materialsLists = materialsListService.listMaterialsListByContractSplitIds(CollectionUtil.newArrayList(splitId));
         // 获取供应商投标清单
-        List<VendorBiddingListQuotationListVO> vendorBiddingListQuotationList = biddingListQuotationService.getVendorBiddingListQuotation(schemeId,splitId,vendorId)
+        List<VendorBiddingListQuotationListVO> vendorBiddingListQuotationList = biddingListQuotationService.getVendorBiddingListQuotation(schemeId, splitId, vendorId)
                 .getVendorBiddingListQuotationList();
-        Map<Long,VendorBiddingListQuotationListVO> vendorBiddingMap = vendorBiddingListQuotationList.stream()
+        Map<Long, VendorBiddingListQuotationListVO> vendorBiddingMap = vendorBiddingListQuotationList.stream()
                 .collect(Collectors.toMap(VendorBiddingListQuotationListVO::getMaterialsListId, val -> val));
 
         BigDecimal requestTotalAmount = BigDecimal.ZERO;
@@ -1976,32 +1996,32 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
             // 校验剩余数量
             materialsRequestVO = materialsRequestMap.get(materialsList.getId());
             if (materialsRequestVO == null) {
-                throw new ParamValidateException(String.format("提交的清单中少了清单:%s,请确认",materialsList.getMaterialsName()));
+                throw new ParamValidateException(String.format("提交的清单中少了清单:%s,请确认", materialsList.getMaterialsName()));
             }
 
-            surplusCount = NumberUtil.subtract(materialsList.getCount(),materialsList.getUsedCount());
-            if (NumberUtil.compare(surplusCount,materialsRequestVO.getSignCount()) < 0) {
-                throw new ParamValidateException(String.format("提交的清单[%s]本次签订量[%s]超过剩余可用量[%s]，请重新输入",materialsList.getMaterialsName(),
-                        NumberUtil.decimalFormat(materialsRequestVO.getSignCount(),4),
-                        NumberUtil.decimalFormat(surplusCount,4)));
+            surplusCount = NumberUtil.subtract(materialsList.getCount(), materialsList.getUsedCount());
+            if (NumberUtil.compare(surplusCount, materialsRequestVO.getSignCount()) < 0) {
+                throw new ParamValidateException(String.format("提交的清单[%s]本次签订量[%s]超过剩余可用量[%s]，请重新输入", materialsList.getMaterialsName(),
+                        NumberUtil.decimalFormat(materialsRequestVO.getSignCount(), 4),
+                        NumberUtil.decimalFormat(surplusCount, 4)));
             }
 
             // 校验单价
             listQuotationListVO = vendorBiddingMap.get(materialsList.getId());
-            if (NumberUtil.compare(materialsRequestVO.getSignUnitPriceInclTax(),listQuotationListVO.getTaxUnitPrice()) > 0) {
-                throw new ParamValidateException(String.format("提交的清单[%s]本次签订含税单价[%s]大于供应商的中标单价[%s]，请重新输入",materialsList.getMaterialsName(),
-                        NumberUtil.decimalFormat(materialsRequestVO.getSignUnitPriceInclTax(),4),
-                        NumberUtil.decimalFormat(listQuotationListVO.getTaxUnitPrice(),4)));
+            if (NumberUtil.compare(materialsRequestVO.getSignUnitPriceInclTax(), listQuotationListVO.getTaxUnitPrice()) > 0) {
+                throw new ParamValidateException(String.format("提交的清单[%s]本次签订含税单价[%s]大于供应商的中标单价[%s]，请重新输入", materialsList.getMaterialsName(),
+                        NumberUtil.decimalFormat(materialsRequestVO.getSignUnitPriceInclTax(), 4),
+                        NumberUtil.decimalFormat(listQuotationListVO.getTaxUnitPrice(), 4)));
             }
 
-            requestTotalAmount = NumberUtil.add(requestTotalAmount,AmountCalUtil.calTotalAmountInclTax(materialsRequestVO.getSignCount(),materialsRequestVO.getSignUnitPriceInclTax()));
+            requestTotalAmount = NumberUtil.add(requestTotalAmount, AmountCalUtil.calTotalAmountInclTax(materialsRequestVO.getSignCount(), materialsRequestVO.getSignUnitPriceInclTax()));
         }
 
         // 校验总金额
         ContractPlanningSplit contractPlanningSplit = contractPlanningSplitService.getById(splitId);
-        BigDecimal totalSurplusAmount = NumberUtil.subtract(contractPlanningSplit.getTotalPlanAmount(),contractPlanningSplit.getTotalUsedAmount());
+        BigDecimal totalSurplusAmount = NumberUtil.subtract(contractPlanningSplit.getTotalPlanAmount(), contractPlanningSplit.getTotalUsedAmount());
         if (totalSurplusAmount.compareTo(requestTotalAmount) < 0) {
-            throw new ParamValidateException(String.format("输入的清单本次含税总价[%s]大于剩余可用金额[%s]",NumberUtil.decimalFormat(requestTotalAmount,4),NumberUtil.decimalFormat(totalSurplusAmount,4)));
+            throw new ParamValidateException(String.format("输入的清单本次含税总价[%s]大于剩余可用金额[%s]", NumberUtil.decimalFormat(requestTotalAmount, 4), NumberUtil.decimalFormat(totalSurplusAmount, 4)));
         }
     }
 
@@ -2022,19 +2042,20 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
                     requestVO.setSignUnitPriceInclTax(x.getSignUnitPriceInclTax());/* 签订单价（含税） */
                     return requestVO;
                 }).collect(Collectors.toList());
-        checkAgreementMaterialsByUpdate(agreementMaterialsList,schemeId,contractSplitId,vendorId,id);
+        checkAgreementMaterialsByUpdate(agreementMaterialsList, schemeId, contractSplitId, vendorId, id);
     }
 
     /**
      * [修改时] 校验合同清单数据
+     *
      * @param agreementMaterialsList
      * @param schemeId
      * @param splitId
      * @param vendorId
      */
-    private void checkAgreementMaterialsByUpdate(List<AgreementMaterialsRequestVO> agreementMaterialsList,Long schemeId,Long splitId,Long vendorId, Long id) {
+    private void checkAgreementMaterialsByUpdate(List<AgreementMaterialsRequestVO> agreementMaterialsList, Long schemeId, Long splitId, Long vendorId, Long id) {
         /* 物料清单id 集合 */
-        Map<Long,AgreementMaterialsRequestVO> materialsRequestMap = agreementMaterialsList.stream()
+        Map<Long, AgreementMaterialsRequestVO> materialsRequestMap = agreementMaterialsList.stream()
                 .collect(Collectors.toMap(AgreementMaterialsRequestVO::getMaterialsListId, val -> val));
 
         // 获取拆分清单 根据 合约采购拆分id 查询
@@ -2043,18 +2064,18 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
 
         /* 获取原来的价格，累加现在的价格后再减去原来的价格。使验证正常通过 */
         List<AgreementMaterialsList> agreementMaterialsListsOld = agreementMaterialsListService.list(new LambdaQueryWrapper<AgreementMaterialsList>().eq(AgreementMaterialsList::getAgreementId, id));
-        if(agreementMaterialsListsOld!=null){
+        if (agreementMaterialsListsOld != null) {
             /* 格式化签订清单数据 */
-            AgreementMaterialsInfoDTO agreementMaterialsInfo = handleAgreementMaterials(agreementMaterialsListsOld,schemeId,splitId,vendorId,id);
-            if(agreementMaterialsInfo!=null){
+            AgreementMaterialsInfoDTO agreementMaterialsInfo = handleAgreementMaterials(agreementMaterialsListsOld, schemeId, splitId, vendorId, id);
+            if (agreementMaterialsInfo != null) {
                 List<MaterialsList> materialsListsOld = agreementMaterialsInfo.getMaterialsLists();
-                if(materialsListsOld!=null){
+                if (materialsListsOld != null) {
                     for (int i = 0; i < materialsLists.size(); i++) {
                         for (int j = 0; j < materialsListsOld.size(); j++) {
                             /* id一样时 */
-                            if(materialsLists.get(i).getId().equals(materialsListsOld.get(j).getId())){
+                            if (materialsLists.get(i).getId().equals(materialsListsOld.get(j).getId())) {
                                 /* 减去上次的 签订单价，得到之前的原始单价，为了过下面的校验规则。 */
-                                materialsLists.get(i).setUsedCount( NumberUtil.subtract(materialsLists.get(i).getUsedCount(),materialsListsOld.get(j).getUsedCount()));
+                                materialsLists.get(i).setUsedCount(NumberUtil.subtract(materialsLists.get(i).getUsedCount(), materialsListsOld.get(j).getUsedCount()));
                             }
                         }
                     }
@@ -2063,9 +2084,9 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
         }
 
         // 获取供应商投标清单
-        List<VendorBiddingListQuotationListVO> vendorBiddingListQuotationList = biddingListQuotationService.getVendorBiddingListQuotation(schemeId,splitId,vendorId)
+        List<VendorBiddingListQuotationListVO> vendorBiddingListQuotationList = biddingListQuotationService.getVendorBiddingListQuotation(schemeId, splitId, vendorId)
                 .getVendorBiddingListQuotationList();
-        Map<Long,VendorBiddingListQuotationListVO> vendorBiddingMap = vendorBiddingListQuotationList.stream()
+        Map<Long, VendorBiddingListQuotationListVO> vendorBiddingMap = vendorBiddingListQuotationList.stream()
                 .collect(Collectors.toMap(VendorBiddingListQuotationListVO::getMaterialsListId, val -> val));
 
         BigDecimal requestTotalAmount = BigDecimal.ZERO;
@@ -2076,41 +2097,41 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper,Agreement>
             // 校验剩余数量
             materialsRequestVO = materialsRequestMap.get(materialsList.getId());
             if (materialsRequestVO == null) {
-                throw new ParamValidateException(String.format("提交的清单中少了清单:%s,请确认",materialsList.getMaterialsName()));
+                throw new ParamValidateException(String.format("提交的清单中少了清单:%s,请确认", materialsList.getMaterialsName()));
             }
 
-            surplusCount = NumberUtil.subtract(materialsList.getCount(),materialsList.getUsedCount());
-            if (NumberUtil.compare(surplusCount,materialsRequestVO.getSignCount()) < 0) {
-                throw new ParamValidateException(String.format("提交的清单[%s]本次签订量[%s]超过剩余可用量[%s]，请重新输入",materialsList.getMaterialsName(),
-                        NumberUtil.decimalFormat(materialsRequestVO.getSignCount(),4),
-                        NumberUtil.decimalFormat(surplusCount,4)));
+            surplusCount = NumberUtil.subtract(materialsList.getCount(), materialsList.getUsedCount());
+            if (NumberUtil.compare(surplusCount, materialsRequestVO.getSignCount()) < 0) {
+                throw new ParamValidateException(String.format("提交的清单[%s]本次签订量[%s]超过剩余可用量[%s]，请重新输入", materialsList.getMaterialsName(),
+                        NumberUtil.decimalFormat(materialsRequestVO.getSignCount(), 4),
+                        NumberUtil.decimalFormat(surplusCount, 4)));
             }
 
             // 校验供应商提交的单价 与 原物料单价对比
             listQuotationListVO = vendorBiddingMap.get(materialsList.getId());
-            if (NumberUtil.compare(materialsRequestVO.getSignUnitPriceInclTax(),listQuotationListVO.getTaxUnitPrice()) > 0) {
-                throw new ParamValidateException(String.format("提交的清单[%s]本次签订含税单价[%s]大于供应商的中标单价[%s]，请重新输入",materialsList.getMaterialsName(),
-                        NumberUtil.decimalFormat(materialsRequestVO.getSignUnitPriceInclTax(),4),
-                        NumberUtil.decimalFormat(listQuotationListVO.getTaxUnitPrice(),4)));
+            if (NumberUtil.compare(materialsRequestVO.getSignUnitPriceInclTax(), listQuotationListVO.getTaxUnitPrice()) > 0) {
+                throw new ParamValidateException(String.format("提交的清单[%s]本次签订含税单价[%s]大于供应商的中标单价[%s]，请重新输入", materialsList.getMaterialsName(),
+                        NumberUtil.decimalFormat(materialsRequestVO.getSignUnitPriceInclTax(), 4),
+                        NumberUtil.decimalFormat(listQuotationListVO.getTaxUnitPrice(), 4)));
             }
 
-            requestTotalAmount = NumberUtil.add(requestTotalAmount,AmountCalUtil.calTotalAmountInclTax(materialsRequestVO.getSignCount(),materialsRequestVO.getSignUnitPriceInclTax()));
+            requestTotalAmount = NumberUtil.add(requestTotalAmount, AmountCalUtil.calTotalAmountInclTax(materialsRequestVO.getSignCount(), materialsRequestVO.getSignUnitPriceInclTax()));
         }
 
         // 校验总金额
         ContractPlanningSplit contractPlanningSplit = contractPlanningSplitService.getById(splitId);
 
         /* 将这一次的减去 */
-        BigDecimal totalSurplusAmount = NumberUtil.subtract(contractPlanningSplit.getTotalPlanAmount(),contractPlanningSplit.getTotalUsedAmount());
+        BigDecimal totalSurplusAmount = NumberUtil.subtract(contractPlanningSplit.getTotalPlanAmount(), contractPlanningSplit.getTotalUsedAmount());
 
         /* 将上一次的加上 */
         if (agreementMaterialsListsOld != null) {
             for (AgreementMaterialsList agreementMaterials : agreementMaterialsListsOld) {
-                totalSurplusAmount = NumberUtil.add(totalSurplusAmount,agreementMaterials.getSignAmountInclTax());
+                totalSurplusAmount = NumberUtil.add(totalSurplusAmount, agreementMaterials.getSignAmountInclTax());
             }
         }
         if (totalSurplusAmount.compareTo(requestTotalAmount) < 0) {
-            throw new ParamValidateException(String.format("输入的清单总金额[%s]大于剩余可用金额[%s]",NumberUtil.decimalFormat(requestTotalAmount,4),NumberUtil.decimalFormat(totalSurplusAmount,4)));
+            throw new ParamValidateException(String.format("输入的清单总金额[%s]大于剩余可用金额[%s]", NumberUtil.decimalFormat(requestTotalAmount, 4), NumberUtil.decimalFormat(totalSurplusAmount, 4)));
         }
     }
 }

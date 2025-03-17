@@ -1056,7 +1056,9 @@ public class TenderNoticeServiceImpl extends ServiceImpl<TenderNoticeMapper,Tend
         List<MinProjectDataVO> minProjectDataList = procurementSchemeService.selectDataByScheme(schemeId);
         if (!CollectionUtils.isEmpty(minProjectDataList)){
             /* 用现成方法的查询 */
-            MinProjectDetailResponseDTO projectDetail = contractPlanService.getMinProjectDetail(minProjectDataList.get(0).getProjectCode());
+//            MinProjectDetailResponseDTO projectDetail = contractPlanService.getMinProjectDetail(minProjectDataList.get(0).getProjectCode());
+            MinProjectVO minProjectByMinAccountCode = minProjectService.getMinProjectByMinAccountCode(minProjectDataList.get(0).getProjectCode());
+            MinProjectDetailResponseDTO projectDetail = BeanCopierUtil.copyBean(minProjectByMinAccountCode, MinProjectDetailResponseDTO.class);
             if(projectDetail!=null){
                 if (StringUtils.isNotBlank(projectDetail.getManagementOrgId())) {
                     /* 获取部门信息 */

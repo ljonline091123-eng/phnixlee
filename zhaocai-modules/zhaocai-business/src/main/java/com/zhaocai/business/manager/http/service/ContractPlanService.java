@@ -206,18 +206,6 @@ public class ContractPlanService {
     }
 
     /**
-     * 查询最小核算项目详细信息
-     * @param projectCode
-     * @return
-     */
-    public MinProjectDetailResponseDTO getMinProjectDetail(String projectCode) {
-        MinProjectDetailRequestDTO reqDTO = new MinProjectDetailRequestDTO(projectCode);
-
-//        return UnderlingRestTemplateService. getForObject(UnderlingPlatformUrlEnum.GET_MIN_PROJECT,MinProjectDetailResponseDTO.class,reqDTO);
-        return null;
-    }
-
-    /**
      * 构造清单回写数据
      *
      * @param procurementId
