@@ -64,19 +64,19 @@
             icon="el-icon-plus"
             size="small"
             @click="handleAdd"
-            v-hasPermi="['procurement:contract:add']"
             >新增</el-button
           >
+            <!--            v-hasPermi="['procurement:contract:add']"-->
           </el-badge>
-          <el-badge :value="total_procurement_yl" style="margin-left: 12px;margin-top: -1px;">
-              <el-button
-              type="success"
-              icon="el-icon-plus"
-              size="small"
-              @click="openSelectYl"
-              >新增易料合同</el-button
-            >
-          </el-badge>
+<!--          <el-badge :value="total_procurement_yl" style="margin-left: 12px;margin-top: -1px;">-->
+<!--              <el-button-->
+<!--              type="success"-->
+<!--              icon="el-icon-plus"-->
+<!--              size="small"-->
+<!--              @click="openSelectYl"-->
+<!--              >新增易料合同</el-button-->
+<!--            >-->
+<!--          </el-badge>-->
 
         </el-form-item>
       </el-form>
