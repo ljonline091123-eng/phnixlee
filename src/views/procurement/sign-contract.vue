@@ -1326,9 +1326,9 @@ export default {
       templateRow:{},
       contractVisibleYl:false,
       revokeLoding: "",
-      form: {
-        vendorBiddingListQuotationList: [],
-      },
+      // form: {
+      //   vendorBiddingListQuotationList: [],
+      // },
       infoTitle: "合同信息新增",
       infoVisible: false,
       // * 规则
