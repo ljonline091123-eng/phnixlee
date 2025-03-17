@@ -84,6 +84,8 @@ export default {
       this.queryParams.vendorId = param.vendorId;
       this.vendorClass=param.vendorClass;
       this.path=this.path+'?vendorClass='+this.vendorClass;
+    }else {
+      this.queryParams.vendorId = param;
     }
     this.getCooperationList()
   },
