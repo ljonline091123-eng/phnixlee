@@ -2915,6 +2915,9 @@ export default {
     /* 招标文件手动上传成功 */
     async fileSuccessBidding(res) {
       const { url, name } = res.data;
+      if(res.data == null){
+        this.$message.error('文件未上传成功，文件名和URL为空，请检查');
+      }
       try {
         /* 保存到文件表获取返回id */
         const res = await addAttachment({ fileName: name, fileUrl: url });

@@ -62,7 +62,7 @@
           >新增</el-button
         >
       </el-col>
-      <!-- <el-col :span="1.5">
+      <el-col :span="1.5">
         <el-button
           type="primary"
           icon="el-icon-edit"
@@ -71,7 +71,7 @@
           :disabled="!selectProjectData.id ? true : false"
           >修改</el-button
         >
-      </el-col> -->
+      </el-col>
       <el-col :span="1.5">
         <el-button
           type="danger"
@@ -132,7 +132,7 @@
     />
 
     <!-- 新增项目弹窗 -->
-    <el-dialog title="新增项目信息" :visible.sync="dialogVisible" width="80%">
+    <el-dialog title="新增项目信息" :visible.sync="dialogVisible" width="80%" @before-close="handleDialogClose">
       <el-form :model="form"  ref="form" :rules="rules" label-width="150px" @submit.native.prevent>
         <el-row :gutter="20">
           <el-col :span="12">
@@ -174,7 +174,7 @@
               <el-cascader
               v-model="form.ziZhiselect"
               :options="zizhiOptions"
-
+              ref="ziZhiselect"
               :props="cascaderProps"
               placeholder="请选择资质类型"
               style="width: 100%"
@@ -331,7 +331,7 @@
 
 <script>
 import {deptTreeSelect} from "@/api/system/user";
-import {listProject,saveMinProjectInfo,deleteProject,BusinessTypeTreeSelect,CertificationTypeTreeSelect,dictProjectTypeTreeSelect} from "@/api/system/project";
+import {listProject,saveMinProjectInfo,getMinProjectById,deleteProject,BusinessTypeTreeSelect,CertificationTypeTreeSelect,dictProjectTypeTreeSelect} from "@/api/system/project";
 import { getDicts as getDicts } from '@/api/system/dict/data'
 import Treeselect from "@riophae/vue-treeselect";
 import "@riophae/vue-treeselect/dist/vue-treeselect.css";
@@ -627,23 +627,27 @@ export default {
         console.log("dictProjectOptions:",this.dictProjectOptions);
       });
     },
+    handleChange(value, selectedData) {
+      console.log('Selected Value:', value); // 当前选中的值数组
+      console.log('Selected Data:', selectedData); // 当前选中项的详细数据对象数组
+      this.buildHierarchy(selectedData); // 构建层级关系
+    },
     // 处理资质选择变化
-    handleZiZhiChange(value) {
+    handleZiZhiChange(value,selectedData) {
       if (value) {
-        console.log("资质变化的value：",value)
-        const selectedNode = this.findNodeByValue(this.zizhiOptions, value);
-        console.log("查找资质节点：selectedNode",selectedNode)
-        if (selectedNode && selectedNode.level === 3) {
-          this.form.ziZhi = selectedNode.pathValue; // 保存三层的节点 value 值
-          console.log("this.form.ziZhi",this.form.ziZhi)
+        const checkedNodes = this.$refs['ziZhiselect'].getCheckedNodes();
+        if (checkedNodes && checkedNodes.length > 0) {
+          this.form.ziZhi = checkedNodes[0].path ? checkedNodes[0].path.join(',') : '';
+          console.log("资质变化的value：", checkedNodes);
+          console.log("资质变化zizhiselect：", this.form.ziZhiselect);
+          console.log("资质变化的this.form.ziZhi：", this.form.ziZhi);
         } else {
-          this.$message.error("请选择第三层的资质类型");
-          this.form.ziZhi = null; // 清空表单中的值
-          this.form.ziZhiselect = null;
+          this.form.ziZhi = '';
+          console.log("没有选中的节点");
         }
-      } else {
-        this.form.ziZhi = null; // 清空表单中的值
-        this.form.ziZhiselect = null;
+        console.log("资质变化的value：",checkedNodes);
+        console.log("资质变化zizhiselect：",this.form.ziZhiselect);
+        console.log("资质变化的this.form.ziZhi：",this.form.ziZhi);
       }
     },
     // 递归查找节点
@@ -727,8 +731,20 @@ export default {
       this.resetForm(); // 关闭弹窗时清空表单
     },
     // 修改按钮操作
-    handleUpdate(row) {
+    async handleUpdate(row) {
       console.log("修改项目", row);
+      const { id, name } = this.selectProjectData;
+      try {
+        const res = await getMinProjectById(id);
+        this.form = res.data;
+        this.form.prgType = this.form.prgType.split(",");
+        let ziZhiStr = this.form.ziZhi.split(",");
+        this.form.ziZhiselect = ziZhiStr;
+        console.log("修改项目this.form", this.form);
+        this.dialogVisible = true;
+      } catch (err) {
+        console.log(err);
+      }
     },
     // 删除按钮操作
     handleDelete() {

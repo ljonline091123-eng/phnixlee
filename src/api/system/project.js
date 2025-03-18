@@ -10,6 +10,18 @@ export function listProject(query) {
     });
 }
 
+
+// 查询项目详情
+export function getMinProjectById(id) {
+  return request({
+    url: "/business/minProject/getMinProjectById",
+    method: "get",
+    params: {
+      id,
+    },
+  });
+}
+
 // 保存项目
 export function saveMinProjectInfo(data) {
   return request({

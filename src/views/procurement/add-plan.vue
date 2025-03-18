@@ -84,7 +84,7 @@
             </el-col>
             <el-col :span="8" class="grid-cell">
               <el-form-item label="上限价(元)" prop="upperLimitPrice" class="required label-right-align">
-                <el-input type="text" clearable  :disabled="isSubmit" v-model="formData.upperLimitPrice" />
+                <el-input type="text" clearable  :disabled="true" v-model="formData.upperLimitPrice" />
               </el-form-item>
             </el-col>
 
@@ -360,7 +360,7 @@
           </el-table-column>
           <el-table-column label="计划金额" align="center" prop="plannedAmountInclTax" min-width="300">
             <template slot-scope="scope">
-              <el-input v-model="scope.row.plannedAmountInclTax" />
+              <el-input v-model="scope.row.plannedAmountInclTax" @input="calculateUpperLimitPrice(scope.row)"/>
             </template>
           </el-table-column>
 
@@ -1285,6 +1285,7 @@ export default {
     //     });
     //   });
     // },
+    //保存
     submitForm(formName) {
       return new Promise((resolve, reject) => {
         const { add, subtract,divide,multiply, bignumber, format,floor } = this.mathjs;
@@ -1322,33 +1323,44 @@ export default {
               background: 'rgba(0, 0, 0, 0.7)'
             });
             const { procurementPlanName, projectHierarchy,beginDate, endDate, arrivalDate, procurementOfficer, procurementOfficerName,projectId,projectName,projectCode, priceType,basePrice, regionProvinceCode, regionCityCode, paymentType, countingType } = this.formData;
-            // 合同类型(1、劳务分包 2、专业分包 3、购买材料 4、租赁材料 5、租赁机械(设备)6、其他)
-            //1:'材料类';2:'设备类';了:'劳务类';4:'专业分包类”
+            const { id,  biddingMethodCode,  bidResponsibleOrgName} = this.currentContract
+            console.log(this.currentContract,'保存时查询的---this.currentContract');
+            console.log(this.formData,'保存时查询的---this.formData');
+            /* 采购类型 procurementType 
+            PURCHASE_MATERIALS(1, "购买材料"),
+            LEASED_MATERIAL(2, "租赁材料"),
+            RENTAL_MACHINERY(3, "租赁机械（设备）"),
+            SPECIALTY_SUBCONTRACT(4, "专业分包"),
+            SERVICE_SUBCONTRACT(5, "劳务分包"),
+            OTHER_TYPE(6, "其他"),
+          */
+            //物料的类别：1:'材料类';2:'设备类';了:'劳务类';4:'专业分包类”
             let contractPlanningCategory;
-            if(this.selecteArchivesClass == 1){
-              contractPlanningCategory = 3;
-            }else if(this.selecteArchivesClass == 2){
-              contractPlanningCategory = 5;
-            }else if(this.selecteArchivesClass == 3){
-              contractPlanningCategory = 1;
-            }else if(this.selecteArchivesClass == 4){
-              contractPlanningCategory = 2;
+            if(contractPlanningCategory == null){
+              if(this.selecteArchivesClass == 1){
+                contractPlanningCategory = 1;
+              }else if(this.selecteArchivesClass == 2){
+                contractPlanningCategory = 3;
+              }else if(this.selecteArchivesClass == 3){
+                contractPlanningCategory = 5;
+              }else if(this.selecteArchivesClass == 4){
+                contractPlanningCategory = 4;
+              }
+              if(!this.selecteArchivesClass){
+                contractPlanningCategory = this.currentContract.procurementPlanType;
+              }
             }
-            if(!this.selecteArchivesClass){
-              contractPlanningCategory = this.procurementType;
-              
-            }
-            console.log("contractPlanningCategory",contractPlanningCategory);
-            // const contractPlanningCategory ;
-            // const {contractPlanningName, plannedAmountInclTaxText, bidResponsibleOrgName} = this.currentContract
-                    // 获取用户填写的合约名称和计划金额
+
+            console.log("保存时的contractPlanningCategory",contractPlanningCategory);
+
+            // 获取用户填写的合约名称和计划金额
             const userModifiedData = {
                 contractPlanningName: this.planList[0].contractPlanningName, // 用户填写的合约名称
-                plannedAmountInclTaxText: this.planList[0].plannedAmountInclTax, // 用户填写的计划金额
+                plannedAmountInclTax: this.planList[0].plannedAmountInclTax, // 用户填写的计划金额
             }
-            console.log("this.planList[0]",this.planList[0]);
-            console.log("合约规划111userModifiedData:", userModifiedData);
-            // const {contractPlanningName, plannedAmountInclTaxText, bidResponsibleOrgName} = userModifiedData
+            console.log("保存时查询的this.planList[0]",this.planList[0]);
+            console.log("合约规划用户填写-userModifiedData:", userModifiedData);
+            
 
             const splitRequestList = this.planList[0]?.children.map(item => {
               return {
@@ -1359,10 +1371,10 @@ export default {
             })
             const formData = {
               procurementPlan:{
-                id: '',
+                id: id || '',
                 procurementPlanName,
                 procurementPlanType:contractPlanningCategory,
-                procurementType: null,
+                procurementType: biddingMethodCode,
                 projectHierarchy,
                 beginDate,
                 endDate,
@@ -1380,7 +1392,7 @@ export default {
               splitRequestList,
               contractPlanning:{
                 contractPlanningName: userModifiedData.contractPlanningName, 
-                plannedAmountInclTaxText :userModifiedData.plannedAmountInclTaxText, 
+                plannedAmountInclTax :userModifiedData.plannedAmountInclTax, 
                 bidResponsibleOrgName: projectHierarchy,
                 projectId,projectName,projectCode
               }
@@ -1428,7 +1440,8 @@ export default {
               /* 指导价 */
               "guidancePrice"
             ];
-            let formDataHandle = this.removeThousandsSeparator(formData,targetKeys);
+            //提交对象数据给后台时将金额格式化
+            let formDataHandle = this.removeThousandsSeparator(formData,targetKeys); 
             console.log('%c👽 提交数据处理后 ', `font-size: 14px;background-color: #f00;`, formDataHandle);
             try{
               const res = await saveProcurementPlan(formDataHandle);
@@ -1462,6 +1475,16 @@ export default {
       });
     },
 
+    //上限价等于计划金额的总和
+    calculateUpperLimitPrice() {
+      this.formData.upperLimitPrice = this.planList[0].plannedAmountInclTax;
+      console.log("this.formData.upperLimitPrice:", this.formData.upperLimitPrice);
+      console.log("this.planList[0].plannedAmountInclTax", this.planList[0].plannedAmountInclTax);
+      this.$nextTick(() => {
+        console.log("视图更新后的 this.formData.upperLimitPrice:", this.formData.upperLimitPrice);
+      });
+    },
+  
     //提交采购计划
     // async submitPlan(formName){
     //   this.submit(formName);
@@ -2796,6 +2819,16 @@ export default {
       },
       immediate: true
     },
+    // 监听计划金额的变化，自动更新上限价
+    "planList[0].plannedAmountInclTax": {
+      handler(val) {
+        if (val) {
+          this.calculateUpperLimitPrice();
+        }
+      },
+      immediate: true
+    },
+
   }
 };
 </script>
