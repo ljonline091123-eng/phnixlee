@@ -24,6 +24,7 @@ import com.zhaocai.business.procurement.vo.res.MinProjectListVO;
 import com.zhaocai.business.procurement.vo.res.MinProjectVO;
 import com.zhaocai.business.pub.service.IBusinessCodeService;
 import com.zhaocai.business.pub.service.ISysDictDataService;
+import com.zhaocai.business.vendor.domain.VendorCertification;
 import com.zhaocai.common.core.bean.PageResult;
 import com.zhaocai.common.core.constant.SecurityConstants;
 import com.zhaocai.common.core.utils.NumberUtil;
@@ -170,8 +171,23 @@ public class MinProjectServiceImpl extends ServiceImpl<MinProjectMapper, MinProj
         minProjectDetailVO.setStateText(stateText);
         minProjectDetailVO.setMoneySecText(moneySecText);
         minProjectDetailVO.setZbTypeText(zbTypeText);
+        if (StringUtils.isNotBlank(minProjectDetailVO.getPrgType())) {
+            minProjectDetailVO.setPrgType(formatString(minProjectDetailVO.getPrgType()));
+        }
 
         return minProjectDetailVO;
+    }
+
+    //去除中括号和双引号
+    public static String formatString(String inputStr) {
+        // 去除字符串的开头和结尾的方括号
+        String trimmedStr = inputStr.replaceAll("\\[|\\]", "");
+        // 去除所有的双引号
+        String noQuotesStr = trimmedStr.replaceAll("\"", "");
+        // 去除所有的单引号
+        String noApostrophesStr = noQuotesStr.replaceAll("'", "");
+        // 返回格式化后的字符串
+        return noApostrophesStr;
     }
 
     @Override
@@ -213,10 +229,10 @@ public class MinProjectServiceImpl extends ServiceImpl<MinProjectMapper, MinProj
 
     @Override
     public PageResult<MinProjectListVO> getProjectListByQuery(MinProjectListRequestDTO requestDTO) {
-        SysDept sysDept = remoteSystemService.getInfo(requestDTO.getDeptId(),SecurityConstants.INNER);
+//        SysDept sysDept = remoteSystemService.getInfo(requestDTO.getDeptId(),SecurityConstants.INNER);
 
-        if(NumberUtil.isNotNullAndZero(requestDTO.getDeptId())){
-            requestDTO.setManagementOrgId(requestDTO.getDeptId().toString());
+        if(!StringUtils.isBlank(requestDTO.getDeptId())){
+            requestDTO.setManagementOrgId(requestDTO.getDeptId());
         }
 
         // 执行分页查询
@@ -239,9 +255,10 @@ public class MinProjectServiceImpl extends ServiceImpl<MinProjectMapper, MinProj
     }
 
     @Override
-    public void deleteProject(Long id) {
-        super.removeById(id);
-
+    public int deleteProject(Long id) {
+        MinProject minProject = super.getById(id);
+        ValidateUtils.isNullException(minProject,"该项目不存在");
+        return baseMapper.deleteMinProjectById(id);
     }
 
 

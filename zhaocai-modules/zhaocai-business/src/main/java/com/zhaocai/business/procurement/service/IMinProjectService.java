@@ -49,5 +49,5 @@ public interface IMinProjectService  extends IService<MinProject> {
      */
     PageResult<MinProjectListVO> getProjectListByQuery(MinProjectListRequestDTO requestDTO);
 
-    void deleteProject(Long id);
+    int deleteProject(Long id);
 }

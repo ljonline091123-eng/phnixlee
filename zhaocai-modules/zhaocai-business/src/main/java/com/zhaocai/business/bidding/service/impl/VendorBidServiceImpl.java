@@ -157,7 +157,13 @@ public class VendorBidServiceImpl implements IVendorBidService {
 //        }
 //        /* 查询招标文件的pdf附件 */
 //        List<AttachmentVO> PdfAttachmentList = attachmentService.listAttachment(AttachmentTypeEnum.BIDING_NOTICE_PDF, requstVO.getNoticeId());
-        return   pdfList;
+        if(pdfList == null || pdfList.isEmpty()){
+            return   attachmentVOList;
+
+        }else {
+            return pdfList;
+        }
+
     }
 
     @Override

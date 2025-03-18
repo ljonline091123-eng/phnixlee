@@ -21,7 +21,7 @@ public class MinProjectListRequestDTO  extends PageRecive {
     private String minAccountFullName;
 
     @ApiModelProperty(value = "归属管理组织-部门id")
-    private Long deptId;
+    private String deptId;
 
     @ApiModelProperty(value = "归属管理组织-第三方部门id")
     private String managementOrgId;
