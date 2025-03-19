@@ -772,7 +772,7 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
      * @param requestVO
      */
     private MaterialProcurementPushRequestVO updateProcurementPlan(ProcurementPlanRequestVO requestVO) {
-        System.out.println("保存采购计划："+ requestVO.getSplitRequestList());
+        System.out.println("保存采购计划-合约规划拆分信息："+ requestVO.getSplitRequestList());
         ProcurementPlan procurementPlan = requestVO.getProcurementPlan();
         ProcurementPlan checkPlan = baseMapper.selectById(procurementPlan.getId());
 

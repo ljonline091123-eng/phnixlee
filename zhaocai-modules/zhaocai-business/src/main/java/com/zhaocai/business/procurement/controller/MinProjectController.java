@@ -5,6 +5,7 @@ import com.zhaocai.business.manager.http.dto.req.MinProjectListRequestDTO;
 import com.zhaocai.business.manager.http.dto.res.MinProjectDetailResponseDTO;
 import com.zhaocai.business.procurement.domain.MinProject;
 import com.zhaocai.business.procurement.service.IMinProjectService;
+import com.zhaocai.business.procurement.vo.res.MinProjectDetailVO;
 import com.zhaocai.business.procurement.vo.res.MinProjectListVO;
 import com.zhaocai.business.procurement.vo.res.MinProjectVO;
 import com.zhaocai.common.core.bean.PageResult;
@@ -55,6 +56,14 @@ public class MinProjectController extends BladeController {
         minProjectService.deleteProject(id);
         return ResultData.success();
     }
+
+    @GetMapping("/getMinProjectById")
+    @ApiOperation(value = "查询项目详情")
+    public ResultData<MinProjectDetailVO> getMinProjectById(@RequestParam Long id) {
+        return ResultData.data(minProjectService.getMinProjectById(id));
+    }
+
+
 
 
 }

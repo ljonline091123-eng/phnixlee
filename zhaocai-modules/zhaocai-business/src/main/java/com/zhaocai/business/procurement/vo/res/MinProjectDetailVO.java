@@ -40,6 +40,9 @@ public class MinProjectDetailVO {
     @ApiModelProperty(value = "归属项目部")
     private String projectDepartment;
 
+    @ApiModelProperty(value = "归属项目部id")
+    private String projectDepartmentId;
+
     @ApiModelProperty(value = "项目业态")
     private String prjState;
 

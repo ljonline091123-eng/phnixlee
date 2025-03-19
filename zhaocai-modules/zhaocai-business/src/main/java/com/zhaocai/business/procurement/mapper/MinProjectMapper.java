@@ -24,4 +24,12 @@ public interface MinProjectMapper extends BaseMapper<MinProject> {
      */
     IPage<MinProject> selectListPage(Page mybatisPage, @Param("requestDTO") MinProjectListRequestDTO requestDTO);
 
+    /**
+     * 通过ID删除项目
+     *
+     * @param id 用户ID
+     * @return 结果
+     */
+    public int deleteMinProjectById(Long id);
+
 }

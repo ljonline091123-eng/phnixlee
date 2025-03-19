@@ -65,8 +65,9 @@
     </resultMap>
 
     <select id="selectListPage" resultMap="MinProjectResult">
-        SELECT * FROM tb_min_project
+        SELECT * FROM tb_min_project mp
         <where>
+            mp.del_flag = 0
             <!-- 根据 management_org_id 查询 -->
             <if test="requestDTO.managementOrgId != null and requestDTO.managementOrgId != ''">
                 AND management_org_id = #{requestDTO.managementOrgId}
@@ -81,6 +82,10 @@
             </if>
         </where>
         <!-- 按照 min_account_code 升序排序 -->
-        ORDER BY min_account_code ASC
+        ORDER BY create_time desc
     </select>
+
+    <delete id="deleteMinProjectById" parameterType="Long">
+        delete from tb_min_project where id=#{id}
+    </delete>
 </mapper>
