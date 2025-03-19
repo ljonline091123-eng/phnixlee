@@ -13,6 +13,7 @@ import com.zhaocai.flowable.domain.dto.FlowProcDefDto;
 import com.zhaocai.flowable.factory.FlowServiceFactory;
 import com.zhaocai.flowable.mapper.FlowDeployMapper;
 import com.zhaocai.flowable.mapper.SysDeployFormMapper;
+import com.zhaocai.flowable.mapper.SysFormMapper;
 import com.zhaocai.flowable.service.IFlowDefinitionService;
 import com.zhaocai.system.api.domain.SysUser;
 import org.apache.commons.io.IOUtils;
@@ -201,6 +202,7 @@ public class FlowDefinitionServiceImpl extends FlowServiceFactory implements IFl
     @Transactional(rollbackFor = Exception.class)
     public Map<String, Object> startProcessInstanceById1(String procDefId, Map<String, Object> variables) {
         try {
+            procDefId = getProcDefIdBySign(procDefId);
             ProcessDefinition processDefinition = repositoryService.createProcessDefinitionQuery().processDefinitionId(procDefId)
                     .latestVersion().singleResult();
             if (Objects.nonNull(processDefinition) && processDefinition.isSuspended()) {
@@ -379,6 +381,19 @@ public class FlowDefinitionServiceImpl extends FlowServiceFactory implements IFl
             // true 允许级联删除 ,不设置会导致数据库外键关联异常
             repositoryService.deleteDeployment(d, true);
         }
+    }
+
+
+    @Resource
+    private SysFormMapper sysFormMapper;
+
+    /**
+     * 根据流程标识key获取流程定义id
+     * @param processDefinitionKey
+     * @return
+     */
+    public String getProcDefIdBySign(String processDefinitionKey) {
+       return sysFormMapper.getProcDefIdBySign(processDefinitionKey);
     }
 
 }

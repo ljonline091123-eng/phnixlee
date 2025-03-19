@@ -5,25 +5,33 @@
 <mapper namespace="com.zhaocai.flowable.mapper.SysFormMapper">
 
     <resultMap type="SysForm" id="SysFormResult">
-        <result property="formId"    column="form_id"    />
-        <result property="formName"    column="form_name"    />
-        <result property="formContent"    column="form_content"    />
-        <result property="createTime"    column="create_time"    />
-        <result property="updateTime"    column="update_time"    />
-        <result property="createBy"    column="create_by"    />
-        <result property="updateBy"    column="update_by"    />
-        <result property="remark"    column="remark"    />
+        <result property="formId" column="form_id"/>
+        <result property="formName" column="form_name"/>
+        <result property="formContent" column="form_content"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateTime" column="update_time"/>
+        <result property="createBy" column="create_by"/>
+        <result property="updateBy" column="update_by"/>
+        <result property="remark" column="remark"/>
     </resultMap>
 
     <sql id="selectSysFormVo">
-        select form_id, form_name, form_content, create_time, update_time, create_by, update_by, remark from sys_form
+        select form_id,
+               form_name,
+               form_content,
+               create_time,
+               update_time,
+               create_by,
+               update_by,
+               remark
+        from sys_form
     </sql>
 
     <select id="selectSysFormList" parameterType="SysForm" resultMap="SysFormResult">
         <include refid="selectSysFormVo"/>
         <where>
-            <if test="formName != null  and formName != ''"> and form_name like concat('%', #{formName}, '%')</if>
-            <if test="formContent != null  and formContent != ''"> and form_content = #{formContent}</if>
+            <if test="formName != null  and formName != ''">and form_name like concat('%', #{formName}, '%')</if>
+            <if test="formContent != null  and formContent != ''">and form_content = #{formContent}</if>
         </where>
         order by create_time desc
     </select>
@@ -70,7 +78,9 @@
     </update>
 
     <delete id="deleteSysFormById" parameterType="Long">
-        delete from sys_form where form_id = #{formId}
+        delete
+        from sys_form
+        where form_id = #{formId}
     </delete>
 
     <delete id="deleteSysFormByIds" parameterType="String">
@@ -79,4 +89,15 @@
             #{formId}
         </foreach>
     </delete>
+
+    <select id="getProcDefIdBySign" parameterType="string" resultType="string">
+        select t1.ID_
+        from flw_sign_compare t,
+             act_re_procdef t1
+        where t.sign_id = t1.KEY_
+          and t1.SUSPENSION_STATE_ = '1'
+          and t.id = #{id}
+        order by VERSION_ desc limit 1
+    </select>
+
 </mapper>
