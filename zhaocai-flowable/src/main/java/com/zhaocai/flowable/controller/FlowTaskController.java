@@ -306,4 +306,21 @@ public class FlowTaskController extends BaseController {
             return AjaxResult.error("高亮历史任务失败");
         }
     }
+
+
+    /**
+     * 获取初始化参数
+     * @param variables
+     * @return
+     */
+    @PostMapping("/initialize")
+    public AjaxResult initialize(@RequestBody Map<String, Object> variables){
+        try {
+            return AjaxResult.success(flowTaskService.initialize(variables));
+        } catch (Exception e) {
+            e.printStackTrace();
+            return AjaxResult.error("初始化接口异常");
+        }
+
+    }
 }

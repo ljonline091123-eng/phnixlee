@@ -23,4 +23,6 @@ public interface RemoteFlowableService {
     AjaxResult startReturnInstanceId(@ApiParam(value = "流程定义id") @PathVariable(value = "procDefId") String procDefId,
                                                 @ApiParam(value = "变量集合,json对象") @RequestBody Map<String, Object> variables) ;
 
+    @PostMapping("/task/initialize")
+    AjaxResult initialize(@RequestBody Map<String, Object> variables);
 }

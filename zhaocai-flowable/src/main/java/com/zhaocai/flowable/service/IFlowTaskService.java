@@ -219,4 +219,6 @@ public interface IFlowTaskService {
     FlowNextDto getNextFlowNode(FlowTaskVo flowTaskVo);
 
     FlowNextDto getNextFlowNodeByStart(FlowTaskVo flowTaskVo);
+
+    Map<String, Object>  initialize(Map<String, Object> variables);
 }

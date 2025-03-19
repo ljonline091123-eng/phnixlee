@@ -13,34 +13,30 @@ import com.zhaocai.common.core.utils.DateUtils;
 import com.zhaocai.common.security.utils.SecurityUtils;
 import com.zhaocai.flowable.common.constant.ProcessConstants;
 import com.zhaocai.flowable.common.enums.FlowComment;
-import com.zhaocai.flowable.domain.vo.FlowTaskVo;
-import com.zhaocai.flowable.factory.FlowServiceFactory;
-import com.zhaocai.flowable.service.IFlowTaskService;
-import com.zhaocai.flowable.service.ISysDeployFormService;
 import com.zhaocai.flowable.domain.SysForm;
 import com.zhaocai.flowable.domain.SysProcessTitle;
 import com.zhaocai.flowable.domain.SysTaskCc;
 import com.zhaocai.flowable.domain.dto.*;
+import com.zhaocai.flowable.domain.vo.FlowTaskVo;
+import com.zhaocai.flowable.factory.FlowServiceFactory;
 import com.zhaocai.flowable.flow.CustomProcessDiagramGenerator;
 import com.zhaocai.flowable.flow.FindNextNodeUtil;
 import com.zhaocai.flowable.flow.FlowableUtils;
 import com.zhaocai.flowable.mapper.FlowDeployMapper;
 import com.zhaocai.flowable.mapper.FlowHistericTaskMapper;
 import com.zhaocai.flowable.mapper.SysTaskCcMapper;
+import com.zhaocai.flowable.service.IFlowTaskService;
+import com.zhaocai.flowable.service.ISysDeployFormService;
 import com.zhaocai.system.api.domain.SysDept;
-import com.zhaocai.system.api.system.RemoteUserService;
 import com.zhaocai.system.api.domain.SysRole;
 import com.zhaocai.system.api.domain.SysUser;
+import com.zhaocai.system.api.system.RemoteUserService;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.ObjectUtils;
 import org.apache.commons.lang3.StringUtils;
-import org.flowable.bpmn.model.BpmnModel;
-import org.flowable.bpmn.model.EndEvent;
-import org.flowable.bpmn.model.FlowElement;
-import org.flowable.bpmn.model.MultiInstanceLoopCharacteristics;
 import org.flowable.bpmn.model.Process;
-import org.flowable.bpmn.model.UserTask;
+import org.flowable.bpmn.model.*;
 import org.flowable.common.engine.api.FlowableException;
 import org.flowable.common.engine.api.FlowableObjectNotFoundException;
 import org.flowable.common.engine.impl.identity.Authentication;
@@ -67,13 +63,7 @@ import javax.annotation.Resource;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
@@ -115,7 +105,6 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
     /**
      * 多实例加签
      * act_ru_task、act_ru_identitylink各生成一条记录
-     *
      */
     @Override
     public void addMultiInstanceExecution(FlowTaskVo flowTaskVo) {
@@ -189,7 +178,7 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
             Long userId = SecurityUtils.getLoginUser().getSysUser().getUserId();
             taskService.setAssignee(taskVo.getTaskId(), userId.toString());
             //更新全局变量
-            taskService.setVariables(taskVo.getTaskId(),taskVo.getVariables());
+            taskService.setVariables(taskVo.getTaskId(), taskVo.getVariables());
             taskService.complete(taskVo.getTaskId(), taskVo.getValues());
         }
         return true;
@@ -204,7 +193,7 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
     @Override
     public Boolean batchComplete(String[] taskIds) {
         Long userId = SecurityUtils.getLoginUser().getSysUser().getUserId();
-        for (String ts:taskIds) {
+        for (String ts : taskIds) {
             taskService.setAssignee(ts, userId.toString());
             taskService.complete(ts);
         }
@@ -221,10 +210,10 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
     public Boolean courtesyCopy(FlowTaskVo task) {
         //根据任务id匹配,若已存在任务id,便覆盖,不存在,则插入
         Integer count = sysTaskCcMapper.selectSysTaskCcCountByinstanceId(task.getInstanceId());
-        if(count > 0){
+        if (count > 0) {
             sysTaskCcMapper.deleteSysTaskCcByinstanceId(task.getInstanceId());
         }
-        List<SysTaskCc> ccList= Arrays.stream(task.getUserId().split(",")).map(s -> new SysTaskCc(task.getInstanceId(), s)).collect(Collectors.toList());
+        List<SysTaskCc> ccList = Arrays.stream(task.getUserId().split(",")).map(s -> new SysTaskCc(task.getInstanceId(), s)).collect(Collectors.toList());
 
         //在此处可发送企业微信消息等通知,自行结合业务实现
 
@@ -526,35 +515,35 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void assignTask(FlowTaskVo flowTaskVo) {
-        if(ObjectUtils.allNull(flowTaskVo.getValues().get(ProcessConstants.PROCESS_APPROVAL))){
+        if (ObjectUtils.allNull(flowTaskVo.getValues().get(ProcessConstants.PROCESS_APPROVAL))) {
             throw new CheckedException("未指定转办人");
         }
-        if(String.valueOf(flowTaskVo.getValues().get(ProcessConstants.PROCESS_APPROVAL)).contains(",")){
+        if (String.valueOf(flowTaskVo.getValues().get(ProcessConstants.PROCESS_APPROVAL)).contains(",")) {
             throw new CheckedException("只能转办给一人");
         }
         //添加审批意见
         taskService.addComment(flowTaskVo.getTaskId(), flowTaskVo.getInstanceId(), FlowComment.NORMAL.getType(), flowTaskVo.getComment());
-        taskService.setAssignee(flowTaskVo.getTaskId(),String.valueOf(flowTaskVo.getValues().get(ProcessConstants.PROCESS_APPROVAL)));
+        taskService.setAssignee(flowTaskVo.getTaskId(), String.valueOf(flowTaskVo.getValues().get(ProcessConstants.PROCESS_APPROVAL)));
         //更新全局变量
-        taskService.setVariables(flowTaskVo.getTaskId(),flowTaskVo.getVariables());
+        taskService.setVariables(flowTaskVo.getTaskId(), flowTaskVo.getVariables());
     }
 
     /**
      * 我发起的流程
      *
-     * @param pageNum 当前页
-     * @param pageSize 页大小
+     * @param pageNum     当前页
+     * @param pageSize    页大小
      * @param flowTaskDto 参数
      */
     @Override
-    public Map<String, Object> myProcess(Integer pageNum, Integer pageSize,FlowTaskDto flowTaskDto) {
+    public Map<String, Object> myProcess(Integer pageNum, Integer pageSize, FlowTaskDto flowTaskDto) {
         Long userId = SecurityUtils.getLoginUser().getSysUser().getUserId();
         Map<String, Object> params = flowTaskDto.getParams();
-        if(!SecurityUtils.isAdmin(userId)){
-            params.put("assignee",userId);
+        if (!SecurityUtils.isAdmin(userId)) {
+            params.put("assignee", userId);
         }
-        params.put("pageNum",pageSize * (pageNum - 1));
-        params.put("pageSize",pageSize);
+        params.put("pageNum", pageSize * (pageNum - 1));
+        params.put("pageSize", pageSize);
         flowTaskDto.setParams(params);
         Integer count = flowHistericTaskMapper.selectFlowHistoricProcessInstanceCount(flowTaskDto);
         List<HistoricProcessInstanceDTO> historicProcessInstances = flowHistericTaskMapper.selectFlowHistoricProcessInstance(flowTaskDto);
@@ -585,7 +574,7 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
             flowTask.setProcDefVersion(pd.getVersion());
             // 当前所处流程
             R<SysUser> startUser = remoteuserservice.selectUserInFoById(hisIns.getStartUserId(), SecurityConstants.INNER);
-            if(startUser.getCode() == HttpStatus.ERROR){
+            if (startUser.getCode() == HttpStatus.ERROR) {
                 throw new CheckedException("获取用户信息失败");
             }
             flowTask.setStartUserId(String.valueOf(startUser.getData().getUserId()));
@@ -596,24 +585,24 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
                 Task currtask = taskList.get(0);
                 flowTask.setTaskId(currtask.getId());
                 flowTask.setTaskName(currtask.getName());
-                if(currtask.getAssignee() !=null){
+                if (currtask.getAssignee() != null) {
                     R<SysUser> assigneeName = remoteuserservice.selectUserInFoById(Long.parseLong(currtask.getAssignee()), SecurityConstants.INNER);
-                    if(assigneeName.getCode() == HttpStatus.ERROR){
+                    if (assigneeName.getCode() == HttpStatus.ERROR) {
                         throw new CheckedException("获取用户信息失败");
                     }
                     flowTask.setAssigneeName(assigneeName.getData().getNickName());
                 }
 
-            }else{
+            } else {
                 List<HistoricTaskInstance> historicTaskInstance = historyService.createHistoricTaskInstanceQuery().
                         processInstanceId(hisIns.getProcInsId()).orderByHistoricTaskInstanceEndTime().desc().list();
-                if(CollectionUtils.isNotEmpty(historicTaskInstance)){
+                if (CollectionUtils.isNotEmpty(historicTaskInstance)) {
                     HistoricTaskInstance histask = historicTaskInstance.get(0);
                     flowTask.setTaskId(histask.getId());
                     flowTask.setTaskName(histask.getName());
-                    if(histask.getAssignee()!=null){
+                    if (histask.getAssignee() != null) {
                         R<SysUser> assigneeName = remoteuserservice.selectUserInFoById(Long.parseLong(histask.getAssignee()), SecurityConstants.INNER);
-                        if(assigneeName.getCode() == HttpStatus.ERROR){
+                        if (assigneeName.getCode() == HttpStatus.ERROR) {
                             throw new CheckedException("获取用户信息失败");
                         }
                         flowTask.setAssigneeName(assigneeName.getData().getNickName());
@@ -622,15 +611,16 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
             }
             flowList.add(flowTask);
         }
-        Map<String, Object> re=new HashMap<>(2);
-        re.put("data",flowList);
-        re.put("total",count);
+        Map<String, Object> re = new HashMap<>(2);
+        re.put("data", flowList);
+        re.put("total", count);
         return re;
     }
 
     /**
      * 取消申请
      * 目前实现方式: 直接将当前流程变更为已完成
+     *
      * @param flowTaskVo 参数
      */
     @Override
@@ -668,13 +658,14 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
 
     /**
      * 撤回任务到上一步
+     *
      * @param flowTaskVo 参数
      * @return 结果
      */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public boolean revokeProcess(FlowTaskVo flowTaskVo) {
-        String processInstanceId=flowTaskVo.getInstanceId();
+        String processInstanceId = flowTaskVo.getInstanceId();
         // 获取当前流程实例的任务列表
         List<Task> tasks = taskService.createTaskQuery()
                 .processInstanceId(processInstanceId)
@@ -733,12 +724,12 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
     /**
      * 待办任务列表
      *
-     * @param pageNum  当前页码
-     * @param pageSize 每页条数
+     * @param pageNum     当前页码
+     * @param pageSize    每页条数
      * @param flowtaskdto 参数
      */
     @Override
-    public Map<String, Object> todoList(Integer pageNum, Integer pageSize,FlowTaskDto flowtaskdto) {
+    public Map<String, Object> todoList(Integer pageNum, Integer pageSize, FlowTaskDto flowtaskdto) {
         SysUser sysUser = SecurityUtils.getLoginUser().getSysUser();
         List<String> roleList = new ArrayList<>();
         TaskQuery taskQuery = taskService.createTaskQuery();
@@ -746,44 +737,43 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
         taskQuery
                 .active()
                 .includeProcessVariables();
-        if(StringUtils.isNotBlank(flowtaskdto.getProcDefName())){
+        if (StringUtils.isNotBlank(flowtaskdto.getProcDefName())) {
             taskQuery.processDefinitionNameLike(flowtaskdto.getProcDefName());
         }
-        if(ObjectUtils.isNotEmpty(flowtaskdto.getParams().get("beginTime"))){
+        if (ObjectUtils.isNotEmpty(flowtaskdto.getParams().get("beginTime"))) {
             taskQuery.taskCreatedAfter(DateUtils.parseDate(flowtaskdto.getParams().get("beginTime")));
         }
-        if(ObjectUtils.isNotEmpty(flowtaskdto.getParams().get("endTime"))){
+        if (ObjectUtils.isNotEmpty(flowtaskdto.getParams().get("endTime"))) {
             taskQuery.taskCreatedBefore(DateUtils.parseDate(flowtaskdto.getParams().get("endTime")));
         }
         taskQuery.or().taskAssignee(String.valueOf(sysUser.getUserId()))
                 .taskCandidateOrAssigned(String.valueOf(sysUser.getUserId()));
-
         List<SysRole> roles = sysUser.getRoles();
-        if(CollectionUtil.isNotEmpty(roles)){
-            roles.forEach(f->
+        if (CollectionUtil.isNotEmpty(roles)) {
+            roles.forEach(f ->
                     roleList.add(String.valueOf(f.getRoleId()))
             );
             taskQuery.taskCandidateGroupIn(roleList).endOr();
-        }else {
+        } else {
             taskQuery.endOr();
         }
 
         List<Task> taskList = taskQuery.orderByTaskCreateTime().desc().listPage(pageSize * (pageNum - 1), pageSize);
-        Map<String, Object> re=new HashMap<>(2);
-        re.put("data",todoListIntegration(taskList));
-        re.put("total",(int) taskQuery.count());
+        Map<String, Object> re = new HashMap<>(2);
+        re.put("data", todoListIntegration(taskList));
+        re.put("total", (int) taskQuery.count());
         return re;
     }
 
     /**
      * 待办任务列表
      *
-     * @param pageNum  当前页码
-     * @param pageSize 每页条数
+     * @param pageNum     当前页码
+     * @param pageSize    每页条数
      * @param flowtaskdto 参数
      */
     @Override
-    public Map<String, Object> todoListV2(Integer pageNum, Integer pageSize,FlowTaskDto flowtaskdto) {
+    public Map<String, Object> todoListV2(Integer pageNum, Integer pageSize, FlowTaskDto flowtaskdto) {
         SysUser sysUser = SecurityUtils.getLoginUser().getSysUser();
         List<String> roleList = new ArrayList<>();
         TaskQuery taskQuery = taskService.createTaskQuery();
@@ -791,13 +781,13 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
         taskQuery
                 .active()
                 .includeProcessVariables();
-        if(StringUtils.isNotBlank(flowtaskdto.getProcDefName())){
+        if (StringUtils.isNotBlank(flowtaskdto.getProcDefName())) {
             taskQuery.processDefinitionNameLike(flowtaskdto.getProcDefName());
         }
-        if(ObjectUtils.isNotEmpty(flowtaskdto.getParams().get("beginTime"))){
+        if (ObjectUtils.isNotEmpty(flowtaskdto.getParams().get("beginTime"))) {
             taskQuery.taskCreatedAfter(DateUtils.parseDate(flowtaskdto.getParams().get("beginTime")));
         }
-        if(ObjectUtils.isNotEmpty(flowtaskdto.getParams().get("endTime"))){
+        if (ObjectUtils.isNotEmpty(flowtaskdto.getParams().get("endTime"))) {
             taskQuery.taskCreatedBefore(DateUtils.parseDate(flowtaskdto.getParams().get("endTime")));
         }
 //        taskQuery.or().taskAssignee(String.valueOf(sysUser.getUserId()))
@@ -811,16 +801,16 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
 //            taskQuery.endOr();
 //        }
         List<Task> taskList = taskQuery.orderByTaskCreateTime().desc().listPage(pageSize * (pageNum - 1), pageSize);
-        Map<String, Object> re=new HashMap<>(2);
-        re.put("data",todoListIntegration(taskList));
-        re.put("total",(int) taskQuery.count());
+        Map<String, Object> re = new HashMap<>(2);
+        re.put("data", todoListIntegration(taskList));
+        re.put("total", (int) taskQuery.count());
         return re;
     }
 
     /**
-     *  待办任务列表整合
+     * 待办任务列表整合
      */
-    private List<FlowTaskDto> todoListIntegration(List<Task> taskList){
+    private List<FlowTaskDto> todoListIntegration(List<Task> taskList) {
         List<FlowTaskDto> flowList = new ArrayList<>();
         for (Task task : Objects.requireNonNull(taskList)) {
             FlowTaskDto flowTask = new FlowTaskDto();
@@ -833,7 +823,7 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
             flowTask.setTaskName(task.getName());
             //获取流程标题
             SysProcessTitle pt = flowDeployMapper.selectSysProcessTitle(task.getProcessInstanceId());
-            if(pt!=null){
+            if (pt != null) {
                 flowTask.setProcessTitle(pt.getProcessTitle());
             }
             // 流程定义信息
@@ -849,8 +839,8 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
                     .singleResult();
             if (historicProcessInstance != null && StringUtils.isNotBlank(historicProcessInstance.getStartUserId())) {
                 R<SysUser> startUser = remoteuserservice.selectUserInFoById(Long.parseLong(historicProcessInstance.getStartUserId()), SecurityConstants.INNER);
-                if(startUser.getCode() == HttpStatus.ERROR){
-                    throw new CheckedException("获取用户信息失败:"+startUser.getMsg());
+                if (startUser.getCode() == HttpStatus.ERROR) {
+                    throw new CheckedException("获取用户信息失败:" + startUser.getMsg());
                 }
                 flowTask.setStartUserId(String.valueOf(startUser.getData().getUserId()));
                 flowTask.setStartUserName(startUser.getData().getNickName());
@@ -866,16 +856,16 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
     /**
      * 已办任务列表
      *
-     * @param pageNum  当前页码
-     * @param pageSize 每页条数
+     * @param pageNum     当前页码
+     * @param pageSize    每页条数
      * @param flowTaskDto 参数
      */
     @Override
-    public Map<String, Object> finishedList(Integer pageNum, Integer pageSize,FlowTaskDto flowTaskDto) {
+    public Map<String, Object> finishedList(Integer pageNum, Integer pageSize, FlowTaskDto flowTaskDto) {
         Map<String, Object> params = flowTaskDto.getParams();
-        params.put("assignee",SecurityUtils.getLoginUser().getSysUser().getUserId());
-        params.put("pageNum",pageSize * (pageNum - 1));
-        params.put("pageSize",pageSize);
+        params.put("assignee", SecurityUtils.getLoginUser().getSysUser().getUserId());
+        params.put("pageNum", pageSize * (pageNum - 1));
+        params.put("pageSize", pageSize);
         flowTaskDto.setParams(params);
 
         List<HistoricTaskInstanceDTO> historicTaskInstanceList = flowHistericTaskMapper.selectFlowHistericTaskInstance(flowTaskDto);
@@ -906,25 +896,25 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
             flowTasks.get().setFormId(pd.getFormId());
             hisTaskList.add(flowTasks.get());
         }
-        Map<String, Object> re=new HashMap<>(2);
-        re.put("data",hisTaskList);
-        re.put("total",hcount);
+        Map<String, Object> re = new HashMap<>(2);
+        re.put("data", hisTaskList);
+        re.put("total", hcount);
         return re;
     }
 
     /**
      * 已办任务列表
      *
-     * @param pageNum  当前页码
-     * @param pageSize 每页条数
+     * @param pageNum     当前页码
+     * @param pageSize    每页条数
      * @param flowTaskDto 参数
      */
     @Override
-    public Map<String, Object> finishedListV2(Integer pageNum, Integer pageSize,FlowTaskDto flowTaskDto) {
+    public Map<String, Object> finishedListV2(Integer pageNum, Integer pageSize, FlowTaskDto flowTaskDto) {
         Map<String, Object> params = flowTaskDto.getParams();
-        params.put("assignee",SecurityUtils.getLoginUser().getSysUser().getUserId());
-        params.put("pageNum",pageSize * (pageNum - 1));
-        params.put("pageSize",pageSize);
+        params.put("assignee", SecurityUtils.getLoginUser().getSysUser().getUserId());
+        params.put("pageNum", pageSize * (pageNum - 1));
+        params.put("pageSize", pageSize);
         flowTaskDto.setParams(params);
 
         List<HistoricTaskInstanceDTO> historicTaskInstanceList = flowHistericTaskMapper.selectFlowHistericTaskInstanceV2(flowTaskDto);
@@ -955,9 +945,9 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
             flowTasks.get().setFormId(pd.getFormId());
             hisTaskList.add(flowTasks.get());
         }
-        Map<String, Object> re=new HashMap<>(2);
-        re.put("data",hisTaskList);
-        re.put("total",hcount);
+        Map<String, Object> re = new HashMap<>(2);
+        re.put("data", hisTaskList);
+        re.put("total", hcount);
         return re;
     }
 
@@ -971,13 +961,13 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
     @Override
     public Map<String, Object> ccList(Integer pageNum, Integer pageSize, FlowTaskDto flowTaskDto) {
         Map<String, Object> params = flowTaskDto.getParams();
-        params.put("userId",SecurityUtils.getLoginUser().getSysUser().getUserId());
-        params.put("pageNum",pageSize * (pageNum - 1));
-        params.put("pageSize",pageSize);
+        params.put("userId", SecurityUtils.getLoginUser().getSysUser().getUserId());
+        params.put("pageNum", pageSize * (pageNum - 1));
+        params.put("pageSize", pageSize);
         flowTaskDto.setParams(params);
         List<CourtesyCopyDTO> copyDTOList = sysTaskCcMapper.selectSysTaskCcList(flowTaskDto);
         List<FlowTaskDto> ccList = Lists.newArrayList();
-        if(!copyDTOList.isEmpty()){
+        if (!copyDTOList.isEmpty()) {
             for (CourtesyCopyDTO inst : copyDTOList) {
                 AtomicReference<FlowTaskDto> flowTasks = new AtomicReference<>(new FlowTaskDto());
                 flowTasks.get().setTaskId(inst.getTaskId());
@@ -1000,9 +990,9 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
             }
         }
 
-        Map<String, Object> re=new HashMap<>(2);
-        re.put("data",ccList);
-        re.put("total",copyDTOList.size());
+        Map<String, Object> re = new HashMap<>(2);
+        re.put("data", ccList);
+        re.put("total", copyDTOList.size());
         return re;
     }
 
@@ -1010,7 +1000,7 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
      * 流程历史流转记录
      *
      * @param procInsId 流程实例ID
-     * @param deployId 部署id
+     * @param deployId  部署id
      */
     @Override
     public Map<String, Object> flowRecord(String procInsId, String deployId) {
@@ -1033,7 +1023,7 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
                         SysUser sysUser = remoteuserservice.selectUserInFoById(Long.parseLong(histIns.getAssignee()), SecurityConstants.INNER).getData();
                         flowTask.setAssigneeId(sysUser.getUserId());
                         flowTask.setAssigneeName(sysUser.getNickName());
-                        if(sysUser.getDept()!=null){
+                        if (sysUser.getDept() != null) {
                             flowTask.setDeptName(sysUser.getDept().getDeptName());
                         }
                     }
@@ -1045,14 +1035,14 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
                         if ("candidate".equals(identityLink.getType())) {
                             if (StringUtils.isNotBlank(identityLink.getUserId())) {
                                 R<SysUser> sysUserR = remoteuserservice.selectUserInFoById(Long.parseLong(identityLink.getUserId()), SecurityConstants.INNER);
-                                if(sysUserR.getCode() == HttpStatus.ERROR){
+                                if (sysUserR.getCode() == HttpStatus.ERROR) {
                                     throw new CheckedException("获取用户信息失败");
                                 }
                                 stringBuilder.append(sysUserR.getData().getNickName()).append(",");
                             }
                             if (StringUtils.isNotBlank(identityLink.getGroupId())) {
                                 R<SysRole> sysRoleR = remoteuserservice.selectRoleById(Long.parseLong(identityLink.getGroupId()), SecurityConstants.INNER);
-                                if(sysRoleR.getCode() == HttpStatus.ERROR){
+                                if (sysRoleR.getCode() == HttpStatus.ERROR) {
                                     throw new CheckedException("获取角色信息失败");
                                 }
                                 stringBuilder.append(sysRoleR.getData().getRoleName()).append(",");
@@ -1066,10 +1056,10 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
                     flowTask.setDuration(histIns.getDurationInMillis() == null || histIns.getDurationInMillis() == 0 ? null : DateUtils.getProcessCompletionTime(histIns.getDurationInMillis()));
                     // 获取意见评论内容
                     List<Comment> commentList = taskService.getProcessInstanceComments(histIns.getProcessInstanceId());
-                    StringBuilder stl=new StringBuilder();
+                    StringBuilder stl = new StringBuilder();
                     commentList.forEach(comment -> {
                         if (histIns.getTaskId().equals(comment.getTaskId())) {
-                            if(comment.getFullMessage() !=null){
+                            if (comment.getFullMessage() != null) {
                                 stl.append(comment.getFullMessage()).append("; ");
                             }
                         }
@@ -1081,12 +1071,11 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
             map.put("flowList", hisFlowList);
         }
         // 如果是第一次流程发起，获取初始化配置的表单
-        if(StringUtils.isNotBlank(deployId)) {
+        if (StringUtils.isNotBlank(deployId)) {
             SysForm sysForm = sysInstanceFormService.selectSysDeployFormByDeployId(deployId);
-//            if (Objects.isNull(sysForm)) {
-//                throw new CheckedException("请先配置流程发起默认需要的流程表单");
-//            }
-            map.put("formData", JSONObject.parseObject(sysForm.getFormContent()));
+            if (sysForm != null) {
+                map.put("formData", JSONObject.parseObject(sysForm.getFormContent()));
+            }
         }
         return map;
     }
@@ -1152,7 +1141,7 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
         List<HistoricActivityInstance> startNodeList = historyService.createHistoricActivityInstanceQuery()
                 .processInstanceId(procInsId)
                 .orderByHistoricActivityInstanceStartTime()
-                .asc().listPage(0,100);
+                .asc().listPage(0, 100);
         for (HistoricActivityInstance startInstance : startNodeList) {
             if (!"sequenceFlow".equals(startInstance.getActivityType())) {
                 flowViewerDto = new FlowViewerDto();
@@ -1229,6 +1218,15 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
             }
         }
         return flowNextDto;
+    }
+
+    @Override
+    public Map<String, Object> initialize(Map<String, Object> variables) {
+        Map<String, Object> variablesMap = new HashMap<>();
+        //TODO
+        variablesMap.put("revokable", true);
+        variablesMap.put("auditable", true);
+        return variablesMap;
     }
 
     /**

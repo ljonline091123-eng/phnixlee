@@ -227,7 +227,7 @@ public class FlowDefinitionServiceImpl extends FlowServiceFactory implements IFl
             /**
              * 将流程标题信息存入
              */
-            int i = flowDeployMapper.insertSysProcessTitle(new SysProcessTitle(processInstance.getId(),String.valueOf(variables.get("processTitle"))));
+            int i = flowDeployMapper.insertSysProcessTitle(new SysProcessTitle(processInstance.getId(),String.valueOf(variables.get("businessTitle"))));
             if(i <=0 ){
                 throw new CheckedException("流程标题添加失败");
             }
