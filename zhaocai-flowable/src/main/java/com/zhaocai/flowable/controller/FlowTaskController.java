@@ -3,26 +3,17 @@ package com.zhaocai.flowable.controller;
 import cn.hutool.json.JSONUtil;
 import com.zhaocai.common.core.web.controller.BaseController;
 import com.zhaocai.common.core.web.domain.AjaxResult;
-import com.zhaocai.common.core.web.page.TableDataInfo;
 import com.zhaocai.common.log.annotation.Log;
 import com.zhaocai.common.log.enums.BusinessType;
-import com.zhaocai.common.security.annotation.RequiresPermissions;
 import com.zhaocai.flowable.domain.dto.FlowTaskDto;
 import com.zhaocai.flowable.domain.dto.FlowViewerDto;
-import com.zhaocai.flowable.service.IFlowTaskService;
 import com.zhaocai.flowable.domain.vo.FlowTaskVo;
+import com.zhaocai.flowable.service.IFlowTaskService;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.web.bind.annotation.DeleteMapping;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import javax.imageio.ImageIO;
 import javax.servlet.http.HttpServletResponse;
@@ -52,7 +43,7 @@ public class FlowTaskController extends BaseController {
     public Map<String, Object> myProcess(@ApiParam(value = "当前页码", required = true) @RequestParam Integer pageNum,
                                          @ApiParam(value = "每页条数", required = true) @RequestParam Integer pageSize,
                                          FlowTaskDto params) {
-        return flowTaskService.myProcess(pageNum, pageSize,params);
+        return flowTaskService.myProcess(pageNum, pageSize, params);
     }
 
     @ApiOperation(value = "取消申请", response = FlowTaskDto.class)
@@ -61,7 +52,7 @@ public class FlowTaskController extends BaseController {
     //@RequiresPermissions("flowable:task:stopProcess")
     public AjaxResult stopProcess(@RequestBody FlowTaskVo flowTaskVo) {
         boolean b = flowTaskService.stopProcess(flowTaskVo);
-        if(b){
+        if (b) {
             return AjaxResult.success();
         }
         return AjaxResult.error();
@@ -78,16 +69,16 @@ public class FlowTaskController extends BaseController {
     @GetMapping(value = "/todoList")
     //@RequiresPermissions("flowable:task:todoList")
     public Map<String, Object> todoList(@ApiParam(value = "当前页码", required = true) @RequestParam Integer pageNum,
-                                  @ApiParam(value = "每页条数", required = true) @RequestParam Integer pageSize, FlowTaskDto params) {
-        return flowTaskService.todoList(pageNum, pageSize,params);
+                                        @ApiParam(value = "每页条数", required = true) @RequestParam Integer pageSize, FlowTaskDto params) {
+        return flowTaskService.todoList(pageNum, pageSize, params);
     }
 
     @ApiOperation(value = "获取待办列表", response = FlowTaskDto.class)
     @GetMapping(value = "/todoListV2")
     //@RequiresPermissions("flowable:task:todoList")
     public Map<String, Object> todoListV2(@ApiParam(value = "当前页码", required = true) @RequestParam Integer pageNum,
-                                        @ApiParam(value = "每页条数", required = true) @RequestParam Integer pageSize, FlowTaskDto params) {
-        return flowTaskService.todoListV2(pageNum, pageSize,params);
+                                          @ApiParam(value = "每页条数", required = true) @RequestParam Integer pageSize, FlowTaskDto params) {
+        return flowTaskService.todoListV2(pageNum, pageSize, params);
     }
 
     @ApiOperation(value = "获取已办任务", response = FlowTaskDto.class)
@@ -103,8 +94,8 @@ public class FlowTaskController extends BaseController {
     @GetMapping(value = "/finishedListV2")
     //@RequiresPermissions("flowable:task:finishedList")
     public Map<String, Object> finishedListV2(@ApiParam(value = "当前页码", required = true) @RequestParam Integer pageNum,
-                                            @ApiParam(value = "每页条数", required = true) @RequestParam Integer pageSize,
-                                            FlowTaskDto params) {
+                                              @ApiParam(value = "每页条数", required = true) @RequestParam Integer pageSize,
+                                              FlowTaskDto params) {
         return flowTaskService.finishedListV2(pageNum, pageSize, params);
     }
 
@@ -121,7 +112,7 @@ public class FlowTaskController extends BaseController {
     @ApiOperation(value = "流程历史流转记录", response = FlowTaskDto.class)
     @GetMapping(value = "/flowRecord")
     public AjaxResult flowRecord(String procInsId, String deployId) {
-        Map<String, Object> flowRecord=flowTaskService.flowRecord(procInsId, deployId);
+        Map<String, Object> flowRecord = flowTaskService.flowRecord(procInsId, deployId);
         return AjaxResult.success(flowRecord);
     }
 
@@ -136,7 +127,7 @@ public class FlowTaskController extends BaseController {
     //@RequiresPermissions("flowable:task:complete")
     @Log(title = "审批任务", businessType = BusinessType.UPDATE)
     public AjaxResult complete(@RequestBody FlowTaskVo params) {
-        if(flowTaskService.complete(params)){
+        if (flowTaskService.complete(params)) {
             return AjaxResult.success();
         }
         return AjaxResult.error();
@@ -147,7 +138,7 @@ public class FlowTaskController extends BaseController {
     @Log(title = "审批任务", businessType = BusinessType.UPDATE)
     public AjaxResult completeCopy(@RequestBody Map<String, Object> variables) {
         FlowTaskVo flowTaskVo = JSONUtil.toBean(JSONUtil.toJsonStr(variables), FlowTaskVo.class);
-        if(flowTaskService.complete(flowTaskVo)){
+        if (flowTaskService.complete(flowTaskVo)) {
             return AjaxResult.success();
         }
         return AjaxResult.error();
@@ -158,10 +149,10 @@ public class FlowTaskController extends BaseController {
     //@RequiresPermissions("flowable:task:batchhandle")
     @Log(title = "批量审批任务", businessType = BusinessType.BATCH)
     public AjaxResult batchComplete(@PathVariable String[] ids) {
-        if(ids.length >10){
+        if (ids.length > 10) {
             return AjaxResult.error("批量审批最多不能超过10条");
         }
-        if(flowTaskService.batchComplete(ids)){
+        if (flowTaskService.batchComplete(ids)) {
             return AjaxResult.success();
         }
         return AjaxResult.error();
@@ -172,7 +163,7 @@ public class FlowTaskController extends BaseController {
     //@RequiresPermissions("flowable:task:handle")
     @Log(title = "抄送任务", businessType = BusinessType.UPDATE)
     public AjaxResult courtesyCopy(@RequestBody FlowTaskVo params) {
-        if(flowTaskService.courtesyCopy(params)){
+        if (flowTaskService.courtesyCopy(params)) {
             return AjaxResult.success("抄送发送成功");
         }
         return AjaxResult.error();
@@ -183,6 +174,16 @@ public class FlowTaskController extends BaseController {
     @Log(title = "驳回任务", businessType = BusinessType.UPDATE)
     //@RequiresPermissions("flowable:task:reject")
     public AjaxResult taskReject(@RequestBody FlowTaskVo flowTaskVo) {
+        flowTaskService.taskReject(flowTaskVo);
+        return AjaxResult.success();
+    }
+
+
+    @ApiOperation(value = "驳回任务")
+    @PostMapping(value = "/rejectCopy")
+    @Log(title = "驳回任务", businessType = BusinessType.UPDATE)
+    public AjaxResult rejectCopy(@RequestBody Map<String, Object> variables) {
+        FlowTaskVo flowTaskVo = JSONUtil.toBean(JSONUtil.toJsonStr(variables), FlowTaskVo.class);
         flowTaskService.taskReject(flowTaskVo);
         return AjaxResult.success();
     }
@@ -294,7 +295,7 @@ public class FlowTaskController extends BaseController {
     /**
      * 获取流程执行节点
      *
-     * @param procInsId 流程实例编号
+     * @param procInsId   流程实例编号
      * @param executionId 任务执行编号
      */
     @RequestMapping("/flowViewer/{procInsId}/{executionId}")
@@ -306,13 +307,14 @@ public class FlowTaskController extends BaseController {
 
     /**
      * 流程节点信息
-     * @param procInsId     流程实例id
+     *
+     * @param procInsId 流程实例id
      */
     @GetMapping("/flowXmlAndNode")
-    public AjaxResult flowXmlAndNode(@RequestParam(value = "procInsId",required = false) String procInsId,
-                                     @RequestParam(value = "deployId",required = false) String deployId){
+    public AjaxResult flowXmlAndNode(@RequestParam(value = "procInsId", required = false) String procInsId,
+                                     @RequestParam(value = "deployId", required = false) String deployId) {
         try {
-            return AjaxResult.success(flowTaskService.flowXmlAndNode(procInsId,deployId));
+            return AjaxResult.success(flowTaskService.flowXmlAndNode(procInsId, deployId));
         } catch (IOException e) {
             e.printStackTrace();
             return AjaxResult.error("高亮历史任务失败");
@@ -322,11 +324,12 @@ public class FlowTaskController extends BaseController {
 
     /**
      * 获取初始化参数
+     *
      * @param variables
      * @return
      */
     @PostMapping("/initialize")
-    public AjaxResult initialize(@RequestBody Map<String, Object> variables){
+    public AjaxResult initialize(@RequestBody Map<String, Object> variables) {
         try {
             return AjaxResult.success(flowTaskService.initialize(variables));
         } catch (Exception e) {
