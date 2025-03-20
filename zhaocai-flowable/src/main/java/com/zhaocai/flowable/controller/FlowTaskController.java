@@ -181,8 +181,7 @@ public class FlowTaskController extends BaseController {
     @Log(title = "驳回任务", businessType = BusinessType.UPDATE)
     public AjaxResult rejectCopy(@RequestBody Map<String, Object> variables) {
         FlowTaskVo flowTaskVo = JSONUtil.toBean(JSONUtil.toJsonStr(variables), FlowTaskVo.class);
-        flowTaskService.taskReject(flowTaskVo);
-        return AjaxResult.success();
+        return AjaxResult.success(flowTaskService.taskReject(flowTaskVo));
     }
 
     @ApiOperation(value = "退回任务")

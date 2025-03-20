@@ -167,8 +167,8 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
      */
     @Transactional(rollbackFor = Exception.class)
     @Override
-    public Map<String,Object> complete(FlowTaskVo taskVo) {
-        Map<String,Object> map = new HashMap<>();
+    public Map<String, Object> complete(FlowTaskVo taskVo) {
+        Map<String, Object> map = new HashMap<>();
         Task task = taskService.createTaskQuery().taskId(taskVo.getTaskId()).singleResult();
         if (Objects.isNull(task)) {
             throw new CheckedException("任务不存在");
@@ -185,12 +185,12 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
             taskService.complete(taskVo.getTaskId(), taskVo.getValues());
         }
         ProcessInstance instance = runtimeService.createProcessInstanceQuery()
-                .processInstanceBusinessKey(taskVo.getInstanceId())
+                .processInstanceId(taskVo.getInstanceId())
                 .singleResult();
         if (instance != null) {
             System.out.println("非终审");
-        }else {
-            map.put("processStatus","4");
+        } else {
+            map.put("processStatus", "4");
         }
         return map;
     }
@@ -237,7 +237,7 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
      * @param flowTaskVo 参数
      */
     @Override
-    public void taskReject(FlowTaskVo flowTaskVo) {
+    public Map<String, Object> taskReject(FlowTaskVo flowTaskVo) {
         if (taskService.createTaskQuery().taskId(flowTaskVo.getTaskId()).singleResult().isSuspended()) {
             throw new CheckedException("任务处于挂起状态!");
         }
@@ -352,8 +352,8 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
         } catch (FlowableException e) {
             throw new CheckedException("无法取消或开始活动");
         }
-
-
+        Map<String, Object> map = new HashMap<>();
+        return map;
     }
 
     /**

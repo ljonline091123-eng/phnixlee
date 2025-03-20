@@ -15,6 +15,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -51,7 +52,7 @@ public class BpmService {
     public BpmInitializeResponseDTO initialize(BpmInitializeRequestDTO requestDTO) {
         requestDTO.setOrgPenetrate(true);
         AjaxResult initialize = remoteFlowableService.initialize(JSONUtil.toBean(JSONUtil.toJsonStr(requestDTO), Map.class));
-        BpmInitializeResponseDTO responseDTO =  JSONUtil.toBean(JSONUtil.toJsonStr(initialize.get("data")), BpmInitializeResponseDTO.class);
+        BpmInitializeResponseDTO responseDTO = JSONUtil.toBean(JSONUtil.toJsonStr(initialize.get("data")), BpmInitializeResponseDTO.class);
 //        BpmInitializeResponseDTO responseDTO = UnderlingRestTemplateService.postForObject(UnderlingPlatformUrlEnum.BPM_OPERATE_INITIALIZE,
 //                BpmInitializeResponseDTO.class, requestDTO);
         try {
@@ -174,22 +175,36 @@ public class BpmService {
      * @return
      */
     public BpmAuditResponseDTO audit(BpmAuditRequestDTO requestDTO) {
-//        requestDTO.setOrgPenetrate(true);
+        requestDTO.setOrgPenetrate(true);
+        Map<String, Object> map = new HashMap<>();
+        map.put("taskId", requestDTO.getCurTaskId());
+        map.put("comment", requestDTO.getOperateComment());
+        map.put("instanceId", requestDTO.getProcessId());
+        map.put("variables", JSONUtil.toBean(JSONUtil.toJsonStr(requestDTO), Map.class));
+        AjaxResult complete;
+        if (requestDTO.isPass()) {
+            complete = remoteFlowableService.completeCopy(map);
+        } else {
+            complete = remoteFlowableService.rejectCopy(map);
+        }
+
+        BpmAuditResponseDTO responseDTO = JSONUtil.toBean(JSONUtil.toJsonStr(complete.get("data")), BpmAuditResponseDTO.class);
 //        BpmAuditResponseDTO responseDTO = UnderlingRestTemplateService.postForObject(UnderlingPlatformUrlEnum.BPM_OPERATE_AUDIT,
 //                BpmAuditResponseDTO.class,requestDTO);
-//        try{
-//            /* 流程操作记录 */
-//            bpmLogService.save(BpmLog.builder()
-//                    .bpmType("审批接口")
-//                    .businessId(requestDTO.getBusinessId())
-//                    .wfProcessId(requestDTO.getProcessId())
-//                    .bpmUrl(UnderlingPlatformUrlEnum.BPM_OPERATE_AUDIT.getUrl())
-//                    .bpmParam(JSONUtil.parse(requestDTO).toString())
-//                    .bpmResponse(JSONUtil.parse(responseDTO).toString())
-//                    .build());
-//        }catch (Exception e){log.error("[  bpmLogService报错  ]{}",e.getMessage());}
-//        return  responseDTO;
-        return null;
+        try {
+            /* 流程操作记录 */
+            bpmLogService.save(BpmLog.builder()
+                    .bpmType("审批接口")
+                    .businessId(requestDTO.getBusinessId())
+                    .wfProcessId(requestDTO.getProcessId())
+                    .bpmUrl(UnderlingPlatformUrlEnum.BPM_OPERATE_AUDIT.getUrl())
+                    .bpmParam(JSONUtil.parse(requestDTO).toString())
+                    .bpmResponse(JSONUtil.parse(responseDTO).toString())
+                    .build());
+        } catch (Exception e) {
+            log.error("[  bpmLogService报错  ]{}", e.getMessage());
+        }
+        return responseDTO;
     }
 
     /**

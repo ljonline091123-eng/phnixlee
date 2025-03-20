@@ -64,7 +64,7 @@ public interface IFlowTaskService {
      * 驳回任务
      *
      */
-    void taskReject(FlowTaskVo flowTaskVo);
+    Map<String,Object> taskReject(FlowTaskVo flowTaskVo);
 
 
     /**
