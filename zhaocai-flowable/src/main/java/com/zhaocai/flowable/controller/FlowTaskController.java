@@ -144,10 +144,9 @@ public class FlowTaskController extends BaseController {
 
     @ApiOperation(value = "审批任务")
     @PostMapping(value = "/completeCopy")
-    //@RequiresPermissions("flowable:task:complete")
     @Log(title = "审批任务", businessType = BusinessType.UPDATE)
-    public AjaxResult completeCopy(@RequestBody Map<String,Object> params) {
-        FlowTaskVo flowTaskVo = JSONUtil.toBean(JSONUtil.toJsonStr(params), FlowTaskVo.class);
+    public AjaxResult completeCopy(@RequestBody Map<String, Object> variables) {
+        FlowTaskVo flowTaskVo = JSONUtil.toBean(JSONUtil.toJsonStr(variables), FlowTaskVo.class);
         if(flowTaskService.complete(flowTaskVo)){
             return AjaxResult.success();
         }

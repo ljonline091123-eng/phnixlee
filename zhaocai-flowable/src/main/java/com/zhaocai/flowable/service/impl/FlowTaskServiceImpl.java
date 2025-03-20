@@ -1330,11 +1330,11 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
             throw new FlowableException("流程实例已结束");
         }
 
-        // 2. 权限验证（发起人或当前处理人）
-        String submitter = (String) runtimeService.getVariable(processInstanceId, "initiator");
-        if (!currentUser.equals(submitter) && !currentUser.equals(currentTask.getAssignee())) {
-            throw new FlowableException("用户无权限驳回");
-        }
+//        // 2. 权限验证（发起人或当前处理人）
+//        String submitter = (String) runtimeService.getVariable(processInstanceId, "initiator");
+//        if (!currentUser.equals(submitter) && !currentUser.equals(currentTask.getAssignee())) {
+//            throw new FlowableException("用户无权限驳回");
+//        }
 
         // 3. 查询历史任务节点（按时间正序排列）
         List<HistoricTaskInstance> historicTasks = historyService.createHistoricTaskInstanceQuery()
@@ -1353,8 +1353,8 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
 
             // 添加到可驳回列表
             Map<String, String> nodeInfo = new HashMap<>();
-            nodeInfo.put("taskId", task.getId());
-            nodeInfo.put("name", task.getName());
+            nodeInfo.put("taskKey", task.getId());
+            nodeInfo.put("taskName", task.getName());
             nodeInfo.put("type", nodeType);
             revokableNodes.add(nodeInfo);
         }
