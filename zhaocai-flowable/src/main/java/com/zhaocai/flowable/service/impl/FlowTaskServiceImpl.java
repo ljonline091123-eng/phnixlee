@@ -10,7 +10,6 @@ import com.zhaocai.common.core.constant.HttpStatus;
 import com.zhaocai.common.core.constant.SecurityConstants;
 import com.zhaocai.common.core.domain.R;
 import com.zhaocai.common.core.exception.CheckedException;
-import com.zhaocai.common.core.exception.ServiceException;
 import com.zhaocai.common.core.utils.DateUtils;
 import com.zhaocai.common.security.utils.SecurityUtils;
 import com.zhaocai.flowable.common.constant.ProcessConstants;
@@ -42,7 +41,6 @@ import org.flowable.bpmn.model.*;
 import org.flowable.common.engine.api.FlowableException;
 import org.flowable.common.engine.api.FlowableObjectNotFoundException;
 import org.flowable.common.engine.impl.identity.Authentication;
-import org.flowable.engine.ProcessEngine;
 import org.flowable.engine.ProcessEngineConfiguration;
 import org.flowable.engine.TaskService;
 import org.flowable.engine.history.HistoricActivityInstance;
@@ -60,13 +58,8 @@ import org.flowable.task.api.DelegationState;
 import org.flowable.task.api.Task;
 import org.flowable.task.api.TaskQuery;
 import org.flowable.task.api.history.HistoricTaskInstance;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
-import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.bind.annotation.*;
 
 import javax.annotation.Resource;
 import java.io.IOException;
@@ -174,7 +167,8 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
      */
     @Transactional(rollbackFor = Exception.class)
     @Override
-    public Boolean complete(FlowTaskVo taskVo) {
+    public Map<String,Object> complete(FlowTaskVo taskVo) {
+        Map<String,Object> map = new HashMap<>();
         Task task = taskService.createTaskQuery().taskId(taskVo.getTaskId()).singleResult();
         if (Objects.isNull(task)) {
             throw new CheckedException("任务不存在");
@@ -190,7 +184,15 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
             taskService.setVariables(taskVo.getTaskId(), taskVo.getVariables());
             taskService.complete(taskVo.getTaskId(), taskVo.getValues());
         }
-        return true;
+        ProcessInstance instance = runtimeService.createProcessInstanceQuery()
+                .processInstanceBusinessKey(taskVo.getInstanceId())
+                .singleResult();
+        if (instance != null) {
+            System.out.println("非终审");
+        }else {
+            map.put("processStatus","4");
+        }
+        return map;
     }
 
     /**
@@ -1230,8 +1232,6 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
     }
 
 
-
-
     @Override
     public Map<String, Object> initialize(Map<String, Object> variables) {
         Map<String, Object> variablesMap = new HashMap<>();
@@ -1283,8 +1283,6 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
         variablesMap.put("nextCandidateList", new ArrayList<>());
 
 
-
-
 //        /* 下一步审批人列表 */
 //        this.nextCandidateList = res.data.nextCandidateList;
 //        /* 下一步审批人是否可选 */
@@ -1311,7 +1309,8 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
 
     /**
      * 获取当前流程可驳回的节点列表
-     * @param taskId 当前任务ID
+     *
+     * @param taskId      当前任务ID
      * @param currentUser 当前用户
      * @return 可驳回节点列表（包含节点ID、名称、类型）
      */
@@ -1349,7 +1348,7 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
         List<Map<String, String>> revokableNodes = new ArrayList<>();
         for (HistoricTaskInstance task : historicTasks) {
             String taskDefKey = task.getTaskDefinitionKey();
-            String nodeType = getNodeType(processDefinitionId,taskDefKey);
+            String nodeType = getNodeType(processDefinitionId, taskDefKey);
 
             // 添加到可驳回列表
             Map<String, String> nodeInfo = new HashMap<>();
@@ -1370,8 +1369,6 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
         FlowElement element = bpmnModel.getFlowElement(taskDefKey);
         return element.getClass().getSimpleName(); // 返回 UserTask/ServiceTask 等类型
     }
-
-
 
 
     /**

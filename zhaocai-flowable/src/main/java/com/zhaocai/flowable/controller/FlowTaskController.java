@@ -122,26 +122,23 @@ public class FlowTaskController extends BaseController {
         return AjaxResult.success(flowTaskService.processVariables(taskId));
     }
 
-    @ApiOperation(value = "审批任务")
-    @PostMapping(value = "/complete")
-    //@RequiresPermissions("flowable:task:complete")
-    @Log(title = "审批任务", businessType = BusinessType.UPDATE)
-    public AjaxResult complete(@RequestBody FlowTaskVo params) {
-        if (flowTaskService.complete(params)) {
-            return AjaxResult.success();
-        }
-        return AjaxResult.error();
-    }
+//    @ApiOperation(value = "审批任务")
+//    @PostMapping(value = "/complete")
+//    //@RequiresPermissions("flowable:task:complete")
+//    @Log(title = "审批任务", businessType = BusinessType.UPDATE)
+//    public AjaxResult complete(@RequestBody FlowTaskVo params) {
+//        if (flowTaskService.complete(params)) {
+//            return AjaxResult.success();
+//        }
+//        return AjaxResult.error();
+//    }
 
     @ApiOperation(value = "审批任务")
     @PostMapping(value = "/completeCopy")
     @Log(title = "审批任务", businessType = BusinessType.UPDATE)
     public AjaxResult completeCopy(@RequestBody Map<String, Object> variables) {
         FlowTaskVo flowTaskVo = JSONUtil.toBean(JSONUtil.toJsonStr(variables), FlowTaskVo.class);
-        if (flowTaskService.complete(flowTaskVo)) {
-            return AjaxResult.success();
-        }
-        return AjaxResult.error();
+        return AjaxResult.success(flowTaskService.complete(flowTaskVo));
     }
 
     @ApiOperation(value = "批量审批任务")

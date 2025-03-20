@@ -45,7 +45,7 @@ public interface IFlowTaskService {
      *
      * @param task 请求实体参数
      */
-    Boolean complete(FlowTaskVo task);
+    Map<String,Object> complete(FlowTaskVo task);
 
     /**
      * 批量审批任务
