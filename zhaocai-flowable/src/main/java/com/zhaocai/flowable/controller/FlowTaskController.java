@@ -1,5 +1,6 @@
 package com.zhaocai.flowable.controller;
 
+import cn.hutool.json.JSONUtil;
 import com.zhaocai.common.core.web.controller.BaseController;
 import com.zhaocai.common.core.web.domain.AjaxResult;
 import com.zhaocai.common.core.web.page.TableDataInfo;
@@ -136,6 +137,18 @@ public class FlowTaskController extends BaseController {
     @Log(title = "审批任务", businessType = BusinessType.UPDATE)
     public AjaxResult complete(@RequestBody FlowTaskVo params) {
         if(flowTaskService.complete(params)){
+            return AjaxResult.success();
+        }
+        return AjaxResult.error();
+    }
+
+    @ApiOperation(value = "审批任务")
+    @PostMapping(value = "/completeCopy")
+    //@RequiresPermissions("flowable:task:complete")
+    @Log(title = "审批任务", businessType = BusinessType.UPDATE)
+    public AjaxResult completeCopy(@RequestBody Map<String,Object> params) {
+        FlowTaskVo flowTaskVo = JSONUtil.toBean(JSONUtil.toJsonStr(params), FlowTaskVo.class);
+        if(flowTaskService.complete(flowTaskVo)){
             return AjaxResult.success();
         }
         return AjaxResult.error();

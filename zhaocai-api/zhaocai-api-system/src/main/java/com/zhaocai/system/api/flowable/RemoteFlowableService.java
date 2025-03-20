@@ -25,4 +25,7 @@ public interface RemoteFlowableService {
 
     @PostMapping("/task/initialize")
     AjaxResult initialize(@RequestBody Map<String, Object> variables);
+
+    @PostMapping(value = "/task/completeCopy")
+    AjaxResult completeCopy(@RequestBody Map<String, Object> variables);
 }
