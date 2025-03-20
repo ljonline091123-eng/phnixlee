@@ -1,26 +1,22 @@
 package com.zhaocai.business.manager.http.service;
 
-import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONUtil;
-import com.zhaocai.business.common.enums.ProcessKeyEnum;
-import com.zhaocai.business.common.exception.BusinessException;
-//import com.zhaocai.business.manager.http.common.config.UnderlingPlatformUrlEnum;
+import com.zhaocai.business.manager.http.common.config.UnderlingPlatformUrlEnum;
 import com.zhaocai.business.manager.http.dto.req.*;
 import com.zhaocai.business.manager.http.dto.res.*;
 import com.zhaocai.business.process.domain.BpmLog;
 import com.zhaocai.business.process.service.IBpmLogService;
 import com.zhaocai.business.procurement.service.IMinProjectService;
-import com.zhaocai.business.procurement.vo.res.MinProjectVO;
-import com.zhaocai.common.core.constant.SecurityConstants;
-import com.zhaocai.common.security.utils.SecurityUtils;
-import com.zhaocai.system.api.domain.SysDept;
+import com.zhaocai.common.core.web.domain.AjaxResult;
+import com.zhaocai.system.api.flowable.RemoteFlowableService;
 import com.zhaocai.system.api.system.RemoteSystemService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
+import javax.annotation.Resource;
 import java.util.List;
+import java.util.Map;
 
 
 /**
@@ -36,38 +32,47 @@ public class BpmService {
     private IBpmLogService bpmLogService;
 
     @Autowired
-    private  UnderlingSystemService underlingSystemService;
+    private UnderlingSystemService underlingSystemService;
 
 
     @Autowired
     private IMinProjectService minProjectService;
 
+
+    @Resource
+    private RemoteFlowableService remoteFlowableService;
+
     /**
      * 初始化接口
+     *
      * @param requestDTO
      * @return
      */
-    public  BpmInitializeResponseDTO initialize(BpmInitializeRequestDTO requestDTO) {
-//        requestDTO.setOrgPenetrate(true);
+    public BpmInitializeResponseDTO initialize(BpmInitializeRequestDTO requestDTO) {
+        requestDTO.setOrgPenetrate(true);
+        AjaxResult initialize = remoteFlowableService.initialize(JSONUtil.toBean(JSONUtil.toJsonStr(requestDTO), Map.class));
+        BpmInitializeResponseDTO responseDTO =  JSONUtil.toBean(JSONUtil.toJsonStr(initialize.get("data")), BpmInitializeResponseDTO.class);
 //        BpmInitializeResponseDTO responseDTO = UnderlingRestTemplateService.postForObject(UnderlingPlatformUrlEnum.BPM_OPERATE_INITIALIZE,
-//                BpmInitializeResponseDTO.class,requestDTO);
-//        try{
-//            /* 流程操作记录 */
-//            bpmLogService.save(BpmLog.builder()
-//                    .bpmType("初始化接口")
-//                    .businessId(requestDTO.getBusinessId())
-//                    .wfProcessId(requestDTO.getProcessId())
-//                    .bpmUrl(UnderlingPlatformUrlEnum.BPM_OPERATE_INITIALIZE.getUrl())
-//                    .bpmParam(JSONUtil.parse(requestDTO).toString())
-//                    .bpmResponse(JSONUtil.parse(responseDTO).toString())
-//                    .build());
-//        }catch (Exception e){log.error("[  bpmLogService报错  ]{}",e.getMessage());}
-//        return  responseDTO;
-        return null;
+//                BpmInitializeResponseDTO.class, requestDTO);
+        try {
+            /* 流程操作记录 */
+            bpmLogService.save(BpmLog.builder()
+                    .bpmType("初始化接口")
+                    .businessId(requestDTO.getBusinessId())
+                    .wfProcessId(requestDTO.getProcessId())
+                    .bpmUrl(UnderlingPlatformUrlEnum.BPM_OPERATE_INITIALIZE.getUrl())
+                    .bpmParam(JSONUtil.parse(requestDTO).toString())
+                    .bpmResponse(JSONUtil.parse(responseDTO).toString())
+                    .build());
+        } catch (Exception e) {
+            log.error("[  bpmLogService报错  ]{}", e.getMessage());
+        }
+        return responseDTO;
     }
 
     /**
      * 流程操作日志列表接口
+     *
      * @param requestDTO
      * @return
      */
@@ -91,6 +96,7 @@ public class BpmService {
 
     /**
      * 弃审接口
+     *
      * @param requestDTO
      * @return
      */
@@ -109,11 +115,12 @@ public class BpmService {
 //                    .build());
 //        }catch (Exception e){log.error("[  bpmLogService报错  ]{}",e.getMessage());}
 //        return  responseDTO;
-        return  null;
+        return null;
     }
 
     /**
      * 撤销
+     *
      * @param requestDTO
      * @return
      */
@@ -132,11 +139,12 @@ public class BpmService {
 //                    .build());
 //        }catch (Exception e){log.error("[  bpmLogService报错  ]{}",e.getMessage());}
 //        return  responseDTO;
-        return  null;
+        return null;
     }
 
     /**
      * 作废
+     *
      * @param requestDTO
      * @return
      */
@@ -155,12 +163,13 @@ public class BpmService {
 //                    .build());
 //        }catch (Exception e){log.error("[  bpmLogService报错  ]{}",e.getMessage());}
 //        return  responseDTO;
-        return  null;
+        return null;
     }
 
 
     /**
      * 审批接口
+     *
      * @param requestDTO
      * @return
      */
@@ -180,11 +189,12 @@ public class BpmService {
 //                    .build());
 //        }catch (Exception e){log.error("[  bpmLogService报错  ]{}",e.getMessage());}
 //        return  responseDTO;
-        return  null;
+        return null;
     }
 
     /**
      * 提交接口
+     *
      * @param requestDTO
      * @return
      */
@@ -242,6 +252,7 @@ public class BpmService {
 
     /**
      * 加载定义接口
+     *
      * @param requestDTO
      * @return
      */
@@ -262,11 +273,12 @@ public class BpmService {
 //                    .build());
 //        }catch (Exception e){log.error("[  bpmLogService报错  ]{}",e.getMessage());}
 //        return  responseDTO;
-        return  null;
+        return null;
     }
 
     /**
-     *  发送无流程消息
+     * 发送无流程消息
+     *
      * @param requestDTO
      * @return
      */
@@ -278,7 +290,8 @@ public class BpmService {
     }
 
     /**
-     *  尝试对流程进行加锁
+     * 尝试对流程进行加锁
+     *
      * @param requestDTO
      * @return
      */
@@ -286,11 +299,12 @@ public class BpmService {
 //        BpmTryLockResponseDTO responseDTO = UnderlingRestTemplateService.postForObject(UnderlingPlatformUrlEnum.BPM_OPERATE_TRYLOCK,
 //                BpmTryLockResponseDTO.class,requestDTO);
 //        return  responseDTO;
-        return  null;
+        return null;
     }
 
     /**
      * 解锁
+     *
      * @param requestDTO
      * @return
      */

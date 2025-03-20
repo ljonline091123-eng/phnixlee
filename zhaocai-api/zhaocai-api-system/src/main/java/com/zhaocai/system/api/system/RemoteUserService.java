@@ -91,4 +91,7 @@ public interface RemoteUserService
     @PutMapping("/user/resetPwd")
     AjaxResult resetPwd(@RequestBody SysUser sysUser, @RequestHeader(SecurityConstants.FROM_SOURCE) String source);
 
+    @GetMapping("/user/authRole/{userId}")
+    AjaxResult authRole(@PathVariable("userId") Long userId);
+
 }

@@ -3,12 +3,14 @@ package com.zhaocai.flowable.service.impl;
 
 import cn.hutool.core.collection.CollectionUtil;
 import cn.hutool.core.util.ObjectUtil;
+import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
 import com.google.common.collect.Lists;
 import com.zhaocai.common.core.constant.HttpStatus;
 import com.zhaocai.common.core.constant.SecurityConstants;
 import com.zhaocai.common.core.domain.R;
 import com.zhaocai.common.core.exception.CheckedException;
+import com.zhaocai.common.core.exception.ServiceException;
 import com.zhaocai.common.core.utils.DateUtils;
 import com.zhaocai.common.security.utils.SecurityUtils;
 import com.zhaocai.flowable.common.constant.ProcessConstants;
@@ -41,6 +43,7 @@ import org.flowable.common.engine.api.FlowableException;
 import org.flowable.common.engine.api.FlowableObjectNotFoundException;
 import org.flowable.common.engine.impl.identity.Authentication;
 import org.flowable.engine.ProcessEngineConfiguration;
+import org.flowable.engine.TaskService;
 import org.flowable.engine.history.HistoricActivityInstance;
 import org.flowable.engine.history.HistoricProcessInstance;
 import org.flowable.engine.impl.cmd.AddMultiInstanceExecutionCmd;
@@ -1220,12 +1223,51 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
         return flowNextDto;
     }
 
+
+    @Resource
+    private RemoteUserService remoteUserService;
+
     @Override
     public Map<String, Object> initialize(Map<String, Object> variables) {
         Map<String, Object> variablesMap = new HashMap<>();
-        //TODO
-        variablesMap.put("revokable", true);
-        variablesMap.put("auditable", true);
+
+        ProcessInstance instance = runtimeService.createProcessInstanceQuery()
+                .processInstanceId(variables.get("processId") + "")
+                .singleResult();
+        if (instance == null) {
+            variablesMap.put("revokable", false);
+            variablesMap.put("auditable", false);
+            variablesMap.put("businessId", null);
+            variablesMap.put("processId", null);
+            return variablesMap;
+        }
+        //默认都不能撤回
+        variablesMap.put("revokable", false);
+        TaskService taskService = processEngine.getTaskService();
+
+        List<Task> userTasks = taskService.createTaskQuery()
+                .processInstanceId(variables.get("processId") + "")
+                .taskAssignee(SecurityUtils.getUserId() + "")
+                .active()
+                .list();
+
+        List<SysRole> roles = JSONArray.parseArray(JSONObject.toJSONString(remoteUserService.authRole(SecurityUtils.getUserId()).get("roles")), SysRole.class);
+        List<String> collect = roles.stream().map(SysRole::getRoleId).map(String::valueOf).collect(Collectors.toList());
+        List<Task> userTasks1 = taskService.createTaskQuery()
+                .processInstanceId(variables.get("processId") + "")
+                .active()
+                .taskCandidateGroupIn(collect)
+                .list();
+        String businessId = "";
+        if (!userTasks.isEmpty()) {
+            businessId = this.processVariables(userTasks.get(0).getId()).get("businessId") + "";
+        }
+        if (!userTasks1.isEmpty()) {
+            businessId = this.processVariables(userTasks1.get(0).getId()).get("businessId") + "";
+        }
+        variablesMap.put("auditable", !userTasks.isEmpty() || !userTasks1.isEmpty());
+        variablesMap.put("businessId", businessId);
+        variablesMap.put("processId", variables.get("processId"));
         return variablesMap;
     }
 
