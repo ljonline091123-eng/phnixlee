@@ -1267,13 +1267,13 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
         if (!userTasks.isEmpty()) {
             businessId = this.processVariables(userTasks.get(0).getId()).get("businessId") + "";
             List<Map<String, String>> revokableNodes = getRevokableNodes(userTasks.get(0).getId(), SecurityUtils.getUserId() + "");
-            variablesMap.put("rejectNodeList", revokableNodes);
+            variablesMap.put("completedTaskList", revokableNodes);
             variablesMap.put("curTaskId", userTasks.get(0).getId());
         }
         if (!userTasks1.isEmpty()) {
             businessId = this.processVariables(userTasks1.get(0).getId()).get("businessId") + "";
             List<Map<String, String>> revokableNodes = getRevokableNodes(userTasks1.get(0).getId(), SecurityUtils.getUserId() + "");
-            variablesMap.put("rejectNodeList", revokableNodes);
+            variablesMap.put("completedTaskList", revokableNodes);
             variablesMap.put("curTaskId", userTasks1.get(0).getId());
         }
         variablesMap.put("auditable", !userTasks.isEmpty() || !userTasks1.isEmpty());
