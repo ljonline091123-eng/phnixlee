@@ -42,6 +42,7 @@ import org.flowable.bpmn.model.*;
 import org.flowable.common.engine.api.FlowableException;
 import org.flowable.common.engine.api.FlowableObjectNotFoundException;
 import org.flowable.common.engine.impl.identity.Authentication;
+import org.flowable.engine.ProcessEngine;
 import org.flowable.engine.ProcessEngineConfiguration;
 import org.flowable.engine.TaskService;
 import org.flowable.engine.history.HistoricActivityInstance;
@@ -59,8 +60,13 @@ import org.flowable.task.api.DelegationState;
 import org.flowable.task.api.Task;
 import org.flowable.task.api.TaskQuery;
 import org.flowable.task.api.history.HistoricTaskInstance;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.bind.annotation.*;
 
 import javax.annotation.Resource;
 import java.io.IOException;
@@ -1224,8 +1230,7 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
     }
 
 
-    @Resource
-    private RemoteUserService remoteUserService;
+
 
     @Override
     public Map<String, Object> initialize(Map<String, Object> variables) {
@@ -1251,7 +1256,7 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
                 .active()
                 .list();
 
-        List<SysRole> roles = JSONArray.parseArray(JSONObject.toJSONString(remoteUserService.authRole(SecurityUtils.getUserId()).get("roles")), SysRole.class);
+        List<SysRole> roles = JSONArray.parseArray(JSONObject.toJSONString(remoteuserservice.authRole(SecurityUtils.getUserId()).get("roles")), SysRole.class);
         List<String> collect = roles.stream().map(SysRole::getRoleId).map(String::valueOf).collect(Collectors.toList());
         List<Task> userTasks1 = taskService.createTaskQuery()
                 .processInstanceId(variables.get("processId") + "")
@@ -1261,15 +1266,113 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
         String businessId = "";
         if (!userTasks.isEmpty()) {
             businessId = this.processVariables(userTasks.get(0).getId()).get("businessId") + "";
+            List<Map<String, String>> revokableNodes = getRevokableNodes(userTasks.get(0).getId(), SecurityUtils.getUserId() + "");
+            variablesMap.put("rejectNodeList", revokableNodes);
+            variablesMap.put("curTaskId", userTasks.get(0).getId());
         }
         if (!userTasks1.isEmpty()) {
             businessId = this.processVariables(userTasks1.get(0).getId()).get("businessId") + "";
+            List<Map<String, String>> revokableNodes = getRevokableNodes(userTasks1.get(0).getId(), SecurityUtils.getUserId() + "");
+            variablesMap.put("rejectNodeList", revokableNodes);
+            variablesMap.put("curTaskId", userTasks1.get(0).getId());
         }
         variablesMap.put("auditable", !userTasks.isEmpty() || !userTasks1.isEmpty());
         variablesMap.put("businessId", businessId);
         variablesMap.put("processId", variables.get("processId"));
+        variablesMap.put("nextAppointable", false);
+        variablesMap.put("nextCandidateList", new ArrayList<>());
+
+
+
+
+//        /* 下一步审批人列表 */
+//        this.nextCandidateList = res.data.nextCandidateList;
+//        /* 下一步审批人是否可选 */
+//        this.nextAppointable = res.data.nextAppointable;
+//        /* 任务阶段 */
+//        this.taskPresentId = res.data.curTaskId;
+//        /* 是否可以审批 */
+//        this.isShowButton = res.data.auditable;
+
+
         return variablesMap;
     }
+
+    /**
+     * 获取当前任务的流程定义ID
+     */
+    private String getProcessDefinitionIdByTask(String taskId) {
+        Task task = taskService.createTaskQuery().taskId(taskId).singleResult();
+        ProcessInstance instance = runtimeService.createProcessInstanceQuery()
+                .processInstanceId(task.getProcessInstanceId())
+                .singleResult();
+        return instance.getProcessDefinitionId();
+    }
+
+    /**
+     * 获取当前流程可驳回的节点列表
+     * @param taskId 当前任务ID
+     * @param currentUser 当前用户
+     * @return 可驳回节点列表（包含节点ID、名称、类型）
+     */
+    public List<Map<String, String>> getRevokableNodes(String taskId, String currentUser) {
+        // 1. 验证当前任务和流程实例
+        Task currentTask = taskService.createTaskQuery().taskId(taskId).singleResult();
+        if (currentTask == null) {
+            throw new FlowableException("任务不存在或已结束");
+        }
+
+        String processInstanceId = currentTask.getProcessInstanceId();
+        ProcessInstance instance = runtimeService.createProcessInstanceQuery()
+                .processInstanceId(processInstanceId)
+                .singleResult();
+        if (instance == null) {
+            throw new FlowableException("流程实例已结束");
+        }
+
+        // 2. 权限验证（发起人或当前处理人）
+        String submitter = (String) runtimeService.getVariable(processInstanceId, "initiator");
+        if (!currentUser.equals(submitter) && !currentUser.equals(currentTask.getAssignee())) {
+            throw new FlowableException("用户无权限驳回");
+        }
+
+        // 3. 查询历史任务节点（按时间正序排列）
+        List<HistoricTaskInstance> historicTasks = historyService.createHistoricTaskInstanceQuery()
+                .processInstanceId(processInstanceId)
+                .orderByHistoricTaskInstanceStartTime().asc()
+                .list();
+
+        // 获取流程定义ID
+        String processDefinitionId = getProcessDefinitionIdByTask(taskId);
+
+        // 4. 过滤不可驳回的节点
+        List<Map<String, String>> revokableNodes = new ArrayList<>();
+        for (HistoricTaskInstance task : historicTasks) {
+            String taskDefKey = task.getTaskDefinitionKey();
+            String nodeType = getNodeType(processDefinitionId,taskDefKey);
+
+            // 添加到可驳回列表
+            Map<String, String> nodeInfo = new HashMap<>();
+            nodeInfo.put("taskId", task.getId());
+            nodeInfo.put("name", task.getName());
+            nodeInfo.put("type", nodeType);
+            revokableNodes.add(nodeInfo);
+        }
+
+        return revokableNodes;
+    }
+
+    /**
+     * 获取节点类型
+     */
+    private String getNodeType(String processDefinitionId, String taskDefKey) {
+        BpmnModel bpmnModel = repositoryService.getBpmnModel(processDefinitionId);
+        FlowElement element = bpmnModel.getFlowElement(taskDefKey);
+        return element.getClass().getSimpleName(); // 返回 UserTask/ServiceTask 等类型
+    }
+
+
+
 
     /**
      * 获取下一节点
