@@ -78,21 +78,24 @@ public class BpmService {
      * @return
      */
     public List<BpmListProcessLogResponseDTO> listProcessLog(BpmListProcessLogRequestDTO requestDTO) {
+        Map<String,Object> map = new HashMap<>();
+        map.put("procInsId",requestDTO.getProcessId());
+        AjaxResult complete = remoteFlowableService.flowRecordCopy(map);
+        List<BpmListProcessLogResponseDTO> responseDTO = JSONUtil.toList(JSONUtil.toJsonStr(complete.get("data")), BpmListProcessLogResponseDTO.class) ;
 //        List<BpmListProcessLogResponseDTO> responseDTO = UnderlingRestTemplateService.listForObject(UnderlingPlatformUrlEnum.BPM_OPERATE_LISTPROCESSLOG,
 //                BpmListProcessLogResponseDTO.class,requestDTO);
-//        try{
-//            /* 流程操作记录 */
-//            bpmLogService.save(BpmLog.builder()
-//                    .bpmType("流程操作日志列表接口")
-//                    .businessId(requestDTO.getBusinessId())
-//                    .wfProcessId(requestDTO.getProcessId())
-//                    .bpmUrl(UnderlingPlatformUrlEnum.BPM_OPERATE_LISTPROCESSLOG.getUrl())
-//                    .bpmParam(JSONUtil.parse(requestDTO).toString())
-//                    .bpmResponse(JSONUtil.parse(responseDTO).toString())
-//                    .build());
-//        }catch (Exception e){log.error("[  bpmLogService报错  ]{}",e.getMessage());}
-//        return  responseDTO;
-        return null;
+        try{
+            /* 流程操作记录 */
+            bpmLogService.save(BpmLog.builder()
+                    .bpmType("流程操作日志列表接口")
+                    .businessId(requestDTO.getBusinessId())
+                    .wfProcessId(requestDTO.getProcessId())
+                    .bpmUrl(UnderlingPlatformUrlEnum.BPM_OPERATE_LISTPROCESSLOG.getUrl())
+                    .bpmParam(JSONUtil.parse(requestDTO).toString())
+                    .bpmResponse(JSONUtil.parse(responseDTO).toString())
+                    .build());
+        }catch (Exception e){log.error("[  bpmLogService报错  ]{}",e.getMessage());}
+        return  responseDTO;
     }
 
     /**
@@ -276,8 +279,7 @@ public class BpmService {
         requestDTO.setOrgPenetrate(true);
         Map<String,Object> map = new HashMap<>();
         map.put("procInsId",requestDTO.getProcessId());
-        map.put("deployId",requestDTO.getProcessId());
-        AjaxResult complete = remoteFlowableService.flowRecordCopy(map);
+        AjaxResult complete = remoteFlowableService.loadTaskDef(map);
         List<BpmLoadTaskDefResponseDTO> responseDTO = JSONUtil.toList(JSONUtil.toJsonStr(complete.get("data")), BpmLoadTaskDefResponseDTO.class) ;
 //        List<BpmLoadTaskDefResponseDTO> responseDTO = UnderlingRestTemplateService.postForList(UnderlingPlatformUrlEnum.BPM_OPERATE_LOADTASKDEF,
 //                BpmLoadTaskDefResponseDTO.class,requestDTO);

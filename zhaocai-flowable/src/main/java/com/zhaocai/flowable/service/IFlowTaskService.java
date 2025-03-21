@@ -221,4 +221,7 @@ public interface IFlowTaskService {
     FlowNextDto getNextFlowNodeByStart(FlowTaskVo flowTaskVo);
 
     Map<String, Object>  initialize(Map<String, Object> variables);
+
+
+    List<Map<String, Object>> loadTaskDef(String processInstanceId);
 }
