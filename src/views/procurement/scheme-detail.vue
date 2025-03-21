@@ -25,24 +25,24 @@
           >
         </div>
         <div v-if="bpmInitData.revokable">
-<!--          <el-button type="primary" size="mini" @click="handelWithdrawalPlan"-->
-<!--            >撤回</el-button-->
-<!--          >-->
+          <el-button type="primary" size="mini" @click="handelWithdrawalPlan"
+            >撤回</el-button
+          >
         </div>
         <div class="permissionButton button-group">
-<!--          <el-button-->
-<!--            type="primary"-->
-<!--            size="mini"-->
-<!--            v-if="bpmInitData.auditable"-->
-<!--            @click="handelSanction"-->
-<!--            >审批</el-button-->
-<!--          >-->
-<!--          <el-button-->
-<!--            type="primary"-->
-<!--            size="mini"-->
-<!--            @click="handelCalibrationApproval"-->
-<!--            >审批详情</el-button-->
-<!--          >-->
+          <el-button
+            type="primary"
+            size="mini"
+            v-if="bpmInitData.auditable"
+            @click="handelSanction"
+            >审批</el-button
+          >
+          <el-button
+            type="primary"
+            size="mini"
+            @click="handelCalibrationApproval"
+            >审批详情</el-button
+          >
         </div>
       </div>
     </BackButton>
