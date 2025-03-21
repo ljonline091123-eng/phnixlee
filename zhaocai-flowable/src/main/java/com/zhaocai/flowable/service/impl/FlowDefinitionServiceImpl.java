@@ -48,6 +48,9 @@ public class FlowDefinitionServiceImpl extends FlowServiceFactory implements IFl
     @Resource
     private SysDeployFormMapper sysDeployFormMapper;
 
+    @Resource
+    private SysFormMapper sysFormMapper;
+
     private static final String BPMN_FILE_SUFFIX = ".bpmn";
 
     @Override
@@ -62,7 +65,7 @@ public class FlowDefinitionServiceImpl extends FlowServiceFactory implements IFl
     /**
      * 流程定义列表
      *
-     * @param name  参数
+     * @param name 参数
      * @return 流程定义分页列表数据
      */
     @Override
@@ -73,7 +76,7 @@ public class FlowDefinitionServiceImpl extends FlowServiceFactory implements IFl
     /**
      * 各个流程定义最新版本列表
      *
-     * @param name  参数
+     * @param name 参数
      * @return 流程定义分页列表数据
      */
     @Override
@@ -107,7 +110,7 @@ public class FlowDefinitionServiceImpl extends FlowServiceFactory implements IFl
     @Override
     public String readXml(String deployId) throws IOException {
         ProcessDefinition definition = repositoryService.createProcessDefinitionQuery().deploymentId(deployId).singleResult();
-        if(Objects.isNull(definition)){
+        if (Objects.isNull(definition)) {
             throw new CheckedException("读取不到流程xml文件");
         }
         InputStream inputStream = repositoryService.getResourceAsStream(definition.getDeploymentId(), definition.getResourceName());
@@ -158,14 +161,14 @@ public class FlowDefinitionServiceImpl extends FlowServiceFactory implements IFl
             // 设置流程发起人Id到流程中
             SysUser sysUser = SecurityUtils.getLoginUser().getSysUser();
             identityService.setAuthenticatedUserId(sysUser.getUserId().toString());
-            variables.put(ProcessConstants.PROCESS_INITIATOR,sysUser.getUserId().toString());
-            variables.put(ProcessConstants.PROCESS_APPROVAL,"");
+            variables.put(ProcessConstants.PROCESS_INITIATOR, sysUser.getUserId().toString());
+            variables.put(ProcessConstants.PROCESS_APPROVAL, "");
             ProcessInstance processInstance = runtimeService.startProcessInstanceById(procDefId, variables);
             /**
              * 将流程标题信息存入
              */
-            int i = flowDeployMapper.insertSysProcessTitle(new SysProcessTitle(processInstance.getId(),String.valueOf(variables.get("processTitle"))));
-            if(i <=0 ){
+            int i = flowDeployMapper.insertSysProcessTitle(new SysProcessTitle(processInstance.getId(), String.valueOf(variables.get("processTitle"))));
+            if (i <= 0) {
                 throw new CheckedException("流程标题添加失败");
             }
             // 给第一步申请人节点设置任务执行人和意见 todo:第一个节点不设置为申请人节点有点问题
@@ -174,12 +177,13 @@ public class FlowDefinitionServiceImpl extends FlowServiceFactory implements IFl
                 //往意见表增加记录
                 taskService.addComment(task.getId(), processInstance.getProcessInstanceId(), FlowComment.NORMAL.getType(), sysUser.getNickName() + "发起流程申请");
                 //往附件表里增加记录,注意:这里会自动往意见表里再增加记录, type值为event
-                if(Objects.nonNull(variables.get("files")) && !variables.get("files").equals("null")){
-                    JSONArray jo=(JSONArray)JSON.parse((String) variables.get("files"));;
+                if (Objects.nonNull(variables.get("files")) && !variables.get("files").equals("null")) {
+                    JSONArray jo = (JSONArray) JSON.parse((String) variables.get("files"));
+                    ;
                     for (Object o : jo) {
-                        JSONObject js=(JSONObject) o;
+                        JSONObject js = (JSONObject) o;
                         taskService.createAttachment(FlowComment.NORMAL.getType(), task.getId(), processInstance.getProcessInstanceId()
-                                ,js.getString("name"),sysUser.getNickName() + "上传的附件",js.getString("url"));
+                                , js.getString("name"), sysUser.getNickName() + "上传的附件", js.getString("url"));
                     }
 
                 }
@@ -188,7 +192,7 @@ public class FlowDefinitionServiceImpl extends FlowServiceFactory implements IFl
             return true;
         } catch (FlowableException e) {
             e.printStackTrace();
-            throw new CheckedException("流程启动错误:"+e.getMessage());
+            throw new CheckedException("流程启动错误:" + e.getMessage());
         }
     }
 
@@ -214,21 +218,23 @@ public class FlowDefinitionServiceImpl extends FlowServiceFactory implements IFl
                 // 设置流程发起人Id到流程中
                 SysUser sysUser = SecurityUtils.getLoginUser().getSysUser();
                 identityService.setAuthenticatedUserId(sysUser.getUserId().toString());
-                variables.put(ProcessConstants.PROCESS_INITIATOR,sysUser.getUserId().toString());
+                variables.put(ProcessConstants.PROCESS_INITIATOR, sysUser.getUserId().toString());
                 nickName = sysUser.getNickName();
             } else {
                 nickName = variables.get("nickName").toString();
                 identityService.setAuthenticatedUserId(variables.get("INITIATOR").toString());
-                variables.put(ProcessConstants.PROCESS_INITIATOR,variables.get("INITIATOR").toString());
+                variables.put(ProcessConstants.PROCESS_INITIATOR, variables.get("INITIATOR").toString());
             }
 
-            variables.put(ProcessConstants.PROCESS_APPROVAL,"");
-            ProcessInstance processInstance = runtimeService.startProcessInstanceById(procDefId, variables);
+            variables.put(ProcessConstants.PROCESS_APPROVAL, "");
+
+            //启动流程实例
+            ProcessInstance processInstance = runtimeService.startProcessInstanceById(procDefId, variables.get("businessId") + "", variables);
             /**
              * 将流程标题信息存入
              */
-            int i = flowDeployMapper.insertSysProcessTitle(new SysProcessTitle(processInstance.getId(),String.valueOf(variables.get("businessTitle"))));
-            if(i <=0 ){
+            int i = flowDeployMapper.insertSysProcessTitle(new SysProcessTitle(processInstance.getId(), String.valueOf(variables.get("businessTitle"))));
+            if (i <= 0) {
                 throw new CheckedException("流程标题添加失败");
             }
             // 给第一步申请人节点设置任务执行人和意见 todo:第一个节点不设置为申请人节点有点问题
@@ -237,24 +243,25 @@ public class FlowDefinitionServiceImpl extends FlowServiceFactory implements IFl
                 //往意见表增加记录
                 taskService.addComment(task.getId(), processInstance.getProcessInstanceId(), FlowComment.NORMAL.getType(), nickName + "发起流程申请");
                 //往附件表里增加记录,注意:这里会自动往意见表里再增加记录, type值为event
-                if(Objects.nonNull(variables.get("files")) && !variables.get("files").equals("null")){
-                    JSONArray jo=(JSONArray)JSON.parse((String) variables.get("files"));;
+                if (Objects.nonNull(variables.get("files")) && !variables.get("files").equals("null")) {
+                    JSONArray jo = (JSONArray) JSON.parse((String) variables.get("files"));
+                    ;
                     for (Object o : jo) {
-                        JSONObject js=(JSONObject) o;
+                        JSONObject js = (JSONObject) o;
                         taskService.createAttachment(FlowComment.NORMAL.getType(), task.getId(), processInstance.getProcessInstanceId()
-                                ,js.getString("name"), nickName + "上传的附件",js.getString("url"));
+                                , js.getString("name"), nickName + "上传的附件", js.getString("url"));
                     }
 
                 }
                 taskService.complete(task.getId(), variables);
             }
             Map<String, Object> map = new HashMap<>();
-            map.put("flag","true");
-            map.put("instanceId",processInstance.getProcessInstanceId());
+            map.put("flag", "true");
+            map.put("instanceId", processInstance.getProcessInstanceId());
             return map;
         } catch (FlowableException e) {
             e.printStackTrace();
-            throw new CheckedException("流程启动错误:"+e.getMessage());
+            throw new CheckedException("流程启动错误:" + e.getMessage());
         }
     }
 
@@ -276,14 +283,14 @@ public class FlowDefinitionServiceImpl extends FlowServiceFactory implements IFl
             // 设置流程发起人Id到流程中
             SysUser sysUser = SecurityUtils.getLoginUser().getSysUser();
             identityService.setAuthenticatedUserId(sysUser.getUserId().toString());
-            variables.put(ProcessConstants.PROCESS_INITIATOR,sysUser.getUserId().toString());
-            variables.put(ProcessConstants.PROCESS_APPROVAL,"");
+            variables.put(ProcessConstants.PROCESS_INITIATOR, sysUser.getUserId().toString());
+            variables.put(ProcessConstants.PROCESS_APPROVAL, "");
             ProcessInstance processInstance = runtimeService.startProcessInstanceById(procDefId, variables);
             /**
              * 将流程标题信息存入
              */
-            int i = flowDeployMapper.insertSysProcessTitle(new SysProcessTitle(processInstance.getId(),String.valueOf(variables.get("processTitle"))));
-            if(i <=0 ){
+            int i = flowDeployMapper.insertSysProcessTitle(new SysProcessTitle(processInstance.getId(), String.valueOf(variables.get("processTitle"))));
+            if (i <= 0) {
                 throw new CheckedException("流程标题添加失败");
             }
             // 给第一步申请人节点设置任务执行人和意见 todo:第一个节点不设置为申请人节点有点问题
@@ -292,39 +299,41 @@ public class FlowDefinitionServiceImpl extends FlowServiceFactory implements IFl
                 //往意见表增加记录
                 taskService.addComment(task.getId(), processInstance.getProcessInstanceId(), FlowComment.NORMAL.getType(), sysUser.getNickName() + "发起流程申请");
                 //往附件表里增加记录,注意:这里会自动往意见表里再增加记录, type值为event
-                if(Objects.nonNull(variables.get("files")) && !variables.get("files").equals("null")){
-                    JSONArray jo=(JSONArray)JSON.parse((String) variables.get("files"));;
+                if (Objects.nonNull(variables.get("files")) && !variables.get("files").equals("null")) {
+                    JSONArray jo = (JSONArray) JSON.parse((String) variables.get("files"));
+                    ;
                     for (Object o : jo) {
-                        JSONObject js=(JSONObject) o;
+                        JSONObject js = (JSONObject) o;
                         taskService.createAttachment(FlowComment.NORMAL.getType(), task.getId(), processInstance.getProcessInstanceId()
-                                ,js.getString("name"),sysUser.getNickName() + "上传的附件",js.getString("url"));
+                                , js.getString("name"), sysUser.getNickName() + "上传的附件", js.getString("url"));
                     }
 
                 }
                 //taskService.complete(task.getId(), variables);
             }
             Map<String, Object> map = new HashMap<>();
-            map.put("flag","true");
-            map.put("instanceId",processInstance.getProcessInstanceId());
+            map.put("flag", "true");
+            map.put("instanceId", processInstance.getProcessInstanceId());
             return map;
         } catch (FlowableException e) {
             e.printStackTrace();
-            throw new CheckedException("流程启动错误:"+e.getMessage());
+            throw new CheckedException("流程启动错误:" + e.getMessage());
         }
     }
 
     /**
      * 通过流程标识key最新版本流程定义id
+     *
      * @param procDefKey 流程标识key
      * @return
      */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public String getByProcDefKey(String procDefKey) {
-        ProcessDefinition processDefinition = (ProcessDefinition)repositoryService.createProcessDefinitionQuery().processDefinitionKey(procDefKey).latestVersion().singleResult();
-        if(Objects.nonNull(processDefinition)){
+        ProcessDefinition processDefinition = (ProcessDefinition) repositoryService.createProcessDefinitionQuery().processDefinitionKey(procDefKey).latestVersion().singleResult();
+        if (Objects.nonNull(processDefinition)) {
             return processDefinition.getId();
-        }else{
+        } else {
             throw new CheckedException("未找到对应流程定义id");
         }
     }
@@ -342,7 +351,7 @@ public class FlowDefinitionServiceImpl extends FlowServiceFactory implements IFl
         /*注意:
         1.只要在act_ru_*表中存在,那么在act_hi_*表中一定会存在,反之,不一定会存在.
         2.key名相同,值会被覆盖.例:比如说key为"save-key",值为1,第二次存入"save-key",值为2,之后的值一直都会是2*/
-        runtimeService.setVariables(procDefId,variables);
+        runtimeService.setVariables(procDefId, variables);
         return true;
     }
 
@@ -377,23 +386,21 @@ public class FlowDefinitionServiceImpl extends FlowServiceFactory implements IFl
     public void delete(String[] deployId) {
         //删除流程绑定的表单信息
         sysDeployFormMapper.deleteSysDeployFormByDeployIds(deployId);
-        for (String d: deployId){
+        for (String d : deployId) {
             // true 允许级联删除 ,不设置会导致数据库外键关联异常
             repositoryService.deleteDeployment(d, true);
         }
     }
 
 
-    @Resource
-    private SysFormMapper sysFormMapper;
-
     /**
      * 根据流程标识key获取流程定义id
+     *
      * @param processDefinitionKey
      * @return
      */
     public String getProcDefIdBySign(String processDefinitionKey) {
-       return sysFormMapper.getProcDefIdBySign(processDefinitionKey);
+        return sysFormMapper.getProcDefIdBySign(processDefinitionKey);
     }
 
 }

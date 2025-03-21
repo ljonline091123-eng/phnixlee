@@ -64,7 +64,7 @@ public interface IFlowTaskService {
      * 驳回任务
      *
      */
-    Map<String,Object> taskReject(FlowTaskVo flowTaskVo);
+    void taskReject(FlowTaskVo flowTaskVo);
 
 
     /**
@@ -72,7 +72,7 @@ public interface IFlowTaskService {
      *
      * @param flowTaskVo 请求实体参数
      */
-    void taskReturn(FlowTaskVo flowTaskVo);
+    Map<String,Object> taskReturn(FlowTaskVo flowTaskVo);
 
     /**
      * 获取所有可回退的节点

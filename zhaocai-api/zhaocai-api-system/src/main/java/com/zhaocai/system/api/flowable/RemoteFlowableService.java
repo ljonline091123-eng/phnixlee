@@ -31,6 +31,6 @@ public interface RemoteFlowableService {
     AjaxResult completeCopy(@RequestBody Map<String, Object> variables);
 
 
-    @PostMapping(value = "/task/rejectCopy")
-    AjaxResult rejectCopy(@RequestBody Map<String, Object> variables);
+    @PostMapping(value = "/task/returnCopy")
+    AjaxResult returnCopy(@RequestBody Map<String, Object> variables);
 }

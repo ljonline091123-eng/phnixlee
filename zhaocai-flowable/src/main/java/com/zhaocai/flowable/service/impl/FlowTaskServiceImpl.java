@@ -237,7 +237,7 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
      * @param flowTaskVo 参数
      */
     @Override
-    public Map<String, Object> taskReject(FlowTaskVo flowTaskVo) {
+    public void taskReject(FlowTaskVo flowTaskVo) {
         if (taskService.createTaskQuery().taskId(flowTaskVo.getTaskId()).singleResult().isSuspended()) {
             throw new CheckedException("任务处于挂起状态!");
         }
@@ -352,8 +352,6 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
         } catch (FlowableException e) {
             throw new CheckedException("无法取消或开始活动");
         }
-        Map<String, Object> map = new HashMap<>();
-        return map;
     }
 
     /**
@@ -363,7 +361,7 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
      */
     @Transactional(rollbackFor = Exception.class)
     @Override
-    public void taskReturn(FlowTaskVo flowTaskVo) {
+    public Map<String,Object> taskReturn(FlowTaskVo flowTaskVo) {
         if (taskService.createTaskQuery().taskId(flowTaskVo.getTaskId()).singleResult().isSuspended()) {
             throw new CheckedException("任务处于挂起状态");
         }
@@ -431,6 +429,8 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
         } catch (FlowableException e) {
             throw new CheckedException("无法取消或开始活动");
         }
+
+        return new HashMap<>();
     }
 
 
@@ -1347,12 +1347,15 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
         // 4. 过滤不可驳回的节点
         List<Map<String, String>> revokableNodes = new ArrayList<>();
         for (HistoricTaskInstance task : historicTasks) {
+            if (taskId.equals(task.getId())) {
+                continue;
+            }
             String taskDefKey = task.getTaskDefinitionKey();
             String nodeType = getNodeType(processDefinitionId, taskDefKey);
 
             // 添加到可驳回列表
             Map<String, String> nodeInfo = new HashMap<>();
-            nodeInfo.put("taskKey", task.getId());
+            nodeInfo.put("taskKey", task.getTaskDefinitionKey());
             nodeInfo.put("taskName", task.getName());
             nodeInfo.put("type", nodeType);
             revokableNodes.add(nodeInfo);

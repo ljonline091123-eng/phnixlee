@@ -181,16 +181,28 @@ public class FlowTaskController extends BaseController {
     @Log(title = "驳回任务", businessType = BusinessType.UPDATE)
     public AjaxResult rejectCopy(@RequestBody Map<String, Object> variables) {
         FlowTaskVo flowTaskVo = JSONUtil.toBean(JSONUtil.toJsonStr(variables), FlowTaskVo.class);
-        return AjaxResult.success(flowTaskService.taskReject(flowTaskVo));
+        flowTaskService.taskReject(flowTaskVo);
+        return AjaxResult.success();
     }
+
+
+
+    @ApiOperation(value = "退回任务")
+    @PostMapping(value = "/returnCopy")
+    //@RequiresPermissions("flowable:task:return")
+    @Log(title = "退回任务", businessType = BusinessType.UPDATE)
+    public AjaxResult returnCopy(@RequestBody Map<String, Object> variables) {
+        FlowTaskVo flowTaskVo = JSONUtil.toBean(JSONUtil.toJsonStr(variables), FlowTaskVo.class);
+        return AjaxResult.success(flowTaskService.taskReturn(flowTaskVo));
+    }
+
 
     @ApiOperation(value = "退回任务")
     @PostMapping(value = "/return")
     //@RequiresPermissions("flowable:task:return")
     @Log(title = "退回任务", businessType = BusinessType.UPDATE)
     public AjaxResult taskReturn(@RequestBody FlowTaskVo flowTaskVo) {
-        flowTaskService.taskReturn(flowTaskVo);
-        return AjaxResult.success();
+        return AjaxResult.success(flowTaskService.taskReturn(flowTaskVo));
     }
 
     @ApiOperation(value = "获取所有可回退的节点")
