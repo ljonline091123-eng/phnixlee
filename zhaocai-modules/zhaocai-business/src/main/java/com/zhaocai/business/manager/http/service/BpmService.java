@@ -185,6 +185,7 @@ public class BpmService {
         if (requestDTO.isPass()) {
             complete = remoteFlowableService.completeCopy(map);
         } else {
+            map.put("targetKey",requestDTO.getRejectTaskKey());
             complete = remoteFlowableService.returnCopy(map);
         }
 

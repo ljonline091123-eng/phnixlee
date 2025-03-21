@@ -361,7 +361,7 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
      */
     @Transactional(rollbackFor = Exception.class)
     @Override
-    public Map<String,Object> taskReturn(FlowTaskVo flowTaskVo) {
+    public Map<String, Object> taskReturn(FlowTaskVo flowTaskVo) {
         if (taskService.createTaskQuery().taskId(flowTaskVo.getTaskId()).singleResult().isSuspended()) {
             throw new CheckedException("任务处于挂起状态");
         }
@@ -429,8 +429,10 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
         } catch (FlowableException e) {
             throw new CheckedException("无法取消或开始活动");
         }
-
-        return new HashMap<>();
+        HashMap<String, Object> map = new HashMap<>();
+        map.put("rejectTaskKey","");
+        map.put("processStatus","");
+        return map;
     }
 
 
@@ -1264,18 +1266,33 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
                 .taskCandidateGroupIn(collect)
                 .list();
         String businessId = "";
+        FlowTaskVo flowTaskVo = new FlowTaskVo();
+        List<Map<String, Object>> maps = new ArrayList<>();
         if (!userTasks.isEmpty()) {
             businessId = this.processVariables(userTasks.get(0).getId()).get("businessId") + "";
-            List<Map<String, String>> revokableNodes = getRevokableNodes(userTasks.get(0).getId(), SecurityUtils.getUserId() + "");
-            variablesMap.put("completedTaskList", revokableNodes);
             variablesMap.put("curTaskId", userTasks.get(0).getId());
+            flowTaskVo.setTaskId(userTasks.get(0).getId());
+            List<UserTask> returnTaskList = findReturnTaskList(flowTaskVo);
+            returnTaskList.forEach(userTask -> {
+                Map<String, Object> map = new HashMap<>();
+                map.put("taskKey", userTask.getId());
+                map.put("taskName", userTask.getName());
+                maps.add(map);
+            });
         }
         if (!userTasks1.isEmpty()) {
             businessId = this.processVariables(userTasks1.get(0).getId()).get("businessId") + "";
-            List<Map<String, String>> revokableNodes = getRevokableNodes(userTasks1.get(0).getId(), SecurityUtils.getUserId() + "");
-            variablesMap.put("completedTaskList", revokableNodes);
             variablesMap.put("curTaskId", userTasks1.get(0).getId());
+            flowTaskVo.setTaskId(userTasks1.get(0).getId());
+            List<UserTask> returnTaskList = findReturnTaskList(flowTaskVo);
+            returnTaskList.forEach(userTask -> {
+                Map<String, Object> map = new HashMap<>();
+                map.put("taskKey", userTask.getId());
+                map.put("taskName", userTask.getName());
+                maps.add(map);
+            });
         }
+        variablesMap.put("completedTaskList", maps);
         variablesMap.put("auditable", !userTasks.isEmpty() || !userTasks1.isEmpty());
         variablesMap.put("businessId", businessId);
         variablesMap.put("processId", variables.get("processId"));
