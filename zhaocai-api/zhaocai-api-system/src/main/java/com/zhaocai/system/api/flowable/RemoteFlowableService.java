@@ -33,4 +33,7 @@ public interface RemoteFlowableService {
 
     @PostMapping(value = "/task/returnCopy")
     AjaxResult returnCopy(@RequestBody Map<String, Object> variables);
+
+    @PostMapping(value = "/task/flowRecordCopy")
+    AjaxResult flowRecordCopy(@RequestBody Map<String, Object> variables);
 }

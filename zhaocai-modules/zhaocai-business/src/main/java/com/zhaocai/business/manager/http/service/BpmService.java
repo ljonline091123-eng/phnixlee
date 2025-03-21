@@ -273,23 +273,27 @@ public class BpmService {
      * @return
      */
     public List<BpmLoadTaskDefResponseDTO> loadTaskDef(BpmLoadTaskDefRequestDTO requestDTO) {
-//        requestDTO.setOrgPenetrate(true);
+        requestDTO.setOrgPenetrate(true);
+        Map<String,Object> map = new HashMap<>();
+        map.put("procInsId",requestDTO.getProcessId());
+        map.put("deployId",requestDTO.getProcessId());
+        AjaxResult complete = remoteFlowableService.flowRecordCopy(map);
+        List<BpmLoadTaskDefResponseDTO> responseDTO = JSONUtil.toList(JSONUtil.toJsonStr(complete.get("data")), BpmLoadTaskDefResponseDTO.class) ;
 //        List<BpmLoadTaskDefResponseDTO> responseDTO = UnderlingRestTemplateService.postForList(UnderlingPlatformUrlEnum.BPM_OPERATE_LOADTASKDEF,
 //                BpmLoadTaskDefResponseDTO.class,requestDTO);
-//        try{
-//            /* 流程操作记录 */
-//            bpmLogService.save(BpmLog.builder()
-//                    .bpmType("加载定义接口")
-//                    .businessId(requestDTO.getBusinessId())
-//                    .wfProcessId(requestDTO.getProcessId())
-//                    .bpmKey(requestDTO.getProcessKey())
-//                    .bpmUrl(UnderlingPlatformUrlEnum.BPM_OPERATE_LOADTASKDEF.getUrl())
-//                    .bpmParam(JSONUtil.parse(requestDTO).toString())
-//                    .bpmResponse(JSONUtil.parse(responseDTO).toString())
-//                    .build());
-//        }catch (Exception e){log.error("[  bpmLogService报错  ]{}",e.getMessage());}
-//        return  responseDTO;
-        return null;
+        try{
+            /* 流程操作记录 */
+            bpmLogService.save(BpmLog.builder()
+                    .bpmType("加载定义接口")
+                    .businessId(requestDTO.getBusinessId())
+                    .wfProcessId(requestDTO.getProcessId())
+                    .bpmKey(requestDTO.getProcessKey())
+                    .bpmUrl(UnderlingPlatformUrlEnum.BPM_OPERATE_LOADTASKDEF.getUrl())
+                    .bpmParam(JSONUtil.parse(requestDTO).toString())
+                    .bpmResponse(JSONUtil.parse(responseDTO).toString())
+                    .build());
+        }catch (Exception e){log.error("[  bpmLogService报错  ]{}",e.getMessage());}
+        return  responseDTO;
     }
 
     /**

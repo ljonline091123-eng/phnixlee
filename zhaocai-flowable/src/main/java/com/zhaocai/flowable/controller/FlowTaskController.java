@@ -116,6 +116,17 @@ public class FlowTaskController extends BaseController {
         return AjaxResult.success(flowRecord);
     }
 
+
+    @ApiOperation(value = "流程历史流转记录", response = FlowTaskDto.class)
+    @PostMapping(value = "/flowRecordCopy")
+    public AjaxResult flowRecordCopy(@RequestBody Map<String, Object> variables) {
+        String procInsId = variables.get("procInsId") + "";
+        String deployId = variables.get("deployId") + "";
+        Map<String, Object> flowRecord = flowTaskService.flowRecord(procInsId, deployId);
+        return AjaxResult.success(flowRecord);
+    }
+
+
     @ApiOperation(value = "获取流程变量", response = FlowTaskDto.class)
     @GetMapping(value = "/processVariables/{taskId}")
     public AjaxResult processVariables(@ApiParam(value = "流程任务Id") @PathVariable(value = "taskId") String taskId) {
@@ -184,7 +195,6 @@ public class FlowTaskController extends BaseController {
         flowTaskService.taskReject(flowTaskVo);
         return AjaxResult.success();
     }
-
 
 
     @ApiOperation(value = "退回任务")
