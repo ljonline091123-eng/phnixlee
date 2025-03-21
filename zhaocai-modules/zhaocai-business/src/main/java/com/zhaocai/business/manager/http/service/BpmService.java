@@ -185,7 +185,7 @@ public class BpmService {
         if (requestDTO.isPass()) {
             complete = remoteFlowableService.completeCopy(map);
         } else {
-            complete = remoteFlowableService.rejectCopy(map);
+            complete = remoteFlowableService.returnCopy(map);
         }
 
         BpmAuditResponseDTO responseDTO = JSONUtil.toBean(JSONUtil.toJsonStr(complete.get("data")), BpmAuditResponseDTO.class);
