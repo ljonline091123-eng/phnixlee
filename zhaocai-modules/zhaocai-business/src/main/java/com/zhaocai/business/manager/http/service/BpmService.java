@@ -15,9 +15,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 
 /**
@@ -81,7 +79,26 @@ public class BpmService {
         Map<String,Object> map = new HashMap<>();
         map.put("procInsId",requestDTO.getProcessId());
         AjaxResult complete = remoteFlowableService.flowRecordCopy(map);
-        List<BpmListProcessLogResponseDTO> responseDTO = JSONUtil.toList(JSONUtil.toJsonStr(complete.get("data")), BpmListProcessLogResponseDTO.class) ;
+        Map<String,Object> map1 = JSONUtil.toBean(JSONUtil.toJsonStr(complete.get("data")), Map.class);
+        List<BpmListProcessLogResponseDTO> responseDTO = new ArrayList<>();
+        if(map1.get("flowList") != null){
+            List<Map> flowList = JSONUtil.toList(JSONUtil.toJsonStr(map1.get("flowList")), Map.class);
+            for (Map map2:flowList){
+                String endTime = map2.get("createTime")==null?null:map2.get("createTime").toString();
+                String assigneeName = map2.get("assigneeName")==null?null:map2.get("assigneeName").toString();
+                String category = map2.get("category")==null?null:map2.get("category").toString();
+                String comment = map2.get("comment")==null?null:JSONUtil.toBean(JSONUtil.toJsonStr(map2.get("comment")),Map.class).get("comment").toString();
+                BpmListProcessLogResponseDTO brd= new BpmListProcessLogResponseDTO();
+                brd.setHandlerName(assigneeName);
+                brd.setOperateName(category);
+                brd.setEndTime(endTime);
+                brd.setOperateRemark("操作说明");
+                brd.setOperateComment(comment);
+                responseDTO.add(brd);
+            }
+
+        }
+
 //        List<BpmListProcessLogResponseDTO> responseDTO = UnderlingRestTemplateService.listForObject(UnderlingPlatformUrlEnum.BPM_OPERATE_LISTPROCESSLOG,
 //                BpmListProcessLogResponseDTO.class,requestDTO);
         try{
