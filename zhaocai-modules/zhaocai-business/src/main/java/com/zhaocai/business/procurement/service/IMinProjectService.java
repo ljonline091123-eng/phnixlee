@@ -42,6 +42,9 @@ public interface IMinProjectService  extends IService<MinProject> {
 
     List<MinProjectVO> getMinProjectList(String managementOrgId);
 
+    /*查询所有的最小核算项目的数量*/
+    long acountMinProjectNumber();
+
     /**
      * 根据查询参数获取最小核算项目列表
      * @param requestDTO

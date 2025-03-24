@@ -5,7 +5,6 @@ import com.alibaba.fastjson.JSONArray;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
-import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.zhaocai.business.common.enums.BusinessCodeEnum;
 import com.zhaocai.business.common.enums.DictBizEnum;
@@ -24,13 +23,11 @@ import com.zhaocai.business.procurement.vo.res.MinProjectListVO;
 import com.zhaocai.business.procurement.vo.res.MinProjectVO;
 import com.zhaocai.business.pub.service.IBusinessCodeService;
 import com.zhaocai.business.pub.service.ISysDictDataService;
-import com.zhaocai.business.vendor.domain.VendorCertification;
 import com.zhaocai.common.core.bean.PageResult;
 import com.zhaocai.common.core.constant.SecurityConstants;
 import com.zhaocai.common.core.utils.NumberUtil;
 import com.zhaocai.common.core.utils.StringUtils;
 import com.zhaocai.common.core.utils.bean.BeanCopierUtil;
-import com.zhaocai.common.core.web.domain.AjaxResult;
 import com.zhaocai.system.api.domain.SysDept;
 import com.zhaocai.system.api.system.RemoteSystemService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -225,6 +222,12 @@ public class MinProjectServiceImpl extends ServiceImpl<MinProjectMapper, MinProj
             minProjectVOS.add(minProjectVO);
         }
         return minProjectVOS;
+    }
+
+    /*查询所有的最小核算项目的数量*/
+    @Override
+    public long acountMinProjectNumber() {
+        return super.count();
     }
 
     @Override

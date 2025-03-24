@@ -2,12 +2,14 @@ package com.zhaocai.business.manager.http.service;
 
 import cn.hutool.core.collection.CollectionUtil;
 import com.zhaocai.business.manager.http.common.config.RestTemplateUtils;
+import com.zhaocai.business.manager.http.common.config.UnderlingPlatformUrlEnum;
 import com.zhaocai.business.manager.http.dto.req.ContractListRequestDTO;
 import com.zhaocai.business.manager.http.dto.req.PerformanceEvaluationRequestDTO;
 import com.zhaocai.business.manager.http.dto.res.ContractListDTO;
 import com.zhaocai.business.manager.http.dto.res.PerformanceEvaluationDTO;
 import com.zhaocai.business.manager.http.dto.res.UnderlingResultData;
 import com.zhaocai.business.manager.template.config.UnderlingPlatformConfig;
+import com.zhaocai.business.procurement.service.IMinProjectService;
 import com.zhaocai.business.vendor.domain.VendorPerformanceEvaluation;
 import com.zhaocai.common.core.utils.NumberUtil;
 import com.zhaocai.common.core.web.bean.thrid.ThridResultCode;
@@ -16,6 +18,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.web.util.UriComponents;
+import org.springframework.web.util.UriComponentsBuilder;
 
 import java.util.ArrayList;
 import java.util.Collections;
