@@ -2,6 +2,7 @@ package com.zhaocai.business.procurement.service.impl;
 
 import cn.hutool.core.collection.CollectionUtil;
 import com.alibaba.fastjson.JSON;
+import com.alibaba.nacos.common.utils.CollectionUtils;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
@@ -9,7 +10,14 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.zhaocai.business.agreement.service.IAgreementMaterialsListService;
 import com.zhaocai.business.agreement.vo.req.AgreementSchemeQueryVO;
 import com.zhaocai.business.agreement.vo.res.AgreementSchemeListVO;
+import com.zhaocai.business.bidding.domain.BiddingInfo;
+import com.zhaocai.business.bidding.domain.TenderNotice;
+import com.zhaocai.business.bidding.enums.BiddingInfoStatusEnum;
 import com.zhaocai.business.bidding.enums.TenderNoticeStatusEnum;
+import com.zhaocai.business.bidding.mapper.BiddingInfoMapper;
+import com.zhaocai.business.bidding.mapper.TenderNoticeMapper;
+import com.zhaocai.business.bidding.service.IBiddingInfoService;
+import com.zhaocai.business.bidding.service.ITenderNoticeService;
 import com.zhaocai.business.common.enums.*;
 import com.zhaocai.business.common.exception.BusinessException;
 import com.zhaocai.business.common.exception.ParamValidateException;
@@ -109,6 +117,12 @@ public class ProcurementSchemeServiceImpl extends ServiceImpl<ProcurementSchemeM
     @Autowired
     private ISystemUserService systemUserService;
 
+    @Autowired
+    private TenderNoticeMapper tenderNoticeMapper;  // 招标公告 Mapper
+
+    @Autowired
+    private BiddingInfoMapper biddingInfoMapper;   // 投标单 Mapper    private IBiddingInfoService biddingInfoService;
+
 
     @Override
     public IPage<BiddingSchemeListVO> selectBiddingSchemePageList(BiddingSchemeListQueryVO queryVO) {
@@ -181,42 +195,6 @@ public class ProcurementSchemeServiceImpl extends ServiceImpl<ProcurementSchemeM
 
 
     @Override
-    @Transactional(propagation = Propagation.REQUIRED, rollbackFor = Exception.class)
-    public void submitProcurementScheme(Long id, String detailUrl, String operateComment) {
-        ProcurementScheme procurementScheme = super.getById(id);
-        ValidateUtils.isNullException(procurementScheme, "该采购方案不存在");
-
-        //接入底层逻辑平台流程
-        Map<String, Object> paramMap = new HashMap<>();
-        paramMap.put("businessId", procurementScheme.getId());
-        paramMap.put("businessTitle", "招标采购/采购管理/采购方案 采购方案审批");
-        paramMap.put("businessContent", String.format(ApproveFlowPromptTemplateEnum.PROCUREMENT_SCHEME.getDesc(),
-                procurementScheme.getProcurementSchemeName()));
-        paramMap.put("detailUrl", detailUrl);
-        paramMap.put("projectCode", procurementScheme.getProjectCode());
-        UserObj userObj = UserObj.builder().businessType(ProcessKeyEnum.ZHAOCAI_PROCUREMENT_SCHEME.name()).
-                businessId(id.toString())
-                .toDoType(ToDoTypeEnum.EXAMINE.name()).build();
-        paramMap.put("userObj", JSON.toJSONString(userObj));
-        paramMap.put("operateComment", operateComment);
-
-        /** 合同类型（contractType），价格(contractMoney)，项目部（parentProjectCode），责任单位（responsibilityDeptId），公司（companyId） */
-
-        paramMap.put("contractType", ProcurementPlanTypeEnum.getProcessType(procurementScheme.getProcurementPlanType()));/* 采购方案 合同类型 */
-        paramMap.put("contractMoney", procurementScheme.getCeilingPrice());/* 采购方案上限价 价格 */
-        processService.startProcessInstance(
-                ProcessKeyEnum.ZHAOCAI_PROCUREMENT_SCHEME.getIdentifying(), paramMap);
-    }
-
-    //获取采购方案详细信息
-    @Override
-    public ProcurementScheme getProcurementSchemeInfoByID(Long id) {
-        ProcurementScheme procurementScheme = baseMapper.selectById(id);
-        ValidateUtils.isNullException(procurementScheme, "该采购方案不存在，请确认");
-        return procurementScheme;
-    }
-
-    @Override
     public ProcurementSchemeDetailVO detail(Long id) {
         ProcurementScheme procurementScheme = baseMapper.selectById(id);
         ValidateUtils.isNullException(procurementScheme, "该采购方案不存在，请确认");
@@ -245,6 +223,42 @@ public class ProcurementSchemeServiceImpl extends ServiceImpl<ProcurementSchemeM
                 .contractPlanList(contractPlanList)
                 .contractSplitIdList(contractSplitList)
                 .build();
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRED, rollbackFor = Exception.class)
+    public void submitProcurementScheme(Long id, String detailUrl, String operateComment) {
+        ProcurementScheme procurementScheme = super.getById(id);
+        ValidateUtils.isNullException(procurementScheme, "该采购方案不存在");
+
+        //接入底层逻辑平台流程
+        Map<String, Object> paramMap = new HashMap<>();
+        paramMap.put("businessId", procurementScheme.getId());
+        paramMap.put("businessTitle", "招标采购/采购管理/采购方案 采购方案审批");
+        paramMap.put("businessContent", String.format(ApproveFlowPromptTemplateEnum.PROCUREMENT_SCHEME.getDesc(),
+                procurementScheme.getProcurementSchemeName()));
+        paramMap.put("detailUrl", detailUrl);
+        paramMap.put("projectCode", procurementScheme.getProjectCode());
+        UserObj userObj = UserObj.builder().businessType(ProcessKeyEnum.ZHAOCAI_PROCUREMENT_SCHEME.name()).
+                businessId(id.toString())
+                .toDoType(ToDoTypeEnum.EXAMINE.name()).build();
+        paramMap.put("userObj", JSON.toJSONString(userObj));
+        paramMap.put("operateComment", operateComment);
+
+        /** 合同类型（contractType），价格(contractMoney)，项目部（parentProjectCode），责任单位（responsibilityDeptId），公司（companyId） */
+
+        paramMap.put("contractType", ProcurementPlanTypeEnum.getProcessType(procurementScheme.getProcurementPlanType()));/* 采购方案 合同类型 */
+        paramMap.put("contractMoney", procurementScheme.getCeilingPrice());/* 采购方案上限价 价格 */
+        processService.startProcessInstance(
+                ProcessKeyEnum.ZHAOCAI_PROCUREMENT_SCHEME.getIdentifying(), paramMap);
+    }
+    //获取采购方案详细信息
+
+    @Override
+    public ProcurementScheme getProcurementSchemeInfoByID(Long id) {
+        ProcurementScheme procurementScheme = baseMapper.selectById(id);
+        ValidateUtils.isNullException(procurementScheme, "该采购方案不存在，请确认");
+        return procurementScheme;
     }
 
     @Override
@@ -395,6 +409,19 @@ public class ProcurementSchemeServiceImpl extends ServiceImpl<ProcurementSchemeM
         super.update(new LambdaUpdateWrapper<ProcurementScheme>()
                 .set(ProcurementScheme::getState, ProcurementSchemeStateEnum.CANCELLATION.getState())
                 .eq(ProcurementScheme::getId, id));
+
+
+
+        //把该采购方案相关的招标公告设为废除
+        TenderNotice notice = new TenderNotice();
+        notice.setNoticeStatus(TenderNoticeStatusEnum.ABANDON_BID.getState());
+        tenderNoticeMapper.update(notice, new LambdaUpdateWrapper<TenderNotice>()
+                .eq(TenderNotice::getSchemeId, id));
+
+
+        //把相关联的投标单改为废标状态
+        biddingInfoMapper.updateBiddingStatusBySchemeId(BiddingInfoStatusEnum.HAVE_ABANDON.getState(), id);
+
     }
 
     @Override

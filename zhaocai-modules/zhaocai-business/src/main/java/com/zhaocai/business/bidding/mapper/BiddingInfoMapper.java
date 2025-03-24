@@ -45,4 +45,7 @@ public interface BiddingInfoMapper extends BaseMapper<BiddingInfo> {
 
     /** 查询已调价的最大的一条版本号数据 */
     List<BiddingInfo> getMaxPriceVersion(@Param("noticeId")Long noticeId,@Param("schemeId") Long schemeId);
+
+    /** 根据schemeId，修改相关投标单的投标状态*/
+    int updateBiddingStatusBySchemeId(@Param("status") Integer status, @Param("schemeId") Long schemeId);
 }

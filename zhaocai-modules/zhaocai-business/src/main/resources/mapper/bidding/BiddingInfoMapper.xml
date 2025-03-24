@@ -225,6 +225,12 @@
         WHERE i.vendor_id = v.vendor_id and i.twice_quot_version = v.twice_quot_version
     </select>
 
+    <update id="updateBiddingStatusBySchemeId">
+        UPDATE tb_bidding_info
+        SET bidding_status = #{status}
+        WHERE scheme_id = #{schemeId}
+    </update>
+
 
 
 </mapper>

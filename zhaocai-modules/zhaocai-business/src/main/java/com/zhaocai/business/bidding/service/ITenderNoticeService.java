@@ -197,5 +197,12 @@ public interface ITenderNoticeService  extends IService<TenderNotice> {
     List<ContractPlanningNoticeVO> getListByContractPlanningId(ContractPlanningQueryVO requestDTO);
 
 
+    /**
+     * 根据 采购方案id 获取 招标公告的id集合
+     * @param schemeId
+     * @return
+     */
+    List<Long> getNoticeIdsBySchemeId(Long schemeId);
+
     PageResult<VendorPortalNoticeListVO> selectVendorPortalNoticePageTwo(VendorPortalNoticePageQueryVO queryDTO);
 }
