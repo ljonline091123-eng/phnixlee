@@ -47,10 +47,9 @@ public class AgreementPaymentItemServiceImpl extends ServiceImpl<AgreementPaymen
                 .eq(AgreementPaymentItem::getAgreementId,agreementId));
 
         AgreementPaymentItemVO paymentItemVO = BeanCopierUtil.copyBean(paymentItem, AgreementPaymentItemVO.class);
-//        paymentItemVO.setCurrencyText(underlingSystemService.listDictMap(DictBizEnum.UNDERLING_SYS_CURRENCY.getName()).get(paymentItem.getCurrency()));
-//        paymentItemVO.setInvoiceTypeText(underlingSystemService.listDictMap(DictBizEnum.UNDERLING_INVOICE_TYPE.getName()).get(paymentItem.getInvoiceType()));        paymentItemVO.setCurrencyText(underlingSystemService.listDictMap(DictBizEnum.UNDERLING_SYS_CURRENCY.getName()).get(paymentItem.getCurrency()));
-//        paymentItemVO.setCurrencyText(sysDictDataService.getLabel(DictBizEnum.UNDERLING_SYS_CURRENCY.getName(),paymentItem.getCurrency()));
-//        paymentItemVO.setInvoiceTypeText(sysDictDataService.getLabel(DictBizEnum.UNDERLING_INVOICE_TYPE.getName(),paymentItem.getInvoiceType()));
+        paymentItemVO.setCurrencyText(sysDictDataService.getLabel(DictBizEnum.UNDERLING_SYS_CURRENCY.getName(),paymentItemVO.getCurrency()));
+        paymentItemVO.setInvoiceTypeText(sysDictDataService.getLabel(DictBizEnum.UNDERLING_INVOICE_TYPE.getName(),paymentItemVO.getInvoiceType()));
+
 
         return paymentItemVO;
     }
