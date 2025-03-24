@@ -83,16 +83,41 @@ public class BpmService {
         List<BpmListProcessLogResponseDTO> responseDTO = new ArrayList<>();
         if(map1.get("flowList") != null){
             List<Map> flowList = JSONUtil.toList(JSONUtil.toJsonStr(map1.get("flowList")), Map.class);
-            for (Map map2:flowList){
+            for (int i = 0;i<flowList.size();i++){
+                Map<String,Object> map2 = flowList.get(i);
                 String endTime = map2.get("createTime")==null?null:map2.get("createTime").toString();
                 String assigneeName = map2.get("assigneeName")==null?null:map2.get("assigneeName").toString();
-                String category = map2.get("category")==null?null:map2.get("category").toString();
+                String category = map2.get("category")==null?"":map2.get("category").toString();
                 String comment = map2.get("comment")==null?null:JSONUtil.toBean(JSONUtil.toJsonStr(map2.get("comment")),Map.class).get("comment").toString();
                 BpmListProcessLogResponseDTO brd= new BpmListProcessLogResponseDTO();
                 brd.setHandlerName(assigneeName);
-                brd.setOperateName(category);
+                switch (category){
+                    case "0":
+                        brd.setOperateName("发起");
+                        brd.setOperateRemark(comment);
+                        break;
+                    case "1":
+                        brd.setOperateName("审批");
+                        brd.setOperateRemark(assigneeName+"通过了流程");
+                        break;
+                    case "2":
+                        brd.setOperateName("退回");
+                        Map<String,Object> map3 = flowList.get(i+1);
+                        String taskName = map3.get("taskName")==null?"":map3.get("taskName").toString();
+                        brd.setOperateRemark(assigneeName+"流程驳回至【"+taskName+"】");
+                        break;
+                    case "3":
+                        brd.setOperateName("驳回");
+                        Map<String,Object> map4 = flowList.get(i+1);
+                        String taskName1 = map4.get("taskName")==null?"":map4.get("taskName").toString();
+                        brd.setOperateRemark(assigneeName+"流程驳回至【"+taskName1+"】");
+                        break;
+                    case "7":
+                        brd.setOperateName("归档");
+                        brd.setOperateRemark(assigneeName+"通过了流程。流程已完成！");
+                        break;
+                }
                 brd.setEndTime(endTime);
-                brd.setOperateRemark("操作说明");
                 brd.setOperateComment(comment);
                 responseDTO.add(brd);
             }

@@ -177,7 +177,22 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
             taskService.addComment(taskVo.getTaskId(), taskVo.getInstanceId(), FlowComment.DELEGATE.getType(), taskVo.getComment());
             taskService.resolveTask(taskVo.getTaskId(), taskVo.getValues());
         } else {
-            taskService.addComment(taskVo.getTaskId(), taskVo.getInstanceId(), FlowComment.NORMAL.getType(), taskVo.getComment());
+            // 获取当前任务对应的流程节点定义
+            BpmnModel bpmnModel = repositoryService.getBpmnModel(task.getProcessDefinitionId());
+            FlowNode currentNode = (FlowNode) bpmnModel.getFlowElement(task.getTaskDefinitionKey());
+            boolean pd = true;
+            // 检查当前节点的出口是否指向结束事件
+            List<SequenceFlow> outgoingFlows = currentNode.getOutgoingFlows();
+            for (SequenceFlow flow : outgoingFlows) {
+                FlowElement targetElement = flow.getTargetFlowElement();
+                if (targetElement instanceof EndEvent) {
+                    taskService.addComment(taskVo.getTaskId(), taskVo.getInstanceId(), FlowComment.COMPLETE.getType(), taskVo.getComment());
+                    pd = false;
+                }
+            }
+            if (pd) {
+                taskService.addComment(taskVo.getTaskId(), taskVo.getInstanceId(), FlowComment.NORMAL.getType(), taskVo.getComment());
+            }
             Long userId = SecurityUtils.getLoginUser().getSysUser().getUserId();
             taskService.setAssignee(taskVo.getTaskId(), userId.toString());
             //更新全局变量
@@ -187,9 +202,7 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
         ProcessInstance instance = runtimeService.createProcessInstanceQuery()
                 .processInstanceId(taskVo.getInstanceId())
                 .singleResult();
-        if (instance != null) {
-            System.out.println("非终审");
-        } else {
+        if (instance == null) {
             map.put("processStatus", "4");
         }
         return map;
@@ -1024,6 +1037,21 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
                     .processInstanceId(procInsId)
                     .orderByHistoricActivityInstanceStartTime()
                     .desc().list();
+
+            String startUserId;
+            // 获取当前的流程实例
+            ProcessInstance processInstance = runtimeService.createProcessInstanceQuery().processInstanceId(procInsId).singleResult();
+            // 如果流程已经结束，则得到结束节点
+            if (Objects.isNull(processInstance)) {
+                HistoricProcessInstance pi = historyService.createHistoricProcessInstanceQuery().processInstanceId(procInsId).singleResult();
+                startUserId = pi.getStartUserId();
+            } else {// 如果流程没有结束，则取当前活动节点
+                // 根据流程实例ID获得当前处于活动状态的ActivityId合集
+                ProcessInstance pi = runtimeService.createProcessInstanceQuery().processInstanceId(procInsId).singleResult();
+                startUserId = pi.getStartUserId();
+            }
+
+
             List<FlowTaskDto> hisFlowList = new ArrayList<>();
             for (HistoricActivityInstance histIns : list) {
                 if (StringUtils.isNotBlank(histIns.getTaskId())) {
@@ -1039,6 +1067,10 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
                         if (sysUser.getDept() != null) {
                             flowTask.setDeptName(sysUser.getDept().getDeptName());
                         }
+                    }else {
+                        SysUser sysUser = remoteuserservice.selectUserInFoById(Long.parseLong(startUserId), SecurityConstants.INNER).getData();
+                        flowTask.setAssigneeId(sysUser.getUserId());
+                        flowTask.setAssigneeName(sysUser.getNickName());
                     }
                     // 展示审批人员
                     List<HistoricIdentityLink> linksForTask = historyService.getHistoricIdentityLinksForTask(histIns.getTaskId());
@@ -1074,6 +1106,7 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
                         if (histIns.getTaskId().equals(comment.getTaskId())) {
                             if (comment.getFullMessage() != null) {
                                 stl.append(comment.getFullMessage()).append("; ");
+                                flowTask.setCategory(comment.getType());
                             }
                         }
                         flowTask.setComment(FlowCommentDto.builder().type(comment.getType()).comment(String.valueOf(stl)).build());
@@ -1105,17 +1138,19 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
 
 
         String processDefinitionId;
+        String startUserId;
         // 获取当前的流程实例
         ProcessInstance processInstance = runtimeService.createProcessInstanceQuery().processInstanceId(processId).singleResult();
         // 如果流程已经结束，则得到结束节点
         if (Objects.isNull(processInstance)) {
             HistoricProcessInstance pi = historyService.createHistoricProcessInstanceQuery().processInstanceId(processId).singleResult();
-
             processDefinitionId = pi.getProcessDefinitionId();
+            startUserId = pi.getStartUserId();
         } else {// 如果流程没有结束，则取当前活动节点
             // 根据流程实例ID获得当前处于活动状态的ActivityId合集
             ProcessInstance pi = runtimeService.createProcessInstanceQuery().processInstanceId(processId).singleResult();
             processDefinitionId = pi.getProcessDefinitionId();
+            startUserId = pi.getStartUserId();
         }
 
         // 获得活动的节点
@@ -1126,10 +1161,12 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
                 .asc().list();
 
         Map<String, Boolean> map = new HashMap<>();
+        Map<String, String> usMap = new HashMap<>();
         for (HistoricActivityInstance tempActivity : highLightedFlowList) {
             if (StringUtils.isNotBlank(tempActivity.getTaskId())) {
                 if (map.get(tempActivity.getActivityId()) == null) {
                     map.put(tempActivity.getActivityId(), !Objects.isNull(tempActivity.getEndTime()));
+                    usMap.put(tempActivity.getActivityId(), tempActivity.getAssignee());
                 }
             }
         }
@@ -1142,18 +1179,47 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
         // 3. 获取所有用户任务节点
         List<UserTask> userTasks = process.findFlowElementsOfType(UserTask.class);
 
+        int i = 0;
         // 5. 处理每个任务节点
         for (UserTask userTask : userTasks) {
+            i++;
             Map<String, Object> nodeInfo = new LinkedHashMap<>();
-
             // 基础信息
             nodeInfo.put("taskId", userTask.getId());
             nodeInfo.put("taskName", userTask.getName());
+            nodeInfo.put("nodeKey", userTask.getId());
+            nodeInfo.put("nodeName", userTask.getName());
             Boolean completed = false;
             if (map.get(userTask.getId()) != null) {
                 completed = map.get(userTask.getId());
             }
             nodeInfo.put("completed", completed);
+            ArrayList<Map<String, Object>> userList = new ArrayList<>();
+            Map<String, Object> userMap = new HashMap<>();
+            userMap.put("appoint", false);
+            userMap.put("completed", completed);
+            userMap.put("userId", usMap.get(userTask.getId()));
+            if (!StringUtils.isEmpty(usMap.get(userTask.getId()))) {
+                userMap.put("userName", remoteuserservice.getUserInfoById(Long.parseLong(usMap.get(userTask.getId())), SecurityConstants.INNER).getNickName());
+            } else if (i == 1) {
+                userMap.put("userName", remoteuserservice.getUserInfoById(Long.parseLong(startUserId), SecurityConstants.INNER).getNickName());
+            } else {
+                userMap.put("userName", userTask.getAssignee());
+            }
+            userList.add(userMap);
+            nodeInfo.put("userList", userList);
+            ArrayList<Map<String, Object>> postList = new ArrayList<>();
+            if (userTask.getCandidateGroups() != null) {
+                for (String str : userTask.getCandidateGroups()) {
+                    R<SysRole> sysRoleR = remoteuserservice.selectRoleById(Long.parseLong(str), SecurityConstants.INNER);
+                    Map<String, Object> postMap = new HashMap<>();
+                    postMap.put("corpOrg", completed);
+                    postMap.put("postId", str);
+                    postMap.put("orgName", sysRoleR.getData().getRoleName());
+                    postList.add(postMap);
+                }
+            }
+            nodeInfo.put("taskPost", postList);
             result.add(nodeInfo);
         }
 

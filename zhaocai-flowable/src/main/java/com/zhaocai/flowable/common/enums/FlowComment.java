@@ -10,12 +10,14 @@ public enum FlowComment {
     /**
      * 说明
      */
+    INITIATE("0", "流程发起"),
     NORMAL("1", "正常"),
     REBACK("2", "退回"),
     REJECT("3", "驳回"),
     DELEGATE("4", "委派"),
     ASSIGN("5", "转办"),
-    STOP("6", "终止");
+    STOP("6", "终止"),
+    COMPLETE("7", "完成");
 
     /**
      * 类型

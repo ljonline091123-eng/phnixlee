@@ -241,7 +241,7 @@ public class FlowDefinitionServiceImpl extends FlowServiceFactory implements IFl
             Task task = taskService.createTaskQuery().processInstanceId(processInstance.getProcessInstanceId()).singleResult();
             if (Objects.nonNull(task)) {
                 //往意见表增加记录
-                taskService.addComment(task.getId(), processInstance.getProcessInstanceId(), FlowComment.NORMAL.getType(), nickName + "发起流程申请");
+                taskService.addComment(task.getId(), processInstance.getProcessInstanceId(), FlowComment.INITIATE.getType(), nickName + "发起流程申请");
                 //往附件表里增加记录,注意:这里会自动往意见表里再增加记录, type值为event
                 if (Objects.nonNull(variables.get("files")) && !variables.get("files").equals("null")) {
                     JSONArray jo = (JSONArray) JSON.parse((String) variables.get("files"));
