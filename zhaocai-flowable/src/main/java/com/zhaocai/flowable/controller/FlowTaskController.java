@@ -121,8 +121,7 @@ public class FlowTaskController extends BaseController {
     @PostMapping(value = "/flowRecordCopy")
     public AjaxResult flowRecordCopy(@RequestBody Map<String, Object> variables) {
         String procInsId = variables.get("procInsId") + "";
-        String deployId = variables.get("deployId") + "";
-        Map<String, Object> flowRecord = flowTaskService.flowRecord(procInsId, deployId);
+        Map<String, Object> flowRecord = flowTaskService.flowRecord(procInsId, null);
         return AjaxResult.success(flowRecord);
     }
 
@@ -353,6 +352,24 @@ public class FlowTaskController extends BaseController {
         } catch (Exception e) {
             e.printStackTrace();
             return AjaxResult.error("初始化接口异常");
+        }
+
+    }
+
+
+    /**
+     * cs
+     *
+     * @param processId
+     * @return
+     */
+    @PostMapping("/loadTaskDef")
+    public AjaxResult loadTaskDef(String processId) {
+        try {
+            return AjaxResult.success(flowTaskService.loadTaskDef(processId));
+        } catch (Exception e) {
+            e.printStackTrace();
+            return AjaxResult.error("接口异常");
         }
 
     }

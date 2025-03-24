@@ -430,8 +430,8 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
             throw new CheckedException("无法取消或开始活动");
         }
         HashMap<String, Object> map = new HashMap<>();
-        map.put("rejectTaskKey","");
-        map.put("processStatus","");
+        map.put("rejectTaskKey", "");
+        map.put("processStatus", "");
         return map;
     }
 
@@ -1091,6 +1091,73 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
             }
         }
         return map;
+    }
+
+
+    /**
+     * 获取流程所有审批节点信息
+     *
+     * @param processId 流程实例ID
+     * @return 节点信息列表
+     */
+    public List<Map<String, Object>> loadTaskDef(String processId) {
+        List<Map<String, Object>> result = new ArrayList<>();
+
+
+        String processDefinitionId;
+        // 获取当前的流程实例
+        ProcessInstance processInstance = runtimeService.createProcessInstanceQuery().processInstanceId(processId).singleResult();
+        // 如果流程已经结束，则得到结束节点
+        if (Objects.isNull(processInstance)) {
+            HistoricProcessInstance pi = historyService.createHistoricProcessInstanceQuery().processInstanceId(processId).singleResult();
+
+            processDefinitionId = pi.getProcessDefinitionId();
+        } else {// 如果流程没有结束，则取当前活动节点
+            // 根据流程实例ID获得当前处于活动状态的ActivityId合集
+            ProcessInstance pi = runtimeService.createProcessInstanceQuery().processInstanceId(processId).singleResult();
+            processDefinitionId = pi.getProcessDefinitionId();
+        }
+
+        // 获得活动的节点
+        List<HistoricActivityInstance> highLightedFlowList = historyService.
+                createHistoricActivityInstanceQuery().
+                processInstanceId(processId).
+                orderByHistoricActivityInstanceStartTime()
+                .asc().list();
+
+        Map<String, Boolean> map = new HashMap<>();
+        for (HistoricActivityInstance tempActivity : highLightedFlowList) {
+            if (StringUtils.isNotBlank(tempActivity.getTaskId())) {
+                if (map.get(tempActivity.getActivityId()) == null) {
+                    map.put(tempActivity.getActivityId(), !Objects.isNull(tempActivity.getEndTime()));
+                }
+            }
+        }
+
+
+        // 2. 获取流程定义模型
+        BpmnModel bpmnModel = repositoryService.getBpmnModel(processDefinitionId);
+        Process process = bpmnModel.getMainProcess();
+
+        // 3. 获取所有用户任务节点
+        List<UserTask> userTasks = process.findFlowElementsOfType(UserTask.class);
+
+        // 5. 处理每个任务节点
+        for (UserTask userTask : userTasks) {
+            Map<String, Object> nodeInfo = new LinkedHashMap<>();
+
+            // 基础信息
+            nodeInfo.put("taskId", userTask.getId());
+            nodeInfo.put("taskName", userTask.getName());
+            Boolean completed = false;
+            if (map.get(userTask.getId()) != null) {
+                completed = map.get(userTask.getId());
+            }
+            nodeInfo.put("completed", completed);
+            result.add(nodeInfo);
+        }
+
+        return result;
     }
 
 
