@@ -790,6 +790,11 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
         }
 
         List<Task> taskList = taskQuery.orderByTaskCreateTime().desc().listPage(pageSize * (pageNum - 1), pageSize);
+        for (Task task : taskList) {
+            Map<String, Object> variables = runtimeService.getVariables(task.getProcessInstanceId());
+            String value = variables.get("detailUrl") + "";
+            task.setFormKey(value);
+        }
         Map<String, Object> re = new HashMap<>(2);
         re.put("data", todoListIntegration(taskList));
         re.put("total", (int) taskQuery.count());
@@ -852,6 +857,7 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
             flowTask.setProcDefId(task.getProcessDefinitionId());
             flowTask.setExecutionId(task.getExecutionId());
             flowTask.setTaskName(task.getName());
+            flowTask.setDetailUrl(task.getFormKey());
             //获取流程标题
             SysProcessTitle pt = flowDeployMapper.selectSysProcessTitle(task.getProcessInstanceId());
             if (pt != null) {
@@ -1117,7 +1123,7 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
                         flowTask.setComment(FlowCommentDto.builder().type(comment.getType()).comment(String.valueOf(stl)).build());
                     });
 //                    if (!StringUtils.isEmpty(flowTask.getAssigneeName())) {
-                        hisFlowList.add(flowTask);
+                    hisFlowList.add(flowTask);
 //                    }
 //                    hisFlowList.add(flowTask);
                 }
