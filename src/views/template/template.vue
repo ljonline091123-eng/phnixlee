@@ -14,9 +14,9 @@
           >{{ dict.label }}</el-radio-button
         >
       </el-radio-group>
-      <FileTemplate v-if="procurementPlanType === 'file'" />
+      <!-- <FileTemplate v-if="procurementPlanType === 'file'" />
       <ContractTemplate v-if="procurementPlanType === 'contract'" />
-      <SupplementalTemplate v-if="procurementPlanType === 'supplemental'" />
+      <SupplementalTemplate v-if="procurementPlanType === 'supplemental'" /> -->
       <RatingTemplate v-if="procurementPlanType === 'rating'" />
     </div>
   </div>
@@ -36,17 +36,17 @@ export default {
   },
   data() {
     return {
-      procurementPlanType: "file",
+      procurementPlanType: "rating",
       tabList: [
-        { label: "招标文件模板", value: "file" },
-        { label: "合同模板", value: "contract" },
-        { label: "补充协议", value: "supplemental" },
+        // { label: "招标文件模板", value: "file" },
+        // { label: "合同模板", value: "contract" },
+        // { label: "补充协议", value: "supplemental" },
         { label: "评分模板", value: "rating" },
       ],
     };
   },
   mounted() {
-    this.procurementPlanType = this.$route.query.paramName || "file";
+    this.procurementPlanType = this.$route.query.paramName || "rating";
     console.log("Query 参数:", this.$route.query.paramName);
   },
   updated() {
