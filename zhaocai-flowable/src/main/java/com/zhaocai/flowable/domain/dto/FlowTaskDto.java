@@ -102,6 +102,9 @@ public class FlowTaskDto extends BaseEntity {
     @ApiModelProperty("是否完成")
     private Integer markCompleted;
 
+    @ApiModelProperty("跳转地址")
+    private String detailUrl;
+
     public Integer getMarkCompleted() {
         return markCompleted;
     }
@@ -326,4 +329,11 @@ public class FlowTaskDto extends BaseEntity {
         this.formId = formId;
     }
 
+    public String getDetailUrl() {
+        return detailUrl;
+    }
+
+    public void setDetailUrl(String detailUrl) {
+        this.detailUrl = detailUrl;
+    }
 }
