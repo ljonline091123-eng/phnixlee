@@ -6,6 +6,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.zhaocai.business.agreement.domain.Agreement;
 import com.zhaocai.business.agreement.service.IAgreementService;
+import com.zhaocai.business.common.enums.ProcurementPlanTypeEnum;
 import com.zhaocai.business.common.utils.ValidateUtils;
 import com.zhaocai.business.manager.http.dto.res.ContractListDTO;
 import com.zhaocai.business.manager.http.service.PerformanceEvaluationService;
@@ -117,7 +118,12 @@ public class VendorCooperationServiceImpl implements IVendorCooperationService {
                             cooperationAgreement.setTotalAmountIncTax(agreement.getTotalAmountIncTax());
                             cooperationAgreement.setAgreementSignDate(agreement.getAgreementSignDate());
                             cooperationAgreement.setAgreementId(agreement.getId());
+                            cooperationAgreement.setPartyAName(agreement.getPartyAName());
+                            cooperationAgreement.setPartyAContactName(agreement.getPartyAContactName());
+                            cooperationAgreement.setPartyAContactPhone(agreement.getPartyAContactPhone());
                             cooperationAgreement.setExpenditureBusinessType(agreement.getExpenditureBusinessType());
+                            cooperationAgreement.setExpenditureBusinessTypeText(ProcurementPlanTypeEnum.getValueByCode(agreement.getExpenditureBusinessType()));
+
                             // 处理合同收付款
                             ContractListDTO listDTO = contractListMap.get(agreement.getAgreementCode());
                             if (listDTO != null) {

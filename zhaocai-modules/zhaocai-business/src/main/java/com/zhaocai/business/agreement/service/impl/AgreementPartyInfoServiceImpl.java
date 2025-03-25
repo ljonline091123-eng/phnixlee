@@ -9,6 +9,7 @@ import com.zhaocai.business.agreement.mapper.AgreementPartyInfoMapper;
 import com.zhaocai.business.agreement.service.IAgreementPartyInfoService;
 import com.zhaocai.business.common.enums.DictBizEnum;
 import com.zhaocai.business.manager.http.service.UnderlingSystemService;
+import com.zhaocai.business.pub.service.ISysDictDataService;
 import com.zhaocai.common.core.utils.bean.BeanCopierUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -28,6 +29,9 @@ public class AgreementPartyInfoServiceImpl extends ServiceImpl<AgreementPartyInf
 
     @Autowired
     private UnderlingSystemService underlingSystemService;
+
+    @Autowired
+    private ISysDictDataService sysDictDataService;
 
     @Override
     public void saveAgreementPartyInfo(List<AgreementPartyInfo> agreementPartyInfoLists, Long agreementId) {
@@ -51,7 +55,7 @@ public class AgreementPartyInfoServiceImpl extends ServiceImpl<AgreementPartyInf
         List<AgreementPartyInfo> agreementPartyInfoLists = list(new LambdaQueryWrapper<AgreementPartyInfo>()
                 .eq(AgreementPartyInfo::getAgreementId, agreementId));
 
-        Map<String,String> partyInfoBaseTypeMap = underlingSystemService.listDictMap(DictBizEnum.UNDERLING_CON_ROLE_TYPE.getName());
+        Map<String,String> partyInfoBaseTypeMap = sysDictDataService.listDictMap(DictBizEnum.UNDERLING_CON_ROLE_TYPE.getName());
         List<AgreementPartyInfoVO> agreementPartyInfoList = BeanCopierUtil.copyList(agreementPartyInfoLists,AgreementPartyInfoVO.class);
         for(AgreementPartyInfoVO partyInfoList : agreementPartyInfoList) {
             partyInfoList.setRoleTypeText(partyInfoBaseTypeMap.get(partyInfoList.getRoleType()));

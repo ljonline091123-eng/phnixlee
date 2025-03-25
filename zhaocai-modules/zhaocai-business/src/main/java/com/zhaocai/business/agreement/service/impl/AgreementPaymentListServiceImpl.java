@@ -43,7 +43,7 @@ public class AgreementPaymentListServiceImpl extends ServiceImpl<AgreementPaymen
         List<AgreementPaymentList> agreementPaymentLists = list(new LambdaQueryWrapper<AgreementPaymentList>()
                 .eq(AgreementPaymentList::getAgreementId, agreementId));
 
-//        Map<String,String> paymentBaseTypeMap = underlingSystemService.listDictMap(DictBizEnum.UNDERLING_PAYMENT_BASE_TYPE.getName());
+//        Map<String,String> paymentBaseTypeMap = sysDictDataService.listDictMap(DictBizEnum.UNDERLING_PAYMENT_BASE_TYPE.getName());
         List<AgreementPaymentListVO> agreementPaymentList = BeanCopierUtil.copyList(agreementPaymentLists,AgreementPaymentListVO.class);
 //        for(AgreementPaymentListVO paymentList : agreementPaymentList) {
 //            paymentList.setPaymentBasisText(paymentBaseTypeMap.get(paymentList.getPaymentBasis()));

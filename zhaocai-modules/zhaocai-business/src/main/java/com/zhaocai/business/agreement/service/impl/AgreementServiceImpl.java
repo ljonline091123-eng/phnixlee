@@ -203,6 +203,9 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper, Agreement
     @Autowired
     private IProcurementPlanService procurementPlanService;
 
+    @Autowired
+    private ISysDictDataService sysDictDataService;
+
 
     @Override
     public PageResult<AgreementListVO> listPage(AgreementListQueryVO queryVO) {
@@ -452,8 +455,8 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper, Agreement
         agreementVO.setPartyBContactName(agreement.getPartyBLegalName());
         agreementVO.setPartyBContactPhone(agreement.getPartyBLegalPhone());
         agreementVO.setExpenditureBusinessTypeText(DictBizCache.getValue(DictBizEnum.PROCUREMENT_PLAN_TYPE, String.valueOf(agreement.getExpenditureBusinessType())));
-        agreementVO.setPaymentCycleText(underlingSystemService.listDictMap(DictBizEnum.UNDERLING_PAYMENT_CYCLE.getName()).get(agreement.getPaymentCycle()));
-        agreementVO.setPriceFormText(underlingSystemService.listDictMap(DictBizEnum.UNDERLING_PRICE_FORM.getName()).get(agreement.getPriceForm()));
+        agreementVO.setPaymentCycleText(sysDictDataService.listDictMap(DictBizEnum.UNDERLING_PAYMENT_CYCLE.getName()).get(agreement.getPaymentCycle()));
+        agreementVO.setPriceFormText(sysDictDataService.listDictMap(DictBizEnum.UNDERLING_PRICE_FORM.getName()).get(agreement.getPriceForm()));
 
         //合同标签附件Url
         if (null != agreement.getLabelAttachmentId()) {
@@ -465,7 +468,7 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper, Agreement
 
         // 处理支付方式
         if (StringUtils.isNotBlank(agreement.getPaymentWay())) {
-            Map<String, String> paymentWayMap = underlingSystemService.listDictMap(DictBizEnum.UNDERLING_PAYMENT_TYPE.getName());
+            Map<String, String> paymentWayMap = sysDictDataService.listDictMap(DictBizEnum.UNDERLING_PAYMENT_TYPE.getName());
             String[] paymentWayS = agreement.getPaymentWay().split(",");
             agreementVO.setPaymentWayText(Arrays.stream(paymentWayS).map(paymentWayMap::get).collect(Collectors.joining(",")));
         }

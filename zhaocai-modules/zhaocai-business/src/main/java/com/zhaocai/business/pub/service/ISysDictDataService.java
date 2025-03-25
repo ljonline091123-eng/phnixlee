@@ -3,6 +3,7 @@ package com.zhaocai.business.pub.service;
 import com.zhaocai.business.pub.vo.res.DictListVO;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * 字典数据Service接口
@@ -26,6 +27,8 @@ public interface ISysDictDataService {
      * @return
      */
     List<DictListVO> listDictByType(String type);
+
+    Map<String,String> listDictMap(String type);
 
     /**
      * 获取字典值
