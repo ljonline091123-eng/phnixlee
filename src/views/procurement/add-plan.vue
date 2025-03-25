@@ -234,10 +234,9 @@
                       </el-table-column>
                       <el-table-column label="清单数量" align="right" prop="count" width="150" v-else>
                         <template slot-scope="scope">
-                          <el-input title="清单数量" v-model="scope.row.count" :disabled="isSubmit || scope.row.belongOffer || scope.row.pushFlag === 'Y'" @input.native="(event) => changeCount(event, inventory.$index, scope.row)" v-thousandth/>
+                          <el-input title="清单数量" v-model="scope.row.count" :disabled="isSubmit || scope.row.belongOffer || scope.row.pushFlag === 'Y'" @input.native="changeCount($event,inventory.$index,scope.row)" v-thousandth/>
                         </template>
                       </el-table-column>
-                      
 <!--                      基价由原来浮动价不可编辑，变成了可以编辑-->
                       <el-table-column label="基价" align="right" width="130" prop="basePrice"  v-if="procurementType === 1 && [2,3,4,5,6,7].includes(formData.priceType)">
                         <template slot-scope="scope">
@@ -325,7 +324,7 @@
                       <el-table-column label="合计(含税)" align="right" prop="totalPriceText" min-width="150">
                         <template slot-scope="scope">
                           <span title="合计(含税)">{{getTotalPriceText(scope.row,inventory.$index)}}</span>
-                          <span> {{ getTotalPriceTableText(inventory.$index) }} </span>
+                          <span> {{ getTotalPriceTableText(scope.row,inventory.$index) }} </span>
                           <!-- <el-input title="浮动价" v-model="scope.row.totalPriceText" :disabled="isSubmit"  class="checkInput"/> -->
                          
                         </template>
@@ -1319,26 +1318,6 @@ export default {
               }
             }
 
-            // // 计算所有清单条目的合计(含税)总和
-            // let totalAmount = bignumber(0);
-            // planList[0].children.forEach(item => {
-            //   item.children.forEach(subItem => {
-            //     console.log("合计相加的每列金额-：",subItem.totalPrice)
-            //     totalAmount = add(totalAmount, bignumber(subItem.totalPrice));
-            //   });
-            // });
-            // // 获取计划金额
-            // const plannedAmountInclTax = bignumber(this.planList[0].plannedAmountInclTax);
-            // // 校验合计(含税)总和是否小于或等于计划金额
-            // if (totalAmount > plannedAmountInclTax) {
-            //   this.isSubmit = false;
-            //   this.$message({
-            //     message: `拆分合约的合计(含税)总和 ${totalAmount.toString()} 不能大于计划金额 ${plannedAmountInclTax.toString()}`,
-            //     type: 'error'
-            //   });
-            //   return false;
-            // }
-
             const loading = this.$loading({
               lock: true,
               background: 'rgba(0, 0, 0, 0.7)'
@@ -2028,8 +2007,8 @@ export default {
 
         splitMaterials.forEach((item,index) => {
           item.$index = index;
-          item.planTable='planTable'+index
-          let children = item.materialsLists.map((child,k) => ({...child, $index:k, indexNumber:(k+1),planTable:item.planTable}))
+          // item.planTable='planTable'+index
+          let children = item.materialsLists.map((child,k) => ({...child, $index:k, indexNumber:(k+1),planTable:'planTable'+k}))
           item.children = children;
         })
         console.log(JSON.stringify(contractPlanning),'contractPlanning--contractPlanning--contractPlanning')
@@ -2662,22 +2641,7 @@ export default {
         return row.unitPriceExclTax ? (row.unitPriceExclTax) : (0.00);
       }
     },
-    /* 计算行含税总价 */
-    getTotalPriceText() {
-      return ( row , index) => {
-        /* 计算 含税单价 不含税单价 行合计价 */
-        // this.calculatePrice(row);
 
-        //暂时计算方式： 行含税总价：含税单价 * 数量
-        if (row.unitPriceInclTax && row.count) {
-          // 行含税总价：含税单价 * 数量
-          const totalPrice = row.unitPriceInclTax * row.count;
-          return totalPrice.toFixed(2); // 保留两位小数
-        }
-
-        return row.totalPriceText ? (row.totalPriceText) : (0.00);
-      }
-    },
       // 处理含税单价输入事件
     changeUnitPriceInclTax(event, row) {
       const value = event.target.value.replace(/,/g, ''); // 移除千分位符号
@@ -2698,10 +2662,25 @@ export default {
       }
     },
   
+    /* 计算行含税总价 */
+    getTotalPriceText() {
+      return ( row , index) => {
+        /* 计算 含税单价 不含税单价 行合计价 */
+        // this.calculatePrice(row);
 
+        //暂时计算方式： 行含税总价：含税单价 * 数量
+        if (row.unitPriceInclTax && row.count) {
+          // 行含税总价：含税单价 * 数量
+          const totalPrice = row.unitPriceInclTax * row.count;
+          return totalPrice.toFixed(2); // 保留两位小数
+        }
+
+        return row.totalPriceText ? (row.totalPriceText) : (0.00);
+      }
+    },
     /* 计算列含税总价 */
     getTotalPriceTableText() {
-      return ( index) => {
+      return ( row , index) => {
         const { add, bignumber } = this.mathjs;
         this.planList.forEach((item) => {
           if (item.children && Array.isArray(item.children)) {
@@ -2711,11 +2690,14 @@ export default {
 
               if (itemChildren.children && Array.isArray(itemChildren.children)) {
                 itemChildren.children.forEach((children) => {
+                  if(children.id==row.id){
+                    children.totalPrice = row.unitPriceInclTax * row.count;
+                  }
+                
                   totalPriceTable = add(children.totalPrice ? children.totalPrice : 0.0 , totalPriceTable);
                 });
               }
               let totalPriceTableText = this.formatNumberDynamicDecimalWithSeparator(totalPriceTable,2);
-              console.log("计算标含税总价：totalPriceTableText", totalPriceTableText);
               /* total-price-sum-table-class */
               document.querySelector('.totalPriceSumTable'+i).textContent = '标包含税总价：'+totalPriceTableText+' (元)';
             });

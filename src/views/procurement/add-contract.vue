@@ -1446,7 +1446,7 @@
                   <span>特征项</span>
                 </div>
                 <div class="list-container">
-                  <div class="list-item" @click="selectTerm(item.id)" :class="item.id === term && 'selected'" v-for="item in termList" :key="item.id">
+                  <div class="list-item" v-for="item in termList" :key="item.id" @click="selectTerm(item.id)" :class="item.id === term && 'selected'" >
                     <el-checkbox class="disabled-checkbox" :value="isIndeterminateObj[item.id].isAll" :indeterminate="isIndeterminateObj[item.id].isHas"/>
                     {{ item.featureName }}
                   </div>
@@ -1858,7 +1858,7 @@ export default {
       deptOptionsChildren:1,
       defaultProps: {
         children: "children",
-        label: "name",
+        label: "label",
       },
       totalBank: 0,
       bankList: [],
@@ -2631,7 +2631,7 @@ export default {
         }else{
           res = await listMaterialsFeature(this.currentNode.id)
         }
-        this.termList = res.data
+        this.termList = res.rows
         this.termList.forEach(item => {
           this.$set(this.termValueMap,item.id, [])
           this.$set(this.isIndeterminateObj,item.id, {})
@@ -2665,7 +2665,7 @@ export default {
         }else{
           res = await listMaterialsFeatureValue(this.term)
         }
-        this.$set(this.termValueMap, id, res.data.map(item => ({...item,selected:false})))
+        this.$set(this.termValueMap, id, res.rows.map(item => ({...item,selected:false})))
       }
       const isAll = this.termValueMap[id].every(item => item.selected);
       const count = this.termValueMap[this.term].filter(item => item.selected).length;
@@ -2674,7 +2674,7 @@ export default {
       this.termValueAll = isAll
     },
     changeTermValue(){
-      console.log(this.termValueMap,'-this.termValueMap');
+      console.log(JSON.stringify(this.termValueMap),'-this.termValueMap');
       const allHaveTrue = Object.values(this.termValueMap).every(array =>
         array.some(item => item.selected === true)
       );
@@ -2686,7 +2686,7 @@ export default {
       this.isIndeterminateObj[this.term].isAll = this.termValueAll
       console.log(allHaveTrue,'allHaveTrue');
       if(allHaveTrue){
-        // 提取所有符合selected的值
+        // 提取所有符合selected的值 
         let filteredValues = Object.values(this.termValueMap).map(arr =>
           arr.filter(item => item.selected).map(item => ({id:item.id,featureValueName:item.featureValueName}))
         );
@@ -2699,7 +2699,7 @@ export default {
           id: `${cur.id}`,
           value: `${cur.featureValueName}`
         }));
-        console.log(this.selectedList,'---点单个');
+        console.log(JSON.stringify(this.selectedList),'---点单个');
       }else{
         this.selectedList = [];
       }
