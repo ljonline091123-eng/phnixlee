@@ -93,7 +93,7 @@ public class BpmService {
                 }
                 String category = map2.get("category")==null?"":map2.get("category").toString();
                 String comment = map2.get("comment")==null?null:JSONUtil.toBean(JSONUtil.toJsonStr(map2.get("comment")),Map.class).get("comment").toString();
-                if(";".equals(comment)){
+                if("; ".equals(comment)){
                     comment = "";
                 }
                 BpmListProcessLogResponseDTO brd= new BpmListProcessLogResponseDTO();
