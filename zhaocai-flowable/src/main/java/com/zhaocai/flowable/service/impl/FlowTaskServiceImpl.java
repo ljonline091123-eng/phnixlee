@@ -430,7 +430,12 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
             }
         }));
         // 设置回退意见
-        currentTaskIds.forEach(currentTaskId -> taskService.addComment(currentTaskId, task.getProcessInstanceId(), FlowComment.REBACK.getType(), flowTaskVo.getComment()));
+        currentTaskIds.forEach(currentTaskId -> {
+            taskService.addComment(currentTaskId, task.getProcessInstanceId(), FlowComment.REBACK.getType(), flowTaskVo.getComment());
+            Long userId = SecurityUtils.getLoginUser().getSysUser().getUserId();
+            taskService.setAssignee(currentTaskId, userId.toString());
+            taskService.setVariable(currentTaskId, "rejectOperator", flowTaskVo.getTargetKey());
+        });
 
         try {
             // 1 对 1 或 多 对 1 情况，currentIds 当前要跳转的节点列表(1或多)，targetKey 跳转到的节点(1)
@@ -1067,10 +1072,6 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
                         if (sysUser.getDept() != null) {
                             flowTask.setDeptName(sysUser.getDept().getDeptName());
                         }
-                    }else {
-                        SysUser sysUser = remoteuserservice.selectUserInFoById(Long.parseLong(startUserId), SecurityConstants.INNER).getData();
-                        flowTask.setAssigneeId(sysUser.getUserId());
-                        flowTask.setAssigneeName(sysUser.getNickName());
                     }
                     // 展示审批人员
                     List<HistoricIdentityLink> linksForTask = historyService.getHistoricIdentityLinksForTask(histIns.getTaskId());
@@ -1097,7 +1098,6 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
                     if (StringUtils.isNotBlank(stringBuilder)) {
                         flowTask.setCandidate(stringBuilder.substring(0, stringBuilder.length() - 1));
                     }
-
                     flowTask.setDuration(histIns.getDurationInMillis() == null || histIns.getDurationInMillis() == 0 ? null : DateUtils.getProcessCompletionTime(histIns.getDurationInMillis()));
                     // 获取意见评论内容
                     List<Comment> commentList = taskService.getProcessInstanceComments(histIns.getProcessInstanceId());
@@ -1107,11 +1107,19 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
                             if (comment.getFullMessage() != null) {
                                 stl.append(comment.getFullMessage()).append("; ");
                                 flowTask.setCategory(comment.getType());
+                                if (FlowComment.INITIATE.getType().equals(comment.getType())) {
+                                    SysUser sysUser = remoteuserservice.selectUserInFoById(Long.parseLong(startUserId), SecurityConstants.INNER).getData();
+                                    flowTask.setAssigneeId(sysUser.getUserId());
+                                    flowTask.setAssigneeName(sysUser.getNickName());
+                                }
                             }
                         }
                         flowTask.setComment(FlowCommentDto.builder().type(comment.getType()).comment(String.valueOf(stl)).build());
                     });
-                    hisFlowList.add(flowTask);
+//                    if (!StringUtils.isEmpty(flowTask.getAssigneeName())) {
+                        hisFlowList.add(flowTask);
+//                    }
+//                    hisFlowList.add(flowTask);
                 }
             }
             map.put("flowList", hisFlowList);
@@ -1164,10 +1172,8 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
         Map<String, String> usMap = new HashMap<>();
         for (HistoricActivityInstance tempActivity : highLightedFlowList) {
             if (StringUtils.isNotBlank(tempActivity.getTaskId())) {
-                if (map.get(tempActivity.getActivityId()) == null) {
-                    map.put(tempActivity.getActivityId(), !Objects.isNull(tempActivity.getEndTime()));
-                    usMap.put(tempActivity.getActivityId(), tempActivity.getAssignee());
-                }
+                map.put(tempActivity.getActivityId(), !Objects.isNull(tempActivity.getEndTime()));
+                usMap.put(tempActivity.getActivityId(), tempActivity.getAssignee());
             }
         }
 

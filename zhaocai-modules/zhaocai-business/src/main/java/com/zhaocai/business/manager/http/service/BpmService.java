@@ -7,6 +7,7 @@ import com.zhaocai.business.manager.http.dto.res.*;
 import com.zhaocai.business.process.domain.BpmLog;
 import com.zhaocai.business.process.service.IBpmLogService;
 import com.zhaocai.business.procurement.service.IMinProjectService;
+import com.zhaocai.common.core.utils.StringUtils;
 import com.zhaocai.common.core.web.domain.AjaxResult;
 import com.zhaocai.system.api.flowable.RemoteFlowableService;
 import com.zhaocai.system.api.system.RemoteSystemService;
@@ -87,8 +88,14 @@ public class BpmService {
                 Map<String,Object> map2 = flowList.get(i);
                 String endTime = map2.get("createTime")==null?null:map2.get("createTime").toString();
                 String assigneeName = map2.get("assigneeName")==null?null:map2.get("assigneeName").toString();
+                if(StringUtils.isEmpty(assigneeName)){
+                    continue;
+                }
                 String category = map2.get("category")==null?"":map2.get("category").toString();
                 String comment = map2.get("comment")==null?null:JSONUtil.toBean(JSONUtil.toJsonStr(map2.get("comment")),Map.class).get("comment").toString();
+                if(";".equals(comment)){
+                    comment = "";
+                }
                 BpmListProcessLogResponseDTO brd= new BpmListProcessLogResponseDTO();
                 brd.setHandlerName(assigneeName);
                 switch (category){
@@ -101,16 +108,14 @@ public class BpmService {
                         brd.setOperateRemark(assigneeName+"通过了流程");
                         break;
                     case "2":
-                        brd.setOperateName("退回");
-                        Map<String,Object> map3 = flowList.get(i+1);
-                        String taskName = map3.get("taskName")==null?"":map3.get("taskName").toString();
-                        brd.setOperateRemark(assigneeName+"流程驳回至【"+taskName+"】");
-                        break;
-                    case "3":
                         brd.setOperateName("驳回");
-                        Map<String,Object> map4 = flowList.get(i+1);
-                        String taskName1 = map4.get("taskName")==null?"":map4.get("taskName").toString();
-                        brd.setOperateRemark(assigneeName+"流程驳回至【"+taskName1+"】");
+                        if(i>0){
+                            Map<String,Object> map3 = flowList.get(i-1);
+                            String taskName = map3.get("taskName")==null?"":map3.get("taskName").toString();
+                            brd.setOperateRemark(assigneeName+"将流程驳回至【"+taskName+"】");
+                        }else {
+                            brd.setOperateRemark(assigneeName+"将流程驳回");
+                        }
                         break;
                     case "7":
                         brd.setOperateName("归档");
