@@ -35,6 +35,7 @@ public class ThridPartyTodoTaskService {
         }
     }
 
+    /*第三方待办数据传输*/
     public void pushTask(PushThirdPartyTodoTaskRequestDTO requestDTO){
 //        PushThirdPartyTodoTaskResponseDTO responseDTO = UnderlingRestTemplateService.postForObject(UnderlingPlatformUrlEnum.WAIT_HDL_HANDLE,
 //                PushThirdPartyTodoTaskResponseDTO.class, requestDTO, requestDTO.getMessageList());

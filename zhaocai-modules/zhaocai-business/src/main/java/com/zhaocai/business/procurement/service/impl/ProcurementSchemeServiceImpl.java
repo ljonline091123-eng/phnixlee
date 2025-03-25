@@ -701,17 +701,20 @@ public class ProcurementSchemeServiceImpl extends ServiceImpl<ProcurementSchemeM
 //     }
 
             //计算上限价和交易标的物
+            // (原上限价：物料清单的‘金额（含税）’相加；   现上限价：采购计划填写的上限价/合约规划的计划金额)
             List<MaterialsList> materialsLists = materialsListService.listMaterialsListByContractSplitIds(contractSplitIds);
-            BigDecimal ceilingPrice = BigDecimal.ZERO;
+//            BigDecimal ceilingPrice = BigDecimal.ZERO;
             List<String> subjectMatterCodeSet = new ArrayList<>();
             List<String> subjectMatterNameSet = new ArrayList<>();
 
             for (MaterialsList materials : materialsLists) {
-                ceilingPrice = ceilingPrice.add(materials.getAmountInclTax());
+//                ceilingPrice = ceilingPrice.add(materials.getAmountInclTax());
 
                 subjectMatterCodeSet.add(materials.getSubjectMatterCode());
                 subjectMatterNameSet.add(materials.getSubjectMatterName());
             }
+//            现上限价：合约规划列表第一个合约规划（只用一个）的计划金额
+            BigDecimal ceilingPrice = contractPlanningList.get(0).getPlannedAmountInclTax();
             schemeCreateVO.setCeilingPrice(NumberUtil.round(ceilingPrice, Constants.SCALE_AMOUNT_VO));
             schemeCreateVO.setSubjectMatterName(subjectMatterNameSet.stream().filter(StringUtils::isNotBlank).distinct().collect(Collectors.joining(",")));
             schemeCreateVO.setSubjectMatterCode(subjectMatterCodeSet.stream().filter(StringUtils::isNotBlank).distinct().collect(Collectors.joining(",")));
