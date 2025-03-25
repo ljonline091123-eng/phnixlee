@@ -365,6 +365,7 @@
           </el-table-column>
 
 
+
           <!-- <el-table-column label="已发生规划金额（含税）" align="right" prop="incurredPlannedAmountText" />
           <el-table-column label="规划余量(元)" align="right" prop="planningBalanceText" />
           <el-table-column label="拟定招标方式" align="center" prop="biddingMethodName" /> -->
@@ -710,6 +711,7 @@ export default {
         deptOptions:[],
         defaultExpandedKeys:[],
         waitCurrentNodeKey:'1826912577508798466',
+        totalPriceQD : null,   //清单的列含税总价
         materialDialogVisible: false, // 控制物料选择对话框的显示和隐藏
         // 物料分类列表
         materialCategories: [
@@ -733,7 +735,8 @@ export default {
         PRICETYPELIST:PRICETYPELIST,
         PRICETYPEOPTIONS:PRICETYPEOPTIONS,
         formData: {
-          priceType:1
+          priceType:1 ,
+          upperLimitPrice: '',
         }, //form表单数据
         planList: [],
         virtualData: [], // 虚拟列表渲染的数据
@@ -787,6 +790,16 @@ export default {
             required: true,
             message: '区域不能为空',
           }],
+          contractPlanningName: [
+            { required: true, message: "合约名称不能为空" }
+          ],
+          plannedAmountInclTax: [
+            { required: true, message: "计划金额不能为空" },
+            { pattern: /^\d+(\.\d{0,4})?$/, message: "请输入正确的计划金额（最多保留4位小数）", trigger: "blur" }
+          ],
+        },
+        tableRef: {
+
         },
         // 遮罩层
         loading: false,
@@ -1318,6 +1331,31 @@ export default {
               }
             }
 
+            // 所有清单条目的合计(含税)总和
+            let totalAmount = this.totalPriceQD;
+            // 获取计划金额
+            if (typeof this.planList[0].plannedAmountInclTax === 'string') {
+              this.planList[0].plannedAmountInclTax =  this.planList[0].plannedAmountInclTax.replace(/,/g, '');
+            }
+            const plannedAmountInclTax = bignumber(this.planList[0].plannedAmountInclTax);
+            // 校验合计(含税)总和是否小于或等于计划金额
+            if (totalAmount != null && plannedAmountInclTax != null) {
+              if (typeof totalAmount === 'string') {
+                totalAmount =  totalAmount.replace(/,/g, '');
+              }
+              const totalAmountBigNumber = bignumber(totalAmount);
+              console.log("提交时的总价this.totalPriceQD", totalAmountBigNumber);
+              console.log("提交时的计划金额plannedAmountInclTax", plannedAmountInclTax);
+              if (totalAmountBigNumber.greaterThan(plannedAmountInclTax)) {
+                this.isSubmit = false;
+                this.$message({
+                  message: `拆分合约的合计(含税)总和 ${totalAmountBigNumber.toString()} 不能大于计划金额 ${plannedAmountInclTax.toString()}`,
+                  type: 'error'
+                });
+                return false;
+              }
+            }
+            
             const loading = this.$loading({
               lock: true,
               background: 'rgba(0, 0, 0, 0.7)'
@@ -1475,14 +1513,18 @@ export default {
       });
     },
 
-    //上限价等于计划金额的总和
-    calculateUpperLimitPrice() {
-      this.formData.upperLimitPrice = this.planList[0].plannedAmountInclTax;
-      console.log("this.formData.upperLimitPrice:", this.formData.upperLimitPrice);
-      console.log("this.planList[0].plannedAmountInclTax", this.planList[0].plannedAmountInclTax);
-      this.$nextTick(() => {
-        console.log("视图更新后的 this.formData.upperLimitPrice:", this.formData.upperLimitPrice);
-      });
+    //上限价等于计划金额
+    calculateUpperLimitPrice(row) {
+      if (row.plannedAmountInclTax) {
+        this.formData.upperLimitPrice = row.plannedAmountInclTax;
+        console.log("上限价this.formData.upperLimitPrice:", this.formData.upperLimitPrice);
+        console.log("计划金额row.plannedAmountInclTax", row.plannedAmountInclTax);
+        this.$nextTick(() => {
+          console.log("视图更新后的 this.formData.upperLimitPrice:", this.formData.upperLimitPrice);
+        });
+      } else {
+        this.$message.error("计划金额不能为空");
+      }
     },
   
     //提交采购计划
@@ -2698,6 +2740,8 @@ export default {
                 });
               }
               let totalPriceTableText = this.formatNumberDynamicDecimalWithSeparator(totalPriceTable,2);
+              this.totalPriceQD = totalPriceTableText;
+              console.log("列含税总价：", totalPriceTableText , this.totalPriceQD);
               /* total-price-sum-table-class */
               document.querySelector('.totalPriceSumTable'+i).textContent = '标包含税总价：'+totalPriceTableText+' (元)';
             });

@@ -471,22 +471,27 @@
           <el-table-column label="清单" align="center">
             <template slot-scope="inventory">
 
-              <virtual-scroll
+              <!-- <virtual-scroll
                 :data="inventory.row.materialsLists"
                 :item-size="62"
                 key-prop="materialsId"
                 ref="virScrollRef"
-                @change="(renderData) => virtualData = renderData">
+                @change="(renderData) => virtualData = renderData"> -->
                   <el-table
                     size="small"
-                    :data="virtualData"
+                    :data="inventory.row.materialsLists"
                     border
                     show-summary
                     :summary-method="getSummaries"
                   >
-                    <el-table-column label="序号" width="50" align="center" fixed="left">
+                    <!-- <el-table-column label="序号" width="50" align="center" fixed="left">
                       <template #default="scope">
                         {{ inventory.row.materialsLists.findIndex(item => item.materialsId === scope.row.materialsId) + 1 }}
+                      </template>
+                    </el-table-column> -->
+                    <el-table-column label="序号" width="50" align="center" fixed="left">
+                      <template #default="scope">
+                        {{ scope.$index + 1 }}
                       </template>
                     </el-table-column>
                     <el-table-column
@@ -507,12 +512,6 @@
                       prop="subjectMatterName"
                       show-overflow-tooltip
                     />
-    <!--                <el-table-column-->
-    <!--                  label="规格型号"-->
-    <!--                  prop="specification"-->
-    <!--                  show-overflow-tooltip-->
-    <!--                />-->
-                    <el-table-column label="成本子目名称(导入)" min-width="150" prop="materialsNameImport" show-overflow-tooltip/>
                     <el-table-column label="特征值特征项" min-width="150" prop="specification" show-overflow-tooltip/>
                     <el-table-column label="计量规则" min-width="150" align="center" prop="measurementRules"  show-overflow-tooltip/>
                     <el-table-column label="工作内容" align="center" prop="workContent" show-overflow-tooltip />
@@ -579,7 +578,7 @@
                     <el-table-column label="合计(含税)" align="right" prop="totalPriceText" min-width="150"/>
                     <el-table-column label="备注" align="center" prop="remark"/>
                   </el-table>
-              </virtual-scroll>
+              <!-- </virtual-scroll> -->
             </template>
           </el-table-column>
         </el-table>

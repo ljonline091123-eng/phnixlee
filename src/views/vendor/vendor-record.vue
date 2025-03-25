@@ -182,7 +182,7 @@
             @pagination="getVendorCooperativePartner"
           />
         </el-tab-pane>
-        <el-tab-pane label="履约评价" name="evaluate">
+        <!-- <el-tab-pane label="履约评价" name="evaluate">
           <el-table
             v-loading="performanceLoading"
             :data="performanceList"
@@ -237,7 +237,7 @@
               width="80"
             />
           </el-table>
-        </el-tab-pane>
+        </el-tab-pane> -->
       </el-tabs>
     </el-dialog>
   </div>

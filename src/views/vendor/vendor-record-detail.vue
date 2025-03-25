@@ -36,15 +36,17 @@
         </el-table-column>
         <el-table-column label="合同签订日期" min-width="140" align="center" prop="agreementSignDate"/>
         <el-table-column label="合同金额" min-width="140" align="right" prop="totalAmountIncTaxText"/>
-        <el-table-column label="已结算金额" min-width="140" align="right" prop="settledAmountText"/>
+        <el-table-column label="支出业务类型" min-width="140" align="right" prop="expenditureBusinessTypeText"/>
+        <el-table-column label="甲方名称" min-width="140" align="right" prop="partyAName"/>
+        <el-table-column label="甲方联系人" min-width="140" align="right" prop="partyAContactName"/>
+        <el-table-column label="甲方联系人电话" min-width="140" align="right" prop="partyAContactPhone"/>
+        <!-- <el-table-column label="已结算金额" min-width="140" align="right" prop="settledAmountText"/>
         <el-table-column label="已付款金额" min-width="140" align="right" prop="paidAmountText"/>
         <el-table-column label="未付款金额" min-width="140" align="right" prop="unpaidAmountText"/>
         <el-table-column label="履约评价（优）" min-width="120" align="center" prop="excellentNum"/>
         <el-table-column label="履约评价（良）" min-width="120" align="center" prop="goodNum"/>
         <el-table-column label="履约评价（合格）" min-width="140" align="center" prop="qualifiedNum"/>
-        <el-table-column label="履约评价（差）" min-width="120" align="center" prop="badNum"/>
-
-
+        <el-table-column label="履约评价（差）" min-width="120" align="center" prop="badNum"/> -->
       </el-table>
     </div>
   </div>

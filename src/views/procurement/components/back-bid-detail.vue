@@ -95,20 +95,25 @@
       <el-table-column prop="materialsLists" label="清单" align="center">
         <template #default="{ row }">
           <span v-if="!row.compVOList">
-              <virtual-scroll
+              <!-- <virtual-scroll
                 :data="row.materialsLists || []"
                 :item-size="62"
                 key-prop="materialsId"
                 ref="virScrollRef"
-                @change="(renderData) => virtualData = renderData">
+                @change="(renderData) => virtualData = renderData"> -->
                 <el-table
                   size="small"
-                  :data="virtualData"
+                  :data="row.materialsLists || []"
                   :style="{ width: 'calc(100% - 1px)' }"
                 >
-                  <el-table-column label="序号" width="50" align="center" fixed="left">
+                  <!-- <el-table-column label="序号" width="50" align="center" fixed="left">
                     <template #default="scope">
                       {{ row.materialsLists.findIndex(item => item.materialsId === scope.row.materialsId) + 1 }}
+                    </template>
+                  </el-table-column> -->
+                  <el-table-column label="序号" width="50" align="center" fixed="left">
+                    <template #default="scope">
+                      {{ scope.$index + 1 }}
                     </template>
                   </el-table-column>
                   <el-table-column
@@ -277,7 +282,7 @@
                     <span :class="'total-price-sum-table-class totalPriceSumTable' + getParentIndex(row)">  </span>
                   </template>
                 </el-table>
-              </virtual-scroll>
+              <!-- </virtual-scroll> -->
           </span>
         </template>
       </el-table-column>
