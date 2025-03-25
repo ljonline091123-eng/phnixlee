@@ -28,17 +28,17 @@
           :disabled="isSubmit"
           :loading="isSubmit"
           >{{ isSubmit ? "提交中..." : "提交" }}</el-button>
-<!--        <el-button-->
-<!--          v-if="auditable"-->
-<!--          type="primary"-->
-<!--          size="mini"-->
-<!--          @click="confirmApprove()"-->
-<!--          >审批</el-button>-->
-<!--        <el-button-->
-<!--          type="primary"-->
-<!--          size="mini"-->
-<!--          @click="handelCalibrationApproval()"-->
-<!--          >审批详情</el-button>-->
+        <el-button
+          v-if="auditable"
+          type="primary"
+          size="mini"
+          @click="confirmApprove()"
+          >审批</el-button>
+        <el-button
+          type="primary"
+          size="mini"
+          @click="handelCalibrationApproval()"
+          >审批详情</el-button>
       </div>
     </BackButton>
     <div class="context">

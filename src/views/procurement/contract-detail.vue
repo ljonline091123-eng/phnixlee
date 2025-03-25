@@ -66,22 +66,22 @@
         </div>
 
         <div class="contractApprovalButton">
-<!--          <el-button-->
-<!--            type="primary"-->
-<!--            size="mini"-->
-<!--            v-if="isShowButton"-->
-<!--            @click="handelSanction"-->
-<!--          >-->
-<!--            审批-->
-<!--          </el-button>-->
-<!--          <el-button-->
-<!--            type="primary"-->
-<!--            size="mini"-->
-<!--            v-if="isShowApprovalDetails"-->
-<!--            @click="handelCalibrationApproval"-->
-<!--          >-->
-<!--            审批详情-->
-<!--          </el-button>-->
+          <el-button
+            type="primary"
+            size="mini"
+            v-if="isShowButton"
+            @click="handelSanction"
+          >
+            审批
+          </el-button>
+          <el-button
+            type="primary"
+            size="mini"
+            v-if="isShowApprovalDetails"
+            @click="handelCalibrationApproval"
+          >
+            审批详情
+          </el-button>
         </div>
       </div>
     </BackButton>
