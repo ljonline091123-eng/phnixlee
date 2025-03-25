@@ -104,6 +104,7 @@ public class BiddingResultServiceImpl extends ServiceImpl<BiddingResultMapper,Bi
         return vo;
     }
 
+    /*定标-定标*/
     @Override
     @Transactional(rollbackFor = Exception.class)
     public boolean calibration(CalibrationEntranceVO entranceVO) {

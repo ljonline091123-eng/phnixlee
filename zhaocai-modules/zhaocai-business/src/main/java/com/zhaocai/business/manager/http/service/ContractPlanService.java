@@ -6,6 +6,7 @@ import com.zhaocai.business.common.conver.ProcurementPlanTypeConver;
 import com.zhaocai.business.common.enums.ProcurementPlanTypeEnum;
 import com.zhaocai.business.common.enums.RentModeEnum;
 import com.zhaocai.business.common.utils.ValidationUtils;
+import com.zhaocai.business.manager.http.common.config.UnderlingPlatformUrlEnum;
 import com.zhaocai.business.manager.http.dto.req.*;
 import com.zhaocai.business.manager.http.dto.res.ContractPlanListDTO;
 import com.zhaocai.business.manager.http.dto.res.ContractPlanMaterialListDTO;
@@ -53,7 +54,7 @@ public class ContractPlanService {
         reqDTO.setPageNum(1);
         reqDTO.setPageSize(10000);
 
-//        // 发送请求
+//        // 发送请求 （合约规划查询）
 //        PageResult<ContractPlanListDTO> pageList =  UnderlingRestTemplateService.pageForObject(UnderlingPlatformUrlEnum.CONTRACT_PLAN_LIST,
 //                ContractPlanListDTO.class,reqDTO,"total","list");
         // 发送请求

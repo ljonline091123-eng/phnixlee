@@ -11,7 +11,6 @@ import com.zhaocai.business.agreement.domain.Agreement;
 import com.zhaocai.business.agreement.service.IAgreementService;
 import com.zhaocai.business.bidding.domain.*;
 import com.zhaocai.business.bidding.enums.TenderNoticeApprovalStatusEnum;
-import com.zhaocai.business.bidding.enums.TenderNoticeApprovalStatusEnum;
 import com.zhaocai.business.bidding.enums.TenderNoticeStatusEnum;
 import com.zhaocai.business.bidding.mapper.TenderNoticeMapper;
 import com.zhaocai.business.bidding.service.*;
@@ -58,6 +57,7 @@ import com.zhaocai.common.core.constant.NumberConstant;
 import com.zhaocai.common.core.constant.SecurityConstants;
 import com.zhaocai.common.core.domain.R;
 import com.zhaocai.common.core.exception.CheckedException;
+import com.zhaocai.common.core.text.Convert;
 import com.zhaocai.common.core.utils.DateUtils;
 import com.zhaocai.common.core.utils.bean.BeanCopierUtil;
 import com.zhaocai.common.security.utils.SecurityUtils;
@@ -65,7 +65,6 @@ import com.zhaocai.system.api.domain.SysDept;
 import com.zhaocai.system.api.domain.SysUser;
 import com.zhaocai.system.api.system.RemoteSystemService;
 import com.zhaocai.system.api.system.RemoteUserService;
-import io.swagger.annotations.ApiModelProperty;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -944,9 +943,12 @@ public class TenderNoticeServiceImpl extends ServiceImpl<TenderNoticeMapper,Tend
         //查询已完成的招标公告数据量
         /*long projectNum = this.count(new LambdaQueryWrapper<TenderNotice>()
                 .eq(TenderNotice::getNoticeStatus, TenderNoticeStatusEnum.COMPLETE.getState()));*/
-        String selectPrgAmount= performanceEvaluationService.selectPrgAmount();
-        if (StringUtils.isNotBlank(selectPrgAmount)) {
-            vo.setProjectNum(Long.valueOf(selectPrgAmount));
+
+//        查询最小核算项目数
+//        String selectPrgAmount= performanceEvaluationService.selectPrgAmount();
+        Long PrgAmount = minProjectService.acountMinProjectNumber();
+        if (PrgAmount != null) {
+            vo.setProjectNum(PrgAmount);
         }else {
             vo.setProjectNum(Long.valueOf(NumberConstant.ZERO));
         }
@@ -1014,6 +1016,17 @@ public class TenderNoticeServiceImpl extends ServiceImpl<TenderNoticeMapper,Tend
     @Override
     public List<ContractPlanningNoticeVO> getListByContractPlanningId(ContractPlanningQueryVO queryVO) {
         return baseMapper.getListByContractPlanningId(queryVO);
+    }
+
+    @Override
+    public List<Long> getNoticeIdsBySchemeId(Long schemeId) {
+        List<Long> ids = super.listObjs(
+                new LambdaQueryWrapper<TenderNotice>()
+                        .eq(TenderNotice::getSchemeId, schemeId)
+                        .select(TenderNotice::getId),
+                obj -> Convert.toLong(obj)  // 更安全的类型转换
+        );
+        return Optional.ofNullable(ids).orElse(Collections.emptyList());
     }
 
     @Override
