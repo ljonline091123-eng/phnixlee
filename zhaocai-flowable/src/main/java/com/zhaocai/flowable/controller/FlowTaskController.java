@@ -360,12 +360,13 @@ public class FlowTaskController extends BaseController {
     /**
      * cs
      *
-     * @param processId
+     * @param variables
      * @return
      */
     @PostMapping("/loadTaskDef")
-    public AjaxResult loadTaskDef(String processId) {
+    public AjaxResult loadTaskDef(@RequestBody Map<String, Object> variables) {
         try {
+            String processId = variables.get("procInsId") + "";
             return AjaxResult.success(flowTaskService.loadTaskDef(processId));
         } catch (Exception e) {
             e.printStackTrace();
