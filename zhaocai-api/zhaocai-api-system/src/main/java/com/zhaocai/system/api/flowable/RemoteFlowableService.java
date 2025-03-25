@@ -39,4 +39,7 @@ public interface RemoteFlowableService {
 
     @PostMapping(value = "/task/loadTaskDef")
     AjaxResult loadTaskDef(@RequestBody Map<String, Object> variables);
+
+    @PostMapping(value = "/task/revokeProcess")
+    AjaxResult revokeProcess(@RequestBody Map<String, Object> variables);
 }

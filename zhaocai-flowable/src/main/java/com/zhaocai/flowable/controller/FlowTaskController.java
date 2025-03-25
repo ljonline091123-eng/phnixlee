@@ -58,12 +58,20 @@ public class FlowTaskController extends BaseController {
         return AjaxResult.error();
     }
 
+//    @ApiOperation(value = "撤回任务", response = FlowTaskDto.class)
+//    @PostMapping(value = "/revokeProcess")
+//    //@RequiresPermissions("flowable:finished:revokeProcess")
+//    public AjaxResult revokeProcess(@RequestBody FlowTaskVo flowTaskVo) {
+//        return AjaxResult.success(flowTaskService.revokeProcess(flowTaskVo));
+//    }
+
     @ApiOperation(value = "撤回任务", response = FlowTaskDto.class)
-    @PostMapping(value = "/revokeProcess")
-    //@RequiresPermissions("flowable:finished:revokeProcess")
-    public AjaxResult revokeProcess(@RequestBody FlowTaskVo flowTaskVo) {
+    @GetMapping(value = "/revokeProcess")
+    public AjaxResult revokeProcess(@RequestBody Map<String, Object> variables) {
+        FlowTaskVo flowTaskVo = JSONUtil.toBean(JSONUtil.toJsonStr(variables), FlowTaskVo.class);
         return AjaxResult.success(flowTaskService.revokeProcess(flowTaskVo));
     }
+
 
     @ApiOperation(value = "获取待办列表", response = FlowTaskDto.class)
     @GetMapping(value = "/todoList")

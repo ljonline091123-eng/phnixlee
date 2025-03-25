@@ -134,7 +134,7 @@ public interface IFlowTaskService {
      * 撤回任务到上一步
      * @param flowTaskVo 参数
      */
-    boolean revokeProcess(FlowTaskVo flowTaskVo);
+    Map<String,Object> revokeProcess(FlowTaskVo flowTaskVo);
 
 
     /**
