@@ -234,9 +234,10 @@
                       </el-table-column>
                       <el-table-column label="清单数量" align="right" prop="count" width="150" v-else>
                         <template slot-scope="scope">
-                          <el-input title="清单数量" v-model="scope.row.count" :disabled="isSubmit || scope.row.belongOffer || scope.row.pushFlag === 'Y'" @input.native="changeCount($event,inventory.$index,scope.row)" v-thousandth/>
+                          <el-input title="清单数量" v-model="scope.row.count" :disabled="isSubmit || scope.row.belongOffer || scope.row.pushFlag === 'Y'" @input.native="(event) => changeCount(event, inventory.$index, scope.row)" v-thousandth/>
                         </template>
                       </el-table-column>
+                      
 <!--                      基价由原来浮动价不可编辑，变成了可以编辑-->
                       <el-table-column label="基价" align="right" width="130" prop="basePrice"  v-if="procurementType === 1 && [2,3,4,5,6,7].includes(formData.priceType)">
                         <template slot-scope="scope">
@@ -1317,6 +1318,26 @@ export default {
                 return false;
               }
             }
+
+            // // 计算所有清单条目的合计(含税)总和
+            // let totalAmount = bignumber(0);
+            // planList[0].children.forEach(item => {
+            //   item.children.forEach(subItem => {
+            //     console.log("合计相加的每列金额-：",subItem.totalPrice)
+            //     totalAmount = add(totalAmount, bignumber(subItem.totalPrice));
+            //   });
+            // });
+            // // 获取计划金额
+            // const plannedAmountInclTax = bignumber(this.planList[0].plannedAmountInclTax);
+            // // 校验合计(含税)总和是否小于或等于计划金额
+            // if (totalAmount > plannedAmountInclTax) {
+            //   this.isSubmit = false;
+            //   this.$message({
+            //     message: `拆分合约的合计(含税)总和 ${totalAmount.toString()} 不能大于计划金额 ${plannedAmountInclTax.toString()}`,
+            //     type: 'error'
+            //   });
+            //   return false;
+            // }
 
             const loading = this.$loading({
               lock: true,
@@ -2694,6 +2715,7 @@ export default {
                 });
               }
               let totalPriceTableText = this.formatNumberDynamicDecimalWithSeparator(totalPriceTable,2);
+              console.log("计算标含税总价：totalPriceTableText", totalPriceTableText);
               /* total-price-sum-table-class */
               document.querySelector('.totalPriceSumTable'+i).textContent = '标包含税总价：'+totalPriceTableText+' (元)';
             });

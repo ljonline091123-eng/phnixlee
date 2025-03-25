@@ -638,6 +638,13 @@ export default {
     PageTitle,
   },
   data() {
+    const judgeFile = (rule, value, callback) => {
+      if (!this.abandonBidForm.attachmentList.length) {
+        callback(new Error("文件不存在"));
+      } else {
+        callback();
+      }
+    };
     return {
       // * 方案名称
       schemeName: '',
@@ -650,8 +657,8 @@ export default {
       abandonBidForm: {},
       fileList: [],
       abandonBidRules: {
-        reason: [{ required: true, message: "请填写废标原因" }],
-        attachmentList: [{ required: true, message: "请上传附件" }],
+        reason: [{ required: true, message: "请填写废标原因",trigger: "blur"  }],
+        attachmentList: [{ required: true, message: "请上传附件",trigger: "blur"  },{ required: true, validator: judgeFile, trigger: "blur" }],
       },
       ids: [],
       vendorDetailVisiable: false,
@@ -842,6 +849,7 @@ export default {
       this.$refs[formName].resetFields();
     },
     handleSuccess(res) {
+      debugger
       const { url, name } = res.data;
       console.log(url, name, "a");
       this.abandonBidForm.attachmentList = [{ fileUrl: url, fileName: name }];

@@ -316,45 +316,84 @@ export const listMaterials = (params) => {
 };
 
 //获取设备特征项
-export const deviceFeatureList = (queryId) => {
+// export const deviceFeatureList = (queryId) => {
+//   return request({
+//     url: "/business/materialsClass/deviceFeatureList",
+//     method: "get",
+//     params: {
+//       queryId,
+//     },
+//   });
+// };
+
+export const deviceFeatureList = (deviceClassId) => {
   return request({
-    url: "/business/materialsClass/deviceFeatureList",
+    url: "/archives/deviceFeature/list",
     method: "get",
     params: {
-      queryId,
+      deviceClassId,
     },
   });
 };
 
 //获取设备特征值
-export const deviceFeatureValueList = (queryId) => {
+// export const deviceFeatureValueList = (queryId) => {
+//   return request({
+//     url: "/business/materialsClass/deviceFeatureValueList",
+//     method: "get",
+//     params: {
+//       queryId,
+//     },
+//   });
+// };
+export const deviceFeatureValueList = (deviceFeatureId) => {
   return request({
-    url: "/business/materialsClass/deviceFeatureValueList",
+    url: "archives/featureValue/list",
     method: "get",
     params: {
-      queryId,
+      deviceFeatureId,
     },
   });
 };
+
 
 //获取物资特征项
-export const listMaterialsFeature = (queryId) => {
+// export const listMaterialsFeature = (queryId) => {
+//   return request({
+//     url: "/business/materialsClass/listMaterialsFeature",
+//     method: "get",
+//     params: {
+//       queryId,
+//     },
+//   });
+// };
+export const listMaterialsFeature = (mtrClassId) => {
   return request({
-    url: "/business/materialsClass/listMaterialsFeature",
+    url: "/archives/mtrFeature/list",
     method: "get",
     params: {
-      queryId,
+      mtrClassId,
     },
   });
 };
 
+
 //获取物资特征值
-export const listMaterialsFeatureValue = (queryId) => {
+// export const listMaterialsFeatureValue = (queryId) => {
+//   return request({
+//     url: "/business/materialsClass/listMaterialsFeatureValue",
+//     method: "get",
+//     params: {
+//       queryId,
+//     },
+//   });
+// };
+export const listMaterialsFeatureValue = (mtrFeatureId) => {
   return request({
-    url: "/business/materialsClass/listMaterialsFeatureValue",
+    url: "/archives/mtrValue/list",
     method: "get",
     params: {
-      queryId,
+      mtrFeatureId,
     },
   });
 };
