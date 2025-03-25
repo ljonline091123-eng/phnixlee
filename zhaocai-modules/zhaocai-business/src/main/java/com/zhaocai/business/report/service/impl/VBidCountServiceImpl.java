@@ -3,6 +3,7 @@ package com.zhaocai.business.report.service.impl;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.zhaocai.business.common.enums.DictBizEnum;
 import com.zhaocai.business.manager.http.service.UnderlingSystemService;
+import com.zhaocai.business.pub.service.ISysDictDataService;
 import com.zhaocai.business.report.mapper.VBidCountMapper;
 import com.zhaocai.business.report.service.IVBidCountService;
 import com.zhaocai.business.report.vo.VBidCountVo;
@@ -27,6 +28,9 @@ public class VBidCountServiceImpl extends ServiceImpl<VBidCountMapper, VBidCount
 
     @Autowired
     private UnderlingSystemService underlingSystemService;
+
+    @Autowired
+    private ISysDictDataService sysDictDataService;
 
     /**
      * 招标率报表
@@ -217,7 +221,7 @@ public class VBidCountServiceImpl extends ServiceImpl<VBidCountMapper, VBidCount
      * @return
      */
     private List<VBidCountVo> handleDict(List<VBidCountVo> bidCountList) {
-        Map<String, String> projectTypeList = underlingSystemService.listDictMap(DictBizEnum.UNDERLING_PROJECT_FORMAT.getName());
+        Map<String, String> projectTypeList = sysDictDataService.listDictMap(DictBizEnum.UNDERLING_PROJECT_FORMAT.getName());
         bidCountList.parallelStream().forEach(i -> {
             //项目业态
             i.setPrjStateName(StringUtils.isNotEmpty(i.getPrjState())?projectTypeList.get(i.getPrjState()):null);

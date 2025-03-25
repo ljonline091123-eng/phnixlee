@@ -3,6 +3,7 @@ package com.zhaocai.business.report.service.impl;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.zhaocai.business.common.enums.DictBizEnum;
 import com.zhaocai.business.manager.http.service.UnderlingSystemService;
+import com.zhaocai.business.pub.service.ISysDictDataService;
 import com.zhaocai.business.report.domain.ContractBase;
 import com.zhaocai.business.report.mapper.ContractBaseMapper;
 import com.zhaocai.business.report.service.*;
@@ -34,6 +35,9 @@ public class ContractBaseServiceImpl extends ServiceImpl<ContractBaseMapper, Con
 
     @Autowired
     private IContractListLaborService laborService;
+
+    @Autowired
+    private ISysDictDataService sysDictDataService;
 
     @Autowired
     private IContractListLeasedDeviceService leasedDeviceService;
@@ -111,7 +115,7 @@ public class ContractBaseServiceImpl extends ServiceImpl<ContractBaseMapper, Con
                 }
             }
         } else if (null != contractBaseReportVo.getMinAccountCode()) { // 项目端
-            Map<String, String> contractTypeList = underlingSystemService.listDictMap(DictBizEnum.UNDERLING_CONTRACT_TYPE.getName());
+            Map<String, String> contractTypeList = sysDictDataService.listDictMap(DictBizEnum.UNDERLING_CONTRACT_TYPE.getName());
             // 查询项目对应的合同
             List<ContractBaseReportVo> contractBaseList = baseMapper.contractLedgerList(contractBaseReportVo);
             if (!CollectionUtils.isEmpty(contractBaseList)) {
@@ -329,7 +333,7 @@ public class ContractBaseServiceImpl extends ServiceImpl<ContractBaseMapper, Con
      * @return
      */
     private List<ContractBaseReportVo> getProject(List<ContractBaseReportVo> resultList, List<ContractBaseReportVo> list, SysDept sysDept, String callType) {
-        Map<String, String> contractTypeList = underlingSystemService.listDictMap(DictBizEnum.UNDERLING_CONTRACT_TYPE.getName());
+        Map<String, String> contractTypeList = sysDictDataService.listDictMap(DictBizEnum.UNDERLING_CONTRACT_TYPE.getName());
         // 汇总项目及以下数据
         List<ContractBaseReportVo> result = list.stream()
                 .collect(Collectors.groupingBy(ContractBaseReportVo::getProjectId))
@@ -415,7 +419,7 @@ public class ContractBaseServiceImpl extends ServiceImpl<ContractBaseMapper, Con
      */
     private List<ContractBaseReportVo> getProject1(List<ContractBaseReportVo> resultList, List<ContractBaseReportVo> list, SysDept sysDept, String callType) {
         ContractBaseReportVo xmb = this.getContractBase(sysDept, list, callType);
-        Map<String, String> contractTypeList = underlingSystemService.listDictMap(DictBizEnum.UNDERLING_CONTRACT_TYPE.getName());
+        Map<String, String> contractTypeList = sysDictDataService.listDictMap(DictBizEnum.UNDERLING_CONTRACT_TYPE.getName());
         // 汇总项目及以下数据
         List<ContractBaseReportVo> result = list.stream()
                 .collect(Collectors.groupingBy(ContractBaseReportVo::getProjectId))

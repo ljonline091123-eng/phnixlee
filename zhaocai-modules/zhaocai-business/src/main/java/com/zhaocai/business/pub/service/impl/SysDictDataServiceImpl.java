@@ -14,8 +14,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 import java.util.stream.Collectors;
 
 /**
@@ -69,6 +68,22 @@ public class SysDictDataServiceImpl implements ISysDictDataService {
                     .map(x -> new DictListVO(x.getDictLabel(),x.getDictValue(),0, x.getRemark())).collect(Collectors.toList());
         }
         return new ArrayList<>();
+    }
+
+    /**
+     * 获取系统字典映射
+     * @param type
+     * @return
+     */
+    @Override
+    public Map<String,String> listDictMap(String type) {
+        List<DictListVO> dictList = listDictByType(type);
+        if (CollectionUtil.isNotEmpty(dictList)) {
+            return dictList.stream()
+                    .collect(Collectors.toMap(DictListVO::getDictValue, DictListVO::getDictLabel));
+        }
+
+        return Collections.emptyMap();
     }
 
     @Override

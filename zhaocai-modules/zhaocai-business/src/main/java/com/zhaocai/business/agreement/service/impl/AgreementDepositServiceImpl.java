@@ -9,6 +9,7 @@ import com.zhaocai.business.agreement.service.IAgreementDepositService;
 import com.zhaocai.business.agreement.vo.res.AgreementDepositVO;
 import com.zhaocai.business.common.enums.DictBizEnum;
 import com.zhaocai.business.manager.http.service.UnderlingSystemService;
+import com.zhaocai.business.pub.service.ISysDictDataService;
 import com.zhaocai.common.core.utils.bean.BeanCopierUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -28,6 +29,9 @@ public class AgreementDepositServiceImpl extends ServiceImpl<AgreementDepositMap
     @Autowired
     private UnderlingSystemService underlingSystemService;
 
+    @Autowired
+    private ISysDictDataService sysDictDataService;
+
     @Override
     public void saveAgreementDeposit(List<AgreementDeposit> agreementDeposits, Long agreementId) {
         if (CollectionUtil.isNotEmpty(agreementDeposits)) {
@@ -42,9 +46,9 @@ public class AgreementDepositServiceImpl extends ServiceImpl<AgreementDepositMap
     public List<AgreementDepositVO> listByAgreementId(Long agreementId) {
         List<AgreementDeposit> agreementDeposits = list(new LambdaQueryWrapper<AgreementDeposit>()
                 .eq(AgreementDeposit::getAgreementId,agreementId));
-        Map<String,String> depositTypeMap = underlingSystemService.listDictMap(DictBizEnum.UNDERLING_DEPOSIT_TYPE.getName());
-        Map<String,String> depositModeMap = underlingSystemService.listDictMap(DictBizEnum.UNDERLING_DEPOSIT_MODE.getName());
-        Map<String,String> depositBaseTypeMap = underlingSystemService.listDictMap(DictBizEnum.UNDERLING_DEPOSIT_BASE_TYPE.getName());
+        Map<String,String> depositTypeMap = sysDictDataService.listDictMap(DictBizEnum.UNDERLING_DEPOSIT_TYPE.getName());
+        Map<String,String> depositModeMap = sysDictDataService.listDictMap(DictBizEnum.UNDERLING_DEPOSIT_MODE.getName());
+        Map<String,String> depositBaseTypeMap = sysDictDataService.listDictMap(DictBizEnum.UNDERLING_DEPOSIT_BASE_TYPE.getName());
 
         List<AgreementDepositVO> agreementDepositList = BeanCopierUtil.copyList(agreementDeposits,AgreementDepositVO.class);
         for (AgreementDepositVO depositVO : agreementDepositList) {

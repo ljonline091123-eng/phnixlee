@@ -11,6 +11,7 @@ import com.zhaocai.business.agreement.vo.res.AgreementUnderlingMaterialsVO;
 import com.zhaocai.business.common.enums.DictBizEnum;
 import com.zhaocai.business.common.utils.AmountCalUtil;
 import com.zhaocai.business.manager.http.service.UnderlingSystemService;
+import com.zhaocai.business.pub.service.ISysDictDataService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -30,6 +31,9 @@ public class AgreementMaterialsListServiceImpl extends ServiceImpl<AgreementMate
     @Autowired
     private UnderlingSystemService underlingSystemService;
 
+    @Autowired
+    private ISysDictDataService sysDictDataService;
+
     @Override
     public void saveAgreementMaterialsList(List<AgreementMaterialsList> agreementMaterialsLists, Long agreementId) {
         if (CollectionUtil.isNotEmpty(agreementMaterialsLists)) {
@@ -44,8 +48,8 @@ public class AgreementMaterialsListServiceImpl extends ServiceImpl<AgreementMate
     public List<AgreementMaterialsListVO> listAgreementMaterials(Long agreementId) {
         List<AgreementMaterialsListVO> resultList = baseMapper.selectAgreementMaterialsList(agreementId);
 
-        Map<String,String> rentalTypeMap = underlingSystemService.listDictMap(DictBizEnum.UNDERLING_RENT_MODE.getName());
-        Map<String,String> rentalUnitMap = underlingSystemService.listDictMap(DictBizEnum.UNDERLING_RENT_UNIT.getName());
+        Map<String,String> rentalTypeMap = sysDictDataService.listDictMap(DictBizEnum.UNDERLING_RENT_MODE.getName());
+        Map<String,String> rentalUnitMap = sysDictDataService.listDictMap(DictBizEnum.UNDERLING_RENT_UNIT.getName());
         for (AgreementMaterialsListVO materials : resultList) {
             materials.setSignTaxAmount(AmountCalUtil.calTaxAmount(materials.getSignAmountInclTax(),materials.getSignAmountExclTax()));
             materials.setTaxAmount(AmountCalUtil.calTaxAmount(materials.getTaxPrice(),materials.getNotTaxPrice()));
@@ -83,8 +87,8 @@ public class AgreementMaterialsListServiceImpl extends ServiceImpl<AgreementMate
     public List<AgreementMaterialsListVO> listAgreementMaterialsByMarket(Long id) {
         List<AgreementMaterialsListVO> resultList = baseMapper.listAgreementMaterialsByMarket(id);
 
-        Map<String,String> rentalTypeMap = underlingSystemService.listDictMap(DictBizEnum.UNDERLING_RENT_MODE.getName());
-        Map<String,String> rentalUnitMap = underlingSystemService.listDictMap(DictBizEnum.UNDERLING_RENT_UNIT.getName());
+        Map<String,String> rentalTypeMap = sysDictDataService.listDictMap(DictBizEnum.UNDERLING_RENT_MODE.getName());
+        Map<String,String> rentalUnitMap = sysDictDataService.listDictMap(DictBizEnum.UNDERLING_RENT_UNIT.getName());
         for (AgreementMaterialsListVO materials : resultList) {
             BigDecimal taxUnitPrice = materials.getNotTaxUnitPrice().multiply(materials.getTaxRate().divide(BigDecimal.valueOf(100))).add(materials.getNotTaxUnitPrice());
             materials.setTaxUnitPrice(taxUnitPrice);

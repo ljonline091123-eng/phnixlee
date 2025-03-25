@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.zhaocai.business.common.enums.DictBizEnum;
 import com.zhaocai.business.common.utils.ValidateUtils;
 import com.zhaocai.business.manager.http.service.UnderlingSystemService;
+import com.zhaocai.business.pub.service.ISysDictDataService;
 import com.zhaocai.business.receipt.domain.ReceiptMaterialsTurnLedger;
 import com.zhaocai.business.receipt.enums.OperationalStateEnum;
 import com.zhaocai.business.receipt.mapper.ReceiptMaterialsTurnLedgerMapper;
@@ -49,6 +50,9 @@ public class ReceiptMaterialsTurnLedgerServiceImpl extends
 
     @Autowired
     private IVendorService vendorService;
+
+    @Autowired
+    private ISysDictDataService sysDictDataService;
     /**
      * 采购订单列表
      * @param queryDTO
@@ -89,10 +93,10 @@ public class ReceiptMaterialsTurnLedgerServiceImpl extends
         BeanUtils.copyBeanProp(turnLedgerVO,materialsTurnLedger);
         //计租方式
         turnLedgerVO.setRentType(StringUtils.isNotEmpty(turnLedgerVO.getRentType())?
-                underlingSystemService.listDictMap(DictBizEnum.UNDERLING_RENT_TYPE.getName()).get(turnLedgerVO.getRentType()):null);
+                sysDictDataService.listDictMap(DictBizEnum.UNDERLING_RENT_TYPE.getName()).get(turnLedgerVO.getRentType()):null);
         //结算状态
         turnLedgerVO.setSettleStatus(StringUtils.isNotEmpty(turnLedgerVO.getSettleStatus())?
-                underlingSystemService.listDictMap(DictBizEnum.UNDERLING_SETTLE_STATUS.getName()).get(turnLedgerVO.getSettleStatus()):null);
+                sysDictDataService.listDictMap(DictBizEnum.UNDERLING_SETTLE_STATUS.getName()).get(turnLedgerVO.getSettleStatus()):null);
         //操作状态
         turnLedgerVO.setStateName(StringUtils.isNotEmpty(turnLedgerVO.getState())? OperationalStateEnum.getValueByCode(turnLedgerVO.getState())!=null
                 ?OperationalStateEnum.getValueByCode(turnLedgerVO.getState()):turnLedgerVO.getState():null);
@@ -100,7 +104,7 @@ public class ReceiptMaterialsTurnLedgerServiceImpl extends
             selectList.stream().map(tem -> {
                 //台班类型
                 tem.setMachineType(StringUtils.isNotEmpty(tem.getMachineType())?
-                        underlingSystemService.listDictMap(DictBizEnum.UNDERLING_MTR_MACH_TYPE.getName()).get(tem.getMachineType()):null);
+                        sysDictDataService.listDictMap(DictBizEnum.UNDERLING_MTR_MACH_TYPE.getName()).get(tem.getMachineType()):null);
                 return tem;
             }).collect(Collectors.toList());
             turnLedgerVO.setDtlList(selectList);

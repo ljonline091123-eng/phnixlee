@@ -11,6 +11,7 @@ import com.zhaocai.business.common.enums.ProcurementPlanTypeEnum;
 import com.zhaocai.business.manager.http.service.UnderlingSystemService;
 import com.zhaocai.business.procurement.domain.ProcurementScheme;
 import com.zhaocai.business.procurement.service.IProcurementSchemeService;
+import com.zhaocai.business.pub.service.ISysDictDataService;
 import com.zhaocai.common.core.utils.NumberUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -36,6 +37,9 @@ public class BiddingListQuotationServiceImpl extends ServiceImpl<BiddingListQuot
     @Autowired
     private IProcurementSchemeService procurementSchemeService;
 
+    @Autowired
+    private ISysDictDataService sysDictDataService;
+
     /**
      * 获取供应商的报价清单
      */
@@ -45,7 +49,7 @@ public class BiddingListQuotationServiceImpl extends ServiceImpl<BiddingListQuot
 
         List<VendorBiddingListQuotationListVO> list = baseMapper.selectVendorBiddingListQuotation(schemeId,splitId,vendorId);
 
-        Map<String,String> rentModeMap = underlingSystemService.listDictMap(DictBizEnum.UNDERLING_RENT_MODE.getName());
+        Map<String,String> rentModeMap = sysDictDataService.listDictMap(DictBizEnum.UNDERLING_RENT_MODE.getName());
 
         for (VendorBiddingListQuotationListVO listVO : list) {
             listVO.setSurplusCount(NumberUtil.subtract(listVO.getCount(),listVO.getUsedCount()));

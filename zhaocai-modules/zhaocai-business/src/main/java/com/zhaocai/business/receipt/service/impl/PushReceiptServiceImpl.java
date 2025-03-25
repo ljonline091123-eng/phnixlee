@@ -2,6 +2,7 @@ package com.zhaocai.business.receipt.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 //import com.zhaocai.business.manager.http.common.config.UnderlingPlatformUrlEnum;
+import com.zhaocai.business.manager.http.common.config.UnderlingPlatformUrlEnum;
 import com.zhaocai.business.manager.http.service.UnderlingRestTemplateService;
 import com.zhaocai.business.receipt.domain.ReceiptReconciliation;
 import com.zhaocai.business.receipt.service.IPushReceiptService;

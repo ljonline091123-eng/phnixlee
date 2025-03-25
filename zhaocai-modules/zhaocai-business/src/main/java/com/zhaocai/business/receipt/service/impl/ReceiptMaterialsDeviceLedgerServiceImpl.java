@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.zhaocai.business.common.enums.DictBizEnum;
 import com.zhaocai.business.common.utils.ValidateUtils;
 import com.zhaocai.business.manager.http.service.UnderlingSystemService;
+import com.zhaocai.business.pub.service.ISysDictDataService;
 import com.zhaocai.business.receipt.domain.ReceiptMaterialsDeviceLedger;
 import com.zhaocai.business.receipt.enums.OperationalStateEnum;
 import com.zhaocai.business.receipt.mapper.ReceiptMaterialsDeviceLedgerMapper;
@@ -19,6 +20,7 @@ import com.zhaocai.common.core.bean.PageResult;
 import com.zhaocai.common.core.utils.StringUtils;
 import com.zhaocai.common.core.utils.bean.BeanUtils;
 import com.zhaocai.common.security.utils.SecurityUtils;
+import org.checkerframework.checker.units.qual.A;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -48,6 +50,9 @@ public class ReceiptMaterialsDeviceLedgerServiceImpl extends ServiceImpl<Receipt
 
     @Autowired
     private IVendorService vendorService;
+
+    @Autowired
+    private ISysDictDataService sysDictDataService;
     /**
      * 采购订单列表
      * @param queryDTO
@@ -88,10 +93,10 @@ public class ReceiptMaterialsDeviceLedgerServiceImpl extends ServiceImpl<Receipt
         BeanUtils.copyBeanProp(deviceLedgerVO,materialsDeviceLedger);
         //计租方式
         deviceLedgerVO.setRentType(StringUtils.isNotEmpty(deviceLedgerVO.getRentType())?
-                underlingSystemService.listDictMap(DictBizEnum.UNDERLING_RENT_TYPE.getName()).get(deviceLedgerVO.getRentType()):null);
+                sysDictDataService.listDictMap(DictBizEnum.UNDERLING_RENT_TYPE.getName()).get(deviceLedgerVO.getRentType()):null);
         //结算状态
         deviceLedgerVO.setSettleStatus(StringUtils.isNotEmpty(deviceLedgerVO.getSettleStatus())?
-                underlingSystemService.listDictMap(DictBizEnum.UNDERLING_SETTLE_STATUS.getName()).get(deviceLedgerVO.getSettleStatus()):null);
+                sysDictDataService.listDictMap(DictBizEnum.UNDERLING_SETTLE_STATUS.getName()).get(deviceLedgerVO.getSettleStatus()):null);
         //操作状态
         deviceLedgerVO.setStateName(StringUtils.isNotEmpty(deviceLedgerVO.getState())?OperationalStateEnum.getValueByCode(deviceLedgerVO.getState())!=null
                 ?OperationalStateEnum.getValueByCode(deviceLedgerVO.getState()):deviceLedgerVO.getState():null);
@@ -99,7 +104,7 @@ public class ReceiptMaterialsDeviceLedgerServiceImpl extends ServiceImpl<Receipt
             selectList.stream().map(tem -> {
                         //台班类型
                         tem.setMachineType(StringUtils.isNotEmpty(tem.getMachineType())?
-                        underlingSystemService.listDictMap(DictBizEnum.UNDERLING_MTR_MACH_TYPE.getName()).get(tem.getMachineType()):null);
+                        sysDictDataService.listDictMap(DictBizEnum.UNDERLING_MTR_MACH_TYPE.getName()).get(tem.getMachineType()):null);
                         return tem;
             }).collect(Collectors.toList());
             deviceLedgerVO.setDtlList(selectList);
