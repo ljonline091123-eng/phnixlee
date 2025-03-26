@@ -338,7 +338,7 @@
                     target="_blank"
                     class="link-type ellipsis-text"
                     v-if="row.attachments.length"
-                    @click="viewFile(row.attachments[0].fileName, row.attachments[0].fileUrl)"
+                    @click="downloadFile(row.attachments[0].fileUrl)"
                     :title="row.attachments[0].fileName"
                     >{{row.attachments[0].fileName}}</a
                   >
@@ -1972,6 +1972,11 @@ export default {
     viewDetail(id) {
       this.bidDetailVisiable = true;
       this.biddingInfoId = id;
+    },
+    /** 下载模板文件 */
+    downloadFile(fileUrl) {
+      console.log("下载文件url：",fileUrl);
+      window.open(fileUrl, '_blank');
     },
     async fileSuccess(res) {
       const { uploadBiddingInfoId } = this;

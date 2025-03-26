@@ -10,7 +10,8 @@
       <el-descriptions-item label=" 采购经办人">{{ procurementScheme.procurementOfficerName }}</el-descriptions-item>
       <el-descriptions-item label="招标方式" :span="2">{{ procurementScheme.procurementTypeText }}</el-descriptions-item>
       <el-descriptions-item label="招标文件">
-        <a href="javascript:;" class="link-type" @click="templateDialogVisible = true">{{ procurementSchemeBidding.biddingTemplate && procurementSchemeBidding.biddingTemplate.fileName }}</a>
+        <a href="javascript:;" class="link-type" @click="downloadFile(procurementSchemeBidding.biddingTemplate.fileUrl)">{{ procurementSchemeBidding.biddingTemplate && procurementSchemeBidding.biddingTemplate.fileName }}</a>
+        <!-- <a href="javascript:;" class="link-type" @click="templateDialogVisible = true">{{ procurementSchemeBidding.biddingTemplate && procurementSchemeBidding.biddingTemplate.fileName }}</a> -->
       </el-descriptions-item>
     </el-descriptions>
 
@@ -50,8 +51,7 @@
 
   </div>
   <!-- 文件预览 -->
-  <el-dialog title="招标文件预览" :visible.sync="templateDialogVisible" width="80%">
-    <!-- <FileModule :attachmentId="procurementSchemeBidding.biddingTemplate && procurementSchemeBidding.biddingTemplate.attachmentId" height="500px"/> -->
+  <!-- <el-dialog title="招标文件预览" :visible.sync="templateDialogVisible" width="80%">
     <iframe allowfullscreen="true"
         v-if="procurementSchemeBidding.biddingTemplate && procurementSchemeBidding.biddingTemplate.attachmentId"
         :src= this.viewFileUrl
@@ -59,7 +59,7 @@
         height="500px"
         frameborder="0"
       ></iframe>
-  </el-dialog>
+  </el-dialog> -->
   </div>
 </template>
 
@@ -133,6 +133,16 @@ export default {
       } else {
         console.error('无法预览招标文件,招标文件模板数据(procurementSchemeBidding.biddingTemplate)未正确加载');
       }
+    },
+
+    /** 下载模板文件 */
+    downloadFile(fileUrl) {
+      if (!fileUrl) {
+        ElMessage.error('招标文件为空文件URL为空，无法下载');
+        return; // 终止函数执行
+      }
+      console.log("下载文件url：",fileUrl);
+      window.open(fileUrl, '_blank');
     },
 
     async getSchemeDetail() {

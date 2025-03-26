@@ -473,7 +473,7 @@
       @update:visible="calibrateVisible = $event"
   />
 
-    <el-dialog
+    <!-- <el-dialog
       :title="templateDialogTitle"
       :visible.sync="templateDialogVisible"
       width="80%"
@@ -484,7 +484,7 @@
               height="700px"
               frameborder="0"
       ></iframe>
-    </el-dialog>
+    </el-dialog> -->
   </div>
 </template>
 
@@ -773,42 +773,42 @@ export default {
       // console.log(file)
 
 
-      // if (file.url) {
-      //   // 在新标签页打开文件
-      //   window.open(file.url, "_blank");
-      // } else {
-      //   this.$message.error("文件无法预览，缺少 URL");
-      // }
+      if (file.url) {
+        // 在新标签页打开文件
+        window.open(file.url, "_blank");
+      } else {
+        this.$message.error("文件无法预览，缺少 URL");
+      }
 
 
       //获取附件的预览URL
-      if (file.id) {
-        this.templateDialogTitle = file.name + "预览";
-        this.templateDialogVisible = true;
-        //获取文档中台的文档编辑URL
-        try {
-          const res = await getViewAttachmentURLByID({attachmentId: file.id});
-          this.viewFileUrl = res.data;
-          console.log("viewFileUrl:", this.viewFileUrl);
-        } catch (err) {
-          console.log(err);
-        }
-      } else if(file.response.code === 200){
-        /* 新增时未保存附件无附件id时调用 */
-        this.templateDialogTitle = file.response.data.name + "预览";
-        this.templateDialogVisible = true;
-        try {
-          const query = { fileName: file.response.data.name?file.response.data.name:'获取不到文件名', fileUrl: file.response.data.url };
-          console.log('%c👽 getViweFileURL:query ', `font-size: 20px;background-color: #f00;`, query);
-          const res = await getViweFileURL(query);
-          this.viewFileUrl = res.data;
-          console.log("viewFileUrl:", this.viewFileUrl);
-        } catch (err) {
-          console.log(err);
-        }
-      }else{
-        console.error('专家附件 数据未正确加载');
-      }
+      // if (file.id) {
+      //   this.templateDialogTitle = file.name + "预览";
+      //   this.templateDialogVisible = true;
+      //   //获取文档中台的文档编辑URL
+      //   try {
+      //     const res = await getViewAttachmentURLByID({attachmentId: file.id});
+      //     this.viewFileUrl = res.data;
+      //     console.log("viewFileUrl:", this.viewFileUrl);
+      //   } catch (err) {
+      //     console.log(err);
+      //   }
+      // } else if(file.response.code === 200){
+      //   /* 新增时未保存附件无附件id时调用 */
+      //   this.templateDialogTitle = file.response.data.name + "预览";
+      //   this.templateDialogVisible = true;
+      //   try {
+      //     const query = { fileName: file.response.data.name?file.response.data.name:'获取不到文件名', fileUrl: file.response.data.url };
+      //     console.log('%c👽 getViweFileURL:query ', `font-size: 20px;background-color: #f00;`, query);
+      //     const res = await getViweFileURL(query);
+      //     this.viewFileUrl = res.data;
+      //     console.log("viewFileUrl:", this.viewFileUrl);
+      //   } catch (err) {
+      //     console.log(err);
+      //   }
+      // }else{
+      //   console.error('专家附件 数据未正确加载');
+      // }
 
     },
     /* 专家附件文件大小上传限制 */

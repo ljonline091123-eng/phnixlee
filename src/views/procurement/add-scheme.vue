@@ -567,13 +567,7 @@
                   <div class="page-title">
                     <span>评分模板预览</span>
                   </div>
-                  <!-- <FileModule
-                    v-if="viewAttachmentId"
-                    :attachmentId="viewAttachmentId"
-                    height= "95%"
-                    type="edit"
-                  /> -->
-                  <iframe allowfullscreen="true"
+                  <!-- <iframe allowfullscreen="true"
                     v-if="viewAttachmentId"
                     :src= this.editFileUrl
                     :key= this.editFileUrl
@@ -587,7 +581,7 @@
                       width="100%"
                       height="500px"
                       frameborder="0"
-                  ></iframe>
+                  ></iframe> -->
                   <!-- 显示评分模板详情 -->
                   <div v-if="showPreview" class="template-detail">
                     <h3>评分模板预览</h3>
