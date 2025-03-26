@@ -234,7 +234,7 @@ public class ProcurementSchemeServiceImpl extends ServiceImpl<ProcurementSchemeM
         //接入底层逻辑平台流程
         Map<String, Object> paramMap = new HashMap<>();
         paramMap.put("businessId", procurementScheme.getId());
-        paramMap.put("businessTitle", "招标采购/采购管理/采购方案 采购方案审批");
+        paramMap.put("businessTitle", "采购方案审批");
         paramMap.put("businessContent", String.format(ApproveFlowPromptTemplateEnum.PROCUREMENT_SCHEME.getDesc(),
                 procurementScheme.getProcurementSchemeName()));
         paramMap.put("detailUrl", detailUrl);

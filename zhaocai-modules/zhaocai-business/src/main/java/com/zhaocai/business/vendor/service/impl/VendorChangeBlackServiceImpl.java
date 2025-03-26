@@ -119,7 +119,7 @@ public class VendorChangeBlackServiceImpl extends ServiceImpl<VendorChangeMapper
         Vendor vendor = vendorService.getById(vendorChange.getVendorId());
         Map<String,Object> paramMap = new HashMap<>();
         paramMap.put("businessId", vendorChange.getId());
-        paramMap.put("businessTitle", "招标采购/供应商管理/供应商基本信息 供应商移入移出黑名单");
+        paramMap.put("businessTitle", "供应商移入移出黑名单");
         paramMap.put("businessContent", String.format(ApproveFlowPromptTemplateEnum.VENDOR_BLACKLIST_APPROVE.getDesc(), vendor.getEnterpriseName()));
         paramMap.put("detailUrl", "/vendor/vendor-detail/"+ Base64.encodeStr(("\""+vendorChange.getVendorId().toString()+"\"").getBytes(),true,true));
         String org = underlingSystemService.getL2OrgByOrgId(vendor.getFirstCooperationCompanyCode());

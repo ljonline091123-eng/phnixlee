@@ -36,6 +36,8 @@ public interface FlowDeployMapper {
      */
     SysProcessTitle selectSysProcessTitle(@Param("procInsId") String procInsId);
 
+    List<SysProcessTitle> selectSysProcessTitleByProcessTitle(@Param("processTitle") String processTitle);
+
     /**
      * 增加流程标题
      * @param param 参数
