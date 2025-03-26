@@ -10,3 +10,11 @@ export const geTaskTodoList = (params) => {
     params
   })
 }
+/** 获取未处理信息 */
+export const getFinishedList = (params) => {
+  return request({
+    url: '/flowable/task/finishedList',
+    method: 'get',
+    params
+  })
+}

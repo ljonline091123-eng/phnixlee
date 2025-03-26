@@ -125,7 +125,7 @@
 import { Base64 } from "js-base64";
 import { mapGetters } from "vuex";
 
-import {geTaskTodoList} from "@/api/index";
+import {geTaskTodoList,getFinishedList} from "@/api/index";
 import {  getSplitPlanList } from "@/api/procurement/plan";
 import {abandonBidMore} from "@/api/procurement/manage";
 
@@ -144,10 +144,10 @@ export default {
           value: 'processed',
           label: "已处理",
         },
-        {
-          value: 'all',
-          label: "全部",
-        },
+        // {
+        //   value: 'all',
+        //   label: "全部",
+        // },
       ],
       loading: false,
       total: 0,
@@ -189,8 +189,7 @@ export default {
         var res ={}
         console.log(JSON.stringify(this.queryRadioType))
         if(this.queryRadioType=='processed'){
-
-        }else if(this.queryRadioType=='all'){
+          res = await getFinishedList(query);
 
         }else {
            res = await geTaskTodoList(query);
