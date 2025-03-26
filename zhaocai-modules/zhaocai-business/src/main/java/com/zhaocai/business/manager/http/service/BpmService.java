@@ -176,21 +176,24 @@ public class BpmService {
      * @return
      */
     public BpmRevokeResponseDTO revoke(BpmRevokeRequestDTO requestDTO) {
+        Map<String,Object> map = new HashMap<>();
+        map.put("instanceId",requestDTO.getProcessId());
+        AjaxResult ajaxResult = remoteFlowableService.revokeProcess(map);
+        BpmRevokeResponseDTO responseDTO = JSONUtil.toBean(JSONUtil.toJsonStr(ajaxResult.get("data")), BpmRevokeResponseDTO.class);
 //        BpmRevokeResponseDTO responseDTO = UnderlingRestTemplateService.postForObject(UnderlingPlatformUrlEnum.BPM_OPERATE_REVOKE,
 //                BpmRevokeResponseDTO.class,requestDTO);
-//        try{
-//            /* 流程操作记录 */
-//            bpmLogService.save(BpmLog.builder()
-//                    .bpmType("撤销接口")
-//                    .businessId(requestDTO.getBusinessId())
-//                    .wfProcessId(requestDTO.getProcessId())
-//                    .bpmUrl(UnderlingPlatformUrlEnum.BPM_OPERATE_REVOKE.getUrl())
-//                    .bpmParam(JSONUtil.parse(requestDTO).toString())
-//                    .bpmResponse(JSONUtil.parse(responseDTO).toString())
-//                    .build());
-//        }catch (Exception e){log.error("[  bpmLogService报错  ]{}",e.getMessage());}
-//        return  responseDTO;
-        return null;
+        try{
+            /* 流程操作记录 */
+            bpmLogService.save(BpmLog.builder()
+                    .bpmType("撤销接口")
+                    .businessId(requestDTO.getBusinessId())
+                    .wfProcessId(requestDTO.getProcessId())
+                    .bpmUrl(UnderlingPlatformUrlEnum.BPM_OPERATE_REVOKE.getUrl())
+                    .bpmParam(JSONUtil.parse(requestDTO).toString())
+                    .bpmResponse(JSONUtil.parse(responseDTO).toString())
+                    .build());
+        }catch (Exception e){log.error("[  bpmLogService报错  ]{}",e.getMessage());}
+        return  responseDTO;
     }
 
     /**

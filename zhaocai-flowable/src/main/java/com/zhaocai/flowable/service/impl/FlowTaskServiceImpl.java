@@ -3,7 +3,6 @@ package com.zhaocai.flowable.service.impl;
 
 import cn.hutool.core.collection.CollectionUtil;
 import cn.hutool.core.util.ObjectUtil;
-import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
 import com.google.common.collect.Lists;
 import com.zhaocai.common.core.constant.HttpStatus;
@@ -50,7 +49,6 @@ import org.flowable.engine.repository.ProcessDefinition;
 import org.flowable.engine.runtime.Execution;
 import org.flowable.engine.runtime.ProcessInstance;
 import org.flowable.engine.task.Comment;
-import org.flowable.identitylink.api.IdentityLink;
 import org.flowable.identitylink.api.history.HistoricIdentityLink;
 import org.flowable.idm.api.Group;
 import org.flowable.image.ProcessDiagramGenerator;
@@ -58,6 +56,7 @@ import org.flowable.task.api.DelegationState;
 import org.flowable.task.api.Task;
 import org.flowable.task.api.TaskQuery;
 import org.flowable.task.api.history.HistoricTaskInstance;
+import org.flowable.task.api.history.HistoricTaskInstanceQuery;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -695,49 +694,60 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
      */
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public boolean revokeProcess(FlowTaskVo flowTaskVo) {
+    public Map<String, Object> revokeProcess(FlowTaskVo flowTaskVo) {
         String processInstanceId = flowTaskVo.getInstanceId();
+        boolean processId = canRollback(processInstanceId, SecurityUtils.getUserId() + "", null);
+        if (!processId) {
+            throw new CheckedException("无法进行撤回操作");
+        }
         // 获取当前流程实例的任务列表
         List<Task> tasks = taskService.createTaskQuery()
                 .processInstanceId(processInstanceId)
                 .orderByTaskCreateTime()
                 .desc()
                 .list();
-
-        if (tasks.size() < 2) {
-            throw new CheckedException("无法撤回到上一步");
+        if (tasks != null) {
+            runtimeService.deleteProcessInstance(processInstanceId, "用户手动终止");
+        } else {
+            throw new CheckedException("无法撤回");
         }
 
-        // 获取上一步任务
-        Task previousTask = tasks.get(1);
-        String previousTaskDefinitionKey = previousTask.getTaskDefinitionKey();
-
-        // 获取上一步任务的候选人员和候选组
-        List<IdentityLink> identityLinks = taskService.getIdentityLinksForTask(previousTask.getId());
-        List<String> candidateUsers = new ArrayList<>();
-        List<String> candidateGroups = new ArrayList<>();
-
-        for (IdentityLink identityLink : identityLinks) {
-            if (identityLink.getUserId() != null) {
-                candidateUsers.add(identityLink.getUserId());
-            }
-            if (identityLink.getGroupId() != null) {
-                candidateGroups.add(identityLink.getGroupId());
-            }
-        }
-
-        // 检查当前用户是否属于候选人员或候选组
-        String currentUser = SecurityUtils.getUsername();
-        if (!candidateUsers.contains(currentUser) && !isUserInAnyGroup(currentUser, candidateGroups)) {
-            throw new CheckedException("您无权撤回到上一步");
-        }
-
-        // 执行撤回操作
-        runtimeService.createChangeActivityStateBuilder()
-                .processInstanceId(processInstanceId)
-                .moveActivityIdTo(previousTask.getTaskDefinitionKey(), previousTaskDefinitionKey)
-                .changeState();
-        return true;
+//        if (tasks.size() < 2) {
+//            throw new CheckedException("无法撤回到上一步");
+//        }
+//
+//        // 获取上一步任务
+//        Task previousTask = tasks.get(1);
+//        String previousTaskDefinitionKey = previousTask.getTaskDefinitionKey();
+//
+//        // 获取上一步任务的候选人员和候选组
+//        List<IdentityLink> identityLinks = taskService.getIdentityLinksForTask(previousTask.getId());
+//        List<String> candidateUsers = new ArrayList<>();
+//        List<String> candidateGroups = new ArrayList<>();
+//
+//        for (IdentityLink identityLink : identityLinks) {
+//            if (identityLink.getUserId() != null) {
+//                candidateUsers.add(identityLink.getUserId());
+//            }
+//            if (identityLink.getGroupId() != null) {
+//                candidateGroups.add(identityLink.getGroupId());
+//            }
+//        }
+//
+//        // 检查当前用户是否属于候选人员或候选组
+//        String currentUser = SecurityUtils.getUsername();
+//        if (!candidateUsers.contains(currentUser) && !isUserInAnyGroup(currentUser, candidateGroups)) {
+//            throw new CheckedException("您无权撤回到上一步");
+//        }
+//
+//        // 执行撤回操作
+//        runtimeService.createChangeActivityStateBuilder()
+//                .processInstanceId(processInstanceId)
+//                .moveActivityIdTo(previousTask.getTaskDefinitionKey(), previousTaskDefinitionKey)
+//                .changeState();
+        Map<String, Object> map = new HashMap<>();
+        map.put("processStatus","3");
+        return map;
     }
 
     // 检查用户是否属于任何候选组
@@ -791,7 +801,7 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
 
         List<Task> taskList = taskQuery.orderByTaskCreateTime().desc().listPage(pageSize * (pageNum - 1), pageSize);
         for (Task task : taskList) {
-            Map<String, Object> variables = runtimeService.getVariables(task.getProcessInstanceId());
+            Map<String, Object> variables = taskService.getVariables(task.getId());
             String value = variables.get("detailUrl") + "";
             task.setFormKey(value);
         }
@@ -1378,11 +1388,97 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
         return flowNextDto;
     }
 
+    /**
+     * 判断当前用户是否可以撤回流程
+     *
+     * @param processInstanceId 流程实例ID
+     * @param currentUserId     当前用户ID
+     * @param currentTaskId     当前任务ID（可为空，自动查询）
+     * @return 是否允许撤回
+     */
+    public boolean canRollback(String processInstanceId, String currentUserId, String currentTaskId) {
+        // 1. 验证流程实例是否存在
+        HistoricProcessInstance processInstance = historyService.createHistoricProcessInstanceQuery()
+                .processInstanceId(processInstanceId)
+                .singleResult();
+        if (processInstance == null) {
+            return false;
+        }
+
+        // 2. 获取当前任务（运行中或历史任务）
+        Task currentTask = null;
+        HistoricTaskInstance historicTask = null;
+        if (currentTaskId != null) {
+            currentTask = taskService.createTaskQuery().taskId(currentTaskId).singleResult();
+        } else {
+            // 自动查询最新任务
+            List<Task> activeTasks = taskService.createTaskQuery()
+                    .processInstanceId(processInstanceId)
+                    .orderByTaskCreateTime().desc()
+                    .list();
+            if (!activeTasks.isEmpty()) {
+                currentTask = activeTasks.get(0);
+            } else {
+                // 查询最后一个已完成的任务
+                historicTask = historyService.createHistoricTaskInstanceQuery()
+                        .processInstanceId(processInstanceId)
+                        .orderByHistoricTaskInstanceEndTime().desc()
+                        .list()
+                        .get(0);
+            }
+        }
+
+        // 3. 检查是否存在后续节点
+        boolean hasNextNode = checkIfNextNodeExists(processInstanceId, currentTask, historicTask);
+        if (hasNextNode) return false;
+
+        // 4. 验证用户权限
+        return checkUserPermission(processInstanceId, currentUserId, currentTask, historicTask);
+    }
+
+    private boolean checkUserPermission(String processInstanceId, String currentUserId, Task currentTask, HistoricTaskInstance historicTask) {
+        // 验证是否为发起人
+        String initiator = (String) runtimeService.getVariable(processInstanceId, "INITIATOR");
+        if (currentUserId.equals(initiator)) return true;
+
+        // 验证是否为任务办理人或候选用户
+        if (currentTask != null) {
+            return currentUserId.equals(currentTask.getAssignee()) || isCandidateUser(currentTask, currentUserId);
+        } else if (historicTask != null) {
+            return currentUserId.equals(historicTask.getAssignee()) || isCandidateUser(historicTask, currentUserId);
+        }
+        return false;
+    }
+
+    private boolean isCandidateUser(Task task, String userId) {
+        TaskQuery query = taskService.createTaskQuery()
+                .taskCandidateUser(userId)
+                .taskId(task.getId());
+        return query.count() > 0;
+    }
+
+    private boolean isCandidateUser(HistoricTaskInstance task, String userId) {
+        HistoricTaskInstanceQuery query = historyService.createHistoricTaskInstanceQuery()
+                .taskCandidateUser(userId)
+                .taskId(task.getId());
+        return query.count() > 0;
+    }
+
+
+    private boolean checkIfNextNodeExists(String processInstanceId, Task currentTask, HistoricTaskInstance historicTask) {
+        Date checkTime = (currentTask != null) ? currentTask.getCreateTime() : historicTask.getEndTime();
+        List<HistoricActivityInstance> nextActivities = historyService.createHistoricActivityInstanceQuery()
+                .processInstanceId(processInstanceId)
+                .startedAfter(checkTime)
+                .list();
+        return !nextActivities.isEmpty();
+    }
+
 
     @Override
     public Map<String, Object> initialize(Map<String, Object> variables) {
         Map<String, Object> variablesMap = new HashMap<>();
-
+        SysUser sysUser = SecurityUtils.getLoginUser().getSysUser();
         ProcessInstance instance = runtimeService.createProcessInstanceQuery()
                 .processInstanceId(variables.get("processId") + "")
                 .singleResult();
@@ -1393,8 +1489,8 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
             variablesMap.put("processId", null);
             return variablesMap;
         }
-        //默认都不能撤回
-        variablesMap.put("revokable", false);
+        boolean processId = canRollback(variables.get("processId") + "", sysUser.getUserId() + "", null);
+        variablesMap.put("revokable", processId);
         TaskService taskService = processEngine.getTaskService();
 
         List<Task> userTasks = taskService.createTaskQuery()
@@ -1403,7 +1499,7 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
                 .active()
                 .list();
 
-        List<SysRole> roles = JSONArray.parseArray(JSONObject.toJSONString(remoteuserservice.authRole(SecurityUtils.getUserId()).get("roles")), SysRole.class);
+        List<SysRole> roles = sysUser.getRoles();
         List<String> collect = roles.stream().map(SysRole::getRoleId).map(String::valueOf).collect(Collectors.toList());
         List<Task> userTasks1 = taskService.createTaskQuery()
                 .processInstanceId(variables.get("processId") + "")
