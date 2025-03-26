@@ -207,7 +207,8 @@ export default {
                 this.$router.push({ path: '/evaluate-expert/evaluate-bids' || "/" }).catch(()=>{});
                 appConstant.platform='2'
             }else{
-                this.$router.push({ path: '/procurement/plan' || "/" }).catch(()=>{});
+                // this.$router.push({ path: '/procurement/plan' || "/" }).catch(()=>{});
+                this.$router.push({ path: "/" }).catch(()=>{});
                   appConstant.platform='1'
            }
 
