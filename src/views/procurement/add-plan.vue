@@ -196,9 +196,14 @@
                       height="600px"
                       :row-class-name="tableRowClassName">
                       <!-- <el-table-column type="selection" width="55" :reserve-selection="true"/> -->
-                      <el-table-column label="序号" width="50" align="center" fixed>
+                      <!-- <el-table-column label="序号" width="50" align="center" fixed>
                         <template #default="scope">
                           {{ scope.row.indexNumber }}
+                        </template>
+                      </el-table-column> -->
+                      <el-table-column label="序号" width="50" align="center" fixed>
+                        <template #default="scope">
+                          {{ scope.$index + 1 }}
                         </template>
                       </el-table-column>
                       <el-table-column label="清单编码" min-width="150" prop="materialsCode" fixed show-overflow-tooltip/>
@@ -664,7 +669,7 @@ export default {
   
       getArchivesDetailList(rData.id,queryParams.type).then(response => {
         
-        this.inventoryList = response.rows || [];
+        this.inventoryList = response.data || [];
         let time=new Date().getTime();
         this.expandKeys.push(time + "")
         this.planList[0] = {contractPlanning:"",plannedAmountInclTax:"",id:time, children: []};
@@ -687,11 +692,11 @@ export default {
             });
             
             // this.planList[0].children=children
-      this.$set(this.planList[0], 'children', JSON.parse(JSON.stringify(children)));
-      console.log(JSON.stringify(this.planList[0]))
-      this.materialDialogVisible=false
-        });
-  }, 
+        this.$set(this.planList[0], 'children', JSON.parse(JSON.stringify(children)));
+        console.log(JSON.stringify(this.planList[0]))
+        this.materialDialogVisible=false
+      });
+    }, 
     getListMenu(queryParams){
       this.loadingTree=true
       this.handleMaterialCategorySelect(queryParams)
