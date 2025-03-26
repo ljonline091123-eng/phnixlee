@@ -1,99 +1,273 @@
 <template>
-  <div class="app-container home">
-    <el-row :gutter="20">
-      <el-col :sm="24" :lg="24">
-        <a href="javascript:POBrowser.openWindow('/pageoffice','width=1800px;height=900px;','http://192.168.6.151:9010/wh-hnjt/2024/06/21/招标文件-钢材_20240621142106A089.docx ');">
-          在线打开文档
-        </a>
-      </el-col>
-    </el-row>
+  <div class="app-container">
+    <div class="context flex flex-column">
+      <el-radio-group
+      style="margin:10px 0 20px 10px;"
+      v-model="queryRadioType"
+      size="small"
+    >
+        <el-radio-button
+        :label="dict.value"
+        :name="dict.value" 
+        v-for="dict in radioList"
+        :key="dict.value"
+        >{{ dict.label }}</el-radio-button>
+    </el-radio-group>
+    
+      <el-form
+        :model="queryParams"
+        ref="queryForm"
+        size="small"
+        :inline="true"
+        v-show="showSearch"
+      >
+        <el-form-item label="消息标题" prop="schemeCode" label-width="80px">
+          <el-input
+            v-model="queryParams.processTitle"
+            placeholder="请输入消息标题"
+            clearable
+            @keyup.enter.native="handleQuery"
+          />
+        </el-form-item>
+        <!-- <el-form-item label="消息内容" prop="schemeName" label-width="80px">
+          <el-input
+            v-model="queryParams.procurementSchemeName"
+            placeholder="请输入消息内容"
+            clearable
+            @keyup.enter.native="handleQuery"
+          />
+        </el-form-item> -->
+        <el-form-item>
+          <el-button
+            type="primary"
+            icon="el-icon-search"
+            size="small"
+            @click="handleQuery"
+            >查询</el-button
+          >
+   
+        </el-form-item>
+      </el-form>
+      <el-table
+        v-loading="loading"
+        :data="todoList"
+        highlight-current-row
+        stripe
+        border
+      >
+        <el-table-column label="序号" type="index" width="50" align="center" />
+       
+        <el-table-column
+          label="菜单名称"
+          show-overflow-tooltip
+        >
+        <template slot-scope="scope">
+          <span v-if="scope.row.processTitle === 'null' || scope.row.processTitle === 'undefined'">无名称</span>
+          <span v-else>{{ scope.row.processTitle }}</span>
+        </template>
+        </el-table-column>
+        <el-table-column
+          label="项目名称"
+          prop="projectCode"
+          show-overflow-tooltip
+        />
+        <el-table-column
+          label="消息内容"
+          min-width="250"
+          align="center"
+          prop="businessContent"
+        />
+        <el-table-column
+        align="center"
+          label="消息状态"
+          prop="messageStatus"
+        />
+        <el-table-column
+          label="上一审批人"
+          align="center"
+          prop="previousApprover"
+        />
+        <el-table-column
+          label="提交时间"
+          align="center"
+          prop="createTime"
+        />
+    
+        <el-table-column
+          label="操作"
+          align="center"
+          fixed="right"
+        >
+          <template slot-scope="scope">
+              <el-button
+              @click="goDetail(scope.row.detailUrl)"
+                type="text"
+                size="small"
+                >处理</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+   
+   
+      <pagination
+        v-show="total > 0"
+        :total="total"
+        :page.sync="queryParams.pageNum"
+        :limit.sync="queryParams.pageSize"
+        @pagination="getList"
+      />
+    </div>
+   
   </div>
 </template>
 
 <script>
-    export default {
-        name: "Index",
-        data() {
-            return {
-                // 版本号
-                version: "3.6.4",
-            };
+import { Base64 } from "js-base64";
+import { mapGetters } from "vuex";
+
+import {geTaskTodoList} from "@/api/index";
+import {  getSplitPlanList } from "@/api/procurement/plan";
+import {abandonBidMore} from "@/api/procurement/manage";
+
+export default {
+  name: "Scheme",
+  dicts: ["procurement_plan_type"],
+  data() {
+    return {
+      queryRadioType: "untreated",
+      radioList: [
+        {
+          value: 'untreated',
+          label: "未处理",
         },
-        methods: {
-            goTarget(href) {
-                window.open(href, "_blank");
-            },
+        {
+          value: 'processed',
+          label: "已处理",
         },
+        {
+          value: 'all',
+          label: "全部",
+        },
+      ],
+      loading: false,
+      total: 0,
+      todoList: [],
+       // 显示搜索条件
+      showSearch: true,
+         // 查询参数
+      queryParams: {
+        pageNum: 1,
+        pageSize: 10,
+
+      },
     };
+  },
+  watch:{
+    queryRadioType: {
+        handler(value) {
+          console.log(value)
+          this.getList();
+        }
+      }
+    },
+  mounted(){
+    this.getList();
+  },
+  methods: {
+        /** 搜索按钮操作 */
+    handleQuery() {
+      this.queryParams.pageNum = 1;
+      this.getList();
+    },
+    /** 获取需求列表 */
+    async getList() {
+      this.loading = true;
+      const query = {
+        ...this.queryParams,
+      };
+      try {
+        var res ={}
+        console.log(JSON.stringify(this.queryRadioType))
+        if(this.queryRadioType=='processed'){
 
-    function updateCount(value) {
-      alert(value);
-    }
+        }else if(this.queryRadioType=='all'){
+
+        }else {
+           res = await geTaskTodoList(query);
+        }
+      
+        this.loading = false;
+        if (res.data) {
+          this.todoList = res.data || [];
+          this.total = res.total;
+        }
+      } catch (err) {
+        this.loading = false;
+        console.log(err);
+      }
+    },
+
+      /** 跳转方案详情 */
+      goDetail(url) {
+        if(url!=null){
+          this.$router.push(url);
+        }
+      
+    },
+
+  },
+  computed: {
+    ...mapGetters(["project"]),
+  },
+
+};
 </script>
+<style lang="scss" scoped>
+.hxwd_table_item_center_first {
+  padding-left: 10px;
+  margin-left: -10px;
+  margin-right: -10px;
+  padding-right: 10px;
+  min-height: 50px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
 
-<style scoped lang="scss">
-  .home {
-    blockquote {
-      padding: 10px 20px;
-      margin: 0 0 20px;
-      font-size: 17.5px;
-      border-left: 5px solid #eee;
-    }
+.hxwd_table_item_center {
+  padding-left: 10px;
+  margin-left: -10px;
+  margin-right: -10px;
+  padding-right: 10px;
+  min-height: 50px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-top: 1px solid #eaeaea;
+}
 
-    hr {
-      margin-top: 20px;
-      margin-bottom: 20px;
-      border: 0;
-      border-top: 1px solid #eee;
-    }
+.hxwd_table_item_left_first {
+  padding-left: 10px;
+  margin-left: -10px;
+  margin-right: -10px;
+  padding-right: 10px;
+  min-height: 50px;
+  display: flex;
+  align-items: center;
+}
 
-    .col-item {
-      margin-bottom: 20px;
-    }
-
-    ul {
-      padding: 0;
-      margin: 0;
-    }
-
-    font-family: "open sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
-    font-size: 13px;
-    color: #676a6c;
-    overflow-x: hidden;
-
-    ul {
-      list-style-type: none;
-    }
-
-    h4 {
-      margin-top: 0px;
-    }
-
-    h2 {
-      margin-top: 10px;
-      font-size: 26px;
-      font-weight: 100;
-    }
-
-    p {
-      margin-top: 10px;
-
-      b {
-        font-weight: 700;
-      }
-    }
-
-    .update-log {
-      ol {
-        display: block;
-        list-style-type: decimal;
-        margin-block-start: 1em;
-        margin-block-end: 1em;
-        margin-inline-start: 0;
-        margin-inline-end: 0;
-        padding-inline-start: 40px;
-      }
-    }
-  }
+.hxwd_table_item_left {
+  padding-left: 10px;
+  margin-left: -10px;
+  margin-right: -10px;
+  padding-right: 10px;
+  min-height: 50px;
+  display: flex;
+  align-items: center;
+  border-top: 1px solid #eaeaea;
+}
+.required {
+  color: rgb(245, 108, 108);
+  margin-right: 4px;
+}
 </style>
-
