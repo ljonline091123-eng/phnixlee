@@ -1,5 +1,6 @@
 package com.zhaocai.archives.main.service;
 
+import com.github.pagehelper.PageInfo;
 import com.zhaocai.archives.main.vo.req.ArchivesDetailQueryVO;
 import com.zhaocai.archives.main.vo.res.ArchivesDetail;
 

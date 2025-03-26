@@ -1,11 +1,13 @@
 package com.zhaocai.archives.main.controller;
 
+import com.github.pagehelper.PageInfo;
 import com.zhaocai.archives.common.exception.BusinessException;
 import com.zhaocai.archives.main.domain.*;
 import com.zhaocai.archives.main.service.*;
 import com.zhaocai.archives.main.vo.req.ArchivesDetailQueryVO;
 import com.zhaocai.archives.main.vo.res.ArchivesDetail;
 import com.zhaocai.archives.pub.ArchivesTypeEnum;
+import com.zhaocai.common.core.constant.HttpStatus;
 import com.zhaocai.common.core.web.controller.BaseController;
 import com.zhaocai.common.core.web.domain.AjaxResult;
 import com.zhaocai.common.core.web.page.TableDataInfo;
@@ -62,10 +64,15 @@ public class archivesController extends BaseController {
     }
 
     @GetMapping("/getArchivesDetailList")
-    public TableDataInfo getArchivesDetailList(ArchivesDetailQueryVO queryVO) {
-        startPage();
+    public AjaxResult getArchivesDetailList(ArchivesDetailQueryVO queryVO) {
+//        startPage();
         List<ArchivesDetail> list = archivesService.getArchivesDetailList(queryVO);
-        return getDataTable(list);
+//        TableDataInfo rspData = new TableDataInfo();
+//        rspData.setCode(HttpStatus.SUCCESS);
+//        rspData.setMsg("查询成功");
+//        rspData.setRows(list.getList());
+//        rspData.setTotal(list.getTotal());
+        return success(list);
     }
 
 

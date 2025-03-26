@@ -1,11 +1,15 @@
 package com.zhaocai.archives.main.service.impl;
 
+import com.github.pagehelper.PageHelper;
+import com.github.pagehelper.PageInfo;
 import com.zhaocai.archives.common.exception.BusinessException;
 import com.zhaocai.archives.main.domain.*;
 import com.zhaocai.archives.main.service.*;
 import com.zhaocai.archives.main.vo.req.ArchivesDetailQueryVO;
 import com.zhaocai.archives.main.vo.res.ArchivesDetail;
 import com.zhaocai.archives.pub.ArchivesTypeEnum;
+import com.zhaocai.common.core.web.page.PageDomain;
+import com.zhaocai.common.core.web.page.TableSupport;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -40,30 +44,44 @@ public class archivesServiceImpl  implements IArchivesService {
      */
     @Override
     public List<ArchivesDetail> getArchivesDetailList(ArchivesDetailQueryVO queryVO) {
+//        /** 获取分页*/
+//        PageDomain jsonPageDomain = TableSupport.buildPageRequest();
+//        Integer  pageNum = jsonPageDomain.getPageNum();
+//        Integer  pageSize = jsonPageDomain.getPageSize();
+//        if(pageNum==null || pageSize==null){
+//            throw new RuntimeException("未获取到分页参数值");
+//        }
+//        PageHelper.startPage(pageNum,pageSize);
+//        PageInfo archivesInfo ;
         List<ArchivesDetail> resultList = new ArrayList<>();
         if(queryVO.getType().equals(ArchivesTypeEnum.Mtr_Class.getType())){
             MtrArchives mtrArchives = new MtrArchives();
             mtrArchives.setMtrClassId(queryVO.getClassId());
             List<MtrArchives> list = mtrArchivesService.selectMtrArchivesList(mtrArchives);
+//            archivesInfo = new PageInfo<>(list);
             resultList.addAll(convertMtrArchivesToArchivesDetail(list)); // 调用转换方法
         } else if (queryVO.getType().equals(ArchivesTypeEnum.Device_Feature.getType())) {
             DeviceArchives deviceArchives = new DeviceArchives();
             deviceArchives.setDeviceClassId(queryVO.getClassId());
             List<DeviceArchives> list = deviceArchivesService.selectDeviceArchivesList(deviceArchives);
+//            archivesInfo = new PageInfo<>(list);
             resultList.addAll(convertDeviceArchivesToArchivesDetail(list));
         } else if (queryVO.getType().equals(ArchivesTypeEnum.Labor_Services.getType())) {
             LaborServicesArchives laborServicesArchives = new LaborServicesArchives();
             laborServicesArchives.setLaborServicesClassId(queryVO.getClassId());
             List<LaborServicesArchives> list = laborServicesArchivesService.selectLaborServicesArchivesList(laborServicesArchives);
+//            archivesInfo = new PageInfo<>(list);
             resultList.addAll(convertLaborServicesArchivesToArchivesDetail(list));
         } else if (queryVO.getType().equals(ArchivesTypeEnum.Major_Subcontracting.getType())) {
             MajorSubcontractingArchives majorSubcontractingArchives = new MajorSubcontractingArchives();
             majorSubcontractingArchives.setMajorSubcontractingClassId(queryVO.getClassId());
             List<MajorSubcontractingArchives> list = majorSubcontractingArchivesService.selectMajorSubcontractingArchivesList(majorSubcontractingArchives);
+//            archivesInfo = new PageInfo<>(list);
             resultList.addAll(convertMajorSubcontractingArchivesToArchivesDetail(list));
         }else {
             throw new BusinessException("该物料类别不存在，请检查！");
         }
+//        archivesInfo.setList(resultList);
         return resultList;
 
     }
