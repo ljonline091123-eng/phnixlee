@@ -3,6 +3,7 @@ package com.zhaocai.business.procurement.service.impl;
 import cn.hutool.core.collection.CollectionUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.zhaocai.business.common.enums.ProcurementPlanTypeEnum;
 import com.zhaocai.business.manager.http.service.ContractPlanService;
 import com.zhaocai.business.procurement.domain.ContractPlanning;
 import com.zhaocai.business.procurement.domain.ContractPlanningSplit;
@@ -47,6 +48,10 @@ public class ContractPlanningServiceImpl extends ServiceImpl<ContractPlanningMap
         }
         if(contractPlanning.getPlannedAmountInclTax() != null ){
             contractPlanning.setPlannedAmountInclTax(contractPlanning.getPlannedAmountInclTax());
+        }
+        if(contractPlanning.getContractPlanningCategory() != null ){
+            contractPlanning.setContractPlanningCategory(contractPlanning.getContractPlanningCategory());
+            contractPlanning.setContractPlanningCategoryName(ProcurementPlanTypeEnum.getValueByCode(contractPlanning.getContractPlanningCategory()));
         }
 
 
