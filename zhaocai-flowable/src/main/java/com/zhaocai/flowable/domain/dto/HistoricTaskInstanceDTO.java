@@ -26,7 +26,7 @@ public class HistoricTaskInstanceDTO  implements Serializable {
     private String parentTaskId;
     private String description;
     private Integer owners;
-    private Integer assignee;
+    private String assignee;
     private Timestamp startTime;
     private Timestamp claimTime;
     private Timestamp endTime;
@@ -188,11 +188,11 @@ public class HistoricTaskInstanceDTO  implements Serializable {
         this.owners = owners;
     }
 
-    public Integer getAssignee() {
+    public String getAssignee() {
         return assignee;
     }
 
-    public void setAssignee(Integer assignee) {
+    public void setAssignee(String assignee) {
         this.assignee = assignee;
     }
 

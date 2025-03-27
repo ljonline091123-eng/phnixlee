@@ -66,7 +66,7 @@ public class FlowTaskController extends BaseController {
 //    }
 
     @ApiOperation(value = "撤回任务", response = FlowTaskDto.class)
-    @GetMapping(value = "/revokeProcess")
+    @PostMapping(value = "/revokeProcess")
     public AjaxResult revokeProcess(@RequestBody Map<String, Object> variables) {
         FlowTaskVo flowTaskVo = JSONUtil.toBean(JSONUtil.toJsonStr(variables), FlowTaskVo.class);
         return AjaxResult.success(flowTaskService.revokeProcess(flowTaskVo));

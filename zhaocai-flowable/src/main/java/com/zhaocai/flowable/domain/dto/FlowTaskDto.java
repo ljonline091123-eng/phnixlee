@@ -105,6 +105,25 @@ public class FlowTaskDto extends BaseEntity {
     @ApiModelProperty("跳转地址")
     private String detailUrl;
 
+    @ApiModelProperty("消息内容")
+    private String businessContent;
+
+    @ApiModelProperty("项目编号")
+    private String projectCode;
+
+    @ApiModelProperty("业务id")
+    private String businessId;
+
+    @ApiModelProperty("流程类型")
+    private String businessType;
+
+    @ApiModelProperty("上一审批人")
+    private String previousApprover;
+
+
+    @ApiModelProperty("消息状态")
+    private String messageStatus;
+
     public Integer getMarkCompleted() {
         return markCompleted;
     }
@@ -335,5 +354,53 @@ public class FlowTaskDto extends BaseEntity {
 
     public void setDetailUrl(String detailUrl) {
         this.detailUrl = detailUrl;
+    }
+
+    public String getBusinessContent() {
+        return businessContent;
+    }
+
+    public void setBusinessContent(String businessContent) {
+        this.businessContent = businessContent;
+    }
+
+    public String getProjectCode() {
+        return projectCode;
+    }
+
+    public void setProjectCode(String projectCode) {
+        this.projectCode = projectCode;
+    }
+
+    public String getBusinessId() {
+        return businessId;
+    }
+
+    public void setBusinessId(String businessId) {
+        this.businessId = businessId;
+    }
+
+    public String getBusinessType() {
+        return businessType;
+    }
+
+    public void setBusinessType(String businessType) {
+        this.businessType = businessType;
+    }
+
+    public String getPreviousApprover() {
+        return previousApprover;
+    }
+
+    public void setPreviousApprover(String previousApprover) {
+        this.previousApprover = previousApprover;
+    }
+
+    public String getMessageStatus() {
+        return messageStatus;
+    }
+
+    public void setMessageStatus(String messageStatus) {
+        this.messageStatus = messageStatus;
     }
 }

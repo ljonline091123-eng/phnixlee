@@ -465,11 +465,11 @@ public class ExpertServiceImpl extends ServiceImpl<ExpertMapper,Expert> implemen
             Map<String,Object> paramMap = new HashMap<>();
             if(expert.getProcessType().equals(ExpertProcessTypeEnum.EXPERT_ADD.getState())){
                 paramMap.put("businessId", expert.getId());
-                paramMap.put("businessTitle", "招标采购/专家管理/专家列表 新增专家审批");
+                paramMap.put("businessTitle", "新增专家审批");
                 paramMap.put("businessContent", String.format(ApproveFlowPromptTemplateEnum.EXPERT_ADD_APPROVE.getDesc(), expert.getExpertName()));
             }else{
                 paramMap.put("businessId", expertChange==null?null:expertChange.getId());
-                paramMap.put("businessTitle", "招标采购/专家管理/专家列表 专家信息修改审批");
+                paramMap.put("businessTitle", "专家信息修改审批");
                 paramMap.put("businessContent", String.format(ApproveFlowPromptTemplateEnum.EXPERT_CHANGE_APPROVE.getDesc(), expert.getExpertName()));
             }
 

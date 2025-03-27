@@ -76,6 +76,11 @@
         SELECT id,proc_ins_id AS procInsId,process_title AS processTitle FROM sys_process_title WHERE proc_ins_id=#{procInsId}
     </select>
 
+    <select id="selectSysProcessTitleByProcessTitle" resultType="SysProcessTitle" parameterType="string">
+        SELECT id,proc_ins_id AS procInsId,process_title AS processTitle FROM sys_process_title WHERE process_title like concat('%', #{processTitle}, '%')
+    </select>
+
+
     <insert id="insertSysProcessTitle" parameterType="SysProcessTitle">
         INSERT INTO sys_process_title (proc_ins_id, process_title)
         VALUES

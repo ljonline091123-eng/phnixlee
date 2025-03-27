@@ -57,6 +57,7 @@ import org.flowable.task.api.Task;
 import org.flowable.task.api.TaskQuery;
 import org.flowable.task.api.history.HistoricTaskInstance;
 import org.flowable.task.api.history.HistoricTaskInstanceQuery;
+import org.flowable.variable.api.history.HistoricVariableInstance;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -708,6 +709,7 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
                 .list();
         if (tasks != null) {
             runtimeService.deleteProcessInstance(processInstanceId, "用户手动终止");
+            historyService.deleteHistoricProcessInstance(processInstanceId);
         } else {
             throw new CheckedException("无法撤回");
         }
@@ -746,7 +748,7 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
 //                .moveActivityIdTo(previousTask.getTaskDefinitionKey(), previousTaskDefinitionKey)
 //                .changeState();
         Map<String, Object> map = new HashMap<>();
-        map.put("processStatus","3");
+        map.put("processStatus", "3");
         return map;
     }
 
@@ -778,8 +780,15 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
         taskQuery
                 .active()
                 .includeProcessVariables();
-        if (StringUtils.isNotBlank(flowtaskdto.getProcDefName())) {
-            taskQuery.processDefinitionNameLike(flowtaskdto.getProcDefName());
+        if (StringUtils.isNotBlank(flowtaskdto.getProcessTitle())) {
+            List<SysProcessTitle> sysProcessTitle = flowDeployMapper.selectSysProcessTitleByProcessTitle(flowtaskdto.getProcessTitle());
+            List<String> collect = sysProcessTitle.stream().map(SysProcessTitle::getProcInsId).collect(Collectors.toList());
+            if (collect != null && !collect.isEmpty()) {
+                taskQuery.processInstanceIdIn(collect);
+            } else {
+                taskQuery.processInstanceId("-1");
+            }
+
         }
         if (ObjectUtils.isNotEmpty(flowtaskdto.getParams().get("beginTime"))) {
             taskQuery.taskCreatedAfter(DateUtils.parseDate(flowtaskdto.getParams().get("beginTime")));
@@ -798,15 +807,56 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
         } else {
             taskQuery.endOr();
         }
-
+        Map<String, Map<String, Object>> map = new HashMap<>();
         List<Task> taskList = taskQuery.orderByTaskCreateTime().desc().listPage(pageSize * (pageNum - 1), pageSize);
         for (Task task : taskList) {
             Map<String, Object> variables = taskService.getVariables(task.getId());
-            String value = variables.get("detailUrl") + "";
-            task.setFormKey(value);
+            // 获取当前任务的流程实例ID
+            String processInstanceId = task.getProcessInstanceId();
+            // 查询历史任务列表，按结束时间降序排列
+            List<HistoricTaskInstance> historicTasks = historyService.createHistoricTaskInstanceQuery()
+                    .processInstanceId(processInstanceId)
+                    .orderByHistoricTaskInstanceEndTime().desc()
+                    .list();
+
+            // 过滤当前任务并获取上一审批人
+            String previousApprover = null;
+            for (HistoricTaskInstance historicTask : historicTasks) {
+                if (!historicTask.getId().equals(task.getId())) {
+                    previousApprover = historicTask.getAssignee();
+                    break;
+                }
+            }
+            if (!StringUtils.isEmpty(previousApprover)) {
+                R<SysUser> startUser = remoteuserservice.selectUserInFoById(Long.parseLong(previousApprover), SecurityConstants.INNER);
+                variables.put("previousApprover", startUser.getData().getNickName());
+            }
+            map.put(task.getId(), variables);
         }
         Map<String, Object> re = new HashMap<>(2);
-        re.put("data", todoListIntegration(taskList));
+        List<FlowTaskDto> flowTaskDtos = todoListIntegration(taskList);
+        flowTaskDtos.stream().forEach(f -> {
+            if (f.getTaskId() != null) {
+                Map<String, Object> variables = map.get(f.getTaskId());
+                String value = variables.get("detailUrl") + "";
+                f.setDetailUrl(value);
+                String businessContent = variables.get("businessContent") == null ? "" : variables.get("businessContent") + "";
+                f.setBusinessContent(businessContent);
+                String projectCode = variables.get("projectCode") == null ? "" : variables.get("projectCode") + "";
+                f.setProjectCode(projectCode);
+                if (variables.get("userObj") != null) {
+                    JSONObject userObj = JSONObject.parseObject(variables.get("userObj") + "");
+                    String businessId = userObj.get("businessId") == null ? "" : userObj.get("businessId") + "";
+                    f.setBusinessId(businessId);
+                    String businessType = userObj.get("businessType") == null ? "" : userObj.get("businessType") + "";
+                    f.setBusinessType(businessType);
+                }
+                f.setPreviousApprover(variables.get("previousApprover") == null ? "" : variables.get("previousApprover") + "");
+                f.setMessageStatus("未处理");
+            }
+        });
+
+        re.put("data", flowTaskDtos);
         re.put("total", (int) taskQuery.count());
         return re;
     }
@@ -867,7 +917,6 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
             flowTask.setProcDefId(task.getProcessDefinitionId());
             flowTask.setExecutionId(task.getExecutionId());
             flowTask.setTaskName(task.getName());
-            flowTask.setDetailUrl(task.getFormKey());
             //获取流程标题
             SysProcessTitle pt = flowDeployMapper.selectSysProcessTitle(task.getProcessInstanceId());
             if (pt != null) {
@@ -941,6 +990,48 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
             flowTasks.get().setProcInsId(inst.getProcInstId());
             flowTasks.get().setHisProcInsId(inst.getProcInstId());
             flowTasks.get().setFormId(pd.getFormId());
+
+
+            List<HistoricVariableInstance> historicVars = historyService.createHistoricVariableInstanceQuery()
+                    .processInstanceId(inst.getProcInstId()).list();
+            Map<String, Object> variables = new HashMap<>();
+            historicVars.stream().forEach(historicVar -> {
+                variables.put(historicVar.getVariableName(), historicVar.getValue());
+            });
+
+
+            // 获取当前任务的流程实例ID
+            String processInstanceId = inst.getProcInstId();
+            // 查询历史任务列表，按结束时间降序排列
+            List<HistoricTaskInstance> historicTasks = historyService.createHistoricTaskInstanceQuery()
+                    .processInstanceId(processInstanceId)
+                    .orderByHistoricTaskInstanceEndTime().desc()
+                    .list();
+
+            // 过滤当前任务并获取上一审批人
+            String previousApprover = null;
+            for (HistoricTaskInstance historicTask : historicTasks) {
+                previousApprover = historicTask.getAssignee();
+                break;
+            }
+            variables.put("previousApprover", previousApprover);
+
+            String value = variables.get("detailUrl") + "";
+            flowTasks.get().setDetailUrl(value);
+            String businessContent = variables.get("businessContent") == null ? "" : variables.get("businessContent") + "";
+            flowTasks.get().setBusinessContent(businessContent);
+            String projectCode = variables.get("projectCode") == null ? "" : variables.get("projectCode") + "";
+            flowTasks.get().setProjectCode(projectCode);
+            if (variables.get("userObj") != null) {
+                JSONObject userObj = JSONObject.parseObject(variables.get("userObj") + "");
+                String businessId = userObj.get("businessId") == null ? "" : userObj.get("businessId") + "";
+                flowTasks.get().setBusinessId(businessId);
+                String businessType = userObj.get("businessType") == null ? "" : userObj.get("businessType") + "";
+                flowTasks.get().setBusinessType(businessType);
+            }
+            flowTasks.get().setPreviousApprover(variables.get("previousApprover") == null ? "" : variables.get("previousApprover") + "");
+            flowTasks.get().setMessageStatus("已处理");
+
             hisTaskList.add(flowTasks.get());
         }
         Map<String, Object> re = new HashMap<>(2);
@@ -1405,35 +1496,25 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
             return false;
         }
 
-        // 2. 获取当前任务（运行中或历史任务）
-        Task currentTask = null;
-        HistoricTaskInstance historicTask = null;
-        if (currentTaskId != null) {
-            currentTask = taskService.createTaskQuery().taskId(currentTaskId).singleResult();
-        } else {
-            // 自动查询最新任务
-            List<Task> activeTasks = taskService.createTaskQuery()
-                    .processInstanceId(processInstanceId)
-                    .orderByTaskCreateTime().desc()
-                    .list();
-            if (!activeTasks.isEmpty()) {
-                currentTask = activeTasks.get(0);
-            } else {
-                // 查询最后一个已完成的任务
-                historicTask = historyService.createHistoricTaskInstanceQuery()
-                        .processInstanceId(processInstanceId)
-                        .orderByHistoricTaskInstanceEndTime().desc()
-                        .list()
-                        .get(0);
-            }
+        List<HistoricActivityInstance> activities = historyService.createHistoricActivityInstanceQuery()
+                .processInstanceId(processInstanceId)
+                .activityType("userTask")  // 过滤用户任务节点
+                .finished()  // 仅查询已完成的节点
+                .orderByHistoricActivityInstanceStartTime().asc()
+                .list();
+
+        //只能撤回刚刚提交的节点
+        if(activities != null && !activities.isEmpty() && activities.size() > 1){
+            return false;
         }
 
-        // 3. 检查是否存在后续节点
-        boolean hasNextNode = checkIfNextNodeExists(processInstanceId, currentTask, historicTask);
-        if (hasNextNode) return false;
+        // 2. 校验当前用户为上报人
+        String submitter = (String) runtimeService.getVariable(processInstanceId, "INITIATOR");
+        if (!currentUserId.equals(submitter)) {
+            return false;
+        }
+        return true;
 
-        // 4. 验证用户权限
-        return checkUserPermission(processInstanceId, currentUserId, currentTask, historicTask);
     }
 
     private boolean checkUserPermission(String processInstanceId, String currentUserId, Task currentTask, HistoricTaskInstance historicTask) {
