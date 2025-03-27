@@ -1,5 +1,6 @@
 package com.zhaocai.flowable.controller;
 
+import cn.hutool.json.JSONUtil;
 import com.zhaocai.common.core.constant.SecurityConstants;
 import com.zhaocai.common.core.domain.R;
 import com.zhaocai.common.core.web.controller.BaseController;
@@ -7,15 +8,14 @@ import com.zhaocai.common.core.web.domain.AjaxResult;
 import com.zhaocai.common.core.web.page.TableDataInfo;
 import com.zhaocai.common.log.annotation.Log;
 import com.zhaocai.common.log.enums.BusinessType;
-import com.zhaocai.common.security.annotation.RequiresPermissions;
 import com.zhaocai.flowable.domain.SysExpression;
 import com.zhaocai.flowable.domain.dto.FlowProcDefDto;
 import com.zhaocai.flowable.domain.dto.FlowSaveXmlVo;
 import com.zhaocai.flowable.service.IFlowDefinitionService;
 import com.zhaocai.flowable.service.ISysExpressionService;
-import com.zhaocai.system.api.system.RemoteUserService;
 import com.zhaocai.system.api.domain.SysRole;
 import com.zhaocai.system.api.domain.SysUser;
+import com.zhaocai.system.api.system.RemoteUserService;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
@@ -89,9 +89,9 @@ public class FlowDefinitionController extends BaseController {
     public AjaxResult importFile(@RequestParam(required = false) String name,
                                  @RequestParam(required = false) String category,
                                  MultipartFile file) throws IOException {
-            InputStream in = file.getInputStream();
-            flowDefinitionService.importFile(name, category, in);
-            return AjaxResult.success("导入成功");
+        InputStream in = file.getInputStream();
+        flowDefinitionService.importFile(name, category, in);
+        return AjaxResult.success("导入成功");
     }
 
 
@@ -99,7 +99,7 @@ public class FlowDefinitionController extends BaseController {
     @GetMapping("/readXml/{deployId}")
     //@RequiresPermissions("flowable:definition:edit")
     public AjaxResult readXml(@ApiParam(value = "流程定义id") @PathVariable(value = "deployId") String deployId) throws IOException {
-            return AjaxResult.success("读取成功",flowDefinitionService.readXml(deployId));
+        return AjaxResult.success("读取成功", flowDefinitionService.readXml(deployId));
     }
 
     @ApiOperation(value = "读取图片文件")
@@ -144,20 +144,20 @@ public class FlowDefinitionController extends BaseController {
             e.printStackTrace();
             return AjaxResult.error(e.getMessage());
         } finally {
-                if (in != null) {
-                    in.close();
-                }
+            if (in != null) {
+                in.close();
+            }
         }
         return AjaxResult.success("保存导入成功");
     }
 
 
     @ApiOperation(value = "根据流程定义id启动流程实例")
-    @PostMapping("/start/{procDefId}")
-    public AjaxResult start(@ApiParam(value = "流程定义id") @PathVariable(value = "procDefId") String procDefId,
+    @PostMapping("/start")
+    public AjaxResult start(@ApiParam(value = "流程定义id") String procDefId,
                             @ApiParam(value = "变量集合,json对象") @RequestBody Map<String, Object> variables) {
         boolean b = flowDefinitionService.startProcessInstanceById(procDefId, variables);
-        if(b){
+        if (b) {
             return AjaxResult.success("流程启动成功");
         }
         return AjaxResult.error("流程启动失败，请联系管理员");
@@ -165,11 +165,12 @@ public class FlowDefinitionController extends BaseController {
     }
 
     @ApiOperation(value = "根据流程定义id启动流程实例返回流程实例id")
-    @PostMapping("/startReturnInstanceId/{procDefId}")
-    public AjaxResult startReturnInstanceId(@ApiParam(value = "流程定义id") @PathVariable(value = "procDefId") String procDefId,
-                            @ApiParam(value = "变量集合,json对象") @RequestBody Map<String, Object> variables) {
-        Map<String, Object> b = flowDefinitionService.startProcessInstanceById1(procDefId, variables);
-        if(b.containsKey("flag") && b.get("flag").equals("true")){
+    @PostMapping("/startReturnInstanceId")
+    public AjaxResult startReturnInstanceId(@RequestBody String variables) {
+        Map map = JSONUtil.toBean(variables, Map.class);
+        String procDefId = map.get("procDefId") + "";
+        Map<String, Object> b = flowDefinitionService.startProcessInstanceById1(procDefId, map);
+        if (b.containsKey("flag") && b.get("flag").equals("true")) {
             return AjaxResult.success(b);
         }
         return AjaxResult.error("流程启动失败，请联系管理员");

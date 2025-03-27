@@ -3,6 +3,7 @@ package com.zhaocai.business.process.service.impl;
 import cn.hutool.core.util.IdUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.extra.spring.SpringUtil;
+import cn.hutool.json.JSONUtil;
 import com.zhaocai.business.common.enums.ProcessStateEnum;
 import com.zhaocai.business.common.enums.RejectTaskKeyEnum;
 import com.zhaocai.business.common.exception.ParamValidateException;
@@ -144,7 +145,8 @@ public class BPMProcessService implements IBPMProcessService {
             }
         }
 
-        AjaxResult ajaxResult = remoteFlowableService.startReturnInstanceId(processKey, variables);
+        variables.put("procDefId",processKey);
+        AjaxResult ajaxResult = remoteFlowableService.startReturnInstanceId(JSONUtil.toJsonStr(variables));
         Map<String, Object> map = (Map<String, Object>) ajaxResult.get("data");
         String processId = map.get("instanceId") + "";
 //        BpmSubmitResponseDTO responseDTO = bpmService.submit(requestDTO);
