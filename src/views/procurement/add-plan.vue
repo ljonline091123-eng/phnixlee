@@ -184,7 +184,7 @@
                       ref="virScrollRef"
                       @change="(renderData) => virtualData = renderData"> -->
                     <el-table size="small" :data="inventory.row.children" border @select="handleSelect"
-                      :row-key="getRowKeys2" :ref="inventory.row.planTable" height="600px"
+                      :row-key="getRowKeys2" :ref="inventory.row.planTable"  max-height="580px"
                       :row-class-name="tableRowClassName">
                       <!-- <el-table-column type="selection" width="55" :reserve-selection="true"/> -->
                       <!-- <el-table-column label="序号" width="50" align="center" fixed>
@@ -235,9 +235,14 @@
                       </el-table-column>
                       <el-table-column label="清单数量" align="right" prop="count" width="150" v-else>
                         <template slot-scope="scope">
-                          <el-input title="清单数量" v-model="scope.row.count"
+                          <!-- <el-input title="清单数量" v-model="scope.row.count"
                             :disabled="isSubmit || scope.row.belongOffer || scope.row.pushFlag === 'Y'"
-                            @input.native="changeCount($event, inventory.$index, scope.row)" v-thousandth />
+                            @input="handleInput" v-thousandth /> -->
+                            <el-input
+                            title="清单数量" v-model="scope.row.count"
+                            :disabled="isSubmit || scope.row.belongOffer || scope.row.pushFlag === 'Y'"
+                            @input="scope.row.count = scope.row.count.replace(/[^0-9]/g, '')"
+                          ></el-input>
                         </template>
                       </el-table-column>
                       <!--                      基价由原来浮动价不可编辑，变成了可以编辑-->
@@ -259,20 +264,20 @@
 
                           <el-input title="单价(含税)" v-model="scope.row.unitPriceInclTax"
                             :disabled="isSubmit || scope.row.belongOffer || scope.row.pushFlag === 'Y'"
-                            @input.native="changeUnitPriceInclTax($event, scope.row)" v-thousandth />
+                            @input="scope.row.unitPriceInclTax = scope.row.unitPriceInclTax.replace(/[^0-90.]/g, '')" v-thousandth />
                         </template>
                       </el-table-column>
                       <el-table-column label="税率(%)" align="right" prop="taxRate">
                         <template slot-scope="scope">
 
-                          <el-input title="税率(%)" v-model="scope.row.taxRate" v-thousandth />
+                          <el-input title="税率(%)"  @input="scope.row.taxRate = scope.row.taxRate.replace(/[^0-90.]/g, '')" v-model="scope.row.taxRate" v-thousandth />
                         </template>
                       </el-table-column>
                       <el-table-column label="单价(不含税)" align="right" prop="unitPriceExclTax" width="150">
                         <template slot-scope="scope">
                           <!-- <span title="单价(不含税)">{{ getUnitPriceExclTax(scope.row) }}</span> -->
                           <el-input title="单价(不含税)" v-model="scope.row.unitPriceExclTax"
-                            @input.native="changeUnitPriceInclTax($event, scope.row)" v-thousandth />
+                          @input="scope.row.unitPriceExclTax = scope.row.unitPriceExclTax.replace(/[^0-90.]/g, '')"  v-thousandth />
                         </template>
                       </el-table-column>
                       <el-table-column label="浮动价" align="right" width="130" prop="floatingPrice"
@@ -649,6 +654,7 @@ export default {
         }
       }
       return {
+        inputValue: '',
         loadingTree: false,
         expandKeys: [],
         deptOptions: [],
@@ -1258,7 +1264,7 @@ export default {
         this.$refs[formName].validate(async (valid, done) => {
           if (valid) {
             const { planList } = this
-            console.log(planList, 'planListplanList--planListplanList-planListplanList');
+            console.log(JSON.stringify(planList), 'planListplanList--planListplanList-planListplanList');
             if (!planList[0].children || !planList[0].children.length) {
               this.isSubmit = false;
               this.$message({
@@ -1267,18 +1273,15 @@ export default {
               });
               return false;
             }
-
-            const isAll = planList[0]?.children.every(item => item.splitContractName && item.splitContractName != "null")
+            const isAll = this.planList.every(item => item.contractPlanningName && item.contractPlanningName != "null" && item.plannedAmountInclTax && item.plannedAmountInclTax!="null")
             //判断长度大于1
-            if (planList[0].children.length > 1) {
+            if (this.planList.length > 0) {
               if (!isAll) {
                 this.isSubmit = false;
-                if (planList[0].children.length != 1) {
                   this.$message({
-                    message: '拆分合约规划名称不能为空',
+                    message: '拆分合约规划名称/计划金额不能为空',
                     type: 'error'
                   });
-                }
                 return false;
               }
             }
@@ -1289,6 +1292,7 @@ export default {
             if (typeof this.planList[0].plannedAmountInclTax === 'string') {
               this.planList[0].plannedAmountInclTax = this.planList[0].plannedAmountInclTax.replace(/,/g, '');
             }
+        
             const plannedAmountInclTax = bignumber(this.planList[0].plannedAmountInclTax);
             // 校验合计(含税)总和是否小于或等于计划金额
             if (totalAmount != null && plannedAmountInclTax != null) {
@@ -1468,6 +1472,11 @@ export default {
 
     //上限价等于计划金额
     calculateUpperLimitPrice(row) {
+      console.log("上限价this.formData.upperLimitPrice:",row.plannedAmountInclTax );
+      let isNumber= row.plannedAmountInclTax == row.plannedAmountInclTax.replace(/[^0-9.]/g, '')
+      if(!isNumber){
+        this.$message.error("计划金额填写错误");
+      }
       if (row.plannedAmountInclTax) {
         this.formData.upperLimitPrice = row.plannedAmountInclTax;
         console.log("上限价this.formData.upperLimitPrice:", this.formData.upperLimitPrice);
@@ -2646,14 +2655,24 @@ export default {
         this.$set(row, 'totalPriceText', this.getTotalPriceText(row)); // 更新行含税总价
       }
     },
-
+    handleInput() {
+      // 使用正则表达式替换非数字字符
+      this.inputValue = this.inputValue.replace(/\D/g, '');
+ console.log(JSON.stringify(this.inputValue))
+      // 如果需要限制小数位数，可以进一步处理
+      // 例如，限制为两位小数
+      // this.inputValue = parseFloat(this.inputValue).toFixed(2);
+    },
     // 处理数量输入事件
-    changeCount(event, index, row) {
+    changeCount(row) {
+      console.log(JSON.stringify(row),'event.target.value')
       const value = event.target.value.replace(/,/g, ''); // 移除千分位符号
       const parsedValue = parseFloat(value);
       if (!isNaN(parsedValue)) {
         row.count = parsedValue;
         this.$set(row, 'totalPriceText', this.getTotalPriceText(row)); // 更新行含税总价
+      }else{
+        
       }
     },
 

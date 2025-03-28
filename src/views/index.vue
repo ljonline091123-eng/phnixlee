@@ -84,11 +84,13 @@
         />
         <el-table-column
           label="上一审批人"
+          min-width="150"
           align="center"
           prop="previousApprover"
         />
         <el-table-column
           label="提交时间"
+          min-width="150"
           align="center"
           prop="createTime"
         />
