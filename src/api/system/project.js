@@ -10,6 +10,15 @@ export function listProject(query) {
     });
 }
 
+// 查询所有部门的下拉树结构
+export function AlldeptTreeSelect(params) {
+  return request({
+    url: "/system/dept/deptTree",
+    method: "get",
+    params
+  });
+}
+
 
 // 查询项目详情
 export function getMinProjectById(id) {

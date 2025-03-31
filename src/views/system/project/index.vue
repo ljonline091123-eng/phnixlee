@@ -335,7 +335,7 @@
 </template>
 
 <script>
-import {deptTreeSelect} from "@/api/system/user";
+import {AlldeptTreeSelect} from "@/api/system/project";
 import {listProject,saveMinProjectInfo,getMinProjectById,deleteProject,BusinessTypeTreeSelect,CertificationTypeTreeSelect,dictProjectTypeTreeSelect} from "@/api/system/project";
 import { getDicts as getDicts } from '@/api/system/dict/data'
 import Treeselect from "@riophae/vue-treeselect";
@@ -583,7 +583,7 @@ export default {
 
     /** 查询部门下拉树结构 */
     getDeptTree() {
-      deptTreeSelect().then((response) => {
+      AlldeptTreeSelect().then((response) => {
         this.deptOptions = this.mapDeptTreeData(response.data);
         console.log("deptOptions:",this.deptOptions);
       });

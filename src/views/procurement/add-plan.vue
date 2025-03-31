@@ -1479,10 +1479,10 @@ export default {
       }
       if (row.plannedAmountInclTax) {
         this.formData.upperLimitPrice = row.plannedAmountInclTax;
-        console.log("上限价this.formData.upperLimitPrice:", this.formData.upperLimitPrice);
-        console.log("计划金额row.plannedAmountInclTax", row.plannedAmountInclTax);
+        // console.log("上限价this.formData.upperLimitPrice:", this.formData.upperLimitPrice);
+        // console.log("计划金额row.plannedAmountInclTax", row.plannedAmountInclTax);
         this.$nextTick(() => {
-          console.log("视图更新后的 this.formData.upperLimitPrice:", this.formData.upperLimitPrice);
+          // console.log("视图更新后的 this.formData.upperLimitPrice:", this.formData.upperLimitPrice);
         });
       } else {
         this.$message.error("计划金额不能为空");
