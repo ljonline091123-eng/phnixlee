@@ -62,6 +62,30 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
 		order by d.parent_id, d.order_num
     </select>
 
+	<select id="selectAllDeptList" parameterType="SysDept" resultMap="SysDeptResult">
+		<include refid="selectDeptVo"/>
+		where d.del_flag = '0'
+		<if test="deptId != null and deptId != 0">
+			AND dept_id = #{deptId}
+		</if>
+		<if test="parentId != null">
+			AND parent_id = #{parentId}
+		</if>
+		<if test="deptName != null and deptName != ''">
+			AND dept_name like concat('%', #{deptName}, '%')
+		</if>
+		<if test="status != null and status != ''">
+			AND status = #{status}
+		</if>
+		<if test="onlyQueryOrg != null and onlyQueryOrg == 1">
+			AND (thrid_org_type is not null and thrid_org_type != '' and thrid_org_type != 'BM')
+		</if>
+		<if test="thridOrgLevel != null and thridOrgLevel != ''">
+			AND thrid_org_level = #{thridOrgLevel}
+		</if>
+		order by d.parent_id, d.order_num
+	</select>
+
     <select id="selectDeptListByRoleId" resultType="Long">
 		select d.dept_id
 		from sys_dept d

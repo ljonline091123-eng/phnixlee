@@ -92,6 +92,18 @@ public class SysDeptController extends BaseController
         return treeList;
     }
 
+    /**
+     * 查询所有部门树结构信息
+     */
+    @GetMapping("/deptTree")
+    public AjaxResult selectDeptTreeList(SysDept dept)
+    {
+        List<TreeSelect> treeList = deptService.selectAllDeptTreeList(dept);
+        return success(treeList);
+    }
+
+
+
 
     /**
      * 查询部门列表（排除节点）

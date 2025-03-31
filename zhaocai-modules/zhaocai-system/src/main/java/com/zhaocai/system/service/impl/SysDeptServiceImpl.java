@@ -79,6 +79,18 @@ public class SysDeptServiceImpl extends ServiceImpl<SysDeptMapper, SysDept> impl
     }
 
     /**
+     * 查询所有部门树结构信息（不用数据过滤）
+     *
+     * @param dept 部门信息
+     * @return 部门树信息集合
+     */
+    @Override
+    public List<TreeSelect> selectAllDeptTreeList(SysDept dept) {
+        List<SysDept> depts = deptMapper.selectAllDeptList(dept);
+        return buildDeptTreeSelect(depts);
+    }
+
+    /**
      * 查询部门树结构信息
      *
      * @param thridDeptId 部门信息
