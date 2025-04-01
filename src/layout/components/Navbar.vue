@@ -37,9 +37,9 @@
                      style="width: 150px; height: 40px;">
             <el-option
               v-for="item in options"
-              :key="item.belongingOrgId"
+              :key="item.minAccountCode"
               :label="item.minAccountFullName"
-              :value="item.belongingOrgId">
+              :value="item.minAccountCode">
             </el-option>
           </el-select>
         </div>
@@ -191,11 +191,11 @@ export default {
     bclxChange(val) {
       let obj = {};
       obj = this.options.find((item) => {
-        return item.belongingOrgId === val;
+        return item.minAccountCode === val;
       });
       this.$store.commit("SET_PROJECT", {
         code: obj.minAccountCode,
-        id: obj.belongingOrgId,
+        id: obj.minAccountCode,
         name: obj.minAccountFullName
       });
       // this.$store.commit("SET_PROJECT", {code:this.options[0].minAccountCode,id:this.value,name:this.options[0].minAccountFullName});
