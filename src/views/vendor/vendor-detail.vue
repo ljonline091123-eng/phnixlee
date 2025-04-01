@@ -18,12 +18,12 @@
         >
 <!--        v-hasPermi="['vendor:black:operation']"-->
 
-<!--        <el-button-->
-<!--          type="primary"-->
-<!--          size="mini"-->
-<!--          v-if="isShowButton"-->
-<!--          @click="handelSanction"-->
-<!--          >审批</el-button>-->
+        <el-button
+          type="primary"
+          size="mini"
+          v-if="isShowButton"
+          @click="handelSanction"
+          >审批</el-button>
         <!-- <el-button
         type="primary"
         size="mini"
