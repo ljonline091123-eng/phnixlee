@@ -829,7 +829,9 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
             }
             if (!StringUtils.isEmpty(previousApprover)) {
                 R<SysUser> startUser = remoteuserservice.selectUserInFoById(Long.parseLong(previousApprover), SecurityConstants.INNER);
-                variables.put("previousApprover", startUser.getData().getNickName());
+                if (startUser != null) {
+                    variables.put("previousApprover", startUser.getData().getNickName());
+                }
             }
             map.put(task.getId(), variables);
         }
@@ -1504,7 +1506,7 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
                 .list();
 
         //只能撤回刚刚提交的节点
-        if(activities != null && !activities.isEmpty() && activities.size() > 1){
+        if (activities != null && !activities.isEmpty() && activities.size() > 1) {
             return false;
         }
 
