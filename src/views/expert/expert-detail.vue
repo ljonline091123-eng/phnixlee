@@ -395,7 +395,7 @@
                   :on-success="fileSuccess"
                   :file-list="formData.resumeAttachList"
                   :on-remove="fileRemove"
-                  :on-preview="handlePreview"
+                  :on-preview="downloadFile"
                 >
                   <el-button size="small" type="primary" :disabled="isSubmit">点击上传</el-button>
                 </el-upload>
@@ -457,7 +457,7 @@
       @update:visible="calibrateVisible = $event"
   />
 
-    <el-dialog
+    <!-- <el-dialog
       :title="templateDialogTitle"
       :visible.sync="templateDialogVisible"
       width="80%"
@@ -468,7 +468,7 @@
               height="700px"
               frameborder="0"
       ></iframe>
-    </el-dialog>
+    </el-dialog> -->
   </div>
 </template>
 
@@ -735,6 +735,16 @@ export default {
        }
 
      },
+
+    /** 下载模板文件 */
+    downloadFile(file) {
+      console.log("下载文件url：",file.fileUrl);
+      if (file.id) {
+        window.open(file.fileUrl, '_blank');
+      } else {
+        console.error('专家附件 数据未正确加载');
+      }
+    },
 
     async getInfoDetail(id) {
         const res = await getInfo(id);

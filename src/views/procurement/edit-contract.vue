@@ -1547,14 +1547,14 @@
       </div>
     </el-dialog>
 
-    <el-dialog title="合同附件预览" :visible.sync="viewFileDialog" width="80%">
+    <!-- <el-dialog title="合同附件预览" :visible.sync="viewFileDialog" width="80%">
       <iframe allowfullscreen="true"
               :src= this.viewFileUrl
               width="100%"
               height="600px"
               frameborder="0"
       ></iframe>
-    </el-dialog>
+    </el-dialog> -->
   </div>
 
 </template>

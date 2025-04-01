@@ -51,7 +51,7 @@
 <!--            >推送至电子签章平台</el-button-->
 <!--          >-->
 <!--        </div>-->
-        <div v-else-if="isOperate === 1 && Number(agreementState) === 9">
+        <!-- <div v-else-if="isOperate === 1 && Number(agreementState) === 9">
           <el-button type="primary" size="mini" @click="toSignAgreement()"
             >签署</el-button
           >
@@ -63,7 +63,7 @@
             @click="toCancelledSignAgreementDialog()"
             >作废签署合同</el-button
           >
-        </div>
+        </div> -->
 
         <div class="contractApprovalButton">
           <el-button
@@ -1171,14 +1171,14 @@
       </div>
     </el-dialog>
 
-    <el-dialog title="合同附件预览" :visible.sync="viewFileDialog" width="80%">
+    <!-- <el-dialog title="合同附件预览" :visible.sync="viewFileDialog" width="80%">
       <iframe allowfullscreen="true"
               :src= this.viewOtherFileUrl
               width="100%"
               height="600px"
               frameborder="0"
       ></iframe>
-    </el-dialog>
+    </el-dialog> -->
   </div>
 </template>
 

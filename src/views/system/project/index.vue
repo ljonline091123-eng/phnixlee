@@ -242,6 +242,11 @@
               </el-select>
             </el-form-item>
           </el-col>
+          <el-col :span="12">
+            <el-form-item label="归属管理组织" prop="projectDepartmentId">
+              <treeselect v-model="form.managementOrgId" :options="deptOptions" :show-count="true" placeholder="请选择归属项目部"></treeselect>
+            </el-form-item>
+          </el-col>
         </el-row>
         <el-row :gutter="20">
           <el-col :span="12">
@@ -330,7 +335,7 @@
 </template>
 
 <script>
-import {deptTreeSelect} from "@/api/system/user";
+import {AlldeptTreeSelect} from "@/api/system/project";
 import {listProject,saveMinProjectInfo,getMinProjectById,deleteProject,BusinessTypeTreeSelect,CertificationTypeTreeSelect,dictProjectTypeTreeSelect} from "@/api/system/project";
 import { getDicts as getDicts } from '@/api/system/dict/data'
 import Treeselect from "@riophae/vue-treeselect";
@@ -578,7 +583,7 @@ export default {
 
     /** 查询部门下拉树结构 */
     getDeptTree() {
-      deptTreeSelect().then((response) => {
+      AlldeptTreeSelect().then((response) => {
         this.deptOptions = this.mapDeptTreeData(response.data);
         console.log("deptOptions:",this.deptOptions);
       });
