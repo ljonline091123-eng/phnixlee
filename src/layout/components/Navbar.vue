@@ -221,7 +221,7 @@ export default {
       const needId = id[id.length - 1]
       const res = await getManagementOrgId(needId).then((response) => {
         this.options = response.data;
-        this.value = this.options[0]?.belongingOrgId;
+        this.value = this.options[0]?.minAccountCode;
         // * 同步要去加到vuex
         this.$store.commit("SET_PROJECT", {
           code: this.options[0]?.minAccountCode,

@@ -84,7 +84,7 @@ const user = {
           }
           const result = await getManagementOrgId(a);
           this.options = result.data;
-          this.value = this.options[0]?.belongingOrgId;
+          this.value = this.options[0]?.minAccountCode;
           // * 同步要去加到vuex
           store.commit("SET_PROJECT", {
             code: this.options[0]?.minAccountCode,
