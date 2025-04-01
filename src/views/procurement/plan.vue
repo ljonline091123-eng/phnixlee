@@ -820,7 +820,7 @@ export default {
     console.log(this.$route.query,'this.$route.query----this.$route.query');
     const param = (this.$route.query.contractPlanningName && JSON.parse(Base64.decode(this.$route.query.contractPlanningName))) || ''
     this.queryParamsMaster.contractName = param
-    this.getMasterPlanningList();
+    // this.getMasterPlanningList();
     this.queryContractPlanSplitFlag();
   },
   methods: {
