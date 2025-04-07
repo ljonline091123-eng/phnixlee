@@ -52,8 +52,10 @@ public enum ApproveFlowPromptTemplateEnum {
     EXPERT_CHANGE_APPROVE("expert_change_approve", "您有专家信息修改（%s）在审核节点的审批"),
     VENDOR_CHANGE_APPROVE("vendor_change_approve", "您有供应商（%s）信息修改在审核节点的审批！"),
     VENDOR_BLACKLIST_APPROVE("vendor_blacklist_approve", "您有供应商（%s）移入移出黑名单在审核节点的审批！"),
+
     PROCUREMENT_PLAN_PUSH("procurement_plan_push", "您有一条（%s）合约规划，请及时发起采购计划"),
 
+    PROCUREMENT_PLAN("procurement_plan", "您有采购计划：%s在审核节点的审批"),
 
     ;
 

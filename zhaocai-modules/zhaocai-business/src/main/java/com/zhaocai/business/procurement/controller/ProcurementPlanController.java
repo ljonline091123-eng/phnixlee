@@ -2,6 +2,8 @@ package com.zhaocai.business.procurement.controller;
 
 import com.zhaocai.business.common.annotations.RepeatSubmit;
 import com.zhaocai.business.common.base.BladeController;
+import com.zhaocai.business.manager.http.dto.req.BpmInitializeRequestDTO;
+import com.zhaocai.business.manager.http.dto.res.BpmInitializeResponseDTO;
 import com.zhaocai.business.manager.http.dto.res.UsersRoleContractPlanListResponseDTO;
 import com.zhaocai.business.procurement.service.IMaterialsListService;
 import com.zhaocai.business.procurement.service.IProcurementPlanService;
@@ -83,15 +85,15 @@ public class ProcurementPlanController extends BladeController {
         return ResultData.data(procurementPlanService.saveProcurementPlan(requestVO));
     }
 
-    /**
-     * 提交采购计划
-     */
-    @PostMapping("/submitProcurementPlan")
-    @ApiOperation(value = "提交采购计划")
-    public ResultData<Boolean> submitProcurementPlan(@RequestParam Long id) {
-        procurementPlanService.submitProcurementPlan(id);
-        return ResultData.success();
-    }
+//    /**
+//     * 提交采购计划
+//     */
+//    @PostMapping("/submitProcurementPlan")
+//    @ApiOperation(value = "提交采购计划")
+//    public ResultData<Boolean> submitProcurementPlan(@RequestParam Long id) {
+//        procurementPlanService.submitProcurementPlan(id);
+//        return ResultData.success();
+//    }
 
     /**
      * 作废采购计划
@@ -196,4 +198,21 @@ public class ProcurementPlanController extends BladeController {
     public ResultData<ProcurementPlanDetailVO> revokePushMaterialProcurementList(@RequestBody MaterialProcurementPushRequestVO requestVO) {
         return ResultData.data(procurementPlanService.revokePushMaterialProcurementList(requestVO));
     }
+
+    @ApiOperation(value = "初始化接口")
+    @GetMapping ("/initialize")
+    public ResultData<BpmInitializeResponseDTO> initialize(BpmInitializeRequestDTO requestDTO) {
+        return procurementPlanService.initialize(requestDTO);
+    }
+
+    /**
+     * 提交采购方案
+     */
+    @PostMapping("/submitProcurementPlan")
+    @ApiOperation(value = "提交采购方案")
+    public ResultData<Boolean> submitProcurementPlan(Long id,String detailUrl,String operateComment) {
+        procurementPlanService.submitProcurementPlan(id,detailUrl,operateComment);
+        return ResultData.success();
+    }
+
 }

@@ -2,6 +2,7 @@ package com.zhaocai.business.procurement.service.impl;
 
 import cn.hutool.core.collection.CollectionUtil;
 import cn.hutool.core.util.ObjectUtil;
+import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONObject;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
@@ -20,14 +21,13 @@ import com.zhaocai.business.common.utils.ValidateUtils;
 import com.zhaocai.business.manager.http.common.config.ThirdPartyTodoFlowGroupEnum;
 import com.zhaocai.business.manager.http.common.config.ThirdPartyTodoFlowModuleEnum;
 import com.zhaocai.business.manager.http.dto.req.*;
+import com.zhaocai.business.manager.http.dto.res.BpmInitializeResponseDTO;
 import com.zhaocai.business.manager.http.dto.res.MarketQuotePriceResponseDTO;
 import com.zhaocai.business.manager.http.dto.res.UsersRoleContractPlanListResponseDTO;
 import com.zhaocai.business.manager.http.dto.res.UsersRoleListResponseDTO;
-import com.zhaocai.business.manager.http.service.ContractPlanService;
-import com.zhaocai.business.manager.http.service.MarketService;
-import com.zhaocai.business.manager.http.service.PlatRoleService;
-import com.zhaocai.business.manager.http.service.ThridPartyTodoTaskService;
+import com.zhaocai.business.manager.http.service.*;
 import com.zhaocai.business.manager.template.config.UnderlingPlatformConfig;
+import com.zhaocai.business.process.service.IBPMProcessService;
 import com.zhaocai.business.procurement.domain.*;
 import com.zhaocai.business.procurement.dto.ContractProcurementPlanDTO;
 import com.zhaocai.business.procurement.dto.SubjectMatterDTO;
@@ -41,8 +41,10 @@ import com.zhaocai.common.core.bean.PageResult;
 import com.zhaocai.common.core.constant.Constants;
 import com.zhaocai.common.core.constant.NumberConstant;
 import com.zhaocai.common.core.constant.SecurityConstants;
+import com.zhaocai.common.core.constant.UserConstants;
 import com.zhaocai.common.core.utils.NumberUtil;
 import com.zhaocai.common.core.utils.bean.BeanCopierUtil;
+import com.zhaocai.common.core.web.bean.ResultData;
 import com.zhaocai.common.core.web.domain.BaseEntity;
 import com.zhaocai.common.security.utils.SecurityUtils;
 import com.zhaocai.system.api.domain.SetConfigValueDTO;
@@ -55,6 +57,7 @@ import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.ObjectUtils;
 
 import java.math.BigDecimal;
 import java.text.SimpleDateFormat;
@@ -128,6 +131,14 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
 
     @Autowired
     private UnderlingPlatformConfig underlingPlatformConfig;
+
+    @Autowired
+    private UnderlingSystemService underlingSystemService;
+
+
+    @Autowired
+    private IBPMProcessService processService;
+
 
     @Override
     public PageResult<ProcurementPlanListVO> listPage(ProcurementPlanListQueryVO queryVO) {
@@ -1035,5 +1046,81 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
         SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ");
         return sdf.format(date);
     }
+
+    @Override
+    public ResultData<BpmInitializeResponseDTO> initialize(BpmInitializeRequestDTO requestDTO) {
+        ProcurementPlan procurementPlan = this.getById(requestDTO.getBusinessId());
+        /* 流程角色配置规则传参 */
+        List<PropertyListRequestDTO<Object>> propertyList = new ArrayList<>();
+
+        /** 合同类型（contractType），价格(contractMoney)，项目部（parentProjectCode），责任单位（responsibilityDeptId），公司（companyId） */
+        PropertyListRequestDTO.addPropertyToList(propertyList, "contractType", ProcurementPlanTypeEnum.getProcessType(procurementPlan.getProcurementPlanType()));/* 采购方案 合同类型 */
+//        PropertyListRequestDTO.addPropertyToList(propertyList, "contractMoney", procurementPlan.getCeilingPrice());/* 采购方案上限价 价格 */
+        // 获取合约规划详情
+        ContractPlanningListVO contractPlanning = contractPlanningService.getByProcurementIdFromUnderling(procurementPlan.getId());
+        /* 最小核算项目 */
+        MinProjectVO minProjectVO = minProjectService.getMinProjectByMinAccountCode(contractPlanning.getProjectCode());
+        if (null != minProjectVO) {
+            PropertyListRequestDTO.addPropertyToList(propertyList, "groupId", UserConstants.GROUP_DEPT_ID);/* 集团 */
+            PropertyListRequestDTO.addPropertyToList(propertyList, "companyId", underlingSystemService.getL2OrgByOrgId(SecurityUtils.getThridOrgId()));/* 公司 二级单位 */
+            PropertyListRequestDTO.addPropertyToList(propertyList, "responsibilityDeptId", minProjectVO.getDutyUnit());/* 责任单位 三级单位 */
+            PropertyListRequestDTO.addPropertyToList(propertyList, "parentProjectCode", minProjectVO.getParentCode());/* 父项目编码(项目部) */
+            requestDTO.setPropertyList(propertyList);
+        }
+        requestDTO.setPropertyList(propertyList);
+        return processService.initialize(requestDTO);
+    }
+
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRED, rollbackFor = Exception.class)
+    public void submitProcurementPlan(Long id, String detailUrl, String operateComment) {
+        ProcurementPlan procurementPlan = super.getById(id);
+        ValidateUtils.isNullException(procurementPlan, "该采购计划不存在");
+
+        //接入底层逻辑平台流程
+        Map<String, Object> paramMap = new HashMap<>();
+        paramMap.put("businessId", procurementPlan.getId());
+        paramMap.put("businessTitle", "采购计划审批");
+        paramMap.put("businessContent", String.format(ApproveFlowPromptTemplateEnum.PROCUREMENT_PLAN.getDesc(),
+                procurementPlan.getProcurementPlanName()));
+        paramMap.put("detailUrl", detailUrl);
+        ContractPlanningListVO contractPlanning = contractPlanningService.getByProcurementIdFromUnderling(procurementPlan.getId());
+        paramMap.put("projectCode", contractPlanning.getProjectCode());
+        UserObj userObj = UserObj.builder().businessType(ProcessKeyEnum.ZHAOCAI_PROCUREMENT_PLAN.name()).
+                businessId(id.toString())
+                .toDoType(ToDoTypeEnum.EXAMINE.name()).build();
+        paramMap.put("userObj", JSON.toJSONString(userObj));
+        paramMap.put("operateComment", operateComment);
+
+        /** 合同类型（contractType），价格(contractMoney)，项目部（parentProjectCode），责任单位（responsibilityDeptId），公司（companyId） */
+
+//        paramMap.put("contractType", ProcurementPlanTypeEnum.getProcessType(procurementScheme.getProcurementPlanType()));/* 采购方案 合同类型 */
+//        paramMap.put("contractMoney", procurementScheme.getCeilingPrice());/* 采购方案上限价 价格 */
+        processService.startProcessInstance(
+                ProcessKeyEnum.ZHAOCAI_PROCUREMENT_PLAN.getIdentifying(), paramMap);
+    }
+
+
+    /**
+     * 发起审批
+     *
+     * @param variables
+     */
+    @Override
+    public void processStart(Map<String, Object> variables) {
+        String processId = variables.get("processId").toString();
+        String businessId = variables.get("businessId").toString();
+        Object flagObj = variables.get("completedFlag");
+        Integer procurementSchemeState = ProcurementSchemeStateEnum.IN_APPROVAL.getState();
+        if (!ObjectUtils.isEmpty(flagObj) && ProcessStateEnum.COMPLETED.getDesc().equals(flagObj.toString())) {
+            procurementSchemeState = ProcurementSchemeStateEnum.APPROVE.getState();
+        }
+        super.update(new LambdaUpdateWrapper<ProcurementPlan>()
+                .set(ProcurementPlan::getWfProcessId, processId)
+                .set(ProcurementPlan::getState, procurementSchemeState)
+                .eq(ProcurementPlan::getId, businessId));
+    }
+
 
 }

@@ -25,7 +25,12 @@ public enum ProcessKeyEnum {
 
     ZHAOCAI_AGREEMENT_SIGN("jiantou-zhaocai:{org}:ZHAOCAI_AGREEMENT_SIGN","合同签订"),
 
+
+    ZHAOCAI_PROCUREMENT_PLAN("jiantou-zhaocai:{org}:ZHAOCAI_PROCUREMENT_PLAN","采购计划"),
+
     ZHAOCAI_VENDOR_UPDATE_LEVEL("jiantou-zhaocai:{org}:ZHAOCAI_VENDOR_UPDATE_LEVEL","供应商-修改等级");
+
+
 
     /**
      * 流程标识

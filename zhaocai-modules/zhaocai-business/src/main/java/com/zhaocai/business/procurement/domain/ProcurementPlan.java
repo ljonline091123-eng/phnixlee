@@ -173,4 +173,10 @@ public class ProcurementPlan extends BaseEntity {
      */
     @ApiModelProperty(value = "状态")
     private Integer state;
+
+    /**
+     * 状态
+     */
+    @ApiModelProperty(value = "流程id")
+    private String wfProcessId;
 }

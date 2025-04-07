@@ -1,15 +1,19 @@
 package com.zhaocai.business.procurement.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
+import com.zhaocai.business.manager.http.dto.req.BpmInitializeRequestDTO;
 import com.zhaocai.business.manager.http.dto.req.UsersRoleListRequestDTO;
+import com.zhaocai.business.manager.http.dto.res.BpmInitializeResponseDTO;
 import com.zhaocai.business.manager.http.dto.res.UsersRoleContractPlanListResponseDTO;
 import com.zhaocai.business.manager.http.dto.res.UsersRoleListResponseDTO;
 import com.zhaocai.business.procurement.domain.ProcurementPlan;
 import com.zhaocai.business.procurement.vo.req.*;
 import com.zhaocai.business.procurement.vo.res.*;
 import com.zhaocai.common.core.bean.PageResult;
+import com.zhaocai.common.core.web.bean.ResultData;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * 采购计划Service接口
@@ -132,4 +136,11 @@ public interface IProcurementPlanService  extends IService<ProcurementPlan> {
     ProcurementPlanDetailVO revokePushMaterialProcurementList(MaterialProcurementPushRequestVO requestVO);
 
     String getgetYjtUrl(String type, String code) throws Exception;
+
+    ResultData<BpmInitializeResponseDTO> initialize(BpmInitializeRequestDTO requestDTO);
+
+    void submitProcurementPlan(Long id, String detailUrl, String operateComment);
+
+
+    void processStart(Map<String, Object> variables);
 }
