@@ -5,6 +5,7 @@ import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
 import com.zhaocai.common.core.exception.CheckedException;
 import com.zhaocai.common.core.utils.DateUtils;
+import com.zhaocai.common.core.utils.StringUtils;
 import com.zhaocai.common.security.utils.SecurityUtils;
 import com.zhaocai.flowable.common.constant.ProcessConstants;
 import com.zhaocai.flowable.common.enums.FlowComment;
@@ -199,14 +200,17 @@ public class FlowDefinitionServiceImpl extends FlowServiceFactory implements IFl
     /**
      * 根据流程定义ID启动流程实例返回流程实例id
      *
-     * @param procDefId 流程定义Id
-     * @param variables 流程变量，表单参数
+     * @param procDefIdOld 流程定义Id
+     * @param variables    流程变量，表单参数
      */
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public Map<String, Object> startProcessInstanceById1(String procDefId, Map<String, Object> variables) {
+    public Map<String, Object> startProcessInstanceById1(String procDefIdOld, Map<String, Object> variables) {
         try {
-            procDefId = getProcDefIdBySign(procDefId);
+            String procDefId = getProcDefIdBySign(procDefIdOld);
+            if (StringUtils.isEmpty(procDefId)) {
+                throw new CheckedException("未找到匹配流程，请检查后重试");
+            }
             ProcessDefinition processDefinition = repositoryService.createProcessDefinitionQuery().processDefinitionId(procDefId)
                     .latestVersion().singleResult();
             if (Objects.nonNull(processDefinition) && processDefinition.isSuspended()) {
