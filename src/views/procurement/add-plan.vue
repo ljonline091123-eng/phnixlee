@@ -3,51 +3,52 @@
     <BackButton path="/procurement/plan" :title="currentContract.type === 'update' ? '修改采购计划' : '新增采购计划'">
       <div>
         <el-button type="primary" plain size="mini" :disabled="isSubmit"
-          @click="$router.replace('/procurement/plan')">取消</el-button>
+                   @click="$router.replace('/procurement/plan')">取消
+        </el-button>
         <el-button type="primary" size="mini" @click="submitForm('form')" :disabled="isSubmit" :loading="isSubmit">{{
-          isSubmit ? '保存中...' : '保存' }}</el-button>
-        <el-button type="primary" size="mini" @click="submitPlan('form')" :disabled="isPlanSubmit"
-          :loading="isPlanSubmit">{{ isPlanSubmit ? '提交中...' : '提交' }}</el-button>
+            isSubmit ? '保存中...' : '保存'
+          }}
+        </el-button>
       </div>
     </BackButton>
     <div class="context">
       <el-form :model="formData" ref="form" :rules="rules" label-position="right" label-width="110px" size="small"
-        @submit.native.prevent>
-        <PageTitle title="基本信息" />
+               @submit.native.prevent>
+        <PageTitle title="基本信息"/>
         <div class="form-body">
           <el-row :gutter="40">
             <el-col :span="8" class="grid-cell">
               <el-form-item label="项目编号" prop="projectCode" class="required label-right-align">
-                <el-input type="text" clearable :readonly="true" disabled v-model="formData.projectCode" />
+                <el-input type="text" clearable :readonly="true" disabled v-model="formData.projectCode"/>
               </el-form-item>
             </el-col>
             <el-col :span="8" class="grid-cell">
               <el-form-item label=" 项目名称" prop="projectName" class="required label-right-align">
-                <el-input v-model="formData.projectName" disabled type="text" clearable />
+                <el-input v-model="formData.projectName" disabled type="text" clearable/>
               </el-form-item>
             </el-col>
             <el-col :span="8" class="grid-cell">
               <el-form-item label="编号" prop="procurementPlanCode" class="required label-right-align">
                 <el-input type="text" clearable :readonly="true" disabled v-model="formData.procurementPlanCode"
-                  placeholder="系统自动为您生成" />
+                          placeholder="系统自动为您生成"/>
               </el-form-item>
             </el-col>
           </el-row>
           <el-row :gutter="40">
             <el-col :span="8" class="grid-cell">
               <el-form-item label=" 采购名称" prop="procurementPlanName" class="required label-right-align">
-                <el-input v-model="formData.procurementPlanName" type="text" clearable :disabled="isSubmit" />
+                <el-input v-model="formData.procurementPlanName" type="text" clearable :disabled="isSubmit"/>
               </el-form-item>
             </el-col>
             <el-col :span="8" class="grid-cell">
               <el-form-item label="  采购层级" prop="projectHierarchy" class="required label-right-align">
-                <el-input v-model="formData.projectHierarchy" type="text" :disabled="isSubmit" clearable />
+                <el-input v-model="formData.projectHierarchy" type="text" :disabled="isSubmit" clearable/>
               </el-form-item>
             </el-col>
             <el-col :span="8" class="grid-cell">
               <el-form-item label="采购人" prop="procurementOfficerName" class="required label-right-align">
                 <el-input v-model="formData.procurementOfficerName" readonly @focus="handleClick" size="large"
-                  placeholder="请选择">
+                          placeholder="请选择">
                   <template slot="suffix"><i class="el-input__icon el-icon-arrow-down"></i></template>
                 </el-input>
                 <!--                <el-select v-model="formData.procurementOfficerName" placeholder="请选择" filterable @change="changeOperator" :disabled="isSubmit" style="width: 100%">-->
@@ -66,22 +67,22 @@
             <el-col :span="8" class="grid-cell">
               <el-form-item label="开始时间" prop="beginDate" class="required label-right-align">
                 <el-date-picker v-model="formData.beginDate" type="date" style="width:100%" placeholder="选择日期"
-                  :picker-options="expireTimeOption" format="yyyy年MM月dd日" value-format="yyyy-MM-dd"
-                  :disabled="isSubmit" />
+                                :picker-options="expireTimeOption" format="yyyy年MM月dd日" value-format="yyyy-MM-dd"
+                                :disabled="isSubmit"/>
               </el-form-item>
             </el-col>
             <el-col :span="8" class="grid-cell">
               <el-form-item label="完成时间" prop="endDate" class="required label-right-align">
                 <el-date-picker v-model="formData.endDate" type="date" style="width:100%" placeholder="选择日期"
-                  :picker-options="expireTimeOverOttion" format="yyyy年MM月dd日" value-format="yyyy-MM-dd"
-                  :disabled="isSubmit" />
+                                :picker-options="expireTimeOverOttion" format="yyyy年MM月dd日" value-format="yyyy-MM-dd"
+                                :disabled="isSubmit"/>
               </el-form-item>
             </el-col>
             <el-col :span="8" class="grid-cell">
               <el-form-item label="进场时间" prop="arrivalDate" class="required label-right-align">
                 <el-date-picker v-model="formData.arrivalDate" type="date" style="width:100%" placeholder="选择日期"
-                  :picker-options="expireTimeOption" format="yyyy年MM月dd日" value-format="yyyy-MM-dd"
-                  :disabled="isSubmit" />
+                                :picker-options="expireTimeOption" format="yyyy年MM月dd日" value-format="yyyy-MM-dd"
+                                :disabled="isSubmit"/>
               </el-form-item>
             </el-col>
           </el-row>
@@ -89,27 +90,27 @@
           <el-row :gutter="40">
             <el-col :span="8" class="grid-cell">
               <el-form-item label="交易标的物" prop="subjectMatterText" class="required label-right-align">
-                <el-input type="text" clearable :readonly="true" disabled v-model="formData.subjectMatterText" />
+                <el-input type="text" clearable :readonly="true" disabled v-model="formData.subjectMatterText"/>
               </el-form-item>
             </el-col>
             <el-col :span="8" class="grid-cell">
               <el-form-item label="上限价(元)" prop="upperLimitPrice" class="required label-right-align">
-                <el-input type="text" clearable :disabled="true" v-model="formData.upperLimitPrice" />
+                <el-input type="text" clearable :disabled="true" v-model="formData.upperLimitPrice"/>
               </el-form-item>
             </el-col>
 
             <el-col :span="8" class="grid-cell" v-if="(procurementType == 1)">
               <el-form-item label="指导价" prop="upperLimitPrice" class="required label-right-align">
                 <el-input type="text" clearable :readonly="true" disabled v-model="formData.guidance_price"
-                  placeholder="对接易料市集" />
+                          placeholder="对接易料市集"/>
               </el-form-item>
             </el-col>
             <el-col :span="8" class="grid-cell">
               <el-form-item label=" 付款方式" prop="paymentType" class="required label-right-align"
-                v-if="(procurementType == 1)">
+                            v-if="(procurementType == 1)">
                 <el-select style="width: 100%" v-model="formData.paymentType" placeholder="请选择付款方式" clearable>
                   <el-option v-for="dict in dict.type.procurement_payment_type" :key="dict.value" :label="dict.label"
-                    :value="dict.value">
+                             :value="dict.value">
                   </el-option>
                 </el-select>
               </el-form-item>
@@ -118,7 +119,7 @@
               <el-form-item label="计数方式" prop="countingType" v-if="(procurementType == 1)">
                 <el-select style="width: 100%" v-model="formData.countingType" placeholder="请选择计数方式" clearable>
                   <el-option v-for="dict in dict.type.procurement_counting_type" :key="dict.value" :label="dict.label"
-                    :value="dict.value">
+                             :value="dict.value">
                   </el-option>
                 </el-select>
               </el-form-item>
@@ -127,21 +128,22 @@
               <el-form-item label="价格类型" prop="priceType" class="required label-right-align">
                 <!-- 价格类型，1固定价，2浮动价，2固定、浮动价。清单的列根据这个监听来判断是否显示隐藏，反之也通过监听清单的价格类型@chang=changePriceType 来判断赋值该价格类型。 -->
                 <el-select v-model="formData.priceType" placeholder="请选择价格类型" clearable style="width: 100%">
-                  <el-option v-for="dict in PRICETYPELIST" :key="dict.value" :label="dict.label" :value="dict.value" />
+                  <el-option v-for="dict in PRICETYPELIST" :key="dict.value" :label="dict.label" :value="dict.value"/>
                 </el-select>
               </el-form-item>
             </el-col>
             <el-col :span="8" class="grid-cell" v-if="(procurementType == 1)">
               <el-form-item label="区域" prop="region">
                 <el-cascader v-model="formData.region" :options="regionOptions"
-                  :props="{ label: 'divisionName', value: 'divisionCode' }" @change="handleChange" style="width: 100%;">
+                             :props="{ label: 'divisionName', value: 'divisionCode' }" @change="handleChange"
+                             style="width: 100%;">
                 </el-cascader>
               </el-form-item>
             </el-col>
             <el-col :span="8" class="grid-cell">
               <!--       采购计划表单基价 （前端用来统一刷新列表清单的基价使用。） watch:formData.basePrice监听      -->
               <el-form-item label=" 基价" prop="basePrice" v-if="(isFloat)" class="label-right-align">
-                <el-input ref="basePriceInput" v-model="formData.basePrice" clearable :disabled="isSubmit" />
+                <el-input ref="basePriceInput" v-model="formData.basePrice" clearable :disabled="isSubmit"/>
               </el-form-item>
             </el-col>
           </el-row>
@@ -152,12 +154,13 @@
             <!-- <el-button  v-if="currentContract.contractPlanningCategory == 1 " type="success" size="small"  @click="pushPlan">易料市集采购</el-button>
             <el-button v-if="currentContract.contractPlanningCategory == 1 "  type="success" size="small"  @click="revokePushPlan">撤销易料市集采购</el-button>
             <el-button type="success" size="small" v-if="formData.isPushData!='Y'" :disabled="isSubmit" @click="splitVisible = true">合约拆分</el-button> -->
-            <el-button type="success" size="small" :disabled="isSubmit" @click="handleSelectMaterial">选取物料</el-button>
+            <el-button type="success" size="small" :disabled="isSubmit" @click="handleSelectMaterial">选取物料
+            </el-button>
           </div>
         </PageTitle>
 
         <el-table v-loading="loading" row-key="id" :data="planList" ref="tableRef" size="small" border
-          default-expand-all :expand-row-keys="expandKeys">
+                  default-expand-all :expand-row-keys="expandKeys">
           <el-table-column type="expand" v-if="planList[0] && planList[0].children && planList[0].children.length">
             <template slot-scope="props">
               <el-table :data="props.row.children" size="small" border>
@@ -184,8 +187,8 @@
                       ref="virScrollRef"
                       @change="(renderData) => virtualData = renderData"> -->
                     <el-table size="small" :data="inventory.row.children" border @select="handleSelect"
-                      :row-key="getRowKeys2" :ref="inventory.row.planTable"  max-height="580px"
-                      :row-class-name="tableRowClassName">
+                              :row-key="getRowKeys2" :ref="inventory.row.planTable" max-height="580px"
+                              :row-class-name="tableRowClassName">
                       <!-- <el-table-column type="selection" width="55" :reserve-selection="true"/> -->
                       <!-- <el-table-column label="序号" width="50" align="center" fixed>
                         <template #default="scope">
@@ -197,39 +200,41 @@
                           {{ scope.$index + 1 }}
                         </template>
                       </el-table-column>
-                      <el-table-column label="清单编码" min-width="150" prop="materialsCode" fixed show-overflow-tooltip />
-                      <el-table-column label="清单名称" min-width="150" prop="materialsName" fixed show-overflow-tooltip />
+                      <el-table-column label="清单编码" min-width="150" prop="materialsCode" fixed
+                                       show-overflow-tooltip/>
+                      <el-table-column label="清单名称" min-width="150" prop="materialsName" fixed
+                                       show-overflow-tooltip/>
                       <!-- <el-table-column label="成本子目名称(导入)" min-width="150" prop="materialsNameImport" show-overflow-tooltip/> -->
-                      <el-table-column label="特征值特征项" min-width="150" prop="specification" show-overflow-tooltip />
-                      <el-table-column label="计量规则" align="center" prop="measurementRules" show-overflow-tooltip />
-                      <el-table-column label="工作内容" align="center" prop="workContent" show-overflow-tooltip />
-                      <el-table-column label="计量单位" align="center" prop="unitMeasurement" />
+                      <el-table-column label="特征值特征项" min-width="150" prop="specification" show-overflow-tooltip/>
+                      <el-table-column label="计量规则" align="center" prop="measurementRules" show-overflow-tooltip/>
+                      <el-table-column label="工作内容" align="center" prop="workContent" show-overflow-tooltip/>
+                      <el-table-column label="计量单位" align="center" prop="unitMeasurement"/>
                       <el-table-column label="价格类型" align="center" prop="priceType" width="200"
-                        v-if="procurementType === 1">
+                                       v-if="procurementType === 1">
                         <template slot-scope="scope">
                           <el-select style="width: 100%" v-model="scope.row.priceType" placeholder="请选择"
-                            @change="changePriceType(inventory.$index, scope.row, $event)">
+                                     @change="changePriceType(inventory.$index, scope.row, $event)">
                             <el-option v-for="dict in PRICETYPEOPTIONS" :label="dict.label" :value="dict.value">
                             </el-option>
                           </el-select>
                         </template>
                       </el-table-column>
                       <el-table-column label="租赁方式" align="center" prop="rentMode"
-                        v-if="currentContract.contractPlanningCategory == 2 || currentContract.contractPlanningCategory == 3"
-                        width="120">
+                                       v-if="currentContract.contractPlanningCategory == 2 || currentContract.contractPlanningCategory == 3"
+                                       width="120">
                         <template slot-scope="scope">
                           <el-select style="width: 100%" v-model="scope.row.rentMode" placeholder="请选择"
-                            @change="changeRentMode(scope.row.materialsId, $event)">
+                                     @change="changeRentMode(scope.row.materialsId, $event)">
                             <el-option v-for="dict in rentModeOptions" :label="dict.label" :value="dict.value">
                             </el-option>
                           </el-select>
                         </template>
                       </el-table-column>
                       <el-table-column label="工作量" align="right" prop="count" width="150"
-                        v-if="currentContract.contractPlanningCategory == 2 || currentContract.contractPlanningCategory == 3">
+                                       v-if="currentContract.contractPlanningCategory == 2 || currentContract.contractPlanningCategory == 3">
                         <template slot-scope="scope">
                           <el-input v-model="scope.row.count" :disabled="isSubmit" v-if="scope.row.rentMode == 3"
-                            @input.native="changeCount($event, inventory.$index, scope.row)" v-thousandth />
+                                    @input.native="changeCount($event, inventory.$index, scope.row)" v-thousandth/>
                           <span v-else>{{ scope.row.count || 0 }}</span>
                         </template>
                       </el-table-column>
@@ -238,7 +243,7 @@
                           <!-- <el-input title="清单数量" v-model="scope.row.count"
                             :disabled="isSubmit || scope.row.belongOffer || scope.row.pushFlag === 'Y'"
                             @input="handleInput" v-thousandth /> -->
-                            <el-input
+                          <el-input
                             title="清单数量" v-model="scope.row.count"
                             :disabled="isSubmit || scope.row.belongOffer || scope.row.pushFlag === 'Y'"
                             @input="scope.row.count = scope.row.count.replace(/[^0-9]/g, '')"
@@ -247,14 +252,15 @@
                       </el-table-column>
                       <!--                      基价由原来浮动价不可编辑，变成了可以编辑-->
                       <el-table-column label="基价" align="right" width="130" prop="basePrice"
-                        v-if="procurementType === 1 && [2, 3, 4, 5, 6, 7].includes(formData.priceType)">
+                                       v-if="procurementType === 1 && [2, 3, 4, 5, 6, 7].includes(formData.priceType)">
                         <template slot-scope="scope">
                           <span v-if="scope.row.priceType === 1">/</span>
                           <div v-else>
                             <el-input title="基价" v-if="!scope.row.isbasePriceNotLegal" v-model="scope.row.basePrice"
-                              v-thousandth @input.native="checkOtherPrice($event, scope.row)" />
-                            <el-input title="基价" v-else v-model="scope.row.basePrice" :disabled="isSubmit" v-thousandth
-                              @input.native="checkOtherPrice($event, scope.row)" class="checkInput" />
+                                      v-thousandth @input.native="checkOtherPrice($event, scope.row)"/>
+                            <el-input title="基价" v-else v-model="scope.row.basePrice" :disabled="isSubmit"
+                                      v-thousandth
+                                      @input.native="checkOtherPrice($event, scope.row)" class="checkInput"/>
                           </div>
 
                         </template>
@@ -263,83 +269,91 @@
                         <template slot-scope="scope">
 
                           <el-input title="单价(含税)" v-model="scope.row.unitPriceInclTax"
-                            :disabled="isSubmit || scope.row.belongOffer || scope.row.pushFlag === 'Y'"
-                            @input="scope.row.unitPriceInclTax = scope.row.unitPriceInclTax.replace(/[^0-90.]/g, '')" v-thousandth />
+                                    :disabled="isSubmit || scope.row.belongOffer || scope.row.pushFlag === 'Y'"
+                                    @input="scope.row.unitPriceInclTax = scope.row.unitPriceInclTax.replace(/[^0-90.]/g, '')"
+                                    v-thousandth/>
                         </template>
                       </el-table-column>
                       <el-table-column label="税率(%)" align="right" prop="taxRate">
                         <template slot-scope="scope">
 
-                          <el-input title="税率(%)"  @input="scope.row.taxRate = scope.row.taxRate.replace(/[^0-90.]/g, '')" v-model="scope.row.taxRate" v-thousandth />
+                          <el-input title="税率(%)"
+                                    @input="scope.row.taxRate = scope.row.taxRate.replace(/[^0-90.]/g, '')"
+                                    v-model="scope.row.taxRate" v-thousandth/>
                         </template>
                       </el-table-column>
                       <el-table-column label="单价(不含税)" align="right" prop="unitPriceExclTax" width="150">
                         <template slot-scope="scope">
                           <!-- <span title="单价(不含税)">{{ getUnitPriceExclTax(scope.row) }}</span> -->
                           <el-input title="单价(不含税)" v-model="scope.row.unitPriceExclTax"
-                          @input="scope.row.unitPriceExclTax = scope.row.unitPriceExclTax.replace(/[^0-90.]/g, '')"  v-thousandth />
+                                    @input="scope.row.unitPriceExclTax = scope.row.unitPriceExclTax.replace(/[^0-90.]/g, '')"
+                                    v-thousandth/>
                         </template>
                       </el-table-column>
                       <el-table-column label="浮动价" align="right" width="130" prop="floatingPrice"
-                        v-if="procurementType === 1 && [2, 3, 4, 5, 6, 7].includes(formData.priceType)">
+                                       v-if="procurementType === 1 && [2, 3, 4, 5, 6, 7].includes(formData.priceType)">
                         <template slot-scope="scope">
                           <span v-if="scope.row.priceType !== 2">/</span>
                           <div v-else>
                             <el-input title="浮动价" v-model="scope.row.floatingPrice" :disabled="isSubmit" v-thousandth
-                              @input.native="changeFloatingPrice($event, scope.row)" class="checkInput" />
+                                      @input.native="changeFloatingPrice($event, scope.row)" class="checkInput"/>
                           </div>
 
                         </template>
                       </el-table-column>
 
                       <el-table-column label="浮动率(%)" align="right" width="130" prop="floatingRate"
-                        v-if="procurementType === 1 && [2, 3, 4, 5, 6, 7].includes(formData.priceType)">
+                                       v-if="procurementType === 1 && [2, 3, 4, 5, 6, 7].includes(formData.priceType)">
                         <template slot-scope="scope">
                           <span v-if="scope.row.priceType !== 4">/</span>
                           <div v-else>
-                            <el-input title="浮动率(%)" v-model="scope.row.floatingRate" :disabled="isSubmit" v-thousandth
-                              @input.native="changeFloatingRate($event, scope.row)" class="checkInput" />
+                            <el-input title="浮动率(%)" v-model="scope.row.floatingRate" :disabled="isSubmit"
+                                      v-thousandth
+                                      @input.native="changeFloatingRate($event, scope.row)" class="checkInput"/>
                           </div>
                         </template>
                       </el-table-column>
 
                       <el-table-column width="120" label="租赁时间" align="right" prop="rentTime"
-                        v-if="currentContract.contractPlanningCategory == 2 || currentContract.contractPlanningCategory == 3">
+                                       v-if="currentContract.contractPlanningCategory == 2 || currentContract.contractPlanningCategory == 3">
                         <template slot-scope="scope">
                           <el-input v-if="scope.row.rentMode == 1 || scope.row.rentMode == 2"
-                            v-model="scope.row.rentTime" @blur="changeWorkload(inventory.$index, scope.row)"
-                            :disabled="isSubmit" v-thousandth />
+                                    v-model="scope.row.rentTime" @blur="changeWorkload(inventory.$index, scope.row)"
+                                    :disabled="isSubmit" v-thousandth/>
                           <span v-else>-</span>
                         </template>
                       </el-table-column>
                       <el-table-column width="120" label="租赁数量" align="right" prop="rentQuantity"
-                        v-if="currentContract.contractPlanningCategory == 2 || currentContract.contractPlanningCategory == 3">
+                                       v-if="currentContract.contractPlanningCategory == 2 || currentContract.contractPlanningCategory == 3">
                         <template slot-scope="scope">
                           <el-input v-if="scope.row.rentMode == 1 || scope.row.rentMode == 2"
-                            v-model="scope.row.rentQuantity" @blur="changeWorkload(inventory.$index, scope.row)"
-                            :disabled="isSubmit" v-thousandth />
+                                    v-model="scope.row.rentQuantity" @blur="changeWorkload(inventory.$index, scope.row)"
+                                    :disabled="isSubmit" v-thousandth/>
                           <span v-else>-</span>
                         </template>
                       </el-table-column>
                       <el-table-column v-if="currentContract.contractPlanningCategory == 1" label="易料商品编码"
-                        align="center" min-width="150" prop="skuId" show-overflow-tooltip>
+                                       align="center" min-width="150" prop="skuId" show-overflow-tooltip>
                         <template slot-scope="scope">
                           <a class="link-type" @click="goDetail(scope.row.code)">
                             {{ scope.row.skuId }}
                           </a>
                         </template>
                       </el-table-column>
-                      <el-table-column v-if="currentContract.contractPlanningCategory == 1" label="易料商品名称" prop="name"
-                        width="150">
+                      <el-table-column v-if="currentContract.contractPlanningCategory == 1" label="易料商品名称"
+                                       prop="name"
+                                       width="150">
                         <template slot-scope="scope">
                           {{ scope.row.name }}
                         </template>
                       </el-table-column>
 
-                      <el-table-column v-if="currentContract.contractPlanningCategory == 1" label="易料品牌" min-width="120"
-                        prop="offerBrand" show-overflow-tooltip />
-                      <el-table-column v-if="currentContract.contractPlanningCategory == 1" label="易料初始报价" width="150"
-                        prop="offerPrice">
+                      <el-table-column v-if="currentContract.contractPlanningCategory == 1" label="易料品牌"
+                                       min-width="120"
+                                       prop="offerBrand" show-overflow-tooltip/>
+                      <el-table-column v-if="currentContract.contractPlanningCategory == 1" label="易料初始报价"
+                                       width="150"
+                                       prop="offerPrice">
                         <!-- <template slot-scope="scope">
                           <el-input v-model="scope.row.offerPrice" disabled v-thousandth/>
                         </template> -->
@@ -355,7 +369,7 @@
                       <el-table-column label="备注" align="center" prop="remark" min-width="300">
                         <template slot-scope="scope">
                           <el-input v-model="scope.row.remark"
-                            :disabled="isSubmit || scope.row.belongOffer || scope.row.pushFlag === 'Y'" />
+                                    :disabled="isSubmit || scope.row.belongOffer || scope.row.pushFlag === 'Y'"/>
                         </template>
                       </el-table-column>
                       <template slot="append">
@@ -369,17 +383,16 @@
                 </el-table-column>
 
 
-
               </el-table>
             </template>
           </el-table-column>
-          <el-table-column label="序号" type="index" width="50" align="center" />
+          <el-table-column label="序号" type="index" width="50" align="center"/>
           <!-- <el-table-column label="合约名称" min-width="300" prop="contractPlanningName" show-overflow-tooltip/>
           <el-table-column label="计划金额" align="right" prop="plannedAmountInclTaxText" /> -->
 
           <el-table-column label="合约名称" align="center" prop="contractPlanningName" min-width="300">
             <template slot-scope="scope">
-              <el-input v-model="scope.row.contractPlanningName" />
+              <el-input v-model="scope.row.contractPlanningName"/>
             </template>
           </el-table-column>
           <el-table-column label="计划金额" align="center" prop="plannedAmountInclTax" min-width="300">
@@ -400,15 +413,16 @@
         </el-table>
 
         <pagination v-show="total > 0" :total="total" :page.sync="queryParams.pageNum"
-          :limit.sync="queryParams.pageSize" @pagination="getList" />
+                    :limit.sync="queryParams.pageSize" @pagination="getList"/>
 
       </el-form>
 
       <!-- 物料类型选择对话框 -->
       <el-dialog title="选取物料" :visible.sync="materialDialogVisible" width="45%">
         <treeMenu class="treeMenu" style="margin: 12px; " :dept-options="deptOptions" :queryType="true" ref="orgTree"
-          :levelExpand="2" @query="getListMenu" @treeClick="treeClickMain" :defaultExpandedKeys="defaultExpandedKeys"
-          :loading="loadingTree" :currentNodeKey="waitCurrentNodeKey"></treeMenu>
+                  :levelExpand="2" @query="getListMenu" @treeClick="treeClickMain"
+                  :defaultExpandedKeys="defaultExpandedKeys"
+                  :loading="loadingTree" :currentNodeKey="waitCurrentNodeKey"></treeMenu>
         <!-- <el-table
           :data="materialCategories"
           style="width: 100%"
@@ -426,28 +440,30 @@
         <el-form :model="searchQuery" ref="planForm" label-position="left" size="small" inline @submit.native.prevent>
           <el-form-item label="用户" prop="pushRoleList" class="label-right-align" label-width="40px">
             <el-input v-model="searchQuery.nickName" placeholder="请输入用户" clearable style="width: 150px"
-              @keyup.enter.native="searchUser" />
+                      @keyup.enter.native="searchUser"/>
           </el-form-item>
           <el-form-item>
             <el-button type="primary" icon="el-icon-search" size="small" style="width: 70px"
-              @click="searchUser">查询</el-button>
+                       @click="searchUser">查询
+            </el-button>
           </el-form-item>
         </el-form>
         <virtual-scroll :data="filteredOperatorList" :item-size="62" key-prop="virtualId" ref="virScroll"
-          @change="(renderData) => virtualList = renderData">
+                        @change="(renderData) => virtualList = renderData">
           <el-table v-loading="officerLoading" :data="virtualList" stripe size="small" highlight-current-row border
-            @selection-change="selectOfficer" @row-click="selectOfficer" :row-key="selSelectKey" max-height="400"
-            ref="selectTable">
+                    @selection-change="selectOfficer" @row-click="selectOfficer" :row-key="selSelectKey"
+                    max-height="400"
+                    ref="selectTable">
             <el-table-column width="30" align="center">
               <template slot-scope="scope">
-                <el-radio v-model="selectedUserId" :label="scope.row.userId" @change="selectOfficer(scope.row)" />
+                <el-radio v-model="selectedUserId" :label="scope.row.userId" @change="selectOfficer(scope.row)"/>
               </template>
             </el-table-column>
-            <el-table-column label="序号" prop="virtualId" width="60" align="center" />
-            <el-table-column label="用户" prop="nickName" width="100" align="center" />
-            <el-table-column label="电话号码" prop="phonenumber" width="150" align="center" />
-            <el-table-column label="归属当前组织名称" prop="thridOrgName" show-overflow-tooltip align="center" />
-            <el-table-column label="归属管理组织名称" prop="orgDeptName" show-overflow-tooltip align="center" />
+            <el-table-column label="序号" prop="virtualId" width="60" align="center"/>
+            <el-table-column label="用户" prop="nickName" width="100" align="center"/>
+            <el-table-column label="电话号码" prop="phonenumber" width="150" align="center"/>
+            <el-table-column label="归属当前组织名称" prop="thridOrgName" show-overflow-tooltip align="center"/>
+            <el-table-column label="归属管理组织名称" prop="orgDeptName" show-overflow-tooltip align="center"/>
           </el-table>
         </virtual-scroll>
         <div slot="footer" class="dialog-footer">
@@ -459,35 +475,36 @@
       <!-- 选择项目合约规划 -->
       <el-dialog title="清单" :visible.sync="inventoryVisible" width="70%">
         <virtual-scroll :data="inventoryList" :item-size="62" key-prop="materialsId" ref="virScrollRefDialog"
-          @change="(renderData) => virtualData = renderData">
+                        @change="(renderData) => virtualData = renderData">
           <el-table v-loading="loading" :data="virtualData" stripe border size="small">
             <!--            <el-table-column label="序号" type="index" width="50" align="center" />-->
             <el-table-column label="序号" width="50" align="center" fixed>
               <template #default="scope">
-                {{inventoryList.findIndex(item => item.materialsId === scope.row.materialsId) + 1}}
+                {{ inventoryList.findIndex(item => item.materialsId === scope.row.materialsId) + 1 }}
               </template>
             </el-table-column>
-            <el-table-column label="清单编码" min-width="100" prop="materialsCode" show-overflow-tooltip />
-            <el-table-column label="清单名称" min-width="200" prop="materialsName" show-overflow-tooltip />
-            <el-table-column label="成本子目名称(导入)" min-width="150" prop="materialsNameImport" show-overflow-tooltip />
-            <el-table-column label="特征值特征项" min-width="150" prop="specification" show-overflow-tooltip />
-            <el-table-column label="计量规则" align="center" prop="measurementRules" show-overflow-tooltip />
-            <el-table-column label="工作内容" align="center" prop="workContent" show-overflow-tooltip />
-            <el-table-column label="计量单位" align="center" prop="unitMeasurement" />
+            <el-table-column label="清单编码" min-width="100" prop="materialsCode" show-overflow-tooltip/>
+            <el-table-column label="清单名称" min-width="200" prop="materialsName" show-overflow-tooltip/>
+            <el-table-column label="成本子目名称(导入)" min-width="150" prop="materialsNameImport"
+                             show-overflow-tooltip/>
+            <el-table-column label="特征值特征项" min-width="150" prop="specification" show-overflow-tooltip/>
+            <el-table-column label="计量规则" align="center" prop="measurementRules" show-overflow-tooltip/>
+            <el-table-column label="工作内容" align="center" prop="workContent" show-overflow-tooltip/>
+            <el-table-column label="计量单位" align="center" prop="unitMeasurement"/>
             <el-table-column
               v-if="currentContract.contractPlanningCategory != 1 && currentContract.contractPlanningCategory != 2"
-              label="工程量" align="right" prop="quantityText" />
-            <el-table-column label="已用数量" align="right" prop="usedCountText" />
-            <el-table-column label="剩余量" align="right" prop="surplusQuantityText" />
+              label="工程量" align="right" prop="quantityText"/>
+            <el-table-column label="已用数量" align="right" prop="usedCountText"/>
+            <el-table-column label="剩余量" align="right" prop="surplusQuantityText"/>
             <el-table-column
               v-if="currentContract.contractPlanningCategory == 1 || currentContract.contractPlanningCategory == 2"
-              label="转换数量" align="right" prop="transferQuantityText" />
+              label="转换数量" align="right" prop="transferQuantityText"/>
             <!-- <el-table-column label="基准价" align="center" prop="basePrice" />
             <el-table-column label="浮动值" align="center" prop="floatingValue" /> -->
-            <el-table-column label="税率(%)" align="right" prop="taxRateText" />
-            <el-table-column label="单价(含税)" align="right" prop="unitPriceInclTaxText" min-width="150" />
-            <el-table-column label="合计(含税)" align="right" prop="totalPriceText" min-width="150" />
-            <el-table-column label="备注" align="center" prop="remark" min-width="200" />
+            <el-table-column label="税率(%)" align="right" prop="taxRateText"/>
+            <el-table-column label="单价(含税)" align="right" prop="unitPriceInclTaxText" min-width="150"/>
+            <el-table-column label="合计(含税)" align="right" prop="totalPriceText" min-width="150"/>
+            <el-table-column label="备注" align="center" prop="remark" min-width="200"/>
           </el-table>
         </virtual-scroll>
       </el-dialog>
@@ -497,7 +514,7 @@
         <el-form :model="splitForm" :rules="splitRules" ref="splitFormRef" @submit.native.prevent>
           <el-form-item label="拟拆分合同份数：" prop="num" label-width="140px">
             <el-input v-model.number="splitForm.num" :disabled="numDisable" autocomplete="off" :maxlength="2"
-              clearable></el-input>
+                      clearable></el-input>
           </el-form-item>
         </el-form>
         <div slot="footer" class="dialog-footer">
@@ -507,11 +524,12 @@
       </el-dialog>
 
       <!-- 标的物选择 -->
-      <el-dialog title="交易标的物选择" :visible.sync="matterVisible" class="dialogClass" width="30%" @closed="matterColsed">
+      <el-dialog title="交易标的物选择" :visible.sync="matterVisible" class="dialogClass" width="30%"
+                 @closed="matterColsed">
         <el-input v-model="matterName" placeholder="请输入搜索内容" clearable size="small" prefix-icon="el-icon-search"
-          style="margin-bottom: 12px" />
+                  style="margin-bottom: 12px"/>
         <el-tree :data="matterList" show-checkbox node-key="serviceClassCode" :filter-node-method="filterNode"
-          default-expand-all ref="tree" :props="defaultProps" check-strictly @check="handleCheckChange">
+                 default-expand-all ref="tree" :props="defaultProps" check-strictly @check="handleCheckChange">
         </el-tree>
         <div slot="footer" class="dialog-footer">
           <el-button @click="matterVisible = false" style="width: 100px;" size="small">取 消</el-button>
@@ -527,28 +545,31 @@
 </template>
 
 <script>
-import { Base64 } from 'js-base64';
-import { create, all } from "mathjs"
+import {Base64} from 'js-base64';
+import {all, create} from "mathjs"
 import {
+  getArchiveClass,
+  getArchivesDetailList,
   getContractMaterials,
-  saveProcurementPlan,
+  getContractPlanSplitFlag,
   getListProcurementOfficer,
-  getMinProject,
   getPlanDetail,
+  getYjtUrl,
   listDwMmServiceSubjectMatter,
-  getContractPlanSplitFlag, pushMaterialProcurementList, revokePushMaterialProcurementList, getYjtUrl,
-  getArchiveClass, getArchivesDetailList
+  pushMaterialProcurementList,
+  revokePushMaterialProcurementList,
+  saveProcurementPlan
 } from '@/api/procurement/plan'
-import { listUnderlingDict } from "@/api/procurement/contract";
-import { listAreaDivisionTree } from '@/api/procurement/manage'
+import {listUnderlingDict} from "@/api/procurement/contract";
+import {listAreaDivisionTree} from '@/api/procurement/manage'
 import BackButton from "@/components/BackButton/index.vue"
-import { mapGetters } from "vuex"
+import {mapGetters} from "vuex"
 import PageTitle from "@/components/PageTitle/index.vue"
-import { PRICETYPELIST, PRICETYPEOPTIONS } from "@/utils/constants";
+import {PRICETYPELIST, PRICETYPEOPTIONS} from "@/utils/constants";
 import VirtualScroll from 'el-table-virtual-scroll'
-import { getTwoLevelDeptByDeptId } from "@/api/system/dept";
-import { submitProcurementPlan } from "@/api/procurement/plan";
+import {getTwoLevelDeptByDeptId} from "@/api/system/dept";
 import treeMenu from '@/components/tree/treeMenu.vue'
+
 export default {
   name: "add-plan",
   dicts: ['plan_type', 'price_type', 'procurement_counting_type', 'procurement_payment_type'],
@@ -615,10 +636,10 @@ export default {
         this.inventoryList = response.data || [];
         let time = new Date().getTime();
         this.expandKeys.push(time + "")
-        this.planList[0] = { contractPlanning: "", plannedAmountInclTax: "", id: time, children: [] };
+        this.planList[0] = {contractPlanning: "", plannedAmountInclTax: "", id: time, children: []};
         const num = 1
         const children = []
-        Array.from({ length: num }).forEach((_, index) => {
+        Array.from({length: num}).forEach((_, index) => {
 
           children.push({
             index,
@@ -664,10 +685,10 @@ export default {
         materialDialogVisible: false, // 控制物料选择对话框的显示和隐藏
         // 物料分类列表
         materialCategories: [
-          { categoryName: '材料类', categoryCode: '1' },
-          { categoryName: '设备类', categoryCode: '2' },
-          { categoryName: '劳务类', categoryCode: '3' },
-          { categoryName: '专业分包类', categoryCode: '4' },
+          {categoryName: '材料类', categoryCode: '1'},
+          {categoryName: '设备类', categoryCode: '2'},
+          {categoryName: '劳务类', categoryCode: '3'},
+          {categoryName: '专业分包类', categoryCode: '4'},
         ],
         selectedCategory: null,
         selecteArchivesClass: null,
@@ -756,9 +777,7 @@ export default {
           //   }
           // ]
         },
-        tableRef: {
-
-        },
+        tableRef: {},
         // 遮罩层
         loading: false,
         // 显示搜索条件
@@ -782,8 +801,8 @@ export default {
         }, //拆分合同数表单
         splitRules: {
           num: [
-            { required: true, message: '请输入拆分的份数', trigger: 'blur' },
-            { validator: checkNum, trigger: 'blur' }
+            {required: true, message: '请输入拆分的份数', trigger: 'blur'},
+            {validator: checkNum, trigger: 'blur'}
           ],
         },
         currentContract: {},
@@ -896,7 +915,7 @@ export default {
       };
       if (this.formData.procurementOfficer) {
         this.selectedUserId = this.formData.procurementOfficer
-        this.selectedUser = { nickName: this.formData.procurementOfficerName, userId: this.formData.procurementOfficer }
+        this.selectedUser = {nickName: this.formData.procurementOfficerName, userId: this.formData.procurementOfficer}
       }
       try {
         this.filteredOperatorList = this.operatorList.map((item, index) => ({
@@ -911,7 +930,7 @@ export default {
     /** 选择采购人-过滤用户 */
     searchUser() {
       this.officerLoading = true;
-      const { nickName } = this.searchQuery;
+      const {nickName} = this.searchQuery;
       this.filteredOperatorList = this.operatorList
         .filter(item => !nickName || item.nickName.includes(nickName))
         .map((item, index) => ({
@@ -949,7 +968,7 @@ export default {
       //isPushRevoke为true表示推送
       this.isPushRevoke = true
       this.materialsLists = []
-      if (!this.planList[0].children) return this.$message({ type: 'error', message: "您还没有可选择的采购清单" });
+      if (!this.planList[0].children) return this.$message({type: 'error', message: "您还没有可选择的采购清单"});
       for (let i = 0; i < this.planList[0].children.length; i++) {
         let children = this.planList[0].children[i]
         console.log(JSON.stringify(children) + "采购清单")
@@ -963,7 +982,10 @@ export default {
         }
       }
       console.log(JSON.stringify(this.materialsLists.length))
-      if (this.isUpdate && this.materialsLists.length == 0) return this.$message({ type: 'error', message: "请选择易料市集采购清单" });
+      if (this.isUpdate && this.materialsLists.length == 0) return this.$message({
+        type: 'error',
+        message: "请选择易料市集采购清单"
+      });
       this.$confirm("是否确定选中的清单进入易料市集进行采购？", "提示", {
         confirmButtonText: "确定",
         cancelButtonText: "取消",
@@ -975,7 +997,7 @@ export default {
     revokePushPlan() {
       //isPushRevoke为false表示撤销
       this.isPushRevoke = false
-      if (!this.planList[0].children) return this.$message({ type: 'error', message: "您还没有可选择的采购清单" });
+      if (!this.planList[0].children) return this.$message({type: 'error', message: "您还没有可选择的采购清单"});
       this.materialsLists = []
       for (let i = 0; i < this.planList[0].children.length; i++) {
         let children = this.planList[0].children[i]
@@ -984,7 +1006,7 @@ export default {
         this.materialsLists = [...this.materialsLists, ...currentSelect];
       }
 
-      if (this.materialsLists.length <= 0) return this.$message({ type: 'error', message: "请选择撤销易料市集采购清单" });
+      if (this.materialsLists.length <= 0) return this.$message({type: 'error', message: "请选择撤销易料市集采购清单"});
       this.$confirm("是否确定撤销选中的清单？", "提示", {
         confirmButtonText: "确定",
         cancelButtonText: "取消",
@@ -993,7 +1015,7 @@ export default {
         for (let i = 0; i < this.materialsLists.length; i++) {
           console.log("撤销" + JSON.stringify(this.materialsLists[i]))
           if (this.materialsLists[i].pushFlag == 'N') {
-            return this.$message({ type: 'error', message: "请选择已推送进入易料市集采购清单" })
+            return this.$message({type: 'error', message: "请选择已推送进入易料市集采购清单"})
           }
         }
         console.log(JSON.stringify(this.materialsLists))
@@ -1042,7 +1064,7 @@ export default {
         this.$refs[`${children.planTable}`].clearSelection();
       }
     },
-    tableRowClassName({ row, rowIndex }) {
+    tableRowClassName({row, rowIndex}) {
       if (row.pushFlag === 'Y') {
         return 'already-pushed';
       } else if (row.pushFlag === 'N') {
@@ -1259,11 +1281,11 @@ export default {
     //保存
     submitForm(formName) {
       return new Promise((resolve, reject) => {
-        const { add, subtract, divide, multiply, bignumber, format, floor } = this.mathjs;
+        const {add, subtract, divide, multiply, bignumber, format, floor} = this.mathjs;
         this.isSubmit = true;
         this.$refs[formName].validate(async (valid, done) => {
           if (valid) {
-            const { planList } = this
+            const {planList} = this
             console.log(JSON.stringify(planList), 'planListplanList--planListplanList-planListplanList');
             if (!planList[0].children || !planList[0].children.length) {
               this.isSubmit = false;
@@ -1273,15 +1295,15 @@ export default {
               });
               return false;
             }
-            const isAll = this.planList.every(item => item.contractPlanningName && item.contractPlanningName != "null" && item.plannedAmountInclTax && item.plannedAmountInclTax!="null")
+            const isAll = this.planList.every(item => item.contractPlanningName && item.contractPlanningName != "null" && item.plannedAmountInclTax && item.plannedAmountInclTax != "null")
             //判断长度大于1
             if (this.planList.length > 0) {
               if (!isAll) {
                 this.isSubmit = false;
-                  this.$message({
-                    message: '拆分合约规划名称/计划金额不能为空',
-                    type: 'error'
-                  });
+                this.$message({
+                  message: '拆分合约规划名称/计划金额不能为空',
+                  type: 'error'
+                });
                 return false;
               }
             }
@@ -1292,7 +1314,7 @@ export default {
             if (typeof this.planList[0].plannedAmountInclTax === 'string') {
               this.planList[0].plannedAmountInclTax = this.planList[0].plannedAmountInclTax.replace(/,/g, '');
             }
-        
+
             const plannedAmountInclTax = bignumber(this.planList[0].plannedAmountInclTax);
             // 校验合计(含税)总和是否小于或等于计划金额
             if (totalAmount != null && plannedAmountInclTax != null) {
@@ -1316,11 +1338,28 @@ export default {
               lock: true,
               background: 'rgba(0, 0, 0, 0.7)'
             });
-            const { procurementPlanName, projectHierarchy, beginDate, endDate, arrivalDate, procurementOfficer, procurementOfficerName, projectId, projectName, projectCode, priceType, basePrice, regionProvinceCode, regionCityCode, paymentType, countingType } = this.formData;
-            const { id, biddingMethodCode, bidResponsibleOrgName } = this.currentContract
+            const {
+              procurementPlanName,
+              projectHierarchy,
+              beginDate,
+              endDate,
+              arrivalDate,
+              procurementOfficer,
+              procurementOfficerName,
+              projectId,
+              projectName,
+              projectCode,
+              priceType,
+              basePrice,
+              regionProvinceCode,
+              regionCityCode,
+              paymentType,
+              countingType
+            } = this.formData;
+            const {id, biddingMethodCode, bidResponsibleOrgName} = this.currentContract
             console.log(this.currentContract, '保存时查询的---this.currentContract');
             console.log(this.formData, '保存时查询的---this.formData');
-            /* 采购类型 procurementType 
+            /* 采购类型 procurementType
             PURCHASE_MATERIALS(1, "购买材料"),
             LEASED_MATERIAL(2, "租赁材料"),
             RENTAL_MACHINERY(3, "租赁机械（设备）"),
@@ -1339,8 +1378,7 @@ export default {
                 contractPlanningCategory = 5;
               } else if (this.selecteArchivesClass == 4) {
                 contractPlanningCategory = 4;
-              }
-              else {
+              } else {
                 contractPlanningCategory = this.currentContract.procurementPlanType;
               }
             }
@@ -1472,9 +1510,9 @@ export default {
 
     //上限价等于计划金额
     calculateUpperLimitPrice(row) {
-      console.log("上限价this.formData.upperLimitPrice:",row.plannedAmountInclTax );
-      let isNumber= row.plannedAmountInclTax == row.plannedAmountInclTax.replace(/[^0-9.]/g, '')
-      if(!isNumber){
+      console.log("上限价this.formData.upperLimitPrice:", row.plannedAmountInclTax);
+      let isNumber = row.plannedAmountInclTax == row.plannedAmountInclTax.replace(/[^0-9.]/g, '')
+      if (!isNumber) {
         this.$message.error("计划金额填写错误");
       }
       if (row.plannedAmountInclTax) {
@@ -1508,57 +1546,57 @@ export default {
     //     this.$message.error("提交采购计划失败，请稍后重试");
     //   }
     // },
-    async submitPlan(formName) {
-      try {
-        this.$refs[formName].validate(async (valid) => {
-          if (valid) {
-            this.isPlanSubmit = true; // 设置提交状态为 true，禁用按钮并显示加载状态
-            // 等待保存表单数据的方法完成
-            try {
-              await this.submitForm(formName);
-            } catch (error) {
-              // 如果保存失败，直接返回，不再继续执行提交逻辑
-              console.error("保存表单数据失败：", error);
-              this.isPlanSubmit = false; // 取消加载状态
-              return;
-            }
-
-            const id = this.currentContract.id;
-            console.log("提交的 plan 的 id：", id);
-            if (!id) {
-              this.isPlanSubmit = false; // 如果 id 不存在，取消加载状态
-              this.$message.error("采购计划 ID 不存在，无法提交");
-              return;
-            }
-
-            try {
-              const loading = this.$loading({
-                lock: true,
-                text: '提交中...',
-                background: 'rgba(0, 0, 0, 0.7)'
-              });
-              await submitProcurementPlan(id);
-              loading.close();
-              this.isPlanSubmit = false; // 提交成功后，取消加载状态
-              this.$message.success("提交成功");
-              this.getPlanDetail();
-            } catch (error) {
-              console.error("提交采购计划失败：", error);
-              this.isPlanSubmit = false; // 提交失败后，取消加载状态
-              loading.close();
-              this.$message.error("提交采购计划失败，请稍后重试");
-            }
-          } else {
-            this.isPlanSubmit = false; // 校验失败后，取消加载状态
-            return false;
-          }
-        });
-      } catch (error) {
-        console.error("提交表单失败：", error);
-        this.isPlanSubmit = false; // 提交表单失败后，取消加载状态
-        this.$message.error("提交表单失败，请稍后重试");
-      }
-    },
+    // async submitPlan(formName) {
+    //   try {
+    //     this.$refs[formName].validate(async (valid) => {
+    //       if (valid) {
+    //         this.isPlanSubmit = true; // 设置提交状态为 true，禁用按钮并显示加载状态
+    //         // 等待保存表单数据的方法完成
+    //         try {
+    //           await this.submitForm(formName);
+    //         } catch (error) {
+    //           // 如果保存失败，直接返回，不再继续执行提交逻辑
+    //           console.error("保存表单数据失败：", error);
+    //           this.isPlanSubmit = false; // 取消加载状态
+    //           return;
+    //         }
+    //
+    //         const id = this.currentContract.id;
+    //         console.log("提交的 plan 的 id：", id);
+    //         if (!id) {
+    //           this.isPlanSubmit = false; // 如果 id 不存在，取消加载状态
+    //           this.$message.error("采购计划 ID 不存在，无法提交");
+    //           return;
+    //         }
+    //
+    //         try {
+    //           const loading = this.$loading({
+    //             lock: true,
+    //             text: '提交中...',
+    //             background: 'rgba(0, 0, 0, 0.7)'
+    //           });
+    //           await submitProcurementPlan(id);
+    //           loading.close();
+    //           this.isPlanSubmit = false; // 提交成功后，取消加载状态
+    //           this.$message.success("提交成功");
+    //           this.getPlanDetail();
+    //         } catch (error) {
+    //           console.error("提交采购计划失败：", error);
+    //           this.isPlanSubmit = false; // 提交失败后，取消加载状态
+    //           loading.close();
+    //           this.$message.error("提交采购计划失败，请稍后重试");
+    //         }
+    //       } else {
+    //         this.isPlanSubmit = false; // 校验失败后，取消加载状态
+    //         return false;
+    //       }
+    //     });
+    //   } catch (error) {
+    //     console.error("提交表单失败：", error);
+    //     this.isPlanSubmit = false; // 提交表单失败后，取消加载状态
+    //     this.$message.error("提交表单失败，请稍后重试");
+    //   }
+    // },
 
 
     /* 批量替换对象中指定属性的,号，用于金额校验，提交对象数据给后台时将金额格式化。 */
@@ -1607,11 +1645,11 @@ export default {
     //提交推送
     submitFormPush(formName) {
       console.log(this.planList, 'ppp');
-      const { format } = this.mathjs
+      const {format} = this.mathjs
       this.isSubmit = true;
       this.$refs[formName].validate(async (valid, done) => {
         if (valid) {
-          const { planList } = this
+          const {planList} = this
           console.log(planList, 'planListplanList--planListplanList-planListplanList');
           if (!planList[0].children || !planList[0].children.length) {
             this.isSubmit = false;
@@ -1679,16 +1717,55 @@ export default {
             text: (msgCount < 200) ? '数据提交中...' : '您好，系统识别到清单量大，正在提交，请耐心等待！',
             background: 'rgba(0, 0, 0, 0.7)'
           });
-          const { procurementPlanName, beginDate, endDate, arrivalDate, procurementOfficer, procurementOfficerName, projectId, projectName, projectCode, priceType, regionProvinceCode, regionCityCode, paymentType, countingType } = this.formData;
-          const { contractPlanningCategory, biddingMethodCode, biddingMethodName, contractPlanningCategoryName, contractPlanningId, contractPlanningName, incurredPlannedAmount, incurredPlannedAmountText, plannedAmountInclTax, plannedAmountInclTaxText, planningBalance, planningBalanceText, bidResponsibleOrg, bidResponsibleOrgName, id, contractPlanningCode, brand } = this.currentContract
+          const {
+            procurementPlanName,
+            beginDate,
+            endDate,
+            arrivalDate,
+            procurementOfficer,
+            procurementOfficerName,
+            projectId,
+            projectName,
+            projectCode,
+            priceType,
+            regionProvinceCode,
+            regionCityCode,
+            paymentType,
+            countingType
+          } = this.formData;
+          const {
+            contractPlanningCategory,
+            biddingMethodCode,
+            biddingMethodName,
+            contractPlanningCategoryName,
+            contractPlanningId,
+            contractPlanningName,
+            incurredPlannedAmount,
+            incurredPlannedAmountText,
+            plannedAmountInclTax,
+            plannedAmountInclTaxText,
+            planningBalance,
+            planningBalanceText,
+            bidResponsibleOrg,
+            bidResponsibleOrgName,
+            id,
+            contractPlanningCode,
+            brand
+          } = this.currentContract
           const splitRequestList = this.planList[0]?.children.map(item => {
             return {
 
               splitContractName: item.splitContractName,
               contractScope: item.contractScope,
               materialsLists: item.children.map(child => {
-                child.unitPriceInclTax = format(Number(child.unitPriceInclTax), { notation: 'fixed', precision: 4 }).toString().replace(/\.?0+$/, '') || '';
-                child.count = format(Number(child.count), { notation: 'fixed', precision: 4 }).toString().replace(/\.?0+$/, '') || '';
+                child.unitPriceInclTax = format(Number(child.unitPriceInclTax), {
+                  notation: 'fixed',
+                  precision: 4
+                }).toString().replace(/\.?0+$/, '') || '';
+                child.count = format(Number(child.count), {
+                  notation: 'fixed',
+                  precision: 4
+                }).toString().replace(/\.?0+$/, '') || '';
                 child.isSelect = this.isUpdate ? '' : child.isSelect;
                 return child
               })
@@ -1714,8 +1791,26 @@ export default {
             },
             splitRequestList,
             contractPlanning: {
-              contractPlanningCategory, biddingMethodCode, biddingMethodName, contractPlanningCategoryName, contractPlanningId, contractPlanningName, incurredPlannedAmount, incurredPlannedAmountText, plannedAmountInclTax, plannedAmountInclTaxText, planningBalance, planningBalanceText,
-              projectId, projectName, projectCode, bidResponsibleOrg, bidResponsibleOrgName, subjectMatter: this.subjectMatter, contractPlanningCode, brand
+              contractPlanningCategory,
+              biddingMethodCode,
+              biddingMethodName,
+              contractPlanningCategoryName,
+              contractPlanningId,
+              contractPlanningName,
+              incurredPlannedAmount,
+              incurredPlannedAmountText,
+              plannedAmountInclTax,
+              plannedAmountInclTaxText,
+              planningBalance,
+              planningBalanceText,
+              projectId,
+              projectName,
+              projectCode,
+              bidResponsibleOrg,
+              bidResponsibleOrgName,
+              subjectMatter: this.subjectMatter,
+              contractPlanningCode,
+              brand
             }
           }
           console.log(formData, 'this.formData');
@@ -1807,9 +1902,9 @@ export default {
 
     //获取物料
     async getContractMaterials() {
-      const { currentContract, formData } = this
+      const {currentContract, formData} = this
       this.planList.push(currentContract)
-      const { contractPlanningId, contractPlanningCategory, contractPlanningCode } = this.currentContract
+      const {contractPlanningId, contractPlanningCategory, contractPlanningCode} = this.currentContract
       const res = await getContractMaterials(contractPlanningId, formData.projectId, contractPlanningCategory, contractPlanningCode, formData.projectName)
       this.inventoryList = res.data.contractMaterialsList;
       this.formData.subjectMatterText = res.data.subjectMatterText || '';
@@ -1817,7 +1912,7 @@ export default {
       this.subjectMatter = res.data.subjectMatter || '';
       if (this.subjectMatter == 1 || this.subjectMatter == 3) {
         this.rules.countingType = [
-          { required: true, message: "计数方式不能为空", trigger: "blur" },
+          {required: true, message: "计数方式不能为空", trigger: "blur"},
         ];
       } else {
         // 如果类型为其他值，则付款方式非必填
@@ -1836,7 +1931,7 @@ export default {
       let arrData = this.planList[0].children[index].materialsLists
       for (let i = 0; i < arrData?.length; i++) {
         if (arrData[i]?.pushFlag == 'Y') {
-          return this.$message({ type: 'error', message: "目前是推送状态不可删除！" })
+          return this.$message({type: 'error', message: "目前是推送状态不可删除！"})
         }
       }
       this.$confirm("是否确定删除标包？", "提示", {
@@ -1893,7 +1988,7 @@ export default {
       // if(Number(num) > 10) return this.$message.error('最多可拆分10份');
       const num = 1
       const children = []
-      Array.from({ length: num }).forEach((_, index) => {
+      Array.from({length: num}).forEach((_, index) => {
         children.push({
           index,
           planTable: 'planTable' + index,
@@ -1912,10 +2007,10 @@ export default {
     handleSplit() {
       this.$refs['splitFormRef'].validate((valid) => {
         if (valid) {
-          const { num } = this.splitForm;
+          const {num} = this.splitForm;
           if (Number(num) > 10) return this.$message.error('最多可拆分10份');
           const children = []
-          Array.from({ length: num }).forEach((_, index) => {
+          Array.from({length: num}).forEach((_, index) => {
             if (index + 1 > this.planList[0].children.length) {
               children.push({
                 index,
@@ -1976,11 +2071,11 @@ export default {
     },
     async getPlanDetail() {
       this.loading = true;
-      const { id, procurementPlanType } = this.currentContract
+      const {id, procurementPlanType} = this.currentContract
       try {
         const res = await getPlanDetail(id);
         console.log(res, '详情!!!!!!!!!!!!!');
-        const { procurementPlan, splitMaterials, contractPlanning } = res.data;
+        const {procurementPlan, splitMaterials, contractPlanning} = res.data;
         procurementPlan.countingType = procurementPlan.countingType + ''
         procurementPlan.paymentType = procurementPlan.paymentType + ''
         // procurementPlan.priceType = procurementPlan.priceType  + ''
@@ -1992,13 +2087,16 @@ export default {
         this.subjectMatter = procurementPlan.subjectMatterType;
         if (this.subjectMatter == 1 || this.subjectMatter == 3) {
           this.rules.countingType = [
-            { required: true, message: "计数方式不能为空", trigger: "blur" },
+            {required: true, message: "计数方式不能为空", trigger: "blur"},
           ];
         } else {
           // 如果类型为其他值，则付款方式非必填
           this.rules.countingType = [];
         }
-        this.formData = { ...this.formData, ...procurementPlan, upperLimitPrice: contractPlanning.plannedAmountInclTaxText }
+        this.formData = {
+          ...this.formData, ...procurementPlan,
+          upperLimitPrice: contractPlanning.plannedAmountInclTaxText
+        }
         console.log(this.formData, 'this.formData');
         // this.wfProcessId = procurementPlan.wfProcessId
 
@@ -2012,20 +2110,25 @@ export default {
         splitMaterials.forEach((item, index) => {
           item.$index = index;
           // item.planTable='planTable'+index
-          let children = item.materialsLists.map((child, k) => ({ ...child, $index: k, indexNumber: (k + 1), planTable: 'planTable' + k }))
+          let children = item.materialsLists.map((child, k) => ({
+            ...child,
+            $index: k,
+            indexNumber: (k + 1),
+            planTable: 'planTable' + k
+          }))
           item.children = children;
         })
         console.log(JSON.stringify(contractPlanning), 'contractPlanning--contractPlanning--contractPlanning')
         console.log(JSON.stringify(splitMaterials), 'splitMaterials--splitMaterials--splitMaterials')
 
-        this.planList[0] = { ...contractPlanning, children: splitMaterials };
+        this.planList[0] = {...contractPlanning, children: splitMaterials};
         // 在数据加载完成后手动展开所有行
         this.$nextTick(() => {
           this.expandAllRows();
         });
         Object.assign(this.currentContract, contractPlanning)
 
-        const { projectId } = this.formData
+        const {projectId} = this.formData
         getContractMaterials(contractPlanning.contractPlanningId, projectId, contractPlanning.contractPlanningCategory, contractPlanning.contractPlanningCode).then(res => {
           this.inventoryList = res.data.contractMaterialsList;
         })
@@ -2087,7 +2190,7 @@ export default {
     },
     //工作量校验
     changeWorkload(splitIndex, row) {
-      const { multiply, round } = this.mathjs;
+      const {multiply, round} = this.mathjs;
       if (row.rentTime && row.rentQuantity) {
         const count = this.formatNumberDynamicDecimalWithSeparator(multiply(row.rentTime, row.rentQuantity));
         row.count = count.replaceAll(',', '');
@@ -2362,7 +2465,7 @@ export default {
     //材料、机械租凭方式字典获取
     async getListUnderlingDict() {
       const res = await listUnderlingDict('RENT_MODE')
-      const resMap = res.data.map(item => ({ value: item.dictValue, label: item.dictLabel }))
+      const resMap = res.data.map(item => ({value: item.dictValue, label: item.dictLabel}))
       this.rentModeOptions = resMap
     },
     async matterFocus(id) {
@@ -2520,7 +2623,7 @@ export default {
     // },
     /* 计算 含税单价 不含税单价 行合计价 */
     calculatePrice(row) {
-      const { multiply, add, divide, bignumber, format } = this.mathjs;
+      const {multiply, add, divide, bignumber, format} = this.mathjs;
       console.log("计算 含税单价 不含税单价 行合计价,row:", row);
       /* 固定价 */
       if (row.priceType === 1) {
@@ -2658,21 +2761,21 @@ export default {
     handleInput() {
       // 使用正则表达式替换非数字字符
       this.inputValue = this.inputValue.replace(/\D/g, '');
- console.log(JSON.stringify(this.inputValue))
+      console.log(JSON.stringify(this.inputValue))
       // 如果需要限制小数位数，可以进一步处理
       // 例如，限制为两位小数
       // this.inputValue = parseFloat(this.inputValue).toFixed(2);
     },
     // 处理数量输入事件
     changeCount(row) {
-      console.log(JSON.stringify(row),'event.target.value')
+      console.log(JSON.stringify(row), 'event.target.value')
       const value = event.target.value.replace(/,/g, ''); // 移除千分位符号
       const parsedValue = parseFloat(value);
       if (!isNaN(parsedValue)) {
         row.count = parsedValue;
         this.$set(row, 'totalPriceText', this.getTotalPriceText(row)); // 更新行含税总价
-      }else{
-        
+      } else {
+
       }
     },
 
@@ -2695,7 +2798,7 @@ export default {
     /* 计算列含税总价 */
     getTotalPriceTableText() {
       return (row, index) => {
-        const { add, bignumber } = this.mathjs;
+        const {add, bignumber} = this.mathjs;
         this.planList.forEach((item) => {
           if (item.children && Array.isArray(item.children)) {
             item.children.forEach((itemChildren, i) => {
@@ -2726,7 +2829,7 @@ export default {
       return (taxUnitPrice, taxRate) => {
         if (!taxUnitPrice || !taxRate) return "0.00";
 
-        const { add, divide, bignumber, format } = this.mathjs;
+        const {add, divide, bignumber, format} = this.mathjs;
 
         const taxUnitPriceBig = bignumber(taxUnitPrice);
         const taxRateBig = bignumber(taxRate);
@@ -2897,7 +3000,7 @@ export default {
   background: #CCCCCC !important;
 }
 
-::v-deep .el-table__body tr:hover>td.el-table__cell {
+::v-deep .el-table__body tr:hover > td.el-table__cell {
   background: initial !important;
 }
 
