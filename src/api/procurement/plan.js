@@ -82,16 +82,16 @@ export const saveProcurementPlan = (data) => {
   })
 }
 
-// 提交采购计划
-export const submitProcurementPlan = (id) => {
-  return request({
-    url: '/business/procurementPlan/submitProcurementPlan',
-    method: 'post',
-    params:{
-      id
-    }
-  })
-}
+// // 提交采购计划
+// export const submitProcurementPlan = (id) => {
+//   return request({
+//     url: '/business/procurementPlan/submitProcurementPlan',
+//     method: 'post',
+//     params:{
+//       id
+//     }
+//   })
+// }
 
 // 作废采购计划
 export const cancellationProcurementPlan = (id) => {
@@ -103,6 +103,19 @@ export const cancellationProcurementPlan = (id) => {
     }
   })
 }
+
+
+// 撤回采购方案
+export const withdrawalPlan = (id) => {
+  return request({
+    url: "/business/procurementPlan/revokeProcurementPlan",
+    method: "post",
+    params: {
+      id,
+    },
+  });
+};
+
 
 // 获取采购计划详情
 export const getPlanDetail = (id) => {
@@ -229,3 +242,21 @@ export const getYjtUrl = (code) => {
     }
   })
 }
+
+// 采购方案流程 初始化接口
+export const getPermissionButtonPlan = (params) => {
+  return request({
+    url: "/business/procurementPlan/initialize",
+    method: "get",
+    params,
+  });
+};
+
+// 提交采购计划
+export const submitProcurementPlan = (params) => {
+  return request({
+    url: "/business/procurementPlan/submitProcurementPlan",
+    method: "post",
+    params,
+  });
+};

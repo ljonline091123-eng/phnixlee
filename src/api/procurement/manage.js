@@ -145,6 +145,15 @@ export const getLoadTaskDefBidding = (params) => {
 };
 
 // 加载定义接口 采购方案
+export const getLoadTaskDefPlan = (params) => {
+  return request({
+    url: "/business/procurementPlan/loadTaskDef",
+    method: "get",
+    params,
+  });
+};
+
+// 加载定义接口 采购方案
 export const getLoadTaskDefScheme = (params) => {
   return request({
     url: "/business/procurementScheme/loadTaskDef",
@@ -242,6 +251,16 @@ export const postAuditProcessScheme = (data) => {
     data,
   });
 };
+
+// 采购计划流程 审批接口
+export const postAuditProcessPlan = (data) => {
+  return request({
+    url: "/business/procurementPlan/audit",
+    method: "post",
+    data,
+  });
+};
+
 // 定标流程 审批接口
 export const postAuditProcessBidding = (data) => {
   return request({
