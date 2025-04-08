@@ -1,9 +1,12 @@
 package com.zhaocai.business.procurement.controller;
 
+import com.alibaba.fastjson.JSONObject;
 import com.zhaocai.business.common.annotations.RepeatSubmit;
 import com.zhaocai.business.common.base.BladeController;
 import com.zhaocai.business.manager.http.dto.req.BpmInitializeRequestDTO;
+import com.zhaocai.business.manager.http.dto.req.BpmLoadTaskDefRequestDTO;
 import com.zhaocai.business.manager.http.dto.res.BpmInitializeResponseDTO;
+import com.zhaocai.business.manager.http.dto.res.BpmLoadTaskDefResponseDTO;
 import com.zhaocai.business.manager.http.dto.res.UsersRoleContractPlanListResponseDTO;
 import com.zhaocai.business.procurement.service.IMaterialsListService;
 import com.zhaocai.business.procurement.service.IProcurementPlanService;
@@ -15,6 +18,7 @@ import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
+import springfox.documentation.annotations.ApiIgnore;
 
 import javax.validation.Valid;
 import java.util.List;
@@ -214,5 +218,35 @@ public class ProcurementPlanController extends BladeController {
         procurementPlanService.submitProcurementPlan(id,detailUrl,operateComment);
         return ResultData.success();
     }
+
+    @ApiOperation(value = "加载定义接口")
+    @GetMapping("/loadTaskDef")
+    public ResultData<List<BpmLoadTaskDefResponseDTO>> loadTaskDef(BpmLoadTaskDefRequestDTO requestDTO) {
+        return procurementPlanService.loadTaskDef(requestDTO);
+    }
+
+    @ApiOperation(value = "审批")
+    @PostMapping ("/audit")
+    public ResultData<String> audit(@ApiIgnore @RequestBody JSONObject body) {
+        String processKey = body.getString("processKey");
+        body.remove("processKey");
+        try {
+            return ResultData.data(procurementPlanService.audit(processKey, body));
+        } catch (Exception e) {
+            return ResultData.fail(e.getLocalizedMessage());
+        }
+    }
+
+
+    /**
+     * 撤回采购方案
+     */
+    @ApiOperation(value = "撤回采购方案")
+    @PostMapping("/revokeProcurementPlan")
+    public ResultData<Boolean> revokeProcurementPlan(@RequestParam Long id) {
+        procurementPlanService.revokeProcurementPlan(id);
+        return ResultData.success();
+    }
+
 
 }

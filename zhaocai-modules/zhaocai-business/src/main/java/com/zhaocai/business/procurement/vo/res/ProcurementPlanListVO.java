@@ -60,7 +60,8 @@ public class ProcurementPlanListVO extends AdviceObject {
     @ApiModelProperty(value = "状态")
     private Integer state;
 
-    @DictCache(dictBizEnum = DictBizEnum.PROCUREMENT_PLAN_STATE,filedName = "state")
+//    @DictCache(dictBizEnum = DictBizEnum.PROCUREMENT_PLAN_STATE,filedName = "state")
+    @DictCache(dictBizEnum = DictBizEnum.PROCUREMENT_SCHEME_STATE,filedName = "state")
     @ApiModelProperty(value = "状态-描述")
     private String stateText;
 

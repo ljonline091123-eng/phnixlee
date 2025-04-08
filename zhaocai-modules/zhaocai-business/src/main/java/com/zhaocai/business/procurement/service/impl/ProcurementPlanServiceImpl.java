@@ -21,10 +21,7 @@ import com.zhaocai.business.common.utils.ValidateUtils;
 import com.zhaocai.business.manager.http.common.config.ThirdPartyTodoFlowGroupEnum;
 import com.zhaocai.business.manager.http.common.config.ThirdPartyTodoFlowModuleEnum;
 import com.zhaocai.business.manager.http.dto.req.*;
-import com.zhaocai.business.manager.http.dto.res.BpmInitializeResponseDTO;
-import com.zhaocai.business.manager.http.dto.res.MarketQuotePriceResponseDTO;
-import com.zhaocai.business.manager.http.dto.res.UsersRoleContractPlanListResponseDTO;
-import com.zhaocai.business.manager.http.dto.res.UsersRoleListResponseDTO;
+import com.zhaocai.business.manager.http.dto.res.*;
 import com.zhaocai.business.manager.http.service.*;
 import com.zhaocai.business.manager.template.config.UnderlingPlatformConfig;
 import com.zhaocai.business.process.service.IBPMProcessService;
@@ -48,7 +45,6 @@ import com.zhaocai.common.core.web.bean.ResultData;
 import com.zhaocai.common.core.web.domain.BaseEntity;
 import com.zhaocai.common.security.utils.SecurityUtils;
 import com.zhaocai.system.api.domain.SetConfigValueDTO;
-import com.zhaocai.system.api.domain.SysUser;
 import com.zhaocai.system.api.system.RemoteSystemService;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
@@ -59,6 +55,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.ObjectUtils;
 
+import java.io.Serializable;
 import java.math.BigDecimal;
 import java.text.SimpleDateFormat;
 import java.time.LocalDate;
@@ -75,7 +72,7 @@ import java.util.stream.Collectors;
  */
 @Slf4j
 @Service
-public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMapper,ProcurementPlan> implements IProcurementPlanService {
+public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMapper, ProcurementPlan> implements IProcurementPlanService {
     @Autowired
     private IBusinessCodeService businessCodeService;
 
@@ -100,7 +97,9 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
     @Autowired
     private RemoteSystemService remoteSystemService;
 
-    /** 合约是否可拆分标识 */
+    /**
+     * 合约是否可拆分标识
+     */
     private final String CONFIG_CONTRACT_SPLIT_FLAG = "contract.split.flag";
 
     @Autowired
@@ -142,20 +141,20 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
 
     @Override
     public PageResult<ProcurementPlanListVO> listPage(ProcurementPlanListQueryVO queryVO) {
-        IPage<ProcurementPlanListVO> iPage =  baseMapper.selectListPage(queryVO.toMybatisPage(), queryVO);
+        IPage<ProcurementPlanListVO> iPage = baseMapper.selectListPage(queryVO.toMybatisPage(), queryVO);
         return new PageResult<>(iPage);
     }
 
     /* 新增采购计划弹窗页面 */
     @Override
     public PageResult<ContractPlanningListVO> listContractPlanningPage(ContractPlanningListQueryVO queryVO) {
-        return contractPlanService.getContractPlanningList(queryVO,true);
+        return contractPlanService.getContractPlanningList(queryVO, true);
     }
 
     /* 采购总计划 */
     @Override
     public ContractPlanningVO listContractPlanning(ContractPlanningListQueryVO queryVO) {
-        PageResult<ContractPlanningListVO> contractPlanningList = contractPlanService.getContractPlanningList(queryVO,false);
+        PageResult<ContractPlanningListVO> contractPlanningList = contractPlanService.getContractPlanningList(queryVO, false);
 
         // 1. 处理状态
         for (ContractPlanningListVO contractPlanning : contractPlanningList.getRows()) {
@@ -196,10 +195,10 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
                     .map(ContractPlanningListVO::getContractPlanningId)
                     .collect(Collectors.toList());
             List<ContractProcurementPlanDTO> firstTimeProcurementPlanList = baseMapper.selectFirstTimeProcurementPlanByContractPlan(contractIdList);
-            Map<String,ContractProcurementPlanDTO> firstTimeProcurementPlanMap = new HashMap<>();
+            Map<String, ContractProcurementPlanDTO> firstTimeProcurementPlanMap = new HashMap<>();
             if (CollectionUtil.isNotEmpty(firstTimeProcurementPlanList)) {
                 firstTimeProcurementPlanMap = firstTimeProcurementPlanList.stream()
-                        .collect(Collectors.toMap(ContractProcurementPlanDTO::getContractPlanningId,val -> val));
+                        .collect(Collectors.toMap(ContractProcurementPlanDTO::getContractPlanningId, val -> val));
             }
 
             /* 查询推送记录 */
@@ -207,16 +206,16 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
             /* 查询招标集合 */
             Map<String, List<ContractPlanningPushRecord>> recordMapList = records.stream().collect(Collectors.groupingBy(ContractPlanningPushRecord::getContractPlanningId));
             /* 查询单条,原来的是这样查询，现在是多条拆包，保留一条 */
-            Map<String, ContractPlanningPushRecord> recordMap = records.stream().collect(Collectors.toMap(ContractPlanningPushRecord::getContractPlanningId, Function.identity(),(existing, replacement) -> replacement));
+            Map<String, ContractPlanningPushRecord> recordMap = records.stream().collect(Collectors.toMap(ContractPlanningPushRecord::getContractPlanningId, Function.identity(), (existing, replacement) -> replacement));
 
             /* 根据合约规划id集合查询对应的招标对象数据和采购方案数据 */
             List<ContractPlanningNoticeVO> recordsQuery = tenderNoticeService.getListByContractPlanningId(new ContractPlanningQueryVO(contractIdList));
             Map<String, List<ContractPlanningNoticeVO>> recordMapQuery = recordsQuery.stream().collect(Collectors.groupingBy(ContractPlanningNoticeVO::getContractPlanningId));
 
-            for (ContractPlanningListVO contractPlanning :resultList) {
-                totalPlannedAmountInclTax = NumberUtil.add(totalPlannedAmountInclTax,contractPlanning.getPlannedAmountInclTax());
-                totalIncurredPlannedAmount = NumberUtil.add(totalIncurredPlannedAmount,contractPlanning.getIncurredPlannedAmount());
-                totalPlanningBalance = NumberUtil.add(totalPlanningBalance,contractPlanning.getPlanningBalance());
+            for (ContractPlanningListVO contractPlanning : resultList) {
+                totalPlannedAmountInclTax = NumberUtil.add(totalPlannedAmountInclTax, contractPlanning.getPlannedAmountInclTax());
+                totalIncurredPlannedAmount = NumberUtil.add(totalIncurredPlannedAmount, contractPlanning.getIncurredPlannedAmount());
+                totalPlanningBalance = NumberUtil.add(totalPlanningBalance, contractPlanning.getPlanningBalance());
 
                 ContractProcurementPlanDTO contractProcurementPlan = firstTimeProcurementPlanMap.get(contractPlanning.getContractPlanningId());
                 if (contractProcurementPlan != null) {
@@ -225,19 +224,19 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
 
                 /* 推送状态 细分到合约规划 */
                 ContractPlanningPushRecord contractPlanningPushRecord = recordMap.get(contractPlanning.getContractPlanningId());
-                if (ObjectUtil.isNotEmpty(contractPlanningPushRecord)){
+                if (ObjectUtil.isNotEmpty(contractPlanningPushRecord)) {
                     contractPlanning.setPushStatus(contractPlanningPushRecord.getPushStatus());
                 }
 
                 /* 增加推送状态 细分到投标对象 */
-                if (recordMapList!=null && !recordMapList.isEmpty()){
-                    if (recordMapQuery!=null && !recordMapQuery.isEmpty()){
+                if (recordMapList != null && !recordMapList.isEmpty()) {
+                    if (recordMapQuery != null && !recordMapQuery.isEmpty()) {
                         List<ContractPlanningPushRecord> contractPlanningPushRecordList = recordMapList.get(contractPlanning.getContractPlanningId());
                         List<ContractPlanningNoticeVO> contractPlanningPushList = recordMapQuery.get(contractPlanning.getContractPlanningId());
-                        if (contractPlanningPushList!=null && !contractPlanningPushList.isEmpty()){
+                        if (contractPlanningPushList != null && !contractPlanningPushList.isEmpty()) {
                             /* 默认都是未推送 */
                             contractPlanningPushList.forEach(obj -> obj.setPushStatus(0));
-                            if (contractPlanningPushRecordList!=null && !contractPlanningPushRecordList.isEmpty()){
+                            if (contractPlanningPushRecordList != null && !contractPlanningPushRecordList.isEmpty()) {
                                 /* 获取已推送的 合约拆分id */
                                 Set<Long> splitContractIds = contractPlanningPushRecordList.stream()
                                         .map(ContractPlanningPushRecord::getSplitContractId)
@@ -254,7 +253,7 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
                             contractPlanning.setContractPlanningNoticeVOList(contractPlanningPushList);
                             /* 判断拆包是否全部推送 */
                             long push = contractPlanningPushList.stream().filter(obj -> obj.getPushStatus().equals(0)).count();
-                            if(push>0)contractPlanning.setPushStatus(0);
+                            if (push > 0) contractPlanning.setPushStatus(0);
                         }
                     }
                 }
@@ -278,21 +277,21 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
     public ContractPlanMaterialListVO listContractMaterials(ContractPlanMaterialListQueryVO queryVO) {
         List<ContractMaterialsListVO> materialsList = contractPlanService.getContractMaterialsList(queryVO);
         // 根据查询的合约清单去查询易料商品信息
-        try{
+        try {
             materialsList = this.selectMarketMaterials(materialsList, queryVO);
-        }catch (Exception e){
+        } catch (Exception e) {
             log.error(e.getMessage());
         }
 
         // 计算上限价
         BigDecimal upperLimitPrice = BigDecimal.ZERO;
         SubjectMatterDTO subjectMatter;
-        for(ContractMaterialsListVO listVO : materialsList){
-            upperLimitPrice = NumberUtil.add(upperLimitPrice, AmountCalUtil.calTotalAmountInclTax(listVO.getCount(),listVO.getUnitPriceInclTax()));
+        for (ContractMaterialsListVO listVO : materialsList) {
+            upperLimitPrice = NumberUtil.add(upperLimitPrice, AmountCalUtil.calTotalAmountInclTax(listVO.getCount(), listVO.getUnitPriceInclTax()));
 
-            log.info("[合约规划物料清单][ContractMaterialsListVO交易标的物]{}",listVO);
+            log.info("[合约规划物料清单][ContractMaterialsListVO交易标的物]{}", listVO);
 
-            subjectMatter = materialsListService.getSubjectMatter(queryVO.getProcurementType(),listVO.getMaterialsCode(),queryVO.getConPlanCode());
+            subjectMatter = materialsListService.getSubjectMatter(queryVO.getProcurementType(), listVO.getMaterialsCode(), queryVO.getConPlanCode());
             if (subjectMatter != null) {
                 listVO.setSubjectMatterCode(subjectMatter.getSubjectMatterCode());
                 listVO.setSubjectMatterName(subjectMatter.getSubjectMatterName());
@@ -305,14 +304,14 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
             }
         }
 
-        ContractPlanMaterialListVO contractPlanMaterialLis = new ContractPlanMaterialListVO(upperLimitPrice,materialsList);
+        ContractPlanMaterialListVO contractPlanMaterialLis = new ContractPlanMaterialListVO(upperLimitPrice, materialsList);
 
         // 交易标的物名称
         String subjectMatterText = materialsList.stream()
-                        .map(ContractMaterialsListVO::getSubjectMatterName)
-                        .filter(StringUtils::isNotBlank)
-                        .distinct()
-                        .collect(Collectors.joining(","));
+                .map(ContractMaterialsListVO::getSubjectMatterName)
+                .filter(StringUtils::isNotBlank)
+                .distinct()
+                .collect(Collectors.joining(","));
         contractPlanMaterialLis.setSubjectMatterText(subjectMatterText);
 
         // 交易标的物编码
@@ -333,6 +332,7 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
 
     /**
      * 查询易料市集清单最新价格
+     *
      * @param materialsList
      * @return
      */
@@ -361,13 +361,13 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
 
         Map<String, MarketQuotePriceResponseDTO> materialMap = new HashMap<>();
         for (MarketQuotePriceResponseDTO marketMaterial : marketMaterialList) {
-            String key = marketMaterial.getOfferGoodsCode()+marketMaterial.getGoodsName();
+            String key = marketMaterial.getOfferGoodsCode() + marketMaterial.getGoodsName();
             materialMap.put(key, marketMaterial);
         }
 
         // 查找匹配的记录
         for (ContractMaterialsListVO materials : materialsList) {
-            String key = materials.getMaterialsCode()+materials.getMaterialsName();
+            String key = materials.getMaterialsCode() + materials.getMaterialsName();
             MarketQuotePriceResponseDTO matchingMaterial = materialMap.get(key);
             if (matchingMaterial != null) {
                 materials.setCode(matchingMaterial.getOfferGoodsCode());
@@ -384,12 +384,12 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
     }
 
     @Override
-    @Transactional(propagation = Propagation.REQUIRED,rollbackFor = Exception.class)
+    @Transactional(propagation = Propagation.REQUIRED, rollbackFor = Exception.class)
     public MaterialProcurementPushRequestVO saveProcurementPlan(ProcurementPlanRequestVO requestVO) {
         MaterialProcurementPushRequestVO vo = new MaterialProcurementPushRequestVO();
         /* 数据校验 */
 //        checkMaterialsList(requestVO);
-        System.out.println("保存采购计划："+ requestVO.getSplitRequestList());
+        System.out.println("保存采购计划：" + requestVO.getSplitRequestList());
         if (NumberUtil.isNullOrZero(requestVO.getProcurementPlan().getId())) {
             // 新增
             vo = addProcurementPlan(requestVO);
@@ -402,37 +402,37 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
     }
 
     @Override
-    @Transactional(propagation = Propagation.REQUIRED,rollbackFor = Exception.class)
+    @Transactional(propagation = Propagation.REQUIRED, rollbackFor = Exception.class)
     public void submitProcurementPlan(Long planId) {
         ProcurementPlan procurementPlan = this.getById(planId);
-        ValidateUtils.isNullException(procurementPlan,"该采购计划不存在，请确认");
-        ValidateUtils.validateStatusNotEquals(ProcurementPlanStateEnum.DRAFT::equalsState,procurementPlan.getState(),"该状态下的采购计划不允许提及");
+        ValidateUtils.isNullException(procurementPlan, "该采购计划不存在，请确认");
+        ValidateUtils.validateStatusNotEquals(ProcurementPlanStateEnum.DRAFT::equalsState, procurementPlan.getState(), "该状态下的采购计划不允许提及");
 
         super.update(new LambdaUpdateWrapper<ProcurementPlan>()
                 .set(ProcurementPlan::getState, ProcurementPlanStateEnum.SUBMITTED.getState())
-                .eq(ProcurementPlan::getId,planId));
+                .eq(ProcurementPlan::getId, planId));
 
         // 拆分结果回写至商务策划
-        updatePlanQuantityAmount(planId,Constants.CONTRACT_UPDATE_ADD_FLAG);
+        updatePlanQuantityAmount(planId, Constants.CONTRACT_UPDATE_ADD_FLAG);
     }
 
     @Override
     public ProcurementPlanDetailVO getProcurementPlanDetail(Long id) {
         ProcurementPlan procurementPlan = this.getById(id);
-        ValidateUtils.isNullException(procurementPlan,"该采购计划不存在，请确认");
+        ValidateUtils.isNullException(procurementPlan, "该采购计划不存在，请确认");
 
         // 采购计划详情
-        ProcurementPlanVO procurementPlanVO = BeanCopierUtil.copyBean(procurementPlan,ProcurementPlanVO.class);
+        ProcurementPlanVO procurementPlanVO = BeanCopierUtil.copyBean(procurementPlan, ProcurementPlanVO.class);
 
         // 设置省、市名称
-        List<String> regionCodeList = Arrays.asList(procurementPlanVO.getRegionProvinceCode(),procurementPlanVO.getRegionCityCode());
+        List<String> regionCodeList = Arrays.asList(procurementPlanVO.getRegionProvinceCode(), procurementPlanVO.getRegionCityCode());
 
-        Map<String,String> regionMap = areaDivisionService.getAreaDivisionMap(regionCodeList);
+        Map<String, String> regionMap = areaDivisionService.getAreaDivisionMap(regionCodeList);
         procurementPlanVO.setRegionProvinceName(regionMap.get(procurementPlanVO.getRegionProvinceCode()) == null ? "" : regionMap.get(procurementPlanVO.getRegionProvinceCode()));
         procurementPlanVO.setRegionCityName(regionMap.get(procurementPlanVO.getRegionCityCode()) == null ? "" : regionMap.get(procurementPlanVO.getRegionCityCode()));
 
         // 获取采购清单
-        List<ContractSplitMaterialsVO> splitMaterials = materialsListService.listMaterialsByPlanId(id,false);
+        List<ContractSplitMaterialsVO> splitMaterials = materialsListService.listMaterialsByPlanId(id, false);
 
         // 获取合约规划详情
         ContractPlanningListVO contractPlanning = contractPlanningService.getByProcurementIdFromUnderling(id);
@@ -474,7 +474,7 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
     @Override
     public void cancellationProcurementPlan(Long planId) {
         ProcurementPlan procurementPlan = this.getById(planId);
-        ValidateUtils.isNullException(procurementPlan,"该采购计划不存在，请确认");
+        ValidateUtils.isNullException(procurementPlan, "该采购计划不存在，请确认");
 
         // 判断该采购计划被哪些采购方案引用
         List<ProcurementScheme> relateSchemeList = procurementSchemePlanRelateService.listProcurementSchemeByRelatePlanId(planId);
@@ -491,12 +491,12 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
 
         if (ProcurementPlanStateEnum.SUBMITTED.equalsState(procurementPlan.getState())) {
             // 如果是已提交的采购方案，则需要回收商务策划的数据
-            updatePlanQuantityAmount(planId,Constants.CONTRACT_UPDATE_REDUCE_FLAG);
+            updatePlanQuantityAmount(planId, Constants.CONTRACT_UPDATE_REDUCE_FLAG);
         }
 
         super.update(new LambdaUpdateWrapper<ProcurementPlan>()
                 .set(ProcurementPlan::getState, ProcurementPlanStateEnum.CANCELLATION.getState())
-                .eq(ProcurementPlan::getId,planId));
+                .eq(ProcurementPlan::getId, planId));
     }
 
     @Override
@@ -508,16 +508,16 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
     }
 
     @Override
-    public String getgetYjtUrl(String type, String  code) throws Exception {
+    public String getgetYjtUrl(String type, String code) throws Exception {
         //String acount = SecurityUtils.getLoginUser().getUsername();
-        String  acount = "15307487727";
-        Long time =new Date().getTime();
-        if(type ==null||type.equals("")){
-            type ="1";
+        String acount = "15307487727";
+        Long time = new Date().getTime();
+        if (type == null || type.equals("")) {
+            type = "1";
         }
-        String requestQuery = acount+","+time+","+type+","+code;
-        String aesString = underlingPlatformConfig.getYjtUrl()+"?"+"data="+AesUtils.encrypt(requestQuery,underlingPlatformConfig.getYjtKey())+"&appId="+underlingPlatformConfig.getAppId();
-        return  aesString;
+        String requestQuery = acount + "," + time + "," + type + "," + code;
+        String aesString = underlingPlatformConfig.getYjtUrl() + "?" + "data=" + AesUtils.encrypt(requestQuery, underlingPlatformConfig.getYjtKey()) + "&appId=" + underlingPlatformConfig.getAppId();
+        return aesString;
 
     }
 
@@ -529,16 +529,16 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
         List<ContractPlanningNoticeVO> contractPlanningNoticeVOList = tenderNoticeService.getListByContractPlanningId(requestDTO);
         /* 用来存储该方法返回对象数据 */
         UsersRoleContractPlanListResponseDTO userContract = new UsersRoleContractPlanListResponseDTO();
-        if(userList!=null && !userList.isEmpty()){
+        if (userList != null && !userList.isEmpty()) {
             userContract.setUserList(userList);
         }
-        if(contractPlanningNoticeVOList!=null && !contractPlanningNoticeVOList.isEmpty()){
+        if (contractPlanningNoticeVOList != null && !contractPlanningNoticeVOList.isEmpty()) {
             /* 默认都是未推送 */
             contractPlanningNoticeVOList.forEach(obj -> obj.setPushStatus(0));
 
             // 查询拆包是否推送
             List<String> contractIdList = requestDTO.getContractIdList();
-            contractIdList = contractIdList==null?new ArrayList<>(Arrays.asList(requestDTO.getContractPlanningId())):contractIdList;
+            contractIdList = contractIdList == null ? new ArrayList<>(Arrays.asList(requestDTO.getContractPlanningId())) : contractIdList;
             contractIdList.add(requestDTO.getContractPlanningId());
             /* 查询推送记录 */
             List<ContractPlanningPushRecord> records = contractPlanningPushRecordService.getByCondition(contractIdList);
@@ -548,10 +548,10 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
             List<ContractPlanningNoticeVO> recordsQuery = tenderNoticeService.getListByContractPlanningId(new ContractPlanningQueryVO(contractIdList));
             Map<String, List<ContractPlanningNoticeVO>> recordMapQuery = recordsQuery.stream().collect(Collectors.groupingBy(ContractPlanningNoticeVO::getContractPlanningId));
             /* 增加推送状态 细分到投标对象 */
-            if (!recordMapList.isEmpty()){
-                if (!recordMapQuery.isEmpty()){
+            if (!recordMapList.isEmpty()) {
+                if (!recordMapQuery.isEmpty()) {
                     List<ContractPlanningPushRecord> contractPlanningPushRecordList = recordMapList.get(contractIdList.get(0));
-                    if (contractPlanningPushRecordList!=null && !contractPlanningPushRecordList.isEmpty()){
+                    if (contractPlanningPushRecordList != null && !contractPlanningPushRecordList.isEmpty()) {
                         /* 获取已推送的 合约拆分id */
                         Set<Long> splitContractIds = contractPlanningPushRecordList.stream()
                                 .map(ContractPlanningPushRecord::getSplitContractId)
@@ -574,6 +574,7 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
 
     /**
      * 推送易料采购清单
+     *
      * @param requestVO
      * @return
      */
@@ -590,11 +591,11 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
         pushVO.setContractPhone(project.getProjectLeaderPhone());
         List<MaterialsList> materialsLists = requestVO.getMaterialsLists();
         List<Long> ids = materialsLists.stream().map(BaseEntity::getId).collect(Collectors.toList());
-        if(CollectionUtil.isEmpty(ids)){
+        if (CollectionUtil.isEmpty(ids)) {
             throw new BusinessException("请勾选需要推送的易料清单");
         }
         List<MaterialsList> materialsPushList = materialsListService.list(new LambdaQueryWrapper<MaterialsList>()
-                        .eq(MaterialsList::getPlanId, requestVO.getId())
+                .eq(MaterialsList::getPlanId, requestVO.getId())
                 .and(wrapper -> wrapper
                         .eq(MaterialsList::getPushFlag, "Y")
                         .or(i -> i.in(MaterialsList::getId, ids))
@@ -615,6 +616,7 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
 
     /**
      * 检查推送的易料采购是否已到签订中
+     *
      * @param id
      */
     private void checkMaterialProcurement(Long id) {
@@ -626,6 +628,7 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
 
     /**
      * 撤销推送的易料采购清单
+     *
      * @param requestVO
      * @return
      */
@@ -642,11 +645,11 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
         pushVO.setContractPhone(project.getProjectLeaderPhone());
         List<MaterialsList> materialsLists = requestVO.getMaterialsLists();
         List<Long> ids = materialsLists.stream().map(BaseEntity::getId).collect(Collectors.toList());
-        if(CollectionUtil.isEmpty(ids)){
+        if (CollectionUtil.isEmpty(ids)) {
             throw new BusinessException("请勾选需要撤销推送的易料清单");
         }
         List<MaterialsList> materialsPushList = materialsListService.list(new LambdaQueryWrapper<MaterialsList>()
-                        .eq(MaterialsList::getPlanId, requestVO.getId())
+                .eq(MaterialsList::getPlanId, requestVO.getId())
                 .eq(MaterialsList::getPushFlag, "Y")
                 .notIn(MaterialsList::getId, ids));
         List<MarketProductListRequestDTO> pushVOList = BeanCopierUtil.copyList(materialsPushList, MarketProductListRequestDTO.class);
@@ -662,15 +665,15 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
         return this.getProcurementPlanDetail(requestVO.getId());
     }
 
-    public void savaContractPlanningPushRecord(ProcurementPlanPushVO planPushVO){
+    public void savaContractPlanningPushRecord(ProcurementPlanPushVO planPushVO) {
         ContractPlanningPushRecord record = new ContractPlanningPushRecord();
         record.setContractPlanningId(planPushVO.getContractPlanningId());
         record.setContractPlanningCode(planPushVO.getContractPlanningCode());
         /* 多增加 采购方案 招标对象 记录 */
-        record.setProcurementSchemeCode(planPushVO.getProcurementSchemeCode()==null?"":planPushVO.getProcurementSchemeCode());
-        record.setNoticeId(planPushVO.getNoticeId()==null?null:planPushVO.getNoticeId());
-        record.setSchemeId(planPushVO.getSchemeId()==null?null:planPushVO.getSchemeId());
-        record.setSplitContractId(planPushVO.getSplitContractId()==null?null:planPushVO.getSplitContractId());
+        record.setProcurementSchemeCode(planPushVO.getProcurementSchemeCode() == null ? "" : planPushVO.getProcurementSchemeCode());
+        record.setNoticeId(planPushVO.getNoticeId() == null ? null : planPushVO.getNoticeId());
+        record.setSchemeId(planPushVO.getSchemeId() == null ? null : planPushVO.getSchemeId());
+        record.setSplitContractId(planPushVO.getSplitContractId() == null ? null : planPushVO.getSplitContractId());
         //JSONObject.parseArray("从数据库中取出的String类型的字段",T.class);
         record.setPushObj(JSONObject.toJSONString(planPushVO.getUserList()));
         record.setPushStatus(NumberConstant.ONE);
@@ -678,7 +681,7 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
     }
 
     /* 推送合约规划 */
-    public void dealOpenPeopleTodoTask (ProcurementPlanPushVO planPushVO){
+    public void dealOpenPeopleTodoTask(ProcurementPlanPushVO planPushVO) {
         PushThirdPartyTodoTaskRequestDTO parentRequestDTO = new PushThirdPartyTodoTaskRequestDTO();
         List<PushThirdPartyTodoTaskSonRequestDTO> messageList = new ArrayList<>();
         String nowTime = formatDate(new Date());
@@ -688,13 +691,13 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
 
         /* 获取已有的合约规划 */
         ContractPlanning contractPlanning = contractPlanningService.getOne(new LambdaQueryWrapper<ContractPlanning>()
-                .eq(ContractPlanning::getContractPlanningCode,planPushVO.getContractPlanningCode())
-                .eq(ContractPlanning::getContractPlanningId,planPushVO.getContractPlanningId())
-                .eq(ContractPlanning::getProjectCode,planPushVO.getProjectCode())
+                .eq(ContractPlanning::getContractPlanningCode, planPushVO.getContractPlanningCode())
+                .eq(ContractPlanning::getContractPlanningId, planPushVO.getContractPlanningId())
+                .eq(ContractPlanning::getProjectCode, planPushVO.getProjectCode())
                 .last("limit 1"));
         /* 查询采购计划 */
         ProcurementPlan procurementPlan = null;
-        if(contractPlanning!=null&&contractPlanning.getPlanId()!=null){
+        if (contractPlanning != null && contractPlanning.getPlanId() != null) {
             procurementPlan = procurementPlanService.getById(contractPlanning.getPlanId());
         }
 
@@ -703,7 +706,7 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
             project = minProjectService.getMinProjectByMinAccountCode(contractPlanning.getProjectCode());
         }
 
-        for (ProcurementPlanPushUserVO userData : planPushVO.getUserList()){
+        for (ProcurementPlanPushUserVO userData : planPushVO.getUserList()) {
             PushThirdPartyTodoTaskSonRequestDTO requestDTO = new PushThirdPartyTodoTaskSonRequestDTO();
             requestDTO.setTitle("采购计划合约拆分信息");
 //            requestDTO.setContent(String.format(ApproveFlowPromptTemplateEnum.PROCUREMENT_PLAN_PUSH.getDesc(), planPushVO.getContractPlanningName()));
@@ -712,36 +715,36 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
             /* 设置省、市名称 */
             String provinceName = "";
             String cityName = "";
-            if(procurementPlan!=null && procurementPlan.getProcurementPlanType().equals(ProcurementPlanTypeEnum.PURCHASE_MATERIALS.getType())){
-                List<String> regionCodeList = Arrays.asList(procurementPlan.getRegionProvinceCode(),procurementPlan.getRegionCityCode());
-                Map<String,String> regionMap = areaDivisionService.getAreaDivisionMap(regionCodeList);
+            if (procurementPlan != null && procurementPlan.getProcurementPlanType().equals(ProcurementPlanTypeEnum.PURCHASE_MATERIALS.getType())) {
+                List<String> regionCodeList = Arrays.asList(procurementPlan.getRegionProvinceCode(), procurementPlan.getRegionCityCode());
+                Map<String, String> regionMap = areaDivisionService.getAreaDivisionMap(regionCodeList);
                 provinceName = (regionMap.get(procurementPlan.getRegionProvinceCode()) == null ? "" : regionMap.get(procurementPlan.getRegionProvinceCode()));
                 cityName = (regionMap.get(procurementPlan.getRegionCityCode()) == null ? "" : regionMap.get(procurementPlan.getRegionCityCode()));
             }
 
             String content =
-                            /* 推送人 登录人 */
-                    "发送人: "+(SecurityUtils.getLoginUserNickName())+
+                    /* 推送人 登录人 */
+                    "发送人: " + (SecurityUtils.getLoginUserNickName()) +
                             /* 项目名称 */
-                    "，最小核算项目"+(contractPlanning==null?"":contractPlanning.getProjectName())+
+                            "，最小核算项目" + (contractPlanning == null ? "" : contractPlanning.getProjectName()) +
                             /* 类型 */
-                    "，合同类型为"+(contractPlanning==null?"":contractPlanning.getContractPlanningCategoryName())+
+                            "，合同类型为" + (contractPlanning == null ? "" : contractPlanning.getContractPlanningCategoryName()) +
                             /* 合约规划名称 */
-                    "-"+(contractPlanning==null?"":contractPlanning.getContractPlanningName())+
+                            "-" + (contractPlanning == null ? "" : contractPlanning.getContractPlanningName()) +
                             /* 采购计划名称 */
-                    "合同将于近期开展，请您及时关注了解，采购计划如下：\n "+(procurementPlan==null?"":procurementPlan.getProcurementPlanName())+
+                            "合同将于近期开展，请您及时关注了解，采购计划如下：\n " + (procurementPlan == null ? "" : procurementPlan.getProcurementPlanName()) +
                             /* 招标时间 */
-                    " 招标时间为"+(planPushVO.getBiddingTime()==null?"":planPushVO.getBiddingTime())+
+                            " 招标时间为" + (planPushVO.getBiddingTime() == null ? "" : planPushVO.getBiddingTime()) +
                             /* 进场时间 */
-                    "，进场时间为"+(planPushVO.getEnterIntoTime()==null?"":planPushVO.getEnterIntoTime())+
+                            "，进场时间为" + (planPushVO.getEnterIntoTime() == null ? "" : planPushVO.getEnterIntoTime()) +
                             /* 采购经办人名称 */
-                    "、采购人为"+(procurementPlan==null?"":procurementPlan.getProcurementOfficerName())+
+                            "、采购人为" + (procurementPlan == null ? "" : procurementPlan.getProcurementOfficerName()) +
                             /* 区域（只有购买材料）：获取“购买材料”类型里边拆分的标包里边的“区域”字段 省 + 市 */
-                    ((procurementPlan==null?false:procurementPlan.getProcurementPlanType().equals(ProcurementPlanTypeEnum.PURCHASE_MATERIALS.getType()) && !(provinceName + cityName).isEmpty())?
-                            "，区域为"+(provinceName + cityName):"");
+                            ((procurementPlan == null ? false : procurementPlan.getProcurementPlanType().equals(ProcurementPlanTypeEnum.PURCHASE_MATERIALS.getType()) && !(provinceName + cityName).isEmpty()) ?
+                                    "，区域为" + (provinceName + cityName) : "");
             requestDTO.setContent(content);/* 推送内容 */
-            requestDTO.setPrjName((project==null?"":project.getMinAccountSimpleName()==null?"":project.getMinAccountSimpleName()));
-            log.info("[推送合约规划推动采购计划拆包推送内容:{}],",content);
+            requestDTO.setPrjName((project == null ? "" : project.getMinAccountSimpleName() == null ? "" : project.getMinAccountSimpleName()));
+            log.info("[推送合约规划推动采购计划拆包推送内容:{}],", content);
 
             requestDTO.setArrivalTime(nowTime);
             requestDTO.setCreateTime(nowTime);
@@ -768,7 +771,7 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
 
     @Override
     public void setContractPlanSplitFlag(String flag) {
-        SetConfigValueDTO setConfigValue = new SetConfigValueDTO(CONFIG_CONTRACT_SPLIT_FLAG,flag);
+        SetConfigValueDTO setConfigValue = new SetConfigValueDTO(CONFIG_CONTRACT_SPLIT_FLAG, flag);
         remoteSystemService.setConfigValueByKey(setConfigValue, SecurityConstants.INNER);
     }
 
@@ -780,17 +783,18 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
 
     /**
      * 修改采购计划
+     *
      * @param requestVO
      */
     private MaterialProcurementPushRequestVO updateProcurementPlan(ProcurementPlanRequestVO requestVO) {
-        System.out.println("保存采购计划-合约规划拆分信息："+ requestVO.getSplitRequestList());
+        System.out.println("保存采购计划-合约规划拆分信息：" + requestVO.getSplitRequestList());
         ProcurementPlan procurementPlan = requestVO.getProcurementPlan();
         ProcurementPlan checkPlan = baseMapper.selectById(procurementPlan.getId());
 
-        ValidateUtils.isNullException(checkPlan,"该采购计划不存在");
-        ValidateUtils.validateStatusEquals(ProcurementPlanStateEnum.SUBMITTED::equalsState,checkPlan.getState(),"已提交的采购计划不能再做修改");
-        ValidateUtils.validateStatusEquals(ProcurementPlanStateEnum.CANCELLATION::equalsState,checkPlan.getState(),"已作废的采购计划不能再做修改");
-        ValidateUtils.validateStatusNotEquals(checkPlan.getCreateId()::equals,SecurityUtils.getUserId(),"您无权修改不属于您的采购计划");
+        ValidateUtils.isNullException(checkPlan, "该采购计划不存在");
+        ValidateUtils.validateStatusEquals(ProcurementPlanStateEnum.SUBMITTED::equalsState, checkPlan.getState(), "已提交的采购计划不能再做修改");
+        ValidateUtils.validateStatusEquals(ProcurementPlanStateEnum.CANCELLATION::equalsState, checkPlan.getState(), "已作废的采购计划不能再做修改");
+        ValidateUtils.validateStatusNotEquals(checkPlan.getCreateId()::equals, SecurityUtils.getUserId(), "您无权修改不属于您的采购计划");
 
         // 修改采购计划
         baseMapper.updateById(procurementPlan);
@@ -799,7 +803,7 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
         List<MaterialsList> list = contractPlanningSplitService.updateContractPlanningSplit(requestVO.getSplitRequestList(), procurementPlan.getId(), procurementPlan);
 
         // 重新保存合约规划
-        contractPlanningService.updateContractPlanning(requestVO.getContractPlanning(),procurementPlan.getId());
+        contractPlanningService.updateContractPlanning(requestVO.getContractPlanning(), procurementPlan.getId());
 
         MaterialProcurementPushRequestVO vo = this.getPushMaterialInfo(procurementPlan, list, requestVO.getContractPlanning());
         return vo;
@@ -807,14 +811,15 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
 
     /**
      * 新增采购计划
+     *
      * @param requestVO
      */
     private MaterialProcurementPushRequestVO addProcurementPlan(ProcurementPlanRequestVO requestVO) {
-        System.out.println("保存采购计划："+ requestVO.getSplitRequestList());
+        System.out.println("保存采购计划：" + requestVO.getSplitRequestList());
         ProcurementPlan procurementPlan = requestVO.getProcurementPlan();
         procurementPlan.setProcurementPlanCode(getProcurementPlanCode());
         procurementPlan.setProcurementReporter(SecurityUtils.getUserId());
-        procurementPlan.setProcurementReporterName(SecurityUtils.getLoginUser()==null?"":SecurityUtils.getLoginUser().getSysUser().getNickName());
+        procurementPlan.setProcurementReporterName(SecurityUtils.getLoginUser() == null ? "" : SecurityUtils.getLoginUser().getSysUser().getNickName());
         procurementPlan.setState(ProcurementPlanStateEnum.DRAFT.getState());
 
         baseMapper.insert(procurementPlan);
@@ -823,7 +828,7 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
         List<MaterialsList> list = contractPlanningSplitService.saveContractPlanningSplit(requestVO.getSplitRequestList(), procurementPlan.getId(), procurementPlan);
 
         // 保存合约规划
-        contractPlanningService.addContractPlanning(requestVO.getContractPlanning(),procurementPlan.getId());
+        contractPlanningService.addContractPlanning(requestVO.getContractPlanning(), procurementPlan.getId());
         MaterialProcurementPushRequestVO vo = this.getPushMaterialInfo(procurementPlan, list, requestVO.getContractPlanning());
         return vo;
     }
@@ -832,13 +837,14 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
         MaterialProcurementPushRequestVO vo = new MaterialProcurementPushRequestVO();
         vo.setId(procurementPlan.getId());
         vo.setProjectCode(contractPlanning.getProjectCode());
-        list = list.stream().filter(i-> null != i.getIsSelect()&&i.getIsSelect().equals("Y")).collect(Collectors.toList());
+        list = list.stream().filter(i -> null != i.getIsSelect() && i.getIsSelect().equals("Y")).collect(Collectors.toList());
         vo.setMaterialsLists(list);
         return vo;
     }
 
     /**
      * 获取采购计划编码
+     *
      * @return
      */
     private String getProcurementPlanCode() {
@@ -847,6 +853,7 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
 
     /**
      * 校验物料数量
+     *
      * @param requestVO
      */
     private void checkMaterialsList(ProcurementPlanRequestVO requestVO) {
@@ -879,23 +886,23 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
         // 上限价
         BigDecimal plannedPrice = BigDecimal.ZERO;
         // 物料总数量
-        Map<String,BigDecimal> materialsCountMap = new HashMap<>();
+        Map<String, BigDecimal> materialsCountMap = new HashMap<>();
 
         // 交易标的物
         List<String> subjectMatterNameList = new ArrayList<>();
         List<String> subjectMatterCodeList = new ArrayList<>();
         for (ContractPlanningSplitRequestVO splitRequest : requestVO.getSplitRequestList()) {
-            Map<String,MaterialsList> materialsListMap = splitRequest.getMaterialsLists().stream()
+            Map<String, MaterialsList> materialsListMap = splitRequest.getMaterialsLists().stream()
                     .collect(Collectors.toMap(MaterialsList::getMaterialsUniqueId, val -> val));
-            for(ContractMaterialsListVO listVO : materialsListList) {
+            for (ContractMaterialsListVO listVO : materialsListList) {
                 MaterialsList materials = materialsListMap.get(listVO.getMaterialsUniqueId());
                 if (materials == null) {
-                    throw new BusinessException("提交的合约拆分["+splitRequest.getSplitContractName()+"]的清单中缺少:" + listVO.getMaterialsCode() + "-" + listVO.getMaterialsName());
+                    throw new BusinessException("提交的合约拆分[" + splitRequest.getSplitContractName() + "]的清单中缺少:" + listVO.getMaterialsCode() + "-" + listVO.getMaterialsName());
                 }
 
                 // 如果是租赁材料、租赁设备，且租赁方式为日、月，需要重新计算清单数量，即工作量
                 if (ProcurementPlanTypeEnum.isRent(procurementPlanType) && !RentModeEnum.isWork(materials.getRentMode())) {
-                    materials.setCount(NumberUtil.multiply(materials.getRentTime(),materials.getRentQuantity(),2));
+                    materials.setCount(NumberUtil.multiply(materials.getRentTime(), materials.getRentQuantity(), 2));
                 }
 
                 // 存在业主不输入清单数量的情况，如果不输入，直接默认为 0
@@ -906,18 +913,18 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
                 // 清单数量
                 BigDecimal materialsCount = materialsCountMap.get(materials.getMaterialsUniqueId());
                 materialsCount = materialsCount == null ? BigDecimal.ZERO : materialsCount;
-                materialsCountMap.put(materials.getMaterialsUniqueId(),NumberUtil.add(materialsCount,materials.getCount()));
+                materialsCountMap.put(materials.getMaterialsUniqueId(), NumberUtil.add(materialsCount, materials.getCount()));
 
                 // 上限价
 //                if (PriceTypeEnum.FLOAT_PRICE.equalsType(priceType)) {
                 if (PriceTypeEnum.FLOAT_PRICE.equalsType(materials.getPriceType())) {
                     // 浮动价 = 清单数量 * (基价 + 浮动价 + 卸费)
-                    BigDecimal floatPrice = NumberUtil.add(materials.getBasePrice(),materials.getFloatingPrice(),materials.getUnloadingFee());
-                    BigDecimal floatPriceAmount = AmountCalUtil.calTotalAmountInclTax(materials.getCount(),floatPrice);
-                    plannedPrice = NumberUtil.add(plannedPrice,floatPriceAmount);
+                    BigDecimal floatPrice = NumberUtil.add(materials.getBasePrice(), materials.getFloatingPrice(), materials.getUnloadingFee());
+                    BigDecimal floatPriceAmount = AmountCalUtil.calTotalAmountInclTax(materials.getCount(), floatPrice);
+                    plannedPrice = NumberUtil.add(plannedPrice, floatPriceAmount);
                 } else {
                     // 价格 = 清单数量 * 含税单价
-                    plannedPrice = NumberUtil.add(plannedPrice, AmountCalUtil.calTotalAmountInclTax(materials.getCount(),materials.getUnitPriceInclTax()));
+                    plannedPrice = NumberUtil.add(plannedPrice, AmountCalUtil.calTotalAmountInclTax(materials.getCount(), materials.getUnitPriceInclTax()));
                 }
 
                 /*
@@ -932,7 +939,7 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
 
                 // 非浮动价、浮动率，将浮动价相关字段全部设置为 null
 //                if (!PriceTypeEnum.FLOAT_PRICE.equalsType(priceType)) {
-                if (!PriceTypeEnum.FLOAT_PRICE.equalsType(materials.getPriceType())  && !PriceTypeEnum.FLOAT_RATE.equalsType(materials.getPriceType())) {
+                if (!PriceTypeEnum.FLOAT_PRICE.equalsType(materials.getPriceType()) && !PriceTypeEnum.FLOAT_RATE.equalsType(materials.getPriceType())) {
                     materials.setBasePrice(null);
                     materials.setFloatingPrice(null);
                     materials.setFloatingRate(null);
@@ -954,8 +961,8 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
                 }
 
                 // 处理交易标的物
-                if (Constants.SUBJECT_MATTER_BLANK.equals( materials.getSubjectMatterCode())) {
-                    throw new ParamValidateException(String.format("清单[%s]的交易标的物为空，请确认",materials.getMaterialsName()));
+                if (Constants.SUBJECT_MATTER_BLANK.equals(materials.getSubjectMatterCode())) {
+                    throw new ParamValidateException(String.format("清单[%s]的交易标的物为空，请确认", materials.getMaterialsName()));
                 }
                 subjectMatterNameList.add(materials.getSubjectMatterName());
                 subjectMatterCodeList.add(materials.getSubjectMatterCode());
@@ -1025,9 +1032,9 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
     /**
      * 拆分数据回写至商务策划
      */
-    private void updatePlanQuantityAmount(Long procurementPlanId,String operateFlag) {
+    private void updatePlanQuantityAmount(Long procurementPlanId, String operateFlag) {
         ContractPlanning contractPlanning = contractPlanningService.getByProcurementId(procurementPlanId);
-        ValidateUtils.isNullException(contractPlanning,"该采购计划对应的合约规划数据不存在，请确认");
+        ValidateUtils.isNullException(contractPlanning, "该采购计划对应的合约规划数据不存在，请确认");
 
         String contractPlanningId = contractPlanning.getContractPlanningId();
         String projectId = contractPlanning.getProjectId();
@@ -1038,11 +1045,11 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
         procurementPlan.add(procurementPlanId);
         List<MaterialsList> materialsLists = materialsListService.listMaterialsListByPlanIds(procurementPlan);
 
-        contractPlanService.updatePlanQuantityAmount(contractPlanningId,projectId,projectCode,procurementPlanId,contractPlanning.getContractPlanningCategory(),
-                            materialsLists,operateFlag);
+        contractPlanService.updatePlanQuantityAmount(contractPlanningId, projectId, projectCode, procurementPlanId, contractPlanning.getContractPlanningCategory(),
+                materialsLists, operateFlag);
     }
 
-    private String formatDate(Date date){
+    private String formatDate(Date date) {
         SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ");
         return sdf.format(date);
     }
@@ -1069,6 +1076,53 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
         }
         requestDTO.setPropertyList(propertyList);
         return processService.initialize(requestDTO);
+    }
+
+    @Override
+    public ResultData<List<BpmListProcessLogResponseDTO>> listProcessLog(BpmListProcessLogRequestDTO requestDTO) {
+        return null;
+    }
+
+    @Override
+    public String audit(String processKey, Map<String, Object> variables) {
+        ProcurementPlan procurementPlan = getById((Serializable) variables.get("businessId"));
+
+        /** 合同类型（contractType），价格(contractMoney)，项目部（parentProjectCode），责任单位（responsibilityDeptId），公司（companyId） */
+//        variables.put("contractType", ProcurementPlanTypeEnum.getProcessType(procurementScheme.getProcurementPlanType()));/* 采购方案 合同类型 */
+//        variables.put("contractMoney", procurementScheme.getCeilingPrice());/* 采购方案上限价 价格 */
+        /* 最小核算项目 */
+        ContractPlanningListVO procurementScheme = contractPlanningService.getByProcurementIdFromUnderling(procurementPlan.getId());
+        MinProjectVO minProjectVO = minProjectService.getMinProjectByMinAccountCode(procurementScheme.getProjectCode());
+        if (null != minProjectVO) {
+            /* 流程角色配置规则传参 */
+            variables.put("groupId", UserConstants.GROUP_DEPT_ID);/* 集团 */
+            variables.put("companyId", underlingSystemService.getL2OrgByOrgId(SecurityUtils.getThridOrgId()));/* 公司 二级单位 */
+            variables.put("responsibilityDeptId", minProjectVO.getDutyUnit());/* 责任单位 三级单位 */
+            variables.put("parentProjectCode", minProjectVO.getParentCode());/* 父项目编码(项目部) */
+        }
+        return processService.auditProcessInstance(ProcessKeyEnum.ZHAOCAI_PROCUREMENT_PLAN.getIdentifying(), variables);
+    }
+
+    @Override
+    public ResultData<List<BpmLoadTaskDefResponseDTO>> loadTaskDef(BpmLoadTaskDefRequestDTO requestDTO) {
+        ProcurementPlan plan = this.getById(requestDTO.getBusinessId());
+        /* 流程角色配置规则传参 */
+        List<PropertyListRequestDTO<Object>> propertyList = new ArrayList<>();
+        /** 合同类型（contractType），价格(contractMoney)，项目部（parentProjectCode），责任单位（responsibilityDeptId），公司（companyId） */
+//        PropertyListRequestDTO.addPropertyToList(propertyList, "contractType", ProcurementPlanTypeEnum.getProcessType(procurementScheme.getProcurementPlanType()));/* 采购方案 合同类型 */
+//        PropertyListRequestDTO.addPropertyToList(propertyList, "contractMoney", procurementScheme.getCeilingPrice());/* 采购方案上限价 价格 */
+        ContractPlanningListVO contractPlanning = contractPlanningService.getByProcurementIdFromUnderling(plan.getId());
+        /* 最小核算项目 */
+        MinProjectVO minProjectVO = minProjectService.getMinProjectByMinAccountCode(contractPlanning.getProjectCode());
+        if (null != minProjectVO) {
+            PropertyListRequestDTO.addPropertyToList(propertyList, "groupId", UserConstants.GROUP_DEPT_ID);/* 集团 */
+            PropertyListRequestDTO.addPropertyToList(propertyList, "companyId", underlingSystemService.getL2OrgByOrgId(SecurityUtils.getThridOrgId()));/* 公司 二级单位 */
+            PropertyListRequestDTO.addPropertyToList(propertyList, "responsibilityDeptId", minProjectVO.getDutyUnit());/* 责任单位 三级单位 */
+            PropertyListRequestDTO.addPropertyToList(propertyList, "parentProjectCode", minProjectVO.getParentCode());/* 父项目编码(项目部) */
+            requestDTO.setPropertyList(propertyList);
+        }
+        requestDTO.setPropertyList(propertyList);
+        return processService.loadTaskDef(requestDTO);
     }
 
 
@@ -1119,6 +1173,60 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
         super.update(new LambdaUpdateWrapper<ProcurementPlan>()
                 .set(ProcurementPlan::getWfProcessId, processId)
                 .set(ProcurementPlan::getState, procurementSchemeState)
+                .eq(ProcurementPlan::getId, businessId));
+    }
+
+    @Override
+    public void revokeProcurementPlan(Long id) {
+        ProcurementPlan procurementPlan = this.getById(id);
+        ValidateUtils.validateStatusNotEquals(ProcurementSchemeStateEnum.IN_APPROVAL::equalsState, procurementPlan.getState(), "非审批中的采购计划不允许撤回");
+        // 撤回流程
+        Map<String, Object> paramMap = new HashMap<>();
+        paramMap.put("businessId", procurementPlan.getId());
+        paramMap.put("processId", procurementPlan.getWfProcessId());
+        processService.revokeProcess(ProcessKeyEnum.ZHAOCAI_PROCUREMENT_PLAN.getIdentifying(), paramMap);
+    }
+
+    @Override
+    public void processAuditPass(Map<String, Object> variables) {
+        String businessId = variables.get("businessId").toString();
+        super.update(new LambdaUpdateWrapper<ProcurementPlan>()
+                .set(ProcurementPlan::getState, ProcurementSchemeStateEnum.APPROVE.getState())
+                .eq(ProcurementPlan::getId, businessId));
+    }
+
+    /**
+     * 审批驳回到发起人
+     *
+     * @param variables
+     */
+    @Override
+    public void processAuditFreedom(Map<String, Object> variables) {
+        String businessId = variables.get("businessId").toString();
+        super.update(new LambdaUpdateWrapper<ProcurementPlan>()
+                .set(ProcurementPlan::getState, ProcurementSchemeStateEnum.DRAFT.getState())
+                .eq(ProcurementPlan::getId, businessId));
+    }
+
+    /**
+     * 审批驳回
+     *
+     * @param variables
+     */
+    @Override
+    public void processAuditReject(Map<String, Object> variables) {
+        String businessId = variables.get("businessId").toString();
+        super.update(new LambdaUpdateWrapper<ProcurementPlan>()
+                .set(ProcurementPlan::getState, ProcurementSchemeStateEnum.REJECT.getState())
+                .eq(ProcurementPlan::getId, businessId));
+    }
+
+
+    @Override
+    public void processAuditRevoke(Map<String, Object> variables) {
+        String businessId = variables.get("businessId").toString();
+        super.update(new LambdaUpdateWrapper<ProcurementPlan>()
+                .set(ProcurementPlan::getState, ProcurementSchemeStateEnum.REVOKED.getState())
                 .eq(ProcurementPlan::getId, businessId));
     }
 

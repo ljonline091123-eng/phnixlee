@@ -6,6 +6,8 @@ import com.zhaocai.business.manager.http.dto.req.UsersRoleListRequestDTO;
 import com.zhaocai.business.manager.http.dto.res.BpmInitializeResponseDTO;
 import com.zhaocai.business.manager.http.dto.res.UsersRoleContractPlanListResponseDTO;
 import com.zhaocai.business.manager.http.dto.res.UsersRoleListResponseDTO;
+import com.zhaocai.business.process.service.IPBMOverrideService;
+import com.zhaocai.business.process.service.IProcessBusinessBaseService;
 import com.zhaocai.business.procurement.domain.ProcurementPlan;
 import com.zhaocai.business.procurement.vo.req.*;
 import com.zhaocai.business.procurement.vo.res.*;
@@ -21,7 +23,7 @@ import java.util.Map;
  * @author chenming
  * @date 2024-05-24
  */
-public interface IProcurementPlanService  extends IService<ProcurementPlan> {
+public interface IProcurementPlanService  extends IService<ProcurementPlan>, IProcessBusinessBaseService, IPBMOverrideService {
 
     /**
      * 列表查询
@@ -143,4 +145,6 @@ public interface IProcurementPlanService  extends IService<ProcurementPlan> {
 
 
     void processStart(Map<String, Object> variables);
+
+    void revokeProcurementPlan(Long id);
 }

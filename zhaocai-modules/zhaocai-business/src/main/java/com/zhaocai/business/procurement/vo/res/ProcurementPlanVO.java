@@ -118,4 +118,7 @@ public class ProcurementPlanVO extends AdviceObject {
 
     @ApiModelProperty(value = "是否存在推送数据")
     private String isPushData;
+
+    @ApiModelProperty(value = "流程id")
+    private String wfProcessId;
 }
