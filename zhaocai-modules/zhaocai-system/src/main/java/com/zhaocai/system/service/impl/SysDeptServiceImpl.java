@@ -18,6 +18,7 @@ import com.zhaocai.system.domain.vo.TreeSelect;
 import com.zhaocai.system.mapper.SysDeptMapper;
 import com.zhaocai.system.mapper.SysRoleMapper;
 import com.zhaocai.system.service.ISysDeptService;
+import com.zhaocai.system.utils.KeyUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -263,6 +264,14 @@ public class SysDeptServiceImpl extends ServiceImpl<SysDeptMapper, SysDept> impl
             throw new ServiceException("部门停用，不允许新增");
         }
         dept.setAncestors(info.getAncestors() + "," + dept.getParentId());
+
+        dept.setThridDeptId(KeyUtils.generateId() + "");
+        if (info != null) {
+            dept.setThridParentId(info.getThridDeptId());
+            dept.setThridOrgLevel(info.getThridOrgLevel() + 1);
+        } else {
+            dept.setThridOrgLevel(1);
+        }
         return deptMapper.insertDept(dept);
     }
 
