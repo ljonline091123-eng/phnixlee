@@ -5,7 +5,7 @@
 
       <i
         class="small-operation-btn el-icon-plus"
-        @click.stop="handleAdd(data, node)"
+        @click.stop="handleAdd({label:'',id:'0'}, node)"
       />
     </div>
     <div v-if="queryType" style="   width: 100%;height: 33px;margin: -10px 10px 16px 0; background-color: #ffffff;">
