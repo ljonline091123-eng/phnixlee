@@ -266,6 +266,7 @@ public class SysDeptServiceImpl extends ServiceImpl<SysDeptMapper, SysDept> impl
         dept.setAncestors(info.getAncestors() + "," + dept.getParentId());
 
         dept.setThridDeptId(KeyUtils.generateId() + "");
+        dept.setOrigin("syncthird");
         if (info != null) {
             dept.setThridParentId(info.getThridDeptId());
             dept.setThridOrgLevel(info.getThridOrgLevel() + 1);
@@ -374,6 +375,12 @@ public class SysDeptServiceImpl extends ServiceImpl<SysDeptMapper, SysDept> impl
             String oldAncestors = oldDept.getAncestors();
             dept.setAncestors(newAncestors);
             updateDeptChildren(dept.getDeptId(), newAncestors, oldAncestors);
+        }
+        if (newParentDept != null) {
+            dept.setThridParentId(newParentDept.getThridDeptId());
+            dept.setThridOrgLevel(newParentDept.getThridOrgLevel() + 1);
+        } else {
+            dept.setThridOrgLevel(1);
         }
         int result = deptMapper.updateDept(dept);
         if (UserConstants.DEPT_NORMAL.equals(dept.getStatus()) && StringUtils.isNotEmpty(dept.getAncestors())

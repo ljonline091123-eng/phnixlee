@@ -179,6 +179,7 @@
         <if test="deptId != null and deptId != 0">dept_id,</if>
         <if test="parentId != null and parentId != 0">parent_id,</if>
         <if test="deptName != null and deptName != ''">dept_name,</if>
+        <if test="origin != null and origin != ''">origin,</if>
         <if test="simpleName != null and simpleName != ''">simple_name,</if>
         <if test="thridDeptId != null and thridDeptId != ''">thrid_dept_id,</if>
         <if test="thridParentId != null and thridParentId != ''">thrid_parent_id,</if>
@@ -195,6 +196,7 @@
         <if test="deptId != null and deptId != 0">#{deptId},</if>
         <if test="parentId != null and parentId != 0">#{parentId},</if>
         <if test="deptName != null and deptName != ''">#{deptName},</if>
+        <if test="origin != null and origin != ''">#{origin},</if>
         <if test="simpleName != null and simpleName != ''">#{simpleName},</if>
         <if test="thridDeptId != null and thridDeptId != ''">#{thridDeptId},</if>
         <if test="thridParentId != null and thridParentId != ''">#{thridParentId},</if>
@@ -215,6 +217,10 @@
         <set>
             <if test="parentId != null and parentId != 0">parent_id = #{parentId},</if>
             <if test="deptName != null and deptName != ''">dept_name = #{deptName},</if>
+            <if test="simpleName != null and simpleName != ''">simple_name = #{simpleName},</if>
+            <if test="thridDeptId != null and thridDeptId != ''">thrid_dept_id = #{thridDeptId},</if>
+            <if test="thridParentId != null and thridParentId != ''">thrid_parent_id = #{thridParentId},</if>
+            <if test="thridOrgLevel != null">thrid_org_level = #{thridOrgLevel},</if>
             <if test="ancestors != null and ancestors != ''">ancestors = #{ancestors},</if>
             <if test="orderNum != null">order_num = #{orderNum},</if>
             <if test="leader != null">leader = #{leader},</if>
