@@ -462,6 +462,9 @@ export default {
         projectDepartmentId: [
           { required: true, message: '归属项目部不能为空', trigger: 'change' }
         ],
+        managementOrgId: [
+          { required: true, message: '归属管理组织不能为空', trigger: 'change' }
+        ],
         moneySec: [
           { required: true, message: '项目资金来源不能为空', trigger: 'change' }
         ],
