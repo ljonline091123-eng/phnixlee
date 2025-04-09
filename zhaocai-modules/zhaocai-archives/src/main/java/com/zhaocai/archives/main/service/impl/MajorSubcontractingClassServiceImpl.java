@@ -1,6 +1,5 @@
 package com.zhaocai.archives.main.service.impl;
 
-import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.zhaocai.archives.dossier.service.ISubcontractingTypeService;
 import com.zhaocai.archives.dossier.tree.SubcontractingTypeTree;
@@ -211,32 +210,52 @@ public class MajorSubcontractingClassServiceImpl extends ServiceImpl<MajorSubcon
         if (majorSubcontractingClass.getId() == null) {
             throw new RuntimeException("id不能为空");
         }
-        MajorSubcontractingClass type = baseMapper.selectMajorSubcontractingClassById(majorSubcontractingClass.getId());
-        String materialCode = type.getMajorSubcontractingClassCode();
-        Integer maxCode = baseMapper.getMaxCode(materialCode, type.getId());
-        if (maxCode != null) {
-            maxCode += 1;
-            //根据规则，长度大于8的流水号有3位
-            if (materialCode.length() >= 8) {
-                if (maxCode < 100 && maxCode >= 10) {
-                    materialCode = materialCode + "0" + maxCode;
-                } else if (maxCode < 10) {
-                    materialCode = materialCode + "00" + maxCode;
-                } else {
-                    materialCode = materialCode + maxCode;
-                }
-            } else {
-                if (maxCode < 10) {
-                    materialCode = materialCode + "0" + maxCode;
-                } else {
-                    materialCode = materialCode + maxCode;
+        String materialCode = "";
+        MajorSubcontractingClass type = new MajorSubcontractingClass();
+        if ("0".equals(majorSubcontractingClass.getId())) {
+            String[] strs = {"A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z"};
+            MajorSubcontractingClass aClassx = new MajorSubcontractingClass();
+            aClassx.setParentId("0");
+            List<MajorSubcontractingClass> mtrClasses = baseMapper.selectMajorSubcontractingClassList(aClassx);
+            Map<String, String> map = new HashMap<>();
+            for (MajorSubcontractingClass mtrClass1 : mtrClasses) {
+                String s = retainEnglishLetters(mtrClass1.getMajorSubcontractingClassCode());
+                map.put(s, s);
+            }
+            for (String s : strs) {
+                if (StringUtils.isEmpty(map.get(s))) {
+                    materialCode = s + "1";
+                    break;
                 }
             }
         } else {
-            if (materialCode.length() >= 8) {
-                materialCode = materialCode + "001";
-            }else {
-                materialCode = materialCode + "01";
+            type = baseMapper.selectMajorSubcontractingClassById(majorSubcontractingClass.getId());
+            materialCode = type.getMajorSubcontractingClassCode();
+            Integer maxCode = baseMapper.getMaxCode(materialCode, type.getId());
+            if (maxCode != null) {
+                maxCode += 1;
+                //根据规则，长度大于8的流水号有3位
+                if (materialCode.length() >= 8) {
+                    if (maxCode < 100 && maxCode >= 10) {
+                        materialCode = materialCode + "0" + maxCode;
+                    } else if (maxCode < 10) {
+                        materialCode = materialCode + "00" + maxCode;
+                    } else {
+                        materialCode = materialCode + maxCode;
+                    }
+                } else {
+                    if (maxCode < 10) {
+                        materialCode = materialCode + "0" + maxCode;
+                    } else {
+                        materialCode = materialCode + maxCode;
+                    }
+                }
+            } else {
+                if (materialCode.length() >= 8) {
+                    materialCode = materialCode + "001";
+                } else {
+                    materialCode = materialCode + "01";
+                }
             }
         }
         MajorSubcontractingClass aClass = new MajorSubcontractingClass();
@@ -253,5 +272,19 @@ public class MajorSubcontractingClassServiceImpl extends ServiceImpl<MajorSubcon
     public long selectMajorSubcontractingClassListCount(MajorSubcontractingClass majorSubcontractingClass) {
         return baseMapper.selectMajorSubcontractingClassListCount(majorSubcontractingClass);
     }
+
+    /**
+     * 保留字符串中的英文字符
+     *
+     * @param input 输入字符串
+     * @return 只包含英文字符的字符串
+     */
+    public static String retainEnglishLetters(String input) {
+        if (input == null || input.isEmpty()) {
+            return input; // 处理空字符串或 null 的情况
+        }
+        return input.replaceAll("[^a-zA-Z]", ""); // 保留 a-z 和 A-Z 范围内的字符
+    }
+
 
 }

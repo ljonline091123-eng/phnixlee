@@ -1,12 +1,9 @@
 package com.zhaocai.archives.main.service.impl;
 
-import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.zhaocai.archives.dossier.service.ILabourTypeService;
 import com.zhaocai.archives.dossier.tree.LabourTypeTree;
-import com.zhaocai.archives.main.domain.DeviceClass;
 import com.zhaocai.archives.main.domain.LaborServicesClass;
-import com.zhaocai.archives.main.domain.MtrClass;
 import com.zhaocai.archives.main.mapper.LaborServicesClassMapper;
 import com.zhaocai.archives.main.service.ILaborServicesClassService;
 import com.zhaocai.archives.utils.KeyUtils;
@@ -155,7 +152,7 @@ public class LaborServicesClassServiceImpl extends ServiceImpl<LaborServicesClas
         }
         boolean b = this.updateBatchById(mtrFeatures);
         if (b) {
-            iLabourTypeService.deleteByHostId(ids,map);
+            iLabourTypeService.deleteByHostId(ids, map);
         }
         return b;
     }
@@ -212,32 +209,52 @@ public class LaborServicesClassServiceImpl extends ServiceImpl<LaborServicesClas
         if (laborServicesClass.getId() == null) {
             throw new RuntimeException("id不能为空");
         }
-        LaborServicesClass type = baseMapper.selectLaborServicesClassById(laborServicesClass.getId());
-        String materialCode = type.getLaborServicesClassCode();
-        Integer maxCode = baseMapper.getMaxCode(materialCode, type.getId());
-        if (maxCode != null) {
-            maxCode += 1;
-            //根据规则，长度大于8的流水号有3位
-            if (materialCode.length() >= 8) {
-                if (maxCode < 100 && maxCode >= 10) {
-                    materialCode = materialCode + "0" + maxCode;
-                } else if (maxCode < 10) {
-                    materialCode = materialCode + "00" + maxCode;
-                } else {
-                    materialCode = materialCode + maxCode;
-                }
-            } else {
-                if (maxCode < 10) {
-                    materialCode = materialCode + "0" + maxCode;
-                } else {
-                    materialCode = materialCode + maxCode;
+        String materialCode = "";
+        LaborServicesClass type = new LaborServicesClass();
+        if ("0".equals(laborServicesClass.getId())) {
+            String[] strs = {"A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z"};
+            LaborServicesClass aClassx = new LaborServicesClass();
+            aClassx.setParentId("0");
+            List<LaborServicesClass> mtrClasses = baseMapper.selectLaborServicesClassList(aClassx);
+            Map<String, String> map = new HashMap<>();
+            for (LaborServicesClass mtrClass1 : mtrClasses) {
+                String s = retainEnglishLetters(mtrClass1.getLaborServicesClassCode());
+                map.put(s, s);
+            }
+            for (String s : strs) {
+                if (StringUtils.isEmpty(map.get(s))) {
+                    materialCode = s + "1";
+                    break;
                 }
             }
         } else {
-            if (materialCode.length() >= 8) {
-                materialCode = materialCode + "001";
-            }else {
-                materialCode = materialCode + "01";
+            type = baseMapper.selectLaborServicesClassById(laborServicesClass.getId());
+            materialCode = type.getLaborServicesClassCode();
+            Integer maxCode = baseMapper.getMaxCode(materialCode, type.getId());
+            if (maxCode != null) {
+                maxCode += 1;
+                //根据规则，长度大于8的流水号有3位
+                if (materialCode.length() >= 8) {
+                    if (maxCode < 100 && maxCode >= 10) {
+                        materialCode = materialCode + "0" + maxCode;
+                    } else if (maxCode < 10) {
+                        materialCode = materialCode + "00" + maxCode;
+                    } else {
+                        materialCode = materialCode + maxCode;
+                    }
+                } else {
+                    if (maxCode < 10) {
+                        materialCode = materialCode + "0" + maxCode;
+                    } else {
+                        materialCode = materialCode + maxCode;
+                    }
+                }
+            } else {
+                if (materialCode.length() >= 8) {
+                    materialCode = materialCode + "001";
+                } else {
+                    materialCode = materialCode + "01";
+                }
             }
         }
         LaborServicesClass aClass = new LaborServicesClass();
@@ -253,6 +270,20 @@ public class LaborServicesClassServiceImpl extends ServiceImpl<LaborServicesClas
     @Override
     public long selectLaborServicesClassListCount(LaborServicesClass laborServicesClass) {
         return baseMapper.selectLaborServicesClassListCount(laborServicesClass);
+    }
+
+
+    /**
+     * 保留字符串中的英文字符
+     *
+     * @param input 输入字符串
+     * @return 只包含英文字符的字符串
+     */
+    public static String retainEnglishLetters(String input) {
+        if (input == null || input.isEmpty()) {
+            return input; // 处理空字符串或 null 的情况
+        }
+        return input.replaceAll("[^a-zA-Z]", ""); // 保留 a-z 和 A-Z 范围内的字符
     }
 
 

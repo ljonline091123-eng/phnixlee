@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.zhaocai.archives.dossier.service.IDeviceTypeService;
 import com.zhaocai.archives.dossier.tree.DeviceTypeTree;
 import com.zhaocai.archives.main.domain.DeviceClass;
+import com.zhaocai.archives.main.domain.MtrClass;
 import com.zhaocai.archives.main.mapper.DeviceClassMapper;
 import com.zhaocai.archives.main.service.IDeviceClassService;
 import com.zhaocai.archives.utils.KeyUtils;
@@ -208,32 +209,52 @@ public class DeviceClassServiceImpl extends ServiceImpl<DeviceClassMapper, Devic
         if (deviceClass.getId() == null) {
             throw new RuntimeException("id不能为空");
         }
-        DeviceClass type = deviceClassMapper.selectDeviceClassById(deviceClass.getId());
-        String materialCode = type.getDeviceClassCode();
-        Integer maxCode = deviceClassMapper.getMaxCode(materialCode, type.getId());
-        if (maxCode != null) {
-            maxCode += 1;
-            //根据规则，长度大于8的流水号有3位
-            if (materialCode.length() >= 8) {
-                if (maxCode < 100 && maxCode >= 10) {
-                    materialCode = materialCode + "0" + maxCode;
-                } else if (maxCode < 10) {
-                    materialCode = materialCode + "00" + maxCode;
-                } else {
-                    materialCode = materialCode + maxCode;
-                }
-            } else {
-                if (maxCode < 10) {
-                    materialCode = materialCode + "0" + maxCode;
-                } else {
-                    materialCode = materialCode + maxCode;
+        String materialCode = "";
+        DeviceClass type = new DeviceClass();
+        if ("0".equals(deviceClass.getId())) {
+            String[] strs = {"A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z"};
+            DeviceClass aClassx = new DeviceClass();
+            aClassx.setParentId("0");
+            List<DeviceClass> mtrClasses = baseMapper.selectDeviceClassList(aClassx);
+            Map<String, String> map = new HashMap<>();
+            for (DeviceClass mtrClass1 : mtrClasses) {
+                String s = retainEnglishLetters(mtrClass1.getDeviceClassCode());
+                map.put(s, s);
+            }
+            for (String s : strs) {
+                if (StringUtils.isEmpty(map.get(s))) {
+                    materialCode = s + "1";
+                    break;
                 }
             }
         } else {
-            if (materialCode.length() >= 8) {
-                materialCode = materialCode + "001";
+             type = deviceClassMapper.selectDeviceClassById(deviceClass.getId());
+             materialCode = type.getDeviceClassCode();
+            Integer maxCode = deviceClassMapper.getMaxCode(materialCode, type.getId());
+            if (maxCode != null) {
+                maxCode += 1;
+                //根据规则，长度大于8的流水号有3位
+                if (materialCode.length() >= 8) {
+                    if (maxCode < 100 && maxCode >= 10) {
+                        materialCode = materialCode + "0" + maxCode;
+                    } else if (maxCode < 10) {
+                        materialCode = materialCode + "00" + maxCode;
+                    } else {
+                        materialCode = materialCode + maxCode;
+                    }
+                } else {
+                    if (maxCode < 10) {
+                        materialCode = materialCode + "0" + maxCode;
+                    } else {
+                        materialCode = materialCode + maxCode;
+                    }
+                }
             } else {
-                materialCode = materialCode + "01";
+                if (materialCode.length() >= 8) {
+                    materialCode = materialCode + "001";
+                } else {
+                    materialCode = materialCode + "01";
+                }
             }
         }
         DeviceClass aClass = new DeviceClass();
@@ -254,6 +275,20 @@ public class DeviceClassServiceImpl extends ServiceImpl<DeviceClassMapper, Devic
         aClass.setCreateTime(DateUtils.getNowDate());
         return aClass;
     }
+
+    /**
+     * 保留字符串中的英文字符
+     *
+     * @param input 输入字符串
+     * @return 只包含英文字符的字符串
+     */
+    public static String retainEnglishLetters(String input) {
+        if (input == null || input.isEmpty()) {
+            return input; // 处理空字符串或 null 的情况
+        }
+        return input.replaceAll("[^a-zA-Z]", ""); // 保留 a-z 和 A-Z 范围内的字符
+    }
+
 
     @Override
     public long selectDeviceClassListCount(DeviceClass deviceClass) {
