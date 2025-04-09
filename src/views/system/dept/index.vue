@@ -155,13 +155,21 @@
       >
         <el-form ref="form" :model="form" :rules="rules" label-width="80px">
           <el-row>
-            <el-col :span="24" v-if="form.parentId !== 0">
+            <el-col :span="12" v-if="form.parentId !== 0">
               <el-form-item label="上级部门" prop="parentId">
                 <treeselect
                   v-model="form.parentId"
                   :options="deptOptions"
                   :normalizer="normalizer"
                   placeholder="选择上级部门"
+                />
+              </el-form-item>
+            </el-col>
+            <el-col :span="12">
+              <el-form-item label="部门简称" prop="simpleName">
+                <el-input
+                  v-model="form.simpleName"
+                  placeholder="请输入部门简称"
                 />
               </el-form-item>
             </el-col>
@@ -345,6 +353,7 @@ export default {
         leader: undefined,
         phone: undefined,
         email: undefined,
+        simpleName: undefined,
         status: "0",
       };
       this.resetForm("form");
