@@ -328,7 +328,7 @@
           </el-col>
         </el-row>
         <el-row :gutter="20">
-          
+
           <el-col :span="12">
             <el-form-item label="行政区划" prop="prjAddr">
               <el-cascader
@@ -565,6 +565,7 @@ export default {
     handleSave: function() {
       this.$refs["form"].validate((valid) => {
         if (valid) {
+          this.form.prjAddr = this.form.prjAddr ? JSON.stringify(this.form.prjAddr) : '';
           // 将 prgType 从数组转换为逗号分隔的字符串
           this.form.prgType = this.form.prgType ? this.form.prgType.join(',') : '';
           console.log("保存项目信息：", this.form);
