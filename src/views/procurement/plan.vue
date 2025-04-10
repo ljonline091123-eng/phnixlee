@@ -573,14 +573,14 @@
                 v-if="Number(scope.row.state) === 0"
                 >修改</el-button
               >
-<!--              <el-button-->
-<!--                type="text"-->
-<!--                @click="goSubmit(scope.row.id, scope.row.procurementPlanName)"-->
-<!--                icon="el-icon-s-promotion"-->
-<!--                size="small"-->
-<!--                v-if="Number(scope.row.state) === 0"-->
-<!--                >提交</el-button-->
-<!--              >-->
+              <el-button
+                type="text"
+                @click="goSubmit(scope.row.id, scope.row.procurementPlanName)"
+                icon="el-icon-s-promotion"
+                size="small"
+                v-if="Number(scope.row.state) === 0 || Number(scope.row.state) === 5"
+                >提交</el-button
+              >
               <el-button
                 type="text"
                 @click="
@@ -932,20 +932,41 @@ export default {
     handleTypeClick(tab) {
       this.queryParams.procurementPlanType = tab.name;
     },
-    // /** 提交 */
-    // goSubmit(id, planName) {
-    //   this.$confirm("确定是否提交采购计划：" + planName, "提示", {
-    //     confirmButtonText: "确定",
-    //     cancelButtonText: "取消",
-    //     type: "warning",
-    //   }).then(async () => {
-    //     try {
-    //       await submitProcurementPlan(id);
-    //       this.$message.success("提交成功");
-    //       this.getPlanList();
-    //     } catch (error) {}
-    //   });
-    // },
+    /** 提交 */
+    goSubmit(id, planName) {
+      this.$confirm("确定是否提交采购计划：" + planName, "提示", {
+        confirmButtonText: "确定",
+        cancelButtonText: "取消",
+        type: "warning",
+      }).then(async () => {
+          try {
+            const loading = this.$loading({
+              lock: true,
+              text: '正在提交...',
+              background: 'rgba(0, 0, 0, 0.7)',
+            });
+            try {
+              // const {id} = this.procurementPlan;
+              let param = Base64.encode(JSON.stringify(id));
+              param = encodeURIComponent(param); //避免base64编码中出现"/"时路由404
+              const detailUrl = `/procurement/add-plan/${param}`;
+              await submitProcurementPlan({
+                id,
+                detailUrl,
+                // operateComment: this.reviewText,
+              });
+              this.$message.success("提交成功");
+              this.getPlanList();
+              // this.resetForm(); // 重置表单
+            } catch (error) {
+              this.$message.error("提交失败");
+            } finally {
+              loading.close();
+            }
+          } catch (error) {
+          }
+      });
+    },
     /** 作废 **/
     goCancellation(id, planName) {
       this.$confirm("确定要作废采购计划：" + planName, "提示", {
