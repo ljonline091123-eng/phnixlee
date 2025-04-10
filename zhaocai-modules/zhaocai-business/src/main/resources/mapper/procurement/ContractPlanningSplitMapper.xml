@@ -54,7 +54,7 @@
         select tpp.id as plan_id,tpp.procurement_plan_name,tpp.project_hierarchy,tps.id as split_contract_id,tps.split_contract_name,
                 tps.contract_scope,tpp.procurement_plan_type as procurement_plan_type,tpp.procurement_type,tpp.price_type
         from tb_contract_planning_split tps
-        inner join tb_procurement_plan tpp on tps.procurement_plan_id = tpp.id and tpp.state = 1
+        inner join tb_procurement_plan tpp on tps.procurement_plan_id = tpp.id and tpp.state = 3
         inner join tb_contract_planning tcp on tcp.plan_id = tpp.id and tcp.project_code = #{queryVO.projectCode,jdbcType=VARCHAR}
         <where>
             tps.id not in (
