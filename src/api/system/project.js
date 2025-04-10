@@ -67,6 +67,14 @@ export function CertificationTypeTreeSelect(roleId) {
   })
 }
 
+// 查询行政区划
+export function listAreaDivisionTree() {
+  return request({
+    url: '/business/division/listAreaDivisionTree',
+    method: 'get'
+  })
+}
+
 // 查询工程分类树
 export function dictProjectTypeTreeSelect(roleId) {
   return request({
