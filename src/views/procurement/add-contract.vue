@@ -32,29 +32,30 @@
 <!--                    clearable />-->
 <!--                </el-form-item>-->
 <!--              </el-col>-->
-              <el-col :span="12">
+              <el-col :span="8">
                 <el-form-item label="归属最小核算项目：" prop="agreement.belongAccountingItem"
                   :rules="[{ required: true, trigger: 'blur', message: '请输入归属最小核算项目' }]">
                   <el-input disabled v-model="firstForm.agreement.belongAccountingItem" placeholder="请输入采购任务名称"
                     clearable />
                 </el-form-item>
               </el-col>
-              <el-col :span="12">
+              <el-col :span="8">
                 <el-form-item label="归属最小核算项目编码：" prop="agreement.belongAccountingItemCode"
                   :rules="[{ required: true, trigger: 'blur', message: '请输入归属最小核算项目编码' }]">
                   <el-input disabled v-model="firstForm.agreement.belongAccountingItemCode" placeholder="请输入采购任务名称"
                     clearable />
                 </el-form-item>
               </el-col>
-            </el-row>
-
-            <el-row :gutter="10">
               <el-col :span="8">
                 <el-form-item label="合同名称：" prop="agreement.agreementName"
-                  :rules="[{ required: true, trigger: 'blur', message: '请输入合同名称' }]">
+                              :rules="[{ required: true, trigger: 'blur', message: '请输入合同名称' }]">
                   <el-input  v-model="firstForm.agreement.agreementName" placeholder="请输入合同名称" clearable/>
                 </el-form-item>
               </el-col>
+            </el-row>
+
+            <el-row :gutter="10">
+
 
               <el-col :span="8">
                 <el-form-item label="合同编码：" prop="agreement.agreementCode" disabled>
@@ -66,15 +67,16 @@
                   <el-input v-model="firstForm.agreement.innerAgreementCode" placeholder="请输入单位内部合同管理编码" clearable />
                 </el-form-item>
               </el-col>
-            </el-row>
-
-            <el-row :gutter="10">
               <el-col :span="8">
                 <el-form-item label="甲方名称：" prop="agreement.partyAName"
-                  :rules="[{ required: true, trigger: 'blur', message: '请输入甲方名称' }]">
+                              :rules="[{ required: true, trigger: 'blur', message: '请输入甲方名称' }]">
                   <el-input disabled v-model="firstForm.agreement.partyAName" placeholder="请输入甲方名称" clearable />
                 </el-form-item>
               </el-col>
+            </el-row>
+
+            <el-row :gutter="10">
+
               <el-col :span="8">
                 <el-form-item label="乙方名称：" prop="agreement.partyBName"
                   :rules="[{ required: true, trigger: 'blur', message: '请输入乙方名称' }]">
@@ -88,16 +90,17 @@
                     clearable />
                 </el-form-item>
               </el-col>
+              <el-col :span="8">
+                <el-form-item label="交易标的物：" prop="agreement.subjectMatterName"
+                              :rules="[{ required: true, trigger: 'blur', message: '请输入交易标的物' }]">
+                  <el-input  v-model="firstForm.agreement.subjectMatterName" disabled placeholder="请输入交易标的物"
+                             clearable />
+                </el-form-item>
+              </el-col>
             </el-row>
 
             <el-row :gutter="10">
-              <el-col :span="8">
-                <el-form-item label="交易标的物：" prop="agreement.subjectMatterName"
-                  :rules="[{ required: true, trigger: 'blur', message: '请输入交易标的物' }]">
-                  <el-input  v-model="firstForm.agreement.subjectMatterName" disabled placeholder="请输入交易标的物"
-                    clearable />
-                </el-form-item>
-              </el-col>
+
               <el-col :span="8">
                 <el-form-item label="支付周期：" prop="agreement.paymentCycle"
                   :rules="[{ required: true, trigger: 'change', message: '请选择支付周期' }]">
@@ -118,15 +121,16 @@
                   </el-select>
                 </el-form-item>
               </el-col>
-            </el-row>
-
-            <el-row :gutter="10">
               <el-col :span="8">
                 <el-form-item label="乙方法人代表：" prop="agreement.partyBLegalName"
-                  :rules="[{ required: true, trigger: 'blur', message: '请输入乙方法人代表' }]">
+                              :rules="[{ required: true, trigger: 'blur', message: '请输入乙方法人代表' }]">
                   <el-input  disabled v-model="firstForm.agreement.partyBLegalName" placeholder="请输入乙方法人代表" clearable />
                 </el-form-item>
               </el-col>
+            </el-row>
+
+            <el-row :gutter="10">
+
               <el-col :span="8">
                 <el-form-item label="身份证：" prop="agreement.partyBLegalIdCard"
                   :rules="[{ required: true, trigger: 'blur', message: '请输入身份证' },{validator: isCardId, trigger: 'blur'}]">
@@ -139,16 +143,17 @@
                   <el-input :disabled="typeContract=='add'?true:false" v-model="firstForm.agreement.partyBLegalPhone" placeholder="请输入联系方式" clearable />
                 </el-form-item>
               </el-col>
+              <el-col :span="8">
+                <el-form-item label="乙方现场实际履职负责人：" prop="agreement.partyBResponsibleName"
+                              :rules="[{ required: true, trigger: 'blur', message: '请输入乙方现场实际履职负责人' }]">
+                  <el-input :disabled="typeContract=='add'?true:false" v-model="firstForm.agreement.partyBResponsibleName" placeholder="请输入乙方现场实际履职负责人"
+                            clearable />
+                </el-form-item>
+              </el-col>
             </el-row>
 
             <el-row :gutter="10">
-              <el-col :span="8">
-                <el-form-item label="乙方现场实际履职负责人：" prop="agreement.partyBResponsibleName"
-                  :rules="[{ required: true, trigger: 'blur', message: '请输入乙方现场实际履职负责人' }]">
-                  <el-input :disabled="typeContract=='add'?true:false" v-model="firstForm.agreement.partyBResponsibleName" placeholder="请输入乙方现场实际履职负责人"
-                    clearable />
-                </el-form-item>
-              </el-col>
+
               <el-col :span="8">
                 <el-form-item label="身份证：" prop="agreement.partyBResponsibleIdCard"
                   :rules="[{ required: true, trigger: 'blur', message: '请输入身份证' },{validator: isCardId, trigger: 'blur'}]">
@@ -161,16 +166,17 @@
                   <el-input :disabled="typeContract=='add'?true:false" v-model="firstForm.agreement.partyBResponsiblePhone" placeholder="请输入联系方式" clearable />
                 </el-form-item>
               </el-col>
+              <el-col :span="8">
+                <el-form-item label="进场日期：" prop="agreement.entryDate"
+                              :rules="[{ required: true, trigger: 'change', message: '请选择进场日期' }]">
+                  <el-date-picker v-model="firstForm.agreement.entryDate" type="date" placeholder="选择日期"
+                                  value-format="yyyy-MM-dd" format="yyyy-MM-dd" style="width: 100%;"></el-date-picker>
+                </el-form-item>
+              </el-col>
             </el-row>
 
             <el-row :gutter="10" v-if="[4, 5].includes(contractType)">
-              <el-col :span="8">
-                <el-form-item label="进场日期：" prop="agreement.entryDate"
-                  :rules="[{ required: true, trigger: 'change', message: '请选择进场日期' }]">
-                  <el-date-picker v-model="firstForm.agreement.entryDate" type="date" placeholder="选择日期"
-                    value-format="yyyy-MM-dd" format="yyyy-MM-dd" style="width: 100%;"></el-date-picker>
-                </el-form-item>
-              </el-col>
+
               <el-col :span="8">
                 <el-form-item label="完工日期：" prop="agreement.finishDate"
                   :rules="[{ required: true, trigger: 'change', message: '请选择完工日期' }]">
