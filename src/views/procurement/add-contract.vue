@@ -25,21 +25,21 @@
           <commonTitle>基本信息</commonTitle>
           <div style="margin-bottom: 8px">
             <el-row :gutter="10">
-              <el-col :span="8">
-                <el-form-item label="归属本级组织：" prop="agreement.belongOrganizationName"
-                  :rules="[{ required: true, trigger: 'blur', message: '请输入归属本级组织' }]">
-                  <el-input disabled  v-model="firstForm.agreement.belongOrganizationName" placeholder="请输入归属本级组织"
-                    clearable />
-                </el-form-item>
-              </el-col>
-              <el-col :span="8">
+<!--              <el-col :span="8">-->
+<!--                <el-form-item label="归属本级组织：" prop="agreement.belongOrganizationName"-->
+<!--                  :rules="[{ required: true, trigger: 'blur', message: '请输入归属本级组织' }]">-->
+<!--                  <el-input disabled  v-model="firstForm.agreement.belongOrganizationName" placeholder="请输入归属本级组织"-->
+<!--                    clearable />-->
+<!--                </el-form-item>-->
+<!--              </el-col>-->
+              <el-col :span="12">
                 <el-form-item label="归属最小核算项目：" prop="agreement.belongAccountingItem"
                   :rules="[{ required: true, trigger: 'blur', message: '请输入归属最小核算项目' }]">
                   <el-input disabled v-model="firstForm.agreement.belongAccountingItem" placeholder="请输入采购任务名称"
                     clearable />
                 </el-form-item>
               </el-col>
-              <el-col :span="8">
+              <el-col :span="12">
                 <el-form-item label="归属最小核算项目编码：" prop="agreement.belongAccountingItemCode"
                   :rules="[{ required: true, trigger: 'blur', message: '请输入归属最小核算项目编码' }]">
                   <el-input disabled v-model="firstForm.agreement.belongAccountingItemCode" placeholder="请输入采购任务名称"
@@ -2687,7 +2687,7 @@ export default {
       this.isIndeterminateObj[this.term].isAll = this.termValueAll
       console.log(allHaveTrue,'allHaveTrue');
       if(allHaveTrue){
-        // 提取所有符合selected的值 
+        // 提取所有符合selected的值
         let filteredValues = Object.values(this.termValueMap).map(arr =>
           arr.filter(item => item.selected).map(item => ({id:item.id,featureValueName:item.featureValueName}))
         );
