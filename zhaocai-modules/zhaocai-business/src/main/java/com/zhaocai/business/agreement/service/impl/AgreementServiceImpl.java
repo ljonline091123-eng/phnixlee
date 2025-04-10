@@ -243,9 +243,9 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper, Agreement
         if (projectDetail == null) {
             throw new ParamValidateException("获取最小核算项目失败");
         }
-        if (StringUtils.isBlank(projectDetail.getBelongingOrgId())) {
-            throw new ParamValidateException("最小核算项目所属的归属本级组织id为空，请确认");
-        }
+//        if (StringUtils.isBlank(projectDetail.getBelongingOrgId())) {
+//            throw new ParamValidateException("最小核算项目所属的归属本级组织id为空，请确认");
+//        }
         if (StringUtils.isBlank(getDeptName(projectDetail.getBelongingOrgId()))) {
             throw new ParamValidateException("最小核算项目所属的归属本级组织为空，请确认");
         }
