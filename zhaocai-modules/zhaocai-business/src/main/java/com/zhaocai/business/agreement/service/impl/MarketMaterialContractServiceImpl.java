@@ -323,15 +323,15 @@ public class MarketMaterialContractServiceImpl extends ServiceImpl<MarketMateria
 //        if (StringUtils.isBlank(getDeptName(projectDetail.getBelongingOrgId()))) {
 //            throw new ParamValidateException("最小核算项目所属的归属本级组织为空，请确认");
 //        }
-        if (StringUtils.isBlank(projectDetail.getPrjAddrInfo())) {
-            throw new ParamValidateException("最小核算项目的合同履行地为空");
-        }
-        if (StringUtils.isBlank(projectDetail.getPrjAddr())) {
-            throw new ParamValidateException("最小核算项目的行政区划为空");
-        }
-        if (StringUtils.isBlank(getAgreementPerformDistrict(projectDetail.getPrjAddr()))) {
-            throw new ParamValidateException("获取最小核算项目的行政区划名称为空");
-        }
+//        if (StringUtils.isBlank(projectDetail.getPrjAddrInfo())) {
+//            throw new ParamValidateException("最小核算项目的合同履行地为空");
+//        }
+//        if (StringUtils.isBlank(projectDetail.getPrjAddr())) {
+//            throw new ParamValidateException("最小核算项目的行政区划为空");
+//        }
+//        if (StringUtils.isBlank(getAgreementPerformDistrict(projectDetail.getPrjAddr()))) {
+//            throw new ParamValidateException("获取最小核算项目的行政区划名称为空");
+//        }
         if (StringUtils.isBlank(projectDetail.getManagementOrgId())) {
             throw new ParamValidateException("最小核算项目的归属管理组织id为空");
         }
