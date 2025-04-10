@@ -20,6 +20,7 @@ import com.zhaocai.system.api.domain.SysUser;
 import org.apache.commons.io.IOUtils;
 import org.flowable.bpmn.model.BpmnModel;
 import org.flowable.common.engine.api.FlowableException;
+import org.flowable.engine.history.HistoricProcessInstance;
 import org.flowable.engine.repository.Deployment;
 import org.flowable.engine.repository.ProcessDefinition;
 import org.flowable.engine.repository.ProcessDefinitionQuery;
@@ -262,6 +263,18 @@ public class FlowDefinitionServiceImpl extends FlowServiceFactory implements IFl
             Map<String, Object> map = new HashMap<>();
             map.put("flag", "true");
             map.put("instanceId", processInstance.getProcessInstanceId());
+            //根据流程实例判断流程是否结束
+            ProcessInstance instance = runtimeService.createProcessInstanceQuery()
+                    .processInstanceId(processInstance.getProcessInstanceId())
+                    .singleResult();
+
+            HistoricProcessInstance historicInstance = historyService.createHistoricProcessInstanceQuery()
+                    .processInstanceId(processInstance.getProcessInstanceId())
+                    .singleResult();
+
+            boolean isCompleted = historicInstance != null && historicInstance.getEndTime() != null;
+
+            map.put("isEnded", isCompleted);
             return map;
         } catch (FlowableException e) {
             e.printStackTrace();

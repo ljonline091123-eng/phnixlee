@@ -159,8 +159,15 @@ public class BPMProcessService implements IBPMProcessService {
 //        }
 //        variables.put("completedFlag", completedFlag);
 //
-//        //2.处理业务的service
-        getProcessBusinessService(processKey).processStart(variables);
+        if(map.get("isEnded") != null && (boolean) map.get("isEnded")){
+            //2.处理业务的service
+            getProcessBusinessService(processKey).processStart(variables);
+            //已完成
+            getProcessBusinessService(processKey).processAuditPass(variables);
+        }else {
+            //2.处理业务的service
+            getProcessBusinessService(processKey).processStart(variables);
+        }
         return processId;
     }
 
