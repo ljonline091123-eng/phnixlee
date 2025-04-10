@@ -321,6 +321,28 @@
               <el-input v-model="form.control"></el-input>
             </el-form-item>
           </el-col>
+          <el-col :span="12">
+            <el-form-item label="详细地址" prop="prjAddrInfo">
+              <el-input v-model="form.prjAddrInfo"></el-input>
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-row :gutter="20">
+          
+          <el-col :span="12">
+            <el-form-item label="行政区划" prop="prjAddr">
+              <el-cascader
+              v-model="form.prjAddr"
+              :options="prjAddrOptions"
+              ref="prjAddr"
+              :props="prjAddrProps"
+              placeholder="请选择行政区划"
+              style="width: 100%"
+              clearable
+              @change="handleXZChange"
+              ></el-cascader>
+            </el-form-item>
+          </el-col>
         </el-row>
       </el-form>
       <span slot="footer" class="dialog-footer">
@@ -337,7 +359,7 @@
 <script>
 import {AlldeptTreeSelect} from "@/api/system/project";
 import {deptTreeSelect} from "@/api/system/user";
-import {listProject,saveMinProjectInfo,getMinProjectById,deleteProject,BusinessTypeTreeSelect,CertificationTypeTreeSelect,dictProjectTypeTreeSelect} from "@/api/system/project";
+import {listProject,saveMinProjectInfo,getMinProjectById,deleteProject,BusinessTypeTreeSelect,CertificationTypeTreeSelect,dictProjectTypeTreeSelect,listAreaDivisionTree} from "@/api/system/project";
 import { getDicts as getDicts } from '@/api/system/dict/data'
 import Treeselect from "@riophae/vue-treeselect";
 import "@riophae/vue-treeselect/dist/vue-treeselect.css";
@@ -370,6 +392,8 @@ export default {
       businessTypeOptions: [],
       // 资质类别树选项
       zizhiOptions: [],
+      //行政区划
+      prjAddrOptions:[],
       // 工程分类树选项
       dictProjectOptions: [],
       //新增弹窗显示
@@ -380,6 +404,12 @@ export default {
         expandTrigger: 'hover',
         emitPath: false,
         value: 'value', // 假设节点的值是 `id`
+        label: 'label', // 假设节点的标签是 `name`
+        children: 'children' // 假设子节点是 `children`
+      },
+        //行政区划选项
+        prjAddrProps: {
+          value: 'value', // 假设节点的值是 `id`
         label: 'label', // 假设节点的标签是 `name`
         children: 'children' // 假设子节点是 `children`
       },
@@ -528,6 +558,7 @@ export default {
     this.getBusinessTypeTree();
     this.getDictProjectTypeTree();
     this.getZizhiTypeTree();
+    this.getXZTypeTree();
   },
   methods: {
     // 保存项目信息
@@ -604,6 +635,17 @@ export default {
         };
       });
     },
+      // 递归映射树结构数据（资质树、业务分类、工程分类）
+      mapXZTreeData(data) {
+      return data.map(item => {
+        return {
+          id: item.divisionCode,
+          label: item.divisionName,
+          value: item.divisionCode,
+          children: item.children.length>0 ? this.mapXZTreeData(item.children) : null
+        };
+      });
+    },
     // 递归映射树结构数据（资质树、业务分类、工程分类）
     mapDeptTreeData(data) {
       return data.map(item => {
@@ -629,6 +671,15 @@ export default {
         console.log("zizhiOptions:",this.zizhiOptions);
       });
     },
+
+     /** 查询行政区划下拉树结构 */
+     getXZTypeTree() {
+      listAreaDivisionTree().then((response) => {
+        this.prjAddrOptions = this.mapXZTreeData(response.data);
+        // this.prjAddrOptions = response.data || [];
+        console.log("prjAddrOptions:",this.prjAddrOptions);
+      });
+    },
     /** 查询工程分类下拉树结构 */
     getDictProjectTypeTree() {
       dictProjectTypeTreeSelect().then((response) => {
@@ -640,6 +691,19 @@ export default {
       console.log('Selected Value:', value); // 当前选中的值数组
       console.log('Selected Data:', selectedData); // 当前选中项的详细数据对象数组
       this.buildHierarchy(selectedData); // 构建层级关系
+    },
+    handleXZChange(value,selectedData) {
+      if (value) {
+        const checkedNodes = this.$refs['prjAddr'].getCheckedNodes();
+        if (checkedNodes && checkedNodes.length > 0) {
+          this.form.prjAddr = checkedNodes[0].path ? checkedNodes[0].path : [];
+        } else {
+          this.form.prjAddr = '';
+          console.log("没有选中的节点");
+        }
+        console.log("资质变化的value：",checkedNodes);
+        console.log("资质变化的this.form.prjAddr",this.form.prjAddr);
+      }
     },
     // 处理资质选择变化
     handleZiZhiChange(value,selectedData) {
