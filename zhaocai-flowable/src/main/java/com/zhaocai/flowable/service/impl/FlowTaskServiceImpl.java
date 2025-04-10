@@ -1016,8 +1016,12 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
                 previousApprover = historicTask.getAssignee();
                 break;
             }
-            variables.put("previousApprover", previousApprover);
-
+            if (!StringUtils.isEmpty(previousApprover)) {
+                R<SysUser> startUser = remoteuserservice.selectUserInFoById(Long.parseLong(previousApprover), SecurityConstants.INNER);
+                if (startUser != null) {
+                    variables.put("previousApprover", startUser.getData().getNickName());
+                }
+            }
             String value = variables.get("detailUrl") + "";
             flowTasks.get().setDetailUrl(value);
             String businessContent = variables.get("businessContent") == null ? "" : variables.get("businessContent") + "";
