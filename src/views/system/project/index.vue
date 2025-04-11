@@ -441,7 +441,8 @@ export default {
         state: '',
         costReductionRate: '',
         biddingPrice: '',
-        control: ''
+        control: '',
+        prjAddr: []
       },
       //表单校验
       rules: {
@@ -459,6 +460,12 @@ export default {
         ],
         ziZhiselect: [
           { required: true, message: '资质不能为空', trigger: 'change' }
+        ],
+        prjAddrInfo: [
+          { required: true, message: '详细地址不能为空', trigger: 'change' }
+        ],
+        prjAddr: [
+          { required: true, message: '行政区划不能为空', trigger: 'change' }
         ],
         construtionUnit: [
           { required: true, message: '建设单位不能为空', trigger: 'blur' }
@@ -806,7 +813,6 @@ export default {
     },
     // 修改按钮操作
     async handleUpdate(row) {
-      console.log("修改项目", row);
       const { id, name } = this.selectProjectData;
       try {
         const res = await getMinProjectById(id);
@@ -814,7 +820,7 @@ export default {
         this.form.prgType = this.form.prgType.split(",");
         let ziZhiStr = this.form.ziZhi.split(",");
         this.form.ziZhiselect = ziZhiStr;
-        console.log("修改项目this.form", this.form);
+        this.form.prjAddr = JSON.parse(this.form.prjAddr) || [];
         this.dialogVisible = true;
       } catch (err) {
         console.log(err);
