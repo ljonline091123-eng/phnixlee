@@ -4,7 +4,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
 "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.zhaocai.business.exam.mapper.ExamineeMapper">
     
-    <resultMap type="Examinee" id="ExamineeResult">
+    <resultMap type="com.zhaocai.business.exam.domain.Examinee" id="ExamineeResult">
         <result property="id"    column="id"    />
         <result property="workUnit"    column="work_unit"    />
         <result property="examineeName"    column="examinee_name"    />
@@ -21,7 +21,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         select id, work_unit, examinee_name, identity_card_id, phone, entry_card_number, examination_room, seat_number, picture_url, exam_point_name from tb_examinee
     </sql>
 
-    <select id="selectExamineeList" parameterType="Examinee" resultMap="ExamineeResult">
+    <select id="selectExamineeList" parameterType="com.zhaocai.business.exam.domain.Examinee" resultMap="ExamineeResult">
         <include refid="selectExamineeVo"/>
         <where>  
             <if test="workUnit != null  and workUnit != ''"> and work_unit = #{workUnit}</if>
@@ -36,7 +36,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         where id = #{id}
     </select>
         
-    <insert id="insertExaminee" parameterType="Examinee">
+    <insert id="insertExaminee" parameterType="com.zhaocai.business.exam.domain.Examinee">
         insert into tb_examinee
         <trim prefix="(" suffix=")" suffixOverrides=",">
             <if test="id != null">id,</if>
@@ -64,7 +64,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
          </trim>
     </insert>
 
-    <update id="updateExaminee" parameterType="Examinee">
+    <update id="updateExaminee" parameterType="com.zhaocai.business.exam.domain.Examinee">
         update tb_examinee
         <trim prefix="SET" suffixOverrides=",">
             <if test="workUnit != null">work_unit = #{workUnit},</if>
