@@ -103,21 +103,26 @@
       <el-table-column label="项目名称" prop="minAccountFullName" align="center" />
       <el-table-column label="最小核算项目编号" prop="minAccountCode" align="center" />
       <el-table-column label="归属项目部" prop="projectDepartment" align="center" />
-      <el-table-column label="项目业态" prop="prjState" align="center">
+      <!--<el-table-column label="项目业态" prop="prjState" align="center">
         <template slot-scope="scope">
           {{ getDictLabel('project_format', scope.row.prjState) }}
         </template>
+      </el-table-column>-->
+      <el-table-column label="项目业态" prop="prjStateText" align="center">
       </el-table-column>
       <el-table-column label="工程类型" prop="prgTypeText" align="center" />
-      <el-table-column label="项目资金来源" prop="moneySec" align="center">
+      <!--<el-table-column label="项目资金来源" prop="moneySec" align="center">
         <template slot-scope="scope">
           {{ getDictLabel('project_funds_source', scope.row.prjState) }}
         </template>
-      </el-table-column>
-      <el-table-column label="项目管理模式" prop="prjManageModel" align="center" >
+      </el-table-column>-->
+      <el-table-column label="项目资金来源" prop="moneySecText" align="center" />
+      <!--<el-table-column label="项目管理模式" prop="prjManageModel" align="center" >
         <template slot-scope="scope">
           {{ getDictLabel('project_manage_model', scope.row.prjState) }}
         </template>
+      </el-table-column>-->
+      <el-table-column label="项目管理模式" prop="prjManageModelText" align="center" >
       </el-table-column>
     </el-table>
     <!-- 分页器 -->
@@ -715,6 +720,7 @@ export default {
     },
     // 处理资质选择变化
     handleZiZhiChange(value,selectedData) {
+      debugger;
       if (value) {
         const checkedNodes = this.$refs['ziZhiselect'].getCheckedNodes();
         if (checkedNodes && checkedNodes.length > 0) {
