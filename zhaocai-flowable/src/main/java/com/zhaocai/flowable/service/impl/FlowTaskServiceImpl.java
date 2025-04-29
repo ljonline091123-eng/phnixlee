@@ -1295,8 +1295,11 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
         BpmnModel bpmnModel = repositoryService.getBpmnModel(processDefinitionId);
         Process process = bpmnModel.getMainProcess();
 
+        Collection<FlowElement> flowElements = process.getFlowElements();
+        Collection<UserTask> tasks  = getAllUserTaskEvent(flowElements, null);
+        List<UserTask> userTasks = sortTasksByFlowPath(getStartEvent(bpmnModel), tasks);
         // 3. 获取所有用户任务节点
-        List<UserTask> userTasks = process.findFlowElementsOfType(UserTask.class);
+        //List<UserTask> userTasks = process.findFlowElementsOfType(UserTask.class);
 
         int i = 0;
         // 5. 处理每个任务节点
@@ -1345,6 +1348,76 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
         return result;
     }
 
+    private static Collection<UserTask> getAllUserTaskEvent(Collection<FlowElement> flowElements, Collection<UserTask> allElements) {
+        allElements = allElements == null ? new ArrayList<>() : allElements;
+        for (FlowElement flowElement : flowElements) {
+
+            if (flowElement instanceof UserTask) {
+                allElements.add((UserTask) flowElement);
+            }
+            if (flowElement instanceof SubProcess) {
+                // 继续深入子流程，进一步获取子流程
+                allElements = getAllUserTaskEvent(((SubProcess) flowElement).getFlowElements(), allElements);
+            }
+        }
+        return allElements;
+    }
+
+    private static StartEvent getStartEvent(BpmnModel model) {
+        Process process = model.getMainProcess();
+        FlowElement startElement = process.getInitialFlowElement();
+        if (startElement instanceof StartEvent) {
+            return (StartEvent) startElement;
+        }
+        return null;
+    }
+
+    private static List<UserTask> sortTasksByFlowPath(StartEvent startEvent, Collection<UserTask> userTasks) {
+        List<UserTask> sorted = new ArrayList<>(userTasks.size());
+        FlowElement next = startEvent.getOutgoingFlows().get(0).getTargetFlowElement();
+        if (next == null) {
+            throw new CheckedException("流程图开始节点未找到目标节点");
+        }
+        // 第一个节点
+        sorted.add((UserTask) next);
+        boolean end = false;
+        while (!end) {
+            next = findTargetNode(next);
+            if (next instanceof Gateway) {
+                continue;
+            }
+            if (next instanceof EndEvent) {
+                end = true;
+                continue;
+            }
+            if (next == null) {
+                end = true;
+            } else {
+                sorted.add((UserTask) next);
+            }
+        }
+
+        return sorted;
+    }
+
+    private static FlowElement findTargetNode(FlowElement node) {
+        if (node instanceof Gateway) {
+            SequenceFlow passWay = ((Gateway) node).getOutgoingFlows().stream()
+                    .filter(flow -> flow.getConditionExpression().contains("pass"))
+                    .findFirst()
+                    .orElseThrow(()-> new CheckedException("网关未正确配置流转条件"));
+            return passWay.getTargetFlowElement();
+        }
+        if (node instanceof EndEvent) {
+            return null;
+        }
+        if (node == null) {
+            return null;
+        }
+        final UserTask userTask = (UserTask) node;
+        // 用户任务节点默认只支持一个出口路径
+        return userTask.getOutgoingFlows().get(0).getTargetFlowElement();
+    }
 
     /**
      * 获取流程过程图
