@@ -949,7 +949,7 @@ export default {
               // const {id} = this.procurementPlan;
               let param = Base64.encode(JSON.stringify(id));
               param = encodeURIComponent(param); //避免base64编码中出现"/"时路由404
-              const detailUrl = `/procurement/add-plan/${param}`;
+              const detailUrl = `/procurement/plan-detail/${param}`;
               await submitProcurementPlan({
                 id,
                 detailUrl,
