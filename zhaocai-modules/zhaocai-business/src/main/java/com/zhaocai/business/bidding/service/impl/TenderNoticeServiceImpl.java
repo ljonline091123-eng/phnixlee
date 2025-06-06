@@ -1117,7 +1117,7 @@ public class TenderNoticeServiceImpl extends ServiceImpl<TenderNoticeMapper,Tend
         }
         ProcurementScheme scheme = procurementSchemeService.getById(tenderNoticeVO.getSchemeId());
         /* 采购方案 1公开招标 进入到这个 招标文件环节的需要验证 */
-        if (scheme.getProcurementType() == NumberConstant.ONE){
+        if (scheme.getProcurementType() == NumberConstant.ONE || scheme.getProcurementType() == NumberConstant.FIVE){
 //            TenderNotice tenderNoticeVerify = this.getOne(new LambdaQueryWrapper<TenderNotice>()
 //                    .eq(TenderNotice::getId, tenderNoticeVO.getId())
 //                    .ne(TenderNotice::getNoticeStatus, TenderNoticeStatusEnum.ABANDON_BID.getState()));

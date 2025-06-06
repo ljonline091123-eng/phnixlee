@@ -151,12 +151,14 @@ public class OrganizationServiceImpl implements IOrganizationService {
         if(null != thridDeptId){
             List<SysDept> deptList = remoteSystemService.getDeptByThridDeptIdNoBM(thridDeptId,SecurityConstants.INNER);
             List<OrganizationVO>  children =  buildOrganizationTreeByOrg(thridDeptId,deptList);
-            OrganizationVO rootVO = new OrganizationVO();
-            rootVO.setOrganizationCode(deptList.get(0).getThridDeptId());
-            rootVO.setOrganizationName(deptList.get(0).getDeptName());
-            rootVO.setOrganizationId(deptList.get(0).getDeptId());
-            rootVO.setChildren(children);
-            organizationTree.add(0,rootVO);
+            if(deptList != null && !deptList.isEmpty()){
+                OrganizationVO rootVO = new OrganizationVO();
+                rootVO.setOrganizationCode(deptList.get(0).getThridDeptId());
+                rootVO.setOrganizationName(deptList.get(0).getDeptName());
+                rootVO.setOrganizationId(deptList.get(0).getDeptId());
+                rootVO.setChildren(children);
+                organizationTree.add(0,rootVO);
+            }
         }
 
         // 获取当前用户的二级组织或集团
