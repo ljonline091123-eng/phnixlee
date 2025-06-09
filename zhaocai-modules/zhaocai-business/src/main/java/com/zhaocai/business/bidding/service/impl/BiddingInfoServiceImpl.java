@@ -303,24 +303,25 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
                     BigDecimal busTotalScore = BigDecimal.ZERO;
                     BigDecimal techTotalScore = BigDecimal.ZERO;
                     //商务技术专家人数
-                    int expertSizeBus = 0;
+//                    int expertSizeBus = 0;
                     int expertSizeTech = 0;
                     for (ExpertScoreExtraVO expertScoreExtra : expertScores) {
-                        if (expertScoreExtra.getExpertType() == 1){
+//                        if (expertScoreExtra.getExpertType() == 1){
                             //1.汇总技术分数
                             techTotalScore = techTotalScore.add(expertScoreExtra.getTechScore());
+                            techTotalScore = techTotalScore.add(expertScoreExtra.getBusScore());
                             expertSizeTech++;
-                        } else if (expertScoreExtra.getExpertType() == 2){
-                            //2.汇总商务分数
-                            busTotalScore = busTotalScore.add(expertScoreExtra.getBusScore());
-                            expertSizeBus++;
-                        }
+//                        } else if (expertScoreExtra.getExpertType() == 2){
+//                            2.汇总商务分数
+//                            busTotalScore = busTotalScore.add(expertScoreExtra.getBusScore());
+//                            expertSizeBus++;
+//                        }
 
                     }
 
-                    if (expertSizeBus > 0){
-                        avgBusTotalScore = busTotalScore.divide(new BigDecimal(expertSizeBus), 2, RoundingMode.HALF_UP);
-                    }
+//                    if (expertSizeBus > 0){
+//                        avgBusTotalScore = busTotalScore.divide(new BigDecimal(expertSizeBus), 2, RoundingMode.HALF_UP);
+//                    }
                     if (expertSizeTech > 0){
                         avgTechTotalScore = techTotalScore.divide(new BigDecimal(expertSizeTech), 2, RoundingMode.HALF_UP);
                     }

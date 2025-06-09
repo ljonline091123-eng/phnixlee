@@ -307,17 +307,17 @@ public class ExpertEvaluationServiceImpl implements IExpertEvaluationService {
 
 				//获取总分
 				if (itemDTO.getScore() != null){
-					totalScore = totalScore.add(itemDTO.getScore());
+					totalScore = itemDTO.getScore();
 				}
 				//设置评分模板项类型
 				itemType = itemDTO.getItemType();
-			}
-			if (itemType == 1) {
-				//技术评分
-				techScore = totalScore;
-			} else if (itemType == 2){
-				//商务评分
-				busScore = totalScore;
+				if (itemType == 1) {
+					//技术评分
+					techScore = techScore.add(totalScore);
+				} else if (itemType == 2){
+					//商务评分
+					busScore = busScore.add(totalScore);
+				}
 			}
 		}
 		boolean res = biddingItemGradeService.saveBatch(itemGradeList);

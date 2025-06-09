@@ -25,7 +25,7 @@ public class BiddingExpertListVO implements Serializable {
     private String expertName;
 
     @ApiModelProperty(value =  "专家类别（1技术类 2经济类）")
-    private Integer expertType;
+    private String expertType;
 
     @ApiModelProperty(value =  "第三方待办跳转地址")
     private String redirectUrl;
