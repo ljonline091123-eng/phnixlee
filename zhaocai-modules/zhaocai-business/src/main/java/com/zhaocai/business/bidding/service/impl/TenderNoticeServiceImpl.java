@@ -1008,6 +1008,9 @@ public class TenderNoticeServiceImpl extends ServiceImpl<TenderNoticeMapper,Tend
         } else if (schemeType == NumberConstant.FOUR){
             TenderFlowSingleService singleService = new TenderFlowSingleService();
             nextNoticeStatus = singleService.nextFlow(TenderFlowSingleService.statusEnumList, noticeStatus);
+        }else if(schemeType == NumberConstant.FIVE){
+            CompareChooseFlowInviteService compareChooseFlowInviteService = new CompareChooseFlowInviteService();
+            nextNoticeStatus = compareChooseFlowInviteService.nextFlow(CompareChooseFlowInviteService.statusEnumList, noticeStatus);
         }
         return nextNoticeStatus;
 
@@ -1107,8 +1110,12 @@ public class TenderNoticeServiceImpl extends ServiceImpl<TenderNoticeMapper,Tend
     /** 验证请求参数 */
     private void verifyParam(TenderNoticeVO tenderNoticeVO){
         if (tenderNoticeVO.getSchemeType() != null){
-            if (tenderNoticeVO.getSchemeType() == NumberConstant.TWO && tenderNoticeVO.getVendorIds().size() < NumberConstant.THREE){
-                throw new ParamValidateException("邀请招标需推荐3家供应商以上");
+            if ((tenderNoticeVO.getSchemeType() == NumberConstant.FIVE || tenderNoticeVO.getSchemeType() == NumberConstant.TWO) && tenderNoticeVO.getVendorIds().size() < NumberConstant.THREE){
+                if(tenderNoticeVO.getSchemeType() == NumberConstant.TWO){
+                    throw new ParamValidateException("邀请招标需推荐3家供应商以上");
+                }else {
+                    throw new ParamValidateException("比选需推荐3家供应商以上");
+                }
             } else if (tenderNoticeVO.getSchemeType() == NumberConstant.THREE && tenderNoticeVO.getVendorIds().size() < NumberConstant.THREE){
                 throw new ParamValidateException("询价采购需推荐3家供应商以上");
             } else if (tenderNoticeVO.getSchemeType() == NumberConstant.FOUR && tenderNoticeVO.getVendorIds().size() != NumberConstant.ONE){
@@ -1117,7 +1124,7 @@ public class TenderNoticeServiceImpl extends ServiceImpl<TenderNoticeMapper,Tend
         }
         ProcurementScheme scheme = procurementSchemeService.getById(tenderNoticeVO.getSchemeId());
         /* 采购方案 1公开招标 进入到这个 招标文件环节的需要验证 */
-        if (scheme.getProcurementType() == NumberConstant.ONE || scheme.getProcurementType() == NumberConstant.FIVE){
+        if (scheme.getProcurementType() == NumberConstant.ONE){
 //            TenderNotice tenderNoticeVerify = this.getOne(new LambdaQueryWrapper<TenderNotice>()
 //                    .eq(TenderNotice::getId, tenderNoticeVO.getId())
 //                    .ne(TenderNotice::getNoticeStatus, TenderNoticeStatusEnum.ABANDON_BID.getState()));
