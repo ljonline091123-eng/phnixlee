@@ -13,6 +13,7 @@ import com.zhaocai.business.bidding.service.IBiddingOpenPeopleService;
 import com.zhaocai.business.bidding.service.IBiddingResultService;
 import com.zhaocai.business.bidding.service.ITenderNoticeService;
 import com.zhaocai.business.bidding.vo.req.BiddingOpenPeopleVO;
+import com.zhaocai.business.bidding.vo.req.EvaluatBidVO;
 import com.zhaocai.business.bidding.vo.req.OpenBidVO;
 import com.zhaocai.business.bidding.vo.req.query.BiddingOpenPeopleQueryVO;
 import com.zhaocai.business.bidding.vo.res.BiddingInfoListVO;
@@ -302,6 +303,13 @@ public class BiddingOpenPeopleServiceImpl extends ServiceImpl<BiddingOpenPeopleM
             TenderNoticeSchemeInfoVO detailVO = tenderNoticeService.getTenderNoticeSchemeInfo(openPeople.getNoticeId());
             Integer nextNoticeStatus = tenderNoticeService.nextTenderNoticeStatus(detailVO.getSchemeType(), detailVO.getNoticeStatus());
             tenderNoticeService.updateStatus(openPeople.getNoticeId(), nextNoticeStatus);
+            ProcurementScheme procurementScheme = procurementSchemeService.getById(detailVO.getSchemeId());
+            if(procurementScheme != null && "Y".equals(procurementScheme.getLowPrice())){
+                EvaluatBidVO evaluatBidVO = new EvaluatBidVO();
+                evaluatBidVO.setNoticeId(openBidVO.getNoticeId());
+                biddingInfoService.evaluatBid(evaluatBidVO);
+//                 nextNoticeStatus = tenderNoticeService.nextTenderNoticeStatus(detailVO.getSchemeType(), nextNoticeStatus);
+            }
         }
         return res;
     }

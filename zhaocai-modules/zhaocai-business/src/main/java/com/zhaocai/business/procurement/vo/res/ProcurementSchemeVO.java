@@ -47,6 +47,9 @@ public class ProcurementSchemeVO extends AdviceObject {
     @ApiModelProperty(value = "是否收取保证金")
     private Integer isReceiveDeposit;
 
+    @ApiModelProperty(value = "是否低价中标")
+    private String lowPrice;
+
     @ApiModelProperty(value = "保证金")
     private BigDecimal securityDeposit;
 

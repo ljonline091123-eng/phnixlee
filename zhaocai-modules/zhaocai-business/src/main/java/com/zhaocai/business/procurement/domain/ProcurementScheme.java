@@ -80,6 +80,13 @@ public class ProcurementScheme extends BaseEntity {
     private Integer isReceiveDeposit;
 
     /**
+     * 是否低价中标
+     */
+    @ApiModelProperty(value = "是否低价中标")
+    @NotNull(message = "是否低价中标不能为空")
+    private String lowPrice;
+
+    /**
      * 保证金
      */
     @ApiModelProperty(value = "保证金")
