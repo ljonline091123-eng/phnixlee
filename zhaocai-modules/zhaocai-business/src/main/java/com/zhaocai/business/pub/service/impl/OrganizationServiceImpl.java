@@ -1,30 +1,19 @@
 package com.zhaocai.business.pub.service.impl;
 
-import cn.hutool.core.collection.CollectionUtil;
-import com.zhaocai.business.common.exception.BusinessException;
 import com.zhaocai.business.manager.http.service.UnderlingSystemService;
-import com.zhaocai.business.process.service.IBPMProcessService;
 import com.zhaocai.business.pub.service.IOrganizationService;
 import com.zhaocai.business.pub.vo.res.OrganizationVO;
-import com.zhaocai.common.core.constant.NumberConstant;
 import com.zhaocai.common.core.constant.SecurityConstants;
-import com.zhaocai.common.core.constant.UserConstants;
-import com.zhaocai.common.core.utils.StringUtils;
-import com.zhaocai.common.core.web.domain.AjaxResult;
-import com.zhaocai.common.security.utils.SecurityUtils;
 import com.zhaocai.system.api.domain.SysDept;
-import com.zhaocai.system.api.domain.SysUser;
 import com.zhaocai.system.api.system.RemoteSystemService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 /**
  * 组织机构实现类
@@ -48,7 +37,7 @@ public class OrganizationServiceImpl implements IOrganizationService {
 
         // 只保留 syncthird 机构
         List<SysDept> filterList = sysDeptList.stream()
-                .filter(x ->"syncthird".equals(x.getOrigin()))
+                .filter(x -> "syncthird".equals(x.getOrigin()))
                 .collect(Collectors.toList());
 
         return buildOrganizationTree(filterList);
@@ -61,7 +50,7 @@ public class OrganizationServiceImpl implements IOrganizationService {
 
         // 只保留 syncthird 机构
         List<SysDept> filterList = sysDeptList.stream()
-                .filter(x ->"syncthird".equals(x.getOrigin()) && !"X".equals(x.getThridOrgType()))
+                .filter(x -> "syncthird".equals(x.getOrigin()) && !"X".equals(x.getThridOrgType()))
                 .collect(Collectors.toList());
 
         return buildOrganizationTree(filterList);
@@ -83,6 +72,7 @@ public class OrganizationServiceImpl implements IOrganizationService {
 
     /**
      * 构建机构树
+     *
      * @param rootDept
      * @param sysDeptMap
      * @return
@@ -119,6 +109,7 @@ public class OrganizationServiceImpl implements IOrganizationService {
 
     /**
      * 构建机构树
+     *
      * @param filterList
      * @return
      */
@@ -140,45 +131,27 @@ public class OrganizationServiceImpl implements IOrganizationService {
 
     /**
      * 范本选择获取公司
+     *
      * @return
      */
     @Override
     public List<OrganizationVO> listOrganizationCalligraphy() {
-        List<OrganizationVO>  organizationTree = new ArrayList<>();
-        // 1、获取当前用户的三级组织或二级组织
-        String thridDeptId = this.getOrgByUserId(SecurityUtils.getThridOrgId());
-        // 2、查询三级组织或二级组织下的公司
-        if(null != thridDeptId){
-            List<SysDept> deptList = remoteSystemService.getDeptByThridDeptIdNoBM(thridDeptId,SecurityConstants.INNER);
-            List<OrganizationVO>  children =  buildOrganizationTreeByOrg(thridDeptId,deptList);
-            if(deptList != null && !deptList.isEmpty()){
-                OrganizationVO rootVO = new OrganizationVO();
-                rootVO.setOrganizationCode(deptList.get(0).getThridDeptId());
-                rootVO.setOrganizationName(deptList.get(0).getDeptName());
-                rootVO.setOrganizationId(deptList.get(0).getDeptId());
-                rootVO.setChildren(children);
-                organizationTree.add(0,rootVO);
-            }
+        List<OrganizationVO> organizationTree = new ArrayList<>();
+        List<SysDept> deptList = remoteSystemService.selectDeptList(new SysDept(), SecurityConstants.INNER);
+        List<SysDept> collect = deptList.stream().filter(dept -> "0".equals(dept.getParentId() + "")).collect(Collectors.toList());
+        String thridDeptId = "1000000000";
+        if (collect != null && !collect.isEmpty()) {
+            thridDeptId = collect.get(0).getThridDeptId();
         }
-
-        // 获取当前用户的二级组织或集团
-//        String currUserTowLevelThridDeptId =  remoteSystemService.getTwoLevelDeptByDeptId
-//                (SecurityUtils.getSysUser().getDeptId(),SecurityConstants.INNER).getThridDeptId();
-//        // 获取所有二级组织及集团
-//        List<SysDept> sysDeptList = remoteSystemService.getTwoLevelDepts(SecurityConstants.INNER);
-//        List<OrganizationVO>  organizationTree = null;
-//        if (!currUserTowLevelThridDeptId.equals(UserConstants.GROUP_DEPT_ID)) {
-//            sysDeptList = sysDeptList.stream().filter(item -> item.getThridOrgLevel() == NumberConstant.ONE ||
-//                    item.getThridDeptId().equals(currUserTowLevelThridDeptId)).collect(Collectors.toList());
-//        }
-//
-//        organizationTree =  buildOrganizationTree(sysDeptList);
-//        if (!currUserTowLevelThridDeptId.equals(UserConstants.GROUP_DEPT_ID)) {
-//            organizationTree.stream().forEach(item -> {
-//                item.setOrganizationType("2");
-//            });
-//        }
-
+        List<OrganizationVO> children = buildOrganizationTreeByOrg(thridDeptId, deptList);
+        if (deptList != null && !deptList.isEmpty()) {
+            OrganizationVO rootVO = new OrganizationVO();
+            rootVO.setOrganizationCode(deptList.get(0).getThridDeptId());
+            rootVO.setOrganizationName(deptList.get(0).getDeptName());
+            rootVO.setOrganizationId(deptList.get(0).getDeptId());
+            rootVO.setChildren(children);
+            organizationTree.add(0, rootVO);
+        }
         return organizationTree;
     }
 
@@ -199,6 +172,7 @@ public class OrganizationServiceImpl implements IOrganizationService {
 
     /**
      * 构建机构树(不从集团层开始)
+     *
      * @param org
      * @param deptList
      * @return
