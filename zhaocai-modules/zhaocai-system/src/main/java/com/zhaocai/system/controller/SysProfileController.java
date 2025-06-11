@@ -134,11 +134,11 @@ public class SysProfileController extends BaseController
                 return error("文件格式不正确，请上传" + Arrays.toString(MimeTypeUtils.IMAGE_EXTENSION) + "格式");
             }
             R<SysFile> fileResult = remoteFileService.upload(file);
-            if (StringUtils.isNull(fileResult) || StringUtils.isNull(fileResult.getData()))
+            if (StringUtils.isNull(fileResult))
             {
                 return error("文件服务异常，请联系管理员");
             }
-            String url = fileResult.getData().getUrl();
+            String url = fileResult.getUrl();
             if (userService.updateUserAvatar(loginUser.getUsername(), url))
             {
                 AjaxResult ajax = AjaxResult.success();
