@@ -310,6 +310,7 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
                             //1.汇总技术分数
                             techTotalScore = techTotalScore.add(expertScoreExtra.getTechScore());
                             techTotalScore = techTotalScore.add(expertScoreExtra.getBusScore());
+                            techTotalScore = techTotalScore.add(expertScoreExtra.getQuotation());
                             expertSizeTech++;
 //                        } else if (expertScoreExtra.getExpertType() == 2){
 //                            2.汇总商务分数

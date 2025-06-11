@@ -51,6 +51,10 @@ public class ExpertScore extends BaseEntity
     @ApiModelProperty(value =  "技术评分")
     private BigDecimal techScore;
 
+    /** 技术评分 */
+    @ApiModelProperty(value =  "报价评分")
+    private BigDecimal quotation;
+
     /** 评标时间 */
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
     @ApiModelProperty(value =  "评标时间")

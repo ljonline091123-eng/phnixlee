@@ -93,6 +93,7 @@ public class MaterialsListServiceImpl extends ServiceImpl<MaterialsListMapper, M
         Integer[] floatRateCount = {0};
         Integer[] fixedCount = {0};
         materialsLists.forEach(materials -> {
+            materials.setId(null);
             materials.setPlanId(planId);
             materials.setContractSplitId(contractSplitId);
             materials.setUsedCount(BigDecimal.ZERO);

@@ -13,6 +13,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="expertId"    column="expert_id"    />
         <result property="busScore"    column="bus_score"    />
         <result property="techScore"    column="tech_score"    />
+        <result property="quotation"    column="quotation"    />
         <result property="evaTime"    column="eva_time"    />
         <result property="evaOpinion"    column="eva_opinion"    />
         <result property="evalStatus"    column="eval_status"    />
@@ -26,7 +27,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     </resultMap>
 
     <sql id="selectExpertScoreVo">
-        select id, scheme_id, notice_id, bidding_info_id, vendor_id, expert_id, bus_score, tech_score, eva_time, eva_opinion, eval_status, create_by, create_id, create_time, update_by, update_id, update_time, del_flag from tb_expert_score
+        select id, scheme_id, notice_id, bidding_info_id, vendor_id, expert_id, bus_score, tech_score,quotation, eva_time, eva_opinion, eval_status, create_by, create_id, create_time, update_by, update_id, update_time, del_flag from tb_expert_score
     </sql>
 
     <select id="findNotEvalVendorCount" resultType="java.lang.Integer">

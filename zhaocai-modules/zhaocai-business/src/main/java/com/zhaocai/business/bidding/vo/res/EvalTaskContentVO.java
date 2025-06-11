@@ -52,6 +52,9 @@ public class EvalTaskContentVO extends AdviceObject {
     @ApiModelProperty(value =  "技术评分")
     private BigDecimal techScore;
 
+    @ApiModelProperty(value =  "报价评分")
+    private BigDecimal quotation;
+
     @ApiModelProperty(value =  "是否评标 0未评标 1已评标")
     private Boolean isEval;
 

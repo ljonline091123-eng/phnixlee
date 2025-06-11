@@ -29,6 +29,10 @@ public class R<T> implements Serializable {
      */
     private String msg;
 
+    private String name;
+
+    private String url;
+
     /**
      * 响应数据
      */
