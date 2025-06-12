@@ -14,5 +14,6 @@ public interface NumberConstant {
 	int THREE = 3;
 	int FOUR = 4;
 	int FIVE = 5;
+	int SIX = 6;
 
 }

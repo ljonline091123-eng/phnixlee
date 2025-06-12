@@ -1011,6 +1011,9 @@ public class TenderNoticeServiceImpl extends ServiceImpl<TenderNoticeMapper,Tend
         }else if(schemeType == NumberConstant.FIVE){
             CompareChooseFlowInviteService compareChooseFlowInviteService = new CompareChooseFlowInviteService();
             nextNoticeStatus = compareChooseFlowInviteService.nextFlow(CompareChooseFlowInviteService.statusEnumList, noticeStatus);
+        }else if(schemeType == NumberConstant.SIX){
+            NegotiationsFlowInviteService negotiationsFlowInviteService = new NegotiationsFlowInviteService();
+            nextNoticeStatus = negotiationsFlowInviteService.nextFlow(CompareChooseFlowInviteService.statusEnumList, noticeStatus);
         }
         return nextNoticeStatus;
 
