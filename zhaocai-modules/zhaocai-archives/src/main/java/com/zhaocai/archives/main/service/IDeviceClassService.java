@@ -3,6 +3,7 @@ package com.zhaocai.archives.main.service;
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.zhaocai.archives.dossier.tree.DeviceTypeTree;
 import com.zhaocai.archives.main.domain.DeviceClass;
+import com.zhaocai.archives.main.domain.DeviceClassExcelData;
 
 import java.util.List;
 
@@ -66,4 +67,6 @@ public interface IDeviceClassService extends IService<DeviceClass> {
     DeviceClass initCode(DeviceClass deviceClass);
 
     long selectDeviceClassListCount(DeviceClass deviceClass);
+
+    String importData(List<DeviceClassExcelData> userList, boolean updateSupport, String operName);
 }

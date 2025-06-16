@@ -89,9 +89,9 @@ public class MtrFeatureServiceImpl extends ServiceImpl<MtrFeatureMapper, MtrFeat
             mtrFeature.setValid(0L);
         }
         int i = mtrFeatureMapper.insertMtrFeature(mtrFeature);
-        if (i > 0) {
-            materialItemService.addByMain(mtrFeature);
-        }
+//        if (i > 0) {
+//            materialItemService.addByMain(mtrFeature);
+//        }
         return i;
     }
 

@@ -15,7 +15,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
-import java.util.*;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * 设备档案主Service业务层处理
@@ -101,9 +104,9 @@ public class DeviceArchivesServiceImpl extends ServiceImpl<DeviceArchivesMapper,
             deviceArchives.setValid(0L);
         }
         int i = deviceArchivesMapper.insertDeviceArchives(deviceArchives);
-        if (i > 0) {
-            iDeviceDetailsService.addTypeByMain(deviceArchives);
-        }
+//        if (i > 0) {
+//            iDeviceDetailsService.addTypeByMain(deviceArchives);
+//        }
         return i;
     }
 

@@ -89,9 +89,9 @@ public class DeviceFeatureValueServiceImpl extends ServiceImpl<DeviceFeatureValu
             deviceFeatureValue.setValid(0L);
         }
         int i = deviceFeatureValueMapper.insertDeviceFeatureValue(deviceFeatureValue);
-        if (i > 0) {
-            iDeviceEigenvalueService.addTypeByMain(deviceFeatureValue);
-        }
+//        if (i > 0) {
+//            iDeviceEigenvalueService.addTypeByMain(deviceFeatureValue);
+//        }
         return i;
     }
 

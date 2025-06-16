@@ -5,6 +5,7 @@ import java.util.List;
 import com.zhaocai.archives.dossier.tree.MaterialTypeTree;
 import com.zhaocai.archives.main.domain.MtrClass;
 import com.baomidou.mybatisplus.extension.service.IService;
+import com.zhaocai.archives.main.domain.MtrClassExcelData;
 
 /**
  * 材料分类主Service接口
@@ -70,4 +71,6 @@ public interface IMtrClassService  extends IService<MtrClass>
     List<MaterialTypeTree> getMtrClassTree(MtrClass materialType);
 
     long selectMtrClassListCount(MtrClass mtrClass);
+
+    String importData(List<MtrClassExcelData> userList, Boolean updateSupport, String operName);
 }

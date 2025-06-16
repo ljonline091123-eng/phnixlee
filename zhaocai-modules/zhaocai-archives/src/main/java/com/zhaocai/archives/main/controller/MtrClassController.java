@@ -2,6 +2,7 @@ package com.zhaocai.archives.main.controller;
 
 import com.zhaocai.archives.dossier.tree.MaterialTypeTree;
 import com.zhaocai.archives.main.domain.MtrClass;
+import com.zhaocai.archives.main.domain.MtrClassExcelData;
 import com.zhaocai.archives.main.service.IMtrClassService;
 import com.zhaocai.common.core.utils.poi.ExcelUtil;
 import com.zhaocai.common.core.web.controller.BaseController;
@@ -9,10 +10,15 @@ import com.zhaocai.common.core.web.domain.AjaxResult;
 import com.zhaocai.common.core.web.page.TableDataInfo;
 import com.zhaocai.common.log.annotation.Log;
 import com.zhaocai.common.log.enums.BusinessType;
+import com.zhaocai.common.security.annotation.RequiresPermissions;
+import com.zhaocai.common.security.utils.SecurityUtils;
+import com.zhaocai.system.api.domain.SysUser;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import javax.servlet.http.HttpServletResponse;
+import java.io.IOException;
 import java.util.List;
 
 /**
@@ -103,4 +109,27 @@ public class MtrClassController extends BaseController {
     public AjaxResult remove(@PathVariable String[] ids) {
         return toAjax(mtrClassService.deleteMtrClassByIds(ids));
     }
+
+
+    @Log(title = "主材导入", businessType = BusinessType.IMPORT)
+//    @RequiresPermissions("system:user:import")
+    @PostMapping("/importData")
+    public AjaxResult importData(MultipartFile file, boolean updateSupport) throws Exception
+    {
+        ExcelUtil<MtrClassExcelData> util = new ExcelUtil<MtrClassExcelData>(MtrClassExcelData.class);
+        List<MtrClassExcelData> userList = util.importExcel(file.getInputStream(),1);
+        String operName = SecurityUtils.getUsername();
+        String message = mtrClassService.importData(userList, updateSupport, operName);
+        return success(message);
+    }
+
+
+    @PostMapping("/importTemplate")
+    public void importTemplate(HttpServletResponse response) throws IOException
+    {
+        ExcelUtil<MtrClassExcelData> util = new ExcelUtil<MtrClassExcelData>(MtrClassExcelData.class);
+        util.importTemplateExcel(response, "材料导入");
+    }
+
+
 }

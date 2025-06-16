@@ -90,9 +90,9 @@ public class MtrFeatureValueServiceImpl extends ServiceImpl<MtrFeatureValueMappe
             mtrFeatureValue.setValid(0L);
         }
         int i = mtrFeatureValueMapper.insertMtrFeatureValue(mtrFeatureValue);
-        if (i > 0) {
-            materialEigenvalueService.addByMain(mtrFeatureValue);
-        }
+//        if (i > 0) {
+//            materialEigenvalueService.addByMain(mtrFeatureValue);
+//        }
         return i;
     }
 

@@ -104,9 +104,9 @@ public class MtrArchivesServiceImpl extends ServiceImpl<MtrArchivesMapper, MtrAr
             mtrArchives.setValid(0L);
         }
         int i = baseMapper.insertMtrArchives(mtrArchives);
-        if (i > 0) {
-            iMaterialDetailsService.addByMain(mtrArchives);
-        }
+//        if (i > 0) {
+//            iMaterialDetailsService.addByMain(mtrArchives);
+//        }
         return i;
     }
 
