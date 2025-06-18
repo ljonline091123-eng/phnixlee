@@ -5,7 +5,7 @@
       <PageTitle title="基本信息">
         <div class="page-title-right">
           <el-button type="primary" size="small" @click="submitForm('form')" :disabled="isSubmit" :loading="isSubmit">{{
-            isSubmit ? '提交中...' : '提交' }}</el-button>
+              isSubmit ? '提交中...' : '提交' }}</el-button>
         </div>
       </PageTitle>
       <el-descriptions class="form-body">
@@ -18,7 +18,7 @@
           <!-- <a href="javascript:;" class="link-type" @click="templateDialogVisible = true">{{
             procurementSchemeBidding.biddingTemplate && procurementSchemeBidding.biddingTemplate.fileName }}</a> -->
           <a href="javascript:;" class="link-type" @click="downloadFile(procurementSchemeBidding.biddingTemplate.fileUrl)">{{
-            procurementSchemeBidding.biddingTemplate && procurementSchemeBidding.biddingTemplate.fileName }}</a>
+              procurementSchemeBidding.biddingTemplate && procurementSchemeBidding.biddingTemplate.fileName }}</a>
         </el-descriptions-item>
       </el-descriptions>
 
@@ -42,50 +42,56 @@
         </div>
       </PageTitle>
       <el-form :model="formData" ref="form" :rules="rules" label-position="right" label-width="100px" size="medium">
-          <el-row :gutter="40">
-            <el-col :span="8" class="grid-cell" v-if="expertType === 2">
-              <el-form-item label="商务评分" prop="business" class="required label-right-align">
-                <el-input type="text" disabled v-model="formData.business" placeholder="根据评分自动计算"></el-input>
-              </el-form-item>
-            </el-col>
-            <el-col :span="8" class="grid-cell" v-if="expertType === 1">
-              <el-form-item label=" 技术评分" prop="technology" class="required label-right-align">
-                <el-input v-model="formData.technology" type="text" disabled placeholder="根据评分自动计算"></el-input>
-              </el-form-item>
-            </el-col>
-          </el-row>
-          <el-row :gutter="40">
-            <el-col :span="16" class="grid-cell">
-              <el-form-item label="评标意见" prop="advice" disabled class="required label-right-align">
-                <el-input v-model="formData.advice" type="textarea" :rows="4"></el-input>
-              </el-form-item>
-            </el-col>
-          </el-row>
-        </el-form>
+        <el-row :gutter="40">
+          <el-col :span="8" class="grid-cell" v-if="expertType === 99">
+            <el-form-item label="商务评分" prop="business" class="required label-right-align">
+              <el-input type="text" disabled v-model="formData.business" placeholder="根据评分自动计算"></el-input>
+            </el-form-item>
+          </el-col>
+          <el-col :span="8" class="grid-cell" v-if="expertType === 99">
+            <el-form-item label="技术评分" prop="technology" class="required label-right-align">
+              <el-input v-model="formData.technology" type="text" disabled placeholder="根据评分自动计算"></el-input>
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-row :gutter="40">
+          <el-col :span="8" class="grid-cell" v-if="expertType === 99">
+            <el-form-item label="报价评分" prop="quotation" class="required label-right-align">
+              <el-input v-model="formData.quotation" type="text" disabled placeholder="根据评分自动计算"></el-input>
+            </el-form-item>
+          </el-col>
+          <el-col :span="16" class="grid-cell">
+            <el-form-item label="评标意见" prop="advice" disabled class="required label-right-align">
+              <el-input v-model="formData.advice" type="textarea" :rows="4"></el-input>
+            </el-form-item>
+          </el-col>
+        </el-row>
+      </el-form>
 
       <PageTitle title="评分记录" marginBottom="15px"/>
       <el-table :data="scoreList" stripe border highlight-current-row>
-          <el-table-column label="序号" type="index" width="50" align="center" />
-          <el-table-column label="商务评分" width="200" align="center" prop="busScore" v-if="expertType === 2" />
-          <el-table-column label="技术评分" width="200" align="center" prop="techScore" v-if="expertType === 1" />
-          <el-table-column label="评分时间" width="200" align="center" prop="evaTime" />
-          <el-table-column label="专家评标意见" prop="evaOpinion" show-overflow-tooltip/>
-        </el-table>
+        <el-table-column label="序号" type="index" width="50" align="center" />
+        <el-table-column label="商务评分" width="200" align="center" prop="busScore" v-if="expertType === 2" />
+        <el-table-column label="技术评分" width="200" align="center" prop="techScore" v-if="expertType === 1" />
+        <el-table-column label="技术评分" width="200" align="center" prop="quotation" v-if="expertType === 3" />
+        <el-table-column label="评分时间" width="200" align="center" prop="evaTime" />
+        <el-table-column label="专家评标意见" prop="evaOpinion" show-overflow-tooltip/>
+      </el-table>
 
       <!-- 评分弹出 -->
-      <el-dialog :title="expertType === 1 ? '技术评分' : '商务评分'" :visible.sync="evaluateVisible" width="40%">
+      <el-dialog :title="expertType === 1 ? '评分' : '评分'" :visible.sync="evaluateVisible" width="40%">
         <el-row :gutter="10">
           <el-col :span="24" v-for="(item, key) in markCategoryDatailVOList" :key="key">
             <el-table :data="item.markItemDetailVOList" default-expand-all row-key="id" stripe border
-              :tree-props="{ children: 'subBiddingMarkItemDetailVOList' }">
+                      :tree-props="{ children: 'subBiddingMarkItemDetailVOList' }">
               <el-table-column label="序号" type="index" width="50" align="center" />
               <el-table-column label="评分项" prop="name" min-width="50%" />
               <el-table-column label="分值" align="center" min-width="30%" prop="highRange" />
               <el-table-column label="得分" prop="score" align="center" min-width="20%">
                 <template slot-scope="{row}">
                   <el-input v-model="row.score"
-                    v-if="!row.subBiddingMarkItemDetailVOList || row.subBiddingMarkItemDetailVOList.length === 0"
-                    type="text" clearable />
+                            v-if="!row.subBiddingMarkItemDetailVOList || row.subBiddingMarkItemDetailVOList.length === 0"
+                            type="text" clearable />
                   <span v-else>-</span>
                 </template>
               </el-table-column>
@@ -136,6 +142,7 @@ export default {
       rules: {
         business: [{ required: true, message: '请先评分' }],
         technology: [{ required: true, message: '请先评分' }],
+        quotation: [{ required: true, message: '请先评分' }],
         advice: [{ required: true, message: '请输入评标意见' }]
       },
       evaluateVisible: false,
@@ -200,7 +207,7 @@ export default {
     downloadFile(fileUrl) {
       if (!fileUrl) {
         ElMessage.error('招标文件为空文件URL为空，无法下载');
-        return; 
+        return;
       }
       console.log("下载文件url：",fileUrl);
       window.open(fileUrl, '_blank');
@@ -214,7 +221,7 @@ export default {
         const { procurementScheme, procurementSchemeBidding } = res.data;
         Object.assign(this, { procurementScheme, procurementSchemeBidding });
         console.log("this.procurementSchemeBidding->",this.procurementSchemeBidding)
-        this.getbiddingTemplate();
+        // this.getbiddingTemplate();
       } catch (err) {
         console.log(err);
       }
@@ -266,7 +273,8 @@ export default {
         if (this.selectList.length) {
           this.markCategoryDatailVOList = JSON.parse(JSON.stringify(this.selectList));
         } else {
-          this.markCategoryDatailVOList = this.evaluatedata.markCategoryDatailVOList.filter(item => item.itemType === expertType)
+          // this.markCategoryDatailVOList = this.evaluatedata.markCategoryDatailVOList.filter(item => item.itemType === expertType);
+          this.markCategoryDatailVOList = this.evaluatedata.markCategoryDatailVOList;
         }
       } catch (err) {
         console.log(err);
@@ -313,6 +321,9 @@ export default {
       }
       if (type === 1) {
         this.$set(this.formData, 'technology', count)
+      }
+      if (type === 3) {
+        this.$set(this.formData, 'quotation', count)
       }
       this.selectList = JSON.parse(JSON.stringify(this.markCategoryDatailVOList));
       this.evaluateVisible = false
