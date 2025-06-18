@@ -88,9 +88,9 @@ public class LaborServicesFeatureValueServiceImpl extends ServiceImpl<LaborServi
             laborServicesFeatureValue.setValid(0L);
         }
         int i = laborServicesFeatureValueMapper.insertLaborServicesFeatureValue(laborServicesFeatureValue);
-        if (i > 0) {
-            iLabourEigenvalueService.addTypeByMain(laborServicesFeatureValue);
-        }
+//        if (i > 0) {
+//            iLabourEigenvalueService.addTypeByMain(laborServicesFeatureValue);
+//        }
         return i;
     }
 

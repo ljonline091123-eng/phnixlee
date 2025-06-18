@@ -3,6 +3,7 @@ package com.zhaocai.archives.main.service;
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.zhaocai.archives.dossier.tree.SubcontractingTypeTree;
 import com.zhaocai.archives.main.domain.MajorSubcontractingClass;
+import com.zhaocai.archives.main.domain.MajorSubcontractingClassExcelData;
 
 import java.util.List;
 
@@ -66,4 +67,6 @@ public interface IMajorSubcontractingClassService extends IService<MajorSubcontr
     MajorSubcontractingClass initCode(MajorSubcontractingClass aClass);
 
     long selectMajorSubcontractingClassListCount(MajorSubcontractingClass majorSubcontractingClass);
+
+    String importData(List<MajorSubcontractingClassExcelData> userList, boolean updateSupport, String operName);
 }

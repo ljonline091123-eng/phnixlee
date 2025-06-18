@@ -3,6 +3,7 @@ package com.zhaocai.archives.main.service;
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.zhaocai.archives.dossier.tree.LabourTypeTree;
 import com.zhaocai.archives.main.domain.LaborServicesClass;
+import com.zhaocai.archives.main.domain.LaborServicesClassExcelData;
 
 import java.util.List;
 
@@ -66,4 +67,6 @@ public interface ILaborServicesClassService extends IService<LaborServicesClass>
     LaborServicesClass initCode(LaborServicesClass laborServicesClass);
 
     long selectLaborServicesClassListCount(LaborServicesClass laborServicesClass);
+
+    String importData(List<LaborServicesClassExcelData> userList, boolean updateSupport, String operName);
 }

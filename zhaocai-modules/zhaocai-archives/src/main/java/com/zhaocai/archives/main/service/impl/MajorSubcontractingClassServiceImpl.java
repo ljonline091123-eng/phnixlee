@@ -3,10 +3,14 @@ package com.zhaocai.archives.main.service.impl;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.zhaocai.archives.dossier.service.ISubcontractingTypeService;
 import com.zhaocai.archives.dossier.tree.SubcontractingTypeTree;
-import com.zhaocai.archives.main.domain.MajorSubcontractingClass;
+import com.zhaocai.archives.main.domain.*;
 import com.zhaocai.archives.main.mapper.MajorSubcontractingClassMapper;
+import com.zhaocai.archives.main.service.IMajorSubcontractingArchivesService;
 import com.zhaocai.archives.main.service.IMajorSubcontractingClassService;
+import com.zhaocai.archives.main.service.IMajorSubcontractingFeatureService;
+import com.zhaocai.archives.main.service.IMajorSubcontractingFeatureValueService;
 import com.zhaocai.archives.utils.KeyUtils;
+import com.zhaocai.common.core.exception.ServiceException;
 import com.zhaocai.common.core.utils.DateUtils;
 import com.zhaocai.common.core.utils.PageUtils;
 import com.zhaocai.common.core.utils.StringUtils;
@@ -30,6 +34,12 @@ public class MajorSubcontractingClassServiceImpl extends ServiceImpl<MajorSubcon
 
     @Resource
     private ISubcontractingTypeService iSubcontractingTypeService;
+    @Autowired
+    private IMajorSubcontractingFeatureService iMajorSubcontractingFeatureService;
+    @Autowired
+    private IMajorSubcontractingFeatureValueService iMajorSubcontractingFeatureValueService;
+    @Autowired
+    private IMajorSubcontractingArchivesService iMajorSubcontractingArchivesService;
 
     /**
      * 查询专业分包分类主
@@ -284,6 +294,320 @@ public class MajorSubcontractingClassServiceImpl extends ServiceImpl<MajorSubcon
             return input; // 处理空字符串或 null 的情况
         }
         return input.replaceAll("[^a-zA-Z]", ""); // 保留 a-z 和 A-Z 范围内的字符
+    }
+
+
+
+
+    @Override
+    public  String importData(List<MajorSubcontractingClassExcelData> userList, boolean updateSupport, String operName) {
+        if (StringUtils.isNull(userList) || userList.size() == 0) {
+            throw new ServiceException("导入数据不能为空！");
+        }
+        MajorSubcontractingClass mtrClass = new MajorSubcontractingClass();
+        mtrClass.setValid(0L);
+        List<MajorSubcontractingClass> mtrClasses = majorSubcontractingClassMapper.selectMajorSubcontractingClassList(mtrClass);
+        Map<String, MajorSubcontractingClass> map = new HashMap<>();
+        mtrClasses.forEach(item -> {
+            map.put(item.getMajorSubcontractingClassCode(), item);
+        });
+        MajorSubcontractingFeature mtrFeature = new MajorSubcontractingFeature();
+        mtrFeature.setValid(0L);
+        Map<String, MajorSubcontractingFeature> featureMap = new HashMap<>();
+        List<MajorSubcontractingFeature> mtrFeatures = iMajorSubcontractingFeatureService.selectMajorSubcontractingFeatureList(mtrFeature);
+        mtrFeatures.forEach(item -> {
+            featureMap.put(item.getMajorSubcontractingClassId() + "|" + item.getFeatureCode(), item);
+        });
+        MajorSubcontractingFeatureValue mtrFeatureValue = new MajorSubcontractingFeatureValue();
+        mtrFeatureValue.setValid(0L);
+        Map<String, MajorSubcontractingFeatureValue> valMap = new HashMap<>();
+        List<MajorSubcontractingFeatureValue> mtrFeatureValues = iMajorSubcontractingFeatureValueService.selectMajorSubcontractingFeatureValueList(mtrFeatureValue);
+        mtrFeatureValues.forEach(item -> {
+            valMap.put(item.getMajorSubcontractingFeatureId() + "|" + item.getFeatureValueCode(), item);
+        });
+        MajorSubcontractingArchives mtrArchives1 = new MajorSubcontractingArchives();
+        mtrArchives1.setValid(0L);
+        Map<String, MajorSubcontractingArchives> mtrArchivesMap = new HashMap<>();
+        List<MajorSubcontractingArchives> mtrArchives = iMajorSubcontractingArchivesService.selectMajorSubcontractingArchivesList(mtrArchives1);
+        mtrArchives.forEach(item -> {
+            mtrArchivesMap.put(item.getMajorSubcontractingClassId() + "|" + item.getMajorSubcontractingCode(), item);
+        });
+        List<MajorSubcontractingClass> addMtrClasses = new ArrayList<>();
+        List<MajorSubcontractingFeature> mtrFeatureList = new ArrayList<>();
+        List<MajorSubcontractingFeatureValue> mtrFeatureValueList = new ArrayList<>();
+        List<MajorSubcontractingArchives> mtrArchivesList = new ArrayList<>();
+        int errIndex = 1;
+        StringBuilder successMsg = new StringBuilder();
+        StringBuilder failureMsg = new StringBuilder();
+        for (MajorSubcontractingClassExcelData data : userList) {
+            errIndex++;
+            //判空
+            if (StringUtils.isEmpty(data.getParentCode())) {
+                failureMsg.append("<br/>第" + errIndex + "行，父级专业分包分类编码为空");
+            }
+            if (StringUtils.isEmpty(data.getMajorSubcontractingClassCode())) {
+                failureMsg.append("<br/>第" + errIndex + "行，专业分包分类编码为空");
+            }
+            if (StringUtils.isEmpty(data.getMajorSubcontractingClassName())) {
+                failureMsg.append("<br/>第" + errIndex + "行，专业分包分类名称为空");
+            }
+            if (!StringUtils.isEmpty(failureMsg.toString())) {
+                continue;
+            }
+            if ("0".equals(data.getParentCode())) {
+                if (map.containsKey(data.getMajorSubcontractingCode())) {
+                    String id = map.get(data.getMajorSubcontractingCode()).getId();
+                    String name = map.get(data.getMajorSubcontractingCode()).getMajorSubcontractingClassName();
+                    //判断是否有特征值、特征项、详细档案
+                    if (!StringUtils.isEmpty(data.getFeatureCode()) || !StringUtils.isEmpty(data.getFeatureValueCode()) || !StringUtils.isEmpty(data.getMajorSubcontractingCode())) {
+                        if (!StringUtils.isEmpty(data.getFeatureCode())) {
+                            if (featureMap.containsKey(id + "|" + data.getFeatureCode())) {
+                                if (!StringUtils.isEmpty(data.getFeatureValueCode())) {
+                                    String id1 = featureMap.get(id + "|" + data.getFeatureCode()).getId();
+                                    if (valMap.containsKey(id1 + "|" + data.getFeatureValueCode())) {
+                                        failureMsg.append("<br/>第" + errIndex + "行，特征值已存在");
+                                    } else {
+                                        MajorSubcontractingFeatureValue mtrFeatureValue1 = new MajorSubcontractingFeatureValue();
+                                        mtrFeatureValue1.setId(KeyUtils.generateId() + "");
+                                        mtrFeatureValue1.setMajorSubcontractingFeatureId(id1);
+                                        mtrFeatureValue1.setFeatureValueName(data.getFeatureValueCode());
+                                        mtrFeatureValue1.setFeatureValueCode(data.getFeatureValueCode());
+                                        mtrFeatureValue1.setCreateId(SecurityUtils.getUserId() + "");
+                                        mtrFeatureValue1.setCreateBy(SecurityUtils.getUsername());
+                                        mtrFeatureValue1.setCreateTime(DateUtils.getNowDate());
+                                        mtrFeatureValueList.add(mtrFeatureValue1);
+                                        valMap.put(id1 + "|" + data.getFeatureValueCode(), mtrFeatureValue1);
+                                    }
+                                } else {
+                                    failureMsg.append("<br/>第" + errIndex + "行，特征项已存在");
+                                }
+                            } else {
+                                MajorSubcontractingFeature mtrFeature1 = new MajorSubcontractingFeature();
+                                mtrFeature1.setId(KeyUtils.generateId() + "");
+                                mtrFeature1.setMajorSubcontractingClassId(id);
+                                mtrFeature1.setFeatureCode(data.getFeatureCode());
+                                mtrFeature1.setFeatureName(data.getFeatureName());
+                                mtrFeature1.setCreateId(SecurityUtils.getUserId() + "");
+                                mtrFeature1.setCreateBy(SecurityUtils.getUsername());
+                                mtrFeature1.setCreateTime(DateUtils.getNowDate());
+                                mtrFeatureList.add(mtrFeature1);
+                                featureMap.put(id + "|" + data.getFeatureCode(), mtrFeature1);
+                                if (!StringUtils.isEmpty(data.getFeatureValueCode())) {
+                                    MajorSubcontractingFeatureValue mtrFeatureValue1 = new MajorSubcontractingFeatureValue();
+                                    mtrFeatureValue1.setId(KeyUtils.generateId() + "");
+                                    mtrFeatureValue1.setMajorSubcontractingFeatureId(mtrFeature1.getId());
+                                    mtrFeatureValue1.setFeatureValueName(data.getFeatureValueCode());
+                                    mtrFeatureValue1.setFeatureValueCode(data.getFeatureValueCode());
+                                    mtrFeatureValue1.setCreateId(SecurityUtils.getUserId() + "");
+                                    mtrFeatureValue1.setCreateBy(SecurityUtils.getUsername());
+                                    mtrFeatureValue1.setCreateTime(DateUtils.getNowDate());
+                                    mtrFeatureValueList.add(mtrFeatureValue1);
+                                    valMap.put(mtrFeature1.getId() + "|" + data.getFeatureValueCode(), mtrFeatureValue1);
+                                }
+                            }
+                        }
+                        if (!StringUtils.isEmpty(data.getMajorSubcontractingCode())) {
+                            if (mtrArchivesMap.containsKey(id + "|" + data.getMajorSubcontractingCode())) {
+                                failureMsg.append("<br/>第" + errIndex + "行，具体档案已存在");
+                            } else {
+                                MajorSubcontractingArchives mtrArchives2 = new MajorSubcontractingArchives();
+                                mtrArchives2.setId(KeyUtils.generateId() + "");
+                                mtrArchives2.setMajorSubcontractingClassId(id);
+                                mtrArchives2.setMajorSubcontractingCode(data.getMajorSubcontractingCode());
+                                mtrArchives2.setMajorSubcontractingName(data.getMajorSubcontractingName());
+                                mtrArchives2.setMajorSubcontractingClassName(name);
+                                mtrArchives2.setMeasureUnit(data.getUnit());
+                                mtrArchives2.setSpecs(data.getSpecs());
+                                mtrArchives2.setFeature(data.getFeature());
+                                mtrArchives2.setMetrologicalRules(data.getMetrologicalRules());
+                                mtrArchives2.setBasicJob(data.getBasicJob());
+                                mtrArchives2.setCreateId(SecurityUtils.getUserId() + "");
+                                mtrArchives2.setCreateBy(SecurityUtils.getUsername());
+                                mtrArchives2.setCreateTime(DateUtils.getNowDate());
+                                mtrArchivesList.add(mtrArchives2);
+                                mtrArchivesMap.put(id + "|" + data.getMajorSubcontractingCode(), mtrArchives2);
+                            }
+                        }
+                    } else {
+                        failureMsg.append("<br/>第" + errIndex + "行，材料分类已存在");
+                    }
+                } else {
+                    MajorSubcontractingClass mtrClass1 = new MajorSubcontractingClass();
+                    mtrClass1.setValid(0L);
+                    mtrClass1.setId(KeyUtils.generateId() + "");
+                    mtrClass1.setParentId(data.getParentCode());
+                    mtrClass1.setMajorSubcontractingClassCode(data.getMajorSubcontractingClassCode());
+                    mtrClass1.setMajorSubcontractingClassName(data.getMajorSubcontractingClassName());
+                    mtrClass1.setMeasureUnit(data.getMeasureUnit());
+                    mtrClass1.setCreateId(SecurityUtils.getUserId() + "");
+                    mtrClass1.setCreateBy(SecurityUtils.getUsername());
+                    mtrClass1.setCreateTime(DateUtils.getNowDate());
+                    addMtrClasses.add(mtrClass1);
+                    map.put(mtrClass1.getMajorSubcontractingClassCode(), mtrClass1);
+                }
+            } else {
+                if (map.containsKey(data.getMajorSubcontractingClassCode())) {
+                    String id = map.get(data.getMajorSubcontractingClassCode()).getId();
+                    String name = map.get(data.getMajorSubcontractingClassCode()).getMajorSubcontractingClassName();
+                    //判断是否有特征值、特征项、详细档案
+                    if (!StringUtils.isEmpty(data.getFeatureCode()) || !StringUtils.isEmpty(data.getFeatureValueCode()) || !StringUtils.isEmpty(data.getMajorSubcontractingCode())) {
+                        if (!StringUtils.isEmpty(data.getFeatureCode())) {
+                            if (featureMap.containsKey(id + "|" + data.getFeatureCode())) {
+                                if (!StringUtils.isEmpty(data.getFeatureValueCode())) {
+                                    String id1 = featureMap.get(id + "|" + data.getFeatureCode()).getId();
+                                    if (valMap.containsKey(id1 + "|" + data.getFeatureValueCode())) {
+                                        failureMsg.append("<br/>第" + errIndex + "行，特征值已存在");
+                                    } else {
+                                        MajorSubcontractingFeatureValue mtrFeatureValue1 = new MajorSubcontractingFeatureValue();
+                                        mtrFeatureValue1.setId(KeyUtils.generateId() + "");
+                                        mtrFeatureValue1.setMajorSubcontractingFeatureId(id1);
+                                        mtrFeatureValue1.setFeatureValueName(data.getFeatureValueCode());
+                                        mtrFeatureValue1.setFeatureValueCode(data.getFeatureValueCode());
+                                        mtrFeatureValue1.setCreateId(SecurityUtils.getUserId() + "");
+                                        mtrFeatureValue1.setCreateBy(SecurityUtils.getUsername());
+                                        mtrFeatureValue1.setCreateTime(DateUtils.getNowDate());
+                                        mtrFeatureValueList.add(mtrFeatureValue1);
+                                        valMap.put(id1 + "|" + data.getFeatureValueCode(), mtrFeatureValue1);
+                                    }
+                                } else {
+                                    failureMsg.append("<br/>第" + errIndex + "行，特征项已存在");
+                                }
+                            } else {
+                                MajorSubcontractingFeature mtrFeature1 = new MajorSubcontractingFeature();
+                                mtrFeature1.setId(KeyUtils.generateId() + "");
+                                mtrFeature1.setMajorSubcontractingClassId(id);
+                                mtrFeature1.setFeatureCode(data.getFeatureCode());
+                                mtrFeature1.setFeatureName(data.getFeatureName());
+                                mtrFeature1.setCreateId(SecurityUtils.getUserId() + "");
+                                mtrFeature1.setCreateBy(SecurityUtils.getUsername());
+                                mtrFeature1.setCreateTime(DateUtils.getNowDate());
+                                mtrFeatureList.add(mtrFeature1);
+                                featureMap.put(id + "|" + data.getFeatureCode(), mtrFeature1);
+
+                                if (!StringUtils.isEmpty(data.getFeatureValueCode())) {
+                                    MajorSubcontractingFeatureValue mtrFeatureValue1 = new MajorSubcontractingFeatureValue();
+                                    mtrFeatureValue1.setId(KeyUtils.generateId() + "");
+                                    mtrFeatureValue1.setMajorSubcontractingFeatureId(mtrFeature1.getId());
+                                    mtrFeatureValue1.setFeatureValueName(data.getFeatureValueCode());
+                                    mtrFeatureValue1.setFeatureValueCode(data.getFeatureValueCode());
+                                    mtrFeatureValue1.setCreateId(SecurityUtils.getUserId() + "");
+                                    mtrFeatureValue1.setCreateBy(SecurityUtils.getUsername());
+                                    mtrFeatureValue1.setCreateTime(DateUtils.getNowDate());
+                                    mtrFeatureValueList.add(mtrFeatureValue1);
+                                    valMap.put(mtrFeature1.getId() + "|" + data.getFeatureValueCode(), mtrFeatureValue1);
+                                }
+                            }
+                        }
+                        if (!StringUtils.isEmpty(data.getMajorSubcontractingCode())) {
+                            if (mtrArchivesMap.containsKey(id + "|" + data.getMajorSubcontractingCode())) {
+                                failureMsg.append("<br/>第" + errIndex + "行，具体档案已存在");
+                            } else {
+                                MajorSubcontractingArchives mtrArchives2 = new MajorSubcontractingArchives();
+                                mtrArchives2.setId(KeyUtils.generateId() + "");
+                                mtrArchives2.setMajorSubcontractingClassId(id);
+                                mtrArchives2.setMajorSubcontractingCode(data.getMajorSubcontractingCode());
+                                mtrArchives2.setMajorSubcontractingName(data.getMajorSubcontractingName());
+                                mtrArchives2.setMajorSubcontractingClassName(name);
+                                mtrArchives2.setMeasureUnit(data.getUnit());
+                                mtrArchives2.setSpecs(data.getSpecs());
+                                mtrArchives2.setFeature(data.getFeature());
+                                mtrArchives2.setMetrologicalRules(data.getMetrologicalRules());
+                                mtrArchives2.setBasicJob(data.getBasicJob());
+                                mtrArchives2.setCreateId(SecurityUtils.getUserId() + "");
+                                mtrArchives2.setCreateBy(SecurityUtils.getUsername());
+                                mtrArchives2.setCreateTime(DateUtils.getNowDate());
+                                mtrArchivesList.add(mtrArchives2);
+                                mtrArchivesMap.put(id + "|" + data.getMajorSubcontractingCode(), mtrArchives2);
+                            }
+                        }
+                    } else {
+                        failureMsg.append("<br/>第" + errIndex + "行，材料分类已存在");
+                    }
+                } else {
+                    MajorSubcontractingClass mtrClass1 = new MajorSubcontractingClass();
+                    mtrClass1.setValid(0L);
+                    mtrClass1.setId(KeyUtils.generateId() + "");
+                    mtrClass1.setParentId(map.get(data.getParentCode()).getId());
+                    mtrClass1.setMajorSubcontractingClassCode(data.getMajorSubcontractingClassCode());
+                    mtrClass1.setMajorSubcontractingClassName(data.getMajorSubcontractingClassName());
+                    mtrClass1.setMeasureUnit(data.getMeasureUnit());
+                    mtrClass1.setCreateId(SecurityUtils.getUserId() + "");
+                    mtrClass1.setCreateBy(SecurityUtils.getUsername());
+                    mtrClass1.setCreateTime(DateUtils.getNowDate());
+                    addMtrClasses.add(mtrClass1);
+                    map.put(mtrClass1.getMajorSubcontractingClassCode(), mtrClass1);
+                    if (!StringUtils.isEmpty(data.getFeatureCode())) {
+                        MajorSubcontractingFeature mtrFeature1 = new MajorSubcontractingFeature();
+                        mtrFeature1.setId(KeyUtils.generateId() + "");
+                        mtrFeature1.setMajorSubcontractingClassId(mtrClass1.getId());
+                        mtrFeature1.setFeatureCode(data.getFeatureCode());
+                        mtrFeature1.setFeatureName(data.getFeatureName());
+                        mtrFeature1.setCreateId(SecurityUtils.getUserId() + "");
+                        mtrFeature1.setCreateBy(SecurityUtils.getUsername());
+                        mtrFeature1.setCreateTime(DateUtils.getNowDate());
+                        mtrFeatureList.add(mtrFeature1);
+                        featureMap.put(mtrClass1.getId() + "|" + data.getFeatureCode(), mtrFeature1);
+                        if (!StringUtils.isEmpty(data.getFeatureValueCode())) {
+                            MajorSubcontractingFeatureValue mtrFeatureValue1 = new MajorSubcontractingFeatureValue();
+                            mtrFeatureValue1.setId(KeyUtils.generateId() + "");
+                            mtrFeatureValue1.setMajorSubcontractingFeatureId(mtrFeature1.getId());
+                            mtrFeatureValue1.setFeatureValueName(data.getFeatureValueCode());
+                            mtrFeatureValue1.setFeatureValueCode(data.getFeatureValueCode());
+                            mtrFeatureValue1.setCreateId(SecurityUtils.getUserId() + "");
+                            mtrFeatureValue1.setCreateBy(SecurityUtils.getUsername());
+                            mtrFeatureValue1.setCreateTime(DateUtils.getNowDate());
+                            mtrFeatureValueList.add(mtrFeatureValue1);
+                            valMap.put(mtrFeature1.getId() + "|" + data.getFeatureValueCode(), mtrFeatureValue1);
+                        }
+                    }
+                    if (!StringUtils.isEmpty(data.getMajorSubcontractingCode())) {
+                        MajorSubcontractingArchives mtrArchives2 = new MajorSubcontractingArchives();
+                        mtrArchives2.setId(KeyUtils.generateId() + "");
+                        mtrArchives2.setMajorSubcontractingClassId(mtrClass1.getId());
+                        mtrArchives2.setMajorSubcontractingCode(data.getMajorSubcontractingCode());
+                        mtrArchives2.setMajorSubcontractingName(data.getMajorSubcontractingName());
+                        mtrArchives2.setMajorSubcontractingClassName(data.getMajorSubcontractingClassName());
+                        mtrArchives2.setMeasureUnit(data.getUnit());
+                        mtrArchives2.setSpecs(data.getSpecs());
+                        mtrArchives2.setFeature(data.getFeature());
+                        mtrArchives2.setMetrologicalRules(data.getMetrologicalRules());
+                        mtrArchives2.setBasicJob(data.getBasicJob());
+                        mtrArchives2.setCreateId(SecurityUtils.getUserId() + "");
+                        mtrArchives2.setCreateBy(SecurityUtils.getUsername());
+                        mtrArchives2.setCreateTime(DateUtils.getNowDate());
+                        mtrArchivesList.add(mtrArchives2);
+                        mtrArchivesMap.put(mtrClass1.getId() + "|" + data.getMajorSubcontractingCode(), mtrArchives2);
+                    }
+                }
+            }
+        }
+        if (StringUtils.isEmpty(failureMsg.toString())) {
+            if (!addMtrClasses.isEmpty()) {
+                for (MajorSubcontractingClass mtrClass1 : addMtrClasses) {
+                    majorSubcontractingClassMapper.insertMajorSubcontractingClass(mtrClass1);
+                }
+            }
+            if (!mtrFeatureList.isEmpty()) {
+                for (MajorSubcontractingFeature mtrClass1 : mtrFeatureList) {
+                    iMajorSubcontractingFeatureService.insertMajorSubcontractingFeature(mtrClass1);
+                }
+            }
+            if (!mtrFeatureValueList.isEmpty()) {
+                for (MajorSubcontractingFeatureValue mtrClass1 : mtrFeatureValueList) {
+                    iMajorSubcontractingFeatureValueService.insertMajorSubcontractingFeatureValue(mtrClass1);
+                }
+            }
+            if (!mtrArchivesList.isEmpty()) {
+                for (MajorSubcontractingArchives mtrClass1 : mtrArchivesList) {
+                    iMajorSubcontractingArchivesService.insertMajorSubcontractingArchives(mtrClass1);
+                }
+            }
+        } else {
+            failureMsg.insert(0, "很抱歉，导入失败！错误如下：");
+            throw new ServiceException(failureMsg.toString());
+        }
+        successMsg.insert(0, "恭喜您，数据已全部导入成功！");
+        return successMsg.toString();
     }
 
 

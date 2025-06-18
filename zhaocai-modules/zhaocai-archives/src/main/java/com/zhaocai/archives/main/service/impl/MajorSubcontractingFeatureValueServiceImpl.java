@@ -89,9 +89,9 @@ public class MajorSubcontractingFeatureValueServiceImpl extends ServiceImpl<Majo
             majorSubcontractingFeatureValue.setValid(0L);
         }
         int i = majorSubcontractingFeatureValueMapper.insertMajorSubcontractingFeatureValue(majorSubcontractingFeatureValue);
-        if (i > 0) {
-            iSubcontractingEigenvalueService.addTypeByMain(majorSubcontractingFeatureValue);
-        }
+//        if (i > 0) {
+//            iSubcontractingEigenvalueService.addTypeByMain(majorSubcontractingFeatureValue);
+//        }
         return i;
     }
 

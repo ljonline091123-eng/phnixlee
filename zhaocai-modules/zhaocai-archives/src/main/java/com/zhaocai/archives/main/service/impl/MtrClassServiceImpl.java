@@ -371,7 +371,7 @@ public class MtrClassServiceImpl extends ServiceImpl<MtrClassMapper, MtrClass> i
         List<MtrFeature> mtrFeatureList = new ArrayList<>();
         List<MtrFeatureValue> mtrFeatureValueList = new ArrayList<>();
         List<MtrArchives> mtrArchivesList = new ArrayList<>();
-        int errIndex = 2;
+        int errIndex = 1;
         StringBuilder successMsg = new StringBuilder();
         StringBuilder failureMsg = new StringBuilder();
         for (MtrClassExcelData data : userList) {

@@ -114,12 +114,12 @@ public class DeviceClassController extends BaseController {
     }
 
 
-    @Log(title = "主材导入", businessType = BusinessType.IMPORT)
+    @Log(title = "设备导入", businessType = BusinessType.IMPORT)
 //    @RequiresPermissions("system:user:import")
     @PostMapping("/importData")
     public AjaxResult importData(MultipartFile file, boolean updateSupport) throws Exception {
         ExcelUtil<DeviceClassExcelData> util = new ExcelUtil<DeviceClassExcelData>(DeviceClassExcelData.class);
-        List<DeviceClassExcelData> userList = util.importExcel(file.getInputStream(), 1);
+        List<DeviceClassExcelData> userList = util.importExcel(file.getInputStream());
         String operName = SecurityUtils.getUsername();
         String message = deviceClassService.importData(userList, updateSupport, operName);
         return success(message);

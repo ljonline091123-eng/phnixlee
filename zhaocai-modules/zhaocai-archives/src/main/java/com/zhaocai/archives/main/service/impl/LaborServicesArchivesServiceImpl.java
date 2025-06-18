@@ -105,9 +105,9 @@ public class LaborServicesArchivesServiceImpl extends ServiceImpl<LaborServicesA
             laborServicesArchives.setValid(0L);
         }
         int i = laborServicesArchivesMapper.insertLaborServicesArchives(laborServicesArchives);
-        if (i > 0) {
-            iLabourDetailsService.addTypeByMain(laborServicesArchives);
-        }
+//        if (i > 0) {
+//            iLabourDetailsService.addTypeByMain(laborServicesArchives);
+//        }
         return i;
     }
 

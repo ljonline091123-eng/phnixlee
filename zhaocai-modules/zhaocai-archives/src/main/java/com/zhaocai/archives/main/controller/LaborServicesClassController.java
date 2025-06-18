@@ -2,6 +2,8 @@ package com.zhaocai.archives.main.controller;
 
 import com.zhaocai.archives.dossier.tree.LabourTypeTree;
 import com.zhaocai.archives.main.domain.LaborServicesClass;
+import com.zhaocai.archives.main.domain.LaborServicesClassExcelData;
+import com.zhaocai.archives.main.domain.MtrClassExcelData;
 import com.zhaocai.archives.main.service.ILaborServicesClassService;
 import com.zhaocai.common.core.utils.poi.ExcelUtil;
 import com.zhaocai.common.core.web.controller.BaseController;
@@ -9,10 +11,13 @@ import com.zhaocai.common.core.web.domain.AjaxResult;
 import com.zhaocai.common.core.web.page.TableDataInfo;
 import com.zhaocai.common.log.annotation.Log;
 import com.zhaocai.common.log.enums.BusinessType;
+import com.zhaocai.common.security.utils.SecurityUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import javax.servlet.http.HttpServletResponse;
+import java.io.IOException;
 import java.util.List;
 
 /**
@@ -102,6 +107,25 @@ public class LaborServicesClassController extends BaseController {
     @GetMapping(value = "/initCode")
     public AjaxResult initCode(LaborServicesClass aClass) {
         return success(laborServicesClassService.initCode(aClass));
+    }
+
+
+    @Log(title = "劳务导入", businessType = BusinessType.IMPORT)
+//    @RequiresPermissions("system:user:import")
+    @PostMapping("/importData")
+    public AjaxResult importData(MultipartFile file, boolean updateSupport) throws Exception {
+        ExcelUtil<LaborServicesClassExcelData> util = new ExcelUtil<LaborServicesClassExcelData>(LaborServicesClassExcelData.class);
+        List<LaborServicesClassExcelData> userList = util.importExcel(file.getInputStream());
+        String operName = SecurityUtils.getUsername();
+        String message = laborServicesClassService.importData(userList, updateSupport, operName);
+        return success(message);
+    }
+
+
+    @PostMapping("/importTemplate")
+    public void importTemplate(HttpServletResponse response) throws IOException {
+        ExcelUtil<LaborServicesClassExcelData> util = new ExcelUtil<LaborServicesClassExcelData>(LaborServicesClassExcelData.class);
+        util.importTemplateExcel(response, "劳务导入");
     }
 
 

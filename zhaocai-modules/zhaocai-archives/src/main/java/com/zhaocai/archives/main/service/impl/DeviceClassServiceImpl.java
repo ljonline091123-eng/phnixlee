@@ -356,7 +356,7 @@ public class DeviceClassServiceImpl extends ServiceImpl<DeviceClassMapper, Devic
         List<DeviceFeature> mtrFeatureList = new ArrayList<>();
         List<DeviceFeatureValue> mtrFeatureValueList = new ArrayList<>();
         List<DeviceArchives> mtrArchivesList = new ArrayList<>();
-        int errIndex = 2;
+        int errIndex = 1;
         StringBuilder successMsg = new StringBuilder();
         StringBuilder failureMsg = new StringBuilder();
         for (DeviceClassExcelData data : userList) {

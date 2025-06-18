@@ -117,7 +117,7 @@ public class MtrClassController extends BaseController {
     public AjaxResult importData(MultipartFile file, boolean updateSupport) throws Exception
     {
         ExcelUtil<MtrClassExcelData> util = new ExcelUtil<MtrClassExcelData>(MtrClassExcelData.class);
-        List<MtrClassExcelData> userList = util.importExcel(file.getInputStream(),1);
+        List<MtrClassExcelData> userList = util.importExcel(file.getInputStream());
         String operName = SecurityUtils.getUsername();
         String message = mtrClassService.importData(userList, updateSupport, operName);
         return success(message);

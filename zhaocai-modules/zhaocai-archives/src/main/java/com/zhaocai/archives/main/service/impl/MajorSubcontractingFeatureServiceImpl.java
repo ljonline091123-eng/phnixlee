@@ -89,9 +89,9 @@ public class MajorSubcontractingFeatureServiceImpl extends ServiceImpl<MajorSubc
             majorSubcontractingFeature.setValid(0L);
         }
         int i = majorSubcontractingFeatureMapper.insertMajorSubcontractingFeature(majorSubcontractingFeature);
-        if (i > 0) {
-            iSubcontractingItemService.addTypeByMain(majorSubcontractingFeature);
-        }
+//        if (i > 0) {
+//            iSubcontractingItemService.addTypeByMain(majorSubcontractingFeature);
+//        }
         return i;
     }
 

@@ -107,9 +107,9 @@ public class MajorSubcontractingArchivesServiceImpl extends ServiceImpl<MajorSub
             majorSubcontractingArchives.setValid(0L);
         }
         int i = majorSubcontractingArchivesMapper.insertMajorSubcontractingArchives(majorSubcontractingArchives);
-        if (i > 0) {
-            iSubcontractingDetailsService.addTypeByMain(majorSubcontractingArchives);
-        }
+//        if (i > 0) {
+//            iSubcontractingDetailsService.addTypeByMain(majorSubcontractingArchives);
+//        }
         return i;
     }
 

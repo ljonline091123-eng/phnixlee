@@ -1,7 +1,6 @@
 package com.zhaocai.business.bidding.service.impl;
 
 import cn.hutool.core.bean.BeanUtil;
-import cn.hutool.core.util.NumberUtil;
 import cn.hutool.extra.spring.SpringUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
@@ -15,9 +14,7 @@ import com.zhaocai.business.bidding.vo.req.*;
 import com.zhaocai.business.bidding.vo.req.query.BiddingInfoQueryVO;
 import com.zhaocai.business.bidding.vo.req.query.BiddingQuotationQueryVO;
 import com.zhaocai.business.bidding.vo.res.*;
-import com.zhaocai.business.common.cache.DictBizCache;
 import com.zhaocai.business.common.enums.AttachmentTypeEnum;
-import com.zhaocai.business.common.enums.DictBizEnum;
 import com.zhaocai.business.common.enums.SmsTemplateEnum;
 import com.zhaocai.business.common.exception.ParamValidateException;
 import com.zhaocai.business.common.sms.SmsSenderUtil;
@@ -26,14 +23,12 @@ import com.zhaocai.business.expert.domain.Expert;
 import com.zhaocai.business.expert.domain.ExpertScore;
 import com.zhaocai.business.expert.service.IExpertScoreService;
 import com.zhaocai.business.expert.service.IExpertService;
-import com.zhaocai.business.procurement.domain.MaterialsList;
 import com.zhaocai.business.procurement.domain.ProcurementScheme;
 import com.zhaocai.business.procurement.domain.ProcurementSchemePlanRelate;
 import com.zhaocai.business.procurement.service.IProcurementPlanService;
 import com.zhaocai.business.procurement.service.IProcurementSchemePlanRelateService;
 import com.zhaocai.business.procurement.service.IProcurementSchemeService;
 import com.zhaocai.business.procurement.vo.res.*;
-import com.zhaocai.business.pub.domain.Attachment;
 import com.zhaocai.business.pub.service.IAttachmentService;
 import com.zhaocai.business.pub.service.ISystemUserService;
 import com.zhaocai.business.pub.vo.req.AttachmentRequestVO;
@@ -43,7 +38,6 @@ import com.zhaocai.common.core.utils.DateUtils;
 import com.zhaocai.common.core.utils.StringUtils;
 import com.zhaocai.common.core.utils.bean.BeanCopierUtil;
 import com.zhaocai.common.security.utils.SecurityUtils;
-import com.zhaocai.system.api.domain.SysUser;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
@@ -54,13 +48,9 @@ import org.springframework.util.ObjectUtils;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.text.ParseException;
-import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-
-import static java.math.BigDecimal.ROUND_DOWN;
 
 /**
  * 投标单信息Service业务层处理
@@ -70,7 +60,7 @@ import static java.math.BigDecimal.ROUND_DOWN;
  */
 @Service
 @Slf4j
-public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,BiddingInfo> implements IBiddingInfoService {
+public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper, BiddingInfo> implements IBiddingInfoService {
 
     @Autowired
     private ITenderNoticeService tenderNoticeService;
@@ -110,7 +100,7 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
         for (BiddingInfoListVO biddingInfoListVO : biddingInfoList) {
             biddingInfoListVO.setBiddingStatusText(BiddingInfoStatusEnum.getValueByCode(biddingInfoListVO.getBiddingStatus()));
             //投标单开标状态
-            if (biddingInfoListVO.getBiddingStatus().compareTo(BiddingInfoStatusEnum.OPENED.getState()) >= 0){
+            if (biddingInfoListVO.getBiddingStatus().compareTo(BiddingInfoStatusEnum.OPENED.getState()) >= 0) {
                 biddingInfoListVO.setBiddingOpenStatus("已开标");
             } else {
                 biddingInfoListVO.setBiddingOpenStatus("待开标");
@@ -130,7 +120,7 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
         for (BiddingInfoOpenListVO biddingInfoOpenListVO : biddingInfoList) {
             biddingInfoOpenListVO.setBiddingStatusText(BiddingInfoStatusEnum.getValueByCode(biddingInfoOpenListVO.getBiddingStatus()));
             //投标单开标状态
-            if (biddingInfoOpenListVO.getBiddingStatus().compareTo(BiddingInfoStatusEnum.OPENED.getState()) >= 0){
+            if (biddingInfoOpenListVO.getBiddingStatus().compareTo(BiddingInfoStatusEnum.OPENED.getState()) >= 0) {
                 biddingInfoOpenListVO.setBiddingOpenStatus("已开标");
             } else {
                 biddingInfoOpenListVO.setBiddingOpenStatus("待开标");
@@ -148,7 +138,7 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
         Integer quoteNum = 0;
         //是否填充报价信息
         boolean isFillBiddingInfo = false;
-        if (tenderNotice.getNoticeStatus().compareTo(TenderNoticeStatusEnum.EVALUATION_BID.getState()) > 0){
+        if (tenderNotice.getNoticeStatus().compareTo(TenderNoticeStatusEnum.EVALUATION_BID.getState()) > 0) {
             //当前招标流程在‘评标’节点之后
             isFillBiddingInfo = true;
         }
@@ -162,15 +152,15 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
 
 
         /* 按供应商分组 将招标对象 的 投标数据 分组，并按版本号排序。 */
-        Map<Long,LinkedList<BiddingQuotationListVO>> hasMap = new HashMap<>();
+        Map<Long, LinkedList<BiddingQuotationListVO>> hasMap = new HashMap<>();
         for (BiddingQuotationListVO vo : list) {
-            if(hasMap.get(vo.getVendorId())==null || hasMap.get(vo.getVendorId()).isEmpty()){
-                hasMap.put(vo.getVendorId(),new LinkedList<>(Arrays.asList(vo)));
-            }else {
+            if (hasMap.get(vo.getVendorId()) == null || hasMap.get(vo.getVendorId()).isEmpty()) {
+                hasMap.put(vo.getVendorId(), new LinkedList<>(Arrays.asList(vo)));
+            } else {
                 LinkedList link = hasMap.get(vo.getVendorId());
                 link.add(vo);
                 Collections.sort(link, new VersionComparator());
-                hasMap.put(vo.getVendorId(),link);
+                hasMap.put(vo.getVendorId(), link);
             }
         }
 
@@ -178,7 +168,7 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
         ProcurementSchemeDetailVO scheme = procurementSchemeService.detail(queryVO.getSchemeId());
 
         List<BiddingQuotationListVO> listReturn = new ArrayList<>();
-        for(Long vendorId : hasMap.keySet()) {
+        for (Long vendorId : hasMap.keySet()) {
             /* 获取该供应商所有的投标数据 */
             BiddingQuotationListVO vo = hasMap.get(vendorId).get((Math.max((hasMap.get(vendorId).size() - 1), 0)));
             /* 采购方案详情 */
@@ -189,45 +179,45 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
                 BiddingQuotationDataVO bidChild = new BiddingQuotationDataVO();
                 bidChild.setTwiceQuotVersion(hasMap.get(vendorId).get(i).getTwiceQuotVersion());/* 版本号 */
                 /* 当前报价版本 已经调价才显示数据，不然没有数据 */
-                if(bidChild.getTwiceQuotVersion()!=null && bidChild.getTwiceQuotVersion().equals(tenderNotice.getTwiceQuotVersion()) && tenderNotice.getTwiceQuotVersion()!=null){
+                if (bidChild.getTwiceQuotVersion() != null && bidChild.getTwiceQuotVersion().equals(tenderNotice.getTwiceQuotVersion()) && tenderNotice.getTwiceQuotVersion() != null) {
 
                     /** 当前招标文件开启调价 */
-                    if(tenderNotice.getTwiceQuotState()!=null && tenderNotice.getTwiceQuotState().equals(NumberConstant.ONE)){
+                    if (tenderNotice.getTwiceQuotState() != null && tenderNotice.getTwiceQuotState().equals(NumberConstant.ONE)) {
                         /* 当前已经调价 */
-                        if(hasMap.get(vendorId).get(i).getPriceChangeState()!=null && hasMap.get(vendorId).get(i).getPriceChangeState().equals(NumberConstant.ONE)){
+                        if (hasMap.get(vendorId).get(i).getPriceChangeState() != null && hasMap.get(vendorId).get(i).getPriceChangeState().equals(NumberConstant.ONE)) {
                             bidChild.setTaxPrice(hasMap.get(vendorId).get(i).getTaxPrice());
                             bidChild.setNotTaxPrice(hasMap.get(vendorId).get(i).getNotTaxPrice());
                             bidChild.setNotTaxPricePattern(hasMap.get(vendorId).get(i).getNotTaxPricePattern());
                             bidChild.setPriceChangeState(NumberConstant.ONE);/* 已调价 */
                             vo.setPriceChangeState(NumberConstant.ONE);/* 当前版本 已调价 */
-                        }else{
+                        } else {
                             /* 当前未调价 */
                             bidChild.setId(hasMap.get(vendorId).get(i).getId());
                             bidChild.setPriceChangeState(NumberConstant.ZERO);/* 调价中 */
                             vo.setPriceChangeState(NumberConstant.ZERO);/* 当前版本 调价中 */
                         }
                         bidChild.setId(hasMap.get(vendorId).get(i).getId());
-                    }else{
+                    } else {
                         /** 当前招标文件 关闭了调价 */
                         bidChild.setId(hasMap.get(vendorId).get(i).getId());
                         bidChild.setTaxPrice(hasMap.get(vendorId).get(i).getTaxPrice());
                         bidChild.setNotTaxPrice(hasMap.get(vendorId).get(i).getNotTaxPrice());
                         bidChild.setNotTaxPricePattern(hasMap.get(vendorId).get(i).getNotTaxPricePattern());
                         /* 当前已经调价 */
-                        if(hasMap.get(vendorId).get(i).getPriceChangeState()!=null && hasMap.get(vendorId).get(i).getPriceChangeState().equals(NumberConstant.ONE)){
+                        if (hasMap.get(vendorId).get(i).getPriceChangeState() != null && hasMap.get(vendorId).get(i).getPriceChangeState().equals(NumberConstant.ONE)) {
                             bidChild.setPriceChangeState(NumberConstant.ONE);/* 已调价 */
                             vo.setPriceChangeState(NumberConstant.ONE);/* 当前版本 已调价 */
-                        }else if(hasMap.get(vendorId).get(i).getPriceChangeState()!=null && hasMap.get(vendorId).get(i).getPriceChangeState().equals(NumberConstant.TWO)){
+                        } else if (hasMap.get(vendorId).get(i).getPriceChangeState() != null && hasMap.get(vendorId).get(i).getPriceChangeState().equals(NumberConstant.TWO)) {
                             /* 当前未调价 */
                             bidChild.setPriceChangeState(NumberConstant.TWO);/* 放弃调价 */
                             vo.setPriceChangeState(NumberConstant.TWO);/* 当前版本 放弃调价 */
-                        }else if(hasMap.get(vendorId).get(i).getPriceChangeState()!=null && hasMap.get(vendorId).get(i).getPriceChangeState().equals(NumberConstant.ZERO)){
+                        } else if (hasMap.get(vendorId).get(i).getPriceChangeState() != null && hasMap.get(vendorId).get(i).getPriceChangeState().equals(NumberConstant.ZERO)) {
                             /* 当前未调价 */
                             bidChild.setPriceChangeState(NumberConstant.ZERO);/* 未调价 */
                             vo.setPriceChangeState(NumberConstant.ZERO);/* 未调价 */
                         }
                     }
-                }else {
+                } else {
                     /* 非当前版本 */
                     bidChild.setId(hasMap.get(vendorId).get(i).getId());
                     bidChild.setTaxPrice(hasMap.get(vendorId).get(i).getTaxPrice());
@@ -243,7 +233,7 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
 
 
             //赋值最大报价次数
-            if (quotationDataVOList.size() > quoteNum){
+            if (quotationDataVOList.size() > quoteNum) {
                 quoteNum = quotationDataVOList.size();
             }
 
@@ -251,15 +241,15 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
             List<AttachmentVO> attachments = attachmentService.listAttachment(AttachmentTypeEnum.EVAL_DOCUMENT, vo.getId());
             vo.setAttachments(attachments);
             //设置需要查看的回标单id（最后一次投标单id）
-            for (int i = quotationDataVOList.size()-1; i >= 0; i--) {
+            for (int i = quotationDataVOList.size() - 1; i >= 0; i--) {
                 /* 已调价 最新版本的 */
-                if(quotationDataVOList.get(i).getPriceChangeState()!=null&&quotationDataVOList.get(i).getPriceChangeState().equals(NumberConstant.ONE)){
+                if (quotationDataVOList.get(i).getPriceChangeState() != null && quotationDataVOList.get(i).getPriceChangeState().equals(NumberConstant.ONE)) {
                     vo.setBiddingInfoId(quotationDataVOList.get(i).getId());
                     break;
                 }
             }
             /* 历史数据是拿不到getPriceChangeState的 */
-            if(vo.getBiddingInfoId()==null){
+            if (vo.getBiddingInfoId() == null) {
                 /* 历史数据是拿不到getPriceChangeState的 ， 直接拿 设置需要查看的回标单id（最后一次投标单id） */
                 vo.setBiddingInfoId(quotationDataVOList.get(quotationDataVOList.size() - 1).getId());
             }
@@ -279,7 +269,7 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
             //3.查询当前轮次的所有专家的评分数据
             //4.刷选出同一个专家对同一个投标单重复评分的数据
             //5.计算综合得分
-            for (int i = quotationDataVOList.size()-1; i >= 0; i--) {
+            for (int i = quotationDataVOList.size() - 1; i >= 0; i--) {
                 List<ExpertScoreExtraVO> expertScores = new ArrayList<>();
                 ExpertScoreExtraVO expertScoreExtraVO;
                 for (BiddingEvaluatExpert evaluatExpert : expertList) {
@@ -289,7 +279,7 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
                             .eq(ExpertScore::getVendorId, vendorId)
                             .eq(ExpertScore::getExpertId, evaluatExpert.getExpertId())
                             .orderByDesc(ExpertScore::getCreateTime).last("limit 1"));
-                    if (!ObjectUtils.isEmpty(expertScore)){
+                    if (!ObjectUtils.isEmpty(expertScore)) {
                         expertScoreExtraVO = BeanCopierUtil.copyBean(expertScore, ExpertScoreExtraVO.class);
                         expertScoreExtraVO.setExpertType(evaluatExpert.getExpertType());
                         //产生评分数据
@@ -297,7 +287,7 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
                     }
                 }
 
-                if (!CollectionUtils.isEmpty(expertScores)){
+                if (!CollectionUtils.isEmpty(expertScores)) {
                     //算分数
 //                    int expertSize = expertScores.size();
                     BigDecimal busTotalScore = BigDecimal.ZERO;
@@ -307,11 +297,11 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
                     int expertSizeTech = 0;
                     for (ExpertScoreExtraVO expertScoreExtra : expertScores) {
 //                        if (expertScoreExtra.getExpertType() == 1){
-                            //1.汇总技术分数
-                            techTotalScore = techTotalScore.add(expertScoreExtra.getTechScore());
-                            techTotalScore = techTotalScore.add(expertScoreExtra.getBusScore());
-                            techTotalScore = techTotalScore.add(expertScoreExtra.getQuotation());
-                            expertSizeTech++;
+                        //1.汇总技术分数
+                        techTotalScore = techTotalScore.add(expertScoreExtra.getTechScore());
+                        techTotalScore = techTotalScore.add(expertScoreExtra.getBusScore());
+                        techTotalScore = techTotalScore.add(expertScoreExtra.getQuotation() == null ? BigDecimal.ZERO : expertScoreExtra.getQuotation());
+                        expertSizeTech++;
 //                        } else if (expertScoreExtra.getExpertType() == 2){
 //                            2.汇总商务分数
 //                            busTotalScore = busTotalScore.add(expertScoreExtra.getBusScore());
@@ -323,7 +313,7 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
 //                    if (expertSizeBus > 0){
 //                        avgBusTotalScore = busTotalScore.divide(new BigDecimal(expertSizeBus), 2, RoundingMode.HALF_UP);
 //                    }
-                    if (expertSizeTech > 0){
+                    if (expertSizeTech > 0) {
                         avgTechTotalScore = techTotalScore.divide(new BigDecimal(expertSizeTech), 2, RoundingMode.HALF_UP);
                     }
                     score = avgBusTotalScore.add(avgTechTotalScore);
@@ -340,19 +330,21 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
 
 
         //综合排名（排序）按照综合分由高到低排序，综合分一致按不含税总价排序
-        if (!CollectionUtils.isEmpty(listReturn)){
+        if (!CollectionUtils.isEmpty(listReturn)) {
             //根据综合分进行排序
             Collections.sort(listReturn);
             //补充字段内容
             fillFieldBid(listReturn, isFillBiddingInfo, quoteNum);
             // 中标审批结果显示
-            fillFieldBidApply(listReturn,queryVO.getNoticeId());
+            fillFieldBidApply(listReturn, queryVO.getNoticeId());
         }
         return listReturn;
     }
 
-    /** 填充列表列表信息 */
-    private void fillFieldBidApply(List<BiddingQuotationListVO> list,Long noticeId){
+    /**
+     * 填充列表列表信息
+     */
+    private void fillFieldBidApply(List<BiddingQuotationListVO> list, Long noticeId) {
         List<BiddingResult> results = biddingResultService.list(new LambdaQueryWrapper<BiddingResult>()
                 .eq(BiddingResult::getNoticeId, noticeId)
                 .eq(BiddingResult::getSureBid, NumberConstant.ONE));
@@ -366,20 +358,22 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
             BiddingResult result = resultMap.get(quotationListVO.getVendorId());
             if (result != null) {
                 quotationListVO.setSureBid(1);  // 设置 sureBid 为 1
-            }else{
+            } else {
                 quotationListVO.setSureBid(0);  // 设置 sureBid 为 0
             }
         }
     }
 
-    /** 填充列表列表信息 */
-    private void fillFieldBid(List<BiddingQuotationListVO> list, boolean isFillBiddingInfo, Integer quoteNum){
+    /**
+     * 填充列表列表信息
+     */
+    private void fillFieldBid(List<BiddingQuotationListVO> list, boolean isFillBiddingInfo, Integer quoteNum) {
         int rank = 0;
         for (BiddingQuotationListVO quotationListVO : list) {
             rank++;
             quotationListVO.setRank(rank);
             quotationListVO.setCandidate("第" + rank + "中标候选人");
-            if (rank == NumberConstant.ONE){
+            if (rank == NumberConstant.ONE) {
                 quotationListVO.setSureBid(NumberConstant.ONE);
             } else {
                 quotationListVO.setSureBid(NumberConstant.ZERO);
@@ -392,9 +386,9 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
             });
 
             int dataSize = quotationDataVOList.size();
-            if (quoteNum > dataSize){
+            if (quoteNum > dataSize) {
                 BiddingQuotationDataVO dataVO = new BiddingQuotationDataVO();
-                if (isFillBiddingInfo){
+                if (isFillBiddingInfo) {
                     dataVO = quotationDataVOList.get(dataSize - 1);
                 }
                 //填充轮次
@@ -409,7 +403,7 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
     @Override
     public BiddingInfoDetailVO getInfo(Long id) {
         BiddingInfoDetailVO vo = new BiddingInfoDetailVO();
-        if (null == id){
+        if (null == id) {
             return vo;
         }
 
@@ -436,7 +430,7 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
         /* 用最新的已投标数据 */
         List<BiddingListQuotation> quotations = biddingListQuotationService.list(new LambdaQueryWrapper<BiddingListQuotation>()
                 .eq(BiddingListQuotation::getBiddingInfoId, newestBiddingInfo.getId()));
-        try{
+        try {
             Map<String, BiddingListQuotation> quotationMap = quotations.stream().collect(Collectors.toMap(item ->
                     item.getSplitId() + "_" + item.getMaterialsId(), Function.identity()));
 
@@ -449,7 +443,7 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
                     List<CompMaterialsContentVO> compMaterialsContentVOList = compContractSplitMaterialsVO.getMaterialsLists();
                     for (CompMaterialsContentVO contentVO : compMaterialsContentVOList) {
                         String quotationKey = compContractSplitMaterialsVO.getSplitId() + "_" + contentVO.getId();
-                        if (quotationMap.containsKey(quotationKey)){
+                        if (quotationMap.containsKey(quotationKey)) {
                             //如果投标物料清单表中有数据匹配上了方案下面的物料清单信息，那就补充信息
                             BiddingListQuotation biddingListQuotation = quotationMap.get(quotationKey);
                             contentVO.setTaxUnitPrice(biddingListQuotation.getTaxUnitPrice());
@@ -479,7 +473,7 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
                 }
             }
             vo.setMaterialsList(compMaterialsList);
-        } catch (Exception e){
+        } catch (Exception e) {
             log.info("获取供应商投标清单信息失败");
             e.printStackTrace();
         }
@@ -489,10 +483,10 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
         for (BiddingListQuotation quotation : quotations) {
             BiddingQuotationDetailVO quotationVO = BeanCopierUtil.copyBean(quotation, BiddingQuotationDetailVO.class);
 
-            if (null != quotation.getTaxUnitPrice()){
+            if (null != quotation.getTaxUnitPrice()) {
                 quotationVO.setTaxUnitPrice(quotation.getTaxUnitPrice());
             }
-            if (null != quotation.getNotTaxUnitPrice()){
+            if (null != quotation.getNotTaxUnitPrice()) {
                 quotationVO.setNotTaxUnitPrice(quotation.getNotTaxUnitPrice());
             }
 
@@ -500,7 +494,7 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
             quotationVO.setNotTaxPrice(quotation.getNotTaxPrice());
 
             for (MaterialsVO mvo : materialsList) {
-                if (quotationVO.getMaterialsCode().equals(mvo.getMaterialsCode())){
+                if (quotationVO.getMaterialsCode().equals(mvo.getMaterialsCode())) {
                     quotationVO.setMaterialsName(mvo.getMaterialsName());
                     quotationVO.setSubjectMatterCode(mvo.getSubjectMatterCode());
                     quotationVO.setSubjectMatterName(mvo.getSubjectMatterName());
@@ -554,8 +548,8 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
         //判断当前操作人是否是选择的财务人员，只允许设置的财务人员确认
         BiddingInfo biddingInfo = this.getById(id);
         ProcurementScheme procurementScheme = procurementSchemeService.getById(biddingInfo.getSchemeId());
-        if (!ObjectUtils.isEmpty(procurementScheme) && StringUtils.isNotEmpty(procurementScheme.getFinanceConfirmId())){
-            if (!procurementScheme.getFinanceConfirmId().equals(SecurityUtils.getUserId().toString())){
+        if (!ObjectUtils.isEmpty(procurementScheme) && StringUtils.isNotEmpty(procurementScheme.getFinanceConfirmId())) {
+            if (!procurementScheme.getFinanceConfirmId().equals(SecurityUtils.getUserId().toString())) {
                 throw new ParamValidateException("仅允许方案中设置的财务人员操作");
             }
         }
@@ -570,7 +564,7 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
     public boolean intoBidOpeningStage(Long noticeId) {
         //查询当前公告流程状态
         TenderNotice tenderNotice = tenderNoticeService.getById(noticeId);
-        if (!TenderNoticeStatusEnum.TENDER_ISSUE.getState().equals(tenderNotice.getNoticeStatus())){
+        if (!TenderNoticeStatusEnum.TENDER_ISSUE.getState().equals(tenderNotice.getNoticeStatus())) {
             throw new ParamValidateException("投标公告状态已变更，请确认当前招标公告状态");
         }
 
@@ -580,7 +574,7 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
                 .eq(BiddingInfo::getSubmitStatus, 1)
                 .eq(BiddingInfo::getBiddingStatus, BiddingInfoStatusEnum.HAVE_BACK.getState())
                 .eq(BiddingInfo::getCollectDeposit, 0));
-        if (count > 0){
+        if (count > 0) {
             throw new ParamValidateException("有未收取保证金的供应商，不允许进入下一环节");
         }
 
@@ -590,12 +584,12 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
                 .eq(BiddingInfo::getSubmitStatus, 1)
                 .ne(BiddingInfo::getBiddingStatus, BiddingInfoStatusEnum.HAVE_ABANDON.getState())
                 .isNull(BiddingInfo::getParentId));
-        if (scheme.getProcurementType() != null){
-            if (scheme.getProcurementType() == NumberConstant.ONE && vendorIds < NumberConstant.THREE){
+        if (scheme.getProcurementType() != null) {
+            if (scheme.getProcurementType() == NumberConstant.ONE && vendorIds < NumberConstant.THREE) {
                 throw new ParamValidateException("公开招标需3家供应商以上");
-            }else if (scheme.getProcurementType() == NumberConstant.TWO && vendorIds < NumberConstant.THREE){
+            } else if (scheme.getProcurementType() == NumberConstant.TWO && vendorIds < NumberConstant.THREE) {
                 throw new ParamValidateException("邀请招标需3家供应商以上");
-            } else if (scheme.getProcurementType() == NumberConstant.THREE && vendorIds < NumberConstant.THREE){
+            } else if (scheme.getProcurementType() == NumberConstant.THREE && vendorIds < NumberConstant.THREE) {
                 throw new ParamValidateException("询价采购需3家供应商以上");
             }
 //            else if (scheme.getProcurementType() == NumberConstant.FOUR && vendorIds != NumberConstant.ONE){
@@ -613,7 +607,7 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
         this.update(new LambdaUpdateWrapper<BiddingInfo>()
                 .set(BiddingInfo::getTwiceQuot, NumberConstant.ZERO)
                 .eq(BiddingInfo::getNoticeId, noticeId)
-                .eq(BiddingInfo::getTwiceQuotVersion, tenderNotice.getTwiceQuotVersion()==null?1:tenderNotice.getTwiceQuotVersion())
+                .eq(BiddingInfo::getTwiceQuotVersion, tenderNotice.getTwiceQuotVersion() == null ? 1 : tenderNotice.getTwiceQuotVersion())
                 .eq(BiddingInfo::getTwiceQuot, NumberConstant.ONE));
 
         /* 获取招标公告 和 采购方案的类型/名称 */
@@ -633,7 +627,7 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
         long count = this.count(new LambdaQueryWrapper<BiddingInfo>()
                 .eq(BiddingInfo::getNoticeId, abandonBidVO.getNoticeId())
                 .ne(BiddingInfo::getBiddingStatus, BiddingInfoStatusEnum.HAVE_ABANDON.getState()));
-        if (!CollectionUtils.isEmpty(biddingInfoIds) && count == (long) biddingInfoIds.size()){
+        if (!CollectionUtils.isEmpty(biddingInfoIds) && count == (long) biddingInfoIds.size()) {
             //如果当前废标操作是废除剩下所有投标单，那就修改招标公告状态为废标
             tenderNoticeService.updateStatus(
                     abandonBidVO.getNoticeId(), TenderNoticeStatusEnum.ABANDON_BID.getState());
@@ -654,7 +648,7 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
         attachmentService.addAttachment(abandonBidVO.getAttachmentList(), AttachmentTypeEnum.BIDING_ABANDON_DOCUMENT,
                 abandonRecord.getId());
 
-        if (!res){
+        if (!res) {
             throw new ParamValidateException("暂无投标信息，不允许废标");
         }
 
@@ -666,7 +660,7 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
     public boolean abandonBidMore(AbandonBidVO abandonBidVO) {
         boolean res = false;
         List<AbandonMoreVO> abandonMoreVOList = abandonBidVO.getAbandonMoreVOList();
-        if (CollectionUtils.isEmpty(abandonMoreVOList)){
+        if (CollectionUtils.isEmpty(abandonMoreVOList)) {
             throw new ParamValidateException("暂无废标参数信息，请重新废标");
         }
         //校验废标参数，判断当前招标公告状态是否允许废标操作
@@ -681,7 +675,7 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
                     .ne(BiddingInfo::getBiddingStatus, BiddingInfoStatusEnum.HAVE_ABANDON.getState())
                     .eq(BiddingInfo::getNoticeId, abandonMoreVO.getNoticeId()));
             List<Long> biddingInfoIds;
-            if (!CollectionUtils.isEmpty(biddingInfos)){
+            if (!CollectionUtils.isEmpty(biddingInfos)) {
                 biddingInfoIds = biddingInfos.stream().map(BiddingInfo::getId).collect(Collectors.toList());
 
                 //2.修改投标单状态为废标
@@ -704,7 +698,7 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
     @Override
     @Transactional(rollbackFor = Exception.class)
     public boolean abandonBidMoreScheme(AbandonBidVO abandonBidVO) {
-        ValidateUtils.isNullException(abandonBidVO.getSchemeId(),"采购方案ID为空必传");
+        ValidateUtils.isNullException(abandonBidVO.getSchemeId(), "采购方案ID为空必传");
         boolean res = false;
         /* 调用废除招标 */
         res = abandonBidMore(abandonBidVO);
@@ -720,24 +714,26 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
         abandonBidMoreScheme(abandonBidVO);
         /* 获取第一条采购方案对应的采购计划 */
         ProcurementSchemePlanRelate procurementSchemePlanRelate = procurementSchemePlanRelateService.getOne(new LambdaQueryWrapper<ProcurementSchemePlanRelate>()
-                .eq(ProcurementSchemePlanRelate::getProcurementSchemeId,abandonBidVO.getSchemeId()).last("limit 1"));
-        ValidateUtils.isNullException(procurementSchemePlanRelate,"查询不到该采购方案对应的采购计划。");
+                .eq(ProcurementSchemePlanRelate::getProcurementSchemeId, abandonBidVO.getSchemeId()).last("limit 1"));
+        ValidateUtils.isNullException(procurementSchemePlanRelate, "查询不到该采购方案对应的采购计划。");
         /* 废除采购计划，如果存在除当前被废除的采购方案外的采购方案没有被废除就无法废除该采购计划。 */
         procurementPlanService.cancellationProcurementPlan(procurementSchemePlanRelate.getProcurementPlanId());
         return true;
     }
 
-    /** 校验废标参数 */
-    private void verifyParam(List<AbandonMoreVO> abandonMoreVOList){
+    /**
+     * 校验废标参数
+     */
+    private void verifyParam(List<AbandonMoreVO> abandonMoreVOList) {
         AbandonMoreVO abandonMoreVO = abandonMoreVOList.get(0);
-        if (ObjectUtils.isEmpty(abandonMoreVO)){
+        if (ObjectUtils.isEmpty(abandonMoreVO)) {
             throw new ParamValidateException("暂无招标数据，无法废标");
         }
-        if (null == abandonMoreVO.getNoticeId()){
+        if (null == abandonMoreVO.getNoticeId()) {
             throw new ParamValidateException("暂无招标数据，无法废标");
         }
         TenderNotice tenderNotice = tenderNoticeService.getById(abandonMoreVO.getNoticeId());
-        if (ObjectUtils.isEmpty(tenderNotice)){
+        if (ObjectUtils.isEmpty(tenderNotice)) {
             throw new ParamValidateException("暂无招标数据，无法废标");
         }
     }
@@ -767,13 +763,12 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
             //获取几个供应商首轮报价信息
 
 
-
             List<BiddingInfo> biddingInfos = this.list(new LambdaQueryWrapper<BiddingInfo>()
                     .eq(BiddingInfo::getNoticeId, noticeId)
                     .eq(BiddingInfo::getBiddingStatus, BiddingInfoStatusEnum.HAVE_BACK.getState())
                     .isNull(BiddingInfo::getParentId));
             boolean flag = true;
-            for (BiddingInfo bid : biddingInfos){
+            for (BiddingInfo bid : biddingInfos) {
                 //获取供应商最新一轮报价数据
                 //查询二次报价的数据
                 BiddingInfo newestBiddingInfo = this.getOne(new LambdaQueryWrapper<BiddingInfo>()
@@ -781,7 +776,7 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
                         .and(q -> q.eq(BiddingInfo::getPriceChangeState, NumberConstant.ONE)/* 已经调价 */
                                 .or().isNull(BiddingInfo::getPriceChangeState))/* 历史数据兼容 */
                         .orderByDesc(BiddingInfo::getCreateTime).last("limit 1"));
-                if (!ObjectUtils.isEmpty(newestBiddingInfo)){
+                if (!ObjectUtils.isEmpty(newestBiddingInfo)) {
                     //换成最新一条投标单
                     bid = newestBiddingInfo;
                 }
@@ -795,7 +790,7 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
                     break;
                 }
             }
-            if (flag){
+            if (flag) {
                 expertVo.setEvalStatus(1);
                 expertVo.setEvalStatusText("已完成");
             } else {
@@ -803,12 +798,12 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
                 expertVo.setEvalStatusText("未完成");
             }
 
-            if (evalStatus != null && 0 == evalStatus){
-                if (!flag){
+            if (evalStatus != null && 0 == evalStatus) {
+                if (!flag) {
                     expertVos.add(expertVo);
                 }
-            } else if (evalStatus != null && 1 == evalStatus){
-                if (flag){
+            } else if (evalStatus != null && 1 == evalStatus) {
+                if (flag) {
                     expertVos.add(expertVo);
                 }
             } else {
@@ -822,7 +817,7 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
     @Override
     public boolean evaluatBid(EvaluatBidVO evaluatBidVO) {
         if (tenderNoticeService.getCountTenderNoticeStatus(
-                evaluatBidVO.getNoticeId(), TenderNoticeStatusEnum.EVALUATION_BID.getState()) == 0){
+                evaluatBidVO.getNoticeId(), TenderNoticeStatusEnum.EVALUATION_BID.getState()) == 0) {
             throw new ParamValidateException("投标公告状态已变更，请确认当前招标公告状态");
         }
 
@@ -830,9 +825,9 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
         /* 评标结束前先进行结束二次报价操作 */
         TwiceBidConOverVO twiceBidConfVO = new TwiceBidConOverVO();
         twiceBidConfVO.setNoticeId(evaluatBidVO.getNoticeId());
-        try{
+        try {
             twiceBidFinish(twiceBidConfVO);
-        }catch (Exception e){
+        } catch (Exception e) {
             log.error("[评标结束前先进行结束二次报价操作]");
             log.error(e.getMessage());
         }
@@ -854,7 +849,7 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
                 .eq(BiddingInfo::getNoticeId, noticeId)
                 .eq(BiddingInfo::getTwiceQuot, NumberConstant.ONE)
                 .last("limit 1"));
-        if (!ObjectUtils.isEmpty(biddingInfo)){
+        if (!ObjectUtils.isEmpty(biddingInfo)) {
             Date twiceTime = biddingInfo.getTwiceTime();
             return DateUtils.parseDateToStr(DateUtils.YYYY_MM_DD, twiceTime);
         }
@@ -862,24 +857,23 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
     }
 
 
-
     @Override
     public boolean twiceBidConf(TwiceBidConfVO twiceBidConfVO) {
         if (tenderNoticeService.getCountTenderNoticeStatus(
-                twiceBidConfVO.getNoticeId(), TenderNoticeStatusEnum.EVALUATION_BID.getState()) == 0){
+                twiceBidConfVO.getNoticeId(), TenderNoticeStatusEnum.EVALUATION_BID.getState()) == 0) {
             throw new ParamValidateException("投标公告状态已变更，请确认当前招标公告状态");
         }
         TenderNotice tenderNotice = tenderNoticeService.getOne(new LambdaQueryWrapper<TenderNotice>()
                 .eq(TenderNotice::getId, twiceBidConfVO.getNoticeId()));
         /* 招标对象 二次报价状态 */
-        if(tenderNotice.getTwiceQuotState()!=null&&tenderNotice.getTwiceQuotState().equals(NumberConstant.ONE) && !tenderNotice.getTwiceQuotVersion().equals(NumberConstant.ONE)){
+        if (tenderNotice.getTwiceQuotState() != null && tenderNotice.getTwiceQuotState().equals(NumberConstant.ONE) && !tenderNotice.getTwiceQuotVersion().equals(NumberConstant.ONE)) {
             throw new ParamValidateException("已开启二次报价，再次开启请先结束当前的二次报价。");
         }
 
         /* 获取当前版本的所有投标数据 */
         List<BiddingInfo> biddingInfoList = this.list(new LambdaUpdateWrapper<BiddingInfo>()
                 .eq(BiddingInfo::getNoticeId, tenderNotice.getId())
-                .eq(BiddingInfo::getTwiceQuotVersion,( tenderNotice.getTwiceQuotVersion()==null?1: tenderNotice.getTwiceQuotVersion())));
+                .eq(BiddingInfo::getTwiceQuotVersion, (tenderNotice.getTwiceQuotVersion() == null ? 1 : tenderNotice.getTwiceQuotVersion())));
         /* 全部复制一份，防止后面需求变化。 */
         /* 这个版本号是根据招标对象走的，第二次供应商未报价，第三次依然可以选中该供应商继续报价。 */
         Date date = new Date();
@@ -893,19 +887,19 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
             bidInfo.setParentId(biddingInfoOld.getId());/* 设置原始id,第一版本的，这个很重要 */
             bidInfo.setCreateTime(date);
             bidInfo.setTwiceTime(twiceBidConfVO.getTwiceTime());/* 二次报价截至时间 */
-            bidInfo.setTwiceQuotVersion((tenderNotice.getTwiceQuotVersion()==null?1:tenderNotice.getTwiceQuotVersion())+1);/* 二次报价版本号加一 */
+            bidInfo.setTwiceQuotVersion((tenderNotice.getTwiceQuotVersion() == null ? 1 : tenderNotice.getTwiceQuotVersion()) + 1);/* 二次报价版本号加一 */
             /* 选中的供应商 开启调价 */
-            if(twiceBidConfVO.getBiddingInfoIds().contains(bidInfo.getId())){
+            if (twiceBidConfVO.getBiddingInfoIds().contains(bidInfo.getId())) {
                 bidInfo.setTwiceQuot(NumberConstant.ONE);/* 开启调价 */
                 bidInfo.setPriceChangeState(NumberConstant.ZERO);/* 默认未调价 */
-            }else{
+            } else {
                 /* 未选中的 默认为未调价 */
                 bidInfo.setTwiceQuot(NumberConstant.ZERO);/* 关闭调价 */
                 bidInfo.setPriceChangeState(NumberConstant.ZERO);/* 未调价 */
             }
             List<AttachmentVO> attachments = attachmentService.listAttachment(AttachmentTypeEnum.BIDING_DOCUMENT, bidInfo.getId());
             List<AttachmentRequestVO> attachmentList = new ArrayList<>();
-            for (AttachmentVO a:attachments){
+            for (AttachmentVO a : attachments) {
                 AttachmentRequestVO av = new AttachmentRequestVO();
                 av.setFileName(a.getFileName());
                 av.setFileUrl(a.getFileUrl());
@@ -919,7 +913,7 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
         tenderNoticeService.update(new LambdaUpdateWrapper<TenderNotice>()
                 .set(TenderNotice::getTwiceQuotState, NumberConstant.ONE)
                 .set(TenderNotice::getTwiceTime, twiceBidConfVO.getTwiceTime())/* 二次报价截至时间 */
-                .set(TenderNotice::getTwiceQuotVersion, (tenderNotice.getTwiceQuotVersion()==null?1:tenderNotice.getTwiceQuotVersion())+1)/* 版本号累加 */
+                .set(TenderNotice::getTwiceQuotVersion, (tenderNotice.getTwiceQuotVersion() == null ? 1 : tenderNotice.getTwiceQuotVersion()) + 1)/* 版本号累加 */
                 .eq(TenderNotice::getId, twiceBidConfVO.getNoticeId()));
         return true;
     }
@@ -927,12 +921,12 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
     @Override
     public boolean twiceBidFinish(TwiceBidConOverVO twiceBidConfVO) {
         if (tenderNoticeService.getCountTenderNoticeStatus(
-                twiceBidConfVO.getNoticeId(), TenderNoticeStatusEnum.EVALUATION_BID.getState()) == 0){
+                twiceBidConfVO.getNoticeId(), TenderNoticeStatusEnum.EVALUATION_BID.getState()) == 0) {
             return false;
         }
         TenderNotice tenderNotice = tenderNoticeService.getById(twiceBidConfVO.getNoticeId());
         /* 招标对象 二次报价状态 */
-        if(tenderNotice.getTwiceQuotState()!=null&&tenderNotice.getTwiceQuotState().equals(NumberConstant.ZERO)){
+        if (tenderNotice.getTwiceQuotState() != null && tenderNotice.getTwiceQuotState().equals(NumberConstant.ZERO)) {
             throw new ParamValidateException("当前的二次报价已经是关闭状态");
         }
         /* 招标对象 关闭二次报价 */
@@ -950,12 +944,12 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
 
                 .eq(BiddingInfo::getNoticeId, twiceBidConfVO.getNoticeId())
                 .eq(BiddingInfo::getTwiceQuot, NumberConstant.ONE)/* 当前版本 选中开启调价的 供应商列表 未调价的改成 放弃调价。 */
-                .eq(BiddingInfo::getTwiceQuotVersion, tenderNotice.getTwiceQuotVersion()==null?2:tenderNotice.getTwiceQuotVersion()));
+                .eq(BiddingInfo::getTwiceQuotVersion, tenderNotice.getTwiceQuotVersion() == null ? 2 : tenderNotice.getTwiceQuotVersion()));
         /* 投标对象 关闭当前版本当前招标对象 所有的投标数据 的二次报价开关 */
         this.update(new LambdaUpdateWrapper<BiddingInfo>()
                 .set(BiddingInfo::getTwiceQuot, NumberConstant.ZERO)/* 关闭所有 二次报价 */
                 .eq(BiddingInfo::getNoticeId, twiceBidConfVO.getNoticeId())
-                .eq(BiddingInfo::getTwiceQuotVersion, tenderNotice.getTwiceQuotVersion()==null?2:tenderNotice.getTwiceQuotVersion())
+                .eq(BiddingInfo::getTwiceQuotVersion, tenderNotice.getTwiceQuotVersion() == null ? 2 : tenderNotice.getTwiceQuotVersion())
                 .eq(BiddingInfo::getTwiceQuot, NumberConstant.ONE));
         return true;
     }
@@ -1007,8 +1001,8 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
     @Override
     public List<BiddingVendorVO> listBiddingVendor(Long schemeId) {
         return super.list(new LambdaQueryWrapper<BiddingInfo>()
-                .eq(BiddingInfo::getSchemeId,schemeId)
-                .eq(BiddingInfo::getBiddingStatus,1))
+                        .eq(BiddingInfo::getSchemeId, schemeId)
+                        .eq(BiddingInfo::getBiddingStatus, 1))
                 .stream()
                 .collect(Collectors.groupingBy(BiddingInfo::getVendorId))
                 .values().stream()
@@ -1031,7 +1025,7 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
                     .eq(ExpertScore::getSchemeId, schemeId));
             BigDecimal avgBusTotalScore = BigDecimal.ZERO;
             BigDecimal avgTechTotalScore = BigDecimal.ZERO;
-            if (!CollectionUtils.isEmpty(expertScores)){
+            if (!CollectionUtils.isEmpty(expertScores)) {
                 //专家人数
                 int expertSize = expertScores.size();
                 BigDecimal busTotalScore = BigDecimal.ZERO;
@@ -1050,7 +1044,7 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
             cal.setTotalScore(avgBusTotalScore.add(avgTechTotalScore));
         }
         //综合排名（排序）按照综合分由高到低排序，综合分一致按不含税总价排序
-        if (!CollectionUtils.isEmpty(calList)){
+        if (!CollectionUtils.isEmpty(calList)) {
             //根据综合分进行排序
             Collections.sort(calList);
             //补充字段内容
@@ -1060,7 +1054,7 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
         return calList;
     }
 
-    private void fillField(List<CalibrationReportListVO> calList){
+    private void fillField(List<CalibrationReportListVO> calList) {
         int rank = 0;
         for (CalibrationReportListVO calibratDataVO : calList) {
             rank++;
@@ -1073,9 +1067,9 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
     @Override
     public List<BiddingQuotationSummaryListVO> getBiddingQuotationSummary(BiddingQuotationQueryVO queryVO) {
         List<BiddingQuotationListVO> list = super.list(new LambdaQueryWrapper<BiddingInfo>()
-                        .eq(null!= queryVO.getSchemeId(),BiddingInfo::getSchemeId,queryVO.getSchemeId())
-                        .eq(null!= queryVO.getNoticeId(),BiddingInfo::getNoticeId,queryVO.getNoticeId())
-                       .notIn(BiddingInfo::getBiddingStatus,BiddingInfoStatusEnum.HAVE_ABANDON.getState()).orderByAsc(BiddingInfo::getNotTaxPrice)
+                        .eq(null != queryVO.getSchemeId(), BiddingInfo::getSchemeId, queryVO.getSchemeId())
+                        .eq(null != queryVO.getNoticeId(), BiddingInfo::getNoticeId, queryVO.getNoticeId())
+                        .notIn(BiddingInfo::getBiddingStatus, BiddingInfoStatusEnum.HAVE_ABANDON.getState()).orderByAsc(BiddingInfo::getNotTaxPrice)
                 )
                 .stream()
                 .map(info -> BeanCopierUtil.copyBean(info, BiddingQuotationListVO.class))
@@ -1085,11 +1079,11 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
         Iterator<Map.Entry<Long, List<BiddingQuotationListVO>>> iterator = groupBy.entrySet().iterator();
         while (iterator.hasNext()) {
             Map.Entry<Long, List<BiddingQuotationListVO>> entry = iterator.next();
-            List<BiddingQuotationListVO> biddingQuotationListVOS =  entry.getValue();
+            List<BiddingQuotationListVO> biddingQuotationListVOS = entry.getValue();
             biddingQuotationListVOS = biddingQuotationListVOS.stream().sorted(Comparator.comparing(BiddingQuotationListVO::getId)).collect(Collectors.toList());
             BiddingQuotationSummaryListVO biddingQuotationSummaryListVO = new BiddingQuotationSummaryListVO();
-            BeanUtil.copyProperties(biddingQuotationListVOS.get(0),biddingQuotationSummaryListVO);
-            if (biddingQuotationListVOS.size() > 0){
+            BeanUtil.copyProperties(biddingQuotationListVOS.get(0), biddingQuotationSummaryListVO);
+            if (biddingQuotationListVOS.size() > 0) {
                 BiddingQuotationListVO first = biddingQuotationListVOS.get(0);
 //                first.setTaxPrice(first.getTaxPrice().setScale(2, ROUND_DOWN));
 //                first.setNotTaxPrice(first.getNotTaxPrice().setScale(2, ROUND_DOWN));
@@ -1112,7 +1106,7 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
 
     /* 评标汇总，只显示最终一轮的 */
     @Override
-    public List<BidEvaluationVo>  getBidEvaluationList(Long noticeId, int scoreType) {
+    public List<BidEvaluationVo> getBidEvaluationList(Long noticeId, int scoreType) {
         List<BidEvaluationVo> bidEvaluationVoList = new ArrayList<>();
         BiddingQuotationQueryVO queryVO = new BiddingQuotationQueryVO();
         queryVO.setNoticeId(noticeId);
@@ -1126,7 +1120,6 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
         List<BiddingQuotationListVO> list = baseMapper.findBiddingQuotationList(queryVO);
 
         for (BiddingQuotationListVO vo : list) {
-
 
 
             BigDecimal busTotalScore = BigDecimal.ZERO;
@@ -1144,7 +1137,7 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
                 expertScoreVo.setExpertId(evaluatExpert.getExpertId());
                 expertScoreVo.setExpertName(evaluatExpert.getExpertName());
                 expertScoreVoList.add(expertScoreVo);
-                if (!ObjectUtils.isEmpty(expertScore)){
+                if (!ObjectUtils.isEmpty(expertScore)) {
                     BigDecimal techScore = expertScore.getTechScore() == null ? BigDecimal.ZERO : expertScore.getTechScore();
                     BigDecimal busScore = expertScore.getBusScore() == null ? BigDecimal.ZERO : expertScore.getBusScore();
                     expertScoreVo.setScore(scoreType == 1 ? techScore : busScore);
@@ -1153,12 +1146,12 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
                     busTotalScore = busTotalScore.add(busScore);
                     techTotalScore = techTotalScore.add(techScore);
                 } else {
-                    expertSize = expertSize-1;
+                    expertSize = expertSize - 1;
                 }
             }
             BigDecimal avgBusTotalScore = BigDecimal.ZERO;
             BigDecimal avgTechTotalScore = BigDecimal.ZERO;
-            if (expertSize > 0){
+            if (expertSize > 0) {
                 avgBusTotalScore = busTotalScore.divide(new BigDecimal(expertSize), 2, RoundingMode.HALF_UP);
                 avgTechTotalScore = techTotalScore.divide(new BigDecimal(expertSize), 2, RoundingMode.HALF_UP);
             }
@@ -1167,7 +1160,7 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
             bidEvaluationVo.setVendorId(vo.getVendorId());
             bidEvaluationVo.setVendorName(vo.getVendorName());
             bidEvaluationVo.setBidEvaluationExpertScoreVoList(expertScoreVoList);
-            bidEvaluationVo.setScore(scoreType==1 ? avgTechTotalScore : avgBusTotalScore);
+            bidEvaluationVo.setScore(scoreType == 1 ? avgTechTotalScore : avgBusTotalScore);
             bidEvaluationVoList.add(bidEvaluationVo);
         }
         return bidEvaluationVoList;
@@ -1185,17 +1178,17 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
         placeBuff.append(urgeExpertMesVO.getProjectName()).append("项目");
         placeBuff.append(detailVO.getProcurementSchemeName());
 
-        if (StringUtils.isNotEmpty(expert.getExpertPhone())){
+        if (StringUtils.isNotEmpty(expert.getExpertPhone())) {
             LinkedHashMap<String, String> varParam = new LinkedHashMap<>();
             varParam.put("name", expert.getExpertName());
             varParam.put("place", placeBuff.toString());
 
             String catalogue = "";
-            if(expert.getExpertType().contains("1") && expert.getExpertType().contains("2"))
+            if (expert.getExpertType().contains("1") && expert.getExpertType().contains("2"))
                 catalogue = "技术商务";
-            else if(expert.getExpertType().contains("1"))
+            else if (expert.getExpertType().contains("1"))
                 catalogue = "技术";
-            else if(expert.getExpertType().contains("2"))
+            else if (expert.getExpertType().contains("2"))
                 catalogue = "商务";
             varParam.put("catalogue", catalogue);
             smsSenderUtil.sendMessage(SmsTemplateEnum.EXPERT_BID_EVA_NOTICE.getCode(), expert.getExpertPhone(), varParam);
@@ -1205,15 +1198,16 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
 
 
     @Override
-    public List<BiddingInfo> getMaxPriceVersion(Long noticeId, Long schemeId){
-        return baseMapper.getMaxPriceVersion(noticeId,schemeId);
+    public List<BiddingInfo> getMaxPriceVersion(Long noticeId, Long schemeId) {
+        return baseMapper.getMaxPriceVersion(noticeId, schemeId);
     }
 
 }
+
 class VersionComparator implements Comparator<BiddingQuotationListVO> {
     @Override
     public int compare(BiddingQuotationListVO v1, BiddingQuotationListVO v2) {
-        if(v1.getTwiceQuotVersion()!=null&&v2.getTwiceQuotVersion()!=null)
+        if (v1.getTwiceQuotVersion() != null && v2.getTwiceQuotVersion() != null)
             return v1.getTwiceQuotVersion().compareTo(v2.getTwiceQuotVersion());
         return 0;
     }

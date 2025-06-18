@@ -7,6 +7,8 @@ import javax.servlet.http.HttpServletResponse;
 import com.zhaocai.archives.dossier.tree.LabourTypeTree;
 import com.zhaocai.archives.dossier.tree.SubcontractingTypeTree;
 import com.zhaocai.archives.main.domain.DeviceClass;
+import com.zhaocai.archives.main.domain.MajorSubcontractingClassExcelData;
+import com.zhaocai.common.security.utils.SecurityUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -25,6 +27,7 @@ import com.zhaocai.common.core.web.controller.BaseController;
 import com.zhaocai.common.core.web.domain.AjaxResult;
 import com.zhaocai.common.core.utils.poi.ExcelUtil;
 import com.zhaocai.common.core.web.page.TableDataInfo;
+import org.springframework.web.multipart.MultipartFile;
 
 /**
  * 专业分包分类主Controller
@@ -121,6 +124,26 @@ public class MajorSubcontractingClassController extends BaseController
     @GetMapping(value = "/initCode")
     public AjaxResult initCode(MajorSubcontractingClass aClass) {
         return success(majorSubcontractingClassService.initCode(aClass));
+    }
+
+
+
+    @Log(title = "专业分包导入", businessType = BusinessType.IMPORT)
+//    @RequiresPermissions("system:user:import")
+    @PostMapping("/importData")
+    public AjaxResult importData(MultipartFile file, boolean updateSupport) throws Exception {
+        ExcelUtil<MajorSubcontractingClassExcelData> util = new ExcelUtil<MajorSubcontractingClassExcelData>(MajorSubcontractingClassExcelData.class);
+        List<MajorSubcontractingClassExcelData> userList = util.importExcel(file.getInputStream());
+        String operName = SecurityUtils.getUsername();
+        String message = majorSubcontractingClassService.importData(userList, updateSupport, operName);
+        return success(message);
+    }
+
+
+    @PostMapping("/importTemplate")
+    public void importTemplate(HttpServletResponse response) throws IOException {
+        ExcelUtil<MajorSubcontractingClassExcelData> util = new ExcelUtil<MajorSubcontractingClassExcelData>(MajorSubcontractingClassExcelData.class);
+        util.importTemplateExcel(response, "专业分包导入");
     }
 
 
