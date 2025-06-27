@@ -634,6 +634,10 @@ export default {
       getArchivesDetailList(rData.id, queryParams.type).then(response => {
 
         this.inventoryList = response.data || [];
+        if(this.inventoryList.length < 1){
+          this.$message.error("该物料未挂接清单！");
+          return
+        }
         let time = new Date().getTime();
         this.expandKeys.push(time + "")
         this.planList[0] = {contractPlanning: "", plannedAmountInclTax: "", id: time, children: []};
