@@ -9,6 +9,7 @@ import lombok.Data;
 
 import java.io.Serializable;
 import java.util.Date;
+import java.util.List;
 
 /**
  * 设备档案主对象 device_archives
@@ -111,5 +112,12 @@ public class DeviceArchives implements Serializable {
 
     @TableField(exist = false)
     private String deviceClassName;
+
+
+    /**
+     * ids
+     */
+    @TableField(exist = false)
+    private List<String> ids;
 
 }

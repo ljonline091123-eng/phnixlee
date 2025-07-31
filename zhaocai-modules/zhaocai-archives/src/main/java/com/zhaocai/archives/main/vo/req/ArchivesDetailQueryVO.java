@@ -5,6 +5,7 @@ import io.swagger.annotations.ApiModelProperty;
 import lombok.Data;
 
 import javax.validation.constraints.NotBlank;
+import java.util.List;
 
 /**
  * 物料详情查询请求参数
@@ -18,6 +19,6 @@ public class ArchivesDetailQueryVO {
     private String type;
 
     @ApiModelProperty(value = "选择的分类id")
-    private String classId;
+    private List<String> classId;
 
 }

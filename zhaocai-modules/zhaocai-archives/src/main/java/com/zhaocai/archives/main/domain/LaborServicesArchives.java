@@ -8,6 +8,7 @@ import lombok.Data;
 
 import java.io.Serializable;
 import java.util.Date;
+import java.util.List;
 
 /**
  * 劳务档案主对象 labor_services_archives
@@ -124,5 +125,13 @@ public class LaborServicesArchives implements Serializable {
 
     @TableField(exist = false)
     private String laborServicesClassName;
+
+
+    /**
+     * ids
+     */
+    @TableField(exist = false)
+    private List<String> ids;
+
 
 }

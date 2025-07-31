@@ -53,28 +53,31 @@ public class archivesServiceImpl  implements IArchivesService {
 //        }
 //        PageHelper.startPage(pageNum,pageSize);
 //        PageInfo archivesInfo ;
+        if(queryVO.getClassId() == null || queryVO.getClassId().isEmpty()){
+            queryVO.setClassId(Collections.singletonList("-1"));
+        }
         List<ArchivesDetail> resultList = new ArrayList<>();
         if(queryVO.getType().equals(ArchivesTypeEnum.Mtr_Class.getType())){
             MtrArchives mtrArchives = new MtrArchives();
-            mtrArchives.setMtrClassId(queryVO.getClassId());
+            mtrArchives.setIds(queryVO.getClassId());
             List<MtrArchives> list = mtrArchivesService.selectMtrArchivesList(mtrArchives);
 //            archivesInfo = new PageInfo<>(list);
             resultList.addAll(convertMtrArchivesToArchivesDetail(list)); // 调用转换方法
         } else if (queryVO.getType().equals(ArchivesTypeEnum.Device_Feature.getType())) {
             DeviceArchives deviceArchives = new DeviceArchives();
-            deviceArchives.setDeviceClassId(queryVO.getClassId());
+            deviceArchives.setIds(queryVO.getClassId());
             List<DeviceArchives> list = deviceArchivesService.selectDeviceArchivesList(deviceArchives);
 //            archivesInfo = new PageInfo<>(list);
             resultList.addAll(convertDeviceArchivesToArchivesDetail(list));
         } else if (queryVO.getType().equals(ArchivesTypeEnum.Labor_Services.getType())) {
             LaborServicesArchives laborServicesArchives = new LaborServicesArchives();
-            laborServicesArchives.setLaborServicesClassId(queryVO.getClassId());
+            laborServicesArchives.setIds(queryVO.getClassId());
             List<LaborServicesArchives> list = laborServicesArchivesService.selectLaborServicesArchivesList(laborServicesArchives);
 //            archivesInfo = new PageInfo<>(list);
             resultList.addAll(convertLaborServicesArchivesToArchivesDetail(list));
         } else if (queryVO.getType().equals(ArchivesTypeEnum.Major_Subcontracting.getType())) {
             MajorSubcontractingArchives majorSubcontractingArchives = new MajorSubcontractingArchives();
-            majorSubcontractingArchives.setMajorSubcontractingClassId(queryVO.getClassId());
+            majorSubcontractingArchives.setIds(queryVO.getClassId());
             List<MajorSubcontractingArchives> list = majorSubcontractingArchivesService.selectMajorSubcontractingArchivesList(majorSubcontractingArchives);
 //            archivesInfo = new PageInfo<>(list);
             resultList.addAll(convertMajorSubcontractingArchivesToArchivesDetail(list));

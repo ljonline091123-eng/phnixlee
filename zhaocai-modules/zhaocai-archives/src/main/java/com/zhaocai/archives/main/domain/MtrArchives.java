@@ -8,6 +8,7 @@ import lombok.Data;
 
 import java.io.Serializable;
 import java.util.Date;
+import java.util.List;
 
 /**
  * 材料档案主对象 mtr_archives
@@ -108,6 +109,12 @@ public class MtrArchives implements Serializable {
      */
     @TableField(exist = false)
     private String mtrClassName;
+
+    /**
+     * ids
+     */
+    @TableField(exist = false)
+    private List<String> ids;
 
 
 }

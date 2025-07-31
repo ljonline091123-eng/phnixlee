@@ -93,6 +93,12 @@
             <if test="createId != null  and createId != ''">and create_id = #{createId}</if>
             <if test="valid != null ">and valid = #{valid}</if>
             <if test="sonId != null ">and son_id = #{sonId}</if>
+            <if test="ids != null ">
+                and labor_services_class_id in
+                <foreach collection="ids" item="id" open="(" close=")" separator=",">
+                    #{id}
+                </foreach>
+            </if>
         </where>
         order by labor_services_code ASC
     </select>

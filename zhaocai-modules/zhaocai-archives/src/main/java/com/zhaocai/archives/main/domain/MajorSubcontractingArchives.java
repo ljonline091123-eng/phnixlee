@@ -8,6 +8,7 @@ import lombok.Data;
 
 import java.io.Serializable;
 import java.util.Date;
+import java.util.List;
 
 /**
  * 专业分包档案主对象 major_subcontracting_archives
@@ -123,5 +124,12 @@ public class MajorSubcontractingArchives implements Serializable {
 
     @TableField(exist = false)
     private String majorSubcontractingClassName;
+
+
+    /**
+     * ids
+     */
+    @TableField(exist = false)
+    private List<String> ids;
 
 }
