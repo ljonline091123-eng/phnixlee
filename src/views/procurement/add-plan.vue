@@ -198,7 +198,7 @@
                           <el-input
                             title="清单数量" v-model="scope.row.count"
                             :disabled="isSubmit || scope.row.belongOffer || scope.row.pushFlag === 'Y'"
-                            @input="scope.row.count = scope.row.count.replace(/[^0-9]/g, '')"
+                            @input="scope.row.count = scope.row.count.replace(/[^0-90.]/g, '')"
                           ></el-input>
                         </template>
                       </el-table-column>
