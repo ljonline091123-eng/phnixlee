@@ -1,5 +1,6 @@
 package com.zhaocai.business.bidding.service.impl;
 
+import cn.hutool.core.util.NumberUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.zhaocai.business.bidding.domain.*;
@@ -36,8 +37,13 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.ObjectUtils;
 
 import java.math.BigDecimal;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
+
+import static java.math.BigDecimal.ROUND_DOWN;
 
 /**
  * @author ssy
@@ -75,7 +81,7 @@ public class ExpertEvaluationServiceImpl implements IExpertEvaluationService {
     public PageResult<EvalTaskPageListVO> todoEvalTaskPage(EvalTaskPageVO pageVO) {
         PageResult<EvalTaskPageListVO> pageResult = new PageResult<>();
         Expert expert = getExpert(SecurityUtils.getUserId());
-        if (ObjectUtils.isEmpty(expert)) {
+        if (ObjectUtils.isEmpty(expert)){
             return pageResult;
         }
 
@@ -98,14 +104,14 @@ public class ExpertEvaluationServiceImpl implements IExpertEvaluationService {
                     .eq(BiddingInfo::getBiddingStatus, BiddingInfoStatusEnum.HAVE_BACK.getState())
                     .eq(BiddingInfo::getSubmitStatus, 1)
                     .isNull(BiddingInfo::getParentId));/* 第一个版本的 */
-            for (BiddingInfo biddingInfo : biddingInfos) {
+            for (BiddingInfo biddingInfo : biddingInfos){
                 //查询是否有最新的报价信息
                 BiddingInfo newestBiddingInfo = biddingInfoService.getOne(new LambdaQueryWrapper<BiddingInfo>()
                         .eq(BiddingInfo::getParentId, biddingInfo.getId())
                         .and(q -> q.eq(BiddingInfo::getPriceChangeState, NumberConstant.ONE)/* 已经调价 */
                                 .or().isNull(BiddingInfo::getPriceChangeState))/* 历史数据兼容 */
                         .orderByDesc(BiddingInfo::getCreateTime).last("limit 1"));
-                if (!ObjectUtils.isEmpty(newestBiddingInfo)) {
+                if (!ObjectUtils.isEmpty(newestBiddingInfo)){
                     biddingInfo = newestBiddingInfo;
                 }
 
@@ -124,12 +130,11 @@ public class ExpertEvaluationServiceImpl implements IExpertEvaluationService {
                         .eq(ExpertScore::getBiddingInfoId, biddingInfo.getId())
                         .eq(ExpertScore::getExpertId, expertId)
                         .orderByDesc(BaseEntity::getCreateTime).last("limit 1"));
-                if (!ObjectUtils.isEmpty(expertScore) && (biddingInfo.getExpertState() == null || biddingInfo.getExpertState().equals(NumberConstant.ONE))) {
+                if (!ObjectUtils.isEmpty(expertScore) && (biddingInfo.getExpertState() == null || biddingInfo.getExpertState().equals(NumberConstant.ONE))){
                     //已评标
                     contentVO.setIsEval(true);
                     contentVO.setBusScore(expertScore.getBusScore());
                     contentVO.setTechScore(expertScore.getTechScore());
-                    contentVO.setQuotation(expertScore.getQuotation());
                 }
                 contentVOList.add(contentVO);
             }
@@ -143,7 +148,7 @@ public class ExpertEvaluationServiceImpl implements IExpertEvaluationService {
     public PageResult<EvalTaskPageListVO> doneEvalTaskPage(EvalTaskPageVO pageVO) {
         PageResult<EvalTaskPageListVO> pageResult = new PageResult<>();
         Expert expert = getExpert(SecurityUtils.getUserId());
-        if (ObjectUtils.isEmpty(expert)) {
+        if (ObjectUtils.isEmpty(expert)){
             return pageResult;
         }
         Long expertId = expert.getId();
@@ -165,14 +170,14 @@ public class ExpertEvaluationServiceImpl implements IExpertEvaluationService {
                     .eq(BiddingInfo::getBiddingStatus, BiddingInfoStatusEnum.HAVE_BACK.getState())
                     .eq(BiddingInfo::getSubmitStatus, 1)
                     .isNull(BiddingInfo::getParentId));
-            for (BiddingInfo biddingInfo : biddingInfos) {
+            for (BiddingInfo biddingInfo : biddingInfos){
                 //查询是否有最新的报价信息
                 BiddingInfo newestBiddingInfo = biddingInfoService.getOne(new LambdaQueryWrapper<BiddingInfo>()
                         .eq(BiddingInfo::getParentId, biddingInfo.getId())
                         .and(q -> q.eq(BiddingInfo::getPriceChangeState, NumberConstant.ONE)/* 已经调价 */
                                 .or().isNull(BiddingInfo::getPriceChangeState))/* 历史数据兼容 */
                         .orderByDesc(BiddingInfo::getCreateTime).last("limit 1"));
-                if (!ObjectUtils.isEmpty(newestBiddingInfo)) {
+                if (!ObjectUtils.isEmpty(newestBiddingInfo)){
                     biddingInfo = newestBiddingInfo;
                 }
 
@@ -191,12 +196,11 @@ public class ExpertEvaluationServiceImpl implements IExpertEvaluationService {
                         .eq(ExpertScore::getBiddingInfoId, biddingInfo.getId())
                         .eq(ExpertScore::getExpertId, expertId)
                         .orderByDesc(BaseEntity::getCreateTime).last("limit 1"));
-                if (!ObjectUtils.isEmpty(expertScore) && (biddingInfo.getExpertState() == null || biddingInfo.getExpertState().equals(NumberConstant.ONE))) {
+                if (!ObjectUtils.isEmpty(expertScore) && (biddingInfo.getExpertState() == null || biddingInfo.getExpertState().equals(NumberConstant.ONE))){
                     //已评标
                     contentVO.setIsEval(true);
                     contentVO.setBusScore(expertScore.getBusScore());
                     contentVO.setTechScore(expertScore.getTechScore());
-                    contentVO.setQuotation(expertScore.getQuotation());
                 }
                 contentVOList.add(contentVO);
             }
@@ -228,7 +232,7 @@ public class ExpertEvaluationServiceImpl implements IExpertEvaluationService {
                 .eq(ExpertScore::getBiddingInfoId, biddingInfoId)
                 .eq(ExpertScore::getExpertId, expertId)
                 .orderByDesc(ExpertScore::getCreateTime).last("limit 1"));
-        if (ObjectUtils.isEmpty(expertScore)) {
+        if (ObjectUtils.isEmpty(expertScore)){
             return dataVO;
         }
         dataVO = BeanCopierUtil.copyBean(expertScore, ExpertEvalDataVO.class);
@@ -237,7 +241,7 @@ public class ExpertEvaluationServiceImpl implements IExpertEvaluationService {
         //查询评分细项
         List<BiddingItemGrade> itemGrades = biddingItemGradeService.list(new LambdaQueryWrapper<BiddingItemGrade>()
                 .eq(BiddingItemGrade::getExpertScoreId, expertScore.getId()));
-        for (BiddingItemGrade itemGrade : itemGrades) {
+        for (BiddingItemGrade itemGrade : itemGrades){
             ExpertEvalDetailDataVO detailDataVO = BeanCopierUtil.copyBean(itemGrade, ExpertEvalDetailDataVO.class);
             BiddingMarkItem markItem = biddingMarkItemService.getOne(new LambdaQueryWrapper<BiddingMarkItem>()
                     .eq(BiddingMarkItem::getId, itemGrade.getItemId()));
@@ -287,8 +291,7 @@ public class ExpertEvaluationServiceImpl implements IExpertEvaluationService {
         List<BiddingItemGrade> itemGradeList = new ArrayList<>();
         BigDecimal busScore = BigDecimal.ZERO;
         BigDecimal techScore = BigDecimal.ZERO;
-        BigDecimal quotation = BigDecimal.ZERO;
-        for (List<EvalItemVO> itemDTOS : evalVO.getEvalItemDTOSList()) {
+        for (List<EvalItemVO> itemDTOS : evalVO.getEvalItemDTOSList()){
             BigDecimal totalScore = BigDecimal.ZERO;
             Integer itemType = 0;
             for (EvalItemVO itemDTO : itemDTOS) {
@@ -303,21 +306,18 @@ public class ExpertEvaluationServiceImpl implements IExpertEvaluationService {
                 itemGradeList.add(itemGrade);
 
                 //获取总分
-                if (itemDTO.getScore() != null) {
-                    totalScore = itemDTO.getScore();
+                if (itemDTO.getScore() != null){
+                    totalScore = totalScore.add(itemDTO.getScore());
                 }
                 //设置评分模板项类型
                 itemType = itemDTO.getItemType();
-                if (itemType == 1) {
-                    //技术评分
-                    techScore = techScore.add(totalScore);
-                } else if (itemType == 2) {
-                    //商务评分
-                    busScore = busScore.add(totalScore);
-                } else if (itemType == 3) {
-                    //商务评分
-                    quotation = quotation.add(totalScore);
-                }
+            }
+            if (itemType == 1) {
+                //技术评分
+                techScore = totalScore;
+            } else if (itemType == 2){
+                //商务评分
+                busScore = totalScore;
             }
         }
         boolean res = biddingItemGradeService.saveBatch(itemGradeList);
@@ -325,7 +325,6 @@ public class ExpertEvaluationServiceImpl implements IExpertEvaluationService {
         //更新商务-技术评分
         expertScore.setBusScore(busScore);
         expertScore.setTechScore(techScore);
-        expertScore.setQuotation(quotation);
         expertScoreService.updateById(expertScore);
 
         EvalVendorCountVO queryDTO = new EvalVendorCountVO();
@@ -335,7 +334,7 @@ public class ExpertEvaluationServiceImpl implements IExpertEvaluationService {
         queryDTO.setNoticeId(evalVO.getNoticeId());
         Integer count = expertScoreService.getNotEvalVendorCount(queryDTO);
         //查询该评分供应商是否为最后一个未评标的供应商，如果是则修改该专家对招标项目的评标状态
-        if (count == 0) {
+        if (count == 0){
             biddingEvaluatExpertService.update(new LambdaUpdateWrapper<BiddingEvaluatExpert>()
                     .set(BiddingEvaluatExpert::getEvalStatus, NumberConstant.ONE)
                     .eq(BiddingEvaluatExpert::getSchemeId, evalVO.getSchemeId())
@@ -344,28 +343,28 @@ public class ExpertEvaluationServiceImpl implements IExpertEvaluationService {
         }
         /* 更新投标对象评分开关 */
         biddingInfoService.update(new LambdaUpdateWrapper<BiddingInfo>()
-                .set(BiddingInfo::getExpertState, NumberConstant.ONE)
-                .eq(BiddingInfo::getId, evalVO.getBiddingInfoId()));
+                .set(BiddingInfo::getExpertState,NumberConstant.ONE)
+                .eq(BiddingInfo::getId,evalVO.getBiddingInfoId()));
 
         return res;
     }
 
-    private void verifyEvalParam(EvalVO evalVO) {
+    private void verifyEvalParam(EvalVO evalVO){
         //判断当前招标公告流程状态
         if (tenderNoticeService.getCountTenderNoticeStatus(
-                evalVO.getNoticeId(), TenderNoticeStatusEnum.EVALUATION_BID.getState()) == 0) {
+                evalVO.getNoticeId(), TenderNoticeStatusEnum.EVALUATION_BID.getState()) == 0){
             throw new ParamValidateException("投标公告状态已变更，请确认当前招标公告状态");
         }
         //判断公告是否开启专家评标
         long count = tenderNoticeService.count(new LambdaQueryWrapper<TenderNotice>()
                 .eq(TenderNotice::getId, evalVO.getNoticeId())
                 .eq(TenderNotice::getIsEval, 1));
-        if (count == 0) {
+        if (count == 0){
             throw new ParamValidateException("请开启专家评标");
         }
     }
 
-    private Expert getExpert(Long userId) {
+    private Expert getExpert(Long userId){
         return expertService.getOne(new LambdaQueryWrapper<Expert>()
                 .eq(Expert::getUserId, userId));
     }
