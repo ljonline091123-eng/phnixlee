@@ -43,23 +43,18 @@
       </PageTitle>
       <el-form :model="formData" ref="form" :rules="rules" label-position="right" label-width="100px" size="medium">
         <el-row :gutter="40">
-          <el-col :span="8" class="grid-cell" v-if="expertType === 99">
+          <el-col :span="8" class="grid-cell" v-if="expertType === 2">
             <el-form-item label="商务评分" prop="business" class="required label-right-align">
               <el-input type="text" disabled v-model="formData.business" placeholder="根据评分自动计算"></el-input>
             </el-form-item>
           </el-col>
-          <el-col :span="8" class="grid-cell" v-if="expertType === 99">
-            <el-form-item label="技术评分" prop="technology" class="required label-right-align">
+          <el-col :span="8" class="grid-cell" v-if="expertType === 1">
+            <el-form-item label=" 技术评分" prop="technology" class="required label-right-align">
               <el-input v-model="formData.technology" type="text" disabled placeholder="根据评分自动计算"></el-input>
             </el-form-item>
           </el-col>
         </el-row>
         <el-row :gutter="40">
-          <el-col :span="8" class="grid-cell" v-if="expertType === 99">
-            <el-form-item label="报价评分" prop="quotation" class="required label-right-align">
-              <el-input v-model="formData.quotation" type="text" disabled placeholder="根据评分自动计算"></el-input>
-            </el-form-item>
-          </el-col>
           <el-col :span="16" class="grid-cell">
             <el-form-item label="评标意见" prop="advice" disabled class="required label-right-align">
               <el-input v-model="formData.advice" type="textarea" :rows="4"></el-input>
@@ -73,13 +68,12 @@
         <el-table-column label="序号" type="index" width="50" align="center" />
         <el-table-column label="商务评分" width="200" align="center" prop="busScore" v-if="expertType === 2" />
         <el-table-column label="技术评分" width="200" align="center" prop="techScore" v-if="expertType === 1" />
-        <el-table-column label="技术评分" width="200" align="center" prop="quotation" v-if="expertType === 3" />
         <el-table-column label="评分时间" width="200" align="center" prop="evaTime" />
         <el-table-column label="专家评标意见" prop="evaOpinion" show-overflow-tooltip/>
       </el-table>
 
       <!-- 评分弹出 -->
-      <el-dialog :title="expertType === 1 ? '评分' : '评分'" :visible.sync="evaluateVisible" width="40%">
+      <el-dialog :title="expertType === 1 ? '技术评分' : '商务评分'" :visible.sync="evaluateVisible" width="40%">
         <el-row :gutter="10">
           <el-col :span="24" v-for="(item, key) in markCategoryDatailVOList" :key="key">
             <el-table :data="item.markItemDetailVOList" default-expand-all row-key="id" stripe border
@@ -142,7 +136,6 @@ export default {
       rules: {
         business: [{ required: true, message: '请先评分' }],
         technology: [{ required: true, message: '请先评分' }],
-        quotation: [{ required: true, message: '请先评分' }],
         advice: [{ required: true, message: '请输入评标意见' }]
       },
       evaluateVisible: false,
@@ -273,8 +266,7 @@ export default {
         if (this.selectList.length) {
           this.markCategoryDatailVOList = JSON.parse(JSON.stringify(this.selectList));
         } else {
-          // this.markCategoryDatailVOList = this.evaluatedata.markCategoryDatailVOList.filter(item => item.itemType === expertType);
-          this.markCategoryDatailVOList = this.evaluatedata.markCategoryDatailVOList;
+          this.markCategoryDatailVOList = this.evaluatedata.markCategoryDatailVOList.filter(item => item.itemType === expertType)
         }
       } catch (err) {
         console.log(err);
@@ -321,9 +313,6 @@ export default {
       }
       if (type === 1) {
         this.$set(this.formData, 'technology', count)
-      }
-      if (type === 3) {
-        this.$set(this.formData, 'quotation', count)
       }
       this.selectList = JSON.parse(JSON.stringify(this.markCategoryDatailVOList));
       this.evaluateVisible = false
