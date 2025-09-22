@@ -96,4 +96,7 @@ public class MtrFeature implements Serializable {
      */
     @Excel(name = "是否同步中台")
     private String isTb;
+
+    @TableField(exist = false)
+    private String archivesId;
 }

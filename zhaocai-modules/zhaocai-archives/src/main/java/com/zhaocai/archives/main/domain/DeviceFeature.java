@@ -6,6 +6,7 @@ import com.zhaocai.common.core.annotation.Excel;
 import io.swagger.annotations.ApiModelProperty;
 import lombok.Data;
 
+import java.beans.Transient;
 import java.io.Serializable;
 import java.util.Date;
 
@@ -95,5 +96,8 @@ public class DeviceFeature implements Serializable {
      */
     @Excel(name = "是否同步中台")
     private String isTb;
+
+    @TableField(exist = false)
+    private String archivesId;
 
 }

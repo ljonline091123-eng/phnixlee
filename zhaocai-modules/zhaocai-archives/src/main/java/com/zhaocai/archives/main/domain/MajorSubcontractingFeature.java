@@ -91,4 +91,6 @@ public class MajorSubcontractingFeature implements Serializable {
     @Excel(name = "副库id")
     private Long sonId;
 
+    @TableField(exist = false)
+    private String archivesId;
 }

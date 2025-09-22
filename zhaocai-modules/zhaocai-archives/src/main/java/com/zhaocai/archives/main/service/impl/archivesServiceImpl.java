@@ -96,6 +96,8 @@ public class archivesServiceImpl  implements IArchivesService {
             ArchivesDetail detail = new ArchivesDetail();
             // 将 MtrArchives 的属性映射到 ArchivesDetail
             detail.setId(mtr.getId());
+            detail.setMaterialsId(mtr.getId());
+            detail.setClassId(mtr.getMtrClassId());
             detail.setMaterialsCode(mtr.getMtrCode());
             detail.setMaterialsName(mtr.getMtrName());
             detail.setUnitMeasurement(mtr.getMeasureUnit());
@@ -117,6 +119,8 @@ public class archivesServiceImpl  implements IArchivesService {
             ArchivesDetail detail = new ArchivesDetail();
             // 将 DeviceArchives 的属性映射到 ArchivesDetail
             detail.setId(device.getId());
+            detail.setMaterialsId(device.getId());
+            detail.setClassId(device.getDeviceClassId());
             detail.setMaterialsName(device.getDeviceName());
             detail.setMaterialsCode(device.getDeviceCode());
             detail.setSpecification(device.getFeature());
@@ -140,6 +144,8 @@ public class archivesServiceImpl  implements IArchivesService {
             ArchivesDetail detail = new ArchivesDetail();
             // 将 LaborServicesArchives 的属性映射到 ArchivesDetail
             detail.setId(labor.getId());
+            detail.setMaterialsId(labor.getId());
+            detail.setClassId(labor.getLaborServicesClassId());
             detail.setMaterialsName(labor.getLaborServicesName());
             detail.setMaterialsCode(labor.getLaborServicesCode());
             detail.setSpecification(labor.getFeature());
@@ -165,6 +171,8 @@ public class archivesServiceImpl  implements IArchivesService {
             ArchivesDetail detail = new ArchivesDetail();
             // 将 MajorSubcontractingArchives 的属性映射到 ArchivesDetail
             detail.setId(major.getId());
+            detail.setMaterialsId(major.getId());
+            detail.setClassId(major.getMajorSubcontractingClassId());
             detail.setMaterialsName(major.getMajorSubcontractingName());
             detail.setMaterialsCode(major.getMajorSubcontractingCode());
             detail.setSpecification(major.getFeature());

@@ -85,7 +85,8 @@ public class ArchivesDetail  {
     @Excel(name = "${comment}", readConverterExp = "$column.readConverterExp()")
     private Long valid;
 
-
+    @ApiModelProperty(value = "classId")
+    private String classId;
 
 
 }

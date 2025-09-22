@@ -62,6 +62,7 @@
             <if test="valid != null ">and valid = #{valid}</if>
             <if test="sonId != null ">and son_id = #{sonId}</if>
             <if test="isTb != null ">and is_tb = #{isTb}</if>
+            <if test="archivesId != null  and archivesId != ''">and device_class_id = (SELECT device_class_id FROM device_archives WHERE id = #{archivesId})</if>
         </where>
         order by feature_code ASC
     </select>
