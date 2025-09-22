@@ -98,54 +98,6 @@
                 <el-input type="text" clearable :disabled="true" v-model="formData.upperLimitPrice"/>
               </el-form-item>
             </el-col>
-
-            <el-col :span="8" class="grid-cell" v-if="(procurementType == 1)">
-              <el-form-item label="指导价" prop="upperLimitPrice" class="required label-right-align">
-                <el-input type="text" clearable :readonly="true" disabled v-model="formData.guidance_price"
-                          placeholder="对接易料市集"/>
-              </el-form-item>
-            </el-col>
-            <el-col :span="8" class="grid-cell">
-              <el-form-item label=" 付款方式" prop="paymentType" class="required label-right-align"
-                            v-if="(procurementType == 1)">
-                <el-select style="width: 100%" v-model="formData.paymentType" placeholder="请选择付款方式" clearable>
-                  <el-option v-for="dict in dict.type.procurement_payment_type" :key="dict.value" :label="dict.label"
-                             :value="dict.value">
-                  </el-option>
-                </el-select>
-              </el-form-item>
-            </el-col>
-            <el-col :span="8" class="grid-cell">
-              <el-form-item label="计数方式" prop="countingType" v-if="(procurementType == 1)">
-                <el-select style="width: 100%" v-model="formData.countingType" placeholder="请选择计数方式" clearable>
-                  <el-option v-for="dict in dict.type.procurement_counting_type" :key="dict.value" :label="dict.label"
-                             :value="dict.value">
-                  </el-option>
-                </el-select>
-              </el-form-item>
-            </el-col>
-            <el-col :span="8" class="grid-cell" v-if="(procurementType == 1)">
-              <el-form-item label="价格类型" prop="priceType" class="required label-right-align">
-                <!-- 价格类型，1固定价，2浮动价，2固定、浮动价。清单的列根据这个监听来判断是否显示隐藏，反之也通过监听清单的价格类型@chang=changePriceType 来判断赋值该价格类型。 -->
-                <el-select v-model="formData.priceType" placeholder="请选择价格类型" clearable style="width: 100%">
-                  <el-option v-for="dict in PRICETYPELIST" :key="dict.value" :label="dict.label" :value="dict.value"/>
-                </el-select>
-              </el-form-item>
-            </el-col>
-            <el-col :span="8" class="grid-cell" v-if="(procurementType == 1)">
-              <el-form-item label="区域" prop="region">
-                <el-cascader v-model="formData.region" :options="regionOptions"
-                             :props="{ label: 'divisionName', value: 'divisionCode' }" @change="handleChange"
-                             style="width: 100%;">
-                </el-cascader>
-              </el-form-item>
-            </el-col>
-            <el-col :span="8" class="grid-cell">
-              <!--       采购计划表单基价 （前端用来统一刷新列表清单的基价使用。） watch:formData.basePrice监听      -->
-              <el-form-item label=" 基价" prop="basePrice" v-if="(isFloat)" class="label-right-align">
-                <el-input ref="basePriceInput" v-model="formData.basePrice" clearable :disabled="isSubmit"/>
-              </el-form-item>
-            </el-col>
           </el-row>
         </div>
 
@@ -255,7 +207,7 @@
                           <el-input
                             title="清单数量" v-model="scope.row.count"
                             :disabled="isSubmit || scope.row.belongOffer || scope.row.pushFlag === 'Y'"
-                            @input="scope.row.count = scope.row.count.replace(/[^0-9]/g, '')"
+                            @input="scope.row.count = scope.row.count.replace(/[^0-90.]/g, '')"
                           ></el-input>
                         </template>
                       </el-table-column>
@@ -719,15 +671,10 @@ export default {
   },
   methods: {
     treeClickMain(data, node, queryParams) {
-      let rData = data || {};
-
-      getArchivesDetailList(rData.id, queryParams.type).then(response => {
+      let rData = data || [];
+      getArchivesDetailList(rData, queryParams.type).then(response => {
 
         this.inventoryList = response.data || [];
-        if(this.inventoryList.length < 1){
-          this.$message.error("该物料未挂接清单！");
-          return
-        }
         let time = new Date().getTime();
         this.expandKeys.push(time + "")
         this.planList[0] = {contractPlanning: "", plannedAmountInclTax: "", id: time, children: []};
@@ -3174,7 +3121,7 @@ export default {
                     children.totalPrice = row.unitPriceInclTax * row.count;
                   }
 
-                  totalPriceTable = add(children.totalPrice ? children.totalPrice : 0.0, totalPriceTable);
+                  totalPriceTable = add(children.totalPrice ? bignumber(children.totalPrice) : 0.0, bignumber(totalPriceTable));
                 });
               }
               let totalPriceTableText = this.formatNumberDynamicDecimalWithSeparator(totalPriceTable, 2);

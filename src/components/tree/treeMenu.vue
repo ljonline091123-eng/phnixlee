@@ -13,7 +13,7 @@
             <el-radio-button
             :disabled="loading===true"
             :label="dict.value"
-            :name="dict.value" 
+            :name="dict.value"
             v-for="dict in radioList"
             :key="dict.value"
             >{{ dict.label }}</el-radio-button>
@@ -43,13 +43,11 @@
           :data="deptOptions"
           class="address-tree"
           :props="defaultProps"
-          :filter-node-method="filterNode"
-          :current-node-key="currentNodeKey"
-          :default-expanded-keys="defaultExpandedKeys"
+          @check="handleCheck"
           ref="tree"
           node-key="id"
           highlight-current
-          @node-click="handleNodeClick"
+          :show-checkbox="true"
         >
         <span slot-scope="{ node, data }" class="custom-tree-node">
           <span class="tooltip" >
@@ -59,7 +57,7 @@
           </span>
         </span>
         </el-tree>
-        
+      <el-button style="float: right;margin-right: 10px" type="primary" size="mini" @click="handleNodeClick" >保存</el-button>
       </div>
   </template>
   <script>
@@ -92,6 +90,7 @@
         // levelExpand:1, //默认展示的级别
         label:undefined,
         modelOptions: [],
+        ids: [],
         parentNode:{},
         // currentNodeKey: '3897276558322302978', // 默认选中节点1
         value: '2',
@@ -113,7 +112,7 @@
     ...mapGetters(['project','org']),
    },
   props: {
- 
+
     // 表格数据
     deptOptions: {
       type: Array,
@@ -123,9 +122,9 @@
       type: Boolean,
       default: false,
     },
-   
-   
-    
+
+
+
     title: {
       type: String,
       default: "",
@@ -153,20 +152,20 @@ watch:{
      label(val) {
       this.$refs.tree.filter(val);
     },
-  
+
       deptOptions: {
         handler(arr) {
           this.initButtons()
         }
       },
-   
+
   },
     created() {
     },
     mounted() {
-   
+
 			this.onRefresh();
-		
+
 	},
     methods: {
       handleRadioChange(value) {
@@ -175,8 +174,8 @@ watch:{
         this.queryParams.type=value
         this.$emit("query", this.queryParams);
     },
- 
- 
+
+
 
     onRefresh() {
         this.$emit("query", this.queryParams);
@@ -204,28 +203,37 @@ watch:{
       if (!value) return true;
       return data.label.indexOf(value) !== -1;
     },
-          // 节点单击事件
-    handleNodeClick(data,node,prop) {
-      console.log(data,node,prop);
-      this.nodeCount++
-      if( this.preNodeId && this.nodeCount >= 2){
-        this.curNodeId = data.id 
-        this.nodeCount = 0
-        if(this.curNodeId == this.preNodeId){//第一次点击的节点和第二次点击的节点id相同
-          this.curNodeId = null
-          this.preNodeId = null   
-          this.$emit('treeClick', data,node,this.queryParams)   
-          return
-        }
+
+    handleCheck() {
+      const nodes = this.$refs.tree.getCheckedNodes(); // 先获取数组
+      if (Array.isArray(nodes)) {
+        const leafNodes = nodes.filter(node => node.children.length === 0); // 再过滤
+        this.ids = leafNodes.map(node => node.id); // 提取id数组
       }
-      this.preNodeId = data.id
-      this.nodeTimer = setTimeout(() => { //300ms内没有第二次点击就把第一次点击的清空
-        this.preNodeId  = null
-        this.nodeCount = 0
-      },300)   
+    },
+          // 节点单击事件
+    handleNodeClick() {
+          this.$emit('treeClick', this.ids,"",this.queryParams)
+      // console.log(data,node,prop);
+      // this.nodeCount++
+      // if( this.preNodeId && this.nodeCount >= 2){
+      //   this.curNodeId = data.id
+      //   this.nodeCount = 0
+      //   if(this.curNodeId == this.preNodeId){//第一次点击的节点和第二次点击的节点id相同
+      //     this.curNodeId = null
+      //     this.preNodeId = null
+      //     this.$emit('treeClick', data,node,this.queryParams)
+      //     return
+      //   }
+      // }
+      // this.preNodeId = data.id
+      // this.nodeTimer = setTimeout(() => { //300ms内没有第二次点击就把第一次点击的清空
+      //   this.preNodeId  = null
+      //   this.nodeCount = 0
+      // },300)
     },
 
-    
+
     expandNodes(level) {
       this.levelExpand=level
       if (level === 1) {
@@ -302,7 +310,7 @@ watch:{
       margin:0px 10px 0 10px;
       background-color: #ffffff;
     }
-   
+
     .tooltip {
       width: 100%;
     margin-right: 5px;
@@ -362,7 +370,7 @@ watch:{
 
       font-size: 13px;
       color: #606266;
-      &:hover .hover-operations { 
+      &:hover .hover-operations {
       display: inline-block;
     }
 
@@ -374,7 +382,7 @@ watch:{
   }
 }
 
-  .operation-view, .hover-operations { 
+  .operation-view, .hover-operations {
     position: absolute;
     right: 8px;
     display: none;
@@ -391,7 +399,7 @@ watch:{
 
 ::v-deep  .el-tree--highlight-current .el-tree-node.is-current > .el-tree-node__content  {
   color: #2b4acb !important;
-  
+
   .add-f-s-14 {
     display: inline-block; /* 或者 block，根据需要 */
     max-width: 140px; /* 确保不超过父容器的宽度 */
@@ -399,7 +407,7 @@ watch:{
     overflow: hidden; /* 隐藏溢出的内容 */
     text-overflow: ellipsis; /* 显示省略号来表示溢出内容 */
     }
-  .hover-operations { 
+  .hover-operations {
       display: inline-block;
     }
 }
@@ -443,4 +451,3 @@ watch:{
 
 }
   </style>
-  
