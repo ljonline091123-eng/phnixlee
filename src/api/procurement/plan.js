@@ -260,3 +260,46 @@ export const submitProcurementPlan = (params) => {
     params,
   });
 };
+
+
+
+// 获取设备分类特征项列表
+export const getDeviceItemList = (params) => {
+  return request({
+    url: '/archives/deviceFeature/list',
+    method: 'get',
+    params: params
+  })
+}
+
+// 获取设备分类特征值列表
+export const getDeviceEigenvalueList = (params) => {
+  return request({
+    url: '/archives/featureValue/list',
+    method: 'get',
+    params: params
+  })
+}
+
+// 获取材料分类特征项列表
+export const getMaterialItemList = (params) => {
+  return request({
+    url: '/archives/mtrFeature/list',
+    method: 'get',
+    params: params
+  })
+}
+
+// 获取材料分类特征值列表
+export const getMaterialEigenvalueList = (params) => {
+  return request({
+    url: '/archives/mtrValue/list',
+    method: 'get',
+    params: params
+  })
+}
+
+
+
+
+

@@ -205,7 +205,16 @@
                       <el-table-column label="清单名称" min-width="150" prop="materialsName" fixed
                                        show-overflow-tooltip/>
                       <!-- <el-table-column label="成本子目名称(导入)" min-width="150" prop="materialsNameImport" show-overflow-tooltip/> -->
-                      <el-table-column label="特征值特征项" min-width="150" prop="specification" show-overflow-tooltip/>
+                      <!--<el-table-column label="特征值特征项" min-width="150" prop="specification" show-overflow-tooltip/>-->
+                      <el-table-column label="特征值特征项"  prop="specification" key="specification" width="150" show-overflow-tooltip>
+                        <template slot-scope="scope">
+                          <el-input  v-model="scope.row.specification" v-if="scope.row.materialsUniqueId == '1' || scope.row.materialsUniqueId == '2'" readonly @focus="handleClickMaterials(scope ,scope.$index)"
+                                     placeholder="请选择" :disabled="isSubmit || scope.row.pushFlag === 'Y'">
+                            <template slot="suffix"><i class="el-input__icon el-icon-arrow-down"></i></template>
+                          </el-input>
+                          <span v-else>{{scope.row.specification}}</span>
+                        </template>
+                      </el-table-column>
                       <el-table-column label="计量规则" align="center" prop="measurementRules" show-overflow-tooltip/>
                       <el-table-column label="工作内容" align="center" prop="workContent" show-overflow-tooltip/>
                       <el-table-column label="计量单位" align="center" prop="unitMeasurement"/>
@@ -541,6 +550,81 @@
       <iframe :src="yjtUrl" width="100%" height="500px" frameborder="0" allowfullscreen></iframe>
     </el-dialog>
 
+    <!-- 添加成本子目及特征值特征项 -->
+    <el-dialog
+      :title="dialogTitle"
+      :visible.sync="dialogOpen"
+      custom-class="materials-dialog"
+      @closed="dialogClosed"
+      width="60%"
+      append-to-body
+    >
+      <div class="split-page-box flex full">
+        <Drag box="box1">
+          <template v-slot:right-content>
+            <div class="right-box fill">
+              <div class="right-item border box">
+                <div class="right-title">
+                  <span>特征项</span>
+                </div>
+                <div class="list-container">
+                  <div class="list-item" @click="selectTerm(item.id)" :class="item.id === term && 'selected'" v-for="item in termList" :key="item.id">
+                    <el-checkbox class="disabled-checkbox" :value="isIndeterminateObj[item.id].isAll" :indeterminate="isIndeterminateObj[item.id].isHas"/>
+                    {{ item.featureName }}
+                  </div>
+                </div>
+              </div>
+              <div class="right-item box">
+                <div class="right-title">
+                  <!--                    <el-checkbox label="特征值" :indeterminate="isIndeterminate" v-model="termValueAll" @change="termValueAllChange"/>-->
+                  <span>特征值</span>
+                </div>
+                <div class="list-container">
+                  <!--                    <div class="list-item" v-for="item in termValueMap[term]">-->
+                  <!--                      <el-checkbox :label="item.eigenvalueName" :key="item.id" v-model="item.selected" @change="changeTermValue(item.id)">-->
+                  <!--                        {{item.eigenvalueName}}-->
+                  <!--                      </el-checkbox>-->
+                  <!--                    </div>-->
+                  <div class="list-item" v-for="item in termValueMap[term]" :key="item.id">
+                    <el-radio
+                      :label="item.featureValueName"
+                      v-model="selectedTerms[term]"
+                      @change="selectSingleTermValue(term, item.id)">
+                      {{item.featureValueName}}
+                    </el-radio>
+                  </div>
+                </div>
+              </div>
+              <div class="right-item">
+                <div class="right-title">
+                  <span>已选内容</span>
+                </div>
+                <div class="list-container">
+                  <div class="list-item space-between" v-for="(item,i) in selectedList" :key="i">
+                    <span>{{ item.itemName }}</span>
+                    <div class="right-delete" @click="deleteItem(i)">
+                      <i class="el-icon-delete"></i>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </template>
+        </Drag>
+      </div>
+      <div slot="footer" class="dialog-footer">
+        <el-button @click="dialogOpen = false" size="small" style="width: 100px"
+        >取 消</el-button
+        >
+        <el-button
+          type="primary"
+          @click="confirmSelect"
+          size="small"
+          style="width: 100px"
+        >确 定</el-button
+        >
+      </div>
+    </el-dialog>
   </div>
 </template>
 
@@ -558,8 +642,12 @@ import {
   listDwMmServiceSubjectMatter,
   pushMaterialProcurementList,
   revokePushMaterialProcurementList,
-  saveProcurementPlan
-} from '@/api/procurement/plan'
+  saveProcurementPlan,
+  getDeviceItemList,
+  getMaterialItemList,
+  getDeviceEigenvalueList,
+  getMaterialEigenvalueList
+} from '@/api/procurement/plan';
 import {listUnderlingDict} from "@/api/procurement/contract";
 import {listAreaDivisionTree} from '@/api/procurement/manage'
 import BackButton from "@/components/BackButton/index.vue"
@@ -568,7 +656,8 @@ import PageTitle from "@/components/PageTitle/index.vue"
 import {PRICETYPELIST, PRICETYPEOPTIONS} from "@/utils/constants";
 import VirtualScroll from 'el-table-virtual-scroll'
 import {getTwoLevelDeptByDeptId} from "@/api/system/dept";
-import treeMenu from '@/components/tree/treeMenu.vue'
+import treeMenu from '@/components/tree/treeMenu.vue';
+import Drag from '@/components/Drag/index2.vue'
 
 export default {
   name: "add-plan",
@@ -580,7 +669,8 @@ export default {
     BackButton,
     PageTitle,
     VirtualScroll,
-    treeMenu
+    treeMenu,
+    Drag
   },
   created() {
     console.log('param--param--param!------------------');
@@ -650,6 +740,7 @@ export default {
             planTable: 'planTable' + index,
             children: this.inventoryList.map(item => ({
               ...item,
+              materialsUniqueId: queryParams.type,
               count: index === 0 ? item.count : 0.00,
               rentTime: index === 0 ? item.rentTime : '',
               rentQuantity: index === 0 ? item.rentQuantity : '',
@@ -865,6 +956,28 @@ export default {
         matterName: undefined,
         initCountObj: {},
         numDisable: false,
+        dialogOpen: false,
+        dialogTitle: "",
+        materialsOptions: [],
+        materialsOptionsChildren: [],
+        materialsName:undefined, // 交易标的物名称（筛选名称）
+        materialsDefaultProps: {
+          children: "children",
+          label: "label",
+        },
+        term:'',//项
+        termList:[],// 特征项列表
+        termValue:'',//值
+        termValueMap:{}, // 特征值列表
+        selectedList:[], // 已选内容列表
+        currentNode:{},
+        expandedKeys:[], // 设置展开节点id
+        termValueAll:false, // 全选/不全选
+        isIndeterminate:false, // 全选、半选状态（特征值）
+        isIndeterminateObj:{},
+        selectedTerms: {}, // 结构：{ 特征项ID: 选中特征值ID }
+        materialsIndex: '', // 对应清单
+        otherProcurementPlanType: '', // 其他类型选择的清单是属于哪类的
       };
     },
 
@@ -2733,6 +2846,252 @@ export default {
 
       return row;
     },
+    handleClickMaterials(row ,index) {
+      if(row.materialsId === '' || row.materialsId === null){
+        return this.$message.warning("请重新选取物料");
+      } else {
+        this.materialsIndex = index
+        this.dialogOpen = true;
+        this.dialogTitle = "选择特征值特征项";
+        this.handleNodeClick(row.row);
+      }
+    },
+    handleNodeClick(data) {
+      this.currentNode = data;
+      this.termList = [];
+      this.term = '';
+      this.termValue = '';//值
+      this.termValueMap = {};
+      this.selectedList = [];
+      this.isIndeterminateObj = {};
+      this.termValueAll = false
+      this.isIndeterminate = false
+      this.selectedTerms = {}
+      this.otherProcurementPlanType = '';
+      debugger;
+      if(["1","2"].includes(data.materialsUniqueId)){
+        // 查询展示特征值特征项
+        this.listSpec(data)
+      }
+    },
+    dialogClosed(){
+      this.materialsName = "";
+      this.term = '';
+      this.termList = [];
+      this.termValue = '';//值
+      this.termValueMap = {};
+      this.selectedList = [];
+      this.currentNode = {};
+      this.isIndeterminateObj = {};
+      this.termValueAll = false;
+      this.isIndeterminate = false;
+      this.selectedTerms = {};
+    },
+    async listSpec(data){
+      let res = null
+      try{
+        const params = {archivesId: this.currentNode.materialsId}
+        if(data.materialsUniqueId === "2"){
+          res = await getDeviceItemList(params)
+        }else{
+          res = await getMaterialItemList(params)
+        }
+        this.termList = res.rows
+        console.log("this.termList",this.termList)
+        this.termList.forEach(item => {
+          this.$set(this.termValueMap,item.id, [])
+          this.$set(this.isIndeterminateObj,item.id, {})
+        })
+      }catch(err){
+        console.log(err);
+      }
+    },
+    async confirmSelect() {
+      if (!this.selectedList.length) return this.$message.warning("特征项/成本子目选择不完整");
+      //this.inventoryList[0].specification = "8888888888";
+      this.dialogOpen = false;
+      debugger;
+      const {itemCode, itemName} = this.selectedList[0] // 选择的特征值特征项
+      if (this.planList && this.planList[0] && this.planList[0].children && this.planList[0].children[0] && this.planList[0].children[0].children) {
+        const targetChildren = this.planList[0].children[0].children;
+        const targetChildren22 = this.planList[0].children;
+        // 检查 index 是否在有效范围内
+        if (this.materialsIndex >= 0 && this.materialsIndex < targetChildren.length) {
+          targetChildren[this.materialsIndex].specification = itemName;
+          //this.planList[0].children[0].children[this.materialsIndex].specification = itemName;
+          this.$set(this.planList[0].children[0], 'children', JSON.parse(JSON.stringify(targetChildren)));
+
+        } else {
+          console.error('Index out of bounds');
+        }
+      } else {
+        console.error('Invalid planList structure');
+      }
+      // 确保 planList 及其 children 存在
+      /*if (this.inventoryList) {
+        // 检查 index 是否在有效范围内
+        if (this.materialsIndex >= 0 && this.materialsIndex < this.inventoryList.length) {
+          this.inventoryList[this.materialsIndex].specification = itemName;
+          let aaa = this.inventoryList;
+          console.error(aaa);
+        } else {
+          console.error('Index out of bounds');
+        }
+      } else {
+        console.error('Invalid planList structure');
+      }*/
+    },
+    async selectTerm(id){
+      this.term = id;
+      const isHas = this.termValueMap[id] && this.termValueMap[id].length;
+      if(!isHas){
+        let res = null
+        const params = {itemId: this.term}
+        if(this.currentNode.materialsUniqueId === "2"){
+          const params = {deviceFeatureId: this.term}
+          res = await getDeviceEigenvalueList(params)
+        }else{
+          const params = {mtrFeatureId: this.term}
+          res = await getMaterialEigenvalueList(params)
+        }
+        this.$set(this.termValueMap, id, res.rows.map(item => ({...item,selected:false})))
+        // 增加-单选控制
+        this.$set(this.selectedTerms, id, null)
+      }
+      const isAll = this.termValueMap[id].every(item => item.selected);
+      const count = this.termValueMap[this.term].filter(item => item.selected).length;
+      this.isIndeterminate = count > 0 && !isAll
+      console.log(this.termValueMap[id],'isAll~~~~~~~~~~~~~');
+      this.termValueAll = isAll
+    },
+    /** 清单-成本子目-选择成本子目后-选择特征项后-选择特征值（单选情况） */
+    selectSingleTermValue(itemId, id){
+      // 获取当前特征项的所有特征值
+      let terms = this.termValueMap[itemId];
+
+      // 遍历并更新每个特征值的选中状态
+      terms = terms.map(item => {
+        if (item.id === id) {
+          item.selected = true;
+        } else {
+          item.selected = false;
+        }
+        return item; // 确保返回每个item，以便创建新的数组
+      });
+
+      // 使用Vue的$set确保响应式更新
+      this.$set(this.termValueMap, itemId, terms);
+      this.changeTermValue();
+    },
+    /** 清单-成本子目-选择成本子目后-选择特征项后-选择特征值（单个单个值选择） */
+    changeTermValue(){
+      console.log(this.termValueMap,'-this.termValueMap');
+      const allHaveTrue = Object.values(this.termValueMap).every(array =>
+        array.some(item => item.selected === true)
+      );
+      this.termValueAll = this.termValueMap[this.term].every(item => item.selected)
+      const count = this.termValueMap[this.term].filter(item => item.selected).length;
+      this.isIndeterminate = count > 0 && !this.termValueAll
+      this.isIndeterminateObj[this.term] = {}
+      this.isIndeterminateObj[this.term].isHas = count > 0 && !this.termValueAll
+      this.isIndeterminateObj[this.term].isAll = this.termValueAll
+      console.log(allHaveTrue,'allHaveTrue');
+      if(allHaveTrue){
+        // // 提取所有符合selected的值
+        // let filteredValues = Object.values(this.termValueMap).map(arr =>
+        //   arr.filter(item => item.selected).map(item => ({id:item.id,eigenvalueCode:item.itemCode+item.eigenvalueCode,eigenvalueName:item.eigenvalueName}))
+        // );
+        let filteredValues = Object.entries(this.termValueMap).map(([termId, arr]) => {
+          // 从特征项列表中找到当前特征项
+          const termItem = this.termList.find(t => t.id === termId);
+          return arr.filter(item => item.selected).map(item => ({
+            id: item.id,
+            // 组合特征项的itemCode + 特征值的eigenvalueCode
+            featureValueCode: termItem.itemCode + item.featureValueCode,
+            featureValueName: item.featureValueName
+          }));
+        });
+        console.log(filteredValues,'filteredValues-------------------');
+        // 生成结果
+        this.selectedList = filteredValues.length > 1?
+          this.generateCombinations(filteredValues)
+          :
+          filteredValues[0].map(cur => ({
+            id: `${cur.id}`,
+            itemCode: `${cur.featureValueCode}`,
+            itemName: `${cur.featureValueName}`
+          }));
+        console.log(this.selectedList,'---点单个');
+      }else{
+        this.selectedList = [];
+      }
+    },
+    /** 清单-成本子目-选择成本子目后-选择特征项后-选择特征值（生成已选内容） */
+    generateCombinations(filteredValues) {
+      let arr = [];
+
+      function helper(currentIndex, currentIds, currentCodes, currentNames) {
+        if (currentIndex === filteredValues.length) {
+          arr.push({
+            id: currentIds.join('-'),
+            itemCode: currentCodes.join(''),
+            itemName: currentNames.join('-')
+          });
+          return;
+        }
+
+        for (let item of filteredValues[currentIndex]) {
+          helper(
+            currentIndex + 1,
+            [...currentIds, item.id],
+            [...currentCodes, item.featureValueCode],
+            [...currentNames, item.featureValueName]
+          );
+        }
+      }
+
+      // 从第0个子数组开始
+      helper(0, [], [], []);
+      console.log(arr,'arr-------------------');
+      return arr;
+    },
+    /** 清单-成本子目-选择成本子目（特征项、特征值）后-已选内容删除 */
+    deleteItem(i){
+      this.selectedList.splice(i,1);
+      console.log(this.selectedList,'this.selectedList---this.selectedList---this.selectedList');
+      const ids = this.selectedList.flatMap(item => item.id.split('-')).filter((value, index, self) => self.indexOf(value) === index);
+      // 处理 obj 中的每个项
+      Object.keys(this.termValueMap).forEach(key => {
+        console.log(this.termValueMap[key],'this.selectedList[key]---~~~');
+        this.termValueMap[key].forEach(item => {
+          // 将 id 转换为字符串并检查是否在 arr 中
+          item.selected = ids.includes(item.id.toString());
+        });
+      });
+      Object.keys(this.termValueMap).forEach(key => {
+        this.termValueMap[key].forEach(item => {
+          // 将 id 转换为字符串并检查是否在 arr 中
+          console.log(ids,'ids---ids---ids');
+          console.log(item.id,'item.id---item.id---item.id');
+          item.selected = ids.includes(item.id.toString());
+        });
+        this.termValueAll = this.termValueMap[key].every(item => item.selected)
+        const count = this.termValueMap[key].filter(item => item.selected).length;
+        this.isIndeterminate = count > 0 && !this.termValueAll
+        this.isIndeterminateObj[key] = {}
+        this.isIndeterminateObj[key].isHas = count > 0 && !this.termValueAll
+        this.isIndeterminateObj[key].isAll = this.termValueAll
+      });
+      console.log(ids,'----')
+      console.log(this.termValueMap,'termValueMap[term]--termValueMap[term]');
+      // （新增单选情况）清理 selectedTerms: 移除那些不在 ids 中的 term
+      Object.keys(this.selectedTerms).forEach(term => {
+        const isSelectedInIds = ids.includes(this.selectedTerms[term].toString());
+        if (!isSelectedInIds) {
+          this.$set(this.selectedTerms, term, null)
+        }
+      });
+    },
   },
   computed: {
     ...mapGetters(['project']),
@@ -3015,5 +3374,84 @@ export default {
 /* 物料高亮显示选中的行 */
 ::v-deep .el-table__row.current-row {
   background-color: #f0f9eb !important;
+}
+::v-deep .materials-dialog .el-dialog__body {
+  margin: 0 auto !important;
+  height: 72vh !important;
+  overflow: auto;
+}
+.right-box{width: 100%;height: 100%; display: flex;
+  .right-item{
+    height: 100%;
+    width: 33%;
+    border-top: solid 1px #eee;
+    border-right: solid 1px #eee;
+    &.border{
+      border: solid 1px #eee;
+    }
+    &.box{
+      width: 33%;
+      height: 100%;
+      display: block;
+    }
+    .right-title{
+      width: 100%;
+      height: 35px;
+      font-size: 14px;
+      line-height: 35px;
+      padding: 0 10px;
+      border-bottom: solid 1px #eee;
+    }
+    .list-container{
+      width: 100%;
+      height: calc(100% - 35px);
+      overflow-y: scroll;
+      .list-item{
+        color:#666 !important;
+        cursor: pointer;
+        width: 100%;
+        padding:10px;
+        border-bottom: solid 1px #eee;
+        &.selected{
+          background: #08c4a2;
+          color: #fff !important;
+        }
+        &.space-between{
+          width: 100%;
+          display: flex;
+          justify-content: space-between
+        }
+        .right-delete{
+          width: 30px;
+          display: flex;
+          justify-content: center;
+          height: 100%;
+        }
+      }
+    }
+  }
+}
+.node-box{
+  display: flex;
+  list-style: none;
+  margin: 0;
+  padding: 0 0 10px 0;
+  li{
+    list-style: none;
+    background-color: #e8e8ef;
+    border-radius: 50%;
+    width: 18px;
+    height: 18px;
+    line-height: 18px;
+    font-size: 12px;
+    text-align: center;
+    margin-right: 10px;
+    color: #999;
+    cursor: pointer;
+    &:hover{
+      background: #2b4acb;
+      color: #fff;
+    }
+  }
 }
 </style>
