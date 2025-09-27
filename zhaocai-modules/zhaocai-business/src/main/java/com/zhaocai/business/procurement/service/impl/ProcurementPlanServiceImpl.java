@@ -34,11 +34,13 @@ import com.zhaocai.business.procurement.vo.req.*;
 import com.zhaocai.business.procurement.vo.res.*;
 import com.zhaocai.business.pub.service.IAreaDivisionService;
 import com.zhaocai.business.pub.service.IBusinessCodeService;
+import com.zhaocai.business.utils.KeyUtils;
 import com.zhaocai.common.core.bean.PageResult;
 import com.zhaocai.common.core.constant.Constants;
 import com.zhaocai.common.core.constant.NumberConstant;
 import com.zhaocai.common.core.constant.SecurityConstants;
 import com.zhaocai.common.core.constant.UserConstants;
+import com.zhaocai.common.core.exception.ServiceException;
 import com.zhaocai.common.core.utils.NumberUtil;
 import com.zhaocai.common.core.utils.bean.BeanCopierUtil;
 import com.zhaocai.common.core.web.bean.ResultData;
@@ -1185,6 +1187,48 @@ public class ProcurementPlanServiceImpl extends ServiceImpl<ProcurementPlanMappe
         paramMap.put("businessId", procurementPlan.getId());
         paramMap.put("processId", procurementPlan.getWfProcessId());
         processService.revokeProcess(ProcessKeyEnum.ZHAOCAI_PROCUREMENT_PLAN.getIdentifying(), paramMap);
+    }
+
+    @Override
+    public List<MaterialsVO> importDataTwo(List<MaterialsListExecl> userList, String radioType, String operName) {
+        List<MaterialsVO> list = new ArrayList<>();
+        Map<String, String> nameMap = new HashMap<>();
+        int errIndex = 1;
+        StringBuilder successMsg = new StringBuilder();
+        StringBuilder failureMsg = new StringBuilder();
+        if (ObjectUtils.isEmpty(userList) || userList.size() == 0) {
+            failureMsg.append("<br/>导入数据不能为空！");
+        }
+        for (MaterialsListExecl data : userList) {
+            errIndex++;
+            MaterialsVO bean = new MaterialsVO();
+            bean.setId(KeyUtils.generateId());
+            //判空
+            if (StringUtils.isEmpty(data.getMaterialsNameImport())) {
+                failureMsg.append("<br/>第" + errIndex + "行，清单名称为空");
+            }
+            if (StringUtils.isNotEmpty(nameMap.get(data.getMaterialsNameImport()))) {
+                failureMsg.append("<br/>第" + errIndex + "行，清单名称重复");
+            }else{
+                nameMap.put(data.getMaterialsNameImport() , data.getMaterialsNameImport());
+            }
+            if (!StringUtils.isEmpty(failureMsg.toString())) {
+                continue;
+            }
+            bean.setMaterialsNameImport(data.getMaterialsNameImport());
+            bean.setMaterialsUniqueId(radioType);
+            bean.setSpecification(data.getSpecification());
+            bean.setCount(data.getCount());
+            bean.setUnitPriceInclTax(data.getUnitPriceInclTax());
+            bean.setTaxRate(data.getTaxRate());
+            bean.setRemark(data.getRemark());
+            list.add(bean);
+        }
+        if (StringUtils.isNotEmpty(failureMsg.toString())) {
+            failureMsg.insert(0, "很抱歉，导入失败！错误如下：");
+            throw new ServiceException(failureMsg.toString());
+        }
+        return list;
     }
 
     @Override

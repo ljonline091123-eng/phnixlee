@@ -1,6 +1,7 @@
 package com.zhaocai.archives.main.controller;
 
 import com.github.pagehelper.PageInfo;
+import com.zhaocai.archives.common.base.BladeController;
 import com.zhaocai.archives.common.exception.BusinessException;
 import com.zhaocai.archives.main.domain.*;
 import com.zhaocai.archives.main.service.*;
@@ -8,9 +9,11 @@ import com.zhaocai.archives.main.vo.req.ArchivesDetailQueryVO;
 import com.zhaocai.archives.main.vo.res.ArchivesDetail;
 import com.zhaocai.archives.pub.ArchivesTypeEnum;
 import com.zhaocai.common.core.constant.HttpStatus;
+import com.zhaocai.common.core.web.bean.ResultData;
 import com.zhaocai.common.core.web.controller.BaseController;
 import com.zhaocai.common.core.web.domain.AjaxResult;
 import com.zhaocai.common.core.web.page.TableDataInfo;
+import io.swagger.annotations.ApiOperation;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
@@ -25,7 +28,7 @@ import java.util.List;
  */
 @RestController
 @RequestMapping("/archivesClass")
-public class archivesController extends BaseController {
+public class archivesController extends BladeController {
     @Autowired
     private IDeviceClassService deviceClassService;
 
@@ -75,6 +78,11 @@ public class archivesController extends BaseController {
         return success(list);
     }
 
-
+    @PostMapping("/matchList")
+    @ApiOperation(value = "清单匹配")
+    public ResultData<List<MaterialsVO>> matchList(@RequestBody List<MaterialsVO> list) {
+        archivesService.matchList(list);
+        return ResultData.data(list);
+    }
 
 }

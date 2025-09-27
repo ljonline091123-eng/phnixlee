@@ -10,10 +10,12 @@ import com.zhaocai.archives.main.vo.res.ArchivesDetail;
 import com.zhaocai.archives.pub.ArchivesTypeEnum;
 import com.zhaocai.common.core.web.page.PageDomain;
 import com.zhaocai.common.core.web.page.TableSupport;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * 设备分类主Service业务层处理
@@ -34,6 +36,30 @@ public class archivesServiceImpl  implements IArchivesService {
 
     @Autowired
     private IMajorSubcontractingArchivesService majorSubcontractingArchivesService;
+
+    @Autowired
+    private IMtrFeatureService mtrFeatureService;
+
+    @Autowired
+    private IMtrFeatureValueService mtrFeatureValueService;
+
+    @Autowired
+    private IDeviceFeatureService deviceFeatureService;
+
+    @Autowired
+    private IDeviceFeatureValueService deviceFeatureValueService;
+
+    @Autowired
+    private ILaborServicesFeatureService laborServicesFeatureService;
+
+    @Autowired
+    private ILaborServicesFeatureValueService laborServicesFeatureValueService;
+
+    @Autowired
+    private IMajorSubcontractingFeatureService majorSubcontractingFeatureService;
+
+    @Autowired
+    private IMajorSubcontractingFeatureValueService majorSubcontractingFeatureValueService;
 
 
     /**
@@ -190,4 +216,133 @@ public class archivesServiceImpl  implements IArchivesService {
         return result;
     }
 
+    @Override
+    public void matchList(List<MaterialsVO> list) {
+        if(list != null && list.size() > 0){
+            Map<String, List<MtrFeature>> mtrFeatureMap = new HashMap<>();
+            Map<String, List<MtrFeatureValue>> mtrFeatureValueMap = new HashMap<>();
+            Map<String, List<DeviceFeature>> deviceFeatureMap = new HashMap<>();
+            Map<String, List<DeviceFeatureValue>> deviceFeatureValueMap = new HashMap<>();
+            if("1".equals(list.get(0).getMaterialsUniqueId())){
+                MtrFeature mtrFeature = new MtrFeature();
+                mtrFeature.setValid(0L);
+                List<MtrFeature> mtrFeatures = mtrFeatureService.selectMtrFeatureList(mtrFeature);
+                mtrFeatureMap = mtrFeatures.stream().collect(Collectors.groupingBy(MtrFeature::getMtrClassId));
+                MtrFeatureValue mtrFeatureValue = new MtrFeatureValue();
+                mtrFeatureValue.setValid(0L);
+                List<MtrFeatureValue> mtrFeatureValues = mtrFeatureValueService.selectMtrFeatureValueList(mtrFeatureValue);
+                mtrFeatureValueMap = mtrFeatureValues.stream().collect(Collectors.groupingBy(MtrFeatureValue::getMtrFeatureId));
+
+            }else if("2".equals(list.get(0).getMaterialsUniqueId())){
+                DeviceFeature deviceFeature = new DeviceFeature();
+                deviceFeature.setValid(0L);
+                List<DeviceFeature> deviceFeatures = deviceFeatureService.selectDeviceFeatureList(deviceFeature);
+                deviceFeatureMap = deviceFeatures.stream().collect(Collectors.groupingBy(DeviceFeature::getDeviceClassId));
+                DeviceFeatureValue deviceFeatureValue = new DeviceFeatureValue();
+                deviceFeatureValue.setValid(0L);
+                List<DeviceFeatureValue> deviceFeatureValues = deviceFeatureValueService.selectDeviceFeatureValueList(deviceFeatureValue);
+                deviceFeatureValueMap = deviceFeatureValues.stream().collect(Collectors.groupingBy(DeviceFeatureValue::getDeviceFeatureId));
+
+            }
+            Map<String, List<MtrFeature>> finalMtrFeatureMap = mtrFeatureMap;
+            Map<String, List<MtrFeatureValue>> finalMtrFeatureValueMap = mtrFeatureValueMap;
+            Map<String, List<DeviceFeature>> finalDeviceFeatureMap = deviceFeatureMap;
+            Map<String, List<DeviceFeatureValue>> finalDeviceFeatureValueMap = deviceFeatureValueMap;
+            list.stream().filter(x -> StringUtils.isEmpty(x.getMaterialsId())).forEach(p->{
+                String type = p.getMaterialsUniqueId();
+                if("1".equals(type)){
+                    MtrArchives mtr = new MtrArchives();
+                    mtr.setValid(0L);
+                    mtr.setMtrName(p.getMaterialsNameImport());
+                    List<MtrArchives> mtrArchives = mtrArchivesService.selectMtrArchivesList(mtr);
+                    if(mtrArchives !=null && mtrArchives.size() == 1){
+                        p.setMaterialsId(mtrArchives.get(0).getId());
+                        p.setMaterialsCode(mtrArchives.get(0).getMtrCode());
+                        p.setMaterialsName(mtrArchives.get(0).getMtrName());
+                        p.setUnitMeasurement(mtrArchives.get(0).getMeasureUnit());
+                        String specification = p.getSpecification();
+                        if(StringUtils.isNotEmpty(specification)){
+                            String[] split = specification.split("-");
+                            List<MtrFeature> mtrFeatures = finalMtrFeatureMap.get(mtrArchives.get(0).getMtrClassId());
+                            if(mtrFeatures != null && mtrFeatures.size() > 0 && split.length == mtrFeatures.size()){
+                                for (int i = 0; i < mtrFeatures.size(); i++) {
+                                    List<MtrFeatureValue> mtrFeatureValues = finalMtrFeatureValueMap.get(mtrFeatures.get(i).getId());
+                                    List<String> valueList = mtrFeatureValues.stream().map(MtrFeatureValue::getFeatureValueName).collect(Collectors.toList());
+                                    if(!valueList.contains(split[i])){
+                                        p.setSpecification(null);
+                                    }
+                                }
+                            }else{
+                                p.setSpecification(null);
+                            }
+                        }else{
+                            p.setSpecification(null);
+                        }
+
+                    }
+                }else if("2".equals(type)){
+                    DeviceArchives mtr = new DeviceArchives();
+                    mtr.setValid(0L);
+                    mtr.setDeviceName(p.getMaterialsNameImport());
+                    List<DeviceArchives> mtrArchives = deviceArchivesService.selectDeviceArchivesList(mtr);
+                    if(mtrArchives !=null && mtrArchives.size() == 1){
+                        p.setMaterialsId(mtrArchives.get(0).getId());
+                        p.setMaterialsCode(mtrArchives.get(0).getDeviceCode());
+                        p.setMaterialsName(mtrArchives.get(0).getDeviceName());
+                        p.setUnitMeasurement(mtrArchives.get(0).getMeasureUnit());
+                        String specification = p.getSpecification();
+                        if(StringUtils.isNotEmpty(specification)){
+                            String[] split = specification.split("-");
+                            List<DeviceFeature> mtrFeatures = finalDeviceFeatureMap.get(mtrArchives.get(0).getDeviceClassId());
+                            if(mtrFeatures != null && mtrFeatures.size() > 0 && split.length == mtrFeatures.size()){
+                                //List<String> valueList = new ArrayList<>();
+                                for (int i = 0; i < mtrFeatures.size(); i++) {
+                                    List<DeviceFeatureValue> mtrFeatureValues = finalDeviceFeatureValueMap.get(mtrFeatures.get(i).getId());
+                                    List<String> valueList = mtrFeatureValues.stream().map(DeviceFeatureValue::getFeatureValueName).collect(Collectors.toList());
+                                    if(!valueList.contains(split[i])){
+                                        p.setSpecification(null);
+                                    }
+                                }
+                            }else{
+                                p.setSpecification(null);
+                            }
+                        }else{
+                            p.setSpecification(null);
+                        }
+
+                    }
+                }else if("3".equals(type)){
+                    LaborServicesArchives mtr = new LaborServicesArchives();
+                    mtr.setValid(0L);
+                    mtr.setLaborServicesName(p.getMaterialsNameImport());
+                    List<LaborServicesArchives> mtrArchives = laborServicesArchivesService.selectLaborServicesArchivesList(mtr);
+                    if(mtrArchives !=null && mtrArchives.size() == 1){
+                        p.setMaterialsId(mtrArchives.get(0).getId());
+                        p.setMaterialsCode(mtrArchives.get(0).getLaborServicesCode());
+                        p.setMaterialsName(mtrArchives.get(0).getLaborServicesName());
+                        p.setUnitMeasurement(mtrArchives.get(0).getMeasureUnit());
+                        p.setSpecification(mtrArchives.get(0).getFeature());
+                        p.setMeasurementRules(mtrArchives.get(0).getMetrologicalRules());
+                        p.setWorkContent(mtrArchives.get(0).getBasicJob());
+                    }
+                }else if("4".equals(type)){
+                    MajorSubcontractingArchives mtr = new MajorSubcontractingArchives();
+                    mtr.setValid(0L);
+                    mtr.setMajorSubcontractingName(p.getMaterialsNameImport());
+                    List<MajorSubcontractingArchives> mtrArchives = majorSubcontractingArchivesService.selectMajorSubcontractingArchivesList(mtr);
+                    if(mtrArchives !=null && mtrArchives.size() == 1){
+                        p.setMaterialsId(mtrArchives.get(0).getId());
+                        p.setMaterialsName(mtrArchives.get(0).getMajorSubcontractingName());
+                        p.setMaterialsCode(mtrArchives.get(0).getMajorSubcontractingCode());
+                        p.setUnitMeasurement(mtrArchives.get(0).getMeasureUnit());
+                        p.setSpecification(mtrArchives.get(0).getFeature());
+                        p.setMeasurementRules(mtrArchives.get(0).getMetrologicalRules());
+                        p.setWorkContent(mtrArchives.get(0).getBasicJob());
+                    }
+                }
+            });
+        }
+
+
+    }
 }

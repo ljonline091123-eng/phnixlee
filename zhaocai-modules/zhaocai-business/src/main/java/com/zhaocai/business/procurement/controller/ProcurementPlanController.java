@@ -8,19 +8,29 @@ import com.zhaocai.business.manager.http.dto.req.BpmLoadTaskDefRequestDTO;
 import com.zhaocai.business.manager.http.dto.res.BpmInitializeResponseDTO;
 import com.zhaocai.business.manager.http.dto.res.BpmLoadTaskDefResponseDTO;
 import com.zhaocai.business.manager.http.dto.res.UsersRoleContractPlanListResponseDTO;
+import com.zhaocai.business.procurement.domain.MaterialsListExecl;
 import com.zhaocai.business.procurement.service.IMaterialsListService;
 import com.zhaocai.business.procurement.service.IProcurementPlanService;
 import com.zhaocai.business.procurement.vo.req.*;
 import com.zhaocai.business.procurement.vo.res.*;
+import com.zhaocai.business.pub.vo.res.OrganizationVO;
 import com.zhaocai.common.core.bean.PageResult;
+import com.zhaocai.common.core.utils.poi.ExcelUtil;
 import com.zhaocai.common.core.web.bean.ResultData;
+import com.zhaocai.common.core.web.domain.AjaxResult;
+import com.zhaocai.common.log.annotation.Log;
+import com.zhaocai.common.log.enums.BusinessType;
+import com.zhaocai.common.security.utils.SecurityUtils;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 import springfox.documentation.annotations.ApiIgnore;
 
+import javax.servlet.http.HttpServletResponse;
 import javax.validation.Valid;
+import java.io.IOException;
 import java.util.List;
 
 /**
@@ -248,5 +258,21 @@ public class ProcurementPlanController extends BladeController {
         return ResultData.success();
     }
 
+    @PostMapping("/importTemplateTwo")
+    public void importTemplateTwo(HttpServletResponse response) throws IOException {
+        ExcelUtil<MaterialsListExecl> util = new ExcelUtil<MaterialsListExecl>(MaterialsListExecl.class);
+        util.importTemplateExcel(response, "采购计划清单导入模版");
+    }
+
+    @Log(title = "采购计划清单导入", businessType = BusinessType.IMPORT)
+    @PostMapping("/importDataTwo")
+    public ResultData<List<MaterialsVO>> importDataTwo(MultipartFile file, String radioType) throws Exception {
+        ExcelUtil<MaterialsListExecl> util = new ExcelUtil<MaterialsListExecl>(MaterialsListExecl.class);
+        List<MaterialsListExecl> userList = util.importExcel(file.getInputStream());
+        String operName = SecurityUtils.getUsername();
+        List<MaterialsVO> list = procurementPlanService.importDataTwo(userList, radioType, operName);
+        return ResultData.data(list);
+
+    }
 
 }

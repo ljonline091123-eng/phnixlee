@@ -8,6 +8,7 @@ import com.zhaocai.business.manager.http.dto.res.UsersRoleContractPlanListRespon
 import com.zhaocai.business.manager.http.dto.res.UsersRoleListResponseDTO;
 import com.zhaocai.business.process.service.IPBMOverrideService;
 import com.zhaocai.business.process.service.IProcessBusinessBaseService;
+import com.zhaocai.business.procurement.domain.MaterialsListExecl;
 import com.zhaocai.business.procurement.domain.ProcurementPlan;
 import com.zhaocai.business.procurement.vo.req.*;
 import com.zhaocai.business.procurement.vo.res.*;
@@ -147,4 +148,6 @@ public interface IProcurementPlanService  extends IService<ProcurementPlan>, IPr
     void processStart(Map<String, Object> variables);
 
     void revokeProcurementPlan(Long id);
+
+    List<MaterialsVO> importDataTwo(List<MaterialsListExecl> userList, String radioType, String operName);
 }
