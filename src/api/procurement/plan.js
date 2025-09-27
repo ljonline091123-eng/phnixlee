@@ -299,6 +299,16 @@ export const getMaterialEigenvalueList = (params) => {
   })
 }
 
+// 匹配物料清单
+export const matchList = (data) => {
+  return request({
+    url: "/archives/archivesClass/matchList",
+    method: "post",
+    data,
+  })
+}
+
+
 
 
 

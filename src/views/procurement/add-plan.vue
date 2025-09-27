@@ -108,6 +108,10 @@
             <el-button type="success" size="small" v-if="formData.isPushData!='Y'" :disabled="isSubmit" @click="splitVisible = true">合约拆分</el-button> -->
             <el-button type="success" size="small" :disabled="isSubmit" @click="handleSelectMaterial">选取物料
             </el-button>
+            <el-button type="success" size="small" :disabled="isSubmit" v-if="planList[0] && planList[0].children && planList[0].children.length" @click="handleMatch()">匹配清单
+            </el-button>
+            <el-button type="success" size="small" :disabled="isSubmit" v-if="planList[0] && planList[0].children && planList[0].children.length"  @click="handleImportTwo()">导入清单
+            </el-button>
           </div>
         </PageTitle>
 
@@ -131,6 +135,7 @@
                   </template>
   </el-table-column> -->
                 <el-table-column label="清单" align="center" prop="inventory">
+
                   <template slot-scope="inventory">
                     <!-- <virtual-scroll
                       :data="inventory.row.children"
@@ -154,13 +159,22 @@
                       </el-table-column>
                       <el-table-column label="清单编码" min-width="150" prop="materialsCode" fixed
                                        show-overflow-tooltip/>
-                      <el-table-column label="清单名称" min-width="150" prop="materialsName" fixed
+                      <el-table-column label="清单名称（导入）" min-width="150" prop="materialsNameImport" fixed
                                        show-overflow-tooltip/>
+                      <el-table-column label="清单名称（系统）" min-width="150" prop="materialsName" fixed
+                                       show-overflow-tooltip>
+                        <template slot-scope="scope">
+                          <!--<el-button type="success" size="small" v-if="scope.row.materialsName == '' || scope.row.materialsName == null"
+                                     @click="handleSelectMaterial">挂接</el-button>
+                          <span v-else>{{scope.row.materialsName}}</span>-->
+                          <span>{{scope.row.materialsName}}</span>
+                        </template>
+                      </el-table-column>
                       <!-- <el-table-column label="成本子目名称(导入)" min-width="150" prop="materialsNameImport" show-overflow-tooltip/> -->
                       <!--<el-table-column label="特征值特征项" min-width="150" prop="specification" show-overflow-tooltip/>-->
                       <el-table-column label="特征值特征项"  prop="specification" key="specification" width="150" show-overflow-tooltip>
                         <template slot-scope="scope">
-                          <el-input  v-model="scope.row.specification" v-if="scope.row.materialsUniqueId == '1' || scope.row.materialsUniqueId == '2'" readonly @focus="handleClickMaterials(scope ,scope.$index)"
+                          <el-input  v-model="scope.row.specification" v-if="scope.row.materialsUniqueId == '1' || scope.row.materialsUniqueId == '2'" readonly @focus="handleClickMaterials(scope.row ,scope.$index)"
                                      placeholder="请选择" :disabled="isSubmit || scope.row.pushFlag === 'Y'">
                             <template slot="suffix"><i class="el-input__icon el-icon-arrow-down"></i></template>
                           </el-input>
@@ -170,7 +184,7 @@
                       <el-table-column label="计量规则" align="center" prop="measurementRules" show-overflow-tooltip/>
                       <el-table-column label="工作内容" align="center" prop="workContent" show-overflow-tooltip/>
                       <el-table-column label="计量单位" align="center" prop="unitMeasurement"/>
-                      <el-table-column label="价格类型" align="center" prop="priceType" width="200"
+                      <!--<el-table-column label="价格类型" align="center" prop="priceType" width="200"
                                        v-if="procurementType === 1">
                         <template slot-scope="scope">
                           <el-select style="width: 100%" v-model="scope.row.priceType" placeholder="请选择"
@@ -201,9 +215,15 @@
                       </el-table-column>
                       <el-table-column label="清单数量" align="right" prop="count" width="150" v-else>
                         <template slot-scope="scope">
-                          <!-- <el-input title="清单数量" v-model="scope.row.count"
+                          <el-input
+                            title="清单数量" v-model="scope.row.count"
                             :disabled="isSubmit || scope.row.belongOffer || scope.row.pushFlag === 'Y'"
-                            @input="handleInput" v-thousandth /> -->
+                            @input="scope.row.count = scope.row.count.replace(/[^0-90.]/g, '')"
+                          ></el-input>
+                        </template>
+                      </el-table-column>-->
+                      <el-table-column label="清单数量" align="right" prop="count" width="150">
+                        <template slot-scope="scope">
                           <el-input
                             title="清单数量" v-model="scope.row.count"
                             :disabled="isSubmit || scope.row.belongOffer || scope.row.pushFlag === 'Y'"
@@ -212,7 +232,7 @@
                         </template>
                       </el-table-column>
                       <!--                      基价由原来浮动价不可编辑，变成了可以编辑-->
-                      <el-table-column label="基价" align="right" width="130" prop="basePrice"
+                      <!--<el-table-column label="基价" align="right" width="130" prop="basePrice"
                                        v-if="procurementType === 1 && [2, 3, 4, 5, 6, 7].includes(formData.priceType)">
                         <template slot-scope="scope">
                           <span v-if="scope.row.priceType === 1">/</span>
@@ -225,7 +245,7 @@
                           </div>
 
                         </template>
-                      </el-table-column>
+                      </el-table-column>-->
                       <el-table-column label="单价(含税)" align="right" prop="unitPriceInclTax" width="180">
                         <template slot-scope="scope">
 
@@ -245,13 +265,15 @@
                       </el-table-column>
                       <el-table-column label="单价(不含税)" align="right" prop="unitPriceExclTax" width="150">
                         <template slot-scope="scope">
-                          <!-- <span title="单价(不含税)">{{ getUnitPriceExclTax(scope.row) }}</span> -->
-                          <el-input title="单价(不含税)" v-model="scope.row.unitPriceExclTax"
+                          <span title="单价(不含税)">{{ getUnitPriceExclTax(scope.row) }}</span>
+                          <!--<el-input title="单价(不含税)" v-model="scope.row.unitPriceExclTax"
                                     @input="scope.row.unitPriceExclTax = scope.row.unitPriceExclTax.replace(/[^0-90.]/g, '')"
-                                    v-thousandth/>
+                                    v-thousandth/>-->
+                         <!-- <span title="单价(不含税)">{{ getTotalPriceText(scope.row, inventory.$index) }}</span>
+                          <span> {{ getTotalPriceTableText(scope.row, inventory.$index) }} </span>-->
                         </template>
                       </el-table-column>
-                      <el-table-column label="浮动价" align="right" width="130" prop="floatingPrice"
+                      <!--<el-table-column label="浮动价" align="right" width="130" prop="floatingPrice"
                                        v-if="procurementType === 1 && [2, 3, 4, 5, 6, 7].includes(formData.priceType)">
                         <template slot-scope="scope">
                           <span v-if="scope.row.priceType !== 2">/</span>
@@ -315,10 +337,7 @@
                       <el-table-column v-if="currentContract.contractPlanningCategory == 1" label="易料初始报价"
                                        width="150"
                                        prop="offerPrice">
-                        <!-- <template slot-scope="scope">
-                          <el-input v-model="scope.row.offerPrice" disabled v-thousandth/>
-                        </template> -->
-                      </el-table-column>
+                      </el-table-column>-->
                       <el-table-column label="合计(含税)" align="right" prop="totalPriceText" min-width="150">
                         <template slot-scope="scope">
                           <span title="合计(含税)">{{ getTotalPriceText(scope.row, inventory.$index) }}</span>
@@ -361,7 +380,6 @@
               <el-input v-model="scope.row.plannedAmountInclTax" @input="calculateUpperLimitPrice(scope.row)"/>
             </template>
           </el-table-column>
-
           <!-- <el-table-column label="已发生规划金额（含税）" align="right" prop="incurredPlannedAmountText" />
           <el-table-column label="规划余量(元)" align="right" prop="planningBalanceText" />
           <el-table-column label="拟定招标方式" align="center" prop="biddingMethodName" /> -->
@@ -577,6 +595,43 @@
         >
       </div>
     </el-dialog>
+
+    <el-dialog
+      :title="upload2.title"
+      :visible.sync="upload2.open"
+      width="400px"
+      append-to-body
+    >
+      <el-upload
+        ref="upload"
+        :limit="1"
+        accept=".xlsx, .xls"
+        :headers="upload2.headers"
+        :action="upload2.url + '?radioType=1' "
+        :disabled="upload2.isUploading"
+        :on-progress="handleFileUploadProgressTwo"
+        :on-success="handleFileSuccessTwo"
+        :auto-upload="false"
+        drag
+      >
+        <i class="el-icon-upload"></i>
+        <div class="el-upload__text">将文件拖到此处，或<em>点击上传</em></div>
+        <div class="el-upload__tip text-center" slot="tip">
+          <span>仅允许导入xls、xlsx格式文件。</span>
+          <el-link
+            type="primary"
+            :underline="false"
+            style="font-size: 12px; vertical-align: baseline"
+            @click="importTemplateTwo"
+          >下载模板</el-link
+          >
+        </div>
+      </el-upload>
+      <div slot="footer" class="dialog-footer">
+        <el-button type="primary" @click="submitFileFormTwo">确 定</el-button>
+        <el-button @click="upload2.open = false">取 消</el-button>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
@@ -598,7 +653,8 @@ import {
   getDeviceItemList,
   getMaterialItemList,
   getDeviceEigenvalueList,
-  getMaterialEigenvalueList
+  getMaterialEigenvalueList,
+  matchList,
 } from '@/api/procurement/plan';
 import {listUnderlingDict} from "@/api/procurement/contract";
 import {listAreaDivisionTree} from '@/api/procurement/manage'
@@ -610,7 +666,9 @@ import VirtualScroll from 'el-table-virtual-scroll'
 import {getTwoLevelDeptByDeptId} from "@/api/system/dept";
 import treeMenu from '@/components/tree/treeMenu.vue';
 import Drag from '@/components/Drag/index2.vue'
-
+import {getToken} from "@/utils/auth";
+import {Loading, Message} from "element-ui";
+import axios from "axios";
 export default {
   name: "add-plan",
   dicts: ['plan_type', 'price_type', 'procurement_counting_type', 'procurement_payment_type'],
@@ -925,6 +983,21 @@ export default {
         selectedTerms: {}, // 结构：{ 特征项ID: 选中特征值ID }
         materialsIndex: '', // 对应清单
         otherProcurementPlanType: '', // 其他类型选择的清单是属于哪类的
+        // 导入参数
+        upload2: {
+          // 是否显示弹出层（用户导入）
+          open: false,
+          // 弹出层标题（用户导入）
+          title: "",
+          // 是否禁用上传
+          isUploading: false,
+          // 是否更新已经存在的用户数据
+          updateSupport: 0,
+          // 设置上传的请求头部
+          headers: { Authorization: "Bearer " + getToken() },
+          // 上传的地址
+          url: process.env.VUE_APP_BASE_API + "/business/procurementPlan/importDataTwo",
+        },
       };
     },
 
@@ -1370,6 +1443,17 @@ export default {
                 });
                 return false;
               }
+            }
+
+            let list = this.planList[0].children[0].children;
+            const isList = list.some(item => item.materialsId == '' || item.materialsId == null || item.materialsId == undefined);
+            if(isList){
+              this.isSubmit = false;
+              this.$message({
+                message: '清单中存在未匹配的数据！',
+                type: 'error'
+              });
+              return false;
             }
 
             // 所有清单条目的合计(含税)总和
@@ -2793,14 +2877,41 @@ export default {
 
       return row;
     },
+    /*计算 固定价含税单价*/
+    calculatePriceTwo(row) {
+      const {multiply, add, divide, bignumber, format} = this.mathjs;
+      console.log("计算 含税单价 不含税单价 行合计价,row:", row);
+      /* 固定价 */
+      if (!row.taxRate || !row.unitPriceInclTax || '' === row.unitPriceInclTax || '' === row.taxRate ||
+        row.unitPriceInclTax === '-' || row.taxRate === '-') {
+        row.unitPriceExclTax = 0.0
+        row.totalPriceText = ''
+        row.totalPrice = ''
+      } else {
+        /* 单价含税(手填) */
+        const priceInclTax = (row.unitPriceInclTax + '').replaceAll(',', '');
+        /* 单价不含税：含税单价 / (1 + (税率  先除100得出百分比)) */
+        const onePlusTaxRate = divide(bignumber(priceInclTax), add(1, divide(bignumber(row.taxRate), 100)));
+        row.unitPriceExclTax = this.formatNumberDynamicDecimalWithSeparator(onePlusTaxRate)
+        /* 行含税总价：含税单价 * 数量 */
+        //const totalPrice = multiply(bignumber(priceInclTax), bignumber(row.count));
+        //row.totalPriceText = this.formatNumberDynamicDecimalWithSeparator(totalPrice);
+       //row.totalPrice = row.totalPriceText.replaceAll(',', '');
+        console.log("计算 结束,row:", row);
+        console.log("计算 结束,row.totalPriceText", row);
+      }
+
+      return row;
+    },
     handleClickMaterials(row ,index) {
-      if(row.materialsId === '' || row.materialsId === null){
-        return this.$message.warning("请重新选取物料");
+      debugger;
+      if(row.materialsId === '' || row.materialsId === null || row.materialsId == undefined){
+        return this.$message.warning("未匹配物料，请匹配后再选择！");
       } else {
         this.materialsIndex = index
         this.dialogOpen = true;
         this.dialogTitle = "选择特征值特征项";
-        this.handleNodeClick(row.row);
+        this.handleNodeClick(row);
       }
     },
     handleNodeClick(data) {
@@ -3039,6 +3150,158 @@ export default {
         }
       });
     },
+    handleImportTwo() {
+      if(this.planList[0] && this.planList[0].children && this.planList[0].children.length){
+        debugger;
+        let type = this.planList[0].children[0].children[0].materialsUniqueId;
+        let typeText = ""
+        if(type == "1"){
+          typeText = "(材料类)";
+        }else if (type == "2"){
+          typeText = "(设备类)";
+        }else if (type == "3"){
+          typeText = "(劳务类)";
+        }else if (type == "4"){
+          typeText = "(专业分包类)";
+        }else {
+          this.$message.error("请选取物料后再导入！");
+        }
+        let title = "清单导入"+typeText;
+        this.upload2.url = process.env.VUE_APP_BASE_API + "/business/procurementPlan/importDataTwo";
+        this.upload2.title = title;
+        this.upload2.open = true;
+      }else{
+        this.$message.error("请选取物料后再导入！");
+      }
+
+    },
+    importTemplateTwo() {
+      let url = "business/procurementPlan/importTemplateTwo";
+      let qz = '清单导入模板';
+      this.download(url,
+        {},
+        qz+`_${new Date().getTime()}.xlsx`
+      );
+    },
+    // 文件上传中处理
+    handleFileUploadProgressTwo(event, file, fileList) {
+      this.upload2.isUploading = true;
+    },
+    // 文件上传成功处理
+    handleFileSuccessTwo(response, file, fileList) {
+      this.upload2.open = false;
+      this.upload2.isUploading = false;
+      this.$refs.upload?.clearFiles();
+      const code = response.code;
+      if(code == 200){
+        this.$alert(
+          "<div style='overflow: auto;overflow-x: hidden;max-height: 70vh;padding: 10px 20px 0;'>" +
+          "数据已全部导入页面!" +
+          "</div>",
+          "导入结果",
+          { dangerouslyUseHTMLString: true }
+        );
+        /*let time = new Date().getTime();
+        this.expandKeys.push(time + "");*/
+        //this.planList[0] = {contractPlanning: "", plannedAmountInclTax: "", id: time, children: []}
+        /*$index: k,
+          indexNumber: (k + 1),*/
+        const list = response.data;
+        const num = 1
+        const children = []
+        /*Array.from({length: num}).forEach((_, index) => {
+          children.push({
+            index,
+            planTable: 'planTable' + index,
+            children: []
+          })
+        });
+        this.$set(this.planList[0], 'children', children);*/
+
+        Array.from({length: num}).forEach((_, index) => {
+          children.push({
+            index,
+            planTable: 'planTable' + index,
+            children: list.map((item, k) => ({
+              ...item,
+            }))
+          })
+        });
+        debugger;
+        console.log(JSON.stringify(children), 'children--children--children')
+        this.$set(this.planList[0], 'children', JSON.parse(JSON.stringify(children)));
+      }else if(code == 500){
+        this.$alert(
+          "<div style='overflow: auto;overflow-x: hidden;max-height: 70vh;padding: 10px 20px 0;'>" +
+          response.msg +
+          "</div>",
+          "导入结果",
+          { dangerouslyUseHTMLString: true }
+        );
+      }
+
+      //this.getList();
+    },
+    submitFileFormTwo() {
+      this.$refs.upload.submit();
+    },
+    handleMatch(){
+      let list = this.planList[0].children[0].children;
+      /*list.map(item => ({
+        ...item,
+        count: index === 0 ? item.count : 0.00,
+        rentTime: index === 0 ? item.rentTime : '',
+        rentQuantity: index === 0 ? item.rentQuantity : '',
+
+      }))*/
+      debugger;
+      let isDate = false;
+      list.map(function(item) {
+        if(item.materialsId == '' || item.materialsId == null || item.materialsId == undefined){
+          isDate = true;
+        }
+      });
+      if(isDate){
+        let downloadLoadingInstance;
+        downloadLoadingInstance = Loading.service({ text: "清单匹配中，请稍候", spinner: "el-icon-loading", background: "rgba(0, 0, 0, 0.7)", })
+        let listParams = JSON.parse(JSON.stringify(list))
+        debugger;
+        matchList(listParams).then((res) => {
+
+            const list = res.data;
+            const num = 1
+            const children = []
+            Array.from({length: num}).forEach((_, index) => {
+              children.push({
+                index,
+                planTable: 'planTable' + index,
+                children: list.map(item => ({
+                  ...item,
+                  count: index === 0 ? item.count : 0.00,
+                  rentTime: index === 0 ? item.rentTime : '',
+                  rentQuantity: index === 0 ? item.rentQuantity : '',
+
+                }))
+              })
+            });
+            this.$set(this.planList[0], 'children', JSON.parse(JSON.stringify(children)));
+            downloadLoadingInstance.close();
+          }).catch((r) => {
+            console.error(r)
+            Message.error('匹配失败！')
+            downloadLoadingInstance.close();
+          })
+
+        /*setTimeout(() => {
+          Message.error('这个操作延迟了2秒！')
+          downloadLoadingInstance.close();
+          // 这里执行你的代码
+        }, 2000);*/
+
+      }else{
+        this.$message.warning('清单已经全部匹配完成！');
+      }
+    },
   },
   computed: {
     ...mapGetters(['project']),
@@ -3054,7 +3317,9 @@ export default {
     getUnitPriceExclTax() {
       return (row) => {
         /* 计算 含税单价 不含税单价 行合计价 */
-        this.calculatePrice(row);
+        //this.calculatePrice(row);
+        /* 计算 固定价含税单价*/
+        this.calculatePriceTwo(row);
         return row.unitPriceExclTax ? (row.unitPriceExclTax) : (0.00);
       }
     },
@@ -3400,5 +3665,20 @@ export default {
       color: #fff;
     }
   }
+}
+
+/*.table-column-right {
+  display: flex;
+  justify-content: flex-end;
+  padding-right: 10px;
+}*/
+.cell-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+.absolute-button {
+  margin-left: auto; /* 关键样式 */
 }
 </style>
