@@ -69,4 +69,6 @@ public interface IDeviceClassService extends IService<DeviceClass> {
     long selectDeviceClassListCount(DeviceClass deviceClass);
 
     String importData(List<DeviceClassExcelData> userList, boolean updateSupport, String operName);
+
+    List<DeviceTypeTree> getDeviceClassTreeTwo();
 }

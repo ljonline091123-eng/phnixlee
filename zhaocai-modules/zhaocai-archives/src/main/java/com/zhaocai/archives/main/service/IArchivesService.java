@@ -11,4 +11,6 @@ public interface IArchivesService {
     List<ArchivesDetail> getArchivesDetailList(ArchivesDetailQueryVO queryVO);
 
     void matchList(List<MaterialsVO> list);
+
+    List<ArchivesDetail> getArchivesDetailListTwo(ArchivesDetailQueryVO queryVO);
 }

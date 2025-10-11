@@ -69,4 +69,6 @@ public interface ILaborServicesClassService extends IService<LaborServicesClass>
     long selectLaborServicesClassListCount(LaborServicesClass laborServicesClass);
 
     String importData(List<LaborServicesClassExcelData> userList, boolean updateSupport, String operName);
+
+    List<LabourTypeTree> getLaborServicesClassTreeTwo();
 }

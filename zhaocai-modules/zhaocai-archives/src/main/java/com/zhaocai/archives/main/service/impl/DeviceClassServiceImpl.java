@@ -1,8 +1,10 @@
 package com.zhaocai.archives.main.service.impl;
 
+import cn.hutool.core.collection.CollectionUtil;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.zhaocai.archives.dossier.service.IDeviceTypeService;
 import com.zhaocai.archives.dossier.tree.DeviceTypeTree;
+import com.zhaocai.archives.dossier.tree.MaterialTypeTree;
 import com.zhaocai.archives.main.domain.*;
 import com.zhaocai.archives.main.mapper.DeviceClassMapper;
 import com.zhaocai.archives.main.service.IDeviceArchivesService;
@@ -210,6 +212,61 @@ public class DeviceClassServiceImpl extends ServiceImpl<DeviceClassMapper, Devic
                 }
             }
         }
+        return list;
+    }
+
+    @Override
+    public List<DeviceTypeTree> getDeviceClassTreeTwo() {
+        DeviceClass mtrClass = new DeviceClass();
+        mtrClass.setValid(0L);
+        PageUtils.clearPage();
+        List<DeviceClass> select = baseMapper.selectDeviceClassList(mtrClass);
+        Map<String, DeviceTypeTree> map = new HashMap<>();
+        select.forEach(item -> {
+            DeviceTypeTree materialTypeTree = new DeviceTypeTree();
+            materialTypeTree.setId(item.getId() + "");
+            materialTypeTree.setLabel(item.getDeviceClassName());
+            materialTypeTree.setType(item.getDeviceClassType());
+            materialTypeTree.setCode(item.getDeviceClassCode());
+            materialTypeTree.setChildren(new ArrayList<>());
+            map.put(item.getId(), materialTypeTree);
+        });
+
+        // 构建树形结构
+        List<DeviceTypeTree> list = new ArrayList<>();
+        for (DeviceClass type : select) {
+            DeviceTypeTree treeVo = map.get(type.getId());
+            if (StringUtils.isEmpty(type.getParentId()) || "0".equals(type.getParentId())) {
+                // 根节点，直接添加
+                list.add(treeVo);
+            } else {
+                // 非根节点，找到父节点并添加到其子节点列表中
+                DeviceTypeTree materialTypeTree = map.get(type.getParentId());
+                if (materialTypeTree != null) {
+                    materialTypeTree.getChildren().add(treeVo);
+                }
+            }
+        }
+        //具体档案加入树
+        DeviceArchives detail = new DeviceArchives();
+        detail.setValid(0L);
+        List<DeviceArchives> detailList = iDeviceArchivesService.selectDeviceArchivesList(detail);
+        if(CollectionUtil.isNotEmpty(detailList)){
+            detailList.stream().forEach(item->{
+                DeviceTypeTree materialTypeTree = map.get(item.getDeviceClassId());
+                if (materialTypeTree != null) {
+                    DeviceTypeTree tree = new DeviceTypeTree();
+                    tree.setId(item.getId() + "");
+                    tree.setLabel(item.getDeviceName());
+                    tree.setType(item.getDeviceClassName());
+                    tree.setCode(item.getDeviceCode());
+                    tree.setChildren(new ArrayList<>());
+                    tree.setState(item.getValid());
+                    materialTypeTree.getChildren().add(tree);
+                }
+            });
+        }
+
         return list;
     }
 

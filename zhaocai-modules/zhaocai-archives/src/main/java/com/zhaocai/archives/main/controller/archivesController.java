@@ -78,6 +78,12 @@ public class archivesController extends BladeController {
         return success(list);
     }
 
+    @GetMapping("/getArchivesDetailListTwo")
+    public AjaxResult getArchivesDetailListTwo(ArchivesDetailQueryVO queryVO) {
+        List<ArchivesDetail> list = archivesService.getArchivesDetailListTwo(queryVO);
+        return success(list);
+    }
+
     @PostMapping("/matchList")
     @ApiOperation(value = "清单匹配")
     public ResultData<List<MaterialsVO>> matchList(@RequestBody List<MaterialsVO> list) {
@@ -85,4 +91,19 @@ public class archivesController extends BladeController {
         return ResultData.data(list);
     }
 
+    @GetMapping("/getArchivesTreeTwo")
+    public AjaxResult getArchivesTreeTwo(String type) {
+        if(type.equals(ArchivesTypeEnum.Mtr_Class.getType())){
+            MtrClass mtrClass = new MtrClass();
+            return success(mtrClassService.getMtrClassTreeTwo(mtrClass));
+        } else if (type.equals(ArchivesTypeEnum.Device_Feature.getType())) {
+            return success(deviceClassService.getDeviceClassTreeTwo());
+        } else if (type.equals(ArchivesTypeEnum.Labor_Services.getType())) {
+            return success(laborServicesClassService.getLaborServicesClassTreeTwo());
+        } else if (type.equals(ArchivesTypeEnum.Major_Subcontracting.getType())) {
+            return success(majorSubcontractingClassService.getMajorSubcontractingClassTreeTwo());
+        }else {
+            throw new BusinessException("该物料类别不存在，请检查！");
+        }
+    }
 }

@@ -1,7 +1,9 @@
 package com.zhaocai.archives.main.service.impl;
 
+import cn.hutool.core.collection.CollectionUtil;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.zhaocai.archives.dossier.service.ILabourTypeService;
+import com.zhaocai.archives.dossier.tree.DeviceTypeTree;
 import com.zhaocai.archives.dossier.tree.LabourTypeTree;
 import com.zhaocai.archives.main.domain.*;
 import com.zhaocai.archives.main.mapper.LaborServicesClassMapper;
@@ -213,6 +215,58 @@ public class LaborServicesClassServiceImpl extends ServiceImpl<LaborServicesClas
         return list;
     }
 
+    public List<LabourTypeTree> getLaborServicesClassTreeTwo() {
+        LaborServicesClass mtrClass = new LaborServicesClass();
+        mtrClass.setValid(0L);
+        PageUtils.clearPage();
+        List<LaborServicesClass> select = baseMapper.selectLaborServicesClassList(mtrClass);
+        Map<String, LabourTypeTree> map = new HashMap<>();
+        select.forEach(item -> {
+            LabourTypeTree materialTypeTree = new LabourTypeTree();
+            materialTypeTree.setId(item.getId() + "");
+            materialTypeTree.setLabel(item.getLaborServicesClassName());
+            materialTypeTree.setType(item.getLaborServicesClassType());
+            materialTypeTree.setCode(item.getLaborServicesClassCode());
+            materialTypeTree.setChildren(new ArrayList<>());
+            map.put(item.getId(), materialTypeTree);
+        });
+
+        // 构建树形结构
+        List<LabourTypeTree> list = new ArrayList<>();
+        for (LaborServicesClass type : select) {
+            LabourTypeTree treeVo = map.get(type.getId());
+            if (StringUtils.isEmpty(type.getParentId()) || "0".equals(type.getParentId())) {
+                // 根节点，直接添加
+                list.add(treeVo);
+            } else {
+                // 非根节点，找到父节点并添加到其子节点列表中
+                LabourTypeTree materialTypeTree = map.get(type.getParentId());
+                if (materialTypeTree != null) {
+                    materialTypeTree.getChildren().add(treeVo);
+                }
+            }
+        }
+        //具体档案加入树
+        LaborServicesArchives detail = new LaborServicesArchives();
+        detail.setValid(0L);
+        List<LaborServicesArchives> detailList = iLaborServicesArchivesService.selectLaborServicesArchivesList(detail);
+        if(CollectionUtil.isNotEmpty(detailList)){
+            detailList.stream().forEach(item->{
+                LabourTypeTree materialTypeTree = map.get(item.getLaborServicesClassId());
+                if (materialTypeTree != null) {
+                    LabourTypeTree tree = new LabourTypeTree();
+                    tree.setId(item.getId() + "");
+                    tree.setLabel(item.getLaborServicesName());
+                    tree.setType(item.getLaborServicesClassName());
+                    tree.setCode(item.getLaborServicesCode());
+                    tree.setChildren(new ArrayList<>());
+                    tree.setState(item.getValid());
+                    materialTypeTree.getChildren().add(tree);
+                }
+            });
+        }
+        return list;
+    }
 
     @Override
     public LaborServicesClass initCode(LaborServicesClass laborServicesClass) {

@@ -11,6 +11,7 @@ import com.zhaocai.archives.pub.ArchivesTypeEnum;
 import com.zhaocai.common.core.web.page.PageDomain;
 import com.zhaocai.common.core.web.page.TableSupport;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -111,6 +112,49 @@ public class archivesServiceImpl  implements IArchivesService {
             throw new BusinessException("该物料类别不存在，请检查！");
         }
 //        archivesInfo.setList(resultList);
+        return resultList;
+
+    }
+
+    @Override
+    public List<ArchivesDetail> getArchivesDetailListTwo(ArchivesDetailQueryVO queryVO) {
+        if(queryVO.getClassId() == null || queryVO.getClassId().isEmpty()){
+            queryVO.setClassId(Collections.singletonList("-1"));
+        }
+        List<ArchivesDetail> resultList = new ArrayList<>();
+        if(queryVO.getType().equals(ArchivesTypeEnum.Mtr_Class.getType())){
+            MtrArchives bean = mtrArchivesService.selectMtrArchivesById(queryVO.getClassId().get(0));
+            if(bean!=null){
+                List<MtrArchives> list = new ArrayList<>();
+                list.add(bean);
+                resultList.addAll(convertMtrArchivesToArchivesDetail(list)); // 调用转换方法
+            }
+        } else if (queryVO.getType().equals(ArchivesTypeEnum.Device_Feature.getType())) {
+            DeviceArchives bean = deviceArchivesService.selectDeviceArchivesById(queryVO.getClassId().get(0));
+            if(bean!=null){
+                List<DeviceArchives> list = new ArrayList<>();
+                list.add(bean);
+                resultList.addAll(convertDeviceArchivesToArchivesDetail(list));
+            }
+        } else if (queryVO.getType().equals(ArchivesTypeEnum.Labor_Services.getType())) {
+            LaborServicesArchives bean = laborServicesArchivesService.selectLaborServicesArchivesById(queryVO.getClassId().get(0));
+            if(bean!=null) {
+                List<LaborServicesArchives> list = new ArrayList<>();
+                list.add(bean);
+                resultList.addAll(convertLaborServicesArchivesToArchivesDetail(list));
+            }
+
+        } else if (queryVO.getType().equals(ArchivesTypeEnum.Major_Subcontracting.getType())) {
+            MajorSubcontractingArchives bean = majorSubcontractingArchivesService.selectMajorSubcontractingArchivesById(queryVO.getClassId().get(0));
+            if(bean!=null) {
+                List<MajorSubcontractingArchives> list = new ArrayList<>();
+                list.add(bean);
+                resultList.addAll(convertMajorSubcontractingArchivesToArchivesDetail(list));
+            }
+
+        }else {
+            throw new BusinessException("该物料类别不存在，请检查！");
+        }
         return resultList;
 
     }

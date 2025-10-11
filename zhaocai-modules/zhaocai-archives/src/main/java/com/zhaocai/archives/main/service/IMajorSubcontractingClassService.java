@@ -69,4 +69,6 @@ public interface IMajorSubcontractingClassService extends IService<MajorSubcontr
     long selectMajorSubcontractingClassListCount(MajorSubcontractingClass majorSubcontractingClass);
 
     String importData(List<MajorSubcontractingClassExcelData> userList, boolean updateSupport, String operName);
+
+    List<SubcontractingTypeTree> getMajorSubcontractingClassTreeTwo();
 }

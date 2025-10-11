@@ -73,4 +73,6 @@ public interface IMtrClassService  extends IService<MtrClass>
     long selectMtrClassListCount(MtrClass mtrClass);
 
     String importData(List<MtrClassExcelData> userList, Boolean updateSupport, String operName);
+
+    List<MaterialTypeTree>  getMtrClassTreeTwo(MtrClass mtrClass);
 }

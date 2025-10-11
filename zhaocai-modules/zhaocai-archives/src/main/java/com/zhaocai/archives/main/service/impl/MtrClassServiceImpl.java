@@ -1,5 +1,6 @@
 package com.zhaocai.archives.main.service.impl;
 
+import cn.hutool.core.collection.CollectionUtil;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.zhaocai.archives.dossier.service.IMaterialTypeService;
 import com.zhaocai.archives.dossier.tree.MaterialTypeTree;
@@ -309,6 +310,60 @@ public class MtrClassServiceImpl extends ServiceImpl<MtrClassMapper, MtrClass> i
                     materialTypeTree.getChildren().add(treeVo);
                 }
             }
+        }
+        return list;
+    }
+
+    @Override
+    public List<MaterialTypeTree> getMtrClassTreeTwo(MtrClass materialType) {
+        MtrClass mtrClass = new MtrClass();
+        mtrClass.setValid(0L);
+        PageUtils.clearPage();
+        List<MtrClass> select = baseMapper.selectMtrClassList(mtrClass);
+        Map<String, MaterialTypeTree> map = new HashMap<>();
+        select.forEach(item -> {
+            MaterialTypeTree materialTypeTree = new MaterialTypeTree();
+            materialTypeTree.setId(item.getId() + "");
+            materialTypeTree.setLabel(item.getMtrClassName());
+            materialTypeTree.setType(item.getMtrClassType());
+            materialTypeTree.setCode(item.getMtrClassCode());
+            materialTypeTree.setChildren(new ArrayList<>());
+            map.put(item.getId(), materialTypeTree);
+        });
+
+        // 构建树形结构
+        List<MaterialTypeTree> list = new ArrayList<>();
+        for (MtrClass type : select) {
+            MaterialTypeTree treeVo = map.get(type.getId());
+            if (type.getParentId() == null || type.getParentId().equals("0")) {
+                // 根节点，直接添加
+                list.add(treeVo);
+            } else {
+                // 非根节点，找到父节点并添加到其子节点列表中
+                MaterialTypeTree materialTypeTree = map.get(type.getParentId());
+                if (materialTypeTree != null) {
+                    materialTypeTree.getChildren().add(treeVo);
+                }
+            }
+        }
+        //具体档案加入树
+        MtrArchives detail = new MtrArchives();
+        detail.setValid(0L);
+        List<MtrArchives> detailList = iMtrArchivesService.selectMtrArchivesList(detail);
+        if(CollectionUtil.isNotEmpty(detailList)){
+            detailList.stream().forEach(item->{
+                MaterialTypeTree materialTypeTree = map.get(item.getMtrClassId());
+                if (materialTypeTree != null) {
+                    MaterialTypeTree tree = new MaterialTypeTree();
+                    tree.setId(item.getId() + "");
+                    tree.setLabel(item.getMtrName());
+                    tree.setType(item.getMtrClassName());
+                    tree.setCode(item.getMtrCode());
+                    tree.setChildren(new ArrayList<>());
+                    tree.setState(item.getValid());
+                    materialTypeTree.getChildren().add(tree);
+                }
+            });
         }
         return list;
     }

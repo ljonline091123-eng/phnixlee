@@ -1,7 +1,9 @@
 package com.zhaocai.archives.main.service.impl;
 
+import cn.hutool.core.collection.CollectionUtil;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.zhaocai.archives.dossier.service.ISubcontractingTypeService;
+import com.zhaocai.archives.dossier.tree.LabourTypeTree;
 import com.zhaocai.archives.dossier.tree.SubcontractingTypeTree;
 import com.zhaocai.archives.main.domain.*;
 import com.zhaocai.archives.main.mapper.MajorSubcontractingClassMapper;
@@ -211,6 +213,60 @@ public class MajorSubcontractingClassServiceImpl extends ServiceImpl<MajorSubcon
                     materialTypeTree.getChildren().add(treeVo);
                 }
             }
+        }
+        return list;
+    }
+
+    @Override
+    public List<SubcontractingTypeTree> getMajorSubcontractingClassTreeTwo() {
+        MajorSubcontractingClass majorSubcontractingClass = new MajorSubcontractingClass();
+        majorSubcontractingClass.setValid(0L);
+        PageUtils.clearPage();
+        List<MajorSubcontractingClass> select = baseMapper.selectMajorSubcontractingClassList(majorSubcontractingClass);
+        Map<String, SubcontractingTypeTree> map = new HashMap<>();
+        select.forEach(item -> {
+            SubcontractingTypeTree materialTypeTree = new SubcontractingTypeTree();
+            materialTypeTree.setId(item.getId() + "");
+            materialTypeTree.setLabel(item.getMajorSubcontractingClassName());
+            materialTypeTree.setType(item.getMajorSubcontractingClassType());
+            materialTypeTree.setCode(item.getMajorSubcontractingClassCode());
+            materialTypeTree.setChildren(new ArrayList<>());
+            map.put(item.getId(), materialTypeTree);
+        });
+
+        // 构建树形结构
+        List<SubcontractingTypeTree> list = new ArrayList<>();
+        for (MajorSubcontractingClass type : select) {
+            SubcontractingTypeTree treeVo = map.get(type.getId());
+            if (StringUtils.isEmpty(type.getParentId()) || "0".equals(type.getParentId())) {
+                // 根节点，直接添加
+                list.add(treeVo);
+            } else {
+                // 非根节点，找到父节点并添加到其子节点列表中
+                SubcontractingTypeTree materialTypeTree = map.get(type.getParentId());
+                if (materialTypeTree != null) {
+                    materialTypeTree.getChildren().add(treeVo);
+                }
+            }
+        }
+        //具体档案加入树
+        MajorSubcontractingArchives detail = new MajorSubcontractingArchives();
+        detail.setValid(0L);
+        List<MajorSubcontractingArchives> detailList = iMajorSubcontractingArchivesService.selectMajorSubcontractingArchivesList(detail);
+        if(CollectionUtil.isNotEmpty(detailList)){
+            detailList.stream().forEach(item->{
+                SubcontractingTypeTree materialTypeTree = map.get(item.getMajorSubcontractingClassId());
+                if (materialTypeTree != null) {
+                    SubcontractingTypeTree tree = new SubcontractingTypeTree();
+                    tree.setId(item.getId() + "");
+                    tree.setLabel(item.getMajorSubcontractingName());
+                    tree.setType(item.getMajorSubcontractingClassName());
+                    tree.setCode(item.getMajorSubcontractingCode());
+                    tree.setChildren(new ArrayList<>());
+                    tree.setState(item.getValid());
+                    materialTypeTree.getChildren().add(tree);
+                }
+            });
         }
         return list;
     }
