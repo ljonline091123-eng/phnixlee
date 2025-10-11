@@ -164,10 +164,9 @@
                       <el-table-column label="清单名称（系统）" min-width="150" prop="materialsName" fixed
                                        show-overflow-tooltip>
                         <template slot-scope="scope">
-                          <!--<el-button type="success" size="small" v-if="scope.row.materialsName == '' || scope.row.materialsName == null"
-                                     @click="handleSelectMaterial">挂接</el-button>
-                          <span v-else>{{scope.row.materialsName}}</span>-->
-                          <span>{{scope.row.materialsName}}</span>
+                          <el-button type="success" size="small" v-if="scope.row.materialsName == '' || scope.row.materialsName == null"
+                                     @click="handleHookingMaterial(scope.row,scope.$index)">挂接</el-button>
+                          <span v-else>{{scope.row.materialsName}}</span>
                         </template>
                       </el-table-column>
                       <!-- <el-table-column label="成本子目名称(导入)" min-width="150" prop="materialsNameImport" show-overflow-tooltip/> -->
@@ -414,6 +413,13 @@
         </el-table> -->
       </el-dialog>
 
+      <el-dialog :title="titleHooking" :visible.sync="materialHookingVisible" width="45%">
+        <treeMenuTwo class="treeMenu" style="margin: 12px; " :dept-options="deptOptionsHooking" :queryTypeTwo="true" ref="orgTreeHooking"
+                  :levelExpand="2" @query="getListMenuHooking" @treeClick="treeClickMainHooking"
+                  :defaultExpandedKeys="defaultExpandedKeys" :queryRadioTypeTwo = "queryRadioTypeTwo"
+                  :loading="loadingTreeHooking" :currentNodeKey="waitCurrentNodeKeyTwo"></treeMenuTwo>
+      </el-dialog>
+
       <!-- 选择采购经办人 -->
       <el-dialog title="采购人" :visible.sync="officerDialog" width="55%">
         <el-form :model="searchQuery" ref="planForm" label-position="left" size="small" inline @submit.native.prevent>
@@ -607,7 +613,7 @@
         :limit="1"
         accept=".xlsx, .xls"
         :headers="upload2.headers"
-        :action="upload2.url + '?radioType=1' "
+        :action="upload2.url"
         :disabled="upload2.isUploading"
         :on-progress="handleFileUploadProgressTwo"
         :on-success="handleFileSuccessTwo"
@@ -640,7 +646,9 @@ import {Base64} from 'js-base64';
 import {all, create} from "mathjs"
 import {
   getArchiveClass,
+  getArchiveClassTwo,
   getArchivesDetailList,
+  getArchivesDetailListTwo,
   getContractMaterials,
   getContractPlanSplitFlag,
   getListProcurementOfficer,
@@ -665,6 +673,7 @@ import {PRICETYPELIST, PRICETYPEOPTIONS} from "@/utils/constants";
 import VirtualScroll from 'el-table-virtual-scroll'
 import {getTwoLevelDeptByDeptId} from "@/api/system/dept";
 import treeMenu from '@/components/tree/treeMenu.vue';
+import treeMenuTwo from '@/components/tree/treeMenuTwo.vue';
 import Drag from '@/components/Drag/index2.vue'
 import {getToken} from "@/utils/auth";
 import {Loading, Message} from "element-ui";
@@ -680,6 +689,7 @@ export default {
     PageTitle,
     VirtualScroll,
     treeMenu,
+    treeMenuTwo,
     Drag
   },
   created() {
@@ -761,10 +771,42 @@ export default {
         this.materialDialogVisible = false
       });
     },
+    treeClickMainHooking(data, node, queryParams) {
+      let rData = data || [];
+      getArchivesDetailListTwo(rData.id, queryParams.type).then(response => {
+        this.inventoryList = response.data || [];
+        if (this.planList && this.planList[0] && this.planList[0].children && this.planList[0].children[0] && this.planList[0].children[0].children) {
+          const targetChildren = this.planList[0].children[0].children;
+          // 检查 index 是否在有效范围内
+          debugger;
+          if (this.materialsIndex >= 0 && this.materialsIndex < targetChildren.length) {
+            targetChildren[this.materialsIndex].materialsId = this.inventoryList[0].materialsId;
+            targetChildren[this.materialsIndex].materialsCode = this.inventoryList[0].materialsCode;
+            targetChildren[this.materialsIndex].materialsName = this.inventoryList[0].materialsName;
+            targetChildren[this.materialsIndex].specification = this.inventoryList[0].specification;
+            targetChildren[this.materialsIndex].measurementRules = this.inventoryList[0].measurementRules;
+            targetChildren[this.materialsIndex].unitMeasurement = this.inventoryList[0].unitMeasurement;
+            targetChildren[this.materialsIndex].workContent = this.inventoryList[0].workContent;
+              //this.planList[0].children[0].children[this.materialsIndex].specification = itemName;
+              this.$set(this.planList[0].children[0], 'children', JSON.parse(JSON.stringify(targetChildren)));
+              console.log(JSON.stringify(this.planList[0]))
+              this.materialHookingVisible = false
+          } else {
+            console.error('Index out of bounds');
+          }
+        }
+
+      });
+    },
     getListMenu(queryParams) {
       this.loadingTree = true
       this.handleMaterialCategorySelect(queryParams)
     },
+    getListMenuHooking(queryParams) {
+      this.loadingTreeHooking = true
+      this.handleMaterialHooking(queryParams)
+    },
+
     /* 代替data初始化 */
     getInitialData() {
       let checkNum = (rule, value, callback) => {
@@ -779,10 +821,15 @@ export default {
         loadingTree: false,
         expandKeys: [],
         deptOptions: [],
+        deptOptionsHooking: [],
+        loadingTreeHooking: false,
+        queryRadioTypeTwo: "",
         defaultExpandedKeys: [],
         waitCurrentNodeKey: '1826912577508798466',
+        waitCurrentNodeKeyTwo: '1826912577508798462',
         totalPriceQD: null,   //清单的列含税总价
         materialDialogVisible: false, // 控制物料选择对话框的显示和隐藏
+        materialHookingVisible: false, // 控制物料选择对话框的显示和隐藏
         // 物料分类列表
         materialCategories: [
           {categoryName: '材料类', categoryCode: '1'},
@@ -998,6 +1045,7 @@ export default {
           // 上传的地址
           url: process.env.VUE_APP_BASE_API + "/business/procurementPlan/importDataTwo",
         },
+        titleHooking: '挂接物料',
       };
     },
 
@@ -1025,6 +1073,45 @@ export default {
     handleMaterialDialogClose() {
       this.materialDialogVisible = false;
       this.selectedCategory = null;
+    },
+
+    handleHookingMaterial(row, index) {
+      debugger;
+      this.materialsIndex = index;
+      this.queryRadioTypeTwo = row.materialsUniqueId;
+      if(this.queryRadioTypeTwo == "1"){
+        this.titleHooking = "接挂物料（材料类)";
+      }else if (this.queryRadioTypeTwo == "2"){
+        this.titleHooking = "接挂物料（设备类)";
+      }else if (this.queryRadioTypeTwo == "3"){
+        this.titleHooking = "接挂物料（劳务类)";
+      }else if (this.queryRadioTypeTwo == "4"){
+        this.titleHooking = "接挂物料（专业分包类)";
+      }else {
+        this.$message.error("请选取物料后再挂接！");
+        return;
+      }
+      this.materialHookingVisible = true;
+    },
+
+    // 处理物料分类选择
+    async handleMaterialHooking(queryParams) {
+      console.log(JSON.stringify(queryParams), '选中的物料分类');
+      this.selecteArchivesClass = queryParams.type;
+      try {
+        let res = await getArchiveClassTwo(queryParams.type);
+        this.deptOptionsHooking = res.data || []
+        console.log("物料分类树：", res.data);
+        this.loadingTreeHooking = false
+      } catch (error) {
+        console.error("获取物料库分类树失败：", error);
+        this.$message.error("获取物料库分类树失败");
+      }
+    },
+
+    // 关闭物料选择对话框
+    handleMaterialHookingClose() {
+      this.materialHookingVisible = false;
     },
 
     /** 选择采购人-点击行 */
@@ -3167,7 +3254,7 @@ export default {
           this.$message.error("请选取物料后再导入！");
         }
         let title = "清单导入"+typeText;
-        this.upload2.url = process.env.VUE_APP_BASE_API + "/business/procurementPlan/importDataTwo";
+        this.upload2.url = process.env.VUE_APP_BASE_API + "/business/procurementPlan/importDataTwo?radioType="+ type;
         this.upload2.title = title;
         this.upload2.open = true;
       }else{

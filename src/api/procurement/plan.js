@@ -21,6 +21,17 @@ export const getArchivesDetailList = (classId,type) => {
       })
       }
 
+// 选取物料
+export const getArchivesDetailListTwo = (classId,type) => {
+  return request({
+    url: '/archives/archivesClass/getArchivesDetailListTwo',
+    method: 'get',
+    params:{
+      classId,type
+    }
+  })
+}
+
 // 采购计划列表
 export const getPlanList = (params) => {
   return request({
@@ -308,7 +319,16 @@ export const matchList = (data) => {
   })
 }
 
-
+// 查询物料分类树
+export const getArchiveClassTwo = (type) => {
+  return request({
+    url: '/archives/archivesClass/getArchivesTreeTwo',
+    method: 'get',
+    params:{
+      type
+    }
+  })
+}
 
 
 
