@@ -179,3 +179,13 @@ export function listOrganization4Company() {
     method: "get",
   })
 }
+
+export const getVendorName = (name) => {
+  return request({
+    url: '/business/vendor/getVendorName',
+    method: 'get',
+    params:{
+      name
+    }
+  })
+}

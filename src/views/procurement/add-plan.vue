@@ -783,6 +783,7 @@ export default {
             targetChildren[this.materialsIndex].materialsId = this.inventoryList[0].materialsId;
             targetChildren[this.materialsIndex].materialsCode = this.inventoryList[0].materialsCode;
             targetChildren[this.materialsIndex].materialsName = this.inventoryList[0].materialsName;
+            targetChildren[this.materialsIndex].materialsNameImport = this.inventoryList[0].materialsNameImport;
             targetChildren[this.materialsIndex].specification = this.inventoryList[0].specification;
             targetChildren[this.materialsIndex].measurementRules = this.inventoryList[0].measurementRules;
             targetChildren[this.materialsIndex].unitMeasurement = this.inventoryList[0].unitMeasurement;
