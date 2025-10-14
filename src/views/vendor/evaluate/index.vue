@@ -75,12 +75,10 @@
       </el-col>
       <el-col :span="1.5">
         <el-button
-          type="danger"
-          plain
-          icon="el-icon-delete"
+          type="warning"
+          icon="el-icon-upload"
           size="mini"
-          @click="handleDelete"
-          :disabled="!selectProjectData.id ? true : false"
+          @click="handleExport"
           >导出</el-button
         >
       </el-col>
@@ -117,7 +115,7 @@
         <template slot-scope="scope">
           <el-button @click="handleClick(scope.row)" type="text" size="small">查看</el-button>
           <el-button type="text" size="small" @click="handleUpdate(scope.row)" >编辑</el-button>
-          <el-button type="text" size="small" v-if="scope.row.evaluateStatus == '0'">删除</el-button>
+          <el-button type="text" size="small" v-if="scope.row.evaluateStatus == '0'" @click="handleDelete(scope.row)">删除</el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -250,7 +248,7 @@ import "@riophae/vue-treeselect/dist/vue-treeselect.css";
 import { uploadFileUrl } from "@/utils/const";
 import {showSecretRelatedTips} from "@/utils/MyUtils";
 import { getVendorName } from "@/api/vendor/vendor";
-import { getlist,save,submit,addBean,getById } from "@/api/vendor/evaluate";
+import { getlist,save,submit,addBean,getById,deleteById } from "@/api/vendor/evaluate";
 
 export default {
   dicts: ['sys_yes_no','evaluate_status','evaluate_type','evaluate_time'],
@@ -724,8 +722,31 @@ export default {
     handleQuarterChange(date) {
       const month = new Date(date).getMonth() + 1;
       this.form.evaluateTimeTxt = `Q${Math.ceil(month / 3)}`;
-    }
-
+    },
+    /** 导出按钮操作 */
+    handleExport() {
+      this.download(
+        "business/vendor/evaluate/export",
+        {
+          ...this.queryParams,
+        },
+        `供应商评价_${new Date().getTime()}.xlsx`
+      );
+      /*const queryParams = this.queryParams;
+      this.$confirm('是否确认导出所有数据项?', "警告", {
+        confirmButtonText: "确定",
+        cancelButtonText: "取消",
+        type: "warning"
+      }).then(function() {
+        this.download(
+          "business/vendor/evaluate/export",
+          {
+            ...this.queryParams,
+          },
+          `供应商评价_${new Date().getTime()}.xlsx`
+        );
+      })*/
+    },
   },
 
 
