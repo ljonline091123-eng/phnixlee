@@ -22,16 +22,19 @@ import com.zhaocai.business.vendor.domain.Vendor;
 import com.zhaocai.business.vendor.domain.VendorContact;
 import com.zhaocai.business.vendor.service.IVendorContactService;
 import com.zhaocai.business.vendor.service.IVendorService;
+import com.zhaocai.business.vendor.vo.req.VendorManagementListQueryDataVO;
 import com.zhaocai.business.vendor.vo.req.VendorOneRequestVO;
 import com.zhaocai.business.vendor.vo.req.VendorRegisterRequestVO;
 import com.zhaocai.business.vendor.vo.req.VendorSaveRequestVO;
 import com.zhaocai.business.vendor.vo.res.VendorDetailVO;
 import com.zhaocai.business.vendor.vo.res.VendorIndexInfoVO;
+import com.zhaocai.business.vendor.vo.res.VendorManagementListDataVO;
 import com.zhaocai.business.vendor.vo.res.VendorSignAuthInfo;
 import com.zhaocai.common.core.web.bean.ResultData;
 import com.zhaocai.common.log.annotation.Log;
 import com.zhaocai.common.log.enums.BusinessType;
 import com.zhaocai.common.security.utils.SecurityUtils;
+import com.zhaocai.system.api.domain.SysDictData;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -39,7 +42,9 @@ import org.springframework.web.bind.annotation.*;
 import springfox.documentation.annotations.ApiIgnore;
 
 import javax.validation.Valid;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * 供应商Controller
@@ -293,5 +298,26 @@ public class VendorController extends BladeController {
     public ResultData removeBlacklist() {
         return ResultData.data(vendorService.removeBlacklist());
     }
+
+
+    @GetMapping("/getVendorName")
+    @ApiOperation("供应商远程名称下拉")
+    public ResultData<List<SysDictData>> getVendorName(String name) {
+        VendorManagementListQueryDataVO bean = new VendorManagementListQueryDataVO();
+        bean.setVendorClass(2);
+        bean.setEnterpriseName(name);
+        List<VendorManagementListDataVO> listVendor = vendorService.getListVendor(bean);
+        List<SysDictData> result = listVendor.stream()
+                .map(vo -> {
+                    SysDictData dict = new SysDictData();
+                    dict.setDictValue(vo.getId()+""); // 假设VendorManagementListDataVO的id对应字典值
+                    dict.setDictLabel(vo.getEnterpriseName()); // 假设name对应字典标签
+                    dict.setDictType("vendor_name"); // 固定字典类型
+                    return dict;
+                })
+                .collect(Collectors.toList());
+        return ResultData.data(result);
+    }
+
 
 }

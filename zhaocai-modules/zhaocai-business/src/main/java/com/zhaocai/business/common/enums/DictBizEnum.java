@@ -106,6 +106,10 @@ public enum DictBizEnum {
 	sys_contracting_method("sys_contracting_method","承揽方式（招标方式）"),
 	UNDERLING_CONTRACT_TYPE("CONTRACT_TYPE","合同/合约类型"),
 	UNDERLING_CON_ROLE_TYPE("CON_ROLE_TYPE","合同/角色类型"),
+	sys_yes_no("sys_yes_no","是否"),
+	evaluate_status("evaluate_status","评分状态"),
+	evaluate_type("evaluate_type","评分类型"),
+	evaluate_time("evaluate_time","评分季度"),
 	;
 
 	private final String name;
