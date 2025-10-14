@@ -7,6 +7,8 @@ import com.zhaocai.business.vendor.domain.TbVendorEvaluate;
 import com.zhaocai.business.vendor.vo.req.TbVendorEvaluateQueryVo;
 import com.zhaocai.common.core.bean.PageResult;
 
+import java.util.List;
+
 /**
  * 供应商评价Service接口
  *
@@ -16,4 +18,6 @@ import com.zhaocai.common.core.bean.PageResult;
 public interface ITbVendorEvaluateService extends IService<TbVendorEvaluate> {
 
     PageResult<TbVendorEvaluate> listPage(TbVendorEvaluateQueryVo tbVendorEvaluate);
+
+    List<TbVendorEvaluate> getList(TbVendorEvaluateQueryVo queryVO);
 }

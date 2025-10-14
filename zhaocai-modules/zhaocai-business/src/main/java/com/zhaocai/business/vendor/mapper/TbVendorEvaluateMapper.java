@@ -20,4 +20,6 @@ import java.util.List;
 public interface TbVendorEvaluateMapper extends BaseMapper<TbVendorEvaluate> {
 
       IPage<TbVendorEvaluate> listPage(Page mybatisPage, @Param("queryVO") TbVendorEvaluateQueryVo queryVO);
+
+      List<TbVendorEvaluate> getList(@Param("queryVO") TbVendorEvaluateQueryVo queryVO);
 }

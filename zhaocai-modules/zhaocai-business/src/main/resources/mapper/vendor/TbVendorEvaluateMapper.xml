@@ -65,5 +65,25 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         </where>
         order by create_time desc
     </select>
+    <select id="getList" resultMap="TbVendorEvaluateResult">
+        <include refid="selectTbVendorEvaluateVo"/>
+        <where>
+            d.del_flag = 0
+            <if test="queryVO.evaluateCode != null  and queryVO.evaluateCode != ''"> and d.evaluate_code like concat('%', #{queryVO.evaluateCode}, '%') </if>
+            <if test="queryVO.vendorId != null "> and d.vendor_id = #{queryVO.vendorId}</if>
+            <if test="queryVO.vendorName != null  and queryVO.vendorName != ''"> and d.vendor_name like concat('%', #{queryVO.vendorName}, '%')</if>
+            <if test="queryVO.evaluateType != null  and queryVO.evaluateType != ''"> and d.evaluate_type = #{queryVO.evaluateType}</if>
+            <if test="queryVO.evaluateTime != null and queryVO.evaluateTime != ''"> and d.evaluate_time = #{queryVO.evaluateTime}</if>
+            <if test="queryVO.evaluateFraction != null "> and d.evaluate_fraction = #{queryVO.evaluateFraction}</if>
+            <if test="queryVO.createId != null "> and d.create_id = #{queryVO.createId}</if>
+            <if test="queryVO.updateId != null "> and d.update_id = #{queryVO.updateId}</if>
+            <if test="queryVO.evaluateStatus != null  and queryVO.evaluateStatus != ''"> and d.evaluate_status = #{queryVO.evaluateStatus}</if>
+            <if test="queryVO.isQualified != null  and queryVO.isQualified != ''"> and d.is_qualified = #{queryVO.isQualified}</if>
+            <if test="queryVO.evaluateTimeTxt != null  and queryVO.evaluateTimeTxt != ''"> and d.evaluate_time_txt = #{queryVO.evaluateTimeTxt}</if>
+            <if test="queryVO.updateBy != null  and queryVO.updateBy != ''"> and d.update_by like concat('%', #{queryVO.updateBy}, '%') </if>
+            <if test="queryVO.updateTime != null and queryVO.updateTime != '' "> and DATE_FORMAT(d.update_time, '%Y-%m-%d')  = #{queryVO.updateTime}</if>
+        </where>
+        order by create_time desc
+    </select>
 
 </mapper>

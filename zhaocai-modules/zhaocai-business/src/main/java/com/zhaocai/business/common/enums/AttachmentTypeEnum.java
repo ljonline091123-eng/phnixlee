@@ -45,7 +45,7 @@ public enum AttachmentTypeEnum {
     AGREEMENT_PDFFILE("agreement_pdfFile","合同pdf文件"),
     AGREEMENT_MATERIALS_LIST("agreement_materials_List","合同清单列表"),
     AGREEMENT_OTHER("agreement_other","合同其他文件"),
-
+    VENDOR_EVALUATE("vendor_evaluate","供应商评价"),
     ;
 
 
