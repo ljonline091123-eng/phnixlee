@@ -10,7 +10,9 @@ import com.zhaocai.business.pub.vo.req.AttachmentRequestVO;
 import com.zhaocai.business.pub.vo.res.AttachmentVO;
 import com.zhaocai.business.utils.KeyUtils;
 import com.zhaocai.business.vendor.domain.TbVendorEvaluate;
+import com.zhaocai.business.vendor.domain.Vendor;
 import com.zhaocai.business.vendor.service.ITbVendorEvaluateService;
+import com.zhaocai.business.vendor.service.IVendorService;
 import com.zhaocai.business.vendor.vo.req.TbVendorEvaluateQueryVo;
 import com.zhaocai.common.core.bean.PageResult;
 import com.zhaocai.common.core.utils.DateUtils;
@@ -53,6 +55,9 @@ public class TbVendorEvaluateController extends BladeController {
     @Autowired
     private IAttachmentService attachmentService;
 
+    @Autowired
+    private IVendorService vendorService;
+
 /**
  * 查询供应商评价列表
  */
@@ -62,6 +67,16 @@ public class TbVendorEvaluateController extends BladeController {
         PageResult<TbVendorEvaluate> list = tbVendorEvaluateService.listPage(queryVO);
         return ResultData.data(list);
     }
+
+    @GetMapping("/listVendorEvaluate")
+    public ResultData<PageResult<TbVendorEvaluate>> listVendorEvaluate(TbVendorEvaluateQueryVo queryVO) {
+        Vendor vendor = vendorService.getByLoginUser(SecurityUtils.getUserId());
+        queryVO.setVendorId(vendor.getId());
+        queryVO.setEvaluateStatus("1");
+        PageResult<TbVendorEvaluate> list = tbVendorEvaluateService.listPage(queryVO);
+        return ResultData.data(list);
+    }
+
 
     /**
      * 导出供应商评价列表
@@ -100,6 +115,7 @@ public class TbVendorEvaluateController extends BladeController {
     public ResultData<TbVendorEvaluate> add() {
         TbVendorEvaluate bean = new TbVendorEvaluate();
         bean.setId(KeyUtils.generateId());
+        bean.setAppealId(KeyUtils.generateId());
         bean.setEvaluateStatus("0");
         return ResultData.data(bean);
     }
@@ -109,6 +125,9 @@ public class TbVendorEvaluateController extends BladeController {
         if (tbVendorEvaluate.getCreateId() == null) {
             if(tbVendorEvaluate.getId() == null){
                 tbVendorEvaluate.setId(KeyUtils.generateId());
+            }
+            if(tbVendorEvaluate.getAppealId() == null){
+                tbVendorEvaluate.setAppealId(KeyUtils.generateId());
             }
             tbVendorEvaluate.setCreateTime(DateUtils.getNowDate());
             tbVendorEvaluate.setCreateId(SecurityUtils.getUserId());
@@ -146,6 +165,9 @@ public class TbVendorEvaluateController extends BladeController {
             if(tbVendorEvaluate.getId() == null){
                 tbVendorEvaluate.setId(KeyUtils.generateId());
             }
+            if(tbVendorEvaluate.getAppealId() == null){
+                tbVendorEvaluate.setAppealId(KeyUtils.generateId());
+            }
             tbVendorEvaluate.setCreateTime(DateUtils.getNowDate());
             tbVendorEvaluate.setCreateId(SecurityUtils.getUserId());
             tbVendorEvaluate.setCreateBy(SecurityUtils.getUsername());
@@ -170,6 +192,9 @@ public class TbVendorEvaluateController extends BladeController {
         }else {
             tbVendorEvaluate.setIsQualified("N");
         }
+        if(StringUtil.isNotEmpty(tbVendorEvaluate.getAppealStatus()) && "1".equals(tbVendorEvaluate.getAppealStatus())){
+            tbVendorEvaluate.setAppealStatus("2");
+        }
         attachmentService.addAttachment(tbVendorEvaluate.getFileList(), AttachmentTypeEnum.VENDOR_EVALUATE, tbVendorEvaluate.getId());
         return ResultData.data(tbVendorEvaluateService.saveOrUpdate(tbVendorEvaluate));
     }
@@ -192,5 +217,18 @@ public class TbVendorEvaluateController extends BladeController {
         tbVendorEvaluateService.removeById(id);
         return ResultData.success();
     }
+
+    @PostMapping("/evaluateAppeal")
+    public ResultData<Boolean> evaluateAppeal(@RequestBody TbVendorEvaluate tbVendorEvaluate) {
+
+        if(StringUtil.isNotEmpty(tbVendorEvaluate.getAppealDescribe())){
+            tbVendorEvaluate.setAppealById(SecurityUtils.getUserId());
+            tbVendorEvaluate.setAppealBy(SecurityUtils.getUsername());
+            tbVendorEvaluate.setAppealTime(DateUtils.getNowDate());
+            tbVendorEvaluate.setAppealStatus("1");
+        }
+        return ResultData.data(tbVendorEvaluateService.saveOrUpdate(tbVendorEvaluate));
+    }
+
 }
 

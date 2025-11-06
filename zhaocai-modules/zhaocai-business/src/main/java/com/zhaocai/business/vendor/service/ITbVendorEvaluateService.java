@@ -20,4 +20,6 @@ public interface ITbVendorEvaluateService extends IService<TbVendorEvaluate> {
     PageResult<TbVendorEvaluate> listPage(TbVendorEvaluateQueryVo tbVendorEvaluate);
 
     List<TbVendorEvaluate> getList(TbVendorEvaluateQueryVo queryVO);
+
+    Long getIsAppeal(Long id);
 }

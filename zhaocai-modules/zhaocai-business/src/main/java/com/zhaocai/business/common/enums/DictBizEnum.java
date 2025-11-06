@@ -110,8 +110,8 @@ public enum DictBizEnum {
 	evaluate_status("evaluate_status","评分状态"),
 	evaluate_type("evaluate_type","评分类型"),
 	evaluate_time("evaluate_time","评分季度"),
+	appeal_status("appeal_status","申诉状态"),
 	;
-
 	private final String name;
 
 	private final String desc;

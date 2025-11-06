@@ -124,10 +124,20 @@ public class TbVendorEvaluate extends AdviceObject {
     @TableField(exist = false)
     private List<AttachmentRequestVO> fileList;
 
+    private Long appealId;
 
+    private String appealStatus;
 
+    @DictCache(dictBizEnum= DictBizEnum.appeal_status,filedName = "appealStatus")
+    @TableField(exist = false)
+    private String appealStatusName;
 
+    private String appealDescribe;
 
+    private Date appealTime;
 
+    private String appealBy;
+
+    private Long appealById;
 
 }

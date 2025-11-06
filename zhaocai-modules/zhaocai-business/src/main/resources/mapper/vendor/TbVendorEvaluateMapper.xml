@@ -22,6 +22,12 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="evaluateStatus"    column="evaluate_status"    />
         <result property="isQualified"    column="is_qualified"    />
         <result property="evaluateTimeTxt"    column="evaluate_time_txt"    />
+        <result property="appealId"    column="appeal_id"    />
+        <result property="appealStatus"    column="appeal_status"    />
+        <result property="appealDescribe"    column="appeal_describe"    />
+        <result property="appealBy"    column="appeal_by"    />
+        <result property="appealById"    column="appeal_by_id"    />
+        <result property="appealTime"    column="appeal_time"    />
     </resultMap>
 
     <sql id="selectTbVendorEvaluateVo">
@@ -42,7 +48,13 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
          d.del_flag,
          d.evaluate_status,
          d.is_qualified,
-         d.evaluate_time_txt from tb_vendor_evaluate d
+         d.evaluate_time_txt,
+         d.appeal_id,
+         d.appeal_status,
+         d.appeal_describe,
+         d.appeal_by,
+         d.appeal_by_id,
+         d.appeal_time from tb_vendor_evaluate d
     </sql>
 
     <select id="listPage" resultMap="TbVendorEvaluateResult">
@@ -62,9 +74,12 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             <if test="queryVO.evaluateTimeTxt != null  and queryVO.evaluateTimeTxt != ''"> and d.evaluate_time_txt = #{queryVO.evaluateTimeTxt}</if>
             <if test="queryVO.updateBy != null  and queryVO.updateBy != ''"> and d.update_by like concat('%', #{queryVO.updateBy}, '%') </if>
             <if test="queryVO.updateTime != null and queryVO.updateTime != '' "> and DATE_FORMAT(d.update_time, '%Y-%m-%d')  = #{queryVO.updateTime}</if>
+            <if test="queryVO.appealStatus != null  and queryVO.appealStatus != ''"> and d.appeal_status = #{queryVO.appealStatus}</if>
+            <if test="queryVO.appealById != null "> and d.appeal_by_id = #{queryVO.appealById}</if>
         </where>
         order by create_time desc
     </select>
+
     <select id="getList" resultMap="TbVendorEvaluateResult">
         <include refid="selectTbVendorEvaluateVo"/>
         <where>
@@ -82,8 +97,14 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             <if test="queryVO.evaluateTimeTxt != null  and queryVO.evaluateTimeTxt != ''"> and d.evaluate_time_txt = #{queryVO.evaluateTimeTxt}</if>
             <if test="queryVO.updateBy != null  and queryVO.updateBy != ''"> and d.update_by like concat('%', #{queryVO.updateBy}, '%') </if>
             <if test="queryVO.updateTime != null and queryVO.updateTime != '' "> and DATE_FORMAT(d.update_time, '%Y-%m-%d')  = #{queryVO.updateTime}</if>
+            <if test="queryVO.appealStatus != null  and queryVO.appealStatus != ''"> and d.appeal_status = #{queryVO.appealStatus}</if>
+            <if test="queryVO.appealById != null "> and d.appeal_by_id = #{queryVO.appealById}</if>
         </where>
         order by create_time desc
+    </select>
+    <select id="getIsAppeal" resultType="java.lang.Long">
+        SELECT count(1) FROM tb_vendor_evaluate WHERE evaluate_status = '1'
+        AND evaluate_fraction &lt; 60 and vendor_id = #{id}
     </select>
 
 </mapper>

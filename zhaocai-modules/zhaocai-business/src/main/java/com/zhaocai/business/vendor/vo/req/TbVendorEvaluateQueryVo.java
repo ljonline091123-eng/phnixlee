@@ -70,4 +70,16 @@ public class TbVendorEvaluateQueryVo extends PageRecive {
 
     private String updateTime;
 
+    private Long appealId;
+
+    private String appealStatus;
+
+    private String appealDescribe;
+
+    private Date appealTime;
+
+    private String appealBy;
+
+    private Long appealById;
+
 }

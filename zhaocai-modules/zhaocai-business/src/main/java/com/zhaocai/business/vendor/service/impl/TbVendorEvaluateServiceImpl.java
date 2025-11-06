@@ -74,4 +74,9 @@ public class TbVendorEvaluateServiceImpl extends ServiceImpl<TbVendorEvaluateMap
         return list;
     }
 
+    @Override
+    public Long getIsAppeal(Long id) {
+        return baseMapper.getIsAppeal(id);
+    }
+
 }

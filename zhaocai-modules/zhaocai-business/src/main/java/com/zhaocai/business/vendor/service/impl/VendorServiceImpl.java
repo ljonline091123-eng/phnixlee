@@ -154,6 +154,10 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
     @Autowired
     private IVendorContactChangeService contactChangeService;
 
+    @Lazy
+    @Autowired
+    private ITbVendorEvaluateService tbVendorEvaluateService;
+
     @Override
     @Transactional(propagation = Propagation.REQUIRED,rollbackFor = Exception.class)
     public VendorRegisterRequestVO getVendorUpdateDetail(Long vendorId) {
@@ -977,9 +981,14 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
                 message = "您已被拉入黑名单，请联系管理员";
                 isAvailable = false;
             }
-
             if (!VendorContactStateEnum.VALID.equalsState(vendorContact.getState())) {
                 message = "登录账号不可用，请联系管理员";
+                isAvailable = false;
+            }
+
+            Long count = tbVendorEvaluateService.getIsAppeal(vendor.getId());
+            if (count > 0) {
+                message = "供应商存在低于60分评价,被列为不合格供应商!";
                 isAvailable = false;
             }
         }
