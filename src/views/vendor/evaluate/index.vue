@@ -228,7 +228,7 @@
       </el-form>
       <span slot="footer" class="dialog-footer" v-if="!isSubmit">
         <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleSave">保存</el-button>
+        <el-button type="primary" @click="handleSave" v-if="form.evaluateStatus == '0'">保存</el-button>
         <el-button type="primary" @click="handleSubmit">确认</el-button>
       </span>
     </el-dialog>
