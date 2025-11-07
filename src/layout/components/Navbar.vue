@@ -58,7 +58,11 @@
         <!--        <el-tooltip content="布局大小" effect="dark" placement="bottom">-->
         <!--          <size-select id="size-select" class="right-menu-item hover-effect" />-->
         <!--        </el-tooltip>-->
-
+        <div class="navbar-message" v-on:click="showList">
+          <el-badge :value="xxsl" class="item">
+            <i class="el-icon-message-solid" style="color: #2b4acb"></i>
+          </el-badge>
+        </div>
       </template>
 
       <el-dropdown class="avatar-container right-menu-item hover-effect" trigger="click">
@@ -79,6 +83,60 @@
         </el-dropdown-menu>
       </el-dropdown>
     </div>
+
+    <!-- 添加或修改消息信息对话框 -->
+    <el-dialog title="消息列表"
+               :visible.sync="dialogVisible"
+               width="900px"
+               :close-on-click-modal="false"
+               :close-on-press-escape="false"
+               :show-close="true"
+               @closed="getXxsl">
+      <div>
+        <el-table v-loading="loading" :data="jtMsgPerList" class="aaa" style="height: calc(100% - 30px)">
+          <!--          <el-table-column label="标题" prop="title"/>-->
+          <el-table-column label="内容" prop="messageTitle" align="center"/>
+          <!--          <el-table-column label="消息类型" prop="msgType"/>-->
+          <!--          <el-table-column label="备注" prop="remark"/>-->
+          <el-table-column label="操作" class-name="small-padding fixed-width" align="center" width="180">
+            <template slot-scope="scope">
+              <el-button
+                size="mini"
+                type="text"
+                @click="messageHandle(scope.row)"
+              >详情
+              </el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+        <pagination
+          v-show="total>0"
+          :total="total"
+          :page.sync="queryParams.pageNum"
+          :limit.sync="queryParams.pageSize"
+          @pagination="msgList"
+        />
+      </div>
+    </el-dialog>
+
+    <el-dialog title="消息详情"
+               :visible.sync="messageFromVisible"
+               width="600px"
+               :close-on-click-modal="false"
+               :close-on-press-escape="false"
+               :show-close="true"
+               @closed="msgList">
+      <div>
+        <el-form :model="messageFrom" label-width="100px">
+          <el-form-item label="消息标题">
+            <el-input v-model="messageFrom.messageTitle" :disabled="true" />
+          </el-form-item>
+          <el-form-item label="消息内容">
+            <el-input v-model="messageFrom.messageContent"  type="textarea" :rows="3" :disabled="true" />
+          </el-form-item>
+        </el-form>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
@@ -95,6 +153,8 @@ import RuoYiDoc from '@/components/RuoYi/Doc'
 import Treeselect from "@riophae/vue-treeselect";
 import "@riophae/vue-treeselect/dist/vue-treeselect.css";
 import {getDeptTree, getManagementOrgId} from "@/api/system/dept";
+import {Notification} from "element-ui";
+import {getUserProfile,getMyList,messageRead} from "@/api/system/user";
 
 export default {
   components: {
@@ -129,6 +189,29 @@ export default {
       value: '',
       thridDeptId: '',
       deptOptions: [],
+      // 遮罩层
+      loading: false,
+      dialogVisible: false,
+      // 选中数组
+      ids: [],
+      // 总条数
+      total: 0,
+      jtMsgPerList: [],
+      userId: null,
+      xxsl: null,
+      message: "",
+      text_content: "",
+      ws: null,
+      // 查询参数
+      queryParams: {
+        pageNum: 1,
+        pageSize: 10,
+        msgMan: null
+      },
+      // 表单参数
+      form: {},
+      messageFrom: {},
+      messageFromVisible: false,
     };
   },
   computed: {
@@ -185,6 +268,27 @@ export default {
       },
       immediate: false
     }
+  },
+  mounted() {
+    getUserProfile().then(response => {
+      this.userId = response.data.userId;
+      //this.deptId = response.data.deptId;
+      let verify = this.$route.query.verify;
+      if(verify == 'Y'|| verify == undefined){
+        this.getMyUser();
+      }
+    });
+    // 绑定事件
+    /*this.$bus.$on('lufei', (data)=>{
+      this.queryParams.msgMan = this.userId;
+      getMyList(this.queryParams).then(response => {
+        if (response.total === 0) {
+          this.xxsl = null;
+        } else {
+          this.xxsl = response.total;
+        }
+      })
+    })*/
   },
   methods: {
     //下拉选择监听
@@ -244,6 +348,55 @@ export default {
         })
       }).catch(() => {
       });
+    },
+    showList() {
+      this.msgList();
+      this.dialogVisible = true; // show(title, obj); obj参数是可传入的参数
+    },
+    msgList() {
+      this.queryParams.msgMan = this.userId;
+      //this.queryParams.lockUnit = this.deptId;
+      this.loading = true;
+      getMyList(this.queryParams).then(response => {
+        this.jtMsgPerList = response.rows;
+        this.total = response.total;
+        this.loading = false;
+      })
+    },
+    getXxsl() {
+      const _this = this;
+      this.queryParams.msgMan = this.userId;
+      //this.queryParams.lockUnit = this.deptId;
+      getMyList(this.queryParams).then(response => {
+        if (response.total === 0) {
+          this.xxsl = null;
+        } else {
+          if (this.xxsl != null && this.xxsl < response.total) {
+            Notification.info({
+              title: "新消息",
+              dangerouslyUseHTMLString: true,
+              message: "您有新的消息,请注意查收。",
+              duration: 3000,
+              offset: 40,
+              onClick: function () {
+                _this.showList()
+              },
+            });
+          }
+          this.xxsl = response.total;
+        }
+      })
+    },
+    getMyUser() {
+      this.getXxsl();
+      setTimeout(() => {
+        this.getMyUser()
+      }, 300000)//300秒查一下
+    },
+    messageHandle(row) {
+      this.messageFrom = row;
+      messageRead(row.id);
+      this.messageFromVisible = true;
     }
   }
 }
@@ -338,6 +491,18 @@ export default {
           top: 25px;
           font-size: 12px;
         }
+      }
+    }
+
+    .navbar-message {
+      margin-left: 1.3021vw;
+      margin-right: 1.3021vw;
+      ::v-deep .el-badge__content.is-fixed {
+        top: 30%;
+      }
+
+      ::v-deep .el-icon-message-solid:before {
+        font-size: 1.3021vw;
       }
     }
   }

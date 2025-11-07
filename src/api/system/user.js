@@ -157,3 +157,20 @@ export function postStatus(id, state) {
     method: "post",
   });
 }
+
+export function getMyList(data) {
+  return request({
+    url: "/business/message/getMyList",
+    method: "get",
+    data: data,
+  });
+}
+
+export function messageRead(id) {
+  return request({
+    url: "/business/message/messageRead/" + id,
+    method: "post",
+  });
+}
+
+
