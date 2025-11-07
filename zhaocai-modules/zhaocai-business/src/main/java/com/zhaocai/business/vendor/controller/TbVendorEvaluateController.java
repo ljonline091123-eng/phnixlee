@@ -3,8 +3,11 @@ package com.zhaocai.business.vendor.controller;
 import com.alibaba.csp.sentinel.util.StringUtil;
 import com.zhaocai.business.common.base.BladeController;
 import com.zhaocai.business.common.enums.AttachmentTypeEnum;
+import com.zhaocai.business.common.enums.DictBizEnum;
 import com.zhaocai.business.procurement.vo.res.MinProjectDetailVO;
+import com.zhaocai.business.pub.domain.Message;
 import com.zhaocai.business.pub.service.IAttachmentService;
+import com.zhaocai.business.pub.service.ISysDictDataService;
 import com.zhaocai.business.pub.service.ISystemUserService;
 import com.zhaocai.business.pub.vo.req.AttachmentRequestVO;
 import com.zhaocai.business.pub.vo.res.AttachmentVO;
@@ -34,6 +37,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -57,6 +61,7 @@ public class TbVendorEvaluateController extends BladeController {
 
     @Autowired
     private IVendorService vendorService;
+
 
 /**
  * 查询供应商评价列表
@@ -227,7 +232,8 @@ public class TbVendorEvaluateController extends BladeController {
             tbVendorEvaluate.setAppealTime(DateUtils.getNowDate());
             tbVendorEvaluate.setAppealStatus("1");
         }
-        return ResultData.data(tbVendorEvaluateService.saveOrUpdate(tbVendorEvaluate));
+        tbVendorEvaluateService.saveOrUpdate(tbVendorEvaluate);
+        return ResultData.data(tbVendorEvaluateService.sendMessage(tbVendorEvaluate));
     }
 
 }

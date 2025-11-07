@@ -9,15 +9,18 @@ import com.zhaocai.common.core.web.page.TableDataInfo;
 import com.zhaocai.common.log.annotation.Log;
 import com.zhaocai.common.log.enums.BusinessType;
 import com.zhaocai.common.security.annotation.RequiresPermissions;
+import com.zhaocai.system.api.domain.SysRole;
+import com.zhaocai.system.api.domain.SysUser;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
 import javax.servlet.http.HttpServletResponse;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * 消息中心Controller
- * 
+ *
  * @author WH
  * @date 2024-05-24
  */
@@ -31,7 +34,6 @@ public class MessageController extends BaseController
     /**
      * 查询消息中心列表
      */
-    @RequiresPermissions("pub:message:list")
     @GetMapping("/list")
     public TableDataInfo list(Message message)
     {
@@ -43,7 +45,6 @@ public class MessageController extends BaseController
     /**
      * 导出消息中心列表
      */
-    @RequiresPermissions("pub:message:export")
     @Log(title = "消息中心", businessType = BusinessType.EXPORT)
     @PostMapping("/export")
     public void export(HttpServletResponse response, Message message)
@@ -56,7 +57,6 @@ public class MessageController extends BaseController
     /**
      * 获取消息中心详细信息
      */
-    @RequiresPermissions("pub:message:query")
     @GetMapping(value = "/{id}")
     public AjaxResult getInfo(@PathVariable("id") String id)
     {
@@ -66,7 +66,6 @@ public class MessageController extends BaseController
     /**
      * 新增消息中心
      */
-    @RequiresPermissions("pub:message:add")
     @Log(title = "消息中心", businessType = BusinessType.INSERT)
     @PostMapping
     public AjaxResult add(@RequestBody Message message)
@@ -77,7 +76,6 @@ public class MessageController extends BaseController
     /**
      * 修改消息中心
      */
-    @RequiresPermissions("pub:message:edit")
     @Log(title = "消息中心", businessType = BusinessType.UPDATE)
     @PutMapping
     public AjaxResult edit(@RequestBody Message message)
@@ -88,11 +86,31 @@ public class MessageController extends BaseController
     /**
      * 删除消息中心
      */
-    @RequiresPermissions("pub:message:remove")
     @Log(title = "消息中心", businessType = BusinessType.DELETE)
 	@DeleteMapping("/{ids}")
     public AjaxResult remove(@PathVariable String[] ids)
     {
         return toAjax(messageService.deleteMessageByIds(ids));
+    }
+
+    @GetMapping("/getMyList")
+    public TableDataInfo getMyList(Message message)
+    {
+        startPage();
+        message.setReadFlag("0");
+        List<Message> list = messageService.selectMessageList(message);
+        return getDataTable(list);
+    }
+
+    @PostMapping("/messageRead/{id}")
+    public AjaxResult authRole(@PathVariable("id") String id)
+    {
+        AjaxResult ajax = AjaxResult.success();
+        Message message = messageService.selectMessageById(id);
+        if(message != null){
+            message.setReadFlag("1");
+            return success(messageService.saveOrUpdate(message));
+        }
+        return ajax;
     }
 }

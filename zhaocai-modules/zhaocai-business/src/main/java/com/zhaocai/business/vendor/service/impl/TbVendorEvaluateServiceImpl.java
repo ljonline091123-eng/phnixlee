@@ -5,13 +5,17 @@ import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.zhaocai.business.common.enums.DictBizEnum;
 import com.zhaocai.business.procurement.vo.res.ProcurementSchemeListVO;
+import com.zhaocai.business.pub.domain.Message;
+import com.zhaocai.business.pub.service.IMessageService;
 import com.zhaocai.business.pub.service.ISysDictDataService;
+import com.zhaocai.business.utils.KeyUtils;
 import com.zhaocai.business.vendor.domain.TbVendorEvaluate;
 import com.zhaocai.business.vendor.mapper.TbVendorEvaluateMapper;
 import com.zhaocai.business.vendor.service.ITbVendorEvaluateService;
 import com.zhaocai.business.vendor.vo.req.TbVendorEvaluateQueryVo;
 import com.zhaocai.common.core.bean.PageResult;
 import com.zhaocai.common.core.utils.DateUtils;
+import com.zhaocai.common.security.utils.SecurityUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -29,6 +33,9 @@ public class TbVendorEvaluateServiceImpl extends ServiceImpl<TbVendorEvaluateMap
 
     @Autowired
     private ISysDictDataService sysDictDataService;
+
+    @Autowired
+    private IMessageService messageService;
 
     @Override
     public PageResult<TbVendorEvaluate> listPage(TbVendorEvaluateQueryVo queryVO) {
@@ -77,6 +84,34 @@ public class TbVendorEvaluateServiceImpl extends ServiceImpl<TbVendorEvaluateMap
     @Override
     public Long getIsAppeal(Long id) {
         return baseMapper.getIsAppeal(id);
+    }
+
+    @Override
+    public boolean sendMessage(TbVendorEvaluate tbVendorEvaluate) {
+        Map<String, String> evaluateTimeMap = sysDictDataService.listDictMap(DictBizEnum.evaluate_time.getName());
+        Message message = new Message();
+        message.setId(KeyUtils.generateId());
+        message.setMessageType(6L);
+        message.setMessageTitle(tbVendorEvaluate.getVendorName()+"供应商评价申诉");
+        if("2".equals(tbVendorEvaluate.getEvaluateType())){
+            String year = DateUtils.parseDateToStr(DateUtils.YYYY, tbVendorEvaluate.getEvaluateTime());
+            tbVendorEvaluate.setEvaluateTimeTxtName(year+"年"+evaluateTimeMap.get(tbVendorEvaluate.getEvaluateTimeTxt()));
+        }else if("3".equals(tbVendorEvaluate.getEvaluateType())){
+            tbVendorEvaluate.setEvaluateTimeTxtName(DateUtils.parseDateToStr(DateUtils.YYYY, tbVendorEvaluate.getEvaluateTime()));
+        }else{
+            tbVendorEvaluate.setEvaluateTimeTxtName(DateUtils.parseDateToStr(DateUtils.YYYY_MM, tbVendorEvaluate.getEvaluateTime()));
+        }
+        message.setMessageContent(tbVendorEvaluate.getVendorName()+"对"+tbVendorEvaluate.getEvaluateTimeTxtName()
+                +"评价申诉。申述说明："+tbVendorEvaluate.getAppealDescribe());
+        message.setReadFlag("0");
+        message.setBusinessId(tbVendorEvaluate.getId()+"");
+        message.setMsgMan(tbVendorEvaluate.getCreateId());
+        message.setMsgManName(tbVendorEvaluate.getCreateBy());
+        message.setCreateTime(DateUtils.getNowDate());
+        message.setCreateId(SecurityUtils.getUserId());
+        message.setCreateBy(SecurityUtils.getUsername());
+        message.setDelFlag("0");
+        return messageService.saveOrUpdate(message);
     }
 
 }

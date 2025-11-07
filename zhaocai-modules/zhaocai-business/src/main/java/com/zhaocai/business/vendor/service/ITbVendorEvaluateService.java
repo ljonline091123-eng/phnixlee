@@ -3,6 +3,7 @@ package com.zhaocai.business.vendor.service;
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.zhaocai.business.procurement.vo.req.ProcurementSchemeListQueryVO;
 import com.zhaocai.business.procurement.vo.res.ProcurementSchemeListVO;
+import com.zhaocai.business.pub.domain.Message;
 import com.zhaocai.business.vendor.domain.TbVendorEvaluate;
 import com.zhaocai.business.vendor.vo.req.TbVendorEvaluateQueryVo;
 import com.zhaocai.common.core.bean.PageResult;
@@ -22,4 +23,6 @@ public interface ITbVendorEvaluateService extends IService<TbVendorEvaluate> {
     List<TbVendorEvaluate> getList(TbVendorEvaluateQueryVo queryVO);
 
     Long getIsAppeal(Long id);
+
+    boolean sendMessage(TbVendorEvaluate message);
 }

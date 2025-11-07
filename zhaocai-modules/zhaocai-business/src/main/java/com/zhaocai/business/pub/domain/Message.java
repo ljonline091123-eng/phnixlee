@@ -30,4 +30,14 @@ public class Message extends BaseEntity
     /** 消息内容 */
     @ApiModelProperty(value =  "消息内容")
     private String messageContent;
+
+    private Long msgMan;
+
+    private String readFlag;
+
+    private String businessId;
+
+    private String detailUrl;
+
+    private String msgManName;
 }
