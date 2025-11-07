@@ -914,7 +914,8 @@ public class TenderNoticeServiceImpl extends ServiceImpl<TenderNoticeMapper,Tend
             record.setMinProjectName(getMinProjectName(record.getSchemeId()));
 
             /* 不使用采购人的招标单位信息，使用采购方案对应项目的的招标单位信息 */
-            record.setUnit(getDeptName(record.getSchemeId()));
+            //record.setUnit(getDeptName(record.getSchemeId()));
+            record.setUnit(getTopDeptName(record.getSchemeId()));
         }
         return new PageResult<>(iPage);
     }
@@ -1089,6 +1090,41 @@ public class TenderNoticeServiceImpl extends ServiceImpl<TenderNoticeMapper,Tend
             }
         }
         return null;
+    }
+
+    private String getTopDeptName(Long schemeId){
+        /* 根据采购方案往合约拆分查询最小核算项目信息 */
+        List<MinProjectDataVO> minProjectDataList = procurementSchemeService.selectDataByScheme(schemeId);
+        if (!CollectionUtils.isEmpty(minProjectDataList)){
+            /* 用现成方法的查询 */
+//            MinProjectDetailResponseDTO projectDetail = contractPlanService.getMinProjectDetail(minProjectDataList.get(0).getProjectCode());
+            MinProjectVO minProjectByMinAccountCode = minProjectService.getMinProjectByMinAccountCode(minProjectDataList.get(0).getProjectCode());
+            MinProjectDetailResponseDTO projectDetail = BeanCopierUtil.copyBean(minProjectByMinAccountCode, MinProjectDetailResponseDTO.class);
+            if(projectDetail!=null){
+                if (StringUtils.isNotBlank(projectDetail.getManagementOrgId())) {
+                    /* 获取部门信息 */
+                    SysDept sysDept = getTopByThridDeptId(projectDetail.getManagementOrgId());
+                    //SysDept sysDept = remoteSystemService.getByThridDeptId(projectDetail.getManagementOrgId(), SecurityConstants.INNER);
+                    return Optional.ofNullable(sysDept)
+                            .map(SysDept::getDeptName)
+                            .orElse("");
+                }
+            }
+        }
+        return null;
+    }
+
+    private  SysDept getTopByThridDeptId(String managementOrgId) {
+        SysDept sysDept = remoteSystemService.getByThridDeptId(managementOrgId, SecurityConstants.INNER);
+        if(sysDept != null){
+            if("0".equals(sysDept.getThridParentId())){
+                return sysDept;
+            }else{
+                return getTopByThridDeptId(sysDept.getThridParentId());
+            }
+        }else{
+            return null;
+        }
     }
 
     /** 获取最小核算项目名称 */
