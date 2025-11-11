@@ -964,8 +964,11 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper, Agreement
         // 获取采购上限价 = 采购计划清单 * 单价
         List<MaterialsList> materialsLists = materialsListService.listMaterialsListByContractSplitIds(CollectionUtil.newArrayList(contractSplitId));
         BigDecimal procurementUpperLimitPrice = BigDecimal.ZERO;
-        for (MaterialsList materialsList : materialsLists) {
+        /*for (MaterialsList materialsList : materialsLists) {
             procurementUpperLimitPrice = procurementUpperLimitPrice.add(AmountCalUtil.calTotalAmountInclTax(materialsList.getCount(), materialsList.getUnitPriceInclTax()));
+        }*/
+        if(contractPlanning.getPlannedAmountInclTax() != null){
+            procurementUpperLimitPrice = contractPlanning.getPlannedAmountInclTax();
         }
         biddingInfoVO.setProcurementUpperLimitPrice(NumberUtil.round(procurementUpperLimitPrice, 2));
 

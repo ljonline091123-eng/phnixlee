@@ -2,10 +2,7 @@ package com.zhaocai.business.bidding.service;
 
 import com.zhaocai.business.bidding.vo.req.EvalVO;
 import com.zhaocai.business.bidding.vo.req.query.EvalTaskPageVO;
-import com.zhaocai.business.bidding.vo.res.BiddingMarkTemplateDetailVO;
-import com.zhaocai.business.bidding.vo.res.EvalTaskPageListVO;
-import com.zhaocai.business.bidding.vo.res.ExpertEvalDataVO;
-import com.zhaocai.business.bidding.vo.res.ExpertEvalRecordVO;
+import com.zhaocai.business.bidding.vo.res.*;
 import com.zhaocai.common.core.bean.PageResult;
 
 import java.util.List;
@@ -52,4 +49,5 @@ public interface IExpertEvaluationService {
 	 */
 	boolean eval(EvalVO evalVO);
 
+	List<BiddingMarkCategoryDetailVO> getEvaluateVisibleDetail(Long schemeId, Long noticeId, Long vendorId, Long expertId);
 }

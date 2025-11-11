@@ -15,6 +15,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
 import javax.validation.Valid;
+import java.text.ParseException;
 import java.util.List;
 
 /**
@@ -53,7 +54,7 @@ public class BiddingInfoController extends BladeController {
      * 查询投标单信息报价列表（评标、二次洽商）
      */
     @PostMapping("/getBiddingQuotationList")
-    public ResultData<List<BiddingQuotationListVO>> getBiddingQuotationList(@RequestBody BiddingQuotationQueryVO queryVO) {
+    public ResultData<List<BiddingQuotationListVO>> getBiddingQuotationList(@RequestBody BiddingQuotationQueryVO queryVO) throws ParseException {
         List<BiddingQuotationListVO> list = biddingInfoService.getBiddingQuotationList(queryVO);
         return ResultData.data(list);
     }
@@ -227,6 +228,13 @@ public class BiddingInfoController extends BladeController {
     @PostMapping("/urgeExpertMes")
     public ResultData<Boolean> urgeExpertMes(@RequestBody UrgeExpertMesVO urgeExpertMesVO) {
         return ResultData.status(biddingInfoService.urgeExpertMes(urgeExpertMesVO));
+    }
+
+    @ApiOperation(value = "评标汇总（定标报告）-新评分(2025-10-29修改为不分专家类型（商务、技术都需要进行评分)")
+    @GetMapping("/getBidEvaluationListByNew")
+    public ResultData<List<BidEvaluationVo>> getBidEvaluationListByNew(@ApiParam(value = "招标公告主键id", required = true) @RequestParam Long noticeId,
+                                                                       @ApiParam(value = "评标类型(1:技术评分 2:商务评分)", required = true) @RequestParam int scoreType) {
+        return ResultData.data(biddingInfoService.getBidEvaluationListByNew(noticeId,scoreType));
     }
 
 }

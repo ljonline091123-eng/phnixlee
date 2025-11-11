@@ -9,6 +9,7 @@ import com.zhaocai.common.core.web.page.TableDataInfo;
 import com.zhaocai.common.log.annotation.Log;
 import com.zhaocai.common.log.enums.BusinessType;
 import com.zhaocai.common.security.annotation.RequiresPermissions;
+import com.zhaocai.common.security.utils.SecurityUtils;
 import com.zhaocai.system.api.domain.SysRole;
 import com.zhaocai.system.api.domain.SysUser;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -98,6 +99,7 @@ public class MessageController extends BaseController
     {
         startPage();
         message.setReadFlag("0");
+        message.setMsgMan(SecurityUtils.getUserId());
         List<Message> list = messageService.selectMessageList(message);
         return getDataTable(list);
     }

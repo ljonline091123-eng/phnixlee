@@ -4,6 +4,7 @@ import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;
 import lombok.Data;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 /**
@@ -38,6 +39,9 @@ public class BiddingMarkItemDetailVO {
 
     @ApiModelProperty(value =  "父项id")
     private Long parentId;
+
+    @ApiModelProperty(value =  "分数")
+    private BigDecimal score;
 
     @ApiModelProperty(value =  "子项模板评分项详情")
     private List<BiddingMarkItemDetailVO> subBiddingMarkItemDetailVOList;

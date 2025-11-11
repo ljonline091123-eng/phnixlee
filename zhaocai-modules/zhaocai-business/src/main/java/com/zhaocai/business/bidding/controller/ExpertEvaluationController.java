@@ -3,15 +3,13 @@ package com.zhaocai.business.bidding.controller;
 import com.zhaocai.business.bidding.service.IExpertEvaluationService;
 import com.zhaocai.business.bidding.vo.req.EvalVO;
 import com.zhaocai.business.bidding.vo.req.query.EvalTaskPageVO;
-import com.zhaocai.business.bidding.vo.res.BiddingMarkTemplateDetailVO;
-import com.zhaocai.business.bidding.vo.res.EvalTaskPageListVO;
-import com.zhaocai.business.bidding.vo.res.ExpertEvalDataVO;
-import com.zhaocai.business.bidding.vo.res.ExpertEvalRecordVO;
+import com.zhaocai.business.bidding.vo.res.*;
 import com.zhaocai.business.common.base.BladeController;
 import com.zhaocai.common.core.bean.PageResult;
 import com.zhaocai.common.core.web.bean.ResultData;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
+import io.swagger.annotations.ApiParam;
 import lombok.AllArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
@@ -86,4 +84,12 @@ public class ExpertEvaluationController extends BladeController {
 		return ResultData.status(expertEvaluationService.eval(evalVO));
 	}
 
+	@ApiOperation(value = "评标汇总（定标报告）-详情")
+	@GetMapping("/getEvaluateVisibleDetail")
+	public ResultData<List<BiddingMarkCategoryDetailVO>> getEvaluateVisibleDetail(@ApiParam(value = "采购方案主键id", required = true) @RequestParam Long schemeId,
+																				  @ApiParam(value = "招标公告主键id", required = true) @RequestParam Long noticeId,
+																				  @ApiParam(value = "供应商主键id", required = true) @RequestParam Long vendorId,
+																				  @ApiParam(value = "专家主键id", required = true) @RequestParam Long expertId) {
+		return ResultData.data(expertEvaluationService.getEvaluateVisibleDetail(schemeId, noticeId, vendorId, expertId));
+	}
 }

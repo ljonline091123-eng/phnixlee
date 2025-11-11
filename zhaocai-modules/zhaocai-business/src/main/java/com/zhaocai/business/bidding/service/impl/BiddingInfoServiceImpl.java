@@ -141,7 +141,7 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
 
 
     @Override
-    public List<BiddingQuotationListVO> getBiddingQuotationList(BiddingQuotationQueryVO queryVO) {
+    public List<BiddingQuotationListVO> getBiddingQuotationList(BiddingQuotationQueryVO queryVO) throws ParseException {
         //查询当前公告流程状态
         TenderNotice tenderNotice = tenderNoticeService.getById(queryVO.getNoticeId());
         //报价次数
@@ -273,6 +273,7 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
             BigDecimal avgBusTotalScore = BigDecimal.ZERO;
             /* 技术评分分数 */
             BigDecimal avgTechTotalScore = BigDecimal.ZERO;
+            BigDecimal avgTotalScore = BigDecimal.ZERO;
 
             //1.倒序循环quotationDataVOList
             //2.根据公告id和投标单id查找有专家评分的报价轮次
@@ -302,31 +303,57 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
 //                    int expertSize = expertScores.size();
                     BigDecimal busTotalScore = BigDecimal.ZERO;
                     BigDecimal techTotalScore = BigDecimal.ZERO;
+                    BigDecimal totalScore = BigDecimal.ZERO;
                     //商务技术专家人数
                     int expertSizeBus = 0;
                     int expertSizeTech = 0;
-                    for (ExpertScoreExtraVO expertScoreExtra : expertScores) {
-                        if (expertScoreExtra.getExpertType() == 1){
-                            //1.汇总技术分数
-                            techTotalScore = techTotalScore.add(expertScoreExtra.getTechScore());
-                            expertSizeTech++;
-                        } else if (expertScoreExtra.getExpertType() == 2){
-                            //2.汇总商务分数
-                            busTotalScore = busTotalScore.add(expertScoreExtra.getBusScore());
-                            expertSizeBus++;
+                    int expertSize = 0;
+                    SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+                    Date now = sdf.parse("2025-10-29 00:00:00");
+                    /* 时间之前根据专家类型进行算分，时间之后不分专家类型（商务、技术都需要进行评分） */
+                    if(tenderNotice.getCreateTime() != null && tenderNotice.getCreateTime().compareTo(now) < 0) {
+                        for (ExpertScoreExtraVO expertScoreExtra : expertScores) {
+                            if (expertScoreExtra.getExpertType() == 1){
+                                //1.汇总技术分数
+                                techTotalScore = techTotalScore.add(expertScoreExtra.getTechScore());
+                                expertSizeTech++;
+                            } else if (expertScoreExtra.getExpertType() == 2){
+                                //2.汇总商务分数
+                                busTotalScore = busTotalScore.add(expertScoreExtra.getBusScore());
+                                expertSizeBus++;
+                            }
+
                         }
 
-                    }
+                        if (expertSizeBus > 0){
+                            avgBusTotalScore = busTotalScore.divide(new BigDecimal(expertSizeBus), 2, RoundingMode.HALF_UP);
+                        }
+                        if (expertSizeTech > 0){
+                            avgTechTotalScore = techTotalScore.divide(new BigDecimal(expertSizeTech), 2, RoundingMode.HALF_UP);
+                        }
+                        score = avgBusTotalScore.add(avgTechTotalScore);
+                        //得到了最新的综合得分，那就跳出算得分的代码
+                        break;
+                    } else {
+                        for (ExpertScoreExtraVO expertScoreExtra : expertScores) {
+                            //1.汇总技术分数
+                            techTotalScore = techTotalScore.add(expertScoreExtra.getTechScore());
+                            //2.汇总商务分数
+                            busTotalScore = busTotalScore.add(expertScoreExtra.getBusScore());
+                            //3.汇总合计分数
+                            totalScore = totalScore.add(expertScoreExtra.getTechScore()).add(expertScoreExtra.getBusScore());
+                            expertSize++;
+                        }
 
-                    if (expertSizeBus > 0){
-                        avgBusTotalScore = busTotalScore.divide(new BigDecimal(expertSizeBus), 2, RoundingMode.HALF_UP);
+                        if (expertSize > 0){
+                            avgBusTotalScore = busTotalScore.divide(new BigDecimal(expertSize), 2, RoundingMode.HALF_UP);
+                            avgTechTotalScore = techTotalScore.divide(new BigDecimal(expertSize), 2, RoundingMode.HALF_UP);
+                            avgTotalScore = totalScore.divide(new BigDecimal(expertSize), 2, RoundingMode.HALF_UP);
+                        }
+                        score = avgTotalScore;
+                        //得到了最新的综合得分，那就跳出算得分的代码
+                        break;
                     }
-                    if (expertSizeTech > 0){
-                        avgTechTotalScore = techTotalScore.divide(new BigDecimal(expertSizeTech), 2, RoundingMode.HALF_UP);
-                    }
-                    score = avgBusTotalScore.add(avgTechTotalScore);
-                    //得到了最新的综合得分，那就跳出算得分的代码
-                    break;
                 }
 
             }
@@ -1205,6 +1232,70 @@ public class BiddingInfoServiceImpl extends ServiceImpl<BiddingInfoMapper,Biddin
     @Override
     public List<BiddingInfo> getMaxPriceVersion(Long noticeId, Long schemeId){
         return baseMapper.getMaxPriceVersion(noticeId,schemeId);
+    }
+
+    /* 评标汇总，只显示最终一轮的
+     *  新评分标准(2025-10-29修改为不分专家类型（商务、技术都需要进行评分)
+     */
+    @Override
+    public List<BidEvaluationVo>  getBidEvaluationListByNew(Long noticeId, int scoreType) {
+        List<BidEvaluationVo> bidEvaluationVoList = new ArrayList<>();
+        BiddingQuotationQueryVO queryVO = new BiddingQuotationQueryVO();
+        queryVO.setNoticeId(noticeId);
+
+        //查询设置的评标专家人员
+        List<BiddingEvaluatExpert> expertList = biddingEvaluatExpertService.list(new LambdaQueryWrapper<BiddingEvaluatExpert>()
+                .eq(BiddingEvaluatExpert::getNoticeId, noticeId)
+                .eq(BiddingEvaluatExpert::getIsJoin, 1));
+        //查询首轮供应商报价数据，有首轮数据才能在列表中显示
+        List<BiddingQuotationListVO> list = baseMapper.findBiddingQuotationList(queryVO);
+
+        for (BiddingQuotationListVO vo : list) {
+
+
+
+            BigDecimal busTotalScore = BigDecimal.ZERO;
+            BigDecimal techTotalScore = BigDecimal.ZERO;
+            List<BidEvaluationExpertScoreVo> expertScoreVoList = new ArrayList<>();
+            int expertSize = expertList.size();
+            for (BiddingEvaluatExpert evaluatExpert : expertList) {
+                //查询评标专家产生的评分数据
+                ExpertScore expertScore = expertScoreService.getOne(new LambdaQueryWrapper<ExpertScore>()
+                        .eq(ExpertScore::getNoticeId, noticeId)
+                        .eq(ExpertScore::getVendorId, vo.getVendorId())
+                        .eq(ExpertScore::getExpertId, evaluatExpert.getExpertId())
+                        .orderByDesc(ExpertScore::getCreateTime).last("limit 1"));
+                BidEvaluationExpertScoreVo expertScoreVo = new BidEvaluationExpertScoreVo();
+                expertScoreVo.setExpertId(evaluatExpert.getExpertId());
+                expertScoreVo.setExpertName(evaluatExpert.getExpertName());
+                expertScoreVoList.add(expertScoreVo);
+                if (!ObjectUtils.isEmpty(expertScore)){
+                    BigDecimal techScore = expertScore.getTechScore() == null ? BigDecimal.ZERO : expertScore.getTechScore();
+                    BigDecimal busScore = expertScore.getBusScore() == null ? BigDecimal.ZERO : expertScore.getBusScore();
+                    expertScoreVo.setScore(scoreType == 1 ? techScore : busScore);
+                    //1.汇总商务分数
+                    //2.汇总技术分数
+                    busTotalScore = busTotalScore.add(busScore);
+                    techTotalScore = techTotalScore.add(techScore);
+                } else {
+                    expertSize = expertSize-1;
+                }
+            }
+            BigDecimal avgBusTotalScore = BigDecimal.ZERO;
+            BigDecimal avgTechTotalScore = BigDecimal.ZERO;
+            if (expertSize > 0){
+                avgBusTotalScore = busTotalScore.divide(new BigDecimal(expertSize), 2, RoundingMode.HALF_UP);
+                avgTechTotalScore = techTotalScore.divide(new BigDecimal(expertSize), 2, RoundingMode.HALF_UP);
+            }
+
+            BidEvaluationVo bidEvaluationVo = new BidEvaluationVo();
+            bidEvaluationVo.setVendorId(vo.getVendorId());
+            bidEvaluationVo.setVendorName(vo.getVendorName());
+            bidEvaluationVo.setBidEvaluationExpertScoreVoList(expertScoreVoList);
+            bidEvaluationVo.setScore(scoreType==1 ? avgTechTotalScore : avgBusTotalScore);
+            bidEvaluationVoList.add(bidEvaluationVo);
+        }
+        return bidEvaluationVoList;
     }
 
 }

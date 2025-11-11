@@ -1,5 +1,6 @@
 package com.zhaocai.business.bidding.service.impl;
 
+import cn.hutool.core.collection.CollectionUtil;
 import cn.hutool.core.util.NumberUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
@@ -42,6 +43,9 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import static java.math.BigDecimal.ROUND_DOWN;
 
@@ -292,8 +296,8 @@ public class ExpertEvaluationServiceImpl implements IExpertEvaluationService {
         BigDecimal busScore = BigDecimal.ZERO;
         BigDecimal techScore = BigDecimal.ZERO;
         for (List<EvalItemVO> itemDTOS : evalVO.getEvalItemDTOSList()){
-            BigDecimal totalScore = BigDecimal.ZERO;
-            Integer itemType = 0;
+//			BigDecimal totalScore = BigDecimal.ZERO;
+//			Integer itemType = 0;
             for (EvalItemVO itemDTO : itemDTOS) {
                 BiddingItemGrade itemGrade = new BiddingItemGrade();
                 //专家用户id
@@ -306,19 +310,26 @@ public class ExpertEvaluationServiceImpl implements IExpertEvaluationService {
                 itemGradeList.add(itemGrade);
 
                 //获取总分
-                if (itemDTO.getScore() != null){
-                    totalScore = totalScore.add(itemDTO.getScore());
-                }
+//				if (itemDTO.getScore() != null){
+//					totalScore = totalScore.add(itemDTO.getScore());
+//				}
                 //设置评分模板项类型
-                itemType = itemDTO.getItemType();
+//				itemType = itemDTO.getItemType();
+                if (itemDTO.getItemType() == 1) {
+                    //技术评分
+                    techScore = techScore.add(itemDTO.getScore());
+                } else if (itemDTO.getItemType() == 2){
+                    //商务评分
+                    busScore = busScore.add(itemDTO.getScore());
+                }
             }
-            if (itemType == 1) {
-                //技术评分
-                techScore = totalScore;
-            } else if (itemType == 2){
-                //商务评分
-                busScore = totalScore;
-            }
+//			if (itemType == 1) {
+//				//技术评分
+//				techScore = totalScore;
+//			} else if (itemType == 2){
+//				//商务评分
+//				busScore = totalScore;
+//			}
         }
         boolean res = biddingItemGradeService.saveBatch(itemGradeList);
 
@@ -347,6 +358,55 @@ public class ExpertEvaluationServiceImpl implements IExpertEvaluationService {
                 .eq(BiddingInfo::getId,evalVO.getBiddingInfoId()));
 
         return res;
+    }
+
+    @Override
+    public List<BiddingMarkCategoryDetailVO> getEvaluateVisibleDetail(Long schemeId, Long noticeId, Long vendorId, Long expertId) {
+        // 获取评分模板项信息
+        BiddingMarkTemplateDetailVO temp = getMarkTempInfo(schemeId);
+        List<BiddingMarkCategoryDetailVO> list = temp.getMarkCategoryDatailVOList();
+
+        // 获取专家评分数据
+        // 1、获取投标单id
+        BiddingInfo biddingInfo = biddingInfoService.getOne(new LambdaQueryWrapper<BiddingInfo>()
+                .eq(BiddingInfo::getNoticeId, noticeId)
+                .eq(BiddingInfo::getVendorId, vendorId));
+        // 2、查询专家评分数据表（最新一条）
+        ExpertScore expertScore = expertScoreService.getOne(new LambdaQueryWrapper<ExpertScore>()
+                .eq(ExpertScore::getNoticeId, noticeId)
+                .eq(ExpertScore::getBiddingInfoId, biddingInfo.getId())
+                .eq(ExpertScore::getExpertId, expertId)
+                .orderByDesc(ExpertScore::getCreateTime).last("limit 1"));
+        // 3、查询评分细项
+        List<BiddingItemGrade> itemGrades = biddingItemGradeService.list(new LambdaQueryWrapper<BiddingItemGrade>()
+                .eq(BiddingItemGrade::getExpertScoreId, expertScore.getId()));
+        Map<Long, BiddingItemGrade> gradeMap = itemGrades.stream().collect(Collectors.toMap(BiddingItemGrade::getItemId, Function.identity()));
+        // 将分数插入到模版中
+        // 遍历模板结构，插入分数
+        for (BiddingMarkCategoryDetailVO category : list) {
+            List<BiddingMarkItemDetailVO> itemDetailList = category.getMarkItemDetailVOList();
+            if (CollectionUtil.isEmpty(itemDetailList)) {
+                continue;
+            }
+
+            for (BiddingMarkItemDetailVO item : itemDetailList) {
+                // 填充主项分数
+                if (gradeMap.containsKey(item.getId())) {
+                    item.setScore(gradeMap.get(item.getId()).getScore());
+                }
+
+                // 填充子项分数
+                List<BiddingMarkItemDetailVO> subItems = item.getSubBiddingMarkItemDetailVOList();
+                if (CollectionUtil.isNotEmpty(subItems)) {
+                    for (BiddingMarkItemDetailVO subItem : subItems) {
+                        if (gradeMap.containsKey(subItem.getId())) {
+                            subItem.setScore(gradeMap.get(subItem.getId()).getScore());
+                        }
+                    }
+                }
+            }
+        }
+        return list;
     }
 
     private void verifyEvalParam(EvalVO evalVO){

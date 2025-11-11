@@ -7,6 +7,7 @@ import com.zhaocai.business.bidding.vo.req.query.BiddingInfoQueryVO;
 import com.zhaocai.business.bidding.vo.req.query.BiddingQuotationQueryVO;
 import com.zhaocai.business.bidding.vo.res.*;
 
+import java.text.ParseException;
 import java.util.List;
 
 /**
@@ -33,7 +34,7 @@ public interface IBiddingInfoService  extends IService<BiddingInfo> {
      * @param queryVO 查询参数
      * @return
      */
-    List<BiddingQuotationListVO> getBiddingQuotationList(BiddingQuotationQueryVO queryVO);
+    List<BiddingQuotationListVO> getBiddingQuotationList(BiddingQuotationQueryVO queryVO) throws ParseException;
 
     /**
      * 获取投标单详情信息
@@ -182,4 +183,12 @@ public interface IBiddingInfoService  extends IService<BiddingInfo> {
     boolean urgeExpertMes(UrgeExpertMesVO urgeExpertMesVO);
 
     List<BiddingInfo> getMaxPriceVersion(Long noticeId, Long schemeId);
+
+    /**
+     * 评分汇总-新评分(2025-10-29修改为不分专家类型（商务、技术都需要进行评分)
+     * @param noticeId
+     * @param scoreType
+     * @return
+     */
+    List<BidEvaluationVo>  getBidEvaluationListByNew(Long noticeId, int scoreType);
 }
