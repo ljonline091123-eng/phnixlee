@@ -757,3 +757,29 @@ export const getProcessLogListExpert = (params) => {
     method: "get",
   });
 };
+
+/** 报价汇总-新评分(2025-10-29修改为不分专家类型（商务、技术都需要进行评分) */
+export const getBidEvaluationListByNew = (noticeId, scoreType) => {
+  return request({
+    url: "/business/info/getBidEvaluationListByNew",
+    method: "get",
+    params: {
+      noticeId,
+      scoreType,
+    },
+  });
+};
+
+/** 获取评分详情 */
+export const getEvaluateVisibleDetail = (schemeId, noticeId, vendorId, expertId) => {
+  return request({
+    url: '/business/expertEvaluation/getEvaluateVisibleDetail',
+    method: 'get',
+    params:{
+      schemeId,
+      noticeId,
+      vendorId,
+      expertId
+    }
+  })
+};

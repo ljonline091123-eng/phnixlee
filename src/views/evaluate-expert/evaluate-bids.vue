@@ -1,6 +1,6 @@
 <template>
   <div class="app-container">
-    <div class="context"> 
+    <div class="context">
     <el-table :data="evaluateList" class="no-right-border" stripe
       highlight-current-row border>
       <el-table-column label="序号" type="index" width="50" align="center" />
@@ -21,18 +21,19 @@
       <el-table-column label="评分" align="center" prop="evalTaskContentVOList">
         <el-table-column prop="taxPrice" label="商务" align="center">
           <template slot-scope="{row}">
-          <template v-if="row.expertType === 2">
             <div  v-for="(item,index)  in row.evalTaskContentVOList" :key="index" class="splitClass">{{ item.busScore? item.busScore : '未评分' }}</div>
           </template>
-          <span v-else>-</span>
-        </template>
         </el-table-column>
         <el-table-column prop="notTaxPrice" label="技术" align="center">
           <template slot-scope="{row}">
-            <template v-if="row.expertType === 1">
-              <div  v-for="(item,index)  in row.evalTaskContentVOList" :key="index" class="splitClass">{{ item.techScore? item.techScore : '未评分' }}</div>
-            </template>
-            <span v-else>-</span>
+            <div  v-for="(item,index)  in row.evalTaskContentVOList" :key="index" class="splitClass">{{ item.techScore? item.techScore : '未评分' }}</div>
+          </template>
+        </el-table-column>
+        <el-table-column prop="notTaxPrice" label="合计" align="center">
+          <template slot-scope="{row}">
+            <div  v-for="(item,index)  in row.evalTaskContentVOList" :key="index" class="splitClass">
+              {{ item.techScore && item.busScore ? item.techScore + item.busScore : item.busScore ? item.busScore : item.techScore ? item.techScore : '未评分' }}
+            </div>
           </template>
         </el-table-column>
       </el-table-column>
@@ -42,7 +43,7 @@
             <el-button type="text" :disabled="row.isEval === undefined || Number(row.isEval) === 0" @click="goEvauateBids(item, row.schemeId, row.noticeId, row.expertType)">评标</el-button>
           </div>
         </template>
-      </el-table-column> 
+      </el-table-column>
     </el-table>
     <div class="pagination_item">
     <pagination v-show="total > 0" :total="total" :page.sync="queryParams.pageNumber" :limit.sync="queryParams.pageSize"

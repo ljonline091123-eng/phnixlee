@@ -33,8 +33,11 @@
     <PageTitle title="评分"/>
     <div class="form-body">
       <el-descriptions>
-          <el-descriptions-item label="商务评分">{{ formData.business }}</el-descriptions-item>
-          <el-descriptions-item label="技术评分" :span="2">{{ formData.technology }}</el-descriptions-item>
+        <el-descriptions-item label="商务评分">{{ formData.business }}</el-descriptions-item>
+        <el-descriptions-item label="技术评分">{{ formData.technology }}</el-descriptions-item>
+        <el-descriptions-item label="总评分">
+          {{ formData.technology && formData.business ? formData.business+formData.technology : formData.business ? formData.business : formData.technology ? formData.technology : '' }}
+        </el-descriptions-item>
           <el-descriptions-item label="评标意见" :span="2">{{ formData.advice }}</el-descriptions-item>
       </el-descriptions>
     </div>
@@ -45,6 +48,11 @@
       <el-table-column label="商务评分" width="200" align="center" prop="busScore" />
       <el-table-column label="技术评分" width="200" align="center" prop="techScore" />
       <el-table-column label="评分时间" width="200" align="center" prop="evaTime" />
+      <el-table-column label="合计" width="200" align="center" prop="techScore">
+        <template slot-scope="scope">
+          {{ scope.row.techScore && scope.row.busScore ? scope.row.techScore + scope.row.busScore : scope.row.busScore ? scope.row.busScore : scope.row.techScore ? scope.row.techScore : '' }}
+        </template>
+      </el-table-column>
       <el-table-column label="专家评标意见" prop="evaOpinion" show-overflow-tooltip/>
     </el-table>
 

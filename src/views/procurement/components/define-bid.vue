@@ -455,7 +455,13 @@
               :key="item.expertId"
             >
               <template slot-scope="{ row }">
-                {{ row.bidEvaluationExpertScoreVoList[index].score }}
+                <a
+                  href="javascript:;"
+                  class="link-type"
+                  @click="getEvaluateVisibleDetail(row.vendorId,item.expertId,2)"
+                >
+                  {{ row.bidEvaluationExpertScoreVoList[index].score }}
+                </a>
               </template>
             </el-table-column>
           </el-table-column>
@@ -488,7 +494,13 @@
               :key="item.expertId"
             >
               <template slot-scope="{ row }">
-                {{ row.bidEvaluationExpertScoreVoList[index].score }}
+                <a
+                  href="javascript:;"
+                  class="link-type"
+                  @click="getEvaluateVisibleDetail(row.vendorId,item.expertId,1)"
+                >
+                  {{ row.bidEvaluationExpertScoreVoList[index].score }}
+                </a>
               </template>
             </el-table-column>
           </el-table-column>
@@ -501,6 +513,22 @@
         </el-table>
       </el-dialog>
     </div>
+    <!-- 评分详情弹出 -->
+    <el-dialog title="评分" :visible.sync="evaluateVisibleDetail" width="40%">
+      <el-row :gutter="10">
+        <el-col :span="24" v-for="(item, key) in markCategoryDatailVOList" :key="key">
+          <PageTitle :title="item.itemType === 1 ? '技术评分' : '商务评分'" marginBottom="15px"/>
+          <el-table :data="item.markItemDetailVOList" default-expand-all row-key="id" stripe border
+                    :tree-props="{ children: 'subBiddingMarkItemDetailVOList' }">
+            <el-table-column label="序号" type="index" width="50" align="center" />
+            <el-table-column label="评分项" prop="name" min-width="40%" show-overflow-tooltip="true"/>
+            <el-table-column label="分值" align="center" min-width="15%" prop="highRange"/>
+            <el-table-column label="描述" align="center" min-width="30%" prop="contant" show-overflow-tooltip="true"/>
+            <el-table-column label="得分" prop="score" align="center" min-width="15%" />
+          </el-table>
+        </el-col>
+      </el-row>
+    </el-dialog>
     <!-- 招标文件预览 -->
     <!-- <el-dialog
       title="招标文件预览"
@@ -636,7 +664,8 @@ import {
   getLoadTaskDefBidding,
   getProcessLogList,
   getProcessLogListBidding,
-  postAuditProcess, getOrgByUserId, revokeBidding, postAuditProcessBidding,
+  postAuditProcess, getOrgByUserId, revokeBidding, postAuditProcessBidding,getBidEvaluationListByNew,
+  getEvaluateVisibleDetail,
 } from "@/api/procurement/manage";
 import FileModule from "@/components/FileModule/index.vue";
 import PageTitle from "@/components/PageTitle/index.vue";
@@ -740,6 +769,8 @@ export default {
       scoreLength: 0,
       showCheckbox: false,
       selectedRowList: [],
+      evaluateVisibleDetail: false,
+      markCategoryDatailVOList: [],
     };
   },
   components: {
@@ -784,6 +815,20 @@ export default {
   // },
 
   methods: {
+    // 获取评分详情
+    async getEvaluateVisibleDetail(vendorId, expertId, type) {
+      debugger
+      this.evaluateVisibleDetail = true;
+      const { id: schemeId } = this.scheme;
+      const { id: noticeId } = this.noticeDetail?.tenderNotice || {};
+      try {
+        const res = await getEvaluateVisibleDetail(schemeId, noticeId, vendorId, expertId)
+        this.evaluatedata = res.data
+        this.markCategoryDatailVOList = this.evaluatedata.filter(item => item.itemType === type)
+      } catch (err) {
+        console.log(err);
+      }
+    },
     cellStyle({ row, column }) {
       debugger
       const ceilingPrice = row.scheme?.procurementScheme?.ceilingPrice;
@@ -1074,8 +1119,19 @@ export default {
     },
     evaluateReport() {
       this.evaluateVisible = true;
-      this.getBidEvaluationList(this.noticeDetail?.tenderNotice?.id, 1);
-      this.getBidEvaluationList(this.noticeDetail?.tenderNotice?.id, 2);
+      // 目标时间：2025-10-29 00:00:00
+      const threshold = new Date('2025-10-29 00:00:00');
+      // 创建时间（假设从接口获取的是字符串）
+      const createTimeStr = this.noticeDetail?.tenderNotice?.createTime;
+      const createTime = new Date(createTimeStr);
+      // 判断是否为空 和 是否早于目标时间
+      if (!createTime || isNaN(createTime.getTime()) || createTime < threshold) {
+        this.getBidEvaluationList(this.noticeDetail?.tenderNotice?.id, 1);
+        this.getBidEvaluationList(this.noticeDetail?.tenderNotice?.id, 2);
+      } else {
+        this.getBidEvaluationListByNew(this.noticeDetail?.tenderNotice?.id, 1);
+        this.getBidEvaluationListByNew(this.noticeDetail?.tenderNotice?.id, 2);
+      }
     },
     /** 获取回标列表 */
     async getBackList() {
@@ -1121,6 +1177,22 @@ export default {
     async getBidEvaluationList(noticeId, scoreType) {
       try {
         const res = await getBidEvaluationList(noticeId, scoreType);
+        console.log(res, "评分分");
+        if (scoreType === 1) {
+          this.skillList = res.data;
+          this.skill = res.data[0].bidEvaluationExpertScoreVoList;
+        } else if (scoreType === 2) {
+          this.businessList = res.data;
+          this.business = res.data[0].bidEvaluationExpertScoreVoList;
+        }
+      } catch (err) {
+        console.log(err);
+      }
+    },
+    // 获取评标汇总-新评分(2025-10-29修改为不分专家类型（商务、技术都需要进行评分)
+    async getBidEvaluationListByNew(noticeId, scoreType) {
+      try {
+        const res = await getBidEvaluationListByNew(noticeId, scoreType);
         console.log(res, "评分分");
         if (scoreType === 1) {
           this.skillList = res.data;

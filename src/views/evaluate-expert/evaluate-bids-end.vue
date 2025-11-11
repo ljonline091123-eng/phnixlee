@@ -1,6 +1,6 @@
 <template>
   <div class="app-container">
-    <div class="context"> 
+    <div class="context">
     <el-table :data="evaluateList" class="no-right-border" stripe border
       highlight-current-row>
       <el-table-column label="序号" type="index" width="50" align="center" />
@@ -32,13 +32,20 @@
           </template>
         </el-table-column>
       </el-table-column>
+      <el-table-column prop="notTaxPrice" label="合计" align="center">
+        <template slot-scope="{row}">
+          <div  v-for="(item,index)  in row.evalTaskContentVOList" :key="index" class="splitClass">
+            {{ item.techScore && item.busScore ? item.techScore+item.busScore : item.busScore ? item.busScore : item.techScore ? item.techScore : '未评分' }}
+          </div>
+        </template>
+      </el-table-column>
       <el-table-column label="评标" align="center" fixed="right">
         <template slot-scope="{row}">
           <div class="splitClass" v-for="item in row.evalTaskContentVOList">
             已评分
           </div>
         </template>
-      </el-table-column> 
+      </el-table-column>
     </el-table>
     <div class="pagination_item">
     <pagination v-show="total > 0" :total="total" :page.sync="queryParams.pageNumber" :limit.sync="queryParams.pageSize"

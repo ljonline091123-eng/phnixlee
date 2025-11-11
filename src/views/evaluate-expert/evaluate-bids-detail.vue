@@ -43,14 +43,19 @@
       </PageTitle>
       <el-form :model="formData" ref="form" :rules="rules" label-position="right" label-width="100px" size="medium">
         <el-row :gutter="40">
-          <el-col :span="8" class="grid-cell" v-if="expertType === 2">
+          <el-col :span="8" class="grid-cell">
             <el-form-item label="商务评分" prop="business" class="required label-right-align">
               <el-input type="text" disabled v-model="formData.business" placeholder="根据评分自动计算"></el-input>
             </el-form-item>
           </el-col>
-          <el-col :span="8" class="grid-cell" v-if="expertType === 1">
+          <el-col :span="8" class="grid-cell">
             <el-form-item label=" 技术评分" prop="technology" class="required label-right-align">
               <el-input v-model="formData.technology" type="text" disabled placeholder="根据评分自动计算"></el-input>
+            </el-form-item>
+          </el-col>
+          <el-col :span="8" class="grid-cell">
+            <el-form-item label=" 总评分" prop="technology" class="required label-right-align">
+              <el-input v-model="formData.total" type="text" disabled placeholder="根据评分自动计算"></el-input>
             </el-form-item>
           </el-col>
         </el-row>
@@ -66,16 +71,22 @@
       <PageTitle title="评分记录" marginBottom="15px"/>
       <el-table :data="scoreList" stripe border highlight-current-row>
         <el-table-column label="序号" type="index" width="50" align="center" />
-        <el-table-column label="商务评分" width="200" align="center" prop="busScore" v-if="expertType === 2" />
-        <el-table-column label="技术评分" width="200" align="center" prop="techScore" v-if="expertType === 1" />
+        <el-table-column label="商务评分" width="200" align="center" prop="busScore" />
+        <el-table-column label="技术评分" width="200" align="center" prop="techScore" />
+        <el-table-column label="合计" width="200" align="center" prop="techScore">
+          <template slot-scope="scope">
+            {{ scope.row.techScore && scope.row.busScore ? scope.row.techScore + scope.row.busScore : scope.row.busScore ? scope.row.busScore : scope.row.techScore ? scope.row.techScore : '' }}
+          </template>
+        </el-table-column>
         <el-table-column label="评分时间" width="200" align="center" prop="evaTime" />
         <el-table-column label="专家评标意见" prop="evaOpinion" show-overflow-tooltip/>
       </el-table>
 
       <!-- 评分弹出 -->
-      <el-dialog :title="expertType === 1 ? '技术评分' : '商务评分'" :visible.sync="evaluateVisible" width="40%">
+      <el-dialog title="评分" :visible.sync="evaluateVisible" width="40%">
         <el-row :gutter="10">
           <el-col :span="24" v-for="(item, key) in markCategoryDatailVOList" :key="key">
+            <PageTitle :title="item.itemType === 1 ? '技术评分' : '商务评分'" marginBottom="15px"/>
             <el-table :data="item.markItemDetailVOList" default-expand-all row-key="id" stripe border
                       :tree-props="{ children: 'subBiddingMarkItemDetailVOList' }">
               <el-table-column label="序号" type="index" width="50" align="center" />
@@ -266,7 +277,8 @@ export default {
         if (this.selectList.length) {
           this.markCategoryDatailVOList = JSON.parse(JSON.stringify(this.selectList));
         } else {
-          this.markCategoryDatailVOList = this.evaluatedata.markCategoryDatailVOList.filter(item => item.itemType === expertType)
+          //this.markCategoryDatailVOList = this.evaluatedata.markCategoryDatailVOList.filter(item => item.itemType === expertType)
+          this.markCategoryDatailVOList = this.evaluatedata.markCategoryDatailVOList
         }
       } catch (err) {
         console.log(err);
@@ -294,6 +306,8 @@ export default {
       console.log(isAccord, 'isAccord-isAccord');
       if (!isAccord) return this.$message.error('评分项大于0且小于等于分值')
 
+      let business = 0
+      let technology = 0
       let count = 0
       let type = 0
       this.markCategoryDatailVOList.forEach(item => {
@@ -301,19 +315,32 @@ export default {
         item.markItemDetailVOList && item.markItemDetailVOList.forEach(subItem => {
           if (subItem.subBiddingMarkItemDetailVOList && subItem.subBiddingMarkItemDetailVOList.length) {
             subItem.subBiddingMarkItemDetailVOList.forEach(sSubItem => {
-              count += Number(sSubItem.score)
+              // count += Number(sSubItem.score)
+              if (type === 2) {
+                business += Number(sSubItem.score)
+              } else if (type === 1) {
+                technology += Number(sSubItem.score)
+              }
             })
           } else {
-            count += Number(subItem.score)
+            // count += Number(subItem.score)
+            if (type === 2) {
+              business += Number(subItem.score)
+            } else if (type === 1) {
+              technology += Number(subItem.score)
+            }
           }
         })
       })
-      if (type === 2) {
+      /*if (type === 2) {
         this.$set(this.formData, 'business', count)
       }
       if (type === 1) {
         this.$set(this.formData, 'technology', count)
-      }
+      }*/
+      this.$set(this.formData, 'business', business)
+      this.$set(this.formData, 'technology', technology)
+      this.$set(this.formData, 'total', business + technology)
       this.selectList = JSON.parse(JSON.stringify(this.markCategoryDatailVOList));
       this.evaluateVisible = false
     },
