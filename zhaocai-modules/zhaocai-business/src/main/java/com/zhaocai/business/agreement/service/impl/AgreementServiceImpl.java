@@ -2027,9 +2027,9 @@ public class AgreementServiceImpl extends ServiceImpl<AgreementMapper, Agreement
         // 校验总金额
         ContractPlanningSplit contractPlanningSplit = contractPlanningSplitService.getById(splitId);
         BigDecimal totalSurplusAmount = NumberUtil.subtract(contractPlanningSplit.getTotalPlanAmount(), contractPlanningSplit.getTotalUsedAmount());
-        if (totalSurplusAmount.compareTo(requestTotalAmount) < 0) {
+        /*if (totalSurplusAmount.compareTo(requestTotalAmount) < 0) {
             throw new ParamValidateException(String.format("输入的清单本次含税总价[%s]大于剩余可用金额[%s]", NumberUtil.decimalFormat(requestTotalAmount, 4), NumberUtil.decimalFormat(totalSurplusAmount, 4)));
-        }
+        }*/
     }
 
     /**
