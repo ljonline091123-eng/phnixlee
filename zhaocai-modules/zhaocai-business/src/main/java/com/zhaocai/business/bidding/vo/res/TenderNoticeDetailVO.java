@@ -108,4 +108,6 @@ public class TenderNoticeDetailVO {
     @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm")
     private Date endApplyTime;*/
 
+    @ApiModelProperty(value =  "采购方案其他文件")
+    private List<AttachmentVO> attachmentListOther;
 }

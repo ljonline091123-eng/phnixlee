@@ -94,4 +94,6 @@ public interface IVendorBidService {
     PageResult<WinningNotifiListVO> winningNotifiPage(WinningNotifiPageQueryVO queryDTO);
 
     Map<String, Integer> numNotice(VendorNoticePageQueryVO queryDTO);
+
+    List<AttachmentVO>  getVendorOtherPdfFileList(VendorBidPdfFileRequstVO requstVO) throws IOException;
 }

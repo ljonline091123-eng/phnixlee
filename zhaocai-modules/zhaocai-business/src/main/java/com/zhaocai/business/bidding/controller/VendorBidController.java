@@ -86,6 +86,12 @@ public class VendorBidController {
         return ResultData.data(vendorBidService.getVendorBidPdfFileList(requstVO));
     }
 
+    @PostMapping("/getVendorPdfFileOtherList")
+    @ApiOperation(value = "获取招标其他文件的pdf文件", notes = "传入noticeId")
+    public ResultData<List<AttachmentVO>> getVendorPdfFileOtherList(@RequestBody VendorBidPdfFileRequstVO requstVO) throws IOException {
+        return ResultData.data(vendorBidService.getVendorOtherPdfFileList(requstVO));
+    }
+
     /**
      * 供应商投标 招标报名 清单附件上传
      */

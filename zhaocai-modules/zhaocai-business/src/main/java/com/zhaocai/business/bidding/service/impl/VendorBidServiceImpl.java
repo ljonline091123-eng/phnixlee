@@ -167,6 +167,21 @@ public class VendorBidServiceImpl implements IVendorBidService {
     }
 
     @Override
+    public List<AttachmentVO> getVendorOtherPdfFileList(VendorBidPdfFileRequstVO requstVO) throws IOException {
+        //招标文件的word附件
+        List<AttachmentVO> attachmentVOList = requstVO.getOldAttachmentList();
+        String unit = requstVO.getUnit();
+        //判断是否已经存在该招标文件的pdf附件
+        List<AttachmentVO> pdfList= attachmentService.listAttachment(AttachmentTypeEnum.SCHEME_OTHER, requstVO.getNoticeId());
+        if(pdfList == null || pdfList.isEmpty()){
+            return   attachmentVOList;
+        }else {
+            return pdfList;
+        }
+
+    }
+
+    @Override
     public TenderNoticeDetailVO detail(Long noticeId) {
         TenderNoticeDetailVO detail = tenderNoticeService.detail(noticeId);
         TenderNotice tenderNotice = detail.getTenderNotice();

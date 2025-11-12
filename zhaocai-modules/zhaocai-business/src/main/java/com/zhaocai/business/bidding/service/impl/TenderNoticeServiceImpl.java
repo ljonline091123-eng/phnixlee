@@ -769,6 +769,9 @@ public class TenderNoticeServiceImpl extends ServiceImpl<TenderNoticeMapper,Tend
         /* 招标文件附件 */
         List<AttachmentVO> attachmentList = attachmentService.listAttachment(AttachmentTypeEnum.BIDING_NOTICE_DOC, tenderNotice.getId());
         vo.setAttachmentList(attachmentList);
+        /* 采购方案其他文件 */
+        List<AttachmentVO> attachmentListOther = attachmentService.listAttachment(AttachmentTypeEnum.SCHEME_OTHER, tenderNotice.getSchemeId());
+        vo.setAttachmentListOther(attachmentListOther);
 
         TenderNoticeChangeRecord changeRecord = getNoticeTimeChange(tenderNotice.getId());
         if (!ObjectUtils.isEmpty(changeRecord)){
