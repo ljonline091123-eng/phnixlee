@@ -393,7 +393,7 @@
                   </a>
                 </el-form-item>
               </el-col>
-              <el-col :span="6" class="custom-col" style="height: 180px">
+              <el-col :span="16" class="custom-col" style="height: 180px">
                 <el-form-item label="其他文件" class="custom-form-item">
 
 
