@@ -309,4 +309,7 @@ public class Vendor extends BaseEntity {
     @ApiModelProperty(value = "客商编号")
     private String middleVendorCode;
 
+    @ApiModelProperty(value = "启用状态")
+    private Integer enableStatus;
+
 }

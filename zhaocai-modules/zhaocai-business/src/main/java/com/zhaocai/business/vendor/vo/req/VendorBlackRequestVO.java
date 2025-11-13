@@ -40,4 +40,7 @@ public class VendorBlackRequestVO {
 
     @TableField(exist = false)
     private String operateComment;
+
+    @ApiModelProperty(value =  "启用状态")
+    private Integer enableStatus;
 }

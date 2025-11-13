@@ -489,6 +489,10 @@ public class VendorContactServiceImpl extends ServiceImpl<VendorContactMapper,Ve
         VendorContact vendorContact = super.getOne(new LambdaQueryWrapper<VendorContact>()
                 .eq(VendorContact::getContactPhone,contactPhone));
         if (vendorContact != null) {
+            Vendor vendor = vendorService.getById(vendorContact.getVendorId());
+            if(vendor != null && vendor.getEnableStatus() != null && vendor.getEnableStatus().equals(1)){
+                return " 您的账号已停用，请联系采购方重新启用";
+            }
             return "成功";
         }
         return " 登录用户:"+contactPhone+" 不存在";

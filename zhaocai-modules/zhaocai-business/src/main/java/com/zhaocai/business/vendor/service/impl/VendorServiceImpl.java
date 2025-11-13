@@ -788,6 +788,9 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
                             vo.setEnterpriseTypeText(vendorClassifyService.getVendorClassifyName(vo.getEnterpriseType()));
                         }
                         vo.setFirstCooperationCompanyName(remoteSystemService.getDeptNameLoop(vo.getFirstCooperationCompanyCode(),"null",SecurityConstants.INNER));
+                        if (StringUtil.isEmpty(vo.getEnableStatus())) {
+                            vo.setEnableStatus("0");
+                        }
                         return vo;
                     })).collect(Collectors.toList());
 
@@ -1624,5 +1627,23 @@ public class VendorServiceImpl extends ServiceImpl<VendorMapper,Vendor> implemen
             ex.printStackTrace();
         }
         return flat;
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRED,rollbackFor = Exception.class)
+    public void updateEnableStatus(VendorBlackRequestVO requestVO) {
+        Vendor vendor = getById(requestVO.getId());
+        ValidateUtils.isNullException(vendor,"该供应商不存在");
+        if (requestVO.getEnableStatus() == 1) {
+            // 停用
+            super.update(new LambdaUpdateWrapper<Vendor>()
+                    .set(Vendor::getEnableStatus, 1)
+                    .eq(Vendor::getId,requestVO.getId()));
+        } else {
+            // 启用
+            super.update(new LambdaUpdateWrapper<Vendor>()
+                    .set(Vendor::getEnableStatus, 0)
+                    .eq(Vendor::getId,requestVO.getId()));
+        }
     }
 }

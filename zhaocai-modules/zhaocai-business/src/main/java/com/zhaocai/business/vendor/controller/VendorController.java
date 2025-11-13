@@ -22,10 +22,7 @@ import com.zhaocai.business.vendor.domain.Vendor;
 import com.zhaocai.business.vendor.domain.VendorContact;
 import com.zhaocai.business.vendor.service.IVendorContactService;
 import com.zhaocai.business.vendor.service.IVendorService;
-import com.zhaocai.business.vendor.vo.req.VendorManagementListQueryDataVO;
-import com.zhaocai.business.vendor.vo.req.VendorOneRequestVO;
-import com.zhaocai.business.vendor.vo.req.VendorRegisterRequestVO;
-import com.zhaocai.business.vendor.vo.req.VendorSaveRequestVO;
+import com.zhaocai.business.vendor.vo.req.*;
 import com.zhaocai.business.vendor.vo.res.VendorDetailVO;
 import com.zhaocai.business.vendor.vo.res.VendorIndexInfoVO;
 import com.zhaocai.business.vendor.vo.res.VendorManagementListDataVO;
@@ -319,5 +316,10 @@ public class VendorController extends BladeController {
         return ResultData.data(result);
     }
 
-
+    @PostMapping("/updateEnableStatus")
+    @ApiOperation(value = "修改启用状态")
+    public ResultData<Boolean> updateEnableStatus(@RequestBody VendorBlackRequestVO requestVO) {
+        vendorService.updateEnableStatus(requestVO);
+        return ResultData.success();
+    }
 }

@@ -160,4 +160,6 @@ public interface IVendorService  extends IService<Vendor> , IProcessBusinessBase
     void pushMarketVendor(Long vendorId);
 
     boolean removeBlacklist();
+
+    void updateEnableStatus(VendorBlackRequestVO requestVO);
 }

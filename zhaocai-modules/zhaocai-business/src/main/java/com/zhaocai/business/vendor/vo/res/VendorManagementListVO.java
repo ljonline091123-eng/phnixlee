@@ -125,6 +125,9 @@ public class VendorManagementListVO extends AdviceObject {
     @ApiModelProperty(value =  "是否外部客商")
     private String isExternal;
 
+    @ApiModelProperty(hidden = true)
+    private String enableStatus;
+
 /*    @ApiModelProperty(value =  "企业编号")
     private String enterpriseCode;*/
 
