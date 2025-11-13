@@ -308,6 +308,25 @@
           prop="vendorStateTwo"
           v-if="['5'].includes(queryParams.vendorClass)"
         />
+        <el-table-column
+          width="120"
+          label="启停状态"
+          align="center"
+          prop="enableStatus"
+          v-if="['0'].includes(queryParams.vendorClass) && $auth.hasPermi('vendor:base:enable')"
+        >
+          <template slot-scope="{ row }">
+            <el-switch
+              :value="row.enableStatus"
+              active-color="#13ce66"
+              inactive-color="#ff4949"
+              @change="updateEnableStatus(row)"
+              active-value="0"
+              inactive-value="1"
+              >
+            </el-switch>
+          </template>
+        </el-table-column>
         <!--<el-table-column
           width="150"
           label="待审人（待开发）"
@@ -433,6 +452,7 @@ import {
   listVendorPerformance,
   listOrganization4Company,
   initCode,
+  updateEnableStatus,
 } from "@/api/vendor/vendor";
 import {getVendorClassifyTree,listAreaDivisionTree} from "@/api/procurement/manage";
 
@@ -670,6 +690,29 @@ export default {
       } catch (err) {
         console.log(err);
       }
+    },
+    updateEnableStatus(row) {
+      debugger;
+      let text = row.enableStatus === "0" ? "停用" : "启用";
+      this.$confirm('确认要' + text+ '"' + row.enterpriseName + '"吗？', "提示", {
+        confirmButtonText: "确定",
+        cancelButtonText: "取消",
+        type: "warning",
+      }).then(async () => {
+        try {
+          const res = await updateEnableStatus({
+            id: row.id,
+            enableStatus: Number(row.enableStatus) === 1 ? 0 : 1,
+          });
+          this.$message({
+            type: "success",
+            message: text+"成功!",
+          });
+          this.getVendorList();
+        } catch (err) {
+          console.log(err);
+        }
+      });
     },
   },
   watch: {

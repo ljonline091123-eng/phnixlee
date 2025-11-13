@@ -656,7 +656,7 @@
               <el-select
                 v-model="form.splitId"
                 placeholder="请选择采购方案"
-                style="width: 100%"采购方案
+                style="width: 100%"
               >
                 <el-option
                   v-for="item in contractSplitOptions"

@@ -189,3 +189,12 @@ export const getVendorName = (name) => {
     }
   })
 }
+
+export const updateEnableStatus = (data) => {
+  return request({
+    url: '/business/vendor/updateEnableStatus',
+    method: 'post',
+    data
+  })
+}
+
