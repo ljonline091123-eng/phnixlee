@@ -121,4 +121,10 @@ public class ProcurementPlanVO extends AdviceObject {
 
     @ApiModelProperty(value = "流程id")
     private String wfProcessId;
+
+    private String timeTxt;
+
+    private String timeTxtTwo;
+
+    private String timeTxtThree;
 }

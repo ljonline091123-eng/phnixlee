@@ -33,7 +33,7 @@ import com.zhaocai.system.service.ISysUserService;
 
 /**
  * 角色信息
- * 
+ *
  * @author ruoyi
  */
 @RestController
@@ -71,7 +71,7 @@ public class SysRoleController extends BaseController
     /**
      * 根据角色编号获取详细信息
      */
-    @RequiresPermissions("system:role:query")
+    //@RequiresPermissions("system:role:query")
     @GetMapping(value = "/{roleId}")
     public AjaxResult getInfo(@PathVariable Long roleId)
     {
