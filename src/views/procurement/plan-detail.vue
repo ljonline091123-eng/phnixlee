@@ -776,7 +776,7 @@ export default {
         // 模拟等待 120 秒后恢复（真实项目中可用事件监听或回调）
         setTimeout(() => {
           this.downloading = false;
-        }, 120000);
+        }, 10000);
       } catch (e) {
         this.downloading = false;
       }

@@ -43,6 +43,14 @@
             @click="handelCalibrationApproval"
             >审批详情</el-button
           >
+          <el-tooltip
+            effect="dark"
+            content="生成pdf需要时间请等待一会..."
+            placement="top"
+          >
+            <el-button type="primary" size="mini" @click="printPdf" :loading="downloading"
+            >{{ downloading ? '正在生成...' : '下载详情Pdf' }}</el-button>
+          </el-tooltip>
         </div>
       </div>
     </BackButton>
@@ -785,6 +793,7 @@ export default {
   dicts: ["purchase_type", "mark_item_type"],
   data() {
     return {
+      downloading: false,// 打印
       loading: false,
       inventoryList: [],
       virtualData: [], // 虚拟列表渲染的数据
@@ -1291,6 +1300,28 @@ export default {
         }
       } catch (error) {}
       this.calibrateLoading = false;
+    },
+    async printPdf() {
+      this.downloading = true;
+      // 模拟接口耗时，如果你使用 a 标签下载，也可以 setTimeout 后恢复状态
+      try {
+        const link = document.createElement('a');
+        /* 网关需要设置白名单 */
+        link.href = `http://127.0.0.1/dev-api/business/agreementWord/generateScheme?id=`+this.procurementScheme.id;
+        link.download = '';
+        link.target = "_blank"
+        link.style.display = 'none';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        // 模拟等待 10 秒后恢复（真实项目中可用事件监听或回调）
+        setTimeout(() => {
+          this.downloading = false;
+        }, 10000);
+      } catch (e) {
+        this.downloading = false;
+      }
     },
   },
   watch: {
