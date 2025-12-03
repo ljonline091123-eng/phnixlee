@@ -65,4 +65,10 @@ public class ProcurementSchemeBiddingVO {
 
     @ApiModelProperty(value =  "招标公告附件")
     private ProcurementSchemeTemplateVO noticeAttachment;
+
+    private String timeTxt;
+
+    private String timeTxtTwo;
+
+    private String timeTxtThree;
 }

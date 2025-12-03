@@ -23,7 +23,9 @@ import com.zhaocai.business.manager.http.service.BpmService;
 import com.zhaocai.business.poi.enums.WordAgreementTypeEnum;
 import com.zhaocai.business.poi.service.WordService;
 import com.zhaocai.business.procurement.service.IProcurementPlanService;
+import com.zhaocai.business.procurement.service.IProcurementSchemeService;
 import com.zhaocai.business.procurement.vo.res.ProcurementPlanDetailVO;
+import com.zhaocai.business.procurement.vo.res.ProcurementSchemeDetailVO;
 import com.zhaocai.business.pub.domain.Attachment;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
@@ -59,6 +61,9 @@ public class WordServiceImpl implements WordService {
 
     @Autowired
     private IProcurementPlanService procurementPlanService;
+
+    @Autowired
+    private IProcurementSchemeService procurementSchemeService;
 
     final private static String urlAgreement = "https://ck.hncig.cn:32000/ckControl/zbcg/procurement/procurement$sign-contract?wjSs=%2Fzhaocai%2Fprocurement%2Fcontract-detail%2F";
 
@@ -344,11 +349,11 @@ public class WordServiceImpl implements WordService {
 
         /* 提取操作名称为“提交”的那一条 */
         for (BpmListProcessLogResponseDTO item : listBpm) {
-            if ("提交".equals(item.getOperateName())) {
+            if ("发起".equals(item.getOperateName())) {
                 /* 编制人就是提交人 */
                 dataModel.put("bianZhiRen", item.getHandlerName());
                 /* 发起日期就是开始时间 */
-                dataModel.put("faQiRiQi", item.getStartTime());
+                dataModel.put("faQiRiQi", item.getEndTime());
                 break; // 如果只要第一条，找到就退出
             }
         }
@@ -421,6 +426,151 @@ public class WordServiceImpl implements WordService {
                     if (wordInput != null) wordInput.close();
                     if (pdfOut != null) pdfOut.close();
                 }*/
+            }
+
+        }
+
+    }
+
+    @Override
+    public void generateWordScheme(Long id, String type, HttpServletResponse response) throws Exception {
+        /* word用的数据格式替换对象 */
+        Map<String, Object> dataModel = new HashMap<>();
+
+        ProcurementSchemeDetailVO detail = procurementSchemeService.detail(id);
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+        if(detail.getProcurementScheme() != null ){
+            if(detail.getProcurementScheme().getCreateTime() != null){
+                String format = sdf.format(detail.getProcurementScheme().getCreateTime() );
+                detail.getProcurementScheme().setTimeTxt(format);
+            }
+        }
+        if(detail.getProcurementSchemeBidding() != null ){
+            if(detail.getProcurementSchemeBidding().getBidDeadline() != null){
+                String format2 = sdf.format(detail.getProcurementSchemeBidding().getBidDeadline() );
+                detail.getProcurementSchemeBidding().setTimeTxtTwo(format2);
+            }
+        }
+        if(detail.getProcurementSchemeBidding() != null ){
+            if(detail.getProcurementSchemeBidding().getApplyTimeNotice() != null){
+                String format3 = sdf.format(detail.getProcurementSchemeBidding().getApplyTimeNotice() );
+                detail.getProcurementSchemeBidding().setTimeTxtThree(format3);
+            }
+        }
+        /* 格式化 响应数据 主要是处理继承了AdviceObject对象的注解@** */
+        ObjectFormatterUtils.format(detail);
+
+        /* 获取审批流程 */
+        BpmListProcessLogRequestDTO requestDTO  = new BpmListProcessLogRequestDTO();
+        requestDTO.setBusinessId(detail.getProcurementScheme().getId().toString());
+        requestDTO.setProcessId(detail.getProcurementScheme().getWfProcessId());
+        List<BpmListProcessLogResponseDTO> listBpm = bpmService.listProcessLog(requestDTO);
+        /* 反转列表 */
+        Collections.reverse(listBpm);
+//        extractedBpmList(listBpm, dataModel);// 这个还是正常表格那样循环显示
+//        dataModel.put("bpmLists", bpmLists);
+        List<BpmListProcessLogResponseDTO> newBpmList = new ArrayList<>();
+        int mergeCounter = 1;
+        for (BpmListProcessLogResponseDTO log : listBpm) {
+            // 如果操作名称为 "重新提交"，则插入一条合并行数据
+            if ("重新提交".equals(log.getOperateName())) {
+                mergeCounter++;
+                BpmListProcessLogResponseDTO mergeLog1 = new BpmListProcessLogResponseDTO();
+                // 根据你的实际字段，设置一个标识或描述（如合并行）
+                mergeLog1.setTaskName("");
+                mergeLog1.setOperateName("");
+                mergeLog1.setOperateRemark("");
+                mergeLog1.setOperateComment("");
+                mergeLog1.setStartTime("");
+                mergeLog1.setEndTime("");
+                mergeLog1.setHandlerName("");
+                newBpmList.add(mergeLog1);
+
+                BpmListProcessLogResponseDTO mergeLog2 = new BpmListProcessLogResponseDTO();
+                mergeLog2.setTaskName("⚫⚫第" + mergeCounter + "次提交⚫⚫");
+                mergeLog2.setOperateName("");
+                mergeLog2.setOperateRemark("");
+                mergeLog2.setOperateComment("");
+                mergeLog2.setStartTime("");
+                mergeLog2.setEndTime("");
+                mergeLog2.setHandlerName("");
+                newBpmList.add(mergeLog2);
+
+                BpmListProcessLogResponseDTO mergeLog3 = new BpmListProcessLogResponseDTO();
+                mergeLog3.setTaskName("");
+                mergeLog3.setOperateName("");
+                mergeLog3.setOperateRemark("");
+                mergeLog3.setOperateComment("");
+                mergeLog3.setStartTime("");
+                mergeLog3.setEndTime("");
+                mergeLog3.setHandlerName("");
+                newBpmList.add(mergeLog3);
+            }
+            // 添加原始日志信息
+            newBpmList.add(log);
+        }
+        // 将新列表赋值给 dataModel 对应的 key
+        dataModel.put("bpmLists", newBpmList);
+
+        /* 提取操作名称为“提交”的那一条 */
+        for (BpmListProcessLogResponseDTO item : listBpm) {
+            if ("发起".equals(item.getOperateName())) {
+                /* 编制人就是提交人 */
+                dataModel.put("bianZhiRen", item.getHandlerName());
+                /* 发起日期就是开始时间 */
+                dataModel.put("faQiRiQi", item.getEndTime());
+                break; // 如果只要第一条，找到就退出
+            }
+        }
+
+        /*基本信息 */
+        dataModel.put("agreement", detail.getProcurementScheme());
+        dataModel.put("procurementSchemeBidding", detail.getProcurementSchemeBidding());
+        /* 清单信息 */
+        dataModel.put("contractPlanList", detail.getContractPlanList());
+
+
+        /* 加载模板 */
+        ClassPathResource resource = new ClassPathResource(WordAgreementTypeEnum.DEFAULT_SCHEME.getPath());
+        try (InputStream inputStream = resource.getInputStream()) {
+
+            /* 需要循环的表数据 */
+            LoopRowTableRenderPolicy loopRowTableRenderPolicy = new LoopRowTableRenderPolicy();
+            Configure config = Configure.builder()
+                    .bind("contractPlanList", loopRowTableRenderPolicy)
+                    .bind("bpmLists", loopRowTableRenderPolicy)
+                    .build();
+
+            XWPFTemplate template = XWPFTemplate.compile(inputStream, config).render(dataModel);
+            /* 增加页脚 */
+            //extractedAddPageHeaderFooterPlan(template, procurementPlanDetail);
+
+            /* 判断是导出Pdf还是Docx */
+            if(type!=null && (type.equals("word") || type.equals("docx") || type.equals("doc"))){
+                /* 设置响应头（支持中文文件名） */
+                String fileName = URLEncoder.encode(detail.getProcurementScheme().getProcurementSchemeCode()+"采购方案.docx", "UTF-8").replaceAll("\\+", "%20");
+                response.setContentType("application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+                response.setHeader("Content-Disposition", "attachment;filename*=UTF-8''" + fileName);
+                /* 输出 Word 文件到浏览器 */
+                template.writeAndClose(response.getOutputStream());
+            }else{
+                // 使用本地LibreOffice转换PDF
+                ByteArrayOutputStream wordOut = new ByteArrayOutputStream();
+                template.writeAndClose(wordOut);
+
+                // 检查LibreOffice是否可用
+                if (!LibreOfficeLocalConverter.isLibreOfficeAvailable()) {
+                    throw new RuntimeException("LibreOffice未安装或不可用，请先安装LibreOffice");
+                }
+
+                // 转换为PDF
+                byte[] pdfBytes = LibreOfficeLocalConverter.convertDocxToPdf(wordOut.toByteArray());
+
+                String fileName = URLEncoder.encode(detail.getProcurementScheme().getProcurementSchemeCode() + "采购方案.pdf", "UTF-8").replaceAll("\\+", "%20");
+                response.setContentType("application/pdf");
+                response.setHeader("Content-Disposition", "attachment;filename*=UTF-8''" + fileName);
+                response.getOutputStream().write(pdfBytes);
+                wordOut.close();
             }
 
         }

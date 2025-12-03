@@ -13,7 +13,7 @@ public enum WordAgreementTypeEnum {
 
     DEFAULT( "默认", "templates/template.docx"),
     DEFAULT_PLAN( "采购计划", "templates/planTemplate.docx"),
-    DEFAULT_SCHEME( "采购方案", "templates/templateScheme.docx"),
+    DEFAULT_SCHEME( "采购方案", "templates/schemeTemplate.docx"),
     ;
 
     private final String desc;

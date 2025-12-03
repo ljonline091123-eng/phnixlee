@@ -127,4 +127,10 @@ public class ProcurementSchemeVO extends AdviceObject {
 
     @ApiModelProperty(value = "项目简称")
     private String minAccountSimpleName;
+
+    private String timeTxt;
+
+    private String timeTxtTwo;
+
+    private String timeTxtThree;
 }

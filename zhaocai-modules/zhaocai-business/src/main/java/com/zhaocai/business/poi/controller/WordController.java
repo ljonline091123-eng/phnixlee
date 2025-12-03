@@ -35,4 +35,9 @@ public class WordController {
     public void generateWordPlan(@RequestParam Long id, @RequestParam(required = false) String type, HttpServletResponse response) throws Exception {
         wordService.generateWordPlan(id,type,response);
     }
+
+    @GetMapping("/generateScheme")
+    public void generateScheme(@RequestParam Long id, @RequestParam(required = false) String type, HttpServletResponse response) throws Exception {
+        wordService.generateWordScheme(id,type,response);
+    }
 }
