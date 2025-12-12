@@ -40,7 +40,6 @@
             >撤回</el-button
           >
         </div>
-
         <!-- <div v-else-if="isOperate === 1 && Number(agreementState) === 3">
           <el-button type="primary" size="mini" @click="pushToVendor()"
             >推送至供应商</el-button
@@ -82,6 +81,14 @@
           >
             审批详情
           </el-button>
+          <el-tooltip
+            effect="dark"
+            content="生成pdf需要时间请等待一会..."
+            placement="top"
+          >
+            <el-button type="primary" size="mini" @click="printPdf2" :loading="downloading"
+            >{{ downloading ? '正在生成...' : '下载详情Pdf' }}</el-button>
+          </el-tooltip>
         </div>
       </div>
     </BackButton>
@@ -1223,6 +1230,7 @@ export default {
 
   data() {
     return {
+      downloading: false,
       path:'/procurement/sign-contract',
       viewFileDialog: false,
       viewOtherFileUrl: "",
@@ -3462,6 +3470,29 @@ export default {
   },
 
   methods: {
+    async printPdf2() {
+      this.downloading = true;
+      // 模拟接口耗时，如果你使用 a 标签下载，也可以 setTimeout 后恢复状态
+      try {
+        const link = document.createElement('a');
+        /* 网关需要设置白名单 */
+        link.href = `http://118.253.180.94:8194/dev-api/business/agreementWord/generate?id=`+this.param.id;
+        //link.href = `http://127.0.0.1/dev-api/business/agreementWord/generate?id=`+this.param.id;
+        link.download = '';
+        link.target = "_blank"
+        link.style.display = 'none';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        // 模拟等待 120 秒后恢复（真实项目中可用事件监听或回调）
+        setTimeout(() => {
+          this.downloading = false;
+        }, 20000);
+      } catch (e) {
+        this.downloading = false;
+      }
+    },
     /* 合计列计算 */
     getSummaries(param) {
       const { columns, data } = param;
@@ -3994,6 +4025,7 @@ export default {
   destroyed() {
     clearInterval(this.intervalId);
   },
+
 };
 </script>
 

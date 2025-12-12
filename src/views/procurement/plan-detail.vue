@@ -765,7 +765,7 @@ export default {
       try {
         const link = document.createElement('a');
         /* 网关需要设置白名单 */
-        link.href = `http://127.0.0.1/dev-api/business/agreementWord/generatePlan?id=`+this.procurementPlan.id;
+        link.href = `http://118.253.180.94:8194/dev-api/business/agreementWord/generatePlan?id=`+this.procurementPlan.id;
         link.download = '';
         link.target = "_blank"
         link.style.display = 'none';
@@ -776,7 +776,7 @@ export default {
         // 模拟等待 120 秒后恢复（真实项目中可用事件监听或回调）
         setTimeout(() => {
           this.downloading = false;
-        }, 10000);
+        }, 20000);
       } catch (e) {
         this.downloading = false;
       }
