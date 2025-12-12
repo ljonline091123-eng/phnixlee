@@ -137,7 +137,7 @@ public class WordServiceImpl implements WordService {
 
         /* 提取操作名称为“提交”的那一条 */
         for (BpmListProcessLogResponseDTO item : listBpm) {
-            if ("提交".equals(item.getOperateName())) {
+            if ("发起".equals(item.getOperateName())) {
                 /* 编制人就是提交人 */
                 dataModel.put("bianZhiRen", item.getHandlerName());
                 /* 发起日期就是开始时间 */
@@ -145,7 +145,6 @@ public class WordServiceImpl implements WordService {
                 break; // 如果只要第一条，找到就退出
             }
         }
-
 
         /* 合同基本信息 */
         dataModel.put("agreement", agreementDetailVO.getAgreement());
@@ -225,7 +224,7 @@ public class WordServiceImpl implements WordService {
 
             XWPFTemplate template = XWPFTemplate.compile(inputStream, config).render(dataModel);
             /* 增加页脚 */
-            extractedAddPageHeaderFooter(template, agreementDetailVO);
+            //extractedAddPageHeaderFooter(template, agreementDetailVO);
 
             /* 判断是导出Pdf还是Docx */
             if(type!=null && (type.equals("word") || type.equals("docx") || type.equals("doc"))){
@@ -236,32 +235,24 @@ public class WordServiceImpl implements WordService {
                 /* 输出 Word 文件到浏览器 */
                 template.writeAndClose(response.getOutputStream());
             }else{
-                /* 适合小型文件存储在内存中，文件大于1MB或者以上内存会有压力。 */
+
+                // 使用本地LibreOffice转换PDF
                 ByteArrayOutputStream wordOut = new ByteArrayOutputStream();
-                ByteArrayInputStream wordInput = null;
-                ByteArrayOutputStream pdfOut = new ByteArrayOutputStream();
-                try {
-                    template.writeAndClose(wordOut);
-                    wordInput = new ByteArrayInputStream(wordOut.toByteArray());
+                template.writeAndClose(wordOut);
 
-                    /* 这里 form 是 "docx"，to 是 "pdf" */
-//                    LibToPdf.setLibreoffceLocation("192.168.240.5");/* 测试环境转换服务，k8s已经指定node节点 */
-                    LibToPdf.setLibreoffceLocation("192.168.241.90");/* 正式环境转换服务，k8s已经指定node节点 */
-                    LibToPdf.setLibreoffceProt(30002);
-                    LibToPdf.doDocumentConvert(wordInput, pdfOut, "docx", "pdf");
-
-                    /* 设置 PDF 响应头（下载 PDF） */
-                    String fileName = URLEncoder.encode(agreementDetailVO.getAgreement().getAgreementCode() + "招采合同.pdf", "UTF-8").replaceAll("\\+", "%20");
-                    response.setContentType("application/pdf");
-                    response.setHeader("Content-Disposition", "attachment;filename*=UTF-8''" + fileName);
-
-                    /* 输出 PDF 到浏览器 */
-                    pdfOut.writeTo(response.getOutputStream());
-                } finally {
-                    if (wordOut != null) wordOut.close();
-                    if (wordInput != null) wordInput.close();
-                    if (pdfOut != null) pdfOut.close();
+                // 检查LibreOffice是否可用
+                if (!LibreOfficeLocalConverter.isLibreOfficeAvailable()) {
+                    throw new RuntimeException("LibreOffice未安装或不可用，请先安装LibreOffice");
                 }
+
+                // 转换为PDF
+                byte[] pdfBytes = LibreOfficeLocalConverter.convertDocxToPdf(wordOut.toByteArray());
+
+                String fileName = URLEncoder.encode(agreementDetailVO.getAgreement().getAgreementCode() + "招采合同.pdf", "UTF-8").replaceAll("\\+", "%20");
+                response.setContentType("application/pdf");
+                response.setHeader("Content-Disposition", "attachment;filename*=UTF-8''" + fileName);
+                response.getOutputStream().write(pdfBytes);
+                wordOut.close();
             }
 
         }
