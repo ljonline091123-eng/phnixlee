@@ -23,19 +23,19 @@
       <el-table-column label="评分" align="center" prop="evalTaskContentVOList">
         <el-table-column prop="taxPrice" label="商务" align="center">
           <template slot-scope="{row}">
-          <div  v-for="(item,index)  in row.evalTaskContentVOList" :key="index" class="splitClass">{{ item.busScore? item.busScore : '未评分' }}</div>
+          <div  v-for="(item,index)  in row.evalTaskContentVOList" :key="index" class="splitClass">{{ item.busScore != null ? item.busScore : '未评分' }}</div>
         </template>
         </el-table-column>
         <el-table-column prop="notTaxPrice" label="技术" align="center">
           <template slot-scope="{row}">
-            <div  v-for="(item,index)  in row.evalTaskContentVOList" :key="index" class="splitClass">{{ item.techScore? item.techScore : '未评分' }}</div>
+            <div  v-for="(item,index)  in row.evalTaskContentVOList" :key="index" class="splitClass">{{ item.techScore != null? item.techScore : '未评分' }}</div>
           </template>
         </el-table-column>
       </el-table-column>
       <el-table-column prop="notTaxPrice" label="合计" align="center">
         <template slot-scope="{row}">
           <div  v-for="(item,index)  in row.evalTaskContentVOList" :key="index" class="splitClass">
-            {{ item.techScore && item.busScore ? item.techScore+item.busScore : item.busScore ? item.busScore : item.techScore ? item.techScore : '未评分' }}
+            {{ item.techScore != null && item.busScore != null ? (item.techScore+item.busScore).toFixed(2) : item.busScore != null ? item.busScore : item.techScore != null ? item.techScore : '未评分' }}
           </div>
         </template>
       </el-table-column>

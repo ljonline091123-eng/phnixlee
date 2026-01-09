@@ -75,7 +75,7 @@
         <el-table-column label="技术评分" width="200" align="center" prop="techScore" />
         <el-table-column label="合计" width="200" align="center" prop="techScore">
           <template slot-scope="scope">
-            {{ scope.row.techScore && scope.row.busScore ? scope.row.techScore + scope.row.busScore : scope.row.busScore ? scope.row.busScore : scope.row.techScore ? scope.row.techScore : '' }}
+            {{ scope.row.techScore != null && scope.row.busScore != null ? (scope.row.techScore + scope.row.busScore).toFixed(2) : scope.row.busScore != null ? scope.row.busScore : scope.row.techScore != null ? scope.row.techScore : '' }}
           </template>
         </el-table-column>
         <el-table-column label="评分时间" width="200" align="center" prop="evaTime" />
