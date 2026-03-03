@@ -410,7 +410,7 @@
           ref="modifyRef"
           :rules="modifyRules"
           label-position="left"
-          label-width="80px"
+          label-width="85px"
           size="medium"
         >
           <el-row>
@@ -484,6 +484,23 @@
                 </template>
               </el-form-item>
             </el-col>
+            <el-col :span="24" class="grid-cell">
+              <el-form-item label="变更后文件" prop="attachmentId" v-if="Number(modifyForm.type) == 2" class="label-right-align">
+                <div>
+                  <el-button size="mini" type="primary" @click="uploadClick">上传</el-button>
+                  <el-upload
+                    style="margin-left: 90px;margin-top: -75px;"
+                    :action="uploadFileUrl"
+                    :limit="1"
+                    :on-success="fileSuccess"
+                    :file-list="modifyForm.fileList"
+                    :on-remove="fileRemove"
+                    ref="upload"
+                    :before-upload="handleBeforeUpload"
+                  ></el-upload>
+                </div>
+              </el-form-item>
+            </el-col>
           </el-row>
         </el-form>
         <el-table v-loading="modifyLoading" :data="modifyList" border stripe>
@@ -496,6 +513,18 @@
           <el-table-column label="变更类型" align="center" prop="typeText" />
           <!-- <el-table-column label="变更前信息" align="center" prop="updateBefore" /> -->
           <el-table-column label="变更内容" align="center" prop="updateAfter" />
+          <el-table-column label="变更文件" align="center" prop="attachmentName" >
+            <template slot-scope="{ row }">
+              <a
+                :href="row.attachmentUrl"
+                class="link-type"
+                target="_blank"
+              >{{
+                  row.attachmentName
+                }}
+              </a>
+            </template>
+          </el-table-column>
           <el-table-column label="经办人" align="center" prop="createBy" />
           <el-table-column label="操作时间" align="center" prop="createTime" />
         </el-table>
@@ -606,7 +635,9 @@ import { getVendorList } from "@/api/vendor/vendor";
 import FileModule from "@/components/FileModule/index.vue";
 import PageTitle from "@/components/PageTitle/index.vue";
 import { get } from "lodash";
-import { getViweFileURL } from "@/api/template/file";
+import {addAttachment, getViweFileURL} from "@/api/template/file";
+import {showSecretRelatedTips} from "@/utils/MyUtils";
+import {uploadFileUrl} from "@/utils/const";
 export default {
   name: "tender-documents",
   dicts: ["vendor_level"],
@@ -717,6 +748,7 @@ export default {
           { required: true, message: "请输入变更后信息", trigger: "blur" },
         ],
       },
+      uploadFileUrl, // 变更文件
       addressProps: {
         children: "children",
         label: "divisionName",
@@ -815,6 +847,47 @@ export default {
     this.getbiddingTemplate();
   },
   methods: {
+    /** 变更文件附件上传 */
+    uploadClick() {
+      showSecretRelatedTips(()=>{
+        this.$refs['upload'].clearFiles();  // 使用 clearFiles 方法清除文件列表
+        this.$refs['upload'].$refs['upload-inner'].handleClick() // 触发文件选择器打开
+      })
+    },
+    /** 变更文件附件上传成功 */
+    async fileSuccess(res) {
+      const { url, name } = res.data;
+      if(res.data == null){
+        this.$message.error('文件未上传成功，文件名和URL为空，请检查');
+      }
+      try {
+        /* 保存到文件表获取返回id */
+        const res = await addAttachment({ fileName: name, fileUrl: url });
+        /* 设置新的附件返回的附件id */
+        this.$set(this.modifyForm, "attachmentId", res.data);
+        this.$set(this.modifyForm, "attachmentName", name);
+        this.$set(this.modifyForm, "attachmentUrl", url);
+        this.$forceUpdate();
+      } catch (err) {
+        console.log(err);
+      }
+    },
+    /** 变更文件删除 */
+    fileRemove() {
+      this.$set(this.modifyForm, "attachmentId", null);
+      this.$set(this.modifyForm, "attachmentName", null);
+      this.$set(this.modifyForm, "attachmentUrl", null);
+      this.$forceUpdate();
+    },
+    /* 文件上传前处理逻辑 */
+    handleBeforeUpload(file) {
+      if (file.name.length > 80) {
+        this.$message.error('文件名不能超过80个字符');
+        return false; // 阻止上传
+      }
+      return true; // 允许上传
+    },
+
     //获取招标文件的预览url
     async getbiddingTemplate(){
       //解构biddingTemplate，获取招标文件的属性
