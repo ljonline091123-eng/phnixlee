@@ -47,4 +47,13 @@ public class TenderNoticeChangeRecordListVO implements Serializable {
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss",timezone = "GMT+8")
     private Date createTime;
 
+    @ApiModelProperty(value = "变更后文件附件id")
+    private Long attachmentId;
+
+    @ApiModelProperty(value = "变更后文件附件名称")
+    private String attachmentName;
+
+    @ApiModelProperty(value =  "变更后文件附件url")
+    private String attachmentUrl;
+
 }

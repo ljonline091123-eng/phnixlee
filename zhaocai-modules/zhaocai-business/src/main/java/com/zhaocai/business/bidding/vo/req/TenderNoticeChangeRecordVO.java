@@ -33,4 +33,7 @@ public class TenderNoticeChangeRecordVO implements Serializable {
     @ApiModelProperty(value =  "变更后信息")
     private String updateAfter;
 
+    @ApiModelProperty(value = "变更后文件附件id")
+    private Long attachmentId;
+
 }

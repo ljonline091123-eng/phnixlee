@@ -41,4 +41,7 @@ public class TenderNoticeChangeRecord extends BaseEntity
     /** 变更后信息 */
     @ApiModelProperty(value =  "变更后信息")
     private String updateAfter;
+
+    @ApiModelProperty(value = "变更后文件附件id")
+    private Long attachmentId;
 }

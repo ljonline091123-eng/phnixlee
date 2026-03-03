@@ -12,6 +12,8 @@ import com.zhaocai.business.bidding.service.ITenderNoticeService;
 import com.zhaocai.business.bidding.vo.req.TenderNoticeChangeRecordVO;
 import com.zhaocai.business.bidding.vo.req.query.TenderNoticeChangeRecordQueryVO;
 import com.zhaocai.business.bidding.vo.res.TenderNoticeChangeRecordListVO;
+import com.zhaocai.business.pub.service.IAttachmentService;
+import com.zhaocai.business.pub.vo.res.AttachmentVO;
 import com.zhaocai.common.core.utils.bean.BeanCopierUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
@@ -29,6 +31,9 @@ import java.util.List;
  */
 @Service
 public class TenderNoticeChangeRecordServiceImpl extends ServiceImpl<TenderNoticeChangeRecordMapper,TenderNoticeChangeRecord> implements ITenderNoticeChangeRecordService {
+
+    @Autowired
+    private IAttachmentService attachmentService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -87,6 +92,11 @@ public class TenderNoticeChangeRecordServiceImpl extends ServiceImpl<TenderNotic
         for (TenderNoticeChangeRecord record : records) {
             TenderNoticeChangeRecordListVO vo = BeanCopierUtil.copyBean(record, TenderNoticeChangeRecordListVO.class);
             vo.setTypeText(vo.getType() == 1 ? "变更时间" : "变更内容");
+            if (vo.getAttachmentId() != null) {
+                AttachmentVO attachmentVO = attachmentService.getAttachmentById(vo.getAttachmentId());
+                vo.setAttachmentName(attachmentVO.getFileName());
+                vo.setAttachmentUrl(attachmentVO.getFileUrl());
+            }
             voList.add(vo);
         }
         return voList;
