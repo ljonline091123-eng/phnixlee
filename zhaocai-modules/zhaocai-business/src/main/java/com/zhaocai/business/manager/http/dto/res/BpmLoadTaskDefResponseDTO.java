@@ -47,4 +47,9 @@ public class BpmLoadTaskDefResponseDTO {
      * 运行时岗位对象
      */
     private List<TaskPost> taskPost;
+
+    /**
+     * 层级
+     */
+    private int level;
 }

@@ -1293,17 +1293,22 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
 
         // 2. 获取流程定义模型
         BpmnModel bpmnModel = repositoryService.getBpmnModel(processDefinitionId);
-        Process process = bpmnModel.getMainProcess();
+        // Process process = bpmnModel.getMainProcess();
 
-        Collection<FlowElement> flowElements = process.getFlowElements();
-        Collection<UserTask> tasks  = getAllUserTaskEvent(flowElements, null);
-        List<UserTask> userTasks = sortTasksByFlowPath(getStartEvent(bpmnModel), tasks);
+        // Collection<FlowElement> flowElements = process.getFlowElements();
+        // Collection<UserTask> tasks  = getAllUserTaskEvent(flowElements, null);
+        // List<UserTask> userTasks = sortTasksByFlowPath(getStartEvent(bpmnModel), tasks);
         // 3. 获取所有用户任务节点
         //List<UserTask> userTasks = process.findFlowElementsOfType(UserTask.class);
 
+        List<List<UserTask>> leveledTasks = sortLeveledTasks(bpmnModel);
         int i = 0;
+        int level = 0;
+        for (List<UserTask> taskGroup : leveledTasks) {
+
+//        int i = 0;
         // 5. 处理每个任务节点
-        for (UserTask userTask : userTasks) {
+        for (UserTask userTask : taskGroup) {
             i++;
             Map<String, Object> nodeInfo = new LinkedHashMap<>();
             // 基础信息
@@ -1311,6 +1316,8 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
             nodeInfo.put("taskName", userTask.getName());
             nodeInfo.put("nodeKey", userTask.getId());
             nodeInfo.put("nodeName", userTask.getName());
+            nodeInfo.put("level", level);           // 新增：层级标识
+            nodeInfo.put("parallel", taskGroup.size() > 1); // 新增：是否并行
             Boolean completed = false;
             if (map.get(userTask.getId()) != null) {
                 completed = map.get(userTask.getId());
@@ -1344,6 +1351,8 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
             nodeInfo.put("taskPost", postList);
             result.add(nodeInfo);
         }
+        level++;
+        }
 
         return result;
     }
@@ -1370,6 +1379,69 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
             return (StartEvent) startElement;
         }
         return null;
+    }
+
+    private static List<List<UserTask>> sortLeveledTasks(BpmnModel bpmnModel) {
+        List<List<UserTask>> levels = new ArrayList<>();
+        StartEvent startEvent = getStartEvent(bpmnModel);
+        if (startEvent == null) {
+            throw new CheckedException("未找到开始节点");
+        }
+        
+        // BFS 遍历，key: 节点id, value: level
+        Map<String, Integer> levelMap = new HashMap<>();
+        // 队列元素: [节点, level]
+        Queue<Object[]> queue = new LinkedList<>();
+        queue.add(new Object[]{startEvent.getOutgoingFlows().get(0).getTargetFlowElement(), 0});
+        
+        while (!queue.isEmpty()) {
+            Object[] pair = queue.poll();
+            FlowElement element = (FlowElement) pair[0];
+            int level = (int) pair[1];
+            
+            if (element == null) continue;
+            if (element instanceof EndEvent) continue;
+            
+            if (element instanceof UserTask) {
+                // 取最小 level（更先到达的路径为准）
+                levelMap.merge(element.getId(), level, Math::min);
+                // 从 UserTask 继续往后走，进入下一 level
+                for (SequenceFlow flow : ((UserTask) element).getOutgoingFlows()) {
+                    queue.add(new Object[]{flow.getTargetFlowElement(), level + 1});
+                }
+            } else if (element instanceof ParallelGateway) {
+                // 并行网关：所有出口路径在同一 level
+                for (SequenceFlow flow : ((ParallelGateway) element).getOutgoingFlows()) {
+                    queue.add(new Object[]{flow.getTargetFlowElement(), level});
+                }
+            } else if (element instanceof ExclusiveGateway) {
+                // 排他网关：走条件为 "pass" 的路径
+                SequenceFlow passWay = ((ExclusiveGateway) element).getOutgoingFlows().stream()
+                    .filter(flow -> flow.getConditionExpression() != null 
+                        && flow.getConditionExpression().contains("pass"))
+                    .findFirst()
+                    .orElse(null);
+                if (passWay != null) {
+                    queue.add(new Object[]{passWay.getTargetFlowElement(), level});
+                }
+            } else if (element instanceof StartEvent) {
+                // 从开始节点往后走
+                for (SequenceFlow flow : ((StartEvent) element).getOutgoingFlows()) {
+                    queue.add(new Object[]{flow.getTargetFlowElement(), level});
+                }
+            }
+        }
+        
+        // 将 levelMap 转为 List<List<UserTask>>
+        Map<Integer, List<UserTask>> levelGroup = new TreeMap<>();
+        for (UserTask task : getAllUserTaskEvent(bpmnModel.getMainProcess().getFlowElements(), null)) {
+            Integer lvl = levelMap.get(task.getId());
+            if (lvl != null) {
+                levelGroup.computeIfAbsent(lvl, k -> new ArrayList<>()).add(task);
+            }
+        }
+        
+        return new ArrayList<>(levelGroup.values());
     }
 
     private static List<UserTask> sortTasksByFlowPath(StartEvent startEvent, Collection<UserTask> userTasks) {
