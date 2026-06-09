@@ -9,16 +9,20 @@
       <span>审批信息</span>
     </div>
     <div class="form-body">
-      <el-steps :active="activeStep" align-center class="step_item">
+      <el-steps :active="computedActiveStep" align-center class="step_item">
         <el-step
-          v-for="(item, index) in processInformationList"
-          :key="index"
-          :title="item.nodeName"
+          v-for="(group, gIndex) in groupedSteps"
+          :key="gIndex"
+          :class="{ 'is-parallel': group.parallel }"
         >
+          <template v-slot:title>
+            <span>{{ group.items.map(n => n.nodeName).join(' / ') }}</span>
+          </template>
           <template v-slot:description>
-            <div>{{ getUserNames(item.userList) }}</div>
-            <!-- <div>{{ getPostNames(item.taskPost) }}</div> -->
-            <div>{{ getOrgName(item.taskPost) }}</div>
+            <div v-for="(item, i) in group.items" :key="i" style="margin-bottom: 4px;">
+              <div>{{ getUserNames(item.userList) }}</div>
+              <div>{{ getOrgName(item.taskPost) }}</div>
+            </div>
           </template>
         </el-step>
       </el-steps>
@@ -73,6 +77,52 @@ export default {
       type: Boolean,
       default: false,
     },
+  },
+  computed: {
+    /**
+     * 将 processInformationList 按 level 分组
+     * 同一 level 的节点是并行节点，显示在同一个 step 中
+     */
+    groupedSteps() {
+      if (!this.processInformationList || this.processInformationList.length === 0) return [];
+      // 检查是否有 level 字段（新格式支持并行网关）
+      const hasLevel = this.processInformationList[0].level !== undefined;
+      if (hasLevel) {
+        const groups = {};
+        this.processInformationList.forEach(item => {
+          const level = item.level;
+          if (!groups[level]) groups[level] = [];
+          groups[level].push(item);
+        });
+        // 按 level 升序排列
+        return Object.keys(groups)
+          .sort((a, b) => a - b)
+          .map(key => ({
+            items: groups[key],
+            parallel: groups[key].length > 1
+          }));
+      }
+      // 旧格式（无 level 字段）：每个节点单独一个 step
+      return this.processInformationList.map(item => ({
+        items: [item],
+        parallel: false
+      }));
+    },
+    /**
+     * 根据完成状态自动计算当前活跃的 step 索引
+     * 找到第一个未完全完成的步骤组
+     */
+    computedActiveStep() {
+      for (let i = 0; i < this.groupedSteps.length; i++) {
+        const group = this.groupedSteps[i];
+        const allCompleted = group.items.every(item =>
+          item.userList && item.userList.length > 0 && item.userList.every(u => u.completed)
+        );
+        if (!allCompleted) return i;
+      }
+      // 全部完成，active 设为总长度，使所有 step 显示为已完成状态
+      return this.groupedSteps.length;
+    }
   },
   methods: {
     getUserNames(userList) {
