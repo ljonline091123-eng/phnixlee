@@ -86,7 +86,7 @@ public class BpmService {
             List<Map> flowList = JSONUtil.toList(JSONUtil.toJsonStr(map1.get("flowList")), Map.class);
             for (int i = 0;i<flowList.size();i++){
                 Map<String,Object> map2 = flowList.get(i);
-                String endTime = map2.get("createTime")==null?null:map2.get("createTime").toString();
+                String endTime = map2.get("finishTime")==null?null:map2.get("finishTime").toString();
                 String assigneeName = map2.get("assigneeName")==null?null:map2.get("assigneeName").toString();
                 if(StringUtils.isEmpty(assigneeName)){
                     continue;
