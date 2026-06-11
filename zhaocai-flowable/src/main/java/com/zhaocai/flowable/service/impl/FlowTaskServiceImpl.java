@@ -1153,7 +1153,7 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
             List<HistoricActivityInstance> list = historyService
                     .createHistoricActivityInstanceQuery()
                     .processInstanceId(procInsId)
-                    .orderByHistoricActivityInstanceStartTime()
+                    .orderByHistoricActivityInstanceEndTime()
                     .desc().list();
 
             String startUserId;
