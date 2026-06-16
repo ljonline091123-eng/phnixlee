@@ -144,4 +144,12 @@ public interface SysUserMapper extends MyBaseMapper<SysUser>
      * @return
      */
     List<SysUser> selectUserListByDeptId(@Param("deptId") Long deptId);
+
+    /**
+     * 根据条件查询用户列表（含删除状态）
+     *
+     * @param user 用户信息
+     * @return 用户信息集合信息
+     */
+    List<SysUser> selectUserListAll(SysUser user);
 }

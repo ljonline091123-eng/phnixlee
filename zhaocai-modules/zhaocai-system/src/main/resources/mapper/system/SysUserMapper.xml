@@ -284,4 +284,44 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
 		left join sys_dept d on su.dept_id = d.dept_id
 		where su.del_flag = '0' and (su.dept_id = #{deptId,jdbcType=BIGINT} OR su.dept_id IN ( SELECT t.dept_id FROM sys_dept t WHERE find_in_set(#{deptId,jdbcType=BIGINT}, ancestors) ))
 	</select>
+
+	<select id="selectUserListAll" parameterType="SysUser" resultMap="SysUserResult">
+		select u.user_id, u.dept_id, u.nick_name, u.user_name, u.email, u.avatar, u.phonenumber, u.sex, u.status, u.del_flag, u.login_ip, u.login_date, u.create_by, u.create_time, u.remark, u.thrid_org_name,
+		d.dept_name, d.leader, d2.dept_name orgDeptName, if(te.user_id is null,0,1) as is_store
+		from sys_user u
+		left join sys_dept d on u.dept_id = d.dept_id
+		left join sys_dept d2 on u.thrid_org_id = d2.thrid_dept_id
+		left join tb_expert te on te.user_id = u.user_id  and te.del_flag = '0'
+		<where>
+		<if test="userId != null and userId != 0">
+			AND u.user_id = #{userId}
+		</if>
+		<if test="userName != null and userName != ''">
+			AND u.user_name like concat('%', #{userName}, '%')
+		</if>
+		<if test="nickName != null and nickName != ''">
+			AND u.nick_name like concat('%', #{nickName}, '%')
+		</if>
+		<if test="status != null and status != ''">
+			AND u.status = #{status}
+		</if>
+		<if test="phonenumber != null and phonenumber != ''">
+			AND u.phonenumber like concat('%', #{phonenumber}, '%')
+		</if>
+		<if test="params.beginTime != null and params.beginTime != ''"><!-- 开始时间检索 -->
+			AND date_format(u.create_time,'%y%m%d') &gt;= date_format(#{params.beginTime},'%y%m%d')
+		</if>
+		<if test="params.endTime != null and params.endTime != ''"><!-- 结束时间检索 -->
+			AND date_format(u.create_time,'%y%m%d') &lt;= date_format(#{params.endTime},'%y%m%d')
+		</if>
+		<if test="deptId != null and deptId != 0">
+			AND (u.dept_id = #{deptId} OR u.dept_id IN ( SELECT t.dept_id FROM sys_dept t WHERE find_in_set(#{deptId}, ancestors) ))
+		</if>
+		<if test="userType != null and userType != ''">
+			AND u.user_type = #{userType}
+		</if>
+		</where>
+		<!-- 数据范围过滤 -->
+		${params.dataScope}
+	</select>
 </mapper>

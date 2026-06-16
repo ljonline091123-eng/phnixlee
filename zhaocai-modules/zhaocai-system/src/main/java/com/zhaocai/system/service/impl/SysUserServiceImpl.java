@@ -234,11 +234,22 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
         if (!SysUser.isAdmin(SecurityUtils.getUserId())) {
             SysUser user = new SysUser();
             user.setUserId(userId);
-            List<SysUser> users = SpringUtils.getAopProxy(this).selectUserList(user);
+            List<SysUser> users = SpringUtils.getAopProxy(this).selectUserListAll(user);
             if (StringUtils.isEmpty(users)) {
                 throw new ServiceException("没有权限访问用户数据！");
             }
         }
+    }
+
+    /**
+     *
+     * 根据条件查询用户列表（含删除状态）
+     * @param user 用户信息
+     * @return 用户信息集合信息
+     */
+    @DataScope(deptAlias = "d", userAlias = "u")
+    public List<SysUser> selectUserListAll(SysUser user) {
+        return userMapper.selectUserListAll(user);
     }
 
     /**
