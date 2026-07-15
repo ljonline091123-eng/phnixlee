@@ -43,4 +43,7 @@ public class VendorIndexInfoVO {
 
     @ApiModelProperty(value = "供应商详情")
     private VendorChangeRequestVO detail;
+
+    @ApiModelProperty(value = "企业资质")
+    private VendorCertificationListVO certification;
 }
