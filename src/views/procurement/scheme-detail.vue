@@ -1307,7 +1307,7 @@ export default {
       try {
         const link = document.createElement('a');
         /* 网关需要设置白名单 */
-        link.href = `http://118.253.180.94:8194/dev-api/business/agreementWord/generateScheme?id=`+this.procurementScheme.id;
+        link.href = `https://118.253.180.94:8194/dev-api/business/agreementWord/generateScheme?id=`+this.procurementScheme.id;
         link.download = '';
         link.target = "_blank"
         link.style.display = 'none';
