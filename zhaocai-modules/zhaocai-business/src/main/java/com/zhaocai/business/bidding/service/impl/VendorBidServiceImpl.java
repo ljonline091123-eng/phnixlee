@@ -433,7 +433,10 @@ public class VendorBidServiceImpl implements IVendorBidService {
                                         .or().isNull(BiddingInfo::getPriceChangeState))/* 历史数据兼容 */
                                 .orderByDesc(BiddingInfo::getCreateTime).last("limit 1"));
                         //校验含税单价
-                        checkTaxUnitPrice(newestBiddingInfo==null?biddingInfo:newestBiddingInfo, quotationVO, taxUnitPrice);
+                        if (newestBiddingInfo != null) {
+                            checkTaxUnitPrice(newestBiddingInfo, quotationVO, taxUnitPrice);
+                        }
+//                        checkTaxUnitPrice(newestBiddingInfo==null?biddingInfo:newestBiddingInfo, quotationVO, taxUnitPrice);
                     }
                     quotation.setTaxPrice(taxPrice);
                     quotation.setNotTaxPrice(notTaxPrice);
@@ -505,7 +508,10 @@ public class VendorBidServiceImpl implements IVendorBidService {
                                 .or().isNull(BiddingInfo::getPriceChangeState))/* 历史数据兼容 */
                         .orderByDesc(BiddingInfo::getCreateTime).last("limit 1"));
                 //校验含税单价
-                checkTaxUnitPrice(newestBiddingInfo==null?biddingInfo:newestBiddingInfo, quotationVO, taxUnitPrice);
+                if (newestBiddingInfo != null) {
+                    checkTaxUnitPrice(newestBiddingInfo, quotationVO, taxUnitPrice);
+                }
+//                checkTaxUnitPrice(newestBiddingInfo==null?biddingInfo:newestBiddingInfo, quotationVO, taxUnitPrice);
             }
         }
         quotation.setTaxPrice(taxPrice);
@@ -767,7 +773,10 @@ public class VendorBidServiceImpl implements IVendorBidService {
                         bidTaxPrice = bidTaxPrice.add(taxPrice);
                         /** 校验含税单价 */
                         //校验含税单价
-                        checkTaxUnitPrice(newestBiddingInfo==null?biddingInfo:newestBiddingInfo, quotationVO, taxUnitPrice);
+                        if (newestBiddingInfo != null) {
+                            checkTaxUnitPrice(newestBiddingInfo, quotationVO, taxUnitPrice);
+                        }
+//                        checkTaxUnitPrice(newestBiddingInfo==null?biddingInfo:newestBiddingInfo, quotationVO, taxUnitPrice);
                     }else if(PriceTypeEnum.FLOAT_RATE.getType().equals(materialsListMap.get(quotationVO.getMaterialsId()).getPriceType())){
                         /* 如果合约规划拆分的清单是 浮动率 */
                         BigDecimal floatingRate = quotationVO.getFloatingRate();
@@ -780,7 +789,10 @@ public class VendorBidServiceImpl implements IVendorBidService {
                         bidTaxPrice = bidTaxPrice.add(taxPrice);
                         /** 校验含税单价 */
                         //校验含税单价
-                        checkTaxUnitPrice(newestBiddingInfo==null?biddingInfo:newestBiddingInfo, quotationVO, taxUnitPrice);
+                        if (newestBiddingInfo != null) {
+                            checkTaxUnitPrice(newestBiddingInfo, quotationVO, taxUnitPrice);
+                        }
+//                        checkTaxUnitPrice(newestBiddingInfo==null?biddingInfo:newestBiddingInfo, quotationVO, taxUnitPrice);
                     }else if(PriceTypeEnum.FIXED_PRICE.getType().equals(materialsListMap.get(quotationVO.getMaterialsId()).getPriceType())){
                         /* 如果合约规划拆分的清单是 固定价 */
                         //含税单价B
@@ -793,7 +805,10 @@ public class VendorBidServiceImpl implements IVendorBidService {
                                 !ProcurementPlanTypeEnum.SERVICE_SUBCONTRACT.getType().equals(scheme.getProcurementPlanType())){
                             /** 校验含税单价 */
                             //校验含税单价
-                            checkTaxUnitPrice(newestBiddingInfo==null?biddingInfo:newestBiddingInfo, quotationVO, taxUnitPrice);
+                            if (newestBiddingInfo != null) {
+                                checkTaxUnitPrice(newestBiddingInfo, quotationVO, taxUnitPrice);
+                            }
+//                            checkTaxUnitPrice(newestBiddingInfo==null?biddingInfo:newestBiddingInfo, quotationVO, taxUnitPrice);
                         }
                     }
                 }
@@ -974,7 +989,10 @@ public class VendorBidServiceImpl implements IVendorBidService {
 
                 quotation.setNotTaxUnitPrice(notTaxUnitPrice);
                 //校验含税单价
-                checkTaxUnitPrice(newestBiddingInfo==null?biddingInfo:newestBiddingInfo, quotationVO, taxUnitPrice);
+                if (newestBiddingInfo != null) {
+                    checkTaxUnitPrice(newestBiddingInfo, quotationVO, taxUnitPrice);
+                }
+//                checkTaxUnitPrice(newestBiddingInfo==null?biddingInfo:newestBiddingInfo, quotationVO, taxUnitPrice);
             }
             quotation.setTaxPrice(taxPrice);
             quotation.setNotTaxPrice(notTaxPrice);
