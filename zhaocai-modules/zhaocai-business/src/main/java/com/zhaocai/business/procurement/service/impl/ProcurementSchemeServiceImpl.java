@@ -443,7 +443,13 @@ public class ProcurementSchemeServiceImpl extends ServiceImpl<ProcurementSchemeM
     @Override
     public void revokeProcurementScheme(Long id) {
         ProcurementScheme procurementScheme = this.getById(id);
-        ValidateUtils.validateStatusNotEquals(ProcurementSchemeStateEnum.IN_APPROVAL::equalsState, procurementScheme.getState(), "非审批中的采购方案不允许撤回");
+        /* 审批中可撤回；驳回到发起人(自由态)且流程已发起(退回修改)同样允许撤回，未提交过的草稿不允许 */
+        boolean canRevoke = ProcurementSchemeStateEnum.IN_APPROVAL.equalsState(procurementScheme.getState())
+                || (ProcurementSchemeStateEnum.DRAFT.equalsState(procurementScheme.getState())
+                && StringUtils.isNotBlank(procurementScheme.getWfProcessId()));
+        if (!canRevoke) {
+            throw new ParamValidateException("非审批中或退回修改的采购方案不允许撤回");
+        }
         // 撤回流程
         Map<String, Object> paramMap = new HashMap<>();
         paramMap.put("businessId", procurementScheme.getId());

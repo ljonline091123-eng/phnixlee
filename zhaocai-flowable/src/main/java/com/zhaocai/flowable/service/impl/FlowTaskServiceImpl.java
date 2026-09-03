@@ -1639,15 +1639,19 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
      * @return 是否允许撤回
      */
     public boolean canRollback(String processInstanceId, String currentUserId, String currentTaskId) {
-        // 1. 验证流程实例是否存在
+        /*// 1. 验证流程实例是否存在
         HistoricProcessInstance processInstance = historyService.createHistoricProcessInstanceQuery()
+                .processInstanceId(processInstanceId)
+                .singleResult();*/
+        // 1. 流程实例必须仍处于运行中（已结束/已撤回删除的实例不可撤回）
+        ProcessInstance processInstance = runtimeService.createProcessInstanceQuery()
                 .processInstanceId(processInstanceId)
                 .singleResult();
         if (processInstance == null) {
             return false;
         }
 
-        List<HistoricActivityInstance> activities = historyService.createHistoricActivityInstanceQuery()
+        /*List<HistoricActivityInstance> activities = historyService.createHistoricActivityInstanceQuery()
                 .processInstanceId(processInstanceId)
                 .activityType("userTask")  // 过滤用户任务节点
                 .finished()  // 仅查询已完成的节点
@@ -1657,7 +1661,7 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
         //只能撤回刚刚提交的节点
         if (activities != null && !activities.isEmpty() && activities.size() > 1) {
             return false;
-        }
+        }*/
 
         // 2. 校验当前用户为上报人
         String submitter = (String) runtimeService.getVariable(processInstanceId, "INITIATOR");
