@@ -1,0 +1,23 @@
+.env
+.venv/
+__pycache__/
+*.py[cod]
+*.db
+.pytest_cache/
+.coverage
+htmlcov/
+dist/
+build/
+
+# Local runtime output and downloaded inspection artifacts
+*.log
+backend/tmp_*
+backend/emchart.js
+backend/quotepage.js
+backend/stock.js
+backend/xsb_*.js
+backend/Article_*.html
+/46
+cninfo_index.html
+f10_response.json
+*.egg-info/

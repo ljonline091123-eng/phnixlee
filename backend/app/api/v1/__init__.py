@@ -1,0 +1,1 @@
+"""Versioned endpoint compatibility package."""
