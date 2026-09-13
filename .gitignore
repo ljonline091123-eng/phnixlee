@@ -1,0 +1,24 @@
+# Android/Gradle
+.gradle/
+.idea/
+build/
+app/build/
+*.iml
+local.properties
+
+# Xcode
+DerivedData/
+xcuserdata/
+*.xcuserstate
+*.moved-aside
+*.xccheckout
+*.xcscmblueprint
+
+# Signing material
+*.p12
+*.mobileprovision
+*.cer
+*.pem
+*.key
+*.jks
+*.keystore

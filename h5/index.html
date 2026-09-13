@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+  <meta name="theme-color" content="#203a36">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>五彩连线</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="app-shell">
+    <header class="topbar">
+      <div class="score-panel" aria-label="当前得分">
+        <span class="eyebrow">SCORE</span>
+        <strong id="score">00000</strong>
+      </div>
+      <div class="brand-mark" aria-label="五彩连线">
+        <span class="brand-dot dot-a"></span><span class="brand-dot dot-b"></span><span class="brand-dot dot-c"></span>
+        <span class="brand-name">五彩连线</span>
+      </div>
+      <div class="next-panel">
+        <span class="eyebrow">下一轮</span>
+        <div id="preview" class="preview-row" aria-label="下一轮棋子预告"></div>
+      </div>
+      <button id="menuButton" class="icon-button" type="button" aria-label="打开菜单" title="菜单">
+        <span></span><span></span><span></span>
+      </button>
+    </header>
+
+    <section class="game-area">
+      <div id="board" class="board" role="grid" aria-label="九乘九棋盘"></div>
+      <div id="toast" class="toast" aria-live="polite"></div>
+    </section>
+
+    <footer class="footer-bar">
+      <span id="statusText">选择棋子，再选择空位</span>
+      <button id="soundButton" class="sound-button" type="button" aria-label="切换音效" title="音效">
+        <span class="sound-icon">◖</span><span id="soundLabel">音效</span>
+      </button>
+    </footer>
+  </main>
+
+  <div id="menuModal" class="modal-backdrop" hidden>
+    <section class="modal menu-modal" role="dialog" aria-modal="true" aria-labelledby="menuTitle">
+      <div class="modal-heading"><h2 id="menuTitle">游戏菜单</h2><button class="close-button" data-close="menuModal" aria-label="关闭">×</button></div>
+      <button class="menu-action" id="newGameButton"><span class="action-icon">↻</span><span>新游戏</span><span class="chevron">›</span></button>
+      <button class="menu-action" id="highScoreButton"><span class="action-icon">♜</span><span>高分榜</span><span class="chevron">›</span></button>
+      <button class="menu-action" id="settingsButton"><span class="action-icon">⚙</span><span>设置</span><span class="chevron">›</span></button>
+      <p class="modal-note">连成五颗或更多同色棋子即可消除</p>
+    </section>
+  </div>
+
+  <div id="settingsModal" class="modal-backdrop" hidden>
+    <section class="modal settings-modal" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+      <div class="modal-heading"><h2 id="settingsTitle">设置</h2><button class="close-button" data-close="settingsModal" aria-label="关闭">×</button></div>
+      <div class="setting-group">
+        <div class="setting-row"><label for="difficulty">难度系数</label><output id="difficultyValue">1.0</output></div>
+        <input id="difficulty" type="range" min="1" max="2" step="0.1" value="1">
+        <div class="range-labels"><span>1.0</span><span>2.0</span></div>
+        <p id="difficultyHint" class="setting-hint">当前分数下每轮生成 3 颗</p>
+      </div>
+      <div class="setting-group">
+        <div class="setting-row"><label for="whiteProbability">白棋概率系数</label><output id="whiteProbabilityValue">1.0</output></div>
+        <input id="whiteProbability" type="range" min="0" max="2" step="0.1" value="1">
+        <div class="range-labels"><span>0</span><span>2.0</span></div>
+      </div>
+      <div class="setting-group">
+        <div class="setting-row"><label for="bombProbability">炸药概率系数</label><output id="bombProbabilityValue">1.0</output></div>
+        <input id="bombProbability" type="range" min="0" max="2" step="0.1" value="1">
+        <div class="range-labels"><span>0</span><span>2.0</span></div>
+      </div>
+      <div class="setting-group speed-group"><div class="setting-row"><label>移动速度</label></div><div id="speedPicker" class="segmented"></div></div>
+      <div class="setting-group toggle-group">
+        <div class="setting-row"><label for="musicToggle">音乐</label><input id="musicToggle" class="toggle" type="checkbox" checked></div>
+        <input id="musicVolume" type="range" min="0" max="1" step="0.05" value="0.65" aria-label="音乐音量">
+      </div>
+      <div class="setting-group toggle-group">
+        <div class="setting-row"><label for="effectsToggle">音效</label><input id="effectsToggle" class="toggle" type="checkbox" checked></div>
+        <input id="effectsVolume" type="range" min="0" max="1" step="0.05" value="0.8" aria-label="音效音量">
+      </div>
+    </section>
+  </div>
+
+  <div id="scoresModal" class="modal-backdrop" hidden>
+    <section class="modal scores-modal" role="dialog" aria-modal="true" aria-labelledby="scoresTitle">
+      <div class="modal-heading"><h2 id="scoresTitle">高分榜</h2><button class="close-button" data-close="scoresModal" aria-label="关闭">×</button></div>
+      <div id="scoresList" class="scores-list"></div>
+    </section>
+  </div>
+
+  <div id="gameOverModal" class="modal-backdrop" hidden>
+    <section class="modal gameover-modal" role="dialog" aria-modal="true" aria-labelledby="gameOverTitle">
+      <div class="gameover-symbol">✦</div>
+      <h2 id="gameOverTitle">棋盘已满</h2>
+      <p>本局得分 <strong id="finalScore">0</strong></p>
+      <label class="nickname-label" for="nickname">记录你的名字</label>
+      <input id="nickname" class="nickname-input" maxlength="12" placeholder="玩家" autocomplete="off">
+      <button id="saveScoreButton" class="primary-button" type="button">保存成绩并开始新游戏</button>
+    </section>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
