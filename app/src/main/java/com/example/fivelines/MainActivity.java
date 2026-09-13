@@ -776,6 +776,14 @@ public class MainActivity extends Activity {
                 drawHeartPiece(canvas, type, cx, cy, radius, movingPiece);
                 return;
             }
+            if (rayRacerMode) {
+                drawCarLogoPiece(canvas, type, cx, cy, radius, movingPiece);
+                return;
+            }
+            if (kuromiTheme) {
+                drawKuromiPiece(canvas, type, cx, cy, radius, movingPiece);
+                return;
+            }
             float shadowRadius = radius * 1.03f;
             paint.setStyle(Paint.Style.FILL);
             paint.setShader(null);
@@ -818,9 +826,6 @@ public class MainActivity extends Activity {
                     cy + radius * 0.05f
             );
             canvas.drawOval(shineBounds, paint);
-            if (kuromiTheme) {
-                drawKuromiFeatures(canvas, cx, cy, radius, baseColor, movingPiece ? 220 : 245);
-            }
             paint.setAlpha(255);
         }
 
@@ -984,119 +989,484 @@ public class MainActivity extends Activity {
             canvas.restore();
         }
 
-        private void drawKuromiFeatures(Canvas canvas, float cx, float cy, float radius, int baseColor, int alpha) {
+        private void drawKuromiPiece(Canvas canvas, int type, float cx, float cy, float radius, boolean movingPiece) {
+            int outerColor = themedOuterColor(type);
+            int outlineColor = type == WHITE ? 0xffd9c8a8 : darken(outerColor, 0.54f);
             canvas.save();
             paint.setShader(null);
-            paint.setStyle(Paint.Style.FILL);
             paint.setStrokeCap(Paint.Cap.ROUND);
-            paint.setAlpha(alpha);
-
-            int hoodColor = 0xff111118;
-            int innerEarColor = lighten(baseColor, 0.20f);
-            Path leftEar = new Path();
-            leftEar.moveTo(cx - radius * 0.42f, cy - radius * 0.42f);
-            leftEar.cubicTo(
-                    cx - radius * 0.84f,
-                    cy - radius * 1.18f,
-                    cx - radius * 0.54f,
-                    cy - radius * 1.36f,
-                    cx - radius * 0.08f,
-                    cy - radius * 0.55f
-            );
-            leftEar.close();
-            paint.setColor(hoodColor);
-            canvas.drawPath(leftEar, paint);
-
-            Path rightEar = new Path();
-            rightEar.moveTo(cx + radius * 0.42f, cy - radius * 0.42f);
-            rightEar.cubicTo(
-                    cx + radius * 0.84f,
-                    cy - radius * 1.18f,
-                    cx + radius * 0.54f,
-                    cy - radius * 1.36f,
-                    cx + radius * 0.08f,
-                    cy - radius * 0.55f
-            );
-            rightEar.close();
-            canvas.drawPath(rightEar, paint);
-
-            paint.setColor(innerEarColor);
-            Path leftInner = new Path();
-            leftInner.moveTo(cx - radius * 0.39f, cy - radius * 0.52f);
-            leftInner.cubicTo(
-                    cx - radius * 0.62f,
-                    cy - radius * 0.96f,
-                    cx - radius * 0.48f,
-                    cy - radius * 1.07f,
-                    cx - radius * 0.22f,
-                    cy - radius * 0.59f
-            );
-            leftInner.close();
-            canvas.drawPath(leftInner, paint);
-
-            Path rightInner = new Path();
-            rightInner.moveTo(cx + radius * 0.39f, cy - radius * 0.52f);
-            rightInner.cubicTo(
-                    cx + radius * 0.62f,
-                    cy - radius * 0.96f,
-                    cx + radius * 0.48f,
-                    cy - radius * 1.07f,
-                    cx + radius * 0.22f,
-                    cy - radius * 0.59f
-            );
-            rightInner.close();
-            canvas.drawPath(rightInner, paint);
-
-            paint.setStyle(Paint.Style.STROKE);
-            paint.setStrokeWidth(Math.max(1.2f, radius * 0.06f));
-            paint.setColor(0x88111118);
-            canvas.drawCircle(cx, cy, radius * 0.98f, paint);
+            paint.setTextAlign(Paint.Align.CENTER);
+            paint.setFakeBoldText(false);
 
             paint.setStyle(Paint.Style.FILL);
-            paint.setColor(0xfffbf5ee);
-            RectF face = new RectF(
-                    cx - radius * 0.50f,
-                    cy - radius * 0.14f,
-                    cx + radius * 0.50f,
-                    cy + radius * 0.48f
-            );
-            canvas.drawOval(face, paint);
+            paint.setAlpha(0x42);
+            paint.setColor(0xff2b2119);
+            canvas.drawCircle(cx + radius * 0.09f, cy + radius * 0.14f, radius * 1.04f, paint);
 
-            paint.setColor(0xff16171d);
-            canvas.drawCircle(cx - radius * 0.18f, cy + radius * 0.08f, radius * 0.08f, paint);
-            canvas.drawCircle(cx + radius * 0.18f, cy + radius * 0.08f, radius * 0.08f, paint);
-            paint.setStyle(Paint.Style.STROKE);
-            paint.setStrokeWidth(Math.max(1.3f, radius * 0.05f));
-            canvas.drawArc(
-                    new RectF(
-                            cx - radius * 0.20f,
-                            cy + radius * 0.16f,
-                            cx + radius * 0.20f,
-                            cy + radius * 0.34f
-                    ),
-                    18f,
-                    144f,
-                    false,
-                    paint
-            );
-            canvas.drawPoint(cx, cy + radius * 0.16f, paint);
-
-            paint.setStyle(Paint.Style.FILL);
-            paint.setColor(0xffff4fb0);
-            canvas.drawCircle(cx, cy - radius * 0.34f, radius * 0.18f, paint);
-            canvas.drawCircle(cx - radius * 0.08f, cy - radius * 0.24f, radius * 0.07f, paint);
-            canvas.drawCircle(cx + radius * 0.08f, cy - radius * 0.24f, radius * 0.07f, paint);
-            paint.setColor(0xff15151a);
-            canvas.drawCircle(cx - radius * 0.06f, cy - radius * 0.36f, radius * 0.025f, paint);
-            canvas.drawCircle(cx + radius * 0.06f, cy - radius * 0.36f, radius * 0.025f, paint);
-            paint.setStrokeWidth(Math.max(1f, radius * 0.032f));
-            canvas.drawLine(cx - radius * 0.08f, cy - radius * 0.31f, cx + radius * 0.08f, cy - radius * 0.31f, paint);
-            canvas.drawLine(cx, cy - radius * 0.39f, cx, cy - radius * 0.26f, paint);
+            drawKuromiEar(canvas, cx, cy, radius, -1f, outerColor);
+            drawKuromiEar(canvas, cx, cy, radius, 1f, outerColor);
 
             paint.setAlpha(255);
+            paint.setStyle(Paint.Style.FILL);
+            paint.setShader(new RadialGradient(
+                    cx - radius * 0.36f,
+                    cy - radius * 0.46f,
+                    radius * 1.55f,
+                    new int[]{lighten(outerColor, 0.22f), outerColor, darken(outerColor, 0.44f)},
+                    new float[]{0f, 0.56f, 1f},
+                    Shader.TileMode.CLAMP
+            ));
+            canvas.drawCircle(cx, cy, radius, paint);
+            paint.setShader(null);
+
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(movingPiece ? 4.1f : 2.2f);
+            paint.setColor(outlineColor);
+            canvas.drawCircle(cx, cy, radius, paint);
+
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(0xfffbfaf4);
+            Path face = new Path();
+            face.moveTo(cx - radius * 0.72f, cy - radius * 0.03f);
+            face.cubicTo(cx - radius * 0.68f, cy - radius * 0.44f, cx - radius * 0.31f, cy - radius * 0.42f, cx - radius * 0.04f, cy - radius * 0.15f);
+            face.quadTo(cx, cy - radius * 0.09f, cx + radius * 0.04f, cy - radius * 0.15f);
+            face.cubicTo(cx + radius * 0.31f, cy - radius * 0.42f, cx + radius * 0.68f, cy - radius * 0.44f, cx + radius * 0.72f, cy - radius * 0.03f);
+            face.cubicTo(cx + radius * 0.82f, cy + radius * 0.52f, cx + radius * 0.39f, cy + radius * 0.78f, cx, cy + radius * 0.77f);
+            face.cubicTo(cx - radius * 0.39f, cy + radius * 0.78f, cx - radius * 0.82f, cy + radius * 0.52f, cx - radius * 0.72f, cy - radius * 0.03f);
+            face.close();
+            canvas.drawPath(face, paint);
+
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(0xff111118);
+            shineBounds.set(cx - radius * 0.45f, cy - radius * 0.02f, cx - radius * 0.19f, cy + radius * 0.45f);
+            canvas.drawOval(shineBounds, paint);
+            shineBounds.set(cx + radius * 0.19f, cy - radius * 0.02f, cx + radius * 0.45f, cy + radius * 0.45f);
+            canvas.drawOval(shineBounds, paint);
+
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(Math.max(1.5f, radius * 0.07f));
+            paint.setColor(0xff111118);
+            canvas.drawLine(cx - radius * 0.43f, cy + radius * 0.02f, cx - radius * 0.58f, cy - radius * 0.08f, paint);
+            canvas.drawLine(cx - radius * 0.42f, cy + radius * 0.12f, cx - radius * 0.58f, cy + radius * 0.07f, paint);
+            canvas.drawLine(cx + radius * 0.43f, cy + radius * 0.02f, cx + radius * 0.58f, cy - radius * 0.08f, paint);
+            canvas.drawLine(cx + radius * 0.42f, cy + radius * 0.12f, cx + radius * 0.58f, cy + radius * 0.07f, paint);
+
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(0xffff9eb7);
+            shineBounds.set(cx - radius * 0.67f, cy + radius * 0.35f, cx - radius * 0.36f, cy + radius * 0.55f);
+            canvas.drawOval(shineBounds, paint);
+            shineBounds.set(cx + radius * 0.36f, cy + radius * 0.35f, cx + radius * 0.67f, cy + radius * 0.55f);
+            canvas.drawOval(shineBounds, paint);
+            paint.setColor(0xffff6f9f);
+            shineBounds.set(cx - radius * 0.08f, cy + radius * 0.24f, cx + radius * 0.08f, cy + radius * 0.34f);
+            canvas.drawOval(shineBounds, paint);
+
+            drawKuromiSkull(canvas, cx, cy - radius * 0.45f, radius * 0.28f);
+
+            paint.setStyle(Paint.Style.FILL);
+            paint.setAlpha(0xb8);
+            paint.setColor(Color.WHITE);
+            shineBounds.set(cx - radius * 0.64f, cy - radius * 0.61f, cx - radius * 0.22f, cy - radius * 0.40f);
+            canvas.drawOval(shineBounds, paint);
+            paint.setAlpha(0x8f);
+            canvas.drawCircle(cx - radius * 0.10f, cy - radius * 0.66f, radius * 0.09f, paint);
+            paint.setAlpha(255);
             paint.setStrokeCap(Paint.Cap.BUTT);
+            paint.setTextAlign(Paint.Align.LEFT);
             canvas.restore();
         }
+
+        private void drawKuromiEar(Canvas canvas, float cx, float cy, float radius, float side, int outerColor) {
+            Path ear = new Path();
+            ear.moveTo(cx + side * radius * 0.42f, cy - radius * 0.54f);
+            ear.cubicTo(
+                    cx + side * radius * 0.62f,
+                    cy - radius * 1.00f,
+                    cx + side * radius * 0.82f,
+                    cy - radius * 1.18f,
+                    cx + side * radius * 1.05f,
+                    cy - radius * 1.15f
+            );
+            ear.cubicTo(
+                    cx + side * radius * 1.15f,
+                    cy - radius * 0.86f,
+                    cx + side * radius * 0.76f,
+                    cy - radius * 0.62f,
+                    cx + side * radius * 0.37f,
+                    cy - radius * 0.36f
+            );
+            ear.close();
+            paint.setStyle(Paint.Style.FILL);
+            paint.setAlpha(255);
+            paint.setShader(new RadialGradient(
+                    cx + side * radius * 0.72f,
+                    cy - radius * 0.92f,
+                    radius * 0.74f,
+                    new int[]{lighten(outerColor, 0.25f), outerColor, darken(outerColor, 0.45f)},
+                    new float[]{0f, 0.62f, 1f},
+                    Shader.TileMode.CLAMP
+            ));
+            canvas.drawPath(ear, paint);
+            paint.setShader(null);
+            paint.setColor(darken(outerColor, 0.35f));
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(Math.max(1.2f, radius * 0.035f));
+            canvas.drawPath(ear, paint);
+
+            paint.setStyle(Paint.Style.FILL);
+            paint.setShader(new RadialGradient(
+                    cx + side * radius * 1.08f,
+                    cy - radius * 1.18f,
+                    radius * 0.32f,
+                    new int[]{lighten(outerColor, 0.25f), outerColor, darken(outerColor, 0.45f)},
+                    new float[]{0f, 0.55f, 1f},
+                    Shader.TileMode.CLAMP
+            ));
+            canvas.drawCircle(cx + side * radius * 1.08f, cy - radius * 1.18f, radius * 0.22f, paint);
+            paint.setShader(null);
+            paint.setAlpha(0x9a);
+            paint.setColor(Color.WHITE);
+            canvas.drawCircle(cx + side * radius * 1.00f, cy - radius * 1.25f, radius * 0.07f, paint);
+            paint.setAlpha(255);
+        }
+
+        private void drawKuromiSkull(Canvas canvas, float cx, float cy, float radius) {
+            paint.setShader(null);
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(0xffff9ab3);
+            shineBounds.set(cx - radius * 0.78f, cy - radius * 0.62f, cx + radius * 0.78f, cy + radius * 0.58f);
+            canvas.drawOval(shineBounds, paint);
+            float toothTop = cy + radius * 0.30f;
+            float toothBottom = cy + radius * 0.92f;
+            for (int i = -1; i <= 1; i++) {
+                shineBounds.set(
+                        cx + i * radius * 0.38f - radius * 0.16f,
+                        toothTop,
+                        cx + i * radius * 0.38f + radius * 0.16f,
+                        toothBottom
+                );
+                canvas.drawRoundRect(shineBounds, radius * 0.10f, radius * 0.10f, paint);
+            }
+            paint.setColor(0xff111118);
+            canvas.drawCircle(cx - radius * 0.28f, cy - radius * 0.08f, radius * 0.17f, paint);
+            canvas.drawCircle(cx + radius * 0.28f, cy - radius * 0.08f, radius * 0.17f, paint);
+        }
+
+        private void drawCarLogoPiece(Canvas canvas, int type, float cx, float cy, float radius, boolean movingPiece) {
+            int outerColor = carOuterColorFor(type);
+            canvas.save();
+            paint.setShader(null);
+            paint.setStrokeCap(Paint.Cap.ROUND);
+            paint.setTextAlign(Paint.Align.CENTER);
+            paint.setFakeBoldText(false);
+
+            paint.setStyle(Paint.Style.FILL);
+            paint.setAlpha(0x46);
+            paint.setColor(0xff2b2119);
+            canvas.drawCircle(cx + radius * 0.10f, cy + radius * 0.13f, radius * 1.04f, paint);
+
+            paint.setAlpha(255);
+            paint.setShader(new RadialGradient(
+                    cx - radius * 0.34f,
+                    cy - radius * 0.42f,
+                    radius * 1.55f,
+                    new int[]{lighten(outerColor, 0.25f), outerColor, darken(outerColor, 0.48f)},
+                    new float[]{0f, 0.58f, 1f},
+                    Shader.TileMode.CLAMP
+            ));
+            paint.setStyle(Paint.Style.FILL);
+            canvas.drawCircle(cx, cy, radius, paint);
+            paint.setShader(null);
+
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(movingPiece ? 4.3f : 2.5f);
+            paint.setColor(type == WHITE ? 0xffd8c8aa : darken(outerColor, 0.55f));
+            canvas.drawCircle(cx, cy, radius, paint);
+
+            int plateColor = type == WHITE ? 0xff2c3036 : 0xff20242b;
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(plateColor);
+            canvas.drawCircle(cx, cy, radius * 0.68f, paint);
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(Math.max(1.3f, radius * 0.045f));
+            paint.setColor(0xffd8dde6);
+            canvas.drawCircle(cx, cy, radius * 0.69f, paint);
+            paint.setColor(0xff6f7785);
+            paint.setStrokeWidth(Math.max(1.0f, radius * 0.022f));
+            canvas.drawCircle(cx, cy, radius * 0.59f, paint);
+
+            switch (carBrandFor(type)) {
+                case 1:
+                    drawFerrariBadge(canvas, cx, cy, radius);
+                    break;
+                case 2:
+                    drawLamborghiniBadge(canvas, cx, cy, radius);
+                    break;
+                case 3:
+                    drawPorscheBadge(canvas, cx, cy, radius);
+                    break;
+                case 4:
+                    drawDodgeBadge(canvas, cx, cy, radius);
+                    break;
+                case 5:
+                    drawCadillacBadge(canvas, cx, cy, radius);
+                    break;
+                case 6:
+                    drawNissanBadge(canvas, cx, cy, radius);
+                    break;
+                case 7:
+                    drawMercedesBadge(canvas, cx, cy, radius);
+                    break;
+                case 8:
+                    drawBmwBadge(canvas, cx, cy, radius);
+                    break;
+                case 9:
+                default:
+                    drawAudiBadge(canvas, cx, cy, radius);
+                    break;
+            }
+
+            paint.setStyle(Paint.Style.FILL);
+            paint.setAlpha(0xb0);
+            paint.setColor(Color.WHITE);
+            shineBounds.set(cx - radius * 0.62f, cy - radius * 0.66f, cx - radius * 0.22f, cy - radius * 0.46f);
+            canvas.drawOval(shineBounds, paint);
+            paint.setAlpha(255);
+            paint.setStrokeCap(Paint.Cap.BUTT);
+            paint.setTextAlign(Paint.Align.LEFT);
+            paint.setFakeBoldText(false);
+            canvas.restore();
+        }
+
+        private int carBrandFor(int type) {
+            switch (type) {
+                case 1:
+                    return 1;
+                case 2:
+                    return 2;
+                case 3:
+                    return 3;
+                case 4:
+                    return 4;
+                case 5:
+                    return 5;
+                case 6:
+                    return 6;
+                case 7:
+                    return 7;
+                case 8:
+                    return 8;
+                case WHITE:
+                default:
+                    return 9;
+            }
+        }
+
+        private int themedOuterColor(int type) {
+            return type == WHITE ? 0xfff1e3c5 : colorFor(type);
+        }
+
+        private int carOuterColorFor(int type) {
+            return type == WHITE ? 0xfff1e3c5 : colorFor(type);
+        }
+
+        private void drawBmwBadge(Canvas canvas, float cx, float cy, float radius) {
+            float r = radius * 0.46f;
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(0xff0b0d12);
+            canvas.drawCircle(cx, cy, r, paint);
+            shineBounds.set(cx - r * 0.70f, cy - r * 0.70f, cx + r * 0.70f, cy + r * 0.70f);
+            paint.setColor(0xfff5f8fc);
+            canvas.drawArc(shineBounds, -90f, 90f, true, paint);
+            canvas.drawArc(shineBounds, 90f, 90f, true, paint);
+            paint.setColor(0xff0b86e8);
+            canvas.drawArc(shineBounds, 0f, 90f, true, paint);
+            canvas.drawArc(shineBounds, 180f, 90f, true, paint);
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(Math.max(1.1f, radius * 0.035f));
+            paint.setColor(0xffe8edf6);
+            canvas.drawCircle(cx, cy, r * 0.72f, paint);
+            canvas.drawCircle(cx, cy, r, paint);
+            drawBadgeText(canvas, "BMW", cx, cy - r * 0.56f, radius * 0.15f, 0xfff5f8fc, true);
+        }
+
+        private void drawMercedesBadge(Canvas canvas, float cx, float cy, float radius) {
+            float r = radius * 0.50f;
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(Math.max(1.4f, radius * 0.055f));
+            paint.setColor(0xffe5e9f1);
+            canvas.drawCircle(cx, cy, r, paint);
+            paint.setStrokeWidth(Math.max(1.6f, radius * 0.070f));
+            Path star = new Path();
+            star.moveTo(cx, cy);
+            star.lineTo(cx, cy - r * 0.86f);
+            star.moveTo(cx, cy);
+            star.lineTo(cx - r * 0.76f, cy + r * 0.46f);
+            star.moveTo(cx, cy);
+            star.lineTo(cx + r * 0.76f, cy + r * 0.46f);
+            canvas.drawPath(star, paint);
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(0xfff7f9ff);
+            canvas.drawCircle(cx, cy, radius * 0.055f, paint);
+        }
+
+        private void drawAudiBadge(Canvas canvas, float cx, float cy, float radius) {
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(Math.max(1.8f, radius * 0.070f));
+            paint.setColor(0xffeef2f6);
+            float ringR = radius * 0.18f;
+            float gap = radius * 0.22f;
+            for (int i = 0; i < 4; i++) {
+                canvas.drawCircle(cx + (i - 1.5f) * gap, cy, ringR, paint);
+            }
+        }
+
+        private void drawFerrariBadge(Canvas canvas, float cx, float cy, float radius) {
+            drawShield(canvas, cx, cy, radius * 0.76f, radius * 1.02f, 0xffffdf25, 0xff111118);
+            float top = cy - radius * 0.44f;
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(0xff199750);
+            canvas.drawRect(cx - radius * 0.30f, top, cx - radius * 0.10f, top + radius * 0.08f, paint);
+            paint.setColor(0xffffffff);
+            canvas.drawRect(cx - radius * 0.10f, top, cx + radius * 0.10f, top + radius * 0.08f, paint);
+            paint.setColor(0xffe10600);
+            canvas.drawRect(cx + radius * 0.10f, top, cx + radius * 0.30f, top + radius * 0.08f, paint);
+            drawHorseGlyph(canvas, cx, cy + radius * 0.03f, radius * 0.43f, 0xff101010);
+        }
+
+        private void drawLamborghiniBadge(Canvas canvas, float cx, float cy, float radius) {
+            drawShield(canvas, cx, cy, radius * 0.82f, radius * 1.02f, 0xff111118, 0xffd7a72b);
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(Math.max(1.1f, radius * 0.045f));
+            paint.setColor(0xffe2b64d);
+            Path horns = new Path();
+            horns.moveTo(cx - radius * 0.24f, cy - radius * 0.10f);
+            horns.cubicTo(cx - radius * 0.44f, cy - radius * 0.32f, cx - radius * 0.32f, cy - radius * 0.42f, cx - radius * 0.13f, cy - radius * 0.20f);
+            horns.moveTo(cx + radius * 0.24f, cy - radius * 0.10f);
+            horns.cubicTo(cx + radius * 0.44f, cy - radius * 0.32f, cx + radius * 0.32f, cy - radius * 0.42f, cx + radius * 0.13f, cy - radius * 0.20f);
+            canvas.drawPath(horns, paint);
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(0xffe2b64d);
+            shineBounds.set(cx - radius * 0.33f, cy - radius * 0.04f, cx + radius * 0.33f, cy + radius * 0.26f);
+            canvas.drawOval(shineBounds, paint);
+            canvas.drawCircle(cx, cy - radius * 0.12f, radius * 0.17f, paint);
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(Math.max(1.0f, radius * 0.040f));
+            canvas.drawLine(cx - radius * 0.18f, cy + radius * 0.21f, cx - radius * 0.29f, cy + radius * 0.38f, paint);
+            canvas.drawLine(cx + radius * 0.18f, cy + radius * 0.21f, cx + radius * 0.29f, cy + radius * 0.38f, paint);
+        }
+
+        private void drawPorscheBadge(Canvas canvas, float cx, float cy, float radius) {
+            drawShield(canvas, cx, cy, radius * 0.84f, radius * 1.02f, 0xfff1c957, 0xff111118);
+            float left = cx - radius * 0.30f;
+            float top = cy - radius * 0.30f;
+            float w = radius * 0.60f;
+            float h = radius * 0.46f;
+            paint.setStyle(Paint.Style.FILL);
+            for (int i = 0; i < 4; i++) {
+                paint.setColor(i % 2 == 0 ? 0xffc62828 : 0xff111118);
+                canvas.drawRect(left, top + i * h / 4f, left + w, top + (i + 1) * h / 4f, paint);
+            }
+            drawHorseGlyph(canvas, cx, cy + radius * 0.17f, radius * 0.22f, 0xff111118);
+            drawBadgeText(canvas, "P", cx, cy - radius * 0.39f, radius * 0.20f, 0xff111118, true);
+        }
+
+        private void drawDodgeBadge(Canvas canvas, float cx, float cy, float radius) {
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(0xfff44336);
+            drawSlash(canvas, cx - radius * 0.14f, cy - radius * 0.02f, radius * 0.13f, radius * 0.55f);
+            drawSlash(canvas, cx + radius * 0.12f, cy - radius * 0.02f, radius * 0.13f, radius * 0.55f);
+            drawBadgeText(canvas, "DODGE", cx, cy + radius * 0.42f, radius * 0.16f, 0xffedf1f7, true);
+        }
+
+        private void drawCadillacBadge(Canvas canvas, float cx, float cy, float radius) {
+            drawShield(canvas, cx, cy, radius * 0.90f, radius * 0.72f, 0xfff4f6f9, 0xffd7dde8);
+            float left = cx - radius * 0.32f;
+            float top = cy - radius * 0.23f;
+            int[] colors = {0xffd6a627, 0xffc4222f, 0xff2855b8, 0xfff1d46a, 0xffffffff, 0xffc4222f};
+            paint.setStyle(Paint.Style.FILL);
+            for (int row = 0; row < 2; row++) {
+                for (int col = 0; col < 3; col++) {
+                    paint.setColor(colors[row * 3 + col]);
+                    canvas.drawRect(
+                            left + col * radius * 0.22f,
+                            top + row * radius * 0.22f,
+                            left + (col + 1) * radius * 0.22f,
+                            top + (row + 1) * radius * 0.22f,
+                            paint
+                    );
+                }
+            }
+        }
+
+        private void drawNissanBadge(Canvas canvas, float cx, float cy, float radius) {
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(Math.max(1.8f, radius * 0.075f));
+            paint.setColor(0xffedf1f7);
+            canvas.drawCircle(cx, cy, radius * 0.43f, paint);
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(0xffe2e7ef);
+            shineBounds.set(cx - radius * 0.50f, cy - radius * 0.14f, cx + radius * 0.50f, cy + radius * 0.14f);
+            canvas.drawRoundRect(shineBounds, radius * 0.06f, radius * 0.06f, paint);
+            drawBadgeText(canvas, "NISSAN", cx, cy + radius * 0.055f, radius * 0.17f, 0xff141820, true);
+        }
+
+        private void drawShield(Canvas canvas, float cx, float cy, float width, float height, int fillColor, int strokeColor) {
+            float top = cy - height * 0.50f;
+            Path shield = new Path();
+            shield.moveTo(cx - width * 0.48f, top + height * 0.06f);
+            shield.lineTo(cx + width * 0.48f, top + height * 0.06f);
+            shield.lineTo(cx + width * 0.40f, top + height * 0.58f);
+            shield.cubicTo(cx + width * 0.28f, top + height * 0.84f, cx + width * 0.08f, top + height, cx, top + height);
+            shield.cubicTo(cx - width * 0.08f, top + height, cx - width * 0.28f, top + height * 0.84f, cx - width * 0.40f, top + height * 0.58f);
+            shield.close();
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(fillColor);
+            canvas.drawPath(shield, paint);
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(Math.max(1.0f, width * 0.045f));
+            paint.setColor(strokeColor);
+            canvas.drawPath(shield, paint);
+        }
+
+        private void drawHorseGlyph(Canvas canvas, float cx, float cy, float size, int color) {
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(color);
+            shineBounds.set(cx - size * 0.20f, cy - size * 0.23f, cx + size * 0.25f, cy + size * 0.18f);
+            canvas.drawOval(shineBounds, paint);
+            canvas.drawCircle(cx + size * 0.18f, cy - size * 0.32f, size * 0.13f, paint);
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(Math.max(1.0f, size * 0.10f));
+            canvas.drawLine(cx - size * 0.06f, cy + size * 0.14f, cx - size * 0.25f, cy + size * 0.45f, paint);
+            canvas.drawLine(cx + size * 0.16f, cy + size * 0.12f, cx + size * 0.33f, cy + size * 0.40f, paint);
+            canvas.drawLine(cx + size * 0.20f, cy - size * 0.18f, cx + size * 0.41f, cy - size * 0.34f, paint);
+            canvas.drawLine(cx - size * 0.22f, cy - size * 0.10f, cx - size * 0.38f, cy - size * 0.33f, paint);
+        }
+
+        private void drawSlash(Canvas canvas, float cx, float cy, float width, float height) {
+            Path slash = new Path();
+            slash.moveTo(cx - width, cy + height * 0.50f);
+            slash.lineTo(cx + width * 0.12f, cy + height * 0.50f);
+            slash.lineTo(cx + width, cy - height * 0.50f);
+            slash.lineTo(cx - width * 0.12f, cy - height * 0.50f);
+            slash.close();
+            canvas.drawPath(slash, paint);
+        }
+
+        private void drawBadgeText(Canvas canvas, String text, float cx, float baseline, float size, int color, boolean bold) {
+            paint.setShader(null);
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(color);
+            paint.setAlpha(255);
+            paint.setTypeface(bold ? Typeface.DEFAULT_BOLD : Typeface.DEFAULT);
+            paint.setTextAlign(Paint.Align.CENTER);
+            paint.setTextSize(size);
+            paint.setFakeBoldText(bold);
+            canvas.drawText(text, cx, baseline, paint);
+            paint.setTypeface(Typeface.DEFAULT);
+            paint.setFakeBoldText(false);
+        }
+
         private int lighten(int color, float amount) {
             int r = Color.red(color);
             int g = Color.green(color);

@@ -33,6 +33,10 @@ final class CloudGameModel: ObservableObject {
         }
     }
 
+    private static let ordinaryTiles: [Tile] = [
+        .red, .yellow, .green, .blue, .purple, .cyan, .pink, .black
+    ]
+
     enum MoveSpeed: String, CaseIterable, Identifiable {
         case slow, normal, fast, lightning
         var id: String { rawValue }
@@ -560,16 +564,14 @@ final class CloudGameModel: ObservableObject {
     }
 
     private func randomTile() -> Tile {
-        let base = 1.0 / 11.0
+        let base = 1.0 / Double(Self.ordinaryTiles.count + 2)
         let white = base * whiteProbability
         let bomb = base * bombProbability
-        let ordinary = max(0.0, 1.0 - white - bomb) / 9.0
         let roll = Double.random(in: 0..<1)
         if roll < white { return .white }
         if roll < white + bomb { return .bomb }
-        let index = Int.random(in: 0..<9)
-        _ = ordinary
-        return Tile.allCases[index]
+        let index = Int.random(in: 0..<Self.ordinaryTiles.count)
+        return Self.ordinaryTiles[index]
     }
 
     private func bombBlastCells(for match: MatchResult) -> Set<Int> {
