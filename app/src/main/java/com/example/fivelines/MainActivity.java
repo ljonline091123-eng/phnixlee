@@ -15,6 +15,7 @@ import android.graphics.Shader;
 import android.graphics.Typeface;
 import android.media.AudioAttributes;
 import android.media.AudioFormat;
+import android.media.MediaPlayer;
 import android.media.AudioTrack;
 import android.os.Build;
 import android.os.Bundle;
@@ -25,6 +26,7 @@ import android.text.InputType;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowInsets;
+import android.view.Gravity;
 import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.LinearLayout;
@@ -48,7 +50,7 @@ public class MainActivity extends Activity {
         super.onCreate(savedInstanceState);
         getWindow().setStatusBarColor(0xff101820);
         getWindow().setNavigationBarColor(0xfff1eadf);
-        soundEngine = new SoundEngine();
+        soundEngine = new SoundEngine(this);
         gameView = new GameView(this, soundEngine, savedInstanceState);
         setContentView(gameView);
     }
@@ -85,18 +87,35 @@ public class MainActivity extends Activity {
         super.onPause();
     }
 
+    @Override
+    protected void onDestroy() {
+        if (soundEngine != null) {
+            soundEngine.release();
+        }
+        super.onDestroy();
+    }
+
     static final class GameView extends View {
         private static final int SIZE = 9;
         private static final int EMPTY = 0;
         private static final int NORMAL_COLORS = 8;
+        private static final int COLOR_PINK = 5;
+        private static final int COLOR_CYAN = 6;
         private static final int WHITE = 9;
         private static final int BOMB = 10;
         private static final int PREVIEW_COUNT = 3;
         private static final int BASE_SPAWN_COUNT = 3;
+        private static final int MUSIC_TRACK_SYNTH = 0;
+        private static final int MUSIC_TRACK_MIDI = 1;
+        private static final int EASTER_NONE = 0;
+        private static final int EASTER_RAY = 1;
+        private static final int EASTER_MOLLY = 2;
 
         private static final int TOP_HEIGHT = 156;
         private static final long SPAWN_DURATION_MS = 320L;
         private static final long REMOVE_DURATION_MS = 500L;
+        private static final long EASTER_LOADING_DURATION_MS = 2600L;
+        private static final long EASTER_FLASH_HALF_MS = 240L;
         private static final float BOARD_MARGIN = 16f;
 
         private static final String SETTINGS_PREFS = "five_lines_settings";
@@ -159,7 +178,18 @@ public class MainActivity extends Activity {
         private boolean soundEnabled;
         private float musicVolume;
         private float soundVolume;
+        private int musicTrack;
         private int movementSpeed;
+        private boolean rayRacerMode;
+        private boolean kuromiTheme;
+        private int easterKind = EASTER_NONE;
+        private boolean easterLoading;
+        private int easterSecretTaps;
+        private long easterStart;
+        private AlertDialog easterDialog;
+        private final ArrayList<int[]> racerTrailCells = new ArrayList<>();
+        private int racerTrailType = EMPTY;
+        private long racerTrailUntil;
 
         GameView(Context context, SoundEngine sound, Bundle savedState) {
             super(context);
@@ -176,7 +206,7 @@ public class MainActivity extends Activity {
         }
 
         void onHostResume() {
-            sound.updateMusic(musicEnabled, musicVolume);
+            sound.updateMusic(musicEnabled, musicVolume, musicTrack);
         }
 
         private void loadSettings() {
@@ -187,7 +217,13 @@ public class MainActivity extends Activity {
             soundEnabled = settings.getBoolean("sound_enabled", true);
             musicVolume = clamp(settings.getFloat("music_volume", 0.35f), 0f, 1f);
             soundVolume = clamp(settings.getFloat("sound_volume", 0.75f), 0f, 1f);
+            musicTrack = Math.max(
+                    MUSIC_TRACK_SYNTH,
+                    Math.min(MUSIC_TRACK_MIDI, settings.getInt("music_track", MUSIC_TRACK_SYNTH))
+            );
             movementSpeed = Math.max(0, Math.min(3, settings.getInt("movement_speed", 0)));
+            rayRacerMode = settings.getBoolean("ray_racer_mode", false);
+            kuromiTheme = settings.getBoolean("kuromi_theme", false);
             sound.updateSound(soundEnabled, soundVolume);
         }
 
@@ -195,6 +231,13 @@ public class MainActivity extends Activity {
         clearedThisTurn = false;
             moveToken++;
             handler.removeCallbacksAndMessages(null);
+            closeEasterDialog();
+            easterKind = EASTER_NONE;
+            easterLoading = false;
+            easterSecretTaps = 0;
+            racerTrailCells.clear();
+            racerTrailType = EMPTY;
+            racerTrailUntil = 0L;
             for (int[] row : board) {
                 Arrays.fill(row, EMPTY);
             }
@@ -296,13 +339,23 @@ public class MainActivity extends Activity {
                     }
                     spawning = false;
                     clearSpawnedCells();
+                    if (tryStartCornerEasterEgg()) {
+                        invalidate();
+                        return;
+                    }
                     if (afterAnimation != null) {
                         afterAnimation.run();
                     }
                     invalidate();
                 }, SPAWN_DURATION_MS);
-            } else if (afterAnimation != null) {
-                afterAnimation.run();
+            } else {
+                if (tryStartCornerEasterEgg()) {
+                    invalidate();
+                    return;
+                }
+                if (afterAnimation != null) {
+                    afterAnimation.run();
+                }
             }
         }
 
@@ -337,7 +390,8 @@ public class MainActivity extends Activity {
                 drawGameOverOverlay(canvas);
             }
             canvas.restore();
-            if (moving || spawning || removing) {
+            if (moving || spawning || removing || easterLoading
+                    || SystemClock.uptimeMillis() < racerTrailUntil) {
                 postInvalidateOnAnimation();
             }
         }
@@ -448,7 +502,9 @@ public class MainActivity extends Activity {
             float firstX = left + 100f;
             float gap = 82f;
             for (int i = 0; i < PREVIEW_COUNT; i++) {
-                drawPiece(canvas, preview[i], firstX + i * gap, centerY, 20f, false);
+                if (preview[i] != EMPTY) {
+                    drawPiece(canvas, preview[i], firstX + i * gap, centerY, 20f, false);
+                }
             }
         }
 
@@ -467,6 +523,10 @@ public class MainActivity extends Activity {
                             paint
                     );
                 }
+            }
+
+            if (kuromiTheme) {
+                drawKuromiWatermark(canvas);
             }
 
             paint.setStyle(Paint.Style.STROKE);
@@ -501,11 +561,18 @@ public class MainActivity extends Activity {
                 }
             }
 
+            if (SystemClock.uptimeMillis() < racerTrailUntil && !racerTrailCells.isEmpty()) {
+                drawRacerCellTrail(canvas);
+            }
             if (moving && !movePath.isEmpty()) {
                 drawMovingPiece(canvas);
             }
             if (removing) {
                 drawExplosionEffects(canvas, removalProgress);
+            }
+
+            if (easterLoading) {
+                drawEasterLoading(canvas);
             }
 
             if (selectedRow >= 0 && selectedCol >= 0 && !moving && !removing && !gameOver) {
@@ -540,7 +607,68 @@ public class MainActivity extends Activity {
             int[] to = movePath.get(segment + 1);
             float x = lerp(centerX(from[1]), centerX(to[1]), easeInOut(local));
             float y = lerp(centerY(from[0]), centerY(to[0]), easeInOut(local));
+            if (rayRacerMode) {
+                drawRacerTrail(canvas, scaled);
+            }
             drawPiece(canvas, movingType, x, y, cellSize * 0.34f, true);
+        }
+
+        private void drawRacerTrail(Canvas canvas, float scaledProgress) {
+            for (int i = 7; i >= 1; i--) {
+                float trailProgress = Math.max(0f, scaledProgress - i * 0.22f);
+                float[] point = pointOnMovePath(trailProgress);
+                int alpha = Math.max(24, 150 - i * 17);
+                float radius = cellSize * (0.33f - i * 0.018f);
+                drawTrailDot(canvas, movingType, point[0], point[1], radius, alpha);
+            }
+        }
+
+        private float[] pointOnMovePath(float scaledProgress) {
+            int segments = Math.max(1, movePath.size() - 1);
+            int segment = Math.min(segments - 1, (int) Math.floor(scaledProgress));
+            float local = Math.min(1f, scaledProgress - segment);
+            int[] from = movePath.get(segment);
+            int[] to = movePath.get(segment + 1);
+            return new float[]{
+                    lerp(centerX(from[1]), centerX(to[1]), easeInOut(local)),
+                    lerp(centerY(from[0]), centerY(to[0]), easeInOut(local))
+            };
+        }
+
+        private void drawTrailDot(Canvas canvas, int type, float cx, float cy, float radius, int alpha) {
+            if (alpha <= 1) {
+                return;
+            }
+            int baseColor = colorFor(type);
+            paint.setShader(new RadialGradient(
+                    cx,
+                    cy,
+                    radius * 1.6f,
+                    new int[]{lighten(baseColor, 0.25f), baseColor, darken(baseColor, 0.45f)},
+                    new float[]{0f, 0.45f, 1f},
+                    Shader.TileMode.CLAMP
+            ));
+            paint.setStyle(Paint.Style.FILL);
+            paint.setAlpha(alpha);
+            canvas.drawCircle(cx, cy, radius, paint);
+            paint.setShader(null);
+            paint.setAlpha(Math.min(120, alpha + 28));
+            paint.setColor(lighten(baseColor, 0.35f));
+            canvas.drawCircle(cx - radius * 0.26f, cy - radius * 0.28f, radius * 0.16f, paint);
+            paint.setAlpha(255);
+        }
+
+        private void drawRacerCellTrail(Canvas canvas) {
+            long now = SystemClock.uptimeMillis();
+            float life = Math.max(0f, Math.min(1f, (racerTrailUntil - now) / 260f));
+            int count = racerTrailCells.size();
+            for (int i = 0; i < count; i++) {
+                int[] cell = racerTrailCells.get(i);
+                float rank = count <= 1 ? 1f : i / (float) (count - 1);
+                int alpha = Math.round((35f + rank * 150f) * life);
+                float radius = cellSize * (0.20f + rank * 0.12f);
+                drawTrailDot(canvas, racerTrailType, centerX(cell[1]), centerY(cell[0]), radius, alpha);
+            }
         }
 
         private void drawExplosionEffects(Canvas canvas, float progress) {
@@ -622,6 +750,11 @@ public class MainActivity extends Activity {
                     cy + radius * 0.05f
             );
             canvas.drawOval(shineBounds, paint);
+            if (kuromiTheme && !movingPiece) {
+                drawKuromiHead(canvas, cx, cy + radius * 0.03f, radius * 0.88f, 235);
+            } else if (kuromiTheme) {
+                drawKuromiHead(canvas, cx, cy + radius * 0.03f, radius * 0.88f, 220);
+            }
             paint.setAlpha(255);
         }
 
@@ -690,6 +823,90 @@ public class MainActivity extends Activity {
             paint.setColor(0xfffff59d);
             canvas.drawCircle(cx + radius * 0.53f, bodyTop - radius * 0.60f, radius * 0.05f, paint);
             paint.setAlpha(255);
+            canvas.restore();
+        }
+
+        private void drawKuromiWatermark(Canvas canvas) {
+            drawKuromiHead(
+                    canvas,
+                    boardLeft + boardSize * 0.5f,
+                    boardTop + boardSize * 0.5f,
+                    boardSize * 0.23f,
+                    38
+            );
+        }
+
+        private void drawKuromiHead(Canvas canvas, float cx, float cy, float radius, int alpha) {
+            canvas.save();
+            paint.setShader(null);
+            paint.setStyle(Paint.Style.FILL);
+            paint.setStrokeCap(Paint.Cap.ROUND);
+
+            paint.setAlpha(alpha);
+            paint.setColor(0xff121216);
+            Path leftEar = new Path();
+            leftEar.moveTo(cx - radius * 0.36f, cy - radius * 0.48f);
+            leftEar.cubicTo(
+                    cx - radius * 1.00f,
+                    cy - radius * 1.42f,
+                    cx - radius * 0.62f,
+                    cy - radius * 1.68f,
+                    cx - radius * 0.05f,
+                    cy - radius * 0.58f
+            );
+            canvas.drawPath(leftEar, paint);
+
+            Path rightEar = new Path();
+            rightEar.moveTo(cx + radius * 0.36f, cy - radius * 0.48f);
+            rightEar.cubicTo(
+                    cx + radius * 1.00f,
+                    cy - radius * 1.42f,
+                    cx + radius * 0.62f,
+                    cy - radius * 1.68f,
+                    cx + radius * 0.05f,
+                    cy - radius * 0.58f
+            );
+            canvas.drawPath(rightEar, paint);
+            canvas.drawCircle(cx, cy - radius * 0.03f, radius * 0.80f, paint);
+
+            paint.setColor(0xfff8f4ef);
+            RectF face = new RectF(
+                    cx - radius * 0.55f,
+                    cy - radius * 0.34f,
+                    cx + radius * 0.55f,
+                    cy + radius * 0.48f
+            );
+            canvas.drawOval(face, paint);
+
+            paint.setColor(0xff1a1a1f);
+            canvas.drawCircle(cx - radius * 0.22f, cy + radius * 0.02f, radius * 0.065f, paint);
+            canvas.drawCircle(cx + radius * 0.22f, cy + radius * 0.02f, radius * 0.065f, paint);
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(Math.max(1.2f, radius * 0.035f));
+            canvas.drawArc(
+                    new RectF(
+                            cx - radius * 0.16f,
+                            cy + radius * 0.10f,
+                            cx + radius * 0.16f,
+                            cy + radius * 0.30f
+                    ),
+                    18f,
+                    144f,
+                    false,
+                    paint
+            );
+
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(0xffff4fb0);
+            canvas.drawCircle(cx, cy - radius * 0.42f, radius * 0.15f, paint);
+            paint.setColor(0xff121216);
+            canvas.drawCircle(cx - radius * 0.05f, cy - radius * 0.44f, radius * 0.025f, paint);
+            canvas.drawCircle(cx + radius * 0.05f, cy - radius * 0.44f, radius * 0.025f, paint);
+            paint.setStrokeWidth(Math.max(1f, radius * 0.026f));
+            canvas.drawLine(cx - radius * 0.05f, cy - radius * 0.36f, cx + radius * 0.05f, cy - radius * 0.36f, paint);
+
+            paint.setAlpha(255);
+            paint.setStrokeCap(Paint.Cap.BUTT);
             canvas.restore();
         }
 
@@ -873,6 +1090,14 @@ public class MainActivity extends Activity {
             movePath = path;
             moveStart = SystemClock.uptimeMillis();
             moveDuration = movementStepDuration() * Math.max(1, path.size() - 1);
+            if (rayRacerMode) {
+                racerTrailCells.clear();
+                for (int[] cell : path) {
+                    racerTrailCells.add(new int[]{cell[0], cell[1]});
+                }
+                racerTrailType = movingType;
+                racerTrailUntil = moveStart + moveDuration + 260L;
+            }
             moving = true;
             sound.playMove();
             invalidate();
@@ -886,6 +1111,10 @@ public class MainActivity extends Activity {
         spawnedThisTurn = false;
         clearedThisTurn = false;
         clearedThisTurn = false;
+                if (tryStartCornerEasterEgg()) {
+                    invalidate();
+                    return;
+                }
         beginResolution(token);
                 invalidate();
             }, moveDuration + 20L);
@@ -920,6 +1149,9 @@ public class MainActivity extends Activity {
         }
 
         private long movementStepDuration() {
+            if (rayRacerMode) {
+                return 4L;
+            }
             switch (movementSpeed) {
                 case 1:
                     return 135L;
@@ -1178,6 +1410,250 @@ public class MainActivity extends Activity {
             handler.postDelayed(this::showGameOverDialog, 120L);
         }
 
+        private boolean tryStartCornerEasterEgg() {
+            if (easterKind != EASTER_NONE || easterLoading || gameOver) {
+                return false;
+            }
+            if (cornersAre(COLOR_CYAN)) {
+                startCornerEasterEgg(EASTER_RAY);
+                return true;
+            }
+            if (cornersAre(COLOR_PINK)) {
+                startCornerEasterEgg(EASTER_MOLLY);
+                return true;
+            }
+            return false;
+        }
+
+        private boolean cornersAre(int type) {
+            return board[0][0] == type
+                    && board[0][SIZE - 1] == type
+                    && board[SIZE - 1][0] == type
+                    && board[SIZE - 1][SIZE - 1] == type;
+        }
+
+        private void startCornerEasterEgg(int kind) {
+            moveToken++;
+            handler.removeCallbacksAndMessages(null);
+            clearPendingRemoval();
+            clearSpawnedCells();
+            for (int[] row : board) {
+                Arrays.fill(row, EMPTY);
+            }
+            Arrays.fill(preview, EMPTY);
+            selectedRow = -1;
+            selectedCol = -1;
+            moving = false;
+            spawning = false;
+            removing = false;
+            spawnedThisTurn = false;
+            clearedThisTurn = false;
+            racerTrailCells.clear();
+            racerTrailType = EMPTY;
+            racerTrailUntil = 0L;
+            easterKind = kind;
+            easterLoading = true;
+            easterSecretTaps = 0;
+            easterStart = SystemClock.uptimeMillis();
+            sound.playClear();
+            invalidate();
+            handler.postDelayed(() -> showEasterReadyDialog(kind), EASTER_LOADING_DURATION_MS);
+        }
+
+        private void drawEasterLoading(Canvas canvas) {
+            long elapsed = Math.max(0L, SystemClock.uptimeMillis() - easterStart);
+            int halfCycle = (int) Math.min(10L, elapsed / EASTER_FLASH_HALF_MS);
+            int alpha = halfCycle % 2 == 0 ? 245 : 76;
+            int colorPhase = (int) (elapsed / 120L);
+            String message = easterKind == EASTER_MOLLY ? "Molly loading..." : "Ray loading...";
+            int columns = glyphColumns(message);
+            float step = Math.min(cellSize * 0.38f, boardSize / Math.max(1f, columns + 2.0f));
+            float radius = Math.max(2.2f, step * 0.32f);
+            float startX = boardLeft + (boardSize - columns * step) * 0.5f;
+            float startY = boardTop + boardSize * 0.50f - step * 2.5f;
+            int dot = 0;
+            float cursorX = startX;
+            for (int charIndex = 0; charIndex < message.length(); charIndex++) {
+                String[] glyph = glyphFor(message.charAt(charIndex));
+                for (int row = 0; row < glyph.length; row++) {
+                    for (int col = 0; col < glyph[row].length(); col++) {
+                        if (glyph[row].charAt(col) != '#') {
+                            continue;
+                        }
+                        int type = ((dot + colorPhase) % NORMAL_COLORS) + 1;
+                        drawLoadingDot(
+                                canvas,
+                                type,
+                                cursorX + col * step,
+                                startY + row * step,
+                                radius,
+                                alpha
+                        );
+                        dot++;
+                    }
+                }
+                cursorX += (glyph[0].length() + 1) * step;
+            }
+        }
+
+        private int glyphColumns(String message) {
+            int columns = 0;
+            for (int i = 0; i < message.length(); i++) {
+                columns += glyphFor(message.charAt(i))[0].length() + 1;
+            }
+            return Math.max(0, columns - 1);
+        }
+
+        private String[] glyphFor(char value) {
+            switch (Character.toLowerCase(value)) {
+                case 'a':
+                    return new String[]{" # ", "# #", "###", "# #", "# #"};
+                case 'd':
+                    return new String[]{"## ", "# #", "# #", "# #", "## "};
+                case 'g':
+                    return new String[]{" ##", "#  ", "# #", "# #", " ##"};
+                case 'i':
+                    return new String[]{"###", " # ", " # ", " # ", "###"};
+                case 'l':
+                    return new String[]{"#  ", "#  ", "#  ", "#  ", "###"};
+                case 'm':
+                    return new String[]{"# #", "###", "###", "# #", "# #"};
+                case 'n':
+                    return new String[]{"## ", "# #", "# #", "# #", "# #"};
+                case 'o':
+                    return new String[]{" # ", "# #", "# #", "# #", " # "};
+                case 'r':
+                    return new String[]{"## ", "# #", "## ", "# #", "# #"};
+                case 'y':
+                    return new String[]{"# #", "# #", " # ", " # ", " # "};
+                case '.':
+                    return new String[]{" ", " ", " ", " ", "#"};
+                default:
+                    return new String[]{"  ", "  ", "  ", "  ", "  "};
+            }
+        }
+
+        private void drawLoadingDot(Canvas canvas, int type, float cx, float cy, float radius, int alpha) {
+            int baseColor = colorFor(type);
+            paint.setShader(new RadialGradient(
+                    cx - radius * 0.25f,
+                    cy - radius * 0.30f,
+                    radius * 1.4f,
+                    new int[]{lighten(baseColor, 0.28f), baseColor, darken(baseColor, 0.50f)},
+                    new float[]{0f, 0.55f, 1f},
+                    Shader.TileMode.CLAMP
+            ));
+            paint.setStyle(Paint.Style.FILL);
+            paint.setAlpha(alpha);
+            canvas.drawCircle(cx, cy, radius, paint);
+            paint.setShader(null);
+            paint.setAlpha(Math.min(255, alpha + 10));
+            paint.setColor(Color.WHITE);
+            canvas.drawCircle(cx - radius * 0.28f, cy - radius * 0.32f, radius * 0.16f, paint);
+            paint.setAlpha(255);
+        }
+
+        private void showEasterReadyDialog(int kind) {
+            if (easterKind != kind || !easterLoading) {
+                return;
+            }
+            easterLoading = false;
+            invalidate();
+
+            LinearLayout root = new LinearLayout(context);
+            root.setOrientation(LinearLayout.VERTICAL);
+            root.setGravity(Gravity.CENTER_HORIZONTAL);
+            int padding = dp(18);
+            root.setPadding(padding, dp(10), padding, dp(4));
+
+            LinearLayout textRow = new LinearLayout(context);
+            textRow.setOrientation(LinearLayout.HORIZONTAL);
+            textRow.setGravity(Gravity.CENTER);
+            char secret = kind == EASTER_MOLLY ? 'y' : 'A';
+            String message = "Are you ready?";
+            for (int i = 0; i < message.length(); i++) {
+                char value = message.charAt(i);
+                TextView letter = new TextView(context);
+                letter.setText(String.valueOf(value));
+                letter.setTextSize(27f);
+                letter.setGravity(Gravity.CENTER);
+                letter.setPadding(dp(1), dp(8), dp(1), dp(8));
+                if (value == secret) {
+                    letter.setTextColor(kind == EASTER_MOLLY ? 0xffff1493 : 0xff00b4d8);
+                    letter.setOnClickListener(v -> handleEasterSecretTap(kind));
+                } else {
+                    letter.setTextColor(0xff192624);
+                }
+                textRow.addView(letter);
+            }
+            root.addView(textRow);
+
+            easterDialog = new AlertDialog.Builder(context)
+                    .setTitle(kind == EASTER_MOLLY ? "Molly loading..." : "Ray loading...")
+                    .setView(root)
+                    .setPositiveButton("ok", (dialog, which) -> finishEaster(false))
+                    .setCancelable(false)
+                    .create();
+            easterDialog.show();
+        }
+
+        private void handleEasterSecretTap(int kind) {
+            if (easterKind != kind) {
+                return;
+            }
+            easterSecretTaps++;
+            sound.playClick();
+            if (easterSecretTaps >= 5) {
+                finishEaster(true);
+            }
+        }
+
+        private void finishEaster(boolean hidden) {
+            int kind = easterKind;
+            if (hidden) {
+                activateHiddenEaster(kind);
+            }
+            if (easterDialog != null) {
+                AlertDialog dialog = easterDialog;
+                easterDialog = null;
+                if (dialog.isShowing()) {
+                    dialog.dismiss();
+                }
+            }
+            easterKind = EASTER_NONE;
+            easterLoading = false;
+            easterSecretTaps = 0;
+            selectedRow = -1;
+            selectedCol = -1;
+            preparePreview();
+            spawnPieces();
+            invalidate();
+        }
+
+        private void activateHiddenEaster(int kind) {
+            SharedPreferences.Editor editor = settings.edit();
+            if (kind == EASTER_RAY) {
+                rayRacerMode = true;
+                editor.putBoolean("ray_racer_mode", true);
+            } else if (kind == EASTER_MOLLY) {
+                kuromiTheme = true;
+                editor.putBoolean("kuromi_theme", true);
+            }
+            editor.apply();
+            sound.playClear();
+        }
+
+        private void closeEasterDialog() {
+            if (easterDialog == null) {
+                return;
+            }
+            AlertDialog dialog = easterDialog;
+            easterDialog = null;
+            if (dialog.isShowing()) {
+                dialog.dismiss();
+            }
+        }
+
         private void showGameOverDialog() {
             if (dialogShowing) {
                 return;
@@ -1324,6 +1800,16 @@ public class MainActivity extends Activity {
             music.setText("\u97f3\u4e50");
             music.setChecked(musicEnabled);
             root.addView(music);
+
+            final TextView musicTrackValue = new TextView(context);
+            SeekBar musicTrackBar = addChoiceSlider(
+                    root,
+                    "\u97f3\u4e50\u66f2\u76ee",
+                    musicTrackValue,
+                    new String[]{"\u97f3\u4e501", "\u97f3\u4e502"},
+                    musicTrack
+            );
+
             final TextView musicVolumeValue = new TextView(context);
             SeekBar musicVolumeBar = addSlider(
                     root,
@@ -1359,6 +1845,10 @@ public class MainActivity extends Activity {
                         bombProbabilityMultiplier = bomb.getProgress() / 10f;
                         movementSpeed = movementSpeedBar.getProgress();
                         musicEnabled = music.isChecked();
+                        musicTrack = Math.max(
+                                MUSIC_TRACK_SYNTH,
+                                Math.min(MUSIC_TRACK_MIDI, musicTrackBar.getProgress())
+                        );
                         soundEnabled = effects.isChecked();
                         musicVolume = musicVolumeBar.getProgress() / 100f;
                         soundVolume = soundVolumeBar.getProgress() / 100f;
@@ -1368,12 +1858,13 @@ public class MainActivity extends Activity {
                                 .putFloat("bomb_probability", bombProbabilityMultiplier)
                                 .putInt("movement_speed", movementSpeed)
                                 .putBoolean("music_enabled", musicEnabled)
+                                .putInt("music_track", musicTrack)
                                 .putBoolean("sound_enabled", soundEnabled)
                                 .putFloat("music_volume", musicVolume)
                                 .putFloat("sound_volume", soundVolume)
                                 .apply();
                         sound.updateSound(soundEnabled, soundVolume);
-                        sound.updateMusic(musicEnabled, musicVolume);
+                        sound.updateMusic(musicEnabled, musicVolume, musicTrack);
                     })
                     .setNegativeButton("\u53d6\u6d88", null)
                     .show();
@@ -1541,6 +2032,8 @@ public class MainActivity extends Activity {
             outState.putInt("five_lines_selected_col", selectedCol);
             outState.putBoolean("five_lines_game_over", gameOver);
         outState.putBoolean("five_lines_spawned_this_turn", spawnedThisTurn);
+            outState.putBoolean("five_lines_ray_racer_mode", rayRacerMode);
+            outState.putBoolean("five_lines_kuromi_theme", kuromiTheme);
         }
 
         private void restoreState(Bundle state) {
@@ -1566,6 +2059,8 @@ public class MainActivity extends Activity {
             selectedCol = state.getInt("five_lines_selected_col", -1);
             gameOver = state.getBoolean("five_lines_game_over", false);
         spawnedThisTurn = state.getBoolean("five_lines_spawned_this_turn", false);
+            rayRacerMode = state.getBoolean("five_lines_ray_racer_mode", rayRacerMode);
+            kuromiTheme = state.getBoolean("five_lines_kuromi_theme", kuromiTheme);
             moving = false;
             removing = false;
             dialogShowing = false;
@@ -1624,36 +2119,60 @@ public class MainActivity extends Activity {
 
     static final class SoundEngine {
         private static final int SAMPLE_RATE = 22050;
+        private static final int MUSIC_TRACK_SYNTH = 0;
+        private static final int MUSIC_TRACK_MIDI = 1;
+        private final Context context;
         private final Handler handler = new Handler(Looper.getMainLooper());
         private boolean soundEnabled = true;
         private float soundVolume = 0.75f;
         private boolean musicEnabled = true;
         private float musicVolume = 0.35f;
+        private int musicTrack = MUSIC_TRACK_SYNTH;
         private int musicIndex;
         private Runnable musicRunnable;
+        private MediaPlayer midiPlayer;
         private final Random random = new Random();
+
+        SoundEngine(Context context) {
+            this.context = context.getApplicationContext();
+        }
 
         void updateSound(boolean enabled, float volume) {
             soundEnabled = enabled;
             soundVolume = Math.max(0f, Math.min(1f, volume));
         }
 
-        void updateMusic(boolean enabled, float volume) {
+        void updateMusic(boolean enabled, float volume, int track) {
+            int nextTrack = Math.max(MUSIC_TRACK_SYNTH, Math.min(MUSIC_TRACK_MIDI, track));
+            boolean trackChanged = nextTrack != musicTrack;
             musicEnabled = enabled;
             musicVolume = Math.max(0f, Math.min(1f, volume));
+            musicTrack = nextTrack;
             if (musicEnabled) {
+                if (trackChanged) {
+                    stopMusic();
+                }
                 startMusic();
             } else {
                 stopMusic();
             }
+            updateMidiVolume();
         }
 
         void startMusic() {
+            if (musicTrack == MUSIC_TRACK_MIDI) {
+                startMidiMusic();
+                return;
+            }
+            startSynthMusic();
+        }
+
+        private void startSynthMusic() {
             if (musicRunnable != null) {
                 return;
             }
             musicRunnable = () -> {
-                if (!musicEnabled) {
+                if (!musicEnabled || musicTrack != MUSIC_TRACK_SYNTH) {
                     return;
                 }
                 double[] melody = {
@@ -1673,11 +2192,60 @@ public class MainActivity extends Activity {
             handler.post(musicRunnable);
         }
 
+        private void startMidiMusic() {
+            if (!musicEnabled) {
+                return;
+            }
+            try {
+                if (midiPlayer == null) {
+                    midiPlayer = MediaPlayer.create(context, R.raw.midi);
+                    if (midiPlayer == null) {
+                        return;
+                    }
+                    midiPlayer.setLooping(true);
+                }
+                updateMidiVolume();
+                if (!midiPlayer.isPlaying()) {
+                    midiPlayer.start();
+                }
+            } catch (Exception ignored) {
+                releaseMidiPlayer();
+            }
+        }
+
         void stopMusic() {
             if (musicRunnable != null) {
                 handler.removeCallbacks(musicRunnable);
                 musicRunnable = null;
             }
+            releaseMidiPlayer();
+        }
+
+        void release() {
+            stopMusic();
+            handler.removeCallbacksAndMessages(null);
+        }
+
+        private void updateMidiVolume() {
+            if (midiPlayer == null) {
+                return;
+            }
+            try {
+                midiPlayer.setVolume(musicVolume, musicVolume);
+            } catch (Exception ignored) {
+            }
+        }
+
+        private void releaseMidiPlayer() {
+            if (midiPlayer == null) {
+                return;
+            }
+            try {
+                midiPlayer.stop();
+            } catch (Exception ignored) {
+            }
+            midiPlayer.release();
+            midiPlayer = null;
         }
 
         void playClick() {
