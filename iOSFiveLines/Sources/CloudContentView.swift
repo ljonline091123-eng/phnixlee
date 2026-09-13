@@ -83,12 +83,6 @@ struct CloudContentView: View {
         GeometryReader { proxy in
             let size = min(proxy.size.width, proxy.size.height)
             ZStack {
-                if game.kuromiTheme {
-                    KuromiHeadView()
-                        .frame(width: size * 0.42, height: size * 0.42)
-                        .opacity(0.20)
-                        .allowsHitTesting(false)
-                }
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 3), count: 9), spacing: 3) {
                     ForEach(0..<81, id: \.self) { index in
                         let trailIndex = game.racerTrail.firstIndex(of: index)
@@ -107,7 +101,7 @@ struct CloudContentView: View {
                 }
                 if let loading = game.easterLoading {
                     LoadingDotsView(loading: loading)
-                        .frame(width: size * 0.86, height: size * 0.28)
+                        .frame(width: size * 0.92, height: size * 0.42)
                         .allowsHitTesting(false)
                 }
             }
@@ -135,7 +129,7 @@ private struct BoardCell: View {
     var body: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 4)
-                .fill(Color(red: 0.57, green: 0.39, blue: 0.22).opacity(kuromiTheme ? 0.78 : 1.0))
+                .fill(Color(red: 0.57, green: 0.39, blue: 0.22))
                 .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color.black.opacity(0.22), lineWidth: 1))
             if let trailTile, let trailIndex {
                 TileTrailView(tile: trailTile, index: trailIndex)
@@ -175,8 +169,8 @@ private struct TileView: View {
                     .foregroundStyle(.white)
             }
             if kuromiTheme, tile != .bomb {
-                KuromiHeadView()
-                    .padding(compact ? 3 : 5)
+                KuromiTileFeaturesView(accent: tile.color)
+                    .padding(compact ? 2 : 4)
             }
         }
         .padding(compact ? 2 : 3)
@@ -203,64 +197,115 @@ private struct TileTrailView: View {
     }
 }
 
-private struct KuromiHeadView: View {
+private struct KuromiTileFeaturesView: View {
+    let accent: Color
+
     var body: some View {
         GeometryReader { proxy in
             let size = min(proxy.size.width, proxy.size.height)
             let center = CGPoint(x: proxy.size.width / 2, y: proxy.size.height / 2 + size * 0.03)
+            let hood = Color(red: 0.055, green: 0.055, blue: 0.075)
             ZStack {
                 Path { path in
-                    path.move(to: CGPoint(x: center.x - size * 0.20, y: center.y - size * 0.25))
+                    path.move(to: CGPoint(x: center.x - size * 0.28, y: center.y - size * 0.25))
                     path.addCurve(
-                        to: CGPoint(x: center.x - size * 0.03, y: center.y - size * 0.31),
-                        control1: CGPoint(x: center.x - size * 0.48, y: center.y - size * 0.78),
-                        control2: CGPoint(x: center.x - size * 0.31, y: center.y - size * 0.88)
+                        to: CGPoint(x: center.x - size * 0.06, y: center.y - size * 0.33),
+                        control1: CGPoint(x: center.x - size * 0.55, y: center.y - size * 0.86),
+                        control2: CGPoint(x: center.x - size * 0.37, y: center.y - size * 0.98)
                     )
-                    path.addLine(to: CGPoint(x: center.x - size * 0.20, y: center.y - size * 0.25))
+                    path.addCurve(
+                        to: CGPoint(x: center.x - size * 0.28, y: center.y - size * 0.25),
+                        control1: CGPoint(x: center.x - size * 0.16, y: center.y - size * 0.27),
+                        control2: CGPoint(x: center.x - size * 0.24, y: center.y - size * 0.22)
+                    )
 
-                    path.move(to: CGPoint(x: center.x + size * 0.20, y: center.y - size * 0.25))
+                    path.move(to: CGPoint(x: center.x + size * 0.28, y: center.y - size * 0.25))
                     path.addCurve(
-                        to: CGPoint(x: center.x + size * 0.03, y: center.y - size * 0.31),
-                        control1: CGPoint(x: center.x + size * 0.48, y: center.y - size * 0.78),
-                        control2: CGPoint(x: center.x + size * 0.31, y: center.y - size * 0.88)
+                        to: CGPoint(x: center.x + size * 0.06, y: center.y - size * 0.33),
+                        control1: CGPoint(x: center.x + size * 0.55, y: center.y - size * 0.86),
+                        control2: CGPoint(x: center.x + size * 0.37, y: center.y - size * 0.98)
                     )
-                    path.addLine(to: CGPoint(x: center.x + size * 0.20, y: center.y - size * 0.25))
+                    path.addCurve(
+                        to: CGPoint(x: center.x + size * 0.28, y: center.y - size * 0.25),
+                        control1: CGPoint(x: center.x + size * 0.16, y: center.y - size * 0.27),
+                        control2: CGPoint(x: center.x + size * 0.24, y: center.y - size * 0.22)
+                    )
                 }
-                .fill(Color(red: 0.07, green: 0.07, blue: 0.09))
+                .fill(hood)
+                .shadow(color: .black.opacity(0.28), radius: size * 0.025, y: size * 0.02)
+
+                Path { path in
+                    path.move(to: CGPoint(x: center.x - size * 0.27, y: center.y - size * 0.34))
+                    path.addCurve(
+                        to: CGPoint(x: center.x - size * 0.13, y: center.y - size * 0.35),
+                        control1: CGPoint(x: center.x - size * 0.40, y: center.y - size * 0.68),
+                        control2: CGPoint(x: center.x - size * 0.31, y: center.y - size * 0.76)
+                    )
+                    path.addLine(to: CGPoint(x: center.x - size * 0.27, y: center.y - size * 0.34))
+
+                    path.move(to: CGPoint(x: center.x + size * 0.27, y: center.y - size * 0.34))
+                    path.addCurve(
+                        to: CGPoint(x: center.x + size * 0.13, y: center.y - size * 0.35),
+                        control1: CGPoint(x: center.x + size * 0.40, y: center.y - size * 0.68),
+                        control2: CGPoint(x: center.x + size * 0.31, y: center.y - size * 0.76)
+                    )
+                    path.addLine(to: CGPoint(x: center.x + size * 0.27, y: center.y - size * 0.34))
+                }
+                .fill(accent.opacity(0.88))
 
                 Circle()
-                    .fill(Color(red: 0.07, green: 0.07, blue: 0.09))
-                    .frame(width: size * 0.68, height: size * 0.68)
-                    .position(center)
+                    .strokeBorder(hood.opacity(0.72), lineWidth: max(1.2, size * 0.045))
+                    .frame(width: size * 0.86, height: size * 0.86)
+                    .position(x: center.x, y: center.y)
 
                 Ellipse()
-                    .fill(Color(red: 0.97, green: 0.94, blue: 0.90))
-                    .frame(width: size * 0.47, height: size * 0.36)
-                    .position(x: center.x, y: center.y + size * 0.06)
+                    .fill(Color(red: 0.99, green: 0.96, blue: 0.91))
+                    .frame(width: size * 0.58, height: size * 0.38)
+                    .position(x: center.x, y: center.y + size * 0.11)
 
                 HStack(spacing: size * 0.13) {
-                    Circle().fill(Color(red: 0.05, green: 0.05, blue: 0.06))
-                    Circle().fill(Color(red: 0.05, green: 0.05, blue: 0.06))
+                    Circle().fill(hood)
+                    Circle().fill(hood)
                 }
-                .frame(width: size * 0.26, height: size * 0.045)
-                .position(x: center.x, y: center.y + size * 0.02)
+                .frame(width: size * 0.28, height: size * 0.055)
+                .position(x: center.x, y: center.y + size * 0.05)
+
+                Path { path in
+                    path.addArc(
+                        center: CGPoint(x: center.x, y: center.y + size * 0.13),
+                        radius: size * 0.105,
+                        startAngle: .degrees(20),
+                        endAngle: .degrees(160),
+                        clockwise: false
+                    )
+                    path.move(to: CGPoint(x: center.x, y: center.y + size * 0.105))
+                    path.addLine(to: CGPoint(x: center.x, y: center.y + size * 0.11))
+                }
+                .stroke(hood, style: StrokeStyle(lineWidth: max(1.3, size * 0.035), lineCap: .round))
 
                 Circle()
-                    .fill(Color(red: 1.0, green: 0.31, blue: 0.69))
-                    .frame(width: size * 0.13, height: size * 0.13)
+                    .fill(Color(red: 1.0, green: 0.30, blue: 0.68))
+                    .frame(width: size * 0.18, height: size * 0.18)
                     .position(x: center.x, y: center.y - size * 0.22)
 
-                Circle()
-                    .fill(Color(red: 0.05, green: 0.05, blue: 0.06))
-                    .frame(width: size * 0.025, height: size * 0.025)
-                    .position(x: center.x - size * 0.025, y: center.y - size * 0.225)
-                Circle()
-                    .fill(Color(red: 0.05, green: 0.05, blue: 0.06))
-                    .frame(width: size * 0.025, height: size * 0.025)
-                    .position(x: center.x + size * 0.025, y: center.y - size * 0.225)
+                HStack(spacing: size * 0.035) {
+                    Circle().fill(hood)
+                    Circle().fill(hood)
+                }
+                .frame(width: size * 0.10, height: size * 0.025)
+                .position(x: center.x, y: center.y - size * 0.23)
+
+                Path { path in
+                    path.move(to: CGPoint(x: center.x - size * 0.04, y: center.y - size * 0.18))
+                    path.addLine(to: CGPoint(x: center.x + size * 0.04, y: center.y - size * 0.18))
+                    path.move(to: CGPoint(x: center.x, y: center.y - size * 0.22))
+                    path.addLine(to: CGPoint(x: center.x, y: center.y - size * 0.14))
+                }
+                .stroke(hood, style: StrokeStyle(lineWidth: max(0.8, size * 0.018), lineCap: .round))
             }
         }
         .aspectRatio(1, contentMode: .fit)
+        .allowsHitTesting(false)
     }
 }
 
@@ -275,24 +320,62 @@ private struct LoadingDotsView: View {
 
     var body: some View {
         GeometryReader { proxy in
-            let layout = Self.layout(for: loading.message)
-            let step = min(
-                proxy.size.width / CGFloat(max(1, layout.columns)),
-                proxy.size.height / 5.0
+            let titleLayout = Self.layout(for: loading.title)
+            let loadingLayout = Self.layout(for: "loading...")
+            let titleStep = min(
+                proxy.size.width / CGFloat(max(1, titleLayout.columns + 2)),
+                proxy.size.height / 8.0
             )
-            let dotSize = max(3.0, step * 0.58)
-            let startX = (proxy.size.width - CGFloat(layout.columns - 1) * step) / 2.0
-            let startY = (proxy.size.height - 4.0 * step) / 2.0
+            let loadingStep = min(
+                proxy.size.width / CGFloat(max(1, loadingLayout.columns + 4)),
+                proxy.size.height / 15.0
+            )
+            let totalHeight = titleStep * 5.0 + loadingStep * 1.55 + loadingStep * 5.0
+            let titleTop = max(0, (proxy.size.height - totalHeight) / 2.0)
+            let loadingTop = titleTop + titleStep * 5.0 + loadingStep * 1.55
+            let color = Self.colors[loading.colorPhase % Self.colors.count]
+            ZStack {
+                dotLine(
+                    layout: titleLayout,
+                    step: titleStep,
+                    dotSize: max(5.0, titleStep * 0.60),
+                    top: titleTop,
+                    canvasWidth: proxy.size.width,
+                    color: color
+                )
+                dotLine(
+                    layout: loadingLayout,
+                    step: loadingStep,
+                    dotSize: max(3.0, loadingStep * 0.58),
+                    top: loadingTop,
+                    canvasWidth: proxy.size.width,
+                    color: color
+                )
+            }
+            .opacity(loading.visible ? 1.0 : 0.26)
+        }
+    }
+
+    private func dotLine(
+        layout: (dots: [Dot], columns: Int),
+        step: CGFloat,
+        dotSize: CGFloat,
+        top: CGFloat,
+        canvasWidth: CGFloat,
+        color: Color
+    ) -> some View {
+        let startX = (canvasWidth - CGFloat(max(0, layout.columns - 1)) * step) / 2.0
+        return ZStack {
             ForEach(layout.dots) { dot in
                 Circle()
-                    .fill(Self.colors[(dot.id + loading.colorPhase) % Self.colors.count])
+                    .fill(color)
                     .frame(width: dotSize, height: dotSize)
-                    .shadow(color: Self.colors[(dot.id + loading.colorPhase) % Self.colors.count].opacity(0.45), radius: 4)
+                    .shadow(color: color.opacity(0.55), radius: 4)
+                    .overlay(Circle().stroke(Color.white.opacity(0.35), lineWidth: 0.6))
                     .position(
                         x: startX + CGFloat(dot.x) * step,
-                        y: startY + CGFloat(dot.y) * step
+                        y: top + CGFloat(dot.y) * step
                     )
-                    .opacity(loading.visible ? 1.0 : 0.24)
             }
         }
     }
@@ -305,7 +388,8 @@ private struct LoadingDotsView: View {
         .purple,
         .cyan,
         .pink,
-        .orange
+        .orange,
+        .black
     ]
 
     private static func layout(for message: String) -> (dots: [Dot], columns: Int) {
@@ -343,7 +427,6 @@ private struct LoadingDotsView: View {
         }
     }
 }
-
 private struct EasterPromptOverlay: View {
     let prompt: CloudGameModel.EasterPrompt
     let onSecretTap: (Character) -> Void

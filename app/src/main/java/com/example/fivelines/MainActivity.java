@@ -114,8 +114,9 @@ public class MainActivity extends Activity {
         private static final int TOP_HEIGHT = 156;
         private static final long SPAWN_DURATION_MS = 320L;
         private static final long REMOVE_DURATION_MS = 500L;
-        private static final long EASTER_LOADING_DURATION_MS = 2600L;
-        private static final long EASTER_FLASH_HALF_MS = 240L;
+        private static final long EASTER_FLASH_HALF_MS = 180L;
+        private static final long EASTER_FLASH_FULL_MS = EASTER_FLASH_HALF_MS * 2L;
+        private static final long EASTER_LOADING_DURATION_MS = EASTER_FLASH_FULL_MS * NORMAL_COLORS;
         private static final float BOARD_MARGIN = 16f;
 
         private static final String SETTINGS_PREFS = "five_lines_settings";
@@ -222,8 +223,9 @@ public class MainActivity extends Activity {
                     Math.min(MUSIC_TRACK_MIDI, settings.getInt("music_track", MUSIC_TRACK_SYNTH))
             );
             movementSpeed = Math.max(0, Math.min(3, settings.getInt("movement_speed", 0)));
-            rayRacerMode = settings.getBoolean("ray_racer_mode", false);
-            kuromiTheme = settings.getBoolean("kuromi_theme", false);
+            rayRacerMode = false;
+            kuromiTheme = false;
+            settings.edit().remove("ray_racer_mode").remove("kuromi_theme").apply();
             sound.updateSound(soundEnabled, soundVolume);
         }
 
@@ -235,6 +237,8 @@ public class MainActivity extends Activity {
             easterKind = EASTER_NONE;
             easterLoading = false;
             easterSecretTaps = 0;
+            rayRacerMode = false;
+            kuromiTheme = false;
             racerTrailCells.clear();
             racerTrailType = EMPTY;
             racerTrailUntil = 0L;
@@ -525,10 +529,6 @@ public class MainActivity extends Activity {
                 }
             }
 
-            if (kuromiTheme) {
-                drawKuromiWatermark(canvas);
-            }
-
             paint.setStyle(Paint.Style.STROKE);
             paint.setStrokeWidth(1.6f);
             paint.setColor(0xff76583f);
@@ -750,10 +750,8 @@ public class MainActivity extends Activity {
                     cy + radius * 0.05f
             );
             canvas.drawOval(shineBounds, paint);
-            if (kuromiTheme && !movingPiece) {
-                drawKuromiHead(canvas, cx, cy + radius * 0.03f, radius * 0.88f, 235);
-            } else if (kuromiTheme) {
-                drawKuromiHead(canvas, cx, cy + radius * 0.03f, radius * 0.88f, 220);
+            if (kuromiTheme) {
+                drawKuromiFeatures(canvas, cx, cy, radius, baseColor, movingPiece ? 220 : 245);
             }
             paint.setAlpha(255);
         }
@@ -826,90 +824,119 @@ public class MainActivity extends Activity {
             canvas.restore();
         }
 
-        private void drawKuromiWatermark(Canvas canvas) {
-            drawKuromiHead(
-                    canvas,
-                    boardLeft + boardSize * 0.5f,
-                    boardTop + boardSize * 0.5f,
-                    boardSize * 0.23f,
-                    38
-            );
-        }
-
-        private void drawKuromiHead(Canvas canvas, float cx, float cy, float radius, int alpha) {
+        private void drawKuromiFeatures(Canvas canvas, float cx, float cy, float radius, int baseColor, int alpha) {
             canvas.save();
             paint.setShader(null);
             paint.setStyle(Paint.Style.FILL);
             paint.setStrokeCap(Paint.Cap.ROUND);
-
             paint.setAlpha(alpha);
-            paint.setColor(0xff121216);
+
+            int hoodColor = 0xff111118;
+            int innerEarColor = lighten(baseColor, 0.20f);
             Path leftEar = new Path();
-            leftEar.moveTo(cx - radius * 0.36f, cy - radius * 0.48f);
+            leftEar.moveTo(cx - radius * 0.42f, cy - radius * 0.42f);
             leftEar.cubicTo(
-                    cx - radius * 1.00f,
-                    cy - radius * 1.42f,
-                    cx - radius * 0.62f,
-                    cy - radius * 1.68f,
-                    cx - radius * 0.05f,
-                    cy - radius * 0.58f
+                    cx - radius * 0.84f,
+                    cy - radius * 1.18f,
+                    cx - radius * 0.54f,
+                    cy - radius * 1.36f,
+                    cx - radius * 0.08f,
+                    cy - radius * 0.55f
             );
+            leftEar.close();
+            paint.setColor(hoodColor);
             canvas.drawPath(leftEar, paint);
 
             Path rightEar = new Path();
-            rightEar.moveTo(cx + radius * 0.36f, cy - radius * 0.48f);
+            rightEar.moveTo(cx + radius * 0.42f, cy - radius * 0.42f);
             rightEar.cubicTo(
-                    cx + radius * 1.00f,
-                    cy - radius * 1.42f,
-                    cx + radius * 0.62f,
-                    cy - radius * 1.68f,
-                    cx + radius * 0.05f,
-                    cy - radius * 0.58f
+                    cx + radius * 0.84f,
+                    cy - radius * 1.18f,
+                    cx + radius * 0.54f,
+                    cy - radius * 1.36f,
+                    cx + radius * 0.08f,
+                    cy - radius * 0.55f
             );
+            rightEar.close();
             canvas.drawPath(rightEar, paint);
-            canvas.drawCircle(cx, cy - radius * 0.03f, radius * 0.80f, paint);
 
-            paint.setColor(0xfff8f4ef);
+            paint.setColor(innerEarColor);
+            Path leftInner = new Path();
+            leftInner.moveTo(cx - radius * 0.39f, cy - radius * 0.52f);
+            leftInner.cubicTo(
+                    cx - radius * 0.62f,
+                    cy - radius * 0.96f,
+                    cx - radius * 0.48f,
+                    cy - radius * 1.07f,
+                    cx - radius * 0.22f,
+                    cy - radius * 0.59f
+            );
+            leftInner.close();
+            canvas.drawPath(leftInner, paint);
+
+            Path rightInner = new Path();
+            rightInner.moveTo(cx + radius * 0.39f, cy - radius * 0.52f);
+            rightInner.cubicTo(
+                    cx + radius * 0.62f,
+                    cy - radius * 0.96f,
+                    cx + radius * 0.48f,
+                    cy - radius * 1.07f,
+                    cx + radius * 0.22f,
+                    cy - radius * 0.59f
+            );
+            rightInner.close();
+            canvas.drawPath(rightInner, paint);
+
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(Math.max(1.2f, radius * 0.06f));
+            paint.setColor(0x88111118);
+            canvas.drawCircle(cx, cy, radius * 0.98f, paint);
+
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(0xfffbf5ee);
             RectF face = new RectF(
-                    cx - radius * 0.55f,
-                    cy - radius * 0.34f,
-                    cx + radius * 0.55f,
+                    cx - radius * 0.50f,
+                    cy - radius * 0.14f,
+                    cx + radius * 0.50f,
                     cy + radius * 0.48f
             );
             canvas.drawOval(face, paint);
 
-            paint.setColor(0xff1a1a1f);
-            canvas.drawCircle(cx - radius * 0.22f, cy + radius * 0.02f, radius * 0.065f, paint);
-            canvas.drawCircle(cx + radius * 0.22f, cy + radius * 0.02f, radius * 0.065f, paint);
+            paint.setColor(0xff16171d);
+            canvas.drawCircle(cx - radius * 0.18f, cy + radius * 0.08f, radius * 0.08f, paint);
+            canvas.drawCircle(cx + radius * 0.18f, cy + radius * 0.08f, radius * 0.08f, paint);
             paint.setStyle(Paint.Style.STROKE);
-            paint.setStrokeWidth(Math.max(1.2f, radius * 0.035f));
+            paint.setStrokeWidth(Math.max(1.3f, radius * 0.05f));
             canvas.drawArc(
                     new RectF(
-                            cx - radius * 0.16f,
-                            cy + radius * 0.10f,
-                            cx + radius * 0.16f,
-                            cy + radius * 0.30f
+                            cx - radius * 0.20f,
+                            cy + radius * 0.16f,
+                            cx + radius * 0.20f,
+                            cy + radius * 0.34f
                     ),
                     18f,
                     144f,
                     false,
                     paint
             );
+            canvas.drawPoint(cx, cy + radius * 0.16f, paint);
 
             paint.setStyle(Paint.Style.FILL);
             paint.setColor(0xffff4fb0);
-            canvas.drawCircle(cx, cy - radius * 0.42f, radius * 0.15f, paint);
-            paint.setColor(0xff121216);
-            canvas.drawCircle(cx - radius * 0.05f, cy - radius * 0.44f, radius * 0.025f, paint);
-            canvas.drawCircle(cx + radius * 0.05f, cy - radius * 0.44f, radius * 0.025f, paint);
-            paint.setStrokeWidth(Math.max(1f, radius * 0.026f));
-            canvas.drawLine(cx - radius * 0.05f, cy - radius * 0.36f, cx + radius * 0.05f, cy - radius * 0.36f, paint);
+            canvas.drawCircle(cx, cy - radius * 0.34f, radius * 0.18f, paint);
+            canvas.drawCircle(cx - radius * 0.08f, cy - radius * 0.24f, radius * 0.07f, paint);
+            canvas.drawCircle(cx + radius * 0.08f, cy - radius * 0.24f, radius * 0.07f, paint);
+            paint.setColor(0xff15151a);
+            canvas.drawCircle(cx - radius * 0.06f, cy - radius * 0.36f, radius * 0.025f, paint);
+            canvas.drawCircle(cx + radius * 0.06f, cy - radius * 0.36f, radius * 0.025f, paint);
+            paint.setStrokeWidth(Math.max(1f, radius * 0.032f));
+            canvas.drawLine(cx - radius * 0.08f, cy - radius * 0.31f, cx + radius * 0.08f, cy - radius * 0.31f, paint);
+            canvas.drawLine(cx, cy - radius * 0.39f, cx, cy - radius * 0.26f, paint);
 
             paint.setAlpha(255);
             paint.setStrokeCap(Paint.Cap.BUTT);
             canvas.restore();
         }
-
         private int lighten(int color, float amount) {
             int r = Color.red(color);
             int g = Color.green(color);
@@ -1441,6 +1468,8 @@ public class MainActivity extends Activity {
                 Arrays.fill(row, EMPTY);
             }
             Arrays.fill(preview, EMPTY);
+            rayRacerMode = false;
+            kuromiTheme = false;
             selectedRow = -1;
             selectedCol = -1;
             moving = false;
@@ -1456,22 +1485,53 @@ public class MainActivity extends Activity {
             easterSecretTaps = 0;
             easterStart = SystemClock.uptimeMillis();
             sound.playClear();
+            scheduleEasterLoadingAlarms(kind);
             invalidate();
             handler.postDelayed(() -> showEasterReadyDialog(kind), EASTER_LOADING_DURATION_MS);
         }
 
+        private void scheduleEasterLoadingAlarms(int kind) {
+            final int token = moveToken;
+            for (int phase = 0; phase < NORMAL_COLORS; phase++) {
+                final int scheduledPhase = phase;
+                handler.postDelayed(() -> {
+                    if (token == moveToken && easterKind == kind && easterLoading) {
+                        sound.playAlarm();
+                    }
+                }, scheduledPhase * EASTER_FLASH_FULL_MS);
+            }
+        }
+
         private void drawEasterLoading(Canvas canvas) {
             long elapsed = Math.max(0L, SystemClock.uptimeMillis() - easterStart);
-            int halfCycle = (int) Math.min(10L, elapsed / EASTER_FLASH_HALF_MS);
-            int alpha = halfCycle % 2 == 0 ? 245 : 76;
-            int colorPhase = (int) (elapsed / 120L);
-            String message = easterKind == EASTER_MOLLY ? "Molly loading..." : "Ray loading...";
+            int halfCycle = (int) Math.min(NORMAL_COLORS * 2L - 1L, elapsed / EASTER_FLASH_HALF_MS);
+            int alpha = halfCycle % 2 == 0 ? 248 : 68;
+            int colorPhase = (int) Math.min(NORMAL_COLORS - 1L, elapsed / EASTER_FLASH_FULL_MS);
+            int type = colorPhase + 1;
+            String title = easterKind == EASTER_MOLLY ? "Molly" : "Ray";
+            String loading = "loading...";
+            int titleColumns = glyphColumns(title);
+            int loadingColumns = glyphColumns(loading);
+            float titleStep = Math.min(cellSize * 0.70f, boardSize / Math.max(1f, titleColumns + 2.0f));
+            float loadingStep = Math.min(cellSize * 0.34f, boardSize / Math.max(1f, loadingColumns + 3.0f));
+            float totalHeight = titleStep * 5f + loadingStep * 1.55f + loadingStep * 5f;
+            float titleY = boardTop + (boardSize - totalHeight) * 0.50f;
+            float loadingY = titleY + titleStep * 5f + loadingStep * 1.55f;
+            drawLoadingLine(canvas, title, titleStep, titleY, Math.max(3.2f, titleStep * 0.31f), type, alpha);
+            drawLoadingLine(canvas, loading, loadingStep, loadingY, Math.max(2.0f, loadingStep * 0.30f), type, alpha);
+        }
+
+        private void drawLoadingLine(
+                Canvas canvas,
+                String message,
+                float step,
+                float startY,
+                float radius,
+                int type,
+                int alpha
+        ) {
             int columns = glyphColumns(message);
-            float step = Math.min(cellSize * 0.38f, boardSize / Math.max(1f, columns + 2.0f));
-            float radius = Math.max(2.2f, step * 0.32f);
-            float startX = boardLeft + (boardSize - columns * step) * 0.5f;
-            float startY = boardTop + boardSize * 0.50f - step * 2.5f;
-            int dot = 0;
+            float startX = boardLeft + (boardSize - Math.max(0, columns - 1) * step) * 0.5f;
             float cursorX = startX;
             for (int charIndex = 0; charIndex < message.length(); charIndex++) {
                 String[] glyph = glyphFor(message.charAt(charIndex));
@@ -1480,7 +1540,6 @@ public class MainActivity extends Activity {
                         if (glyph[row].charAt(col) != '#') {
                             continue;
                         }
-                        int type = ((dot + colorPhase) % NORMAL_COLORS) + 1;
                         drawLoadingDot(
                                 canvas,
                                 type,
@@ -1489,13 +1548,11 @@ public class MainActivity extends Activity {
                                 radius,
                                 alpha
                         );
-                        dot++;
                     }
                 }
                 cursorX += (glyph[0].length() + 1) * step;
             }
         }
-
         private int glyphColumns(String message) {
             int columns = 0;
             for (int i = 0; i < message.length(); i++) {
@@ -1631,15 +1688,11 @@ public class MainActivity extends Activity {
         }
 
         private void activateHiddenEaster(int kind) {
-            SharedPreferences.Editor editor = settings.edit();
             if (kind == EASTER_RAY) {
                 rayRacerMode = true;
-                editor.putBoolean("ray_racer_mode", true);
             } else if (kind == EASTER_MOLLY) {
                 kuromiTheme = true;
-                editor.putBoolean("kuromi_theme", true);
             }
-            editor.apply();
             sound.playClear();
         }
 
@@ -2262,6 +2315,11 @@ public class MainActivity extends Activity {
 
         void playClear() {
             playTone(740, 180, soundVolume * 0.38f);
+        }
+
+        void playAlarm() {
+            playTone(880, 95, soundVolume * 0.46f);
+            handler.postDelayed(() -> playTone(1320, 110, soundVolume * 0.36f), 86L);
         }
 
         void playExplosion() {

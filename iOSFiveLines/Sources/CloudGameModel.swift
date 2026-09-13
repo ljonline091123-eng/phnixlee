@@ -67,12 +67,14 @@ final class CloudGameModel: ObservableObject {
         case ray
         case molly
 
-        var loadingMessage: String {
+        var loadingTitle: String {
             switch self {
-            case .ray: return "Ray loading..."
-            case .molly: return "Molly loading..."
+            case .ray: return "Ray"
+            case .molly: return "Molly"
             }
         }
+
+        var loadingMessage: String { "\(loadingTitle) loading..." }
 
         var secret: Character {
             switch self {
@@ -90,7 +92,7 @@ final class CloudGameModel: ObservableObject {
     }
 
     struct EasterLoading: Equatable {
-        var message: String
+        var title: String
         var colorPhase: Int
         var visible: Bool
     }
@@ -137,8 +139,8 @@ final class CloudGameModel: ObservableObject {
     @Published var effectsVolume = 0.8 { didSet { applyAudioSettings() } }
     @Published var musicTrack: MusicTrack = .music1 { didSet { applyAudioSettings() } }
     @Published var moveSpeed: MoveSpeed = .slow { didSet { saveSettings() } }
-    @Published var rayRacerMode = false { didSet { saveSettings() } }
-    @Published var kuromiTheme = false { didSet { saveSettings() } }
+    @Published var rayRacerMode = false
+    @Published var kuromiTheme = false
     @Published var easterLoading: EasterLoading?
     @Published var easterPrompt: EasterPrompt?
     @Published var racerTrail: [Int] = []
@@ -150,6 +152,7 @@ final class CloudGameModel: ObservableObject {
     private let settingsKey = "FiveLines.settings"
     private var loadingTimer: Timer?
     private var easterSecretTaps = 0
+    private let easterLoadingColorCount = Tile.allCases.filter { !$0.isWildcard }.count
 
     init() {
         loadScores()
@@ -170,6 +173,8 @@ final class CloudGameModel: ObservableObject {
         racerTrail = []
         racerTrailTile = nil
         easterSecretTaps = 0
+        rayRacerMode = false
+        kuromiTheme = false
         score = 0
         isGameOver = false
         busy = false
@@ -397,33 +402,45 @@ final class CloudGameModel: ObservableObject {
         removing = []
         board = Array(repeating: nil, count: 81)
         nextTiles = []
+        rayRacerMode = false
+        kuromiTheme = false
         racerTrail = []
         racerTrailTile = nil
         busy = true
         clearedThisTurn = false
         easterSecretTaps = 0
         easterPrompt = nil
-        easterLoading = EasterLoading(message: kind.loadingMessage, colorPhase: 0, visible: true)
+        easterLoading = EasterLoading(title: kind.loadingTitle, colorPhase: 0, visible: true)
         audio.playClear()
+        audio.playAlarm()
 
         let startedAt = Date()
-        loadingTimer = Timer.scheduledTimer(withTimeInterval: 0.12, repeats: true) { [weak self] timer in
+        let flashHalfDuration = 0.18
+        let flashFullDuration = flashHalfDuration * 2
+        let totalDuration = Double(easterLoadingColorCount) * flashFullDuration
+        var lastAlarmPhase = 0
+        loadingTimer = Timer.scheduledTimer(withTimeInterval: 0.08, repeats: true) { [weak self] timer in
             guard let self else {
                 timer.invalidate()
                 return
             }
             let elapsed = Date().timeIntervalSince(startedAt)
-            if elapsed >= 2.6 {
+            if elapsed >= totalDuration {
                 timer.invalidate()
                 self.loadingTimer = nil
                 self.easterLoading = nil
                 self.easterPrompt = EasterPrompt(kind: kind)
                 return
             }
-            let halfCycle = Int(elapsed / 0.24)
+            let colorPhase = min(self.easterLoadingColorCount - 1, Int(elapsed / flashFullDuration))
+            if colorPhase != lastAlarmPhase {
+                lastAlarmPhase = colorPhase
+                self.audio.playAlarm()
+            }
+            let halfCycle = Int(elapsed / flashHalfDuration)
             self.easterLoading = EasterLoading(
-                message: kind.loadingMessage,
-                colorPhase: Int(elapsed / 0.12),
+                title: kind.loadingTitle,
+                colorPhase: colorPhase,
                 visible: halfCycle % 2 == 0
             )
         }
@@ -618,8 +635,6 @@ final class CloudGameModel: ObservableObject {
            let speed = MoveSpeed(rawValue: rawSpeed) {
             moveSpeed = speed
         }
-        rayRacerMode = values["rayRacerMode"] as? Bool ?? false
-        kuromiTheme = values["kuromiTheme"] as? Bool ?? false
     }
 
     private func saveSettings() {
@@ -632,9 +647,7 @@ final class CloudGameModel: ObservableObject {
             "musicVolume": musicVolume,
             "effectsVolume": effectsVolume,
             "musicTrack": musicTrack.rawValue,
-            "moveSpeed": moveSpeed.rawValue,
-            "rayRacerMode": rayRacerMode,
-            "kuromiTheme": kuromiTheme
+            "moveSpeed": moveSpeed.rawValue
         ]
         UserDefaults.standard.set(values, forKey: settingsKey)
     }
@@ -691,6 +704,13 @@ private final class AudioEngine {
     func playMove() { playTone(440, 0.13, soundVolume * 0.28) }
     func playSpawn() { playTone(520, 0.10, soundVolume * 0.22) }
     func playClear() { playTone(740, 0.18, soundVolume * 0.38) }
+    func playAlarm() {
+        playTone(880, 0.095, soundVolume * 0.46)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.086) { [weak self] in
+            guard let self else { return }
+            self.playTone(1320, 0.11, self.soundVolume * 0.36)
+        }
+    }
     func playExplosion() { playTone(72, 0.39, soundVolume * 0.82); playNoise(0.26, soundVolume * 0.58) }
 
     private func startMusic() {
