@@ -8,12 +8,13 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.models.ai_hub import KnowledgeBase, KnowledgeDocument, ResearchReportRecord
+from app.models.market_data import DataSource, StockKline, StockRealtimeQuote
 from app.prompts.fundamental import FUNDAMENTAL_SYSTEM_PROMPT
 from app.prompts.orchestrator import ORCHESTRATOR_SYSTEM_PROMPT
 from app.prompts.technical import TECHNICAL_SYSTEM_PROMPT
 from app.services.model_hub import ModelHubService
 from app.services.stock_on_demand import StockOnDemandService
-from app.models.market_data import DataSource
 from app.skills.capital_tech import CapitalAndTechOutput, get_capital_and_tech_skill
 from app.skills.financial import FinancialAnalysisOutput, get_financial_analysis_skill
 from app.skills.news_rag import RecentNewsRagOutput, get_recent_news_rag_skill
@@ -54,12 +55,25 @@ class ResearchReport(BaseModel):
     model_provider: str | None = None
     model_instance: str | None = None
     warnings: list[str] = Field(default_factory=list)
+    score: int | None = None
+    rating: str | None = None
+    conclusion: str | None = None
+    report_id: int | None = None
+    data_source_codes: list[str] = Field(default_factory=list)
+    knowledge_base_ids: list[int] = Field(default_factory=list)
+    knowledge_documents: list[dict[str, Any]] = Field(default_factory=list)
+    history_evaluation: dict[str, Any] = Field(default_factory=dict)
 
 
 @dataclass
 class ResearchContext:
     symbol: str
     market: str | None
+    data_source_codes: list[str] = field(default_factory=list)
+    knowledge_base_ids: list[int] = field(default_factory=list)
+    knowledge_documents: list[dict[str, Any]] = field(default_factory=list)
+    history_evaluation: dict[str, Any] = field(default_factory=dict)
+    price_snapshot: dict[str, Any] = field(default_factory=dict)
     financial: FinancialAnalysisOutput | None = None
     technical: CapitalAndTechOutput | None = None
     news: RecentNewsRagOutput | None = None
@@ -85,6 +99,144 @@ def _fmt(value: Any) -> str:
     if isinstance(value, float):
         return f"{value:.2f}"
     return str(value)
+
+
+def _overall_score(context: ResearchContext) -> int:
+    if context.fundamental is None or context.technical_agent is None:
+        return 0
+    return round((context.fundamental.score + context.technical_agent.score) / 2)
+
+
+def _first_number(*values: Any) -> float | None:
+    for value in values:
+        if isinstance(value, (int, float)):
+            return float(value)
+    return None
+
+
+def _latest_price_snapshot(db: Session, symbol: str, market: str | None) -> dict[str, Any]:
+    quote_statement = select(StockRealtimeQuote).where(StockRealtimeQuote.symbol == symbol)
+    kline_statement = select(StockKline).where(StockKline.symbol == symbol)
+    if market:
+        quote_statement = quote_statement.where(StockRealtimeQuote.market == market)
+        kline_statement = kline_statement.where(StockKline.market == market)
+    quote = db.scalar(quote_statement.order_by(StockRealtimeQuote.fetched_at.desc()).limit(1))
+    kline = db.scalar(kline_statement.order_by(StockKline.trade_date.desc()).limit(1))
+    latest_price = _first_number(
+        quote.current_price if quote else None,
+        kline.close_price if kline else None,
+    )
+    previous_close = _first_number(
+        quote.previous_close_price if quote else None,
+        kline.open_price if kline else None,
+    )
+    return {
+        "latest_price": latest_price,
+        "previous_close": previous_close,
+        "quote_time": quote.quote_time if quote else None,
+        "trade_date": kline.trade_date if kline else None,
+        "volume": _first_number(quote.volume if quote else None, kline.volume if kline else None),
+        "amount": _first_number(quote.amount if quote else None, kline.amount if kline else None),
+        "change_pct": quote.change_pct if quote else None,
+    }
+
+
+def _knowledge_scope_text(context: ResearchContext) -> str:
+    if not context.knowledge_documents:
+        return "- 本次未选中知识库，或知识库中暂未检索到该股票证据。"
+    lines = []
+    for item in context.knowledge_documents[:8]:
+        title = str(item.get("title") or "未命名证据")
+        source_table = str(item.get("source_table") or "unknown")
+        lines.append(f"- {title}（{source_table}）")
+    return "\n".join(lines)
+
+
+def _history_evaluation_text(context: ResearchContext) -> str:
+    data = context.history_evaluation or {}
+    if data.get("status") == "NO_HISTORY":
+        return "- 暂无历史研报，本次报告将作为后续复盘基准。"
+    if data.get("status") == "NO_PRICE":
+        return f"- 已找到历史研报 #{data.get('previous_report_id')}，但缺少可比较的当前或历史价格，暂以评分和风险项变化做定性复盘。"
+    return (
+        f"- 上一份研报 #{data.get('previous_report_id')} 评级 {data.get('previous_rating') or '--'}、"
+        f"评分 {data.get('previous_score') or '--'}；参考价 {_fmt(data.get('previous_price'))}，"
+        f"当前价 {_fmt(data.get('current_price'))}，区间变化 {_fmt(data.get('price_change_pct'))}%。"
+    )
+
+
+def _build_history_evaluation(db: Session, context: ResearchContext) -> dict[str, Any]:
+    statement = (
+        select(ResearchReportRecord)
+        .where(
+            ResearchReportRecord.symbol == context.symbol,
+            ResearchReportRecord.market == str(context.market or ""),
+        )
+        .order_by(ResearchReportRecord.created_at.desc())
+        .limit(1)
+    )
+    previous = db.scalar(statement)
+    if previous is None:
+        return {
+            "status": "NO_HISTORY",
+            "summary": "暂无历史研报，本次报告作为该股票的首份 AI 研报基准。",
+            "adjustments": ["后续生成新研报时，将以本次评分、评级、价格快照和风险项进行复盘。"],
+        }
+    previous_snapshot = dict(previous.agent_snapshot_json or {}).get("price_snapshot") or {}
+    previous_price = _first_number(previous_snapshot.get("latest_price"), previous_snapshot.get("previous_close"))
+    current_price = _first_number(context.price_snapshot.get("latest_price"), context.price_snapshot.get("previous_close"))
+    score = _overall_score(context)
+    score_delta = score - previous.score if previous.score is not None else None
+    result: dict[str, Any] = {
+        "status": "EVALUATED",
+        "previous_report_id": previous.id,
+        "previous_created_at": previous.created_at.isoformat() if previous.created_at else None,
+        "previous_rating": previous.rating,
+        "previous_score": previous.score,
+        "current_score": score,
+        "score_delta": score_delta,
+        "previous_price": previous_price,
+        "current_price": current_price,
+        "previous_conclusion": previous.conclusion,
+    }
+    if previous_price is None or current_price is None:
+        result.update(
+            {
+                "status": "NO_PRICE",
+                "summary": "已找到历史研报，但缺少可比较的历史或当前价格，当前只进行评分、评级和风险项变化复盘。",
+                "adjustments": [
+                    "补齐历史 K 线或实时行情后再评估价格方向准确性。",
+                    "重点比较本次基本面、技术面和新闻公告风险项相对历史研报的变化。",
+                ],
+            }
+        )
+        return result
+    price_change_pct = round((current_price - previous_price) / previous_price * 100, 2) if previous_price else None
+    result["price_change_pct"] = price_change_pct
+    bullish_previous = (previous.score or 0) >= 60 or str(previous.rating or "").upper() in {"A", "B"}
+    bearish_previous = (previous.score or 0) <= 44 or str(previous.rating or "").upper() == "D"
+    if price_change_pct is None:
+        accuracy = "价格基准为 0，无法计算方向。"
+    elif bullish_previous and price_change_pct >= 0:
+        accuracy = "历史偏积极判断与后续价格方向基本一致。"
+    elif bullish_previous and price_change_pct < 0:
+        accuracy = "历史偏积极判断未被价格验证，需要下调假设或重新检查风险触发条件。"
+    elif bearish_previous and price_change_pct <= 0:
+        accuracy = "历史偏谨慎判断与后续价格方向基本一致。"
+    elif bearish_previous and price_change_pct > 0:
+        accuracy = "历史偏谨慎判断偏保守，需要复核错过的基本面或资金催化。"
+    else:
+        accuracy = "历史结论偏中性，本次重点评估是否出现新的方向信号。"
+    adjustments = []
+    if score_delta is not None:
+        if score_delta >= 8:
+            adjustments.append("本次综合评分明显上调，应核验改善来自基本面、量价还是新闻公告催化。")
+        elif score_delta <= -8:
+            adjustments.append("本次综合评分明显下调，应把风险项和失效条件前置到预警列表。")
+        else:
+            adjustments.append("本次评分相对历史变化不大，应继续跟踪原有支撑阻力和风险触发条件。")
+    result.update({"summary": accuracy, "adjustments": adjustments or ["继续跟踪财报、公告、成交量和价格相对关键位的变化。"]})
+    return result
 
 
 def _model_json(response_text: str | None) -> dict[str, Any]:
@@ -276,7 +428,7 @@ def _heuristic_markdown(context: ResearchContext) -> str:
     lines = [
         f"# {context.symbol} {context.news.name} AI 深度研究报告",
         "",
-        f"> 数据范围：本地已存储的 F10、日线、资金流、新闻和公告；综合评级不代表收益承诺。",
+        f"> 数据范围：本地已存储的 F10、日线、资金流、新闻、公告、知识图谱和历史研报；综合评级不代表收益承诺。",
         "",
         "## 一、综合评级",
         "",
@@ -305,13 +457,27 @@ def _heuristic_markdown(context: ResearchContext) -> str:
     lines.extend(
         [
             "",
-            "## 五、条件化观察与交易计划",
+            "## 五、数据源与知识图谱证据",
             "",
+            f"- 指定数据源：{', '.join(context.data_source_codes) if context.data_source_codes else '默认内部数据源'}。",
+            f"- 指定知识库：{', '.join(str(item) for item in context.knowledge_base_ids) if context.knowledge_base_ids else '未指定'}。",
+            _knowledge_scope_text(context),
+            "",
+            "## 六、历史研报复盘",
+            "",
+            _history_evaluation_text(context),
+            *(f"- 调整建议：{item}" for item in context.history_evaluation.get("adjustments", [])),
+            "",
+            "## 七、短中长线观察与交易计划",
+            "",
+            f"- 短线（1周）：重点观察价格在 {_fmt(support)} 附近的承接，以及放量突破 {_fmt(resistance)} 是否成立；若量价不配合，以观望为主。",
+            "- 中线（1个月）：跟踪财报改善、公告催化和新闻情绪是否持续，若基本面评分与资金面同时改善，可提高关注优先级。",
+            "- 长线（3个月以上）：以业务布局、盈利质量、股东结构和行业景气度为主，只有连续证据链改善时才提高长期评级。",
             f"- 观察区间：重点观察价格在 {_fmt(support)} 附近的承接，以及向上突破 {_fmt(resistance)} 时的成交量确认。",
             "- 进入条件：基本面最新报告未恶化，且价格重新站稳关键均线并出现量价配合；不满足条件时保持观望。",
             "- 退出条件：跌破支撑并伴随放量、公告风险落地、或后续财报显示盈利质量恶化。具体仓位和止损需结合个人风险承受能力。",
             "",
-            "## 六、风险提示与待验证清单",
+            "## 八、风险提示与待验证清单",
             "",
             *(f"- {item}" for item in (fundamental.data_gaps + technical.data_gaps + news.warnings or ["需继续跟踪下一期财报、公告和成交量变化。"])),
             "- 本报告仅供研究参考，不构成投资建议；历史数据不代表未来表现。",
@@ -330,6 +496,10 @@ class MasterOrchestratorAgent:
         user_payload = {
             "symbol": context.symbol,
             "market": context.market,
+            "data_source_codes": context.data_source_codes,
+            "knowledge_base_ids": context.knowledge_base_ids,
+            "knowledge_documents": context.knowledge_documents,
+            "history_evaluation": context.history_evaluation,
             "financial_agent": context.fundamental.model_dump(),
             "technical_agent": context.technical_agent.model_dump(),
             "news_rag": context.news.model_dump(),
@@ -356,6 +526,12 @@ class MasterOrchestratorAgent:
             markdown = generated
         else:
             markdown = _heuristic_markdown(context)
+        score = _overall_score(context)
+        rating = _rating(score)
+        conclusion = (
+            f"综合评级 {rating}（{score}/100）：{context.fundamental.commentary} "
+            f"{context.technical_agent.commentary}"
+        )
         context.report = ResearchReport(
             symbol=context.fundamental.evidence.symbol,
             market=context.fundamental.evidence.market,
@@ -371,6 +547,13 @@ class MasterOrchestratorAgent:
                 *context.technical_agent.data_gaps,
                 *context.news.warnings,
             ],
+            score=score,
+            rating=rating,
+            conclusion=conclusion,
+            data_source_codes=context.data_source_codes,
+            knowledge_base_ids=context.knowledge_base_ids,
+            knowledge_documents=context.knowledge_documents,
+            history_evaluation=context.history_evaluation,
         )
         return context.report
 
@@ -389,14 +572,88 @@ class ResearchWorkflow:
         self.technical_agent = TechnicalCapitalAgent()
         self.orchestrator = MasterOrchestratorAgent()
 
+    def _load_knowledge_documents(self, context: ResearchContext, limit: int = 12) -> list[dict[str, Any]]:
+        if not context.knowledge_base_ids:
+            kb = self.db.scalar(
+                select(KnowledgeBase).where(
+                    KnowledgeBase.kb_code == "STOCK_FULL_KG",
+                    KnowledgeBase.enabled.is_(True),
+                )
+            )
+            context.knowledge_base_ids = [kb.id] if kb else []
+        if not context.knowledge_base_ids:
+            return []
+        rows = list(
+            self.db.scalars(
+                select(KnowledgeDocument)
+                .where(
+                    KnowledgeDocument.knowledge_base_id.in_(context.knowledge_base_ids),
+                    KnowledgeDocument.symbol == context.symbol,
+                )
+                .order_by(KnowledgeDocument.updated_at.desc())
+                .limit(limit)
+            ).all()
+        )
+        return [
+            {
+                "id": row.id,
+                "knowledge_base_id": row.knowledge_base_id,
+                "source_table": row.source_table,
+                "source_record_id": row.source_record_id,
+                "market": row.market,
+                "symbol": row.symbol,
+                "title": row.title,
+                "excerpt": row.content[:500],
+                "metadata_json": row.metadata_json,
+            }
+            for row in rows
+        ]
+
+    def _save_report(self, context: ResearchContext, report: ResearchReport) -> ResearchReportRecord:
+        snapshot = {
+            "fundamental": context.fundamental.model_dump(mode="json") if context.fundamental else None,
+            "technical": context.technical_agent.model_dump(mode="json") if context.technical_agent else None,
+            "news": context.news.model_dump(mode="json") if context.news else None,
+            "price_snapshot": context.price_snapshot,
+            "knowledge_documents": context.knowledge_documents,
+        }
+        record = ResearchReportRecord(
+            market=report.market,
+            symbol=report.symbol,
+            name=report.name,
+            title=f"{report.symbol} {report.name} AI 深度研究报告",
+            report_markdown=report.report_markdown,
+            conclusion=report.conclusion,
+            rating=report.rating,
+            score=report.score,
+            model_provider=report.model_provider,
+            model_instance=report.model_instance,
+            data_sources_json=report.data_source_codes,
+            knowledge_base_ids_json=report.knowledge_base_ids,
+            agent_snapshot_json=snapshot,
+            history_evaluation_json=report.history_evaluation,
+            warnings_json=report.warnings,
+        )
+        self.db.add(record)
+        self.db.commit()
+        self.db.refresh(record)
+        return record
+
     def stream(
         self,
         symbol: str,
         market: str | None = None,
         top_k: int = 5,
         refresh: bool = False,
+        data_source_codes: list[str] | None = None,
+        knowledge_base_ids: list[int] | None = None,
     ) -> Iterator[dict[str, Any]]:
-        context = ResearchContext(symbol=symbol, market=market)
+        context = ResearchContext(
+            symbol=symbol,
+            market=market,
+            data_source_codes=list(data_source_codes or []),
+            knowledge_base_ids=list(knowledge_base_ids or []),
+        )
         yield {"event": "stage", "data": {"stage": "resolve", "message": "正在解析本地股票主数据"}}
         try:
             context.financial = get_financial_analysis_skill(symbol, market, db=self.db)
@@ -417,6 +674,8 @@ class ResearchWorkflow:
                     context.financial = get_financial_analysis_skill(context.symbol, context.market, db=self.db)
             context.news = get_recent_news_rag_skill(context.symbol, top_k, context.market, db=self.db)
             context.technical = get_capital_and_tech_skill(context.symbol, context.market, db=self.db)
+            context.price_snapshot = _latest_price_snapshot(self.db, context.symbol, context.market)
+            context.knowledge_documents = self._load_knowledge_documents(context)
         except Exception as exc:
             yield {"event": "error", "data": {"message": str(exc)}}
             return
@@ -429,8 +688,14 @@ class ResearchWorkflow:
         context.technical_agent = self.technical_agent.run(context.symbol, context.market, self.db)
         yield {"event": "agent", "data": context.technical_agent.model_dump(mode="json")}
 
+        yield {"event": "stage", "data": {"stage": "history", "message": "ResearchReportReview 正在复盘历史研报与当前证据"}}
+        context.history_evaluation = _build_history_evaluation(self.db, context)
+
         yield {"event": "stage", "data": {"stage": "orchestrator", "message": "MasterOrchestratorAgent 正在汇总证据并生成研报"}}
         report = self.orchestrator.run(context, self.db)
+        yield {"event": "stage", "data": {"stage": "persist", "message": "正在保存研报并写入历史复盘库"}}
+        saved_report = self._save_report(context, report)
+        report.report_id = saved_report.id
         # Chunking makes the endpoint useful even when the selected provider is
         # not a streaming provider. The browser receives a genuine typewriter
         # stream and can render Markdown incrementally.
@@ -445,5 +710,10 @@ class ResearchWorkflow:
                 "model_provider": report.model_provider,
                 "model_instance": report.model_instance,
                 "warnings": report.warnings,
+                "score": report.score,
+                "rating": report.rating,
+                "conclusion": report.conclusion,
+                "report_id": report.report_id,
+                "history_evaluation": report.history_evaluation,
             },
         }

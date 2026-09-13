@@ -12,7 +12,7 @@ from app.db.session import SessionLocal, engine
 from app.services.catalog import seed_default_catalog
 from app.services.daily_sync import daily_master_sync_loop
 from app.services.model_hub import seed_default_models, seed_default_skills
-from app.services.resource_hub import seed_default_data_assets
+from app.services.resource_hub import seed_default_agents, seed_default_data_assets, seed_default_knowledge_bases
 
 settings = get_settings()
 
@@ -26,6 +26,8 @@ async def lifespan(_: FastAPI):
         seed_default_models(db)
         seed_default_skills(db)
         seed_default_data_assets(db)
+        seed_default_knowledge_bases(db)
+        seed_default_agents(db)
     sync_task = asyncio.create_task(daily_master_sync_loop())
     try:
         yield

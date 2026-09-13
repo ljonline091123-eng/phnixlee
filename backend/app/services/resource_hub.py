@@ -19,26 +19,52 @@ from app.models.ai_hub import (
     KnowledgeDocument,
     KnowledgeEntity,
     KnowledgeRelation,
+    ModelSkill,
+    ResearchReportRecord,
 )
 from app.models.market_data import (
+    StockF10Cache,
     StockFinancialReport,
+    StockKline,
     StockNews,
     StockNotice,
+    StockRealtimeQuote,
     StockSymbol,
 )
 
 
 DEFAULT_DATA_ASSETS = (
-    ("STOCK_SYMBOL", "stock_symbol", "股票主数据", "A股、港股、新三板和创新层股票代码、名称及市场属性。"),
-    ("STOCK_QUOTE", "stock_realtime_quote", "实时行情", "股票最新价格、涨跌幅、成交量和成交额。"),
-    ("STOCK_KLINE", "stock_kline", "历史K线", "股票日线 OHLC、成交量和成交额。"),
-    ("STOCK_FINANCIAL", "stock_financial_report", "财务报告", "F10 财务指标和报告期数据。"),
-    ("STOCK_NOTICE", "stock_notice", "公司公告", "上市公司及挂牌公司公告。"),
-    ("STOCK_NEWS", "stock_news", "新闻资讯", "股票相关新闻和资讯。"),
-    ("STOCK_F10", "stock_f10_cache", "F10资料缓存", "公司简介、股东、业务构成等 F10 分区缓存。"),
-    ("WATCHLIST", "watchlist_item", "自选股", "用户自选股票清单。"),
-    ("DATA_SYNC_LOG", "data_sync_log", "数据同步日志", "批量数据同步状态与统计。"),
-    ("DATA_FETCH_LOG", "data_fetch_log", "按需获取日志", "单股票按需数据获取记录。"),
+    ("STOCK_SYMBOL", "stock_symbol", "DW基础数据：股票主数据", "股票代码、名称、市场、交易所、资产类型和上市状态，是单股知识图谱的主实体来源。"),
+    ("STOCK_QUOTE", "stock_realtime_quote", "DW股价：实时行情", "股票最新价格、涨跌幅、开高低收、成交量、成交额和换手率，用于短线预警。"),
+    ("STOCK_KLINE", "stock_kline", "DW股价/交易量：历史K线", "股票日线 OHLC、成交量、成交额、换手率和均线计算基础，用于量价研判。"),
+    ("STOCK_FINANCIAL", "stock_financial_report", "DW财报：财务报告", "F10 财务指标、报告期、币种和原始财报字段，用于盈利质量与经营现状分析。"),
+    ("STOCK_NOTICE", "stock_notice", "DW公告：公司公告", "上市公司及挂牌公司公告、公告类型、发布时间和来源链接，用于事件驱动和风险识别。"),
+    ("STOCK_NEWS", "stock_news", "DW新闻：新闻资讯", "股票相关新闻、来源、情绪、摘要和发布时间，用于舆情与外部催化分析。"),
+    ("STOCK_F10", "stock_f10_cache", "DW股东/业务：F10资料", "公司简介、股东、基金流、业务构成、财务摘要和财务报表等 F10 分区缓存。"),
+    ("RESEARCH_REPORT", "research_report", "DW研究：AI研报", "AI 生成研报、历史结论、评分、模型信息、知识库引用和复盘结果。"),
+    ("WATCHLIST", "watchlist_item", "DW用户：自选股", "用户自选股票清单和研究关注标记。"),
+    ("DATA_SYNC_LOG", "data_sync_log", "治理日志：批量同步", "批量数据同步状态、统计和异常信息。"),
+    ("DATA_FETCH_LOG", "data_fetch_log", "治理日志：按需获取", "单股票按需数据获取记录、来源接口和入库统计。"),
+)
+
+DEFAULT_KNOWLEDGE_BASES = (
+    {
+        "kb_code": "STOCK_FULL_KG",
+        "kb_name": "单股全覆盖知识图谱",
+        "description": "围绕单只股票整合基础数据、新闻、公告、财报、股价、交易量、股东/F10 和 AI 研报，形成可追溯实体关系网络。",
+        "source_tables": [
+            "stock_symbol",
+            "stock_news",
+            "stock_notice",
+            "stock_financial_report",
+            "stock_kline",
+            "stock_realtime_quote",
+            "stock_f10_cache",
+            "research_report",
+        ],
+        "version": "1.0.0",
+        "enabled": True,
+    },
 )
 
 
@@ -60,6 +86,148 @@ def seed_default_data_assets(db: Session) -> None:
             asset.table_name = table_name
             asset.display_name = display_name
             asset.description = description
+    db.commit()
+
+
+def seed_default_knowledge_bases(db: Session) -> None:
+    """Seed the stock knowledge graph catalog without rebuilding user data."""
+
+    for kb_config in DEFAULT_KNOWLEDGE_BASES:
+        kb = db.scalar(select(KnowledgeBase).where(KnowledgeBase.kb_code == kb_config["kb_code"]))
+        if kb is None:
+            kb = KnowledgeBase(
+                kb_code=str(kb_config["kb_code"]),
+                kb_name=str(kb_config["kb_name"]),
+                description=str(kb_config["description"]),
+                source_tables=list(kb_config["source_tables"]),
+                version=str(kb_config["version"]),
+                enabled=bool(kb_config["enabled"]),
+                status="DRAFT",
+            )
+            db.add(kb)
+        else:
+            kb.kb_name = str(kb_config["kb_name"])
+            kb.description = str(kb_config["description"])
+            kb.source_tables = list(kb_config["source_tables"])
+            kb.version = kb.version or str(kb_config["version"])
+            kb.enabled = bool(kb_config["enabled"])
+    db.commit()
+
+
+DEFAULT_AGENTS = (
+    {
+        "agent_code": "DATA_GOVERNANCE_AGENT",
+        "display_name": "数据治理智能体",
+        "system_prompt": "负责把股票基础数据、新闻、公告、财报、股价、交易量、股东和 F10 数据治理成 DW 数据层，输出分类、质量、入库和待补数据建议。",
+        "model_instance_code": "QWEN_PLUS",
+        "max_iterations": 8,
+        "description": "用于研究中心对话页签的数据治理、数据分类、字段解释和质量检查。",
+        "skill_codes": ["DATA_GOVERNANCE_DW"],
+        "kb_codes": ["STOCK_FULL_KG"],
+        "asset_codes": ["STOCK_SYMBOL", "STOCK_QUOTE", "STOCK_KLINE", "STOCK_FINANCIAL", "STOCK_NOTICE", "STOCK_NEWS", "STOCK_F10", "RESEARCH_REPORT"],
+    },
+    {
+        "agent_code": "KNOWLEDGE_GRAPH_AGENT",
+        "display_name": "知识图谱智能体",
+        "system_prompt": "以单只股票为对象建立全覆盖知识图谱，抽取公司、股东、业务、财报、公告、新闻、价格、交易量和研报之间的可追溯关系。",
+        "model_instance_code": "GEMINI_FLASH",
+        "max_iterations": 8,
+        "description": "用于知识库构建、实体关系抽取和证据链归档。",
+        "skill_codes": ["STOCK_KNOWLEDGE_GRAPH_BUILDER"],
+        "kb_codes": ["STOCK_FULL_KG"],
+        "asset_codes": ["STOCK_SYMBOL", "STOCK_QUOTE", "STOCK_KLINE", "STOCK_FINANCIAL", "STOCK_NOTICE", "STOCK_NEWS", "STOCK_F10", "RESEARCH_REPORT"],
+    },
+    {
+        "agent_code": "QA_QUERY_AGENT",
+        "display_name": "问答问数智能体",
+        "system_prompt": "负责研究中心对话页签的问答问数、治理解释和分析问答，优先使用内部数据源和知识图谱，输出统计口径和证据。",
+        "model_instance_code": "QWEN_PLUS",
+        "max_iterations": 6,
+        "description": "用于数据治理、分析、问数、问答等日常交互操作。",
+        "skill_codes": ["STOCK_QA_QUERY", "DATA_GOVERNANCE_DW"],
+        "kb_codes": ["STOCK_FULL_KG"],
+        "asset_codes": ["STOCK_SYMBOL", "STOCK_QUOTE", "STOCK_KLINE", "STOCK_FINANCIAL", "STOCK_NOTICE", "STOCK_NEWS", "STOCK_F10", "RESEARCH_REPORT"],
+    },
+    {
+        "agent_code": "STOCK_SELECTION_AGENT",
+        "display_name": "分析选股智能体",
+        "system_prompt": "读取内部数据源、知识图谱和可验证外部信息，分析基本面、业务布局、发展前景、经营现状、量价操作和交易量，给出短中长线结论。",
+        "model_instance_code": "DEEPSEEK_CHAT",
+        "max_iterations": 10,
+        "description": "用于分析选股、趋势研判、短中长线操作结论和风险条件。",
+        "skill_codes": ["STOCK_SELECTION_ANALYST", "STOCK_TREND_ADVISOR", "RESEARCH_REPORT_REVIEW"],
+        "kb_codes": ["STOCK_FULL_KG"],
+        "asset_codes": ["STOCK_SYMBOL", "STOCK_QUOTE", "STOCK_KLINE", "STOCK_FINANCIAL", "STOCK_NOTICE", "STOCK_NEWS", "STOCK_F10", "RESEARCH_REPORT"],
+    },
+    {
+        "agent_code": "RESEARCH_REPORT_AGENT",
+        "display_name": "研报生成智能体",
+        "system_prompt": "对指定股票、数据源和知识库进行证据归纳，生成 AI 研究报告，并对历史研报进行预测准确性复盘和结论修正。",
+        "model_instance_code": "DEEPSEEK_CHAT",
+        "max_iterations": 10,
+        "description": "用于研究中心研究页签，生成并保存研报、比对历史研报。",
+        "skill_codes": ["STOCK_SELECTION_ANALYST", "STOCK_TREND_ADVISOR", "RESEARCH_REPORT_REVIEW"],
+        "kb_codes": ["STOCK_FULL_KG"],
+        "asset_codes": ["STOCK_SYMBOL", "STOCK_QUOTE", "STOCK_KLINE", "STOCK_FINANCIAL", "STOCK_NOTICE", "STOCK_NEWS", "STOCK_F10", "RESEARCH_REPORT"],
+    },
+    {
+        "agent_code": "RISK_WARNING_AGENT",
+        "display_name": "预警智能体",
+        "system_prompt": "监控公告、新闻、财报、股价、成交量、股东和研报结论变化，识别量价失效、负面事件、经营恶化和历史判断偏差。",
+        "model_instance_code": "DEEPSEEK_CHAT",
+        "max_iterations": 6,
+        "description": "用于预警判断、历史研报偏差提示和风险解释。",
+        "skill_codes": ["STOCK_TREND_ADVISOR", "RESEARCH_REPORT_REVIEW"],
+        "kb_codes": ["STOCK_FULL_KG"],
+        "asset_codes": ["STOCK_QUOTE", "STOCK_KLINE", "STOCK_NOTICE", "STOCK_NEWS", "STOCK_FINANCIAL", "STOCK_F10", "RESEARCH_REPORT"],
+    },
+)
+
+
+def seed_default_agents(db: Session) -> None:
+    """Configure the built-in stock research agents and bind their resources."""
+
+    for agent_config in DEFAULT_AGENTS:
+        agent = db.scalar(select(AgentDefinition).where(AgentDefinition.agent_code == agent_config["agent_code"]))
+        if agent is None:
+            agent = AgentDefinition(
+                agent_code=str(agent_config["agent_code"]),
+                display_name=str(agent_config["display_name"]),
+                system_prompt=str(agent_config["system_prompt"]),
+                model_instance_code=str(agent_config["model_instance_code"]),
+                max_iterations=int(agent_config["max_iterations"]),
+                enabled=True,
+                description=str(agent_config["description"]),
+                version="1.0.0",
+            )
+            db.add(agent)
+        else:
+            agent.display_name = str(agent_config["display_name"])
+            agent.system_prompt = str(agent_config["system_prompt"])
+            agent.model_instance_code = str(agent_config["model_instance_code"])
+            agent.max_iterations = int(agent_config["max_iterations"])
+            agent.enabled = True
+            agent.description = str(agent_config["description"])
+        db.flush()
+
+    skill_by_code = {
+        item.skill_code: item.id for item in db.scalars(select(ModelSkill).where(ModelSkill.enabled.is_(True))).all()
+    }
+    kb_by_code = {
+        item.kb_code: item.id for item in db.scalars(select(KnowledgeBase).where(KnowledgeBase.enabled.is_(True))).all()
+    }
+    asset_by_code = {
+        item.asset_code: item.id for item in db.scalars(select(AgentDataAsset).where(AgentDataAsset.enabled.is_(True))).all()
+    }
+
+    for agent_config in DEFAULT_AGENTS:
+        agent = db.scalar(select(AgentDefinition).where(AgentDefinition.agent_code == agent_config["agent_code"]))
+        if agent is None:
+            continue
+        skill_ids = [skill_by_code[code] for code in agent_config["skill_codes"] if code in skill_by_code]
+        kb_ids = [kb_by_code[code] for code in agent_config["kb_codes"] if code in kb_by_code]
+        asset_ids = [asset_by_code[code] for code in agent_config["asset_codes"] if code in asset_by_code]
+        set_agent_links(db, agent, [], skill_ids, kb_ids, asset_ids)
     db.commit()
 
 
@@ -234,6 +402,78 @@ def build_knowledge_base(db: Session, knowledge_base: KnowledgeBase, max_documen
             )
             for row in rows
         )
+    if "stock_kline" in allowed_tables:
+        rows = list(db.scalars(select(StockKline).order_by(StockKline.trade_date.desc()).limit(max_documents)).all())
+        documents.extend(
+            KnowledgeDocument(
+                knowledge_base_id=knowledge_base.id,
+                source_table="stock_kline",
+                source_record_id=row.id,
+                market=row.market,
+                symbol=row.symbol,
+                title=f"{row.symbol} {row.trade_date} K线与交易量",
+                content=(
+                    f"交易日期：{row.trade_date}\n周期：{row.period}\n复权：{row.adjust or '--'}\n"
+                    f"开盘：{row.open_price}，最高：{row.high_price}，最低：{row.low_price}，收盘：{row.close_price}\n"
+                    f"成交量：{row.volume}，成交额：{row.amount}，换手率：{row.turnover_rate}"
+                ),
+                metadata_json={"trade_date": row.trade_date, "period": row.period, "adjust": row.adjust},
+            )
+            for row in rows
+        )
+    if "stock_realtime_quote" in allowed_tables:
+        rows = list(db.scalars(select(StockRealtimeQuote).order_by(StockRealtimeQuote.fetched_at.desc()).limit(max_documents)).all())
+        documents.extend(
+            KnowledgeDocument(
+                knowledge_base_id=knowledge_base.id,
+                source_table="stock_realtime_quote",
+                source_record_id=row.id,
+                market=row.market,
+                symbol=row.symbol,
+                title=f"{row.symbol} 实时行情",
+                content=(
+                    f"行情时间：{row.quote_time or '--'}\n最新价：{row.current_price}\n涨跌额：{row.change_amount}\n"
+                    f"涨跌幅：{row.change_pct}\n成交量：{row.volume}\n成交额：{row.amount}\n换手率：{row.turnover_rate}"
+                ),
+                metadata_json={"quote_time": row.quote_time, "fetched_at": row.fetched_at.isoformat() if row.fetched_at else None},
+            )
+            for row in rows
+        )
+    if "stock_f10_cache" in allowed_tables:
+        rows = list(db.scalars(select(StockF10Cache).order_by(StockF10Cache.fetched_at.desc()).limit(max_documents)).all())
+        documents.extend(
+            KnowledgeDocument(
+                knowledge_base_id=knowledge_base.id,
+                source_table="stock_f10_cache",
+                source_record_id=row.id,
+                market=row.market,
+                symbol=row.symbol,
+                title=f"{row.symbol} F10 {row.section}",
+                content=f"F10 分区：{row.section}\n数据：{row.payload_json}",
+                metadata_json={"section": row.section, "fetched_at": row.fetched_at.isoformat() if row.fetched_at else None},
+            )
+            for row in rows
+        )
+    if "research_report" in allowed_tables:
+        rows = list(db.scalars(select(ResearchReportRecord).order_by(ResearchReportRecord.created_at.desc()).limit(max_documents)).all())
+        documents.extend(
+            KnowledgeDocument(
+                knowledge_base_id=knowledge_base.id,
+                source_table="research_report",
+                source_record_id=row.id,
+                market=row.market,
+                symbol=row.symbol,
+                title=row.title,
+                content=row.report_markdown,
+                metadata_json={
+                    "rating": row.rating,
+                    "score": row.score,
+                    "created_at": row.created_at.isoformat() if row.created_at else None,
+                    "history_evaluation": row.history_evaluation_json,
+                },
+            )
+            for row in rows
+        )
 
     db.execute(delete(KnowledgeRelation).where(KnowledgeRelation.knowledge_base_id == knowledge_base.id))
     db.execute(delete(KnowledgeEntity).where(KnowledgeEntity.knowledge_base_id == knowledge_base.id))
@@ -243,6 +483,7 @@ def build_knowledge_base(db: Session, knowledge_base: KnowledgeBase, max_documen
     db.flush()
 
     entities: dict[tuple[str, str], KnowledgeEntity] = {}
+    document_entities: dict[int, KnowledgeEntity] = {}
     for document in documents:
         if not document.symbol:
             continue
@@ -258,6 +499,30 @@ def build_knowledge_base(db: Session, knowledge_base: KnowledgeBase, max_documen
             )
             entities[key] = entity
             db.add(entity)
+        document_key = f"{document.source_table}:{document.source_record_id or document.id}:{document.symbol}"
+        doc_entity = KnowledgeEntity(
+            knowledge_base_id=knowledge_base.id,
+            entity_type={
+                "stock_symbol": "COMPANY_PROFILE",
+                "stock_news": "NEWS",
+                "stock_notice": "NOTICE",
+                "stock_financial_report": "FINANCIAL_REPORT",
+                "stock_kline": "PRICE_SERIES",
+                "stock_realtime_quote": "REALTIME_QUOTE",
+                "stock_f10_cache": "F10_SECTION",
+                "research_report": "RESEARCH_REPORT",
+            }.get(document.source_table, "DOCUMENT"),
+            entity_key=document_key[:256],
+            entity_name=document.title[:256],
+            properties_json={
+                "market": document.market,
+                "symbol": document.symbol,
+                "source_table": document.source_table,
+                "source_record_id": document.source_record_id,
+            },
+        )
+        document_entities[document.id] = doc_entity
+        db.add(doc_entity)
     db.flush()
 
     relations: list[KnowledgeRelation] = []
@@ -265,7 +530,8 @@ def build_knowledge_base(db: Session, knowledge_base: KnowledgeBase, max_documen
         if not document.symbol:
             continue
         entity = entities.get(("STOCK", f"{document.market}:{document.symbol}"))
-        if entity is None:
+        doc_entity = document_entities.get(document.id)
+        if entity is None or doc_entity is None:
             continue
         relations.append(
             KnowledgeRelation(
@@ -275,14 +541,18 @@ def build_knowledge_base(db: Session, knowledge_base: KnowledgeBase, max_documen
                     "stock_news": "HAS_NEWS",
                     "stock_notice": "HAS_NOTICE",
                     "stock_financial_report": "HAS_FINANCIAL_REPORT",
+                    "stock_kline": "HAS_PRICE_AND_VOLUME_SERIES",
+                    "stock_realtime_quote": "HAS_REALTIME_QUOTE",
+                    "stock_f10_cache": "HAS_F10_SECTION",
+                    "research_report": "HAS_RESEARCH_REPORT",
                     "stock_symbol": "DESCRIBED_BY",
                 }.get(document.source_table, "HAS_DOCUMENT"),
-                object_entity_id=entity.id,
+                object_entity_id=doc_entity.id,
                 evidence_document_id=document.id,
             )
         )
     db.add_all(relations)
-    knowledge_base.entity_count = len(entities)
+    knowledge_base.entity_count = len(entities) + len(document_entities)
     knowledge_base.relation_count = len(relations)
     knowledge_base.status = "READY"
     db.commit()
@@ -291,4 +561,3 @@ def build_knowledge_base(db: Session, knowledge_base: KnowledgeBase, max_documen
         "entities_created": len(entities),
         "relations_created": len(relations),
     }
-

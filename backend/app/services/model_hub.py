@@ -30,60 +30,163 @@ DEFAULT_MODEL_PROVIDERS = (
         "provider_name": "DeepSeek",
         "provider_type": "DEEPSEEK",
         "enabled": True,
-        "description": "DeepSeek 最新模型，兼容 OpenAI Chat Completions API。",
-        "config_json": {"api_base_url": "https://api.deepseek.com"},
+        "description": "DeepSeek 付费模型，兼容 OpenAI Chat Completions API，适合作为股票研究主力模型。",
+        "config_json": {
+            "api_base_url": "https://api.deepseek.com",
+            "billing_type": "PAID",
+            "billing_label": "付费",
+            "api_key_label": "DeepSeek API Key / SK",
+            "api_key_hint": "在 DeepSeek 控制台创建 API Key 后填入模型实例的 SK 字段。",
+        },
+    },
+    {
+        "provider_code": "QWEN",
+        "provider_name": "通义千问 / 阿里云百炼",
+        "provider_type": "OPENAI_COMPAT",
+        "enabled": True,
+        "description": "千问模型，使用阿里云百炼 OpenAI 兼容接口；按所选地域和业务空间配置 Base URL 与 SK。",
+        "config_json": {
+            "api_base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+            "billing_type": "FREE_TIER_OR_PAID",
+            "billing_label": "免费额度/付费",
+            "api_key_label": "DASHSCOPE_API_KEY / SK",
+            "api_key_hint": "填入阿里云百炼 API Key；如使用新版地域域名，请把实例 API Base URL 改为对应 WorkspaceId 地址。",
+        },
+    },
+    {
+        "provider_code": "OPENAI",
+        "provider_name": "ChatGPT / OpenAI",
+        "provider_type": "OPENAI_COMPAT",
+        "enabled": True,
+        "description": "OpenAI / ChatGPT API 付费模型，使用 OpenAI 兼容 Chat Completions 接口。",
+        "config_json": {
+            "api_base_url": "https://api.openai.com/v1",
+            "billing_type": "PAID",
+            "billing_label": "付费",
+            "api_key_label": "OPENAI_API_KEY / SK",
+            "api_key_hint": "填入 OpenAI API Key，格式通常以 sk- 开头。",
+        },
+    },
+    {
+        "provider_code": "GEMINI",
+        "provider_name": "Google Gemini",
+        "provider_type": "GEMINI_REST",
+        "enabled": True,
+        "description": "Gemini API 模型，使用 Google Gemini generateContent REST 接口。",
+        "config_json": {
+            "api_base_url": "https://generativelanguage.googleapis.com/v1beta",
+            "billing_type": "FREE_TIER_OR_PAID",
+            "billing_label": "免费额度/付费",
+            "api_key_label": "GEMINI_API_KEY / SK",
+            "api_key_hint": "填入 Google AI Studio 或 Google Cloud 的 Gemini API Key。",
+        },
     },
     {
         "provider_code": "MOCK",
         "provider_name": "Local Mock Provider",
         "provider_type": "MOCK",
         "enabled": True,
-        "description": "Built-in fallback for local validation and offline development.",
-        "config_json": {},
-    },
-)
-
-DEFAULT_DEEPSEEK_INSTANCES = (
-    {
-        "instance_code": "DEEPSEEK_CHAT",
-        "model_code": "deepseek-v4-pro",
-        "model_name": "DeepSeek V4 Pro",
-        "purpose": "GENERAL",
-        "api_key": None,
-        "api_base_url": "https://api.deepseek.com",
-        "api_path": "chat/completions",
-        "max_tokens": 4096,
-        "temperature": 0.2,
-        "top_p": 0.95,
-        "enabled": True,
-        "fallback_instance_code": None,
-        "config_json": {},
-        "description": "DeepSeek V4 Pro 通用对话模型，保留 DEEPSEEK_CHAT 实例代码以兼容既有配置。",
-    },
-    {
-        "instance_code": "DEEPSEEK_V4_FLASH",
-        "model_code": "deepseek-v4-flash",
-        "model_name": "DeepSeek V4 Flash",
-        "purpose": "GENERAL",
-        "api_key": None,
-        "api_base_url": "https://api.deepseek.com",
-        "api_path": "chat/completions",
-        "max_tokens": 4096,
-        "temperature": 0.2,
-        "top_p": 0.95,
-        "enabled": True,
-        "fallback_instance_code": None,
-        "config_json": {},
-        "description": "DeepSeek V4 Flash 快速通用模型。",
+        "description": "本地免费模拟模型，用于未配置外部 SK 时的离线验证和兜底。",
+        "config_json": {
+            "billing_type": "FREE",
+            "billing_label": "免费",
+            "api_key_label": "无需 SK",
+        },
     },
 )
 
 DEFAULT_MODEL_INSTANCES = (
     {
+        "provider_code": "DEEPSEEK",
+        "instance_code": "DEEPSEEK_CHAT",
+        "model_code": "deepseek-v4-pro",
+        "model_name": "DeepSeek V4 Pro",
+        "purpose": "GENERAL,RESEARCH,STOCK_ANALYSIS",
+        "api_key": None,
+        "api_base_url": "https://api.deepseek.com",
+        "api_path": "chat/completions",
+        "max_tokens": 6000,
+        "temperature": 0.2,
+        "top_p": 0.95,
+        "enabled": True,
+        "fallback_instance_code": "QWEN_PLUS",
+        "config_json": {"billing_label": "付费", "billing_type": "PAID"},
+        "description": "股票研究主力实例；保留 DEEPSEEK_CHAT 实例代码以兼容既有路由。",
+    },
+    {
+        "provider_code": "DEEPSEEK",
+        "instance_code": "DEEPSEEK_V4_FLASH",
+        "model_code": "deepseek-v4-flash",
+        "model_name": "DeepSeek V4 Flash",
+        "purpose": "GENERAL,QA_QUERY",
+        "api_key": None,
+        "api_base_url": "https://api.deepseek.com",
+        "api_path": "chat/completions",
+        "max_tokens": 4096,
+        "temperature": 0.2,
+        "top_p": 0.95,
+        "enabled": True,
+        "fallback_instance_code": "MOCK_GENERAL",
+        "config_json": {"billing_label": "付费", "billing_type": "PAID"},
+        "description": "快速问答、问数和常规分析实例。",
+    },
+    {
+        "provider_code": "QWEN",
+        "instance_code": "QWEN_PLUS",
+        "model_code": "qwen-plus",
+        "model_name": "通义千问 Plus",
+        "purpose": "GENERAL,QA_QUERY,DATA_GOVERNANCE",
+        "api_key": None,
+        "api_base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+        "api_path": "chat/completions",
+        "max_tokens": 6000,
+        "temperature": 0.2,
+        "top_p": 0.9,
+        "enabled": True,
+        "fallback_instance_code": "GEMINI_FLASH",
+        "config_json": {"billing_label": "免费额度/付费", "billing_type": "FREE_TIER_OR_PAID"},
+        "description": "千问 OpenAI 兼容接口实例；适合中文数据治理、问答问数和低成本研判。",
+    },
+    {
+        "provider_code": "OPENAI",
+        "instance_code": "OPENAI_CHATGPT",
+        "model_code": "gpt-5.6-luna",
+        "model_name": "ChatGPT / OpenAI GPT-5.6 Luna",
+        "purpose": "GENERAL,RESEARCH,STOCK_ANALYSIS",
+        "api_key": None,
+        "api_base_url": "https://api.openai.com/v1",
+        "api_path": "chat/completions",
+        "max_tokens": 6000,
+        "temperature": 0.2,
+        "top_p": 0.9,
+        "enabled": True,
+        "fallback_instance_code": "MOCK_GENERAL",
+        "config_json": {"billing_label": "付费", "billing_type": "PAID"},
+        "description": "ChatGPT / OpenAI 通用研究实例，可用于选股分析、报告润色和复杂问答。",
+    },
+    {
+        "provider_code": "GEMINI",
+        "instance_code": "GEMINI_FLASH",
+        "model_code": "gemini-2.5-flash",
+        "model_name": "Gemini 2.5 Flash",
+        "purpose": "GENERAL,RESEARCH,KNOWLEDGE_GRAPH",
+        "api_key": None,
+        "api_base_url": "https://generativelanguage.googleapis.com/v1beta",
+        "api_path": None,
+        "max_tokens": 6000,
+        "temperature": 0.2,
+        "top_p": 0.9,
+        "enabled": True,
+        "fallback_instance_code": "MOCK_GENERAL",
+        "config_json": {"billing_label": "免费额度/付费", "billing_type": "FREE_TIER_OR_PAID"},
+        "description": "Gemini REST 实例，适合长文本治理、知识图谱摘要和多源信息归纳。",
+    },
+    {
+        "provider_code": "MOCK",
         "instance_code": "MOCK_GENERAL",
         "model_code": "mock-general",
         "model_name": "Mock General Model",
-        "purpose": "GENERAL",
+        "purpose": "GENERAL,OFFLINE_FALLBACK",
         "api_key": None,
         "api_base_url": None,
         "api_path": None,
@@ -92,51 +195,83 @@ DEFAULT_MODEL_INSTANCES = (
         "top_p": 0.95,
         "enabled": True,
         "fallback_instance_code": None,
-        "config_json": {},
-        "description": "Fallback model instance that returns deterministic structured output.",
+        "config_json": {"billing_label": "免费", "billing_type": "FREE"},
+        "description": "本地免费兜底模型，确保无外部 API Key 时系统可运行和测试。",
     },
 )
 
 DEFAULT_MODEL_ROUTES = (
     {
         "task_type": "general_chat",
-        "preferred_instance_code": "MOCK_GENERAL",
-        "fallback_chain_json": [],
+        "preferred_instance_code": "QWEN_PLUS",
+        "fallback_chain_json": ["DEEPSEEK_V4_FLASH", "GEMINI_FLASH", "OPENAI_CHATGPT", "MOCK_GENERAL"],
         "route_policy": "PREFERRED_THEN_FALLBACK",
         "enabled": True,
-        "description": "Default route for model-center smoke tests.",
+        "description": "通用对话优先使用中文友好的千问实例，无 SK 时降级到本地 Mock。",
+    },
+    {
+        "task_type": "model_lab_chat",
+        "preferred_instance_code": "QWEN_PLUS",
+        "fallback_chain_json": ["DEEPSEEK_V4_FLASH", "GEMINI_FLASH", "OPENAI_CHATGPT", "MOCK_GENERAL"],
+        "route_policy": "PREFERRED_THEN_FALLBACK",
+        "enabled": True,
+        "description": "模型实验室手工问答和连通性验证路由。",
+    },
+    {
+        "task_type": "data_governance",
+        "preferred_instance_code": "QWEN_PLUS",
+        "fallback_chain_json": ["GEMINI_FLASH", "DEEPSEEK_CHAT", "OPENAI_CHATGPT", "MOCK_GENERAL"],
+        "route_policy": "PREFERRED_THEN_FALLBACK",
+        "enabled": True,
+        "description": "数据治理、分类入湖、DW 层质量检查与字段解释路由。",
+    },
+    {
+        "task_type": "knowledge_graph",
+        "preferred_instance_code": "GEMINI_FLASH",
+        "fallback_chain_json": ["QWEN_PLUS", "DEEPSEEK_CHAT", "OPENAI_CHATGPT", "MOCK_GENERAL"],
+        "route_policy": "PREFERRED_THEN_FALLBACK",
+        "enabled": True,
+        "description": "单股知识图谱构建、实体关系抽取与证据归档路由。",
+    },
+    {
+        "task_type": "qa_query",
+        "preferred_instance_code": "QWEN_PLUS",
+        "fallback_chain_json": ["DEEPSEEK_V4_FLASH", "GEMINI_FLASH", "OPENAI_CHATGPT", "MOCK_GENERAL"],
+        "route_policy": "PREFERRED_THEN_FALLBACK",
+        "enabled": True,
+        "description": "研究中心对话页签的问答、问数、治理和分析路由。",
+    },
+    {
+        "task_type": "stock_screening",
+        "preferred_instance_code": "DEEPSEEK_CHAT",
+        "fallback_chain_json": ["QWEN_PLUS", "GEMINI_FLASH", "OPENAI_CHATGPT", "MOCK_GENERAL"],
+        "route_policy": "PREFERRED_THEN_FALLBACK",
+        "enabled": True,
+        "description": "分析选股、基本面和量价策略研判路由。",
     },
     {
         "task_type": "stock_analysis",
         "preferred_instance_code": "DEEPSEEK_CHAT",
-        "fallback_chain_json": ["MOCK_GENERAL"],
+        "fallback_chain_json": ["QWEN_PLUS", "GEMINI_FLASH", "OPENAI_CHATGPT", "MOCK_GENERAL"],
         "route_policy": "PREFERRED_THEN_FALLBACK",
         "enabled": True,
-        "description": "Stock analysis uses DeepSeek when configured and falls back to the local mock model offline.",
+        "description": "研报生成主路由，综合 DeepSeek、千问、Gemini、ChatGPT 与本地兜底。",
     },
-)
-
-DEFAULT_MODEL_SKILLS = (
     {
-        "skill_code": "STOCK_TREND_ADVISOR",
-        "skill_name": "股票趋势研判（DeepSeek）",
-        "description": "综合新闻、公告、量价、成交量和财报，生成带风险边界的趋势研判。",
-        "instructions": (
-            "你是一名严谨的股票研究助理，优先使用提供的最新数据，不得编造不存在的新闻、公告、价格或财报。"
-            "请按以下顺序分析：1）新闻与公告的事实、来源、时间和潜在影响；"
-            "2）股价、趋势、支撑阻力、波动和成交量变化；3）财报中的收入、利润、现金流、杠杆和估值线索；"
-            "4）多空情景与未来1周、1个月、3个月的趋势概率。"
-            "最后给出条件化的进入/退出计划：参考入场区间、止损位、分批止盈区间、观察时间窗口和触发条件。"
-            "如果数据不足，明确列出缺失项并降低结论置信度；不要把分析写成保证收益的承诺。"
-            "输出必须包含：结论摘要、证据、趋势判断、进入方案、退出方案、风险与失效条件。"
-        ),
+        "task_type": "research_report",
+        "preferred_instance_code": "DEEPSEEK_CHAT",
+        "fallback_chain_json": ["QWEN_PLUS", "GEMINI_FLASH", "OPENAI_CHATGPT", "MOCK_GENERAL"],
+        "route_policy": "PREFERRED_THEN_FALLBACK",
         "enabled": True,
-        "config_json": {
-            "preferred_instance_code": "DEEPSEEK_CHAT",
-            "task_type": "stock_analysis",
-            "temperature": 0.2,
-            "risk_disclaimer": "仅供研究参考，不构成投资建议。",
-        },
+        "description": "历史研报对比、结论复盘和报告生成路由。",
+    },
+    {
+        "task_type": "risk_warning",
+        "preferred_instance_code": "DEEPSEEK_CHAT",
+        "fallback_chain_json": ["QWEN_PLUS", "GEMINI_FLASH", "OPENAI_CHATGPT", "MOCK_GENERAL"],
+        "route_policy": "PREFERRED_THEN_FALLBACK",
+        "enabled": True,
+        "description": "预警判断、负面公告识别、量价失效条件和风险提醒路由。",
     },
 )
 
@@ -149,45 +284,56 @@ def seed_default_models(db: Session) -> None:
             provider = ModelProvider(**provider_config)
             db.add(provider)
             db.flush()
+        else:
+            provider.provider_name = str(provider_config["provider_name"])
+            provider.provider_type = str(provider_config["provider_type"])
+            provider.description = provider.description or str(provider_config.get("description") or "")
+            provider.config_json = {**dict(provider_config.get("config_json") or {}), **dict(provider.config_json or {})}
         provider_by_code[provider.provider_code] = provider
 
-    deepseek = provider_by_code["DEEPSEEK"]
-    for instance_config in DEFAULT_DEEPSEEK_INSTANCES:
+    for raw_config in DEFAULT_MODEL_INSTANCES:
+        instance_config = dict(raw_config)
+        provider_code = str(instance_config.pop("provider_code"))
+        provider = provider_by_code[provider_code]
         instance = db.scalar(select(ModelInstance).where(ModelInstance.instance_code == instance_config["instance_code"]))
         if not instance:
-            db.add(ModelInstance(provider_id=deepseek.id, **instance_config))
+            db.add(ModelInstance(provider_id=provider.id, **instance_config))
             db.flush()
             continue
+        instance.provider_id = provider.id
         if instance.instance_code == "DEEPSEEK_CHAT" and instance.model_code in {"deepseek-chat", "deepseek-reasoner"}:
             instance.model_code = str(instance_config["model_code"])
             instance.model_name = str(instance_config["model_name"])
-            instance.api_base_url = instance.api_base_url or str(instance_config["api_base_url"])
-            instance.api_path = instance.api_path or str(instance_config["api_path"])
-            instance.description = instance.description or str(instance_config["description"])
+        for field_name in ("api_base_url", "api_path", "fallback_instance_code", "description"):
+            if getattr(instance, field_name) in (None, ""):
+                setattr(instance, field_name, instance_config.get(field_name))
+        instance.purpose = instance.purpose or str(instance_config.get("purpose") or "GENERAL")
+        instance.max_tokens = instance.max_tokens or int(instance_config.get("max_tokens") or 4096)
+        instance.temperature = instance.temperature if instance.temperature is not None else float(instance_config.get("temperature") or 0.2)
+        instance.top_p = instance.top_p if instance.top_p is not None else float(instance_config.get("top_p") or 0.95)
+        instance.config_json = {**dict(instance_config.get("config_json") or {}), **dict(instance.config_json or {})}
 
-    provider = provider_by_code["MOCK"]
-
-    instance = db.scalar(select(ModelInstance).where(ModelInstance.instance_code == "MOCK_GENERAL"))
-    if not instance:
-        db.add(
-            ModelInstance(
-                provider_id=provider.id,
-                **DEFAULT_MODEL_INSTANCES[0],
-            )
-        )
-        db.flush()
-
-    existing_route_types = set(db.scalars(select(ModelRouteRule.task_type)).all())
     for route_config in DEFAULT_MODEL_ROUTES:
         route = db.scalar(select(ModelRouteRule).where(ModelRouteRule.task_type == route_config["task_type"]))
         if route is None:
             db.add(ModelRouteRule(**route_config))
             continue
-        if route_config["task_type"] == "stock_analysis":
+        if route_config["task_type"] in {
+            "general_chat",
+            "model_lab_chat",
+            "data_governance",
+            "knowledge_graph",
+            "qa_query",
+            "stock_screening",
+            "stock_analysis",
+            "research_report",
+            "risk_warning",
+        }:
             route.preferred_instance_code = route_config["preferred_instance_code"]
             route.fallback_chain_json = route_config["fallback_chain_json"]
             route.route_policy = route_config["route_policy"]
             route.description = route_config["description"]
+            route.enabled = bool(route_config["enabled"])
 
     db.commit()
 
@@ -195,8 +341,8 @@ def seed_default_models(db: Session) -> None:
 DEFAULT_MODEL_SKILLS_V2 = (
     {
         "skill_code": "STOCK_TREND_ADVISOR",
-        "skill_name": "股票趋势综合研判（DeepSeek）",
-        "description": "综合分析新闻、公告、股价、成交量和财报，给出带证据、带置信度和风险边界的趋势与交易计划。",
+        "skill_name": "股票趋势综合研判",
+        "description": "综合新闻、公告、股价、成交量和财报，给出带证据、置信度和风险边界的趋势与交易计划。",
         "instructions": (
             "你是一名严谨的股票研究助手。只使用输入中提供或明确可验证的资料，不得编造新闻、公告、价格、成交量、财报或事件日期。"
             "请按以下顺序分析：1）新闻与公告的来源、发布时间、事实要点、潜在影响和是否已被市场定价；"
@@ -214,6 +360,71 @@ DEFAULT_MODEL_SKILLS_V2 = (
             "temperature": 0.2,
             "risk_disclaimer": "仅供研究参考，不构成投资建议；价格和时间区间均为条件化假设。",
         },
+    },
+    {
+        "skill_code": "DATA_GOVERNANCE_DW",
+        "skill_name": "股票数据治理与 DW 分层",
+        "description": "把股票基础资料、新闻、公告、财报、股价、交易量、股东和 F10 数据归类成可追溯 DW 数据层。",
+        "instructions": (
+            "你是股票数据治理智能体。输入可能包含来自接口、数据库表、新闻、公告、财报、行情和 F10 的混合数据。"
+            "必须先识别数据类别：基础数据、新闻、公告、财报、股价、交易量、股东、业务/F10、研究报告、同步日志。"
+            "为每类数据输出目标 DW 层、主键、时间字段、来源、质量问题、去重规则、缺失字段和后续治理动作。"
+            "不得改变事实值，不得把猜测写入 DW 层。无法确认的数据标为 PENDING_REVIEW。"
+            "输出格式固定为：分类结果、字段映射、质量校验、入库建议、风险与待补数据。"
+        ),
+        "enabled": True,
+        "config_json": {"task_type": "data_governance", "preferred_instance_code": "QWEN_PLUS"},
+    },
+    {
+        "skill_code": "STOCK_KNOWLEDGE_GRAPH_BUILDER",
+        "skill_name": "单股全覆盖知识图谱构建",
+        "description": "以单只股票为对象，抽取公司、行业、股东、财报、公告、新闻、价格、成交量和研报结论的实体关系。",
+        "instructions": (
+            "你是股票知识图谱构建智能体。围绕一只股票建立全覆盖知识图谱，所有实体和关系都必须能追溯到输入证据。"
+            "实体类型至少包括：STOCK、COMPANY、INDUSTRY、SHAREHOLDER、FINANCIAL_REPORT、NOTICE、NEWS、PRICE_SERIES、VOLUME_SERIES、BUSINESS_SEGMENT、RESEARCH_REPORT。"
+            "关系类型至少包括：HAS_BASIC_PROFILE、HAS_SHAREHOLDER、HAS_FINANCIAL_REPORT、HAS_NOTICE、HAS_NEWS、HAS_PRICE_SERIES、HAS_VOLUME_SERIES、HAS_BUSINESS_SEGMENT、HAS_RESEARCH_REPORT、IMPACTS、SUPPORTS、CONFLICTS_WITH。"
+            "输出时给出实体清单、关系清单、证据来源、冲突事实和缺失项，不得生成无证据关系。"
+        ),
+        "enabled": True,
+        "config_json": {"task_type": "knowledge_graph", "preferred_instance_code": "GEMINI_FLASH"},
+    },
+    {
+        "skill_code": "STOCK_QA_QUERY",
+        "skill_name": "股票问答问数",
+        "description": "面向研究中心对话页签，读取内部数据源和知识图谱，回答治理、问数、分析和问答请求。",
+        "instructions": (
+            "你是股票问答问数智能体。回答前先判断用户问题属于数据治理、统计问数、事实问答、研判分析还是预警解释。"
+            "优先引用内部数据源和知识图谱中的事实；如果缺少数据，明确说明缺失表、缺失字段或缺失时间段。"
+            "问数类问题要给出统计口径、过滤条件和结果含义；分析类问题要区分事实、推断和需要验证的假设。"
+            "输出应简洁、可执行，必要时给出下一步数据治理或分析动作。"
+        ),
+        "enabled": True,
+        "config_json": {"task_type": "qa_query", "preferred_instance_code": "QWEN_PLUS"},
+    },
+    {
+        "skill_code": "STOCK_SELECTION_ANALYST",
+        "skill_name": "分析选股与短中长线研判",
+        "description": "结合内部数据源、知识图谱和外部信息，分析基本面、业务布局、发展前景、经营现状和量价操作，给出短中长线结论。",
+        "instructions": (
+            "你是资深股票研究分析师。必须从基本面、业务布局、发展前景、经营现状、量价结构、成交量、资金行为、新闻公告和股东变化进行综合判断。"
+            "结论要覆盖短线（1周）、中线（1个月）、长线（3个月以上）三个周期，并说明适用条件、失效条件和跟踪指标。"
+            "读取内部数据源和知识图谱时，优先使用带日期、来源和可追溯证据的数据。外部信息只能作为补充，并要标明来源或说明尚未接入。"
+            "输出必须包括：核心结论、证据链、看多/看空因素、短中长线策略、预警信号、需要补充的数据。"
+        ),
+        "enabled": True,
+        "config_json": {"task_type": "stock_screening", "preferred_instance_code": "DEEPSEEK_CHAT"},
+    },
+    {
+        "skill_code": "RESEARCH_REPORT_REVIEW",
+        "skill_name": "研报历史复盘与修正",
+        "description": "生成新研报时对比历史研报，评估历史预测是否有效，并提出需要调整的判断。",
+        "instructions": (
+            "你是研报复盘智能体。输入包含当前研报证据和历史研报摘要时，必须评估历史结论是否被后续价格、成交量、公告、财报或新闻验证。"
+            "复盘要输出：历史结论、当前验证结果、预测偏差、偏差原因、需要上调或下调的判断、下一次跟踪指标。"
+            "不得因为单一短期价格波动直接判定全部预测正确或错误，要结合历史研报的时间、评级、分数、支撑阻力和风险提示。"
+        ),
+        "enabled": True,
+        "config_json": {"task_type": "research_report", "preferred_instance_code": "DEEPSEEK_CHAT"},
     },
 )
 
@@ -326,18 +537,19 @@ class ModelHubService:
     def test_instance(self, instance_code: str) -> ModelCallLog:
         instance = self._get_instance_by_code(instance_code)
         routed_model = self._to_routed_model(instance)
+        prompt = "请只返回：模型连通性测试成功。"
         log = self._start_log(
             task_type="model_test",
             provider_code=routed_model.provider.provider_code,
             instance_code=routed_model.instance.instance_code,
             model_code=routed_model.instance.model_code,
-            request_json={"mode": "ping"},
+            request_json={"mode": "connectivity", "prompt": prompt},
         )
         try:
             result = get_model_adapter(routed_model.provider.provider_type).chat(
                 instance=routed_model.instance,
-                messages=[{"role": "user", "content": "ping"}],
-                metadata_json={"mode": "ping"},
+                messages=[{"role": "user", "content": prompt}],
+                metadata_json={"mode": "connectivity"},
             )
             log.status = "SUCCESS"
             log.response_text = result.response_text

@@ -153,14 +153,15 @@ def test_provider(provider_id: int, db: Session = Depends(get_db)) -> ModelTestR
             message=message,
         )
     log = ModelHubService(db).test_instance(instance.instance_code)
+    succeeded = log.status == "SUCCESS"
     return ModelTestResponse(
         call_log_id=log.id,
         provider_code=log.provider_code,
         instance_code=log.instance_code,
         model_code=log.model_code,
         status=log.status,
-        message="Model provider test completed.",
-        response_text=log.response_text,
+        message="供应商测试成功，已收到模型响应。" if succeeded else "供应商测试失败，请检查 API Base URL、SK/API Key、模型编码和网络连通性。",
+        response_text=log.response_text or log.error_message,
     )
 
 
@@ -233,13 +234,14 @@ def delete_instance(instance_id: int, db: Session = Depends(get_db)) -> Response
 def test_instance(instance_id: int, db: Session = Depends(get_db)) -> ModelTestResponse:
     instance = _instance_or_404(db, instance_id)
     log = ModelHubService(db).test_instance(instance.instance_code)
+    succeeded = log.status == "SUCCESS"
     return ModelTestResponse(
         call_log_id=log.id,
         provider_code=log.provider_code,
         instance_code=log.instance_code,
         model_code=log.model_code,
         status=log.status,
-        message="Model instance test completed.",
+        message="模型实例测试成功，已收到模型响应。" if succeeded else "模型实例测试失败，请检查 API Base URL、SK/API Key、模型编码和网络连通性。",
         response_text=log.response_text or log.error_message,
     )
 

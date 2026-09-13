@@ -4571,3 +4571,133 @@ textarea:focus {
 .skill-instructions-input {
   min-height: 260px;
 }
+
+.muted-cell {
+  max-width: 260px;
+  color: var(--text-muted);
+  font-size: 12px;
+  word-break: break-all;
+}
+
+.field-help-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0 24px 18px;
+}
+
+.field-help-grid > div {
+  padding: 12px 13px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #f7faf5;
+}
+
+.field-help-grid strong,
+.field-help-grid span {
+  display: block;
+}
+
+.field-help-grid strong {
+  margin-bottom: 5px;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.field-help-grid span {
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.research-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 330px;
+  gap: 18px;
+  align-items: start;
+}
+
+.research-chat-panel {
+  max-width: 980px;
+}
+
+.research-chat-form {
+  display: grid;
+  gap: 12px;
+  margin: 0 24px 18px;
+}
+
+.research-question-input {
+  resize: vertical;
+}
+
+.research-selection-grid {
+  margin: 16px 24px 18px;
+}
+
+.research-selection-grid label {
+  align-content: start;
+}
+
+.report-history-panel {
+  position: sticky;
+  top: 18px;
+}
+
+.report-history-list {
+  display: grid;
+  gap: 10px;
+  margin: 0 24px 24px;
+  max-height: 70vh;
+  overflow: auto;
+}
+
+.report-history-item {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  padding: 12px 13px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  color: var(--text);
+  background: #fff;
+  text-align: left;
+  cursor: pointer;
+}
+
+.report-history-item:hover,
+.report-history-item.active {
+  border-color: #4f795b;
+  background: #eef6ee;
+  box-shadow: 0 0 0 2px rgba(79, 121, 91, .12);
+}
+
+.report-history-item strong {
+  font-size: 14px;
+}
+
+.report-history-item span,
+.report-history-item small {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+@media (max-width: 1100px) {
+  .field-help-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .research-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .report-history-panel {
+    position: static;
+  }
+}
+
+@media (max-width: 680px) {
+  .field-help-grid {
+    grid-template-columns: 1fr;
+  }
+}

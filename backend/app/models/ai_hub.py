@@ -249,6 +249,28 @@ class KnowledgeRelation(TimestampMixin, Base):
     evidence_document_id: Mapped[int | None] = mapped_column(ForeignKey("knowledge_document.id", ondelete="SET NULL"))
 
 
+class ResearchReportRecord(TimestampMixin, Base):
+    __tablename__ = "research_report"
+    __table_args__ = (Index("ix_research_report_symbol_created", "market", "symbol", "created_at"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    market: Mapped[str] = mapped_column(String(16), nullable=False, index=True)
+    symbol: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(128), nullable=False, default="")
+    title: Mapped[str] = mapped_column(String(256), nullable=False, default="AI 深度研究报告")
+    report_markdown: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    conclusion: Mapped[str | None] = mapped_column(Text)
+    rating: Mapped[str | None] = mapped_column(String(32))
+    score: Mapped[int | None] = mapped_column(Integer)
+    model_provider: Mapped[str | None] = mapped_column(String(64))
+    model_instance: Mapped[str | None] = mapped_column(String(64))
+    data_sources_json: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    knowledge_base_ids_json: Mapped[list[int]] = mapped_column(JSON, nullable=False, default=list)
+    agent_snapshot_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    history_evaluation_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    warnings_json: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+
+
 class ModelCallLog(Base):
     __tablename__ = "model_call_log"
     __table_args__ = (Index("ix_model_call_log_task_started", "task_type", "started_at"),)

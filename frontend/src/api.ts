@@ -515,6 +515,35 @@ export type ResearchAnalyzeDone = {
   model_provider?: string | null;
   model_instance?: string | null;
   warnings: string[];
+  score?: number | null;
+  rating?: string | null;
+  conclusion?: string | null;
+  report_id?: number | null;
+  history_evaluation?: Record<string, unknown>;
+};
+
+export type ResearchReportSummary = {
+  id: number;
+  symbol: string;
+  market: string;
+  name: string;
+  title: string;
+  rating?: string | null;
+  score?: number | null;
+  conclusion?: string | null;
+  model_provider?: string | null;
+  model_instance?: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ResearchReportDetail = ResearchReportSummary & {
+  report_markdown: string;
+  data_sources_json: string[];
+  knowledge_base_ids_json: number[];
+  agent_snapshot_json: Record<string, unknown>;
+  history_evaluation_json: Record<string, unknown>;
+  warnings_json: string[];
 };
 
 type RequestOptions = RequestInit & { body?: BodyInit | null };
@@ -723,7 +752,14 @@ export const api = {
     }),
   listModelCallLogs: (limit = 20) => request<ModelCallLog[]>(`/model-hub/call-logs?limit=${limit}`),
   analyzeResearch: async (
-    payload: { symbol: string; market?: string; top_k?: number; refresh?: boolean },
+    payload: {
+      symbol: string;
+      market?: string;
+      top_k?: number;
+      refresh?: boolean;
+      data_source_codes?: string[];
+      knowledge_base_ids?: number[];
+    },
     handlers: {
       onStage?: (data: { stage: string; message: string }) => void;
       onAgent?: (data: ResearchFundamentalAgent | ResearchTechnicalAgent) => void;
@@ -770,4 +806,7 @@ export const api = {
     }
     if (buffer.trim()) dispatch(buffer);
   },
+  listResearchReports: (params: URLSearchParams = new URLSearchParams()) =>
+    request<ResearchReportSummary[]>(`/research/reports${params.toString() ? `?${params.toString()}` : ""}`),
+  getResearchReport: (id: number) => request<ResearchReportDetail>(`/research/reports/${id}`),
 };

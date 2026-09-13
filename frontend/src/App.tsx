@@ -15,6 +15,8 @@ import {
   type ModelProviderPayload,
   type ModelRoute,
   type ModelRoutePayload,
+  type ResearchReportDetail,
+  type ResearchReportSummary,
   type ModelSkill,
   type ModelSkillPayload,
   type StockSymbol,
@@ -27,6 +29,7 @@ type ModuleView = "data" | "model" | "watch" | "research";
 type ModelHubTab =
   "models" | "agents" | "skills" | "assets" | "knowledge" | "logs";
 type DataView = "sources" | "interfaces" | "universe";
+type ResearchTab = "chat" | "research";
 const marketLabel: Record<string, string> = {
   ALL: "全部市场",
   CN_A: "A股",
@@ -40,6 +43,9 @@ const providerTypeLabel: Record<string, string> = {
   GEMINI_REST: "Gemini REST",
   DEEPSEEK: "DeepSeek",
 };
+function billingLabel(config: Record<string, unknown> | undefined) {
+  return String(config?.billing_label || config?.billing_type || "--");
+}
 const inputClass = "text-input";
 function ErrorText({ error }: { error: string }) {
   return error ? <p className="form-error">{error}</p> : null;
@@ -456,7 +462,7 @@ type ProviderForm = ModelProviderPayload & { id?: number };
 const emptyProvider: ProviderForm = {
   provider_code: "",
   provider_name: "",
-  provider_type: "DEEPSEEK",
+  provider_type: "OPENAI_COMPAT",
   enabled: true,
   description: "",
   config_json: {},
@@ -1197,6 +1203,8 @@ function ModelTab(props: {
                 <tr>
                   <th>供应商</th>
                   <th>类型</th>
+                  <th>费用</th>
+                  <th>API Base</th>
                   <th>状态</th>
                   <th>操作</th>
                 </tr>
@@ -1212,6 +1220,14 @@ function ModelTab(props: {
                       <td>
                         {providerTypeLabel[item.provider_type] ||
                           item.provider_type}
+                      </td>
+                      <td>{billingLabel(item.config_json)}</td>
+                      <td className="muted-cell">
+                        {String(
+                          item.config_json.api_base_url ||
+                            item.config_json.base_url ||
+                            "--",
+                        )}
                       </td>
                       <td>
                         <Status enabled={item.enabled} />
@@ -1240,7 +1256,7 @@ function ModelTab(props: {
                   ))
                 ) : (
                   <tr>
-                    <td className="empty-table-cell" colSpan={4}>
+                    <td className="empty-table-cell" colSpan={6}>
                       暂无模型供应商，点击“新增供应商”创建。
                     </td>
                   </tr>
@@ -1267,6 +1283,24 @@ function ModelTab(props: {
               </button>
             </div>
           </div>
+          <div className="field-help-grid">
+            <div>
+              <strong>最大 Token</strong>
+              <span>单次回答允许输出的最大长度，值越大越适合长研报，但成本和耗时更高。</span>
+            </div>
+            <div>
+              <strong>Temperature</strong>
+              <span>控制随机性，0 更稳定保守，数值越高回答越发散。</span>
+            </div>
+            <div>
+              <strong>Top P</strong>
+              <span>控制候选词采样范围，越低越保守，越高越开放。</span>
+            </div>
+            <div>
+              <strong>API/SK</strong>
+              <span>API Base URL 是服务地址，API Path 是调用路径，SK/API Key 是密钥；未配置会自动走降级链。</span>
+            </div>
+          </div>
           <div className="resource-list-header">
             <h3>模型列表</h3>
             <span>{instances.length} 个模型实例</span>
@@ -1279,6 +1313,8 @@ function ModelTab(props: {
                   <th>供应商</th>
                   <th>模型</th>
                   <th>用途</th>
+                  <th>费用</th>
+                  <th>参数</th>
                   <th>Key</th>
                   <th>状态</th>
                   <th>操作</th>
@@ -1298,6 +1334,10 @@ function ModelTab(props: {
                       </td>
                       <td>{item.model_code}</td>
                       <td>{item.purpose || "--"}</td>
+                      <td>{billingLabel(item.config_json)}</td>
+                      <td className="muted-cell">
+                        Token {item.max_tokens} / T {item.temperature} / P {item.top_p}
+                      </td>
                       <td>{item.api_key_configured ? "已配置" : "未配置"}</td>
                       <td>
                         <Status enabled={item.enabled} />
@@ -1326,7 +1366,7 @@ function ModelTab(props: {
                   ))
                 ) : (
                   <tr>
-                    <td className="empty-table-cell" colSpan={7}>
+                    <td className="empty-table-cell" colSpan={9}>
                       暂无模型实例，点击“新增模型”创建。
                     </td>
                   </tr>
@@ -1492,6 +1532,30 @@ function ModelTab(props: {
                     })
                   }
                 />
+                <select
+                  className={inputClass}
+                  value={String(provider.config_json.billing_label || "")}
+                  onChange={(e) =>
+                    setProvider({
+                      ...provider,
+                      config_json: {
+                        ...provider.config_json,
+                        billing_label: e.target.value,
+                        billing_type:
+                          e.target.value === "免费"
+                            ? "FREE"
+                            : e.target.value === "付费"
+                              ? "PAID"
+                              : "FREE_TIER_OR_PAID",
+                      },
+                    })
+                  }
+                >
+                  <option value="">费用类型</option>
+                  <option value="免费">免费</option>
+                  <option value="付费">付费</option>
+                  <option value="免费额度/付费">免费额度/付费</option>
+                </select>
                 <textarea
                   className="field-span-2"
                   rows={3}
@@ -1621,6 +1685,30 @@ function ModelTab(props: {
                     setInstance({ ...instance, api_path: e.target.value })
                   }
                 />
+                <select
+                  className={inputClass}
+                  value={String(instance.config_json.billing_label || "")}
+                  onChange={(e) =>
+                    setInstance({
+                      ...instance,
+                      config_json: {
+                        ...instance.config_json,
+                        billing_label: e.target.value,
+                        billing_type:
+                          e.target.value === "免费"
+                            ? "FREE"
+                            : e.target.value === "付费"
+                              ? "PAID"
+                              : "FREE_TIER_OR_PAID",
+                      },
+                    })
+                  }
+                >
+                  <option value="">费用类型</option>
+                  <option value="免费">免费</option>
+                  <option value="付费">付费</option>
+                  <option value="免费额度/付费">免费额度/付费</option>
+                </select>
                 <input
                   className={inputClass}
                   type="number"
@@ -2889,32 +2977,135 @@ function renderResearchMarkdown(text: string) {
 }
 
 function ResearchPage() {
+  const [tab, setTab] = useState<ResearchTab>("chat");
   const [market, setMarket] = useState("CN_A");
   const [query, setQuery] = useState("");
   const [report, setReport] = useState("");
   const [running, setRunning] = useState(false);
+  const [stage, setStage] = useState("");
   const [error, setError] = useState("");
+  const [chatQuestion, setChatQuestion] = useState("请帮我检查当前股票数据治理、知识图谱和选股分析能力还缺什么。");
+  const [chatAnswer, setChatAnswer] = useState("");
+  const [chatRunning, setChatRunning] = useState(false);
+  const [assets, setAssets] = useState<DataAsset[]>([]);
+  const [knowledge, setKnowledge] = useState<KnowledgeBase[]>([]);
+  const [selectedAssets, setSelectedAssets] = useState<string[]>([]);
+  const [selectedKnowledge, setSelectedKnowledge] = useState<number[]>([]);
+  const [reports, setReports] = useState<ResearchReportSummary[]>([]);
+  const [selectedReport, setSelectedReport] = useState<ResearchReportDetail | null>(null);
+
+  async function loadReports() {
+    const result = await api.listResearchReports();
+    setReports(result);
+  }
+
+  useEffect(() => {
+    void Promise.all([api.listDataAssets(), api.listKnowledgeBases(), api.listResearchReports()])
+      .then(([assetResult, knowledgeResult, reportResult]) => {
+        setAssets(assetResult);
+        setKnowledge(knowledgeResult);
+        setReports(reportResult);
+        setSelectedAssets((current) =>
+          current.length ? current : assetResult.filter((item) => item.enabled).map((item) => item.asset_code),
+        );
+        setSelectedKnowledge((current) => {
+          if (current.length) return current;
+          const fullKg = knowledgeResult.find((item) => item.kb_code === "STOCK_FULL_KG");
+          return fullKg ? [fullKg.id] : knowledgeResult.filter((item) => item.enabled).slice(0, 1).map((item) => item.id);
+        });
+      })
+      .catch((e) => setError(e instanceof Error ? e.message : "研究中心资源加载失败"));
+  }, []);
+
+  function toggleAsset(code: string) {
+    setSelectedAssets((current) =>
+      current.includes(code) ? current.filter((item) => item !== code) : [...current, code],
+    );
+  }
+
+  function toggleKnowledge(id: number) {
+    setSelectedKnowledge((current) =>
+      current.includes(id) ? current.filter((item) => item !== id) : [...current, id],
+    );
+  }
+
+  async function openReport(id: number) {
+    try {
+      const detail = await api.getResearchReport(id);
+      setSelectedReport(detail);
+      setReport(detail.report_markdown);
+      setError("");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "研报加载失败");
+    }
+  }
+
+  async function sendChat(event: FormEvent) {
+    event.preventDefault();
+    const question = chatQuestion.trim();
+    if (!question) return;
+    setChatRunning(true);
+    setChatAnswer("");
+    setError("");
+    try {
+      const result = await api.chatWithModel({
+        task_type: "qa_query",
+        messages: [
+          {
+            role: "system",
+            content:
+              "你是研究中心对话页签的问答问数智能体，围绕数据治理、知识图谱、股票分析、问数和问答执行操作。回答要区分事实、推断和缺失数据。",
+          },
+          { role: "user", content: question },
+        ],
+        temperature: 0.2,
+        max_tokens: 2200,
+        metadata_json: {
+          skill_code: "STOCK_QA_QUERY",
+          agent: "QA_QUERY_AGENT",
+          data_source_codes: selectedAssets,
+          knowledge_base_ids: selectedKnowledge,
+        },
+      });
+      setChatAnswer(result.response_text);
+      void loadReports();
+    } catch (e) {
+      setChatAnswer(e instanceof Error ? e.message : "智能体调用失败");
+    } finally {
+      setChatRunning(false);
+    }
+  }
+
   async function submit(event: FormEvent) {
     event.preventDefault();
     const symbol = query.trim();
     if (!symbol) return;
     setRunning(true);
     setReport("");
+    setSelectedReport(null);
+    setStage("");
     setError("");
     try {
       let nextReport = "";
       await api.analyzeResearch(
-        { market, symbol, top_k: 5 },
         {
+          market,
+          symbol,
+          top_k: 5,
+          data_source_codes: selectedAssets,
+          knowledge_base_ids: selectedKnowledge,
+        },
+        {
+          onStage: (data) => setStage(data.message),
           onReport: (delta) => {
             nextReport += delta;
             setReport((current) => current + delta);
           },
-          onDone: () => {
-            window.localStorage.setItem(
-              `gemini-quant-agent:research-report:${market}:${symbol}`,
-              nextReport,
-            );
+          onDone: (data) => {
+            setStage(`研报已保存${data.report_id ? `：#${data.report_id}` : ""}`);
+            void loadReports().then(() => {
+              if (data.report_id) void openReport(data.report_id);
+            });
           },
           onError: setError,
         },
@@ -2930,46 +3121,156 @@ function ResearchPage() {
       <PageHeader
         eyebrow="AI RESEARCH"
         title="研究中心"
-        detail={running ? "正在生成研报..." : "DeepSeek / 多智能体分析"}
+        detail={
+          running
+            ? stage || "正在生成研报..."
+            : chatRunning
+              ? "智能体正在回答..."
+              : "默认对话页签；研究页签用于生成、保存和复盘研报"
+        }
       />
-      <section className="panel">
-        <div className="panel-heading">
-          <div>
-            <p className="eyebrow">DEEP RESEARCH</p>
-            <h2>生成 AI 深度研报</h2>
+      <div className="resource-tabs">
+        <button type="button" className={tab === "chat" ? "active" : ""} onClick={() => setTab("chat")}>
+          对话
+        </button>
+        <button type="button" className={tab === "research" ? "active" : ""} onClick={() => setTab("research")}>
+          研究
+        </button>
+      </div>
+      {tab === "chat" && (
+        <section className="panel research-chat-panel">
+          <div className="panel-heading">
+            <div>
+              <p className="eyebrow">AGENT CHAT</p>
+              <h2>智能体对话</h2>
+              <p>调用问答问数智能体，处理数据治理、分析、问数、问答和预警解释。</p>
+            </div>
           </div>
+          <form className="research-chat-form" onSubmit={sendChat}>
+            <textarea
+              className="text-input research-question-input"
+              rows={5}
+              value={chatQuestion}
+              onChange={(e) => setChatQuestion(e.target.value)}
+              placeholder="请输入数据治理、问数、问答、分析或预警问题"
+            />
+            <button className="primary-button" type="submit" disabled={chatRunning}>
+              {chatRunning ? "调用中..." : "发送给智能体"}
+            </button>
+          </form>
+          <ErrorText error={error} />
+          <article className="research-markdown">
+            {chatAnswer ? renderResearchMarkdown(chatAnswer) : <p className="empty-state">这里会显示智能体回答。</p>}
+          </article>
+        </section>
+      )}
+      {tab === "research" && (
+        <div className="research-layout">
+          <section className="panel">
+            <div className="panel-heading">
+              <div>
+                <p className="eyebrow">DEEP RESEARCH</p>
+                <h2>生成 AI 深度研报</h2>
+                <p>指定股票、数据源和知识库后，由研报智能体生成报告并保存数据库。</p>
+              </div>
+            </div>
+            <form className="inline-form" onSubmit={submit}>
+              <select
+                className={inputClass}
+                value={market}
+                onChange={(e) => setMarket(e.target.value)}
+              >
+                <option value="CN_A">A股</option>
+                <option value="HK">港股</option>
+                <option value="NEEQ">新三板</option>
+              </select>
+              <input
+                className={inputClass}
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="输入股票代码或名称"
+              />
+              <button className="primary-button" type="submit" disabled={running}>
+                {running ? "生成中..." : "生成研报"}
+              </button>
+            </form>
+            <div className="selection-grid research-selection-grid">
+              <label>
+                数据源 / DW 数据层
+                {assets.length ? (
+                  assets.map((item) => (
+                    <span key={item.id}>
+                      <input
+                        type="checkbox"
+                        checked={selectedAssets.includes(item.asset_code)}
+                        onChange={() => toggleAsset(item.asset_code)}
+                      />
+                      {item.display_name}
+                    </span>
+                  ))
+                ) : (
+                  <span>暂无数据资产</span>
+                )}
+              </label>
+              <label>
+                知识库
+                {knowledge.length ? (
+                  knowledge.map((item) => (
+                    <span key={item.id}>
+                      <input
+                        type="checkbox"
+                        checked={selectedKnowledge.includes(item.id)}
+                        onChange={() => toggleKnowledge(item.id)}
+                      />
+                      {item.kb_name}（{item.entity_count} 实体 / {item.relation_count} 关系）
+                    </span>
+                  ))
+                ) : (
+                  <span>暂无知识库</span>
+                )}
+              </label>
+            </div>
+            <ErrorText error={error} />
+            <article className="research-markdown">
+              {report ? (
+                renderResearchMarkdown(report)
+              ) : (
+                <p className="empty-state">
+                  输入股票代码后，报告会以流式方式显示，并自动保存到数据库。
+                </p>
+              )}
+            </article>
+          </section>
+
+          <section className="panel report-history-panel">
+            <div className="panel-heading">
+              <div>
+                <p className="eyebrow">REPORT HISTORY</p>
+                <h2>历史研报</h2>
+                <p>所有生成过研报的股票都会保存，点击可查看对应研报。</p>
+              </div>
+            </div>
+            <div className="report-history-list">
+              {reports.length ? (
+                reports.map((item) => (
+                  <button
+                    type="button"
+                    key={item.id}
+                    className={selectedReport?.id === item.id ? "report-history-item active" : "report-history-item"}
+                    onClick={() => void openReport(item.id)}
+                  >
+                    <strong>{item.symbol} {item.name}</strong>
+                    <span>{marketLabel[item.market] || item.market} / {item.rating || "--"} / {item.score ?? "--"}分</span>
+                    <small>{formatDate(item.created_at)}</small>
+                  </button>
+                ))
+              ) : (
+                <p className="empty-state">暂无历史研报。</p>
+              )}
+            </div>
+          </section>
         </div>
-        <form className="inline-form" onSubmit={submit}>
-          <select
-            className={inputClass}
-            value={market}
-            onChange={(e) => setMarket(e.target.value)}
-          >
-            <option value="CN_A">A股</option>
-            <option value="HK">港股</option>
-            <option value="NEEQ">新三板</option>
-          </select>
-          <input
-            className={inputClass}
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="输入股票代码或名称"
-          />
-          <button className="primary-button" type="submit" disabled={running}>
-            {running ? "生成中..." : "生成研报"}
-          </button>
-        </form>
-        <ErrorText error={error} />
-        <article className="research-markdown">
-          {report ? (
-            renderResearchMarkdown(report)
-          ) : (
-            <p className="empty-state">
-              输入股票代码后，报告会以流式方式显示。
-            </p>
-          )}
-        </article>
-      </section>
+      )}
     </>
   );
 }

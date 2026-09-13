@@ -10,6 +10,7 @@ from sqlalchemy.orm import sessionmaker
 from app.db.base import Base
 from app.db.session import get_db
 from app.main import app
+from app.models.ai_hub import ResearchReportRecord
 from app.models.market_data import (
     DataSource,
     StockF10Cache,
@@ -195,9 +196,16 @@ class ResearchPhaseTest(unittest.TestCase):
         self.assertIn("agent", event_names)
         self.assertIn("report", event_names)
         self.assertEqual(event_names[-1], "done")
+        self.assertIn("history", [item["data"].get("stage") for item in events if item["event"] == "stage"])
         report_text = "".join(item["data"].get("delta", "") for item in events if item["event"] == "report")
         self.assertIn("综合评级", report_text)
         self.assertIn("风险提示", report_text)
+        report_id = events[-1]["data"].get("report_id")
+        self.assertIsInstance(report_id, int)
+        saved_report = self.db.get(ResearchReportRecord, report_id)
+        self.assertIsNotNone(saved_report)
+        self.assertEqual(saved_report.symbol, "000001")
+        self.assertTrue(saved_report.report_markdown)
 
     def test_sse_endpoint_contract(self) -> None:
         def override_get_db():
