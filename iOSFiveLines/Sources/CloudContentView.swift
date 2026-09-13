@@ -1086,7 +1086,7 @@ private struct SettingsView: View {
         NavigationStack {
             Form {
                 Section("概率与难度") {
-                    Text(game.adminMode ? "管理员模式已开启，可以修改概率参数。" : "普通模式锁定：难度 1.1、白棋 0.8、炸药 0.4。连续切换音乐 7 次可进入管理员模式。")
+                    Text(adminModeNote)
                         .font(.footnote)
                         .foregroundStyle(game.adminMode ? .green : .secondary)
                     settingSlider("难度系数", value: $game.difficulty, range: 1...2, step: 0.1)
@@ -1148,6 +1148,18 @@ private struct SettingsView: View {
                 }
             }
         }
+    }
+
+    private var adminModeNote: String {
+        if game.adminMode {
+            return "管理员模式已开启，可以修改概率参数。保存一次后会自动关闭管理员模式。"
+        }
+        return String(
+            format: "普通模式锁定：当前难度 %.1f、白棋 %.1f、炸药 %.1f。连续切换音乐 7 次可进入管理员模式。",
+            game.difficulty,
+            game.whiteProbability,
+            game.bombProbability
+        )
     }
 
     private func settingSlider(

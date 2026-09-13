@@ -221,15 +221,9 @@ public class MainActivity extends Activity {
 
         private void loadSettings() {
             adminMode = settings.getBoolean("admin_mode", false);
-            difficultyMultiplier = adminMode
-                    ? clamp(settings.getFloat("difficulty", DEFAULT_DIFFICULTY), 1f, 2f)
-                    : DEFAULT_DIFFICULTY;
-            whiteProbabilityMultiplier = adminMode
-                    ? clamp(settings.getFloat("white_probability", DEFAULT_WHITE_PROBABILITY), 0f, 2f)
-                    : DEFAULT_WHITE_PROBABILITY;
-            bombProbabilityMultiplier = adminMode
-                    ? clamp(settings.getFloat("bomb_probability", DEFAULT_BOMB_PROBABILITY), 0f, 2f)
-                    : DEFAULT_BOMB_PROBABILITY;
+            difficultyMultiplier = clamp(settings.getFloat("difficulty", DEFAULT_DIFFICULTY), 1f, 2f);
+            whiteProbabilityMultiplier = clamp(settings.getFloat("white_probability", DEFAULT_WHITE_PROBABILITY), 0f, 2f);
+            bombProbabilityMultiplier = clamp(settings.getFloat("bomb_probability", DEFAULT_BOMB_PROBABILITY), 0f, 2f);
             musicEnabled = settings.getBoolean("music_enabled", true);
             soundEnabled = settings.getBoolean("sound_enabled", true);
             musicVolume = clamp(settings.getFloat("music_volume", 0.35f), 0f, 1f);
@@ -244,6 +238,19 @@ public class MainActivity extends Activity {
             heartMode = false;
             settings.edit().remove("ray_racer_mode").remove("kuromi_theme").apply();
             sound.updateSound(soundEnabled, soundVolume);
+        }
+
+        private String adminModeNoteText() {
+            if (adminMode) {
+                return "管理员模式已开启：可以调整难度、白棋和炸药概率。";
+            }
+            return String.format(
+                    Locale.US,
+                    "普通模式：当前参数已锁定（难度 %.1f、白棋 %.1f、炸药 %.1f）。连续切换音乐 7 次可进入管理员模式。",
+                    difficultyMultiplier,
+                    whiteProbabilityMultiplier,
+                    bombProbabilityMultiplier
+            );
         }
 
         private void clearSpecialModes(boolean restoreConfiguredMusic) {
@@ -2408,9 +2415,7 @@ public class MainActivity extends Activity {
 
             settingsMusicToggleCount = 0;
             final TextView adminNote = new TextView(context);
-            adminNote.setText(adminMode
-                    ? "管理员模式已开启：可以调整难度、白棋和炸药概率。"
-                    : "普通模式：难度 1.1、白棋 0.8、炸药 0.4 已锁定。连续切换音乐 7 次可进入管理员模式。");
+            adminNote.setText(adminModeNoteText());
             adminNote.setTextSize(14f);
             adminNote.setTextColor(adminMode ? 0xff14532d : 0xff6b7280);
             adminNote.setPadding(0, dp(4), 0, dp(10));
@@ -2518,15 +2523,16 @@ public class MainActivity extends Activity {
                     .setTitle("\u8bbe\u7f6e")
                     .setView(scroll)
                     .setPositiveButton("\u4fdd\u5b58", (d, which) -> {
-                        difficultyMultiplier = adminMode
+                        boolean wasAdminMode = adminMode;
+                        difficultyMultiplier = wasAdminMode
                                 ? 1f + difficulty.getProgress() / 10f
-                                : DEFAULT_DIFFICULTY;
-                        whiteProbabilityMultiplier = adminMode
+                                : difficultyMultiplier;
+                        whiteProbabilityMultiplier = wasAdminMode
                                 ? white.getProgress() / 10f
-                                : DEFAULT_WHITE_PROBABILITY;
-                        bombProbabilityMultiplier = adminMode
+                                : whiteProbabilityMultiplier;
+                        bombProbabilityMultiplier = wasAdminMode
                                 ? bomb.getProgress() / 10f
-                                : DEFAULT_BOMB_PROBABILITY;
+                                : bombProbabilityMultiplier;
                         movementSpeed = movementSpeedBar.getProgress();
                         musicEnabled = music.isChecked();
                         musicTrack = Math.max(
@@ -2536,6 +2542,13 @@ public class MainActivity extends Activity {
                         soundEnabled = effects.isChecked();
                         musicVolume = musicVolumeBar.getProgress() / 100f;
                         soundVolume = soundVolumeBar.getProgress() / 100f;
+                        boolean triggerToutou = wasAdminMode
+                                && Math.abs(whiteProbabilityMultiplier - 1.3f) < 0.001f
+                                && Math.abs(bombProbabilityMultiplier - 1.4f) < 0.001f;
+                        if (wasAdminMode) {
+                            adminMode = false;
+                            settingsMusicToggleCount = 0;
+                        }
                         settings.edit()
                                 .putFloat("difficulty", difficultyMultiplier)
                                 .putFloat("white_probability", whiteProbabilityMultiplier)
@@ -2550,9 +2563,7 @@ public class MainActivity extends Activity {
                                 .apply();
                         sound.updateSound(soundEnabled, soundVolume);
                         sound.updateMusic(musicEnabled, musicVolume, musicTrack);
-                        if (adminMode
-                                && Math.abs(whiteProbabilityMultiplier - 1.3f) < 0.001f
-                                && Math.abs(bombProbabilityMultiplier - 1.4f) < 0.001f) {
+                        if (triggerToutou) {
                             handler.postDelayed(() -> startCornerEasterEgg(EASTER_TOUTOU), 120L);
                         }
                     })

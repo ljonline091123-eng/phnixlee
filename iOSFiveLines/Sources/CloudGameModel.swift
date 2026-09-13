@@ -688,15 +688,19 @@ final class CloudGameModel: ObservableObject {
     }
 
     func saveSettingsAndCheckAdminEaster() {
-        if !adminMode {
-            difficulty = Self.defaultDifficulty
-            whiteProbability = Self.defaultWhiteProbability
-            bombProbability = Self.defaultBombProbability
+        let wasAdminMode = adminMode
+        difficulty = min(2, max(1, difficulty))
+        whiteProbability = min(2, max(0, whiteProbability))
+        bombProbability = min(2, max(0, bombProbability))
+        let shouldTriggerToutou = wasAdminMode
+            && abs(whiteProbability - 1.3) < 0.001
+            && abs(bombProbability - 1.4) < 0.001
+        if wasAdminMode {
+            adminMode = false
+            musicToggleUnlockCount = 0
         }
         saveSettings()
-        if adminMode
-            && abs(whiteProbability - 1.3) < 0.001
-            && abs(bombProbability - 1.4) < 0.001 {
+        if shouldTriggerToutou {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) { [weak self] in
                 self?.startCornerEasterEgg(.toutou)
             }
@@ -734,9 +738,9 @@ final class CloudGameModel: ObservableObject {
         defer { suppressSettingsSave = false }
         let values = UserDefaults.standard.dictionary(forKey: settingsKey) ?? [:]
         adminMode = values["adminMode"] as? Bool ?? false
-        difficulty = adminMode ? values["difficulty"] as? Double ?? Self.defaultDifficulty : Self.defaultDifficulty
-        whiteProbability = adminMode ? values["whiteProbability"] as? Double ?? Self.defaultWhiteProbability : Self.defaultWhiteProbability
-        bombProbability = adminMode ? values["bombProbability"] as? Double ?? Self.defaultBombProbability : Self.defaultBombProbability
+        difficulty = min(2, max(1, values["difficulty"] as? Double ?? Self.defaultDifficulty))
+        whiteProbability = min(2, max(0, values["whiteProbability"] as? Double ?? Self.defaultWhiteProbability))
+        bombProbability = min(2, max(0, values["bombProbability"] as? Double ?? Self.defaultBombProbability))
         musicEnabled = values["musicEnabled"] as? Bool ?? true
         effectsEnabled = values["effectsEnabled"] as? Bool ?? true
         musicVolume = values["musicVolume"] as? Double ?? 0.65
