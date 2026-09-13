@@ -12,6 +12,7 @@
 		7A1B00010000000000000003 /* CloudContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A1A00010000000000000003 /* CloudContentView.swift */; };
 		7A1B00010000000000000004 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 7A1A00010000000000000004 /* Assets.xcassets */; };
 		7A1B00010000000000000005 /* midi.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 7A1A00010000000000000007 /* midi.mp3 */; };
+		7A1B00010000000000000006 /* sy.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 7A1A00010000000000000008 /* sy.mp3 */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -22,6 +23,7 @@
 		7A1A00010000000000000005 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		7A1A00010000000000000006 /* FiveLines.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = FiveLines.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		7A1A00010000000000000007 /* midi.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = midi.mp3; sourceTree = "<group>"; };
+		7A1A00010000000000000008 /* sy.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = sy.mp3; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -60,6 +62,7 @@
 				7A1A00010000000000000004 /* Assets.xcassets */,
 				7A1A00010000000000000005 /* Info.plist */,
 				7A1A00010000000000000007 /* midi.mp3 */,
+				7A1A00010000000000000008 /* sy.mp3 */,
 			);
 			path = .;
 			sourceTree = "<group>";
@@ -131,6 +134,7 @@
 			files = (
 				7A1B00010000000000000004 /* Assets.xcassets in Resources */,
 				7A1B00010000000000000005 /* midi.mp3 in Resources */,
+				7A1B00010000000000000006 /* sy.mp3 in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

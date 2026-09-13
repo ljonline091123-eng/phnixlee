@@ -107,9 +107,11 @@ public class MainActivity extends Activity {
         private static final int BASE_SPAWN_COUNT = 3;
         private static final int MUSIC_TRACK_SYNTH = 0;
         private static final int MUSIC_TRACK_MIDI = 1;
+        private static final int MUSIC_TRACK_SY = 2;
         private static final int EASTER_NONE = 0;
         private static final int EASTER_RAY = 1;
         private static final int EASTER_MOLLY = 2;
+        private static final int EASTER_TOUTOU = 3;
 
         private static final int TOP_HEIGHT = 156;
         private static final long SPAWN_DURATION_MS = 320L;
@@ -118,6 +120,10 @@ public class MainActivity extends Activity {
         private static final long EASTER_FLASH_FULL_MS = EASTER_FLASH_HALF_MS * 2L;
         private static final long EASTER_LOADING_DURATION_MS = EASTER_FLASH_FULL_MS * NORMAL_COLORS;
         private static final float BOARD_MARGIN = 16f;
+        private static final float DEFAULT_DIFFICULTY = 1.1f;
+        private static final float DEFAULT_WHITE_PROBABILITY = 0.8f;
+        private static final float DEFAULT_BOMB_PROBABILITY = 0.4f;
+        private static final int TOUTOU_LOADING_COLORS = 7;
 
         private static final String SETTINGS_PREFS = "five_lines_settings";
         private static final String SCORES_PREFS = "five_lines_scores";
@@ -181,13 +187,16 @@ public class MainActivity extends Activity {
         private float soundVolume;
         private int musicTrack;
         private int movementSpeed;
+        private boolean adminMode;
         private boolean rayRacerMode;
         private boolean kuromiTheme;
+        private boolean heartMode;
         private int easterKind = EASTER_NONE;
         private boolean easterLoading;
         private int easterSecretTaps;
         private long easterStart;
         private AlertDialog easterDialog;
+        private int settingsMusicToggleCount;
         private final ArrayList<int[]> racerTrailCells = new ArrayList<>();
         private int racerTrailType = EMPTY;
         private long racerTrailUntil;
@@ -211,9 +220,16 @@ public class MainActivity extends Activity {
         }
 
         private void loadSettings() {
-            difficultyMultiplier = clamp(settings.getFloat("difficulty", 1f), 1f, 2f);
-            whiteProbabilityMultiplier = clamp(settings.getFloat("white_probability", 1f), 0f, 2f);
-            bombProbabilityMultiplier = clamp(settings.getFloat("bomb_probability", 1f), 0f, 2f);
+            adminMode = settings.getBoolean("admin_mode", false);
+            difficultyMultiplier = adminMode
+                    ? clamp(settings.getFloat("difficulty", DEFAULT_DIFFICULTY), 1f, 2f)
+                    : DEFAULT_DIFFICULTY;
+            whiteProbabilityMultiplier = adminMode
+                    ? clamp(settings.getFloat("white_probability", DEFAULT_WHITE_PROBABILITY), 0f, 2f)
+                    : DEFAULT_WHITE_PROBABILITY;
+            bombProbabilityMultiplier = adminMode
+                    ? clamp(settings.getFloat("bomb_probability", DEFAULT_BOMB_PROBABILITY), 0f, 2f)
+                    : DEFAULT_BOMB_PROBABILITY;
             musicEnabled = settings.getBoolean("music_enabled", true);
             soundEnabled = settings.getBoolean("sound_enabled", true);
             musicVolume = clamp(settings.getFloat("music_volume", 0.35f), 0f, 1f);
@@ -225,20 +241,36 @@ public class MainActivity extends Activity {
             movementSpeed = Math.max(0, Math.min(3, settings.getInt("movement_speed", 0)));
             rayRacerMode = false;
             kuromiTheme = false;
+            heartMode = false;
             settings.edit().remove("ray_racer_mode").remove("kuromi_theme").apply();
             sound.updateSound(soundEnabled, soundVolume);
         }
 
-    private void resetGame() {
-        clearedThisTurn = false;
+        private void clearSpecialModes(boolean restoreConfiguredMusic) {
+            rayRacerMode = false;
+            kuromiTheme = false;
+            heartMode = false;
+            racerTrailCells.clear();
+            racerTrailType = EMPTY;
+            racerTrailUntil = 0L;
+            if (restoreConfiguredMusic && musicTrack == MUSIC_TRACK_SY) {
+                musicEnabled = settings.getBoolean("music_enabled", true);
+                musicTrack = Math.max(
+                        MUSIC_TRACK_SYNTH,
+                        Math.min(MUSIC_TRACK_MIDI, settings.getInt("music_track", MUSIC_TRACK_SYNTH))
+                );
+                sound.updateMusic(musicEnabled, musicVolume, musicTrack);
+            }
+        }
+
+        private void resetGame() {
             moveToken++;
             handler.removeCallbacksAndMessages(null);
             closeEasterDialog();
             easterKind = EASTER_NONE;
             easterLoading = false;
             easterSecretTaps = 0;
-            rayRacerMode = false;
-            kuromiTheme = false;
+            clearSpecialModes(true);
             racerTrailCells.clear();
             racerTrailType = EMPTY;
             racerTrailUntil = 0L;
@@ -253,25 +285,19 @@ public class MainActivity extends Activity {
         clearedThisTurn = false;
         clearedThisTurn = false;
         clearedThisTurn = false;
-        clearedThisTurn = false;
-        spawnedThisTurn = false;
-        clearedThisTurn = false;
-        clearedThisTurn = false;
-        moving = false;
+            spawnedThisTurn = false;
+            clearedThisTurn = false;
+            moving = false;
             spawning = false;
             removing = false;
             gameOver = false;
             dialogShowing = false;
-        spawnedThisTurn = false;
-        clearedThisTurn = false;
-        clearedThisTurn = false;
-        clearedThisTurn = false;
             movePath.clear();
             clearSpawnedCells();
             clearPendingRemoval();
             preparePreview();
             spawnPieces();
-        invalidate();
+            invalidate();
         }
 
         private void preparePreview() {
@@ -610,7 +636,20 @@ public class MainActivity extends Activity {
             if (rayRacerMode) {
                 drawRacerTrail(canvas, scaled);
             }
+            if (heartMode && movingType != BOMB) {
+                drawHeartMoveTrail(canvas, scaled);
+            }
             drawPiece(canvas, movingType, x, y, cellSize * 0.34f, true);
+        }
+
+        private void drawHeartMoveTrail(Canvas canvas, float scaledProgress) {
+            for (int i = 8; i >= 1; i--) {
+                float trailProgress = Math.max(0f, scaledProgress - i * 0.18f);
+                float[] point = pointOnMovePath(trailProgress);
+                int alpha = Math.max(26, 172 - i * 18);
+                float radius = cellSize * (0.24f - i * 0.010f);
+                drawHeartShape(canvas, point[0], point[1], radius, colorFor(movingType), alpha, false);
+            }
         }
 
         private void drawRacerTrail(Canvas canvas, float scaledProgress) {
@@ -685,8 +724,33 @@ public class MainActivity extends Activity {
                 paint.setAlpha(Math.round(150f * (1f - progress)));
                 paint.setColor(0xffffc107);
                 canvas.drawCircle(cx, cy, cellSize * (0.10f + 0.45f * progress), paint);
+                if (heartMode) {
+                    drawExplosionHearts(canvas, cx, cy, progress);
+                }
             }
             paint.setAlpha(255);
+        }
+
+        private void drawExplosionHearts(Canvas canvas, float cx, float cy, float progress) {
+            int[] colors = {
+                    0xffe10600,
+                    0xffff4fb0,
+                    0xffffd000,
+                    0xff00b4d8,
+                    0xff7209b7,
+                    0xff00a86b,
+                    0xffff7a00,
+                    0xffff6aa2
+            };
+            float distance = cellSize * (0.22f + progress * 1.05f);
+            int alpha = Math.round(230f * Math.max(0f, 1f - progress));
+            for (int i = 0; i < colors.length; i++) {
+                double angle = -Math.PI / 2d + i * (Math.PI * 2d / colors.length);
+                float x = cx + (float) Math.cos(angle) * distance;
+                float y = cy + (float) Math.sin(angle) * distance;
+                float radius = cellSize * (0.12f + 0.04f * (1f - progress));
+                drawHeartShape(canvas, x, y, radius, colors[i], alpha, false);
+            }
         }
 
         private float spawnProgress() {
@@ -706,6 +770,10 @@ public class MainActivity extends Activity {
             }
             if (type == BOMB) {
                 drawBomb(canvas, cx, cy, radius, movingPiece);
+                return;
+            }
+            if (heartMode) {
+                drawHeartPiece(canvas, type, cx, cy, radius, movingPiece);
                 return;
             }
             float shadowRadius = radius * 1.03f;
@@ -753,6 +821,98 @@ public class MainActivity extends Activity {
             if (kuromiTheme) {
                 drawKuromiFeatures(canvas, cx, cy, radius, baseColor, movingPiece ? 220 : 245);
             }
+            paint.setAlpha(255);
+        }
+
+        private void drawHeartPiece(Canvas canvas, int type, float cx, float cy, float radius, boolean movingPiece) {
+            int baseColor = colorFor(type);
+            paint.setShader(null);
+            paint.setStyle(Paint.Style.FILL);
+            paint.setAlpha(0x44);
+            paint.setColor(0x442b2119);
+            drawHeartShape(canvas, cx + radius * 0.10f, cy + radius * 0.13f, radius * 1.02f, 0xff2b2119, 64, false);
+
+            paint.setShader(new RadialGradient(
+                    cx - radius * 0.30f,
+                    cy - radius * 0.40f,
+                    radius * 1.35f,
+                    new int[]{
+                            lighten(baseColor, 0.24f),
+                            baseColor,
+                            darken(baseColor, 0.50f)
+                    },
+                    new float[]{0f, 0.58f, 1f},
+                    Shader.TileMode.CLAMP
+            ));
+            drawHeartShape(canvas, cx, cy, radius, baseColor, 255, false);
+            paint.setShader(null);
+
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(movingPiece ? 4.2f : 2.3f);
+            paint.setColor(type == WHITE ? 0xff8b949e : darken(baseColor, 0.56f));
+            drawHeartShape(canvas, cx, cy, radius, baseColor, 255, true);
+
+            paint.setStyle(Paint.Style.FILL);
+            paint.setAlpha(0xc8);
+            paint.setColor(Color.WHITE);
+            canvas.drawCircle(cx - radius * 0.25f, cy - radius * 0.32f, radius * 0.13f, paint);
+            paint.setAlpha(0x58);
+            shineBounds.set(
+                    cx - radius * 0.50f,
+                    cy - radius * 0.07f,
+                    cx - radius * 0.20f,
+                    cy + radius * 0.10f
+            );
+            canvas.drawOval(shineBounds, paint);
+            paint.setAlpha(255);
+        }
+
+        private void drawHeartShape(Canvas canvas, float cx, float cy, float radius, int color, int alpha, boolean stroke) {
+            Path heart = new Path();
+            heart.moveTo(cx, cy + radius * 0.62f);
+            heart.cubicTo(
+                    cx - radius * 1.10f,
+                    cy - radius * 0.03f,
+                    cx - radius * 0.78f,
+                    cy - radius * 0.86f,
+                    cx - radius * 0.22f,
+                    cy - radius * 0.62f
+            );
+            heart.cubicTo(
+                    cx - radius * 0.06f,
+                    cy - radius * 0.55f,
+                    cx,
+                    cy - radius * 0.40f,
+                    cx,
+                    cy - radius * 0.28f
+            );
+            heart.cubicTo(
+                    cx,
+                    cy - radius * 0.40f,
+                    cx + radius * 0.06f,
+                    cy - radius * 0.55f,
+                    cx + radius * 0.22f,
+                    cy - radius * 0.62f
+            );
+            heart.cubicTo(
+                    cx + radius * 0.78f,
+                    cy - radius * 0.86f,
+                    cx + radius * 1.10f,
+                    cy - radius * 0.03f,
+                    cx,
+                    cy + radius * 0.62f
+            );
+            heart.close();
+            paint.setAlpha(alpha);
+            if (stroke) {
+                paint.setStyle(Paint.Style.STROKE);
+            } else {
+                paint.setStyle(Paint.Style.FILL);
+                if (paint.getShader() == null) {
+                    paint.setColor(color);
+                }
+            }
+            canvas.drawPath(heart, paint);
             paint.setAlpha(255);
         }
 
@@ -1468,8 +1628,7 @@ public class MainActivity extends Activity {
                 Arrays.fill(row, EMPTY);
             }
             Arrays.fill(preview, EMPTY);
-            rayRacerMode = false;
-            kuromiTheme = false;
+            clearSpecialModes(true);
             selectedRow = -1;
             selectedCol = -1;
             moving = false;
@@ -1487,12 +1646,13 @@ public class MainActivity extends Activity {
             sound.playClear();
             scheduleEasterLoadingAlarms(kind);
             invalidate();
-            handler.postDelayed(() -> showEasterReadyDialog(kind), EASTER_LOADING_DURATION_MS);
+            handler.postDelayed(() -> showEasterReadyDialog(kind), easterLoadingDurationFor(kind));
         }
 
         private void scheduleEasterLoadingAlarms(int kind) {
             final int token = moveToken;
-            for (int phase = 0; phase < NORMAL_COLORS; phase++) {
+            int count = easterLoadingColorCount(kind);
+            for (int phase = 0; phase < count; phase++) {
                 final int scheduledPhase = phase;
                 handler.postDelayed(() -> {
                     if (token == moveToken && easterKind == kind && easterLoading) {
@@ -1502,23 +1662,40 @@ public class MainActivity extends Activity {
             }
         }
 
+        private long easterLoadingDurationFor(int kind) {
+            return EASTER_FLASH_FULL_MS * easterLoadingColorCount(kind);
+        }
+
+        private int easterLoadingColorCount(int kind) {
+            return kind == EASTER_TOUTOU ? TOUTOU_LOADING_COLORS : NORMAL_COLORS;
+        }
+
         private void drawEasterLoading(Canvas canvas) {
             long elapsed = Math.max(0L, SystemClock.uptimeMillis() - easterStart);
-            int halfCycle = (int) Math.min(NORMAL_COLORS * 2L - 1L, elapsed / EASTER_FLASH_HALF_MS);
+            int colorCount = easterLoadingColorCount(easterKind);
+            int halfCycle = (int) Math.min(colorCount * 2L - 1L, elapsed / EASTER_FLASH_HALF_MS);
             int alpha = halfCycle % 2 == 0 ? 248 : 68;
-            int colorPhase = (int) Math.min(NORMAL_COLORS - 1L, elapsed / EASTER_FLASH_FULL_MS);
+            int colorPhase = (int) Math.min(colorCount - 1L, elapsed / EASTER_FLASH_FULL_MS);
             int type = colorPhase + 1;
-            String title = easterKind == EASTER_MOLLY ? "Molly" : "Ray";
-            String loading = "loading...";
+            String title = easterKind == EASTER_TOUTOU
+                    ? "头头"
+                    : (easterKind == EASTER_MOLLY ? "Molly" : "Ray");
+            String subtitle = easterKind == EASTER_TOUTOU ? "1314" : "loading...";
             int titleColumns = glyphColumns(title);
-            int loadingColumns = glyphColumns(loading);
-            float titleStep = Math.min(cellSize * 0.70f, boardSize / Math.max(1f, titleColumns + 2.0f));
-            float loadingStep = Math.min(cellSize * 0.34f, boardSize / Math.max(1f, loadingColumns + 3.0f));
-            float totalHeight = titleStep * 5f + loadingStep * 1.55f + loadingStep * 5f;
+            int subtitleColumns = glyphColumns(subtitle);
+            int titleRows = glyphRows(title);
+            int subtitleRows = glyphRows(subtitle);
+            float titleStep = Math.min(cellSize * 0.74f, boardSize / Math.max(1f, titleColumns + 2.0f));
+            float subtitleStep = Math.min(cellSize * 0.36f, boardSize / Math.max(1f, subtitleColumns + 3.0f));
+            if (easterKind == EASTER_TOUTOU) {
+                titleStep = Math.min(cellSize * 0.62f, boardSize / Math.max(1f, titleColumns + 2.0f));
+                subtitleStep = Math.min(cellSize * 0.50f, boardSize / Math.max(1f, subtitleColumns + 3.0f));
+            }
+            float totalHeight = titleStep * titleRows + subtitleStep * 1.55f + subtitleStep * subtitleRows;
             float titleY = boardTop + (boardSize - totalHeight) * 0.50f;
-            float loadingY = titleY + titleStep * 5f + loadingStep * 1.55f;
+            float subtitleY = titleY + titleStep * titleRows + subtitleStep * 1.55f;
             drawLoadingLine(canvas, title, titleStep, titleY, Math.max(3.2f, titleStep * 0.31f), type, alpha);
-            drawLoadingLine(canvas, loading, loadingStep, loadingY, Math.max(2.0f, loadingStep * 0.30f), type, alpha);
+            drawLoadingLine(canvas, subtitle, subtitleStep, subtitleY, Math.max(2.0f, subtitleStep * 0.30f), type, alpha);
         }
 
         private void drawLoadingLine(
@@ -1561,8 +1738,22 @@ public class MainActivity extends Activity {
             return Math.max(0, columns - 1);
         }
 
+        private int glyphRows(String message) {
+            int rows = 1;
+            for (int i = 0; i < message.length(); i++) {
+                rows = Math.max(rows, glyphFor(message.charAt(i)).length);
+            }
+            return rows;
+        }
+
         private String[] glyphFor(char value) {
             switch (Character.toLowerCase(value)) {
+                case '1':
+                    return new String[]{" # ", "## ", " # ", " # ", "###"};
+                case '3':
+                    return new String[]{"## ", "  #", " # ", "  #", "## "};
+                case '4':
+                    return new String[]{"# #", "# #", "###", "  #", "  #"};
                 case 'a':
                     return new String[]{" # ", "# #", "###", "# #", "# #"};
                 case 'd':
@@ -1583,6 +1774,16 @@ public class MainActivity extends Activity {
                     return new String[]{"## ", "# #", "## ", "# #", "# #"};
                 case 'y':
                     return new String[]{"# #", "# #", " # ", " # ", " # "};
+                case '头':
+                    return new String[]{
+                            "   #   ",
+                            "#  #  #",
+                            " # # # ",
+                            "  ###  ",
+                            "   #   ",
+                            "  # #  ",
+                            "##   ##"
+                    };
                 case '.':
                     return new String[]{" ", " ", " ", " ", "#"};
                 default:
@@ -1646,12 +1847,19 @@ public class MainActivity extends Activity {
             root.addView(textRow);
 
             easterDialog = new AlertDialog.Builder(context)
-                    .setTitle(kind == EASTER_MOLLY ? "Molly loading..." : "Ray loading...")
+                    .setTitle(easterDialogTitle(kind))
                     .setView(root)
                     .setPositiveButton("ok", (dialog, which) -> finishEaster(false))
                     .setCancelable(false)
                     .create();
             easterDialog.show();
+        }
+
+        private String easterDialogTitle(int kind) {
+            if (kind == EASTER_TOUTOU) {
+                return "头头 1314";
+            }
+            return kind == EASTER_MOLLY ? "Molly loading..." : "Ray loading...";
         }
 
         private void handleEasterSecretTap(int kind) {
@@ -1660,9 +1868,13 @@ public class MainActivity extends Activity {
             }
             easterSecretTaps++;
             sound.playClick();
-            if (easterSecretTaps >= 5) {
+            if (easterSecretTaps >= requiredEasterSecretTaps(kind)) {
                 finishEaster(true);
             }
+        }
+
+        private int requiredEasterSecretTaps(int kind) {
+            return kind == EASTER_TOUTOU ? 13 : 5;
         }
 
         private void finishEaster(boolean hidden) {
@@ -1680,6 +1892,10 @@ public class MainActivity extends Activity {
             easterKind = EASTER_NONE;
             easterLoading = false;
             easterSecretTaps = 0;
+            if (!hidden && kind == EASTER_TOUTOU) {
+                exitGame();
+                return;
+            }
             selectedRow = -1;
             selectedCol = -1;
             preparePreview();
@@ -1692,8 +1908,19 @@ public class MainActivity extends Activity {
                 rayRacerMode = true;
             } else if (kind == EASTER_MOLLY) {
                 kuromiTheme = true;
+            } else if (kind == EASTER_TOUTOU) {
+                heartMode = true;
+                musicEnabled = true;
+                musicTrack = MUSIC_TRACK_SY;
+                sound.updateMusic(true, musicVolume, MUSIC_TRACK_SY);
             }
             sound.playClear();
+        }
+
+        private void exitGame() {
+            if (context instanceof Activity) {
+                ((Activity) context).finish();
+            }
         }
 
         private void closeEasterDialog() {
@@ -1809,6 +2036,16 @@ public class MainActivity extends Activity {
             root.setPadding(padding, dp(4), padding, dp(4));
             scroll.addView(root);
 
+            settingsMusicToggleCount = 0;
+            final TextView adminNote = new TextView(context);
+            adminNote.setText(adminMode
+                    ? "管理员模式已开启：可以调整难度、白棋和炸药概率。"
+                    : "普通模式：难度 1.1、白棋 0.8、炸药 0.4 已锁定。连续切换音乐 7 次可进入管理员模式。");
+            adminNote.setTextSize(14f);
+            adminNote.setTextColor(adminMode ? 0xff14532d : 0xff6b7280);
+            adminNote.setPadding(0, dp(4), 0, dp(10));
+            root.addView(adminNote);
+
             final TextView difficultyValue = new TextView(context);
             SeekBar difficulty = addSlider(
                     root,
@@ -1819,6 +2056,7 @@ public class MainActivity extends Activity {
                     1f,
                     0.1f
             );
+            difficulty.setEnabled(adminMode);
             final TextView whiteValue = new TextView(context);
             SeekBar white = addSlider(
                     root,
@@ -1829,6 +2067,7 @@ public class MainActivity extends Activity {
                     0f,
                     0.1f
             );
+            white.setEnabled(adminMode);
             final TextView bombValue = new TextView(context);
             SeekBar bomb = addSlider(
                     root,
@@ -1839,6 +2078,7 @@ public class MainActivity extends Activity {
                     0f,
                     0.1f
             );
+            bomb.setEnabled(adminMode);
 
             final TextView movementSpeedValue = new TextView(context);
             SeekBar movementSpeedBar = addChoiceSlider(
@@ -1853,6 +2093,21 @@ public class MainActivity extends Activity {
             music.setText("\u97f3\u4e50");
             music.setChecked(musicEnabled);
             root.addView(music);
+            music.setOnCheckedChangeListener((buttonView, isChecked) -> {
+                settingsMusicToggleCount++;
+                if (!adminMode && settingsMusicToggleCount >= 7) {
+                    adminMode = true;
+                    difficulty.setEnabled(true);
+                    white.setEnabled(true);
+                    bomb.setEnabled(true);
+                    adminNote.setText("管理员模式已开启：可以调整难度、白棋和炸药概率。");
+                    adminNote.setTextColor(0xff14532d);
+                    settings.edit().putBoolean("admin_mode", true).apply();
+                    sound.playAlarm();
+                } else {
+                    sound.playClick();
+                }
+            });
 
             final TextView musicTrackValue = new TextView(context);
             SeekBar musicTrackBar = addChoiceSlider(
@@ -1893,9 +2148,15 @@ public class MainActivity extends Activity {
                     .setTitle("\u8bbe\u7f6e")
                     .setView(scroll)
                     .setPositiveButton("\u4fdd\u5b58", (d, which) -> {
-                        difficultyMultiplier = 1f + difficulty.getProgress() / 10f;
-                        whiteProbabilityMultiplier = white.getProgress() / 10f;
-                        bombProbabilityMultiplier = bomb.getProgress() / 10f;
+                        difficultyMultiplier = adminMode
+                                ? 1f + difficulty.getProgress() / 10f
+                                : DEFAULT_DIFFICULTY;
+                        whiteProbabilityMultiplier = adminMode
+                                ? white.getProgress() / 10f
+                                : DEFAULT_WHITE_PROBABILITY;
+                        bombProbabilityMultiplier = adminMode
+                                ? bomb.getProgress() / 10f
+                                : DEFAULT_BOMB_PROBABILITY;
                         movementSpeed = movementSpeedBar.getProgress();
                         musicEnabled = music.isChecked();
                         musicTrack = Math.max(
@@ -1909,6 +2170,7 @@ public class MainActivity extends Activity {
                                 .putFloat("difficulty", difficultyMultiplier)
                                 .putFloat("white_probability", whiteProbabilityMultiplier)
                                 .putFloat("bomb_probability", bombProbabilityMultiplier)
+                                .putBoolean("admin_mode", adminMode)
                                 .putInt("movement_speed", movementSpeed)
                                 .putBoolean("music_enabled", musicEnabled)
                                 .putInt("music_track", musicTrack)
@@ -1918,6 +2180,11 @@ public class MainActivity extends Activity {
                                 .apply();
                         sound.updateSound(soundEnabled, soundVolume);
                         sound.updateMusic(musicEnabled, musicVolume, musicTrack);
+                        if (adminMode
+                                && Math.abs(whiteProbabilityMultiplier - 1.3f) < 0.001f
+                                && Math.abs(bombProbabilityMultiplier - 1.4f) < 0.001f) {
+                            handler.postDelayed(() -> startCornerEasterEgg(EASTER_TOUTOU), 120L);
+                        }
                     })
                     .setNegativeButton("\u53d6\u6d88", null)
                     .show();
@@ -2087,6 +2354,7 @@ public class MainActivity extends Activity {
         outState.putBoolean("five_lines_spawned_this_turn", spawnedThisTurn);
             outState.putBoolean("five_lines_ray_racer_mode", rayRacerMode);
             outState.putBoolean("five_lines_kuromi_theme", kuromiTheme);
+            outState.putBoolean("five_lines_heart_mode", heartMode);
         }
 
         private void restoreState(Bundle state) {
@@ -2111,9 +2379,15 @@ public class MainActivity extends Activity {
             selectedRow = state.getInt("five_lines_selected_row", -1);
             selectedCol = state.getInt("five_lines_selected_col", -1);
             gameOver = state.getBoolean("five_lines_game_over", false);
-        spawnedThisTurn = state.getBoolean("five_lines_spawned_this_turn", false);
+            spawnedThisTurn = state.getBoolean("five_lines_spawned_this_turn", false);
             rayRacerMode = state.getBoolean("five_lines_ray_racer_mode", rayRacerMode);
             kuromiTheme = state.getBoolean("five_lines_kuromi_theme", kuromiTheme);
+            heartMode = state.getBoolean("five_lines_heart_mode", heartMode);
+            if (heartMode) {
+                musicEnabled = true;
+                musicTrack = MUSIC_TRACK_SY;
+                sound.updateMusic(true, musicVolume, MUSIC_TRACK_SY);
+            }
             moving = false;
             removing = false;
             dialogShowing = false;
@@ -2174,6 +2448,7 @@ public class MainActivity extends Activity {
         private static final int SAMPLE_RATE = 22050;
         private static final int MUSIC_TRACK_SYNTH = 0;
         private static final int MUSIC_TRACK_MIDI = 1;
+        private static final int MUSIC_TRACK_SY = 2;
         private final Context context;
         private final Handler handler = new Handler(Looper.getMainLooper());
         private boolean soundEnabled = true;
@@ -2196,7 +2471,7 @@ public class MainActivity extends Activity {
         }
 
         void updateMusic(boolean enabled, float volume, int track) {
-            int nextTrack = Math.max(MUSIC_TRACK_SYNTH, Math.min(MUSIC_TRACK_MIDI, track));
+            int nextTrack = Math.max(MUSIC_TRACK_SYNTH, Math.min(MUSIC_TRACK_SY, track));
             boolean trackChanged = nextTrack != musicTrack;
             musicEnabled = enabled;
             musicVolume = Math.max(0f, Math.min(1f, volume));
@@ -2215,6 +2490,10 @@ public class MainActivity extends Activity {
         void startMusic() {
             if (musicTrack == MUSIC_TRACK_MIDI) {
                 startMidiMusic();
+                return;
+            }
+            if (musicTrack == MUSIC_TRACK_SY) {
+                startSyMusic();
                 return;
             }
             startSynthMusic();
@@ -2246,12 +2525,20 @@ public class MainActivity extends Activity {
         }
 
         private void startMidiMusic() {
+            startMp3Music(R.raw.midi);
+        }
+
+        private void startSyMusic() {
+            startMp3Music(R.raw.sy);
+        }
+
+        private void startMp3Music(int rawResource) {
             if (!musicEnabled) {
                 return;
             }
             try {
                 if (midiPlayer == null) {
-                    midiPlayer = MediaPlayer.create(context, R.raw.midi);
+                    midiPlayer = MediaPlayer.create(context, rawResource);
                     if (midiPlayer == null) {
                         return;
                     }

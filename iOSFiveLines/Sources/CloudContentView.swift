@@ -1,4 +1,5 @@
 import SwiftUI
+import Darwin
 
 struct CloudContentView: View {
     @EnvironmentObject private var game: CloudGameModel
@@ -70,7 +71,7 @@ struct CloudContentView: View {
                     .foregroundStyle(.secondary)
                 HStack(spacing: 5) {
                     ForEach(Array(game.nextTiles.enumerated()), id: \.offset) { _, tile in
-                        TileView(tile: tile, compact: true, kuromiTheme: game.kuromiTheme)
+                        TileView(tile: tile, compact: true, kuromiTheme: game.kuromiTheme, heartMode: game.heartMode)
                     }
                 }
             }
@@ -92,7 +93,9 @@ struct CloudContentView: View {
                             removing: game.removing.contains(index),
                             trailTile: game.racerTrailTile,
                             trailIndex: trailIndex,
-                            kuromiTheme: game.kuromiTheme
+                            kuromiTheme: game.kuromiTheme,
+                            heartMode: game.heartMode,
+                            heartBurst: game.heartMode && game.explodingBombs.contains(index)
                         )
                         .aspectRatio(1, contentMode: .fit)
                         .contentShape(Rectangle())
@@ -125,6 +128,8 @@ private struct BoardCell: View {
     let trailTile: CloudGameModel.Tile?
     let trailIndex: Int?
     let kuromiTheme: Bool
+    let heartMode: Bool
+    let heartBurst: Bool
 
     var body: some View {
         ZStack {
@@ -132,13 +137,16 @@ private struct BoardCell: View {
                 .fill(Color(red: 0.57, green: 0.39, blue: 0.22))
                 .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color.black.opacity(0.22), lineWidth: 1))
             if let trailTile, let trailIndex {
-                TileTrailView(tile: trailTile, index: trailIndex)
+                TileTrailView(tile: trailTile, index: trailIndex, heartMode: heartMode)
             }
             if let tile {
-                TileView(tile: tile, compact: false, kuromiTheme: kuromiTheme)
+                TileView(tile: tile, compact: false, kuromiTheme: kuromiTheme, heartMode: heartMode)
                     .scaleEffect(removing ? 0.08 : 1)
                     .opacity(removing ? 0 : 1)
                     .transition(.scale)
+            }
+            if heartBurst {
+                HeartBurstView()
             }
         }
         .overlay(
@@ -153,22 +161,39 @@ private struct TileView: View {
     let tile: CloudGameModel.Tile
     let compact: Bool
     let kuromiTheme: Bool
+    let heartMode: Bool
 
     var body: some View {
         ZStack {
-            Circle()
-                .fill(tile.color)
-                .overlay(
-                    Circle()
-                        .stroke(tile == .white ? Color.gray.opacity(0.45) : Color.white.opacity(0.6), lineWidth: compact ? 1 : 2)
-                )
-                .shadow(color: .black.opacity(0.25), radius: compact ? 2 : 4, y: 2)
+            if heartMode, tile != .bomb {
+                HeartShape()
+                    .fill(tile.color)
+                    .overlay(
+                        HeartShape()
+                            .stroke(tile == .white ? Color.gray.opacity(0.55) : Color.white.opacity(0.6), lineWidth: compact ? 1 : 2)
+                    )
+                    .shadow(color: .black.opacity(0.25), radius: compact ? 2 : 4, y: 2)
+                    .overlay(alignment: .topLeading) {
+                        Circle()
+                            .fill(.white.opacity(0.76))
+                            .frame(width: compact ? 5 : 8, height: compact ? 5 : 8)
+                            .padding(compact ? 7 : 10)
+                    }
+            } else {
+                Circle()
+                    .fill(tile.color)
+                    .overlay(
+                        Circle()
+                            .stroke(tile == .white ? Color.gray.opacity(0.45) : Color.white.opacity(0.6), lineWidth: compact ? 1 : 2)
+                    )
+                    .shadow(color: .black.opacity(0.25), radius: compact ? 2 : 4, y: 2)
+            }
             if tile == .bomb {
                 Image(systemName: "burst.fill")
                     .font(.system(size: compact ? 11 : 16, weight: .black))
                     .foregroundStyle(.white)
             }
-            if kuromiTheme, tile != .bomb {
+            if kuromiTheme, !heartMode, tile != .bomb {
                 KuromiTileFeaturesView(accent: tile.color)
                     .padding(compact ? 2 : 4)
             }
@@ -176,27 +201,93 @@ private struct TileView: View {
         .padding(compact ? 2 : 3)
     }
 }
-
 private struct TileTrailView: View {
     let tile: CloudGameModel.Tile
     let index: Int
+    let heartMode: Bool
 
     var body: some View {
-        Circle()
-            .fill(
-                RadialGradient(
-                    colors: [tile.color.opacity(0.80), tile.color.opacity(0.16), .clear],
-                    center: .center,
-                    startRadius: 1,
-                    endRadius: 28
-                )
-            )
-            .padding(CGFloat(5 + index * 2))
-            .opacity(max(0.16, 0.58 - Double(index) * 0.07))
-            .blur(radius: CGFloat(index) * 0.45)
+        Group {
+            if heartMode, tile != .bomb {
+                HeartShape()
+                    .fill(tile.color.opacity(0.72))
+                    .overlay(HeartShape().stroke(.white.opacity(0.22), lineWidth: 0.8))
+            } else {
+                Circle()
+                    .fill(
+                        RadialGradient(
+                            colors: [tile.color.opacity(0.80), tile.color.opacity(0.16), .clear],
+                            center: .center,
+                            startRadius: 1,
+                            endRadius: 28
+                        )
+                    )
+            }
+        }
+        .padding(CGFloat(5 + index * 2))
+        .opacity(max(0.16, 0.58 - Double(index) * 0.07))
+        .blur(radius: CGFloat(index) * 0.45)
     }
 }
 
+private struct HeartShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        let width = rect.width
+        let height = rect.height
+        let x = rect.midX
+        let y = rect.midY
+        var path = Path()
+        path.move(to: CGPoint(x: x, y: y + height * 0.33))
+        path.addCurve(
+            to: CGPoint(x: x - width * 0.13, y: y - height * 0.31),
+            control1: CGPoint(x: x - width * 0.52, y: y - height * 0.02),
+            control2: CGPoint(x: x - width * 0.39, y: y - height * 0.44)
+        )
+        path.addCurve(
+            to: CGPoint(x: x, y: y - height * 0.13),
+            control1: CGPoint(x: x - width * 0.04, y: y - height * 0.27),
+            control2: CGPoint(x: x, y: y - height * 0.20)
+        )
+        path.addCurve(
+            to: CGPoint(x: x + width * 0.13, y: y - height * 0.31),
+            control1: CGPoint(x: x, y: y - height * 0.20),
+            control2: CGPoint(x: x + width * 0.04, y: y - height * 0.27)
+        )
+        path.addCurve(
+            to: CGPoint(x: x, y: y + height * 0.33),
+            control1: CGPoint(x: x + width * 0.39, y: y - height * 0.44),
+            control2: CGPoint(x: x + width * 0.52, y: y - height * 0.02)
+        )
+        path.closeSubpath()
+        return path
+    }
+}
+
+private struct HeartBurstView: View {
+    private let colors: [Color] = [.pink, .red, .orange, .yellow, .purple, .cyan, .green, .white]
+
+    var body: some View {
+        GeometryReader { proxy in
+            TimelineView(.animation) { timeline in
+                let progress = CGFloat((timeline.date.timeIntervalSinceReferenceDate * 2).truncatingRemainder(dividingBy: 1))
+                ZStack {
+                    ForEach(colors.indices, id: \.self) { index in
+                        let angle = -CGFloat.pi / 2 + CGFloat(index) * .pi * 2 / CGFloat(colors.count)
+                        let distance = min(proxy.size.width, proxy.size.height) * (0.12 + 0.48 * progress)
+                        HeartShape()
+                            .fill(colors[index].opacity(Double(1 - progress)))
+                            .frame(width: proxy.size.width * 0.22, height: proxy.size.height * 0.22)
+                            .position(
+                                x: proxy.size.width / 2 + cos(angle) * distance,
+                                y: proxy.size.height / 2 + sin(angle) * distance
+                            )
+                    }
+                }
+            }
+        }
+        .allowsHitTesting(false)
+    }
+}
 private struct KuromiTileFeaturesView: View {
     let accent: Color
 
@@ -321,18 +412,18 @@ private struct LoadingDotsView: View {
     var body: some View {
         GeometryReader { proxy in
             let titleLayout = Self.layout(for: loading.title)
-            let loadingLayout = Self.layout(for: "loading...")
+            let subtitleLayout = Self.layout(for: loading.subtitle)
             let titleStep = min(
                 proxy.size.width / CGFloat(max(1, titleLayout.columns + 2)),
-                proxy.size.height / 8.0
+                proxy.size.height / CGFloat(max(8, titleLayout.rows + 4))
             )
-            let loadingStep = min(
-                proxy.size.width / CGFloat(max(1, loadingLayout.columns + 4)),
-                proxy.size.height / 15.0
+            let subtitleStep = min(
+                proxy.size.width / CGFloat(max(1, subtitleLayout.columns + 4)),
+                proxy.size.height / CGFloat(max(14, subtitleLayout.rows + 9))
             )
-            let totalHeight = titleStep * 5.0 + loadingStep * 1.55 + loadingStep * 5.0
+            let totalHeight = titleStep * CGFloat(titleLayout.rows) + subtitleStep * 1.55 + subtitleStep * CGFloat(subtitleLayout.rows)
             let titleTop = max(0, (proxy.size.height - totalHeight) / 2.0)
-            let loadingTop = titleTop + titleStep * 5.0 + loadingStep * 1.55
+            let subtitleTop = titleTop + titleStep * CGFloat(titleLayout.rows) + subtitleStep * 1.55
             let color = Self.colors[loading.colorPhase % Self.colors.count]
             ZStack {
                 dotLine(
@@ -344,10 +435,10 @@ private struct LoadingDotsView: View {
                     color: color
                 )
                 dotLine(
-                    layout: loadingLayout,
-                    step: loadingStep,
-                    dotSize: max(3.0, loadingStep * 0.58),
-                    top: loadingTop,
+                    layout: subtitleLayout,
+                    step: subtitleStep,
+                    dotSize: max(3.0, subtitleStep * 0.58),
+                    top: subtitleTop,
                     canvasWidth: proxy.size.width,
                     color: color
                 )
@@ -357,7 +448,7 @@ private struct LoadingDotsView: View {
     }
 
     private func dotLine(
-        layout: (dots: [Dot], columns: Int),
+        layout: (dots: [Dot], columns: Int, rows: Int),
         step: CGFloat,
         dotSize: CGFloat,
         top: CGFloat,
@@ -392,12 +483,14 @@ private struct LoadingDotsView: View {
         .black
     ]
 
-    private static func layout(for message: String) -> (dots: [Dot], columns: Int) {
+    private static func layout(for message: String) -> (dots: [Dot], columns: Int, rows: Int) {
         var dots: [Dot] = []
         var cursor = 0
         var id = 0
+        var rows = 1
         for character in message {
             let glyph = glyph(for: character)
+            rows = max(rows, glyph.count)
             for row in 0..<glyph.count {
                 let values = Array(glyph[row])
                 for column in 0..<values.count where values[column] == "#" {
@@ -407,11 +500,14 @@ private struct LoadingDotsView: View {
             }
             cursor += (glyph.first?.count ?? 0) + 1
         }
-        return (dots, max(1, cursor - 1))
+        return (dots, max(1, cursor - 1), rows)
     }
 
     private static func glyph(for character: Character) -> [String] {
         switch character.lowercased() {
+        case "1": return [" # ", "## ", " # ", " # ", "###"]
+        case "3": return ["## ", "  #", " # ", "  #", "## "]
+        case "4": return ["# #", "# #", "###", "  #", "  #"]
         case "a": return [" # ", "# #", "###", "# #", "# #"]
         case "d": return ["## ", "# #", "# #", "# #", "## "]
         case "g": return [" ##", "#  ", "# #", "# #", " ##"]
@@ -422,6 +518,7 @@ private struct LoadingDotsView: View {
         case "o": return [" # ", "# #", "# #", "# #", " # "]
         case "r": return ["## ", "# #", "## ", "# #", "# #"]
         case "y": return ["# #", "# #", " # ", " # ", " # "]
+        case "头": return ["   #   ", "#  #  #", " # # # ", "  ###  ", "   #   ", "  # #  ", "##   ##"]
         case ".": return [" ", " ", " ", " ", "#"]
         default: return ["  ", "  ", "  ", "  ", "  "]
         }
@@ -556,9 +653,15 @@ private struct SettingsView: View {
         NavigationStack {
             Form {
                 Section("概率与难度") {
+                    Text(game.adminMode ? "管理员模式已开启，可以修改概率参数。" : "普通模式锁定：难度 1.1、白棋 0.8、炸药 0.4。连续切换音乐 7 次可进入管理员模式。")
+                        .font(.footnote)
+                        .foregroundStyle(game.adminMode ? .green : .secondary)
                     settingSlider("难度系数", value: $game.difficulty, range: 1...2, step: 0.1)
+                        .disabled(!game.adminMode)
                     settingSlider("白棋概率系数", value: $game.whiteProbability, range: 0...2, step: 0.1)
+                        .disabled(!game.adminMode)
                     settingSlider("炸药概率系数", value: $game.bombProbability, range: 0...2, step: 0.1)
+                        .disabled(!game.adminMode)
                 }
                 Section("速度") {
                     Picker("移动速度", selection: $game.moveSpeed) {
@@ -569,9 +672,20 @@ private struct SettingsView: View {
                     .pickerStyle(.segmented)
                 }
                 Section("声音") {
-                    Toggle("音乐", isOn: $game.musicEnabled)
-                    Picker("\u{97F3}\u{4E50}\u{66F2}\u{76EE}", selection: $game.musicTrack) {
-                        ForEach(CloudGameModel.MusicTrack.allCases) { track in
+                    Toggle("音乐", isOn: Binding(
+                        get: { game.musicEnabled },
+                        set: { value in
+                            game.musicEnabled = value
+                            game.noteMusicToggleForAdminUnlock()
+                        }
+                    ))
+                    Picker("\u{97F3}\u{4E50}\u{66F2}\u{76EE}", selection: Binding(
+                        get: {
+                            CloudGameModel.MusicTrack.selectable.contains(game.musicTrack) ? game.musicTrack : .music1
+                        },
+                        set: { game.musicTrack = $0 }
+                    )) {
+                        ForEach(CloudGameModel.MusicTrack.selectable) { track in
                             Text(track.title).tag(track)
                         }
                     }
@@ -587,8 +701,17 @@ private struct SettingsView: View {
             }
             .navigationTitle("设置")
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("保存") {
+                        game.saveSettingsAndCheckAdminEaster()
+                        dismiss()
+                    }
+                }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("完成") { dismiss() }
+                    Button("完成") {
+                        game.saveSettingsAndCheckAdminEaster()
+                        dismiss()
+                    }
                 }
             }
         }

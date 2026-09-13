@@ -1,9 +1,14 @@
 import SwiftUI
 import Foundation
+import Darwin
 import AudioToolbox
 import AVFoundation
 
 final class CloudGameModel: ObservableObject {
+    static let defaultDifficulty = 1.1
+    static let defaultWhiteProbability = 0.8
+    static let defaultBombProbability = 0.4
+
     enum Tile: String, CaseIterable, Identifiable, Codable, Hashable {
         case red, yellow, green, blue, purple, cyan, pink, orange, black, white, bomb
 
@@ -52,6 +57,7 @@ final class CloudGameModel: ObservableObject {
     enum MusicTrack: Int, CaseIterable, Identifiable, Equatable {
         case music1 = 0
         case music2 = 1
+        case sy = 2
 
         var id: Int { rawValue }
 
@@ -59,27 +65,40 @@ final class CloudGameModel: ObservableObject {
             switch self {
             case .music1: return "\u{97F3}\u{4E50}1"
             case .music2: return "\u{97F3}\u{4E50}2"
+            case .sy: return "sy.mp3"
             }
         }
+
+        static var selectable: [MusicTrack] { [.music1, .music2] }
     }
 
     enum EasterKind: Equatable {
         case ray
         case molly
+        case toutou
 
         var loadingTitle: String {
             switch self {
             case .ray: return "Ray"
             case .molly: return "Molly"
+            case .toutou: return "头头"
             }
         }
 
-        var loadingMessage: String { "\(loadingTitle) loading..." }
+        var loadingSubtitle: String {
+            switch self {
+            case .toutou: return "1314"
+            default: return "loading..."
+            }
+        }
+
+        var loadingMessage: String { "\(loadingTitle) \(loadingSubtitle)" }
 
         var secret: Character {
             switch self {
             case .ray: return "A"
             case .molly: return "y"
+            case .toutou: return "A"
             }
         }
 
@@ -87,12 +106,28 @@ final class CloudGameModel: ObservableObject {
             switch self {
             case .ray: return Color(red: 0.02, green: 0.68, blue: 0.72)
             case .molly: return Color(red: 0.92, green: 0.22, blue: 0.52)
+            case .toutou: return Color(red: 1.0, green: 0.25, blue: 0.45)
+            }
+        }
+
+        var secretTapCount: Int {
+            switch self {
+            case .toutou: return 13
+            default: return 5
+            }
+        }
+
+        var loadingColorCount: Int {
+            switch self {
+            case .toutou: return 7
+            default: return 9
             }
         }
     }
 
     struct EasterLoading: Equatable {
         var title: String
+        var subtitle: String
         var colorPhase: Int
         var visible: Bool
     }
@@ -130,21 +165,24 @@ final class CloudGameModel: ObservableObject {
     @Published var score = 0
     @Published var highScores: [ScoreEntry] = []
     @Published var isGameOver = false
-    @Published var difficulty = 1.0 { didSet { saveSettings() } }
-    @Published var whiteProbability = 1.0 { didSet { saveSettings() } }
-    @Published var bombProbability = 1.0 { didSet { saveSettings() } }
+    @Published var difficulty = CloudGameModel.defaultDifficulty { didSet { saveSettings() } }
+    @Published var whiteProbability = CloudGameModel.defaultWhiteProbability { didSet { saveSettings() } }
+    @Published var bombProbability = CloudGameModel.defaultBombProbability { didSet { saveSettings() } }
     @Published var musicEnabled = true { didSet { applyAudioSettings() } }
     @Published var effectsEnabled = true { didSet { applyAudioSettings() } }
     @Published var musicVolume = 0.65 { didSet { applyAudioSettings() } }
     @Published var effectsVolume = 0.8 { didSet { applyAudioSettings() } }
     @Published var musicTrack: MusicTrack = .music1 { didSet { applyAudioSettings() } }
     @Published var moveSpeed: MoveSpeed = .slow { didSet { saveSettings() } }
+    @Published var adminMode = false { didSet { saveSettings() } }
     @Published var rayRacerMode = false
     @Published var kuromiTheme = false
+    @Published var heartMode = false
     @Published var easterLoading: EasterLoading?
     @Published var easterPrompt: EasterPrompt?
     @Published var racerTrail: [Int] = []
     @Published var racerTrailTile: Tile?
+    @Published var explodingBombs: Set<Int> = []
 
     private var busy = false
     private var clearedThisTurn = false
@@ -152,7 +190,8 @@ final class CloudGameModel: ObservableObject {
     private let settingsKey = "FiveLines.settings"
     private var loadingTimer: Timer?
     private var easterSecretTaps = 0
-    private let easterLoadingColorCount = Tile.allCases.filter { !$0.isWildcard }.count
+    private var musicToggleUnlockCount = 0
+    private var suppressSettingsSave = false
 
     init() {
         loadScores()
@@ -172,9 +211,12 @@ final class CloudGameModel: ObservableObject {
         easterPrompt = nil
         racerTrail = []
         racerTrailTile = nil
+        explodingBombs = []
         easterSecretTaps = 0
         rayRacerMode = false
         kuromiTheme = false
+        heartMode = false
+        restoreConfiguredMusicAfterHiddenMode()
         score = 0
         isGameOver = false
         busy = false
@@ -236,7 +278,7 @@ final class CloudGameModel: ObservableObject {
             if tryStartCornerEasterEgg() {
                 return
             }
-            if rayRacerMode {
+            if rayRacerMode || heartMode {
                 let trail = racerTrail
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) { [weak self] in
                     guard let self, self.racerTrail == trail else { return }
@@ -251,7 +293,7 @@ final class CloudGameModel: ObservableObject {
             return
         }
         let next = route[step]
-        if rayRacerMode {
+        if rayRacerMode || heartMode {
             racerTrailTile = tile
             racerTrail = Array(([current] + racerTrail).prefix(7))
         }
@@ -280,6 +322,7 @@ final class CloudGameModel: ObservableObject {
         score += lineCount >= 5 ? 5 + (lineCount - 5) * 2 : 0
         score += blastOnlyCount
         removing = allCells
+        explodingBombs = Set(match.lineCells.filter { board[$0]?.isBomb == true })
         playEffect(1105)
 
         withAnimation(.easeIn(duration: 0.5)) {
@@ -290,6 +333,7 @@ final class CloudGameModel: ObservableObject {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
             guard let self else { return }
             self.removing = []
+            self.explodingBombs = []
             self.resolveChain()
         }
     }
@@ -313,6 +357,7 @@ final class CloudGameModel: ObservableObject {
         score += lineCount >= 5 ? 5 + (lineCount - 5) * 2 : 0
         score += blastOnlyCount
         removing = allCells
+        explodingBombs = Set(match.lineCells.filter { board[$0]?.isBomb == true })
         playEffect(1105)
         withAnimation(.easeIn(duration: 0.5)) {
             for index in allCells {
@@ -322,6 +367,7 @@ final class CloudGameModel: ObservableObject {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
             guard let self else { return }
             self.removing = []
+            self.explodingBombs = []
             self.resolveChain()
         }
     }
@@ -404,20 +450,23 @@ final class CloudGameModel: ObservableObject {
         nextTiles = []
         rayRacerMode = false
         kuromiTheme = false
+        heartMode = false
+        restoreConfiguredMusicAfterHiddenMode()
         racerTrail = []
         racerTrailTile = nil
+        explodingBombs = []
         busy = true
         clearedThisTurn = false
         easterSecretTaps = 0
         easterPrompt = nil
-        easterLoading = EasterLoading(title: kind.loadingTitle, colorPhase: 0, visible: true)
+        easterLoading = EasterLoading(title: kind.loadingTitle, subtitle: kind.loadingSubtitle, colorPhase: 0, visible: true)
         audio.playClear()
         audio.playAlarm()
 
         let startedAt = Date()
         let flashHalfDuration = 0.18
         let flashFullDuration = flashHalfDuration * 2
-        let totalDuration = Double(easterLoadingColorCount) * flashFullDuration
+        let totalDuration = Double(kind.loadingColorCount) * flashFullDuration
         var lastAlarmPhase = 0
         loadingTimer = Timer.scheduledTimer(withTimeInterval: 0.08, repeats: true) { [weak self] timer in
             guard let self else {
@@ -432,7 +481,7 @@ final class CloudGameModel: ObservableObject {
                 self.easterPrompt = EasterPrompt(kind: kind)
                 return
             }
-            let colorPhase = min(self.easterLoadingColorCount - 1, Int(elapsed / flashFullDuration))
+            let colorPhase = min(kind.loadingColorCount - 1, Int(elapsed / flashFullDuration))
             if colorPhase != lastAlarmPhase {
                 lastAlarmPhase = colorPhase
                 self.audio.playAlarm()
@@ -440,6 +489,7 @@ final class CloudGameModel: ObservableObject {
             let halfCycle = Int(elapsed / flashHalfDuration)
             self.easterLoading = EasterLoading(
                 title: kind.loadingTitle,
+                subtitle: kind.loadingSubtitle,
                 colorPhase: colorPhase,
                 visible: halfCycle % 2 == 0
             )
@@ -454,7 +504,7 @@ final class CloudGameModel: ObservableObject {
         guard let prompt = easterPrompt, prompt.secret == value else { return }
         easterSecretTaps += 1
         audio.playClick()
-        if easterSecretTaps >= 5 {
+        if easterSecretTaps >= prompt.kind.secretTapCount {
             finishEaster(hidden: true)
         }
     }
@@ -467,12 +517,29 @@ final class CloudGameModel: ObservableObject {
         easterPrompt = nil
         easterSecretTaps = 0
 
+        if kind == .toutou && !hidden {
+            exit(0)
+        }
+
         if hidden {
             switch kind {
             case .ray:
                 rayRacerMode = true
             case .molly:
                 kuromiTheme = true
+            case .toutou:
+                heartMode = true
+                suppressSettingsSave = true
+                musicEnabled = true
+                musicTrack = .sy
+                suppressSettingsSave = false
+                audio.configure(
+                    soundEnabled: effectsEnabled,
+                    soundVolume: effectsVolume,
+                    musicEnabled: true,
+                    musicVolume: musicVolume,
+                    musicTrack: .sy
+                )
             case nil:
                 break
             }
@@ -607,7 +674,35 @@ final class CloudGameModel: ObservableObject {
         }
     }
 
+    func noteMusicToggleForAdminUnlock() {
+        musicToggleUnlockCount += 1
+        if !adminMode, musicToggleUnlockCount >= 7 {
+            adminMode = true
+            musicToggleUnlockCount = 0
+            audio.playAlarm()
+        } else {
+            audio.playClick()
+        }
+    }
+
+    func saveSettingsAndCheckAdminEaster() {
+        if !adminMode {
+            difficulty = Self.defaultDifficulty
+            whiteProbability = Self.defaultWhiteProbability
+            bombProbability = Self.defaultBombProbability
+        }
+        saveSettings()
+        if adminMode
+            && abs(whiteProbability - 1.3) < 0.001
+            && abs(bombProbability - 1.4) < 0.001 {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) { [weak self] in
+                self?.startCornerEasterEgg(.toutou)
+            }
+        }
+    }
+
     private func applyAudioSettings() {
+        guard !suppressSettingsSave else { return }
         audio.configure(
             soundEnabled: effectsEnabled,
             soundVolume: effectsVolume,
@@ -618,17 +713,35 @@ final class CloudGameModel: ObservableObject {
         saveSettings()
     }
 
-    private func loadSettings() {
+    private func restoreConfiguredMusicAfterHiddenMode() {
+        guard musicTrack == .sy else { return }
         let values = UserDefaults.standard.dictionary(forKey: settingsKey) ?? [:]
-        difficulty = values["difficulty"] as? Double ?? 1.0
-        whiteProbability = values["whiteProbability"] as? Double ?? 1.0
-        bombProbability = values["bombProbability"] as? Double ?? 1.0
+        musicEnabled = values["musicEnabled"] as? Bool ?? true
+        if let rawTrack = values["musicTrack"] as? Int,
+           let track = MusicTrack(rawValue: rawTrack),
+           MusicTrack.selectable.contains(track) {
+            musicTrack = track
+        } else {
+            musicTrack = .music1
+        }
+        applyAudioSettings()
+    }
+
+    private func loadSettings() {
+        suppressSettingsSave = true
+        defer { suppressSettingsSave = false }
+        let values = UserDefaults.standard.dictionary(forKey: settingsKey) ?? [:]
+        adminMode = values["adminMode"] as? Bool ?? false
+        difficulty = adminMode ? values["difficulty"] as? Double ?? Self.defaultDifficulty : Self.defaultDifficulty
+        whiteProbability = adminMode ? values["whiteProbability"] as? Double ?? Self.defaultWhiteProbability : Self.defaultWhiteProbability
+        bombProbability = adminMode ? values["bombProbability"] as? Double ?? Self.defaultBombProbability : Self.defaultBombProbability
         musicEnabled = values["musicEnabled"] as? Bool ?? true
         effectsEnabled = values["effectsEnabled"] as? Bool ?? true
         musicVolume = values["musicVolume"] as? Double ?? 0.65
         effectsVolume = values["effectsVolume"] as? Double ?? 0.8
         if let rawTrack = values["musicTrack"] as? Int,
-           let track = MusicTrack(rawValue: rawTrack) {
+           let track = MusicTrack(rawValue: rawTrack),
+           MusicTrack.selectable.contains(track) {
             musicTrack = track
         }
         if let rawSpeed = values["moveSpeed"] as? String,
@@ -638,15 +751,20 @@ final class CloudGameModel: ObservableObject {
     }
 
     private func saveSettings() {
+        guard !suppressSettingsSave else { return }
+        let savedMusicTrack = MusicTrack.selectable.contains(musicTrack)
+            ? musicTrack.rawValue
+            : (UserDefaults.standard.dictionary(forKey: settingsKey)?["musicTrack"] as? Int ?? MusicTrack.music1.rawValue)
         let values: [String: Any] = [
             "difficulty": difficulty,
             "whiteProbability": whiteProbability,
             "bombProbability": bombProbability,
+            "adminMode": adminMode,
             "musicEnabled": musicEnabled,
             "effectsEnabled": effectsEnabled,
             "musicVolume": musicVolume,
             "effectsVolume": effectsVolume,
-            "musicTrack": musicTrack.rawValue,
+            "musicTrack": savedMusicTrack,
             "moveSpeed": moveSpeed.rawValue
         ]
         UserDefaults.standard.set(values, forKey: settingsKey)
@@ -718,7 +836,9 @@ private final class AudioEngine {
         case .music1:
             startSynthMusic()
         case .music2:
-            startMidiMusic()
+            startBundledMusic(named: "midi")
+        case .sy:
+            startBundledMusic(named: "sy")
         }
     }
 
@@ -730,11 +850,11 @@ private final class AudioEngine {
         }
     }
 
-    private func startMidiMusic() {
+    private func startBundledMusic(named resourceName: String) {
         guard musicEnabled else { return }
         do {
             if midiPlayer == nil {
-                guard let url = Bundle.main.url(forResource: "midi", withExtension: "mp3") else { return }
+                guard let url = Bundle.main.url(forResource: resourceName, withExtension: "mp3") else { return }
                 midiPlayer = try AVAudioPlayer(contentsOf: url)
                 midiPlayer?.numberOfLoops = -1
                 midiPlayer?.prepareToPlay()
