@@ -14,6 +14,7 @@ import {
   type ModelProvider,
   type ModelProviderPayload,
   type ModelRoute,
+  type ModelRoutePayload,
   type ModelSkill,
   type ModelSkillPayload,
   type StockSymbol,
@@ -364,7 +365,7 @@ function DataConsolePage() {
               <option value="NEEQ">新三板</option>
               <option value="NEEQ_INNOVATION">创新层</option>
             </select>
-            <input
+<input
               className={inputClass}
               value={keyword}
               onChange={(e) => setKeyword(e.target.value)}
@@ -477,6 +478,18 @@ const emptyInstance: InstanceForm = {
   config_json: {},
   description: "",
 };
+type RouteForm = Omit<ModelRoutePayload, "fallback_chain_json"> & {
+  id?: number;
+  fallback_chain_text: string;
+};
+const emptyRoute: RouteForm = {
+  task_type: "",
+  preferred_instance_code: "",
+  fallback_chain_text: "",
+  route_policy: "PREFERRED_THEN_FALLBACK",
+  enabled: true,
+  description: "",
+};
 type SkillForm = ModelSkillPayload & { id?: number };
 type AgentForm = AgentPayload & { id?: number };
 type KnowledgeForm = {
@@ -535,10 +548,16 @@ function ModelLabPage() {
     useState<ProviderForm>(emptyProvider);
   const [editingInstance, setEditingInstance] =
     useState<InstanceForm>(emptyInstance);
+  const [editingRoute, setEditingRoute] = useState<RouteForm>(emptyRoute);
   const [editingSkill, setEditingSkill] = useState<SkillForm>(emptySkill);
   const [editingAgent, setEditingAgent] = useState<AgentForm>(emptyAgent);
   const [editingKnowledge, setEditingKnowledge] =
     useState<KnowledgeForm>(emptyKnowledge);
+  const [modelDialog, setModelDialog] = useState<
+    "provider" | "instance" | "route" | null
+  >(null);
+  const [agentDialogOpen, setAgentDialogOpen] = useState(false);
+  const [skillDialogOpen, setSkillDialogOpen] = useState(false);
   const [chat, setChat] = useState({
     instance_code: "",
     message: "请用一句话测试当前模型。",
@@ -571,17 +590,26 @@ function ModelLabPage() {
   useEffect(() => {
     void load();
   }, []);
-  function message(text: string) {
+function message(text: string) {
     setNotice(text);
     window.setTimeout(() => setNotice(""), 3500);
   }
   async function saveProvider(event: FormEvent) {
     event.preventDefault();
     try {
-      const { id, ...payload } = editingProvider;
+      const { id } = editingProvider;
+      const payload: ModelProviderPayload = {
+        provider_code: editingProvider.provider_code,
+        provider_name: editingProvider.provider_name,
+        provider_type: editingProvider.provider_type,
+        enabled: editingProvider.enabled,
+        description: editingProvider.description || "",
+        config_json: editingProvider.config_json || {},
+      };
       if (id) await api.updateModelProvider(id, payload);
       else await api.createModelProvider(payload);
       setEditingProvider(emptyProvider);
+      setModelDialog(null);
       await load();
       message("模型供应商已保存");
     } catch (e) {
@@ -591,19 +619,70 @@ function ModelLabPage() {
   async function saveInstance(event: FormEvent) {
     event.preventDefault();
     try {
-      const { id, ...payload } = editingInstance;
+      const { id } = editingInstance;
+      const payload: ModelInstancePayload = {
+        provider_id: editingInstance.provider_id || providers[0]?.id || 0,
+        instance_code: editingInstance.instance_code,
+        model_code: editingInstance.model_code,
+        model_name: editingInstance.model_name,
+        purpose: editingInstance.purpose,
+        api_key: editingInstance.api_key,
+        api_base_url: editingInstance.api_base_url,
+        api_path: editingInstance.api_path,
+        max_tokens: editingInstance.max_tokens,
+        temperature: editingInstance.temperature,
+        top_p: editingInstance.top_p,
+        enabled: editingInstance.enabled,
+        fallback_instance_code: editingInstance.fallback_instance_code,
+        config_json: editingInstance.config_json || {},
+        description: editingInstance.description || "",
+      };
       if (!payload.provider_id) throw new Error("请选择供应商");
-      if (id && !payload.api_key) delete payload.api_key;
+      if (!payload.api_key) delete payload.api_key;
       if (id) await api.updateModelInstance(id, payload);
       else await api.createModelInstance(payload);
       setEditingInstance({
         ...emptyInstance,
         provider_id: providers[0]?.id || 0,
       });
+      setModelDialog(null);
       await load();
       message("模型实例已保存");
     } catch (e) {
       message(e instanceof Error ? e.message : "模型实例保存失败");
+    }
+  }
+  async function saveRoute(event: FormEvent) {
+    event.preventDefault();
+    try {
+      const fallback_chain_json = editingRoute.fallback_chain_text
+        .split(/[\n,，]/)
+        .map((item) => item.trim())
+        .filter(Boolean);
+      const payload: ModelRoutePayload = {
+        task_type: editingRoute.task_type.trim(),
+        preferred_instance_code:
+          editingRoute.preferred_instance_code || instances[0]?.instance_code || "",
+        fallback_chain_json,
+        route_policy: editingRoute.route_policy || "PREFERRED_THEN_FALLBACK",
+        enabled: editingRoute.enabled,
+        description: editingRoute.description || "",
+      };
+      if (!payload.task_type) throw new Error("请输入任务类型");
+      if (!payload.preferred_instance_code) throw new Error("请选择首选模型实例");
+      if (editingRoute.id) {
+        const updatePayload: Partial<ModelRoutePayload> = { ...payload };
+        delete updatePayload.task_type;
+        await api.updateModelRoute(editingRoute.id, updatePayload);
+      } else {
+        await api.createModelRoute(payload);
+      }
+      setEditingRoute(emptyRoute);
+      setModelDialog(null);
+      await load();
+      message("任务路由已保存");
+    } catch (e) {
+      message(e instanceof Error ? e.message : "任务路由保存失败");
     }
   }
   async function testProvider(item: ModelProvider) {
@@ -650,13 +729,34 @@ function ModelLabPage() {
       message(e instanceof Error ? e.message : "删除失败，可能仍被路由引用");
     }
   }
+  async function deleteRoute(item: ModelRoute) {
+    if (!window.confirm(`删除任务路由 ${item.task_type}？`)) return;
+    try {
+      await api.deleteModelRoute(item.id);
+      await load();
+      message("任务路由已删除");
+    } catch (e) {
+      message(e instanceof Error ? e.message : "任务路由删除失败");
+    }
+  }
   async function saveSkill(event: FormEvent) {
     event.preventDefault();
     try {
-      const { id, ...payload } = editingSkill;
+      const { id } = editingSkill;
+      const skillCode = (editingSkill.skill_code || "").trim();
+      const payload: ModelSkillPayload = {
+        skill_code: skillCode || undefined,
+        skill_name: editingSkill.skill_name,
+        description: editingSkill.description || "",
+        instructions: editingSkill.instructions,
+        enabled: editingSkill.enabled,
+        config_json: editingSkill.config_json || {},
+        version: editingSkill.version || "1.0.0",
+      };
       if (id) await api.updateModelSkill(id, payload);
       else await api.createModelSkill(payload);
       setEditingSkill(emptySkill);
+      setSkillDialogOpen(false);
       await load();
       message("Skill 已保存");
     } catch (e) {
@@ -676,10 +776,26 @@ function ModelLabPage() {
   async function saveAgent(event: FormEvent) {
     event.preventDefault();
     try {
-      const { id, ...payload } = editingAgent;
+      const { id } = editingAgent;
+      const agentCode = (editingAgent.agent_code || "").trim();
+      const payload: AgentPayload = {
+        agent_code: agentCode || undefined,
+        display_name: editingAgent.display_name,
+        system_prompt: editingAgent.system_prompt,
+        model_instance_code: editingAgent.model_instance_code,
+        max_iterations: editingAgent.max_iterations,
+        enabled: editingAgent.enabled,
+        description: editingAgent.description || "",
+        version: editingAgent.version || "1.0.0",
+        child_agent_ids: editingAgent.child_agent_ids,
+        skill_ids: editingAgent.skill_ids,
+        knowledge_base_ids: editingAgent.knowledge_base_ids,
+        data_asset_ids: editingAgent.data_asset_ids,
+      };
       if (id) await api.updateAgent(id, payload);
       else await api.createAgent(payload);
       setEditingAgent(emptyAgent);
+      setAgentDialogOpen(false);
       await load();
       message("智能体已保存");
     } catch (e) {
@@ -792,14 +908,85 @@ function ModelLabPage() {
             provider_id: editingInstance.provider_id || providers[0]?.id || 0,
           }}
           setInstance={setEditingInstance}
+          route={{
+            ...editingRoute,
+            preferred_instance_code:
+              editingRoute.preferred_instance_code ||
+              instances[0]?.instance_code ||
+              "",
+          }}
+          setRoute={setEditingRoute}
+          dialog={modelDialog}
+          onOpenProvider={() => {
+            setEditingProvider(emptyProvider);
+            setModelDialog("provider");
+          }}
+          onOpenInstance={() => {
+            setEditingInstance({
+              ...emptyInstance,
+              provider_id: providers[0]?.id || 0,
+            });
+            setModelDialog("instance");
+          }}
+          onOpenRoute={() => {
+            setEditingRoute({
+              ...emptyRoute,
+              preferred_instance_code: instances[0]?.instance_code || "",
+            });
+            setModelDialog("route");
+          }}
+          onCloseDialog={() => setModelDialog(null)}
           onProvider={saveProvider}
           onInstance={saveInstance}
-          onEditProvider={(item) => setEditingProvider({ ...item })}
-          onEditInstance={(item) =>
-            setEditingInstance({ ...item, api_key: "" })
-          }
+          onRoute={saveRoute}
+          onEditProvider={(item) => {
+            setEditingProvider({
+              id: item.id,
+              provider_code: item.provider_code,
+              provider_name: item.provider_name,
+              provider_type: item.provider_type,
+              enabled: item.enabled,
+              description: item.description || "",
+              config_json: item.config_json || {},
+            });
+            setModelDialog("provider");
+          }}
+          onEditInstance={(item) => {
+            setEditingInstance({
+              id: item.id,
+              provider_id: item.provider_id,
+              instance_code: item.instance_code,
+              model_code: item.model_code,
+              model_name: item.model_name,
+              purpose: item.purpose,
+              api_key: "",
+              api_base_url: item.api_base_url || "",
+              api_path: item.api_path || "/chat/completions",
+              max_tokens: item.max_tokens,
+              temperature: item.temperature,
+              top_p: item.top_p,
+              enabled: item.enabled,
+              fallback_instance_code: item.fallback_instance_code || "",
+              config_json: item.config_json || {},
+              description: item.description || "",
+            });
+            setModelDialog("instance");
+          }}
+          onEditRoute={(item) => {
+            setEditingRoute({
+              id: item.id,
+              task_type: item.task_type,
+              preferred_instance_code: item.preferred_instance_code,
+              fallback_chain_text: (item.fallback_chain_json || []).join("\n"),
+              route_policy: item.route_policy,
+              enabled: item.enabled,
+              description: item.description || "",
+            });
+            setModelDialog("route");
+          }}
           onDeleteProvider={deleteProvider}
           onDeleteInstance={deleteInstance}
+          onDeleteRoute={deleteRoute}
           onTestProvider={testProvider}
           onTestInstance={testInstance}
         />
@@ -813,14 +1000,24 @@ function ModelLabPage() {
           assets={assets}
           value={editingAgent}
           setValue={setEditingAgent}
+          dialogOpen={agentDialogOpen}
+          onOpen={() => {
+            setEditingAgent(emptyAgent);
+            setAgentDialogOpen(true);
+          }}
+          onClose={() => {
+            setAgentDialogOpen(false);
+            setEditingAgent(emptyAgent);
+          }}
           onSave={saveAgent}
-          onEdit={(item) =>
+          onEdit={(item) => {
             setEditingAgent({
               ...item,
               id: item.id,
               description: item.description || "",
-            })
-          }
+            });
+            setAgentDialogOpen(true);
+          }}
           onDelete={deleteAgent}
         />
       )}
@@ -829,7 +1026,29 @@ function ModelLabPage() {
           skills={skills}
           value={editingSkill}
           setValue={setEditingSkill}
+          dialogOpen={skillDialogOpen}
+          onOpen={() => {
+            setEditingSkill(emptySkill);
+            setSkillDialogOpen(true);
+          }}
+          onClose={() => {
+            setSkillDialogOpen(false);
+            setEditingSkill(emptySkill);
+          }}
           onSave={saveSkill}
+          onEdit={(item) => {
+            setEditingSkill({
+              id: item.id,
+              skill_code: item.skill_code,
+              skill_name: item.skill_name,
+              description: item.description || "",
+              instructions: item.instructions,
+              enabled: item.enabled,
+              config_json: item.config_json || {},
+              version: item.version || "1.0.0",
+            });
+            setSkillDialogOpen(true);
+          }}
           onDelete={deleteSkill}
         />
       )}
@@ -874,6 +1093,41 @@ function ModelLabPage() {
   );
 }
 
+function ResourceDialog({
+  eyebrow,
+  title,
+  children,
+  onClose,
+}: {
+  eyebrow: string;
+  title: string;
+  children: ReactNode;
+  onClose: () => void;
+}) {
+  return (
+    <div
+      className="resource-dialog-backdrop"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <section className="resource-dialog" role="dialog" aria-modal="true">
+        <div className="resource-dialog-header">
+          <div>
+            <p className="eyebrow">{eyebrow}</p>
+            <h3>{title}</h3>
+          </div>
+          <button className="quiet-button" type="button" onClick={onClose}>
+            关闭
+          </button>
+        </div>
+        <div className="resource-dialog-body">{children}</div>
+      </section>
+    </div>
+  );
+}
+
 function ModelTab(props: {
   providers: ModelProvider[];
   instances: ModelInstance[];
@@ -882,12 +1136,22 @@ function ModelTab(props: {
   setProvider: (v: ProviderForm) => void;
   instance: InstanceForm;
   setInstance: (v: InstanceForm) => void;
+  route: RouteForm;
+  setRoute: (v: RouteForm) => void;
+  dialog: "provider" | "instance" | "route" | null;
+  onOpenProvider: () => void;
+  onOpenInstance: () => void;
+  onOpenRoute: () => void;
+  onCloseDialog: () => void;
   onProvider: (e: FormEvent) => void;
   onInstance: (e: FormEvent) => void;
+  onRoute: (e: FormEvent) => void;
   onEditProvider: (v: ModelProvider) => void;
   onEditInstance: (v: ModelInstance) => void;
+  onEditRoute: (v: ModelRoute) => void;
   onDeleteProvider: (v: ModelProvider) => void;
   onDeleteInstance: (v: ModelInstance) => void;
+  onDeleteRoute: (v: ModelRoute) => void;
   onTestProvider: (v: ModelProvider) => void;
   onTestInstance: (v: ModelInstance) => void;
 }) {
@@ -899,314 +1163,658 @@ function ModelTab(props: {
     setProvider,
     instance,
     setInstance,
+    route,
+    setRoute,
+    dialog,
   } = props;
   return (
     <>
-      <section className="panel">
-        <div className="panel-heading">
-          <div>
-            <p className="eyebrow">PROVIDERS</p>
-            <h2>模型供应商</h2>
+      <div className="resource-stack">
+        <section className="panel resource-management-panel">
+          <div className="panel-heading">
+            <div>
+              <p className="eyebrow">PROVIDERS</p>
+              <h2>模型供应商清单</h2>
+              <p>维护 DeepSeek、本地模拟或兼容 OpenAI 的模型供应商。</p>
+            </div>
+            <div className="panel-actions">
+              <button
+                className="primary-button"
+                type="button"
+                onClick={props.onOpenProvider}
+              >
+                新增供应商
+              </button>
+            </div>
           </div>
-        </div>
-        <form className="field-grid" onSubmit={props.onProvider}>
-          <input
-            className={inputClass}
-            placeholder="供应商编码"
-            value={provider.provider_code}
-            onChange={(e) =>
-              setProvider({ ...provider, provider_code: e.target.value })
-            }
-            required
-          />
-          <input
-            className={inputClass}
-            placeholder="显示名称"
-            value={provider.provider_name}
-            onChange={(e) =>
-              setProvider({ ...provider, provider_name: e.target.value })
-            }
-            required
-          />
-          <select
-            className={inputClass}
-            value={provider.provider_type}
-            onChange={(e) =>
-              setProvider({
-                ...provider,
-                provider_type: e.target.value as ProviderForm["provider_type"],
-              })
-            }
-          >
-            {Object.entries(providerTypeLabel).map(([key, label]) => (
-              <option key={key} value={key}>
-                {label}
-              </option>
-            ))}
-          </select>
-          <input
-            className={inputClass}
-            placeholder="API Base URL（可选）"
-            value={String(
-              provider.config_json.api_base_url ||
-                provider.config_json.base_url ||
-                "",
-            )}
-            onChange={(e) =>
-              setProvider({
-                ...provider,
-                config_json: {
-                  ...provider.config_json,
-                  api_base_url: e.target.value,
-                },
-              })
-            }
-          />
-          <label className="checkbox-row">
-            <input
-              type="checkbox"
-              checked={provider.enabled}
-              onChange={(e) =>
-                setProvider({ ...provider, enabled: e.target.checked })
-              }
-            />
-            启用供应商
-          </label>
-          <button className="primary-button" type="submit">
-            {provider.id ? "更新供应商" : "新增供应商"}
-          </button>
-        </form>
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>供应商</th>
-                <th>类型</th>
-                <th>状态</th>
-                <th>操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              {providers.map((item) => (
-                <tr key={item.id}>
-                  <td>
-                    <strong>{item.provider_name}</strong>
-                    <code>{item.provider_code}</code>
-                  </td>
-                  <td>
-                    {providerTypeLabel[item.provider_type] ||
-                      item.provider_type}
-                  </td>
-                  <td>
-                    <Status enabled={item.enabled} />
-                  </td>
-                  <td className="button-row">
-                    <button
-                      type="button"
-                      onClick={() => props.onEditProvider(item)}
-                    >
-                      编辑
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => props.onTestProvider(item)}
-                    >
-                      测试
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => props.onDeleteProvider(item)}
-                    >
-                      删除
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
-      <section className="panel">
-        <div className="panel-heading">
-          <div>
-            <p className="eyebrow">MODEL INSTANCES</p>
-            <h2>模型实例</h2>
+          <div className="resource-list-header">
+            <h3>供应商列表</h3>
+            <span>{providers.length} 个供应商</span>
           </div>
-        </div>
-        <form className="field-grid" onSubmit={props.onInstance}>
-          <select
-            className={inputClass}
-            value={instance.provider_id}
-            onChange={(e) =>
-              setInstance({ ...instance, provider_id: Number(e.target.value) })
-            }
-            required
-          >
-            <option value={0}>选择供应商</option>
-            {providers.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.provider_name}
-              </option>
-            ))}
-          </select>
-          <input
-            className={inputClass}
-            placeholder="实例编码"
-            value={instance.instance_code}
-            onChange={(e) =>
-              setInstance({ ...instance, instance_code: e.target.value })
-            }
-            required
-          />
-          <input
-            className={inputClass}
-            placeholder="模型编码，如 deepseek-chat"
-            value={instance.model_code}
-            onChange={(e) =>
-              setInstance({ ...instance, model_code: e.target.value })
-            }
-            required
-          />
-          <input
-            className={inputClass}
-            placeholder="显示名称"
-            value={instance.model_name}
-            onChange={(e) =>
-              setInstance({ ...instance, model_name: e.target.value })
-            }
-            required
-          />
-          <input
-            className={inputClass}
-            placeholder="API Key（可选）"
-            type="password"
-            value={instance.api_key || ""}
-            onChange={(e) =>
-              setInstance({ ...instance, api_key: e.target.value })
-            }
-          />
-          <input
-            className={inputClass}
-            placeholder="用途"
-            value={instance.purpose}
-            onChange={(e) =>
-              setInstance({ ...instance, purpose: e.target.value })
-            }
-          />
-          <label className="checkbox-row">
-            <input
-              type="checkbox"
-              checked={instance.enabled}
-              onChange={(e) =>
-                setInstance({ ...instance, enabled: e.target.checked })
-              }
-            />
-            启用实例
-          </label>
-          <button className="primary-button" type="submit">
-            {instance.id ? "更新实例" : "新增实例"}
-          </button>
-        </form>
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>实例</th>
-                <th>供应商</th>
-                <th>模型</th>
-                <th>Key</th>
-                <th>状态</th>
-                <th>操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              {instances.map((item) => (
-                <tr key={item.id}>
-                  <td>
-                    <strong>{item.instance_code}</strong>
-                    <code>{item.model_name}</code>
-                  </td>
-                  <td>
-                    {providers.find((p) => p.id === item.provider_id)
-                      ?.provider_name || item.provider_id}
-                  </td>
-                  <td>{item.model_code}</td>
-                  <td>{item.api_key_configured ? "已配置" : "未配置"}</td>
-                  <td>
-                    <Status enabled={item.enabled} />
-                  </td>
-                  <td className="button-row">
-                    <button
-                      type="button"
-                      onClick={() => props.onEditInstance(item)}
-                    >
-                      编辑
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => props.onTestInstance(item)}
-                    >
-                      测试
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => props.onDeleteInstance(item)}
-                    >
-                      删除
-                    </button>
-                  </td>
+          <div className="table-wrap resource-list-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>供应商</th>
+                  <th>类型</th>
+                  <th>状态</th>
+                  <th>操作</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <div className="table-wrap route-table-wrap">
-          <h3>任务路由</h3>
-          <table className="route-table">
-            <thead>
-              <tr>
-                <th>任务</th>
-                <th>首选实例</th>
-                <th>降级链</th>
-                <th>状态</th>
-              </tr>
-            </thead>
-            <tbody>
-              {routes.map((route) => (
-                <tr key={route.id}>
-                  <td>
-                    <code className="route-code">{route.task_type}</code>
-                  </td>
-                  <td>
-                    <span className="route-pill">{route.preferred_instance_code}</span>
-                  </td>
-                  <td>
-                    {route.fallback_chain_json.length ? (
-                      <span className="route-chain">
-                        {route.fallback_chain_json.map((item, index) => (
-                          <span key={`${route.id}-${item}-${index}`}>
-                            {index > 0 ? <em>→</em> : null}
-                            <b>{item}</b>
+              </thead>
+              <tbody>
+                {providers.length ? (
+                  providers.map((item) => (
+                    <tr key={item.id}>
+                      <td>
+                        <strong>{item.provider_name}</strong>
+                        <code>{item.provider_code}</code>
+                      </td>
+                      <td>
+                        {providerTypeLabel[item.provider_type] ||
+                          item.provider_type}
+                      </td>
+                      <td>
+                        <Status enabled={item.enabled} />
+                      </td>
+                      <td className="button-row">
+                        <button
+                          type="button"
+                          onClick={() => props.onEditProvider(item)}
+                        >
+                          编辑
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => props.onTestProvider(item)}
+                        >
+                          测试
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => props.onDeleteProvider(item)}
+                        >
+                          删除
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td className="empty-table-cell" colSpan={4}>
+                      暂无模型供应商，点击“新增供应商”创建。
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section className="panel resource-management-panel">
+          <div className="panel-heading">
+            <div>
+              <p className="eyebrow">MODEL INSTANCES</p>
+              <h2>模型实例清单</h2>
+              <p>维护具体模型编码、用途、访问路径与调用参数。</p>
+            </div>
+            <div className="panel-actions">
+              <button
+                className="primary-button"
+                type="button"
+                onClick={props.onOpenInstance}
+              >
+                新增模型
+              </button>
+            </div>
+          </div>
+          <div className="resource-list-header">
+            <h3>模型列表</h3>
+            <span>{instances.length} 个模型实例</span>
+          </div>
+          <div className="table-wrap resource-list-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>实例</th>
+                  <th>供应商</th>
+                  <th>模型</th>
+                  <th>用途</th>
+                  <th>Key</th>
+                  <th>状态</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                {instances.length ? (
+                  instances.map((item) => (
+                    <tr key={item.id}>
+                      <td>
+                        <strong>{item.instance_code}</strong>
+                        <code>{item.model_name}</code>
+                      </td>
+                      <td>
+                        {providers.find((p) => p.id === item.provider_id)
+                          ?.provider_name || item.provider_id}
+                      </td>
+                      <td>{item.model_code}</td>
+                      <td>{item.purpose || "--"}</td>
+                      <td>{item.api_key_configured ? "已配置" : "未配置"}</td>
+                      <td>
+                        <Status enabled={item.enabled} />
+                      </td>
+                      <td className="button-row">
+                        <button
+                          type="button"
+                          onClick={() => props.onEditInstance(item)}
+                        >
+                          编辑
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => props.onTestInstance(item)}
+                        >
+                          测试
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => props.onDeleteInstance(item)}
+                        >
+                          删除
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td className="empty-table-cell" colSpan={7}>
+                      暂无模型实例，点击“新增模型”创建。
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section className="panel resource-management-panel">
+          <div className="panel-heading">
+            <div>
+              <p className="eyebrow">TASK ROUTES</p>
+              <h2>任务路由清单</h2>
+              <p>维护任务类型到首选模型、降级链和路由策略的映射。</p>
+            </div>
+            <div className="panel-actions">
+              <button
+                className="primary-button"
+                type="button"
+                onClick={props.onOpenRoute}
+              >
+                新增路由
+              </button>
+            </div>
+          </div>
+          <div className="resource-list-header">
+            <h3>路由列表</h3>
+            <span>{routes.length} 条路由</span>
+          </div>
+          <div className="table-wrap resource-list-wrap route-table-wrap">
+            <table className="route-table">
+              <thead>
+                <tr>
+                  <th>任务</th>
+                  <th>首选实例</th>
+                  <th>降级链</th>
+                  <th>策略</th>
+                  <th>状态</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                {routes.length ? (
+                  routes.map((item) => (
+                    <tr key={item.id}>
+                      <td>
+                        <code className="route-code">{item.task_type}</code>
+                      </td>
+                      <td>
+                        <span className="route-pill">
+                          {item.preferred_instance_code}
+                        </span>
+                      </td>
+                      <td>
+                        {item.fallback_chain_json.length ? (
+                          <span className="route-chain">
+                            {item.fallback_chain_json.map((chainItem, index) => (
+                              <span key={`${item.id}-${chainItem}-${index}`}>
+                                {index > 0 ? <em>→</em> : null}
+                                <b>{chainItem}</b>
+                              </span>
+                            ))}
                           </span>
-                        ))}
-                      </span>
-                    ) : (
-                      "--"
-                    )}
-                  </td>
-                  <td>
-                    <Status enabled={route.enabled} />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
+                        ) : (
+                          "--"
+                        )}
+                      </td>
+                      <td>{item.route_policy || "--"}</td>
+                      <td>
+                        <Status enabled={item.enabled} />
+                      </td>
+                      <td className="button-row">
+                        <button
+                          type="button"
+                          onClick={() => props.onEditRoute(item)}
+                        >
+                          编辑
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => props.onDeleteRoute(item)}
+                        >
+                          删除
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td className="empty-table-cell" colSpan={6}>
+                      暂无任务路由，点击“新增路由”创建。
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+
+      {dialog === "provider" && (
+        <ResourceDialog
+          eyebrow="PROVIDER FORM"
+          title={provider.id ? "编辑模型供应商" : "新增模型供应商"}
+          onClose={props.onCloseDialog}
+        >
+          <form className="resource-editor-form" onSubmit={props.onProvider}>
+            <div className="resource-form-section">
+              <div className="resource-section-title">基础信息</div>
+              <div className="field-grid">
+                <input
+                  className={inputClass}
+                  placeholder="供应商编码，如 DEEPSEEK"
+                  value={provider.provider_code}
+                  onChange={(e) =>
+                    setProvider({ ...provider, provider_code: e.target.value })
+                  }
+                  disabled={Boolean(provider.id)}
+                  required
+                />
+                <input
+                  className={inputClass}
+                  placeholder="显示名称"
+                  value={provider.provider_name}
+                  onChange={(e) =>
+                    setProvider({ ...provider, provider_name: e.target.value })
+                  }
+                  required
+                />
+                <select
+                  className={inputClass}
+                  value={provider.provider_type}
+                  onChange={(e) =>
+                    setProvider({
+                      ...provider,
+                      provider_type: e.target
+                        .value as ProviderForm["provider_type"],
+                    })
+                  }
+                >
+                  {Object.entries(providerTypeLabel).map(([key, label]) => (
+                    <option key={key} value={key}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  className={inputClass}
+                  placeholder="API Base URL（可选）"
+                  value={String(
+                    provider.config_json.api_base_url ||
+                      provider.config_json.base_url ||
+                      "",
+                  )}
+                  onChange={(e) =>
+                    setProvider({
+                      ...provider,
+                      config_json: {
+                        ...provider.config_json,
+                        api_base_url: e.target.value,
+                      },
+                    })
+                  }
+                />
+                <textarea
+                  className="field-span-2"
+                  rows={3}
+                  placeholder="说明"
+                  value={provider.description || ""}
+                  onChange={(e) =>
+                    setProvider({ ...provider, description: e.target.value })
+                  }
+                />
+                <label className="checkbox-row">
+                  <input
+                    type="checkbox"
+                    checked={provider.enabled}
+                    onChange={(e) =>
+                      setProvider({ ...provider, enabled: e.target.checked })
+                    }
+                  />
+                  启用供应商
+                </label>
+              </div>
+            </div>
+            <div className="form-actions">
+              <button
+                className="quiet-button"
+                type="button"
+                onClick={props.onCloseDialog}
+              >
+                取消
+              </button>
+              <button className="primary-button" type="submit">
+                {provider.id ? "更新供应商" : "创建供应商"}
+              </button>
+            </div>
+          </form>
+        </ResourceDialog>
+      )}
+
+      {dialog === "instance" && (
+        <ResourceDialog
+          eyebrow="MODEL FORM"
+          title={instance.id ? "编辑模型实例" : "新增模型实例"}
+          onClose={props.onCloseDialog}
+        >
+          <form className="resource-editor-form" onSubmit={props.onInstance}>
+            <div className="resource-form-section">
+              <div className="resource-section-title">模型配置</div>
+              <div className="field-grid">
+                <select
+                  className={inputClass}
+                  value={instance.provider_id}
+                  onChange={(e) =>
+                    setInstance({
+                      ...instance,
+                      provider_id: Number(e.target.value),
+                    })
+                  }
+                  required
+                >
+                  <option value={0}>选择供应商</option>
+                  {providers.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.provider_name}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  className={inputClass}
+                  placeholder="实例编码，如 DEEPSEEK_CHAT"
+                  value={instance.instance_code}
+                  onChange={(e) =>
+                    setInstance({
+                      ...instance,
+                      instance_code: e.target.value,
+                    })
+                  }
+                  disabled={Boolean(instance.id)}
+                  required
+                />
+                <input
+                  className={inputClass}
+                  placeholder="模型编码，如 deepseek-chat"
+                  value={instance.model_code}
+                  onChange={(e) =>
+                    setInstance({ ...instance, model_code: e.target.value })
+                  }
+                  required
+                />
+                <input
+                  className={inputClass}
+                  placeholder="显示名称"
+                  value={instance.model_name}
+                  onChange={(e) =>
+                    setInstance({ ...instance, model_name: e.target.value })
+                  }
+                  required
+                />
+                <input
+                  className={inputClass}
+                  placeholder="用途，如 chat / research"
+                  value={instance.purpose}
+                  onChange={(e) =>
+                    setInstance({ ...instance, purpose: e.target.value })
+                  }
+                />
+                <input
+                  className={inputClass}
+                  placeholder="API Key（留空则不更新）"
+                  type="password"
+                  value={instance.api_key || ""}
+                  onChange={(e) =>
+                    setInstance({ ...instance, api_key: e.target.value })
+                  }
+                />
+                <input
+                  className={inputClass}
+                  placeholder="API Base URL（可选）"
+                  value={instance.api_base_url || ""}
+                  onChange={(e) =>
+                    setInstance({ ...instance, api_base_url: e.target.value })
+                  }
+                />
+                <input
+                  className={inputClass}
+                  placeholder="API Path（可选）"
+                  value={instance.api_path || ""}
+                  onChange={(e) =>
+                    setInstance({ ...instance, api_path: e.target.value })
+                  }
+                />
+                <input
+                  className={inputClass}
+                  type="number"
+                  min={1}
+                  max={200000}
+                  placeholder="最大 Token"
+                  value={instance.max_tokens}
+                  onChange={(e) =>
+                    setInstance({
+                      ...instance,
+                      max_tokens: Number(e.target.value),
+                    })
+                  }
+                />
+                <input
+                  className={inputClass}
+                  type="number"
+                  min={0}
+                  max={2}
+                  step={0.1}
+                  placeholder="Temperature"
+                  value={instance.temperature}
+                  onChange={(e) =>
+                    setInstance({
+                      ...instance,
+                      temperature: Number(e.target.value),
+                    })
+                  }
+                />
+                <input
+                  className={inputClass}
+                  type="number"
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  placeholder="Top P"
+                  value={instance.top_p}
+                  onChange={(e) =>
+                    setInstance({ ...instance, top_p: Number(e.target.value) })
+                  }
+                />
+                <select
+                  className={inputClass}
+                  value={instance.fallback_instance_code || ""}
+                  onChange={(e) =>
+                    setInstance({
+                      ...instance,
+                      fallback_instance_code: e.target.value || undefined,
+                    })
+                  }
+                >
+                  <option value="">不设置实例级降级</option>
+                  {instances
+                    .filter((item) => item.instance_code !== instance.instance_code)
+                    .map((item) => (
+                      <option key={item.id} value={item.instance_code}>
+                        {item.instance_code}
+                      </option>
+                    ))}
+                </select>
+                <textarea
+                  className="field-span-2"
+                  rows={3}
+                  placeholder="说明"
+                  value={instance.description || ""}
+                  onChange={(e) =>
+                    setInstance({ ...instance, description: e.target.value })
+                  }
+                />
+                <label className="checkbox-row">
+                  <input
+                    type="checkbox"
+                    checked={instance.enabled}
+                    onChange={(e) =>
+                      setInstance({ ...instance, enabled: e.target.checked })
+                    }
+                  />
+                  启用实例
+                </label>
+              </div>
+            </div>
+            <div className="form-actions">
+              <button
+                className="quiet-button"
+                type="button"
+                onClick={props.onCloseDialog}
+              >
+                取消
+              </button>
+              <button className="primary-button" type="submit">
+                {instance.id ? "更新模型" : "创建模型"}
+              </button>
+            </div>
+          </form>
+        </ResourceDialog>
+      )}
+
+      {dialog === "route" && (
+        <ResourceDialog
+          eyebrow="ROUTE FORM"
+          title={route.id ? "编辑任务路由" : "新增任务路由"}
+          onClose={props.onCloseDialog}
+        >
+          <form className="resource-editor-form" onSubmit={props.onRoute}>
+            <div className="resource-form-section">
+              <div className="resource-section-title">路由规则</div>
+              <div className="field-grid">
+                <input
+                  className={inputClass}
+                  placeholder="任务类型，如 model_lab_chat"
+                  value={route.task_type}
+                  onChange={(e) =>
+                    setRoute({ ...route, task_type: e.target.value })
+                  }
+                  disabled={Boolean(route.id)}
+                  required
+                />
+                <select
+                  className={inputClass}
+                  value={route.preferred_instance_code}
+                  onChange={(e) =>
+                    setRoute({
+                      ...route,
+                      preferred_instance_code: e.target.value,
+                    })
+                  }
+                  required
+                >
+                  <option value="">选择首选模型实例</option>
+                  {instances.map((item) => (
+                    <option key={item.id} value={item.instance_code}>
+                      {item.instance_code}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  className={inputClass}
+                  placeholder="路由策略"
+                  value={route.route_policy}
+                  onChange={(e) =>
+                    setRoute({ ...route, route_policy: e.target.value })
+                  }
+                />
+                <label className="checkbox-row">
+                  <input
+                    type="checkbox"
+                    checked={route.enabled}
+                    onChange={(e) =>
+                      setRoute({ ...route, enabled: e.target.checked })
+                    }
+                  />
+                  启用路由
+                </label>
+                <textarea
+                  className="field-span-2"
+                  rows={4}
+                  placeholder="降级实例编码，每行一个，或用逗号分隔"
+                  value={route.fallback_chain_text}
+                  onChange={(e) =>
+                    setRoute({
+                      ...route,
+                      fallback_chain_text: e.target.value,
+                    })
+                  }
+                />
+                <textarea
+                  className="field-span-2"
+                  rows={3}
+                  placeholder="说明"
+                  value={route.description || ""}
+                  onChange={(e) =>
+                    setRoute({ ...route, description: e.target.value })
+                  }
+                />
+              </div>
+            </div>
+            <div className="form-actions">
+              <button
+                className="quiet-button"
+                type="button"
+                onClick={props.onCloseDialog}
+              >
+                取消
+              </button>
+              <button className="primary-button" type="submit">
+                {route.id ? "更新路由" : "创建路由"}
+              </button>
+            </div>
+          </form>
+        </ResourceDialog>
+      )}
     </>
   );
 }
-
 function AgentTab({
   agents,
   instances,
@@ -1215,6 +1823,9 @@ function AgentTab({
   assets,
   value,
   setValue,
+  dialogOpen,
+  onOpen,
+  onClose,
   onSave,
   onEdit,
   onDelete,
@@ -1226,13 +1837,19 @@ function AgentTab({
   assets: DataAsset[];
   value: AgentForm;
   setValue: (v: AgentForm) => void;
+  dialogOpen: boolean;
+  onOpen: () => void;
+  onClose: () => void;
   onSave: (e: FormEvent) => void;
   onEdit: (v: AgentDefinition) => void;
   onDelete: (v: AgentDefinition) => void;
 }) {
   const toggle = (
     key:
-      "child_agent_ids" | "skill_ids" | "knowledge_base_ids" | "data_asset_ids",
+      | "child_agent_ids"
+      | "skill_ids"
+      | "knowledge_base_ids"
+      | "data_asset_ids",
     id: number,
   ) => {
     const selected = value[key].includes(id);
@@ -1244,190 +1861,256 @@ function AgentTab({
     });
   };
   return (
-    <section className="panel">
-      <div className="panel-heading">
-        <div>
-          <p className="eyebrow">AGENT REGISTRY</p>
-          <h2>智能体管理</h2>
+    <>
+      <section className="panel resource-management-panel">
+        <div className="panel-heading">
+          <div>
+            <p className="eyebrow">AGENT REGISTRY</p>
+            <h2>智能体清单</h2>
+            <div className="auto-code-note">
+              编码可留空由系统自动生成，格式为 AGENT_0001；已保存的智能体可在列表中编辑或删除。
+            </div>
+          </div>
+          <div className="panel-actions">
+            <button className="primary-button" type="button" onClick={onOpen}>
+              新增智能体
+            </button>
+          </div>
         </div>
-      </div>
-      <form onSubmit={onSave}>
-        <div className="field-grid">
-          <input
-            className={inputClass}
-            placeholder="智能体编码"
-            value={value.agent_code}
-            onChange={(e) => setValue({ ...value, agent_code: e.target.value })}
-            required
-          />
-          <input
-            className={inputClass}
-            placeholder="显示名称"
-            value={value.display_name}
-            onChange={(e) =>
-              setValue({ ...value, display_name: e.target.value })
-            }
-            required
-          />
-          <select
-            className={inputClass}
-            value={value.model_instance_code || ""}
-            onChange={(e) =>
-              setValue({
-                ...value,
-                model_instance_code: e.target.value || null,
-              })
-            }
-          >
-            <option value="">自动路由</option>
-            {instances.map((item) => (
-              <option key={item.id} value={item.instance_code}>
-                {item.instance_code}
-              </option>
-            ))}
-          </select>
-          <input
-            className={inputClass}
-            type="number"
-            min={1}
-            max={50}
-            value={value.max_iterations}
-            onChange={(e) =>
-              setValue({ ...value, max_iterations: Number(e.target.value) })
-            }
-            placeholder="最大迭代次数"
-          />
-          <textarea
-            className="field-span-2"
-            rows={4}
-            placeholder="系统提示词"
-            value={value.system_prompt}
-            onChange={(e) =>
-              setValue({ ...value, system_prompt: e.target.value })
-            }
-            required
-          />
-          <textarea
-            className="field-span-2"
-            rows={2}
-            placeholder="描述"
-            value={value.description || ""}
-            onChange={(e) =>
-              setValue({ ...value, description: e.target.value })
-            }
-          />
-          <label className="checkbox-row">
-            <input
-              type="checkbox"
-              checked={value.enabled}
-              onChange={(e) =>
-                setValue({ ...value, enabled: e.target.checked })
-              }
-            />
-            启用智能体
-          </label>
+        <div className="resource-list-header">
+          <h3>智能体列表</h3>
+          <span>{agents.length} 个智能体</span>
         </div>
-        <div className="selection-grid">
-          <label>
-            子智能体
-            {agents
-              .filter((item) => item.id !== value.id)
-              .map((item) => (
-                <span key={item.id}>
+        <div className="table-wrap resource-list-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>智能体</th>
+                <th>模型</th>
+                <th>绑定资源</th>
+                <th>状态</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              {agents.length ? (
+                agents.map((item) => (
+                  <tr key={item.id}>
+                    <td>
+                      <strong>{item.display_name}</strong>
+                      <code>{item.agent_code}</code>
+                    </td>
+                    <td>{item.model_instance_code || "自动路由"}</td>
+                    <td>
+                      {item.skill_ids.length} Skill / {" "}
+                      {item.knowledge_base_ids.length} 知识库 / {" "}
+                      {item.data_asset_ids.length} 数据资产
+                    </td>
+                    <td>
+                      <Status enabled={item.enabled} />
+                    </td>
+                    <td className="button-row">
+                      <button type="button" onClick={() => onEdit(item)}>
+                        编辑
+                      </button>
+                      <button type="button" onClick={() => onDelete(item)}>
+                        删除
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td className="empty-table-cell" colSpan={5}>
+                    暂无智能体，点击“新增智能体”创建。
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      {dialogOpen && (
+        <ResourceDialog
+          eyebrow="AGENT FORM"
+          title={value.id ? "编辑智能体" : "新增智能体"}
+          onClose={onClose}
+        >
+          <form className="resource-editor-form" onSubmit={onSave}>
+            <div className="resource-form-section">
+              <div className="resource-section-title">基础信息</div>
+              <div className="field-grid">
+                <input
+                  className={inputClass}
+                  placeholder="智能体编码（可留空自动生成）"
+                  value={value.agent_code || ""}
+                  onChange={(e) =>
+                    setValue({ ...value, agent_code: e.target.value })
+                  }
+                />
+                <input
+                  className={inputClass}
+                  placeholder="显示名称"
+                  value={value.display_name}
+                  onChange={(e) =>
+                    setValue({ ...value, display_name: e.target.value })
+                  }
+                  required
+                />
+                <select
+                  className={inputClass}
+                  value={value.model_instance_code || ""}
+                  onChange={(e) =>
+                    setValue({
+                      ...value,
+                      model_instance_code: e.target.value || null,
+                    })
+                  }
+                >
+                  <option value="">自动路由</option>
+                  {instances.map((item) => (
+                    <option key={item.id} value={item.instance_code}>
+                      {item.instance_code}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  className={inputClass}
+                  type="number"
+                  min={1}
+                  max={100}
+                  value={value.max_iterations}
+                  onChange={(e) =>
+                    setValue({
+                      ...value,
+                      max_iterations: Number(e.target.value),
+                    })
+                  }
+                  placeholder="最大迭代次数"
+                />
+                <textarea
+                  className="field-span-2"
+                  rows={4}
+                  placeholder="系统提示词"
+                  value={value.system_prompt}
+                  onChange={(e) =>
+                    setValue({ ...value, system_prompt: e.target.value })
+                  }
+                  required
+                />
+                <textarea
+                  className="field-span-2"
+                  rows={2}
+                  placeholder="描述"
+                  value={value.description || ""}
+                  onChange={(e) =>
+                    setValue({ ...value, description: e.target.value })
+                  }
+                />
+                <label className="checkbox-row">
                   <input
                     type="checkbox"
-                    checked={value.child_agent_ids.includes(item.id)}
-                    onChange={() => toggle("child_agent_ids", item.id)}
+                    checked={value.enabled}
+                    onChange={(e) =>
+                      setValue({ ...value, enabled: e.target.checked })
+                    }
                   />
-                  {item.display_name}
-                </span>
-              ))}
-          </label>
-          <label>
-            Skills
-            {skills.map((item) => (
-              <span key={item.id}>
-                <input
-                  type="checkbox"
-                  checked={value.skill_ids.includes(item.id)}
-                  onChange={() => toggle("skill_ids", item.id)}
-                />
-                {item.skill_name}
-              </span>
-            ))}
-          </label>
-          <label>
-            知识库
-            {knowledge.map((item) => (
-              <span key={item.id}>
-                <input
-                  type="checkbox"
-                  checked={value.knowledge_base_ids.includes(item.id)}
-                  onChange={() => toggle("knowledge_base_ids", item.id)}
-                />
-                {item.kb_name}
-              </span>
-            ))}
-          </label>
-          <label>
-            数据源
-            {assets.map((item) => (
-              <span key={item.id}>
-                <input
-                  type="checkbox"
-                  checked={value.data_asset_ids.includes(item.id)}
-                  onChange={() => toggle("data_asset_ids", item.id)}
-                />
-                {item.display_name}
-              </span>
-            ))}
-          </label>
-        </div>
-        <button className="primary-button" type="submit">
-          {value.id ? "更新智能体" : "保存智能体"}
-        </button>
-      </form>
-      <div className="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>智能体</th>
-              <th>模型</th>
-              <th>绑定资源</th>
-              <th>状态</th>
-              <th>操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            {agents.map((item) => (
-              <tr key={item.id}>
-                <td>
-                  <strong>{item.display_name}</strong>
-                  <code>{item.agent_code}</code>
-                </td>
-                <td>{item.model_instance_code || "自动路由"}</td>
-                <td>
-                  {item.skill_ids.length} Skill /{" "}
-                  {item.knowledge_base_ids.length} 知识库 /{" "}
-                  {item.data_asset_ids.length} 数据资产
-                </td>
-                <td>
-                  <Status enabled={item.enabled} />
-                </td>
-                <td className="button-row">
-                  <button type="button" onClick={() => onEdit(item)}>
-                    编辑
-                  </button>
-                  <button type="button" onClick={() => onDelete(item)}>
-                    删除
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </section>
+                  启用智能体
+                </label>
+              </div>
+            </div>
+
+            <div className="resource-form-section">
+              <div className="resource-section-title">资源绑定</div>
+              <div className="selection-grid">
+                <label>
+                  子智能体
+                  {agents.filter((item) => item.id !== value.id).length ? (
+                    agents
+                      .filter((item) => item.id !== value.id)
+                      .map((item) => (
+                        <span key={item.id}>
+                          <input
+                            type="checkbox"
+                            checked={value.child_agent_ids.includes(item.id)}
+                            onChange={() => toggle("child_agent_ids", item.id)}
+                          />
+                          {item.display_name}
+                        </span>
+                      ))
+                  ) : (
+                    <span>暂无可选子智能体</span>
+                  )}
+                </label>
+                <label>
+                  Skills
+                  {skills.length ? (
+                    skills.map((item) => (
+                      <span key={item.id}>
+                        <input
+                          type="checkbox"
+                          checked={value.skill_ids.includes(item.id)}
+                          onChange={() => toggle("skill_ids", item.id)}
+                        />
+                        {item.skill_name}
+                      </span>
+                    ))
+                  ) : (
+                    <span>暂无 Skill</span>
+                  )}
+                </label>
+                <label>
+                  知识库
+                  {knowledge.length ? (
+                    knowledge.map((item) => (
+                      <span key={item.id}>
+                        <input
+                          type="checkbox"
+                          checked={value.knowledge_base_ids.includes(item.id)}
+                          onChange={() =>
+                            toggle("knowledge_base_ids", item.id)
+                          }
+                        />
+                        {item.kb_name}
+                      </span>
+                    ))
+                  ) : (
+                    <span>暂无知识库</span>
+                  )}
+                </label>
+                <label>
+                  数据源
+                  {assets.length ? (
+                    assets.map((item) => (
+                      <span key={item.id}>
+                        <input
+                          type="checkbox"
+                          checked={value.data_asset_ids.includes(item.id)}
+                          onChange={() => toggle("data_asset_ids", item.id)}
+                        />
+                        {item.display_name}
+                      </span>
+                    ))
+                  ) : (
+                    <span>暂无数据源</span>
+                  )}
+                </label>
+              </div>
+            </div>
+
+            <div className="form-actions">
+              <button className="quiet-button" type="button" onClick={onClose}>
+                取消
+              </button>
+              <button className="primary-button" type="submit">
+                {value.id ? "更新智能体" : "创建智能体"}
+              </button>
+            </div>
+          </form>
+        </ResourceDialog>
+      )}
+    </>
   );
 }
 
@@ -1435,121 +2118,170 @@ function SkillTab({
   skills,
   value,
   setValue,
+  dialogOpen,
+  onOpen,
+  onClose,
   onSave,
+  onEdit,
   onDelete,
 }: {
   skills: ModelSkill[];
   value: SkillForm;
   setValue: (v: SkillForm) => void;
+  dialogOpen: boolean;
+  onOpen: () => void;
+  onClose: () => void;
   onSave: (e: FormEvent) => void;
+  onEdit: (v: ModelSkill) => void;
   onDelete: (v: ModelSkill) => void;
 }) {
   return (
-    <section className="panel">
-      <div className="panel-heading">
-        <div>
-          <p className="eyebrow">MARKDOWN SKILLS</p>
-          <h2>Skill 管理</h2>
+    <>
+      <section className="panel resource-management-panel">
+        <div className="panel-heading">
+          <div>
+            <p className="eyebrow">MARKDOWN SKILLS</p>
+            <h2>Skill 清单</h2>
+            <div className="auto-code-note">
+              编码可留空由系统自动生成，格式为 SKILL_0001；保存后同步到 backend/skill_docs/*.SKILL.md。
+            </div>
+          </div>
+          <div className="panel-actions">
+            <button className="primary-button" type="button" onClick={onOpen}>
+              新增 Skill
+            </button>
+          </div>
         </div>
-        <p>保存后同步到 backend/skill_docs/*.SKILL.md</p>
-      </div>
-      <form onSubmit={onSave}>
-        <div className="field-grid">
-          <input
-            className={inputClass}
-            placeholder="Skill 编码"
-            value={value.skill_code}
-            onChange={(e) => setValue({ ...value, skill_code: e.target.value })}
-            required
-          />
-          <input
-            className={inputClass}
-            placeholder="Skill 名称"
-            value={value.skill_name}
-            onChange={(e) => setValue({ ...value, skill_name: e.target.value })}
-            required
-          />
-          <input
-            className={inputClass}
-            placeholder="版本"
-            value={value.version || "1.0.0"}
-            onChange={(e) => setValue({ ...value, version: e.target.value })}
-          />
-          <label className="checkbox-row">
-            <input
-              type="checkbox"
-              checked={value.enabled}
-              onChange={(e) =>
-                setValue({ ...value, enabled: e.target.checked })
-              }
-            />
-            启用 Skill
-          </label>
-          <textarea
-            className="field-span-2"
-            rows={12}
-            placeholder="Markdown 指令内容"
-            value={value.instructions}
-            onChange={(e) =>
-              setValue({ ...value, instructions: e.target.value })
-            }
-            required
-          />
+        <div className="resource-list-header">
+          <h3>Skill 列表</h3>
+          <span>{skills.length} 个 Skill</span>
         </div>
-        <button className="primary-button" type="submit">
-          {value.id ? "更新 Skill" : "保存 Skill"}
-        </button>
-      </form>
-      <div className="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Skill</th>
-              <th>版本</th>
-              <th>格式</th>
-              <th>状态</th>
-              <th>操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            {skills.map((item) => (
-              <tr key={item.id}>
-                <td>
-                  <strong>{item.skill_name}</strong>
-                  <code>{item.skill_code}</code>
-                </td>
-                <td>{item.version || "--"}</td>
-                <td>{item.format || "Markdown"}</td>
-                <td>
-                  <Status enabled={item.enabled} />
-                </td>
-                <td className="button-row">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setValue({
-                        ...item,
-                        description: item.description || "",
-                        version: item.version || "1.0.0",
-                        config_json: item.config_json || {},
-                      })
-                    }
-                  >
-                    编辑
-                  </button>
-                  <button type="button" onClick={() => onDelete(item)}>
-                    删除
-                  </button>
-                </td>
+        <div className="table-wrap resource-list-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Skill</th>
+                <th>版本</th>
+                <th>格式</th>
+                <th>状态</th>
+                <th>操作</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </section>
+            </thead>
+            <tbody>
+              {skills.length ? (
+                skills.map((item) => (
+                  <tr key={item.id}>
+                    <td>
+                      <strong>{item.skill_name}</strong>
+                      <code>{item.skill_code}</code>
+                    </td>
+                    <td>{item.version || "--"}</td>
+                    <td>{item.format || "Markdown"}</td>
+                    <td>
+                      <Status enabled={item.enabled} />
+                    </td>
+                    <td className="button-row">
+                      <button type="button" onClick={() => onEdit(item)}>
+                        编辑
+                      </button>
+                      <button type="button" onClick={() => onDelete(item)}>
+                        删除
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td className="empty-table-cell" colSpan={5}>
+                    暂无 Skill，点击“新增 Skill”创建。
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      {dialogOpen && (
+        <ResourceDialog
+          eyebrow="SKILL FORM"
+          title={value.id ? "编辑 Skill" : "新增 Skill"}
+          onClose={onClose}
+        >
+          <form className="resource-editor-form" onSubmit={onSave}>
+            <div className="resource-form-section">
+              <div className="resource-section-title">Skill 内容</div>
+              <div className="field-grid">
+                <input
+                  className={inputClass}
+                  placeholder="Skill 编码（可留空自动生成）"
+                  value={value.skill_code || ""}
+                  onChange={(e) =>
+                    setValue({ ...value, skill_code: e.target.value })
+                  }
+                />
+                <input
+                  className={inputClass}
+                  placeholder="Skill 名称"
+                  value={value.skill_name}
+                  onChange={(e) =>
+                    setValue({ ...value, skill_name: e.target.value })
+                  }
+                  required
+                />
+                <input
+                  className={inputClass}
+                  placeholder="版本"
+                  value={value.version || "1.0.0"}
+                  onChange={(e) =>
+                    setValue({ ...value, version: e.target.value })
+                  }
+                />
+                <label className="checkbox-row">
+                  <input
+                    type="checkbox"
+                    checked={value.enabled}
+                    onChange={(e) =>
+                      setValue({ ...value, enabled: e.target.checked })
+                    }
+                  />
+                  启用 Skill
+                </label>
+                <textarea
+                  className="field-span-2"
+                  rows={3}
+                  placeholder="描述"
+                  value={value.description || ""}
+                  onChange={(e) =>
+                    setValue({ ...value, description: e.target.value })
+                  }
+                />
+                <textarea
+                  className="field-span-2 skill-instructions-input"
+                  rows={14}
+                  placeholder="Markdown 指令内容"
+                  value={value.instructions}
+                  onChange={(e) =>
+                    setValue({ ...value, instructions: e.target.value })
+                  }
+                  required
+                />
+              </div>
+            </div>
+            <div className="form-actions">
+              <button className="quiet-button" type="button" onClick={onClose}>
+                取消
+              </button>
+              <button className="primary-button" type="submit">
+                {value.id ? "更新 Skill" : "创建 Skill"}
+              </button>
+            </div>
+          </form>
+        </ResourceDialog>
+      )}
+    </>
   );
 }
-
 function AssetTab({
   assets,
   onInspect,
@@ -2241,3 +2973,4 @@ function ResearchPage() {
     </>
   );
 }
+/* Resource identifiers are generated server-side; forms intentionally omit code inputs. */

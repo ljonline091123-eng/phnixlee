@@ -102,6 +102,53 @@ class ModelHubFoundationTest(unittest.TestCase):
         self.assertIsNotNone(failed_attempt)
         self.assertEqual(failed_attempt.status, "FAILED")
 
+    def test_route_crud_api(self) -> None:
+        from fastapi.testclient import TestClient
+        from app.main import app
+
+        def override_get_db():
+            yield self.db
+
+        app.dependency_overrides[get_db] = override_get_db
+        try:
+            with TestClient(app) as client:
+                response = client.post(
+                    "/api/v1/model-hub/routes",
+                    json={
+                        "task_type": "ui_test_route",
+                        "preferred_instance_code": "MOCK_GENERAL",
+                        "fallback_chain_json": [],
+                        "route_policy": "PREFERRED_THEN_FALLBACK",
+                        "enabled": True,
+                        "description": "前端路由管理测试",
+                    },
+                )
+                self.assertEqual(response.status_code, 201)
+                route_id = response.json()["id"]
+
+                response = client.put(
+                    f"/api/v1/model-hub/routes/{route_id}",
+                    json={
+                        "preferred_instance_code": "DEEPSEEK_CHAT",
+                        "fallback_chain_json": ["MOCK_GENERAL"],
+                        "enabled": False,
+                    },
+                )
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.json()["preferred_instance_code"], "DEEPSEEK_CHAT")
+                self.assertEqual(response.json()["fallback_chain_json"], ["MOCK_GENERAL"])
+                self.assertFalse(response.json()["enabled"])
+
+                response = client.delete(f"/api/v1/model-hub/routes/{route_id}")
+                self.assertEqual(response.status_code, 204)
+
+                response = client.get("/api/v1/model-hub/routes")
+                self.assertEqual(response.status_code, 200)
+                task_types = {item["task_type"] for item in response.json()}
+                self.assertNotIn("ui_test_route", task_types)
+        finally:
+            app.dependency_overrides.clear()
+
     def test_skill_crud_api(self) -> None:
         from fastapi.testclient import TestClient
         from app.main import app

@@ -7,7 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class AgentCreate(BaseModel):
-    agent_code: str = Field(min_length=2, max_length=64, pattern=r"^[A-Z0-9_\-]+$")
+    agent_code: str | None = Field(default=None, min_length=2, max_length=64, pattern=r"^[A-Z0-9_\-]+$")
     display_name: str = Field(min_length=1, max_length=128)
     system_prompt: str = ""
     model_instance_code: str | None = Field(default=None, max_length=64)
@@ -151,4 +151,3 @@ class KnowledgeSearchResult(BaseModel):
     title: str
     content: str
     metadata_json: dict[str, Any]
-

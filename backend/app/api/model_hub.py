@@ -285,6 +285,16 @@ def update_route(
     return route
 
 
+@router.delete("/routes/{route_id}", status_code=204)
+def delete_route(route_id: int, db: Session = Depends(get_db)) -> Response:
+    route = db.get(ModelRouteRule, route_id)
+    if not route:
+        raise HTTPException(status_code=404, detail="Model route not found")
+    db.delete(route)
+    db.commit()
+    return Response(status_code=204)
+
+
 @router.get("/skills", response_model=list[ModelSkillRead])
 def list_skills(enabled: bool | None = None, db: Session = Depends(get_db)) -> list[ModelSkill]:
     statement = select(ModelSkill).order_by(ModelSkill.skill_code)
@@ -295,7 +305,9 @@ def list_skills(enabled: bool | None = None, db: Session = Depends(get_db)) -> l
 
 @router.post("/skills", response_model=ModelSkillRead, status_code=status.HTTP_201_CREATED)
 def create_skill(payload: ModelSkillCreate, db: Session = Depends(get_db)) -> ModelSkill:
-    skill = ModelSkill(**payload.model_dump())
+    values = payload.model_dump()
+    values["skill_code"] = values.get("skill_code") or _next_skill_code(db)
+    skill = ModelSkill(**values)
     db.add(skill)
     try:
         db.flush()
@@ -377,3 +389,11 @@ def list_call_logs(limit: int = 50, db: Session = Depends(get_db)) -> list[Model
     if limit < 1 or limit > 500:
         raise HTTPException(status_code=422, detail="limit must be between 1 and 500")
     return list(db.scalars(select(ModelCallLog).order_by(ModelCallLog.started_at.desc()).limit(limit)).all())
+def _next_skill_code(db: "Session") -> str:
+    """Return the next stable, human-readable Skill identifier."""
+    index = int(db.scalar(select(func.count(ModelSkill.id))) or 0) + 1
+    while True:
+        code = f"SKILL_{index:04d}"
+        if not db.scalar(select(ModelSkill.id).where(ModelSkill.skill_code == code)):
+            return code
+        index += 1

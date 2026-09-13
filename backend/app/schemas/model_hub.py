@@ -115,7 +115,7 @@ class ModelRouteRuleRead(ModelRouteRuleCreate):
 
 
 class ModelSkillCreate(BaseModel):
-    skill_code: str = Field(min_length=2, max_length=64, pattern=r"^[A-Z0-9_\-]+$")
+    skill_code: str | None = Field(default=None, min_length=2, max_length=64, pattern=r"^[A-Z0-9_\-]+$")
     skill_name: str = Field(min_length=1, max_length=128)
     description: str | None = None
     instructions: str = Field(min_length=1)

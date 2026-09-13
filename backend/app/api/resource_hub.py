@@ -126,7 +126,7 @@ def _validate_agent_model(db: Session, model_instance_code: str | None) -> None:
 def create_agent(payload: AgentCreate, db: Session = Depends(get_db)) -> AgentRead:
     _validate_agent_model(db, payload.model_instance_code)
     agent = AgentDefinition(
-        agent_code=payload.agent_code,
+            agent_code=payload.agent_code or _next_agent_code(db),
         display_name=payload.display_name,
         system_prompt=payload.system_prompt,
         model_instance_code=payload.model_instance_code,
@@ -352,3 +352,11 @@ def get_skill_file(skill_id: int, db: Session = Depends(get_db)) -> ModelSkill:
     if path.exists():
         skill.instructions = path.read_text(encoding="utf-8")
     return skill
+def _next_agent_code(db: "Session") -> str:
+    """Return the next stable, human-readable agent identifier."""
+    index = int(db.scalar(select(func.count(AgentDefinition.id))) or 0) + 1
+    while True:
+        code = f"AGENT_{index:04d}"
+        if not db.scalar(select(AgentDefinition.id).where(AgentDefinition.agent_code == code)):
+            return code
+        index += 1

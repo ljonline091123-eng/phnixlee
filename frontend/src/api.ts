@@ -348,7 +348,7 @@ export type ModelCallLog = {
 
 export type ModelSkill = {
   id: number;
-  skill_code: string;
+  skill_code?: string;
   skill_name: string;
   description?: string | null;
   instructions: string;
@@ -364,7 +364,7 @@ export type ModelSkill = {
 };
 
 export type ModelSkillPayload = {
-  skill_code: string;
+  skill_code?: string;
   skill_name: string;
   description?: string;
   instructions: string;
@@ -375,7 +375,7 @@ export type ModelSkillPayload = {
 
 export type AgentDefinition = {
   id: number;
-  agent_code: string;
+  agent_code?: string;
   display_name: string;
   system_prompt: string;
   model_instance_code?: string | null;
@@ -392,7 +392,7 @@ export type AgentDefinition = {
 };
 
 export type AgentPayload = {
-  agent_code: string;
+  agent_code?: string;
   display_name: string;
   system_prompt: string;
   model_instance_code?: string | null;
@@ -668,6 +668,7 @@ export const api = {
       method: "PUT",
       body: JSON.stringify(payload),
     }),
+  deleteModelRoute: (id: number) => request<void>(`/model-hub/routes/${id}`, { method: "DELETE" }),
   listModelSkills: () => request<ModelSkill[]>("/model-hub/skills"),
   createModelSkill: (payload: ModelSkillPayload) =>
     request<ModelSkill>("/model-hub/skills", {
