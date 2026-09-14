@@ -415,11 +415,30 @@ export type DataAsset = {
   allowed_columns: string[];
   columns: string[];
   governance_status: string;
+  source_health: string;
+  last_governed_at?: string | null;
+  governance_report_json: Record<string, unknown>;
   row_count: number;
   enabled: boolean;
   last_inspected_at?: string | null;
   created_at: string;
   updated_at: string;
+};
+
+export type DataAssetPayload = {
+  asset_code: string;
+  table_name: string;
+  display_name: string;
+  description?: string;
+  allowed_columns?: string[];
+  enabled: boolean;
+};
+
+export type DataPreview = {
+  table_name: string;
+  columns: string[];
+  row_count: number;
+  rows: Array<Record<string, unknown>>;
 };
 
 export type KnowledgeBase = {
@@ -435,6 +454,43 @@ export type KnowledgeBase = {
   enabled: boolean;
   created_at: string;
   updated_at: string;
+};
+
+export type KnowledgeGraph = {
+  id: number;
+  knowledge_base_id: number;
+  graph_code: string;
+  graph_name: string;
+  description?: string | null;
+  symbol?: string | null;
+  source_tables: string[];
+  version: string;
+  governance_status: string;
+  enabled: boolean;
+  entity_count: number;
+  relation_count: number;
+  last_governed_at?: string | null;
+  governance_report_json: Record<string, unknown>;
+};
+
+export type KnowledgeGraphPayload = Pick<KnowledgeGraph, "knowledge_base_id" | "graph_code" | "graph_name" | "source_tables" | "version" | "enabled"> & {
+  description?: string;
+  symbol?: string | null;
+};
+
+export type GovernanceRun = {
+  id: number;
+  target_type: "ASSET" | "GRAPH";
+  target_id: number;
+  status: string;
+  summary_json: Record<string, unknown>;
+  model_call_log_id?: number | null;
+  created_at: string;
+};
+
+export type GraphExplore = {
+  nodes: Array<{ id: number; type: string; key: string; name: string; properties: Record<string, unknown> }>;
+  relations: Array<{ id: number; from_id: number; to_id: number; type: string; evidence?: { document_id: number; title: string; source_table: string; excerpt: string } | null }>;
 };
 
 export type ModelTestResponse = {
@@ -717,11 +773,27 @@ export const api = {
     request<AgentDefinition>(`/resources/agents/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
   deleteAgent: (id: number) => request<void>(`/resources/agents/${id}`, { method: "DELETE" }),
   listDataAssets: () => request<DataAsset[]>("/resources/data-assets"),
+  listAssetSourceTables: () => request<string[]>("/resources/data-assets/source-tables"),
+  createDataAsset: (payload: DataAssetPayload) => request<DataAsset>("/resources/data-assets", { method: "POST", body: JSON.stringify(payload) }),
+  previewDataAsset: (id: number, limit = 20) => request<DataPreview>(`/resources/data-assets/${id}/preview?limit=${limit}`),
+  setAssetGovernanceState: (id: number, governance_status: string) => request<DataAsset>(`/resources/data-assets/${id}/governance-state`, { method: "PUT", body: JSON.stringify({ governance_status }) }),
+  governDataAsset: (id: number, source_asset_ids: number[], agent_id?: number) => request<GovernanceRun>(`/resources/data-assets/${id}/govern`, { method: "POST", body: JSON.stringify({ source_asset_ids, agent_id }) }),
+  batchGovernAssets: (target_ids: number[], source_asset_ids: number[] = [], agent_id?: number) => request<{ results: Array<{ target_id: number; status: string; message?: string }> }>("/resources/data-assets/govern/batch", { method: "POST", body: JSON.stringify({ target_ids, source_asset_ids, agent_id }) }),
+  listGovernanceRuns: (target_type: "ASSET" | "GRAPH", target_id: number) => request<GovernanceRun[]>(`/resources/governance-runs?target_type=${target_type}&target_id=${target_id}`),
   updateDataAsset: (id: number, payload: Partial<DataAsset>) =>
     request<DataAsset>(`/resources/data-assets/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
   inspectDataAsset: (id: number) =>
     request<DataAsset>(`/resources/data-assets/${id}/inspect`, { method: "POST" }),
   listKnowledgeBases: () => request<KnowledgeBase[]>("/resources/knowledge-bases"),
+  searchKnowledgeBase: (id: number, q = "") => request<Array<{ document_id: number; source_table: string; symbol?: string; title: string; content: string }>>(`/resources/knowledge-bases/${id}/search?q=${encodeURIComponent(q)}`),
+  listKnowledgeGraphs: () => request<KnowledgeGraph[]>("/resources/knowledge-graphs"),
+  createKnowledgeGraph: (payload: KnowledgeGraphPayload) => request<KnowledgeGraph>("/resources/knowledge-graphs", { method: "POST", body: JSON.stringify(payload) }),
+  updateKnowledgeGraph: (id: number, payload: Partial<KnowledgeGraphPayload>) => request<KnowledgeGraph>(`/resources/knowledge-graphs/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
+  deleteKnowledgeGraph: (id: number) => request<void>(`/resources/knowledge-graphs/${id}`, { method: "DELETE" }),
+  exploreKnowledgeGraph: (id: number, q = "") => request<GraphExplore>(`/resources/knowledge-graphs/${id}/explore?q=${encodeURIComponent(q)}`),
+  setGraphGovernanceState: (id: number, governance_status: string) => request<KnowledgeGraph>(`/resources/knowledge-graphs/${id}/governance-state`, { method: "PUT", body: JSON.stringify({ governance_status }) }),
+  governKnowledgeGraph: (id: number, source_asset_ids: number[], agent_id?: number) => request<GovernanceRun>(`/resources/knowledge-graphs/${id}/govern`, { method: "POST", body: JSON.stringify({ source_asset_ids, agent_id }) }),
+  batchGovernGraphs: (target_ids: number[], source_asset_ids: number[] = [], agent_id?: number) => request<{ results: Array<{ target_id: number; status: string; message?: string }> }>("/resources/knowledge-graphs/govern/batch", { method: "POST", body: JSON.stringify({ target_ids, source_asset_ids, agent_id }) }),
   createKnowledgeBase: (payload: {
     kb_code: string;
     kb_name: string;

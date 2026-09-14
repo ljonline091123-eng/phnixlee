@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.ai_hub import KnowledgeBase, KnowledgeDocument, ResearchReportRecord
+from app.models.ai_hub import KnowledgeBase, KnowledgeDocument, KnowledgeGraph, ResearchReportRecord
 from app.models.market_data import DataSource, StockKline, StockRealtimeQuote
 from app.prompts.fundamental import FUNDAMENTAL_SYSTEM_PROMPT
 from app.prompts.orchestrator import ORCHESTRATOR_SYSTEM_PROMPT
@@ -586,16 +586,27 @@ class ResearchWorkflow:
         rows = list(
             self.db.scalars(
                 select(KnowledgeDocument)
+                .join(KnowledgeGraph, KnowledgeGraph.id == KnowledgeDocument.graph_id)
+                .join(KnowledgeBase, KnowledgeBase.id == KnowledgeDocument.knowledge_base_id)
                 .where(
                     KnowledgeDocument.knowledge_base_id.in_(context.knowledge_base_ids),
                     KnowledgeDocument.symbol == context.symbol,
+                    KnowledgeBase.enabled.is_(True),
+                    KnowledgeGraph.enabled.is_(True),
+                    KnowledgeGraph.governance_status.in_(["GOVERNED", "LOCKED"]),
                 )
                 .order_by(KnowledgeDocument.updated_at.desc())
-                .limit(limit)
+                .limit(limit * 4)
             ).all()
         )
-        return [
-            {
+        documents: list[dict[str, Any]] = []
+        seen: set[tuple[str, int | None, str | None]] = set()
+        for row in rows:
+            key = (row.source_table, row.source_record_id, row.symbol)
+            if key in seen:
+                continue
+            seen.add(key)
+            documents.append({
                 "id": row.id,
                 "knowledge_base_id": row.knowledge_base_id,
                 "source_table": row.source_table,
@@ -605,9 +616,10 @@ class ResearchWorkflow:
                 "title": row.title,
                 "excerpt": row.content[:500],
                 "metadata_json": row.metadata_json,
-            }
-            for row in rows
-        ]
+            })
+            if len(documents) >= limit:
+                break
+        return documents
 
     def _save_report(self, context: ResearchContext, report: ResearchReport) -> ResearchReportRecord:
         snapshot = {

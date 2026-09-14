@@ -31,3 +31,17 @@ def ensure_compat_columns(engine: Engine) -> None:
             existing = {column["name"] for column in inspector.get_columns("stock_financial_report")}
             if "url" not in existing:
                 connection.execute(text('ALTER TABLE stock_financial_report ADD COLUMN "url" VARCHAR(2048)'))
+        if "agent_data_asset" in tables:
+            existing = {column["name"] for column in inspector.get_columns("agent_data_asset")}
+            for name, definition in (
+                ("source_health", "VARCHAR(32) NOT NULL DEFAULT 'UNKNOWN'"),
+                ("last_governed_at", "DATETIME"),
+                ("governance_report_json", "JSON NOT NULL DEFAULT '{}'"),
+            ):
+                if name not in existing:
+                    connection.execute(text(f'ALTER TABLE agent_data_asset ADD COLUMN "{name}" {definition}'))
+        for table_name in ("knowledge_document", "knowledge_entity", "knowledge_relation"):
+            if table_name in tables:
+                existing = {column["name"] for column in inspector.get_columns(table_name)}
+                if "graph_id" not in existing:
+                    connection.execute(text(f'ALTER TABLE "{table_name}" ADD COLUMN graph_id INTEGER'))

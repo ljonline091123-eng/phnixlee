@@ -70,7 +70,6 @@ class DataAssetCreate(BaseModel):
     display_name: str = Field(min_length=1, max_length=128)
     description: str | None = None
     allowed_columns: list[str] = Field(default_factory=list)
-    governance_status: str = Field(default="PENDING", max_length=32)
     enabled: bool = True
 
 
@@ -78,7 +77,6 @@ class DataAssetUpdate(BaseModel):
     display_name: str | None = Field(default=None, min_length=1, max_length=128)
     description: str | None = None
     allowed_columns: list[str] | None = None
-    governance_status: str | None = Field(default=None, max_length=32)
     enabled: bool | None = None
 
 
@@ -93,6 +91,9 @@ class DataAssetRead(BaseModel):
     allowed_columns: list[str]
     columns: list[str] = Field(default_factory=list)
     governance_status: str
+    source_health: str = "UNKNOWN"
+    last_governed_at: datetime | None = None
+    governance_report_json: dict[str, Any] = Field(default_factory=dict)
     row_count: int
     enabled: bool
     last_inspected_at: datetime | None
@@ -151,3 +152,62 @@ class KnowledgeSearchResult(BaseModel):
     title: str
     content: str
     metadata_json: dict[str, Any]
+
+
+class KnowledgeGraphCreate(BaseModel):
+    knowledge_base_id: int
+    graph_code: str = Field(min_length=2, max_length=64, pattern=r"^[A-Z0-9_\-]+$")
+    graph_name: str = Field(min_length=1, max_length=128)
+    description: str | None = None
+    symbol: str | None = Field(default=None, max_length=32)
+    source_tables: list[str] = Field(default_factory=list)
+    version: str = "1.0.0"
+    enabled: bool = True
+
+
+class KnowledgeGraphUpdate(BaseModel):
+    graph_name: str | None = Field(default=None, min_length=1, max_length=128)
+    description: str | None = None
+    symbol: str | None = Field(default=None, max_length=32)
+    source_tables: list[str] | None = None
+    version: str | None = None
+    enabled: bool | None = None
+
+
+class KnowledgeGraphRead(KnowledgeGraphCreate):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    governance_status: str
+    entity_count: int
+    relation_count: int
+    last_governed_at: datetime | None
+    governance_report_json: dict[str, Any]
+    created_at: datetime
+    updated_at: datetime
+
+
+class GovernanceRequest(BaseModel):
+    source_asset_ids: list[int] = Field(default_factory=list)
+    agent_id: int | None = None
+
+
+class GovernanceBatchRequest(GovernanceRequest):
+    target_ids: list[int] = Field(min_length=1)
+
+
+class GovernanceStateUpdate(BaseModel):
+    governance_status: str
+
+
+class GovernanceRunRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    target_type: str
+    target_id: int
+    agent_id: int | None
+    model_call_log_id: int | None
+    source_asset_ids: list[int]
+    status: str
+    summary_json: dict[str, Any]
+    created_at: datetime
+    updated_at: datetime

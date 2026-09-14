@@ -8,6 +8,7 @@ import {
   type DataSource,
   type IpoCalendarResponse,
   type KnowledgeBase,
+  type KnowledgeGraph,
   type ModelCallLog,
   type ModelInstance,
   type ModelInstancePayload,
@@ -24,6 +25,7 @@ import {
   type WatchlistItem,
 } from "./api";
 import { StockDetailDrawer } from "./StockDetailDrawer";
+import { GovernedAssetTab, GovernedKnowledgeTab } from "./ResourceGovernance";
 
 type ModuleView = "data" | "model" | "watch" | "research";
 type ModelHubTab =
@@ -498,15 +500,6 @@ const emptyRoute: RouteForm = {
 };
 type SkillForm = ModelSkillPayload & { id?: number };
 type AgentForm = AgentPayload & { id?: number };
-type KnowledgeForm = {
-  id?: number;
-  kb_code: string;
-  kb_name: string;
-  description: string;
-  source_tables: string[];
-  version: string;
-  enabled: boolean;
-};
 const emptySkill: SkillForm = {
   skill_code: "",
   skill_name: "",
@@ -530,14 +523,6 @@ const emptyAgent: AgentForm = {
   knowledge_base_ids: [],
   data_asset_ids: [],
 };
-const emptyKnowledge: KnowledgeForm = {
-  kb_code: "",
-  kb_name: "",
-  description: "",
-  source_tables: [],
-  version: "1.0.0",
-  enabled: true,
-};
 
 function ModelLabPage() {
   const [tab, setTab] = useState<ModelHubTab>("models");
@@ -548,6 +533,7 @@ function ModelLabPage() {
   const [agents, setAgents] = useState<AgentDefinition[]>([]);
   const [assets, setAssets] = useState<DataAsset[]>([]);
   const [knowledge, setKnowledge] = useState<KnowledgeBase[]>([]);
+  const [graphs, setGraphs] = useState<KnowledgeGraph[]>([]);
   const [logs, setLogs] = useState<ModelCallLog[]>([]);
   const [notice, setNotice] = useState("");
   const [editingProvider, setEditingProvider] =
@@ -557,8 +543,6 @@ function ModelLabPage() {
   const [editingRoute, setEditingRoute] = useState<RouteForm>(emptyRoute);
   const [editingSkill, setEditingSkill] = useState<SkillForm>(emptySkill);
   const [editingAgent, setEditingAgent] = useState<AgentForm>(emptyAgent);
-  const [editingKnowledge, setEditingKnowledge] =
-    useState<KnowledgeForm>(emptyKnowledge);
   const [modelDialog, setModelDialog] = useState<
     "provider" | "instance" | "route" | null
   >(null);
@@ -579,6 +563,7 @@ function ModelLabPage() {
         api.listAgents(),
         api.listDataAssets(),
         api.listKnowledgeBases(),
+        api.listKnowledgeGraphs(),
         api.listModelCallLogs(),
       ]);
       setProviders(result[0]);
@@ -588,7 +573,8 @@ function ModelLabPage() {
       setAgents(result[4]);
       setAssets(result[5]);
       setKnowledge(result[6]);
-      setLogs(result[7]);
+      setGraphs(result[7]);
+      setLogs(result[8]);
     } catch (e) {
       setNotice(e instanceof Error ? e.message : "资源中心加载失败");
     }
@@ -818,38 +804,6 @@ function message(text: string) {
       message(e instanceof Error ? e.message : "智能体删除失败");
     }
   }
-  async function saveKnowledge(event: FormEvent) {
-    event.preventDefault();
-    try {
-      const { id, ...payload } = editingKnowledge;
-      if (id) await api.updateKnowledgeBase(id, payload);
-      else await api.createKnowledgeBase(payload);
-      setEditingKnowledge(emptyKnowledge);
-      await load();
-      message("知识库已保存");
-    } catch (e) {
-      message(e instanceof Error ? e.message : "知识库保存失败");
-    }
-  }
-  async function buildKnowledge(item: KnowledgeBase) {
-    try {
-      const result = await api.buildKnowledgeBase(item.id);
-      await load();
-      message(`知识图谱构建完成，生成 ${result.entities_created} 个实体`);
-    } catch (e) {
-      message(e instanceof Error ? e.message : "知识库构建失败");
-    }
-  }
-  async function deleteKnowledge(item: KnowledgeBase) {
-    if (!window.confirm(`删除知识库 ${item.kb_name}？`)) return;
-    try {
-      await api.deleteKnowledgeBase(item.id);
-      await load();
-      message("知识库已删除");
-    } catch (e) {
-      message(e instanceof Error ? e.message : "知识库可能正在被智能体引用");
-    }
-  }
   async function sendChat(event: FormEvent) {
     event.preventDefault();
     try {
@@ -1059,31 +1013,21 @@ function message(text: string) {
         />
       )}
       {tab === "assets" && (
-        <AssetTab
+        <GovernedAssetTab
           assets={assets}
-          onInspect={async (item) => {
-            try {
-              await api.inspectDataAsset(item.id);
-              await load();
-              message("数据资产已检查");
-            } catch (e) {
-              message(e instanceof Error ? e.message : "检查失败");
-            }
-          }}
-          onToggle={async (item) => {
-            await api.updateDataAsset(item.id, { enabled: !item.enabled });
-            await load();
-          }}
+          agents={agents}
+          reload={load}
+          notify={message}
         />
       )}
       {tab === "knowledge" && (
-        <KnowledgeTab
+        <GovernedKnowledgeTab
           knowledge={knowledge}
-          value={editingKnowledge}
-          setValue={setEditingKnowledge}
-          onSave={saveKnowledge}
-          onBuild={buildKnowledge}
-          onDelete={deleteKnowledge}
+          graphs={graphs}
+          assets={assets}
+          agents={agents}
+          reload={load}
+          notify={message}
         />
       )}
       {tab === "logs" && (
@@ -2370,202 +2314,6 @@ function SkillTab({
     </>
   );
 }
-function AssetTab({
-  assets,
-  onInspect,
-  onToggle,
-}: {
-  assets: DataAsset[];
-  onInspect: (v: DataAsset) => void;
-  onToggle: (v: DataAsset) => void;
-}) {
-  return (
-    <section className="panel">
-      <div className="panel-heading">
-        <div>
-          <p className="eyebrow">GOVERNED TABLES</p>
-          <h2>数据资产</h2>
-        </div>
-        <p>智能体只能访问登记在册的本地数据库表</p>
-      </div>
-      <div className="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>资产</th>
-              <th>本地表</th>
-              <th>字段</th>
-              <th>行数</th>
-              <th>治理状态</th>
-              <th>操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            {assets.map((item) => (
-              <tr key={item.id}>
-                <td>
-                  <strong>{item.display_name}</strong>
-                  <code>{item.asset_code}</code>
-                </td>
-                <td>{item.table_name}</td>
-                <td>{item.columns.length} 个</td>
-                <td>{item.row_count.toLocaleString()}</td>
-                <td>{item.governance_status}</td>
-                <td className="button-row">
-                  <button type="button" onClick={() => onInspect(item)}>
-                    检查
-                  </button>
-                  <button type="button" onClick={() => void onToggle(item)}>
-                    {item.enabled ? "停用" : "启用"}
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </section>
-  );
-}
-
-function KnowledgeTab({
-  knowledge,
-  value,
-  setValue,
-  onSave,
-  onBuild,
-  onDelete,
-}: {
-  knowledge: KnowledgeBase[];
-  value: KnowledgeForm;
-  setValue: (v: KnowledgeForm) => void;
-  onSave: (e: FormEvent) => void;
-  onBuild: (v: KnowledgeBase) => void;
-  onDelete: (v: KnowledgeBase) => void;
-}) {
-  return (
-    <section className="panel">
-      <div className="panel-heading">
-        <div>
-          <p className="eyebrow">KNOWLEDGE GRAPH</p>
-          <h2>知识库与知识图谱</h2>
-        </div>
-        <p>从本地数据资产生成文档、实体和关系</p>
-      </div>
-      <form className="field-grid" onSubmit={onSave}>
-        <input
-          className={inputClass}
-          placeholder="知识库编码"
-          value={value.kb_code}
-          onChange={(e) => setValue({ ...value, kb_code: e.target.value })}
-          required
-        />
-        <input
-          className={inputClass}
-          placeholder="知识库名称"
-          value={value.kb_name}
-          onChange={(e) => setValue({ ...value, kb_name: e.target.value })}
-          required
-        />
-        <input
-          className={inputClass}
-          placeholder="版本"
-          value={value.version}
-          onChange={(e) => setValue({ ...value, version: e.target.value })}
-        />
-        <input
-          className="field-span-2"
-          placeholder="来源表，逗号分隔；留空使用全部资产"
-          value={value.source_tables.join(",")}
-          onChange={(e) =>
-            setValue({
-              ...value,
-              source_tables: e.target.value
-                .split(",")
-                .map((x) => x.trim())
-                .filter(Boolean),
-            })
-          }
-        />
-        <textarea
-          className="field-span-2"
-          rows={2}
-          placeholder="描述"
-          value={value.description}
-          onChange={(e) => setValue({ ...value, description: e.target.value })}
-        />
-        <label className="checkbox-row">
-          <input
-            type="checkbox"
-            checked={value.enabled}
-            onChange={(e) => setValue({ ...value, enabled: e.target.checked })}
-          />
-          启用知识库
-        </label>
-        <button className="primary-button" type="submit">
-          {value.id ? "更新知识库" : "保存知识库"}
-        </button>
-      </form>
-      <div className="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>知识库</th>
-              <th>来源表</th>
-              <th>实体</th>
-              <th>关系</th>
-              <th>状态</th>
-              <th>操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            {knowledge.map((item) => (
-              <tr key={item.id}>
-                <td>
-                  <strong>{item.kb_name}</strong>
-                  <code>
-                    {item.kb_code} / v{item.version}
-                  </code>
-                </td>
-                <td>{item.source_tables.join(", ") || "全部资产"}</td>
-                <td>{item.entity_count}</td>
-                <td>{item.relation_count}</td>
-                <td>
-                  <Status enabled={item.enabled} /> <small>{item.status}</small>
-                </td>
-                <td className="button-row">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setValue({
-                        id: item.id,
-                        kb_code: item.kb_code,
-                        kb_name: item.kb_name,
-                        description: item.description || "",
-                        source_tables: item.source_tables,
-                        version: item.version,
-                        enabled: item.enabled,
-                      })
-                    }
-                  >
-                    编辑
-                  </button>
-                  <button type="button" onClick={() => void onBuild(item)}>
-                    重建图谱
-                  </button>
-                  <button type="button" onClick={() => onDelete(item)}>
-                    删除
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </section>
-  );
-}
-
 function LogsTab({
   logs,
   chat,

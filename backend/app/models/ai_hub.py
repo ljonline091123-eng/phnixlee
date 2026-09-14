@@ -189,6 +189,9 @@ class AgentDataAsset(TimestampMixin, Base):
     description: Mapped[str | None] = mapped_column(Text)
     allowed_columns: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     governance_status: Mapped[str] = mapped_column(String(32), nullable=False, default="PENDING")
+    source_health: Mapped[str] = mapped_column(String(32), nullable=False, default="UNKNOWN")
+    last_governed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    governance_report_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     row_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     last_inspected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -209,12 +212,45 @@ class KnowledgeBase(TimestampMixin, Base):
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
 
+class KnowledgeGraph(TimestampMixin, Base):
+    __tablename__ = "knowledge_graph"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    knowledge_base_id: Mapped[int] = mapped_column(ForeignKey("knowledge_base.id", ondelete="RESTRICT"), nullable=False, index=True)
+    graph_code: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
+    graph_name: Mapped[str] = mapped_column(String(128), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text)
+    symbol: Mapped[str | None] = mapped_column(String(32))
+    source_tables: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    version: Mapped[str] = mapped_column(String(32), nullable=False, default="1.0.0")
+    governance_status: Mapped[str] = mapped_column(String(32), nullable=False, default="PENDING")
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    entity_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    relation_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    last_governed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    governance_report_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+
+
+class GovernanceRun(TimestampMixin, Base):
+    __tablename__ = "governance_run"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    target_type: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    target_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    agent_id: Mapped[int | None] = mapped_column(ForeignKey("agent_definition.id", ondelete="SET NULL"))
+    model_call_log_id: Mapped[int | None] = mapped_column(ForeignKey("model_call_log.id", ondelete="SET NULL"))
+    source_asset_ids: Mapped[list[int]] = mapped_column(JSON, nullable=False, default=list)
+    status: Mapped[str] = mapped_column(String(32), nullable=False)
+    summary_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+
+
 class KnowledgeDocument(TimestampMixin, Base):
     __tablename__ = "knowledge_document"
     __table_args__ = (Index("ix_knowledge_document_kb_symbol", "knowledge_base_id", "symbol"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     knowledge_base_id: Mapped[int] = mapped_column(ForeignKey("knowledge_base.id", ondelete="CASCADE"), nullable=False)
+    graph_id: Mapped[int | None] = mapped_column(ForeignKey("knowledge_graph.id", ondelete="CASCADE"), index=True)
     source_table: Mapped[str] = mapped_column(String(128), nullable=False)
     source_record_id: Mapped[int | None] = mapped_column(Integer)
     market: Mapped[str | None] = mapped_column(String(16))
@@ -232,6 +268,7 @@ class KnowledgeEntity(TimestampMixin, Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     knowledge_base_id: Mapped[int] = mapped_column(ForeignKey("knowledge_base.id", ondelete="CASCADE"), nullable=False)
+    graph_id: Mapped[int | None] = mapped_column(ForeignKey("knowledge_graph.id", ondelete="CASCADE"), index=True)
     entity_type: Mapped[str] = mapped_column(String(64), nullable=False)
     entity_key: Mapped[str] = mapped_column(String(256), nullable=False)
     entity_name: Mapped[str] = mapped_column(String(256), nullable=False)
@@ -243,6 +280,7 @@ class KnowledgeRelation(TimestampMixin, Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     knowledge_base_id: Mapped[int] = mapped_column(ForeignKey("knowledge_base.id", ondelete="CASCADE"), nullable=False)
+    graph_id: Mapped[int | None] = mapped_column(ForeignKey("knowledge_graph.id", ondelete="CASCADE"), index=True)
     subject_entity_id: Mapped[int] = mapped_column(ForeignKey("knowledge_entity.id", ondelete="CASCADE"), nullable=False)
     predicate: Mapped[str] = mapped_column(String(128), nullable=False)
     object_entity_id: Mapped[int] = mapped_column(ForeignKey("knowledge_entity.id", ondelete="CASCADE"), nullable=False)

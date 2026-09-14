@@ -276,6 +276,19 @@ DEFAULT_MODEL_ROUTES = (
 )
 
 
+def _damaged_text(value: object) -> bool:
+    return isinstance(value, str) and ("\ufffd" in value or "??" in value)
+
+
+def _repair_default_text(current: dict[str, Any], defaults: dict[str, Any]) -> dict[str, Any]:
+    repaired = dict(current)
+    for key, default in defaults.items():
+        value = repaired.get(key)
+        if _damaged_text(value) and isinstance(default, str):
+            repaired[key] = default
+    return repaired
+
+
 def seed_default_models(db: Session) -> None:
     provider_by_code: dict[str, ModelProvider] = {}
     for provider_config in DEFAULT_MODEL_PROVIDERS:
@@ -285,10 +298,15 @@ def seed_default_models(db: Session) -> None:
             db.add(provider)
             db.flush()
         else:
-            provider.provider_name = str(provider_config["provider_name"])
+            if not provider.provider_name or _damaged_text(provider.provider_name):
+                provider.provider_name = str(provider_config["provider_name"])
             provider.provider_type = str(provider_config["provider_type"])
-            provider.description = provider.description or str(provider_config.get("description") or "")
-            provider.config_json = {**dict(provider_config.get("config_json") or {}), **dict(provider.config_json or {})}
+            if not provider.description or _damaged_text(provider.description):
+                provider.description = str(provider_config.get("description") or "")
+            provider.config_json = _repair_default_text(
+                {**dict(provider_config.get("config_json") or {}), **dict(provider.config_json or {})},
+                dict(provider_config.get("config_json") or {}),
+            )
         provider_by_code[provider.provider_code] = provider
 
     for raw_config in DEFAULT_MODEL_INSTANCES:
@@ -305,35 +323,30 @@ def seed_default_models(db: Session) -> None:
             instance.model_code = str(instance_config["model_code"])
             instance.model_name = str(instance_config["model_name"])
         for field_name in ("api_base_url", "api_path", "fallback_instance_code", "description"):
-            if getattr(instance, field_name) in (None, ""):
+            if getattr(instance, field_name) in (None, "") or _damaged_text(getattr(instance, field_name)):
                 setattr(instance, field_name, instance_config.get(field_name))
         instance.purpose = instance.purpose or str(instance_config.get("purpose") or "GENERAL")
         instance.max_tokens = instance.max_tokens or int(instance_config.get("max_tokens") or 4096)
         instance.temperature = instance.temperature if instance.temperature is not None else float(instance_config.get("temperature") or 0.2)
         instance.top_p = instance.top_p if instance.top_p is not None else float(instance_config.get("top_p") or 0.95)
-        instance.config_json = {**dict(instance_config.get("config_json") or {}), **dict(instance.config_json or {})}
+        instance.config_json = _repair_default_text(
+            {**dict(instance_config.get("config_json") or {}), **dict(instance.config_json or {})},
+            dict(instance_config.get("config_json") or {}),
+        )
 
     for route_config in DEFAULT_MODEL_ROUTES:
         route = db.scalar(select(ModelRouteRule).where(ModelRouteRule.task_type == route_config["task_type"]))
         if route is None:
             db.add(ModelRouteRule(**route_config))
             continue
-        if route_config["task_type"] in {
-            "general_chat",
-            "model_lab_chat",
-            "data_governance",
-            "knowledge_graph",
-            "qa_query",
-            "stock_screening",
-            "stock_analysis",
-            "research_report",
-            "risk_warning",
-        }:
+        if not route.preferred_instance_code:
             route.preferred_instance_code = route_config["preferred_instance_code"]
+        if route.fallback_chain_json is None:
             route.fallback_chain_json = route_config["fallback_chain_json"]
+        if not route.route_policy:
             route.route_policy = route_config["route_policy"]
+        if not route.description or _damaged_text(route.description):
             route.description = route_config["description"]
-            route.enabled = bool(route_config["enabled"])
 
     db.commit()
 
@@ -439,6 +452,13 @@ def seed_default_skills(db: Session) -> None:
             db.flush()
         elif not skill.file_path:
             skill.is_builtin = True
+        if skill.is_builtin:
+            for field_name in ("skill_name", "description", "instructions"):
+                if _damaged_text(getattr(skill, field_name)):
+                    setattr(skill, field_name, skill_config[field_name])
+            skill.config_json = _repair_default_text(
+                dict(skill.config_json or {}), dict(skill_config.get("config_json") or {})
+            )
         if skill.file_path:
             continue
         file_path, content_hash = ensure_skill_file(skill.skill_code, skill.instructions)
