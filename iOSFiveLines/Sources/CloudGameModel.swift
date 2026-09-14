@@ -549,17 +549,7 @@ final class CloudGameModel: ObservableObject {
                 kuromiTheme = true
             case .toutou:
                 heartMode = true
-                suppressSettingsSave = true
-                musicEnabled = true
-                musicTrack = .sy
-                suppressSettingsSave = false
-                audio.configure(
-                    soundEnabled: effectsEnabled,
-                    soundVolume: effectsVolume,
-                    musicEnabled: true,
-                    musicVolume: musicVolume,
-                    musicTrack: .sy
-                )
+                applyAudioSettings()
             case nil:
                 break
             }

@@ -2114,8 +2114,7 @@ public class MainActivity extends Activity {
                 kuromiTheme = true;
             } else if (kind == EASTER_TOUTOU) {
                 heartMode = true;
-                musicEnabled = true;
-                sound.updateMusic(true, musicVolume, activeMusicTrack());
+                sound.updateMusic(musicEnabled, musicVolume, activeMusicTrack());
             }
             sound.playClear();
         }
@@ -2598,9 +2597,6 @@ public class MainActivity extends Activity {
             heartMode = state.getBoolean("five_lines_heart_mode", heartMode);
             claimedEaster = state.getInt("five_lines_claimed_easter", EASTER_NONE);
             adminUnlockedByMusic = state.getBoolean("five_lines_admin_unlocked_by_music", false);
-            if (heartMode) {
-                musicEnabled = true;
-            }
             sound.updateMusic(musicEnabled, musicVolume, activeMusicTrack());
             moving = false;
             removing = false;
