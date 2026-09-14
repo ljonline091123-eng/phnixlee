@@ -2,14 +2,21 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
+import json
+import os
 from typing import Any
+
+import httpx
+from jsonschema import Draft202012Validator, ValidationError
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.connectors.model_registry import get_model_adapter
 from app.models.ai_hub import ModelCallLog, ModelInstance, ModelProvider, ModelRouteRule, ModelSkill
-from app.services.skill_files import ensure_skill_file
+from app.services.core_skill_defs import core_skill_rows
+from app.services.skill_registry import sync_skill_from_file
+from app.services.model_credentials import decrypt_api_key, encrypt_api_key
 
 
 @dataclass(frozen=True)
@@ -79,6 +86,19 @@ DEFAULT_MODEL_PROVIDERS = (
             "billing_label": "免费额度/付费",
             "api_key_label": "GEMINI_API_KEY / SK",
             "api_key_hint": "填入 Google AI Studio 或 Google Cloud 的 Gemini API Key。",
+        },
+    },
+    {
+        "provider_code": "ANTHROPIC",
+        "provider_name": "Claude / Anthropic",
+        "provider_type": "ANTHROPIC",
+        "enabled": True,
+        "description": "Claude Messages API for multi-step Agent coordination and review.",
+        "config_json": {
+            "api_base_url": "https://api.anthropic.com/v1",
+            "billing_type": "PAID",
+            "billing_label": "付费",
+            "api_key_label": "Anthropic API Key",
         },
     },
     {
@@ -182,6 +202,40 @@ DEFAULT_MODEL_INSTANCES = (
         "description": "Gemini REST 实例，适合长文本治理、知识图谱摘要和多源信息归纳。",
     },
     {
+        "provider_code": "GEMINI",
+        "instance_code": "GEMINI_PRO",
+        "model_code": "gemini-2.5-pro",
+        "model_name": "Gemini 2.5 Pro",
+        "purpose": "DEEP_RESEARCH,LONG_REPORT,MULTIMODAL",
+        "api_key": None,
+        "api_base_url": "https://generativelanguage.googleapis.com/v1beta",
+        "api_path": None,
+        "max_tokens": 8192,
+        "temperature": 0.2,
+        "top_p": 0.9,
+        "enabled": True,
+        "fallback_instance_code": "GEMINI_FLASH",
+        "config_json": {"billing_label": "免费额度/付费", "billing_type": "FREE_TIER_OR_PAID"},
+        "description": "Long financial reports and chart or document interpretation.",
+    },
+    {
+        "provider_code": "ANTHROPIC",
+        "instance_code": "CLAUDE_SONNET",
+        "model_code": "claude-sonnet-5",
+        "model_name": "Claude Sonnet 5",
+        "purpose": "MULTI_STEP_AGENT,META_REVIEW",
+        "api_key": None,
+        "api_base_url": "https://api.anthropic.com/v1",
+        "api_path": "messages",
+        "max_tokens": 6000,
+        "temperature": 1.0,
+        "top_p": 1.0,
+        "enabled": True,
+        "fallback_instance_code": "OPENAI_CHATGPT",
+        "config_json": {"billing_label": "付费", "billing_type": "PAID"},
+        "description": "Claude Messages instance for multi-step reasoning.",
+    },
+    {
         "provider_code": "MOCK",
         "instance_code": "MOCK_GENERAL",
         "model_code": "mock-general",
@@ -201,6 +255,22 @@ DEFAULT_MODEL_INSTANCES = (
 )
 
 DEFAULT_MODEL_ROUTES = (
+    {
+        "task_type": "deep_research",
+        "preferred_instance_code": "GEMINI_PRO",
+        "fallback_chain_json": ["GEMINI_FLASH", "CLAUDE_SONNET", "OPENAI_CHATGPT", "MOCK_GENERAL"],
+        "route_policy": "PREFERRED_THEN_FALLBACK",
+        "enabled": True,
+        "description": "Long report reading and research synthesis after deterministic screening.",
+    },
+    {
+        "task_type": "meta_review",
+        "preferred_instance_code": "OPENAI_CHATGPT",
+        "fallback_chain_json": ["CLAUDE_SONNET", "DEEPSEEK_CHAT", "MOCK_GENERAL"],
+        "route_policy": "PREFERRED_THEN_FALLBACK",
+        "enabled": True,
+        "description": "Review repeated failed predictions and propose a Skill revision for approval.",
+    },
     {
         "task_type": "general_chat",
         "preferred_instance_code": "QWEN_PLUS",
@@ -308,6 +378,8 @@ def seed_default_models(db: Session) -> None:
                 dict(provider_config.get("config_json") or {}),
             )
         provider_by_code[provider.provider_code] = provider
+        if not provider.api_base_url:
+            provider.api_base_url = (provider.config_json or {}).get("api_base_url")
 
     for raw_config in DEFAULT_MODEL_INSTANCES:
         instance_config = dict(raw_config)
@@ -333,6 +405,18 @@ def seed_default_models(db: Session) -> None:
             {**dict(instance_config.get("config_json") or {}), **dict(instance.config_json or {})},
             dict(instance_config.get("config_json") or {}),
         )
+
+    if os.environ.get("MODEL_CREDENTIAL_KEY"):
+        for provider in provider_by_code.values():
+            instances = list(db.scalars(select(ModelInstance).where(ModelInstance.provider_id == provider.id)).all())
+            legacy_keys = {item.api_key for item in instances if item.api_key}
+            if not provider.api_key_encrypted and len(legacy_keys) == 1:
+                provider.api_key_encrypted = encrypt_api_key(next(iter(legacy_keys)))
+            if provider.api_key_encrypted:
+                shared_key = decrypt_api_key(provider.api_key_encrypted)
+                for item in instances:
+                    if item.api_key == shared_key:
+                        item.api_key = None
 
     for route_config in DEFAULT_MODEL_ROUTES:
         route = db.scalar(select(ModelRouteRule).where(ModelRouteRule.task_type == route_config["task_type"]))
@@ -444,7 +528,7 @@ DEFAULT_MODEL_SKILLS_V2 = (
 
 def seed_default_skills(db: Session) -> None:
     """Seed built-in skills without overwriting user-maintained content."""
-    for skill_config in DEFAULT_MODEL_SKILLS_V2:
+    for skill_config in (*DEFAULT_MODEL_SKILLS_V2, *core_skill_rows()):
         skill = db.scalar(select(ModelSkill).where(ModelSkill.skill_code == skill_config["skill_code"]))
         if skill is None:
             skill = ModelSkill(**skill_config, is_builtin=True)
@@ -459,11 +543,7 @@ def seed_default_skills(db: Session) -> None:
             skill.config_json = _repair_default_text(
                 dict(skill.config_json or {}), dict(skill_config.get("config_json") or {})
             )
-        if skill.file_path:
-            continue
-        file_path, content_hash = ensure_skill_file(skill.skill_code, skill.instructions)
-        skill.file_path = file_path
-        skill.content_hash = content_hash
+        sync_skill_from_file(db, skill)
         skill.version = skill.version or "1.0.0"
         skill.format = "MD"
     db.commit()
@@ -477,12 +557,15 @@ class ModelHubService:
         statement = select(ModelRouteRule).where(ModelRouteRule.task_type == task_type, ModelRouteRule.enabled.is_(True))
         route = self.db.scalar(statement)
         if requested_instance_code:
-            instance = self._get_instance_by_code(requested_instance_code)
-            return [self._to_routed_model(instance)]
-        if not route:
+            self._get_instance_by_code(requested_instance_code)
+        if requested_instance_code and not route:
+            return [self._to_routed_model(self._get_instance_by_code(requested_instance_code))]
+        if not route and not requested_instance_code:
             return [self._load_default_mock_model()]
-
-        candidates: list[str] = [route.preferred_instance_code, *route.fallback_chain_json]
+        candidates: list[str] = list(dict.fromkeys([
+            *([requested_instance_code] if requested_instance_code else []),
+            *([route.preferred_instance_code, *(route.fallback_chain_json or [])] if route else []),
+        ]))
         routed: list[RoutedModel] = []
         for code in candidates:
             try:
@@ -502,6 +585,11 @@ class ModelHubService:
         metadata_json: dict[str, Any] | None = None,
     ) -> ModelCallLog:
         metadata = metadata_json or {}
+        if task_type in {"stock_screening", "stock_analysis", "risk_warning", "data_governance"}:
+            if sum(len(item.get("content", "")) for item in messages) > 60_000:
+                raise ValueError("Soft-analysis input exceeds 60,000 characters; run Python/SQL filtering first")
+            if int(metadata.get("candidate_count") or 0) > 50:
+                raise ValueError("Soft-analysis candidate pool cannot exceed 50 stocks")
         skill_code = str(metadata.get("skill_code") or "").strip()
         if skill_code:
             skill = self.db.scalar(
@@ -510,7 +598,9 @@ class ModelHubService:
                     ModelSkill.enabled.is_(True),
                 )
             )
-            if skill:
+            if skill and skill.skill_type == "PROMPT_SOP":
+                sync_skill_from_file(self.db, skill)
+                self.db.commit()
                 messages = [
                     {"role": "system", "content": skill.instructions},
                     *messages,
@@ -538,6 +628,9 @@ class ModelHubService:
                     max_tokens=max_tokens,
                     metadata_json=metadata,
                 )
+                output_schema = metadata.get("json_schema_output")
+                if output_schema:
+                    Draft202012Validator(output_schema).validate(json.loads(result.response_text))
                 log.status = "SUCCESS"
                 log.response_text = result.response_text
                 log.response_json = result.response_json
@@ -548,7 +641,9 @@ class ModelHubService:
                 return log
             except Exception as exc:
                 self.db.rollback()
-                last_log = self._mark_failed(log.id, exc)
+                last_log = self._mark_failed(log.id, exc, routed.instance.api_key)
+                if not self._should_fallback(exc):
+                    break
 
         if last_log:
             return last_log
@@ -580,7 +675,7 @@ class ModelHubService:
             self.db.refresh(log)
             return log
         except Exception as exc:
-            return self._mark_failed(log.id, exc)
+            return self._mark_failed(log.id, exc, routed_model.instance.api_key)
 
     def _start_log(
         self,
@@ -611,12 +706,15 @@ class ModelHubService:
             raise ValueError(f"Model instance is disabled: {instance_code}")
         return instance
 
-    def _mark_failed(self, log_id: int, exc: Exception) -> ModelCallLog:
+    def _mark_failed(self, log_id: int, exc: Exception, api_key: str | None = None) -> ModelCallLog:
         failed_log = self.db.get(ModelCallLog, log_id)
         if not failed_log:
             raise RuntimeError(f"Model call log not found: {log_id}") from exc
         failed_log.status = "FAILED"
-        failed_log.error_message = str(exc)[:4000]
+        message = str(exc)
+        if api_key:
+            message = message.replace(api_key, "***")
+        failed_log.error_message = message[:4000]
         failed_log.completed_at = datetime.now(timezone.utc)
         failed_log.latency_ms = self._compute_latency_ms(failed_log.started_at, failed_log.completed_at)
         self.db.commit()
@@ -629,7 +727,30 @@ class ModelHubService:
             raise ValueError(f"Model provider not found for instance: {instance.instance_code}")
         if not provider.enabled:
             raise ValueError(f"Model provider is disabled: {provider.provider_code}")
-        return RoutedModel(provider=provider, instance=instance)
+        api_key = decrypt_api_key(provider.api_key_encrypted) if provider.api_key_encrypted else instance.api_key
+        resolved = ModelInstance(
+            provider_id=instance.provider_id,
+            instance_code=instance.instance_code,
+            model_code=instance.model_code,
+            model_name=instance.model_name,
+            purpose=instance.purpose,
+            usage_type=instance.usage_type,
+            api_key=api_key,
+            api_base_url=provider.api_base_url or instance.api_base_url or (provider.config_json or {}).get("api_base_url"),
+            api_path=instance.api_path,
+            max_tokens=instance.max_tokens,
+            temperature=instance.temperature,
+            top_p=instance.top_p,
+            enabled=instance.enabled,
+            config_json=instance.config_json or {},
+        )
+        return RoutedModel(provider=provider, instance=resolved)
+
+    @staticmethod
+    def _should_fallback(exc: Exception) -> bool:
+        if isinstance(exc, httpx.HTTPStatusError):
+            return exc.response.status_code == 429 or exc.response.status_code >= 500
+        return isinstance(exc, (httpx.RequestError, ValueError, TimeoutError, ValidationError, json.JSONDecodeError))
 
     @staticmethod
     def _compute_latency_ms(started_at: datetime, completed_at: datetime | None) -> int | None:

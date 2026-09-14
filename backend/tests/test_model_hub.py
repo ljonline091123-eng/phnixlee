@@ -117,7 +117,7 @@ class ModelHubFoundationTest(unittest.TestCase):
                     json={
                         "task_type": "ui_test_route",
                         "preferred_instance_code": "MOCK_GENERAL",
-                        "fallback_chain_json": [],
+                        "fallback_chain_json": ["DEEPSEEK_CHAT"],
                         "route_policy": "PREFERRED_THEN_FALLBACK",
                         "enabled": True,
                         "description": "前端路由管理测试",

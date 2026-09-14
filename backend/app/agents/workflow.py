@@ -14,6 +14,7 @@ from app.prompts.fundamental import FUNDAMENTAL_SYSTEM_PROMPT
 from app.prompts.orchestrator import ORCHESTRATOR_SYSTEM_PROMPT
 from app.prompts.technical import TECHNICAL_SYSTEM_PROMPT
 from app.services.model_hub import ModelHubService
+from app.services.prediction_ledger import record_report_rating
 from app.services.stock_on_demand import StockOnDemandService
 from app.skills.capital_tech import CapitalAndTechOutput, get_capital_and_tech_skill
 from app.skills.financial import FinancialAnalysisOutput, get_financial_analysis_skill
@@ -647,6 +648,11 @@ class ResearchWorkflow:
             warnings_json=report.warnings,
         )
         self.db.add(record)
+        self.db.flush()
+        record_report_rating(
+            self.db, record,
+            entry_price=_first_number(context.price_snapshot.get("latest_price"), context.price_snapshot.get("previous_close")),
+        )
         self.db.commit()
         self.db.refresh(record)
         return record

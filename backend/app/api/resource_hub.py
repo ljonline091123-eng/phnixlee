@@ -4,6 +4,8 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 from fastapi.encoders import jsonable_encoder
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
+from jsonschema import Draft202012Validator
+from jsonschema.exceptions import SchemaError
 
 from app.db.session import get_db
 from app.models.ai_hub import (
@@ -22,10 +24,11 @@ from app.models.ai_hub import (
     ModelProvider,
     ModelSkill,
 )
-from app.schemas.model_hub import ModelSkillRead
+from app.schemas.model_hub import ModelChatResponse, ModelSkillRead
 from app.schemas.resource_hub import (
     AgentCreate,
     AgentRead,
+    AgentRunRequest,
     AgentSummary,
     AgentUpdate,
     DataAssetRead,
@@ -53,6 +56,9 @@ from app.services.resource_hub import (
     table_columns,
 )
 from app.services.skill_files import delete_skill_file, skill_file_path, write_skill_file
+from app.services.model_hub import ModelHubService
+from app.services.prediction_ledger import record_agent_predictions
+from app.services.skill_registry import sync_skill_from_file
 
 router = APIRouter(prefix="/resources", tags=["AI Resource Hub"])
 
@@ -65,6 +71,8 @@ def _agent_read(agent: AgentDefinition) -> AgentRead:
         system_prompt=agent.system_prompt,
         model_instance_code=agent.model_instance_code,
         max_iterations=agent.max_iterations,
+        context_window_limit=agent.context_window_limit,
+        json_schema_output=agent.json_schema_output or {},
         enabled=agent.enabled,
         description=agent.description,
         version=agent.version,
@@ -72,6 +80,7 @@ def _agent_read(agent: AgentDefinition) -> AgentRead:
         skill_ids=[link.skill_id for link in agent.skill_links],
         knowledge_base_ids=[link.knowledge_base_id for link in agent.knowledge_links],
         data_asset_ids=[link.data_asset_id for link in agent.data_asset_links],
+        data_source_ids=[link.data_source_id for link in agent.data_source_links],
         created_at=agent.created_at,
         updated_at=agent.updated_at,
     )
@@ -137,15 +146,26 @@ def _validate_agent_model(db: Session, model_instance_code: str | None) -> None:
         raise HTTPException(status_code=404, detail="Model instance not found")
 
 
+def _validate_output_schema(schema: dict) -> None:
+    if schema:
+        try:
+            Draft202012Validator.check_schema(schema)
+        except SchemaError as exc:
+            raise HTTPException(status_code=422, detail=f"Invalid JSON output schema: {exc.message}") from exc
+
+
 @router.post("/agents", response_model=AgentRead, status_code=status.HTTP_201_CREATED)
 def create_agent(payload: AgentCreate, db: Session = Depends(get_db)) -> AgentRead:
     _validate_agent_model(db, payload.model_instance_code)
+    _validate_output_schema(payload.json_schema_output)
     agent = AgentDefinition(
             agent_code=payload.agent_code or _next_agent_code(db),
         display_name=payload.display_name,
         system_prompt=payload.system_prompt,
         model_instance_code=payload.model_instance_code,
         max_iterations=payload.max_iterations,
+        context_window_limit=payload.context_window_limit,
+        json_schema_output=payload.json_schema_output,
         enabled=payload.enabled,
         description=payload.description,
         version=payload.version,
@@ -160,6 +180,7 @@ def create_agent(payload: AgentCreate, db: Session = Depends(get_db)) -> AgentRe
             payload.skill_ids,
             payload.knowledge_base_ids,
             payload.data_asset_ids,
+            payload.data_source_ids,
         )
         db.commit()
     except ValueError as exc:
@@ -181,7 +202,8 @@ def update_agent(agent_id: int, payload: AgentUpdate, db: Session = Depends(get_
         raise HTTPException(status_code=404, detail="Agent not found")
     values = payload.model_dump(exclude_unset=True)
     _validate_agent_model(db, values.get("model_instance_code", agent.model_instance_code))
-    for field in ("agent_code", "display_name", "system_prompt", "model_instance_code", "max_iterations", "enabled", "description", "version"):
+    _validate_output_schema(values.get("json_schema_output", agent.json_schema_output or {}))
+    for field in ("agent_code", "display_name", "system_prompt", "model_instance_code", "max_iterations", "context_window_limit", "json_schema_output", "enabled", "description", "version"):
         if field in values:
             setattr(agent, field, values[field])
     try:
@@ -192,6 +214,7 @@ def update_agent(agent_id: int, payload: AgentUpdate, db: Session = Depends(get_
             values.get("skill_ids", [link.skill_id for link in agent.skill_links]),
             values.get("knowledge_base_ids", [link.knowledge_base_id for link in agent.knowledge_links]),
             values.get("data_asset_ids", [link.data_asset_id for link in agent.data_asset_links]),
+            values.get("data_source_ids", [link.data_source_id for link in agent.data_source_links]),
         )
         db.commit()
     except ValueError as exc:
@@ -199,6 +222,55 @@ def update_agent(agent_id: int, payload: AgentUpdate, db: Session = Depends(get_
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     db.refresh(agent)
     return _agent_read(agent)
+
+
+@router.post("/agents/{agent_id}/run", response_model=ModelChatResponse)
+def run_agent(agent_id: int, payload: AgentRunRequest, db: Session = Depends(get_db)) -> ModelChatResponse:
+    agent = db.get(AgentDefinition, agent_id)
+    if agent is None or not agent.enabled:
+        raise HTTPException(status_code=404, detail="Enabled agent not found")
+    system_messages = [{"role": "system", "content": agent.system_prompt}]
+    if payload.task_type in {"stock_screening", "stock_analysis", "research_report"}:
+        system_messages.append({"role": "system", "content": (
+            "If you give an explicit BUY, SELL, or HOLD recommendation, return a JSON object with a "
+            "prediction field. Include market, stock_code, action_type, target_timeframe (T+1 to T+30), "
+            "reasoning_logic, skill_code from a bound Skill, and an observed positive entry_price. "
+            "Do not invent prices. The recommendation is recorded for T+N review."
+        )})
+    for link in agent.skill_links:
+        if link.skill.enabled and link.skill.skill_type == "PROMPT_SOP":
+            sync_skill_from_file(db, link.skill)
+            system_messages.append({"role": "system", "content": link.skill.instructions})
+    db.commit()
+    history = [item.model_dump() for item in payload.messages[-agent.context_window_limit * 2:]]
+    log = ModelHubService(db).chat(
+        task_type=payload.task_type,
+        instance_code=agent.model_instance_code,
+        messages=[*system_messages, *history],
+        metadata_json={
+            "agent_code": agent.agent_code,
+            "json_schema_output": agent.json_schema_output or {},
+            "knowledge_base_ids": [link.knowledge_base_id for link in agent.knowledge_links],
+            "data_source_ids": [link.data_source_id for link in agent.data_source_links],
+        },
+    )
+    prediction_ids: list[int] = []
+    if log.status == "SUCCESS" and log.provider_code != "MOCK":
+        try:
+            prediction_ids = record_agent_predictions(
+                db, log.response_text or "",
+                allowed_skill_codes={link.skill.skill_code for link in agent.skill_links if link.skill.enabled},
+                model_instance_code=log.instance_code,
+            )
+        except ValueError as exc:
+            db.rollback()
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return ModelChatResponse(
+        call_log_id=log.id, task_type=log.task_type, provider_code=log.provider_code,
+        instance_code=log.instance_code, model_code=log.model_code, status=log.status,
+        response_text=log.response_text or log.error_message or "", response_json=log.response_json,
+        prediction_ids=prediction_ids,
+    )
 
 
 @router.delete("/agents/{agent_id}", status_code=204)

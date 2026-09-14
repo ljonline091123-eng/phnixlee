@@ -20,6 +20,7 @@ import {
   type ResearchReportSummary,
   type ModelSkill,
   type ModelSkillPayload,
+  type SkillOptimizationDraft,
   type StockSymbol,
   type SyncLog,
   type WatchlistItem,
@@ -44,6 +45,7 @@ const providerTypeLabel: Record<string, string> = {
   OPENAI_COMPAT: "OpenAI 兼容",
   GEMINI_REST: "Gemini REST",
   DEEPSEEK: "DeepSeek",
+  ANTHROPIC: "Claude / Anthropic",
 };
 function billingLabel(config: Record<string, unknown> | undefined) {
   return String(config?.billing_label || config?.billing_type || "--");
@@ -465,6 +467,8 @@ const emptyProvider: ProviderForm = {
   provider_code: "",
   provider_name: "",
   provider_type: "OPENAI_COMPAT",
+  api_base_url: "",
+  api_key: "",
   enabled: true,
   description: "",
   config_json: {},
@@ -476,8 +480,7 @@ const emptyInstance: InstanceForm = {
   model_code: "",
   model_name: "",
   purpose: "chat",
-  api_key: "",
-  api_base_url: "",
+  usage_type: "EXACT",
   api_path: "/chat/completions",
   max_tokens: 4096,
   temperature: 0.2,
@@ -498,15 +501,17 @@ const emptyRoute: RouteForm = {
   enabled: true,
   description: "",
 };
-type SkillForm = ModelSkillPayload & { id?: number };
-type AgentForm = AgentPayload & { id?: number };
+type SkillForm = ModelSkillPayload & { id?: number; config_json_text?: string };
+type AgentForm = AgentPayload & { id?: number; json_schema_output_text?: string };
 const emptySkill: SkillForm = {
   skill_code: "",
   skill_name: "",
   description: "",
   instructions: "",
+  skill_type: "PROMPT_SOP",
   enabled: true,
   config_json: {},
+  config_json_text: "{}",
   version: "1.0.0",
 };
 const emptyAgent: AgentForm = {
@@ -515,6 +520,9 @@ const emptyAgent: AgentForm = {
   system_prompt: "",
   model_instance_code: null,
   max_iterations: 8,
+  context_window_limit: 12,
+  json_schema_output: {},
+  json_schema_output_text: "{}",
   enabled: true,
   description: "",
   version: "1.0.0",
@@ -522,14 +530,17 @@ const emptyAgent: AgentForm = {
   skill_ids: [],
   knowledge_base_ids: [],
   data_asset_ids: [],
+  data_source_ids: [],
 };
 
 function ModelLabPage() {
   const [tab, setTab] = useState<ModelHubTab>("models");
   const [providers, setProviders] = useState<ModelProvider[]>([]);
+  const [sources, setSources] = useState<DataSource[]>([]);
   const [instances, setInstances] = useState<ModelInstance[]>([]);
   const [routes, setRoutes] = useState<ModelRoute[]>([]);
   const [skills, setSkills] = useState<ModelSkill[]>([]);
+  const [skillDrafts, setSkillDrafts] = useState<SkillOptimizationDraft[]>([]);
   const [agents, setAgents] = useState<AgentDefinition[]>([]);
   const [assets, setAssets] = useState<DataAsset[]>([]);
   const [knowledge, setKnowledge] = useState<KnowledgeBase[]>([]);
@@ -542,6 +553,7 @@ function ModelLabPage() {
     useState<InstanceForm>(emptyInstance);
   const [editingRoute, setEditingRoute] = useState<RouteForm>(emptyRoute);
   const [editingSkill, setEditingSkill] = useState<SkillForm>(emptySkill);
+  const [skillRevisions, setSkillRevisions] = useState<Array<{ id: number; version: string; source: string; created_at: string }>>([]);
   const [editingAgent, setEditingAgent] = useState<AgentForm>(emptyAgent);
   const [modelDialog, setModelDialog] = useState<
     "provider" | "instance" | "route" | null
@@ -565,6 +577,8 @@ function ModelLabPage() {
         api.listKnowledgeBases(),
         api.listKnowledgeGraphs(),
         api.listModelCallLogs(),
+        api.listSources(),
+        api.listSkillDrafts(),
       ]);
       setProviders(result[0]);
       setInstances(result[1]);
@@ -575,6 +589,8 @@ function ModelLabPage() {
       setKnowledge(result[6]);
       setGraphs(result[7]);
       setLogs(result[8]);
+      setSources(result[9]);
+      setSkillDrafts(result[10]);
     } catch (e) {
       setNotice(e instanceof Error ? e.message : "资源中心加载失败");
     }
@@ -594,6 +610,8 @@ function message(text: string) {
         provider_code: editingProvider.provider_code,
         provider_name: editingProvider.provider_name,
         provider_type: editingProvider.provider_type,
+        api_base_url: editingProvider.api_base_url || undefined,
+        api_key: editingProvider.api_key || undefined,
         enabled: editingProvider.enabled,
         description: editingProvider.description || "",
         config_json: editingProvider.config_json || {},
@@ -618,8 +636,7 @@ function message(text: string) {
         model_code: editingInstance.model_code,
         model_name: editingInstance.model_name,
         purpose: editingInstance.purpose,
-        api_key: editingInstance.api_key,
-        api_base_url: editingInstance.api_base_url,
+        usage_type: editingInstance.usage_type,
         api_path: editingInstance.api_path,
         max_tokens: editingInstance.max_tokens,
         temperature: editingInstance.temperature,
@@ -630,7 +647,6 @@ function message(text: string) {
         description: editingInstance.description || "",
       };
       if (!payload.provider_id) throw new Error("请选择供应商");
-      if (!payload.api_key) delete payload.api_key;
       if (id) await api.updateModelInstance(id, payload);
       else await api.createModelInstance(payload);
       setEditingInstance({
@@ -651,6 +667,7 @@ function message(text: string) {
         .split(/[\n,，]/)
         .map((item) => item.trim())
         .filter(Boolean);
+      if (!fallback_chain_json.length) throw new Error("请至少配置一个降级模型实例");
       const payload: ModelRoutePayload = {
         task_type: editingRoute.task_type.trim(),
         preferred_instance_code:
@@ -741,8 +758,10 @@ function message(text: string) {
         skill_name: editingSkill.skill_name,
         description: editingSkill.description || "",
         instructions: editingSkill.instructions,
+        skill_type: editingSkill.skill_type,
+        expected_content_hash: editingSkill.expected_content_hash,
         enabled: editingSkill.enabled,
-        config_json: editingSkill.config_json || {},
+        config_json: JSON.parse(editingSkill.config_json_text || "{}"),
         version: editingSkill.version || "1.0.0",
       };
       if (id) await api.updateModelSkill(id, payload);
@@ -776,6 +795,8 @@ function message(text: string) {
         system_prompt: editingAgent.system_prompt,
         model_instance_code: editingAgent.model_instance_code,
         max_iterations: editingAgent.max_iterations,
+        context_window_limit: editingAgent.context_window_limit,
+        json_schema_output: JSON.parse(editingAgent.json_schema_output_text || "{}"),
         enabled: editingAgent.enabled,
         description: editingAgent.description || "",
         version: editingAgent.version || "1.0.0",
@@ -783,6 +804,7 @@ function message(text: string) {
         skill_ids: editingAgent.skill_ids,
         knowledge_base_ids: editingAgent.knowledge_base_ids,
         data_asset_ids: editingAgent.data_asset_ids,
+        data_source_ids: editingAgent.data_source_ids,
       };
       if (id) await api.updateAgent(id, payload);
       else await api.createAgent(payload);
@@ -892,6 +914,7 @@ function message(text: string) {
             setEditingRoute({
               ...emptyRoute,
               preferred_instance_code: instances[0]?.instance_code || "",
+              fallback_chain_text: instances.find((item) => item.instance_code !== instances[0]?.instance_code)?.instance_code || "",
             });
             setModelDialog("route");
           }}
@@ -905,6 +928,8 @@ function message(text: string) {
               provider_code: item.provider_code,
               provider_name: item.provider_name,
               provider_type: item.provider_type,
+              api_base_url: item.api_base_url || "",
+              api_key: "",
               enabled: item.enabled,
               description: item.description || "",
               config_json: item.config_json || {},
@@ -919,8 +944,7 @@ function message(text: string) {
               model_code: item.model_code,
               model_name: item.model_name,
               purpose: item.purpose,
-              api_key: "",
-              api_base_url: item.api_base_url || "",
+              usage_type: item.usage_type,
               api_path: item.api_path || "/chat/completions",
               max_tokens: item.max_tokens,
               temperature: item.temperature,
@@ -958,6 +982,7 @@ function message(text: string) {
           skills={skills}
           knowledge={knowledge}
           assets={assets}
+          sources={sources}
           value={editingAgent}
           setValue={setEditingAgent}
           dialogOpen={agentDialogOpen}
@@ -975,6 +1000,7 @@ function message(text: string) {
               ...item,
               id: item.id,
               description: item.description || "",
+              json_schema_output_text: JSON.stringify(item.json_schema_output || {}, null, 2),
             });
             setAgentDialogOpen(true);
           }}
@@ -989,6 +1015,7 @@ function message(text: string) {
           dialogOpen={skillDialogOpen}
           onOpen={() => {
             setEditingSkill(emptySkill);
+            setSkillRevisions([]);
             setSkillDialogOpen(true);
           }}
           onClose={() => {
@@ -996,17 +1023,46 @@ function message(text: string) {
             setEditingSkill(emptySkill);
           }}
           onSave={saveSkill}
-          onEdit={(item) => {
+          revisions={skillRevisions}
+          drafts={skillDrafts}
+          onReviewDraft={async (draftId, approve) => {
+            try {
+              if (approve) await api.approveSkillDraft(draftId);
+              else await api.rejectSkillDraft(draftId);
+              await load();
+              message(approve ? "已批准并生成新的 Skill 版本" : "已驳回优化建议");
+            } catch (error) {
+              message(error instanceof Error ? error.message : "优化建议审核失败");
+            }
+          }}
+          onRollback={async (revisionId) => {
+            if (!editingSkill.id) return;
+            try {
+              const updated = await api.rollbackSkill(editingSkill.id, revisionId);
+              setEditingSkill({ ...editingSkill, instructions: updated.instructions, version: updated.version, expected_content_hash: updated.content_hash || undefined });
+              setSkillRevisions(await api.listSkillRevisions(editingSkill.id));
+              await load();
+              message("已回滚并生成新的 Skill 版本");
+            } catch (error) {
+              message(error instanceof Error ? error.message : "Skill 回滚失败");
+            }
+          }}
+          onEdit={async (item) => {
             setEditingSkill({
               id: item.id,
               skill_code: item.skill_code,
               skill_name: item.skill_name,
               description: item.description || "",
               instructions: item.instructions,
+              skill_type: item.skill_type,
+              expected_content_hash: item.content_hash || undefined,
               enabled: item.enabled,
               config_json: item.config_json || {},
+              config_json_text: JSON.stringify(item.config_json || {}, null, 2),
               version: item.version || "1.0.0",
             });
+            try { setSkillRevisions(await api.listSkillRevisions(item.id)); }
+            catch (error) { message(error instanceof Error ? error.message : "版本历史加载失败"); }
             setSkillDialogOpen(true);
           }}
           onDelete={deleteSkill}
@@ -1149,6 +1205,7 @@ function ModelTab(props: {
                   <th>类型</th>
                   <th>费用</th>
                   <th>API Base</th>
+                  <th>API Key</th>
                   <th>状态</th>
                   <th>操作</th>
                 </tr>
@@ -1167,12 +1224,9 @@ function ModelTab(props: {
                       </td>
                       <td>{billingLabel(item.config_json)}</td>
                       <td className="muted-cell">
-                        {String(
-                          item.config_json.api_base_url ||
-                            item.config_json.base_url ||
-                            "--",
-                        )}
+                        {item.api_base_url || "--"}
                       </td>
+                      <td>{item.api_key_configured ? "已配置" : "未配置"}</td>
                       <td>
                         <Status enabled={item.enabled} />
                       </td>
@@ -1200,7 +1254,7 @@ function ModelTab(props: {
                   ))
                 ) : (
                   <tr>
-                    <td className="empty-table-cell" colSpan={6}>
+                    <td className="empty-table-cell" colSpan={7}>
                       暂无模型供应商，点击“新增供应商”创建。
                     </td>
                   </tr>
@@ -1461,20 +1515,21 @@ function ModelTab(props: {
                 <input
                   className={inputClass}
                   placeholder="API Base URL（可选）"
-                  value={String(
-                    provider.config_json.api_base_url ||
-                      provider.config_json.base_url ||
-                      "",
-                  )}
+                  value={provider.api_base_url || ""}
                   onChange={(e) =>
                     setProvider({
                       ...provider,
-                      config_json: {
-                        ...provider.config_json,
-                        api_base_url: e.target.value,
-                      },
+                      api_base_url: e.target.value,
                     })
                   }
+                />
+                <input
+                  className={inputClass}
+                  type="password"
+                  autoComplete="new-password"
+                  placeholder="供应商共享 API Key（留空则保持原值）"
+                  value={provider.api_key || ""}
+                  onChange={(e) => setProvider({ ...provider, api_key: e.target.value })}
                 />
                 <select
                   className={inputClass}
@@ -1604,23 +1659,14 @@ function ModelTab(props: {
                     setInstance({ ...instance, purpose: e.target.value })
                   }
                 />
-                <input
+                <select
                   className={inputClass}
-                  placeholder="API Key（留空则不更新）"
-                  type="password"
-                  value={instance.api_key || ""}
-                  onChange={(e) =>
-                    setInstance({ ...instance, api_key: e.target.value })
-                  }
-                />
-                <input
-                  className={inputClass}
-                  placeholder="API Base URL（可选）"
-                  value={instance.api_base_url || ""}
-                  onChange={(e) =>
-                    setInstance({ ...instance, api_base_url: e.target.value })
-                  }
-                />
+                  value={instance.usage_type}
+                  onChange={(e) => setInstance({ ...instance, usage_type: e.target.value as "EXACT" | "CREATIVE" })}
+                >
+                  <option value="EXACT">EXACT · 数据治理与结构化输出</option>
+                  <option value="CREATIVE">CREATIVE · 研究推演与报告撰写</option>
+                </select>
                 <input
                   className={inputClass}
                   placeholder="API Path（可选）"
@@ -1853,6 +1899,7 @@ function AgentTab({
   skills,
   knowledge,
   assets,
+  sources,
   value,
   setValue,
   dialogOpen,
@@ -1867,6 +1914,7 @@ function AgentTab({
   skills: ModelSkill[];
   knowledge: KnowledgeBase[];
   assets: DataAsset[];
+  sources: DataSource[];
   value: AgentForm;
   setValue: (v: AgentForm) => void;
   dialogOpen: boolean;
@@ -1881,7 +1929,8 @@ function AgentTab({
       | "child_agent_ids"
       | "skill_ids"
       | "knowledge_base_ids"
-      | "data_asset_ids",
+      | "data_asset_ids"
+      | "data_source_ids",
     id: number,
   ) => {
     const selected = value[key].includes(id);
@@ -2012,6 +2061,15 @@ function AgentTab({
                   type="number"
                   min={1}
                   max={100}
+                  value={value.context_window_limit}
+                  onChange={(e) => setValue({ ...value, context_window_limit: Number(e.target.value) })}
+                  placeholder="保留历史对话轮数"
+                />
+                <input
+                  className={inputClass}
+                  type="number"
+                  min={1}
+                  max={100}
                   value={value.max_iterations}
                   onChange={(e) =>
                     setValue({
@@ -2030,6 +2088,13 @@ function AgentTab({
                     setValue({ ...value, system_prompt: e.target.value })
                   }
                   required
+                />
+                <textarea
+                  className="field-span-2"
+                  rows={5}
+                  placeholder="JSON Schema 输出约束（JSON 对象）"
+                  value={value.json_schema_output_text || "{}"}
+                  onChange={(e) => setValue({ ...value, json_schema_output_text: e.target.value })}
                 />
                 <textarea
                   className="field-span-2"
@@ -2128,6 +2193,19 @@ function AgentTab({
                     <span>暂无数据源</span>
                   )}
                 </label>
+                <label>
+                  外部数据源
+                  {sources.map((item) => (
+                    <span key={item.id}>
+                      <input
+                        type="checkbox"
+                        checked={value.data_source_ids.includes(item.id)}
+                        onChange={() => toggle("data_source_ids", item.id)}
+                      />
+                      {item.source_name}
+                    </span>
+                  ))}
+                </label>
               </div>
             </div>
 
@@ -2156,6 +2234,10 @@ function SkillTab({
   onSave,
   onEdit,
   onDelete,
+  revisions,
+  onRollback,
+  drafts,
+  onReviewDraft,
 }: {
   skills: ModelSkill[];
   value: SkillForm;
@@ -2166,6 +2248,10 @@ function SkillTab({
   onSave: (e: FormEvent) => void;
   onEdit: (v: ModelSkill) => void;
   onDelete: (v: ModelSkill) => void;
+  revisions: Array<{ id: number; version: string; source: string; created_at: string }>;
+  onRollback: (revisionId: number) => void;
+  drafts: SkillOptimizationDraft[];
+  onReviewDraft: (draftId: number, approve: boolean) => void;
 }) {
   return (
     <>
@@ -2193,6 +2279,7 @@ function SkillTab({
             <thead>
               <tr>
                 <th>Skill</th>
+                <th>类型</th>
                 <th>版本</th>
                 <th>格式</th>
                 <th>状态</th>
@@ -2207,6 +2294,7 @@ function SkillTab({
                       <strong>{item.skill_name}</strong>
                       <code>{item.skill_code}</code>
                     </td>
+                    <td>{item.skill_type === "EXECUTABLE_TOOL" ? "执行工具" : "Prompt SOP"}</td>
                     <td>{item.version || "--"}</td>
                     <td>{item.format || "Markdown"}</td>
                     <td>
@@ -2224,7 +2312,7 @@ function SkillTab({
                 ))
               ) : (
                 <tr>
-                  <td className="empty-table-cell" colSpan={5}>
+                  <td className="empty-table-cell" colSpan={6}>
                     暂无 Skill，点击“新增 Skill”创建。
                   </td>
                 </tr>
@@ -2233,6 +2321,27 @@ function SkillTab({
           </table>
         </div>
       </section>
+
+      {drafts.length > 0 && (
+        <section className="panel resource-management-panel">
+          <div className="panel-heading"><div><p className="eyebrow">META REVIEW</p><h2>待审核 Skill 优化建议</h2></div></div>
+          {drafts.map((draft) => {
+            const skill = skills.find((item) => item.id === draft.skill_id);
+            return (
+              <div className="resource-form-section" key={draft.id}>
+                <div className="resource-section-title">{skill?.skill_name || `Skill #${draft.skill_id}`} · 基于版本 {draft.base_skill_version}</div>
+                <p>{draft.rationale}</p>
+                <p>关联失败预测：{draft.prediction_ids.join("、")}</p>
+                <details><summary>查看建议 Prompt</summary><pre>{draft.proposed_instructions}</pre></details>
+                <div className="button-row">
+                  <button type="button" onClick={() => onReviewDraft(draft.id, true)}>批准并生成版本</button>
+                  <button type="button" onClick={() => onReviewDraft(draft.id, false)}>驳回</button>
+                </div>
+              </div>
+            );
+          })}
+        </section>
+      )}
 
       {dialogOpen && (
         <ResourceDialog
@@ -2265,10 +2374,19 @@ function SkillTab({
                   className={inputClass}
                   placeholder="版本"
                   value={value.version || "1.0.0"}
+                  readOnly={Boolean(value.id)}
                   onChange={(e) =>
                     setValue({ ...value, version: e.target.value })
                   }
                 />
+                <select
+                  className={inputClass}
+                  value={value.skill_type}
+                  onChange={(e) => setValue({ ...value, skill_type: e.target.value as "PROMPT_SOP" | "EXECUTABLE_TOOL" })}
+                >
+                  <option value="PROMPT_SOP">PROMPT_SOP · Markdown 指令</option>
+                  <option value="EXECUTABLE_TOOL">EXECUTABLE_TOOL · 函数工具</option>
+                </select>
                 <label className="checkbox-row">
                   <input
                     type="checkbox"
@@ -2298,8 +2416,26 @@ function SkillTab({
                   }
                   required
                 />
+                <textarea
+                  className="field-span-2"
+                  rows={6}
+                  placeholder="config_json（EXECUTABLE_TOOL 需包含 function_spec）"
+                  value={value.config_json_text || "{}"}
+                  onChange={(e) => setValue({ ...value, config_json_text: e.target.value })}
+                />
               </div>
             </div>
+            {value.id && revisions.length > 0 && (
+              <div className="resource-form-section">
+                <div className="resource-section-title">版本历史</div>
+                {revisions.map((revision) => (
+                  <div className="button-row" key={revision.id}>
+                    <span>{revision.version} · {revision.source} · {new Date(revision.created_at).toLocaleString()}</span>
+                    <button type="button" disabled={revision.version === value.version} onClick={() => onRollback(revision.id)}>回滚到此版本</button>
+                  </div>
+                ))}
+              </div>
+            )}
             <div className="form-actions">
               <button className="quiet-button" type="button" onClick={onClose}>
                 取消

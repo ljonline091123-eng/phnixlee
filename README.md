@@ -144,13 +144,22 @@ Available endpoints:
   be encrypted or stored in a secret manager before multi-user deployment.
 - Network failures from upstream providers are written to synchronization logs and
   do not corrupt existing stock master data.
-- Model API keys are not returned by management APIs. Before production use, move
-  credentials from the database to a secret manager and encrypt at rest.
+- Model API keys are not returned by management APIs. Newly configured provider
+  keys are encrypted at rest using `MODEL_CREDENTIAL_KEY`; keep that key outside Git.
 
 ## Model hub
 
 The application starts with an offline `MOCK_GENERAL` model so model routing,
 skills, and tests can be validated before real model credentials are configured.
+
+For provider API keys, create a Fernet encryption key once and set it before
+starting the API. Keep the same key across restarts; losing it makes stored
+provider credentials unreadable:
+
+```powershell
+python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+$env:MODEL_CREDENTIAL_KEY="<generated-value>"
+```
 
 Model management APIs:
 
@@ -161,9 +170,13 @@ Model management APIs:
 - `POST /api/v1/model-hub/chat`
 - `GET /api/v1/model-hub/call-logs`
 
-Supported provider types are `MOCK`, `OPENAI_COMPAT`, and `GEMINI_REST`. The
+Supported provider types are `MOCK`, `OPENAI_COMPAT`, `DEEPSEEK`, `GEMINI_REST`,
+and `ANTHROPIC`. The
 task route chooses a preferred instance first, then attempts its configured
 fallback chain when the preferred model cannot complete the call.
+
+The core model/Agent/Skill refactor, data contracts, and prediction-review
+workflow are documented in [docs/core-architecture.md](docs/core-architecture.md).
 
 ## Phase 2 AI research center
 

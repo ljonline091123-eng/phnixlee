@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
+from app.schemas.model_hub import ModelMessage
 
 
 class AgentCreate(BaseModel):
@@ -12,6 +13,8 @@ class AgentCreate(BaseModel):
     system_prompt: str = ""
     model_instance_code: str | None = Field(default=None, max_length=64)
     max_iterations: int = Field(default=8, ge=1, le=100)
+    context_window_limit: int = Field(default=12, ge=1, le=100)
+    json_schema_output: dict[str, Any] = Field(default_factory=dict)
     enabled: bool = True
     description: str | None = None
     version: str = Field(default="1.0.0", max_length=32)
@@ -19,6 +22,7 @@ class AgentCreate(BaseModel):
     skill_ids: list[int] = Field(default_factory=list)
     knowledge_base_ids: list[int] = Field(default_factory=list)
     data_asset_ids: list[int] = Field(default_factory=list)
+    data_source_ids: list[int] = Field(default_factory=list)
 
 
 class AgentUpdate(BaseModel):
@@ -27,6 +31,8 @@ class AgentUpdate(BaseModel):
     system_prompt: str | None = None
     model_instance_code: str | None = Field(default=None, max_length=64)
     max_iterations: int | None = Field(default=None, ge=1, le=100)
+    context_window_limit: int | None = Field(default=None, ge=1, le=100)
+    json_schema_output: dict[str, Any] | None = None
     enabled: bool | None = None
     description: str | None = None
     version: str | None = Field(default=None, max_length=32)
@@ -34,6 +40,7 @@ class AgentUpdate(BaseModel):
     skill_ids: list[int] | None = None
     knowledge_base_ids: list[int] | None = None
     data_asset_ids: list[int] | None = None
+    data_source_ids: list[int] | None = None
 
 
 class AgentRead(BaseModel):
@@ -45,6 +52,8 @@ class AgentRead(BaseModel):
     system_prompt: str
     model_instance_code: str | None
     max_iterations: int
+    context_window_limit: int
+    json_schema_output: dict[str, Any]
     enabled: bool
     description: str | None
     version: str
@@ -52,6 +61,7 @@ class AgentRead(BaseModel):
     skill_ids: list[int] = Field(default_factory=list)
     knowledge_base_ids: list[int] = Field(default_factory=list)
     data_asset_ids: list[int] = Field(default_factory=list)
+    data_source_ids: list[int] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
 
@@ -62,6 +72,11 @@ class AgentSummary(BaseModel):
     display_name: str
     enabled: bool
     model_instance_code: str | None = None
+
+
+class AgentRunRequest(BaseModel):
+    task_type: str = Field(default="general_chat", min_length=1, max_length=64)
+    messages: list[ModelMessage] = Field(min_length=1, max_length=200)
 
 
 class DataAssetCreate(BaseModel):

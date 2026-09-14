@@ -21,6 +21,7 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg://quant_user:quant_password@postgres:5432/quant_agent
       APP_ENV: docker
+      MODEL_CREDENTIAL_KEY: ${MODEL_CREDENTIAL_KEY:-}
     ports:
       - "8000:8000"
     depends_on:

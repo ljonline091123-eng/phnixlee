@@ -1,10 +1,11 @@
-from app.connectors.model_adapters import GeminiRestAdapter, MockModelAdapter, ModelAdapter, OpenAICompatAdapter
+from app.connectors.model_adapters import AnthropicMessagesAdapter, GeminiRestAdapter, MockModelAdapter, ModelAdapter, OpenAICompatAdapter
 
 _MODEL_ADAPTERS: dict[str, type[ModelAdapter]] = {
     "MOCK": MockModelAdapter,
     "OPENAI_COMPAT": OpenAICompatAdapter,
     "DEEPSEEK": OpenAICompatAdapter,
     "GEMINI_REST": GeminiRestAdapter,
+    "ANTHROPIC": AnthropicMessagesAdapter,
 }
 
 

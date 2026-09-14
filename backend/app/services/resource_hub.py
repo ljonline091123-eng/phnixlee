@@ -14,6 +14,7 @@ from app.models.ai_hub import (
     AgentChildLink,
     AgentDataAsset,
     AgentDataAssetLink,
+    AgentDataSourceLink,
     AgentDefinition,
     AgentKnowledgeBaseLink,
     AgentSkillLink,
@@ -26,6 +27,7 @@ from app.models.ai_hub import (
     ResearchReportRecord,
 )
 from app.models.market_data import (
+    DataSource,
     StockF10Cache,
     StockFinancialReport,
     StockKline,
@@ -160,7 +162,7 @@ DEFAULT_AGENTS = (
         "model_instance_code": "QWEN_PLUS",
         "max_iterations": 8,
         "description": "用于研究中心对话页签的数据治理、数据分类、字段解释和质量检查。",
-        "skill_codes": ["DATA_GOVERNANCE_DW"],
+        "skill_codes": ["DATA_GOVERNANCE_DW", "DATA_CLEANING_DW"],
         "kb_codes": ["STOCK_FULL_KG"],
         "asset_codes": ["STOCK_SYMBOL", "STOCK_QUOTE", "STOCK_KLINE", "STOCK_FINANCIAL", "STOCK_NOTICE", "STOCK_NEWS", "STOCK_F10", "RESEARCH_REPORT"],
     },
@@ -193,7 +195,7 @@ DEFAULT_AGENTS = (
         "model_instance_code": "DEEPSEEK_CHAT",
         "max_iterations": 10,
         "description": "用于分析选股、趋势研判、短中长线操作结论和风险条件。",
-        "skill_codes": ["STOCK_SELECTION_ANALYST", "STOCK_TREND_ADVISOR", "RESEARCH_REPORT_REVIEW"],
+        "skill_codes": ["STOCK_SELECTION_ANALYST", "STOCK_TREND_ADVISOR", "RESEARCH_REPORT_REVIEW", "RESEARCH_REVIEW_CORRECTION"],
         "kb_codes": ["STOCK_FULL_KG"],
         "asset_codes": ["STOCK_SYMBOL", "STOCK_QUOTE", "STOCK_KLINE", "STOCK_FINANCIAL", "STOCK_NOTICE", "STOCK_NEWS", "STOCK_F10", "RESEARCH_REPORT"],
     },
@@ -204,7 +206,7 @@ DEFAULT_AGENTS = (
         "model_instance_code": "DEEPSEEK_CHAT",
         "max_iterations": 10,
         "description": "用于研究中心研究页签，生成并保存研报、比对历史研报。",
-        "skill_codes": ["STOCK_SELECTION_ANALYST", "STOCK_TREND_ADVISOR", "RESEARCH_REPORT_REVIEW"],
+        "skill_codes": ["STOCK_SELECTION_ANALYST", "STOCK_TREND_ADVISOR", "RESEARCH_REPORT_REVIEW", "RESEARCH_REVIEW_CORRECTION"],
         "kb_codes": ["STOCK_FULL_KG"],
         "asset_codes": ["STOCK_SYMBOL", "STOCK_QUOTE", "STOCK_KLINE", "STOCK_FINANCIAL", "STOCK_NOTICE", "STOCK_NEWS", "STOCK_F10", "RESEARCH_REPORT"],
     },
@@ -215,7 +217,7 @@ DEFAULT_AGENTS = (
         "model_instance_code": "DEEPSEEK_CHAT",
         "max_iterations": 6,
         "description": "用于预警判断、历史研报偏差提示和风险解释。",
-        "skill_codes": ["STOCK_TREND_ADVISOR", "RESEARCH_REPORT_REVIEW"],
+        "skill_codes": ["STOCK_TREND_ADVISOR", "RESEARCH_REPORT_REVIEW", "WATCH_ALERT"],
         "kb_codes": ["STOCK_FULL_KG"],
         "asset_codes": ["STOCK_QUOTE", "STOCK_KLINE", "STOCK_NOTICE", "STOCK_NEWS", "STOCK_FINANCIAL", "STOCK_F10", "RESEARCH_REPORT"],
     },
@@ -224,10 +226,11 @@ DEFAULT_AGENTS = (
 
 def seed_default_agents(db: Session) -> None:
     """Configure the built-in stock research agents and bind their resources."""
-
+    created_codes: set[str] = set()
     for agent_config in DEFAULT_AGENTS:
         agent = db.scalar(select(AgentDefinition).where(AgentDefinition.agent_code == agent_config["agent_code"]))
         if agent is None:
+            created_codes.add(str(agent_config["agent_code"]))
             agent = AgentDefinition(
                 agent_code=str(agent_config["agent_code"]),
                 display_name=str(agent_config["display_name"]),
@@ -239,13 +242,6 @@ def seed_default_agents(db: Session) -> None:
                 version="1.0.0",
             )
             db.add(agent)
-        else:
-            agent.display_name = str(agent_config["display_name"])
-            agent.system_prompt = str(agent_config["system_prompt"])
-            agent.model_instance_code = str(agent_config["model_instance_code"])
-            agent.max_iterations = int(agent_config["max_iterations"])
-            agent.enabled = True
-            agent.description = str(agent_config["description"])
         db.flush()
 
     skill_by_code = {
@@ -259,6 +255,8 @@ def seed_default_agents(db: Session) -> None:
     }
 
     for agent_config in DEFAULT_AGENTS:
+        if agent_config["agent_code"] not in created_codes:
+            continue
         agent = db.scalar(select(AgentDefinition).where(AgentDefinition.agent_code == agent_config["agent_code"]))
         if agent is None:
             continue
@@ -299,11 +297,13 @@ def set_agent_links(
     skill_ids: list[int],
     knowledge_base_ids: list[int],
     data_asset_ids: list[int],
+    data_source_ids: list[int] | None = None,
 ) -> None:
     unique_children = list(dict.fromkeys(child_agent_ids))
     unique_skills = list(dict.fromkeys(skill_ids))
     unique_kbs = list(dict.fromkeys(knowledge_base_ids))
     unique_assets = list(dict.fromkeys(data_asset_ids))
+    unique_sources = list(dict.fromkeys(data_source_ids or []))
     if agent.id in unique_children:
         raise ValueError("An agent cannot reference itself as a child agent")
 
@@ -327,11 +327,16 @@ def set_agent_links(
         count = db.scalar(select(func.count(AgentDataAsset.id)).where(AgentDataAsset.id.in_(unique_assets))) or 0
         if int(count) != len(unique_assets):
             raise ValueError("One or more data assets do not exist")
+    if unique_sources:
+        count = db.scalar(select(func.count(DataSource.id)).where(DataSource.id.in_(unique_sources))) or 0
+        if int(count) != len(unique_sources):
+            raise ValueError("One or more data sources do not exist")
 
     db.execute(delete(AgentChildLink).where(AgentChildLink.agent_id == agent.id))
     db.execute(delete(AgentSkillLink).where(AgentSkillLink.agent_id == agent.id))
     db.execute(delete(AgentKnowledgeBaseLink).where(AgentKnowledgeBaseLink.agent_id == agent.id))
     db.execute(delete(AgentDataAssetLink).where(AgentDataAssetLink.agent_id == agent.id))
+    db.execute(delete(AgentDataSourceLink).where(AgentDataSourceLink.agent_id == agent.id))
     db.flush()
     db.add_all(
         [AgentChildLink(agent_id=agent.id, child_agent_id=child_id, order_index=index) for index, child_id in enumerate(unique_children)]
@@ -339,6 +344,7 @@ def set_agent_links(
     db.add_all([AgentSkillLink(agent_id=agent.id, skill_id=skill_id) for skill_id in unique_skills])
     db.add_all([AgentKnowledgeBaseLink(agent_id=agent.id, knowledge_base_id=kb_id) for kb_id in unique_kbs])
     db.add_all([AgentDataAssetLink(agent_id=agent.id, data_asset_id=asset_id) for asset_id in unique_assets])
+    db.add_all([AgentDataSourceLink(agent_id=agent.id, data_source_id=source_id) for source_id in unique_sources])
 
 
 def would_create_agent_cycle(db: Session, agent_id: int, child_agent_ids: list[int]) -> bool:

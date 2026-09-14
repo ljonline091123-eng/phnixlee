@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import hashlib
+import os
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 
 
 SKILL_ROOT = Path(__file__).resolve().parents[2] / "skill_docs"
@@ -21,7 +23,13 @@ def skill_file_path(skill_code: str) -> Path:
 def write_skill_file(skill_code: str, content: str) -> tuple[str, str]:
     path = skill_file_path(skill_code)
     SKILL_ROOT.mkdir(parents=True, exist_ok=True)
-    path.write_text(content, encoding="utf-8")
+    with NamedTemporaryFile(mode="w", encoding="utf-8", dir=SKILL_ROOT, delete=False, suffix=".tmp") as temp:
+        temp.write(content)
+        temp_path = Path(temp.name)
+    try:
+        os.replace(temp_path, path)
+    finally:
+        temp_path.unlink(missing_ok=True)
     return str(path.relative_to(SKILL_ROOT.parent)), hashlib.sha256(content.encode("utf-8")).hexdigest()
 
 
@@ -37,4 +45,3 @@ def delete_skill_file(skill_code: str) -> None:
     path = skill_file_path(skill_code)
     if path.exists():
         path.unlink()
-

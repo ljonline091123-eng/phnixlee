@@ -93,7 +93,11 @@ def _agent_review(db: Session, agent: AgentDefinition | None, task_type: str, sk
         task_type=task_type,
         instance_code=agent.model_instance_code if agent else None,
         messages=messages,
-        metadata_json={"skill_code": skill_code, "governance_target": evidence.get("target")},
+        metadata_json={
+            "skill_code": skill_code,
+            "governance_target": evidence.get("target"),
+            "json_schema_output": agent.json_schema_output if agent else {},
+        },
     )
     if log.status != "SUCCESS":
         raise ValueError(log.error_message or "Agent governance failed")

@@ -110,6 +110,60 @@ class OpenAICompatAdapter(ModelAdapter):
         return f"{base_url}/{api_path}"
 
 
+class AnthropicMessagesAdapter(ModelAdapter):
+    adapter_type = "ANTHROPIC"
+
+    def health_check(self, instance: ModelInstance) -> tuple[str, list[str]]:
+        if not instance.api_key or not instance.api_base_url:
+            raise ValueError("ANTHROPIC instance requires api_key and api_base_url")
+        return ("Claude Messages endpoint is configured.", ["chat"])
+
+    def chat(
+        self,
+        instance: ModelInstance,
+        messages: list[dict[str, str]],
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+        metadata_json: dict[str, Any] | None = None,
+    ) -> ModelExecutionResult:
+        self.health_check(instance)
+        url = f"{instance.api_base_url.rstrip('/')}/{(instance.api_path or 'messages').lstrip('/')}"
+        system = "\n".join(item["content"] for item in messages if item["role"] == "system").strip()
+        conversation = [
+            {"role": "assistant" if item["role"] == "assistant" else "user", "content": item["content"]}
+            for item in messages if item["role"] != "system"
+        ]
+        payload: dict[str, Any] = {
+            "model": instance.model_code,
+            "max_tokens": max_tokens if max_tokens is not None else instance.max_tokens,
+            "messages": conversation,
+        }
+        if system:
+            payload["system"] = system
+        # Current Claude Sonnet models reject non-default sampling parameters;
+        # opt in for models that explicitly support them.
+        if (instance.config_json or {}).get("send_sampling_parameters"):
+            payload["temperature"] = temperature if temperature is not None else instance.temperature
+            payload["top_p"] = instance.top_p
+        payload.update((instance.config_json or {}).get("extra_body_json", {}))
+        headers = {
+            "Authorization": f"Bearer {instance.api_key}",
+            "anthropic-version": "2023-06-01",
+            "Content-Type": "application/json",
+        }
+        workspace_id = (instance.config_json or {}).get("workspace_id")
+        if workspace_id:
+            headers["anthropic-workspace-id"] = str(workspace_id)
+        with httpx.Client(timeout=httpx.Timeout(60.0)) as client:
+            response = client.post(url, json=payload, headers=headers)
+            response.raise_for_status()
+            response_json = response.json()
+        response_text = "\n".join(
+            item.get("text", "") for item in response_json.get("content", []) if item.get("type") == "text"
+        )
+        return ModelExecutionResult(response_text=response_text, response_json=response_json)
+
+
 class GeminiRestAdapter(ModelAdapter):
     adapter_type = "GEMINI_REST"
 
@@ -129,10 +183,10 @@ class GeminiRestAdapter(ModelAdapter):
         if not instance.api_key:
             raise ValueError("GEMINI_REST instance requires api_key")
         base_url = (instance.api_base_url or "https://generativelanguage.googleapis.com/v1beta").rstrip("/")
-        url = f"{base_url}/models/{instance.model_code}:generateContent?key={instance.api_key}"
+        url = f"{base_url}/models/{instance.model_code}:generateContent"
         system_instruction = "\n".join(item["content"] for item in messages if item["role"] == "system").strip()
         contents = [
-            {"role": item["role"], "parts": [{"text": item["content"]}]}
+            {"role": "model" if item["role"] == "assistant" else "user", "parts": [{"text": item["content"]}]}
             for item in messages
             if item["role"] != "system"
         ]
@@ -147,7 +201,7 @@ class GeminiRestAdapter(ModelAdapter):
         payload["generationConfig"] = generation_config
         payload.update(instance.config_json.get("extra_body_json", {}))
         with httpx.Client(timeout=httpx.Timeout(60.0)) as client:
-            response = client.post(url, json=payload)
+            response = client.post(url, json=payload, headers={"x-goog-api-key": instance.api_key})
             response.raise_for_status()
             response_json = response.json()
         text = ""
@@ -155,7 +209,5 @@ class GeminiRestAdapter(ModelAdapter):
         if candidates:
             content = candidates[0].get("content") or {}
             parts = content.get("parts") or []
-            if parts:
-                text = parts[0].get("text") or ""
+            text = "\n".join(part.get("text", "") for part in parts if part.get("text"))
         return ModelExecutionResult(response_text=text or str(response_json), response_json=response_json)
-

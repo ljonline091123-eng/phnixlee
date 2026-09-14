@@ -15,6 +15,16 @@ def ensure_compat_columns(engine: Engine) -> None:
     inspector = inspect(engine)
     tables = set(inspector.get_table_names())
     with engine.begin() as connection:
+        for table_name, additions in (
+            ("model_provider", (("api_base_url", "VARCHAR(512)"), ("api_key_encrypted", "TEXT"))),
+            ("model_instance", (("usage_type", "VARCHAR(16) NOT NULL DEFAULT 'EXACT'"),)),
+            ("agent_definition", (("context_window_limit", "INTEGER NOT NULL DEFAULT 12"), ("json_schema_output", "JSON NOT NULL DEFAULT '{}'"))),
+        ):
+            if table_name in tables:
+                existing = {column["name"] for column in inspector.get_columns(table_name)}
+                for name, definition in additions:
+                    if name not in existing:
+                        connection.execute(text(f'ALTER TABLE "{table_name}" ADD COLUMN "{name}" {definition}'))
         if "model_skill" in tables:
             existing = {column["name"] for column in inspector.get_columns("model_skill")}
             additions = (
@@ -23,6 +33,7 @@ def ensure_compat_columns(engine: Engine) -> None:
                 ("version", "VARCHAR(32) NOT NULL DEFAULT '1.0.0'"),
                 ("is_builtin", "BOOLEAN NOT NULL DEFAULT 0"),
                 ("format", "VARCHAR(16) NOT NULL DEFAULT 'MD'"),
+                ("skill_type", "VARCHAR(32) NOT NULL DEFAULT 'PROMPT_SOP'"),
             )
             for name, definition in additions:
                 if name not in existing:

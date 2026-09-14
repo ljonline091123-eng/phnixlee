@@ -12,6 +12,7 @@ from app.db.session import SessionLocal, engine
 from app.services.catalog import seed_default_catalog
 from app.services.daily_sync import daily_master_sync_loop
 from app.services.model_hub import seed_default_models, seed_default_skills
+from app.services.prediction_review import daily_prediction_review_loop
 from app.services.resource_hub import seed_default_agents, seed_default_data_assets, seed_default_knowledge_bases, seed_default_graphs
 
 settings = get_settings()
@@ -30,14 +31,13 @@ async def lifespan(_: FastAPI):
         seed_default_graphs(db)
         seed_default_agents(db)
     sync_task = asyncio.create_task(daily_master_sync_loop())
+    review_task = asyncio.create_task(daily_prediction_review_loop())
     try:
         yield
     finally:
         sync_task.cancel()
-        try:
-            await sync_task
-        except asyncio.CancelledError:
-            pass
+        review_task.cancel()
+        await asyncio.gather(sync_task, review_task, return_exceptions=True)
         engine.dispose()
 
 

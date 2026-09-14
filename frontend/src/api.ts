@@ -253,7 +253,9 @@ export type ModelProvider = {
   id: number;
   provider_code: string;
   provider_name: string;
-  provider_type: "MOCK" | "OPENAI_COMPAT" | "GEMINI_REST" | "DEEPSEEK";
+  provider_type: "MOCK" | "OPENAI_COMPAT" | "GEMINI_REST" | "DEEPSEEK" | "ANTHROPIC";
+  api_base_url?: string | null;
+  api_key_configured: boolean;
   enabled: boolean;
   description?: string;
   config_json: Record<string, unknown>;
@@ -265,6 +267,8 @@ export type ModelProviderPayload = {
   provider_code: string;
   provider_name: string;
   provider_type: ModelProvider["provider_type"];
+  api_base_url?: string | null;
+  api_key?: string;
   enabled: boolean;
   description?: string;
   config_json: Record<string, unknown>;
@@ -277,6 +281,7 @@ export type ModelInstance = {
   model_code: string;
   model_name: string;
   purpose: string;
+  usage_type: "EXACT" | "CREATIVE";
   api_base_url?: string;
   api_path?: string;
   max_tokens: number;
@@ -297,6 +302,7 @@ export type ModelInstancePayload = {
   model_code: string;
   model_name: string;
   purpose: string;
+  usage_type: "EXACT" | "CREATIVE";
   api_key?: string;
   api_base_url?: string;
   api_path?: string;
@@ -352,6 +358,7 @@ export type ModelSkill = {
   skill_name: string;
   description?: string | null;
   instructions: string;
+  skill_type: "PROMPT_SOP" | "EXECUTABLE_TOOL";
   enabled: boolean;
   config_json: Record<string, unknown>;
   created_at: string;
@@ -363,11 +370,24 @@ export type ModelSkill = {
   format?: string;
 };
 
+export type SkillOptimizationDraft = {
+  id: number;
+  skill_id: number;
+  base_skill_version: string;
+  prediction_ids: number[];
+  proposed_instructions: string;
+  rationale: string;
+  status: string;
+  created_at: string;
+};
+
 export type ModelSkillPayload = {
   skill_code?: string;
   skill_name: string;
   description?: string;
   instructions: string;
+  skill_type: "PROMPT_SOP" | "EXECUTABLE_TOOL";
+  expected_content_hash?: string;
   enabled: boolean;
   config_json: Record<string, unknown>;
   version?: string;
@@ -380,6 +400,8 @@ export type AgentDefinition = {
   system_prompt: string;
   model_instance_code?: string | null;
   max_iterations: number;
+  context_window_limit: number;
+  json_schema_output: Record<string, unknown>;
   enabled: boolean;
   description?: string | null;
   version: string;
@@ -387,6 +409,7 @@ export type AgentDefinition = {
   skill_ids: number[];
   knowledge_base_ids: number[];
   data_asset_ids: number[];
+  data_source_ids: number[];
   created_at: string;
   updated_at: string;
 };
@@ -397,6 +420,8 @@ export type AgentPayload = {
   system_prompt: string;
   model_instance_code?: string | null;
   max_iterations: number;
+  context_window_limit: number;
+  json_schema_output: Record<string, unknown>;
   enabled: boolean;
   description?: string;
   version?: string;
@@ -404,6 +429,7 @@ export type AgentPayload = {
   skill_ids: number[];
   knowledge_base_ids: number[];
   data_asset_ids: number[];
+  data_source_ids: number[];
 };
 
 export type DataAsset = {
@@ -766,6 +792,11 @@ export const api = {
       body: JSON.stringify(payload),
     }),
   deleteModelSkill: (id: number) => request<void>(`/model-hub/skills/${id}`, { method: "DELETE" }),
+  listSkillRevisions: (id: number) => request<Array<{ id: number; version: string; source: string; created_at: string }>>(`/model-hub/skills/${id}/revisions`),
+  rollbackSkill: (id: number, revisionId: number) => request<ModelSkill>(`/model-hub/skills/${id}/revisions/${revisionId}/rollback`, { method: "POST" }),
+  listSkillDrafts: () => request<SkillOptimizationDraft[]>("/model-hub/skill-drafts?status_filter=PENDING_REVIEW"),
+  approveSkillDraft: (id: number) => request<ModelSkill>(`/model-hub/skill-drafts/${id}/approve`, { method: "POST" }),
+  rejectSkillDraft: (id: number) => request<SkillOptimizationDraft>(`/model-hub/skill-drafts/${id}/reject`, { method: "POST" }),
   listAgents: () => request<AgentDefinition[]>("/resources/agents"),
   createAgent: (payload: AgentPayload) =>
     request<AgentDefinition>("/resources/agents", { method: "POST", body: JSON.stringify(payload) }),
