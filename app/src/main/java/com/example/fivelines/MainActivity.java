@@ -203,6 +203,7 @@ public class MainActivity extends Activity {
         private long easterStart;
         private AlertDialog easterDialog;
         private int settingsMusicToggleCount;
+        private boolean adminUnlockedByMusic;
         private final ArrayList<int[]> racerTrailCells = new ArrayList<>();
         private int racerTrailType = EMPTY;
         private long racerTrailUntil;
@@ -287,6 +288,12 @@ public class MainActivity extends Activity {
             moveToken++;
             handler.removeCallbacksAndMessages(null);
             closeEasterDialog();
+            adminMode = false;
+            settingsMusicToggleCount = 0;
+            adminUnlockedByMusic = false;
+            settings.edit()
+                    .putBoolean("admin_mode", false)
+                    .apply();
             easterKind = EASTER_NONE;
             claimedEaster = EASTER_NONE;
             easterLoading = false;
@@ -2291,6 +2298,8 @@ public class MainActivity extends Activity {
                 settingsMusicToggleCount++;
                 if (!adminMode && settingsMusicToggleCount >= 7) {
                     adminMode = true;
+                    adminUnlockedByMusic = true;
+                    settingsMusicToggleCount = 0;
                     difficulty.setEnabled(true);
                     white.setEnabled(true);
                     bomb.setEnabled(true);
@@ -2361,13 +2370,15 @@ public class MainActivity extends Activity {
                         soundEnabled = effects.isChecked();
                         musicVolume = musicVolumeBar.getProgress() / 100f;
                         soundVolume = soundVolumeBar.getProgress() / 100f;
-                        boolean triggerToutou = claimedEaster == EASTER_NONE && wasAdminMode
+                        boolean triggerToutou = claimedEaster == EASTER_NONE
+                                && wasAdminMode && adminUnlockedByMusic
                                 && Math.abs(whiteProbabilityMultiplier - 1.3f) < 0.001f
                                 && Math.abs(bombProbabilityMultiplier - 1.4f) < 0.001f;
                         if (wasAdminMode) {
                             adminMode = false;
                             settingsMusicToggleCount = 0;
                         }
+                        adminUnlockedByMusic = false;
                         settings.edit()
                                 .putFloat("difficulty", difficultyMultiplier)
                                 .putFloat("white_probability", whiteProbabilityMultiplier)
@@ -2556,6 +2567,7 @@ public class MainActivity extends Activity {
             outState.putBoolean("five_lines_kuromi_theme", kuromiTheme);
             outState.putBoolean("five_lines_heart_mode", heartMode);
             outState.putInt("five_lines_claimed_easter", claimedEaster);
+            outState.putBoolean("five_lines_admin_unlocked_by_music", adminUnlockedByMusic);
         }
 
         private void restoreState(Bundle state) {
@@ -2585,6 +2597,7 @@ public class MainActivity extends Activity {
             kuromiTheme = state.getBoolean("five_lines_kuromi_theme", kuromiTheme);
             heartMode = state.getBoolean("five_lines_heart_mode", heartMode);
             claimedEaster = state.getInt("five_lines_claimed_easter", EASTER_NONE);
+            adminUnlockedByMusic = state.getBoolean("five_lines_admin_unlocked_by_music", false);
             if (heartMode) {
                 musicEnabled = true;
             }

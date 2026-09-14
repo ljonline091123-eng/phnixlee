@@ -200,6 +200,7 @@ final class CloudGameModel: ObservableObject {
     private var easterSecretTaps = 0
     private var claimedEaster: EasterKind?
     private var musicToggleUnlockCount = 0
+    private var adminUnlockedByMusic = false
     private var suppressSettingsSave = false
 
     init() {
@@ -213,7 +214,6 @@ final class CloudGameModel: ObservableObject {
         loadingTimer?.invalidate()
         loadingTimer = nil
         board = Array(repeating: nil, count: 81)
-        nextTiles = randomPreview()
         selectedIndex = nil
         removing = []
         easterLoading = nil
@@ -227,7 +227,13 @@ final class CloudGameModel: ObservableObject {
         kuromiTheme = false
         heartMode = false
         restoreConfiguredMusicAfterHiddenMode()
+        suppressSettingsSave = true
+        adminMode = false
+        suppressSettingsSave = false
+        musicToggleUnlockCount = 0
+        adminUnlockedByMusic = false
         applyAudioSettings()
+        nextTiles = randomPreview()
         score = 0
         isGameOver = false
         busy = false
@@ -690,6 +696,7 @@ final class CloudGameModel: ObservableObject {
         musicToggleUnlockCount += 1
         if !adminMode, musicToggleUnlockCount >= 7 {
             adminMode = true
+            adminUnlockedByMusic = true
             musicToggleUnlockCount = 0
             audio.playAlarm()
         } else {
@@ -697,18 +704,23 @@ final class CloudGameModel: ObservableObject {
         }
     }
 
+    func beginSettingsSession() {
+        musicToggleUnlockCount = 0
+    }
+
     func saveSettingsAndCheckAdminEaster() {
         let wasAdminMode = adminMode
         difficulty = min(2, max(1, difficulty))
         whiteProbability = min(2, max(0, whiteProbability))
         bombProbability = min(2, max(0, bombProbability))
-        let shouldTriggerToutou = claimedEaster == nil && wasAdminMode
+        let shouldTriggerToutou = claimedEaster == nil && wasAdminMode && adminUnlockedByMusic
             && abs(whiteProbability - 1.3) < 0.001
             && abs(bombProbability - 1.4) < 0.001
         if wasAdminMode {
             adminMode = false
             musicToggleUnlockCount = 0
         }
+        adminUnlockedByMusic = false
         saveSettings()
         if shouldTriggerToutou {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) { [weak self] in

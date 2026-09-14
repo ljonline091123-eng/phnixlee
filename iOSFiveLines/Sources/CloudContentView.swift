@@ -896,13 +896,11 @@ private struct SettingsView: View {
                     }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("完成") {
-                        game.saveSettingsAndCheckAdminEaster()
-                        dismiss()
-                    }
+                    Button("关闭") { dismiss() }
                 }
             }
         }
+        .onAppear { game.beginSettingsSession() }
     }
 
     private var adminModeNote: String {
