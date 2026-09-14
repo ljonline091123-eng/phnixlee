@@ -6,6 +6,8 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.content.res.Configuration;
 import android.graphics.Canvas;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Path;
@@ -108,6 +110,8 @@ public class MainActivity extends Activity {
         private static final int MUSIC_TRACK_SYNTH = 0;
         private static final int MUSIC_TRACK_MIDI = 1;
         private static final int MUSIC_TRACK_SY = 2;
+        private static final int MUSIC_TRACK_MOLLY = 3;
+        private static final int MUSIC_TRACK_RAY = 4;
         private static final int EASTER_NONE = 0;
         private static final int EASTER_RAY = 1;
         private static final int EASTER_MOLLY = 2;
@@ -138,6 +142,7 @@ public class MainActivity extends Activity {
         private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final RectF menuBounds = new RectF();
         private final RectF shineBounds = new RectF();
+        private final Bitmap[] carLogoBitmaps = new Bitmap[10];
 
     private int score;
     // Snapshot before a player move. A score change means that move cleared a line.
@@ -192,6 +197,7 @@ public class MainActivity extends Activity {
         private boolean kuromiTheme;
         private boolean heartMode;
         private int easterKind = EASTER_NONE;
+        private int claimedEaster = EASTER_NONE;
         private boolean easterLoading;
         private int easterSecretTaps;
         private long easterStart;
@@ -216,7 +222,14 @@ public class MainActivity extends Activity {
         }
 
         void onHostResume() {
-            sound.updateMusic(musicEnabled, musicVolume, musicTrack);
+            sound.updateMusic(musicEnabled, musicVolume, activeMusicTrack());
+        }
+
+        private int activeMusicTrack() {
+            if (heartMode) return MUSIC_TRACK_SY;
+            if (claimedEaster == EASTER_MOLLY) return MUSIC_TRACK_MOLLY;
+            if (claimedEaster == EASTER_RAY) return MUSIC_TRACK_RAY;
+            return musicTrack;
         }
 
         private void loadSettings() {
@@ -275,9 +288,11 @@ public class MainActivity extends Activity {
             handler.removeCallbacksAndMessages(null);
             closeEasterDialog();
             easterKind = EASTER_NONE;
+            claimedEaster = EASTER_NONE;
             easterLoading = false;
             easterSecretTaps = 0;
             clearSpecialModes(true);
+            sound.updateMusic(musicEnabled, musicVolume, activeMusicTrack());
             racerTrailCells.clear();
             racerTrailType = EMPTY;
             racerTrailUntil = 0L;
@@ -1085,29 +1100,31 @@ public class MainActivity extends Activity {
 
         private void drawKuromiEar(Canvas canvas, float cx, float cy, float radius, float side, int outerColor) {
             Path ear = new Path();
-            ear.moveTo(cx + side * radius * 0.42f, cy - radius * 0.54f);
+            ear.moveTo(cx + side * radius * 0.35f, cy - radius * 0.72f);
             ear.cubicTo(
-                    cx + side * radius * 0.62f,
-                    cy - radius * 1.00f,
-                    cx + side * radius * 0.82f,
-                    cy - radius * 1.18f,
-                    cx + side * radius * 1.05f,
-                    cy - radius * 1.15f
+                    cx + side * radius * 0.49f,
+                    cy - radius * 1.12f,
+                    cx + side * radius * 0.69f,
+                    cy - radius * 1.41f,
+                    cx + side * radius * 0.94f,
+                    cy - radius * 1.43f
             );
             ear.cubicTo(
-                    cx + side * radius * 1.15f,
-                    cy - radius * 0.86f,
-                    cx + side * radius * 0.76f,
-                    cy - radius * 0.62f,
-                    cx + side * radius * 0.37f,
-                    cy - radius * 0.36f
+                    cx + side * radius * 1.13f,
+                    cy - radius * 1.45f,
+                    cx + side * radius * 1.16f,
+                    cy - radius * 1.09f,
+                    cx + side * radius * 1.22f,
+                    cy - radius * 0.75f
             );
+            ear.quadTo(cx + side * radius * 1.22f, cy - radius * 0.54f,
+                    cx + side * radius * 0.81f, cy - radius * 0.59f);
             ear.close();
             paint.setStyle(Paint.Style.FILL);
             paint.setAlpha(255);
             paint.setShader(new RadialGradient(
-                    cx + side * radius * 0.72f,
-                    cy - radius * 0.92f,
+                    cx + side * radius * 0.76f,
+                    cy - radius * 1.20f,
                     radius * 0.74f,
                     new int[]{lighten(outerColor, 0.25f), outerColor, darken(outerColor, 0.45f)},
                     new float[]{0f, 0.62f, 1f},
@@ -1122,18 +1139,23 @@ public class MainActivity extends Activity {
 
             paint.setStyle(Paint.Style.FILL);
             paint.setShader(new RadialGradient(
-                    cx + side * radius * 1.08f,
-                    cy - radius * 1.18f,
+                    cx + side * radius * 1.02f,
+                    cy - radius * 1.44f,
                     radius * 0.32f,
                     new int[]{lighten(outerColor, 0.25f), outerColor, darken(outerColor, 0.45f)},
                     new float[]{0f, 0.55f, 1f},
                     Shader.TileMode.CLAMP
             ));
-            canvas.drawCircle(cx + side * radius * 1.08f, cy - radius * 1.18f, radius * 0.22f, paint);
+            canvas.drawCircle(cx + side * radius * 1.02f, cy - radius * 1.44f, radius * 0.20f, paint);
             paint.setShader(null);
             paint.setAlpha(0x9a);
             paint.setColor(Color.WHITE);
-            canvas.drawCircle(cx + side * radius * 1.00f, cy - radius * 1.25f, radius * 0.07f, paint);
+            canvas.drawCircle(cx + side * radius * 0.96f, cy - radius * 1.52f, radius * 0.07f, paint);
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(Math.max(1.1f, radius * 0.055f));
+            canvas.drawLine(cx + side * radius * 0.65f, cy - radius * 1.20f,
+                    cx + side * radius * 0.86f, cy - radius * 1.33f, paint);
+            paint.setStyle(Paint.Style.FILL);
             paint.setAlpha(255);
         }
 
@@ -1193,44 +1215,24 @@ public class MainActivity extends Activity {
             int plateColor = type == WHITE ? 0xff2c3036 : 0xff20242b;
             paint.setStyle(Paint.Style.FILL);
             paint.setColor(plateColor);
-            canvas.drawCircle(cx, cy, radius * 0.68f, paint);
+            canvas.drawCircle(cx, cy, radius * 0.81f, paint);
             paint.setStyle(Paint.Style.STROKE);
             paint.setStrokeWidth(Math.max(1.3f, radius * 0.045f));
             paint.setColor(0xffd8dde6);
-            canvas.drawCircle(cx, cy, radius * 0.69f, paint);
+            canvas.drawCircle(cx, cy, radius * 0.82f, paint);
             paint.setColor(0xff6f7785);
             paint.setStrokeWidth(Math.max(1.0f, radius * 0.022f));
-            canvas.drawCircle(cx, cy, radius * 0.59f, paint);
+            canvas.drawCircle(cx, cy, radius * 0.73f, paint);
 
-            switch (carBrandFor(type)) {
-                case 1:
-                    drawFerrariBadge(canvas, cx, cy, radius);
-                    break;
-                case 2:
-                    drawLamborghiniBadge(canvas, cx, cy, radius);
-                    break;
-                case 3:
-                    drawPorscheBadge(canvas, cx, cy, radius);
-                    break;
-                case 4:
-                    drawDodgeBadge(canvas, cx, cy, radius);
-                    break;
-                case 5:
-                    drawCadillacBadge(canvas, cx, cy, radius);
-                    break;
-                case 6:
-                    drawNissanBadge(canvas, cx, cy, radius);
-                    break;
-                case 7:
-                    drawMercedesBadge(canvas, cx, cy, radius);
-                    break;
-                case 8:
-                    drawBmwBadge(canvas, cx, cy, radius);
-                    break;
-                case 9:
-                default:
-                    drawAudiBadge(canvas, cx, cy, radius);
-                    break;
+            Bitmap logo = carLogoFor(carBrandFor(type));
+            if (logo != null) {
+                paint.setStyle(Paint.Style.FILL);
+                paint.setColor(Color.WHITE);
+                paint.setAlpha(255);
+                paint.setFilterBitmap(true);
+                shineBounds.set(cx - radius * 0.82f, cy - radius * 0.82f,
+                        cx + radius * 0.82f, cy + radius * 0.82f);
+                canvas.drawBitmap(logo, null, shineBounds, paint);
             }
 
             paint.setStyle(Paint.Style.FILL);
@@ -1269,209 +1271,24 @@ public class MainActivity extends Activity {
             }
         }
 
+        private Bitmap carLogoFor(int brand) {
+            if (brand < 1 || brand >= carLogoBitmaps.length) return null;
+            if (carLogoBitmaps[brand] == null) {
+                int[] resources = {0, R.drawable.car_ferrari, R.drawable.car_lamborghini,
+                        R.drawable.car_porsche, R.drawable.car_dodge, R.drawable.car_cadillac,
+                        R.drawable.car_nissan, R.drawable.car_mercedes, R.drawable.car_bmw,
+                        R.drawable.car_audi};
+                carLogoBitmaps[brand] = BitmapFactory.decodeResource(getResources(), resources[brand]);
+            }
+            return carLogoBitmaps[brand];
+        }
+
         private int themedOuterColor(int type) {
             return type == WHITE ? 0xfff1e3c5 : colorFor(type);
         }
 
         private int carOuterColorFor(int type) {
             return type == WHITE ? 0xfff1e3c5 : colorFor(type);
-        }
-
-        private void drawBmwBadge(Canvas canvas, float cx, float cy, float radius) {
-            float r = radius * 0.46f;
-            paint.setStyle(Paint.Style.FILL);
-            paint.setColor(0xff0b0d12);
-            canvas.drawCircle(cx, cy, r, paint);
-            shineBounds.set(cx - r * 0.70f, cy - r * 0.70f, cx + r * 0.70f, cy + r * 0.70f);
-            paint.setColor(0xfff5f8fc);
-            canvas.drawArc(shineBounds, -90f, 90f, true, paint);
-            canvas.drawArc(shineBounds, 90f, 90f, true, paint);
-            paint.setColor(0xff0b86e8);
-            canvas.drawArc(shineBounds, 0f, 90f, true, paint);
-            canvas.drawArc(shineBounds, 180f, 90f, true, paint);
-            paint.setStyle(Paint.Style.STROKE);
-            paint.setStrokeWidth(Math.max(1.1f, radius * 0.035f));
-            paint.setColor(0xffe8edf6);
-            canvas.drawCircle(cx, cy, r * 0.72f, paint);
-            canvas.drawCircle(cx, cy, r, paint);
-            drawBadgeText(canvas, "BMW", cx, cy - r * 0.56f, radius * 0.15f, 0xfff5f8fc, true);
-        }
-
-        private void drawMercedesBadge(Canvas canvas, float cx, float cy, float radius) {
-            float r = radius * 0.50f;
-            paint.setStyle(Paint.Style.STROKE);
-            paint.setStrokeWidth(Math.max(1.4f, radius * 0.055f));
-            paint.setColor(0xffe5e9f1);
-            canvas.drawCircle(cx, cy, r, paint);
-            paint.setStrokeWidth(Math.max(1.6f, radius * 0.070f));
-            Path star = new Path();
-            star.moveTo(cx, cy);
-            star.lineTo(cx, cy - r * 0.86f);
-            star.moveTo(cx, cy);
-            star.lineTo(cx - r * 0.76f, cy + r * 0.46f);
-            star.moveTo(cx, cy);
-            star.lineTo(cx + r * 0.76f, cy + r * 0.46f);
-            canvas.drawPath(star, paint);
-            paint.setStyle(Paint.Style.FILL);
-            paint.setColor(0xfff7f9ff);
-            canvas.drawCircle(cx, cy, radius * 0.055f, paint);
-        }
-
-        private void drawAudiBadge(Canvas canvas, float cx, float cy, float radius) {
-            paint.setStyle(Paint.Style.STROKE);
-            paint.setStrokeWidth(Math.max(1.8f, radius * 0.070f));
-            paint.setColor(0xffeef2f6);
-            float ringR = radius * 0.18f;
-            float gap = radius * 0.22f;
-            for (int i = 0; i < 4; i++) {
-                canvas.drawCircle(cx + (i - 1.5f) * gap, cy, ringR, paint);
-            }
-        }
-
-        private void drawFerrariBadge(Canvas canvas, float cx, float cy, float radius) {
-            drawShield(canvas, cx, cy, radius * 0.76f, radius * 1.02f, 0xffffdf25, 0xff111118);
-            float top = cy - radius * 0.44f;
-            paint.setStyle(Paint.Style.FILL);
-            paint.setColor(0xff199750);
-            canvas.drawRect(cx - radius * 0.30f, top, cx - radius * 0.10f, top + radius * 0.08f, paint);
-            paint.setColor(0xffffffff);
-            canvas.drawRect(cx - radius * 0.10f, top, cx + radius * 0.10f, top + radius * 0.08f, paint);
-            paint.setColor(0xffe10600);
-            canvas.drawRect(cx + radius * 0.10f, top, cx + radius * 0.30f, top + radius * 0.08f, paint);
-            drawHorseGlyph(canvas, cx, cy + radius * 0.03f, radius * 0.43f, 0xff101010);
-        }
-
-        private void drawLamborghiniBadge(Canvas canvas, float cx, float cy, float radius) {
-            drawShield(canvas, cx, cy, radius * 0.82f, radius * 1.02f, 0xff111118, 0xffd7a72b);
-            paint.setStyle(Paint.Style.STROKE);
-            paint.setStrokeWidth(Math.max(1.1f, radius * 0.045f));
-            paint.setColor(0xffe2b64d);
-            Path horns = new Path();
-            horns.moveTo(cx - radius * 0.24f, cy - radius * 0.10f);
-            horns.cubicTo(cx - radius * 0.44f, cy - radius * 0.32f, cx - radius * 0.32f, cy - radius * 0.42f, cx - radius * 0.13f, cy - radius * 0.20f);
-            horns.moveTo(cx + radius * 0.24f, cy - radius * 0.10f);
-            horns.cubicTo(cx + radius * 0.44f, cy - radius * 0.32f, cx + radius * 0.32f, cy - radius * 0.42f, cx + radius * 0.13f, cy - radius * 0.20f);
-            canvas.drawPath(horns, paint);
-            paint.setStyle(Paint.Style.FILL);
-            paint.setColor(0xffe2b64d);
-            shineBounds.set(cx - radius * 0.33f, cy - radius * 0.04f, cx + radius * 0.33f, cy + radius * 0.26f);
-            canvas.drawOval(shineBounds, paint);
-            canvas.drawCircle(cx, cy - radius * 0.12f, radius * 0.17f, paint);
-            paint.setStyle(Paint.Style.STROKE);
-            paint.setStrokeWidth(Math.max(1.0f, radius * 0.040f));
-            canvas.drawLine(cx - radius * 0.18f, cy + radius * 0.21f, cx - radius * 0.29f, cy + radius * 0.38f, paint);
-            canvas.drawLine(cx + radius * 0.18f, cy + radius * 0.21f, cx + radius * 0.29f, cy + radius * 0.38f, paint);
-        }
-
-        private void drawPorscheBadge(Canvas canvas, float cx, float cy, float radius) {
-            drawShield(canvas, cx, cy, radius * 0.84f, radius * 1.02f, 0xfff1c957, 0xff111118);
-            float left = cx - radius * 0.30f;
-            float top = cy - radius * 0.30f;
-            float w = radius * 0.60f;
-            float h = radius * 0.46f;
-            paint.setStyle(Paint.Style.FILL);
-            for (int i = 0; i < 4; i++) {
-                paint.setColor(i % 2 == 0 ? 0xffc62828 : 0xff111118);
-                canvas.drawRect(left, top + i * h / 4f, left + w, top + (i + 1) * h / 4f, paint);
-            }
-            drawHorseGlyph(canvas, cx, cy + radius * 0.17f, radius * 0.22f, 0xff111118);
-            drawBadgeText(canvas, "P", cx, cy - radius * 0.39f, radius * 0.20f, 0xff111118, true);
-        }
-
-        private void drawDodgeBadge(Canvas canvas, float cx, float cy, float radius) {
-            paint.setStyle(Paint.Style.FILL);
-            paint.setColor(0xfff44336);
-            drawSlash(canvas, cx - radius * 0.14f, cy - radius * 0.02f, radius * 0.13f, radius * 0.55f);
-            drawSlash(canvas, cx + radius * 0.12f, cy - radius * 0.02f, radius * 0.13f, radius * 0.55f);
-            drawBadgeText(canvas, "DODGE", cx, cy + radius * 0.42f, radius * 0.16f, 0xffedf1f7, true);
-        }
-
-        private void drawCadillacBadge(Canvas canvas, float cx, float cy, float radius) {
-            drawShield(canvas, cx, cy, radius * 0.90f, radius * 0.72f, 0xfff4f6f9, 0xffd7dde8);
-            float left = cx - radius * 0.32f;
-            float top = cy - radius * 0.23f;
-            int[] colors = {0xffd6a627, 0xffc4222f, 0xff2855b8, 0xfff1d46a, 0xffffffff, 0xffc4222f};
-            paint.setStyle(Paint.Style.FILL);
-            for (int row = 0; row < 2; row++) {
-                for (int col = 0; col < 3; col++) {
-                    paint.setColor(colors[row * 3 + col]);
-                    canvas.drawRect(
-                            left + col * radius * 0.22f,
-                            top + row * radius * 0.22f,
-                            left + (col + 1) * radius * 0.22f,
-                            top + (row + 1) * radius * 0.22f,
-                            paint
-                    );
-                }
-            }
-        }
-
-        private void drawNissanBadge(Canvas canvas, float cx, float cy, float radius) {
-            paint.setStyle(Paint.Style.STROKE);
-            paint.setStrokeWidth(Math.max(1.8f, radius * 0.075f));
-            paint.setColor(0xffedf1f7);
-            canvas.drawCircle(cx, cy, radius * 0.43f, paint);
-            paint.setStyle(Paint.Style.FILL);
-            paint.setColor(0xffe2e7ef);
-            shineBounds.set(cx - radius * 0.50f, cy - radius * 0.14f, cx + radius * 0.50f, cy + radius * 0.14f);
-            canvas.drawRoundRect(shineBounds, radius * 0.06f, radius * 0.06f, paint);
-            drawBadgeText(canvas, "NISSAN", cx, cy + radius * 0.055f, radius * 0.17f, 0xff141820, true);
-        }
-
-        private void drawShield(Canvas canvas, float cx, float cy, float width, float height, int fillColor, int strokeColor) {
-            float top = cy - height * 0.50f;
-            Path shield = new Path();
-            shield.moveTo(cx - width * 0.48f, top + height * 0.06f);
-            shield.lineTo(cx + width * 0.48f, top + height * 0.06f);
-            shield.lineTo(cx + width * 0.40f, top + height * 0.58f);
-            shield.cubicTo(cx + width * 0.28f, top + height * 0.84f, cx + width * 0.08f, top + height, cx, top + height);
-            shield.cubicTo(cx - width * 0.08f, top + height, cx - width * 0.28f, top + height * 0.84f, cx - width * 0.40f, top + height * 0.58f);
-            shield.close();
-            paint.setStyle(Paint.Style.FILL);
-            paint.setColor(fillColor);
-            canvas.drawPath(shield, paint);
-            paint.setStyle(Paint.Style.STROKE);
-            paint.setStrokeWidth(Math.max(1.0f, width * 0.045f));
-            paint.setColor(strokeColor);
-            canvas.drawPath(shield, paint);
-        }
-
-        private void drawHorseGlyph(Canvas canvas, float cx, float cy, float size, int color) {
-            paint.setStyle(Paint.Style.FILL);
-            paint.setColor(color);
-            shineBounds.set(cx - size * 0.20f, cy - size * 0.23f, cx + size * 0.25f, cy + size * 0.18f);
-            canvas.drawOval(shineBounds, paint);
-            canvas.drawCircle(cx + size * 0.18f, cy - size * 0.32f, size * 0.13f, paint);
-            paint.setStyle(Paint.Style.STROKE);
-            paint.setStrokeWidth(Math.max(1.0f, size * 0.10f));
-            canvas.drawLine(cx - size * 0.06f, cy + size * 0.14f, cx - size * 0.25f, cy + size * 0.45f, paint);
-            canvas.drawLine(cx + size * 0.16f, cy + size * 0.12f, cx + size * 0.33f, cy + size * 0.40f, paint);
-            canvas.drawLine(cx + size * 0.20f, cy - size * 0.18f, cx + size * 0.41f, cy - size * 0.34f, paint);
-            canvas.drawLine(cx - size * 0.22f, cy - size * 0.10f, cx - size * 0.38f, cy - size * 0.33f, paint);
-        }
-
-        private void drawSlash(Canvas canvas, float cx, float cy, float width, float height) {
-            Path slash = new Path();
-            slash.moveTo(cx - width, cy + height * 0.50f);
-            slash.lineTo(cx + width * 0.12f, cy + height * 0.50f);
-            slash.lineTo(cx + width, cy - height * 0.50f);
-            slash.lineTo(cx - width * 0.12f, cy - height * 0.50f);
-            slash.close();
-            canvas.drawPath(slash, paint);
-        }
-
-        private void drawBadgeText(Canvas canvas, String text, float cx, float baseline, float size, int color, boolean bold) {
-            paint.setShader(null);
-            paint.setStyle(Paint.Style.FILL);
-            paint.setColor(color);
-            paint.setAlpha(255);
-            paint.setTypeface(bold ? Typeface.DEFAULT_BOLD : Typeface.DEFAULT);
-            paint.setTextAlign(Paint.Align.CENTER);
-            paint.setTextSize(size);
-            paint.setFakeBoldText(bold);
-            canvas.drawText(text, cx, baseline, paint);
-            paint.setTypeface(Typeface.DEFAULT);
-            paint.setFakeBoldText(false);
         }
 
         private int lighten(int color, float amount) {
@@ -1975,7 +1792,7 @@ public class MainActivity extends Activity {
         }
 
         private boolean tryStartCornerEasterEgg() {
-            if (easterKind != EASTER_NONE || easterLoading || gameOver) {
+            if (claimedEaster != EASTER_NONE || easterKind != EASTER_NONE || easterLoading || gameOver) {
                 return false;
             }
             if (cornersAre(COLOR_CYAN)) {
@@ -1997,6 +1814,7 @@ public class MainActivity extends Activity {
         }
 
         private void startCornerEasterEgg(int kind) {
+            if (claimedEaster != EASTER_NONE) return;
             moveToken++;
             handler.removeCallbacksAndMessages(null);
             clearPendingRemoval();
@@ -2017,6 +1835,8 @@ public class MainActivity extends Activity {
             racerTrailType = EMPTY;
             racerTrailUntil = 0L;
             easterKind = kind;
+            claimedEaster = kind;
+            sound.updateMusic(musicEnabled, musicVolume, activeMusicTrack());
             easterLoading = true;
             easterSecretTaps = 0;
             easterStart = SystemClock.uptimeMillis();
@@ -2288,8 +2108,7 @@ public class MainActivity extends Activity {
             } else if (kind == EASTER_TOUTOU) {
                 heartMode = true;
                 musicEnabled = true;
-                musicTrack = MUSIC_TRACK_SY;
-                sound.updateMusic(true, musicVolume, MUSIC_TRACK_SY);
+                sound.updateMusic(true, musicVolume, activeMusicTrack());
             }
             sound.playClear();
         }
@@ -2542,7 +2361,7 @@ public class MainActivity extends Activity {
                         soundEnabled = effects.isChecked();
                         musicVolume = musicVolumeBar.getProgress() / 100f;
                         soundVolume = soundVolumeBar.getProgress() / 100f;
-                        boolean triggerToutou = wasAdminMode
+                        boolean triggerToutou = claimedEaster == EASTER_NONE && wasAdminMode
                                 && Math.abs(whiteProbabilityMultiplier - 1.3f) < 0.001f
                                 && Math.abs(bombProbabilityMultiplier - 1.4f) < 0.001f;
                         if (wasAdminMode) {
@@ -2562,7 +2381,7 @@ public class MainActivity extends Activity {
                                 .putFloat("sound_volume", soundVolume)
                                 .apply();
                         sound.updateSound(soundEnabled, soundVolume);
-                        sound.updateMusic(musicEnabled, musicVolume, musicTrack);
+                        sound.updateMusic(musicEnabled, musicVolume, activeMusicTrack());
                         if (triggerToutou) {
                             handler.postDelayed(() -> startCornerEasterEgg(EASTER_TOUTOU), 120L);
                         }
@@ -2736,6 +2555,7 @@ public class MainActivity extends Activity {
             outState.putBoolean("five_lines_ray_racer_mode", rayRacerMode);
             outState.putBoolean("five_lines_kuromi_theme", kuromiTheme);
             outState.putBoolean("five_lines_heart_mode", heartMode);
+            outState.putInt("five_lines_claimed_easter", claimedEaster);
         }
 
         private void restoreState(Bundle state) {
@@ -2764,11 +2584,11 @@ public class MainActivity extends Activity {
             rayRacerMode = state.getBoolean("five_lines_ray_racer_mode", rayRacerMode);
             kuromiTheme = state.getBoolean("five_lines_kuromi_theme", kuromiTheme);
             heartMode = state.getBoolean("five_lines_heart_mode", heartMode);
+            claimedEaster = state.getInt("five_lines_claimed_easter", EASTER_NONE);
             if (heartMode) {
                 musicEnabled = true;
-                musicTrack = MUSIC_TRACK_SY;
-                sound.updateMusic(true, musicVolume, MUSIC_TRACK_SY);
             }
+            sound.updateMusic(musicEnabled, musicVolume, activeMusicTrack());
             moving = false;
             removing = false;
             dialogShowing = false;
@@ -2830,6 +2650,8 @@ public class MainActivity extends Activity {
         private static final int MUSIC_TRACK_SYNTH = 0;
         private static final int MUSIC_TRACK_MIDI = 1;
         private static final int MUSIC_TRACK_SY = 2;
+        private static final int MUSIC_TRACK_MOLLY = 3;
+        private static final int MUSIC_TRACK_RAY = 4;
         private final Context context;
         private final Handler handler = new Handler(Looper.getMainLooper());
         private boolean soundEnabled = true;
@@ -2852,7 +2674,7 @@ public class MainActivity extends Activity {
         }
 
         void updateMusic(boolean enabled, float volume, int track) {
-            int nextTrack = Math.max(MUSIC_TRACK_SYNTH, Math.min(MUSIC_TRACK_SY, track));
+            int nextTrack = Math.max(MUSIC_TRACK_SYNTH, Math.min(MUSIC_TRACK_RAY, track));
             boolean trackChanged = nextTrack != musicTrack;
             musicEnabled = enabled;
             musicVolume = Math.max(0f, Math.min(1f, volume));
@@ -2875,6 +2697,14 @@ public class MainActivity extends Activity {
             }
             if (musicTrack == MUSIC_TRACK_SY) {
                 startSyMusic();
+                return;
+            }
+            if (musicTrack == MUSIC_TRACK_MOLLY) {
+                startMp3Music(R.raw.lbxx);
+                return;
+            }
+            if (musicTrack == MUSIC_TRACK_RAY) {
+                startMp3Music(R.raw.twzd);
                 return;
             }
             startSynthMusic();

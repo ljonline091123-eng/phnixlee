@@ -13,6 +13,9 @@
 		7A1B00010000000000000004 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 7A1A00010000000000000004 /* Assets.xcassets */; };
 		7A1B00010000000000000005 /* midi.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 7A1A00010000000000000007 /* midi.mp3 */; };
 		7A1B00010000000000000006 /* sy.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 7A1A00010000000000000008 /* sy.mp3 */; };
+		7A1B00010000000000000007 /* lbxx.mid in Resources */ = {isa = PBXBuildFile; fileRef = 7A1A00010000000000000009 /* lbxx.mid */; };
+		7A1B00010000000000000008 /* lbxx.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 7A1A0001000000000000000A /* lbxx.mp3 */; };
+		7A1B00010000000000000009 /* twzd.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 7A1A0001000000000000000B /* twzd.mp3 */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -24,6 +27,9 @@
 		7A1A00010000000000000006 /* FiveLines.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = FiveLines.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		7A1A00010000000000000007 /* midi.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = midi.mp3; sourceTree = "<group>"; };
 		7A1A00010000000000000008 /* sy.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = sy.mp3; sourceTree = "<group>"; };
+		7A1A00010000000000000009 /* lbxx.mid */ = {isa = PBXFileReference; lastKnownFileType = "audio.midi"; path = lbxx.mid; sourceTree = "<group>"; };
+		7A1A0001000000000000000A /* lbxx.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = lbxx.mp3; sourceTree = "<group>"; };
+		7A1A0001000000000000000B /* twzd.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = twzd.mp3; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -63,6 +69,9 @@
 				7A1A00010000000000000005 /* Info.plist */,
 				7A1A00010000000000000007 /* midi.mp3 */,
 				7A1A00010000000000000008 /* sy.mp3 */,
+				7A1A00010000000000000009 /* lbxx.mid */,
+				7A1A0001000000000000000A /* lbxx.mp3 */,
+				7A1A0001000000000000000B /* twzd.mp3 */,
 			);
 			path = .;
 			sourceTree = "<group>";
@@ -135,6 +144,9 @@
 				7A1B00010000000000000004 /* Assets.xcassets in Resources */,
 				7A1B00010000000000000005 /* midi.mp3 in Resources */,
 				7A1B00010000000000000006 /* sy.mp3 in Resources */,
+				7A1B00010000000000000007 /* lbxx.mid in Resources */,
+				7A1B00010000000000000008 /* lbxx.mp3 in Resources */,
+				7A1B00010000000000000009 /* twzd.mp3 in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -62,6 +62,8 @@ final class CloudGameModel: ObservableObject {
         case music1 = 0
         case music2 = 1
         case sy = 2
+        case molly = 3
+        case ray = 4
 
         var id: Int { rawValue }
 
@@ -70,6 +72,8 @@ final class CloudGameModel: ObservableObject {
             case .music1: return "\u{97F3}\u{4E50}1"
             case .music2: return "\u{97F3}\u{4E50}2"
             case .sy: return "sy.mp3"
+            case .molly: return "lbxx.mid"
+            case .ray: return "twzd.mp3"
             }
         }
 
@@ -194,6 +198,7 @@ final class CloudGameModel: ObservableObject {
     private let settingsKey = "FiveLines.settings"
     private var loadingTimer: Timer?
     private var easterSecretTaps = 0
+    private var claimedEaster: EasterKind?
     private var musicToggleUnlockCount = 0
     private var suppressSettingsSave = false
 
@@ -217,10 +222,12 @@ final class CloudGameModel: ObservableObject {
         racerTrailTile = nil
         explodingBombs = []
         easterSecretTaps = 0
+        claimedEaster = nil
         rayRacerMode = false
         kuromiTheme = false
         heartMode = false
         restoreConfiguredMusicAfterHiddenMode()
+        applyAudioSettings()
         score = 0
         isGameOver = false
         busy = false
@@ -433,7 +440,7 @@ final class CloudGameModel: ObservableObject {
     }
 
     private func tryStartCornerEasterEgg() -> Bool {
-        guard easterLoading == nil, easterPrompt == nil, !isGameOver else { return false }
+        guard claimedEaster == nil, easterLoading == nil, easterPrompt == nil, !isGameOver else { return false }
         let corners = [0, 8, 72, 80]
         if corners.allSatisfy({ board[$0] == .cyan }) {
             startCornerEasterEgg(.ray)
@@ -447,6 +454,7 @@ final class CloudGameModel: ObservableObject {
     }
 
     private func startCornerEasterEgg(_ kind: EasterKind) {
+        guard claimedEaster == nil else { return }
         loadingTimer?.invalidate()
         selectedIndex = nil
         removing = []
@@ -456,6 +464,8 @@ final class CloudGameModel: ObservableObject {
         kuromiTheme = false
         heartMode = false
         restoreConfiguredMusicAfterHiddenMode()
+        claimedEaster = kind
+        applyAudioSettings()
         racerTrail = []
         racerTrailTile = nil
         explodingBombs = []
@@ -692,7 +702,7 @@ final class CloudGameModel: ObservableObject {
         difficulty = min(2, max(1, difficulty))
         whiteProbability = min(2, max(0, whiteProbability))
         bombProbability = min(2, max(0, bombProbability))
-        let shouldTriggerToutou = wasAdminMode
+        let shouldTriggerToutou = claimedEaster == nil && wasAdminMode
             && abs(whiteProbability - 1.3) < 0.001
             && abs(bombProbability - 1.4) < 0.001
         if wasAdminMode {
@@ -714,7 +724,7 @@ final class CloudGameModel: ObservableObject {
             soundVolume: effectsVolume,
             musicEnabled: musicEnabled,
             musicVolume: musicVolume,
-            musicTrack: musicTrack
+            musicTrack: activeMusicTrack
         )
         saveSettings()
     }
@@ -731,6 +741,15 @@ final class CloudGameModel: ObservableObject {
             musicTrack = .music1
         }
         applyAudioSettings()
+    }
+
+    private var activeMusicTrack: MusicTrack {
+        if heartMode { return .sy }
+        switch claimedEaster {
+        case .molly: return .molly
+        case .ray: return .ray
+        default: return musicTrack
+        }
     }
 
     private func loadSettings() {
@@ -845,6 +864,10 @@ private final class AudioEngine {
             startBundledMusic(named: "midi")
         case .sy:
             startBundledMusic(named: "sy")
+        case .molly:
+            startBundledMusic(named: "lbxx")
+        case .ray:
+            startBundledMusic(named: "twzd")
         }
     }
 

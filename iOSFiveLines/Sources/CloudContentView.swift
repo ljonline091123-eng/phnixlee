@@ -297,15 +297,29 @@ private struct HeartBurstView: View {
 }
 private enum CarBrand {
     case bmw, mercedes, audi, ferrari, lamborghini, porsche, dodge, cadillac, nissan
+
+    var assetName: String {
+        switch self {
+        case .bmw: return "CarBmw"
+        case .mercedes: return "CarMercedes"
+        case .audi: return "CarAudi"
+        case .ferrari: return "CarFerrari"
+        case .lamborghini: return "CarLamborghini"
+        case .porsche: return "CarPorsche"
+        case .dodge: return "CarDodge"
+        case .cadillac: return "CarCadillac"
+        case .nissan: return "CarNissan"
+        }
+    }
 }
 
 private extension CloudGameModel.Tile {
     var kuromiOuterColor: Color {
-        self == .white ? Color(red: 0.94, green: 0.86, blue: 0.68) : color
+        self == .white ? Color(red: 0.95, green: 0.89, blue: 0.77) : color
     }
 
     var carOuterColor: Color {
-        self == .white ? Color(red: 0.94, green: 0.86, blue: 0.68) : color
+        self == .white ? Color(red: 0.95, green: 0.89, blue: 0.77) : color
     }
 
     var carBrand: CarBrand {
@@ -446,19 +460,21 @@ private struct KuromiEarShape: Shape {
         let cy = rect.minY + size * 0.54
         let r = size * 0.34
         var path = Path()
-        path.move(to: CGPoint(x: cx + side * r * 0.42, y: cy - r * 0.54))
+        path.move(to: CGPoint(x: cx + side * r * 0.35, y: cy - r * 0.72))
         path.addCurve(
-            to: CGPoint(x: cx + side * r * 1.05, y: cy - r * 1.15),
-            control1: CGPoint(x: cx + side * r * 0.62, y: cy - r * 1.00),
-            control2: CGPoint(x: cx + side * r * 0.82, y: cy - r * 1.18)
+            to: CGPoint(x: cx + side * r * 0.94, y: cy - r * 1.43),
+            control1: CGPoint(x: cx + side * r * 0.49, y: cy - r * 1.12),
+            control2: CGPoint(x: cx + side * r * 0.69, y: cy - r * 1.41)
         )
         path.addCurve(
-            to: CGPoint(x: cx + side * r * 0.37, y: cy - r * 0.36),
-            control1: CGPoint(x: cx + side * r * 1.15, y: cy - r * 0.86),
-            control2: CGPoint(x: cx + side * r * 0.76, y: cy - r * 0.62)
+            to: CGPoint(x: cx + side * r * 1.22, y: cy - r * 0.75),
+            control1: CGPoint(x: cx + side * r * 1.13, y: cy - r * 1.45),
+            control2: CGPoint(x: cx + side * r * 1.16, y: cy - r * 1.09)
         )
+        path.addQuadCurve(to: CGPoint(x: cx + side * r * 0.81, y: cy - r * 0.59),
+                          control: CGPoint(x: cx + side * r * 1.22, y: cy - r * 0.54))
         path.closeSubpath()
-        path.addEllipse(in: CGRect(x: cx + side * r * 1.08 - r * 0.22, y: cy - r * 1.18 - r * 0.22, width: r * 0.44, height: r * 0.44))
+        path.addEllipse(in: CGRect(x: cx + side * r * 1.02 - r * 0.20, y: cy - r * 1.44 - r * 0.20, width: r * 0.40, height: r * 0.40))
         return path
     }
 }
@@ -467,29 +483,30 @@ private struct KuromiFaceMaskShape: Shape {
     func path(in rect: CGRect) -> Path {
         let cx = rect.midX
         let cy = rect.midY - rect.height * 0.02
-        let r = min(rect.width, rect.height) * 0.50
+        let rx = rect.width * 0.50
+        let ry = rect.height * 0.50
         var path = Path()
-        path.move(to: CGPoint(x: cx - r * 0.86, y: cy - r * 0.18))
+        path.move(to: CGPoint(x: cx - rx * 0.86, y: cy - ry * 0.18))
         path.addCurve(
-            to: CGPoint(x: cx - r * 0.05, y: cy - r * 0.34),
-            control1: CGPoint(x: cx - r * 0.83, y: cy - r * 0.84),
-            control2: CGPoint(x: cx - r * 0.34, y: cy - r * 0.78)
+            to: CGPoint(x: cx - rx * 0.05, y: cy - ry * 0.34),
+            control1: CGPoint(x: cx - rx * 0.83, y: cy - ry * 0.84),
+            control2: CGPoint(x: cx - rx * 0.34, y: cy - ry * 0.78)
         )
-        path.addQuadCurve(to: CGPoint(x: cx + r * 0.05, y: cy - r * 0.34), control: CGPoint(x: cx, y: cy - r * 0.22))
+        path.addQuadCurve(to: CGPoint(x: cx + rx * 0.05, y: cy - ry * 0.34), control: CGPoint(x: cx, y: cy - ry * 0.22))
         path.addCurve(
-            to: CGPoint(x: cx + r * 0.86, y: cy - r * 0.18),
-            control1: CGPoint(x: cx + r * 0.34, y: cy - r * 0.78),
-            control2: CGPoint(x: cx + r * 0.83, y: cy - r * 0.84)
-        )
-        path.addCurve(
-            to: CGPoint(x: cx, y: cy + r * 0.86),
-            control1: CGPoint(x: cx + r * 0.96, y: cy + r * 0.54),
-            control2: CGPoint(x: cx + r * 0.46, y: cy + r * 0.88)
+            to: CGPoint(x: cx + rx * 0.86, y: cy - ry * 0.18),
+            control1: CGPoint(x: cx + rx * 0.34, y: cy - ry * 0.78),
+            control2: CGPoint(x: cx + rx * 0.83, y: cy - ry * 0.84)
         )
         path.addCurve(
-            to: CGPoint(x: cx - r * 0.86, y: cy - r * 0.18),
-            control1: CGPoint(x: cx - r * 0.46, y: cy + r * 0.88),
-            control2: CGPoint(x: cx - r * 0.96, y: cy + r * 0.54)
+            to: CGPoint(x: cx, y: cy + ry * 0.86),
+            control1: CGPoint(x: cx + rx * 0.96, y: cy + ry * 0.54),
+            control2: CGPoint(x: cx + rx * 0.46, y: cy + ry * 0.88)
+        )
+        path.addCurve(
+            to: CGPoint(x: cx - rx * 0.86, y: cy - ry * 0.18),
+            control1: CGPoint(x: cx - rx * 0.46, y: cy + ry * 0.88),
+            control2: CGPoint(x: cx - rx * 0.96, y: cy + ry * 0.54)
         )
         path.closeSubpath()
         return path
@@ -550,11 +567,14 @@ private struct CarLogoTileView: View {
                     .position(x: proxy.size.width / 2, y: proxy.size.height / 2)
                 Circle()
                     .fill(Color(red: 0.12, green: 0.13, blue: 0.16))
-                    .frame(width: size * 0.63, height: size * 0.63)
+                    .frame(width: size * 0.75, height: size * 0.75)
                     .overlay(Circle().stroke(Color(red: 0.86, green: 0.88, blue: 0.92), lineWidth: max(1, size * 0.028)))
                     .position(x: proxy.size.width / 2, y: proxy.size.height / 2)
-                CarEmblemView(brand: tile.carBrand)
-                    .frame(width: size * 0.56, height: size * 0.56)
+                Image(tile.carBrand.assetName)
+                    .resizable()
+                    .interpolation(.high)
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: size * 0.76, height: size * 0.76)
                     .position(x: proxy.size.width / 2, y: proxy.size.height / 2)
                 Ellipse()
                     .fill(.white.opacity(0.72))
@@ -565,271 +585,6 @@ private struct CarLogoTileView: View {
         }
         .aspectRatio(1, contentMode: .fit)
         .allowsHitTesting(false)
-    }
-}
-
-private struct CarEmblemView: View {
-    let brand: CarBrand
-
-    var body: some View {
-        GeometryReader { proxy in
-            let side = min(proxy.size.width, proxy.size.height)
-            ZStack {
-                switch brand {
-                case .bmw:
-                    bmwLogo(side: side)
-                case .mercedes:
-                    mercedesLogo(side: side)
-                case .audi:
-                    audiLogo(side: side)
-                case .ferrari:
-                    ferrariLogo(side: side)
-                case .lamborghini:
-                    lamborghiniLogo(side: side)
-                case .porsche:
-                    porscheLogo(side: side)
-                case .dodge:
-                    dodgeLogo(side: side)
-                case .cadillac:
-                    cadillacLogo(side: side)
-                case .nissan:
-                    nissanLogo(side: side)
-                }
-            }
-            .frame(width: proxy.size.width, height: proxy.size.height)
-        }
-    }
-
-    private func bmwLogo(side: CGFloat) -> some View {
-        ZStack {
-            Circle().fill(Color.black)
-            PieSlice(start: .degrees(-90), end: .degrees(0)).fill(Color(red: 0.08, green: 0.53, blue: 0.92)).padding(side * 0.18)
-            PieSlice(start: .degrees(0), end: .degrees(90)).fill(Color.white).padding(side * 0.18)
-            PieSlice(start: .degrees(90), end: .degrees(180)).fill(Color(red: 0.08, green: 0.53, blue: 0.92)).padding(side * 0.18)
-            PieSlice(start: .degrees(180), end: .degrees(270)).fill(Color.white).padding(side * 0.18)
-            Circle().stroke(Color.white.opacity(0.88), lineWidth: max(1, side * 0.055)).padding(side * 0.16)
-            Text("BMW")
-                .font(.system(size: side * 0.15, weight: .heavy, design: .rounded))
-                .foregroundStyle(.white)
-                .offset(y: -side * 0.30)
-        }
-    }
-
-    private func mercedesLogo(side: CGFloat) -> some View {
-        ZStack {
-            Circle().stroke(Color(red: 0.88, green: 0.91, blue: 0.96), lineWidth: max(1, side * 0.075)).padding(side * 0.08)
-            Path { path in
-                let c = CGPoint(x: side / 2, y: side / 2)
-                let r = side * 0.39
-                path.move(to: c)
-                path.addLine(to: CGPoint(x: c.x, y: c.y - r))
-                path.move(to: c)
-                path.addLine(to: CGPoint(x: c.x - r * 0.86, y: c.y + r * 0.50))
-                path.move(to: c)
-                path.addLine(to: CGPoint(x: c.x + r * 0.86, y: c.y + r * 0.50))
-            }
-            .stroke(Color(red: 0.92, green: 0.94, blue: 0.98), style: StrokeStyle(lineWidth: max(1.4, side * 0.085), lineCap: .round))
-        }
-    }
-
-    private func audiLogo(side: CGFloat) -> some View {
-        ZStack {
-            ForEach(0..<4, id: \.self) { index in
-                Circle()
-                    .stroke(Color(red: 0.92, green: 0.94, blue: 0.98), lineWidth: max(1.2, side * 0.06))
-                    .frame(width: side * 0.31, height: side * 0.31)
-                    .position(x: side * (0.28 + CGFloat(index) * 0.15), y: side * 0.50)
-            }
-        }
-    }
-
-    private func ferrariLogo(side: CGFloat) -> some View {
-        ZStack {
-            ShieldShape().fill(Color(red: 1.0, green: 0.88, blue: 0.12))
-            ShieldShape().stroke(Color.black, lineWidth: max(1, side * 0.035))
-            HStack(spacing: 0) {
-                Color.green
-                Color.white
-                Color.red
-            }
-            .frame(width: side * 0.50, height: side * 0.07)
-            .offset(y: -side * 0.33)
-            HorseGlyph(color: .black).frame(width: side * 0.46, height: side * 0.46).offset(y: side * 0.04)
-        }
-        .padding(side * 0.08)
-    }
-
-    private func lamborghiniLogo(side: CGFloat) -> some View {
-        ZStack {
-            ShieldShape().fill(Color.black)
-            ShieldShape().stroke(Color(red: 0.86, green: 0.63, blue: 0.16), lineWidth: max(1, side * 0.045))
-            BullGlyph(color: Color(red: 0.88, green: 0.67, blue: 0.20)).frame(width: side * 0.56, height: side * 0.46).offset(y: side * 0.06)
-        }
-        .padding(side * 0.06)
-    }
-
-    private func porscheLogo(side: CGFloat) -> some View {
-        ZStack {
-            ShieldShape().fill(Color(red: 0.91, green: 0.74, blue: 0.32))
-            VStack(spacing: 0) {
-                ForEach(0..<4, id: \.self) { index in
-                    Rectangle().fill(index % 2 == 0 ? Color.red.opacity(0.82) : Color.black.opacity(0.88))
-                }
-            }
-            .frame(width: side * 0.47, height: side * 0.42)
-            .offset(y: side * 0.02)
-            HorseGlyph(color: .black).frame(width: side * 0.25, height: side * 0.25).offset(y: side * 0.15)
-            Text("P")
-                .font(.system(size: side * 0.22, weight: .black, design: .serif))
-                .foregroundStyle(.black)
-                .offset(y: -side * 0.31)
-            ShieldShape().stroke(Color.black, lineWidth: max(1, side * 0.035))
-        }
-        .padding(side * 0.06)
-    }
-
-    private func dodgeLogo(side: CGFloat) -> some View {
-        ZStack {
-            SlashShape().fill(Color.red).frame(width: side * 0.16, height: side * 0.62).offset(x: -side * 0.11, y: -side * 0.04)
-            SlashShape().fill(Color.red).frame(width: side * 0.16, height: side * 0.62).offset(x: side * 0.13, y: -side * 0.04)
-            Text("DODGE")
-                .font(.system(size: side * 0.13, weight: .heavy, design: .rounded))
-                .foregroundStyle(Color(red: 0.92, green: 0.94, blue: 0.98))
-                .offset(y: side * 0.35)
-        }
-    }
-
-    private func cadillacLogo(side: CGFloat) -> some View {
-        ZStack {
-            ShieldShape().fill(Color(red: 0.92, green: 0.94, blue: 0.98))
-            VStack(spacing: side * 0.012) {
-                HStack(spacing: side * 0.012) {
-                    Color(red: 0.85, green: 0.66, blue: 0.15)
-                    Color(red: 0.80, green: 0.10, blue: 0.17)
-                    Color(red: 0.10, green: 0.30, blue: 0.74)
-                }
-                HStack(spacing: side * 0.012) {
-                    Color(red: 0.98, green: 0.84, blue: 0.20)
-                    Color.white
-                    Color(red: 0.80, green: 0.10, blue: 0.17)
-                }
-            }
-            .frame(width: side * 0.55, height: side * 0.40)
-            ShieldShape().stroke(Color(red: 0.82, green: 0.85, blue: 0.90), lineWidth: max(1, side * 0.045))
-        }
-        .padding(side * 0.10)
-    }
-
-    private func nissanLogo(side: CGFloat) -> some View {
-        ZStack {
-            Circle().stroke(Color(red: 0.88, green: 0.91, blue: 0.96), lineWidth: max(1.5, side * 0.075)).padding(side * 0.15)
-            RoundedRectangle(cornerRadius: side * 0.045)
-                .fill(Color(red: 0.88, green: 0.91, blue: 0.96))
-                .frame(width: side * 0.83, height: side * 0.25)
-            Text("NISSAN")
-                .font(.system(size: side * 0.17, weight: .black, design: .rounded))
-                .foregroundStyle(Color(red: 0.08, green: 0.09, blue: 0.11))
-        }
-    }
-}
-
-private struct PieSlice: Shape {
-    let start: Angle
-    let end: Angle
-
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        let center = CGPoint(x: rect.midX, y: rect.midY)
-        let radius = min(rect.width, rect.height) / 2
-        path.move(to: center)
-        path.addArc(center: center, radius: radius, startAngle: start, endAngle: end, clockwise: false)
-        path.closeSubpath()
-        return path
-    }
-}
-
-private struct ShieldShape: Shape {
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        path.move(to: CGPoint(x: rect.minX + rect.width * 0.10, y: rect.minY + rect.height * 0.05))
-        path.addLine(to: CGPoint(x: rect.maxX - rect.width * 0.10, y: rect.minY + rect.height * 0.05))
-        path.addLine(to: CGPoint(x: rect.maxX - rect.width * 0.16, y: rect.minY + rect.height * 0.62))
-        path.addCurve(
-            to: CGPoint(x: rect.midX, y: rect.maxY),
-            control1: CGPoint(x: rect.maxX - rect.width * 0.24, y: rect.minY + rect.height * 0.84),
-            control2: CGPoint(x: rect.midX + rect.width * 0.12, y: rect.maxY)
-        )
-        path.addCurve(
-            to: CGPoint(x: rect.minX + rect.width * 0.16, y: rect.minY + rect.height * 0.62),
-            control1: CGPoint(x: rect.midX - rect.width * 0.12, y: rect.maxY),
-            control2: CGPoint(x: rect.minX + rect.width * 0.24, y: rect.minY + rect.height * 0.84)
-        )
-        path.closeSubpath()
-        return path
-    }
-}
-
-private struct SlashShape: Shape {
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        path.move(to: CGPoint(x: rect.minX, y: rect.maxY))
-        path.addLine(to: CGPoint(x: rect.minX + rect.width * 0.58, y: rect.maxY))
-        path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
-        path.addLine(to: CGPoint(x: rect.minX + rect.width * 0.42, y: rect.minY))
-        path.closeSubpath()
-        return path
-    }
-}
-
-private struct HorseGlyph: View {
-    let color: Color
-
-    var body: some View {
-        GeometryReader { proxy in
-            let side = min(proxy.size.width, proxy.size.height)
-            ZStack {
-                Ellipse().fill(color).frame(width: side * 0.42, height: side * 0.30).position(x: side * 0.48, y: side * 0.52)
-                Circle().fill(color).frame(width: side * 0.18, height: side * 0.18).position(x: side * 0.62, y: side * 0.31)
-                Path { path in
-                    path.move(to: CGPoint(x: side * 0.42, y: side * 0.60))
-                    path.addLine(to: CGPoint(x: side * 0.22, y: side * 0.92))
-                    path.move(to: CGPoint(x: side * 0.57, y: side * 0.58))
-                    path.addLine(to: CGPoint(x: side * 0.78, y: side * 0.88))
-                    path.move(to: CGPoint(x: side * 0.63, y: side * 0.39))
-                    path.addLine(to: CGPoint(x: side * 0.86, y: side * 0.23))
-                    path.move(to: CGPoint(x: side * 0.36, y: side * 0.43))
-                    path.addLine(to: CGPoint(x: side * 0.15, y: side * 0.20))
-                }
-                .stroke(color, style: StrokeStyle(lineWidth: max(1, side * 0.10), lineCap: .round))
-            }
-            .frame(width: proxy.size.width, height: proxy.size.height)
-        }
-    }
-}
-
-private struct BullGlyph: View {
-    let color: Color
-
-    var body: some View {
-        GeometryReader { proxy in
-            let side = min(proxy.size.width, proxy.size.height)
-            ZStack {
-                Ellipse().fill(color).frame(width: side * 0.72, height: side * 0.30).position(x: side * 0.50, y: side * 0.55)
-                Circle().fill(color).frame(width: side * 0.24, height: side * 0.24).position(x: side * 0.50, y: side * 0.36)
-                Path { path in
-                    path.move(to: CGPoint(x: side * 0.40, y: side * 0.32))
-                    path.addCurve(to: CGPoint(x: side * 0.16, y: side * 0.12), control1: CGPoint(x: side * 0.22, y: side * 0.13), control2: CGPoint(x: side * 0.30, y: side * 0.05))
-                    path.move(to: CGPoint(x: side * 0.60, y: side * 0.32))
-                    path.addCurve(to: CGPoint(x: side * 0.84, y: side * 0.12), control1: CGPoint(x: side * 0.78, y: side * 0.13), control2: CGPoint(x: side * 0.70, y: side * 0.05))
-                    path.move(to: CGPoint(x: side * 0.35, y: side * 0.66))
-                    path.addLine(to: CGPoint(x: side * 0.20, y: side * 0.95))
-                    path.move(to: CGPoint(x: side * 0.65, y: side * 0.66))
-                    path.addLine(to: CGPoint(x: side * 0.80, y: side * 0.95))
-                }
-                .stroke(color, style: StrokeStyle(lineWidth: max(1, side * 0.085), lineCap: .round))
-            }
-            .frame(width: proxy.size.width, height: proxy.size.height)
-        }
     }
 }
 
