@@ -13,6 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.connectors.model_registry import get_model_adapter
+from app.core.config import get_settings
 from app.models.ai_hub import ModelCallLog, ModelInstance, ModelProvider, ModelRouteRule, ModelSkill
 from app.services.core_skill_defs import core_skill_rows
 from app.services.skill_registry import sync_skill_from_file
@@ -129,7 +130,7 @@ DEFAULT_MODEL_INSTANCES = (
         "temperature": 0.2,
         "top_p": 0.95,
         "enabled": True,
-        "fallback_instance_code": "QWEN_PLUS",
+        "fallback_instance_code": "GEMINI_PRO",
         "config_json": {"billing_label": "付费", "billing_type": "PAID"},
         "description": "股票研究主力实例；保留 DEEPSEEK_CHAT 实例代码以兼容既有路由。",
     },
@@ -146,7 +147,7 @@ DEFAULT_MODEL_INSTANCES = (
         "temperature": 0.2,
         "top_p": 0.95,
         "enabled": True,
-        "fallback_instance_code": "MOCK_GENERAL",
+        "fallback_instance_code": "GEMINI_FLASH",
         "config_json": {"billing_label": "付费", "billing_type": "PAID"},
         "description": "快速问答、问数和常规分析实例。",
     },
@@ -258,55 +259,55 @@ DEFAULT_MODEL_ROUTES = (
     {
         "task_type": "deep_research",
         "preferred_instance_code": "GEMINI_PRO",
-        "fallback_chain_json": ["GEMINI_FLASH", "CLAUDE_SONNET", "OPENAI_CHATGPT", "MOCK_GENERAL"],
+        "fallback_chain_json": ["DEEPSEEK_CHAT", "GEMINI_FLASH", "MOCK_GENERAL"],
         "route_policy": "PREFERRED_THEN_FALLBACK",
         "enabled": True,
         "description": "Long report reading and research synthesis after deterministic screening.",
     },
     {
         "task_type": "meta_review",
-        "preferred_instance_code": "OPENAI_CHATGPT",
-        "fallback_chain_json": ["CLAUDE_SONNET", "DEEPSEEK_CHAT", "MOCK_GENERAL"],
+        "preferred_instance_code": "GEMINI_PRO",
+        "fallback_chain_json": ["DEEPSEEK_CHAT", "GEMINI_FLASH", "MOCK_GENERAL"],
         "route_policy": "PREFERRED_THEN_FALLBACK",
         "enabled": True,
         "description": "Review repeated failed predictions and propose a Skill revision for approval.",
     },
     {
         "task_type": "general_chat",
-        "preferred_instance_code": "QWEN_PLUS",
-        "fallback_chain_json": ["DEEPSEEK_V4_FLASH", "GEMINI_FLASH", "OPENAI_CHATGPT", "MOCK_GENERAL"],
+        "preferred_instance_code": "DEEPSEEK_V4_FLASH",
+        "fallback_chain_json": ["GEMINI_FLASH", "MOCK_GENERAL"],
         "route_policy": "PREFERRED_THEN_FALLBACK",
         "enabled": True,
-        "description": "通用对话优先使用中文友好的千问实例，无 SK 时降级到本地 Mock。",
+        "description": "通用对话优先使用 DeepSeek V4 Flash，失败时依次降级到 Gemini Flash、本地 Mock。",
     },
     {
         "task_type": "model_lab_chat",
-        "preferred_instance_code": "QWEN_PLUS",
-        "fallback_chain_json": ["DEEPSEEK_V4_FLASH", "GEMINI_FLASH", "OPENAI_CHATGPT", "MOCK_GENERAL"],
+        "preferred_instance_code": "DEEPSEEK_V4_FLASH",
+        "fallback_chain_json": ["GEMINI_FLASH", "MOCK_GENERAL"],
         "route_policy": "PREFERRED_THEN_FALLBACK",
         "enabled": True,
         "description": "模型实验室手工问答和连通性验证路由。",
     },
     {
         "task_type": "data_governance",
-        "preferred_instance_code": "QWEN_PLUS",
-        "fallback_chain_json": ["GEMINI_FLASH", "DEEPSEEK_CHAT", "OPENAI_CHATGPT", "MOCK_GENERAL"],
+        "preferred_instance_code": "DEEPSEEK_V4_FLASH",
+        "fallback_chain_json": ["GEMINI_FLASH", "MOCK_GENERAL"],
         "route_policy": "PREFERRED_THEN_FALLBACK",
         "enabled": True,
         "description": "数据治理、分类入湖、DW 层质量检查与字段解释路由。",
     },
     {
         "task_type": "knowledge_graph",
-        "preferred_instance_code": "GEMINI_FLASH",
-        "fallback_chain_json": ["QWEN_PLUS", "DEEPSEEK_CHAT", "OPENAI_CHATGPT", "MOCK_GENERAL"],
+        "preferred_instance_code": "DEEPSEEK_V4_FLASH",
+        "fallback_chain_json": ["GEMINI_PRO", "MOCK_GENERAL"],
         "route_policy": "PREFERRED_THEN_FALLBACK",
         "enabled": True,
         "description": "单股知识图谱构建、实体关系抽取与证据归档路由。",
     },
     {
         "task_type": "qa_query",
-        "preferred_instance_code": "QWEN_PLUS",
-        "fallback_chain_json": ["DEEPSEEK_V4_FLASH", "GEMINI_FLASH", "OPENAI_CHATGPT", "MOCK_GENERAL"],
+        "preferred_instance_code": "DEEPSEEK_V4_FLASH",
+        "fallback_chain_json": ["GEMINI_FLASH", "MOCK_GENERAL"],
         "route_policy": "PREFERRED_THEN_FALLBACK",
         "enabled": True,
         "description": "研究中心对话页签的问答、问数、治理和分析路由。",
@@ -314,7 +315,7 @@ DEFAULT_MODEL_ROUTES = (
     {
         "task_type": "stock_screening",
         "preferred_instance_code": "DEEPSEEK_CHAT",
-        "fallback_chain_json": ["QWEN_PLUS", "GEMINI_FLASH", "OPENAI_CHATGPT", "MOCK_GENERAL"],
+        "fallback_chain_json": ["GEMINI_PRO", "MOCK_GENERAL"],
         "route_policy": "PREFERRED_THEN_FALLBACK",
         "enabled": True,
         "description": "分析选股、基本面和量价策略研判路由。",
@@ -322,28 +323,49 @@ DEFAULT_MODEL_ROUTES = (
     {
         "task_type": "stock_analysis",
         "preferred_instance_code": "DEEPSEEK_CHAT",
-        "fallback_chain_json": ["QWEN_PLUS", "GEMINI_FLASH", "OPENAI_CHATGPT", "MOCK_GENERAL"],
+        "fallback_chain_json": ["GEMINI_PRO", "MOCK_GENERAL"],
         "route_policy": "PREFERRED_THEN_FALLBACK",
         "enabled": True,
-        "description": "研报生成主路由，综合 DeepSeek、千问、Gemini、ChatGPT 与本地兜底。",
+        "description": "股票分析优先使用 DeepSeek V4 Pro，失败时依次降级到 Gemini 2.5 Pro、本地 Mock。",
     },
     {
         "task_type": "research_report",
         "preferred_instance_code": "DEEPSEEK_CHAT",
-        "fallback_chain_json": ["QWEN_PLUS", "GEMINI_FLASH", "OPENAI_CHATGPT", "MOCK_GENERAL"],
+        "fallback_chain_json": ["GEMINI_PRO", "MOCK_GENERAL"],
         "route_policy": "PREFERRED_THEN_FALLBACK",
         "enabled": True,
         "description": "历史研报对比、结论复盘和报告生成路由。",
     },
     {
         "task_type": "risk_warning",
-        "preferred_instance_code": "DEEPSEEK_CHAT",
-        "fallback_chain_json": ["QWEN_PLUS", "GEMINI_FLASH", "OPENAI_CHATGPT", "MOCK_GENERAL"],
+        "preferred_instance_code": "DEEPSEEK_V4_FLASH",
+        "fallback_chain_json": ["GEMINI_FLASH", "MOCK_GENERAL"],
         "route_policy": "PREFERRED_THEN_FALLBACK",
         "enabled": True,
         "description": "预警判断、负面公告识别、量价失效条件和风险提醒路由。",
     },
 )
+
+# Upgrade only routes that still match the previous built-in profile. Operators'
+# customized routes must remain untouched across application restarts.
+LEGACY_DEFAULT_ROUTE_OPTIONS = {
+    "data_governance": ("QWEN_PLUS", ("GEMINI_FLASH", "DEEPSEEK_CHAT", "OPENAI_CHATGPT", "MOCK_GENERAL")),
+    "deep_research": ("GEMINI_FLASH", ("OPENAI_CHATGPT", "DEEPSEEK_CHAT", "MOCK_GENERAL")),
+    "general_chat": ("QWEN_PLUS", ("DEEPSEEK_V4_FLASH", "GEMINI_FLASH", "OPENAI_CHATGPT", "MOCK_GENERAL")),
+    "knowledge_graph": ("GEMINI_FLASH", ("QWEN_PLUS", "DEEPSEEK_CHAT", "OPENAI_CHATGPT", "MOCK_GENERAL")),
+    "meta_review": ("OPENAI_CHATGPT", ("DEEPSEEK_CHAT", "QWEN_PLUS", "MOCK_GENERAL")),
+    "model_lab_chat": ("QWEN_PLUS", ("DEEPSEEK_V4_FLASH", "GEMINI_FLASH", "OPENAI_CHATGPT", "MOCK_GENERAL")),
+    "qa_query": ("QWEN_PLUS", ("DEEPSEEK_V4_FLASH", "GEMINI_FLASH", "OPENAI_CHATGPT", "MOCK_GENERAL")),
+    "research_report": ("DEEPSEEK_CHAT", ("QWEN_PLUS", "GEMINI_FLASH", "OPENAI_CHATGPT", "MOCK_GENERAL")),
+    "risk_warning": ("DEEPSEEK_CHAT", ("QWEN_PLUS", "GEMINI_FLASH", "OPENAI_CHATGPT", "MOCK_GENERAL")),
+    "stock_analysis": ("DEEPSEEK_CHAT", ("QWEN_PLUS", "GEMINI_FLASH", "OPENAI_CHATGPT", "MOCK_GENERAL")),
+    "stock_screening": ("DEEPSEEK_CHAT", ("QWEN_PLUS", "GEMINI_FLASH", "OPENAI_CHATGPT", "MOCK_GENERAL")),
+}
+
+LEGACY_DEFAULT_INSTANCE_FALLBACKS = {
+    "DEEPSEEK_CHAT": "QWEN_PLUS",
+    "DEEPSEEK_V4_FLASH": "MOCK_GENERAL",
+}
 
 
 def _damaged_text(value: object) -> bool:
@@ -391,6 +413,8 @@ def seed_default_models(db: Session) -> None:
             db.flush()
             continue
         instance.provider_id = provider.id
+        if instance.fallback_instance_code == LEGACY_DEFAULT_INSTANCE_FALLBACKS.get(instance.instance_code):
+            instance.fallback_instance_code = instance_config["fallback_instance_code"]
         if instance.instance_code == "DEEPSEEK_CHAT" and instance.model_code in {"deepseek-chat", "deepseek-reasoner"}:
             instance.model_code = str(instance_config["model_code"])
             instance.model_name = str(instance_config["model_name"])
@@ -406,7 +430,7 @@ def seed_default_models(db: Session) -> None:
             dict(instance_config.get("config_json") or {}),
         )
 
-    if os.environ.get("MODEL_CREDENTIAL_KEY"):
+    if os.environ.get("MODEL_CREDENTIAL_KEY") or get_settings().model_credential_key:
         for provider in provider_by_code.values():
             instances = list(db.scalars(select(ModelInstance).where(ModelInstance.provider_id == provider.id)).all())
             legacy_keys = {item.api_key for item in instances if item.api_key}
@@ -423,6 +447,10 @@ def seed_default_models(db: Session) -> None:
         if route is None:
             db.add(ModelRouteRule(**route_config))
             continue
+        if (route.preferred_instance_code, tuple(route.fallback_chain_json or ())) == LEGACY_DEFAULT_ROUTE_OPTIONS.get(route.task_type):
+            route.preferred_instance_code = route_config["preferred_instance_code"]
+            route.fallback_chain_json = route_config["fallback_chain_json"]
+            route.description = route_config["description"]
         if not route.preferred_instance_code:
             route.preferred_instance_code = route_config["preferred_instance_code"]
         if route.fallback_chain_json is None:

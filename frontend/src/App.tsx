@@ -567,7 +567,7 @@ function ModelLabPage() {
   const [chatResult, setChatResult] = useState("");
   async function load() {
     try {
-      const result = await Promise.all([
+      const result = await Promise.allSettled([
         api.listModelProviders(),
         api.listModelInstances(),
         api.listModelRoutes(),
@@ -580,17 +580,19 @@ function ModelLabPage() {
         api.listSources(),
         api.listSkillDrafts(),
       ]);
-      setProviders(result[0]);
-      setInstances(result[1]);
-      setRoutes(result[2]);
-      setSkills(result[3]);
-      setAgents(result[4]);
-      setAssets(result[5]);
-      setKnowledge(result[6]);
-      setGraphs(result[7]);
-      setLogs(result[8]);
-      setSources(result[9]);
-      setSkillDrafts(result[10]);
+      if (result[0].status === "fulfilled") setProviders(result[0].value);
+      if (result[1].status === "fulfilled") setInstances(result[1].value);
+      if (result[2].status === "fulfilled") setRoutes(result[2].value);
+      if (result[3].status === "fulfilled") setSkills(result[3].value);
+      if (result[4].status === "fulfilled") setAgents(result[4].value);
+      if (result[5].status === "fulfilled") setAssets(result[5].value);
+      if (result[6].status === "fulfilled") setKnowledge(result[6].value);
+      if (result[7].status === "fulfilled") setGraphs(result[7].value);
+      if (result[8].status === "fulfilled") setLogs(result[8].value);
+      if (result[9].status === "fulfilled") setSources(result[9].value);
+      if (result[10].status === "fulfilled") setSkillDrafts(result[10].value);
+      const failed = result.find((item) => item.status === "rejected");
+      setNotice(failed?.status === "rejected" ? (failed.reason instanceof Error ? failed.reason.message : "部分资源加载失败") : "");
     } catch (e) {
       setNotice(e instanceof Error ? e.message : "资源中心加载失败");
     }

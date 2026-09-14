@@ -125,12 +125,13 @@ class CoreModelRefactorTest(unittest.TestCase):
     def test_legacy_schema_receives_new_columns(self) -> None:
         engine = create_engine(f"sqlite:///{Path(self.temp.name) / 'legacy.db'}")
         with engine.begin() as connection:
-            for name in ("model_provider", "model_instance", "model_skill", "agent_definition"):
+            for name in ("model_provider", "model_instance", "model_skill", "agent_definition", "skill_optimization_draft"):
                 connection.execute(text(f"CREATE TABLE {name} (id INTEGER PRIMARY KEY)"))
         ensure_compat_columns(engine)
         inspector = inspect(engine)
         for table_name, column in (("model_provider", "api_key_encrypted"), ("model_instance", "usage_type"),
-                                   ("model_skill", "skill_type"), ("agent_definition", "json_schema_output")):
+                                   ("model_skill", "skill_type"), ("agent_definition", "json_schema_output"),
+                                   ("skill_optimization_draft", "base_skill_version")):
             self.assertIn(column, {item["name"] for item in inspector.get_columns(table_name)})
         engine.dispose()
 
@@ -165,6 +166,38 @@ class CoreModelRefactorTest(unittest.TestCase):
         self.assertEqual(timeout_log.instance_code, "MOCK_GENERAL")
         failures = list(self.db.scalars(select(ModelCallLog).where(ModelCallLog.instance_code == "TEST_PRIMARY")).all())
         self.assertEqual(len(failures), 5)
+
+    def test_deepseek_rate_limit_uses_gemini_route_fallback(self) -> None:
+        class DeepSeekRateLimited:
+            def chat(self, **_kwargs):
+                request = httpx.Request("POST", "https://api.deepseek.com/chat/completions")
+                raise httpx.HTTPStatusError("rate limited", request=request, response=httpx.Response(429, request=request))
+
+        class GeminiSuccess:
+            def chat(self, **_kwargs):
+                return ModelExecutionResult(response_text="Gemini fallback works", response_json={"ok": True})
+
+        with patch("app.services.model_hub.get_model_adapter", side_effect=lambda kind: DeepSeekRateLimited() if kind == "DEEPSEEK" else GeminiSuccess()):
+            log = ModelHubService(self.db).chat("general_chat", [{"role": "user", "content": "test"}])
+        self.assertEqual(log.provider_code, "GEMINI")
+        self.assertEqual(log.instance_code, "GEMINI_FLASH")
+        self.assertEqual(log.response_text, "Gemini fallback works")
+        failed = self.db.scalar(select(ModelCallLog).where(ModelCallLog.instance_code == "DEEPSEEK_V4_FLASH"))
+        self.assertEqual(failed.status, "FAILED")
+
+    def test_builtin_agent_model_upgrades_once(self) -> None:
+        seed_default_agents(self.db)
+        agent = self.db.scalar(select(AgentDefinition).where(AgentDefinition.agent_code == "QA_QUERY_AGENT"))
+        agent.model_instance_code = "QWEN_PLUS"
+        agent.version = "1.0.0"
+        self.db.commit()
+        seed_default_agents(self.db)
+        self.assertEqual(agent.model_instance_code, "DEEPSEEK_V4_FLASH")
+        self.assertEqual(agent.version, "1.0.1")
+        agent.model_instance_code = "QWEN_PLUS"
+        self.db.commit()
+        seed_default_agents(self.db)
+        self.assertEqual(agent.model_instance_code, "QWEN_PLUS")
 
     def test_skill_sync_versions_and_rollback(self) -> None:
         created = self.client.post("/api/v1/model-hub/skills", json={

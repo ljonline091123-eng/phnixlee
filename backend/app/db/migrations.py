@@ -56,3 +56,16 @@ def ensure_compat_columns(engine: Engine) -> None:
                 existing = {column["name"] for column in inspector.get_columns(table_name)}
                 if "graph_id" not in existing:
                     connection.execute(text(f'ALTER TABLE "{table_name}" ADD COLUMN graph_id INTEGER'))
+        if "skill_optimization_draft" in tables:
+            existing = {column["name"] for column in inspector.get_columns("skill_optimization_draft")}
+            if "base_skill_version" not in existing:
+                connection.execute(text(
+                    "ALTER TABLE skill_optimization_draft ADD COLUMN "
+                    "base_skill_version VARCHAR(32) NOT NULL DEFAULT '1.0.0'"
+                ))
+                if "skill_id" in existing and "model_skill" in tables:
+                    connection.execute(text(
+                        "UPDATE skill_optimization_draft SET base_skill_version = "
+                        "COALESCE((SELECT version FROM model_skill "
+                        "WHERE model_skill.id = skill_optimization_draft.skill_id), '1.0.0')"
+                    ))

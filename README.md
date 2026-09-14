@@ -161,6 +161,16 @@ python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().d
 $env:MODEL_CREDENTIAL_KEY="<generated-value>"
 ```
 
+For the local Windows setup, the same stable key can be kept in the ignored
+`backend/.env` file as `MODEL_CREDENTIAL_KEY=...`. The Model Lab already contains
+DeepSeek V4 Pro/Flash and Gemini 2.5 Pro/Flash instances. Open **模型实验室 →
+模型与路由 → 模型供应商**, edit the DeepSeek and Gemini providers, enter each
+provider's API Key, save, then use **测试** to verify the real API response.
+DeepSeek handles routine chat, governance, warnings, and stock analysis;
+Gemini Pro handles deep research and is the fallback for detailed analysis.
+Without either provider key, task routes can fall back to the clearly labeled
+local Mock instance; no external model connectivity is implied by a Mock result.
+
 Model management APIs:
 
 - `GET|POST|PUT /api/v1/model-hub/providers`

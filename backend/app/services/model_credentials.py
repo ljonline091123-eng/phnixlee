@@ -6,9 +6,11 @@ import os
 
 from cryptography.fernet import Fernet, InvalidToken
 
+from app.core.config import get_settings
+
 
 def _cipher() -> Fernet:
-    key = os.environ.get("MODEL_CREDENTIAL_KEY", "").strip()
+    key = (os.environ.get("MODEL_CREDENTIAL_KEY") or get_settings().model_credential_key).strip()
     if not key:
         raise ValueError("Set MODEL_CREDENTIAL_KEY before saving or using a model API key")
     try:

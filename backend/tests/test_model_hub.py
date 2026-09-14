@@ -49,6 +49,32 @@ class ModelHubFoundationTest(unittest.TestCase):
         self.assertEqual(deepseek_instance.model_code, "deepseek-v4-pro")
         self.assertIsNotNone(instance)
         self.assertIsNotNone(route)
+        self.assertEqual(route.preferred_instance_code, "DEEPSEEK_V4_FLASH")
+        self.assertEqual(route.fallback_chain_json, ["GEMINI_FLASH", "MOCK_GENERAL"])
+
+    def test_legacy_route_upgrades_without_overwriting_custom_route(self) -> None:
+        with TemporaryDirectory() as folder:
+            engine = create_engine(f"sqlite:///{Path(folder) / 'routes.db'}")
+            Base.metadata.create_all(engine)
+            with sessionmaker(bind=engine)() as db:
+                seed_default_models(db)
+                route = db.scalar(select(ModelRouteRule).where(ModelRouteRule.task_type == "general_chat"))
+                deepseek = db.scalar(select(ModelInstance).where(ModelInstance.instance_code == "DEEPSEEK_CHAT"))
+                deepseek.fallback_instance_code = "QWEN_PLUS"
+                route.preferred_instance_code = "QWEN_PLUS"
+                route.fallback_chain_json = ["DEEPSEEK_V4_FLASH", "GEMINI_FLASH", "OPENAI_CHATGPT", "MOCK_GENERAL"]
+                db.commit()
+                seed_default_models(db)
+                self.assertEqual(route.preferred_instance_code, "DEEPSEEK_V4_FLASH")
+                self.assertEqual(route.fallback_chain_json, ["GEMINI_FLASH", "MOCK_GENERAL"])
+                self.assertEqual(deepseek.fallback_instance_code, "GEMINI_PRO")
+                route.preferred_instance_code = "GEMINI_PRO"
+                route.fallback_chain_json = ["MOCK_GENERAL"]
+                db.commit()
+                seed_default_models(db)
+                self.assertEqual(route.preferred_instance_code, "GEMINI_PRO")
+                self.assertEqual(route.fallback_chain_json, ["MOCK_GENERAL"])
+            engine.dispose()
 
     def test_mock_chat_works(self) -> None:
         service = ModelHubService(self.db)

@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     api_v1_prefix: str = "/api/v1"
     database_url: str = DEFAULT_DATABASE_URL
     sql_echo: bool = False
+    model_credential_key: str = ""
 
     model_config = SettingsConfigDict(
         env_file=".env",

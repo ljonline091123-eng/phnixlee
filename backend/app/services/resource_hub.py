@@ -159,7 +159,7 @@ DEFAULT_AGENTS = (
         "agent_code": "DATA_GOVERNANCE_AGENT",
         "display_name": "数据治理智能体",
         "system_prompt": "负责把股票基础数据、新闻、公告、财报、股价、交易量、股东和 F10 数据治理成 DW 数据层，输出分类、质量、入库和待补数据建议。",
-        "model_instance_code": "QWEN_PLUS",
+        "model_instance_code": "DEEPSEEK_V4_FLASH",
         "max_iterations": 8,
         "description": "用于研究中心对话页签的数据治理、数据分类、字段解释和质量检查。",
         "skill_codes": ["DATA_GOVERNANCE_DW", "DATA_CLEANING_DW"],
@@ -181,7 +181,7 @@ DEFAULT_AGENTS = (
         "agent_code": "QA_QUERY_AGENT",
         "display_name": "问答问数智能体",
         "system_prompt": "负责研究中心对话页签的问答问数、治理解释和分析问答，优先使用内部数据源和知识图谱，输出统计口径和证据。",
-        "model_instance_code": "QWEN_PLUS",
+        "model_instance_code": "DEEPSEEK_V4_FLASH",
         "max_iterations": 6,
         "description": "用于数据治理、分析、问数、问答等日常交互操作。",
         "skill_codes": ["STOCK_QA_QUERY", "DATA_GOVERNANCE_DW"],
@@ -239,9 +239,14 @@ def seed_default_agents(db: Session) -> None:
                 max_iterations=int(agent_config["max_iterations"]),
                 enabled=True,
                 description=str(agent_config["description"]),
-                version="1.0.0",
+                version="1.0.1" if agent_config["agent_code"] in {"DATA_GOVERNANCE_AGENT", "QA_QUERY_AGENT"} else "1.0.0",
             )
             db.add(agent)
+        elif agent_config["agent_code"] in {"DATA_GOVERNANCE_AGENT", "QA_QUERY_AGENT"} and agent.version == "1.0.0":
+            if agent.model_instance_code == "QWEN_PLUS":
+                agent.model_instance_code = "DEEPSEEK_V4_FLASH"
+            if agent.model_instance_code == "DEEPSEEK_V4_FLASH":
+                agent.version = "1.0.1"
         db.flush()
 
     skill_by_code = {
