@@ -1,0 +1,310 @@
+"""Single source of truth for human-readable database table descriptions."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+from sqlalchemy import MetaData, Table
+from sqlalchemy.orm import Session
+
+
+@dataclass(frozen=True)
+class TableDescription:
+    display_name: str
+    domain: str
+    description: str
+
+
+TABLE_DESCRIPTIONS: dict[str, TableDescription] = {
+    "agent_child_link": TableDescription("智能体子任务关系", "智能体", "记录主智能体与子智能体的编排关系及执行顺序。"),
+    "agent_data_asset": TableDescription("智能体数据资产", "数据治理", "登记可供智能体访问的本地数据表、允许字段、治理状态及启停状态。"),
+    "agent_data_asset_link": TableDescription("智能体数据资产绑定", "智能体", "记录智能体与可访问数据资产的多对多授权关系。"),
+    "agent_data_source_link": TableDescription("智能体数据源绑定", "智能体", "记录智能体与可调用数据源的多对多绑定关系。"),
+    "agent_definition": TableDescription("智能体定义", "智能体", "保存智能体的提示词、模型实例、迭代上限、上下文限制及结构化输出约束。"),
+    "agent_knowledge_base_link": TableDescription("智能体知识库绑定", "智能体", "记录智能体与可查询知识库的多对多绑定关系。"),
+    "agent_skill_link": TableDescription("智能体 Skill 绑定", "智能体", "记录智能体可调用的 Skill 及其绑定关系。"),
+    "data_fetch_log": TableDescription("按需数据抓取日志", "数据采集", "记录按股票和接口抓取数据的请求、结果数量、落库数量及错误。"),
+    "data_interface": TableDescription("数据接口目录", "数据采集", "登记数据源提供的接口、适用市场、调用方式及输入输出结构。"),
+    "data_source": TableDescription("数据源", "数据采集", "登记行情和资讯数据供应源、适配器类型、优先级及启用配置。"),
+    "data_sync_log": TableDescription("批量同步日志", "数据采集", "记录股票基础资料等批量同步任务的市场、状态和增删改统计。"),
+    "database_table_comment": TableDescription("数据库表说明", "系统元数据", "保存各表的中文名称、业务用途和字段释义，供 SQLite 客户端直接查询。"),
+    "governance_run": TableDescription("治理执行记录", "数据治理", "记录数据资产或知识图谱的一次治理任务、所用智能体、来源资产及结果。"),
+    "knowledge_base": TableDescription("知识库", "知识图谱", "登记知识库的来源表、版本、状态，以及实体和关系统计。"),
+    "knowledge_document": TableDescription("知识文档", "知识图谱", "保存由源数据转化的知识文档，并关联知识库、图谱和股票代码。"),
+    "knowledge_entity": TableDescription("知识实体", "知识图谱", "保存知识图谱中的公司、人物、事件等实体及其属性。"),
+    "knowledge_graph": TableDescription("知识图谱", "知识图谱", "登记知识库下的独立图谱、股票范围、来源表、治理与启用状态。"),
+    "knowledge_relation": TableDescription("知识关系", "知识图谱", "保存实体之间的关系、谓词及可追溯的证据文档。"),
+    "model_call_log": TableDescription("模型调用日志", "模型实验室", "记录模型请求、响应、耗时、状态及错误，供调试和审计。"),
+    "model_instance": TableDescription("模型实例", "模型实验室", "保存供应商下具体模型的用途、调用地址、参数与备用实例。"),
+    "model_provider": TableDescription("模型供应商", "模型实验室", "保存模型供应商类型、API 地址、加密凭据和启用状态。"),
+    "model_route_rule": TableDescription("模型任务路由", "模型实验室", "按任务类型配置首选模型实例、降级链及路由策略。"),
+    "model_skill": TableDescription("Skill 定义", "模型实验室", "保存 Skill 指令、类型、版本、文件同步信息和启用状态。"),
+    "model_skill_revision": TableDescription("Skill 历史版本", "模型实验室", "保存 Skill 每个版本的指令正文、内容哈希和变更来源，支持回滚。"),
+    "prediction_ledger": TableDescription("预测账本", "研究复盘", "保存选股或买卖建议、依据与使用的 Skill 版本，并记录后续实际走势和评估。"),
+    "research_report": TableDescription("研究报告", "研究复盘", "保存单只股票的 AI 研报、结论、评分、数据来源及历史报告评估。"),
+    "skill_optimization_draft": TableDescription("Skill 优化草案", "研究复盘", "保存预测失败后生成的 Skill 修订建议、证据与人工审核状态。"),
+    "stock_f10_cache": TableDescription("股票 F10 缓存", "股票数据", "按股票及栏目缓存 F10 公司资料和业务信息。"),
+    "stock_financial_report": TableDescription("股票财务报告", "股票数据", "按股票、指标、报告期和来源保存财务报告结构化数据。"),
+    "stock_kline": TableDescription("股票历史 K 线", "股票数据", "保存股票不同周期和复权口径下的开高低收、成交量额及换手率。"),
+    "stock_news": TableDescription("股票新闻", "股票数据", "保存股票相关新闻的时间、标题、正文、来源和原文链接。"),
+    "stock_notice": TableDescription("股票公告", "股票数据", "保存上市公司公告的日期、类型、标题、链接和结构化内容。"),
+    "stock_realtime_quote": TableDescription("股票实时行情", "股票数据", "保存每只股票最新报价、涨跌幅、成交量额和行情时间。"),
+    "stock_symbol": TableDescription("股票基础资料", "股票数据", "保存股票代码、市场、交易所、名称、上市状态及来源信息。"),
+    "watchlist_item": TableDescription("自选股", "股票数据", "保存用户关注的市场与股票代码及备注。"),
+}
+
+
+COMMON_COLUMN_DESCRIPTIONS: dict[str, str] = {
+    "action_type": "预测建议的操作类型，例如买入、卖出或持有。",
+    "actual_price": "复盘时观察到的实际股价。",
+    "actual_return_pct": "按实际股价计算的收益率百分比。",
+    "adapter_method": "数据适配器中执行该接口的方法名。",
+    "adapter_type": "接入数据源所用的适配器类型。",
+    "adjust": "K 线复权口径，例如前复权、后复权或不复权。",
+    "agent_code": "智能体的唯一业务编码。",
+    "agent_id": "关联的智能体定义 ID。",
+    "agent_snapshot_json": "生成研报时使用的智能体配置快照。",
+    "allowed_columns": "允许智能体访问的数据表字段名列表。",
+    "amount": "成交额；计量单位以数据来源为准。",
+    "api_base_url": "模型供应商或实例的 API 基础地址。",
+    "api_key": "实例级 API 密钥，兼容历史配置。",
+    "api_key_encrypted": "经加密保存的供应商 API 密钥。",
+    "api_path": "实例调用接口相对 API 基础地址的路径。",
+    "asset_code": "数据资产的唯一业务编码。",
+    "asset_type": "证券资产类型，例如股票。",
+    "base_skill_version": "优化建议所依据的原 Skill 版本号。",
+    "change_amount": "最新价相对前收盘价的涨跌金额。",
+    "change_pct": "最新价相对前收盘价的涨跌幅百分比。",
+    "child_agent_id": "被编排的子智能体 ID。",
+    "close_price": "该交易周期的收盘价。",
+    "column_comments_json": "字段名到中文释义的 JSON 对象。",
+    "completed_at": "任务或调用完成时间。",
+    "conclusion": "研报的最终分析结论。",
+    "config_json": "该记录的扩展配置参数，JSON 格式。",
+    "content": "新闻或知识文档的正文内容。",
+    "content_hash": "Skill 指令内容的哈希值，用于校验版本。",
+    "content_json": "公告或新闻的结构化正文及附加信息。",
+    "context_window_limit": "智能体保留的历史对话轮数上限。",
+    "created_at": "记录创建时间。",
+    "currency": "财务数据使用的币种。",
+    "current_price": "股票最新成交价或报价。",
+    "data_asset_id": "关联的数据资产 ID。",
+    "data_category": "接口提供的数据类别。",
+    "data_json": "财务报告或指标的结构化数据。",
+    "data_source_id": "关联的数据源 ID。",
+    "data_sources_json": "生成研报时使用的数据源编码列表。",
+    "description": "该记录的业务说明或备注。",
+    "detail_json": "同步任务的详细结果及附加统计。",
+    "direction_hit": "预测方向是否与实际走势一致。",
+    "display_name": "界面展示用的中文名称。",
+    "domain": "表所属的业务领域。",
+    "enabled": "是否启用该记录或配置。",
+    "entity_count": "知识库或图谱中的实体数量。",
+    "entity_key": "同一知识库内用于去重的实体键。",
+    "entity_name": "知识实体的展示名称。",
+    "entity_type": "知识实体类别，例如公司、人物或事件。",
+    "entry_price": "生成预测建议时采用的参考入场价格。",
+    "error_message": "执行失败时的错误信息。",
+    "evaluated_at": "预测复盘评估完成时间。",
+    "evaluation_json": "预测命中与收益率评估的详细结果。",
+    "evidence_document_id": "支持该知识关系的证据文档 ID。",
+    "exchange": "股票所属交易所。",
+    "ext_json": "股票基础资料的扩展属性。",
+    "failed_count": "批量同步失败的记录数量。",
+    "failure_signature": "一组预测失败案例的去重标识。",
+    "fallback_chain_json": "首选模型不可用时依次尝试的实例编码列表。",
+    "fallback_instance_code": "模型实例自身配置的备用实例编码。",
+    "fetched_at": "数据从来源接口获取的时间。",
+    "file_path": "Skill 对应的 Markdown 文件路径。",
+    "format": "Skill 文件格式，例如 MD。",
+    "governance_report_json": "最近一次数据或图谱治理的结构化报告。",
+    "governance_status": "治理状态，例如待治理、已治理或已锁定。",
+    "graph_code": "知识图谱的唯一业务编码。",
+    "graph_id": "所属知识图谱 ID。",
+    "graph_name": "知识图谱的展示名称。",
+    "high_price": "该交易周期的最高价。",
+    "history_evaluation_json": "新研报对历史研报结论的对比评估。",
+    "id": "本表记录的数字主键。",
+    "indicator": "财务指标或报告类别编码。",
+    "input_schema": "数据接口入参的结构定义。",
+    "inserted_count": "批量同步中新插入的记录数量。",
+    "instance_code": "模型实例的唯一业务编码。",
+    "instructions": "Skill 当前或历史版本的指令正文。",
+    "interface_code": "数据接口的业务编码。",
+    "interface_name": "数据接口的展示名称。",
+    "is_builtin": "是否为系统内置 Skill。",
+    "json_schema_output": "智能体返回结构化 JSON 的 Schema 约束。",
+    "kb_code": "知识库的唯一业务编码。",
+    "kb_name": "知识库的展示名称。",
+    "knowledge_base_id": "所属知识库 ID。",
+    "knowledge_base_ids_json": "生成研报时使用的知识库 ID 列表。",
+    "last_governed_at": "最近一次成功或尝试治理的时间。",
+    "last_inspected_at": "最近一次检查数据资产的时间。",
+    "last_synced_at": "股票基础资料最近同步时间。",
+    "latency_ms": "模型调用耗时，单位毫秒。",
+    "list_date": "股票上市日期。",
+    "low_price": "该交易周期的最低价。",
+    "market": "所属证券市场编码，例如 CN_A 或 HK。",
+    "max_iterations": "智能体一次任务允许的最大迭代次数。",
+    "max_tokens": "模型单次回答允许输出的最大 Token 数。",
+    "metadata_json": "知识文档的来源及其他元数据。",
+    "model_call_log_id": "关联的模型调用日志 ID。",
+    "model_code": "供应商 API 使用的具体模型编码。",
+    "model_instance": "生成研报时使用的模型实例编码。",
+    "model_instance_code": "关联或使用的模型实例编码。",
+    "model_name": "模型实例的展示名称。",
+    "model_provider": "生成研报时使用的模型供应商编码。",
+    "name": "股票或报告对应的证券名称。",
+    "news_time": "新闻发布的日期和时间。",
+    "note": "自选股备注。",
+    "notice_date": "公告发布日期。",
+    "notice_type": "公告业务类型。",
+    "object_entity_id": "知识关系的客体实体 ID。",
+    "open_price": "该交易周期的开盘价。",
+    "order_index": "子智能体的执行顺序。",
+    "output_schema": "数据接口返回结果的结构定义。",
+    "payload_json": "F10 栏目的缓存内容。",
+    "period": "K 线周期，例如日线或周线。",
+    "persisted_count": "按需抓取后成功写入本地库的记录数量。",
+    "predicate": "知识关系的谓词或关系类型。",
+    "predicted_at": "预测建议生成时间。",
+    "prediction_ids": "触发 Skill 优化建议的预测账本 ID 列表。",
+    "preferred_instance_code": "该任务路由的首选模型实例编码。",
+    "previous_close_price": "前一交易日收盘价。",
+    "price_as_of": "复盘实际价格对应的行情时间。",
+    "priority": "数据源路由优先级，数值越小越优先。",
+    "properties_json": "知识实体的属性键值集合。",
+    "proposed_instructions": "待审核的新版 Skill 指令草案。",
+    "provider_code": "模型供应商的唯一业务编码。",
+    "provider_id": "所属模型供应商 ID。",
+    "provider_name": "模型供应商的展示名称。",
+    "provider_type": "模型供应商协议或适配器类型。",
+    "purpose": "模型实例的主要业务用途。",
+    "quote_time": "实时行情报价对应的时间。",
+    "rating": "研报给出的投资评级。",
+    "rationale": "提出 Skill 优化草案的原因与依据。",
+    "raw_payload": "数据源返回的原始报文。",
+    "reasoning_logic": "选股或交易建议的推理依据。",
+    "relation_count": "知识库或图谱中的关系数量。",
+    "report_markdown": "完整研报正文，Markdown 格式。",
+    "report_period": "财务报告所属会计期间。",
+    "request_json": "发起数据抓取或模型调用时的请求参数。",
+    "request_mode": "接口的请求或同步方式。",
+    "research_report_id": "关联的研究报告 ID。",
+    "response_json": "模型返回的结构化响应。",
+    "response_text": "模型返回的文本内容。",
+    "reviewed_at": "Skill 优化草案被审核的时间。",
+    "route_policy": "首选实例与降级链的调度策略。",
+    "row_count": "数据资产最近一次统计的记录行数。",
+    "score": "研报综合评分。",
+    "section": "F10 公司资料的栏目编码。",
+    "skill_code": "Skill 的唯一业务编码。",
+    "skill_id": "关联的 Skill ID。",
+    "skill_name": "Skill 的展示名称。",
+    "skill_type": "Skill 类型：提示词 SOP 或可执行工具。",
+    "skill_version_used": "生成预测时实际使用的 Skill 版本。",
+    "source": "Skill 历史版本的变更来源。",
+    "source_asset_ids": "本次治理使用的数据资产 ID 列表。",
+    "source_code": "数据源的唯一业务编码。",
+    "source_health": "数据资产来源表的健康检查结果。",
+    "source_id": "关联的数据源 ID。",
+    "source_name": "数据来源的展示名称。",
+    "source_record_id": "来源表中原始记录的 ID。",
+    "source_table": "知识文档所依据的本地来源表名。",
+    "source_tables": "知识库或图谱关联的来源表名列表。",
+    "source_type": "数据源的业务类型。",
+    "started_at": "任务或调用开始时间。",
+    "status": "该记录当前的业务状态。",
+    "stock_code": "股票交易代码。",
+    "subject_entity_id": "知识关系的主语实体 ID。",
+    "summary_json": "数据或图谱治理结果摘要。",
+    "supported_markets": "该接口支持的市场编码列表。",
+    "symbol": "股票交易代码。",
+    "system_prompt": "智能体执行任务时使用的系统提示词。",
+    "table_name": "关联的物理数据库表名。",
+    "target_id": "本次治理的目标记录 ID。",
+    "target_return_pct": "预测期望达到的收益率百分比。",
+    "target_timeframe": "预测的目标期限，例如 T+5。",
+    "target_type": "治理目标类别，例如数据资产或知识图谱。",
+    "task_type": "模型调用或路由对应的任务类型。",
+    "temperature": "模型生成随机性参数，越低通常越稳定。",
+    "title": "新闻、公告、知识文档或研报的标题。",
+    "top_p": "模型核采样概率阈值。",
+    "total_count": "本次抓取或同步处理的记录总数。",
+    "trade_date": "K 线对应的交易日期。",
+    "turnover_rate": "股票换手率；计量口径以数据来源为准。",
+    "updated_at": "记录最近更新时间。",
+    "updated_count": "批量同步中更新的记录数量。",
+    "url": "来源网页或原始资料链接。",
+    "usage_type": "模型参数用途类型，例如精确型 EXACT 或创意型 CREATIVE。",
+    "version": "当前配置或历史内容的版本号。",
+    "volume": "成交量；计量单位以数据来源为准。",
+    "warnings_json": "研报中的风险提示列表。",
+}
+
+
+TABLE_COLUMN_OVERRIDES: dict[str, dict[str, str]] = {
+    "agent_data_asset": {
+        "table_name": "该数据资产对应的本地物理表名。",
+        "display_name": "数据资产在界面中显示的名称。",
+    },
+    "data_fetch_log": {"status": "按需抓取任务的执行状态。"},
+    "data_source": {"source_name": "数据源在界面中显示的名称。"},
+    "data_sync_log": {"status": "批量同步任务的执行状态。"},
+    "database_table_comment": {
+        "table_name": "被说明的物理数据库表名，也是本表主键。",
+        "display_name": "数据库表的中文名称。",
+        "description": "该数据库表的业务用途与存储内容。",
+    },
+    "governance_run": {"status": "本次治理任务的执行状态。"},
+    "knowledge_base": {"status": "知识库的建设或使用状态。"},
+    "model_call_log": {"status": "本次模型调用的执行状态。"},
+    "model_skill_revision": {"source": "历史版本的产生方式，例如界面编辑或文件同步。"},
+    "prediction_ledger": {"status": "预测待复盘、已评估等生命周期状态。"},
+    "skill_optimization_draft": {"status": "Skill 优化草案的待审核、通过或拒绝状态。"},
+    "stock_news": {"source_name": "发布新闻的媒体或来源名称。"},
+    "stock_symbol": {"status": "股票上市、退市等交易状态。"},
+}
+
+
+def column_descriptions_for(table: Table) -> dict[str, str]:
+    overrides = TABLE_COLUMN_OVERRIDES.get(table.name, {})
+    actual_names = {column.name for column in table.columns}
+    unknown_overrides = set(overrides) - actual_names
+    if unknown_overrides:
+        raise ValueError(f"{table.name} has unknown column overrides: {sorted(unknown_overrides)}")
+    missing = actual_names - set(COMMON_COLUMN_DESCRIPTIONS) - set(overrides)
+    if missing:
+        raise ValueError(f"{table.name} has undocumented columns: {sorted(missing)}")
+    return {
+        column.name: overrides.get(column.name, COMMON_COLUMN_DESCRIPTIONS.get(column.name, ""))
+        for column in table.columns
+    }
+
+
+def apply_table_comments(metadata: MetaData) -> None:
+    """Expose comments in SQLAlchemy and in databases with native COMMENT support."""
+    for name, table in metadata.tables.items():
+        description = TABLE_DESCRIPTIONS.get(name)
+        if description is not None:
+            table.comment = description.description
+            column_descriptions = column_descriptions_for(table)
+            for column in table.columns:
+                column.comment = column_descriptions[column.name]
+
+
+def seed_table_comments(session: Session) -> None:
+    """Keep the queryable SQLite catalog in sync without touching business rows."""
+    from app.models.schema_catalog import DatabaseTableComment
+    from app.db.base import Base
+
+    for name, description in TABLE_DESCRIPTIONS.items():
+        row = session.get(DatabaseTableComment, name)
+        if row is None:
+            row = DatabaseTableComment(table_name=name)
+            session.add(row)
+        row.display_name = description.display_name
+        row.domain = description.domain
+        row.description = description.description
+        row.column_comments_json = column_descriptions_for(Base.metadata.tables[name])
+    session.commit()

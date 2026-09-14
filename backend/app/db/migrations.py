@@ -69,3 +69,10 @@ def ensure_compat_columns(engine: Engine) -> None:
                         "COALESCE((SELECT version FROM model_skill "
                         "WHERE model_skill.id = skill_optimization_draft.skill_id), '1.0.0')"
                     ))
+        if "database_table_comment" in tables:
+            existing = {column["name"] for column in inspector.get_columns("database_table_comment")}
+            if "column_comments_json" not in existing:
+                connection.execute(text(
+                    "ALTER TABLE database_table_comment ADD COLUMN "
+                    "column_comments_json JSON NOT NULL DEFAULT '{}'"
+                ))

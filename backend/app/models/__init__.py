@@ -35,6 +35,11 @@ from app.models.ai_hub import (
     ModelSkill,
     ModelSkillRevision,
 )
+from app.models.schema_catalog import DatabaseTableComment
+from app.db.base import Base
+from app.db.table_comments import apply_table_comments
+
+apply_table_comments(Base.metadata)
 
 __all__ = [
     "DataFetchLog",
@@ -70,4 +75,5 @@ __all__ = [
     "KnowledgeDocument",
     "KnowledgeEntity",
     "KnowledgeRelation",
+    "DatabaseTableComment",
 ]

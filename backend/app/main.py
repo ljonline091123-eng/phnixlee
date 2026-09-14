@@ -8,6 +8,7 @@ from app.api import data_interfaces, data_sources, model_hub, research, resource
 from app.core.config import get_settings
 from app.db.base import Base
 from app.db.migrations import ensure_compat_columns
+from app.db.table_comments import seed_table_comments
 from app.db.session import SessionLocal, engine
 from app.services.catalog import seed_default_catalog
 from app.services.daily_sync import daily_master_sync_loop
@@ -23,6 +24,7 @@ async def lifespan(_: FastAPI):
     ensure_compat_columns(engine)
     Base.metadata.create_all(bind=engine)
     with SessionLocal() as db:
+        seed_table_comments(db)
         seed_default_catalog(db)
         seed_default_models(db)
         seed_default_skills(db)
