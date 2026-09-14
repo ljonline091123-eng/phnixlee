@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState, type ReactNode } from "react";
+import { FormEvent, useEffect, useRef, useState, type ReactNode } from "react";
 import {
   api,
   type AgentDefinition,
@@ -20,6 +20,7 @@ import {
   type ResearchReportSummary,
   type ModelSkill,
   type ModelSkillPayload,
+  type ModelTestResponse,
   type SkillOptimizationDraft,
   type StockSymbol,
   type SyncLog,
@@ -33,6 +34,13 @@ type ModelHubTab =
   "models" | "agents" | "skills" | "assets" | "knowledge" | "logs";
 type DataView = "sources" | "interfaces" | "universe";
 type ResearchTab = "chat" | "research";
+type ModelTestDialogState = {
+  target: string;
+  status: "RUNNING" | "SUCCESS" | "FAILED" | "CONFIGURED";
+  message: string;
+  detail?: string;
+  callLogId?: number;
+};
 const marketLabel: Record<string, string> = {
   ALL: "全部市场",
   CN_A: "A股",
@@ -558,6 +566,8 @@ function ModelLabPage() {
   const [modelDialog, setModelDialog] = useState<
     "provider" | "instance" | "route" | null
   >(null);
+  const [testDialog, setTestDialog] = useState<ModelTestDialogState | null>(null);
+  const testRequestId = useRef(0);
   const [agentDialogOpen, setAgentDialogOpen] = useState(false);
   const [skillDialogOpen, setSkillDialogOpen] = useState(false);
   const [chat, setChat] = useState({
@@ -696,27 +706,50 @@ function message(text: string) {
       message(e instanceof Error ? e.message : "任务路由保存失败");
     }
   }
-  async function testProvider(item: ModelProvider) {
+  function closeTestDialog() {
+    testRequestId.current += 1;
+    setTestDialog(null);
+  }
+  async function runModelTest(
+    target: string,
+    keyConfigured: boolean,
+    providerType: ModelProvider["provider_type"] | undefined,
+    request: () => Promise<ModelTestResponse>,
+  ) {
+    const requestId = ++testRequestId.current;
+    setTestDialog({ target, status: "RUNNING", message: "正在调用模型，请稍候…" });
     try {
-      const result = await api.testModelProvider(item.id);
-      message(
-        `${item.provider_name}：${result.message}${result.response_text ? ` ${result.response_text}` : ""}`,
-      );
+      const result = await request();
+      if (requestId !== testRequestId.current) return;
+      const missingKey = result.status === "FAILED" && !keyConfigured && providerType !== "MOCK";
+      setTestDialog({
+        target,
+        status: result.status === "SUCCESS" || result.status === "CONFIGURED" ? result.status : "FAILED",
+        message: missingKey
+          ? "未配置 API Key（SK），测试在发送模型请求前失败。请编辑对应供应商，填写密钥并保存后重试。"
+          : result.message,
+        detail: result.response_text || undefined,
+        callLogId: result.call_log_id || undefined,
+      });
       await load();
     } catch (e) {
-      message(e instanceof Error ? e.message : "供应商测试失败");
+      if (requestId !== testRequestId.current) return;
+      setTestDialog({
+        target,
+        status: "FAILED",
+        message: !keyConfigured && providerType !== "MOCK"
+          ? "未配置 API Key（SK）。请编辑对应供应商，填写密钥并保存后重试。"
+          : "测试请求未能完成。",
+        detail: e instanceof Error ? e.message : "请检查后端服务和网络连接。",
+      });
     }
   }
+  async function testProvider(item: ModelProvider) {
+    await runModelTest(item.provider_name, item.api_key_configured, item.provider_type, () => api.testModelProvider(item.id));
+  }
   async function testInstance(item: ModelInstance) {
-    try {
-      const result = await api.testModelInstance(item.id);
-      message(
-        `${item.instance_code}：${result.message}${result.response_text ? ` ${result.response_text}` : ""}`,
-      );
-      await load();
-    } catch (e) {
-      message(e instanceof Error ? e.message : "模型实例测试失败");
-    }
+    const providerType = providers.find((provider) => provider.id === item.provider_id)?.provider_type;
+    await runModelTest(item.instance_code, item.api_key_configured, providerType, () => api.testModelInstance(item.id));
   }
   async function deleteProvider(item: ModelProvider) {
     if (!window.confirm(`删除供应商 ${item.provider_name}？`)) return;
@@ -1097,6 +1130,21 @@ function message(text: string) {
           onSend={sendChat}
         />
       )}
+      {testDialog && (
+        <ResourceDialog
+          eyebrow="MODEL TEST"
+          title={`${testDialog.target} · 测试结果`}
+          onClose={closeTestDialog}
+          compact
+        >
+          <div className={`model-test-result ${testDialog.status.toLowerCase()}`}>
+            <strong>{testDialog.status === "RUNNING" ? "测试中" : testDialog.status === "SUCCESS" ? "测试成功" : testDialog.status === "CONFIGURED" ? "配置可用" : "测试失败"}</strong>
+            <p>{testDialog.message}</p>
+            {testDialog.detail && <pre>{testDialog.detail}</pre>}
+            {testDialog.callLogId && <small>调用日志 ID：{testDialog.callLogId}</small>}
+          </div>
+        </ResourceDialog>
+      )}
     </>
   );
 }
@@ -1106,11 +1154,13 @@ function ResourceDialog({
   title,
   children,
   onClose,
+  compact = false,
 }: {
   eyebrow: string;
   title: string;
   children: ReactNode;
   onClose: () => void;
+  compact?: boolean;
 }) {
   return (
     <div
@@ -1120,7 +1170,7 @@ function ResourceDialog({
         if (event.target === event.currentTarget) onClose();
       }}
     >
-      <section className="resource-dialog" role="dialog" aria-modal="true">
+      <section className={`resource-dialog${compact ? " resource-dialog-compact" : ""}`} role="dialog" aria-modal="true">
         <div className="resource-dialog-header">
           <div>
             <p className="eyebrow">{eyebrow}</p>
@@ -1183,7 +1233,7 @@ function ModelTab(props: {
             <div>
               <p className="eyebrow">PROVIDERS</p>
               <h2>模型供应商清单</h2>
-              <p>维护 DeepSeek、本地模拟或兼容 OpenAI 的模型供应商。</p>
+              <p>维护模型供应商。启用不代表连接成功；外部模型还需配置 API Key 并通过测试。</p>
             </div>
             <div className="panel-actions">
               <button
@@ -1298,7 +1348,7 @@ function ModelTab(props: {
             </div>
             <div>
               <strong>API/SK</strong>
-              <span>API Base URL 是服务地址，API Path 是调用路径，SK/API Key 是密钥；未配置会自动走降级链。</span>
+              <span>API Base URL 是服务地址，API Path 是调用路径，SK/API Key 是密钥。单独测试直接检查所选模型；任务调用才按路由降级。</span>
             </div>
           </div>
           <div className="resource-list-header">

@@ -66,8 +66,10 @@ class OpenAICompatAdapter(ModelAdapter):
     adapter_type = "OPENAI_COMPAT"
 
     def health_check(self, instance: ModelInstance) -> tuple[str, list[str]]:
-        if not instance.api_key or not instance.api_base_url:
-            raise ValueError("OPENAI_COMPAT instance requires api_key and api_base_url")
+        if not instance.api_key:
+            raise ValueError("OPENAI_COMPAT instance requires api_key")
+        if not instance.api_base_url:
+            raise ValueError("OPENAI_COMPAT instance requires api_base_url")
         return ("OpenAI-compatible endpoint is configured.", ["chat"])
 
     def chat(
@@ -78,8 +80,7 @@ class OpenAICompatAdapter(ModelAdapter):
         max_tokens: int | None = None,
         metadata_json: dict[str, Any] | None = None,
     ) -> ModelExecutionResult:
-        if not instance.api_key or not instance.api_base_url:
-            raise ValueError("OPENAI_COMPAT instance requires api_key and api_base_url")
+        self.health_check(instance)
         url = self._build_url(instance)
         payload: dict[str, Any] = {
             "model": instance.model_code,
@@ -114,8 +115,10 @@ class AnthropicMessagesAdapter(ModelAdapter):
     adapter_type = "ANTHROPIC"
 
     def health_check(self, instance: ModelInstance) -> tuple[str, list[str]]:
-        if not instance.api_key or not instance.api_base_url:
-            raise ValueError("ANTHROPIC instance requires api_key and api_base_url")
+        if not instance.api_key:
+            raise ValueError("ANTHROPIC instance requires api_key")
+        if not instance.api_base_url:
+            raise ValueError("ANTHROPIC instance requires api_base_url")
         return ("Claude Messages endpoint is configured.", ["chat"])
 
     def chat(
