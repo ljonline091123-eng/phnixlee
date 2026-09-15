@@ -27,6 +27,32 @@ export function bidCountReport(query) {
 }
 
 /**
+ * 投标率统计(左树右表-获取下一层)
+ * @param params
+ * @returns {*}
+ */
+export function getBidCountNext(params) {
+  return request({
+    url: '/business/report/getBidCountNext',
+    method: 'get',
+    params: params
+  })
+}
+
+/**
+ * 问题报表-异常报表(懒加载获取下一层)
+ * @param params
+ * @returns {*}
+ */
+export function getProblemNext(params) {
+  return request({
+    url: '/business/report/getProblemNext',
+    method: 'get',
+    params: params
+  })
+}
+
+/**
  * 获取组织及以下所有项目编码
  * @param id
  * @returns {*}
