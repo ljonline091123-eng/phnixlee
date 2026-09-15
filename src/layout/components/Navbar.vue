@@ -155,6 +155,7 @@ import "@riophae/vue-treeselect/dist/vue-treeselect.css";
 import {getDeptTree, getManagementOrgId} from "@/api/system/dept";
 import {Notification} from "element-ui";
 import {getUserProfile,getMyList,messageRead} from "@/api/system/user";
+import {getUnifiedLoginUrl, removePortalToken} from "@/utils/auth";
 
 export default {
   components: {
@@ -344,7 +345,9 @@ export default {
         type: 'warning'
       }).then(() => {
         this.$store.dispatch('LogOut').then(() => {
-          location.href = '/index';
+          // 统一登录：退出后跳回供应商端统一登录页
+          removePortalToken()
+          location.href = getUnifiedLoginUrl()
         })
       }).catch(() => {
       });

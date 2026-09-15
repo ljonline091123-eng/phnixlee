@@ -1,7 +1,7 @@
 import axios from "axios";
 import { Notification, MessageBox, Message, Loading } from "element-ui";
 import store from "@/store";
-import { getToken, getControlToken } from "@/utils/auth";
+import { getToken, getControlToken, getUnifiedLoginUrl, removePortalToken } from "@/utils/auth";
 import errorCode from "@/utils/errorCode";
 import { tansParams, blobValidate } from "@/utils/ruoyi";
 import cache from "@/plugins/cache";
@@ -127,8 +127,9 @@ service.interceptors.response.use(
           .then(() => {
             isRelogin.show = false;
             store.dispatch("FedLogOut").then(() => {
-              // location.href = "/index";
-              window.parent.location.reload();
+              // 统一登录：会话过期重新登录时跳统一登录页
+              removePortalToken()
+              window.parent.location.href = getUnifiedLoginUrl();
             });
           })
           .catch(() => {
