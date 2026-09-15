@@ -257,6 +257,14 @@ DEFAULT_MODEL_INSTANCES = (
 
 DEFAULT_MODEL_ROUTES = (
     {
+        "task_type": "data_distillation",
+        "preferred_instance_code": "DEEPSEEK_CHAT",
+        "fallback_chain_json": ["GEMINI_FLASH"],
+        "route_policy": "PREFERRED_THEN_FALLBACK",
+        "enabled": False,
+        "description": "单文档双轨蒸馏；完成任务执行器及真实模型连通验证后启用。",
+    },
+    {
         "task_type": "deep_research",
         "preferred_instance_code": "GEMINI_PRO",
         "fallback_chain_json": ["DEEPSEEK_CHAT", "GEMINI_FLASH", "MOCK_GENERAL"],
@@ -657,7 +665,7 @@ class ModelHubService:
                     metadata_json=metadata,
                 )
                 output_schema = metadata.get("json_schema_output")
-                if output_schema:
+                if output_schema and not metadata.get("defer_schema_validation"):
                     Draft202012Validator(output_schema).validate(json.loads(result.response_text))
                 log.status = "SUCCESS"
                 log.response_text = result.response_text

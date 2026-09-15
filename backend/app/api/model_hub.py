@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import delete, func, inspect, select, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -32,7 +32,9 @@ from app.connectors.model_registry import get_model_adapter
 from app.services.skill_files import delete_skill_file, write_skill_file
 from app.services.skill_registry import rollback_skill, save_skill_content, sync_skill_from_file
 from app.schemas.skill_tools import DwValidationRequest, PredictionScoreRequest, WatchFilterRequest
+from app.schemas.distillation import ExtractionRequest, ExtractionSource
 from app.services.skill_tools import filter_watch_candidates, score_prediction_outcomes, validate_dw_records
+from app.services.ondemand_distillation import trigger_ondemand_extraction
 from app.schemas.predictions import PredictionCreate, PredictionRead, SkillDraftRead
 from app.services.prediction_review import propose_failed_skill_revisions, review_predictions
 
@@ -523,6 +525,14 @@ def approve_skill_draft(draft_id: int, db: Session = Depends(get_db)) -> ModelSk
         raise HTTPException(status_code=404, detail="Skill draft not found")
     if draft.status != "PENDING_REVIEW":
         raise HTTPException(status_code=409, detail="Skill draft has already been reviewed")
+    if draft.failure_signature.startswith("DISTILLATION_REVIEW:"):
+        raise HTTPException(status_code=409, detail="Entity review cannot be approved as a Skill prompt revision")
+    draft_columns = {column["name"] for column in inspect(db.connection()).get_columns("skill_optimization_draft")}
+    if "draft_type" in draft_columns and db.execute(
+        text("SELECT draft_type FROM skill_optimization_draft WHERE id = :draft_id"),
+        {"draft_id": draft_id},
+    ).scalar_one() == "DISTILLATION_REVIEW":
+        raise HTTPException(status_code=409, detail="Entity review cannot be approved as a Skill prompt revision")
     skill = _skill_or_404(db, draft.skill_id)
     sync_skill_from_file(db, skill)
     if skill.version != draft.base_skill_version:
@@ -581,7 +591,7 @@ def list_call_logs(limit: int = 50, db: Session = Depends(get_db)) -> list[Model
 
 @router.post("/skill-tools/validate-dw-records")
 def run_dw_validation(payload: DwValidationRequest) -> dict:
-    return validate_dw_records(payload)
+    return validate_dw_records(payload.records)
 
 
 @router.post("/skill-tools/filter-watch-candidates")
@@ -592,6 +602,18 @@ def run_watch_filter(payload: WatchFilterRequest) -> dict:
 @router.post("/skill-tools/score-prediction-outcomes")
 def run_prediction_scoring(payload: PredictionScoreRequest) -> dict:
     return score_prediction_outcomes(payload)
+
+
+@router.post("/skill-tools/trigger-ondemand-extraction", response_model=ExtractionSource)
+def run_ondemand_extraction(
+    payload: ExtractionRequest, db: Session = Depends(get_db)
+) -> ExtractionSource:
+    try:
+        return trigger_ondemand_extraction(payload.stock_code, payload.doc_id, db)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 def _next_skill_code(db: "Session") -> str:

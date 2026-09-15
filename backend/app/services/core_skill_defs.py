@@ -9,6 +9,48 @@ DOC_ROOT = Path(__file__).resolve().parents[2] / "skill_docs"
 
 CORE_SKILLS = (
     {
+        "skill_code": "ONDEMAND_DATA_DISTILLER",
+        "skill_name": "按需数据双轨蒸馏 SOP",
+        "description": "单文档有界提取问答块与有证据的图谱三元组。",
+        "task_type": "data_distillation",
+        "skill_type": "PROMPT_SOP",
+        "function_spec": {
+            "name": "trigger_ondemand_extraction",
+            "description": "Read one provenance-linked stock document before bounded LLM extraction.",
+            "endpoint": "/api/v1/model-hub/skill-tools/trigger-ondemand-extraction",
+            "parameters": {
+                "type": "object",
+                "required": ["stock_code", "doc_id"],
+                "properties": {
+                    "stock_code": {"type": "string", "minLength": 1, "maxLength": 32},
+                    "doc_id": {"type": "integer", "minimum": 1},
+                },
+                "additionalProperties": False,
+            },
+        },
+    },
+    {
+        "skill_code": "ONDEMAND_DATA_DISTILLER_TOOL",
+        "skill_name": "按需业务原文读取工具",
+        "description": "确定性读取单条来源原文，核对证券代码及文档来源。",
+        "task_type": "data_distillation",
+        "skill_type": "EXECUTABLE_TOOL",
+        "function_spec": {
+            "name": "trigger_ondemand_extraction",
+            "description": "Read one provenance-linked stock document; no model or graph writes.",
+            "endpoint": "/api/v1/model-hub/skill-tools/trigger-ondemand-extraction",
+            "parameters": {
+                "type": "object",
+                "required": ["stock_code", "doc_id"],
+                "properties": {
+                    "stock_code": {"type": "string", "minLength": 1, "maxLength": 32},
+                    "doc_id": {"type": "integer", "minimum": 1},
+                },
+                "additionalProperties": False,
+            },
+        },
+    },
+    {
         "skill_code": "DATA_CLEANING_DW",
         "skill_name": "数据清洗与 DW 入湖",
         "description": "Python 批量校验和去重，Agent 只解释质量摘要与入湖建议。",
@@ -74,7 +116,7 @@ def core_skill_rows() -> tuple[dict, ...]:
         "skill_name": item["skill_name"],
         "description": item["description"],
         "instructions": (DOC_ROOT / f"{item['skill_code']}.SKILL.md").read_text(encoding="utf-8"),
-        "skill_type": "PROMPT_SOP",
+        "skill_type": item.get("skill_type", "PROMPT_SOP"),
         "enabled": True,
         "config_json": {"task_type": item["task_type"], "function_spec": item["function_spec"]},
     } for item in CORE_SKILLS)

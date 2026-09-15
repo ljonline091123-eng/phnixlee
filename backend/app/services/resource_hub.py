@@ -36,6 +36,7 @@ from app.models.market_data import (
     StockRealtimeQuote,
     StockSymbol,
 )
+from app.schemas.distillation import DistillationOutput
 
 
 DEFAULT_DATA_ASSETS = (
@@ -156,6 +157,20 @@ def seed_default_graphs(db: Session) -> None:
 
 DEFAULT_AGENTS = (
     {
+        "agent_code": "DISTILLATION_GOVERNANCE_AGENT",
+        "display_name": "双轨蒸馏调度智能体",
+        "system_prompt": "你是数据蒸馏调度官。仅处理工具按单只股票和知识文档读取的业务原文。先由 Python 分块，再调用 ONDEMAND_DATA_DISTILLER；严格验证 JSON、实体类型、来源证据和知识图谱关系白名单。KB 与 KG 各自记录成功或失败。置信度低于 0.8、无法核验的新节点或冲突事实写入隔离的 DISTILLATION_REVIEW 草稿，等待人工审核，不得自动写图，也不得作为 Skill Prompt 修订批准。",
+        "model_instance_code": "DEEPSEEK_CHAT",
+        "max_iterations": 6,
+        "context_window_limit": 4,
+        "json_schema_output": DistillationOutput.model_json_schema(),
+        "description": "按需业务数据蒸馏的待启用编排配置；启用前需部署任务执行器、向量库与 Neo4j。",
+        "enabled": False,
+        "skill_codes": ["ONDEMAND_DATA_DISTILLER", "ONDEMAND_DATA_DISTILLER_TOOL"],
+        "kb_codes": ["STOCK_FULL_KG"],
+        "asset_codes": ["STOCK_NEWS", "STOCK_NOTICE", "STOCK_FINANCIAL"],
+    },
+    {
         "agent_code": "DATA_GOVERNANCE_AGENT",
         "display_name": "数据治理智能体",
         "system_prompt": "负责把股票基础数据、新闻、公告、财报、股价、交易量、股东和 F10 数据治理成 DW 数据层，输出分类、质量、入库和待补数据建议。",
@@ -237,7 +252,9 @@ def seed_default_agents(db: Session) -> None:
                 system_prompt=str(agent_config["system_prompt"]),
                 model_instance_code=str(agent_config["model_instance_code"]),
                 max_iterations=int(agent_config["max_iterations"]),
-                enabled=True,
+                context_window_limit=int(agent_config.get("context_window_limit", 12)),
+                json_schema_output=dict(agent_config.get("json_schema_output") or {}),
+                enabled=bool(agent_config.get("enabled", True)),
                 description=str(agent_config["description"]),
                 version="1.0.1" if agent_config["agent_code"] in {"DATA_GOVERNANCE_AGENT", "QA_QUERY_AGENT"} else "1.0.0",
             )

@@ -90,6 +90,17 @@ class OpenAICompatAdapter(ModelAdapter):
             "top_p": instance.top_p,
         }
         payload.update(instance.config_json.get("extra_body_json", {}))
+        metadata = metadata_json or {}
+        output_schema = metadata.get("json_schema_output")
+        if output_schema and metadata.get("native_structured_output"):
+            payload["response_format"] = {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": str(metadata.get("json_schema_name") or "structured_output"),
+                    "strict": True,
+                    "schema": output_schema,
+                },
+            }
         headers = {
             "Authorization": f"Bearer {instance.api_key}",
             "Content-Type": "application/json",
@@ -201,8 +212,15 @@ class GeminiRestAdapter(ModelAdapter):
             "maxOutputTokens": max_tokens if max_tokens is not None else instance.max_tokens,
             "topP": instance.top_p,
         }
+        extra_body = dict(instance.config_json.get("extra_body_json", {}))
+        generation_config.update(extra_body.pop("generationConfig", {}))
+        metadata = metadata_json or {}
+        output_schema = metadata.get("json_schema_output")
+        if output_schema and metadata.get("native_structured_output"):
+            generation_config["responseMimeType"] = "application/json"
+            generation_config["responseJsonSchema"] = output_schema
+        payload.update(extra_body)
         payload["generationConfig"] = generation_config
-        payload.update(instance.config_json.get("extra_body_json", {}))
         with httpx.Client(timeout=httpx.Timeout(60.0)) as client:
             response = client.post(url, json=payload, headers={"x-goog-api-key": instance.api_key})
             response.raise_for_status()
