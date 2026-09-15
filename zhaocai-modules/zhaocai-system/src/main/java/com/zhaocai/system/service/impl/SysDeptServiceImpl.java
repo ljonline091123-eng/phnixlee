@@ -539,6 +539,52 @@ public class SysDeptServiceImpl extends ServiceImpl<SysDeptMapper, SysDept> impl
         return sysDepts;
     }
 
+    /**
+     * 根据第三方部门 id 获取本单位和下一层单位
+     *
+     * @param thridDeptId 第三方部门 id
+     * @param type 1=含公司、部门、项目部 2=含公司,不含部门、项目部 3=含公司、项目部,不含部门 4=含公司、部门,不含项目部
+     */
+    @Override
+    public List<SysDept> getDeptAndNextDept(String thridDeptId, String type) {
+        List<SysDept> sysDepts = new ArrayList<>();
+        SysDept sysDept = deptMapper.selectOne(new LambdaQueryWrapper<SysDept>()
+                .eq(SysDept::getThridDeptId, thridDeptId));
+        if (!ObjectUtils.isEmpty(sysDept)) {
+            if (type.equals("1")) {
+                sysDepts = super.list(new LambdaQueryWrapper<SysDept>()
+                        .eq(SysDept::getThridParentId, thridDeptId)
+                        .eq(SysDept::getStatus, "0")
+                        .eq(SysDept::getDelFlag, "0")
+                        .orderByAsc(SysDept::getOrderNum));
+            } else if (type.equals("2")) {
+                List<String> thridOrgTypes = Arrays.asList("X", "BM");
+                sysDepts = super.list(new LambdaQueryWrapper<SysDept>()
+                        .eq(SysDept::getThridParentId, thridDeptId)
+                        .eq(SysDept::getStatus, "0")
+                        .eq(SysDept::getDelFlag, "0")
+                        .notIn(SysDept::getThridOrgType, thridOrgTypes)
+                        .orderByAsc(SysDept::getOrderNum));
+            } else if (type.equals("3")) {
+                sysDepts = super.list(new LambdaQueryWrapper<SysDept>()
+                        .eq(SysDept::getThridParentId, thridDeptId)
+                        .eq(SysDept::getStatus, "0")
+                        .eq(SysDept::getDelFlag, "0")
+                        .ne(SysDept::getThridOrgType, "BM")
+                        .orderByAsc(SysDept::getOrderNum));
+            } else if (type.equals("4")) {
+                sysDepts = super.list(new LambdaQueryWrapper<SysDept>()
+                        .eq(SysDept::getThridParentId, thridDeptId)
+                        .eq(SysDept::getStatus, "0")
+                        .eq(SysDept::getDelFlag, "0")
+                        .ne(SysDept::getThridOrgType, "X")
+                        .orderByAsc(SysDept::getOrderNum));
+            }
+            sysDepts.add(0, sysDept);
+        }
+        return sysDepts;
+    }
+
     @Override
     public List<TreeSelect> getDeptTreeByThridDeptId(String thridDeptId) {
         List<SysDept> sysDepts = new ArrayList<>();

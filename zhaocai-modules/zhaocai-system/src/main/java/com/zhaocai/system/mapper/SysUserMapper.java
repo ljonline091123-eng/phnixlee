@@ -132,6 +132,14 @@ public interface SysUserMapper extends MyBaseMapper<SysUser>
     public SysUser checkUserNameAndUserTypeUnique(@Param("userName") String userName,@Param("userType") String userType);
     public SysUser selectUserByUserNameAndUserType(@Param("userName") String userName, @Param("userType") String userType);
 
+    /**
+     * 统一登录：按用户名查询全部有效用户（不限 user_type，供 auth 自动识别身份）
+     *
+     * @param userName 用户名
+     * @return 用户列表
+     */
+    public List<SysUser> selectUserListByUserName(@Param("userName") String userName);
+
     boolean deleteSyncUser();
 
     SysUser findThridUserCond(@Param("thridUserId") String thridUserId);

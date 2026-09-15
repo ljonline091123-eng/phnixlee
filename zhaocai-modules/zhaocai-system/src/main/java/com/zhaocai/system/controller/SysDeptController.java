@@ -303,6 +303,26 @@ public class SysDeptController extends BaseController
     }
 
     /**
+     * 根据第三方部门 id 获取组织机构信息(本单位和下一层单位)
+     * @param thridDeptId
+     * @param type 1=含公司、部门、项目部 2=含公司,不含部门、项目部 3=含公司、项目部,不含部门 4=含公司、部门,不含项目部
+     * @return
+     */
+    @InnerAuth
+    @GetMapping("/getDeptAndNextDept")
+    public List<SysDept> getDeptAndNextDept(@RequestParam Object thridDeptId, @RequestParam Object type) {
+        String thridDeptIdNew = String.valueOf(thridDeptId);
+        String typeNew = String.valueOf(type);
+        if (StringUtils.isEmpty(thridDeptIdNew)) {
+            throw new RuntimeException("第三方部门 id 不能为空");
+        }
+        if (StringUtils.isEmpty(typeNew)) {
+            typeNew = "1";
+        }
+        return deptService.getDeptAndNextDept(thridDeptIdNew, typeNew);
+    }
+
+    /**
      * 根据第三方部门 id 获取组织机构信息(本部门及以下部门，含项目部) 树结构
      * @param thridDeptId
      * @return

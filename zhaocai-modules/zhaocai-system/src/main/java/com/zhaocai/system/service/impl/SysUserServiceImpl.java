@@ -547,6 +547,11 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
     }
 
     @Override
+    public List<SysUser> selectUserListByUserName(String userName) {
+        return userMapper.selectUserListByUserName(userName);
+    }
+
+    @Override
     public Boolean insertUsers(List<SysUser> users, boolean saveFlag) {
         if (users.size() > 0) {
             if (saveFlag) {

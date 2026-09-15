@@ -411,6 +411,16 @@ public class SysUserController extends BaseController
     }
 
     /**
+     * 统一登录：按用户名查询全部有效用户（不限 user_type，供 auth 服务自动识别身份）
+     */
+    @InnerAuth
+    @GetMapping("/listByUserName")
+    public R<List<SysUser>> listByUserName(String username)
+    {
+        return R.ok(userService.selectUserListByUserName(username));
+    }
+
+    /**
      * 获取全部用户列表用于工作流
      */
     @RequiresPermissions("system:user:list")

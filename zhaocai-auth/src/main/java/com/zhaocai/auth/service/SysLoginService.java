@@ -9,6 +9,7 @@ import com.alibaba.fastjson.JSONObject;
 import com.zhaocai.auth.config.UnderlingPlatformConfig;
 import com.zhaocai.auth.dto.DecryptionTokenResDTO;
 import com.zhaocai.auth.form.LoginBody;
+import com.zhaocai.auth.vo.LoginResult;
 import com.zhaocai.common.core.enums.UserTypeEnum;
 import com.zhaocai.common.security.service.TokenService;
 import org.slf4j.Logger;
@@ -30,7 +31,9 @@ import com.zhaocai.system.api.system.RemoteUserService;
 import com.zhaocai.system.api.domain.SysUser;
 import com.zhaocai.system.api.model.LoginUser;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
@@ -126,6 +129,94 @@ public class SysLoginService
         passwordService.validate(user, password);
         recordLogService.recordLogininfor(username, Constants.LOGIN_SUCCESS, "登录成功");
         return userInfo;
+    }
+
+    /**
+     * 统一登录：不指定用户类型，按用户名自动识别身份
+     *
+     * 单一身份时直接走原有登录流程返回用户信息；
+     * 双身份（同一用户名在多个 user_type 下密码均匹配）时不签发 token，
+     * 返回类型列表由前端弹窗让用户选择后带 userType 重新登录。
+     */
+    public LoginResult autoDetectLogin(String username, String password)
+    {
+        // 用户名或密码为空 错误
+        if (StringUtils.isAnyBlank(username, password))
+        {
+            recordLogService.recordLogininfor(username, Constants.LOGIN_FAIL, "用户/密码必须填写");
+            throw new ServiceException("用户/密码必须填写");
+        }
+        // 密码如果不在指定范围内 错误
+        if (password.length() < UserConstants.PASSWORD_MIN_LENGTH
+                || password.length() > UserConstants.PASSWORD_MAX_LENGTH)
+        {
+            recordLogService.recordLogininfor(username, Constants.LOGIN_FAIL, "用户密码不在指定范围");
+            throw new ServiceException("用户密码不在指定范围");
+        }
+        // 用户名不在指定范围内 错误
+        if (username.length() < UserConstants.USERNAME_MIN_LENGTH
+                || username.length() > UserConstants.USERNAME_MAX_LENGTH)
+        {
+            recordLogService.recordLogininfor(username, Constants.LOGIN_FAIL, "用户名不在指定范围");
+            throw new ServiceException("用户名不在指定范围");
+        }
+        // IP黑名单校验
+        String blackStr = Convert.toStr(redisService.getCacheObject(CacheConstants.SYS_LOGIN_BLACKIPLIST));
+        if (IpUtils.isMatchedIp(blackStr, IpUtils.getIpAddr()))
+        {
+            recordLogService.recordLogininfor(username, Constants.LOGIN_FAIL, "很遗憾，访问IP已被列入系统黑名单");
+            throw new ServiceException("很遗憾，访问IP已被列入系统黑名单");
+        }
+        // 查询该用户名下全部有效账号（不限 user_type）
+        R<List<SysUser>> listResult = remoteUserService.getUserListByUserName(username, SecurityConstants.INNER);
+        if (StringUtils.isNull(listResult) || StringUtils.isNull(listResult.getData()) || listResult.getData().isEmpty())
+        {
+            recordLogService.recordLogininfor(username, Constants.LOGIN_FAIL, "登录用户不存在");
+            throw new ServiceException("登录用户：" + username + " 不存在");
+        }
+        if (R.FAIL == listResult.getCode())
+        {
+            throw new ServiceException(listResult.getMsg());
+        }
+        List<SysUser> users = listResult.getData();
+        // 账号状态校验（删除/停用）
+        for (SysUser user : users)
+        {
+            if (UserStatus.DELETED.getCode().equals(user.getDelFlag()))
+            {
+                recordLogService.recordLogininfor(username, Constants.LOGIN_FAIL, "对不起，您的账号已被删除");
+                throw new ServiceException("对不起，您的账号：" + username + " 已被删除");
+            }
+            if (UserStatus.DISABLE.getCode().equals(user.getStatus()))
+            {
+                recordLogService.recordLogininfor(username, Constants.LOGIN_FAIL, "用户已停用，请联系管理员");
+                throw new ServiceException("对不起，您的账号：" + username + " 已停用");
+            }
+        }
+        // 密码匹配，收集命中的用户类型
+        List<String> matchedTypes = new ArrayList<>();
+        for (SysUser user : users)
+        {
+            if (passwordService.matches(user, password) && !matchedTypes.contains(user.getUserType()))
+            {
+                matchedTypes.add(user.getUserType());
+            }
+        }
+        if (matchedTypes.isEmpty())
+        {
+            // 走原有校验以保留失败计数/锁定机制
+            passwordService.validate(users.get(0), password);
+            throw new ServiceException("用户名或密码错误");
+        }
+        if (matchedTypes.size() > 1)
+        {
+            // 双身份：不签发token，由前端弹窗让用户选择后带userType重新登录
+            recordLogService.recordLogininfor(username, Constants.LOGIN_FAIL, "账号具有多重身份，待用户选择登录系统");
+            return new LoginResult(true, matchedTypes);
+        }
+        // 唯一身份：走原有登录流程（含角色权限、登录日志）
+        LoginUser userInfo = login(username, password, matchedTypes.get(0));
+        return new LoginResult(userInfo);
     }
 
     public void logout(String loginName)
