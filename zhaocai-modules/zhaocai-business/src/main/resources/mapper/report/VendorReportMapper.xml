@@ -1,0 +1,162 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhaocai.business.report.mapper.VendorReportMapper">
+    <resultMap type="com.zhaocai.business.report.vo.res.VendorReportListVo" id="VendorReportResult">
+        <result property="id" column="id"/>
+        <result property="expenditureBusinessType" column="expenditure_business_type"/>
+        <result property="vendorId" column="vendor_id"/>
+        <result property="vendorName" column="vendor_name"/>
+        <result property="partyAOrgId" column="party_a_org_id"/>
+        <result property="minAccountCode" column="min_account_code"/>
+        <result property="projectDepartmentId" column="project_department_id"/>
+        <result property="partyAName" column="party_a_name"/>
+        <result property="contractAmount" column="contract_amount"/>
+        <result property="enterpriseProvinceCode" column="enterprise_province_code"/>
+        <result property="enterpriseCityCode" column="enterprise_city_code"/>
+        <result property="enterpriseLocation" column="enterprise_location"/>
+        <result property="tbiCount" column="tbi_count"/>
+        <result property="tbrCount" column="tbr_count"/>
+        <result property="tbrAmount" column="tbr_amount"/>
+        <result property="tbrRate" column="tbr_rate"/>
+        <result property="applyTime" column="apply_time"/>
+        <result property="evaluationTypeName" column="evaluation_type_name"/>
+        <result property="area" column="area"/>
+    </resultMap>
+
+    <!--
+      列表查询
+      说明(中湘大连改造)：
+      1. 项目评分汇总列改为展示供应商评价(tb_vendor_evaluate)确认状态的合格/不合格次数
+      2. scopeId 由后端根据登录用户所属单位强制注入，用于数据权限过滤；为空表示不限制(集团账号)
+      3. 排序改为按合格次数降序
+    -->
+    <select id="select" parameterType="com.zhaocai.business.report.vo.req.VendorReportQueryVo" resultMap="VendorReportResult">
+        select
+            tvr.*,
+            concat('合格', ifnull(tvr.qualified_count, 0), '次，不合格', ifnull(tvr.unqualified_count, 0), '次') as evaluation_type_name
+        from tb_vendor_report tvr
+        <where>
+            <!-- 数据权限范围(本单位及下级单位) -->
+            <if test="scopeId != null and scopeId != ''">
+                AND ( tvr.party_a_org_id = #{scopeId} OR tvr.party_a_org_id in (
+                    select t.thrid_dept_id from sys_dept t where FIND_IN_SET(
+                        (select dept_id from sys_dept where thrid_dept_id = #{scopeId}),
+                        t.ancestors)
+                    )
+                )
+            </if>
+            <if test="area != null and area != ''">
+                AND tvr.enterprise_location like concat('%',#{area},'%')
+            </if>
+            <if test="deptId != null and deptId != ''">
+                AND tvr.party_a_org_id = #{deptId}
+            </if>
+            <if test="startDate != null">
+                AND tvr.apply_time >= #{startDate}
+            </if>
+            <if test="endDate != null">
+                AND tvr.apply_time &lt;= #{endDate}
+            </if>
+            <if test="expenditureBusinessType != null and expenditureBusinessType != ''">
+                AND tvr.expenditure_business_type = #{expenditureBusinessType}
+            </if>
+            <if test="id != null">
+                and ( tvr.party_a_org_id = #{id} OR tvr.party_a_org_id in (
+                    select t.thrid_dept_id from sys_dept t where FIND_IN_SET(
+                        (select dept_id from sys_dept where thrid_dept_id = #{id}),
+                        t.ancestors)
+                    )
+                )
+            </if>
+            <if test="minAccountCode != null and minAccountCode != ''">
+                AND tvr.min_account_code = #{minAccountCode}
+            </if>
+        </where>
+        order by ifnull(tvr.qualified_count, 0) desc
+    </select>
+
+<!--    <select id="selectAll" resultMap="VendorReportResult">-->
+<!--        select-->
+<!--            ta.*,-->
+<!--            vbi.tbi_count,-->
+<!--            vbi.tbr_count ,-->
+<!--            vbi.tbr_amount ,-->
+<!--            vbi.tbr_rate ,-->
+<!--            vbi.apply_time,-->
+<!--            vec.evaluation_type_name ,-->
+<!--            vec.evaluation_type ,-->
+<!--            vec.evaluation_count-->
+<!--        from-->
+<!--            (select-->
+<!--                 concat(ta.expenditure_business_type,'-',ta.vendor_id,'-',ta.party_a_org_id) as id,-->
+<!--                 ta.expenditure_business_type,-->
+<!--                 ta.vendor_id,-->
+<!--                 tv.enterprise_name as vendor_name,-->
+<!--                 ta.party_a_org_id,-->
+<!--                 ta.belong_accounting_item_code as min_account_code,-->
+<!--                 tmp.project_department_id,-->
+<!--                 MAX(ta.party_a_name) AS party_a_name,-->
+<!--                 SUM(ta.total_amount_inc_tax) AS contract_amount,-->
+<!--                 tv.enterprise_province_code,-->
+<!--                 tv.enterprise_city_code,-->
+<!--                 MAX(CONCAT(COALESCE(tv.enterprise_province_name, ''), '-', COALESCE(tv.enterprise_city_name, ''))) AS enterprise_location-->
+<!--             FROM tb_agreement ta-->
+<!--                      LEFT JOIN tb_vendor tv ON ta.vendor_id = tv.id-->
+<!--                      left join tb_min_project tmp on ta.belong_accounting_item_code = tmp.min_account_code-->
+<!--             GROUP BY ta.expenditure_business_type,ta.vendor_id,ta.party_a_org_id) ta-->
+<!--                left join v_bidding_info vbi on ta.id = vbi.id-->
+<!--    </select>-->
+
+    <!--
+      定时任务刷数据源
+      说明(中湘大连改造)：评分类统计不再取平台同步的 v_evaluation_count(中湘大连无此对接)，
+      改为按供应商聚合本地供应商评价(tb_vendor_evaluate)确认状态的数据。
+      注意：供应商评价表未与项目/单位关联，只能按供应商聚合，
+            即同一供应商的所有行展示的合格/不合格次数相同。
+    -->
+    <select id="selectAll" resultMap="VendorReportResult">
+        select
+            vbi.id,
+            vbi.procurement_plan_type as expenditure_business_type,
+            vbi.vendor_id,
+            tv.enterprise_name as vendor_name,
+            vbi.taxpayer as party_a_org_id,
+            vbi.project_code as min_account_code,
+            tmp.project_department_id,
+            sd.dept_name as party_a_name,
+            ta.contract_amount,
+            tv.enterprise_province_code,
+            tv.enterprise_city_code,
+            CONCAT(COALESCE(tv.enterprise_province_name, ''), '-', COALESCE(tv.enterprise_city_name, '')) AS enterprise_location,
+            vbi.tbi_count,
+            vbi.tbr_count ,
+            vbi.tbr_amount ,
+            vbi.tbr_rate ,
+            vbi.apply_time,
+            concat('合格', ifnull(vec.qualified_count, 0), '次，不合格', ifnull(vec.unqualified_count, 0), '次') as evaluation_type_name,
+            ifnull(vec.qualified_count, 0) as qualified_count,
+            ifnull(vec.unqualified_count, 0) as unqualified_count
+        from v_bidding_info vbi
+            left join tb_vendor tv on vbi.vendor_id = tv.id
+            left join tb_min_project tmp on vbi.project_code = tmp.min_account_code
+            left join sys_dept sd on sd.thrid_dept_id = vbi.taxpayer
+            left join (
+                select
+                    concat(ta.expenditure_business_type,'-',ta.belong_accounting_item_code,'-',ta.vendor_id,'-',ta.party_a_org_id) as id,
+                    SUM(ta.total_amount_inc_tax) AS contract_amount
+                FROM tb_agreement ta
+                GROUP BY ta.expenditure_business_type,ta.vendor_id,ta.party_a_org_id,ta.belong_accounting_item_code
+            ) ta on vbi.id COLLATE utf8mb4_0900_ai_ci = ta.id COLLATE utf8mb4_0900_ai_ci
+            left join (
+                select
+                    ve.vendor_id,
+                    sum(case when ve.is_qualified = 'Y' then 1 else 0 end) as qualified_count,
+                    sum(case when ve.is_qualified = 'N' then 1 else 0 end) as unqualified_count
+                from tb_vendor_evaluate ve
+                where ve.del_flag = '0' and ve.evaluate_status = '1'
+                group by ve.vendor_id
+            ) vec on vec.vendor_id = vbi.vendor_id
+    </select>
+</mapper>

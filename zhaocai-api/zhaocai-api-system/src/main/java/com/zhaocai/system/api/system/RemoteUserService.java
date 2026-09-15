@@ -51,6 +51,16 @@ public interface RemoteUserService
     public R<LoginUser> getUserInfoByUserType(@RequestParam("username") String username,
                                               @RequestParam("userType")  String userType, @RequestHeader(SecurityConstants.FROM_SOURCE) String source);
 
+    /**
+     * 统一登录：按用户名查询全部有效用户（不限 user_type）
+     *
+     * @param username 用户名
+     * @param source 请求来源
+     * @return 结果
+     */
+    @GetMapping("/user/listByUserName")
+    public R<List<SysUser>> getUserListByUserName(@RequestParam("username") String username, @RequestHeader(SecurityConstants.FROM_SOURCE) String source);
+
     @PostMapping("/user/addBusinessUser")
     public R<Long> addBusinessUser(@Validated @RequestBody BusinessUser businessUser,@RequestHeader(SecurityConstants.FROM_SOURCE) String source);
 

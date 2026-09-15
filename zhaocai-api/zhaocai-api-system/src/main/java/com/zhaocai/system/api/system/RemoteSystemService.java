@@ -143,6 +143,13 @@ public interface RemoteSystemService {
     List<SysDept> getDeptByThridDeptId(@RequestParam(value = "thridDeptId") String thridDeptId, @RequestHeader(SecurityConstants.FROM_SOURCE) String source);
 
     /**
+     * 根据第三方部门 id 获取组织机构信息(本单位和下一层单位)
+     * type: 1=含公司、部门、项目部 2=含公司,不含部门、项目部 3=含公司、项目部,不含部门 4=含公司、部门,不含项目部
+     */
+    @GetMapping("/dept/getDeptAndNextDept")
+    List<SysDept> getDeptAndNextDept(@RequestParam(value = "thridDeptId") String thridDeptId, @RequestParam(value = "type") String type, @RequestHeader(SecurityConstants.FROM_SOURCE) String source);
+
+    /**
      * 根据第三方部门 id 获取组织机构信息(本部门及以下部门，不含部门、项目部)
      */
     @GetMapping("/dept/getDeptByThridDeptIdNoBM")

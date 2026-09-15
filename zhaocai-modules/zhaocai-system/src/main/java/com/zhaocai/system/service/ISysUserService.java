@@ -213,6 +213,11 @@ public interface ISysUserService extends IService<SysUser>
 
     public SysUser selectUserByUserNameAndUserType(String userName, String userType);
 
+    /**
+     * 统一登录：按用户名查询全部有效用户（不限 user_type，供 auth 自动识别身份）
+     */
+    public List<SysUser> selectUserListByUserName(String userName);
+
     public Boolean insertUsers(List<SysUser> users, boolean saveFlag);
 
     public Boolean deleteSyncUser();

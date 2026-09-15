@@ -65,6 +65,21 @@ public class RemoteBusinessFallbackFactory implements FallbackFactory<RemoteBusi
                 return ResultData.fail("供应商移除黑名单失败:" + throwable.getMessage());
             }
 
+            @Override
+            public ResultData<Boolean> handleBidReport(String source) {
+                return ResultData.fail("刷新招标率报表数据失败:" + throwable.getMessage());
+            }
+
+            @Override
+            public ResultData<Boolean> handleVendorReport(String source) {
+                return ResultData.fail("刷新供应商报表数据失败:" + throwable.getMessage());
+            }
+
+            @Override
+            public ResultData<Boolean> handleProblemReport(String source) {
+                return ResultData.fail("刷新问题报表数据失败:" + throwable.getMessage());
+            }
+
         };
     }
 

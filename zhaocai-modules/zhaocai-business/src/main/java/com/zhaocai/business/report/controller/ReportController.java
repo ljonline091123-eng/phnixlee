@@ -3,6 +3,8 @@ package com.zhaocai.business.report.controller;
 import com.zhaocai.business.common.base.BladeController;
 import com.zhaocai.business.report.service.*;
 import com.zhaocai.business.report.vo.*;
+import com.zhaocai.business.report.vo.req.VendorReportQueryVo;
+import com.zhaocai.business.report.vo.res.VendorReportListVo;
 import com.zhaocai.common.core.utils.poi.ExcelUtil;
 import com.zhaocai.common.core.web.bean.ResultData;
 import com.zhaocai.common.core.web.domain.AjaxResult;
@@ -14,6 +16,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import javax.servlet.http.HttpServletResponse;
+import javax.validation.Valid;
 import java.util.List;
 import java.util.Map;
 
@@ -43,6 +46,15 @@ public class ReportController extends BladeController {
     @Autowired
     private IPriceAnalysisByConReportService priceAnalysisByConReportService;
 
+    @Autowired
+    private IBidReportService bidReportService;
+
+    @Autowired
+    private IVendorReportService vendorReportService;
+
+    @Autowired
+    private IProblemReportService problemReportService;
+
     /**
      * 招标率报表
      * @param tenderingRate
@@ -64,13 +76,23 @@ public class ReportController extends BladeController {
 //    }
 
     /**
-     * 招标率报表(左树右表形式)
+     * 招标率报表(左树右表形式-初始化)
      * @param vBidCountVo
      * @return
      */
     @GetMapping("/bidCountReport")
-    public ResultData<List<VBidCountVo>> bidCountReport(VBidCountVo vBidCountVo){
-        return ResultData.data(bidCountService.getBidCountReport(vBidCountVo));
+    public AjaxResult bidCountReport(VBidCountVo vBidCountVo){
+        return AjaxResult.success(bidReportService.getInitialInfo(vBidCountVo));
+    }
+
+    /**
+     * 招标率报表(左树右表形式-获取下一层)
+     * @param vBidCountVo
+     * @return
+     */
+    @GetMapping("/getBidCountNext")
+    public AjaxResult getBidCountNext(VBidCountVo vBidCountVo){
+        return AjaxResult.success(bidReportService.getBidCountNext(vBidCountVo));
     }
 
     /**
@@ -90,10 +112,9 @@ public class ReportController extends BladeController {
      */
     @PostMapping("/bidCountReportExport")
     public void bidCountReportExport(HttpServletResponse response,VBidCountVo vBidCountVo) {
-        List<VBidCountVo> list = bidCountService.bidCountReportExport(vBidCountVo);
-        String title = bidCountService.getExportTitle(vBidCountVo);
+        Map<String, Object> map = bidReportService.bidReportExport(vBidCountVo);
         ExcelUtil<VBidCountVo> util = new ExcelUtil<VBidCountVo>(VBidCountVo.class);
-        util.exportExcel(response,list, "招标率报表数据",title + "招标率统计报表");
+        util.exportExcel(response, (List<VBidCountVo>) map.get("list"), "招标率报表数据",map.get("title") + "招标率统计报表");
     }
 
     /**
@@ -226,5 +247,81 @@ public class ReportController extends BladeController {
     @GetMapping("/getOrgList")
     public AjaxResult getOrgList(String id) {
         return AjaxResult.success(managePageReportService.getOrgList(id));
+    }
+
+    /**
+     * 供应商报表
+     * @param vo
+     * @return
+     */
+    @GetMapping("/vendorReport")
+    public AjaxResult vendorReport(@Valid VendorReportQueryVo vo){
+        return AjaxResult.success(vendorReportService.getVendorReport(vo));
+    }
+
+    /**
+     * 供应商报表导出
+     * @param vo
+     * @return
+     */
+    @PostMapping("/vendorReportExport")
+    public void vendorReportExport(HttpServletResponse response, VendorReportQueryVo vo){
+        Map<String, Object> map = vendorReportService.vendorReportExport(vo);
+        ExcelUtil<VendorReportListVo> util = new ExcelUtil<VendorReportListVo>(VendorReportListVo.class);
+        util.exportExcel(response, (List<VendorReportListVo>) map.get("list"), "供应商报表数据",map.get("title") + "供应商统计报表");
+    }
+
+    /**
+     * 问题报表-异常报表-初始化
+     * @param queryVO
+     * @return
+     */
+    @GetMapping("/problemReport")
+    public AjaxResult problemReport(@Valid ProblemReportVo queryVO) {
+        return AjaxResult.success(problemReportService.getInitialInfo(queryVO));
+    }
+
+    /**
+     * 问题报表-异常报表-下一层数据
+     * @param queryVO
+     * @return
+     */
+    @GetMapping("/getProblemNext")
+    public AjaxResult getProblemNext(ProblemReportVo queryVO){
+        return AjaxResult.success(problemReportService.getProblemNext(queryVO));
+    }
+
+    /**
+     * 问题报表-异常报表导出
+     * @param vo
+     * @return
+     */
+    @PostMapping("/problemReportExport")
+    public void problemReportExport(HttpServletResponse response, ProblemReportVo vo){
+        Map<String, Object> map = problemReportService.problemReportExport(vo);
+        ExcelUtil<ProblemReportVo> util = new ExcelUtil<ProblemReportVo>(ProblemReportVo.class);
+        util.exportExcel(response, (List<ProblemReportVo>) map.get("list"), "问题报表-异常报表数据",map.get("title") + "问题报表-异常统计报表");
+    }
+
+    /**
+     * 问题报表-供应商评价不合格记录(tab2)
+     * @param queryVO
+     * @return
+     */
+    @GetMapping("/evaluationBadReport")
+    public AjaxResult evaluationBadReport(@Valid EvaluationBadReportVo queryVO) {
+        return AjaxResult.success(problemReportService.getEvaluationBadReport(queryVO));
+    }
+
+    /**
+     * 问题报表-供应商评价不合格记录导出(tab2)
+     * @param vo
+     * @return
+     */
+    @PostMapping("/evaluationBadReportExport")
+    public void evaluationBadReportExport(HttpServletResponse response, EvaluationBadReportVo vo){
+        Map<String, Object> map = problemReportService.evaluationBadReportExport(vo);
+        ExcelUtil<EvaluationBadReportVo> util = new ExcelUtil<EvaluationBadReportVo>(EvaluationBadReportVo.class);
+        util.exportExcel(response, (List<EvaluationBadReportVo>) map.get("list"), "问题报表-供应商评价不合格情况报表数据",map.get("title") + "问题报表-供应商评价不合格情况统计报表");
     }
 }

@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.zhaocai.business.common.enums.ReportEnum;
 import com.zhaocai.business.report.mapper.ManagePageReportMapper;
 import com.zhaocai.business.report.service.IManagePageReportService;
+import com.zhaocai.business.report.util.ReportScopeUtil;
 import com.zhaocai.business.report.vo.ManagePageReportVo;
 import com.zhaocai.common.core.constant.SecurityConstants;
 import com.zhaocai.common.core.utils.StringUtils;
@@ -107,8 +108,14 @@ public class ManagePageReportServiceImpl extends ServiceImpl<ManagePageReportMap
 
     @Override
     public List<SysDept> getOrgList(String orgId) {
+        // 报表组织树按登录用户数据权限收敛：
+        // 集团账号按传入单位(未传时取登录用户所属单位)取树，其他账号一律取本人所属单位及下级
+        String scopeOrgId = ReportScopeUtil.clampOrgId(StringUtils.isNotEmpty(orgId) ? orgId : ReportScopeUtil.getDefaultOrgId());
+        if (StringUtils.isEmpty(scopeOrgId)) {
+            return new ArrayList<>();
+        }
         OrgInfoQueryDTO queryDTO = new OrgInfoQueryDTO();
-        queryDTO.setThridOrgId(orgId);
+        queryDTO.setThridOrgId(scopeOrgId);
         List<SysDept> depts = remoteSystemService.getOrgInfoList(queryDTO, SecurityConstants.INNER);
         return depts;
     }

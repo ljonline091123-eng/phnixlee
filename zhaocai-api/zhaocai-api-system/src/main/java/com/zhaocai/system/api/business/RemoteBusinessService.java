@@ -84,4 +84,31 @@ public interface RemoteBusinessService {
 
     @GetMapping("/vendor/removeBlacklist")
     public ResultData<Boolean> removeBlacklist(@RequestHeader(SecurityConstants.FROM_SOURCE) String inner);
+
+    /**
+     * 刷新招标率报表数据
+     *
+     * @param source 请求来源
+     * @return 结果
+     */
+    @GetMapping("/bidReport/handleBidReport")
+    public ResultData<Boolean> handleBidReport(@RequestHeader(SecurityConstants.FROM_SOURCE) String source);
+
+    /**
+     * 刷新供应商报表数据
+     *
+     * @param source 请求来源
+     * @return 结果
+     */
+    @GetMapping("/vendorReport/handleVendorReport")
+    public ResultData<Boolean> handleVendorReport(@RequestHeader(SecurityConstants.FROM_SOURCE) String source);
+
+    /**
+     * 刷新问题报表数据
+     *
+     * @param source 请求来源
+     * @return 结果
+     */
+    @GetMapping("/problemReport/handleProblemReport")
+    public ResultData<Boolean> handleProblemReport(@RequestHeader(SecurityConstants.FROM_SOURCE) String source);
 }

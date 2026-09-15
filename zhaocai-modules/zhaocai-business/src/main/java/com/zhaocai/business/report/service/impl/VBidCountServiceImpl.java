@@ -349,7 +349,6 @@ public class VBidCountServiceImpl extends ServiceImpl<VBidCountMapper, VBidCount
         BigDecimal dyNum = BigDecimal.ZERO;
         BigDecimal gkTotalNum = BigDecimal.ZERO;
         BigDecimal ngkTotalNum = BigDecimal.ZERO;
-        BigDecimal nBidTotalNum = BigDecimal.ZERO;
         // 一次性遍历列表，计算所有需要的值
         for (VBidCountVo item : projectList) {
             cgNum = cgNum.add(item.getCgNum());
@@ -359,7 +358,6 @@ public class VBidCountServiceImpl extends ServiceImpl<VBidCountMapper, VBidCount
             dyNum = dyNum.add(item.getDyNum());
             gkTotalNum = gkTotalNum.add(item.getGkTotalNum());
             ngkTotalNum = ngkTotalNum.add(item.getNgkTotalNum());
-            nBidTotalNum = nBidTotalNum.add(item.getNBidTotalNum());
         }
         // 设置计算结果
         vo.setCgNum(cgNum);
@@ -369,7 +367,6 @@ public class VBidCountServiceImpl extends ServiceImpl<VBidCountMapper, VBidCount
         vo.setDyNum(dyNum);
         vo.setGkTotalNum(gkTotalNum);
         vo.setNgkTotalNum(ngkTotalNum);
-        vo.setNBidTotalNum(nBidTotalNum);
         // 计算比率
         if (cgNum.compareTo(BigDecimal.ZERO) > 0) {
             vo.setGkRatio(gkNum.divide(cgNum, 4, RoundingMode.HALF_UP).multiply(BigDecimal.valueOf(100)).setScale(2, RoundingMode.HALF_UP));
@@ -435,7 +432,6 @@ public class VBidCountServiceImpl extends ServiceImpl<VBidCountMapper, VBidCount
         BigDecimal dyNum = BigDecimal.ZERO;
         BigDecimal gkTotalNum = BigDecimal.ZERO;
         BigDecimal ngkTotalNum = BigDecimal.ZERO;
-        BigDecimal nBidTotalNum = BigDecimal.ZERO;
         // 一次性遍历列表，计算所有需要的值
         for (VBidCountVo item : list) {
             cgNum = cgNum.add(item.getCgNum());
@@ -445,7 +441,6 @@ public class VBidCountServiceImpl extends ServiceImpl<VBidCountMapper, VBidCount
             dyNum = dyNum.add(item.getDyNum());
             gkTotalNum = gkTotalNum.add(item.getGkTotalNum());
             ngkTotalNum = ngkTotalNum.add(item.getNgkTotalNum());
-            nBidTotalNum = nBidTotalNum.add(item.getNBidTotalNum());
         }
         // 设置计算结果
         vo.setCgNum(cgNum);
@@ -455,7 +450,6 @@ public class VBidCountServiceImpl extends ServiceImpl<VBidCountMapper, VBidCount
         vo.setDyNum(dyNum);
         vo.setGkTotalNum(gkTotalNum);
         vo.setNgkTotalNum(ngkTotalNum);
-        vo.setNBidTotalNum(nBidTotalNum);
         // 计算比率
         if (cgNum.compareTo(BigDecimal.ZERO) > 0) {
             vo.setGkRatio(gkNum.divide(cgNum, 4, RoundingMode.HALF_UP).multiply(BigDecimal.valueOf(100)).setScale(2, RoundingMode.HALF_UP));

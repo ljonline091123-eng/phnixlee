@@ -48,6 +48,11 @@ public class RemoteUserFallbackFactory implements FallbackFactory<RemoteUserServ
             }
 
             @Override
+            public R<List<SysUser>> getUserListByUserName(String username, String source) {
+                return R.fail("获取用户列表失败:" + throwable.getMessage());
+            }
+
+            @Override
             public R<Long> addBusinessUser(BusinessUser businessUser, String source) {
                 return R.fail("注册用户失败:" + throwable.getMessage());
             }

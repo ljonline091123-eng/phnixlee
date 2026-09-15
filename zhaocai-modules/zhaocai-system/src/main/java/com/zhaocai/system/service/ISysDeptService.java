@@ -179,6 +179,10 @@ public interface ISysDeptService extends IService<SysDept>
     List<SysDept> getThreeLevelDepts();
 
     List<SysDept> getDeptByThridDeptId(String thridDeptId);
+
+    /* 根据第三方部门 id 获取本单位和下一层单位，type 见 DeptTypeEnum */
+    List<SysDept> getDeptAndNextDept(String thridDeptIdNew, String typeNew);
+
     /* 同getDeptByThridDeptId效果一样，数据被格式化了 */
     List<TreeSelect> getDeptTreeByThridDeptId(String thridDeptId);
 

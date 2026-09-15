@@ -21,7 +21,6 @@
         <result property="dyNum" column="dy_num"/>
         <result property="gkTotalNum" column="gk_total_num"/>
         <result property="ngkTotalNum" column="ngk_total_num"/>
-        <result property="nBidTotalNum" column="n_bid_total_num"/>
         <result property="gkRatio" column="gk_ratio"/>
     </resultMap>
 
@@ -45,7 +44,6 @@
             vbc.dy_num,
             vbc.gk_total_num,
             vbc.ngk_total_num,
-            vbc.n_bid_total_num,
             vbc.gk_ratio
         from v_bid_count vbc
         left join sys_dept sd on vbc.project_department_id = sd.thrid_dept_id

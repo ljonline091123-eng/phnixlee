@@ -13,11 +13,33 @@ public class VBidCountVo {
     private String id;
 
     /** 组织名称(第三方) */
-    @Excel(name = "组织名称")
+//    @Excel(name = "组织名称")
     private String DeptName;
+
+    /** 组织名称(一级单位) */
+    @Excel(name = "一级单位")
+    private String OneDeptName;
+
+    /** 组织名称(二级单位) */
+    @Excel(name = "二级单位")
+    private String TwoDeptName;
+
+    /** 组织名称(三级单位) */
+    @Excel(name = "三级单位")
+    private String ThreeDeptName;
+
+    /** 组织名称(四级单位) */
+    @Excel(name = "四级单位")
+    private String FourDeptName;
+
+    /** 祖级列表 */
+    private String ancestors;
 
     /** 上级组织id(第三方) */
     private String parentId;
+
+    /** 组织机构idList */
+    private List<String> idList;
 
     /** 子项 */
     private List<VBidCountVo> children;
@@ -88,11 +110,13 @@ public class VBidCountVo {
     @Excel(name = "非公开总次数")
     private BigDecimal ngkTotalNum;
 
-    /** 非招标总数 */
-    @Excel(name = "非招标总数")
-    private BigDecimal nBidTotalNum;
-
     /** 公开招标率 */
     @Excel(name = "公开率（%）")
     private BigDecimal gkRatio;
+
+    /** 页数 */
+    private int pageNum;
+
+    /** 页面条数 */
+    private int pageSize;
 }
