@@ -111,7 +111,7 @@ public class ProblemReportServiceImpl extends ServiceImpl<ProblemReportMapper, P
         // 集团或公司端
         if (null != orgId) {
             // 获取当前单位及下一层的组织
-            List<SysDept> deptList = remoteSystemService.getDeptAndNextDept(queryVo.getId(), DeptTypeEnum.NOT_BM_DEPT_TYPE.getType(), SecurityConstants.INNER);
+            List<SysDept> deptList = remoteSystemService.getDeptAndNextDept(queryVo.getId(), DeptTypeEnum.ALL_DEPT_TYPE.getType(), SecurityConstants.INNER);
             if (CollectionUtil.isNotEmpty(deptList)) {
                 // 获取组织统计数据
                 queryVo.setDeptId(String.valueOf(deptList.get(0).getDeptId()));
@@ -145,7 +145,7 @@ public class ProblemReportServiceImpl extends ServiceImpl<ProblemReportMapper, P
                     .collect(Collectors.toList());
             if (CollectionUtil.isNotEmpty(bidList)) {
                 ProblemReportVo vo = new ProblemReportVo();
-                if (dept.getThridOrgType().equals("X")) {
+                if ("X".equals(dept.getThridOrgType())) {
                     // 项目部层获取下面所有
                     vo = bidList.get(0);
                     queryVo.setProjectDepartmentId(dept.getThridDeptId());
@@ -172,7 +172,7 @@ public class ProblemReportServiceImpl extends ServiceImpl<ProblemReportMapper, P
             return resultList;
         }
         // 获取当前单位及下一层的组织
-        List<SysDept> deptList = remoteSystemService.getDeptAndNextDept(queryVo.getId(), DeptTypeEnum.NOT_BM_DEPT_TYPE.getType(), SecurityConstants.INNER);
+        List<SysDept> deptList = remoteSystemService.getDeptAndNextDept(queryVo.getId(), DeptTypeEnum.ALL_DEPT_TYPE.getType(), SecurityConstants.INNER);
         if (CollectionUtil.isNotEmpty(deptList)) {
             queryVo.setDeptId(String.valueOf(deptList.get(0).getDeptId()));
             List<ProblemReportVo> list = baseMapper.getProblemByDept(queryVo);
@@ -219,7 +219,7 @@ public class ProblemReportServiceImpl extends ServiceImpl<ProblemReportMapper, P
                             List<ProblemReportVo> children = new ArrayList<>();
                             ProblemReportVo vo = new ProblemReportVo();
                             vo.setNum(bidList.stream().map(ProblemReportVo::getNum).reduce(BigDecimal.ZERO, BigDecimal::add));
-                            if (sysDept.getThridOrgType().equals("X")) {
+                            if ("X".equals(sysDept.getThridOrgType())) {
                                 // 项目部层获取下面所有
                                 vo.setFourDeptName(sysDept.getDeptName());
                                 queryVo.setProjectDepartmentId(sysDept.getThridDeptId());
@@ -350,7 +350,7 @@ public class ProblemReportServiceImpl extends ServiceImpl<ProblemReportMapper, P
         }
         // 非本人所属组织时要校验一次，越权则回落到本人所属组织
         if (!orgId.equals(defaultOrgId)) {
-            List<SysDept> deptList = remoteSystemService.getDeptAndNextDept(orgId, DeptTypeEnum.NOT_BM_DEPT_TYPE.getType(), SecurityConstants.INNER);
+            List<SysDept> deptList = remoteSystemService.getDeptAndNextDept(orgId, DeptTypeEnum.ALL_DEPT_TYPE.getType(), SecurityConstants.INNER);
             if (CollectionUtil.isEmpty(deptList) || !ReportScopeUtil.inScope(deptList.get(0))) {
                 orgId = defaultOrgId;
             }

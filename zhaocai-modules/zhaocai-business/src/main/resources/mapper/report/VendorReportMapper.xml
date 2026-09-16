@@ -51,7 +51,12 @@
                 AND tvr.enterprise_location like concat('%',#{area},'%')
             </if>
             <if test="deptId != null and deptId != ''">
-                AND tvr.party_a_org_id = #{deptId}
+                AND ( tvr.party_a_org_id = #{deptId} OR tvr.party_a_org_id in (
+                    select t.thrid_dept_id from sys_dept t where FIND_IN_SET(
+                        (select dept_id from sys_dept where thrid_dept_id = #{deptId}),
+                        t.ancestors)
+                    )
+                )
             </if>
             <if test="startDate != null">
                 AND tvr.apply_time >= #{startDate}

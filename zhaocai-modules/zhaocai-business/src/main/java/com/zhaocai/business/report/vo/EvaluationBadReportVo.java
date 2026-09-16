@@ -5,6 +5,7 @@ import com.zhaocai.common.core.annotation.Excel;
 import com.zhaocai.common.core.bean.PageRecive;
 import lombok.Data;
 
+import java.math.BigDecimal;
 import java.util.Date;
 
 /**
@@ -33,6 +34,10 @@ public class EvaluationBadReportVo extends PageRecive {
     /** 评价类型名称 */
     @Excel(name = "评价类型")
     private String typeName;
+
+    /** 评价分数(tb_vendor_evaluate.evaluate_fraction) */
+    @Excel(name = "评价分数")
+    private BigDecimal evaluateFraction;
 
     /** 评分周期 */
     private Date evaluateTime;

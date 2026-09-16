@@ -39,4 +39,14 @@ public class ReportTask {
         }
     }
 
+    public void handlePurchaseLedgerReport(){
+        ResultData<Boolean> res = this.remoteBusinessService.handlePurchaseLedgerReport(SecurityConstants.INNER);
+        if (res.getCode() == ResultCode.SUCCESS.getCode()){
+            System.out.println("采购台账报表任务执行成功");
+        } else {
+            // 抛出异常让调度日志(sys_job_log.status=1)记下失败原因，避免静默失败难排查
+            throw new RuntimeException("采购台账报表数据刷新失败：" + res.getMsg());
+        }
+    }
+
 }

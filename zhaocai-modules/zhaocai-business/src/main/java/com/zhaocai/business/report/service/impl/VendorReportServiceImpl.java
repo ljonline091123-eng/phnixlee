@@ -152,7 +152,7 @@ public class VendorReportServiceImpl extends ServiceImpl<VendorReportMapper, Ven
         }
         // 非本人所属单位时要校验一次，越权则回落到本人所属单位
         if (!orgId.equals(defaultOrgId)) {
-            List<SysDept> deptList = remoteSystemService.getDeptAndNextDept(orgId, DeptTypeEnum.NOT_BM_DEPT_TYPE.getType(), SecurityConstants.INNER);
+            List<SysDept> deptList = remoteSystemService.getDeptAndNextDept(orgId, DeptTypeEnum.ALL_DEPT_TYPE.getType(), SecurityConstants.INNER);
             if (CollectionUtil.isEmpty(deptList) || !ReportScopeUtil.inScope(deptList.get(0))) {
                 orgId = defaultOrgId;
             }

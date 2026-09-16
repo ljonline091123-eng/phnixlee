@@ -111,4 +111,13 @@ public interface RemoteBusinessService {
      */
     @GetMapping("/problemReport/handleProblemReport")
     public ResultData<Boolean> handleProblemReport(@RequestHeader(SecurityConstants.FROM_SOURCE) String source);
+
+    /**
+     * 刷新采购台账报表数据
+     *
+     * @param source 请求来源
+     * @return 结果
+     */
+    @GetMapping("/report/purchaseLedgerHandleReport")
+    public ResultData<Boolean> handlePurchaseLedgerReport(@RequestHeader(SecurityConstants.FROM_SOURCE) String source);
 }

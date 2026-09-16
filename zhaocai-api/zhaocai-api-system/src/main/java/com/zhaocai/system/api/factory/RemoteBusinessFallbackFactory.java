@@ -80,6 +80,11 @@ public class RemoteBusinessFallbackFactory implements FallbackFactory<RemoteBusi
                 return ResultData.fail("刷新问题报表数据失败:" + throwable.getMessage());
             }
 
+            @Override
+            public ResultData<Boolean> handlePurchaseLedgerReport(String source) {
+                return ResultData.fail("刷新采购台账报表数据失败:" + throwable.getMessage());
+            }
+
         };
     }
 

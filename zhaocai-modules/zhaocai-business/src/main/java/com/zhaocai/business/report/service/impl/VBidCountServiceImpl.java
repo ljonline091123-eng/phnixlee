@@ -243,7 +243,8 @@ public class VBidCountServiceImpl extends ServiceImpl<VBidCountMapper, VBidCount
             List<SysDept> deptList = remoteSystemService.getDeptByThridDeptId(thridDeptId, SecurityConstants.INNER);
             if(!CollectionUtils.isEmpty(deptList)) {
                 SysDept sysDept = deptList.get(0);
-                if (sysDept.getThridOrgType().equals("X")) {
+                // 部门的 thrid_org_type 可能为 NULL，判断要用常量在前
+                if ("X".equals(sysDept.getThridOrgType())) {
                     list = bidCountList.parallelStream().filter(i -> i.getProjectDepartmentId().equals(sysDept.getThridDeptId()))
                             .map(VBidCountVo::getMinAccountCode)
                             .collect(Collectors.toList());

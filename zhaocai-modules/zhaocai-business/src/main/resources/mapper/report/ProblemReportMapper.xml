@@ -216,6 +216,7 @@
         <result property="id" column="id"/>
         <result property="vendorName" column="vendor_name"/>
         <result property="evaluateType" column="evaluate_type"/>
+        <result property="evaluateFraction" column="evaluate_fraction"/>
         <result property="evaluateTime" column="evaluate_time"/>
         <result property="evaluateTimeTxt" column="evaluate_time_txt"/>
         <result property="createBy" column="create_by"/>
@@ -227,6 +228,7 @@
             d.id,
             d.vendor_name,
             d.evaluate_type,
+            d.evaluate_fraction,
             d.evaluate_time,
             d.evaluate_time_txt,
             d.create_by,

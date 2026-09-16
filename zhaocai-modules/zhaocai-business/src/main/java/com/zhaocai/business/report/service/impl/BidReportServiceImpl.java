@@ -114,7 +114,7 @@ public class BidReportServiceImpl extends ServiceImpl<BidReportMapper, BidReport
         }
         // 非本人所属组织时要校验一次，越权则回落到本人所属组织
         if (!orgId.equals(defaultOrgId)) {
-            List<SysDept> deptList = remoteSystemService.getDeptAndNextDept(orgId, DeptTypeEnum.NOT_BM_DEPT_TYPE.getType(), SecurityConstants.INNER);
+            List<SysDept> deptList = remoteSystemService.getDeptAndNextDept(orgId, DeptTypeEnum.ALL_DEPT_TYPE.getType(), SecurityConstants.INNER);
             if (CollectionUtil.isEmpty(deptList) || !ReportScopeUtil.inScope(deptList.get(0))) {
                 orgId = defaultOrgId;
             }
@@ -137,7 +137,7 @@ public class BidReportServiceImpl extends ServiceImpl<BidReportMapper, BidReport
         if (StringUtils.isEmpty(orgId)) {
             return new ArrayList<>();
         }
-        return remoteSystemService.getDeptAndNextDept(orgId, DeptTypeEnum.NOT_BM_DEPT_TYPE.getType(), SecurityConstants.INNER);
+        return remoteSystemService.getDeptAndNextDept(orgId, DeptTypeEnum.ALL_DEPT_TYPE.getType(), SecurityConstants.INNER);
     }
 
     /**
@@ -188,7 +188,7 @@ public class BidReportServiceImpl extends ServiceImpl<BidReportMapper, BidReport
                             vo.setId(sysDept.getThridDeptId());
                             vo.setDeptName(sysDept.getDeptName());
                             vo.setParentId(sysDept.getThridParentId());
-                            if (sysDept.getThridOrgType().equals("X")) {
+                            if ("X".equals(sysDept.getThridOrgType())) {
                                 // 项目部层获取下面所有
                                 vo = bidList.get(0);
                                 vo.setFourDeptName(sysDept.getDeptName());
@@ -243,7 +243,7 @@ public class BidReportServiceImpl extends ServiceImpl<BidReportMapper, BidReport
                     .collect(Collectors.toList());
             if (CollectionUtil.isNotEmpty(bidList)) {
                 VBidCountVo vo = new VBidCountVo();
-                if (dept.getThridOrgType().equals("X")) {
+                if ("X".equals(dept.getThridOrgType())) {
                     // 项目部层获取下面所有
                     vo = bidList.get(0);
                     vo.setChildren(getXInfo(dept.getThridDeptId(), queryVo));

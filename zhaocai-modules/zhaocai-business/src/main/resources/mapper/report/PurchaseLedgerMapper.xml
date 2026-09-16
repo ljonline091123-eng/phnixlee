@@ -1,0 +1,196 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhaocai.business.report.mapper.PurchaseLedgerMapper">
+
+    <resultMap type="com.zhaocai.business.report.domain.PurchaseLedger" id="PurchaseLedgerResult">
+        <result property="id"            column="id"/>
+        <result property="grain"         column="grain"/>
+        <result property="recordId"      column="record_id"/>
+        <result property="planId"        column="plan_id"/>
+        <result property="noticeId"      column="notice_id"/>
+        <result property="noticeStatus"  column="notice_status"/>
+        <result property="orgId"         column="org_id"/>
+        <result property="orgName"       column="org_name"/>
+        <result property="projectCode"   column="project_code"/>
+        <result property="projectName"   column="project_name"/>
+        <result property="demandType"    column="demand_type"/>
+        <result property="planCode"      column="plan_code"/>
+        <result property="planName"      column="plan_name"/>
+        <result property="splitNames"    column="split_names"/>
+        <result property="schemeCode"    column="scheme_code"/>
+        <result property="schemeName"    column="scheme_name"/>
+        <result property="method"        column="method"/>
+        <result property="controlAmount" column="control_amount"/>
+        <result property="purchaser"     column="purchaser"/>
+        <result property="handler"       column="handler"/>
+        <result property="planEffectTime" column="plan_effect_time"/>
+        <result property="openTime"      column="open_time"/>
+        <result property="awardTime"     column="award_time"/>
+        <result property="supplierName"  column="supplier_name"/>
+        <result property="awardAmount"   column="award_amount"/>
+        <result property="savingAmount"  column="saving_amount"/>
+        <result property="savingRate"    column="saving_rate"/>
+        <result property="contractCode"  column="contract_code"/>
+        <result property="contractState" column="contract_state"/>
+        <result property="status"        column="status"/>
+        <result property="currentStage"  column="current_stage"/>
+        <result property="exceptionInfo" column="exception_info"/>
+        <result property="createBy"      column="create_by"/>
+        <result property="createTime"    column="create_time"/>
+    </resultMap>
+
+    <!-- 清空物化表。WHERE id > 0：公共 MybatisPlusConfig 的 BlockAttackInnerInterceptor 会拦截无 where 的全表删除 -->
+    <delete id="deleteAll">
+        DELETE FROM tb_purchase_ledger WHERE id > 0
+    </delete>
+
+    <!-- 视图全量灌入物化表（列顺序与 DDL 一致，id/create_time 自增由库生成） -->
+    <insert id="insertFromView">
+        INSERT INTO tb_purchase_ledger
+        (grain, record_id, plan_id, notice_id, notice_status, org_id, org_name, project_code, project_name, demand_type,
+         plan_code, plan_name, split_names, scheme_code, scheme_name, method, control_amount,
+         purchaser, handler, plan_effect_time, open_time, award_time, supplier_name, award_amount,
+         saving_amount, saving_rate, contract_code, contract_state, status, current_stage, exception_info)
+        SELECT grain, record_id, plan_id, notice_id, notice_status, org_id, org_name, project_code, project_name, demand_type,
+               plan_code, plan_name, split_names, scheme_code, scheme_name, method, control_amount,
+               purchaser, handler, plan_effect_time, open_time, award_time, supplier_name, award_amount,
+               saving_amount, saving_rate, contract_code, contract_state, status, current_stage, exception_info
+        FROM v_purchase_ledger
+    </insert>
+
+    <!-- 汇总聚合查询：组织 × 项目 × 需求类型 平铺 -->
+    <select id="selectSummary" parameterType="com.zhaocai.business.report.vo.req.PurchaseLedgerQueryVo"
+            resultType="com.zhaocai.business.report.vo.res.PurchaseLedgerSummaryVo">
+        SELECT org_id            AS orgId,
+               org_name          AS orgName,
+               project_code      AS projectCode,
+               project_name      AS projectName,
+               demand_type       AS demandType,
+               SUM(CASE WHEN status = 'pending'    THEN 1 ELSE 0 END) AS pending,
+               SUM(CASE WHEN status = 'preopen'    THEN 1 ELSE 0 END) AS preopen,
+               SUM(CASE WHEN status = 'preaward'   THEN 1 ELSE 0 END) AS preaward,
+               SUM(CASE WHEN status = 'completed'  THEN 1 ELSE 0 END) AS completed,
+               SUM(CASE WHEN status = 'exception'  THEN 1 ELSE 0 END) AS exception
+        FROM tb_purchase_ledger
+        <where>
+            <if test="scopeId != null and scopeId != ''">
+                AND ( org_id = #{scopeId} OR org_id IN (
+                    SELECT t.thrid_dept_id FROM sys_dept t WHERE FIND_IN_SET(
+                        (SELECT dept_id FROM sys_dept WHERE thrid_dept_id = #{scopeId}), t.ancestors) )
+                )
+            </if>
+            <if test="id != null and id != ''">
+                AND ( org_id = #{id} OR org_id IN (
+                    SELECT t.thrid_dept_id FROM sys_dept t WHERE FIND_IN_SET(
+                        (SELECT dept_id FROM sys_dept WHERE thrid_dept_id = #{id}), t.ancestors) )
+                )
+            </if>
+            <if test="projectCode != null and projectCode != ''">
+                AND project_code = #{projectCode}
+            </if>
+            <if test="projectKeyword != null and projectKeyword != ''">
+                AND project_name like concat('%', #{projectKeyword}, '%')
+            </if>
+            <if test="demandType != null">
+                AND demand_type = #{demandType}
+            </if>
+        </where>
+        GROUP BY org_id, org_name, project_code, project_name, demand_type
+        ORDER BY org_name, project_name, demand_type
+    </select>
+
+    <!-- 明细宽表查询（分页在 Service 层做，此处取全量再按权限过滤） -->
+    <select id="selectPageList" parameterType="com.zhaocai.business.report.vo.req.PurchaseLedgerQueryVo"
+            resultType="com.zhaocai.business.report.vo.res.PurchaseLedgerListVo">
+        SELECT grain            AS grain,
+               record_id        AS recordId,
+               plan_id          AS planId,
+               notice_id        AS noticeId,
+               notice_status    AS noticeStatus,
+               org_id           AS orgId,
+               org_name         AS orgName,
+               project_code     AS projectCode,
+               project_name     AS projectName,
+               demand_type      AS demandType,
+               plan_code        AS planCode,
+               plan_name        AS planName,
+               split_names      AS splitNames,
+               scheme_code      AS schemeCode,
+               scheme_name      AS schemeName,
+               method           AS method,
+               control_amount   AS controlAmount,
+               purchaser        AS purchaser,
+               handler          AS handler,
+               plan_effect_time AS planEffectTime,
+               open_time        AS openTime,
+               award_time       AS awardTime,
+               supplier_name    AS supplierName,
+               award_amount     AS awardAmount,
+               saving_amount    AS savingAmount,
+               saving_rate      AS savingRate,
+               contract_code    AS contractCode,
+               contract_state   AS contractState,
+               status           AS status,
+               current_stage    AS currentStage,
+               exception_info   AS exceptionInfo
+        FROM tb_purchase_ledger
+        <where>
+            <if test="scopeId != null and scopeId != ''">
+                AND ( org_id = #{scopeId} OR org_id IN (
+                    SELECT t.thrid_dept_id FROM sys_dept t WHERE FIND_IN_SET(
+                        (SELECT dept_id FROM sys_dept WHERE thrid_dept_id = #{scopeId}), t.ancestors) )
+                )
+            </if>
+            <if test="id != null and id != ''">
+                AND ( org_id = #{id} OR org_id IN (
+                    SELECT t.thrid_dept_id FROM sys_dept t WHERE FIND_IN_SET(
+                        (SELECT dept_id FROM sys_dept WHERE thrid_dept_id = #{id}), t.ancestors) )
+                )
+            </if>
+            <if test="status != null and status != ''">
+                AND status = #{status}
+            </if>
+            <if test="projectCode != null and projectCode != ''">
+                AND project_code = #{projectCode}
+            </if>
+            <!-- 项目名称模糊（明细页筛选框） -->
+            <if test="projectKeyword != null and projectKeyword != ''">
+                AND project_name like concat('%', #{projectKeyword}, '%')
+            </if>
+            <if test="demandType != null">
+                AND demand_type = #{demandType}
+            </if>
+            <if test="method != null">
+                AND method = #{method}
+            </if>
+            <if test="currentStage != null and currentStage != ''">
+                AND current_stage = #{currentStage}
+            </if>
+            <if test="handler != null and handler != ''">
+                AND handler like concat('%', #{handler}, '%')
+            </if>
+            <if test="purchaser != null and purchaser != ''">
+                AND purchaser like concat('%', #{purchaser}, '%')
+            </if>
+            <if test="keyword != null and keyword != ''">
+                AND ( plan_code like concat('%', #{keyword}, '%')
+                   OR plan_name like concat('%', #{keyword}, '%')
+                   OR scheme_code like concat('%', #{keyword}, '%')
+                   OR scheme_name like concat('%', #{keyword}, '%') )
+            </if>
+            <if test="planEffectBegin != null and planEffectBegin != ''">
+                AND plan_effect_time &gt;= #{planEffectBegin}
+            </if>
+            <if test="planEffectEnd != null and planEffectEnd != ''">
+                AND plan_effect_time &lt;= #{planEffectEnd}
+            </if>
+        </where>
+        ORDER BY
+            <choose>
+                <when test="status != null and status != ''">CASE status WHEN 'pending' THEN 0 WHEN 'preopen' THEN 1 WHEN 'preaward' THEN 2 WHEN 'completed' THEN 3 ELSE 4 END,</when>
+                <otherwise>status,</otherwise>
+            </choose>
+            org_name, project_name, record_id
+    </select>
+
+</mapper>
