@@ -1,16 +1,10 @@
 from __future__ import annotations
 
-import asyncio
-from collections.abc import Awaitable, Callable
 from datetime import datetime
-import inspect
 import json
 import os
 from pathlib import Path
 from typing import Any
-
-from pydantic import ValidationError
-from sqlalchemy.orm import Session
 
 from app.db.session import SessionLocal
 from app.models.ai_hub import GovernanceRun
@@ -21,15 +15,15 @@ from app.schemas.data_governance import (
     QualityIssue,
     TargetTable,
 )
-from app.services.model_hub import ModelHubService
 from app.services.skill_tools import validate_dw_records
+
+from .base_agent import BaseAgent, LlmCall, SessionFactory
 
 
 SKILL_PATH = Path(__file__).resolve().parents[3] / "skill_docs" / "DATA_CLEANING_DW.SKILL.md"
 DEFAULT_INSTANCE_CODE = "GEMINI_FLASH"
 
-LlmCall = Callable[..., str | Awaitable[str]]
-SessionFactory = Callable[[], Session]
+TargetTableCatalog = dict[str, tuple[str, list[str]]]
 
 TARGET_TABLE_CATALOG: dict[str, tuple[str, list[str]]] = {
     "BASIC": ("stock_symbol", ["market", "symbol"]),
@@ -55,19 +49,10 @@ TARGET_TABLE_CATALOG: dict[str, tuple[str, list[str]]] = {
 }
 
 
-def _read_skill_prompt() -> str:
-    if not SKILL_PATH.is_file():
-        raise FileNotFoundError(f"Data cleaning Skill file not found: {SKILL_PATH}")
-    content = SKILL_PATH.read_text(encoding="utf-8").strip()
-    if not content:
-        raise ValueError(f"Data cleaning Skill file is empty: {SKILL_PATH}")
-    return content
-
-
-def _target_tables(category_counts: dict[str, int]) -> list[TargetTable]:
+def _target_tables(category_counts: dict[str, int], catalog: TargetTableCatalog) -> list[TargetTable]:
     targets: list[TargetTable] = []
     for category in category_counts:
-        mapping = TARGET_TABLE_CATALOG.get(category)
+        mapping = catalog.get(category)
         if not mapping:
             continue
         table_name, business_key = mapping
@@ -117,11 +102,11 @@ def _missing_data(issues: list[QualityIssue]) -> list[str]:
     ]
 
 
-def _unmapped_categories(category_counts: dict[str, int]) -> list[str]:
-    return [category for category in category_counts if category not in TARGET_TABLE_CATALOG]
+def _unmapped_categories(category_counts: dict[str, int], catalog: TargetTableCatalog) -> list[str]:
+    return [category for category in category_counts if category not in catalog]
 
 
-def _prompt_payload(precheck: dict[str, Any]) -> dict[str, Any]:
+def _prompt_payload(precheck: dict[str, Any], catalog: TargetTableCatalog) -> dict[str, Any]:
     return {
         "as_of": precheck["as_of"],
         "total_records": precheck["total_records"],
@@ -136,15 +121,19 @@ def _prompt_payload(precheck: dict[str, Any]) -> dict[str, Any]:
         "dedupe_keys": precheck["dedupe_keys"],
         "target_table_catalog": {
             category: {"table_name": value[0], "business_key": value[1]}
-            for category, value in TARGET_TABLE_CATALOG.items()
+            for category, value in catalog.items()
             if category in precheck["category_counts"]
         },
-        "unmapped_categories": _unmapped_categories(precheck["category_counts"]),
+        "unmapped_categories": _unmapped_categories(precheck["category_counts"], catalog),
     }
 
 
-def _build_user_prompt(precheck: dict[str, Any], validation_feedback: list[dict[str, Any]] | None = None) -> str:
-    payload = _prompt_payload(precheck)
+def _build_user_prompt(
+    precheck: dict[str, Any],
+    catalog: TargetTableCatalog,
+    validation_feedback: list[dict[str, Any]] | None = None,
+) -> str:
+    payload = _prompt_payload(precheck, catalog)
     parts = [
         "根据下列硬规则预审摘要生成 DataCleaningOutput。",
         "不得推翻 category_counts、quality_issues、dedupe_keys、as_of 或异常记录 ID；不得假设已经写入数据库。",
@@ -159,62 +148,16 @@ def _build_user_prompt(precheck: dict[str, Any], validation_feedback: list[dict[
     return "\n".join(parts)
 
 
-async def _default_llm_call(*, system_prompt: str, user_prompt: str, json_schema: dict[str, Any]) -> str:
-    instance_code = os.getenv("DATA_CLEANING_MODEL_INSTANCE", DEFAULT_INSTANCE_CODE).strip() or None
-
-    def invoke() -> str:
-        with SessionLocal() as db:
-            log = ModelHubService(db).chat(
-                task_type="data_governance",
-                instance_code=instance_code,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt},
-                ],
-                temperature=0.0,
-                max_tokens=4096,
-                metadata_json={
-                    "json_schema_output": json_schema,
-                    "json_schema_name": "data_cleaning_output",
-                    "native_structured_output": True,
-                    "defer_schema_validation": True,
-                    "source": "data_cleaning_runner",
-                },
-            )
-            if log.status != "SUCCESS" or not log.response_text:
-                raise RuntimeError(log.error_message or "All data-governance model routes failed")
-            return log.response_text
-
-    return await asyncio.to_thread(invoke)
-
-
-async def _call_model(
-    llm_call: LlmCall,
-    *,
-    system_prompt: str,
-    user_prompt: str,
-    json_schema: dict[str, Any],
-) -> str:
-    response = llm_call(
-        system_prompt=system_prompt,
-        user_prompt=user_prompt,
-        json_schema=json_schema,
-    )
-    if inspect.isawaitable(response):
-        response = await response
-    if not isinstance(response, str):
-        raise TypeError("LLM call must return a JSON string")
-    return response
-
-
-def _reconcile_with_precheck(output: DataCleaningOutput, precheck: dict[str, Any]) -> DataCleaningOutput:
+def _reconcile_with_precheck(
+    output: DataCleaningOutput, precheck: dict[str, Any], catalog: TargetTableCatalog
+) -> DataCleaningOutput:
     issues = [QualityIssue.model_validate(item) for item in precheck["quality_issues"]]
     pending_by_id = {item.record_id: item for item in output.pending_review}
     for item in _pending_reviews_from_precheck(precheck):
         pending_by_id[item.record_id] = item
 
     missing_data = list(dict.fromkeys([*output.missing_data, *_missing_data(issues)]))
-    unmapped = _unmapped_categories(precheck["category_counts"])
+    unmapped = _unmapped_categories(precheck["category_counts"], catalog)
     missing_data.extend(f"target_table_mapping:{category}" for category in unmapped)
     missing_data = list(dict.fromkeys(missing_data))
     unresolved = bool(issues or pending_by_id or missing_data)
@@ -230,24 +173,42 @@ def _reconcile_with_precheck(output: DataCleaningOutput, precheck: dict[str, Any
         "category_counts": precheck["category_counts"],
         "quality_issues": [item.model_dump(mode="json") for item in issues],
         "dedupe_keys": precheck["dedupe_keys"],
-        "target_tables": [item.model_dump(mode="json") for item in _target_tables(precheck["category_counts"])],
+        "target_tables": [
+            item.model_dump(mode="json")
+            for item in _target_tables(precheck["category_counts"], catalog)
+        ],
         "pending_review": [item.model_dump(mode="json") for item in pending_by_id.values()],
         "missing_data": missing_data,
         "evidence_text": evidence,
     })
 
 
-def _fallback_output(precheck: dict[str, Any], failure: Exception) -> DataCleaningOutput:
+def _fallback_output(
+    precheck: dict[str, Any], failure: Exception | None, catalog: TargetTableCatalog
+) -> DataCleaningOutput:
     issues = [QualityIssue.model_validate(item) for item in precheck["quality_issues"]]
     pending = _pending_reviews_from_precheck(precheck)
-    pending.append(PendingReview(
+    pending_by_id = {item.record_id: item for item in pending}
+    existing_batch = pending_by_id.get("BATCH")
+    pending_by_id["BATCH"] = PendingReview(
         record_id="BATCH",
-        reason="LLM_STRUCTURED_OUTPUT_VALIDATION_FAILED",
-        evidence_text=f"{type(failure).__name__}: {str(failure)[:500]}",
-    ))
+        reason=", ".join(filter(None, (
+            existing_batch.reason if existing_batch else "",
+            "LLM_STRUCTURED_OUTPUT_VALIDATION_FAILED",
+        ))),
+        evidence_text="; ".join(filter(None, (
+            existing_batch.evidence_text if existing_batch else "",
+            (
+                f"{type(failure).__name__}: {str(failure)[:500]}"
+                if failure is not None
+                else "Unknown structured output failure"
+            ),
+        ))),
+    )
     missing_data = _missing_data(issues)
     missing_data.extend(
-        f"target_table_mapping:{category}" for category in _unmapped_categories(precheck["category_counts"])
+        f"target_table_mapping:{category}"
+        for category in _unmapped_categories(precheck["category_counts"], catalog)
     )
     return DataCleaningOutput(
         as_of=datetime.fromisoformat(precheck["as_of"]),
@@ -255,8 +216,8 @@ def _fallback_output(precheck: dict[str, Any], failure: Exception) -> DataCleani
         category_counts=precheck["category_counts"],
         quality_issues=issues,
         dedupe_keys=precheck["dedupe_keys"],
-        target_tables=_target_tables(precheck["category_counts"]),
-        pending_review=pending,
+        target_tables=_target_tables(precheck["category_counts"], catalog),
+        pending_review=list(pending_by_id.values()),
         missing_data=list(dict.fromkeys(missing_data)),
         confidence=0.0,
         evidence_text=(
@@ -280,50 +241,115 @@ def _persist_governance_output(
         db.commit()
 
 
+class DataCleaningAgent(BaseAgent[DataCleaningOutput]):
+    """DW cleaning agent backed by deterministic validation and a Skill SOP."""
+
+    def __init__(
+        self,
+        *,
+        llm_call: LlmCall | None = None,
+        prompt_path: str | Path = SKILL_PATH,
+        model_session_factory: SessionFactory = SessionLocal,
+        instance_code: str | None = None,
+    ) -> None:
+        resolved_instance_code = (
+            instance_code
+            or os.getenv("DATA_CLEANING_MODEL_INSTANCE", DEFAULT_INSTANCE_CODE).strip()
+            or None
+        )
+        super().__init__(
+            prompt_path=prompt_path,
+            response_schema=DataCleaningOutput,
+            task_type="data_governance",
+            instance_code=resolved_instance_code,
+            llm_call=llm_call,
+            model_session_factory=model_session_factory,
+            temperature=0.0,
+            max_tokens=4096,
+            schema_name="data_cleaning_output",
+        )
+
+    def prepare_context(
+        self,
+        context_data: Any,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        catalog = {
+            **TARGET_TABLE_CATALOG,
+            **(kwargs.get("target_table_catalog") or {}),
+        }
+        return {
+            "precheck": validate_dw_records(list(context_data)),
+            "catalog": catalog,
+        }
+
+    def build_user_prompt(
+        self,
+        prepared_context: dict[str, Any],
+        *,
+        validation_feedback: list[dict[str, Any]] | None,
+        **kwargs: Any,
+    ) -> str:
+        return _build_user_prompt(
+            prepared_context["precheck"],
+            prepared_context["catalog"],
+            validation_feedback,
+        )
+
+    def reconcile_response(
+        self,
+        response: DataCleaningOutput,
+        prepared_context: dict[str, Any],
+        **kwargs: Any,
+    ) -> DataCleaningOutput:
+        return _reconcile_with_precheck(
+            response,
+            prepared_context["precheck"],
+            prepared_context["catalog"],
+        )
+
+    def build_fallback(
+        self,
+        prepared_context: dict[str, Any],
+        *,
+        failure: Exception | None,
+        **kwargs: Any,
+    ) -> DataCleaningOutput:
+        return _fallback_output(
+            prepared_context["precheck"],
+            failure,
+            prepared_context["catalog"],
+        )
+
+    def finalize_response(
+        self,
+        response: DataCleaningOutput,
+        prepared_context: dict[str, Any],
+        **kwargs: Any,
+    ) -> DataCleaningOutput:
+        governance_run_id = kwargs.get("governance_run_id")
+        if governance_run_id is not None:
+            _persist_governance_output(
+                response,
+                governance_run_id,
+                kwargs.get("persistence_session_factory") or SessionLocal,
+            )
+        return response
+
+
 async def run_data_cleaning_agent(
     records: list[dict[str, Any]],
     *,
     llm_call: LlmCall | None = None,
     governance_run_id: int | None = None,
     session_factory: SessionFactory | None = None,
+    target_table_catalog: TargetTableCatalog | None = None,
 ) -> DataCleaningOutput:
-    """Run deterministic validation, structured model review, retry, and persistence."""
-
-    precheck = validate_dw_records(records)
-    system_prompt = _read_skill_prompt()
-    schema = DataCleaningOutput.model_json_schema()
-    caller = llm_call or _default_llm_call
-    output: DataCleaningOutput
-
-    try:
-        response_text = await _call_model(
-            caller,
-            system_prompt=system_prompt,
-            user_prompt=_build_user_prompt(precheck),
-            json_schema=schema,
-        )
-        try:
-            output = _reconcile_with_precheck(
-                DataCleaningOutput.model_validate_json(response_text), precheck
-            )
-        except ValidationError as first_error:
-            feedback = json.loads(first_error.json(include_url=False, include_input=False))
-            retry_text = await _call_model(
-                caller,
-                system_prompt=system_prompt,
-                user_prompt=_build_user_prompt(precheck, feedback),
-                json_schema=schema,
-            )
-            output = _reconcile_with_precheck(
-                DataCleaningOutput.model_validate_json(retry_text), precheck
-            )
-    except Exception as failure:
-        output = _fallback_output(precheck, failure)
-
-    if governance_run_id is not None:
-        _persist_governance_output(
-            output,
-            governance_run_id,
-            session_factory or SessionLocal,
-        )
-    return output
+    """Compatibility entry point for existing services and tests."""
+    agent = DataCleaningAgent(llm_call=llm_call)
+    return await agent.execute(
+        records,
+        governance_run_id=governance_run_id,
+        persistence_session_factory=session_factory or SessionLocal,
+        target_table_catalog=target_table_catalog,
+    )

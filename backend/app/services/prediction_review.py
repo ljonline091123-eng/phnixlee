@@ -11,7 +11,6 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
-from app.db.session import SessionLocal
 from app.models.ai_hub import ModelInstance, ModelProvider, ModelSkill, PredictionLedger, SkillOptimizationDraft
 from app.models.market_data import DataSource, StockKline
 from app.schemas.skill_tools import PredictionOutcomeInput, PredictionScoreRequest
@@ -153,9 +152,10 @@ def propose_failed_skill_revisions(db: Session) -> int:
 
 
 def review_predictions_once() -> None:
-    with SessionLocal() as db:
-        review_predictions(db, fetch_missing=True)
-        propose_failed_skill_revisions(db)
+    """Compatibility wrapper; new callers use PredictionReviewWorkflow."""
+    from app.orchestration.background import PredictionReviewWorkflow
+
+    PredictionReviewWorkflow().execute()
 
 
 async def daily_prediction_review_loop() -> None:

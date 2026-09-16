@@ -1,10 +1,10 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
-import { api, type AgentDefinition, type DataAsset, type DataAssetPayload, type DataPreview,
-  type GovernanceRun, type GraphExplore, type KnowledgeBase, type KnowledgeGraph,
-  type KnowledgeGraphPayload } from "./api";
+import { api, type AgentDefinition, type BatchGovernanceResult, type DataAsset,
+  type DataAssetPayload, type DataGovernanceSummary, type DataPreview, type GovernanceRun,
+  type GraphExplore, type KnowledgeBase, type KnowledgeGraph, type KnowledgeGraphPayload } from "./api";
 
 type CommonProps = { assets: DataAsset[]; agents: AgentDefinition[]; reload: () => Promise<void>; notify: (text: string) => void };
-const stateLabel: Record<string, string> = { PENDING: "待治理", GOVERNED: "已治理", LOCKED: "已锁定", READY: "可用", MISSING: "来源缺失", SCHEMA_CHANGED: "字段变化" };
+const stateLabel: Record<string, string> = { PENDING: "待治理", GOVERNED: "已治理", LOCKED: "已锁定", READY: "可用", MISSING: "来源缺失", SCHEMA_CHANGED: "字段变化", COMPLETED: "治理完成", PENDING_REVIEW: "待人工审核", SKIPPED: "已跳过", FAILED: "执行失败", RUNNING: "执行中" };
 const label = (value: string) => stateLabel[value] || value;
 const asText = (value: unknown) => value == null ? "" : typeof value === "object" ? JSON.stringify(value) : String(value);
 const errText = (error: unknown) => error instanceof Error ? error.message : "操作失败";
@@ -30,11 +30,13 @@ function AgentChoice({ agents, value, change, code }: { agents: AgentDefinition[
 
 export function GovernedAssetTab({ assets, agents, reload, notify }: CommonProps) {
   const [tables, setTables] = useState<string[]>([]);
-  const [dialog, setDialog] = useState<"create" | "edit" | "preview" | "govern" | null>(null);
+  const [dialog, setDialog] = useState<"create" | "edit" | "preview" | "govern" | "result" | "batch-result" | null>(null);
   const [active, setActive] = useState<DataAsset | null>(null);
   const [form, setForm] = useState<DataAssetPayload>({ asset_code: "", table_name: "", display_name: "", description: "", enabled: true });
   const [preview, setPreview] = useState<DataPreview | null>(null);
   const [runs, setRuns] = useState<GovernanceRun[]>([]);
+  const [governanceResult, setGovernanceResult] = useState<GovernanceRun | null>(null);
+  const [batchResult, setBatchResult] = useState<BatchGovernanceResult[]>([]);
   const [sources, setSources] = useState<number[]>([]);
   const [agentId, setAgentId] = useState<number>();
   const [selected, setSelected] = useState<number[]>([]);
@@ -62,20 +64,31 @@ export function GovernedAssetTab({ assets, agents, reload, notify }: CommonProps
   };
   const govern = async (event: FormEvent) => {
     event.preventDefault(); if (!active) return;
-    const ok = await run(() => api.governDataAsset(active.id, sources, agentId), "数据资产治理完成");
-    if (ok) setDialog(null);
+    setBusy(true); setError("");
+    try {
+      const result = await api.governDataAsset(active.id, sources, agentId);
+      setGovernanceResult(result); await reload(); setDialog("result");
+      notify(result.status === "COMPLETED" ? "数据资产治理完成" : "治理已完成预审，存在待审核事项");
+    } catch (error) { setError(errText(error)); }
+    finally { setBusy(false); }
   };
   const batch = async () => {
     if (!selected.length) return;
     setBusy(true); setError("");
     try {
       const result = await api.batchGovernAssets(selected);
-      const failed = result.results.filter(item => item.status !== "SUCCESS");
+      const failed = result.results.filter(item => item.status === "FAILED" || item.status === "SKIPPED");
+      setBatchResult(result.results);
       setSelected([]); await reload();
-      notify(`批量治理完成：成功 ${result.results.length - failed.length} 项，未完成 ${failed.length} 项`);
+      notify(`批量治理完成：完成 ${result.results.length - failed.length} 项，未执行 ${failed.length} 项`);
       if (failed.length) setError(failed.map(item => `${item.target_id}: ${item.message || item.status}`).join("；"));
+      setDialog("batch-result");
     } catch (error) { setError(errText(error)); } finally { setBusy(false); }
   };
+  const summary = governanceResult?.summary_json as Partial<DataGovernanceSummary> | undefined;
+  const qualityIssues = summary?.quality_issues || [];
+  const pendingReview = summary?.pending_review || [];
+  const targetTables = summary?.target_tables || [];
   return <section className="panel resource-management-panel">
     <div className="panel-heading"><div><p className="eyebrow">GOVERNED TABLES</p><h2>数据资产清单</h2><p>预览来源、选择智能体治理，并保留每次运行记录。批量治理使用各资产当前来源。</p></div>
       <div className="panel-actions"><button type="button" onClick={() => { setForm({ asset_code: "", table_name: "", display_name: "", description: "", enabled: true }); setActive(null); setError(""); setDialog("create"); }}>新增资产</button>
@@ -88,7 +101,7 @@ export function GovernedAssetTab({ assets, agents, reload, notify }: CommonProps
         <td>{item.enabled ? "启用" : "停用"}</td><td className="button-row">
           <button type="button" onClick={() => void openPreview(item)}>预览</button>
           <button type="button" onClick={() => { setActive(item); setForm({ asset_code: item.asset_code, table_name: item.table_name, display_name: item.display_name, description: item.description || "", allowed_columns: item.allowed_columns, enabled: item.enabled }); setDialog("edit"); }}>编辑</button>
-          <button type="button" disabled={item.governance_status === "LOCKED" || busy} onClick={() => { setActive(item); setSources([]); setAgentId(undefined); setError(""); setDialog("govern"); }}>治理</button>
+          <button type="button" disabled={item.governance_status === "LOCKED" || busy} onClick={() => { setActive(item); setSources([]); setAgentId(undefined); setGovernanceResult(null); setError(""); setDialog("govern"); }}>治理</button>
           <button type="button" onClick={() => void run(() => api.setAssetGovernanceState(item.id, item.governance_status === "LOCKED" ? "PENDING" : "LOCKED"), item.governance_status === "LOCKED" ? "已解锁" : "已锁定")}>{item.governance_status === "LOCKED" ? "解锁" : "锁定"}</button>
           <button type="button" onClick={() => void run(() => api.updateDataAsset(item.id, { enabled: !item.enabled }), "使用状态已更新")}>{item.enabled ? "停用" : "启用"}</button>
         </td></tr>)}</tbody></table></div>
@@ -105,9 +118,24 @@ export function GovernedAssetTab({ assets, agents, reload, notify }: CommonProps
     {dialog === "govern" && active && <Dialog title={`治理数据资产：${active.display_name}`} close={() => setDialog(null)}><form className="governance-form" onSubmit={govern}><p>目标资产始终作为数据源。可以补充关联来源，治理结果会记录在历史中。</p>
       {error && <p className="form-error">{error}</p>}<SourceChoices assets={assets.filter(item => item.id !== active.id)} selected={sources} change={setSources} />
       <AgentChoice agents={agents} value={agentId} change={setAgentId} code="数据治理智能体" /><button className="primary-button" type="submit" disabled={busy}>{busy ? "治理中…" : "开始治理"}</button></form></Dialog>}
+    {dialog === "result" && active && governanceResult && summary && <Dialog title={`治理结果：${active.display_name}`} close={() => setDialog(null)}><div className="governance-result">
+      <div className="governance-result-summary">
+        <div><small>执行结果</small><strong>{label(governanceResult.status)}</strong></div>
+        <div><small>置信度</small><strong>{typeof summary.confidence === "number" ? `${(summary.confidence * 100).toFixed(0)}%` : "—"}</strong></div>
+        <div><small>质量问题</small><strong>{qualityIssues.length}</strong></div>
+        <div><small>待审核记录</small><strong>{pendingReview.length}</strong></div>
+      </div>
+      <section><h4>分类统计</h4><div className="governance-category-list">{Object.entries(summary.category_counts || {}).map(([name, count]) => <span key={name}><strong>{name}</strong>{count} 条</span>)}</div></section>
+      <section><h4>目标表映射</h4>{targetTables.length ? <div className="table-wrap"><table><thead><tr><th>类别</th><th>目标表</th><th>业务键</th></tr></thead><tbody>{targetTables.map(item => <tr key={`${item.category}-${item.table_name}`}><td>{item.category}</td><td><code>{item.table_name}</code></td><td>{item.business_key.join("、")}</td></tr>)}</tbody></table></div> : <p className="governance-empty">暂无可确认的目标表映射。</p>}</section>
+      <section><h4>质量问题</h4>{qualityIssues.length ? <div className="table-wrap"><table><thead><tr><th>记录</th><th>字段</th><th>问题</th><th>等级</th><th>证据</th></tr></thead><tbody>{qualityIssues.map((item, index) => <tr key={`${item.record_id}-${item.field_name}-${index}`}><td>{item.record_id}</td><td>{item.field_name}</td><td>{item.issue_type}</td><td><span className={`governance-severity ${item.severity.toLowerCase()}`}>{item.severity}</span></td><td>{item.evidence_text}</td></tr>)}</tbody></table></div> : <p className="governance-empty">硬规则未发现质量问题。</p>}</section>
+      {pendingReview.length > 0 && <section><h4>待人工审核</h4><div className="governance-review-list">{pendingReview.map((item, index) => <article key={`${item.record_id}-${index}`}><strong>{item.record_id}</strong><span>{item.reason}</span><small>{item.evidence_text}</small></article>)}</div></section>}
+      {(summary.missing_data?.length || 0) > 0 && <section><h4>缺失数据</h4><ul>{summary.missing_data?.map(item => <li key={item}>{item}</li>)}</ul></section>}
+      <section><h4>治理依据</h4><p>{summary.evidence_text}</p><small>批次时间：{summary.as_of ? new Date(summary.as_of).toLocaleString("zh-CN") : "—"} · 运行记录 #{governanceResult.id}</small></section>
+    </div></Dialog>}
+    {dialog === "batch-result" && <Dialog title="批量治理结果" close={() => setDialog(null)}><div className="governance-result"><div className="table-wrap"><table><thead><tr><th>数据资产</th><th>结果</th><th>运行记录</th><th>说明</th></tr></thead><tbody>{batchResult.map(item => <tr key={item.target_id}><td>{assets.find(asset => asset.id === item.target_id)?.display_name || `#${item.target_id}`}</td><td>{label(item.status)}</td><td>{item.run_id ? `#${item.run_id}` : "—"}</td><td>{item.message || (item.status === "PENDING_REVIEW" ? "存在待审核事项" : "—")}</td></tr>)}</tbody></table></div></div></Dialog>}
     {dialog === "preview" && active && <Dialog title={`资产预览：${active.display_name}`} close={() => setDialog(null)}><div className="governance-detail">
       {error && <p className="form-error">{error}</p>}{preview && <><p>{preview.table_name} · 共 {preview.row_count.toLocaleString()} 行 · 只读预览前 {preview.rows.length} 行</p><div className="table-wrap"><table><thead><tr>{preview.columns.map(name => <th key={name}>{name}</th>)}</tr></thead><tbody>{preview.rows.map((row, index) => <tr key={index}>{preview.columns.map(name => <td key={name}>{asText(row[name])}</td>)}</tr>)}</tbody></table></div></>}
-      <h3>最近治理结果</h3><pre>{JSON.stringify(active.governance_report_json || {}, null, 2)}</pre><h3>运行记录</h3>{runs.map(item => <p key={item.id}>#{item.id} · {item.status} · {new Date(item.created_at).toLocaleString("zh-CN")} · {asText(item.summary_json.error || item.summary_json.provider_code)}</p>)}</div></Dialog>}
+      <h3>最近治理结果</h3><pre>{JSON.stringify(active.governance_report_json || {}, null, 2)}</pre><h3>运行记录</h3>{runs.map(item => <p key={item.id}>#{item.id} · {label(item.status)} · {new Date(item.created_at).toLocaleString("zh-CN")} · {asText(item.summary_json.error || item.summary_json.evidence_text)}</p>)}</div></Dialog>}
   </section>;
 }
 

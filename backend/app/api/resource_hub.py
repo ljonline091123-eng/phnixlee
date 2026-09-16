@@ -56,9 +56,12 @@ from app.services.resource_hub import (
     table_columns,
 )
 from app.services.skill_files import delete_skill_file, skill_file_path, write_skill_file
-from app.services.model_hub import ModelHubService
-from app.services.prediction_ledger import record_agent_predictions
-from app.services.skill_registry import sync_skill_from_file
+from app.orchestration.model_hub import (
+    AgentExecutionCommand,
+    AgentExecutionWorkflow,
+    AgentOutputError,
+    AgentUnavailableError,
+)
 
 router = APIRouter(prefix="/resources", tags=["AI Resource Hub"])
 
@@ -226,51 +229,18 @@ def update_agent(agent_id: int, payload: AgentUpdate, db: Session = Depends(get_
 
 @router.post("/agents/{agent_id}/run", response_model=ModelChatResponse)
 def run_agent(agent_id: int, payload: AgentRunRequest, db: Session = Depends(get_db)) -> ModelChatResponse:
-    agent = db.get(AgentDefinition, agent_id)
-    if agent is None or not agent.enabled:
-        raise HTTPException(status_code=404, detail="Enabled agent not found")
-    system_messages = [{"role": "system", "content": agent.system_prompt}]
-    if payload.task_type in {"stock_screening", "stock_analysis", "research_report"}:
-        system_messages.append({"role": "system", "content": (
-            "If you give an explicit BUY, SELL, or HOLD recommendation, return a JSON object with a "
-            "prediction field. Include market, stock_code, action_type, target_timeframe (T+1 to T+30), "
-            "reasoning_logic, skill_code from a bound Skill, and an observed positive entry_price. "
-            "Do not invent prices. The recommendation is recorded for T+N review."
-        )})
-    for link in agent.skill_links:
-        if link.skill.enabled and link.skill.skill_type == "PROMPT_SOP":
-            sync_skill_from_file(db, link.skill)
-            system_messages.append({"role": "system", "content": link.skill.instructions})
-    db.commit()
-    history = [item.model_dump() for item in payload.messages[-agent.context_window_limit * 2:]]
-    log = ModelHubService(db).chat(
-        task_type=payload.task_type,
-        instance_code=agent.model_instance_code,
-        messages=[*system_messages, *history],
-        metadata_json={
-            "agent_code": agent.agent_code,
-            "json_schema_output": agent.json_schema_output or {},
-            "knowledge_base_ids": [link.knowledge_base_id for link in agent.knowledge_links],
-            "data_source_ids": [link.data_source_id for link in agent.data_source_links],
-        },
-    )
-    prediction_ids: list[int] = []
-    if log.status == "SUCCESS" and log.provider_code != "MOCK":
-        try:
-            prediction_ids = record_agent_predictions(
-                db, log.response_text or "",
-                allowed_skill_codes={link.skill.skill_code for link in agent.skill_links if link.skill.enabled},
-                model_instance_code=log.instance_code,
+    try:
+        return AgentExecutionWorkflow(db).execute(
+            AgentExecutionCommand(
+                agent_id=agent_id,
+                task_type=payload.task_type,
+                messages=[item.model_dump() for item in payload.messages],
             )
-        except ValueError as exc:
-            db.rollback()
-            raise HTTPException(status_code=422, detail=str(exc)) from exc
-    return ModelChatResponse(
-        call_log_id=log.id, task_type=log.task_type, provider_code=log.provider_code,
-        instance_code=log.instance_code, model_code=log.model_code, status=log.status,
-        response_text=log.response_text or log.error_message or "", response_json=log.response_json,
-        prediction_ids=prediction_ids,
-    )
+        )
+    except AgentUnavailableError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except AgentOutputError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.delete("/agents/{agent_id}", status_code=204)
@@ -387,18 +357,24 @@ def set_asset_governance_state(asset_id: int, payload: GovernanceStateUpdate,
 
 
 @router.post("/data-assets/{asset_id}/govern", response_model=GovernanceRunRead)
-def govern_one_asset(asset_id: int, payload: GovernanceRequest, db: Session = Depends(get_db)) -> GovernanceRun:
+async def govern_one_asset(
+    asset_id: int, payload: GovernanceRequest, db: Session = Depends(get_db)
+) -> GovernanceRun:
     asset = db.get(AgentDataAsset, asset_id)
     if not asset:
         raise HTTPException(status_code=404, detail="Data asset not found")
     try:
-        return govern_asset(db, asset, payload.source_asset_ids, payload.agent_id)
+        return await govern_asset(
+            db, asset, payload.source_asset_ids, payload.agent_id, payload.record_limit
+        )
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @router.post("/data-assets/govern/batch")
-def govern_assets_batch(payload: GovernanceBatchRequest, db: Session = Depends(get_db)) -> dict:
+async def govern_assets_batch(
+    payload: GovernanceBatchRequest, db: Session = Depends(get_db)
+) -> dict:
     results = []
     for asset_id in dict.fromkeys(payload.target_ids):
         asset = db.get(AgentDataAsset, asset_id)
@@ -406,8 +382,10 @@ def govern_assets_batch(payload: GovernanceBatchRequest, db: Session = Depends(g
             results.append({"target_id": asset_id, "status": "SKIPPED", "message": "Not found or locked"})
             continue
         try:
-            run = govern_asset(db, asset, payload.source_asset_ids, payload.agent_id)
-            results.append({"target_id": asset_id, "status": "SUCCESS", "run_id": run.id})
+            run = await govern_asset(
+                db, asset, payload.source_asset_ids, payload.agent_id, payload.record_limit
+            )
+            results.append({"target_id": asset_id, "status": run.status, "run_id": run.id})
         except Exception as exc:
             results.append({"target_id": asset_id, "status": "FAILED", "message": str(exc)})
     return {"results": results}

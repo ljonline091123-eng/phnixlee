@@ -1,6 +1,9 @@
+import json
 import unittest
+from datetime import datetime, timezone
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, select, func, text
@@ -9,6 +12,7 @@ from sqlalchemy.orm import sessionmaker
 from app.db.base import Base
 from app.db.session import get_db
 from app.main import app
+from app.connectors.model_adapters import ModelExecutionResult
 from app.models.ai_hub import AgentDataAsset, GovernanceRun, KnowledgeBase, KnowledgeDocument, KnowledgeEntity, KnowledgeGraph, ModelProvider, ModelSkill, ResearchReportRecord
 from app.services.model_hub import seed_default_models, seed_default_skills
 from app.services.resource_hub import seed_default_data_assets, seed_default_graphs, seed_default_knowledge_bases
@@ -42,6 +46,10 @@ class ResourceGovernanceTest(unittest.TestCase):
     def test_asset_preview_governance_lock_and_batch_skip(self):
         assets = self.client.get("/api/v1/resources/data-assets").json()
         report = next(item for item in assets if item["asset_code"] == "RESEARCH_REPORT")
+        invalid_limit = self.client.post(
+            f"/api/v1/resources/data-assets/{report['id']}/govern", json={"record_limit": 5001}
+        )
+        self.assertEqual(invalid_limit.status_code, 422)
         self.assertEqual(report["governance_status"], "PENDING")
         self.assertEqual(report["source_health"], "READY")
         self.client.put(f"/api/v1/resources/data-assets/{report['id']}", json={"enabled": False})
@@ -49,13 +57,58 @@ class ResourceGovernanceTest(unittest.TestCase):
         self.assertEqual(preview["row_count"], 2)
         self.assertEqual(len(preview["rows"]), 2)
         governed = self.client.post(f"/api/v1/resources/data-assets/{report['id']}/govern", json={}).json()
-        self.assertEqual(governed["status"], "SUCCESS")
+        self.assertEqual(governed["status"], "PENDING_REVIEW")
         self.assertFalse(self.db.get(AgentDataAsset, report["id"]).enabled)
-        self.assertEqual(governed["summary_json"]["sources"][0]["quality"]["null_counts"]["symbol"], 0)
+        self.assertEqual(len(governed["summary_json"]["quality_issues"]), 2)
+        self.assertEqual(
+            {item["field_name"] for item in governed["summary_json"]["quality_issues"]},
+            {"source"},
+        )
+        self.assertEqual(self.db.get(AgentDataAsset, report["id"]).governance_status, "PENDING")
         self.client.put(f"/api/v1/resources/data-assets/{report['id']}/governance-state", json={"governance_status": "LOCKED"})
         skipped = self.client.post("/api/v1/resources/data-assets/govern/batch", json={"target_ids": [report["id"]]}).json()
         self.assertEqual(skipped["results"][0]["status"], "SKIPPED")
         self.assertEqual(self.db.scalar(select(func.count(GovernanceRun.id))), 1)
+
+    def test_asset_governance_marks_completed_only_after_valid_structured_output(self):
+        for report in self.db.scalars(select(ResearchReportRecord)).all():
+            report.model_provider = "TEST_PROVIDER"
+        self.db.commit()
+        asset = self.db.scalar(select(AgentDataAsset).where(AgentDataAsset.asset_code == "RESEARCH_REPORT"))
+        captured_messages = []
+
+        class StructuredAdapter:
+            def chat(self, **kwargs):
+                captured_messages.extend(kwargs["messages"])
+                response = {
+                    "as_of": datetime.now(timezone.utc).isoformat(),
+                    "status": "COMPLETED",
+                    "category_counts": {"RESEARCH_REPORT": 2},
+                    "quality_issues": [],
+                    "dedupe_keys": ["source_record_id"],
+                    "target_tables": [],
+                    "pending_review": [],
+                    "missing_data": [],
+                    "confidence": 0.94,
+                    "evidence_text": "Validated bounded hard-rule summary.",
+                }
+                return ModelExecutionResult(response_text=json.dumps(response), response_json=response)
+
+        with patch("app.services.model_hub.get_model_adapter", return_value=StructuredAdapter()):
+            response = self.client.post(
+                f"/api/v1/resources/data-assets/{asset.id}/govern",
+                json={"record_limit": 5000},
+            )
+        self.assertEqual(response.status_code, 200, response.text)
+        result = response.json()
+        self.assertEqual(result["status"], "COMPLETED")
+        self.assertEqual(result["summary_json"]["quality_issues"], [])
+        self.assertEqual(result["summary_json"]["target_tables"][0]["table_name"], "research_report")
+        self.assertIsNotNone(result["model_call_log_id"])
+        self.db.refresh(asset)
+        self.assertEqual(asset.governance_status, "GOVERNED")
+        user_prompt = next(item["content"] for item in captured_messages if item["role"] == "user")
+        self.assertNotIn("研究证据", user_prompt)
 
     def test_two_graphs_from_one_base_have_independent_entities(self):
         kb = self.client.get("/api/v1/resources/knowledge-bases").json()[0]

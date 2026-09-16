@@ -467,6 +467,47 @@ export type DataPreview = {
   rows: Array<Record<string, unknown>>;
 };
 
+export type GovernanceQualityIssue = {
+  record_id: string;
+  field_name: string;
+  issue_type: string;
+  severity: "LOW" | "MEDIUM" | "HIGH";
+  evidence_text: string;
+};
+
+export type GovernancePendingReview = {
+  record_id: string;
+  reason: string;
+  evidence_text: string;
+};
+
+export type GovernanceTargetTable = {
+  category: string;
+  table_name: string;
+  business_key: string[];
+  evidence_text: string;
+};
+
+export type DataGovernanceSummary = {
+  as_of: string;
+  status: "COMPLETED" | "PENDING_REVIEW";
+  category_counts: Record<string, number>;
+  quality_issues: GovernanceQualityIssue[];
+  dedupe_keys: string[];
+  target_tables: GovernanceTargetTable[];
+  pending_review: GovernancePendingReview[];
+  missing_data: string[];
+  confidence: number;
+  evidence_text: string;
+};
+
+export type BatchGovernanceResult = {
+  target_id: number;
+  status: "COMPLETED" | "PENDING_REVIEW" | "SKIPPED" | "FAILED";
+  run_id?: number;
+  message?: string;
+};
+
 export type KnowledgeBase = {
   id: number;
   kb_code: string;
@@ -808,8 +849,8 @@ export const api = {
   createDataAsset: (payload: DataAssetPayload) => request<DataAsset>("/resources/data-assets", { method: "POST", body: JSON.stringify(payload) }),
   previewDataAsset: (id: number, limit = 20) => request<DataPreview>(`/resources/data-assets/${id}/preview?limit=${limit}`),
   setAssetGovernanceState: (id: number, governance_status: string) => request<DataAsset>(`/resources/data-assets/${id}/governance-state`, { method: "PUT", body: JSON.stringify({ governance_status }) }),
-  governDataAsset: (id: number, source_asset_ids: number[], agent_id?: number) => request<GovernanceRun>(`/resources/data-assets/${id}/govern`, { method: "POST", body: JSON.stringify({ source_asset_ids, agent_id }) }),
-  batchGovernAssets: (target_ids: number[], source_asset_ids: number[] = [], agent_id?: number) => request<{ results: Array<{ target_id: number; status: string; message?: string }> }>("/resources/data-assets/govern/batch", { method: "POST", body: JSON.stringify({ target_ids, source_asset_ids, agent_id }) }),
+  governDataAsset: (id: number, source_asset_ids: number[], agent_id?: number, record_limit = 5000) => request<GovernanceRun>(`/resources/data-assets/${id}/govern`, { method: "POST", body: JSON.stringify({ source_asset_ids, agent_id, record_limit }) }),
+  batchGovernAssets: (target_ids: number[], source_asset_ids: number[] = [], agent_id?: number, record_limit = 5000) => request<{ results: BatchGovernanceResult[] }>("/resources/data-assets/govern/batch", { method: "POST", body: JSON.stringify({ target_ids, source_asset_ids, agent_id, record_limit }) }),
   listGovernanceRuns: (target_type: "ASSET" | "GRAPH", target_id: number) => request<GovernanceRun[]>(`/resources/governance-runs?target_type=${target_type}&target_id=${target_id}`),
   updateDataAsset: (id: number, payload: Partial<DataAsset>) =>
     request<DataAsset>(`/resources/data-assets/${id}`, { method: "PUT", body: JSON.stringify(payload) }),

@@ -36,6 +36,20 @@ python -m uvicorn app.main:app --reload
 
 Open `http://127.0.0.1:8000/docs` after startup.
 
+每日同步和预测复盘不在 Web 进程中运行。需要本地自动调度时，另开两个终端并使用同一个 `DATABASE_URL`：
+
+```powershell
+cd backend
+python -m app.jobs.scheduler
+```
+
+```powershell
+cd backend
+python -m app.jobs.worker
+```
+
+`scheduler` 只提交带幂等键的任务，`worker` 独立执行并将状态、重试和错误写入 `scheduled_job`、`pipeline_run`、`pipeline_stage_run`。Docker Compose 会自动启动这两个进程。
+
 To create tables and seed the initial source/interface catalog without starting
 the API:
 

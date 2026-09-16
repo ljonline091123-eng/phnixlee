@@ -27,14 +27,17 @@ from app.schemas.model_hub import (
     ModelTestResponse,
 )
 from app.services.model_hub import ModelHubService
+from app.orchestration.model_hub import (
+    ModelInvocationCommand,
+    ModelInvocationWorkflow,
+    SkillToolWorkflow,
+)
 from app.services.model_credentials import decrypt_api_key, encrypt_api_key
 from app.connectors.model_registry import get_model_adapter
 from app.services.skill_files import delete_skill_file, write_skill_file
 from app.services.skill_registry import rollback_skill, save_skill_content, sync_skill_from_file
 from app.schemas.skill_tools import DwValidationRequest, PredictionScoreRequest, WatchFilterRequest
 from app.schemas.distillation import ExtractionRequest, ExtractionSource
-from app.services.skill_tools import filter_watch_candidates, score_prediction_outcomes, validate_dw_records
-from app.services.ondemand_distillation import trigger_ondemand_extraction
 from app.schemas.predictions import PredictionCreate, PredictionRead, SkillDraftRead
 from app.services.prediction_review import propose_failed_skill_revisions, review_predictions
 
@@ -562,23 +565,15 @@ def reject_skill_draft(draft_id: int, db: Session = Depends(get_db)) -> SkillOpt
 
 @router.post("/chat", response_model=ModelChatResponse)
 def chat(payload: ModelChatRequest, db: Session = Depends(get_db)) -> ModelChatResponse:
-    log = ModelHubService(db).chat(
-        task_type=payload.task_type,
-        instance_code=payload.instance_code,
-        messages=[item.model_dump() for item in payload.messages],
-        temperature=payload.temperature,
-        max_tokens=payload.max_tokens,
-        metadata_json=payload.metadata_json,
-    )
-    return ModelChatResponse(
-        call_log_id=log.id,
-        task_type=log.task_type,
-        provider_code=log.provider_code,
-        instance_code=log.instance_code,
-        model_code=log.model_code,
-        status=log.status,
-        response_text=log.response_text or log.error_message or "",
-        response_json=log.response_json,
+    return ModelInvocationWorkflow(db).execute(
+        ModelInvocationCommand(
+            task_type=payload.task_type,
+            instance_code=payload.instance_code,
+            messages=[item.model_dump() for item in payload.messages],
+            temperature=payload.temperature,
+            max_tokens=payload.max_tokens,
+            metadata_json=payload.metadata_json,
+        )
     )
 
 
@@ -591,17 +586,17 @@ def list_call_logs(limit: int = 50, db: Session = Depends(get_db)) -> list[Model
 
 @router.post("/skill-tools/validate-dw-records")
 def run_dw_validation(payload: DwValidationRequest) -> dict:
-    return validate_dw_records(payload.records)
+    return SkillToolWorkflow().execute("validate_dw_records", payload.records)
 
 
 @router.post("/skill-tools/filter-watch-candidates")
 def run_watch_filter(payload: WatchFilterRequest) -> dict:
-    return filter_watch_candidates(payload)
+    return SkillToolWorkflow().execute("filter_watch_candidates", payload)
 
 
 @router.post("/skill-tools/score-prediction-outcomes")
 def run_prediction_scoring(payload: PredictionScoreRequest) -> dict:
-    return score_prediction_outcomes(payload)
+    return SkillToolWorkflow().execute("score_prediction_outcomes", payload)
 
 
 @router.post("/skill-tools/trigger-ondemand-extraction", response_model=ExtractionSource)
@@ -609,7 +604,10 @@ def run_ondemand_extraction(
     payload: ExtractionRequest, db: Session = Depends(get_db)
 ) -> ExtractionSource:
     try:
-        return trigger_ondemand_extraction(payload.stock_code, payload.doc_id, db)
+        return SkillToolWorkflow(db).execute(
+            "trigger_ondemand_extraction",
+            {"stock_code": payload.stock_code, "doc_id": payload.doc_id},
+        )
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:

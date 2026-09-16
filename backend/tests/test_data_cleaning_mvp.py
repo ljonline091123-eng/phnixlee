@@ -108,6 +108,14 @@ def test_hard_rule_samples_are_bounded_but_all_issue_ids_are_retained() -> None:
     assert len(result["issue_record_ids"]) == 60
 
 
+def test_empty_batch_requires_review_without_negative_valid_count() -> None:
+    result = validate_dw_records([])
+    assert result["status"] == "PENDING_REVIEW"
+    assert result["valid_record_count"] == 0
+    assert result["quality_issues"][0]["issue_type"] == "EMPTY_BATCH"
+    assert result["issue_record_ids"] == ["BATCH"]
+
+
 def test_agent_retries_then_downgrades_and_persists(tmp_path: Path) -> None:
     engine = create_engine(
         f"sqlite:///{(tmp_path / 'governance.db').as_posix()}",

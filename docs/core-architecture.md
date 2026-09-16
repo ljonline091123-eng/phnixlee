@@ -1,5 +1,36 @@
 # GEMINI QUANT 核心模型、Skill 与复盘链路
 
+## 四层应用架构
+
+后端按以下依赖方向组织，外层可以调用内层，内层不依赖 FastAPI：
+
+| 层级 | 路径 | 当前职责 |
+| --- | --- | --- |
+| 表示层 | `backend/app/api/` | Request/Response Schema、HTTP 状态码、响应头和异常映射。 |
+| 编排层 | `backend/app/orchestration/` | 串联仓储、数据源、领域服务和模型路由；F10、Agent/Skill、每日同步与复盘均通过 Workflow 执行。 |
+| 领域服务层 | `backend/app/services/` | F10 合并规则、行情抓取、模型路由、Skill 硬规则、治理与复盘等原子能力。 |
+| 数据与适配器层 | `backend/app/repositories/`、`backend/app/db/`、`backend/app/connectors/` | 查询模型、ORM 会话、第三方行情和模型供应商适配。 |
+
+`GET /stocks/{market}/{symbol}/f10` 已迁移到 `F10Workflow`。路由只处理 HTTP 缓存头和把应用异常映射成 404/422；`StockF10Repository` 集中查询，`services/f10.py` 保存无 HTTP 依赖的缓存、合并和标准化规则。模型对话和 Agent 执行分别使用 `ModelInvocationWorkflow`、`AgentExecutionWorkflow`；确定性 Skill 工具统一经 `SkillToolWorkflow` 调用，因此 REST、后台任务和未来的批处理入口可以复用同一条业务链。
+
+## 独立任务调度与状态机
+
+FastAPI `lifespan` 只初始化数据库和默认目录，不再创建常驻定时协程。Docker 部署包含三个独立后端角色：
+
+- `api`：接收 HTTP 请求；
+- `scheduler`：按上海时区生成每日主数据同步和 T+N 复盘任务；
+- `worker`：领取任务并执行 `orchestration/background.py` 中的 Workflow。
+
+任务使用 PostgreSQL/SQLite 内的三张表形成轻量可靠队列：
+
+| 表 | 用途 |
+| --- | --- |
+| `scheduled_job` | 幂等键、计划时间、Worker 租约、最大尝试次数、重试时间和最终状态。 |
+| `pipeline_run` | 一次完整业务工作流的输入、输出、触发来源、当前阶段和总体状态。 |
+| `pipeline_stage_run` | 每个阶段的尝试、租约、错误和结构化结果，后续可扩展数据采集、清洗、蒸馏、入图等多阶段 Pipeline。 |
+
+PostgreSQL Worker 使用 `FOR UPDATE SKIP LOCKED` 竞争任务。领取后立即提交事务，再执行外部行情或模型调用；成功或失败由新事务落库。Worker 崩溃后，其他 Worker 可以回收租约已经过期的 `RUNNING` 任务。`idempotency_key` 防止多实例 Scheduler 重复创建同一业务日任务。
+
 ## 两层筛选
 
 Python/SQL 对全市场量价、财务和数据质量做批量计算。`filter-watch-candidates` 最多接收 5,000 条已聚合指标，每次最多返回 50 只候选股。Agent 只接收候选池、证据摘要、研报片段和知识图谱关系；`stock_screening`、`stock_analysis`、`risk_warning`、`data_governance` 调用还受 60,000 字符及 50 只候选股的服务层边界约束。不要通过普通 `general_chat` 端点传输全市场原始表。

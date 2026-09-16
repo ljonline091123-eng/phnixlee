@@ -11,13 +11,6 @@ import asyncio
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import select
-
-from app.core.markets import MASTER_MARKETS
-from app.db.session import SessionLocal
-from app.models.market_data import DataSource
-from app.services.catalog import seed_default_catalog
-from app.services.stock_sync import StockSyncService
 
 
 SHANGHAI = ZoneInfo("Asia/Shanghai")
@@ -36,26 +29,10 @@ def _seconds_until_next_midnight() -> float:
 
 
 def sync_master_data_once() -> None:
-    """Synchronize all configured master markets using the primary source."""
-    with SessionLocal() as db:
-        # Keep this callable independently testable and self-healing when the
-        # service is launched against an empty database.
-        seed_default_catalog(db)
-        source = db.scalar(
-            select(DataSource).where(
-                DataSource.source_code == "AKSHARE",
-                DataSource.enabled.is_(True),
-            )
-        )
-        if source is None:
-            return
-        for market in MASTER_MARKETS:
-            try:
-                StockSyncService(db).synchronize(source, market, enable_fallback=True)
-            except Exception:
-                # A failing market must not prevent the other markets from
-                # being refreshed at the same scheduled run.
-                db.rollback()
+    """Compatibility wrapper; new callers use MasterDataSyncWorkflow."""
+    from app.orchestration.background import MasterDataSyncWorkflow
+
+    MasterDataSyncWorkflow().execute()
 
 
 async def daily_master_sync_loop() -> None:

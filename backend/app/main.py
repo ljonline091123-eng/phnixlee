@@ -1,4 +1,3 @@
-import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -6,40 +5,18 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import data_interfaces, data_sources, model_hub, research, resource_hub, stock_tools, stocks
 from app.core.config import get_settings
-from app.db.base import Base
-from app.db.migrations import ensure_compat_columns
-from app.db.table_comments import seed_table_comments
-from app.db.session import SessionLocal, engine
-from app.services.catalog import seed_default_catalog
-from app.services.daily_sync import daily_master_sync_loop
-from app.services.model_hub import seed_default_models, seed_default_skills
-from app.services.prediction_review import daily_prediction_review_loop
-from app.services.resource_hub import seed_default_agents, seed_default_data_assets, seed_default_knowledge_bases, seed_default_graphs
+from app.db.bootstrap import initialize_database
+from app.db.session import engine
 
 settings = get_settings()
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    ensure_compat_columns(engine)
-    Base.metadata.create_all(bind=engine)
-    with SessionLocal() as db:
-        seed_table_comments(db)
-        seed_default_catalog(db)
-        seed_default_models(db)
-        seed_default_skills(db)
-        seed_default_data_assets(db)
-        seed_default_knowledge_bases(db)
-        seed_default_graphs(db)
-        seed_default_agents(db)
-    sync_task = asyncio.create_task(daily_master_sync_loop())
-    review_task = asyncio.create_task(daily_prediction_review_loop())
+    initialize_database()
     try:
         yield
     finally:
-        sync_task.cancel()
-        review_task.cancel()
-        await asyncio.gather(sync_task, review_task, return_exceptions=True)
         engine.dispose()
 
 

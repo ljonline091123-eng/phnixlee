@@ -16,6 +16,9 @@ class TableDescription:
 
 
 TABLE_DESCRIPTIONS: dict[str, TableDescription] = {
+    "pipeline_run": TableDescription("工作流运行记录", "任务编排", "记录一次业务工作流的触发来源、输入输出、当前阶段、执行状态和错误。"),
+    "pipeline_stage_run": TableDescription("工作流阶段记录", "任务编排", "记录工作流内各阶段的尝试次数、租约、重试计划、输入输出和错误。"),
+    "scheduled_job": TableDescription("后台任务队列", "任务编排", "保存独立 Worker 消费的幂等任务、执行时间、租约、重试次数和处理状态。"),
     "agent_child_link": TableDescription("智能体子任务关系", "智能体", "记录主智能体与子智能体的编排关系及执行顺序。"),
     "agent_data_asset": TableDescription("智能体数据资产", "数据治理", "登记可供智能体访问的本地数据表、允许字段、治理状态及启停状态。"),
     "agent_data_asset_link": TableDescription("智能体数据资产绑定", "智能体", "记录智能体与可访问数据资产的多对多授权关系。"),
@@ -55,6 +58,23 @@ TABLE_DESCRIPTIONS: dict[str, TableDescription] = {
 
 
 COMMON_COLUMN_DESCRIPTIONS: dict[str, str] = {
+    "attempt": "当前工作流阶段已经执行的次数。",
+    "attempts": "后台任务已经执行的次数。",
+    "correlation_id": "用于关联同一业务请求或跨系统调用链的标识。",
+    "current_stage": "工作流当前正在执行或最近执行的阶段编码。",
+    "error_code": "失败异常的类型或标准错误编码。",
+    "idempotency_key": "避免相同业务任务重复创建和执行的唯一键。",
+    "input_json": "工作流或阶段接收的结构化输入。",
+    "lease_until": "Worker 对任务或阶段持有执行权的截止时间。",
+    "max_attempts": "任务或阶段允许执行的最大次数。",
+    "next_retry_at": "失败后允许再次执行的最早时间。",
+    "output_json": "工作流或阶段产出的结构化结果。",
+    "pipeline_run_id": "所属工作流运行记录 ID。",
+    "pipeline_type": "工作流的业务类型编码。",
+    "run_after": "后台任务允许开始执行的最早时间。",
+    "stage_code": "工作流阶段的稳定业务编码。",
+    "trigger_type": "工作流触发来源，例如 API、定时调度或人工操作。",
+    "worker_id": "领取并执行后台任务的 Worker 实例标识。",
     "action_type": "预测建议的操作类型，例如买入、卖出或持有。",
     "actual_price": "复盘时观察到的实际股价。",
     "actual_return_pct": "按实际股价计算的收益率百分比。",

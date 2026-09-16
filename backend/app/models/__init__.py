@@ -36,6 +36,7 @@ from app.models.ai_hub import (
     ModelSkillRevision,
 )
 from app.models.schema_catalog import DatabaseTableComment
+from app.models.pipeline import PipelineRun, PipelineStageRun, ScheduledJob
 from app.db.base import Base
 from app.db.table_comments import apply_table_comments
 
@@ -76,4 +77,7 @@ __all__ = [
     "KnowledgeEntity",
     "KnowledgeRelation",
     "DatabaseTableComment",
+    "PipelineRun",
+    "PipelineStageRun",
+    "ScheduledJob",
 ]

@@ -44,6 +44,16 @@ def validate_dw_records(
     issue_record_ids: list[str] = []
     effective_as_of = _aware(as_of or datetime.now(timezone.utc))
 
+    if not records:
+        issues.append(_quality_issue(
+            record_id="BATCH",
+            field_name="records",
+            issue_type="EMPTY_BATCH",
+            severity="HIGH",
+            evidence_text="validate_dw_records received an empty batch",
+        ))
+        issue_record_ids.append("BATCH")
+
     for index, record in enumerate(records):
         if not isinstance(record, dict):
             record = {}
@@ -132,7 +142,7 @@ def validate_dw_records(
         "quality_issues": issue_samples,
         "quality_issues_truncated": len(issues) > len(issue_samples),
         "issue_record_ids": issue_record_ids,
-        "valid_record_count": len(records) - len(issue_record_ids),
+        "valid_record_count": max(0, len(records) - len(issue_record_ids)),
         "duplicate_count": duplicate_count,
         "dedupe_keys": ["market", "stock_code", "category", "source", "source_record_id"],
         "status": "PENDING_REVIEW" if issues else "COMPLETED",

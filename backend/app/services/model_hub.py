@@ -644,9 +644,15 @@ class ModelHubService:
         candidates = self.list_route_options(task_type=task_type, requested_instance_code=instance_code)
         last_log: ModelCallLog | None = None
         for routed in candidates:
+            # Materialize provider values before _start_log commits. The model
+            # instance is already a transient snapshot, so the outbound call
+            # cannot implicitly open a database transaction by lazy-loading an
+            # expired ORM row.
+            provider_code = routed.provider.provider_code
+            provider_type = routed.provider.provider_type
             log = self._start_log(
                 task_type=task_type,
-                provider_code=routed.provider.provider_code,
+                provider_code=provider_code,
                 instance_code=routed.instance.instance_code,
                 model_code=routed.instance.model_code,
                 request_json={
@@ -657,7 +663,7 @@ class ModelHubService:
                 },
             )
             try:
-                result = get_model_adapter(routed.provider.provider_type).chat(
+                result = get_model_adapter(provider_type).chat(
                     instance=routed.instance,
                     messages=messages,
                     temperature=temperature,

@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timezone
 from typing import Any
 
 from sqlalchemy import inspect, select, text
 from sqlalchemy.engine import Engine
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 
+from app.core.agent.data_cleaning_runner import run_data_cleaning_agent
 from app.db.session import engine
 from app.models.ai_hub import AgentDataAsset, AgentDefinition, GovernanceRun, KnowledgeBase, KnowledgeGraph
 from app.services.model_hub import ModelHubService
@@ -14,6 +16,34 @@ from app.services.resource_hub import build_knowledge_graph, inspect_data_asset,
 
 
 GOVERNANCE_STATES = {"PENDING", "GOVERNED", "LOCKED"}
+MAX_GOVERNANCE_RECORDS = 5000
+
+ASSET_CATEGORIES = {
+    "STOCK_SYMBOL": "BASIC",
+    "STOCK_QUOTE": "PRICE",
+    "STOCK_KLINE": "KLINE",
+    "STOCK_FINANCIAL": "FINANCIAL_REPORT",
+    "STOCK_NOTICE": "NOTICE",
+    "STOCK_NEWS": "NEWS",
+    "STOCK_F10": "F10",
+    "RESEARCH_REPORT": "RESEARCH_REPORT",
+    "WATCHLIST": "WATCHLIST",
+    "DATA_SYNC_LOG": "DATA_SYNC_LOG",
+    "DATA_FETCH_LOG": "DATA_FETCH_LOG",
+}
+
+GOVERNANCE_COLUMNS = {
+    "id", "market", "stock_code", "symbol", "source", "source_name", "source_id",
+    "model_provider", "interface_code", "observed_at", "news_time", "notice_date",
+    "report_period", "trade_date", "quote_time", "fetched_at", "updated_at", "created_at",
+    "last_synced_at", "started_at", "price", "current_price", "close", "close_price",
+    "open", "open_price", "volume",
+}
+
+TIME_COLUMNS = (
+    "observed_at", "news_time", "notice_date", "trade_date", "quote_time", "report_period",
+    "fetched_at", "last_synced_at", "updated_at", "created_at", "started_at",
+)
 
 
 def available_source_tables(db_engine: Engine = engine) -> list[str]:
@@ -55,6 +85,169 @@ def quality_profile(table_name: str, columns: list[str], db_engine: Engine) -> d
         "null_counts": {name: int(result[name] or 0) for name in chosen},
         "checked_columns": chosen,
     }
+
+
+def _asset_category(asset: AgentDataAsset) -> str:
+    if asset.asset_code in ASSET_CATEGORIES:
+        return ASSET_CATEGORIES[asset.asset_code]
+    name = f"{asset.asset_code}_{asset.table_name}".upper()
+    for token, category in (
+        ("SHAREHOLDER", "SHAREHOLDER"), ("FINANCIAL", "FINANCIAL_REPORT"),
+        ("NOTICE", "NOTICE"), ("NEWS", "NEWS"), ("KLINE", "KLINE"),
+        ("QUOTE", "PRICE"), ("RESEARCH", "RESEARCH_REPORT"), ("SYMBOL", "BASIC"),
+    ):
+        if token in name:
+            return category
+    return asset.asset_code.upper()
+
+
+def _business_key(table_name: str, db_engine: Engine) -> list[str]:
+    details = inspect(db_engine)
+    unique_keys = [
+        list(item.get("column_names") or [])
+        for item in details.get_unique_constraints(table_name)
+        if item.get("column_names")
+    ]
+    if unique_keys:
+        return min(unique_keys, key=len)
+    primary_key = list(details.get_pk_constraint(table_name).get("constrained_columns") or [])
+    return primary_key or [str(details.get_columns(table_name)[0]["name"])]
+
+
+def _read_governance_rows(
+    asset: AgentDataAsset, limit: int, db_engine: Engine
+) -> tuple[list[dict[str, Any]], list[str]]:
+    if asset.table_name not in available_source_tables(db_engine):
+        raise ValueError(f"Data source is unavailable: {asset.table_name}")
+    all_columns = [str(item["name"]) for item in inspect(db_engine).get_columns(asset.table_name)]
+    permitted = [name for name in (asset.allowed_columns or all_columns) if name in all_columns]
+    chosen = [name for name in permitted if name in GOVERNANCE_COLUMNS]
+    if not chosen and permitted:
+        chosen = permitted[:1]
+    if not chosen:
+        raise ValueError(f"Data asset has no readable governance columns: {asset.asset_code}")
+    quote = db_engine.dialect.identifier_preparer.quote
+    statement = text(
+        f'SELECT {", ".join(quote(name) for name in chosen)} '
+        f'FROM {quote(asset.table_name)} LIMIT :limit'
+    )
+    with db_engine.connect() as connection:
+        rows = [
+            dict(row._mapping)
+            for row in connection.execute(statement, {"limit": min(MAX_GOVERNANCE_RECORDS, limit)})
+        ]
+    return rows, _business_key(asset.table_name, db_engine)
+
+
+def _first_value(row: dict[str, Any], names: tuple[str, ...]) -> Any:
+    return next((row[name] for name in names if name in row and row[name] not in (None, "")), None)
+
+
+def _canonical_records(
+    asset: AgentDataAsset, rows: list[dict[str, Any]], business_key: list[str]
+) -> list[dict[str, Any]]:
+    category = _asset_category(asset)
+    source_columns = tuple(
+        name for name in ("source", "source_name", "source_id", "model_provider", "interface_code")
+        if name in (rows[0] if rows else {})
+    )
+    records: list[dict[str, Any]] = []
+    for row in rows:
+        key_values = [row.get(name) for name in business_key]
+        source_record_id = (
+            "|".join(f"{name}={value}" for name, value in zip(business_key, key_values))
+            if key_values and all(value not in (None, "") for value in key_values)
+            else row.get("id")
+        )
+        source = _first_value(row, source_columns) if source_columns else asset.table_name
+        market = _first_value(row, ("market",))
+        stock_code = _first_value(row, ("stock_code", "symbol"))
+        if category in {"DATA_SYNC_LOG", "DATA_FETCH_LOG"}:
+            market = market or "SYSTEM"
+            stock_code = stock_code or _first_value(row, ("interface_code",)) or asset.asset_code
+        payload_json: dict[str, Any] = {}
+        for target, candidates in {
+            "price": ("price", "current_price"),
+            "close": ("close", "close_price"),
+            "open": ("open", "open_price"),
+            "volume": ("volume",),
+        }.items():
+            source_name = next((name for name in candidates if name in row), None)
+            if source_name:
+                payload_json[target] = row[source_name]
+        records.append({
+            "market": market or "",
+            "stock_code": stock_code or "",
+            "category": category,
+            "source": source if source not in (None, "") else "",
+            "source_record_id": source_record_id or "",
+            "observed_at": _first_value(row, TIME_COLUMNS) or "",
+            "payload_json": payload_json,
+        })
+    return records
+
+
+def _load_asset_batch(
+    sources: list[AgentDataAsset], record_limit: int, db_engine: Engine
+) -> tuple[list[dict[str, Any]], dict[str, tuple[str, list[str]]]]:
+    records: list[dict[str, Any]] = []
+    catalog: dict[str, tuple[str, list[str]]] = {}
+    remaining = min(MAX_GOVERNANCE_RECORDS, max(1, record_limit))
+    for index, source in enumerate(sources):
+        if remaining <= 0:
+            break
+        sources_left = len(sources) - index
+        source_limit = max(1, remaining // sources_left)
+        rows, business_key = _read_governance_rows(source, source_limit, db_engine)
+        category = _asset_category(source)
+        catalog[category] = (source.table_name, business_key)
+        records.extend(_canonical_records(source, rows, business_key))
+        remaining -= len(rows)
+    return records, catalog
+
+
+def _data_cleaning_llm_call(
+    db_engine: Engine,
+    agent: AgentDefinition | None,
+    runtime: dict[str, Any],
+):
+    local_sessions = sessionmaker(bind=db_engine, autoflush=False, autocommit=False)
+    instance_code = agent.model_instance_code if agent else None
+    agent_prompt = agent.system_prompt.strip() if agent else ""
+
+    async def call(*, system_prompt: str, user_prompt: str, json_schema: dict[str, Any]) -> str:
+        def invoke() -> str:
+            with local_sessions() as local_db:
+                combined_prompt = "\n\n".join(item for item in (agent_prompt, system_prompt) if item)
+                log = ModelHubService(local_db).chat(
+                    task_type="data_governance",
+                    instance_code=instance_code,
+                    messages=[
+                        {"role": "system", "content": combined_prompt},
+                        {"role": "user", "content": user_prompt},
+                    ],
+                    temperature=0.0,
+                    max_tokens=4096,
+                    metadata_json={
+                        "json_schema_output": json_schema,
+                        "json_schema_name": "data_cleaning_output",
+                        "native_structured_output": True,
+                        "defer_schema_validation": True,
+                        "source": "data_asset_governance",
+                    },
+                )
+                runtime.update({
+                    "model_call_log_id": log.id,
+                    "provider_code": log.provider_code,
+                    "instance_code": log.instance_code,
+                })
+                if log.status != "SUCCESS" or not log.response_text:
+                    raise RuntimeError(log.error_message or "All data-governance model routes failed")
+                return log.response_text
+
+        return await asyncio.to_thread(invoke)
+
+    return call
 
 
 def _source_assets(db: Session, asset_ids: list[int]) -> list[AgentDataAsset]:
@@ -115,34 +308,54 @@ def _record(db: Session, target_type: str, target_id: int, asset_ids: list[int],
     return run
 
 
-def govern_asset(db: Session, asset: AgentDataAsset, source_asset_ids: list[int], agent_id: int | None) -> GovernanceRun:
+async def govern_asset(
+    db: Session,
+    asset: AgentDataAsset,
+    source_asset_ids: list[int],
+    agent_id: int | None,
+    record_limit: int = MAX_GOVERNANCE_RECORDS,
+) -> GovernanceRun:
     if asset.governance_status == "LOCKED":
         raise ValueError("Locked data assets cannot be governed")
     ids = list(dict.fromkeys([asset.id, *source_asset_ids]))
     sources = _source_assets(db, ids)
     agent = _agent(db, agent_id, "DATA_GOVERNANCE_AGENT")
+    run = _record(
+        db,
+        "ASSET",
+        asset.id,
+        ids,
+        agent.id if agent else None,
+        "RUNNING",
+        {"phase": "HARD_RULE_VALIDATION", "record_limit": record_limit},
+    )
     try:
-        evidence = {"target": asset.asset_code, "sources": []}
         for source in sources:
             inspect_data_asset(source, db.get_bind())
-            preview = preview_table(source.table_name, source.allowed_columns, 10, db.get_bind())
-            evidence["sources"].append({
-                "asset_code": source.asset_code, "table": source.table_name,
-                "columns": preview["columns"], "row_count": preview["row_count"],
-                "quality": quality_profile(source.table_name, preview["columns"], db.get_bind()),
-                "sample": [{key: str(value)[:160] for key, value in row.items()} for row in preview["rows"][:3]],
-            })
-        log = _agent_review(db, agent, "data_governance", "DATA_GOVERNANCE_DW", evidence)
-        report = {"sources": evidence["sources"], "agent_review": log.response_text,
-                  "provider_code": log.provider_code, "model_call_log_id": log.id,
-                  "checked_at": datetime.now(timezone.utc).isoformat()}
-        asset.governance_status = "GOVERNED"
+        records, target_catalog = _load_asset_batch(sources, record_limit, db.get_bind())
+        runtime: dict[str, Any] = {}
+        output = await run_data_cleaning_agent(
+            records,
+            llm_call=_data_cleaning_llm_call(db.get_bind(), agent, runtime),
+            target_table_catalog=target_catalog,
+        )
+        report = output.model_dump(mode="json")
+        asset.governance_status = "GOVERNED" if output.status.value == "COMPLETED" else "PENDING"
         asset.last_governed_at = datetime.now(timezone.utc)
         asset.governance_report_json = report
-        return _record(db, "ASSET", asset.id, ids, agent.id if agent else None, "SUCCESS", report, log.id)
+        run.status = output.status.value
+        run.summary_json = report
+        run.model_call_log_id = runtime.get("model_call_log_id")
+        db.commit()
+        db.refresh(run)
+        return run
     except Exception as exc:
         db.rollback()
-        _record(db, "ASSET", asset.id, ids, agent.id if agent else None, "FAILED", {"error": str(exc)})
+        failed_run = db.get(GovernanceRun, run.id)
+        if failed_run:
+            failed_run.status = "FAILED"
+            failed_run.summary_json = {"error": str(exc)}
+            db.commit()
         raise
 
 

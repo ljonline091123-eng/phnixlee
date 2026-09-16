@@ -204,6 +204,7 @@ class KnowledgeGraphRead(KnowledgeGraphCreate):
 class GovernanceRequest(BaseModel):
     source_asset_ids: list[int] = Field(default_factory=list)
     agent_id: int | None = None
+    record_limit: int = Field(default=5000, ge=1, le=5000)
 
 
 class GovernanceBatchRequest(GovernanceRequest):
