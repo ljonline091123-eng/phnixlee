@@ -1,6 +1,6 @@
 <template>
   <div class="app-container">
-    <div class="context flex flex-column">
+    <div class="context flex flex-column" style="height: 100%">
       <ShowTablePro
         ref="showTable"
         :total="total"
@@ -40,7 +40,7 @@ export default {
           prop: "deptId",
           label: "合作单位",
           type: "treeSelect",
-          labelKey: "deptName",
+          labelKey: "label",
           valueKey: "thridDeptId",
         },
         {

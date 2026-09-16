@@ -4,7 +4,7 @@
  * 为什么不复用 mixins/mixin.js：
  * 1. 日期区间要拆成 startDate/endDate(这三个报表后端 VO 的入参)，老报表用的是 startTime/endTime；
  * 2. 老 mixin 里会调 listDept() 拉全量部门树，这三个报表的组织树改由 ShowTablePro 按登录用户
- *    数据权限加载(/business/report/getOrgList)，不再依赖全量部门接口。
+ *    数据权限加载(/system/dept/getDeptTree，单位+部门)，不再依赖全量部门接口。
  * 修改这里前请先确认后端 VO 里的日期字段名。
  */
 export const mixinReport = {

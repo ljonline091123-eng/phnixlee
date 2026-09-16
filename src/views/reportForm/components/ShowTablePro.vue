@@ -1,5 +1,5 @@
 <template>
-  <div class="app-container" style="overflow: auto; height: calc(100vh - 4px)">
+  <div class="app-container" style="height: 100%">
     <div
       style="height: 100%; background-color: #fff; padding: 16px; box-sizing: border-box"
       class="flex flex-column"
@@ -200,14 +200,15 @@
  * 1. 支持 el-table 懒加载树(:load + reportType)、分页、页面写死的下拉选项(selectArr)、表头提示(headerSlot)；
  * 2. 不再监听顶部"单位-项目"选择框(vuex 的 org/project/scopeType)——这三个报表的数据范围由后端按
  *    登录用户数据权限收敛，页面里的树/下拉只做二次筛选；
- * 3. 组织树改走 /business/report/getOrgList(后端已按数据权限收敛)，不再调 listDept() 拉全量部门。
+ * 3. 组织树改走 /system/dept/getDeptTree(与采购台账左树、顶部"单位-项目"选择框同源，按登录用户
+ *    数据权限返回单位+部门)，不再调 listDept() 拉全量部门。
  *
  * 老报表页面(合同台账/价格分析等)请继续使用 components/ShowTable.vue。
  */
 import Treeselect from "@riophae/vue-treeselect";
 import "@riophae/vue-treeselect/dist/vue-treeselect.css";
 import { listUnderlingDict } from "@/api/procurement/contract";
-import { getOrgList } from "@/api/reportForm/tenderingRateReport";
+import { getDeptTree } from "@/api/system/dept";
 import { getBidCountNext, getProblemNext } from "@/api/reportForm/tenderingRateReport";
 
 export default {
@@ -273,7 +274,7 @@ export default {
     // 项目业态字典
     this.getListUnderlingDict("PROJECT_FORMAT");
     // 组织树按登录用户数据权限加载
-    this.getDeptTree();
+    this.loadDeptTree();
   },
   methods: {
     /**
@@ -330,11 +331,13 @@ export default {
       }));
     },
     /**
-     * 获取当前登录用户有数据权限的组织树
+     * 获取组织树(单位 + 单位下所有部门)
+     * 与采购台账左树/顶部"单位-项目"选择框同源(/system/dept/getDeptTree)，
+     * 返回的已是 TreeSelect 树(label/children/thridDeptId)，无需再组树
      */
-    getDeptTree() {
-      getOrgList().then((response) => {
-        this.deptOptions = this.handleTree(response.data, "deptId");
+    loadDeptTree() {
+      getDeptTree().then((response) => {
+        this.deptOptions = response.data || [];
       });
     },
     goDetail(row, method) {

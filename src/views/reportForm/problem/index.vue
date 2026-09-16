@@ -1,6 +1,6 @@
 <template>
   <div class="app-container">
-    <div class="context flex flex-column">
+    <div class="context flex flex-column" style="height: 100%">
       <el-radio-group
         v-model="radioType"
         size="small"
@@ -68,14 +68,14 @@ export default {
       radioType: "1",
       radioList: [
         { value: "1", label: "异常报表" },
-        { value: "2", label: "供应商履约评价为差的情况" },
+        { value: "2", label: "供应商评价不合格的情况" },
       ],
       queryItemList: [
         {
           prop: "deptId",
           label: "组织机构",
           type: "treeSelect",
-          labelKey: "deptName",
+          labelKey: "label",
           valueKey: "thridDeptId",
         },
         {
@@ -177,6 +177,13 @@ export default {
           width: 250,
           showOverflowTooltip: true,
           headerSlot: "获取评价时选择的评价类型",
+        },
+        {
+          prop: "evaluateFraction",
+          label: "评价分数",
+          width: 150,
+          showOverflowTooltip: true,
+          headerSlot: "获取供应商评价的分数",
         },
         {
           prop: "evaluateTimeTxtName",

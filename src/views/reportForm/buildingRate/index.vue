@@ -31,7 +31,7 @@
               :props="defaultProps"
               :filter-node-method="filterNode"
               ref="tree"
-              node-key="deptId"
+              node-key="id"
               highlight-current
               @node-click="handleNodeClick"
             />
@@ -63,9 +63,9 @@ import Drag from "@/components/Drag/index.vue";
 import { mixinReport } from "@/views/reportForm/mixins/mixinReport";
 import {
   bidCountReport,
-  getOrgList,
   getProjectCode,
 } from "@/api/reportForm/tenderingRateReport";
+import { getDeptTree } from "@/api/system/dept";
 import { formatDate } from "@/utils";
 
 export default {
@@ -83,7 +83,7 @@ export default {
       arrData: [],
       defaultProps: {
         children: "children",
-        label: "deptName",
+        label: "label",
       },
       queryItemList: [
         {
@@ -275,20 +275,22 @@ export default {
     // 筛选节点
     filterNode(value, data) {
       if (!value) return true;
-      return data.deptName.indexOf(value) !== -1;
+      return data.label && data.label.indexOf(value) !== -1;
     },
     /**
-     * 获取单位树(当前登录用户有数据权限的组织)
+     * 获取单位树(单位 + 单位下所有部门)
+     * 与采购台账左树/顶部"单位-项目"选择框同源(/system/dept/getDeptTree)，
+     * 返回的已是 TreeSelect 树(label/children/thridDeptId)，直接使用即可
      */
     getOrgListFn() {
       this.deptTreeLoading = true;
-      getOrgList()
+      getDeptTree()
         .then((res) => {
           this.arrData = res.data || [];
-          this.deptOptions = this.handleTree(this.arrData, "deptId");
+          this.deptOptions = this.arrData;
           // 默认展开根节点
           if (this.arrData.length > 0) {
-            this.treeData = [this.arrData[0].deptId];
+            this.treeData = [this.arrData[0].id];
           }
           this.deptTreeLoading = false;
         })
