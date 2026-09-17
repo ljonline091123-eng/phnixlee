@@ -254,13 +254,22 @@ export default {
 
   },
   watch: {
-    // org: {
-    //   handler(val) {
-    //     console.log(val)
-    //     this.thridDeptId = val
-    //   },
-    //   immediate: true
-    // },
+    // 单位&项目选择框联动：页面(如报表穿透)写入 vuex 的 org 后同步级联选择器
+    org: {
+      handler(val) {
+        if (!val) return;
+        const path = Array.isArray(val) ? val : this.findDeptPath(this.deptOptions, val, []);
+        if (path && path.length && JSON.stringify(path) !== JSON.stringify(this.thridDeptId)) {
+          this.thridDeptId = path;
+        }
+      },
+    },
+    // 项目选择框联动：页面(如报表穿透)写入 vuex 的 project 后同步下拉
+    project: {
+      handler(newVal) {
+        if (newVal && newVal.code) this.value = newVal.code;
+      },
+    },
     thridDeptId: {
       handler(val) {
         this.value = null
@@ -326,14 +335,32 @@ export default {
       const needId = id[id.length - 1]
       const res = await getManagementOrgId(needId).then((response) => {
         this.options = response.data;
-        this.value = this.options[0]?.minAccountCode;
+        // 若 store 里已选中项目仍在当前单位项目列表内，则保留，避免报表穿透后被顶掉
+        const current = this.$store.state.project.project;
+        const keep = current && current.code
+          ? response.data.find(o => o.minAccountCode === current.code)
+          : null;
+        const picked = keep || response.data[0];
+        this.value = picked && picked.minAccountCode;
         // * 同步要去加到vuex
         this.$store.commit("SET_PROJECT", {
-          code: this.options[0]?.minAccountCode,
+          code: picked && picked.minAccountCode,
           id: this.value,
-          name: this.options[0]?.minAccountFullName
+          name: picked && picked.minAccountFullName
         });
       });
+    },
+    // 在单位树里按 thridDeptId 找级联路径(与 el-cascader 的 v-model 数组格式一致)
+    findDeptPath(nodes, thridDeptId, path) {
+      for (const n of (nodes || [])) {
+        const p = path.concat(n.thridDeptId);
+        if (n.thridDeptId === thridDeptId) return p;
+        if (n.children && n.children.length) {
+          const r = this.findDeptPath(n.children, thridDeptId, p);
+          if (r && r.length) return r;
+        }
+      }
+      return [];
     },
     toggleSideBar() {
       this.$store.dispatch('app/toggleSideBar')

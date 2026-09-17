@@ -28,26 +28,25 @@ export default {
 <style lang="scss" scoped>
 .el-popper {position:absolute !important;}
 .app-main {
-  /* 50= navbar  50  */ 
-  // min-height: calc(100vh - 50px);
-  height: 100%;
+  /* main-container 是纵向 flex：页头占多少，剩余空间就全给内容区，
+     不再按 50/84px 手工计算高度，页头实际高度怎么变都能正好占满一屏 */
+  flex: 1 1 auto;
+  min-height: 0;
   width: 100%;
   position: relative;
-  overflow: scroll;
+  /* auto：内容不超出时不出滚动条；长页面在内容区内部滚动 */
+  overflow: auto;
   background-color: #F2F2F8;
 }
 
 .fixed-header + .app-main {
+  /* 页头悬浮（fixedHeader 开启）时 app-main 从页面顶部开始，用 padding 让出页头位置 */
   padding-top: 50px;
 }
 
 .hasTagsView {
-  .app-main {
-    /* 84 = navbar + tags-view = 50 + 34 */
-    min-height: calc(100vh - 84px);
-  }
-
   .fixed-header + .app-main {
+    /* 84 = navbar 50 + tags-view 34 */
     padding-top: 84px;
   }
 }

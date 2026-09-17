@@ -339,6 +339,8 @@ export default {
         projectCodeList: undefined,
       },
       report:'',
+      // 报表穿透进入时以穿透参数为准，顶部选择框不再覆盖查询条件
+      reportSource: !!(this.$route.query.projectCode || this.$route.query.projectCodeList),
       currentBid: {}, //当前选中条目
       /** 废标 */
       abandonBidVisiable: false,
@@ -354,7 +356,26 @@ export default {
     };
   },
   created() {
-
+    const q = this.$route.query;
+    // 报表穿透：以穿透参数为准过滤(项目级 projectCode / 单位级 projectCodeList)
+    if (!q.projectCode && !q.projectCodeList) {
+      return;
+    }
+    this.queryParams = {
+      pageNumber: 1,
+      pageSize: 10,
+      procurementSchemeName: undefined,
+      procurementSchemeCode: undefined,
+      procurementOfficer: undefined,
+      procurementOfficerName: undefined,
+      noticeStatus: q.noticeStatus || undefined,
+      procurementType: (q.procurementType && q.procurementType !== 'all') ? q.procurementType : 'all',
+      projectCode: q.projectCode || undefined,
+      projectCodeList: q.projectCodeList
+        ? (Array.isArray(q.projectCodeList) ? q.projectCodeList : String(q.projectCodeList).split(','))
+        : undefined,
+    };
+    this.getBiddingSchemeList();
   },
   computed: {
     ...mapGetters(["project"]),
@@ -537,6 +558,10 @@ export default {
     },
     project: {
       handler(newVal, oldVal) {
+        // 报表穿透进入时以穿透参数为准，避免被顶部选择框覆盖
+        if (this.reportSource) {
+          return;
+        }
         console.log('%c👽 handler-》oldVal ', `font-size: 20px;background-color: #f00;`, oldVal);
         console.log('%c👽 handler-》newVal ', `font-size: 20px;background-color: #f00;`, JSON.stringify(newVal));
         if (oldVal === undefined || newVal.id !== oldVal.id) {

@@ -1,6 +1,15 @@
 <template>
   <div class="app-container workbench">
 
+    <!-- 顶部欢迎语（样式参考原型 welcome-card：整卡 banner 背景 + 左侧白纱保证文字可读 + 深蓝字） -->
+    <section class="welcome-card">
+      <div>
+        <h1>{{ greeting }}，{{ nickname }}</h1>
+        <p>今日有 {{ todoTotal }} 项待处理事项</p>
+      </div>
+      <time>{{ todayText }}</time>
+    </section>
+
     <!-- 五张状态卡（采购台账五类状态计数，点击跳采购台账页） -->
     <div class="status-cards">
       <div v-for="card in statusCards" :key="card.key" class="scard" @click="goLedger">
@@ -13,14 +22,14 @@
       </div>
     </div>
 
-    <div class="grid">
+    <div class="grid grid-2">
       <!-- 我的待办（数据来自 flowable 待办接口，与待办事项页一致） -->
       <section class="panel">
         <header>
           <h2>我的待办 <span class="badge">{{ todoTotal }}</span></h2>
           <a class="more" @click="$router.push('/index')">查看更多 ›</a>
         </header>
-        <el-table :data="todoList" size="mini" class="todo-table">
+        <el-table :data="todoList" class="todo-table">
           <el-table-column label="菜单名称" show-overflow-tooltip>
             <template slot-scope="scope">
               <span v-if="scope.row.processTitle === 'null' || scope.row.processTitle === 'undefined'">无名称</span>
@@ -33,19 +42,31 @@
           <el-table-column label="提交时间" prop="createTime" align="center" min-width="140" />
           <el-table-column label="操作" align="center" width="60">
             <template slot-scope="scope">
-              <el-button type="text" size="small" @click="goDetail(scope.row.detailUrl)">处理</el-button>
+              <el-button type="text" @click="goDetail(scope.row.detailUrl)">处理</el-button>
             </template>
           </el-table-column>
         </el-table>
       </section>
 
-      <!-- 采购方式分析（招标率统计合计：公开/邀标/询价/单一，只统计已完成采购） -->
+      <!-- 采购方式分析（已完成采购按方式计数：公开/邀标/询价/单一；单位+年份筛选用，点击跳招标率统计） -->
       <section class="panel">
-        <header><h2>采购方式分析</h2></header>
+        <header>
+          <h2>采购方式分析</h2>
+          <div class="tools">
+            <el-select v-model="methodOrgId" size="small" class="org-select" @change="loadStats">
+              <el-option label="全部单位" value="" />
+              <el-option v-for="org in orgOptions" :key="org.value" :label="org.label" :value="org.value" />
+            </el-select>
+            <el-select v-model="methodYear" size="small" class="year-select" @change="loadStats">
+              <el-option label="全部年份" value="" />
+              <el-option v-for="y in yearOptions" :key="y" :label="y + '年'" :value="y" />
+            </el-select>
+          </div>
+        </header>
         <div class="donut-wrap">
           <div ref="donut" class="donut-chart"></div>
           <div class="legend">
-            <div v-for="item in methodLegend" :key="item.name">
+            <div v-for="item in methodLegend" :key="item.name" class="legend-item" @click="goBuildingRate">
               <span class="dot" :style="{ background: item.color }"></span>
               {{ item.name }}
               <span class="pct">{{ item.pct }}</span>
@@ -55,7 +76,7 @@
       </section>
     </div>
 
-    <div class="grid">
+    <div class="grid grid-3">
       <!-- 招采概览（采购台账已完成数据；单位树+年份筛选只作用于本面板） -->
       <section class="panel">
         <header>
@@ -71,7 +92,7 @@
             </el-select>
           </div>
         </header>
-        <div class="metrics">
+        <div class="metrics" @click="goLedgerDetail">
           <div class="m">
             <div class="ml"><span class="mi" style="background:#3b82f6">✕</span>采购次数</div>
             <div class="mv">{{ overview.purchaseCount }}<small>次</small></div>
@@ -92,20 +113,23 @@
         <div ref="trend" class="trend-chart"></div>
       </section>
 
-      <!-- 合作金额TOP5供应商（供应商报表按供应商汇总合同签订金额(含税)取前5） -->
+      <!-- 合作金额TOP5供应商（供应商报表按供应商汇总合同签订金额(含税)取前5；点击行跳供应商报表） -->
       <section class="panel">
         <header>
           <h2>合作金额TOP5供应商</h2>
-          <a class="more" @click="$router.push('/tender-procurement/reportForm/vender')">查看更多 ›</a>
+          <a class="more" @click="goVendorReport">查看更多 ›</a>
         </header>
-        <el-table :data="topVendors" size="mini" class="todo-table">
-          <el-table-column label="排名" width="60" align="center">
+        <el-table :data="topVendors" class="todo-table vendor-table" @row-click="goVendorReport">
+          <!-- 三列固定像素宽度（el-table 的百分比列宽按 px 计算、支持不好，用固定值）：
+               排名加宽、名称列固定不再吃满剩余空间（名称往中间移）、金额固定宽度左对齐，
+               名称与金额之间不会出现大片空白；长名称省略号+悬浮看全 -->
+          <el-table-column label="排名" width="90" align="center">
             <template slot-scope="scope">
               <span class="rank" :class="'r' + (scope.$index + 1)">{{ scope.$index + 1 }}</span>
             </template>
           </el-table-column>
-          <el-table-column label="供应商名称" prop="vendorName" show-overflow-tooltip />
-          <el-table-column label="合作金额（元）" align="right">
+          <el-table-column label="供应商名称" prop="vendorName" show-overflow-tooltip width="220" />
+          <el-table-column label="合作金额（元）" width="140" align="left">
             <template slot-scope="scope">{{ formatAmount(scope.row.contractAmount) }}</template>
           </el-table-column>
         </el-table>
@@ -141,12 +165,32 @@ export default {
       // 概览筛选（仅作用于招采概览；年份默认"全部年份"，与状态卡口径一致）
       overviewOrgId: "",
       overviewYear: "",
+      // 采购方式分析筛选（仅作用于该面板，默认全部）
+      methodOrgId: "",
+      methodYear: "",
       orgOptions: [],
       donutChart: null,
       trendChart: null
     };
   },
   computed: {
+    // 登录用户昵称（欢迎语展示用，登录时已存入 store；取不到时回落登录名）
+    nickname() {
+      return this.$store.state.user.nickname || this.$store.state.user.name;
+    },
+    greeting() {
+      const hour = new Date().getHours();
+      if (hour < 12) return "上午好";
+      if (hour < 18) return "下午好";
+      return "晚上好";
+    },
+    todayText() {
+      const now = new Date();
+      const weeks = ["日", "一", "二", "三", "四", "五", "六"];
+      // \u00a0 为不换行空格（原型 HTML 里的 &nbsp; 实体），用 fromCharCode 生成，避免源码出现不可见字符
+      const nbsp = String.fromCharCode(160);
+      return `${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日${nbsp}${nbsp}星期${weeks[now.getDay()]}`;
+    },
     // 年份下拉：近5年
     yearOptions() {
       const current = new Date().getFullYear();
@@ -183,17 +227,33 @@ export default {
     this.loadTodo();
     this.loadDeptTree();
     window.addEventListener("resize", this.handleResize);
+    // 侧边栏收起/展开只改容器宽度、不触发 window resize，用 ResizeObserver 跟随重绘图表
+    if (window.ResizeObserver) {
+      this.resizeObserver = new ResizeObserver(this.handleResize);
+      this.resizeObserver.observe(this.$el);
+    }
   },
   beforeDestroy() {
     window.removeEventListener("resize", this.handleResize);
+    if (this.resizeObserver) this.resizeObserver.disconnect();
     if (this.donutChart) this.donutChart.dispose();
     if (this.trendChart) this.trendChart.dispose();
   },
   methods: {
-    /** 工作台统计数据（单位树+年份仅作为概览筛选条件传给后端） */
+    /** 图表跟随容器尺寸重绘（窗口缩放、侧边栏收起/展开都会触发） */
+    handleResize() {
+      if (this.donutChart) this.donutChart.resize();
+      if (this.trendChart) this.trendChart.resize();
+    },
+    /** 工作台统计数据（单位树+年份分别作用于招采概览与采购方式分析） */
     loadStats() {
       this.loading = true;
-      getWorkbenchStats({ year: this.overviewYear || "", orgId: this.overviewOrgId || "" }).then(res => {
+      getWorkbenchStats({
+        year: this.overviewYear || "",
+        orgId: this.overviewOrgId || "",
+        methodYear: this.methodYear || "",
+        methodOrgId: this.methodOrgId || ""
+      }).then(res => {
         const data = res.data || {};
         this.statusCounts = data.statusCards || this.statusCounts;
         this.methodCounts = data.methodAnalysis || this.methodCounts;
@@ -251,10 +311,10 @@ export default {
             show: true,
             position: "center",
             formatter: `${Number(m.cgNum) || 0}\n采购次数`,
-            fontSize: 22,
+            fontSize: 24,
             fontWeight: 700,
             color: "#0f2b66",
-            lineHeight: 30
+            lineHeight: 32
           },
           data: [
             { value: Number(m.gkNum) || 0, name: "公开招标", itemStyle: { color: "#2563eb" } },
@@ -264,6 +324,10 @@ export default {
           ]
         }]
       });
+      // 点击圆环任意扇区 → 跳转招标率统计页
+      this.donutChart.off("click");
+      this.donutChart.on("click", () => this.goBuildingRate());
+      this.donutChart.resize();
     },
     /** 月度金额趋势（金额统一为元展示，与上方指标卡片口径一致） */
     renderTrend() {
@@ -275,6 +339,7 @@ export default {
       const budget = this.monthlyTrend.map(row => yuan(row.budgetAmount));
       const award = this.monthlyTrend.map(row => yuan(row.awardAmount));
       this.trendChart.setOption({
+        title: { text: "月度金额趋势（元）", textStyle: { fontSize: 14, color: "#334155" }, left: 6, top: 4 },
         tooltip: {
           trigger: "axis",
           formatter(params) {
@@ -285,16 +350,21 @@ export default {
             return res;
           }
         },
-        legend: { data: ["采购预算", "采购金额"], right: 10, top: 0, textStyle: { fontSize: 12, color: "#47586e" } },
-        grid: { left: 50, right: 14, top: 34, bottom: 24 },
+        legend: { data: ["采购预算", "采购金额"], right: 10, top: 0, textStyle: { fontSize: 13, color: "#47586e" } },
+        grid: { left: 50, right: 14, top: 44, bottom: 24 },
         xAxis: { type: "category", boundaryGap: false, data: months, axisLine: { lineStyle: { color: "#cbd5e1" } }, axisLabel: { color: "#64748b" } },
-        yAxis: { type: "value", name: "单位：元", nameTextStyle: { color: "#94a3b8" }, splitLine: { lineStyle: { color: "#eef2f8" } }, axisLabel: { color: "#64748b" } },
+        yAxis: { type: "value", splitLine: { lineStyle: { color: "#eef2f8" } }, axisLabel: { color: "#64748b" } },
         series: [
           { name: "采购预算", type: "line", smooth: true, symbol: "circle", symbolSize: 6, data: budget, lineStyle: { width: 2.2, color: "#2563eb" }, itemStyle: { color: "#2563eb" }, areaStyle: { color: "rgba(37,99,235,.06)" } },
           { name: "采购金额", type: "line", smooth: true, symbol: "circle", symbolSize: 6, data: award, lineStyle: { width: 2.2, color: "#10b981" }, itemStyle: { color: "#10b981" }, areaStyle: { color: "rgba(16,185,129,.06)" } }
         ]
       });
+      // 点击趋势图 → 跳转采购台账明细"已完成"页签
+      this.trendChart.off("click");
+      this.trendChart.on("click", () => this.goLedgerDetail());
+      this.trendChart.resize();
     },
+    /** 容器尺寸变化（窗口缩放/侧边栏收展）时重绘图表 */
     handleResize() {
       if (this.donutChart) this.donutChart.resize();
       if (this.trendChart) this.trendChart.resize();
@@ -303,9 +373,24 @@ export default {
     formatAmount(value) {
       return (Number(value) || 0).toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     },
-    /** 状态卡 → 采购台账页 */
+    /** 状态卡 → 采购台账页（报表已移到 2067 分析报表目录下，路由为 /analytical/xxx） */
     goLedger() {
-      this.$router.push("/tender-procurement/reportForm/purchaseLedger");
+      this.$router.push("/analytical/purchaseLedger");
+    },
+    /** 采购方式分析 → 招标率统计页 */
+    goBuildingRate() {
+      this.$router.push("/analytical/buildingRate");
+    },
+    /** TOP5供应商（行/查看更多）→ 供应商报表页 */
+    goVendorReport() {
+      this.$router.push("/analytical/vender");
+    },
+    /** 招采概览 → 采购台账明细"已完成"页签（不带筛选条件） */
+    goLedgerDetail() {
+      this.$router.push({
+        path: "/analytical/purchaseLedgerDetail",
+        query: { status: "completed" }
+      });
     },
     /** 待办处理 → 各业务详情页（与待办事项页一致） */
     goDetail(url) {
@@ -318,56 +403,78 @@ export default {
 </script>
 
 <style scoped>
-.workbench { min-width: 1200px; }
+/* ===== 一屏布局：工作台撑满内容区（AppMain 高度=视口-页头），内部弹性伸缩 =====
+   极端小屏/高缩放下内容实在放不下时，工作台内部滚动兜底，绝不截断表格行 */
+.workbench { height: 100%; display: flex; flex-direction: column; gap: 10px; padding: 10px 16px; overflow-x: hidden; overflow-y: auto; }
+
+/* 顶部欢迎语：整卡铺开 banner 背景图（center/cover），
+   背景分两层：上面是白纱渐变（左实右透），保证左侧文字可读、右侧渐显原图 */
+.welcome-card { position: relative; flex: none; display: flex; align-items: center; height: 80px; padding: 0 18px; border: 1px solid #e5eaf3; border-radius: 10px; background: linear-gradient(90deg, #fff 0%, rgba(255, 255, 255, .92) 40%, rgba(255, 255, 255, .3) 62%, rgba(255, 255, 255, 0) 80%), url("../../assets/images/workbench-welcome.jpg") center / cover no-repeat; box-shadow: 0 1px 3px rgba(15, 43, 102, .04); overflow: hidden; }
+.welcome-card > div, .welcome-card time { position: relative; z-index: 1; }
+.welcome-card h1 { margin: 0 0 3px; color: #092d82; font-size: 28px; line-height: 38px; font-weight: 700; }
+.welcome-card p { margin: 0; color: #164291; font-weight: 500; font-size: 15px; }
+.welcome-card time { margin: 0 auto; color: #123b91; font-weight: 600; flex: none; font-size: 15px; }
 
 /* 五张状态卡 */
-.status-cards { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; margin-bottom: 14px; }
-.scard { position: relative; display: flex; align-items: center; gap: 14px; background: #fff; border: 1px solid #e5eaf3; border-radius: 10px; padding: 18px 20px; cursor: pointer; box-shadow: 0 1px 3px rgba(15, 43, 102, .04); }
+.status-cards { flex: none; display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
+.scard { position: relative; display: flex; align-items: center; gap: 14px; background: #fff; border: 1px solid #e5eaf3; border-radius: 10px; padding: 13px 20px; cursor: pointer; box-shadow: 0 1px 3px rgba(15, 43, 102, .04); }
 .scard .ic { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; font-size: 20px; color: #fff; flex: none; }
 .ic-blue { background: #3b82f6; }
 .ic-cyan { background: #22d3ee; }
 .ic-indigo { background: #818cf8; }
 .ic-green { background: #10b981; }
 .ic-red { background: #fca5a5; }
-.scard .lbl { font-size: 14px; color: #64748b; }
-.scard .num { font-size: 30px; font-weight: 700; color: #0f2b66; line-height: 1.1; }
-.scard .num small { font-size: 13px; font-weight: 400; color: #94a3b8; margin-left: 2px; }
+.scard .lbl { font-size: 15px; color: #64748b; }
+.scard .num { font-size: 30px; font-weight: 700; color: #0f2b66; line-height: 1.15; }
+.scard .num small { font-size: 14px; font-weight: 400; color: #94a3b8; margin-left: 2px; }
 .scard .num.warn { color: #f97316; }
 .scard > i { position: absolute; right: 16px; top: 50%; transform: translateY(-50%); color: #c3cddf; font-style: normal; font-size: 16px; }
 
-/* 面板布局：左宽右窄 */
-.grid { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(380px, 1fr); gap: 14px; }
-.grid + .grid { margin-top: 14px; }
-.panel { background: #fff; border: 1px solid #e5eaf3; border-radius: 10px; box-shadow: 0 1px 3px rgba(15, 43, 102, .04); padding: 0 0 10px; }
-.panel header { display: flex; align-items: center; padding: 16px 18px 10px; }
-.panel h2 { font-size: 16px; color: #1e3a6e; font-weight: 600; margin: 0; display: flex; align-items: center; gap: 8px; }
-.badge { display: inline-grid; place-items: center; min-width: 34px; height: 20px; padding: 0 7px; border-radius: 10px; background: #e8f0fe; color: #2563eb; font-size: 12px; font-weight: 600; }
-.panel .more { margin-left: auto; color: #2563eb; font-size: 13px; cursor: pointer; }
-.todo-table { width: calc(100% - 36px); margin: 0 18px 6px; }
+/* 面板布局：左宽右窄。flex-basis 用 auto：行高先按内容撑开（保证待办 5 行完整显示），
+   剩余空间再按 1.1 : 1.15 分配；空间不足时整页滚动而不截断 */
+.grid { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(360px, 1fr); gap: 10px; min-height: 0; }
+.grid-2 { flex: 1.1 0 auto; }
+.grid-3 { flex: 1.15 0 auto; }
+.panel { display: flex; flex-direction: column; min-height: 0; overflow: hidden; background: #fff; border: 1px solid #e5eaf3; border-radius: 10px; box-shadow: 0 1px 3px rgba(15, 43, 102, .04); padding-bottom: 8px; }
+.panel header { flex: none; display: flex; align-items: center; padding: 10px 18px 6px; }
+.panel h2 { font-size: 18px; color: #1e3a6e; font-weight: 600; margin: 0; display: flex; align-items: center; gap: 8px; }
+.badge { display: inline-grid; place-items: center; min-width: 36px; height: 22px; padding: 0 7px; border-radius: 11px; background: #e8f0fe; color: #2563eb; font-size: 13px; font-weight: 600; }
+.panel .more { margin-left: auto; color: #2563eb; font-size: 14px; cursor: pointer; }
+/* 表格占满面板剩余高度；行高压缩保证小屏也能一屏放下 */
+.todo-table { flex: 1; min-height: 0; width: calc(100% - 36px); margin: 0 18px 4px; }
+.todo-table::v-deep .el-table__cell { padding: 4px 0; }
 
 /* 采购方式分析 */
-.donut-wrap { display: flex; align-items: center; padding: 4px 18px 8px; }
-.donut-chart { width: 55%; height: 240px; }
+.donut-wrap { flex: 1; min-height: 0; display: flex; align-items: center; padding: 0 18px 4px; }
+.donut-chart { width: 55%; height: 100%; min-height: 150px; }
 .legend { flex: 1; }
-.legend div { display: flex; align-items: center; gap: 8px; padding: 7px 0; font-size: 13px; color: #334155; }
-.legend .dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
-.legend .pct { margin-left: auto; font-weight: 600; color: #0f2b66; }
+.legend div { display: flex; align-items: center; gap: 10px; padding: 7px 0; font-size: 16px; color: #334155; }
+.legend-item { cursor: pointer; }
+.legend .dot { width: 12px; height: 12px; border-radius: 50%; flex: none; }
+/* 占比紧跟名称（去掉原来的 margin-left:auto 推到最右），名称与占比一起放大 */
+.legend .pct { margin-left: 8px; font-weight: 600; color: #0f2b66; }
+.donut-chart { cursor: pointer; }
 
 /* 招采概览 */
 .tools { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+/* 下拉框保持 small 高度（一屏布局），仅把文字调大到与其他页面一致 */
+.tools ::v-deep .el-input__inner { font-size: 14px; }
 .org-select { width: 170px; }
 .year-select { width: 110px; }
-.metrics { display: grid; grid-template-columns: repeat(4, 1fr); padding: 4px 18px 0; }
-.metrics .m { padding: 10px 14px; border-left: 1px solid #eef2f8; }
+.metrics { flex: none; display: grid; grid-template-columns: repeat(4, 1fr); padding: 2px 18px 0; cursor: pointer; }
+.metrics .m { padding: 8px 14px; border-left: 1px solid #eef2f8; }
 .metrics .m:first-child { border-left: 0; }
-.metrics .ml { display: flex; align-items: center; gap: 8px; color: #64748b; font-size: 13px; }
-.metrics .mi { width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; font-size: 15px; color: #fff; flex: none; }
-.metrics .mv { font-size: 22px; font-weight: 700; color: #0f2b66; margin-top: 6px; }
-.metrics .mv small { font-size: 13px; font-weight: 400; color: #94a3b8; margin-left: 2px; }
-.trend-chart { width: calc(100% - 36px); height: 230px; margin: 0 18px; }
+.metrics .ml { display: flex; align-items: center; gap: 8px; color: #64748b; font-size: 14px; }
+.metrics .mi { width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; font-size: 14px; color: #fff; flex: none; }
+.metrics .mv { font-size: 23px; font-weight: 700; color: #0f2b66; margin-top: 4px; }
+.metrics .mv small { font-size: 14px; font-weight: 400; color: #94a3b8; margin-left: 2px; }
+.trend-chart { flex: 1; min-height: 0; width: calc(100% - 36px); margin: 0 18px; cursor: pointer; }
+
+/* TOP5：整行可点击，鼠标手型（cursor 会被单元格继承） */
+.vendor-table { cursor: pointer; }
 
 /* TOP5 排名角标 */
-.rank { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 5px; font-size: 12px; font-weight: 600; color: #64748b; background: #eef2f8; }
+.rank { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 5px; font-size: 13px; font-weight: 600; color: #64748b; background: #eef2f8; }
 .rank.r1 { background: #f59e0b; color: #fff; }
 .rank.r2 { background: #94a3b8; color: #fff; }
 .rank.r3 { background: #fb923c; color: #fff; }

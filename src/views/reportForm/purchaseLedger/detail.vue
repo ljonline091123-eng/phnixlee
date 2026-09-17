@@ -20,7 +20,7 @@
         <el-form-item label="项目名称">
           <el-input v-model="queryParams.projectKeyword" placeholder="请输入项目名称" clearable style="width: 160px" @keyup.enter.native="handleQuery" />
         </el-form-item>
-        <el-form-item label="采购需求类型">
+        <el-form-item label="采购类别">
           <el-select v-model="queryParams.demandType" placeholder="全部" clearable style="width: 150px">
             <el-option v-for="item in demandTypeOptions" :key="item.value" :label="item.label" :value="item.value" />
           </el-select>
@@ -36,9 +36,9 @@
         <el-form-item label="采购经办人">
           <el-input v-model="queryParams.handler" placeholder="采购方案负责人" clearable style="width: 140px" @keyup.enter.native="handleQuery" />
         </el-form-item>
-        <el-form-item label="计划生效时间">
+        <el-form-item label="计划完成时间">
           <el-date-picker
-            v-model="planEffectRange"
+            v-model="planFinishRange"
             type="daterange"
             value-format="yyyy-MM-dd"
             range-separator="至"
@@ -54,78 +54,110 @@
         </el-form-item>
       </el-form>
 
+      <!-- 列序对齐《采购台账字段字典.xlsx》32 字段；列集按状态页签切换：
+           待招采/待开标只显示到"异常情况"；待定标加开标/定标时间；
+           已完成/全部/异常显示全部列（含结果发布时间/中标/节约/合同）。
+           :key 强制切页签时表格重新渲染，避免 v-if 列切换残留 -->
       <el-table
+        :key="queryParams.status"
         v-loading="loading"
         :data="tableData"
         border
         stripe
         style="width: 100%"
       >
-        <el-table-column prop="orgName" label="组织机构" width="150" fixed="left" show-overflow-tooltip />
+        <el-table-column label="序号" width="64" align="center" fixed="left">
+          <template slot-scope="scope">{{ (queryParams.pageNum - 1) * queryParams.pageSize + scope.$index + 1 }}</template>
+        </el-table-column>
+        <el-table-column prop="orgName" label="组织机构" width="180" show-overflow-tooltip />
         <el-table-column prop="projectCode" label="项目编号" width="130" show-overflow-tooltip />
         <el-table-column prop="projectName" label="项目名称" width="180" show-overflow-tooltip />
         <el-table-column prop="planCode" label="计划编号" width="150" show-overflow-tooltip />
-        <el-table-column prop="splitNames" label="计划拆分项/合约拆分名称" width="180" show-overflow-tooltip>
-          <template slot-scope="scope">{{ scope.row.splitNames || '—' }}</template>
+        <el-table-column prop="planName" label="采购名称" width="180" show-overflow-tooltip>
+          <template slot-scope="scope">{{ scope.row.planName || '—' }}</template>
         </el-table-column>
-        <el-table-column prop="schemeCode" label="任务编号" width="140" show-overflow-tooltip>
+        <el-table-column prop="contractCategory" label="合约类别" width="110" show-overflow-tooltip>
+          <template slot-scope="scope">{{ scope.row.contractCategory || '—' }}</template>
+        </el-table-column>
+        <el-table-column prop="contractName" label="合约名称" width="220" show-overflow-tooltip>
+          <template slot-scope="scope">{{ scope.row.contractName || '—' }}</template>
+        </el-table-column>
+        <el-table-column prop="planAmount" label="计划金额（含税）" width="150" align="right">
+          <template slot-scope="scope">{{ formatMoney(scope.row.planAmount) }}</template>
+        </el-table-column>
+        <el-table-column prop="purchaser" label="采购人" width="110" show-overflow-tooltip>
+          <template slot-scope="scope">{{ scope.row.purchaser || '—' }}</template>
+        </el-table-column>
+        <el-table-column prop="planFinishTime" label="计划完成时间" width="120">
+          <template slot-scope="scope">{{ formatDate(scope.row.planFinishTime) }}</template>
+        </el-table-column>
+        <el-table-column prop="schemeCode" label="任务编号（采购方案）" width="180" show-overflow-tooltip>
           <template slot-scope="scope">{{ scope.row.schemeCode || '—' }}</template>
         </el-table-column>
-        <el-table-column prop="schemeName" label="任务名称" width="160" show-overflow-tooltip>
+        <el-table-column prop="schemeName" label="任务名称（采购方案）" width="220" show-overflow-tooltip>
           <template slot-scope="scope">{{ scope.row.schemeName || '—' }}</template>
         </el-table-column>
-        <el-table-column prop="demandTypeText" label="采购需求类型" width="110" />
-        <el-table-column prop="methodText" label="采购方式" width="100">
+        <el-table-column prop="demandTypeText" label="采购类别" width="110" />
+        <el-table-column prop="methodText" label="采购方式" width="110">
           <template slot-scope="scope">{{ scope.row.methodText || '待确定' }}</template>
         </el-table-column>
-        <el-table-column prop="controlAmount" label="采购控制金额(含税)" width="130" align="right">
+        <el-table-column prop="controlAmount" label="控制金额/上限价（含税）" width="180" align="right">
           <template slot-scope="scope">{{ formatMoney(scope.row.controlAmount) }}</template>
         </el-table-column>
-        <el-table-column prop="currentStage" label="当前环节" width="130" show-overflow-tooltip />
-        <el-table-column prop="statusText" label="采购状态" width="100" align="center">
+        <el-table-column prop="handler" label="采购经办人" width="110" show-overflow-tooltip>
+          <template slot-scope="scope">{{ scope.row.handler || '—' }}</template>
+        </el-table-column>
+        <el-table-column prop="currentStage" label="当前环节" width="140" show-overflow-tooltip />
+        <el-table-column prop="statusText" label="采购状态" width="110" align="center">
           <template slot-scope="scope">
             <el-tag :type="statusTagType(scope.row.status)" size="small">{{ scope.row.statusText }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="purchaser" label="采购人" width="100" show-overflow-tooltip>
-          <template slot-scope="scope">{{ scope.row.purchaser || '—' }}</template>
-        </el-table-column>
-        <el-table-column prop="handler" label="采购经办人" width="100" show-overflow-tooltip>
-          <template slot-scope="scope">{{ scope.row.handler || '—' }}</template>
-        </el-table-column>
-        <el-table-column prop="planEffectTime" label="计划生效时间" width="150">
-          <template slot-scope="scope">{{ formatDate(scope.row.planEffectTime) }}</template>
-        </el-table-column>
-        <el-table-column prop="openTime" label="开标时间" width="150">
+        <!-- ↓ 以下列按状态页签动态显示（待定标起显示开标/定标时间，已完成起显示结果与合同列） -->
+        <el-table-column v-if="showOpenAward" prop="openTime" label="开标时间" width="130">
           <template slot-scope="scope">{{ formatDate(scope.row.openTime) }}</template>
         </el-table-column>
-        <el-table-column prop="awardTime" label="定标时间" width="150">
+        <el-table-column v-if="showOpenAward" prop="awardTime" label="定标时间" width="130">
           <template slot-scope="scope">{{ formatDate(scope.row.awardTime) }}</template>
         </el-table-column>
-        <el-table-column prop="supplierName" label="中标/成交单位" width="160" show-overflow-tooltip>
+        <el-table-column v-if="showResult" prop="resultPublishTime" label="结果发布时间" width="140">
+          <template slot-scope="scope">{{ formatDate(scope.row.resultPublishTime) }}</template>
+        </el-table-column>
+        <el-table-column v-if="showResult" prop="supplierName" label="中标/成交单位" width="190" show-overflow-tooltip>
           <template slot-scope="scope">{{ scope.row.supplierName || '—' }}</template>
         </el-table-column>
-        <el-table-column prop="awardAmount" label="中标/成交金额(含税)" width="130" align="right">
+        <el-table-column v-if="showResult" prop="awardAmount" label="中标/成交金额（含税）" width="170" align="right">
           <template slot-scope="scope">{{ formatMoney(scope.row.awardAmount) }}</template>
         </el-table-column>
-        <el-table-column prop="savingAmount" label="节约金额(含税)" width="120" align="right">
+        <el-table-column v-if="showResult" prop="savingAmount" label="节约金额（含税）" width="150" align="right">
           <template slot-scope="scope">{{ formatMoney(scope.row.savingAmount) }}</template>
         </el-table-column>
-        <el-table-column prop="savingRate" label="节约率" width="90" align="right">
+        <el-table-column v-if="showResult" prop="savingRate" label="节约率" width="90" align="right">
           <template slot-scope="scope">{{ scope.row.savingRate == null ? '—' : scope.row.savingRate + '%' }}</template>
         </el-table-column>
-        <el-table-column prop="contractCode" label="合同编号" width="150" show-overflow-tooltip>
+        <el-table-column v-if="showResult" prop="contractCode" label="合同编号" width="150" show-overflow-tooltip>
           <template slot-scope="scope">{{ scope.row.contractCode || '—' }}</template>
         </el-table-column>
-        <el-table-column prop="contractStateText" label="合同状态" width="110" show-overflow-tooltip>
+        <el-table-column v-if="showResult" prop="agreementName" label="合同名称" width="180" show-overflow-tooltip>
+          <template slot-scope="scope">{{ scope.row.agreementName || '—' }}</template>
+        </el-table-column>
+        <el-table-column v-if="showResult" prop="agreementAmount" label="合同金额（含税）" width="150" align="right">
+          <template slot-scope="scope">{{ formatMoneyList(scope.row.agreementAmount) }}</template>
+        </el-table-column>
+        <el-table-column v-if="showResult" prop="contractStateText" label="合同状态" width="110" show-overflow-tooltip>
           <template slot-scope="scope">{{ scope.row.contractStateText || '—' }}</template>
         </el-table-column>
-        <el-table-column prop="exceptionInfo" label="异常情况" width="120">
+        <el-table-column v-if="showResult" prop="agreementSignDate" label="合同签订日期" width="120">
+          <template slot-scope="scope">{{ scope.row.agreementSignDate || '—' }}</template>
+        </el-table-column>
+        <!-- ↑ 以上列按状态页签动态显示 -->
+        <el-table-column prop="exceptionInfo" label="异常情况" width="180" show-overflow-tooltip>
           <template slot-scope="scope">{{ scope.row.exceptionInfo || '—' }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="110" fixed="right" align="center">
+        <el-table-column label="操作" width="150" fixed="right" align="center">
           <template slot-scope="scope">
             <el-button type="text" size="small" @click="goDetail(scope.row)">查看</el-button>
+            <el-button v-if="showResult && scope.row.agreementId" type="text" size="small" @click="goContractDetail(scope.row)">合同详情</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -181,7 +213,7 @@ export default {
         { value: 5, label: "比选" },
         { value: 6, label: "竞争性谈判" }
       ],
-      planEffectRange: [],
+      planFinishRange: [],
       queryParams: {
         status: "all", // 页签值：all=全部(查询时不传)，其余为五类状态
         id: null,
@@ -196,6 +228,16 @@ export default {
       }
     };
   },
+  computed: {
+    /** 待定标/已完成/全部/异常 显示开标、定标时间列 */
+    showOpenAward() {
+      return ["preaward", "completed", "exception", "all"].indexOf(this.queryParams.status) !== -1;
+    },
+    /** 已完成/全部/异常 显示结果发布时间、中标、节约、合同相关列 */
+    showResult() {
+      return ["completed", "exception", "all"].indexOf(this.queryParams.status) !== -1;
+    }
+  },
   created() {
     const q = this.$route.query || {};
     // 汇总页点击数字带入：状态/组织orgId/项目编号/需求类型；直接进入时默认"全部"页签
@@ -207,18 +249,18 @@ export default {
     this.getList();
   },
   methods: {
-    /** 组装查询参数：'all'页签不传状态(null 会被序列化跳过)，拼接计划生效时间区间 */
+    /** 组装查询参数：'all'页签不传状态(null 会被序列化跳过)，拼接计划完成时间区间 */
     buildParams() {
       const params = Object.assign({}, this.queryParams);
       if (params.status === "all") {
         params.status = null;
       }
-      if (this.planEffectRange && this.planEffectRange.length === 2) {
-        params.planEffectBegin = this.planEffectRange[0];
-        params.planEffectEnd = this.planEffectRange[1];
+      if (this.planFinishRange && this.planFinishRange.length === 2) {
+        params.planFinishBegin = this.planFinishRange[0];
+        params.planFinishEnd = this.planFinishRange[1];
       } else {
-        params.planEffectBegin = null;
-        params.planEffectEnd = null;
+        params.planFinishBegin = null;
+        params.planFinishEnd = null;
       }
       return params;
     },
@@ -254,7 +296,7 @@ export default {
         handler: null,
         pageNum: 1
       });
-      this.planEffectRange = [];
+      this.planFinishRange = [];
     },
     handleQuery() {
       this.queryParams.pageNum = 1;
@@ -292,6 +334,15 @@ export default {
         window.open(`/procurement/tendering/${encodeURIComponent(param)}`, "_blank");
       }
     },
+    /** 穿透合同详情：契约与 sign-contract.vue 一致 {id:合同id, type:合同业务类型}；多合同取第一份 */
+    goContractDetail(row) {
+      const ids = String(row.agreementId).split(",");
+      const types = String(row.expenditureBusinessType || "").split(",");
+      if (!ids[0]) return this.$message.info("该记录无关联合同");
+      const obj = { id: ids[0], type: types[0] || "" };
+      const param = Base64.encode(JSON.stringify(obj));
+      window.open(`/procurement/contract-detail/${encodeURIComponent(param)}`, "_blank");
+    },
     /** 导出：完整结果不受分页限制（后端导出接口不传 pageNum/pageSize 即全量） */
     handleExport() {
       this.$confirm("确认导出当前条件下的采购台账明细数据吗？", "提示", {
@@ -318,6 +369,11 @@ export default {
     formatMoney(v) {
       if (v === null || v === undefined) return "—";
       return Number(v).toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    },
+    /** 多合同金额拼接串（如 "121.0000,89.0000"）：逐个格式化后用中文逗号连接 */
+    formatMoneyList(v) {
+      if (v === null || v === undefined || v === "") return "—";
+      return String(v).split(",").map(item => this.formatMoney(item)).join("，");
     },
     formatDate(v) {
       if (!v) return "—";

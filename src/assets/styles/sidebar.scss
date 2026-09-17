@@ -2,10 +2,14 @@
 
   .main-container {
     height: 100%;
+    /* 纵向 flex：页头占实际高度，剩余空间全给 app-main，
+       高度分配不依赖写死的页头像素值（页头高度怎么变都不会溢出） */
+    display: flex;
+    flex-direction: column;
     transition: margin-left .28s;
     margin-left: $base-sidebar-width;
     position: relative;
-    
+
   }
  
   .sidebarHide {

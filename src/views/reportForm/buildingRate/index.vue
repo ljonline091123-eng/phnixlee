@@ -233,12 +233,14 @@ export default {
     },
     /**
      * 次数列穿透到招标列表
+     * 同时联动顶部"单位&项目"选择框：单位行选中该单位，项目行选中该单位+项目
      * @param row 当前行
      * @param procurementType 采购类型：all=全部、1=公开、2=邀标、3=询价、4=单一
      */
     goBidding(row, procurementType) {
       if (row.type === "G") {
         // 公司/集团层级：先取本级及以下所有项目编码
+        this.commitTopSelector(row.id);
         getProjectCode(row.id).then((res) => {
           this.$router.push({
             path: "/procurement/bindding",
@@ -252,6 +254,13 @@ export default {
           });
         });
       } else {
+        // 项目层级：联动顶部选择框选中项目及其所属单位
+        this.commitTopSelector(row.projectDepartmentId);
+        this.$store.commit("SET_PROJECT", {
+          code: row.id,
+          id: row.id,
+          name: row.minAccountFullName,
+        });
         this.$router.push({
           path: "/procurement/bindding",
           query: {
@@ -263,6 +272,36 @@ export default {
           },
         });
       }
+    },
+    /**
+     * 联动顶部"单位&项目"选择框：按 thridDeptId 在单位树中找级联路径并写入 vuex
+     * @param thridDeptId 单位/部门第三方id
+     */
+    commitTopSelector(thridDeptId) {
+      if (!thridDeptId) return;
+      const path = this.findOrgPath(thridDeptId);
+      if (path && path.length) {
+        this.$store.commit("SET_ORG", path);
+      }
+    },
+    /**
+     * 在单位树(与顶部选择框同源的 getDeptTree 树)里找 thridDeptId 的级联路径
+     * @param thridDeptId
+     * @param nodes
+     * @param path
+     * @returns {[]}
+     */
+    findOrgPath(thridDeptId, nodes = this.arrData, path = []) {
+      if (!Array.isArray(nodes)) return [];
+      for (const n of nodes) {
+        const p = path.concat(n.thridDeptId);
+        if (n.thridDeptId === thridDeptId) return p;
+        if (n.children && n.children.length) {
+          const r = this.findOrgPath(thridDeptId, n.children, p);
+          if (r && r.length) return r;
+        }
+      }
+      return [];
     },
     /**
      * 点击单位树节点：表格切到该单位的数据

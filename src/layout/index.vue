@@ -86,6 +86,9 @@ export default {
   position: relative;
   height: 100%;
   width: 100%;
+  /* 兜底裁剪：布局壳层哪怕有 1px 的溢出（取整误差、页头高度变化等）也直接裁掉，
+     保证浏览器窗口级永不出现滚动条；长页面的滚动由 app-main 内部承担 */
+  overflow: hidden;
 
   &.mobile.openSidebar {
     position: fixed;

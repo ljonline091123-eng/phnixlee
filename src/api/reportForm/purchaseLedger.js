@@ -15,7 +15,7 @@ export function getPurchaseLedgerSummary(query) {
 
 /**
  * 采购台账-明细宽表查询
- * @param query {id, status, projectCode, demandType, method, keyword, currentStage, purchaser, handler, planEffectBegin/End, pageNum, pageSize}
+ * @param query {id, status, projectCode, demandType, method, keyword, currentStage, purchaser, handler, planFinishBegin/End, pageNum, pageSize}
  * @returns {*}
  */
 export function getPurchaseLedgerList(query) {
