@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhaocai.business.report.mapper.WorkbenchMapper">
+
+    <!-- 五张状态卡：采购台账按状态计数（待招采/待开标/待定标/已完成/异常终止）。
+         不带单位树/年份筛选，只按数据权限范围收敛（无范围=集团账号查全部） -->
+    <select id="selectStatusCount" resultType="java.util.HashMap">
+        SELECT SUM(CASE WHEN status = 'pending'   THEN 1 ELSE 0 END) AS pending,
+               SUM(CASE WHEN status = 'preopen'   THEN 1 ELSE 0 END) AS preopen,
+               SUM(CASE WHEN status = 'preaward'  THEN 1 ELSE 0 END) AS preaward,
+               SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS completed,
+               SUM(CASE WHEN status = 'exception' THEN 1 ELSE 0 END) AS exception
+        FROM tb_purchase_ledger
+        <where>
+            <if test="scopeId != null and scopeId != ''">
+                AND ( org_id = #{scopeId} OR org_id IN (
+                    SELECT t.thrid_dept_id FROM sys_dept t WHERE FIND_IN_SET(
+                        (SELECT dept_id FROM sys_dept WHERE thrid_dept_id = #{scopeId}), t.ancestors) )
+                )
+            </if>
+        </where>
+    </select>
+
+    <!-- 采购方式分析：招标率统计合计（视图口径=方案完成+公告完成，只统计已完成采购） -->
+    <select id="selectMethodCount" resultType="java.util.HashMap">
+        SELECT IFNULL(SUM(gk_num), 0) AS gkNum,
+               IFNULL(SUM(yq_num), 0) AS yqNum,
+               IFNULL(SUM(xj_num), 0) AS xjNum,
+               IFNULL(SUM(dy_num), 0) AS dyNum,
+               IFNULL(SUM(cg_num), 0) AS cgNum
+        FROM tb_bid_report
+        <where>
+            project_department_id IS NOT NULL
+            <if test="scopeId != null and scopeId != ''">
+                AND ( project_department_id = #{scopeId} OR project_department_id IN (
+                    SELECT t.thrid_dept_id FROM sys_dept t WHERE FIND_IN_SET(
+                        (SELECT dept_id FROM sys_dept WHERE thrid_dept_id = #{scopeId}), t.ancestors) )
+                )
+            </if>
+        </where>
+    </select>
+
+    <!-- 招采概览-月度金额：已完成任务(grain=TASK, status=completed)按招标完成时间聚合。
+         招标完成时间 = 中标结果发布时写入的 tb_bidding_result.notifi_time；
+         一个公告只取最新一条中标结果（与采购台账视图取数一致），避免重复计量。
+         无中标结果的已完成行不参与统计（无采购金额也无完成时间）。 -->
+    <select id="selectMonthlyAmount" resultType="java.util.HashMap">
+        SELECT MONTH(t.completion_time)  AS monthNo,
+               COUNT(*)                  AS purchaseCount,
+               SUM(t.control_amount)     AS budgetAmount,
+               SUM(t.award_amount)       AS awardAmount
+        FROM (
+            SELECT l.control_amount,
+                   bi.tax_price    AS award_amount,
+                   br.notifi_time  AS completion_time
+            FROM tb_purchase_ledger l
+            INNER JOIN tb_bidding_result br ON br.id = (
+                SELECT br2.id FROM tb_bidding_result br2
+                WHERE br2.notice_id = l.notice_id
+                  AND br2.bid_result = 1
+                  AND br2.del_flag = 0
+                ORDER BY br2.update_time DESC
+                LIMIT 1
+            )
+            INNER JOIN tb_bidding_info bi ON bi.id = br.bidding_info_id
+            WHERE l.grain = 'TASK'
+              AND l.status = 'completed'
+              AND br.notifi_time IS NOT NULL
+            <if test="orgId != null and orgId != ''">
+              AND ( l.org_id = #{orgId} OR l.org_id IN (
+                  SELECT t.thrid_dept_id FROM sys_dept t WHERE FIND_IN_SET(
+                      (SELECT dept_id FROM sys_dept WHERE thrid_dept_id = #{orgId}), t.ancestors) )
+              )
+            </if>
+            <if test="year != null">
+              AND YEAR(br.notifi_time) = #{year}
+            </if>
+        ) t
+        GROUP BY MONTH(t.completion_time)
+    </select>
+
+    <!-- 合作金额TOP5供应商：供应商报表按供应商汇总 合同签订金额(含税) 取前5 -->
+    <select id="selectTopVendors" resultType="java.util.HashMap">
+        SELECT vendor_name           AS vendorName,
+               SUM(contract_amount)  AS contractAmount
+        FROM tb_vendor_report
+        <where>
+            <if test="scopeId != null and scopeId != ''">
+                AND ( party_a_org_id = #{scopeId} OR party_a_org_id IN (
+                    SELECT t.thrid_dept_id FROM sys_dept t WHERE FIND_IN_SET(
+                        (SELECT dept_id FROM sys_dept WHERE thrid_dept_id = #{scopeId}), t.ancestors) )
+                )
+            </if>
+        </where>
+        GROUP BY vendor_name
+        ORDER BY SUM(contract_amount) DESC
+        LIMIT 5
+    </select>
+
+</mapper>
