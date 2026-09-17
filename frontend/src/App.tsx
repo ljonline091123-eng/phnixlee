@@ -470,7 +470,10 @@ function DataConsolePage() {
   );
 }
 
-type ProviderForm = ModelProviderPayload & { id?: number };
+type ProviderForm = ModelProviderPayload & {
+  id?: number;
+  api_key_configured?: boolean;
+};
 const emptyProvider: ProviderForm = {
   provider_code: "",
   provider_name: "",
@@ -623,17 +626,24 @@ function message(text: string) {
         provider_name: editingProvider.provider_name,
         provider_type: editingProvider.provider_type,
         api_base_url: editingProvider.api_base_url || undefined,
-        api_key: editingProvider.api_key || undefined,
+        api_key: editingProvider.api_key?.trim() || undefined,
         enabled: editingProvider.enabled,
         description: editingProvider.description || "",
         config_json: editingProvider.config_json || {},
       };
-      if (id) await api.updateModelProvider(id, payload);
-      else await api.createModelProvider(payload);
+      const savedProvider = id
+        ? await api.updateModelProvider(id, payload)
+        : await api.createModelProvider(payload);
       setEditingProvider(emptyProvider);
       setModelDialog(null);
       await load();
-      message("模型供应商已保存");
+      message(
+        savedProvider.api_key_configured
+          ? "模型供应商已保存，API Key 已配置（编辑时不回显）"
+          : savedProvider.provider_type === "MOCK"
+            ? "模型供应商已保存，本地模拟模型无需 API Key"
+            : "模型供应商已保存，尚未配置 API Key",
+      );
     } catch (e) {
       message(e instanceof Error ? e.message : "供应商保存失败");
     }
@@ -965,6 +975,7 @@ function message(text: string) {
               provider_type: item.provider_type,
               api_base_url: item.api_base_url || "",
               api_key: "",
+              api_key_configured: item.api_key_configured,
               enabled: item.enabled,
               description: item.description || "",
               config_json: item.config_json || {},
@@ -1278,7 +1289,9 @@ function ModelTab(props: {
                       <td className="muted-cell">
                         {item.api_base_url || "--"}
                       </td>
-                      <td>{item.api_key_configured ? "已配置" : "未配置"}</td>
+                      <td title={item.api_key_configured ? "API Key 已保存；编辑时不回显，留空保留" : undefined}>
+                        {item.api_key_configured ? "已配置" : "未配置"}
+                      </td>
                       <td>
                         <Status enabled={item.enabled} />
                       </td>
@@ -1579,7 +1592,9 @@ function ModelTab(props: {
                   className={inputClass}
                   type="password"
                   autoComplete="new-password"
-                  placeholder="供应商共享 API Key（留空则保持原值）"
+                  aria-label="供应商共享 API Key"
+                  aria-describedby="provider-api-key-status"
+                  placeholder={provider.api_key_configured ? "输入新 API Key 可替换已保存密钥" : "输入供应商共享 API Key"}
                   value={provider.api_key || ""}
                   onChange={(e) => setProvider({ ...provider, api_key: e.target.value })}
                 />
@@ -1607,6 +1622,17 @@ function ModelTab(props: {
                   <option value="付费">付费</option>
                   <option value="免费额度/付费">免费额度/付费</option>
                 </select>
+                <p id="provider-api-key-status" className="field-span-2 provider-key-status" role="status">
+                  {provider.api_key?.trim()
+                    ? provider.api_key_configured
+                      ? "已输入新 API Key，点击更新供应商后将替换原密钥。"
+                      : "已输入 API Key，点击保存后生效。"
+                    : provider.api_key_configured
+                      ? "API Key 已保存。为保护密钥，编辑时不回显；留空保存会保留现有密钥，输入新值才会替换。"
+                      : provider.provider_type === "MOCK"
+                        ? "本地模拟模型无需 API Key。"
+                        : "尚未配置 API Key。输入并保存后，可使用列表中的测试按钮验证连接。"}
+                </p>
                 <textarea
                   className="field-span-2"
                   rows={3}

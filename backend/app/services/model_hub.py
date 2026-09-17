@@ -18,6 +18,7 @@ from app.models.ai_hub import ModelCallLog, ModelInstance, ModelProvider, ModelR
 from app.services.core_skill_defs import core_skill_rows
 from app.services.skill_registry import sync_skill_from_file
 from app.services.model_credentials import decrypt_api_key, encrypt_api_key
+from app.services.model_errors import describe_model_error
 
 
 @dataclass(frozen=True)
@@ -188,8 +189,8 @@ DEFAULT_MODEL_INSTANCES = (
     {
         "provider_code": "GEMINI",
         "instance_code": "GEMINI_FLASH",
-        "model_code": "gemini-2.5-flash",
-        "model_name": "Gemini 2.5 Flash",
+        "model_code": "gemini-3.6-flash",
+        "model_name": "Gemini 3.6 Flash",
         "purpose": "GENERAL,RESEARCH,KNOWLEDGE_GRAPH",
         "api_key": None,
         "api_base_url": "https://generativelanguage.googleapis.com/v1beta",
@@ -753,10 +754,7 @@ class ModelHubService:
         if not failed_log:
             raise RuntimeError(f"Model call log not found: {log_id}") from exc
         failed_log.status = "FAILED"
-        message = str(exc)
-        if api_key:
-            message = message.replace(api_key, "***")
-        failed_log.error_message = message[:4000]
+        failed_log.error_message = describe_model_error(exc, api_key)
         failed_log.completed_at = datetime.now(timezone.utc)
         failed_log.latency_ms = self._compute_latency_ms(failed_log.started_at, failed_log.completed_at)
         self.db.commit()

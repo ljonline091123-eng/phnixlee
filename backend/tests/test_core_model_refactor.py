@@ -19,6 +19,7 @@ from app.main import app
 from app.models.ai_hub import AgentDefinition, AgentSkillLink, ModelCallLog, ModelInstance, ModelProvider, ModelRouteRule, ModelSkill, PredictionLedger, ResearchReportRecord, SkillOptimizationDraft
 from app.models.market_data import DataSource, StockKline
 from app.services.model_hub import ModelHubService, seed_default_models, seed_default_skills
+from app.services.model_credentials import decrypt_api_key
 from app.services.prediction_review import propose_failed_skill_revisions, review_predictions
 from app.services.prediction_ledger import record_report_rating
 from app.services.resource_hub import seed_default_agents, seed_default_data_assets, seed_default_knowledge_bases
@@ -67,6 +68,92 @@ class CoreModelRefactorTest(unittest.TestCase):
                 )
                 self.assertEqual(routed.instance.api_key, "test-secret-123")
                 self.assertEqual(routed.instance.api_base_url, "https://example.invalid/v1")
+
+    def test_saved_provider_key_survives_fresh_session_and_keyless_edits(self) -> None:
+        secret = "test-persisted-provider-key"
+        provider = self.db.scalar(select(ModelProvider).where(ModelProvider.provider_code == "GEMINI"))
+        provider_id = provider.id
+        with patch.dict(os.environ, {"MODEL_CREDENTIAL_KEY": Fernet.generate_key().decode()}):
+            saved = self.client.put(f"/api/v1/model-hub/providers/{provider_id}", json={"api_key": secret})
+            self.assertEqual(saved.status_code, 200, saved.text)
+            self.assertTrue(saved.json()["api_key_configured"])
+
+            with sessionmaker(bind=self.engine)() as fresh_db:
+                persisted = fresh_db.get(ModelProvider, provider_id)
+                encrypted_key = persisted.api_key_encrypted
+                self.assertNotEqual(encrypted_key, secret)
+                self.assertEqual(decrypt_api_key(encrypted_key), secret)
+                app.dependency_overrides[get_db] = lambda: fresh_db
+                try:
+                    for edit in ({"description": "Updated description"}, {"api_key": None, "enabled": True}):
+                        response = self.client.put(f"/api/v1/model-hub/providers/{provider_id}", json=edit)
+                        self.assertEqual(response.status_code, 200, response.text)
+                        self.assertTrue(response.json()["api_key_configured"])
+                        fresh_db.refresh(persisted)
+                        self.assertEqual(persisted.api_key_encrypted, encrypted_key)
+
+                    for endpoint in ("providers", "instances"):
+                        response = self.client.get(f"/api/v1/model-hub/{endpoint}")
+                        self.assertEqual(response.status_code, 200, response.text)
+                        self.assertNotIn(secret, response.text)
+                        self.assertNotIn(encrypted_key, response.text)
+                        for item in response.json():
+                            self.assertNotIn("api_key", item)
+                            self.assertNotIn("api_key_encrypted", item)
+                finally:
+                    app.dependency_overrides[get_db] = lambda: self.db
+
+    def test_provider_connection_test_uses_saved_key_after_reopening_database_session(self) -> None:
+        secret = "test-gemini-persisted-key"
+        provider = self.db.scalar(select(ModelProvider).where(ModelProvider.provider_code == "GEMINI"))
+        provider_id = provider.id
+        with patch.dict(os.environ, {"MODEL_CREDENTIAL_KEY": Fernet.generate_key().decode()}):
+            saved = self.client.put(f"/api/v1/model-hub/providers/{provider_id}", json={"api_key": secret})
+            self.assertEqual(saved.status_code, 200, saved.text)
+            with sessionmaker(bind=self.engine)() as fresh_db:
+                app.dependency_overrides[get_db] = lambda: fresh_db
+                try:
+                    with patch("app.connectors.model_adapters.httpx.Client") as client_type:
+                        post = client_type.return_value.__enter__.return_value.post
+                        post.return_value.json.return_value = {
+                            "candidates": [{"content": {"parts": [{"text": "Connection verified"}]}}],
+                        }
+                        response = self.client.post(f"/api/v1/model-hub/providers/{provider_id}/test")
+                        self.assertEqual(response.status_code, 200, response.text)
+                        self.assertEqual(response.json()["status"], "SUCCESS")
+                        self.assertEqual(response.json()["response_text"], "Connection verified")
+                        post.assert_called_once()
+                        self.assertEqual(post.call_args.kwargs["headers"]["x-goog-api-key"], secret)
+                        self.assertNotIn(secret, post.call_args.args[0])
+                        self.assertNotIn(secret, response.text)
+                finally:
+                    app.dependency_overrides[get_db] = lambda: self.db
+
+    def test_instance_key_update_is_shared_and_keyless_edits_preserve_it(self) -> None:
+        secret = "test-instance-supplied-shared-key"
+        provider = self.db.scalar(select(ModelProvider).where(ModelProvider.provider_code == "DEEPSEEK"))
+        instances = list(self.db.scalars(select(ModelInstance).where(ModelInstance.provider_id == provider.id)).all())
+        instance_id = instances[0].id
+        provider_id = provider.id
+        for instance in instances:
+            instance.api_key = "legacy-instance-key"
+        self.db.commit()
+        with patch.dict(os.environ, {"MODEL_CREDENTIAL_KEY": Fernet.generate_key().decode()}):
+            saved = self.client.put(f"/api/v1/model-hub/instances/{instance_id}", json={"api_key": secret})
+            self.assertEqual(saved.status_code, 200, saved.text)
+            self.assertTrue(saved.json()["api_key_configured"])
+            self.assertNotIn(secret, saved.text)
+            for edit in ({"description": "Updated model"}, {"api_key": None}):
+                response = self.client.put(f"/api/v1/model-hub/instances/{instance_id}", json=edit)
+                self.assertEqual(response.status_code, 200, response.text)
+                self.assertTrue(response.json()["api_key_configured"])
+            with sessionmaker(bind=self.engine)() as fresh_db:
+                persisted = fresh_db.get(ModelProvider, provider_id)
+                self.assertNotEqual(persisted.api_key_encrypted, secret)
+                self.assertEqual(decrypt_api_key(persisted.api_key_encrypted), secret)
+                for instance in fresh_db.scalars(select(ModelInstance).where(ModelInstance.provider_id == provider_id)):
+                    self.assertIsNone(instance.api_key)
+                    self.assertEqual(ModelHubService(fresh_db)._to_routed_model(instance).instance.api_key, secret)
 
     def test_legacy_key_migration_keeps_conflicting_instance_credentials(self) -> None:
         provider = ModelProvider(provider_code="LEGACY_KEYS", provider_name="Legacy keys", provider_type="OPENAI_COMPAT")
