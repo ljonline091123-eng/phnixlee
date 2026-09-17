@@ -1,13 +1,6 @@
 <template>
   <div class="app-container workbench">
 
-    <!-- 顶部欢迎栏 -->
-    <div class="welcome">
-      <h1>{{ greeting }}，{{ name }}</h1>
-      <p>欢迎使用招标采购管理系统，祝您工作顺利！</p>
-      <span class="date">{{ todayText }}</span>
-    </div>
-
     <!-- 五张状态卡（采购台账五类状态计数，点击跳采购台账页） -->
     <div class="status-cards">
       <div v-for="card in statusCards" :key="card.key" class="scard" @click="goLedger">
@@ -112,8 +105,8 @@
             </template>
           </el-table-column>
           <el-table-column label="供应商名称" prop="vendorName" show-overflow-tooltip />
-          <el-table-column label="合作金额（万元）" align="right">
-            <template slot-scope="scope">{{ toWan(scope.row.contractAmount) }}</template>
+          <el-table-column label="合作金额（元）" align="right">
+            <template slot-scope="scope">{{ formatAmount(scope.row.contractAmount) }}</template>
           </el-table-column>
         </el-table>
       </section>
@@ -122,7 +115,6 @@
 </template>
 
 <script>
-import { mapGetters } from "vuex";
 import * as echarts from "echarts";
 import { getWorkbenchStats } from "@/api/workbench";
 import { geTaskTodoList } from "@/api/index";
@@ -146,27 +138,15 @@ export default {
       // 我的待办
       todoList: [],
       todoTotal: 0,
-      // 概览筛选（仅作用于招采概览）
+      // 概览筛选（仅作用于招采概览；年份默认"全部年份"，与状态卡口径一致）
       overviewOrgId: "",
-      overviewYear: new Date().getFullYear(),
+      overviewYear: "",
       orgOptions: [],
       donutChart: null,
       trendChart: null
     };
   },
   computed: {
-    ...mapGetters(["name"]),
-    greeting() {
-      const hour = new Date().getHours();
-      if (hour < 12) return "上午好";
-      if (hour < 18) return "下午好";
-      return "晚上好";
-    },
-    todayText() {
-      const now = new Date();
-      const weeks = ["日", "一", "二", "三", "四", "五", "六"];
-      return `${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日  星期${weeks[now.getDay()]}`;
-    },
     // 年份下拉：近5年
     yearOptions() {
       const current = new Date().getFullYear();
@@ -285,20 +265,30 @@ export default {
         }]
       });
     },
-    /** 月度金额趋势（金额换算为万元展示） */
+    /** 月度金额趋势（金额统一为元展示，与上方指标卡片口径一致） */
     renderTrend() {
       if (!this.trendChart) {
         this.trendChart = echarts.init(this.$refs.trend);
       }
+      const yuan = v => Number(v) || 0;
       const months = this.monthlyTrend.map(row => row.monthNo + "月");
-      const budget = this.monthlyTrend.map(row => this.toWan(row.budgetAmount));
-      const award = this.monthlyTrend.map(row => this.toWan(row.awardAmount));
+      const budget = this.monthlyTrend.map(row => yuan(row.budgetAmount));
+      const award = this.monthlyTrend.map(row => yuan(row.awardAmount));
       this.trendChart.setOption({
-        tooltip: { trigger: "axis" },
+        tooltip: {
+          trigger: "axis",
+          formatter(params) {
+            let res = params[0].axisValue + "<br/>";
+            params.forEach(p => {
+              res += p.marker + p.seriesName + "：" + p.value.toLocaleString("zh-CN", { maximumFractionDigits: 2 }) + "元<br/>";
+            });
+            return res;
+          }
+        },
         legend: { data: ["采购预算", "采购金额"], right: 10, top: 0, textStyle: { fontSize: 12, color: "#47586e" } },
         grid: { left: 50, right: 14, top: 34, bottom: 24 },
         xAxis: { type: "category", boundaryGap: false, data: months, axisLine: { lineStyle: { color: "#cbd5e1" } }, axisLabel: { color: "#64748b" } },
-        yAxis: { type: "value", splitLine: { lineStyle: { color: "#eef2f8" } }, axisLabel: { color: "#64748b" } },
+        yAxis: { type: "value", name: "单位：元", nameTextStyle: { color: "#94a3b8" }, splitLine: { lineStyle: { color: "#eef2f8" } }, axisLabel: { color: "#64748b" } },
         series: [
           { name: "采购预算", type: "line", smooth: true, symbol: "circle", symbolSize: 6, data: budget, lineStyle: { width: 2.2, color: "#2563eb" }, itemStyle: { color: "#2563eb" }, areaStyle: { color: "rgba(37,99,235,.06)" } },
           { name: "采购金额", type: "line", smooth: true, symbol: "circle", symbolSize: 6, data: award, lineStyle: { width: 2.2, color: "#10b981" }, itemStyle: { color: "#10b981" }, areaStyle: { color: "rgba(16,185,129,.06)" } }
@@ -309,14 +299,9 @@ export default {
       if (this.donutChart) this.donutChart.resize();
       if (this.trendChart) this.trendChart.resize();
     },
-    /** 金额格式化（元，千分位，最多2位小数） */
+    /** 金额格式化（元，千分位，保留2位小数） */
     formatAmount(value) {
-      const num = Number(value) || 0;
-      return num.toLocaleString("zh-CN", { maximumFractionDigits: 2 });
-    },
-    /** 元 → 万元（保留2位） */
-    toWan(value) {
-      return ((Number(value) || 0) / 10000).toFixed(2);
+      return (Number(value) || 0).toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     },
     /** 状态卡 → 采购台账页 */
     goLedger() {
@@ -334,10 +319,6 @@ export default {
 
 <style scoped>
 .workbench { min-width: 1200px; }
-.welcome { display: flex; align-items: center; margin-bottom: 12px; }
-.welcome h1 { color: #0f2b66; font-size: 20px; margin: 0 14px 0 0; }
-.welcome p { color: #5b6f8f; font-size: 13px; margin: 0; }
-.welcome .date { margin-left: auto; color: #5b6f8f; font-size: 13px; }
 
 /* 五张状态卡 */
 .status-cards { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; margin-bottom: 14px; }

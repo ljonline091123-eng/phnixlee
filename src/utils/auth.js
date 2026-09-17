@@ -46,6 +46,11 @@ export function getZcToken(token) {
 
 // 统一登录页地址（供应商端），招采端退出/会话过期时跳转
 export function getUnifiedLoginUrl() {
+  // 供应商端登录页端口（同host不同端口共享cookie），hostname 动态取当前访问地址
+  const port = process.env.VUE_APP_PORTAL_PORT
+  if (port) {
+    return `${window.location.protocol}//${window.location.hostname}:${port}/login`
+  }
   // 环境变量缺失时兜底为旧登录页，避免跳转地址为 undefined 造成循环刷新
   return process.env.VUE_APP_UNIFIED_LOGIN_URL || process.env.BASE_URL + 'login'
 }
