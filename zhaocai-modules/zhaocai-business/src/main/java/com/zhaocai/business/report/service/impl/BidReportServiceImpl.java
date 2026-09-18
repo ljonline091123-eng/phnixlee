@@ -63,7 +63,14 @@ public class BidReportServiceImpl extends ServiceImpl<BidReportMapper, BidReport
                 rootVo.setParentId(deptList.get(0).getThridParentId());
                 rootVo.setType("G");
                 // 只有本级时也要返回空的 children，前端固定取 tableData[0].children
-                rootVo.setChildren(deptList.size() > 1 ? getNextData(deptList, list, queryVo) : new ArrayList<>());
+                List<VBidCountVo> children = deptList.size() > 1 ? getNextData(deptList, list, queryVo) : new ArrayList<>();
+                // 直接挂在当前组织(公司/单位根节点)下的招标也作为子行展示，
+                // 否则招标记录挂根节点时只在汇总行显示数字、看不到项目明细(与异常报表修复一致)
+                List<VBidCountVo> rootProjects = getXInfo(deptList.get(0).getThridDeptId(), queryVo);
+                if (CollectionUtil.isNotEmpty(rootProjects)) {
+                    children.addAll(rootProjects);
+                }
+                rootVo.setChildren(children);
                 resultList.add(rootVo);
             }
         } else if (StringUtils.isNotEmpty(queryVo.getMinAccountCode())) {         // 项目端

@@ -123,7 +123,15 @@ public class ProblemReportServiceImpl extends ServiceImpl<ProblemReportMapper, P
                     rootVo.setDeptName(deptList.get(0).getDeptName());
                     rootVo.setParentId(deptList.get(0).getThridParentId());
                     // 只有本级时也要返回空的 children，前端固定取 tableData[0].children
-                    rootVo.setChildren(deptList.size() > 1 ? getNextData(deptList, list, queryVo) : new ArrayList<>());
+                    List<ProblemReportVo> children = deptList.size() > 1 ? getNextData(deptList, list, queryVo) : new ArrayList<>();
+                    // 直接挂在当前组织(公司/单位根节点)下的异常(project_department_id=当前组织id)也作为子行展示，
+                    // 否则项目挂根节点时只在汇总行显示笔数、看不到明细
+                    queryVo.setProjectDepartmentId(deptList.get(0).getThridDeptId());
+                    List<ProblemReportVo> rootProjects = baseMapper.select(queryVo);
+                    if (CollectionUtil.isNotEmpty(rootProjects)) {
+                        children.addAll(rootProjects);
+                    }
+                    rootVo.setChildren(children);
                     resultList.add(rootVo);
                 }
             }

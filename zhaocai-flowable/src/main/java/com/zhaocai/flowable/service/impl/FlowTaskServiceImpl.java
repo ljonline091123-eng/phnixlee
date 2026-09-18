@@ -945,8 +945,10 @@ public class FlowTaskServiceImpl extends FlowServiceFactory implements IFlowTask
                 SysDept dept = startUser.getData().getDept();
                 String deptName = ObjectUtil.isEmpty(dept) ? null : dept.getDeptName();
                 flowTask.setStartDeptName(deptName);
-                flowList.add(flowTask);
             }
+            // 历史流程实例可能被清理（查不到记录/无发起人），任务本身仍是有效待办，必须保留行；
+            // 否则列表行数会少于 total（total 按查询条件计数），工作台角标与列表对不上
+            flowList.add(flowTask);
         }
         return flowList;
     }
