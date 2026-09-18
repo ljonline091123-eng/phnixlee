@@ -99,11 +99,11 @@
           </div>
           <div class="m">
             <div class="ml"><span class="mi" style="background:#10b981">🪙</span>采购预算</div>
-            <div class="mv">{{ formatAmount(overview.budgetAmount) }}<small>元</small></div>
+            <div class="mv">{{ formatWan(overview.budgetAmount) }}<small>万元</small></div>
           </div>
           <div class="m">
             <div class="ml"><span class="mi" style="background:#f59e0b">📄</span>采购金额</div>
-            <div class="mv">{{ formatAmount(overview.awardAmount) }}<small>元</small></div>
+            <div class="mv">{{ formatWan(overview.awardAmount) }}<small>万元</small></div>
           </div>
           <div class="m">
             <div class="ml"><span class="mi" style="background:#8b5cf6">📈</span>成本节约率</div>
@@ -119,7 +119,7 @@
           <h2>合作金额TOP5供应商</h2>
           <a class="more" @click="goVendorReport">查看更多 ›</a>
         </header>
-        <el-table :data="topVendors" class="todo-table vendor-table" @row-click="goVendorReport">
+        <el-table ref="vendorTable" :data="topVendors" class="vendor-table" :height="vendorTableHeight || undefined" :row-style="vendorRowStyle" @row-click="goVendorReport">
           <!-- 三列固定像素宽度（el-table 的百分比列宽按 px 计算、支持不好，用固定值）：
                排名加宽、名称列固定不再吃满剩余空间（名称往中间移）、金额固定宽度左对齐，
                名称与金额之间不会出现大片空白；长名称省略号+悬浮看全 -->
@@ -129,7 +129,7 @@
             </template>
           </el-table-column>
           <el-table-column label="供应商名称" prop="vendorName" show-overflow-tooltip width="220" />
-          <el-table-column label="合作金额（元）" width="140" align="left">
+          <el-table-column label="合作金额（元）" align="right">
             <template slot-scope="scope">{{ formatAmount(scope.row.contractAmount) }}</template>
           </el-table-column>
         </el-table>
@@ -169,6 +169,9 @@ export default {
       methodOrgId: "",
       methodYear: "",
       orgOptions: [],
+      // TOP5 表格：高度与行高自适应（保证 5 行全部显示且正好填满面板）
+      vendorTableHeight: undefined,
+      vendorRowH: 44,
       donutChart: null,
       trendChart: null
     };
@@ -226,6 +229,7 @@ export default {
     this.loadStats();
     this.loadTodo();
     this.loadDeptTree();
+    this.computeVendorTable();
     window.addEventListener("resize", this.handleResize);
     // 侧边栏收起/展开只改容器宽度、不触发 window resize，用 ResizeObserver 跟随重绘图表
     if (window.ResizeObserver) {
@@ -244,6 +248,29 @@ export default {
     handleResize() {
       if (this.donutChart) this.donutChart.resize();
       if (this.trendChart) this.trendChart.resize();
+      this.computeVendorTable();
+    },
+    /** TOP5 行内联样式：行高按剩余高度均分，5 行正好填满面板 */
+    vendorRowStyle() {
+      return { height: this.vendorRowH + "px" };
+    },
+    /** 计算 TOP5 表格高度与行高：面板高度扣除标题区后均分给数据行 */
+    computeVendorTable() {
+      this.$nextTick(() => {
+        const el = this.$refs.vendorTable && this.$refs.vendorTable.$el;
+        if (!el) return;
+        const panel = el.closest(".panel");
+        // 面板高度扣除：标题区(h2 高约41px) + 面板底部内边距8 + 表格底部外边距4
+        const tableRegion = panel
+          ? panel.clientHeight - 41 - 8 - 4
+          : el.clientHeight;
+        const header = el.querySelector(".el-table__header-wrapper");
+        const headerH = header ? header.offsetHeight : 40;
+        const rows = (this.topVendors || []).length;
+        const bodyH = tableRegion - headerH - 2;
+        this.vendorTableHeight = tableRegion;
+        this.vendorRowH = rows > 0 ? Math.max(40, Math.floor(bodyH / rows)) : 44;
+      });
     },
     /** 工作台统计数据（单位树+年份分别作用于招采概览与采购方式分析） */
     loadStats() {
@@ -263,6 +290,7 @@ export default {
         this.$nextTick(() => {
           this.renderDonut();
           this.renderTrend();
+          this.computeVendorTable();
         });
       }).finally(() => {
         this.loading = false;
@@ -329,23 +357,23 @@ export default {
       this.donutChart.on("click", () => this.goBuildingRate());
       this.donutChart.resize();
     },
-    /** 月度金额趋势（金额统一为元展示，与上方指标卡片口径一致） */
+    /** 月度金额趋势（金额统一为万元展示，与上方指标卡片口径一致） */
     renderTrend() {
       if (!this.trendChart) {
         this.trendChart = echarts.init(this.$refs.trend);
       }
-      const yuan = v => Number(v) || 0;
+      const wan = v => (Number(v) || 0) / 10000;
       const months = this.monthlyTrend.map(row => row.monthNo + "月");
-      const budget = this.monthlyTrend.map(row => yuan(row.budgetAmount));
-      const award = this.monthlyTrend.map(row => yuan(row.awardAmount));
+      const budget = this.monthlyTrend.map(row => wan(row.budgetAmount));
+      const award = this.monthlyTrend.map(row => wan(row.awardAmount));
       this.trendChart.setOption({
-        title: { text: "月度金额趋势（元）", textStyle: { fontSize: 14, color: "#334155" }, left: 6, top: 4 },
+        title: { text: "月度金额趋势（万元）", textStyle: { fontSize: 14, color: "#334155" }, left: 6, top: 4 },
         tooltip: {
           trigger: "axis",
           formatter(params) {
             let res = params[0].axisValue + "<br/>";
             params.forEach(p => {
-              res += p.marker + p.seriesName + "：" + p.value.toLocaleString("zh-CN", { maximumFractionDigits: 2 }) + "元<br/>";
+              res += p.marker + p.seriesName + "：" + p.value.toLocaleString("zh-CN", { maximumFractionDigits: 2 }) + "万元<br/>";
             });
             return res;
           }
@@ -372,6 +400,10 @@ export default {
     /** 金额格式化（元，千分位，保留2位小数） */
     formatAmount(value) {
       return (Number(value) || 0).toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    },
+    /** 金额格式化（元 → 万元，除以10000后千分位保留2位） */
+    formatWan(value) {
+      return this.formatAmount((Number(value) || 0) / 10000);
     },
     /** 状态卡 → 采购台账页（报表已移到 2067 分析报表目录下，路由为 /analytical/xxx） */
     goLedger() {
@@ -430,11 +462,14 @@ export default {
 .scard .num.warn { color: #f97316; }
 .scard > i { position: absolute; right: 16px; top: 50%; transform: translateY(-50%); color: #c3cddf; font-style: normal; font-size: 16px; }
 
-/* 面板布局：左宽右窄。flex-basis 用 auto：行高先按内容撑开（保证待办 5 行完整显示），
-   剩余空间再按 1.1 : 1.15 分配；空间不足时整页滚动而不截断 */
-.grid { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(360px, 1fr); gap: 10px; min-height: 0; }
-.grid-2 { flex: 1.1 0 auto; }
-.grid-3 { flex: 1.15 0 auto; }
+/* 面板布局：左宽右窄。左侧（我的待办/招采概览）占 2 份，
+   右侧（采购方式分析/TOP5）占 1 份，左大右小更合理。
+   两行面板弹性铺满剩余高度（不浪费底部空白），min-height 保证内容不被压扁；
+   行高由容器高度分配、与内容无关，切换筛选时布局不跳动；
+   空间不足时整页滚动而不截断内容 */
+.grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 10px; }
+.grid-2 { flex: 1 1 0; min-height: 260px; }
+.grid-3 { flex: 1.15 1 0; min-height: 294px; }
 .panel { display: flex; flex-direction: column; min-height: 0; overflow: hidden; background: #fff; border: 1px solid #e5eaf3; border-radius: 10px; box-shadow: 0 1px 3px rgba(15, 43, 102, .04); padding-bottom: 8px; }
 .panel header { flex: none; display: flex; align-items: center; padding: 10px 18px 6px; }
 .panel h2 { font-size: 18px; color: #1e3a6e; font-weight: 600; margin: 0; display: flex; align-items: center; gap: 8px; }
@@ -470,8 +505,11 @@ export default {
 .metrics .mv small { font-size: 14px; font-weight: 400; color: #94a3b8; margin-left: 2px; }
 .trend-chart { flex: 1; min-height: 0; width: calc(100% - 36px); margin: 0 18px; cursor: pointer; }
 
-/* TOP5：整行可点击，鼠标手型（cursor 会被单元格继承） */
-.vendor-table { cursor: pointer; }
+/* TOP5：整行可点击，鼠标手型（cursor 会被单元格继承）。
+   不共用 todo-table 类，避免其 4px 单元格内边距与这里的行高规则优先级冲突。
+   行高由 JS 按面板高度自适应计算（vendorRowStyle），5 行正好填满面板、不会溢出 */
+.vendor-table { flex: 1; min-height: 0; width: calc(100% - 36px); margin: 0 18px 4px; cursor: pointer; }
+.vendor-table::v-deep .el-table__body td.el-table__cell { padding: 0; }
 
 /* TOP5 排名角标 */
 .rank { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 5px; font-size: 13px; font-weight: 600; color: #64748b; background: #eef2f8; }

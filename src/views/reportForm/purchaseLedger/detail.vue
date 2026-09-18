@@ -185,7 +185,7 @@ export default {
   components: { BackButton },
   data() {
     return {
-      backPath: "/tender-procurement/reportForm/purchaseLedger",
+      backPath: "/analytical/purchaseLedger",
       loading: false,
       tableData: [],
       total: 0,

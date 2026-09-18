@@ -15,8 +15,8 @@
 </template>
 
 <script>
-import logoImg from '@/assets/logo/logo_title.png'
-import logoOffImg from '@/assets/logo/logo_title_off.png'
+import logoImg from '@/assets/logo/jkty_logo_title.png'
+import logoOffImg from '@/assets/logo/jkty_logo_icon.png'
 
 // import logoImg from '@/assets/logo/logo.png'
 
@@ -72,8 +72,9 @@ export default {
     width: 100%;
 
     & .sidebar-logo {
-      width: 180px;
-      height: 28px;
+      /* jkty_logo 原图 370x62 等比放大；200px 侧边栏最多放到 190 宽，再大放不下 */
+      width: 190px;
+      height: 32px;
       vertical-align: middle;
       margin-right: 8px;
       margin-top: 6px;

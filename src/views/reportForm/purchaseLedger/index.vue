@@ -72,9 +72,18 @@
           :tree-props="{ children: 'children' }"
           default-expand-all
         >
-          <el-table-column prop="orgName" label="组织机构" min-width="180" show-overflow-tooltip />
-          <el-table-column prop="projectCode" label="项目编号" min-width="140" show-overflow-tooltip />
-          <el-table-column prop="projectName" label="项目名称" min-width="200" show-overflow-tooltip />
+          <!-- 组织机构：仅单位/部门行显示组织名；项目行与需求类型行留空（树缩进已表达层级归属） -->
+          <el-table-column prop="orgName" label="组织机构" min-width="180" show-overflow-tooltip>
+            <template slot-scope="scope">
+              {{ scope.row.type === 'U' || scope.row.type === 'D' ? scope.row.orgName : '' }}
+            </template>
+          </el-table-column>
+          <el-table-column prop="projectCode" label="项目编号" width="110" show-overflow-tooltip>
+            <template slot-scope="scope">{{ scope.row.type === 'P' ? scope.row.projectCode : '' }}</template>
+          </el-table-column>
+          <el-table-column prop="projectName" label="项目名称" min-width="200" show-overflow-tooltip>
+            <template slot-scope="scope">{{ scope.row.type === 'P' ? scope.row.projectName : '' }}</template>
+          </el-table-column>
           <el-table-column prop="demandTypeText" label="采购需求类型" min-width="120" />
           <!-- 五类状态列表头带问号提示（写法同 ShowTablePro 的表头问号提示） -->
           <el-table-column v-for="st in statusColumns" :key="st.key" width="110" align="center">
@@ -198,7 +207,7 @@ export default {
         demandType: row.demandType
       };
       this.$router.push({
-        path: "/tender-procurement/reportForm/purchaseLedgerDetail",
+        path: "/analytical/purchaseLedgerDetail",
         query
       });
     },

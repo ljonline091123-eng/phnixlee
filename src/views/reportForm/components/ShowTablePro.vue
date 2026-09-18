@@ -151,10 +151,11 @@
             :key="item.prop"
             :label="item.label"
             :width="item.width"
-            :show-overflow-tooltip="item.showOverflowTooltip"
+            :show-overflow-tooltip="item.tooltipChunk ? false : item.showOverflowTooltip"
             :prop="item.prop"
             :align="item.align"
             :fixed="item.fixed"
+            :className="item.className"
             v-else
           >
             <!-- 表头问号提示 -->
@@ -168,8 +169,29 @@
               <span>{{ item.label }}</span>
             </template>
             <template slot-scope="scope">
+              <!-- 自定义悬浮提示：tooltipChunk 指定每行几个，列表只显示一行省略 -->
+              <el-tooltip
+                v-if="item.tooltipChunk && scope.row[item.prop]"
+                placement="top"
+                popper-class="report-chunk-tooltip"
+              >
+                <div slot="content" class="report-chunk-tooltip-content">
+                  <div
+                    v-for="(group, gi) in chunkBy(scope.row[item.prop], item.tooltipChunk)"
+                    :key="gi"
+                    class="report-chunk-tooltip-line"
+                  >
+                    <span
+                      v-for="(piece, pi) in group"
+                      :key="pi"
+                      class="report-chunk-tooltip-item"
+                    >{{ piece }}</span>
+                  </div>
+                </div>
+                <span class="report-cell-ellipsis">{{ scope.row[item.prop] }}</span>
+              </el-tooltip>
               <a
-                v-if="item.clickMethod"
+                v-else-if="item.clickMethod"
                 class="link-type"
                 @click="goDetail(scope.row, item.clickMethod)"
               >
@@ -340,6 +362,22 @@ export default {
         this.deptOptions = response.data || [];
       });
     },
+    /**
+     * 把换行分隔的字符串按每行 n 个分组（配合 tooltipChunk 自定义悬浮提示）
+     * @param value 后端返回的换行分隔文本
+     * @param n 每行个数
+     * @returns {[]}
+     */
+    chunkBy(value, n) {
+      const arr = String(value || "")
+        .split("\n")
+        .filter((s) => s !== "");
+      const result = [];
+      for (let i = 0; i < arr.length; i += n) {
+        result.push(arr.slice(i, i + n));
+      }
+      return result;
+    },
     goDetail(row, method) {
       method(row);
     },
@@ -376,5 +414,29 @@ export default {
 
 ::v-deep .el-input .el-input__inner {
   height: 34px;
+}
+</style>
+
+<style lang="scss">
+/* 自定义悬浮提示（tooltip 渲染到 body 上，需要全局样式）：
+   按 tooltipChunk 个一组换行显示，列表单元格只显示一行省略 */
+.report-chunk-tooltip-content {
+  line-height: 1.6;
+}
+.report-chunk-tooltip-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 16px;
+}
+.report-chunk-tooltip-item {
+  white-space: nowrap;
+}
+.report-cell-ellipsis {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
 }
 </style>
