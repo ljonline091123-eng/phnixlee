@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.models.ai_hub import ModelInstance, ModelProvider, ModelSkill, PredictionLedger, SkillOptimizationDraft
 from app.models.market_data import DataSource, StockKline
+from app.models.selection import SelectionCandidate
 from app.schemas.skill_tools import PredictionOutcomeInput, PredictionScoreRequest
 from app.services.daily_sync import _seconds_until_next_midnight
 from app.services.model_hub import ModelHubService
@@ -44,6 +45,9 @@ def _fetch_due_kline(db: Session, row: PredictionLedger) -> None:
 def review_predictions(db: Session, *, fetch_missing: bool = False, limit: int = 100) -> dict[str, int]:
     rows = list(db.scalars(select(PredictionLedger).where(
         PredictionLedger.status == "PENDING",
+        # Selection predictions use their confirmed snapshot and ten-session
+        # tracking workflow; the generic reviewer must not evaluate them twice.
+        ~PredictionLedger.id.in_(select(SelectionCandidate.prediction_id).where(SelectionCandidate.prediction_id.is_not(None))),
     ).order_by(PredictionLedger.predicted_at).limit(limit)).all())
     fetched: set[tuple[str, str]] = set()
     evaluated = 0

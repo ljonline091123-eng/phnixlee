@@ -48,8 +48,12 @@ def analyze_stock(payload: StockAnalysisRequest, db: Session = Depends(get_db)) 
                 ),
             },
             {
-                "role": "tool",
-                "content": json.dumps(
+                # This is context collected by our service, not a tool-call
+                # response in the provider's function-calling protocol.  A
+                # bare ``tool`` message is rejected by DeepSeek/OpenAI unless
+                # it also carries a tool_call_id, so pass it as user context.
+                "role": "user",
+                "content": "以下是工具采集的本地数据，请只基于这些数据回答：\n" + json.dumps(
                     {
                         "stock_profile": stock_profile,
                         "tool_results": tool_results,

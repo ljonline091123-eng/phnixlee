@@ -16,6 +16,7 @@ class TableDescription:
 
 
 TABLE_DESCRIPTIONS: dict[str, TableDescription] = {
+    "stock_context_event": TableDescription("股票外部证据", "数据采集", "保存人工补充的政策、原材料、产业链、股东及合同原文和来源，关联股票后供知识治理使用。"),
     "pipeline_run": TableDescription("工作流运行记录", "任务编排", "记录一次业务工作流的触发来源、输入输出、当前阶段、执行状态和错误。"),
     "pipeline_stage_run": TableDescription("工作流阶段记录", "任务编排", "记录工作流内各阶段的尝试次数、租约、重试计划、输入输出和错误。"),
     "scheduled_job": TableDescription("后台任务队列", "任务编排", "保存独立 Worker 消费的幂等任务、执行时间、租约、重试次数和处理状态。"),
@@ -54,6 +55,10 @@ TABLE_DESCRIPTIONS: dict[str, TableDescription] = {
     "stock_realtime_quote": TableDescription("股票实时行情", "股票数据", "保存每只股票最新报价、涨跌幅、成交量额和行情时间。"),
     "stock_symbol": TableDescription("股票基础资料", "股票数据", "保存股票代码、市场、交易所、名称、上市状态及来源信息。"),
     "watchlist_item": TableDescription("自选股", "股票数据", "保存用户关注的市场与股票代码及备注。"),
+    "selection_run": TableDescription("选股监盘运行", "选股监盘", "保存硬规则筛选运行、模型与知识库选择、候选数量和缺失数据。"),
+    "selection_candidate": TableDescription("选股候选", "选股监盘", "保存硬过滤候选、量价规则、本地知识证据及人工接受或拒绝结果。"),
+    "selection_tracking": TableDescription("选股跟踪", "选股监盘", "保存人工确认后的预测目标、实际交易日进度、收益、回撤和复盘状态。"),
+    "selection_snapshot": TableDescription("选股跟踪快照", "选股监盘", "按实际交易日保存收盘价、累计收益和回撤，至少满十个交易日后完成复盘。"),
 }
 
 
@@ -260,10 +265,63 @@ COMMON_COLUMN_DESCRIPTIONS: dict[str, str] = {
     "version": "当前配置或历史内容的版本号。",
     "volume": "成交量；计量单位以数据来源为准。",
     "warnings_json": "研报中的风险提示列表。",
+    "as_of": "Selection evaluation timestamp",
+    "candidate_count": "Number of hard-filter candidates",
+    "candidate_limit": "Maximum candidate count",
+    "data_mode": "Real or mock data marker",
+    "graph_ids_json": "Selected knowledge graph IDs",
+    "reviewed_count": "Number of manually reviewed candidates",
+    "tracking_count": "Number of approved tracking records",
+    "universe_scope": "Universe scope",
+    "criteria_json": "Hard filter criteria",
+    "analysis_mode": "Analysis mode",
+    "missing_data_json": "Missing-data explanations",
+    "run_id": "Selection run ID",
+    "entry_date": "Entry trade date",
+    "hard_score": "Deterministic hard-filter score",
+    "hard_rules_json": "Deterministic rule results",
+    "evidence_json": "Local evidence references",
+    "analysis_json": "Bounded analysis result",
+    "decision": "Human review decision",
+    "review_notes": "Human review notes",
+    "target_price": "Human-confirmed target price",
+    "stop_price": "Human-confirmed stop price",
+    "confidence": "Human-confirmed confidence",
+    "prediction_id": "Prediction ledger ID",
+    "candidate_id": "Candidate ID",
+    "required_sessions": "Required trading sessions",
+    "observed_sessions": "Observed trading sessions",
+    "latest_date": "Latest observed trade date",
+    "latest_price": "Latest observed close price",
+    "cumulative_return_pct": "Cumulative return percentage",
+    "max_drawdown_pct": "Maximum drawdown percentage",
+    "data_source": "Observed data source",
+    "review_json": "Tracking review result",
+    "tracking_id": "Tracking ID",
+    "return_pct": "Return from entry percentage",
+    "drawdown_pct": "Drawdown percentage",
+    "sequence": "Trading-session sequence",
+
+    "confirmation_date": "Human review confirmation date",
+    "adjust": "Tracking price adjustment policy; empty means unadjusted close.",
+    "target_hit": "Whether the confirmed target was reached after the required sessions.",
+    "stop_hit": "Whether the confirmed stop level was reached during tracking.",
 }
 
 
 TABLE_COLUMN_OVERRIDES: dict[str, dict[str, str]] = {
+    "selection_run": {"criteria_json": "本次硬过滤阈值与候选范围。", "missing_data_json": "未能获取或不足以判断的数据项。", "analysis_mode": "综合评价模式及是否请求模型。"},
+    "selection_candidate": {"hard_rules_json": "可复核的量价硬规则结果。", "evidence_json": "知识库、图谱及行情证据引用。", "decision": "人工复选结果。"},
+    "selection_tracking": {"required_sessions": "要求的真实交易日数量，默认十个。", "observed_sessions": "已获取的去重交易日数量。", "review_json": "完成跟踪后的复盘依据。"},
+    "selection_snapshot": {"trade_date": "真实交易日行情日期。", "return_pct": "相对人工确认入场价的累计收益率。", "drawdown_pct": "相对历史峰值的回撤。"},
+    "stock_context_event": {
+        "event_type": "外部证据类别：政策、原材料、产业链、股东、合同或其他。",
+        "published_at": "原始资料发布时刻，以 UTC 存储。",
+        "related_entity": "资料涉及的相关企业、机构、原料或政策名称；不代表已确认因果关系。",
+        "content_hash": "来源、标题及原文的 SHA256，用于同一股票证据导入去重。",
+        "content": "导入的完整文本，不自动补写原文缺失部分。",
+        "source_name": "原始发布机构或数据来源名称，由导入者提供，待治理核验。",
+    },
     "agent_data_asset": {
         "table_name": "该数据资产对应的本地物理表名。",
         "display_name": "数据资产在界面中显示的名称。",

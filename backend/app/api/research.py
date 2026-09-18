@@ -33,6 +33,7 @@ def analyze_stock(payload: ResearchAnalyzeRequest, db: Session = Depends(get_db)
             payload.refresh,
             data_source_codes=payload.data_source_codes,
             knowledge_base_ids=payload.knowledge_base_ids,
+            model_instance_code=payload.model_instance_code,
         ):
             yield _sse(str(item.get("event") or "message"), item.get("data") or {})
 

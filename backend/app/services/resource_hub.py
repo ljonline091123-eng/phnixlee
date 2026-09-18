@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from datetime import datetime, timezone
@@ -46,6 +47,7 @@ DEFAULT_DATA_ASSETS = (
     ("STOCK_FINANCIAL", "stock_financial_report", "DW财报：财务报告", "F10 财务指标、报告期、币种和原始财报字段，用于盈利质量与经营现状分析。"),
     ("STOCK_NOTICE", "stock_notice", "DW公告：公司公告", "上市公司及挂牌公司公告、公告类型、发布时间和来源链接，用于事件驱动和风险识别。"),
     ("STOCK_NEWS", "stock_news", "DW新闻：新闻资讯", "股票相关新闻、来源、情绪、摘要和发布时间，用于舆情与外部催化分析。"),
+    ("STOCK_CONTEXT_EVENT", "stock_context_event", "External contextual evidence", "Policy, raw materials, supply chain, contracts and shareholder events with provenance."),
     ("STOCK_F10", "stock_f10_cache", "DW股东/业务：F10资料", "公司简介、股东、基金流、业务构成、财务摘要和财务报表等 F10 分区缓存。"),
     ("RESEARCH_REPORT", "research_report", "DW研究：AI研报", "AI 生成研报、历史结论、评分、模型信息、知识库引用和复盘结果。"),
     ("WATCHLIST", "watchlist_item", "DW用户：自选股", "用户自选股票清单和研究关注标记。"),
@@ -66,6 +68,7 @@ DEFAULT_KNOWLEDGE_BASES = (
             "stock_kline",
             "stock_realtime_quote",
             "stock_f10_cache",
+            "stock_context_event",
             "research_report",
         ],
         "version": "1.0.0",
@@ -123,6 +126,10 @@ def seed_default_knowledge_bases(db: Session) -> None:
             kb.kb_name = kb.kb_name or str(kb_config["kb_name"])
             kb.description = kb.description or str(kb_config["description"])
             kb.version = kb.version or str(kb_config["version"])
+            # Upgrade only the built-in full graph.  User-created knowledge bases
+            # keep their deliberate source boundary unchanged.
+            if kb.kb_code == "STOCK_FULL_KG" and "stock_context_event" not in (kb.source_tables or []):
+                kb.source_tables = [*(kb.source_tables or []), "stock_context_event"]
     db.commit()
 
 
@@ -147,6 +154,8 @@ def seed_default_graphs(db: Session) -> None:
             )
             db.add(graph)
             db.flush()
+        elif kb.kb_code == "STOCK_FULL_KG" and "stock_context_event" not in (graph.source_tables or []):
+            graph.source_tables = [*(graph.source_tables or []), "stock_context_event"]
         for model in (KnowledgeDocument, KnowledgeEntity, KnowledgeRelation):
             db.query(model).filter(model.knowledge_base_id == kb.id, model.graph_id.is_(None)).update(
                 {model.graph_id: graph.id}, synchronize_session=False
@@ -179,7 +188,7 @@ DEFAULT_AGENTS = (
         "description": "用于研究中心对话页签的数据治理、数据分类、字段解释和质量检查。",
         "skill_codes": ["DATA_GOVERNANCE_DW", "DATA_CLEANING_DW"],
         "kb_codes": ["STOCK_FULL_KG"],
-        "asset_codes": ["STOCK_SYMBOL", "STOCK_QUOTE", "STOCK_KLINE", "STOCK_FINANCIAL", "STOCK_NOTICE", "STOCK_NEWS", "STOCK_F10", "RESEARCH_REPORT"],
+        "asset_codes": ["STOCK_SYMBOL", "STOCK_QUOTE", "STOCK_KLINE", "STOCK_FINANCIAL", "STOCK_NOTICE", "STOCK_NEWS", "STOCK_F10", "STOCK_CONTEXT_EVENT", "RESEARCH_REPORT"],
     },
     {
         "agent_code": "KNOWLEDGE_GRAPH_AGENT",
@@ -190,7 +199,7 @@ DEFAULT_AGENTS = (
         "description": "用于知识库构建、实体关系抽取和证据链归档。",
         "skill_codes": ["STOCK_KNOWLEDGE_GRAPH_BUILDER"],
         "kb_codes": ["STOCK_FULL_KG"],
-        "asset_codes": ["STOCK_SYMBOL", "STOCK_QUOTE", "STOCK_KLINE", "STOCK_FINANCIAL", "STOCK_NOTICE", "STOCK_NEWS", "STOCK_F10", "RESEARCH_REPORT"],
+        "asset_codes": ["STOCK_SYMBOL", "STOCK_QUOTE", "STOCK_KLINE", "STOCK_FINANCIAL", "STOCK_NOTICE", "STOCK_NEWS", "STOCK_F10", "STOCK_CONTEXT_EVENT", "RESEARCH_REPORT"],
     },
     {
         "agent_code": "QA_QUERY_AGENT",
@@ -201,7 +210,7 @@ DEFAULT_AGENTS = (
         "description": "用于数据治理、分析、问数、问答等日常交互操作。",
         "skill_codes": ["STOCK_QA_QUERY", "DATA_GOVERNANCE_DW"],
         "kb_codes": ["STOCK_FULL_KG"],
-        "asset_codes": ["STOCK_SYMBOL", "STOCK_QUOTE", "STOCK_KLINE", "STOCK_FINANCIAL", "STOCK_NOTICE", "STOCK_NEWS", "STOCK_F10", "RESEARCH_REPORT"],
+        "asset_codes": ["STOCK_SYMBOL", "STOCK_QUOTE", "STOCK_KLINE", "STOCK_FINANCIAL", "STOCK_NOTICE", "STOCK_NEWS", "STOCK_F10", "STOCK_CONTEXT_EVENT", "RESEARCH_REPORT"],
     },
     {
         "agent_code": "STOCK_SELECTION_AGENT",
@@ -212,7 +221,7 @@ DEFAULT_AGENTS = (
         "description": "用于分析选股、趋势研判、短中长线操作结论和风险条件。",
         "skill_codes": ["STOCK_SELECTION_ANALYST", "STOCK_TREND_ADVISOR", "RESEARCH_REPORT_REVIEW", "RESEARCH_REVIEW_CORRECTION"],
         "kb_codes": ["STOCK_FULL_KG"],
-        "asset_codes": ["STOCK_SYMBOL", "STOCK_QUOTE", "STOCK_KLINE", "STOCK_FINANCIAL", "STOCK_NOTICE", "STOCK_NEWS", "STOCK_F10", "RESEARCH_REPORT"],
+        "asset_codes": ["STOCK_SYMBOL", "STOCK_QUOTE", "STOCK_KLINE", "STOCK_FINANCIAL", "STOCK_NOTICE", "STOCK_NEWS", "STOCK_F10", "STOCK_CONTEXT_EVENT", "RESEARCH_REPORT"],
     },
     {
         "agent_code": "RESEARCH_REPORT_AGENT",
@@ -223,7 +232,7 @@ DEFAULT_AGENTS = (
         "description": "用于研究中心研究页签，生成并保存研报、比对历史研报。",
         "skill_codes": ["STOCK_SELECTION_ANALYST", "STOCK_TREND_ADVISOR", "RESEARCH_REPORT_REVIEW", "RESEARCH_REVIEW_CORRECTION"],
         "kb_codes": ["STOCK_FULL_KG"],
-        "asset_codes": ["STOCK_SYMBOL", "STOCK_QUOTE", "STOCK_KLINE", "STOCK_FINANCIAL", "STOCK_NOTICE", "STOCK_NEWS", "STOCK_F10", "RESEARCH_REPORT"],
+        "asset_codes": ["STOCK_SYMBOL", "STOCK_QUOTE", "STOCK_KLINE", "STOCK_FINANCIAL", "STOCK_NOTICE", "STOCK_NEWS", "STOCK_F10", "STOCK_CONTEXT_EVENT", "RESEARCH_REPORT"],
     },
     {
         "agent_code": "RISK_WARNING_AGENT",
@@ -234,7 +243,7 @@ DEFAULT_AGENTS = (
         "description": "用于预警判断、历史研报偏差提示和风险解释。",
         "skill_codes": ["STOCK_TREND_ADVISOR", "RESEARCH_REPORT_REVIEW", "WATCH_ALERT"],
         "kb_codes": ["STOCK_FULL_KG"],
-        "asset_codes": ["STOCK_QUOTE", "STOCK_KLINE", "STOCK_NOTICE", "STOCK_NEWS", "STOCK_FINANCIAL", "STOCK_F10", "RESEARCH_REPORT"],
+        "asset_codes": ["STOCK_QUOTE", "STOCK_KLINE", "STOCK_NOTICE", "STOCK_NEWS", "STOCK_FINANCIAL", "STOCK_F10", "STOCK_CONTEXT_EVENT", "RESEARCH_REPORT"],
     },
 )
 
@@ -405,6 +414,13 @@ def build_knowledge_graph(db: Session, graph: KnowledgeGraph, max_documents: int
         raise ValueError("Choose source tables before building a graph")
     symbol_filter = graph.symbol.strip() if graph.symbol else None
     documents: list[KnowledgeDocument] = []
+    # Keep per-source accounting alongside the materialized documents.  A graph is
+    # only considered complete when every configured feed is available and non-empty.
+    raw_counts: dict[str, int] = {name: 0 for name in sorted(allowed_tables)}
+    duplicate_counts: dict[str, int] = {name: 0 for name in sorted(allowed_tables)}
+    unavailable: dict[str, str] = {}
+    limited_sources: set[str] = set()
+    dedupe_keys: set[str] = set()
 
     if "stock_symbol" in allowed_tables:
         query = select(StockSymbol)
@@ -437,8 +453,9 @@ def build_knowledge_graph(db: Session, graph: KnowledgeGraph, max_documents: int
                 market=row.market,
                 symbol=row.symbol,
                 title=row.title,
-                content=row.content or row.title,
-                metadata_json={"news_time": row.news_time, "source_name": row.source_name, "url": row.url},
+                content=row.content or (json.dumps(row.content_json, ensure_ascii=False, default=str) if row.content_json else row.title),
+                metadata_json={"news_time": row.news_time, "source_name": row.source_name, "url": row.url,
+                               "content_scope": "SOURCE_CONTENT_OR_PAYLOAD" if row.content else "SOURCE_PAYLOAD_OR_TITLE"},
             )
             for row in rows
         )
@@ -477,7 +494,13 @@ def build_knowledge_graph(db: Session, graph: KnowledgeGraph, max_documents: int
                 symbol=row.symbol,
                 title=f"{row.symbol} {row.report_period} {row.indicator}",
                 content=f"报告期：{row.report_period}\n指标：{row.indicator}\n币种：{row.currency or '--'}\n数据：{row.data_json}",
-                metadata_json={"report_period": row.report_period, "indicator": row.indicator, "currency": row.currency},
+                metadata_json={
+                    "report_period": row.report_period,
+                    "indicator": row.indicator,
+                    "currency": row.currency,
+                    "data_json": row.data_json,
+                    "content_scope": "SOURCE_PAYLOAD",
+                },
             )
             for row in rows
         )
@@ -499,7 +522,11 @@ def build_knowledge_graph(db: Session, graph: KnowledgeGraph, max_documents: int
                     f"开盘：{row.open_price}，最高：{row.high_price}，最低：{row.low_price}，收盘：{row.close_price}\n"
                     f"成交量：{row.volume}，成交额：{row.amount}，换手率：{row.turnover_rate}"
                 ),
-                metadata_json={"trade_date": row.trade_date, "period": row.period, "adjust": row.adjust},
+                metadata_json={"trade_date": row.trade_date, "period": row.period, "adjust": row.adjust,
+                               "open_price": row.open_price, "high_price": row.high_price,
+                               "low_price": row.low_price, "close_price": row.close_price,
+                               "volume": row.volume, "amount": row.amount,
+                               "turnover_rate": row.turnover_rate, "content_scope": "NORMALIZED_SOURCE_FIELDS"},
             )
             for row in rows
         )
@@ -520,7 +547,10 @@ def build_knowledge_graph(db: Session, graph: KnowledgeGraph, max_documents: int
                     f"行情时间：{row.quote_time or '--'}\n最新价：{row.current_price}\n涨跌额：{row.change_amount}\n"
                     f"涨跌幅：{row.change_pct}\n成交量：{row.volume}\n成交额：{row.amount}\n换手率：{row.turnover_rate}"
                 ),
-                metadata_json={"quote_time": row.quote_time, "fetched_at": row.fetched_at.isoformat() if row.fetched_at else None},
+                metadata_json={"quote_time": row.quote_time, "fetched_at": row.fetched_at.isoformat() if row.fetched_at else None,
+                               "current_price": row.current_price, "change_pct": row.change_pct,
+                               "volume": row.volume, "turnover_rate": row.turnover_rate,
+                               "raw_payload": row.raw_payload, "content_scope": "SOURCE_PAYLOAD"},
             )
             for row in rows
         )
@@ -538,7 +568,9 @@ def build_knowledge_graph(db: Session, graph: KnowledgeGraph, max_documents: int
                 symbol=row.symbol,
                 title=f"{row.symbol} F10 {row.section}",
                 content=f"F10 分区：{row.section}\n数据：{row.payload_json}",
-                metadata_json={"section": row.section, "fetched_at": row.fetched_at.isoformat() if row.fetched_at else None},
+                metadata_json={"section": row.section, "payload_json": row.payload_json,
+                               "fetched_at": row.fetched_at.isoformat() if row.fetched_at else None,
+                               "content_scope": "SOURCE_PAYLOAD"},
             )
             for row in rows
         )
@@ -566,6 +598,10 @@ def build_knowledge_graph(db: Session, graph: KnowledgeGraph, max_documents: int
             for row in rows
         )
 
+    # The dedicated contextual evidence table is intentionally handled through the
+    # generic path.  This keeps policy, raw-material, supply-chain, contract and
+    # shareholder evidence extensible without making the graph builder depend on a
+    # particular migration order.
     supported = {
         "stock_symbol", "stock_news", "stock_notice", "stock_financial_report",
         "stock_kline", "stock_realtime_quote", "stock_f10_cache", "research_report",
@@ -575,28 +611,100 @@ def build_knowledge_graph(db: Session, graph: KnowledgeGraph, max_documents: int
     quote = db_engine.dialect.identifier_preparer.quote
     for table_name in sorted(allowed_tables - supported):
         if table_name not in available_tables or not is_business_table(table_name):
-            raise ValueError(f"Unsupported graph source: {table_name}")
+            unavailable[table_name] = "TABLE_NOT_AVAILABLE_OR_NOT_ALLOWED"
+            continue
         columns = {str(item["name"]) for item in inspect(db_engine).get_columns(table_name)}
         where = " WHERE symbol = :symbol" if symbol_filter and "symbol" in columns else ""
         if symbol_filter and "symbol" not in columns:
+            unavailable[table_name] = "SYMBOL_FILTER_NOT_SUPPORTED"
             continue
         query = text(f'SELECT * FROM {quote(table_name)}{where} LIMIT :limit')
         parameters = {"limit": max_documents, "symbol": symbol_filter}
-        rows = list(db.execute(query, parameters).mappings().all())
+        try:
+            rows = list(db.execute(query, parameters).mappings().all())
+        except Exception as exc:
+            unavailable[table_name] = str(exc)[:240]
+            continue
+        raw_counts[table_name] = len(rows)
         for raw in rows:
             row = dict(raw)
             symbol = str(row.get("symbol") or "") or None
             record_id = row.get("id")
+            event_type = str(row.get("event_type") or "").upper() or None
+            content = row.get("content") or json.dumps(row, ensure_ascii=False, default=str)
+            # Keep source payloads intact up to a generous bound and disclose any
+            # truncation to callers; never present an excerpt as complete evidence.
+            content_truncated = len(content) > 200000
+            if content_truncated:
+                content = content[:200000]
+            title = str(row.get("title") or row.get("name") or f"{table_name} {symbol or record_id or ''}")[:512]
+            dedupe_material = " ".join(str(content).split()).lower()
+            dedupe_key = f"{table_name}|{symbol or ''}|{title.lower()}|{hashlib.sha1(dedupe_material.encode('utf-8')).hexdigest()}"
+            if table_name in {"stock_news", "stock_notice", "stock_context_event"} and dedupe_key in dedupe_keys:
+                duplicate_counts[table_name] += 1
+                continue
+            dedupe_keys.add(dedupe_key)
             documents.append(KnowledgeDocument(
                 knowledge_base_id=knowledge_base.id,
                 source_table=table_name,
                 source_record_id=int(record_id) if isinstance(record_id, int) else None,
                 market=str(row.get("market") or "") or None,
                 symbol=symbol,
-                title=str(row.get("title") or row.get("name") or f"{table_name} {symbol or record_id or ''}")[:512],
-                content=json.dumps(row, ensure_ascii=False, default=str)[:6000],
-                metadata_json={"source_table": table_name, "source_record_id": record_id},
+                title=title,
+                content=content,
+                metadata_json={"source_table": table_name, "source_record_id": record_id,
+                               "source_name": row.get("source_name"), "url": row.get("url"),
+                               "event_type": event_type, "published_at": row.get("published_at"),
+                               "related_entity": row.get("related_entity"),
+                               "content_scope": "SOURCE_CONTENT_OR_PAYLOAD",
+                               "content_truncated": content_truncated, "dedupe_key": dedupe_key},
             ))
+        # Known ORM sources above are counted from their materialized rows.  This
+        # keeps coverage useful for both built-in and custom source tables.
+    for source_name in allowed_tables:
+        if raw_counts.get(source_name, 0):
+            continue
+        raw_counts[source_name] = sum(1 for document in documents if document.source_table == source_name)
+
+    # Built-in ORM sources are deduplicated here as well.  The source id remains in
+    # evidence, while identical news/notice/event payloads yield one semantic edge.
+    unique_documents: list[KnowledgeDocument] = []
+    seen_builtin: dict[str, KnowledgeDocument] = {}
+    for document in documents:
+        if document.source_table not in {"stock_news", "stock_notice", "stock_context_event"}:
+            unique_documents.append(document)
+            continue
+        metadata = dict(document.metadata_json or {})
+        key = str(metadata.get("dedupe_key") or (
+            f"{document.source_table}|{document.market or ''}|{document.symbol or ''}|"
+            f"{document.title.strip().lower()}|{hashlib.sha1(' '.join(document.content.split()).lower().encode('utf-8')).hexdigest()}"
+        ))
+        if key in seen_builtin:
+            duplicate_counts[document.source_table] = duplicate_counts.get(document.source_table, 0) + 1
+            primary = seen_builtin[key]
+            primary_metadata = dict(primary.metadata_json or {})
+            duplicate_sources = list(primary_metadata.get("duplicate_source_records") or [])
+            duplicate_sources.append({"source_record_id": document.source_record_id,
+                                      "source_name": (metadata or {}).get("source_name"),
+                                      "url": (metadata or {}).get("url")})
+            primary_metadata["duplicate_source_records"] = duplicate_sources[:20]
+            primary.metadata_json = primary_metadata
+            continue
+        seen_builtin[key] = document
+        metadata["dedupe_key"] = key
+        document.metadata_json = metadata
+        unique_documents.append(document)
+    documents = unique_documents
+    # Keep bounded source content and disclose truncation uniformly for ORM and
+    # generic tables.  A bounded document is still useful evidence but cannot make
+    # a graph claim that the source was complete.
+    for document in documents:
+        if len(document.content or "") > 200000:
+            metadata = dict(document.metadata_json or {})
+            metadata["content_truncated"] = True
+            document.metadata_json = metadata
+            document.content = document.content[:200000]
+    limited_sources.update(source for source, count in raw_counts.items() if count >= max_documents)
 
     db.execute(delete(KnowledgeRelation).where(KnowledgeRelation.graph_id == graph.id))
     db.execute(delete(KnowledgeEntity).where(KnowledgeEntity.graph_id == graph.id))
@@ -648,6 +756,7 @@ def build_knowledge_graph(db: Session, graph: KnowledgeGraph, max_documents: int
                 "stock_realtime_quote": "REALTIME_QUOTE",
                 "stock_f10_cache": "F10_SECTION",
                 "research_report": "RESEARCH_REPORT",
+                "stock_context_event": "EXTERNAL_EVENT",
             }.get(document.source_table, "DOCUMENT"),
             entity_key=document_key[:256],
             entity_name=document.title[:256],
@@ -656,6 +765,13 @@ def build_knowledge_graph(db: Session, graph: KnowledgeGraph, max_documents: int
                 "symbol": document.symbol,
                 "source_table": document.source_table,
                 "source_record_id": document.source_record_id,
+                "evidence": {
+                    key: (document.metadata_json or {}).get(key)
+                    for key in ("source_name", "url", "event_type", "published_at", "related_entity")
+                    if (document.metadata_json or {}).get(key)
+                },
+                "content_scope": (document.metadata_json or {}).get("content_scope", "SOURCE_RECORD"),
+                "content_truncated": bool((document.metadata_json or {}).get("content_truncated", False)),
             },
         )
         document_entities[document.id] = doc_entity
@@ -697,22 +813,321 @@ def build_knowledge_graph(db: Session, graph: KnowledgeGraph, max_documents: int
                 evidence_document_id=document.id,
             )
         )
+        metadata = document.metadata_json or {}
+        if document.source_table == "stock_financial_report" and entity is not None:
+            indicator = str(metadata.get("indicator") or document.title.rsplit(" ", 1)[-1])
+            metric_key = ("FINANCIAL_METRIC", f"{document.market or ''}:{document.symbol}:{metadata.get('report_period') or ''}:{indicator}")
+            metric_entity = entities.get(metric_key)
+            if metric_entity is None:
+                metric_entity = KnowledgeEntity(
+                    knowledge_base_id=knowledge_base.id, graph_id=graph.id,
+                    entity_type="FINANCIAL_METRIC", entity_key=f"{graph.id}:{metric_key[1]}",
+                    entity_name=indicator[:256],
+                    properties_json={"indicator": indicator, "report_period": metadata.get("report_period"),
+                                     "currency": metadata.get("currency"), "data_json": metadata.get("data_json", {}),
+                                     "fact_only": True},
+                )
+                entities[metric_key] = metric_entity
+                db.add(metric_entity)
+            # Metric nodes are attached below after all new entities receive ids.
+        if document.source_table == "stock_f10_cache" and entity is not None:
+            section = str(metadata.get("section") or "unknown")
+            section_key = ("F10_SECTION", f"{document.market or ''}:{document.symbol}:{section}")
+            section_entity = entities.get(section_key)
+            if section_entity is None:
+                section_entity = KnowledgeEntity(
+                    knowledge_base_id=knowledge_base.id, graph_id=graph.id,
+                    entity_type="F10_SECTION", entity_key=f"{graph.id}:{section_key[1]}",
+                    entity_name=section[:256],
+                    properties_json={"section": section, "payload": metadata.get("payload_json", {}), "fact_only": True},
+                )
+                entities[section_key] = section_entity
+                db.add(section_entity)
+        if document.source_table == "stock_context_event" and entity is not None:
+            event_type = str(metadata.get("event_type") or "OTHER").upper()
+            event_key = ("EXTERNAL_EVENT", f"{document.symbol}:{document.id}:{event_type}")
+            event_entity = entities.get(event_key)
+            if event_entity is None:
+                event_entity = KnowledgeEntity(
+                    knowledge_base_id=knowledge_base.id, graph_id=graph.id,
+                    entity_type="EXTERNAL_EVENT", entity_key=f"{graph.id}:{event_key[1]}",
+                    entity_name=document.title[:256],
+                    properties_json={"event_type": event_type, "source_name": metadata.get("source_name"),
+                                     "url": metadata.get("url"), "published_at": metadata.get("published_at"),
+                                     "related_entity": metadata.get("related_entity"), "fact_only": True},
+                )
+                entities[event_key] = event_entity
+                db.add(event_entity)
+        if document.source_table in {"stock_news", "stock_notice"} and entity is not None:
+            # A headline/content keyword only records that an item *mentions* a
+            # topic.  It is deliberately represented as MENTIONED_EVENT and never
+            # upgraded to a causal or verified external event.
+            text_blob = f"{document.title}\n{document.content}"
+            mentioned_types = []
+            if re.search(r"政策|监管|法规|国务院|财政|货币", text_blob, re.IGNORECASE):
+                mentioned_types.append("POLICY")
+            if re.search(r"原材料|锂|铜|钢|石油|大宗|商品价格", text_blob, re.IGNORECASE):
+                mentioned_types.append("RAW_MATERIAL")
+            if re.search(r"供应链|上游|下游|供应商|客户", text_blob, re.IGNORECASE):
+                mentioned_types.append("SUPPLY_CHAIN")
+            if re.search(r"回购|增持|减持|股东|大股东", text_blob, re.IGNORECASE):
+                mentioned_types.append("SHAREHOLDER")
+            if re.search(r"合同|订单|签署|中标|协议", text_blob, re.IGNORECASE):
+                mentioned_types.append("CONTRACT")
+            for event_type in mentioned_types:
+                event_key = ("MENTIONED_EVENT", f"{document.market or ''}:{document.symbol}:{document.id}:{event_type}")
+                if event_key not in entities:
+                    event_entity = KnowledgeEntity(
+                        knowledge_base_id=knowledge_base.id, graph_id=graph.id,
+                        entity_type="MENTIONED_EVENT", entity_key=f"{graph.id}:{event_key[1]}",
+                        entity_name=f"{event_type} mention: {document.title}"[:256],
+                        properties_json={"event_type": event_type, "extraction_method": "KEYWORD_MENTION",
+                                         "fact_only": True, "source_table": document.source_table},
+                    )
+                    entities[event_key] = event_entity
+                    db.add(event_entity)
+    db.flush()
+
+    # Add source-specific semantic edges after entity ids are available.  Event
+    # predicates encode the declared event type only; they do not claim causality.
+    semantic_seen: set[tuple[int, str, int, int]] = set()
+    for document in documents:
+        if not document.symbol:
+            continue
+        entity = entities.get(("STOCK", f"{document.market}:{document.symbol}"))
+        doc_entity = document_entities.get(document.id)
+        if entity is None or doc_entity is None:
+            continue
+        metadata = document.metadata_json or {}
+        semantic: list[tuple[str, tuple[str, str]]] = []
+        if document.source_table == "stock_financial_report":
+            indicator = str(metadata.get("indicator") or document.title.rsplit(" ", 1)[-1])
+            semantic.append(("HAS_FINANCIAL_METRIC", ("FINANCIAL_METRIC", f"{document.market or ''}:{document.symbol}:{metadata.get('report_period') or ''}:{indicator}")))
+        elif document.source_table == "stock_f10_cache":
+            section = str(metadata.get("section") or "unknown")
+            semantic.append(("HAS_F10_SECTION", ("F10_SECTION", f"{document.market or ''}:{document.symbol}:{section}")))
+            if re.search(r"share|holder|股东|回购|增持|减持|股本", section, re.IGNORECASE):
+                semantic.append(("HAS_SHAREHOLDER_EVENT", ("F10_SECTION", f"{document.symbol}:{section}")))
+        elif document.source_table == "stock_context_event":
+            event_type = str(metadata.get("event_type") or "OTHER").upper()
+            predicate = {"POLICY": "HAS_POLICY_EVENT", "RAW_MATERIAL": "HAS_RAW_MATERIAL_EVENT",
+                         "SUPPLY_CHAIN": "HAS_SUPPLY_CHAIN_EVENT", "SHAREHOLDER": "HAS_SHAREHOLDER_EVENT",
+                         "CONTRACT": "HAS_CONTRACT_EVENT"}.get(event_type, "HAS_EXTERNAL_EVENT")
+            semantic.append((predicate, ("EXTERNAL_EVENT", f"{document.symbol}:{document.id}:{event_type}")))
+        elif document.source_table in {"stock_news", "stock_notice"}:
+            text_blob = f"{document.title}\n{document.content}"
+            mentions = []
+            if re.search(r"政策|监管|法规|国务院|财政|货币", text_blob, re.IGNORECASE):
+                mentions.append(("POLICY", "MENTIONS_POLICY"))
+            if re.search(r"原材料|锂|铜|钢|石油|大宗|商品价格", text_blob, re.IGNORECASE):
+                mentions.append(("RAW_MATERIAL", "MENTIONS_RAW_MATERIAL"))
+            if re.search(r"供应链|上游|下游|供应商|客户", text_blob, re.IGNORECASE):
+                mentions.append(("SUPPLY_CHAIN", "MENTIONS_SUPPLY_CHAIN"))
+            if re.search(r"回购|增持|减持|股东|大股东", text_blob, re.IGNORECASE):
+                mentions.append(("SHAREHOLDER", "MENTIONS_SHAREHOLDER"))
+            if re.search(r"合同|订单|签署|中标|协议", text_blob, re.IGNORECASE):
+                mentions.append(("CONTRACT", "MENTIONS_CONTRACT"))
+            semantic.extend((predicate, ("MENTIONED_EVENT", f"{document.market or ''}:{document.symbol}:{document.id}:{event_type}"))
+                            for event_type, predicate in mentions)
+        for predicate, target_key in semantic:
+            target = entities.get(target_key)
+            if target is None:
+                continue
+            key = (entity.id, predicate, target.id, document.id)
+            if key in semantic_seen:
+                continue
+            semantic_seen.add(key)
+            relations.append(KnowledgeRelation(
+                knowledge_base_id=knowledge_base.id, graph_id=graph.id,
+                subject_entity_id=entity.id, predicate=predicate,
+                object_entity_id=target.id, evidence_document_id=document.id,
+            ))
+            relations.append(KnowledgeRelation(
+                knowledge_base_id=knowledge_base.id, graph_id=graph.id,
+                subject_entity_id=target.id, predicate="SUPPORTED_BY",
+                object_entity_id=doc_entity.id, evidence_document_id=document.id,
+            ))
+
+    # Deterministic observable anomaly flags for price/volume, always linked to the
+    # original K-line row.  They are facts about an observation rather than forecasts.
+    from statistics import median
+    kline_rows: dict[tuple[str, str, str, str], list[KnowledgeDocument]] = {}
+    for document in documents:
+        if document.source_table == "stock_kline" and document.symbol:
+            metadata = document.metadata_json or {}
+            key = (str(document.market or ""), document.symbol, str(metadata.get("period") or ""), str(metadata.get("adjust") or ""))
+            kline_rows.setdefault(key, []).append(document)
+    baseline_missing: list[str] = []
+    for (market, symbol, period, adjust), rows in kline_rows.items():
+        # Rows are sorted oldest first so the anomaly baseline never sees future
+        # bars.  Separate markets and adjustment modes to avoid mixing scales.
+        rows.sort(key=lambda item: str((item.metadata_json or {}).get("trade_date") or ""))
+        prior_volumes: list[float] = []
+        stock = entities.get(("STOCK", f"{market}:{symbol}"))
+        if stock is None:
+            continue
+        for row in rows:
+            metadata = row.metadata_json or {}
+            anomalies: list[tuple[str, dict[str, Any]]] = []
+            try:
+                baseline = median(prior_volumes[-20:]) if len(prior_volumes) >= 3 else None
+                if baseline is None and metadata.get("volume") not in (None, ""):
+                    baseline_missing.append(f"{market}:{symbol}:{metadata.get('trade_date') or row.id}")
+                if baseline and metadata.get("volume") is not None and float(metadata["volume"]) >= baseline * 3:
+                    anomalies.append(("VOLUME_SPIKE", {"volume": metadata["volume"], "baseline_volume": baseline,
+                                                        "baseline_window": min(len(prior_volumes), 20)}))
+                if metadata.get("open_price") not in (None, 0, "") and metadata.get("close_price") not in (None, ""):
+                    if abs(float(metadata["close_price"]) / float(metadata["open_price"]) - 1) >= 0.07:
+                        anomalies.append(("PRICE_MOVE", {"open_price": metadata["open_price"], "close_price": metadata["close_price"]}))
+                if metadata.get("turnover_rate") is not None and float(metadata["turnover_rate"]) >= 20:
+                    anomalies.append(("TURNOVER_SPIKE", {"turnover_rate": metadata["turnover_rate"]}))
+            except (TypeError, ValueError):
+                continue
+            try:
+                if metadata.get("volume") not in (None, ""):
+                    prior_volumes.append(float(metadata["volume"]))
+            except (TypeError, ValueError):
+                pass
+            for anomaly_type, values in anomalies:
+                key = ("MARKET_ANOMALY", f"{market}:{symbol}:{period}:{adjust}:{metadata.get('trade_date') or row.id}:{anomaly_type}")
+                anomaly = entities.get(key)
+                if anomaly is None:
+                    anomaly = KnowledgeEntity(
+                        knowledge_base_id=knowledge_base.id, graph_id=graph.id,
+                        entity_type="MARKET_ANOMALY", entity_key=f"{graph.id}:{key[1]}",
+                        entity_name=f"{symbol} {anomaly_type}",
+                        properties_json={"anomaly_type": anomaly_type, **values,
+                                         "trade_date": metadata.get("trade_date"), "fact_only": True},
+                    )
+                    entities[key] = anomaly
+                    db.add(anomaly)
+                    db.flush()
+                relations.append(KnowledgeRelation(
+                    knowledge_base_id=knowledge_base.id, graph_id=graph.id,
+                    subject_entity_id=stock.id, predicate="HAS_MARKET_ANOMALY",
+                    object_entity_id=anomaly.id, evidence_document_id=row.id,
+                ))
+                relations.append(KnowledgeRelation(
+                    knowledge_base_id=knowledge_base.id, graph_id=graph.id,
+                    subject_entity_id=anomaly.id, predicate="EVIDENCED_BY",
+                    object_entity_id=document_entities[row.id].id, evidence_document_id=row.id,
+                ))
     db.add_all(relations)
     db.flush()
     graph.entity_count = len(entities) + len(document_entities)
     graph.relation_count = len(relations)
     knowledge_base.entity_count = int(db.scalar(select(func.count(KnowledgeEntity.id)).where(KnowledgeEntity.knowledge_base_id == knowledge_base.id)) or 0)
     knowledge_base.relation_count = int(db.scalar(select(func.count(KnowledgeRelation.id)).where(KnowledgeRelation.knowledge_base_id == knowledge_base.id)) or 0)
-    knowledge_base.status = "READY"
+    # Report source/category coverage explicitly.  Empty feeds are not silently
+    # turned into a "governed" graph, while a graph intentionally configured with a
+    # single source (for example a research-only graph) can still be complete.
+    category_sources = {
+        "company_profile": ["stock_symbol"],
+        "market_price_volume": ["stock_kline", "stock_realtime_quote"],
+        "financial_fundamentals": ["stock_financial_report"],
+        "shareholders_corporate_actions": ["stock_f10_cache", "stock_context_event"],
+        "news_notices": ["stock_news", "stock_notice"],
+        "external_context": ["stock_context_event"],
+        "research": ["research_report"],
+    }
+    categories: dict[str, Any] = {}
+    missing_categories: list[str] = []
+    shareholder_documents = [
+        document for document in documents
+        if (document.source_table == "stock_f10_cache" and re.search(
+            r"share|holder|股东|回购|增持|减持|股本", str((document.metadata_json or {}).get("section") or ""), re.IGNORECASE
+        ))
+        or (document.source_table == "stock_context_event" and
+            str((document.metadata_json or {}).get("event_type") or "").upper() == "SHAREHOLDER")
+    ]
+    for category, sources in category_sources.items():
+        configured = [source for source in sources if source in allowed_tables]
+        records = (len(shareholder_documents) if category == "shareholders_corporate_actions"
+                   else sum(raw_counts.get(source, 0) for source in configured))
+        categories[category] = {"configured_sources": configured, "records": records,
+                                "covered": bool(records) if configured else False}
+        if configured and not records:
+            missing_categories.append(category)
+    source_coverage = {
+        source: {"status": ("READY" if raw_counts.get(source, 0) else
+                             ("UNAVAILABLE" if source in unavailable else "EMPTY")),
+                 "raw_records": raw_counts.get(source, 0),
+                 "records_kept": sum(1 for document in documents if document.source_table == source),
+                 "duplicates_removed": duplicate_counts.get(source, 0),
+                 "limit_reached": source in limited_sources}
+        for source in sorted(allowed_tables)
+    }
+    missing_data = [source if source not in unavailable else f"{source}:{unavailable[source]}"
+                    for source in sorted(allowed_tables)
+                    if not raw_counts.get(source, 0) or source in limited_sources]
+    # Whole-graph counts can hide a single-stock gap (one financial row does not
+    # cover thousands of symbols).  Summarize dimensions per symbol and include a
+    # small sample for the governance UI and review workflow.
+    configured_dimension_sources = {
+        category: [source for source in sources if source in allowed_tables]
+        for category, sources in category_sources.items()
+    }
+    stock_symbols = sorted({f"{document.market or ''}:{document.symbol}" for document in documents if document.symbol})
+    stock_dimensions: dict[str, set[str]] = {symbol: set() for symbol in stock_symbols}
+    source_to_categories = {
+        source: [category for category, sources in configured_dimension_sources.items() if source in sources]
+        for source in allowed_tables
+    }
+    for document in documents:
+        if not document.symbol:
+            continue
+        stock_key = f"{document.market or ''}:{document.symbol}"
+        dimensions = source_to_categories.get(document.source_table, [])
+        if document.source_table == "stock_f10_cache" and not re.search(
+            r"share|holder|股东|回购|增持|减持|股本", str((document.metadata_json or {}).get("section") or ""), re.IGNORECASE
+        ):
+            dimensions = [category for category in dimensions if category != "shareholders_corporate_actions"]
+        if document.source_table == "stock_context_event" and str((document.metadata_json or {}).get("event_type") or "").upper() != "SHAREHOLDER":
+            dimensions = [category for category in dimensions if category != "shareholders_corporate_actions"]
+        stock_dimensions.setdefault(stock_key, set()).update(dimensions)
+    required_dimensions = [category for category, sources in configured_dimension_sources.items() if sources]
+    missing_dimension_counts = {
+        category: sum(1 for dimensions in stock_dimensions.values() if category not in dimensions)
+        for category in required_dimensions
+    }
+    uncovered_symbols = [symbol for symbol, dimensions in stock_dimensions.items()
+                         if any(category not in dimensions for category in required_dimensions)]
+    stock_dimension_coverage = {
+        "total_stock_count": len(stock_dimensions),
+        "covered_stock_count": len(stock_dimensions) - len(uncovered_symbols),
+        "required_dimensions": required_dimensions,
+        "missing_stock_count_by_dimension": missing_dimension_counts,
+        "uncovered_symbol_sample": uncovered_symbols[:50],
+    }
+    stock_scope_missing = bool(required_dimensions and not stock_dimensions)
+    coverage = {
+        "complete": not missing_data and not missing_categories and not limited_sources and
+        not uncovered_symbols and not stock_scope_missing,
+        "configured_sources": sorted(allowed_tables),
+        "source_coverage": source_coverage,
+        "categories": categories,
+        "missing_data": missing_data,
+        "missing_categories": missing_categories,
+        "limited_sources": sorted(limited_sources),
+        "stock_dimension_coverage": stock_dimension_coverage,
+        "stock_scope_missing": stock_scope_missing,
+        "documents_before_dedupe": sum(raw_counts.values()),
+        "documents_after_dedupe": len(documents),
+        "duplicate_records_removed": sum(duplicate_counts.values()),
+        "anomaly_baseline_missing_sample": baseline_missing[:50],
+        "notes": ["事实关系均关联证据文档；未从新闻标题推断因果或补造缺失数据。"],
+    }
+    knowledge_base.status = "READY" if coverage["complete"] else "PARTIAL"
     db.flush()
     return {
         "documents_created": len(documents),
-        "entities_created": len(entities),
+        "entities_created": len(entities) + len(document_entities),
         "relations_created": len(relations),
+        "coverage": coverage,
     }
 
 
-def build_knowledge_base(db: Session, knowledge_base: KnowledgeBase, max_documents: int = 100000) -> dict[str, int]:
+def build_knowledge_base(db: Session, knowledge_base: KnowledgeBase, max_documents: int = 100000) -> dict[str, Any]:
     graph = db.scalar(select(KnowledgeGraph).where(KnowledgeGraph.graph_code == knowledge_base.kb_code))
     if graph is None:
         raise ValueError("Default knowledge graph not found")

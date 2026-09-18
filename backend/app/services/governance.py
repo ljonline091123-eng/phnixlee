@@ -387,13 +387,18 @@ def govern_graph(db: Session, graph: KnowledgeGraph, source_asset_ids: list[int]
         log = _agent_review(db, agent, "knowledge_graph", "STOCK_KNOWLEDGE_GRAPH_BUILDER", evidence)
         graph.source_tables = table_names
         counts = build_knowledge_graph(db, graph)
-        report = {**counts, "sources": evidence["sources"], "agent_review": log.response_text,
+        coverage = counts.get("coverage", {}) if isinstance(counts, dict) else {}
+        # A successful build with missing/empty configured feeds is a partial,
+        # reviewable result.  It must not be presented as a complete graph.
+        governance_status = "GOVERNED" if coverage.get("complete", True) else "PENDING"
+        run_status = "SUCCESS" if governance_status == "GOVERNED" else "PENDING_REVIEW"
+        report = {**counts, "coverage": coverage, "sources": evidence["sources"], "agent_review": log.response_text,
                   "provider_code": log.provider_code, "model_call_log_id": log.id,
                   "checked_at": datetime.now(timezone.utc).isoformat()}
-        graph.governance_status = "GOVERNED"
+        graph.governance_status = governance_status
         graph.last_governed_at = datetime.now(timezone.utc)
         graph.governance_report_json = report
-        return _record(db, "GRAPH", graph.id, ids, agent.id if agent else None, "SUCCESS", report, log.id)
+        return _record(db, "GRAPH", graph.id, ids, agent.id if agent else None, run_status, report, log.id)
     except Exception as exc:
         db.rollback()
         _record(db, "GRAPH", graph.id, ids, agent.id if agent else None, "FAILED", {"error": str(exc)})

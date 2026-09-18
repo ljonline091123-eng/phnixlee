@@ -27,6 +27,7 @@ import {
   type WatchlistItem,
 } from "./api";
 import { StockDetailDrawer } from "./StockDetailDrawer";
+import { SelectionWorkbench } from "./SelectionWatch";
 import { GovernedAssetTab, GovernedKnowledgeTab } from "./ResourceGovernance";
 
 type ModuleView = "data" | "model" | "watch" | "research";
@@ -100,7 +101,7 @@ export default function App() {
                   : view === "model"
                     ? "模型实验室"
                     : view === "watch"
-                      ? "自动盯盘"
+                      ? "选股盯盘"
                       : "研究中心"}
               </button>
             ),
@@ -1135,6 +1136,8 @@ function message(text: string) {
       {tab === "logs" && (
         <LogsTab
           logs={logs}
+          instances={instances}
+          providers={providers}
           chat={chat}
           setChat={setChat}
           result={chatResult}
@@ -2530,17 +2533,25 @@ function SkillTab({
 }
 function LogsTab({
   logs,
+  instances,
+  providers,
   chat,
   setChat,
   result,
   onSend,
 }: {
   logs: ModelCallLog[];
+  instances: ModelInstance[];
+  providers: ModelProvider[];
   chat: { instance_code: string; message: string };
   setChat: (v: { instance_code: string; message: string }) => void;
   result: string;
   onSend: (e: FormEvent) => void;
 }) {
+  const selectedInstance = instances.find((item) => item.instance_code === chat.instance_code);
+  const selectedProvider = selectedInstance
+    ? providers.find((item) => item.id === selectedInstance.provider_id)
+    : undefined;
   return (
     <section className="panel">
       <div className="panel-heading">
@@ -2551,14 +2562,21 @@ function LogsTab({
       </div>
       <form className="mini-form" onSubmit={onSend}>
         <div className="field-grid">
-          <input
+          <select
             className={inputClass}
-            placeholder="实例编码，留空自动路由"
             value={chat.instance_code}
             onChange={(e) =>
               setChat({ ...chat, instance_code: e.target.value })
             }
-          />
+          >
+            <option value="">自动路由（按任务路由与降级链执行）</option>
+            {instances.filter((item) => item.enabled).map((item) => {
+              const provider = providers.find((candidate) => candidate.id === item.provider_id);
+              return <option key={item.id} value={item.instance_code}>
+                {item.instance_code} · {item.model_name || item.model_code} · {provider?.provider_name || "未关联供应商"}
+              </option>;
+            })}
+          </select>
           <textarea
             className="field-span-2"
             rows={3}
@@ -2568,6 +2586,23 @@ function LogsTab({
           <button className="primary-button" type="submit">
             发送测试
           </button>
+        </div>
+        <div className="model-selection-status" role="status">
+          {selectedInstance ? (
+            <>
+              <strong>指定实例</strong>
+              <span className="route-pill">{selectedInstance.instance_code}</span>
+              <span>{selectedProvider?.provider_name || "供应商未找到"} · {selectedInstance.model_code}</span>
+              <span className={selectedProvider?.api_key_configured || selectedInstance.api_key_configured ? "status-inline-ok" : "status-inline-warning"}>
+                {selectedProvider?.api_key_configured || selectedInstance.api_key_configured ? "API Key 已配置" : "API Key 未配置"}
+              </span>
+            </>
+          ) : (
+            <>
+              <strong>自动路由</strong>
+              <span>由后端按 task_type 选择首选实例，遇到限流、超时或服务错误时依次尝试降级链。</span>
+            </>
+          )}
         </div>
         <pre className="chat-result">{result || "等待模型返回"}</pre>
       </form>
@@ -2587,9 +2622,14 @@ function LogsTab({
               <tr key={log.id}>
                 <td>{formatDate(log.started_at)}</td>
                 <td>{log.task_type}</td>
-                <td>{log.instance_code || "--"}</td>
+                <td className="nowrap-code">{log.instance_code || "自动路由"}</td>
                 <td>{log.status}</td>
-                <td>{log.response_text || log.error_message || "--"}</td>
+                <td>
+                  <div className="log-execution-meta">
+                    <span>{log.provider_code || "--"} · {log.model_code || "--"}</span>
+                    <span className={log.status === "SUCCESS" ? "status-inline-ok" : "status-inline-warning"}>{log.response_text || log.error_message || "--"}</span>
+                  </div>
+                </td>
               </tr>
             ))}
           </tbody>
@@ -2612,7 +2652,7 @@ function formatSignedPercent(value?: number | string | null) {
 }
 
 function AutoWatchPage() {
-  const [tab, setTab] = useState<"watch" | "ipo">("watch");
+  const [tab, setTab] = useState<"selection" | "tracking" | "watch" | "ipo">("selection");
   const [items, setItems] = useState<WatchlistItem[]>([]);
   const [ipo, setIpo] = useState<IpoCalendarResponse | null>(null);
   const [market, setMarket] = useState("ALL");
@@ -2668,11 +2708,13 @@ function AutoWatchPage() {
   return (
     <>
       <PageHeader
-        eyebrow="AUTO WATCH"
-        title="自动盯盘"
-        detail={notice || "自选与打新"}
+        eyebrow="SELECTION & MONITORING"
+        title="选股盯盘"
+        detail={notice || "知识选股 · 人工复选 · 预测跟踪"}
       />
       <div className="resource-tabs">
+        <button type="button" className={tab === "selection" ? "active" : ""} onClick={() => setTab("selection")}>选股与复选</button>
+        <button type="button" className={tab === "tracking" ? "active" : ""} onClick={() => setTab("tracking")}>跟踪与复盘</button>
         <button
           type="button"
           className={tab === "watch" ? "active" : ""}
@@ -2691,7 +2733,7 @@ function AutoWatchPage() {
           打新
         </button>
       </div>
-      {tab === "watch" ? (
+      {tab === "selection" || tab === "tracking" ? <SelectionWorkbench mode={tab} /> : tab === "watch" ? (
         <section className="panel">
           <div className="inline-form">
             <select
@@ -2949,6 +2991,9 @@ function ResearchPage() {
   const [chatQuestion, setChatQuestion] = useState("请帮我检查当前股票数据治理、知识图谱和选股分析能力还缺什么。");
   const [chatAnswer, setChatAnswer] = useState("");
   const [chatRunning, setChatRunning] = useState(false);
+  const [researchInstances, setResearchInstances] = useState<ModelInstance[]>([]);
+  const [chatModelInstance, setChatModelInstance] = useState("");
+  const [researchModelInstance, setResearchModelInstance] = useState("");
   const [assets, setAssets] = useState<DataAsset[]>([]);
   const [knowledge, setKnowledge] = useState<KnowledgeBase[]>([]);
   const [selectedAssets, setSelectedAssets] = useState<string[]>([]);
@@ -2962,11 +3007,12 @@ function ResearchPage() {
   }
 
   useEffect(() => {
-    void Promise.all([api.listDataAssets(), api.listKnowledgeBases(), api.listResearchReports()])
-      .then(([assetResult, knowledgeResult, reportResult]) => {
+    void Promise.all([api.listDataAssets(), api.listKnowledgeBases(), api.listResearchReports(), api.listModelInstances()])
+      .then(([assetResult, knowledgeResult, reportResult, instanceResult]) => {
         setAssets(assetResult);
         setKnowledge(knowledgeResult);
         setReports(reportResult);
+        setResearchInstances(instanceResult);
         setSelectedAssets((current) =>
           current.length ? current : assetResult.filter((item) => item.enabled).map((item) => item.asset_code),
         );
@@ -3028,6 +3074,7 @@ function ResearchPage() {
           data_source_codes: selectedAssets,
           knowledge_base_ids: selectedKnowledge,
         },
+        instance_code: chatModelInstance || undefined,
       });
       setChatAnswer(result.response_text);
       void loadReports();
@@ -3056,6 +3103,7 @@ function ResearchPage() {
           top_k: 5,
           data_source_codes: selectedAssets,
           knowledge_base_ids: selectedKnowledge,
+          model_instance_code: researchModelInstance || undefined,
         },
         {
           onStage: (data) => setStage(data.message),
@@ -3109,6 +3157,12 @@ function ResearchPage() {
             </div>
           </div>
           <form className="research-chat-form" onSubmit={sendChat}>
+            <label className="research-model-picker">对话模型
+              <select className={inputClass} value={chatModelInstance} onChange={(e) => setChatModelInstance(e.target.value)}>
+                <option value="">自动路由（按任务路由与降级链）</option>
+                {researchInstances.filter((item) => item.enabled).map((item) => <option key={item.id} value={item.instance_code} disabled={!item.api_key_configured}>{item.instance_code} · {item.model_name || item.model_code}{item.api_key_configured ? "" : "（未配置密钥）"}</option>)}
+              </select>
+            </label>
             <textarea
               className="text-input research-question-input"
               rows={5}
@@ -3152,6 +3206,10 @@ function ResearchPage() {
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="输入股票代码或名称"
               />
+              <select className={inputClass} value={researchModelInstance} onChange={(e) => setResearchModelInstance(e.target.value)} aria-label="研究模型">
+                <option value="">自动路由（研报任务）</option>
+                {researchInstances.filter((item) => item.enabled).map((item) => <option key={item.id} value={item.instance_code} disabled={!item.api_key_configured}>{item.instance_code} · {item.model_name || item.model_code}{item.api_key_configured ? "" : "（未配置密钥）"}</option>)}
+              </select>
               <button className="primary-button" type="submit" disabled={running}>
                 {running ? "生成中..." : "生成研报"}
               </button>

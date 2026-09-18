@@ -654,9 +654,45 @@ def explore_knowledge_graph(graph_id: int, q: str = "", limit: int = 30,
                            "evidence": ({"document_id": evidence[relation.evidence_document_id].id,
                                          "title": evidence[relation.evidence_document_id].title,
                                          "source_table": evidence[relation.evidence_document_id].source_table,
-                                         "excerpt": evidence[relation.evidence_document_id].content[:500]}
+                                         "excerpt": evidence[relation.evidence_document_id].content[:500],
+                                         "content_scope": (evidence[relation.evidence_document_id].metadata_json or {}).get("content_scope", "SOURCE_RECORD"),
+                                         "content_truncated": bool((evidence[relation.evidence_document_id].metadata_json or {}).get("content_truncated", False)),
+                                         "document_url": f"/api/v1/resources/knowledge-graphs/{graph_id}/documents/{evidence[relation.evidence_document_id].id}"}
                                         if relation.evidence_document_id in evidence else None)}
                           for relation in relations]}
+
+
+@router.get("/knowledge-graphs/{graph_id}/documents/{document_id}")
+def get_knowledge_graph_document(graph_id: int, document_id: int,
+                                 db: Session = Depends(get_db)) -> dict:
+    """Return the complete bounded source document for an evidence relation.
+
+    ``explore`` intentionally returns short excerpts for graph browsing.  This
+    endpoint keeps the graph boundary and lets reviewers inspect the full source
+    payload (or the explicitly marked bounded content) without pretending that a
+    source summary is an original full article.
+    """
+    _graph_or_404(db, graph_id)
+    document = db.scalar(select(KnowledgeDocument).where(
+        KnowledgeDocument.id == document_id,
+        KnowledgeDocument.graph_id == graph_id,
+    ))
+    if document is None:
+        raise HTTPException(status_code=404, detail="Knowledge graph document not found")
+    metadata = document.metadata_json or {}
+    return {
+        "document_id": document.id,
+        "source_table": document.source_table,
+        "source_record_id": document.source_record_id,
+        "market": document.market,
+        "symbol": document.symbol,
+        "title": document.title,
+        "content": document.content,
+        "content_length": len(document.content or ""),
+        "content_scope": metadata.get("content_scope", "SOURCE_RECORD"),
+        "content_truncated": bool(metadata.get("content_truncated", False)),
+        "metadata_json": metadata,
+    }
 
 
 @router.get("/skills/{skill_id}/file", response_model=ModelSkillRead)

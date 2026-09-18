@@ -557,7 +557,21 @@ export type GovernanceRun = {
 
 export type GraphExplore = {
   nodes: Array<{ id: number; type: string; key: string; name: string; properties: Record<string, unknown> }>;
-  relations: Array<{ id: number; from_id: number; to_id: number; type: string; evidence?: { document_id: number; title: string; source_table: string; excerpt: string } | null }>;
+  relations: Array<{ id: number; from_id: number; to_id: number; type: string; evidence?: { document_id: number; title: string; source_table: string; excerpt: string; content_scope?: string; content_truncated?: boolean; document_url?: string } | null }>;
+};
+
+export type KnowledgeGraphDocument = {
+  document_id: number;
+  source_table: string;
+  source_record_id?: string | number | null;
+  market?: string | null;
+  symbol?: string | null;
+  title: string;
+  content: string;
+  content_length: number;
+  content_scope: string;
+  content_truncated: boolean;
+  metadata_json: Record<string, unknown>;
 };
 
 export type ModelTestResponse = {
@@ -671,7 +685,7 @@ export type ResearchReportDetail = ResearchReportSummary & {
 
 type RequestOptions = RequestInit & { body?: BodyInit | null };
 
-async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+export async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...options,
     cache: "no-store",
@@ -863,6 +877,7 @@ export const api = {
   updateKnowledgeGraph: (id: number, payload: Partial<KnowledgeGraphPayload>) => request<KnowledgeGraph>(`/resources/knowledge-graphs/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
   deleteKnowledgeGraph: (id: number) => request<void>(`/resources/knowledge-graphs/${id}`, { method: "DELETE" }),
   exploreKnowledgeGraph: (id: number, q = "") => request<GraphExplore>(`/resources/knowledge-graphs/${id}/explore?q=${encodeURIComponent(q)}`),
+  getKnowledgeGraphDocument: (graphId: number, documentId: number) => request<KnowledgeGraphDocument>(`/resources/knowledge-graphs/${graphId}/documents/${documentId}`),
   setGraphGovernanceState: (id: number, governance_status: string) => request<KnowledgeGraph>(`/resources/knowledge-graphs/${id}/governance-state`, { method: "PUT", body: JSON.stringify({ governance_status }) }),
   governKnowledgeGraph: (id: number, source_asset_ids: number[], agent_id?: number) => request<GovernanceRun>(`/resources/knowledge-graphs/${id}/govern`, { method: "POST", body: JSON.stringify({ source_asset_ids, agent_id }) }),
   batchGovernGraphs: (target_ids: number[], source_asset_ids: number[] = [], agent_id?: number) => request<{ results: Array<{ target_id: number; status: string; message?: string }> }>("/resources/knowledge-graphs/govern/batch", { method: "POST", body: JSON.stringify({ target_ids, source_asset_ids, agent_id }) }),
@@ -903,6 +918,7 @@ export const api = {
       refresh?: boolean;
       data_source_codes?: string[];
       knowledge_base_ids?: number[];
+      model_instance_code?: string;
     },
     handlers: {
       onStage?: (data: { stage: string; message: string }) => void;

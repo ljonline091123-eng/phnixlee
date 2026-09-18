@@ -20,6 +20,9 @@ class ResearchAnalyzeRequest(BaseModel):
     refresh: bool = False
     data_source_codes: list[str] = Field(default_factory=list)
     knowledge_base_ids: list[int] = Field(default_factory=list)
+    # Empty means the configured research_report/stock_analysis route.  A
+    # concrete instance code is available for reproducible model comparison.
+    model_instance_code: str | None = Field(default=None, max_length=64)
 
 
 class ResearchAgentSnapshot(BaseModel):

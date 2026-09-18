@@ -14,14 +14,13 @@ from app.models import DatabaseTableComment
 class TableCommentTests(unittest.TestCase):
     def test_every_model_table_has_a_description(self) -> None:
         self.assertEqual(set(Base.metadata.tables), set(TABLE_DESCRIPTIONS))
-        self.assertEqual(len(TABLE_DESCRIPTIONS), 38)
+        self.assertTrue({"selection_run", "selection_candidate", "selection_tracking", "selection_snapshot", "stock_context_event"}.issubset(TABLE_DESCRIPTIONS))
         for name, table in Base.metadata.tables.items():
             self.assertEqual(table.comment, TABLE_DESCRIPTIONS[name].description)
             self.assertEqual(
                 {column.name: column.comment for column in table.columns},
                 column_descriptions_for(table),
             )
-        self.assertEqual(sum(len(table.columns) for table in Base.metadata.tables.values()), 442)
 
     def test_catalog_is_queryable_and_seed_is_idempotent(self) -> None:
         engine = create_engine("sqlite:///:memory:")
@@ -29,7 +28,7 @@ class TableCommentTests(unittest.TestCase):
         with Session(engine) as session:
             seed_table_comments(session)
             rows = session.scalars(select(DatabaseTableComment)).all()
-            self.assertEqual(len(rows), 38)
+            self.assertEqual(len(rows), len(Base.metadata.tables))
             self.assertEqual(
                 session.get(DatabaseTableComment, "stock_kline").display_name,
                 "股票历史 K 线",
@@ -38,7 +37,7 @@ class TableCommentTests(unittest.TestCase):
             self.assertEqual(len(kline_columns), len(Base.metadata.tables["stock_kline"].columns))
             self.assertIn("收盘价", kline_columns["close_price"])
             seed_table_comments(session)
-            self.assertEqual(len(session.scalars(select(DatabaseTableComment)).all()), 38)
+            self.assertEqual(len(session.scalars(select(DatabaseTableComment)).all()), len(Base.metadata.tables))
         with engine.connect() as connection:
             flattened = connection.execute(text(
                 "SELECT j.key, j.value FROM database_table_comment AS t, "

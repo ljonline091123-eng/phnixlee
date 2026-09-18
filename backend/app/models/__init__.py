@@ -36,7 +36,9 @@ from app.models.ai_hub import (
     ModelSkillRevision,
 )
 from app.models.schema_catalog import DatabaseTableComment
+from app.models.context_event import StockContextEvent
 from app.models.pipeline import PipelineRun, PipelineStageRun, ScheduledJob
+from app.models.selection import SelectionCandidate, SelectionRun, SelectionSnapshot, SelectionTracking
 from app.db.base import Base
 from app.db.table_comments import apply_table_comments
 
@@ -80,4 +82,8 @@ __all__ = [
     "PipelineRun",
     "PipelineStageRun",
     "ScheduledJob",
+    "SelectionRun",
+    "SelectionCandidate",
+    "SelectionTracking",
+    "SelectionSnapshot",
 ]

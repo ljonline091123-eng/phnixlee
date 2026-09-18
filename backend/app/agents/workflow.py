@@ -72,6 +72,7 @@ class ResearchContext:
     market: str | None
     data_source_codes: list[str] = field(default_factory=list)
     knowledge_base_ids: list[int] = field(default_factory=list)
+    model_instance_code: str | None = None
     knowledge_documents: list[dict[str, Any]] = field(default_factory=list)
     history_evaluation: dict[str, Any] = field(default_factory=dict)
     price_snapshot: dict[str, Any] = field(default_factory=dict)
@@ -507,6 +508,7 @@ class MasterOrchestratorAgent:
         }
         response = ModelHubService(db).chat(
             task_type="stock_analysis",
+            instance_code=context.model_instance_code,
             messages=[
                 {"role": "system", "content": ORCHESTRATOR_SYSTEM_PROMPT},
                 {
@@ -665,12 +667,14 @@ class ResearchWorkflow:
         refresh: bool = False,
         data_source_codes: list[str] | None = None,
         knowledge_base_ids: list[int] | None = None,
+        model_instance_code: str | None = None,
     ) -> Iterator[dict[str, Any]]:
         context = ResearchContext(
             symbol=symbol,
             market=market,
             data_source_codes=list(data_source_codes or []),
             knowledge_base_ids=list(knowledge_base_ids or []),
+            model_instance_code=model_instance_code,
         )
         yield {"event": "stage", "data": {"stage": "resolve", "message": "正在解析本地股票主数据"}}
         try:

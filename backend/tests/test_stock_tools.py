@@ -10,6 +10,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.api.stocks import get_stock_f10
 from app.db.base import Base
+from app.db.session import get_db
 from app.main import app
 from app.models.market_data import DataSource, StockF10Cache, StockKline, StockNews, StockNotice, StockRealtimeQuote, StockSymbol
 from app.services.catalog import seed_default_catalog
@@ -37,6 +38,10 @@ class StockToolsFoundationTest(unittest.TestCase):
 
     def setUp(self) -> None:
         self.db = self.session_factory()
+        # Keep API tests isolated from the developer's running database and
+        # configured provider keys.  Otherwise this test can spend credits on
+        # a real model instead of exercising the seeded mock provider.
+        app.dependency_overrides[get_db] = lambda: self.db
         Base.metadata.drop_all(self.engine)
         Base.metadata.create_all(self.engine)
         seed_default_catalog(self.db)
@@ -125,6 +130,7 @@ class StockToolsFoundationTest(unittest.TestCase):
         self.db.commit()
 
     def tearDown(self) -> None:
+        app.dependency_overrides.pop(get_db, None)
         self.db.close()
 
     def test_stock_tools_catalog_is_exposed(self) -> None:

@@ -76,3 +76,15 @@ def ensure_compat_columns(engine: Engine) -> None:
                     "ALTER TABLE database_table_comment ADD COLUMN "
                     "column_comments_json JSON NOT NULL DEFAULT '{}'"
                 ))
+        if "selection_tracking" in tables:
+            existing = {column["name"] for column in inspector.get_columns("selection_tracking")}
+            if "confirmation_date" not in existing:
+                connection.execute(text(
+                    "ALTER TABLE selection_tracking ADD COLUMN confirmation_date VARCHAR(16) NOT NULL DEFAULT '1970-01-01'"
+                ))
+            if "adjust" not in existing:
+                connection.execute(text("ALTER TABLE selection_tracking ADD COLUMN adjust VARCHAR(16) NOT NULL DEFAULT ''"))
+            if "target_hit" not in existing:
+                connection.execute(text("ALTER TABLE selection_tracking ADD COLUMN target_hit BOOLEAN"))
+            if "stop_hit" not in existing:
+                connection.execute(text("ALTER TABLE selection_tracking ADD COLUMN stop_hit BOOLEAN"))
