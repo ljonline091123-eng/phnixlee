@@ -21,23 +21,35 @@
         </where>
     </select>
 
-    <!-- 采购方式分析：招标率统计合计（视图口径=方案完成+公告完成，只统计已完成采购） -->
+    <!-- 采购方式分析：采购台账已完成任务(grain=TASK, status=completed)按采购方式计数。
+         只统计公开(1)/邀标(2)/询价(3)/单一(4)四类，与招标率统计口径一致；
+         时间口径同招采概览=招标完成时间(中标结果发布 notifi_time)，支持单位+年份筛选。 -->
     <select id="selectMethodCount" resultType="java.util.HashMap">
-        SELECT IFNULL(SUM(gk_num), 0) AS gkNum,
-               IFNULL(SUM(yq_num), 0) AS yqNum,
-               IFNULL(SUM(xj_num), 0) AS xjNum,
-               IFNULL(SUM(dy_num), 0) AS dyNum,
-               IFNULL(SUM(cg_num), 0) AS cgNum
-        FROM tb_bid_report
-        <where>
-            project_department_id IS NOT NULL
-            <if test="scopeId != null and scopeId != ''">
-                AND ( project_department_id = #{scopeId} OR project_department_id IN (
-                    SELECT t.thrid_dept_id FROM sys_dept t WHERE FIND_IN_SET(
-                        (SELECT dept_id FROM sys_dept WHERE thrid_dept_id = #{scopeId}), t.ancestors) )
-                )
-            </if>
-        </where>
+        SELECT l.method AS method,
+               COUNT(*) AS cnt
+        FROM tb_purchase_ledger l
+        INNER JOIN tb_bidding_result br ON br.id = (
+            SELECT br2.id FROM tb_bidding_result br2
+            WHERE br2.notice_id = l.notice_id
+              AND br2.bid_result = 1
+              AND br2.del_flag = 0
+            ORDER BY br2.update_time DESC
+            LIMIT 1
+        )
+        WHERE l.grain = 'TASK'
+          AND l.status = 'completed'
+          AND l.method IN (1, 2, 3, 4)
+          AND br.notifi_time IS NOT NULL
+        <if test="orgId != null and orgId != ''">
+          AND ( l.org_id = #{orgId} OR l.org_id IN (
+              SELECT t.thrid_dept_id FROM sys_dept t WHERE FIND_IN_SET(
+                  (SELECT dept_id FROM sys_dept WHERE thrid_dept_id = #{orgId}), t.ancestors) )
+          )
+        </if>
+        <if test="year != null">
+          AND YEAR(br.notifi_time) = #{year}
+        </if>
+        GROUP BY l.method
     </select>
 
     <!-- 招采概览-月度金额：已完成任务(grain=TASK, status=completed)按招标完成时间聚合。
@@ -79,12 +91,15 @@
         GROUP BY MONTH(t.completion_time)
     </select>
 
-    <!-- 合作金额TOP5供应商：供应商报表按供应商汇总 合同签订金额(含税) 取前5 -->
+    <!-- 合作金额TOP5供应商：供应商报表按供应商汇总 合同签订金额(含税) 取前5。
+         无合同金额的供应商按0参与排名（COALESCE），保证表格始终有数据行；
+         过滤空名称供应商。 -->
     <select id="selectTopVendors" resultType="java.util.HashMap">
         SELECT vendor_name           AS vendorName,
-               SUM(contract_amount)  AS contractAmount
+               COALESCE(SUM(contract_amount), 0) AS contractAmount
         FROM tb_vendor_report
         <where>
+            vendor_name IS NOT NULL AND vendor_name != ''
             <if test="scopeId != null and scopeId != ''">
                 AND ( party_a_org_id = #{scopeId} OR party_a_org_id IN (
                     SELECT t.thrid_dept_id FROM sys_dept t WHERE FIND_IN_SET(
@@ -93,7 +108,7 @@
             </if>
         </where>
         GROUP BY vendor_name
-        ORDER BY SUM(contract_amount) DESC
+        ORDER BY COALESCE(SUM(contract_amount), 0) DESC
         LIMIT 5
     </select>
 

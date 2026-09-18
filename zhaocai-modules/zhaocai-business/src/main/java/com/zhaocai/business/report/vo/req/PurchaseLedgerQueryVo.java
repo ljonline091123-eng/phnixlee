@@ -50,11 +50,11 @@ public class PurchaseLedgerQueryVo {
     /** 计划/采购方案编号或名称 关键字 */
     private String keyword;
 
-    /** 计划生效时间-起 */
-    private String planEffectBegin;
+    /** 计划完成时间-起(采购计划end_date) */
+    private String planFinishBegin;
 
-    /** 计划生效时间-止 */
-    private String planEffectEnd;
+    /** 计划完成时间-止 */
+    private String planFinishEnd;
 
     /** 页数 */
     private int pageNum;

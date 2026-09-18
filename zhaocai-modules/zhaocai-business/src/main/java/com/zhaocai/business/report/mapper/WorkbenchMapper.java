@@ -18,8 +18,12 @@ public interface WorkbenchMapper {
     /** 五张状态卡：采购台账按状态计数（待招采/待开标/待定标/已完成/异常终止） */
     Map<String, Object> selectStatusCount(@Param("scopeId") String scopeId);
 
-    /** 采购方式分析：招标率统计合计（公开/邀标/询价/单一次数，口径=只统计已完成采购） */
-    Map<String, Object> selectMethodCount(@Param("scopeId") String scopeId);
+    /**
+     * 采购方式分析：采购台账已完成任务按采购方式计数（1公开 2邀标 3询价 4单一），
+     * 时间口径同招采概览(招标完成时间 notifi_time)，支持单位+年份筛选
+     * 返回 method / cnt
+     */
+    List<Map<String, Object>> selectMethodCount(@Param("orgId") String orgId, @Param("year") Integer year);
 
     /**
      * 招采概览-月度金额：已完成任务按招标完成时间(中标结果发布 notifi_time)聚合

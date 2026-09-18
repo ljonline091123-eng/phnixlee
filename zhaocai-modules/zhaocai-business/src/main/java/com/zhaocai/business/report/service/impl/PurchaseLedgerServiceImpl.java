@@ -24,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -67,10 +68,28 @@ public class PurchaseLedgerServiceImpl extends ServiceImpl<PurchaseLedgerMapper,
     }
 
     /**
-     * 汇总视图聚合查询
+     * 汇总视图查询：平铺聚合 → 组装 单位→部门→项目行 三层树
      */
     @Override
     public List<PurchaseLedgerSummaryVo> getSummary(PurchaseLedgerQueryVo queryVo) {
+        return buildSummaryTree(getSummaryFlat(queryVo), queryVo.getId());
+    }
+
+    /**
+     * 汇总视图导出（保持平铺明细，不随页面改树）
+     */
+    @Override
+    public Map<String, Object> summaryExport(PurchaseLedgerQueryVo queryVo) {
+        Map<String, Object> map = new HashMap<>();
+        map.put("title", "采购台账");
+        map.put("list", getSummaryFlat(queryVo));
+        return map;
+    }
+
+    /**
+     * 平铺聚合查询（组织 × 项目 × 采购需求类型），并翻译需求类型名称
+     */
+    private List<PurchaseLedgerSummaryVo> getSummaryFlat(PurchaseLedgerQueryVo queryVo) {
         if (!resolveScopeOrgId(queryVo)) {
             return new ArrayList<>();
         }
@@ -84,14 +103,118 @@ public class PurchaseLedgerServiceImpl extends ServiceImpl<PurchaseLedgerMapper,
     }
 
     /**
-     * 汇总视图导出
+     * 把平铺汇总行组装成 单位 → 部门 → 项目 → 采购需求类型 四级树
+     *
+     * 组织骨架：getDeptAndNextDept(scopeOrgId, 含公司、部门,不含项目部) 取根单位 + 直属部门。
+     * 台账叶子行（项目×需求类型）按 org_id（管理组织=部门）归组：先按项目合并成项目节点，
+     * 需求类型行挂在项目下；管理组织不在骨架里（如项目部）则回落到根单位，保证数据不丢。
+     * 各级节点五状态 = 其下所有叶子行计数向上求和。
+     *
+     * @param flatList    平铺汇总行（组织×项目×需求类型）
+     * @param scopeOrgId  生效范围组织id(第三方部门id)，getSummaryFlat 已把 queryVo.id 修正为它
      */
-    @Override
-    public Map<String, Object> summaryExport(PurchaseLedgerQueryVo queryVo) {
-        Map<String, Object> map = new HashMap<>();
-        map.put("title", "采购台账");
-        map.put("list", getSummary(queryVo));
-        return map;
+    private List<PurchaseLedgerSummaryVo> buildSummaryTree(List<PurchaseLedgerSummaryVo> flatList, String scopeOrgId) {
+        if (CollectionUtil.isEmpty(flatList) || StringUtils.isEmpty(scopeOrgId)) {
+            return flatList;
+        }
+        List<SysDept> deptList = remoteSystemService.getDeptAndNextDept(
+                scopeOrgId, DeptTypeEnum.NOT_X_DEPT_TYPE.getType(), SecurityConstants.INNER);
+        if (CollectionUtil.isEmpty(deptList)) {
+            return flatList;
+        }
+        SysDept unitDept = deptList.get(0);
+
+        // 单位节点（根）
+        PurchaseLedgerSummaryVo unitNode = new PurchaseLedgerSummaryVo();
+        unitNode.setId(unitDept.getThridDeptId());
+        unitNode.setType("U");
+        unitNode.setOrgId(unitDept.getThridDeptId());
+        unitNode.setOrgName(unitDept.getDeptName());
+
+        // 部门节点：部门 thrid_dept_id -> 节点
+        Map<String, PurchaseLedgerSummaryVo> deptNodeMap = new LinkedHashMap<>();
+        for (int i = 1; i < deptList.size(); i++) {
+            SysDept dept = deptList.get(i);
+            PurchaseLedgerSummaryVo deptNode = new PurchaseLedgerSummaryVo();
+            deptNode.setId(dept.getThridDeptId());
+            deptNode.setType("D");
+            deptNode.setOrgId(dept.getThridDeptId());
+            deptNode.setOrgName(dept.getDeptName());
+            deptNodeMap.put(dept.getThridDeptId(), deptNode);
+        }
+
+        // 叶子行(项目×需求类型) → 需求类型节点(T)；按 部门 → 项目 两级归组
+        // 项目节点 key=orgId_projectCode；管理组织不在部门骨架里的回落到根单位
+        Map<String, PurchaseLedgerSummaryVo> projectNodeMap = new LinkedHashMap<>();
+        Map<String, List<PurchaseLedgerSummaryVo>> deptProjectList = new LinkedHashMap<>(); // 组织id -> 项目节点，null=回落到单位
+        for (PurchaseLedgerSummaryVo row : flatList) {
+            row.setType("T");
+            row.setId(row.getOrgId() + "_"
+                    + (row.getProjectCode() == null ? "" : row.getProjectCode()) + "_"
+                    + (row.getDemandType() == null ? "" : row.getDemandType()));
+
+            String parentOrgId = deptNodeMap.containsKey(row.getOrgId()) ? row.getOrgId() : null;
+            String projectKey = (parentOrgId == null ? "" : parentOrgId) + "_"
+                    + (row.getProjectCode() == null ? "" : row.getProjectCode());
+            PurchaseLedgerSummaryVo projectNode = projectNodeMap.get(projectKey);
+            if (projectNode == null) {
+                projectNode = new PurchaseLedgerSummaryVo();
+                projectNode.setId(projectKey);
+                projectNode.setType("P");
+                projectNode.setOrgId(parentOrgId);
+                projectNode.setProjectCode(row.getProjectCode());
+                projectNode.setProjectName(row.getProjectName());
+                projectNodeMap.put(projectKey, projectNode);
+                deptProjectList.computeIfAbsent(parentOrgId, k -> new ArrayList<>()).add(projectNode);
+            }
+            projectNode.getChildren().add(row);
+        }
+
+        // 项目求和后挂到部门（无项目的部门不展示），部门求和后挂到单位；回落到单位的项目直接挂单位
+        for (PurchaseLedgerSummaryVo deptNode : deptNodeMap.values()) {
+            List<PurchaseLedgerSummaryVo> projects = deptProjectList.get(deptNode.getOrgId());
+            if (CollectionUtil.isNotEmpty(projects)) {
+                for (PurchaseLedgerSummaryVo projectNode : projects) {
+                    sumNode(projectNode);
+                    deptNode.getChildren().add(projectNode);
+                }
+                sumNode(deptNode);
+                unitNode.getChildren().add(deptNode);
+            }
+        }
+        List<PurchaseLedgerSummaryVo> unitProjects = deptProjectList.get(null);
+        if (CollectionUtil.isNotEmpty(unitProjects)) {
+            for (PurchaseLedgerSummaryVo projectNode : unitProjects) {
+                sumNode(projectNode);
+                unitNode.getChildren().add(projectNode);
+            }
+        }
+        sumNode(unitNode);
+
+        List<PurchaseLedgerSummaryVo> result = new ArrayList<>();
+        result.add(unitNode);
+        return result;
+    }
+
+    /** 五状态计数向上求和（子节点已含各自计数） */
+    private void sumNode(PurchaseLedgerSummaryVo node) {
+        long pending = 0L, preopen = 0L, preaward = 0L, completed = 0L, exception = 0L;
+        for (PurchaseLedgerSummaryVo child : node.getChildren()) {
+            pending += count(child.getPending());
+            preopen += count(child.getPreopen());
+            preaward += count(child.getPreaward());
+            completed += count(child.getCompleted());
+            exception += count(child.getException());
+        }
+        node.setPending(pending);
+        node.setPreopen(preopen);
+        node.setPreaward(preaward);
+        node.setCompleted(completed);
+        node.setException(exception);
+    }
+
+    private long count(Long v) {
+        return v == null ? 0L : v;
     }
 
     /**

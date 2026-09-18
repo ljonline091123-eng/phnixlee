@@ -30,12 +30,14 @@ public class WorkbenchController extends BladeController {
     /**
      * 工作台统计
      *
-     * @param year  年份(概览筛选用，空=全部年份)
-     * @param orgId 组织id(sys_dept.thrid_dept_id，概览筛选用，空=全部单位)
+     * @param year        年份(招采概览筛选用，空=全部年份)
+     * @param orgId       组织id(sys_dept.thrid_dept_id，招采概览筛选用，空=全部单位)
+     * @param methodYear  年份(采购方式分析筛选用，空=全部年份)
+     * @param methodOrgId 组织id(sys_dept.thrid_dept_id，采购方式分析筛选用，空=全部单位)
      */
     @ApiOperation("工作台统计数据")
     @GetMapping("/workbench")
-    public AjaxResult workbench(Integer year, String orgId) {
-        return AjaxResult.success(workbenchService.getWorkbench(year, orgId));
+    public AjaxResult workbench(Integer year, String orgId, Integer methodYear, String methodOrgId) {
+        return AjaxResult.success(workbenchService.getWorkbench(year, orgId, methodYear, methodOrgId));
     }
 }

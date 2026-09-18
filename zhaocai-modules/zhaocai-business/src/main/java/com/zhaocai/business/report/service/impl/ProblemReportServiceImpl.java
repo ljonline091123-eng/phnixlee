@@ -145,8 +145,8 @@ public class ProblemReportServiceImpl extends ServiceImpl<ProblemReportMapper, P
                     .collect(Collectors.toList());
             if (CollectionUtil.isNotEmpty(bidList)) {
                 ProblemReportVo vo = new ProblemReportVo();
-                if ("X".equals(dept.getThridOrgType())) {
-                    // 项目部层获取下面所有
+                if ("X".equals(dept.getThridOrgType()) || StringUtils.isEmpty(dept.getThridOrgType())) {
+                    // 项目部层/部门层获取下面所有
                     vo = bidList.get(0);
                     queryVo.setProjectDepartmentId(dept.getThridDeptId());
                     vo.setChildren(baseMapper.select(queryVo));
@@ -219,8 +219,8 @@ public class ProblemReportServiceImpl extends ServiceImpl<ProblemReportMapper, P
                             List<ProblemReportVo> children = new ArrayList<>();
                             ProblemReportVo vo = new ProblemReportVo();
                             vo.setNum(bidList.stream().map(ProblemReportVo::getNum).reduce(BigDecimal.ZERO, BigDecimal::add));
-                            if ("X".equals(sysDept.getThridOrgType())) {
-                                // 项目部层获取下面所有
+                            if ("X".equals(sysDept.getThridOrgType()) || StringUtils.isEmpty(sysDept.getThridOrgType())) {
+                                // 项目部层/部门层获取下面所有
                                 vo.setFourDeptName(sysDept.getDeptName());
                                 queryVo.setProjectDepartmentId(sysDept.getThridDeptId());
                                 children = baseMapper.select(queryVo);

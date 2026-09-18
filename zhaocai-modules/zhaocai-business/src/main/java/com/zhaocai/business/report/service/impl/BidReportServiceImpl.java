@@ -188,8 +188,8 @@ public class BidReportServiceImpl extends ServiceImpl<BidReportMapper, BidReport
                             vo.setId(sysDept.getThridDeptId());
                             vo.setDeptName(sysDept.getDeptName());
                             vo.setParentId(sysDept.getThridParentId());
-                            if ("X".equals(sysDept.getThridOrgType())) {
-                                // 项目部层获取下面所有
+                            if ("X".equals(sysDept.getThridOrgType()) || StringUtils.isEmpty(sysDept.getThridOrgType())) {
+                                // 项目部层/部门层获取下面所有
                                 vo = bidList.get(0);
                                 vo.setFourDeptName(sysDept.getDeptName());
                                 resultList.add(vo);
@@ -243,8 +243,8 @@ public class BidReportServiceImpl extends ServiceImpl<BidReportMapper, BidReport
                     .collect(Collectors.toList());
             if (CollectionUtil.isNotEmpty(bidList)) {
                 VBidCountVo vo = new VBidCountVo();
-                if ("X".equals(dept.getThridOrgType())) {
-                    // 项目部层获取下面所有
+                if ("X".equals(dept.getThridOrgType()) || StringUtils.isEmpty(dept.getThridOrgType())) {
+                    // 项目部层/部门层获取下面所有
                     vo = bidList.get(0);
                     vo.setChildren(getXInfo(dept.getThridDeptId(), queryVo));
                 } else {

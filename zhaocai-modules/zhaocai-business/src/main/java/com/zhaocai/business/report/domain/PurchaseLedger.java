@@ -81,6 +81,22 @@ public class PurchaseLedger {
     @ApiModelProperty(value = "计划拆分项名称")
     private String splitNames;
 
+    /** 合约名称(新增采购计划时填写的合约名称, tb_contract_planning.contract_planning_name) */
+    @ApiModelProperty(value = "合约名称")
+    private String contractName;
+
+    /** 合约类别(合约规划分类名称, tb_contract_planning.contract_planning_category_name) */
+    @ApiModelProperty(value = "合约类别")
+    private String contractCategory;
+
+    /** 计划金额(含税)(计划表单"计划金额", tb_contract_planning.planned_amount_incl_tax) */
+    @ApiModelProperty(value = "计划金额(含税)")
+    private BigDecimal planAmount;
+
+    /** 计划完成时间(计划表单"完成时间", tb_procurement_plan.end_date) */
+    @ApiModelProperty(value = "计划完成时间")
+    private Date planFinishTime;
+
     /** 任务编号(采购方案编号) */
     @ApiModelProperty(value = "任务编号")
     private String schemeCode;
@@ -113,9 +129,13 @@ public class PurchaseLedger {
     @ApiModelProperty(value = "开标时间")
     private Date openTime;
 
-    /** 定标时间 */
+    /** 定标时间(中标公示开始时间) */
     @ApiModelProperty(value = "定标时间")
     private Date awardTime;
+
+    /** 结果发布时间(中标通知发布时间, tb_bidding_result.notifi_time, "已完成"时间锚点) */
+    @ApiModelProperty(value = "结果发布时间")
+    private Date resultPublishTime;
 
     /** 中标/成交单位 */
     @ApiModelProperty(value = "中标/成交单位")
@@ -140,6 +160,26 @@ public class PurchaseLedger {
     /** 合同状态(原值拼接) */
     @ApiModelProperty(value = "合同状态")
     private String contractState;
+
+    /** 合同id(多合同按id拼接, 穿透合同详情用, 不显示) */
+    @ApiModelProperty(value = "合同id")
+    private String agreementId;
+
+    /** 合同名称(多合同按id拼接) */
+    @ApiModelProperty(value = "合同名称")
+    private String agreementName;
+
+    /** 合同金额(含税, 多合同按id拼接, 字符串因拼接) */
+    @ApiModelProperty(value = "合同金额(含税)")
+    private String agreementAmount;
+
+    /** 合同签订日期(yyyy-MM-dd, 多合同按id拼接) */
+    @ApiModelProperty(value = "合同签订日期")
+    private String agreementSignDate;
+
+    /** 合同业务类型(多合同按id拼接, 穿透合同详情用, 不显示) */
+    @ApiModelProperty(value = "合同业务类型")
+    private String expenditureBusinessType;
 
     /** pending/preopen/preaward/completed/exception */
     @ApiModelProperty(value = "采购状态")
