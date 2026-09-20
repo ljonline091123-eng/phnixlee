@@ -219,10 +219,10 @@ export default {
       bidCountReport(params)
         .then((res) => {
           this.tableData = res.data || [];
-          // 第二层默认还有下一层，点击时懒加载
+          // 第二层默认还有下一层，点击时懒加载；只有组织行(有 deptName)才可展开，项目行是叶子不显示箭头
           if (this.tableData.length > 0 && this.tableData[0].children) {
             this.tableData[0].children.forEach((item) => {
-              item.hasChildren = true;
+              item.hasChildren = !!item.deptName;
             });
           }
           this.loading = false;

@@ -319,9 +319,9 @@ export default {
       query
         .then((res) => {
           const arr = res.data || [];
-          // 默认都当成还有下一层，没有数据时展开为空
+          // 只有组织行(有 deptName)才可继续展开，项目行是叶子不显示箭头
           arr.forEach((item) => {
-            item.hasChildren = true;
+            item.hasChildren = !!item.deptName;
           });
           resolve(arr);
         })

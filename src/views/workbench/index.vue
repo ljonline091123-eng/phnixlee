@@ -113,7 +113,7 @@
         <div ref="trend" class="trend-chart"></div>
       </section>
 
-      <!-- 合作金额TOP5供应商（供应商报表按供应商汇总合同签订金额(含税)取前5；点击行跳供应商报表） -->
+      <!-- 中标金额TOP5供应商（台账已完成关联最新中标结果，按供应商汇总含税中标价取前5；点击行跳供应商报表） -->
       <section class="panel">
         <header>
           <h2>合作金额TOP5供应商</h2>
@@ -130,7 +130,7 @@
           </el-table-column>
           <el-table-column label="供应商名称" prop="vendorName" show-overflow-tooltip width="220" />
           <el-table-column label="合作金额（元）" align="right">
-            <template slot-scope="scope">{{ formatAmount(scope.row.contractAmount) }}</template>
+            <template slot-scope="scope">{{ formatAmount(scope.row.awardAmount) }}</template>
           </el-table-column>
         </el-table>
       </section>
@@ -157,7 +157,7 @@ export default {
       overview: { purchaseCount: 0, budgetAmount: 0, awardAmount: 0, savingRate: null },
       // 月度金额趋势（12 个月）
       monthlyTrend: [],
-      // 合作金额TOP5供应商
+      // 中标金额TOP5供应商
       topVendors: [],
       // 我的待办
       todoList: [],
