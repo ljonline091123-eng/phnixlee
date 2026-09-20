@@ -309,14 +309,19 @@ class MarketDataFoundationTest(unittest.TestCase):
 
     def test_api_endpoints_load_with_seeded_catalog(self) -> None:
         from fastapi.testclient import TestClient
+        from app.db.session import get_db
         from app.main import app
 
-        with TestClient(app) as client:
-            response = client.get("/health")
-            self.assertEqual(response.status_code, 200)
-            response = client.get("/api/v1/data-sources")
-            self.assertEqual(response.status_code, 200)
-            self.assertGreaterEqual(len(response.json()), 1)
+        with patch.dict(app.dependency_overrides, {get_db: lambda: self.db}):
+            client = TestClient(app)
+            try:
+                response = client.get("/health")
+                self.assertEqual(response.status_code, 200)
+                response = client.get("/api/v1/data-sources")
+                self.assertEqual(response.status_code, 200)
+                self.assertGreaterEqual(len(response.json()), 1)
+            finally:
+                client.close()
 
     def test_cn_fund_flow_payload_is_normalized(self) -> None:
         adapter = AkshareAdapter()
@@ -436,7 +441,9 @@ class MarketDataFoundationTest(unittest.TestCase):
         financial_summary = {"periods": ["2026-06-30", "2025-12-31"]}
         self.assertTrue(_hk_published_reports_need_refresh(payload, financial_summary, None))
 
-    def test_hk_snapshot_refreshes_when_fund_flow_cache_is_stale(self) -> None:
+    @patch("app.services.f10.date", wraps=date)
+    def test_hk_snapshot_refreshes_when_fund_flow_cache_is_stale(self, mock_date) -> None:
+        mock_date.today.return_value = date(2026, 9, 5)
         fresh_payload = {
             "profile": {"source": "test", "fields": {"上市日期": "1972-11-01", "证券简称": "测试港股"}},
             "holders": {"source": "test", "major": [{"name": "holder"}], "circulating": []},

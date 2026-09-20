@@ -16,6 +16,13 @@ class TableDescription:
 
 
 TABLE_DESCRIPTIONS: dict[str, TableDescription] = {
+    "foundation_entity": TableDescription("主数据主体", "数据底座", "保存公司、人物、机构及分类等稳定身份，外部标识在法域内唯一，同名不自动合并。"),
+    "foundation_security": TableDescription("主数据证券", "数据底座", "保存独立证券身份、发行公司和股份类别，与上市记录分离。"),
+    "foundation_listing": TableDescription("证券上市映射", "数据底座", "将既有股票记录映射到证券及发行公司，保留市场代码和持久证据。"),
+    "foundation_evidence": TableDescription("持久证据版本", "数据底座", "独立保存来源文本及版本，不受旧知识图谱重建影响，保留可获知时间和内容范围。"),
+    "foundation_fact": TableDescription("主数据候选事实", "数据底座", "保存股权、控制、经济往来、分类及司法参与事实，使用审核状态和业务有效期。"),
+    "foundation_fact_evidence": TableDescription("事实证据关联", "数据底座", "关联事实与不可变证据版本，一项事实可由多份证据支持。"),
+    "foundation_fact_review": TableDescription("事实审核历史", "数据底座", "追加记录事实状态变化、理由和操作标识，支持按系统知晓时刻回放。"),
     "stock_context_event": TableDescription("股票外部证据", "数据采集", "保存人工补充的政策、原材料、产业链、股东及合同原文和来源，关联股票后供知识治理使用。"),
     "pipeline_run": TableDescription("工作流运行记录", "任务编排", "记录一次业务工作流的触发来源、输入输出、当前阶段、执行状态和错误。"),
     "pipeline_stage_run": TableDescription("工作流阶段记录", "任务编排", "记录工作流内各阶段的尝试次数、租约、重试计划、输入输出和错误。"),
@@ -310,6 +317,44 @@ COMMON_COLUMN_DESCRIPTIONS: dict[str, str] = {
 
 
 TABLE_COLUMN_OVERRIDES: dict[str, dict[str, str]] = {
+    "foundation_entity": {
+        "id": "主体的稳定 UUID 标识。", "name": "主体名称，同名不表示同一主体。",
+        "entity_type": "主体类型，例如公司、机构、人物或分类。", "jurisdiction": "主体所属注册或身份法域。",
+        "identifier_scheme": "外部标识体系，例如统一社会信用代码。", "identifier_value": "指定法域及体系中的标识值。",
+        "properties_json": "主体补充属性，不作为名称自动合并依据。", "created_at": "系统首次记录此主体的时刻。",
+    },
+    "foundation_security": {
+        "id": "证券的稳定 UUID 标识。", "entity_id": "发行公司的主数据主体 ID。",
+        "share_class": "股份类别，不等于股票代码或公司身份。", "created_at": "系统首次记录证券的时刻。",
+    },
+    "foundation_listing": {
+        "id": "上市映射的 UUID 标识。", "security_id": "关联证券主数据 ID。",
+        "stock_symbol_id": "既有股票记录 ID，一条股票记录仅有一个发行主体映射。",
+        "market": "映射建立时的市场代码。", "symbol": "映射建立时的股票代码。", "name": "映射建立时的证券名称。",
+        "evidence_id": "支持发行主体映射的持久证据版本 ID。", "created_at": "映射建立时刻。",
+    },
+    "foundation_evidence": {
+        "id": "持久证据版本的 UUID 标识。", "entity_id": "可选关联主体 ID。", "source_name": "实际来源名称。",
+        "source_key": "同一来源文档的稳定键，用于组织更正版本。", "title": "证据标题。",
+        "content": "提交或导入的完整文本；是否属于原始全文由元数据明确。", "url": "原始来源链接。",
+        "published_at": "来源披露时刻，未知时为空。", "available_at": "资料可获知时刻，未知时使用本次记录时间。",
+        "content_hash": "保存文本的 SHA256，用于校验原文。", "fingerprint": "文本及重要来源元数据的版本指纹。",
+        "version": "同源同文档键的递增版本号。", "metadata_json": "内容范围、截断情况、旧记录来源及可获知时间依据。",
+        "created_at": "本系统首次保存此版本的时刻。",
+    },
+    "foundation_fact": {
+        "id": "事实版本的 UUID 标识。", "fact_type": "股权、控制、供应链、经济往来、分类或司法参与类型。",
+        "title": "事实摘要标题。", "subject_entity_id": "事实主体的主数据 ID。", "object_entity_id": "事实客体 ID；司法参与事实为空。",
+        "properties_json": "经类型契约校验的事实属性，比例、金额及司法阶段有明确口径。", "status": "审核状态，待审、已接受或已拒绝。",
+        "valid_from": "业务有效期开始日期，包含当天。", "valid_to": "业务有效期结束日期，不包含当天。",
+        "created_at": "系统首次记录事实的时刻。", "updated_at": "最近审核状态变更时刻。",
+    },
+    "foundation_fact_evidence": {"fact_id": "关联事实 ID。", "evidence_id": "关联持久证据版本 ID。"},
+    "foundation_fact_review": {
+        "id": "审核历史 UUID 标识。", "fact_id": "被审核的事实 ID。", "previous_status": "审核前状态。",
+        "decision": "本次审核结果。", "reason": "审核理由或撤销依据。", "reviewer": "单用户应用的操作标识，不代表认证身份。",
+        "created_at": "审核状态变化实际被系统记录的时刻。",
+    },
     "selection_run": {"criteria_json": "本次硬过滤阈值与候选范围。", "missing_data_json": "未能获取或不足以判断的数据项。", "analysis_mode": "综合评价模式及是否请求模型。"},
     "selection_candidate": {"hard_rules_json": "可复核的量价硬规则结果。", "evidence_json": "知识库、图谱及行情证据引用。", "decision": "人工复选结果。"},
     "selection_tracking": {"required_sessions": "要求的真实交易日数量，默认十个。", "observed_sessions": "已获取的去重交易日数量。", "review_json": "完成跟踪后的复盘依据。"},

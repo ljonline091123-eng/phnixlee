@@ -39,12 +39,18 @@ from app.models.schema_catalog import DatabaseTableComment
 from app.models.context_event import StockContextEvent
 from app.models.pipeline import PipelineRun, PipelineStageRun, ScheduledJob
 from app.models.selection import SelectionCandidate, SelectionRun, SelectionSnapshot, SelectionTracking
+from app.models.foundation import (
+    FoundationEntity, FoundationSecurity, FoundationListing, FoundationEvidence,
+    FoundationFact, FoundationFactEvidence, FoundationFactReview,
+)
 from app.db.base import Base
 from app.db.table_comments import apply_table_comments
 
 apply_table_comments(Base.metadata)
 
 __all__ = [
+    "FoundationEntity", "FoundationSecurity", "FoundationListing", "FoundationEvidence",
+    "FoundationFact", "FoundationFactEvidence", "FoundationFactReview",
     "DataFetchLog",
     "DataInterface",
     "DataSource",

@@ -6,6 +6,7 @@ from collections.abc import Callable
 from typing import Any
 
 from app.orchestration.background import MasterDataSyncWorkflow, PredictionReviewWorkflow
+from app.orchestration.foundation import LegacyEvidenceArchiveWorkflow
 from app.services.selection import refresh_tracking
 from app.db.session import SessionLocal
 
@@ -14,6 +15,7 @@ TaskHandler = Callable[[dict[str, Any]], dict[str, Any]]
 
 
 TASK_HANDLERS: dict[str, TaskHandler] = {
+    'foundation_archive_evidence': LegacyEvidenceArchiveWorkflow().execute,
     "daily_master_sync": MasterDataSyncWorkflow().execute,
     "daily_prediction_review": PredictionReviewWorkflow().execute,
     "daily_selection_tracking_refresh": lambda payload: _refresh_selection_tracking(payload),

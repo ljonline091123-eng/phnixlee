@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import data_interfaces, data_sources, model_hub, research, resource_hub, selection, stock_tools, stocks
 from app.api import context_events
+from app.api import foundation, foundation_jobs
 from app.core.config import get_settings
 from app.db.bootstrap import initialize_database
 from app.db.session import engine
@@ -45,6 +46,8 @@ app.include_router(resource_hub.router, prefix=settings.api_v1_prefix)
 app.include_router(context_events.router, prefix=settings.api_v1_prefix)
 app.include_router(research.router, prefix=settings.api_v1_prefix)
 app.include_router(selection.router, prefix=settings.api_v1_prefix)
+app.include_router(foundation_jobs.router, prefix=settings.api_v1_prefix)
+app.include_router(foundation.router, prefix=settings.api_v1_prefix)
 
 
 @app.get("/health", tags=["System"])

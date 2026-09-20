@@ -230,3 +230,16 @@ remains usable offline. The implementation is organized under
 `backend/app/skills`, `backend/app/agents`, `backend/app/prompts`,
 `backend/app/services/market_data.py`, and
 `backend/app/api/v1/endpoints/research.py`.
+
+## Additive Data Foundation
+
+The Data Platform includes a subject-and-relations workspace for entities,
+company/security mappings, evidence versions, candidate facts, manual reviews,
+and legal-case observations. Existing stock, graph, research, and selection
+workflows remain unchanged. This is a local single-user foundation, not an
+authenticated multi-user approval system.
+
+See [implementation and scope](docs/data-foundation-implementation.md) and
+[explicit database migration](docs/data-foundation-migration.md) before enabling
+it on a business database. Set `DATA_FOUNDATION_ENABLED=false` to disable the new
+business endpoints; this does not remove tables or replace database backups.

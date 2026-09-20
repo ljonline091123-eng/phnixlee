@@ -29,11 +29,12 @@ import {
 import { StockDetailDrawer } from "./StockDetailDrawer";
 import { SelectionWorkbench } from "./SelectionWatch";
 import { GovernedAssetTab, GovernedKnowledgeTab } from "./ResourceGovernance";
+import { DataFoundation } from "./DataFoundation";
 
 type ModuleView = "data" | "model" | "watch" | "research";
 type ModelHubTab =
   "models" | "agents" | "skills" | "assets" | "knowledge" | "logs";
-type DataView = "sources" | "interfaces" | "universe";
+type DataView = "sources" | "interfaces" | "universe" | "foundation";
 type ResearchTab = "chat" | "research";
 type ModelTestDialogState = {
   target: string;
@@ -224,7 +225,7 @@ function DataConsolePage() {
         }
       />
       <div className="resource-tabs">
-        {(["sources", "interfaces", "universe"] as DataView[]).map((item) => (
+        {(["sources", "interfaces", "universe", "foundation"] as DataView[]).map((item) => (
           <button
             type="button"
             key={item}
@@ -235,7 +236,9 @@ function DataConsolePage() {
               ? "数据源"
               : item === "interfaces"
                 ? "接口目录"
-                : "股票主数据"}
+                : item === "universe"
+                  ? "股票主数据"
+                  : "主体与关系"}
           </button>
         ))}
       </div>
@@ -461,6 +464,7 @@ function DataConsolePage() {
           </div>
         </section>
       )}
+      {tab === "foundation" && <DataFoundation />}
       {detailStock && (
         <StockDetailDrawer
           stock={detailStock}
