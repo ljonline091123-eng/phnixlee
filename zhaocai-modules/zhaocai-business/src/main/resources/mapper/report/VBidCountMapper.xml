@@ -27,7 +27,7 @@
     <select id="select" parameterType="com.zhaocai.business.report.vo.VBidCountVo" resultMap="VBidCountResult">
         select
             vbc.min_account_code as id,
-            vbc.project_department_id as parent_id,
+            vbc.management_org_id as parent_id,
             'X' as type,
             vbc.min_account_full_name,
             vbc.min_account_code,
@@ -46,12 +46,12 @@
             vbc.ngk_total_num,
             vbc.gk_ratio
         from v_bid_count vbc
-        left join sys_dept sd on vbc.project_department_id = sd.thrid_dept_id
+        left join sys_dept sd on vbc.management_org_id = sd.thrid_dept_id
         <where>
-            vbc.project_department_id is not null
+            vbc.management_org_id is not null
             <if test="id != null">
-                and ( vbc.project_department_id = #{id} OR
-                        vbc.project_department_id in (
+                and ( vbc.management_org_id = #{id} OR
+                        vbc.management_org_id in (
                         select t.thrid_dept_id from sys_dept t where FIND_IN_SET(
                             (select dept_id from sys_dept where thrid_dept_id = #{id}), t.ancestors)
                         )

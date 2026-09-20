@@ -10,6 +10,12 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import javax.net.ssl.HttpsURLConnection;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.X509TrustManager;
+import java.security.SecureRandom;
+import java.security.cert.X509Certificate;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -104,7 +110,17 @@ public class YOZOfileUtils {
             // 输出编码后的URL
             System.out.println("替换空格后的encodedUrl(下载地址)：" + encodedUrl);
 
-            InputStream in = new URL(encodedUrl.toString()).openStream();
+            InputStream in;
+            // TODO【临时绕过】2026-09-18：文件服务器 118.253.180.94:8193 的 SSL 证书过期
+            // （CN=zxdljs.com，notAfter=2026-09-08），导致 PKIX validity check failed。
+            // 临时改为“信任所有证书+跳过主机名校验”以解除合同签订/文件下载阻塞。
+            // 注意：证书续期时须带上 IP:118.253.180.94 的 SAN（库里附件URL用的是IP直连），
+            // 续期完成后务必删除本分支，恢复为 new URL(encodedUrl).openStream()。
+            if (encodedUrl.startsWith("https://")) {
+                in = openTrustAllHttpsStream(encodedUrl);
+            } else {
+                in = new URL(encodedUrl).openStream();
+            }
             Files.copy(in, targetPath, StandardCopyOption.REPLACE_EXISTING);
             System.out.println("文件已下载至: " + targetPath);
 
@@ -114,6 +130,44 @@ public class YOZOfileUtils {
         }
         return targetPath;
 
+    }
+
+    /**
+     * 临时方法：以“信任所有证书 + 跳过主机名校验”的方式打开 HTTPS 连接。
+     * 仅用于文件服务器证书过期期间的应急下载，证书续期后应随 TODO 分支一并移除。
+     *
+     * @param urlStr HTTPS 下载地址
+     * @return 文件输入流
+     * @throws IOException 连接失败
+     */
+    private InputStream openTrustAllHttpsStream(String urlStr) throws IOException {
+        try {
+            TrustManager[] trustAll = new TrustManager[]{
+                    new X509TrustManager() {
+                        @Override
+                        public void checkClientTrusted(X509Certificate[] chain, String authType) {
+                        }
+
+                        @Override
+                        public void checkServerTrusted(X509Certificate[] chain, String authType) {
+                        }
+
+                        @Override
+                        public X509Certificate[] getAcceptedIssuers() {
+                            return new X509Certificate[0];
+                        }
+                    }
+            };
+            SSLContext sslContext = SSLContext.getInstance("TLS");
+            sslContext.init(null, trustAll, new SecureRandom());
+
+            HttpsURLConnection conn = (HttpsURLConnection) new URL(urlStr).openConnection();
+            conn.setSSLSocketFactory(sslContext.getSocketFactory());
+            conn.setHostnameVerifier((hostname, session) -> true);
+            return conn.getInputStream();
+        } catch (Exception e) {
+            throw new IOException("临时HTTPS下载连接失败: " + e.getMessage(), e);
+        }
     }
 
     /**

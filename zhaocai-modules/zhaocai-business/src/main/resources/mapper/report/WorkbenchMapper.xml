@@ -21,9 +21,10 @@
         </where>
     </select>
 
-    <!-- 采购方式分析：采购台账已完成任务(grain=TASK, status=completed)按采购方式计数。
+    <!-- 采购方式分析：采购台账已完成任务(grain=TASK, status=completed)按采购方式计数，
          只统计公开(1)/邀标(2)/询价(3)/单一(4)四类，与招标率统计口径一致；
-         时间口径同招采概览=招标完成时间(中标结果发布 notifi_time)，支持单位+年份筛选。 -->
+         必须关联到"有中标通知发布时间(notifi_time)"的中标结果才算已完成（与招采概览同口径），
+         支持单位+年份筛选。 -->
     <select id="selectMethodCount" resultType="java.util.HashMap">
         SELECT l.method AS method,
                COUNT(*) AS cnt
@@ -55,7 +56,7 @@
     <!-- 招采概览-月度金额：已完成任务(grain=TASK, status=completed)按招标完成时间聚合。
          招标完成时间 = 中标结果发布时写入的 tb_bidding_result.notifi_time；
          一个公告只取最新一条中标结果（与采购台账视图取数一致），避免重复计量。
-         无中标结果的已完成行不参与统计（无采购金额也无完成时间）。 -->
+         无中标结果(或未发中标通知)的已完成行不参与统计（无采购金额也无完成时间）。 -->
     <select id="selectMonthlyAmount" resultType="java.util.HashMap">
         SELECT MONTH(t.completion_time)  AS monthNo,
                COUNT(*)                  AS purchaseCount,
@@ -91,24 +92,36 @@
         GROUP BY MONTH(t.completion_time)
     </select>
 
-    <!-- 合作金额TOP5供应商：供应商报表按供应商汇总 合同签订金额(含税) 取前5。
-         无合同金额的供应商按0参与排名（COALESCE），保证表格始终有数据行；
-         过滤空名称供应商。 -->
+    <!-- 中标金额TOP5供应商：与招采概览同源口径——采购台账已完成任务(grain=TASK, status=completed)
+         关联最新一条中标结果(bid_result=1)，按中标供应商(br.vendor_name)汇总 含税中标价(tb_bidding_info.tax_price)
+         取前5；无金额按0参与排名（COALESCE），过滤空名称供应商；数据权限按台账 org_id 收敛。 -->
     <select id="selectTopVendors" resultType="java.util.HashMap">
-        SELECT vendor_name           AS vendorName,
-               COALESCE(SUM(contract_amount), 0) AS contractAmount
-        FROM tb_vendor_report
+        SELECT br.vendor_name                          AS vendorName,
+               COALESCE(SUM(bi.tax_price), 0)          AS awardAmount
+        FROM tb_purchase_ledger l
+        INNER JOIN tb_bidding_result br ON br.id = (
+            SELECT br2.id FROM tb_bidding_result br2
+            WHERE br2.notice_id = l.notice_id
+              AND br2.bid_result = 1
+              AND br2.del_flag = 0
+            ORDER BY br2.update_time DESC
+            LIMIT 1
+        )
+        INNER JOIN tb_bidding_info bi ON bi.id = br.bidding_info_id
         <where>
-            vendor_name IS NOT NULL AND vendor_name != ''
+            l.grain = 'TASK'
+            AND l.status = 'completed'
+            AND br.notifi_time IS NOT NULL
+            AND br.vendor_name IS NOT NULL AND br.vendor_name != ''
             <if test="scopeId != null and scopeId != ''">
-                AND ( party_a_org_id = #{scopeId} OR party_a_org_id IN (
+                AND ( l.org_id = #{scopeId} OR l.org_id IN (
                     SELECT t.thrid_dept_id FROM sys_dept t WHERE FIND_IN_SET(
                         (SELECT dept_id FROM sys_dept WHERE thrid_dept_id = #{scopeId}), t.ancestors) )
                 )
             </if>
         </where>
-        GROUP BY vendor_name
-        ORDER BY COALESCE(SUM(contract_amount), 0) DESC
+        GROUP BY br.vendor_name
+        ORDER BY COALESCE(SUM(bi.tax_price), 0) DESC
         LIMIT 5
     </select>
 

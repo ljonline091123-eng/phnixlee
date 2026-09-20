@@ -59,8 +59,8 @@ public class VBidCountServiceImpl extends ServiceImpl<VBidCountMapper, VBidCount
                                 .filter(i -> null != i.getAncestors() && i.getAncestors().contains(sysDept.getAncestors() + "," + sysDept.getDeptId()))
                                 .map(SysDept::getThridDeptId)
                                 .collect(Collectors.toSet());
-                        List<VBidCountVo> list = bidCountList.parallelStream().filter(i->idSet.contains(i.getProjectDepartmentId())
-                                || i.getProjectDepartmentId().equals(sysDept.getThridDeptId()) ).collect(Collectors.toList());
+                        List<VBidCountVo> list = bidCountList.parallelStream().filter(i->idSet.contains(i.getManagementOrgId())
+                                || i.getManagementOrgId().equals(sysDept.getThridDeptId()) ).collect(Collectors.toList());
                         if(!CollectionUtils.isEmpty(list)){
                             VBidCountVo vo = this.getBidCount(sysDept, list);
                             if (sysDept.getThridOrgType().equals("X")) {
@@ -81,7 +81,7 @@ public class VBidCountServiceImpl extends ServiceImpl<VBidCountMapper, VBidCount
         // 项目端
         if(null != vBidCountVo.getMinAccountCode() && !CollectionUtils.isEmpty(bidCountList)){
             // 获取组织结构(本级及以下)
-            List<SysDept> deptList = remoteSystemService.getDeptByThridDeptId(bidCountList.get(0).getProjectDepartmentId(), SecurityConstants.INNER);
+            List<SysDept> deptList = remoteSystemService.getDeptByThridDeptId(bidCountList.get(0).getManagementOrgId(), SecurityConstants.INNER);
             if(!CollectionUtils.isEmpty(deptList)){
                 VBidCountVo vo = this.getBidCount(deptList.get(0), bidCountList);
                 vo.setChildren(this.getProject(bidCountList, deptList.get(0)));
@@ -115,15 +115,15 @@ public class VBidCountServiceImpl extends ServiceImpl<VBidCountMapper, VBidCount
                         .filter(i -> null != i.getAncestors() && i.getAncestors().contains(sysDept.getAncestors() + "," + sysDept.getDeptId()))
                         .map(SysDept::getThridDeptId)
                         .collect(Collectors.toSet());
-                List<VBidCountVo> list = bidCountList.stream().filter(i -> idSet.contains(i.getProjectDepartmentId())
-                        || i.getProjectDepartmentId().equals(sysDept.getThridDeptId()) ).collect(Collectors.toList());
+                List<VBidCountVo> list = bidCountList.stream().filter(i -> idSet.contains(i.getManagementOrgId())
+                        || i.getManagementOrgId().equals(sysDept.getThridDeptId()) ).collect(Collectors.toList());
                 if (!CollectionUtils.isEmpty(list)) {
                     VBidCountVo vo = this.getBidCount(sysDept, list);
                     resultList.add(vo);
                 }
                 // 组织中项目部层
             } else if (!CollectionUtils.isEmpty(deptList) && deptList.get(0).getThridOrgType().equals("X")) {
-                List<VBidCountVo> list = bidCountList.stream().filter(i -> i.getProjectDepartmentId().equals(vBidCountVo.getId())).collect(Collectors.toList());
+                List<VBidCountVo> list = bidCountList.stream().filter(i -> i.getManagementOrgId().equals(vBidCountVo.getId())).collect(Collectors.toList());
                 if (!CollectionUtils.isEmpty(list)) {
                     list.forEach(i -> {
                         i.setId(i.getMinAccountCode());
@@ -141,8 +141,8 @@ public class VBidCountServiceImpl extends ServiceImpl<VBidCountMapper, VBidCount
                             .filter(i -> null != i.getAncestors() && i.getAncestors().contains(sysDept.getAncestors() + "," + sysDept.getDeptId()))
                             .map(SysDept::getThridDeptId)
                             .collect(Collectors.toSet());
-                    List<VBidCountVo> list = bidCountList.stream().filter(i -> idSet.contains(i.getProjectDepartmentId())
-                            || i.getProjectDepartmentId().equals(sysDept.getThridDeptId()) ).collect(Collectors.toList());
+                    List<VBidCountVo> list = bidCountList.stream().filter(i -> idSet.contains(i.getManagementOrgId())
+                            || i.getManagementOrgId().equals(sysDept.getThridDeptId()) ).collect(Collectors.toList());
                     if (!CollectionUtils.isEmpty(list)) {
                         VBidCountVo vo = this.getBidCount(sysDept, list);
                         resultList.add(vo);
@@ -152,7 +152,7 @@ public class VBidCountServiceImpl extends ServiceImpl<VBidCountMapper, VBidCount
         }
         if(null != vBidCountVo.getMinAccountCode() && !CollectionUtils.isEmpty(bidCountList)) {
             // 获取组织结构(本级及以下)
-            List<SysDept> deptList = remoteSystemService.getDeptByThridDeptId(bidCountList.get(0).getProjectDepartmentId(), SecurityConstants.INNER);
+            List<SysDept> deptList = remoteSystemService.getDeptByThridDeptId(bidCountList.get(0).getManagementOrgId(), SecurityConstants.INNER);
             if(!CollectionUtils.isEmpty(deptList)){
                 VBidCountVo vo = this.getBidCount(deptList.get(0), bidCountList);
                 vo.setChildren(this.getProject(bidCountList, deptList.get(0)));
@@ -189,8 +189,8 @@ public class VBidCountServiceImpl extends ServiceImpl<VBidCountMapper, VBidCount
                                 .filter(i -> null != i.getAncestors() && i.getAncestors().contains(sysDept.getAncestors() + "," + sysDept.getDeptId()))
                                 .map(SysDept::getThridDeptId)
                                 .collect(Collectors.toSet());
-                        List<VBidCountVo> list = bidCountList.parallelStream().filter(i->idSet.contains(i.getProjectDepartmentId())
-                                || i.getProjectDepartmentId().equals(sysDept.getThridDeptId()) ).collect(Collectors.toList());
+                        List<VBidCountVo> list = bidCountList.parallelStream().filter(i->idSet.contains(i.getManagementOrgId())
+                                || i.getManagementOrgId().equals(sysDept.getThridDeptId()) ).collect(Collectors.toList());
                         if(!CollectionUtils.isEmpty(list)){
                             VBidCountVo vo = this.getBidCount(sysDept, list);
                             resultList.add(vo);
@@ -205,7 +205,7 @@ public class VBidCountServiceImpl extends ServiceImpl<VBidCountMapper, VBidCount
         // 项目端
         if(null != vBidCountVo.getMinAccountCode() && !CollectionUtils.isEmpty(bidCountList)){
             // 获取组织结构(本级及以下)
-            List<SysDept> deptList = remoteSystemService.getDeptByThridDeptId(bidCountList.get(0).getProjectDepartmentId(), SecurityConstants.INNER);
+            List<SysDept> deptList = remoteSystemService.getDeptByThridDeptId(bidCountList.get(0).getManagementOrgId(), SecurityConstants.INNER);
             if(!CollectionUtils.isEmpty(deptList)){
                 VBidCountVo vo = this.getBidCount(deptList.get(0), bidCountList);
                 resultList.add(vo);
@@ -245,7 +245,7 @@ public class VBidCountServiceImpl extends ServiceImpl<VBidCountMapper, VBidCount
                 SysDept sysDept = deptList.get(0);
                 // 部门的 thrid_org_type 可能为 NULL，判断要用常量在前
                 if ("X".equals(sysDept.getThridOrgType())) {
-                    list = bidCountList.parallelStream().filter(i -> i.getProjectDepartmentId().equals(sysDept.getThridDeptId()))
+                    list = bidCountList.parallelStream().filter(i -> i.getManagementOrgId().equals(sysDept.getThridDeptId()))
                             .map(VBidCountVo::getMinAccountCode)
                             .collect(Collectors.toList());
 
@@ -254,8 +254,8 @@ public class VBidCountServiceImpl extends ServiceImpl<VBidCountMapper, VBidCount
                                     && i.getAncestors().contains(sysDept.getAncestors() + "," + sysDept.getDeptId()))
                             .map(SysDept::getThridDeptId)
                             .collect(Collectors.toSet());
-                    list = bidCountList.parallelStream().filter(i -> ids.contains(i.getProjectDepartmentId())
-                            || i.getProjectDepartmentId().equals(sysDept.getThridDeptId()))
+                    list = bidCountList.parallelStream().filter(i -> ids.contains(i.getManagementOrgId())
+                            || i.getManagementOrgId().equals(sysDept.getThridDeptId()))
                             .map(VBidCountVo::getMinAccountCode)
                             .collect(Collectors.toList());
                 }
@@ -303,7 +303,7 @@ public class VBidCountServiceImpl extends ServiceImpl<VBidCountMapper, VBidCount
                 bidCountList = this.handleDict(bidCountList);
                 // 按部门编号分组
                 resultList = bidCountList.stream()
-                        .collect(Collectors.groupingBy(VBidCountVo::getProjectDepartmentId))
+                        .collect(Collectors.groupingBy(VBidCountVo::getManagementOrgId))
                         .entrySet()
                         .stream()
                         .map(entry -> {
@@ -325,7 +325,7 @@ public class VBidCountServiceImpl extends ServiceImpl<VBidCountMapper, VBidCount
             if(!CollectionUtils.isEmpty(bidCountList)){
                 VBidCountVo vo = new VBidCountVo();
                 vo = this.getCountData(vo,bidCountList);
-                vo.setId(bidCountList.get(0).getProjectDepartmentId());
+                vo.setId(bidCountList.get(0).getManagementOrgId());
                 vo.setDeptName(bidCountList.get(0).getProjectDepartmentName());
                 vo.setType("X");
                 vo.setChildren(bidCountList);

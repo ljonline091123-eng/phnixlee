@@ -9,6 +9,8 @@
         <result property="minAccountFullName" column="min_account_full_name"/>
         <result property="projectDepartmentId" column="project_department_id"/>
         <result property="projectDepartment" column="project_department"/>
+        <result property="managementOrgId" column="management_org_id"/>
+        <result property="managementOrg" column="management_org"/>
         <result property="deptId" column="dept_id"/>
         <result property="ancestors" column="ancestors"/>
         <result property="prjState" column="prj_state"/>
@@ -48,10 +50,11 @@
     <select id="select" parameterType="com.zhaocai.business.report.vo.VBidCountVo" resultMap="VBidCountResult">
         select
         tbr.min_account_code as id,
-        tbr.project_department_id as parent_id,
+        tbr.management_org_id as parent_id,
         tbr.min_account_full_name,
         tbr.min_account_code,
         tbr.prj_state,
+        tbr.management_org_id,
         tbr.project_department_id,
         tbr.cg_num,
         tbr.gk_num,
@@ -63,7 +66,7 @@
         tbr.gk_ratio
         from tb_bid_report tbr
         <where>
-            tbr.project_department_id is not null
+            tbr.management_org_id is not null
             <if test="deptId != null">
                 and ( tbr.dept_id = #{deptId} OR tbr.ancestors like concat('%',#{deptId},'%'))
             </if>
@@ -77,15 +80,15 @@
                 AND tbr.prj_state = #{prjState}
             </if>
             <if test="projectDepartmentId != null and projectDepartmentId != ''">
-                AND tbr.project_department_id = #{projectDepartmentId}
+                AND tbr.management_org_id = #{projectDepartmentId}
             </if>
         </where>
     </select>
 
     <select id="getBidCountByDept" parameterType="com.zhaocai.business.report.vo.VBidCountVo" resultMap="VBidCountResult">
         select
-        tbr.project_department_id as id,
-        tbr.project_department as dept_name,
+        tbr.management_org_id as id,
+        tbr.management_org as dept_name,
         tbr.ancestors,
         sum(tbr.cg_num) as cg_num,
         sum(tbr.gk_num) as gk_num,
@@ -97,7 +100,7 @@
         sum(tbr.gk_ratio) as gk_ratio
         from tb_bid_report tbr
         <where>
-            tbr.project_department_id is not null
+            tbr.management_org_id is not null
             <if test="deptId != null">
                 and ( tbr.dept_id = #{deptId} OR tbr.ancestors like concat('%',#{deptId},'%'))
             </if>
@@ -111,7 +114,7 @@
                 AND tbr.prj_state = #{prjState}
             </if>
         </where>
-    group by  project_department_id
+    group by  tbr.management_org_id, tbr.management_org, tbr.ancestors
     </select>
 
     <select id="selectAll" resultMap="BidReportResult">
@@ -120,9 +123,11 @@
             vbc.min_account_code,
             vbc.min_account_full_name,
             vbc.project_department_id,
-            sd.dept_name as project_department,
-            sd.dept_id,
-            sd.ancestors,
+            sd1.dept_name as project_department,
+            vbc.management_org_id,
+            sd2.dept_name as management_org,
+            sd2.dept_id,
+            sd2.ancestors,
             vbc.prj_state,
             vbc.cg_num,
             vbc.gk_num,
@@ -133,7 +138,7 @@
             vbc.ngk_total_num,
             vbc.gk_ratio
         from v_bid_count vbc
-        left join sys_dept sd
-        on sd.thrid_dept_id = vbc.project_department_id
+        left join sys_dept sd1 on sd1.thrid_dept_id = vbc.project_department_id
+        left join sys_dept sd2 on sd2.thrid_dept_id = vbc.management_org_id
     </select>
 </mapper>

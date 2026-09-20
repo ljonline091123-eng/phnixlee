@@ -38,6 +38,14 @@ public class BidReport {
     @ApiModelProperty(value = "归属项目部名称")
     private String projectDepartment;
 
+    /** 管理组织id(第三方部门id，部门级，报表树按此归组) */
+    @ApiModelProperty(value = "管理组织id(第三方部门id，部门级)")
+    private String managementOrgId;
+
+    /** 管理组织名称 */
+    @ApiModelProperty(value = "管理组织名称")
+    private String managementOrg;
+
     /** 部门id */
     @ApiModelProperty(value = "部门id")
     private Long deptId;
