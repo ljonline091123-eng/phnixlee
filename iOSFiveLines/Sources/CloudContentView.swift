@@ -1,128 +1,186 @@
 import SwiftUI
-import Darwin
+import Foundation
 
 struct CloudContentView: View {
     @EnvironmentObject private var game: CloudGameModel
     @State private var menuPresented = false
+    @State private var scoresPresented = false
+    @State private var settingsPresented = false
 
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 12) {
-                header
-                board
+        VStack(spacing: 0) {
+            header
+                .frame(height: 156)
+            GeometryReader { proxy in
+                let size = max(0, min(proxy.size.width - 32, proxy.size.height - 32) - 14)
+                board(size: size)
+                    .position(x: proxy.size.width / 2, y: (size + 14) / 2 + 16)
             }
-            .padding(12)
-            .background(
-                LinearGradient(
-                    colors: [Color(red: 0.96, green: 0.94, blue: 0.88), Color(red: 0.82, green: 0.78, blue: 0.68)],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
+        }
+        .background(Color(red: 0.945, green: 0.918, blue: 0.875).ignoresSafeArea(edges: [.horizontal, .bottom]))
+        .background(Color(red: 0.063, green: 0.094, blue: 0.125).ignoresSafeArea())
+        .confirmationDialog("菜单", isPresented: $menuPresented, titleVisibility: .visible) {
+            Button("新游戏") { game.startNewGame() }
+            Button("高分榜") { scoresPresented = true }
+            Button("设置") {
+                game.beginSettingsSession()
+                settingsPresented = true
+            }
+            Button("取消", role: .cancel) {}
+        }
+        .sheet(isPresented: $scoresPresented) {
+            HighScoresView()
+                .environmentObject(game)
+        }
+        .sheet(isPresented: $settingsPresented) {
+            SettingsView()
+                .environmentObject(game)
+        }
+        .sheet(isPresented: $game.isGameOver) {
+            GameOverView()
+                .environmentObject(game)
+                .presentationDetents([.medium])
+                .interactiveDismissDisabled()
+        }
+        .overlay {
+            if let prompt = game.easterPrompt {
+                EasterPromptOverlay(
+                    prompt: prompt,
+                    onSecretTap: { game.tapEasterSecret($0) },
+                    onOK: { game.closeEasterPrompt() }
                 )
-                .ignoresSafeArea()
-            )
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        menuPresented = true
-                    } label: {
-                        Image(systemName: "line.3.horizontal")
-                    }
-                    .accessibilityLabel("菜单")
-                }
-            }
-            .sheet(isPresented: $menuPresented) {
-                GameMenuView()
-                    .environmentObject(game)
-            }
-            .sheet(isPresented: $game.isGameOver) {
-                GameOverView()
-                    .environmentObject(game)
-                    .presentationDetents([.medium])
-            }
-            .overlay {
-                if let prompt = game.easterPrompt {
-                    EasterPromptOverlay(
-                        prompt: prompt,
-                        onSecretTap: { game.tapEasterSecret($0) },
-                        onOK: { game.closeEasterPrompt() }
-                    )
-                }
             }
         }
     }
 
     private var header: some View {
-        HStack(alignment: .top, spacing: 10) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text("得分")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                Text("\(game.score)")
-                    .font(.system(size: 28, weight: .black, design: .rounded))
-                    .monospacedDigit()
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(12)
-            .background(.white.opacity(0.82), in: RoundedRectangle(cornerRadius: 12))
-
-            VStack(alignment: .trailing, spacing: 5) {
-                Text("下一轮")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                HStack(spacing: 5) {
-                    ForEach(Array(game.nextTiles.enumerated()), id: \.offset) { _, tile in
-                        TileView(tile: tile, compact: true, rayRacerMode: game.rayRacerMode, kuromiTheme: game.kuromiTheme, heartMode: game.heartMode)
-                    }
+        VStack(spacing: 8) {
+            HStack(alignment: .top, spacing: 10) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("五子消除")
+                        .font(.system(size: 30, weight: .bold))
+                        .foregroundStyle(.white)
+                    Text("白色万能球 · 炸药+至少四颗同色球清除全盘")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.white.opacity(0.82))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.72)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                Button {
+                    game.playClick()
+                    menuPresented = true
+                } label: {
+                    Text("菜单")
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundStyle(.white)
+                        .frame(width: 94, height: 50)
+                        .background(Color(red: 0.937, green: 0.325, blue: 0.314), in: RoundedRectangle(cornerRadius: 15))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("菜单")
             }
-            .padding(10)
-            .background(.white.opacity(0.82), in: RoundedRectangle(cornerRadius: 12))
+
+            HStack(spacing: 14) {
+                scoreCard
+                previewCard
+            }
+            .frame(height: 66)
         }
+        .padding(.horizontal, 20)
+        .padding(.top, 10)
+        .padding(.bottom, 12)
+        .background(Color(red: 0.063, green: 0.094, blue: 0.125))
     }
 
-    private var board: some View {
-        GeometryReader { proxy in
-            let size = min(proxy.size.width, proxy.size.height)
-            ZStack {
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 3), count: 9), spacing: 3) {
-                    ForEach(0..<81, id: \.self) { index in
-                        let trailIndex = game.racerTrail.firstIndex(of: index)
-                        BoardCell(
-                            tile: game.board[index],
-                            selected: game.selectedIndex == index,
-                            removing: game.removing.contains(index),
-                            trailTile: game.racerTrailTile,
-                            trailIndex: trailIndex,
-                            rayRacerMode: game.rayRacerMode,
-                            kuromiTheme: game.kuromiTheme,
-                            heartMode: game.heartMode,
-                            heartBurst: game.heartMode && game.explodingBombs.contains(index)
-                        )
-                        .aspectRatio(1, contentMode: .fit)
-                        .contentShape(Rectangle())
-                        .onTapGesture { game.tap(index) }
-                    }
-                }
-                if let loading = game.easterLoading {
-                    LoadingDotsView(loading: loading)
-                        .frame(width: size * 0.92, height: size * 0.42)
-                        .allowsHitTesting(false)
+    private var scoreCard: some View {
+        HStack(spacing: 8) {
+            Text("得分")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(Color(red: 0.79, green: 0.84, blue: 0.87))
+            Text(String(format: "%05d", min(99_999, game.score)))
+                .font(.system(size: 24, weight: .bold, design: .monospaced))
+                .foregroundStyle(.white)
+                .monospacedDigit()
+                .minimumScaleFactor(0.72)
+        }
+        .padding(.horizontal, 10)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color(red: 0.149, green: 0.216, blue: 0.275))
+                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(red: 0.376, green: 0.49, blue: 0.545), lineWidth: 1))
+        )
+    }
+
+    private var previewCard: some View {
+        HStack(spacing: 5) {
+            Text("下一轮")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(Color(red: 0.79, green: 0.84, blue: 0.87))
+                .fixedSize()
+            HStack(spacing: 3) {
+                ForEach(Array(game.nextTiles.enumerated()), id: \.offset) { _, tile in
+                    TileView(
+                        tile: tile,
+                        compact: true,
+                        rayRacerMode: game.rayRacerMode,
+                        kuromiTheme: game.kuromiTheme,
+                        heartMode: game.heartMode
+                    )
+                    .frame(width: 30, height: 30)
                 }
             }
-            .frame(width: size, height: size)
-            .padding(7)
-            .background(
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(Color(red: 0.29, green: 0.18, blue: 0.10))
-                    .shadow(color: .black.opacity(0.22), radius: 10, y: 6)
-            )
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
-        .aspectRatio(1, contentMode: .fit)
+        .padding(.horizontal, 8)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color(red: 0.149, green: 0.216, blue: 0.275))
+                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(red: 0.376, green: 0.49, blue: 0.545), lineWidth: 1))
+        )
+    }
+
+    private func board(size: CGFloat) -> some View {
+        ZStack {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 0), count: 9), spacing: 0) {
+                ForEach(0..<81, id: \.self) { index in
+                    let trailIndex = game.racerTrail.firstIndex(of: index)
+                    BoardCell(
+                        index: index,
+                        tile: game.board[index],
+                        selected: game.selectedIndex == index,
+                        removing: game.removing.contains(index),
+                        trailTile: game.racerTrailTile,
+                        trailIndex: trailIndex,
+                        rayRacerMode: game.rayRacerMode,
+                        kuromiTheme: game.kuromiTheme,
+                        heartMode: game.heartMode,
+                        heartBurst: game.heartMode && game.explodingBombs.contains(index)
+                    )
+                    .aspectRatio(1, contentMode: .fit)
+                    .contentShape(Rectangle())
+                    .onTapGesture { game.tap(index) }
+                }
+            }
+            if let loading = game.easterLoading {
+                LoadingDotsView(loading: loading)
+                    .frame(width: size * 0.92, height: size * 0.42)
+                    .allowsHitTesting(false)
+            }
+        }
+        .frame(width: size, height: size)
+        .padding(7)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(Color(red: 0.447, green: 0.329, blue: 0.243))
+        )
     }
 }
 
 private struct BoardCell: View {
+    let index: Int
     let tile: CloudGameModel.Tile?
     let selected: Bool
     let removing: Bool
@@ -135,9 +193,11 @@ private struct BoardCell: View {
 
     var body: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 4)
-                .fill(Color(red: 0.57, green: 0.39, blue: 0.22))
-                .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color.black.opacity(0.22), lineWidth: 1))
+            Rectangle()
+                .fill(index / 9 % 2 == index % 9 % 2
+                    ? Color(red: 0.875, green: 0.788, blue: 0.667)
+                    : Color(red: 0.812, green: 0.702, blue: 0.557))
+                .overlay(Rectangle().stroke(Color(red: 0.463, green: 0.345, blue: 0.247), lineWidth: 0.8))
             if let trailTile, let trailIndex {
                 TileTrailView(tile: trailTile, index: trailIndex, heartMode: heartMode)
             }
@@ -152,8 +212,9 @@ private struct BoardCell: View {
             }
         }
         .overlay(
-            RoundedRectangle(cornerRadius: 5)
-                .stroke(selected ? Color.white : Color.clear, lineWidth: 3)
+            Rectangle()
+                .inset(by: 3)
+                .stroke(selected ? Color(red: 0.863, green: 0.149, blue: 0.149) : Color.clear, lineWidth: 3)
         )
         .animation(.easeInOut(duration: 0.5), value: removing)
     }
@@ -169,10 +230,7 @@ private struct TileView: View {
     var body: some View {
         ZStack {
             if tile == .bomb {
-                standardBall
-                Image(systemName: "burst.fill")
-                    .font(.system(size: compact ? 11 : 16, weight: .black))
-                    .foregroundStyle(.white)
+                DynamiteTileView(compact: compact)
             } else if heartMode {
                 HeartShape()
                     .fill(tile.color)
@@ -202,10 +260,87 @@ private struct TileView: View {
         Circle()
             .fill(tile.color)
             .overlay(
-                Circle()
-                    .stroke(tile == .white ? Color.gray.opacity(0.45) : Color.white.opacity(0.6), lineWidth: compact ? 1 : 2)
+                Circle().fill(
+                    RadialGradient(
+                        colors: [.white.opacity(0.42), .clear, .black.opacity(0.48)],
+                        center: UnitPoint(x: 0.34, y: 0.30),
+                        startRadius: 1,
+                        endRadius: compact ? 24 : 42
+                    )
+                )
+            )
+            .overlay(
+                Circle().stroke(
+                    tile == .white ? Color(red: 0.482, green: 0.529, blue: 0.58) : Color.black.opacity(0.48),
+                    lineWidth: compact ? 1 : 1.7
+                )
             )
             .shadow(color: .black.opacity(0.25), radius: compact ? 2 : 4, y: 2)
+            .overlay(alignment: .topLeading) {
+                Circle()
+                    .fill(.white.opacity(0.72))
+                    .frame(width: compact ? 4 : 7, height: compact ? 4 : 7)
+                    .padding(compact ? 7 : 10)
+            }
+    }
+}
+
+private struct DynamiteTileView: View {
+    let compact: Bool
+
+    var body: some View {
+        GeometryReader { proxy in
+            let size = min(proxy.size.width, proxy.size.height)
+            let bodyWidth = size * 0.34
+            let bodyHeight = size * 0.74
+            ZStack {
+                RoundedRectangle(cornerRadius: size * 0.07)
+                    .fill(.black.opacity(0.28))
+                    .frame(width: bodyWidth, height: bodyHeight)
+                    .offset(x: size * 0.05, y: size * 0.06)
+                RoundedRectangle(cornerRadius: size * 0.07)
+                    .fill(Color(red: 0.718, green: 0.11, blue: 0.11))
+                    .frame(width: bodyWidth, height: bodyHeight)
+                    .overlay(alignment: .leading) {
+                        RoundedRectangle(cornerRadius: size * 0.025)
+                            .fill(Color(red: 0.937, green: 0.325, blue: 0.314))
+                            .frame(width: size * 0.06)
+                            .padding(.vertical, size * 0.06)
+                            .padding(.leading, size * 0.04)
+                    }
+                    .overlay {
+                        VStack {
+                            Rectangle().fill(Color(red: 0.427, green: 0.082, blue: 0.082)).frame(height: size * 0.055)
+                            Spacer()
+                            Rectangle().fill(Color(red: 0.427, green: 0.082, blue: 0.082)).frame(height: size * 0.055)
+                        }
+                        .padding(.vertical, size * 0.15)
+                    }
+                Rectangle()
+                    .fill(Color(red: 0.306, green: 0.204, blue: 0.18))
+                    .frame(width: size * 0.11, height: size * 0.12)
+                    .offset(y: -bodyHeight * 0.56)
+                Path { path in
+                    path.move(to: CGPoint(x: size * 0.51, y: size * 0.12))
+                    path.addCurve(
+                        to: CGPoint(x: size * 0.74, y: size * 0.08),
+                        control1: CGPoint(x: size * 0.61, y: -size * 0.01),
+                        control2: CGPoint(x: size * 0.69, y: size * 0.14)
+                    )
+                }
+                .stroke(Color(red: 0.306, green: 0.204, blue: 0.18), style: StrokeStyle(lineWidth: max(1.5, size * 0.045), lineCap: .round))
+                Circle()
+                    .fill(Color(red: 1.0, green: 0.757, blue: 0.027))
+                    .frame(width: size * 0.13, height: size * 0.13)
+                    .overlay(Circle().fill(Color(red: 1.0, green: 0.961, blue: 0.616)).frame(width: size * 0.05, height: size * 0.05))
+                    .position(x: size * 0.75, y: size * 0.07)
+            }
+            .frame(width: size, height: size)
+            .rotationEffect(.degrees(-16))
+            .position(x: proxy.size.width / 2, y: proxy.size.height / 2)
+        }
+        .padding(compact ? 1 : 2)
+        .allowsHitTesting(false)
     }
 }
 private struct TileTrailView: View {
@@ -755,46 +890,6 @@ private struct EasterPromptOverlay: View {
     }
 }
 
-private struct GameMenuView: View {
-    @EnvironmentObject private var game: CloudGameModel
-    @Environment(\.dismiss) private var dismiss
-    @State private var scoresPresented = false
-    @State private var settingsPresented = false
-
-    var body: some View {
-        NavigationStack {
-            List {
-                Button {
-                    game.startNewGame()
-                    dismiss()
-                } label: {
-                    Label("新游戏", systemImage: "arrow.clockwise")
-                }
-                Button {
-                    scoresPresented = true
-                } label: {
-                    Label("高分榜", systemImage: "trophy")
-                }
-                Button {
-                    settingsPresented = true
-                } label: {
-                    Label("设置", systemImage: "gearshape")
-                }
-            }
-            .navigationTitle("菜单")
-            .sheet(isPresented: $scoresPresented) {
-                HighScoresView()
-                    .environmentObject(game)
-            }
-            .sheet(isPresented: $settingsPresented) {
-                SettingsView()
-                    .environmentObject(game)
-            }
-        }
-        .presentationDetents([.medium])
-    }
-}
-
 private struct HighScoresView: View {
     @EnvironmentObject private var game: CloudGameModel
     @Environment(\.dismiss) private var dismiss
@@ -808,8 +903,9 @@ private struct HighScoresView: View {
                         .foregroundStyle(.secondary)
                     Text(entry.name)
                     Spacer()
-                    Text("\(entry.score)")
+                    Text(String(format: "%05d", min(99_999, entry.score)))
                         .fontWeight(.bold)
+                        .monospacedDigit()
                 }
             }
             .overlay {
@@ -823,7 +919,7 @@ private struct HighScoresView: View {
                     }
                 }
             }
-            .navigationTitle("高分榜")
+            .navigationTitle("高分榜（前10名）")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("完成") { dismiss() }
@@ -948,14 +1044,24 @@ private struct GameOverView: View {
                 .font(.title.bold())
             Text("本局得分：\(game.score)")
                 .font(.headline)
-            TextField("昵称", text: $nickname)
-                .textFieldStyle(.roundedBorder)
-                .padding(.horizontal)
-            Button("保存成绩并开始新游戏") {
-                game.submitScore(nickname)
-                dismiss()
+            if game.qualifiesForHighScore {
+                TextField("昵称", text: $nickname)
+                    .textFieldStyle(.roundedBorder)
+                    .padding(.horizontal)
+                Button("保存成绩并开始新游戏") {
+                    game.submitScore(nickname)
+                    dismiss()
+                }
+                .buttonStyle(.borderedProminent)
+            } else {
+                Text("本局未进入前 10 名")
+                    .foregroundStyle(.secondary)
+                Button("开始新游戏") {
+                    game.dismissGameOverAndRestart()
+                    dismiss()
+                }
+                .buttonStyle(.borderedProminent)
             }
-            .buttonStyle(.borderedProminent)
         }
         .padding(24)
     }

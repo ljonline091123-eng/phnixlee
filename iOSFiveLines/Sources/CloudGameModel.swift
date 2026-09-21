@@ -1,7 +1,6 @@
 import SwiftUI
 import Foundation
 import Darwin
-import AudioToolbox
 import AVFoundation
 
 final class CloudGameModel: ObservableObject {
@@ -18,13 +17,13 @@ final class CloudGameModel: ObservableObject {
 
         var color: Color {
             switch self {
-            case .red: return Color(red: 0.88, green: 0.12, blue: 0.15)
-            case .yellow: return Color(red: 0.98, green: 0.75, blue: 0.08)
-            case .green: return Color(red: 0.10, green: 0.62, blue: 0.28)
-            case .blue: return Color(red: 0.08, green: 0.32, blue: 0.83)
-            case .purple: return Color(red: 0.47, green: 0.18, blue: 0.72)
-            case .cyan: return Color(red: 0.02, green: 0.68, blue: 0.72)
-            case .pink: return Color(red: 0.92, green: 0.22, blue: 0.52)
+            case .red: return Color(red: 0.882, green: 0.024, blue: 0.0)
+            case .yellow: return Color(red: 1.0, green: 0.816, blue: 0.0)
+            case .green: return Color(red: 0.0, green: 0.659, blue: 0.42)
+            case .blue: return Color(red: 0.0, green: 0.341, blue: 0.851)
+            case .purple: return Color(red: 0.447, green: 0.035, blue: 0.718)
+            case .cyan: return Color(red: 0.0, green: 0.706, blue: 0.847)
+            case .pink: return Color(red: 1.0, green: 0.0, blue: 0.659)
             case .orange: return Color(red: 0.95, green: 0.40, blue: 0.05)
             case .black: return Color(red: 0.06, green: 0.07, blue: 0.09)
             case .white: return Color.white
@@ -50,8 +49,8 @@ final class CloudGameModel: ObservableObject {
         }
         var stepDuration: Double {
             switch self {
-            case .slow: return 0.24
-            case .normal: return 0.14
+            case .slow: return 0.22
+            case .normal: return 0.135
             case .fast: return 0.08
             case .lightning: return 0.035
             }
@@ -178,8 +177,8 @@ final class CloudGameModel: ObservableObject {
     @Published var bombProbability = CloudGameModel.defaultBombProbability { didSet { saveSettings() } }
     @Published var musicEnabled = true { didSet { applyAudioSettings() } }
     @Published var effectsEnabled = true { didSet { applyAudioSettings() } }
-    @Published var musicVolume = 0.65 { didSet { applyAudioSettings() } }
-    @Published var effectsVolume = 0.8 { didSet { applyAudioSettings() } }
+    @Published var musicVolume = 0.35 { didSet { applyAudioSettings() } }
+    @Published var effectsVolume = 0.75 { didSet { applyAudioSettings() } }
     @Published var musicTrack: MusicTrack = .music1 { didSet { applyAudioSettings() } }
     @Published var moveSpeed: MoveSpeed = .slow { didSet { saveSettings() } }
     @Published var adminMode = false { didSet { saveSettings() } }
@@ -202,6 +201,7 @@ final class CloudGameModel: ObservableObject {
     private var musicToggleUnlockCount = 0
     private var adminUnlockedByMusic = false
     private var suppressSettingsSave = false
+    private var gameToken = 0
 
     init() {
         loadScores()
@@ -211,6 +211,8 @@ final class CloudGameModel: ObservableObject {
     }
 
     func startNewGame() {
+        gameToken += 1
+        let token = gameToken
         loadingTimer?.invalidate()
         loadingTimer = nil
         board = Array(repeating: nil, count: 81)
@@ -236,9 +238,15 @@ final class CloudGameModel: ObservableObject {
         nextTiles = randomPreview()
         score = 0
         isGameOver = false
-        busy = false
+        busy = true
         clearedThisTurn = false
-        spawnPieces(count: 3, animated: false)
+        let openingTiles = nextTiles
+        _ = spawnPieces(tiles: openingTiles, animated: true)
+        nextTiles = randomPreview()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.32) { [weak self] in
+            guard let self, self.gameToken == token else { return }
+            self.busy = false
+        }
     }
 
     func tap(_ index: Int) {
@@ -248,18 +256,20 @@ final class CloudGameModel: ObservableObject {
         if let selected = selectedIndex {
             if board[index] == nil {
                 guard let route = shortestPath(from: selected, to: index) else {
-                    selectedIndex = nil
                     return
                 }
                 clearedThisTurn = false
                 selectedIndex = nil
                 busy = true
+                audio.playMove()
                 moveAlongPath(tile: board[selected]!, from: selected, route: route, step: 0)
             } else {
                 selectedIndex = index
+                audio.playClick()
             }
         } else if board[index] != nil {
             selectedIndex = index
+            audio.playClick()
         }
     }
 
@@ -272,6 +282,23 @@ final class CloudGameModel: ObservableObject {
         saveScores()
         isGameOver = false
         startNewGame()
+    }
+
+    var qualifiesForHighScore: Bool {
+        highScores.count < 10 || score > (highScores.last?.score ?? Int.min)
+    }
+
+    func dismissGameOverAndRestart() {
+        isGameOver = false
+        startNewGame()
+    }
+
+    func playClick() {
+        audio.playClick()
+    }
+
+    func setAppActive(_ active: Bool) {
+        audio.setAppActive(active)
     }
 
     func colorName(_ tile: Tile) -> String {
@@ -297,8 +324,9 @@ final class CloudGameModel: ObservableObject {
             }
             if rayRacerMode || heartMode {
                 let trail = racerTrail
+                let token = gameToken
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) { [weak self] in
-                    guard let self, self.racerTrail == trail else { return }
+                    guard let self, self.gameToken == token, self.racerTrail == trail else { return }
                     self.racerTrail = []
                     self.racerTrailTile = nil
                 }
@@ -318,9 +346,10 @@ final class CloudGameModel: ObservableObject {
             board[current] = nil
             board[next] = tile
         }
-        playEffect(1104)
+        let token = gameToken
         DispatchQueue.main.asyncAfter(deadline: .now() + activeStepDuration) { [weak self] in
-            self?.moveAlongPath(tile: tile, from: next, route: route, step: step + 1)
+            guard let self, self.gameToken == token else { return }
+            self.moveAlongPath(tile: tile, from: next, route: route, step: step + 1)
         }
     }
 
@@ -330,29 +359,7 @@ final class CloudGameModel: ObservableObject {
             spawnAfterUnsuccessfulMove()
             return
         }
-        clearedThisTurn = true
-        busy = true
-        let blastCells = bombBlastCells(for: match)
-        let allCells = match.lineCells.union(blastCells)
-        let lineCount = match.lineCells.count
-        let blastOnlyCount = blastCells.subtracting(match.lineCells).count
-        score += lineCount >= 5 ? 5 + (lineCount - 5) * 2 : 0
-        score += blastOnlyCount
-        removing = allCells
-        explodingBombs = Set(match.lineCells.filter { board[$0]?.isBomb == true })
-        playEffect(1105)
-
-        withAnimation(.easeIn(duration: 0.5)) {
-            for index in allCells {
-                board[index] = nil
-            }
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-            guard let self else { return }
-            self.removing = []
-            self.explodingBombs = []
-            self.resolveChain()
-        }
+        startRemoval(match)
     }
 
     private func resolveChain() {
@@ -366,7 +373,12 @@ final class CloudGameModel: ObservableObject {
             }
             return
         }
+        startRemoval(match)
+    }
+
+    private func startRemoval(_ match: MatchResult) {
         clearedThisTurn = true
+        busy = true
         let blastCells = bombBlastCells(for: match)
         let allCells = match.lineCells.union(blastCells)
         let lineCount = match.lineCells.count
@@ -375,14 +387,19 @@ final class CloudGameModel: ObservableObject {
         score += blastOnlyCount
         removing = allCells
         explodingBombs = Set(match.lineCells.filter { board[$0]?.isBomb == true })
-        playEffect(1105)
+        if explodingBombs.isEmpty {
+            audio.playClear()
+        } else {
+            audio.playExplosion()
+        }
         withAnimation(.easeIn(duration: 0.5)) {
             for index in allCells {
                 board[index] = nil
             }
         }
+        let token = gameToken
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-            guard let self else { return }
+            guard let self, self.gameToken == token else { return }
             self.removing = []
             self.explodingBombs = []
             self.resolveChain()
@@ -404,8 +421,17 @@ final class CloudGameModel: ObservableObject {
             return
         }
         nextTiles = randomPreview()
-        busy = false
-        checkGameOver()
+        let token = gameToken
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.32) { [weak self] in
+            guard let self, self.gameToken == token else { return }
+            let match = self.findMatches()
+            if match.lineCells.isEmpty {
+                self.busy = false
+                self.checkGameOver()
+            } else {
+                self.startRemoval(match)
+            }
+        }
     }
 
     private func spawnCount() -> Int {
@@ -413,11 +439,6 @@ final class CloudGameModel: ObservableObject {
         guard score >= 50, difficulty > 1 else { return base }
         let extra = Int(Double(base) * ((Double(score) / 100.0) * (difficulty - 1.0)))
         return max(base, base + extra)
-    }
-
-    @discardableResult
-    private func spawnPieces(count: Int, animated: Bool) -> Bool {
-        spawnPieces(tiles: (0..<count).map { _ in randomTile() }, animated: animated)
     }
 
     @discardableResult
@@ -438,7 +459,7 @@ final class CloudGameModel: ObservableObject {
             withAnimation(.spring(response: 0.32, dampingFraction: 0.68)) {
                 changes()
             }
-            playEffect(1103)
+            audio.playSpawn()
         } else {
             changes()
         }
@@ -669,19 +690,6 @@ final class CloudGameModel: ObservableObject {
         rayRacerMode ? 0.0035 : moveSpeed.stepDuration
     }
 
-    private func playEffect(_ id: SystemSoundID) {
-        switch id {
-        case 1103:
-            audio.playSpawn()
-        case 1104:
-            audio.playMove()
-        case 1105:
-            audio.playClear()
-        default:
-            audio.playClick()
-        }
-    }
-
     func noteMusicToggleForAdminUnlock() {
         musicToggleUnlockCount += 1
         if !adminMode, musicToggleUnlockCount >= 7 {
@@ -713,8 +721,10 @@ final class CloudGameModel: ObservableObject {
         adminUnlockedByMusic = false
         saveSettings()
         if shouldTriggerToutou {
+            let token = gameToken
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) { [weak self] in
-                self?.startCornerEasterEgg(.toutou)
+                guard let self, self.gameToken == token else { return }
+                self.startCornerEasterEgg(.toutou)
             }
         }
     }
@@ -764,8 +774,8 @@ final class CloudGameModel: ObservableObject {
         bombProbability = min(2, max(0, values["bombProbability"] as? Double ?? Self.defaultBombProbability))
         musicEnabled = values["musicEnabled"] as? Bool ?? true
         effectsEnabled = values["effectsEnabled"] as? Bool ?? true
-        musicVolume = values["musicVolume"] as? Double ?? 0.65
-        effectsVolume = values["effectsVolume"] as? Double ?? 0.8
+        musicVolume = values["musicVolume"] as? Double ?? 0.35
+        effectsVolume = values["effectsVolume"] as? Double ?? 0.75
         if let rawTrack = values["musicTrack"] as? Int,
            let track = MusicTrack(rawValue: rawTrack),
            MusicTrack.selectable.contains(track) {
@@ -811,14 +821,20 @@ final class CloudGameModel: ObservableObject {
 
 private final class AudioEngine {
     private var soundEnabled = true
-    private var soundVolume = 0.8
+    private var soundVolume = 0.75
     private var musicEnabled = true
-    private var musicVolume = 0.65
+    private var musicVolume = 0.35
     private var musicTrack: CloudGameModel.MusicTrack = .music1
+    private var appActive = true
     private var musicIndex = 0
     private var musicTimer: Timer?
     private var midiPlayer: AVAudioPlayer?
     private var activePlayers: [AVAudioPlayer] = []
+
+    init() {
+        try? AVAudioSession.sharedInstance().setCategory(.ambient, mode: .default)
+        try? AVAudioSession.sharedInstance().setActive(true)
+    }
 
     func configure(
         soundEnabled: Bool,
@@ -834,7 +850,7 @@ private final class AudioEngine {
         self.musicVolume = min(1, max(0, musicVolume))
         self.musicTrack = musicTrack
 
-        if musicEnabled {
+        if musicEnabled && appActive {
             if trackChanged {
                 stopMusic()
             }
@@ -843,6 +859,18 @@ private final class AudioEngine {
             stopMusic()
         }
         midiPlayer?.volume = Float(self.musicVolume)
+    }
+
+    func setAppActive(_ active: Bool) {
+        guard appActive != active else { return }
+        appActive = active
+        if active {
+            try? AVAudioSession.sharedInstance().setActive(true)
+            if musicEnabled { startMusic() }
+        } else {
+            stopMusic()
+            try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        }
     }
 
     func playClick() { playTone(660, 0.055, soundVolume * 0.40) }
@@ -856,9 +884,17 @@ private final class AudioEngine {
             self.playTone(1320, 0.11, self.soundVolume * 0.36)
         }
     }
-    func playExplosion() { playTone(72, 0.39, soundVolume * 0.82); playNoise(0.26, soundVolume * 0.58) }
+    func playExplosion() {
+        playTone(72, 0.39, soundVolume * 0.82)
+        playNoise(0.26, soundVolume * 0.58)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.085) { [weak self] in
+            guard let self else { return }
+            self.playTone(155, 0.26, self.soundVolume * 0.42)
+        }
+    }
 
     private func startMusic() {
+        guard appActive else { return }
         switch musicTrack {
         case .music1:
             startSynthMusic()
