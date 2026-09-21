@@ -15,6 +15,7 @@ from app.services.resource_hub import (
     seed_default_graphs,
     seed_default_knowledge_bases,
 )
+from app.services.taxonomy import seed_builtin_definitions
 
 
 def initialize_database(*, seed_defaults: bool = True) -> None:
@@ -31,3 +32,5 @@ def initialize_database(*, seed_defaults: bool = True) -> None:
         seed_default_knowledge_bases(db)
         seed_default_graphs(db)
         seed_default_agents(db)
+        seed_builtin_definitions(db)
+        db.commit()

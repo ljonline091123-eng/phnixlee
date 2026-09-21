@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import os
 import socket
 import time
@@ -14,7 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.db.bootstrap import initialize_database
 from app.db.session import SessionLocal
-from app.jobs.tasks import execute_task
+from app.jobs.tasks import TASK_HANDLERS, execute_task
 from app.models.pipeline import PipelineRun, PipelineStageRun, ScheduledJob
 
 
@@ -28,11 +29,22 @@ class JobWorker:
         *,
         worker_id: str | None = None,
         lease_seconds: int = 900,
+        task_types: tuple[str, ...] | None = None,
         session_factory: Callable[[], Session] = SessionLocal,
         task_executor: Callable[[str, dict[str, Any]], dict[str, Any]] = execute_task,
     ):
+        if lease_seconds <= 0:
+            raise ValueError("Worker lease must be a positive number of seconds")
+        if task_types is not None:
+            task_types = tuple(dict.fromkeys(task_types))
+            if not task_types:
+                raise ValueError("An explicit task filter cannot be empty")
+            unknown = set(task_types) - TASK_HANDLERS.keys()
+            if unknown:
+                raise ValueError(f"Unknown worker task types: {', '.join(sorted(unknown))}")
         self.worker_id = worker_id or f"{socket.gethostname()}:{os.getpid()}"
         self.lease_seconds = lease_seconds
+        self.task_types = task_types
         self.session_factory = session_factory
         self.task_executor = task_executor
 
@@ -77,6 +89,8 @@ class JobWorker:
             .order_by(ScheduledJob.run_after, ScheduledJob.id)
             .limit(1)
         )
+        if self.task_types is not None:
+            statement = statement.where(ScheduledJob.task_type.in_(self.task_types))
         if db.get_bind().dialect.name == "postgresql":
             statement = statement.with_for_update(skip_locked=True)
         job = db.scalar(statement)
@@ -173,9 +187,22 @@ class JobWorker:
         )
 
 
-def main() -> None:
+def main(argv: list[str] | None = None) -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--task-type", action="append", choices=sorted(TASK_HANDLERS),
+                        help="Only claim this task type; repeat to allow more types")
+    parser.add_argument("--once", action="store_true",
+                        help="Attempt one eligible job and then exit, even if the queue is empty")
+    parser.add_argument("--lease-seconds", type=int, default=900)
+    args = parser.parse_args(argv)
+    if args.lease_seconds <= 0:
+        parser.error("--lease-seconds must be positive")
     initialize_database(seed_defaults=False)
-    worker = JobWorker()
+    worker = JobWorker(task_types=tuple(args.task_type) if args.task_type else None,
+                       lease_seconds=args.lease_seconds)
+    if args.once:
+        worker.run_once()
+        return
     while True:
         if not worker.run_once():
             time.sleep(2)

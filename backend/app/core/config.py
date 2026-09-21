@@ -13,7 +13,9 @@ class Settings(BaseSettings):
     api_v1_prefix: str = "/api/v1"
     database_url: str = DEFAULT_DATABASE_URL
     sql_echo: bool = False
+    seed_defaults_on_startup: bool = True
     data_foundation_enabled: bool = True
+    company_research_context_enabled: bool = True
     model_credential_key: str = ""
 
     model_config = SettingsConfigDict(

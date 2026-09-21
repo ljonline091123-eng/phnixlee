@@ -16,6 +16,9 @@ class TableDescription:
 
 
 TABLE_DESCRIPTIONS: dict[str, TableDescription] = {
+    "classification_definition": TableDescription("\u5206\u7c7b\u4e3b\u6570\u636e\u5b9a\u4e49", "\u6570\u636e\u5e95\u5ea7", "\u884c\u4e1a\u3001\u4e3b\u9898\u3001\u7c7b\u578b\u548c\u89c4\u6a21\u6807\u7b7e\u7684\u7248\u672c\u5316\u4e3b\u6570\u636e\u53ca\u5176\u771f\u5b9e\u91ca\u4e49\uff0c\u7528\u4e8e\u524d\u7aef\u89e3\u91ca\u548c\u5206\u7c7b\u6cbb\u7406\u3002"),
+    "foundation_source_identity": TableDescription("来源主体标识", "数据底座", "将来源命名空间及稳定发行人标识映射到主体，支持有依据的跨市场同公司关联，不按名称合并。"),
+    "foundation_security_classification": TableDescription("证券分类事实", "数据底座", "直接关联证券、定义版本及证据的分类候选，独立记录业务有效期和审核历史，不强挂发行公司。"),
     "foundation_entity": TableDescription("主数据主体", "数据底座", "保存公司、人物、机构及分类等稳定身份，外部标识在法域内唯一，同名不自动合并。"),
     "foundation_security": TableDescription("主数据证券", "数据底座", "保存独立证券身份、发行公司和股份类别，与上市记录分离。"),
     "foundation_listing": TableDescription("证券上市映射", "数据底座", "将既有股票记录映射到证券及发行公司，保留市场代码和持久证据。"),
@@ -317,6 +320,21 @@ COMMON_COLUMN_DESCRIPTIONS: dict[str, str] = {
 
 
 TABLE_COLUMN_OVERRIDES: dict[str, dict[str, str]] = {
+    "classification_definition": {
+        "id": "\u5206\u7c7b\u5b9a\u4e49\u7a33\u5b9a ID", "taxonomy": "\u5206\u7c7b\u4f53\u7cfb\u540d\u79f0", "dimension": "\u5206\u7c7b\u7ef4\u5ea6\uff0c\u5982\u884c\u4e1a\u3001\u4e3b\u9898\u3001\u7c7b\u578b", "code": "\u6765\u6e90\u6216\u8bcd\u5178\u4ee3\u7801", "label": "\u663e\u793a\u540d\u79f0", "definition": "\u4e3b\u6570\u636e\u771f\u5b9e\u91ca\u4e49", "criteria": "\u7eb3\u5165\u6807\u51c6\u548c\u4e0d\u9002\u7528\u8bf4\u660e", "parent_code": "\u4e0a\u7ea7\u5206\u7c7b\u4ee3\u7801", "jurisdiction": "\u9002\u7528\u6cd5\u57df", "source_name": "\u5b9a\u4e49\u6765\u6e90", "source_url": "\u6765\u6e90\u94fe\u63a5", "definition_version": "\u91ca\u4e49\u7248\u672c", "status": "\u5b9a\u4e49\u72b6\u6001", "valid_from": "\u6709\u6548\u671f\u5f00\u59cb", "valid_to": "\u6709\u6548\u671f\u7ed3\u675f", "properties_json": "\u6269\u5c55\u5c5e\u6027", "created_at": "\u521b\u5efa\u65f6\u95f4", "updated_at": "\u66f4\u65b0\u65f6\u95f4",
+    },
+    "foundation_source_identity": {
+        "id": "标识映射的稳定 ID。", "entity_id": "规范主体 ID。", "namespace": "原始来源或登记体系命名空间。",
+        "external_id": "来源内的稳定发行人或登记标识，不使用名称生成。", "entity_type": "标识对应主体类别。",
+        "jurisdiction": "已知注册法域。", "created_at": "首次记录该映射的时刻。",
+    },
+    "foundation_security_classification": {
+        "id": "分类事实稳定 ID。", "security_id": "直接关联的证券 ID。", "evidence_id": "支持分类的持久证据版本。",
+        "dimension": "规模、风格、上市属性等分类维度。", "code": "定义体系内分类代码。", "label": "分类展示名称。",
+        "definition_version": "分类定义版本。", "method": "形成分类所用方法或规则。", "properties_json": "样本、指标或规则口径。",
+        "status": "候选、接受或拒绝状态。", "valid_from": "有效期开始，含当天。", "valid_to": "有效期截止，不含当天。",
+        "reviews_json": "按实际发生顺序追加的审核记录。", "created_at": "首次记录时间。", "updated_at": "最近审核时间。",
+    },
     "foundation_entity": {
         "id": "主体的稳定 UUID 标识。", "name": "主体名称，同名不表示同一主体。",
         "entity_type": "主体类型，例如公司、机构、人物或分类。", "jurisdiction": "主体所属注册或身份法域。",

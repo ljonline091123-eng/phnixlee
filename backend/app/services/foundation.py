@@ -228,13 +228,15 @@ def _validate_endpoints(payload: FactCreate, subject: FoundationEntity, obj: Fou
                         "HAS_CLASSIFICATION": {"CLASSIFICATION"}}
     actor_types = {"COMPANY", "PERSON", "ORGANIZATION"}
     subject_types = {"COMPANY"} if payload.fact_type in {"IN_INDUSTRY", "MEMBER_OF_THEME", "HAS_CLASSIFICATION"} else actor_types
+    if payload.fact_type == "HOLDS_EQUITY":
+        subject_types = subject_types | {"HOLDER_ACCOUNT"}
     if subject.entity_type not in subject_types:
         raise FoundationError("subject entity type is invalid for this fact")
     if obj and obj.entity_type not in expected_objects.get(payload.fact_type, actor_types | {"PROJECT"}):
         raise FoundationError("object entity type is invalid for this fact")
 
 
-def create_fact(db: Session, payload: FactCreate) -> FoundationFact:
+def create_fact(db: Session, payload: FactCreate, *, fact_id: str | None = None) -> FoundationFact:
     subject = required(db, FoundationEntity, payload.subject_entity_id)
     obj = required(db, FoundationEntity, payload.object_entity_id) if payload.object_entity_id else None
     _validate_endpoints(payload, subject, obj)
@@ -247,6 +249,8 @@ def create_fact(db: Session, payload: FactCreate) -> FoundationFact:
         required(db, FoundationEvidence, evidence_id)
     now = utc_now()
     row = FoundationFact(**payload.model_dump(exclude={"evidence_ids"}), status="PENDING", created_at=now, updated_at=now)
+    if fact_id is not None:
+        row.id = fact_id
     db.add(row)
     db.flush()
     db.add_all([FoundationFactEvidence(fact_id=row.id, evidence_id=value) for value in sorted(set(payload.evidence_ids))])

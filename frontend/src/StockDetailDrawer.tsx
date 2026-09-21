@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
+import { Building2 } from "lucide-react";
+import { CompanyGraphDialog } from "./CompanyGraphWorkbench";
 
 import {
   api,
@@ -1142,6 +1144,7 @@ export function StockDetailDrawer({
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
   const [remoteError, setRemoteError] = useState("");
+  const [companyGraphOpen, setCompanyGraphOpen] = useState(false);
   const [tab, setTab] = useState<PrimaryTab>("精选");
   const [f10Tab, setF10Tab] = useState<F10Tab>("财务");
   const [newsPage, setNewsPage] = useState(1);
@@ -1342,11 +1345,13 @@ export function StockDetailDrawer({
             </div>
           </div>
           <div className="detail-head-actions">
+            <button type="button" onClick={() => setCompanyGraphOpen(true)}><Building2 size={15} /> 公司关联</button>
             <button type="button" onClick={() => void refreshRemote()} disabled={refreshing}>{refreshing ? "更新中" : "手动更新"}</button>
             <button type="button" onClick={onClose}>关闭</button>
           </div>
         </header>
 
+        {companyGraphOpen && <CompanyGraphDialog stock={stock} close={() => setCompanyGraphOpen(false)} />}
         {loading && <p className="empty-state">正在读取本地数据库...</p>}
         {error && <p className="form-error">{error}</p>}
         {remoteError && <p className="form-error soft-error">{remoteError}</p>}

@@ -56,6 +56,7 @@ from app.services.resource_hub import (
     table_columns,
 )
 from app.services.skill_files import delete_skill_file, skill_file_path, write_skill_file
+from app.services.graph_identity import enrich_legacy_nodes
 from app.orchestration.model_hub import (
     AgentExecutionCommand,
     AgentExecutionWorkflow,
@@ -647,8 +648,7 @@ def explore_knowledge_graph(graph_id: int, q: str = "", limit: int = 30,
     evidence_ids = [relation.evidence_document_id for relation in relations if relation.evidence_document_id]
     evidence = {item.id: item for item in db.scalars(select(KnowledgeDocument).where(
         KnowledgeDocument.id.in_(evidence_ids))).all()} if evidence_ids else {}
-    return {"nodes": [{"id": node.id, "type": node.entity_type, "key": node.entity_key,
-                        "name": node.entity_name, "properties": node.properties_json} for node in nodes],
+    return {"nodes": enrich_legacy_nodes(db, nodes),
             "relations": [{"id": relation.id, "from_id": relation.subject_entity_id,
                            "to_id": relation.object_entity_id, "type": relation.predicate,
                            "evidence": ({"document_id": evidence[relation.evidence_document_id].id,

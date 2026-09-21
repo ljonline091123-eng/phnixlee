@@ -23,7 +23,7 @@ BACKEND_ROOT = Path(__file__).resolve().parents[1]
 if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
 
-HEAD = "foundation_0001"
+HEAD = "foundation_0003"
 VERSION_TABLE = "foundation_schema_revision"
 DATABASE_ENV = "FOUNDATION_MIGRATION_DATABASE_URL"
 
@@ -36,11 +36,17 @@ def migration_config(*, output_buffer: io.StringIO | None = None) -> Config:
     return Config(str(BACKEND_ROOT / "alembic.ini"), output_buffer=output_buffer)
 
 
-def revision_metadata() -> MetaData:
-    revision = ScriptDirectory.from_config(migration_config()).get_revision(HEAD)
+def revision_metadata(revision_id: str = HEAD) -> MetaData:
+    revision = ScriptDirectory.from_config(migration_config()).get_revision(revision_id)
     if revision is None:
         raise MigrationSafetyError("The foundation revision is missing.")
     return revision.module.build_metadata()
+
+
+def supported_revisions() -> set[str]:
+    """Only accept revisions on the checked foundation upgrade history."""
+    return {revision.revision for revision in ScriptDirectory.from_config(
+        migration_config()).iterate_revisions(HEAD, "base")}
 
 
 def managed_table_names(metadata: MetaData) -> set[str]:
@@ -91,7 +97,7 @@ def inspect_foundation(connection: Connection, metadata: MetaData | None = None)
             continue
         if isinstance(difference, tuple) and difference[0] == "add_index" and difference[1].table.name in missing:
             continue
-        problems.append("Schema differs from frozen foundation_0001: " + repr(difference))
+        problems.append(f"Schema differs from frozen {HEAD}: " + repr(difference))
 
     # Alembic does not compare CHECK constraints or primary keys automatically.
     for name in present:
@@ -119,14 +125,16 @@ def inspect_foundation(connection: Connection, metadata: MetaData | None = None)
             problems.append("The foundation version table has an unexpected schema.")
         else:
             versions = list(connection.execute(text(f'SELECT version_num FROM "{VERSION_TABLE}"')).scalars())
-            if versions != [HEAD]:
+            if len(versions) != 1 or versions[0] not in supported_revisions():
                 problems.append("The foundation version table is empty or has an unsupported revision.")
             else:
                 current_revision = versions[0]
-                if missing:
-                    problems.append("The recorded revision is current but some managed tables are missing.")
+                recorded_tables = managed_table_names(revision_metadata(current_revision))
+                if recorded_tables - existing:
+                    problems.append("Some tables required by the recorded revision are missing.")
 
-    status = "BLOCKED" if problems else "CURRENT" if current_revision == HEAD else "UNVERSIONED" if present else "PENDING"
+    status = ("BLOCKED" if problems else "CURRENT" if current_revision == HEAD else
+              "UPGRADE_REQUIRED" if current_revision else "UNVERSIONED" if present else "PENDING")
     return {
         "status": status,
         "target_revision": HEAD,

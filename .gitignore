@@ -12,6 +12,7 @@ build/
 # Local runtime output and downloaded inspection artifacts
 *.log
 backend/tmp_*
+backend/validation/
 backend/emchart.js
 backend/quotepage.js
 backend/stock.js

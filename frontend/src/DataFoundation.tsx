@@ -6,13 +6,13 @@ import "./DataFoundation.css";
 type Tab = "entities" | "evidence" | "facts" | "legal";
 type Row = FoundationEntity | FoundationEvidence | FoundationFact;
 type DialogState = { kind: "entity-create" | "evidence-create" | "import" | "fact-create" } | { kind: "entity" | "evidence" | "fact"; id: string } | null;
-const entityNames: Record<string, string> = { COMPANY: "公司", PERSON: "自然人", ORGANIZATION: "机构", PROJECT: "项目", INDUSTRY: "行业", THEME: "板块主题", CLASSIFICATION: "类型标签", PRODUCT: "产品", MATERIAL: "原材料" };
+const entityNames: Record<string, string> = { COMPANY: "公司", PERSON: "自然人", ORGANIZATION: "机构", HOLDER_ACCOUNT: "披露股东账户（身份待解析）", PROJECT: "项目", INDUSTRY: "行业", THEME: "板块主题", CLASSIFICATION: "类型标签", PRODUCT: "产品", MATERIAL: "原材料" };
 const factNames: Record<string, string> = { HOLDS_EQUITY: "直接持股", CONTROLS: "控制关系", SUPPLIES_TO: "供应关系", PARTNERS_WITH: "合作关系", GUARANTEES: "担保", LENDS_TO: "借贷", COMPETES_WITH: "竞争关系", IN_INDUSTRY: "行业归属", MEMBER_OF_THEME: "板块归属", HAS_CLASSIFICATION: "类型归属", CONTRACT: "合同", LEGAL_CASE: "司法事项" };
 const statusNames: Record<string, string> = { ALL: "全部状态", PENDING: "待审核", ACCEPTED: "已接受", REJECTED: "已拒绝" };
 const valueNames: Record<string, string> = { INTENT: "意向", SIGNED: "已签署", ACTIVE: "履行中", COMPLETED: "已完成", TERMINATED: "已终止", CIVIL: "民事", CRIMINAL: "刑事", ADMINISTRATIVE: "行政", ARBITRATION: "仲裁", ENFORCEMENT: "执行", BANKRUPTCY: "破产", OTHER: "其他", PLAINTIFF: "原告", DEFENDANT: "被告", THIRD_PARTY: "第三人", APPLICANT: "申请人", RESPONDENT: "被申请人", DEBTOR: "债务人", CREDITOR: "债权人", FILED: "已立案", PENDING: "审理中", JUDGMENT: "已裁判", APPEAL: "上诉中", SETTLED: "已和解", WITHDRAWN: "已撤回", CLOSED: "已结案", UNKNOWN: "未知", CLAIMED: "诉请金额", SETTLEMENT: "和解金额", PROVISION: "预计负债" };
 const propertyNames: Record<string, string> = { ratio: "持股比例 (%)", ratio_basis: "比例分母与口径", shares: "持股数量", shares_unit: "数量单位", control_basis: "控制依据", product: "产品或服务", business_scope: "业务范围", amount: "金额", currency: "币种", taxonomy: "行业分类体系", taxonomy_version: "分类版本", classification_method: "分类方法", contract_status: "合同状态", case_number: "案号", court: "法院或机构", jurisdiction: "司法辖区", procedure_type: "程序类型", party_role: "主体诉讼角色", case_status: "程序状态", amount_type: "金额性质", registered_address: "注册地址", legal_form: "法律形式", registration_status: "登记状态", description: "备注" };
 const amountTypeNames: Record<string, string> = { CLAIMED: "诉请金额", JUDGMENT: "判决义务金额", ENFORCEMENT: "执行金额", SETTLEMENT: "和解金额", PROVISION: "预计负债" };
-const propertyValueName = (key: string, value: string) => (key === "amount_type" ? amountTypeNames[value] : valueNames[value]) || value;
+const propertyValueName = (key: string, value: string) => value === "SOURCE_SNAPSHOT_UNKNOWN_BUSINESS_DATE" ? "持仓基准日未知" : (key === "amount_type" ? amountTypeNames[value] : valueNames[value]) || value;
 const tabNames: Record<Tab, string> = { entities: "主体主数据", evidence: "证据资料", facts: "关系与事项", legal: "司法事项" };
 const text = (value: unknown): string => value == null || value === "" ? "未提供" : typeof value === "object" ? JSON.stringify(value) : String(value);
 const errorText = (error: unknown) => error instanceof Error ? error.message : "请求失败";
@@ -161,6 +161,7 @@ function FactDetail({ id, close, changed }: { id: string; close: () => void; cha
   return <Modal title="事实与审核" close={close} busy={busy}>{item ? <>
     <div className="foundation-detail-heading"><div><h3>{item.title}</h3><span>{factNames[item.fact_type] || item.fact_type}</span></div><Status value={item.status} /></div>
     <div className="foundation-relation"><span>{item.subject_name}</span>{item.object_entity_id && <><ArrowRight size={18} /><span>{item.object_name || item.object_entity_id}</span></>}</div>
+    {item.properties_json.temporal_scope === "SOURCE_SNAPSHOT_UNKNOWN_BUSINESS_DATE" && <p className="foundation-notice">持仓基准日未知</p>}
     <Properties values={item.properties_json} /><dl className="foundation-properties"><div><dt>生效开始</dt><dd>{item.valid_from || "未提供"}</dd></div><div><dt>生效截止（不含）</dt><dd>{item.valid_to || "未提供"}</dd></div></dl>
     <section className="foundation-detail-section"><h3>关联证据 · {item.evidence.length}</h3>{item.evidence.map(evidence => <details key={evidence.id} className="foundation-evidence-disclosure"><summary>{evidence.title}<small>{evidence.source_name} · 版本 {evidence.version}</small></summary><EvidenceContent item={evidence} /></details>)}{!item.evidence.length && <Empty>暂无关联证据</Empty>}</section>
     {(item.status === "PENDING" || item.status === "ACCEPTED") && <form key={item.status} className="foundation-form foundation-review" onSubmit={review}>

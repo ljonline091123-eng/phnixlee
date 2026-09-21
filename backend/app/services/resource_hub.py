@@ -38,6 +38,7 @@ from app.models.market_data import (
     StockSymbol,
 )
 from app.schemas.distillation import DistillationOutput
+from app.services.graph_identity import normalize_pair, resolve_many
 
 
 DEFAULT_DATA_ASSETS = (
@@ -717,6 +718,7 @@ def build_knowledge_graph(db: Session, graph: KnowledgeGraph, max_documents: int
 
     entities: dict[tuple[str, str], KnowledgeEntity] = {}
     document_entities: dict[int, KnowledgeEntity] = {}
+    stock_identities = resolve_many(db, ((document.market, document.symbol) for document in documents if document.symbol))
     for document in documents:
         source_key = ("DATASET", document.source_table)
         if source_key not in entities:
@@ -739,7 +741,8 @@ def build_knowledge_graph(db: Session, graph: KnowledgeGraph, max_documents: int
                     entity_type="STOCK",
                     entity_key=f"{graph.id}:{key[1]}",
                     entity_name=document.symbol,
-                    properties_json={"market": document.market, "symbol": document.symbol},
+                    properties_json={"market": document.market, "symbol": document.symbol,
+                        **stock_identities.get(normalize_pair(document.market, document.symbol), {})},
                 )
                 entities[key] = entity
                 db.add(entity)

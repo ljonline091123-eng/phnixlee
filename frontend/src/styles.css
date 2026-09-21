@@ -2930,7 +2930,22 @@ label input[type="checkbox"] {
     padding: 16px 18px;
   }
 
-  .sidebar nav,
+  .sidebar nav {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+    margin-top: 14px;
+  }
+
+  .sidebar nav .nav-item {
+    min-width: 0;
+    min-height: 40px;
+    padding: 9px 10px;
+    gap: 8px;
+    font-size: 13px;
+    letter-spacing: 0;
+  }
+
   .sidebar-note {
     display: none;
   }
@@ -4991,5 +5006,36 @@ textarea:focus {
 @media (max-width: 680px) {
   .field-help-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .restored-stock-detail .detail-market-header {
+    flex-wrap: wrap;
+  }
+
+  .restored-stock-detail .detail-market-header > div:first-child {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+
+  .restored-stock-detail .detail-market-header h2 {
+    overflow-wrap: anywhere;
+    letter-spacing: 0;
+  }
+
+  .restored-stock-detail .detail-head-actions {
+    flex-wrap: wrap;
+    width: 100%;
+    gap: 8px;
+  }
+
+  .restored-stock-detail .detail-head-actions button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    min-height: 36px;
+    flex: 0 1 auto;
   }
 }

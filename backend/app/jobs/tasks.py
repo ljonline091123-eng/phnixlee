@@ -7,6 +7,7 @@ from typing import Any
 
 from app.orchestration.background import MasterDataSyncWorkflow, PredictionReviewWorkflow
 from app.orchestration.foundation import LegacyEvidenceArchiveWorkflow
+from app.orchestration.company_governance import CompanyGovernanceWorkflow
 from app.services.selection import refresh_tracking
 from app.db.session import SessionLocal
 
@@ -15,6 +16,7 @@ TaskHandler = Callable[[dict[str, Any]], dict[str, Any]]
 
 
 TASK_HANDLERS: dict[str, TaskHandler] = {
+    "company_graph_governance": CompanyGovernanceWorkflow().execute,
     'foundation_archive_evidence': LegacyEvidenceArchiveWorkflow().execute,
     "daily_master_sync": MasterDataSyncWorkflow().execute,
     "daily_prediction_review": PredictionReviewWorkflow().execute,

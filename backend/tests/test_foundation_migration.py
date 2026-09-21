@@ -99,6 +99,102 @@ class FoundationMigrationTests(unittest.TestCase):
         self.create_foundation_tables(names={"foundation_entity"})
         self.assertEqual(apply_foundation(self.engine)["status"], "CURRENT")
 
+    def test_previous_revision_upgrades_without_recreating_its_tables(self) -> None:
+        previous = revision_metadata("foundation_0001")
+        self.create_foundation_tables(previous)
+        with self.engine.begin() as connection:
+            connection.execute(text(f"CREATE TABLE {VERSION_TABLE} (version_num VARCHAR(32) NOT NULL PRIMARY KEY)"))
+            connection.execute(text(f"INSERT INTO {VERSION_TABLE} VALUES ('foundation_0001')"))
+            connection.execute(text(
+                "INSERT INTO foundation_entity (id, name, entity_type, jurisdiction, properties_json, created_at) "
+                "VALUES ('before-v2', 'Existing Company', 'COMPANY', 'CN', '{}', '2026-09-20 00:00:00')"
+            ))
+        legacy_before = self.legacy_snapshot()
+        with self.engine.connect() as connection:
+            report = inspect_foundation(connection)
+        self.assertEqual(report["status"], "UPGRADE_REQUIRED")
+        self.assertEqual(set(report["tables_to_create"]), {
+            "foundation_source_identity", "foundation_security_classification", "foundation_company_mapping_state"})
+        self.assertEqual(apply_foundation(self.engine)["status"], "CURRENT")
+        with self.engine.connect() as connection:
+            self.assertEqual(connection.execute(text("SELECT name FROM foundation_entity WHERE id = 'before-v2'")).scalar_one(), "Existing Company")
+        self.assertEqual(self.legacy_snapshot(), legacy_before)
+
+    def test_second_revision_adds_mapping_state_without_recreating_previous_schema(self) -> None:
+        previous = revision_metadata("foundation_0002")
+        self.create_foundation_tables(previous)
+        with self.engine.begin() as connection:
+            connection.execute(text(f"CREATE TABLE {VERSION_TABLE} (version_num VARCHAR(32) NOT NULL PRIMARY KEY)"))
+            connection.execute(text(f"INSERT INTO {VERSION_TABLE} VALUES ('foundation_0002')"))
+            connection.execute(text(
+                "INSERT INTO foundation_entity (id, name, entity_type, jurisdiction, properties_json, created_at) "
+                "VALUES ('before-v3', 'Keep Existing Company', 'COMPANY', 'CN', '{}', '2026-09-20 00:00:00')"
+            ))
+            connection.execute(text(
+                "INSERT INTO foundation_source_identity (id, entity_id, namespace, external_id, entity_type, jurisdiction, created_at) "
+                "VALUES ('source-before-v3', 'before-v3', 'SOURCE', 'ORG-1', 'COMPANY', 'CN', '2026-09-20 00:00:00')"
+            ))
+            old_schema = connection.execute(text(
+                "SELECT name, sql FROM sqlite_master WHERE name LIKE 'foundation_%' "
+                "AND name != :version_table ORDER BY name"
+            ), {"version_table": VERSION_TABLE}).all()
+        legacy_before = self.legacy_snapshot()
+        tables_before = set(inspect(self.engine).get_table_names())
+        with self.engine.connect() as connection:
+            report = inspect_foundation(connection)
+        self.assertEqual(report["status"], "UPGRADE_REQUIRED")
+        self.assertEqual(report["current_revision"], "foundation_0002")
+        self.assertEqual(report["tables_to_create"], ["foundation_company_mapping_state"])
+        self.assertEqual(apply_foundation(self.engine)["status"], "CURRENT")
+        self.assertEqual(set(inspect(self.engine).get_table_names()) - tables_before, {"foundation_company_mapping_state"})
+        with self.engine.connect() as connection:
+            self.assertEqual(connection.execute(text("SELECT name FROM foundation_entity WHERE id = 'before-v3'")).scalar_one(), "Keep Existing Company")
+            self.assertEqual(connection.execute(text("SELECT entity_id FROM foundation_source_identity WHERE id = 'source-before-v3'")).scalar_one(), "before-v3")
+            new_schema = connection.execute(text(
+                "SELECT name, sql FROM sqlite_master WHERE name LIKE 'foundation_%' "
+                "AND name NOT IN (:version_table, 'foundation_company_mapping_state') ORDER BY name"
+            ), {"version_table": VERSION_TABLE}).all()
+            self.assertEqual(new_schema, old_schema)
+        self.assertEqual(self.legacy_snapshot(), legacy_before)
+
+    def test_mapping_outcomes_created_before_migration_are_adopted_without_data_loss(self) -> None:
+        import app.models.company_mapping  # noqa: F401
+        from app.db.base import Base
+
+        self.create_foundation_tables(Base.metadata)
+        with self.engine.begin() as connection:
+            connection.execute(text(
+                "INSERT INTO foundation_company_mapping_state "
+                "(stock_symbol_id, status, reason, source_name, source_snapshot, attempt_count, details_json, attempted_at) "
+                "VALUES (1, 'SOURCE_NOT_FOUND', 'No matching issuer in source', 'PUBLIC_SOURCE', 'snapshot-1', "
+                "2, :details, '2026-09-20 00:00:00')"
+            ), {"details": '{"retained":true}'})
+            before = connection.execute(text("SELECT * FROM foundation_company_mapping_state")).all()
+        self.assertEqual(apply_foundation(self.engine)["status"], "CURRENT")
+        self.assertEqual(apply_foundation(self.engine)["status"], "CURRENT")
+        with self.engine.connect() as connection:
+            self.assertEqual(connection.execute(text("SELECT * FROM foundation_company_mapping_state")).all(), before)
+
+    def test_mapping_state_schema_drift_blocks_adoption(self) -> None:
+        self.metadata.tables["foundation_company_mapping_state"].c.reason.type = String(128)
+        self.metadata.tables["foundation_company_mapping_state"].indexes.clear()
+        self.create_foundation_tables()
+        with self.engine.connect() as connection:
+            report = inspect_foundation(connection)
+        self.assertEqual(report["status"], "BLOCKED")
+        self.assertTrue(any("modify_type" in problem for problem in report["problems"]))
+        self.assertTrue(any("add_index" in problem for problem in report["problems"]))
+        with self.assertRaises(MigrationSafetyError):
+            apply_foundation(self.engine)
+        self.assertNotIn(VERSION_TABLE, inspect(self.engine).get_table_names())
+
+    def test_previous_revision_with_missing_old_tables_is_blocked(self) -> None:
+        with self.engine.begin() as connection:
+            connection.execute(text(f"CREATE TABLE {VERSION_TABLE} (version_num VARCHAR(32) NOT NULL PRIMARY KEY)"))
+            connection.execute(text(f"INSERT INTO {VERSION_TABLE} VALUES ('foundation_0001')"))
+        with self.assertRaisesRegex(MigrationSafetyError, "required by the recorded revision"):
+            apply_foundation(self.engine)
+
     def test_column_and_index_drift_prevent_version_adoption(self) -> None:
         self.metadata.tables["foundation_entity"].c.name.type = String(80)
         self.metadata.tables["foundation_entity"].c.name.nullable = True
@@ -198,6 +294,7 @@ class FoundationMigrationTests(unittest.TestCase):
                 sql = preview_sql(dialect)
                 self.assertIn("CREATE TABLE foundation_entity", sql)
                 self.assertIn("CREATE TABLE foundation_schema_revision", sql)
+                self.assertIn("CREATE TABLE foundation_company_mapping_state", sql)
                 self.assertNotIn("CREATE TABLE stock_symbol", sql)
                 self.assertNotIn("ALTER TABLE stock_symbol", sql)
                 self.assertNotIn("DROP TABLE", sql)

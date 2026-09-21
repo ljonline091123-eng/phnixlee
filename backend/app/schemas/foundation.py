@@ -5,7 +5,7 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, StringConstraints, field_validator, model_validator
 
-EntityType = Literal["COMPANY", "PERSON", "ORGANIZATION", "PROJECT", "INDUSTRY", "THEME", "CLASSIFICATION", "PRODUCT", "MATERIAL"]
+EntityType = Literal["COMPANY", "PERSON", "ORGANIZATION", "HOLDER_ACCOUNT", "PROJECT", "INDUSTRY", "THEME", "CLASSIFICATION", "PRODUCT", "MATERIAL"]
 FactType = Literal["HOLDS_EQUITY", "CONTROLS", "SUPPLIES_TO", "PARTNERS_WITH", "GUARANTEES", "LENDS_TO", "COMPETES_WITH", "IN_INDUSTRY", "MEMBER_OF_THEME", "HAS_CLASSIFICATION", "CONTRACT", "LEGAL_CASE"]
 FactStatus = Literal["PENDING", "ACCEPTED", "REJECTED"]
 

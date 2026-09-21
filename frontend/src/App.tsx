@@ -30,11 +30,13 @@ import { StockDetailDrawer } from "./StockDetailDrawer";
 import { SelectionWorkbench } from "./SelectionWatch";
 import { GovernedAssetTab, GovernedKnowledgeTab } from "./ResourceGovernance";
 import { DataFoundation } from "./DataFoundation";
+import { CompanyGraphWorkbench } from "./CompanyGraphWorkbench";
+import { EnvironmentBanner } from "./EnvironmentBanner";
 
 type ModuleView = "data" | "model" | "watch" | "research";
 type ModelHubTab =
   "models" | "agents" | "skills" | "assets" | "knowledge" | "logs";
-type DataView = "sources" | "interfaces" | "universe" | "foundation";
+type DataView = "sources" | "interfaces" | "universe" | "foundation" | "company_graph";
 type ResearchTab = "chat" | "research";
 type ModelTestDialogState = {
   target: string;
@@ -119,6 +121,7 @@ export default function App() {
         </div>
       </aside>
       <section className="workspace">
+        <EnvironmentBanner />
         {moduleView === "data" ? (
           <DataConsolePage />
         ) : moduleView === "model" ? (
@@ -225,7 +228,7 @@ function DataConsolePage() {
         }
       />
       <div className="resource-tabs">
-        {(["sources", "interfaces", "universe", "foundation"] as DataView[]).map((item) => (
+        {(["sources", "interfaces", "universe", "foundation", "company_graph"] as DataView[]).map((item) => (
           <button
             type="button"
             key={item}
@@ -238,7 +241,9 @@ function DataConsolePage() {
                 ? "接口目录"
                 : item === "universe"
                   ? "股票主数据"
-                  : "主体与关系"}
+                  : item === "foundation"
+                    ? "主体与关系"
+                    : "公司关系"}
           </button>
         ))}
       </div>
@@ -465,6 +470,7 @@ function DataConsolePage() {
         </section>
       )}
       {tab === "foundation" && <DataFoundation />}
+      {tab === "company_graph" && <CompanyGraphWorkbench />}
       {detailStock && (
         <StockDetailDrawer
           stock={detailStock}

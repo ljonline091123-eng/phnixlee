@@ -14,6 +14,7 @@ from app.prompts.fundamental import FUNDAMENTAL_SYSTEM_PROMPT
 from app.prompts.orchestrator import ORCHESTRATOR_SYSTEM_PROMPT
 from app.prompts.technical import TECHNICAL_SYSTEM_PROMPT
 from app.services.model_hub import ModelHubService
+from app.services.company_research import load_company_context, company_context_markdown
 from app.services.prediction_ledger import record_report_rating
 from app.services.stock_on_demand import StockOnDemandService
 from app.skills.capital_tech import CapitalAndTechOutput, get_capital_and_tech_skill
@@ -76,6 +77,7 @@ class ResearchContext:
     knowledge_documents: list[dict[str, Any]] = field(default_factory=list)
     history_evaluation: dict[str, Any] = field(default_factory=dict)
     price_snapshot: dict[str, Any] = field(default_factory=dict)
+    company_context: dict[str, Any] = field(default_factory=dict)
     financial: FinancialAnalysisOutput | None = None
     technical: CapitalAndTechOutput | None = None
     news: RecentNewsRagOutput | None = None
@@ -502,6 +504,7 @@ class MasterOrchestratorAgent:
             "knowledge_base_ids": context.knowledge_base_ids,
             "knowledge_documents": context.knowledge_documents,
             "history_evaluation": context.history_evaluation,
+            "company_relationships": context.company_context,
             "financial_agent": context.fundamental.model_dump(),
             "technical_agent": context.technical_agent.model_dump(),
             "news_rag": context.news.model_dump(),
@@ -529,6 +532,7 @@ class MasterOrchestratorAgent:
             markdown = generated
         else:
             markdown = _heuristic_markdown(context)
+        markdown += company_context_markdown(context.company_context)
         score = _overall_score(context)
         rating = _rating(score)
         conclusion = (
@@ -631,6 +635,7 @@ class ResearchWorkflow:
             "news": context.news.model_dump(mode="json") if context.news else None,
             "price_snapshot": context.price_snapshot,
             "knowledge_documents": context.knowledge_documents,
+            "company_relationships": context.company_context,
         }
         record = ResearchReportRecord(
             market=report.market,
@@ -698,6 +703,7 @@ class ResearchWorkflow:
             context.technical = get_capital_and_tech_skill(context.symbol, context.market, db=self.db)
             context.price_snapshot = _latest_price_snapshot(self.db, context.symbol, context.market)
             context.knowledge_documents = self._load_knowledge_documents(context)
+            context.company_context = load_company_context(self.db, context.market, context.symbol)
         except Exception as exc:
             yield {"event": "error", "data": {"message": str(exc)}}
             return

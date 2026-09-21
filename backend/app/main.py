@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api import data_interfaces, data_sources, model_hub, research, resource_hub, selection, stock_tools, stocks
 from app.api import context_events
 from app.api import foundation, foundation_jobs
+from app.api import company_graph, company_governance, taxonomy
 from app.core.config import get_settings
 from app.db.bootstrap import initialize_database
 from app.db.session import engine
@@ -15,7 +16,7 @@ settings = get_settings()
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    initialize_database()
+    initialize_database(seed_defaults=settings.seed_defaults_on_startup)
     try:
         yield
     finally:
@@ -48,6 +49,9 @@ app.include_router(research.router, prefix=settings.api_v1_prefix)
 app.include_router(selection.router, prefix=settings.api_v1_prefix)
 app.include_router(foundation_jobs.router, prefix=settings.api_v1_prefix)
 app.include_router(foundation.router, prefix=settings.api_v1_prefix)
+app.include_router(company_graph.router, prefix=settings.api_v1_prefix)
+app.include_router(company_governance.router, prefix=settings.api_v1_prefix)
+app.include_router(taxonomy.router, prefix=settings.api_v1_prefix)
 
 
 @app.get("/health", tags=["System"])
