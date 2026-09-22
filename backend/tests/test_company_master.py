@@ -145,3 +145,32 @@ def test_official_reit_category_does_not_require_a_nonexistent_subcategory(db):
         "source_record": {"Stock Code": "02800", "Category": "Real Estate Investment Trusts", "Sub-Category": ""}}
     result = import_master_batch(db, [stocks(db)[2]], {"exclusions": [exclusion]})
     assert result["counts"] == {"NOT_APPLICABLE": 1}
+
+
+def test_exact_provider_historical_equity_classification_can_resolve_delisted_code(db):
+    value = record("HK", "00001")
+    value["security_classification_evidence"] = {"source_name": "EASTMONEY_CODETABLE", "source_record": {
+        "code": "00001", "market": 116, "smallType": 3, "securityType": [102], "status": 30}}
+    result = import_master_batch(db, [stocks(db)[1]], {"records": [value]})
+    assert result["counts"] == {"MAPPED": 1}
+    proof = db.scalar(select(FoundationEvidence))
+    assert 'EASTMONEY_CODETABLE' in proof.content
+
+
+@pytest.mark.parametrize("small_type, extra_type, codes, expected", [(1, 10, [6], "NOT_APPLICABLE"),
+    (1, 16, [6], "NOT_APPLICABLE"), (3, 10, [6, 102], "CONFLICT"), (1, 99, [6], "CONFLICT")])
+def test_provider_fund_exclusion_requires_explicit_exact_classification(db, small_type, extra_type, codes, expected):
+    exclusion = {"market": "HK", "symbol": "02800", "source_name": "EASTMONEY_CODETABLE", "source_record": {
+        "code": "02800", "market": 116, "smallType": small_type, "extSmallType": extra_type, "securityType": codes}}
+    result = import_master_batch(db, [stocks(db)[2]], {"exclusions": [exclusion]})
+    assert result["counts"] == {expected: 1}
+
+
+def test_cross_market_jurisdiction_proof_must_name_same_issuer(db):
+    value = record()
+    value["company"]["jurisdiction"] = "HK"
+    value["registration_jurisdiction_evidence"] = {"source_record": {
+        "ORG_CODE": "OTHER", "ORG_NAME": value["company"]["name"], "SECUCODE": "00001.HK", "REG_PLACE": "香港"}}
+    result = import_master_batch(db, [stocks(db)[0]], {"records": [value]})
+    assert result["counts"] == {"CONFLICT": 1}
+    assert count(db, FoundationEntity) == 0

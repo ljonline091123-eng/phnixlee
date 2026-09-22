@@ -6,7 +6,8 @@ import httpx
 import pytest
 
 from app.connectors.company_master_sources import (
-    CompanyMasterSourcesClient, build_master_result, parse_hkex_securities, parse_master_record,
+    CompanyMasterSourcesClient, apply_registration_jurisdictions, build_master_result,
+    codetable_classification, parse_hkex_securities, parse_master_record,
 )
 
 NOW = "2026-09-21T10:00:00+00:00"
@@ -149,3 +150,58 @@ def test_repeated_page_and_access_gate_are_not_silently_accepted(tmp_path):
     assert result["status"] == "UNAVAILABLE"
     assert result["records"] == []
     assert json.loads((tmp_path / "denied" / "manifest.json").read_text(encoding="utf-8"))["failures"]
+
+
+def test_registration_place_matches_full_source_identity_and_cannot_override_conflict():
+    domestic = raw("688981.SH", "10004588", "中芯国际集成电路制造有限公司")
+    foreign = raw("00981.HK", "10004588", domestic["ORG_NAME"], REG_PLACE="Cayman Islands 开曼群岛（英属）")
+    record = parse_master_record(domestic, "CN_A", "688981", NOW)
+    apply_registration_jurisdictions([record], [page([foreign])])
+    assert record["company"]["jurisdiction"] == foreign["REG_PLACE"]
+    assert record["registration_jurisdiction_evidence"]["source_record"] == foreign
+    # Same provider issuer ID alone is insufficient when registered names differ.
+    record = parse_master_record(domestic, "CN_A", "688981", NOW)
+    apply_registration_jurisdictions([record], [page([{**foreign, "ORG_NAME": "Other Company"}])])
+    assert "registration_jurisdiction_evidence" not in record
+    apply_registration_jurisdictions([record], [page([foreign, {**foreign, "REG_PLACE": "中国"}])])
+    assert "registration_jurisdiction_evidence" not in record
+    domestic["REG_NUM"] = "91440300192185379H"
+    record = parse_master_record(domestic, "CN_A", "688981", NOW)
+    apply_registration_jurisdictions([record], [page([foreign])])
+    assert record["company"]["jurisdiction"] == "CN"
+    assert record["jurisdiction_conflict"] == "CN_USCC_CONFLICTS_WITH_EXPLICIT_REG_PLACE"
+
+
+def test_codetable_classification_requires_exact_market_code_and_known_combination():
+    equity = {"market": 116, "code": "00007", "smallType": 3, "securityType": [102, 6]}
+    fund = {"market": 116, "code": "09311", "smallType": 1, "extSmallType": 10, "securityType": [6, 199]}
+    assert codetable_classification(equity, "00007") == "ORDINARY_EQUITY"
+    assert codetable_classification(fund, "09311") == "NON_EQUITY"
+    assert codetable_classification(equity, "00008") is None
+    assert codetable_classification({**equity, "market": 0}, "00007") is None
+    assert codetable_classification({**equity, "securityType": [6]}, "00007") is None
+    assert codetable_classification({**fund, "extSmallType": 0}, "09311") is None
+    assert codetable_classification({**fund, "securityType": [6, 102]}, "09311") is None
+
+
+def test_supplement_does_not_replace_first_snapshot_and_keeps_origin_proofs(tmp_path):
+    targets = [{"market": "HK", "symbol": symbol} for symbol in ("00007", "09311", "02900")]
+    pages_dir = tmp_path / "pages"
+    pages_dir.mkdir()
+    first = {"unresolved": targets}
+    first_text = json.dumps(first)
+    (tmp_path / "result.json").write_text(first_text, encoding="utf-8")
+    (pages_dir / "HK_0001.json").write_text(json.dumps(page([raw("00007.HK", "issuer7", "Issuer Seven")]), ensure_ascii=False), encoding="utf-8")
+    (tmp_path / "hkex_security_classification.json").write_text(json.dumps({"records": [], "retrieved_at": NOW}), encoding="utf-8")
+    def handler(request):
+        code = request.url.params["keyword"]
+        row = {"market": 116, "code": code, "smallType": 3, "securityType": [6, 102]} if code == "00007" else {"market": 116, "code": code, "smallType": 1, "extSmallType": 10, "securityType": [6, 199]}
+        return httpx.Response(200, json={"result": [] if code == "02900" else [row]})
+    with httpx.Client(transport=httpx.MockTransport(handler)) as http:
+        result = CompanyMasterSourcesClient(tmp_path, client=http, delay=0).collect_supplement(targets)
+    assert (tmp_path / "result.json").read_text(encoding="utf-8") == first_text
+    assert len(result["records"]) == len(result["exclusions"]) == len(result["unresolved"]) == 1
+    assert result["records"][0]["security_classification_evidence"]["source_record"]["code"] == "00007"
+    assert result["exclusions"][0]["source_name"] == "EASTMONEY_CODETABLE"
+    assert result["unresolved"][0]["classification_source_attempt"]["exact_rows"] == 0
+    assert (tmp_path / "combined_result.json").exists()

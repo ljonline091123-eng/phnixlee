@@ -1,6 +1,6 @@
 # Foundation 增量迁移与运行说明
 
-项目使用独立的 Alembic 历史，当前版本为 `foundation_0002`。首版 `foundation_0001` 的七张表保持原始快照，第二版仅新增来源标识映射和证券分类两张表。该历史只管理以下九张表及自己的版本表 `foundation_schema_revision`：
+项目使用独立的 Alembic 历史，当前版本为 `foundation_0003`。首版 `foundation_0001` 的七张表保持原始快照，第二版仅新增来源标识映射和证券分类两张表，第三版仅新增全量股票公司映射状态表。该历史只管理以下十张表及自己的版本表 `foundation_schema_revision`：
 
 - `foundation_entity`
 - `foundation_security`
@@ -11,6 +11,7 @@
 - `foundation_fact_review`
 - `foundation_source_identity`（0002 新增）
 - `foundation_security_classification`（0002 新增）
+- `foundation_company_mapping_state`（0003 新增，记录已映射、来源缺失、不适用及冲突的具体原因）
 
 已有证券、图谱、研报、任务等业务表不在该历史的管理范围内。`stock_symbol.id` 是新上市记录表引用的前置主键；迁移仅核对其存在及基本类型，不创建或修改该旧表。
 
@@ -20,7 +21,7 @@
 
 因此有两种正常状态：
 
-1. 尚未启动新版本：新表不存在，迁移按 0001、0002 顺序创建这些表并记录版本。
+1. 尚未启动新版本：新表不存在，迁移按 0001、0002、0003 顺序创建这些表并记录版本。
 2. 新版本启动已通过 `create_all` 建好新表：迁移逐项核对已有结构，全部一致才记录版本。不会重建已有表，不删除数据，也不盲目执行 `stamp`。
 
 部分表已经存在时，也必须先核对已存在部分，之后只补齐缺失表。发现字段、类型、可空性、数据库默认值、索引、唯一约束、外键、主键或 CHECK 不一致时，返回 `BLOCKED`，不尝试自动修复或掩盖差异。该核对不是全量业务数据审计，也不接管旧表的结构漂移。
@@ -36,7 +37,7 @@ python scripts/migrate_foundation.py preview
 python scripts/migrate_foundation.py preview --dialect postgresql
 ```
 
-`preview` 展示从 0001 到 0002 的完整初始 DDL，不根据某个库的现状裁剪 SQL。实际待创建表和需核对采用的表由 `check` 给出。不要将完整预览 SQL 直接执行到已有表的数据库。
+`preview` 展示从 0001 到 0003 的完整初始 DDL，不根据某个库的现状裁剪 SQL。实际待创建表和需核对采用的表由 `check` 给出。不要将完整预览 SQL 直接执行到已有表的数据库。
 
 运行检查或迁移必须显式提供目标 URL，也可通过专用环境变量设置。脚本不会加载应用 `.env`，不会默认使用应用的 `DATABASE_URL`，也不会调用启动和种子逻辑。
 
@@ -59,8 +60,8 @@ SQLite CLI 仅接受已存在的数据库文件，不会因为路径拼错创建
 | --- | --- | --- |
 | `PENDING` | 新表均未建立，旧证券主键符合前置条件 | 审阅待创建表后执行 `apply` |
 | `UNVERSIONED` | 部分或全部新表已存在且结构一致，但没有迁移版本记录 | `apply` 补齐缺表并登记已验证版本 |
-| `UPGRADE_REQUIRED` | 已登记 0001，旧表结构正确，尚未登记 0002 | `apply` 仅补齐两个新表并升级版本，已由 `create_all` 建立的表先核对再采用 |
-| `CURRENT` | 新表与冻结结构一致，版本为 `foundation_0002` | 重复 `apply` 不重复建表或写入版本 |
+| `UPGRADE_REQUIRED` | 已登记 0001 或 0002，旧表结构正确，尚未登记 0003 | `apply` 仅补齐后续版本的新表，已由 `create_all` 建立的表先核对再采用 |
+| `CURRENT` | 新表与冻结结构一致，版本为 `foundation_0003` | 重复 `apply` 不重复建表或写入版本 |
 | `BLOCKED` | 前置条件、结构、未知新表或版本信息有差异 | 根据 `problems` 排查，保留差异，不直接 `stamp` |
 
 `check` 成功退出码为 0，发现阻碍时为 2；`PENDING` 不等于已经迁移完成。输出同时包含 `tables_to_create`、`verified_tables_to_adopt` 和具体问题。
