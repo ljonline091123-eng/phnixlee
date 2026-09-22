@@ -8,7 +8,7 @@ from typing import Any
 
 from sqlalchemy import delete, func, inspect, select, text
 from sqlalchemy.engine import Engine
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, load_only
 
 from app.db.session import engine
 from app.models.ai_hub import (
@@ -54,6 +54,16 @@ DEFAULT_DATA_ASSETS = (
     ("WATCHLIST", "watchlist_item", "DW用户：自选股", "用户自选股票清单和研究关注标记。"),
     ("DATA_SYNC_LOG", "data_sync_log", "治理日志：批量同步", "批量数据同步状态、统计和异常信息。"),
     ("DATA_FETCH_LOG", "data_fetch_log", "治理日志：按需获取", "单股票按需数据获取记录、来源接口和入库统计。"),
+    ("FOUNDATION_ENTITY", "foundation_entity", "公司主数据：公司及其他主体", "公司、机构、股东账户及行业等主体身份，保留注册法域和外部标识；同名不自动合并。"),
+    ("FOUNDATION_SECURITY", "foundation_security", "公司主数据：证券与发行公司", "独立证券身份、发行公司及股份类别，支持同一公司发行多只证券。"),
+    ("FOUNDATION_LISTING", "foundation_listing", "公司主数据：股票上市映射", "连接股票代码、市场、证券及发行公司，并保存映射依据。"),
+    ("FOUNDATION_FACT", "foundation_fact", "公司关系：股权、往来及司法事实", "股权、控制、供应链、经济往来和司法参与事实；审核状态、比例、金额及有效期以事实记录为准。"),
+    ("FOUNDATION_EVIDENCE", "foundation_evidence", "公司关系：持久证据", "关系及主数据的来源原文、版本、发布时间和可获知时间，不随图谱重建删除。"),
+    ("FOUNDATION_FACT_EVIDENCE", "foundation_fact_evidence", "公司关系：事实证据关联", "关联公司事实与对应的证据版本，支持一项事实使用多份证据。"),
+    ("FOUNDATION_SOURCE_IDENTITY", "foundation_source_identity", "公司主数据：来源身份映射", "来源内稳定标识到公司及主体的映射，用于可追溯的跨来源身份统一。"),
+    ("FOUNDATION_SECURITY_CLASSIFICATION", "foundation_security_classification", "分类主数据：证券分类事实", "证券的行业、主题、风格及规模分类，保留定义版本、证据和审核状态。"),
+    ("FOUNDATION_COMPANY_MAPPING_STATE", "foundation_company_mapping_state", "公司主数据：股票公司映射覆盖", "记录各股票发行公司映射的结果和未覆盖原因，便于检查全市场覆盖情况。"),
+    ("CLASSIFICATION_DEFINITION", "classification_definition", "分类主数据：行业与类型释义", "行业、主题、类型和规模标签的真实释义、纳入标准、来源和定义版本。"),
 )
 
 DEFAULT_KNOWLEDGE_BASES = (
@@ -80,15 +90,23 @@ DEFAULT_KNOWLEDGE_BASES = (
 
 def is_business_table(table_name: str) -> bool:
     """Allow new local business tables while excluding credentials and control metadata."""
+    if table_name.startswith("foundation_"):
+        return table_name in {item[1] for item in DEFAULT_DATA_ASSETS if item[1].startswith("foundation_")}
     return bool(re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", table_name)) and not table_name.startswith(
-        ("agent_", "model_", "knowledge_", "governance_", "sqlite_")
-    ) and table_name not in {"data_source", "data_interface"}
+        ("agent_", "model_", "knowledge_", "governance_", "sqlite_", "pipeline_")
+    ) and table_name not in {
+        "data_source", "data_interface", "scheduled_job", "database_table_comment", "skill_optimization_draft",
+    }
 
 
 def seed_default_data_assets(db: Session) -> None:
     """Register the project's local tables as read-only Agent data assets."""
     for asset_code, table_name, display_name, description in DEFAULT_DATA_ASSETS:
-        asset = db.scalar(select(AgentDataAsset).where(AgentDataAsset.asset_code == asset_code))
+        # A user may already have registered the same business table under a
+        # custom code. Reuse it instead of violating the unique table mapping.
+        asset = db.scalar(select(AgentDataAsset).where(
+            (AgentDataAsset.asset_code == asset_code) | (AgentDataAsset.table_name == table_name)
+        ))
         if asset is None:
             asset = AgentDataAsset(
                 asset_code=asset_code,
@@ -406,7 +424,9 @@ def would_create_agent_cycle(db: Session, agent_id: int, child_agent_ids: list[i
     return visit(agent_id)
 
 
-def build_knowledge_graph(db: Session, graph: KnowledgeGraph, max_documents: int = 100000) -> dict[str, int]:
+def build_knowledge_graph(db: Session, graph: KnowledgeGraph, max_documents: int = 100000, *,
+                          source_columns: dict[str, list[str]] | None = None,
+                          enrich_company_identity: bool = True) -> dict[str, int]:
     knowledge_base = db.get(KnowledgeBase, graph.knowledge_base_id)
     if knowledge_base is None:
         raise ValueError("Knowledge base not found")
@@ -423,8 +443,14 @@ def build_knowledge_graph(db: Session, graph: KnowledgeGraph, max_documents: int
     limited_sources: set[str] = set()
     dedupe_keys: set[str] = set()
 
+    def permitted(query, model):
+        columns = (source_columns or {}).get(model.__tablename__)
+        if columns:
+            return query.options(load_only(*(getattr(model, name) for name in columns), raiseload=True))
+        return query
+
     if "stock_symbol" in allowed_tables:
-        query = select(StockSymbol)
+        query = permitted(select(StockSymbol), StockSymbol)
         if symbol_filter:
             query = query.where(StockSymbol.symbol == symbol_filter)
         rows = list(db.scalars(query.order_by(StockSymbol.market, StockSymbol.symbol).limit(max_documents)).all())
@@ -442,7 +468,7 @@ def build_knowledge_graph(db: Session, graph: KnowledgeGraph, max_documents: int
             for row in rows
         )
     if "stock_news" in allowed_tables:
-        query = select(StockNews)
+        query = permitted(select(StockNews), StockNews)
         if symbol_filter:
             query = query.where(StockNews.symbol == symbol_filter)
         rows = list(db.scalars(query.order_by(StockNews.news_time.desc()).limit(max_documents)).all())
@@ -461,7 +487,7 @@ def build_knowledge_graph(db: Session, graph: KnowledgeGraph, max_documents: int
             for row in rows
         )
     if "stock_notice" in allowed_tables:
-        query = select(StockNotice)
+        query = permitted(select(StockNotice), StockNotice)
         if symbol_filter:
             query = query.where(StockNotice.symbol == symbol_filter)
         rows = list(db.scalars(query.order_by(StockNotice.notice_date.desc()).limit(max_documents)).all())
@@ -481,7 +507,7 @@ def build_knowledge_graph(db: Session, graph: KnowledgeGraph, max_documents: int
     if "stock_financial_report" in allowed_tables:
         rows = list(
             db.scalars(
-                (select(StockFinancialReport).where(StockFinancialReport.symbol == symbol_filter) if symbol_filter else select(StockFinancialReport))
+                permitted((select(StockFinancialReport).where(StockFinancialReport.symbol == symbol_filter) if symbol_filter else select(StockFinancialReport)), StockFinancialReport)
                 .order_by(StockFinancialReport.report_period.desc())
                 .limit(max_documents)
             ).all()
@@ -506,7 +532,7 @@ def build_knowledge_graph(db: Session, graph: KnowledgeGraph, max_documents: int
             for row in rows
         )
     if "stock_kline" in allowed_tables:
-        query = select(StockKline)
+        query = permitted(select(StockKline), StockKline)
         if symbol_filter:
             query = query.where(StockKline.symbol == symbol_filter)
         rows = list(db.scalars(query.order_by(StockKline.trade_date.desc()).limit(max_documents)).all())
@@ -532,7 +558,7 @@ def build_knowledge_graph(db: Session, graph: KnowledgeGraph, max_documents: int
             for row in rows
         )
     if "stock_realtime_quote" in allowed_tables:
-        query = select(StockRealtimeQuote)
+        query = permitted(select(StockRealtimeQuote), StockRealtimeQuote)
         if symbol_filter:
             query = query.where(StockRealtimeQuote.symbol == symbol_filter)
         rows = list(db.scalars(query.order_by(StockRealtimeQuote.fetched_at.desc()).limit(max_documents)).all())
@@ -556,7 +582,7 @@ def build_knowledge_graph(db: Session, graph: KnowledgeGraph, max_documents: int
             for row in rows
         )
     if "stock_f10_cache" in allowed_tables:
-        query = select(StockF10Cache)
+        query = permitted(select(StockF10Cache), StockF10Cache)
         if symbol_filter:
             query = query.where(StockF10Cache.symbol == symbol_filter)
         rows = list(db.scalars(query.order_by(StockF10Cache.fetched_at.desc()).limit(max_documents)).all())
@@ -576,7 +602,7 @@ def build_knowledge_graph(db: Session, graph: KnowledgeGraph, max_documents: int
             for row in rows
         )
     if "research_report" in allowed_tables:
-        query = select(ResearchReportRecord)
+        query = permitted(select(ResearchReportRecord), ResearchReportRecord)
         if symbol_filter:
             query = query.where(ResearchReportRecord.symbol == symbol_filter)
         rows = list(db.scalars(query.order_by(ResearchReportRecord.created_at.desc()).limit(max_documents)).all())
@@ -608,18 +634,23 @@ def build_knowledge_graph(db: Session, graph: KnowledgeGraph, max_documents: int
         "stock_kline", "stock_realtime_quote", "stock_f10_cache", "research_report",
     }
     db_engine = db.get_bind()
-    available_tables = set(inspect(db_engine).get_table_names())
+    # Inspect within this transaction: a second SQLite connection cannot read
+    # schema while a large multi-domain snapshot holds the writer's spill lock.
+    source_inspector = inspect(db.connection())
+    available_tables = set(source_inspector.get_table_names())
     quote = db_engine.dialect.identifier_preparer.quote
     for table_name in sorted(allowed_tables - supported):
         if table_name not in available_tables or not is_business_table(table_name):
             unavailable[table_name] = "TABLE_NOT_AVAILABLE_OR_NOT_ALLOWED"
             continue
-        columns = {str(item["name"]) for item in inspect(db_engine).get_columns(table_name)}
+        columns = {str(item["name"]) for item in source_inspector.get_columns(table_name)}
         where = " WHERE symbol = :symbol" if symbol_filter and "symbol" in columns else ""
         if symbol_filter and "symbol" not in columns:
             unavailable[table_name] = "SYMBOL_FILTER_NOT_SUPPORTED"
             continue
-        query = text(f'SELECT * FROM {quote(table_name)}{where} LIMIT :limit')
+        permitted_columns = (source_columns or {}).get(table_name)
+        selection = ", ".join(quote(name) for name in permitted_columns if name in columns) if permitted_columns else "*"
+        query = text(f'SELECT {selection} FROM {quote(table_name)}{where} LIMIT :limit')
         parameters = {"limit": max_documents, "symbol": symbol_filter}
         try:
             rows = list(db.execute(query, parameters).mappings().all())
@@ -718,7 +749,11 @@ def build_knowledge_graph(db: Session, graph: KnowledgeGraph, max_documents: int
 
     entities: dict[tuple[str, str], KnowledgeEntity] = {}
     document_entities: dict[int, KnowledgeEntity] = {}
-    stock_identities = resolve_many(db, ((document.market, document.symbol) for document in documents if document.symbol))
+    stock_identities = resolve_many(db, ((document.market, document.symbol) for document in documents if document.symbol)) if enrich_company_identity else {
+        pair: {"canonical_security_id": f"security:{pair[0]}:{pair[1]}", "canonical_company_id": None,
+               "mapping_status": "NOT_AUTHORIZED", "identity_version": "SECURITY_COMPANY_V1"}
+        for document in documents if document.symbol and (pair := normalize_pair(document.market, document.symbol))
+    }
     for document in documents:
         source_key = ("DATASET", document.source_table)
         if source_key not in entities:

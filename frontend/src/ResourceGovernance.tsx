@@ -1,8 +1,11 @@
-import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { api, type AgentDefinition, type BatchGovernanceResult, type DataAsset,
   type DataAssetPayload, type DataGovernanceSummary, type DataPreview, type GovernanceRun,
   type GraphExplore, type KnowledgeBase, type KnowledgeGraph, type KnowledgeGraphDocument, type KnowledgeGraphPayload } from "./api";
 import { EvidenceIntake } from "./EvidenceIntake";
+import { KnowledgeGraphDialog } from "./KnowledgeGraphExplorer";
+import { DataAssetPreview } from "./DataAssetPreview";
+import { KnowledgeGovernancePanel } from "./KnowledgeGovernancePanel";
 
 type CommonProps = { assets: DataAsset[]; agents: AgentDefinition[]; reload: () => Promise<void>; notify: (text: string) => void };
 const stateLabel: Record<string, string> = { PENDING: "待治理", GOVERNED: "已治理", LOCKED: "已锁定", READY: "可用", MISSING: "来源缺失", SCHEMA_CHANGED: "字段变化", COMPLETED: "治理完成", PENDING_REVIEW: "待人工审核", SKIPPED: "已跳过", FAILED: "执行失败", RUNNING: "执行中" };
@@ -56,7 +59,8 @@ function CoverageSummary({ report }: { report: Record<string, unknown> }) {
       })}</div>
       {Object.keys(sources).length > 0 && <div className="coverage-source-list"><small>数据源状态</small>{Object.entries(sources).map(([key, raw]) => {
         const item = raw && typeof raw === "object" ? raw as Record<string, unknown> : {};
-        return <span key={key}>{key} · {String(item.status || "未知")} · {Number(item.records_kept || 0).toLocaleString()} 条</span>;
+        const sourceStatus: Record<string, string> = { AVAILABLE: "来源可用", EMPTY: "暂无数据", SAMPLED: "限定样本", MATERIALIZED: "已生成知识文档", UNREGISTERED: "未登记", DISABLED: "已停用", UNAVAILABLE: "来源不可用", PENDING_REVIEW: "待审核", RESTRICTED_COLUMNS: "读取字段权限不完整", UNBOUND_ASSET: "智能体未绑定资产", INSUFFICIENT_DATA: "证据不足" };
+        return <span key={key}>{String(item.display_name || key)} · {sourceStatus[String(item.status)] || label(String(item.status || "未知"))} · {Number(item.documents_created ?? item.records_kept ?? 0).toLocaleString()} 条{item.limited ? "（样本范围）" : ""}</span>;
       })}</div>}
       {(typeof stock.total_stock_count === "number" || Object.keys(missingByDimension).length > 0) && <div className="coverage-stock-summary"><small>按股票覆盖</small><span>{Number(stock.covered_stock_count || 0).toLocaleString()} / {Number(stock.total_stock_count || 0).toLocaleString()} 只股票完整覆盖</span>{Object.entries(missingByDimension).map(([key, count]) => <span key={key}>缺少{coverageCategoryLabels[key] || key}：{Number(count || 0).toLocaleString()} 只</span>)}</div>}
       {uncovered.length > 0 && <p className="coverage-uncovered">缺口示例：{uncovered.slice(0, 12).map(String).join("、")}{uncovered.length > 12 ? " …" : ""}</p>}
@@ -89,6 +93,7 @@ export function GovernedAssetTab({ assets, agents, reload, notify }: CommonProps
   const [active, setActive] = useState<DataAsset | null>(null);
   const [form, setForm] = useState<DataAssetPayload>({ asset_code: "", table_name: "", display_name: "", description: "", enabled: true });
   const [preview, setPreview] = useState<DataPreview | null>(null);
+  const previewRequest = useRef(0);
   const [runs, setRuns] = useState<GovernanceRun[]>([]);
   const [governanceResult, setGovernanceResult] = useState<GovernanceRun | null>(null);
   const [batchResult, setBatchResult] = useState<BatchGovernanceResult[]>([]);
@@ -105,9 +110,10 @@ export function GovernedAssetTab({ assets, agents, reload, notify }: CommonProps
     finally { setBusy(false); }
   };
   const openPreview = async (item: DataAsset) => {
+    const requestId = ++previewRequest.current;
     setActive(item); setPreview(null); setRuns([]); setError(""); setDialog("preview");
-    try { const [data, history] = await Promise.all([api.previewDataAsset(item.id), api.listGovernanceRuns("ASSET", item.id)]); setPreview(data); setRuns(history); }
-    catch (error) { setError(errText(error)); }
+    try { const [data, history] = await Promise.all([api.previewDataAsset(item.id), api.listGovernanceRuns("ASSET", item.id).catch(() => [])]); if (requestId === previewRequest.current) { setPreview(data); setRuns(history); } }
+    catch (error) { if (requestId === previewRequest.current) setError(errText(error)); }
   };
   const save = async (event: FormEvent) => {
     event.preventDefault();
@@ -189,7 +195,7 @@ export function GovernedAssetTab({ assets, agents, reload, notify }: CommonProps
     </div></Dialog>}
     {dialog === "batch-result" && <Dialog title="批量治理结果" close={() => setDialog(null)}><div className="governance-result"><div className="table-wrap"><table><thead><tr><th>数据资产</th><th>结果</th><th>运行记录</th><th>说明</th></tr></thead><tbody>{batchResult.map(item => <tr key={item.target_id}><td>{assets.find(asset => asset.id === item.target_id)?.display_name || `#${item.target_id}`}</td><td>{label(item.status)}</td><td>{item.run_id ? `#${item.run_id}` : "—"}</td><td>{item.message || (item.status === "PENDING_REVIEW" ? "存在待审核事项" : "—")}</td></tr>)}</tbody></table></div></div></Dialog>}
     {dialog === "preview" && active && <Dialog title={`资产预览：${active.display_name}`} close={() => setDialog(null)}><div className="governance-detail">
-      {error && <p className="form-error">{error}</p>}{preview && <><p>{preview.table_name} · 共 {preview.row_count.toLocaleString()} 行 · 只读预览前 {preview.rows.length} 行</p><div className="table-wrap"><table><thead><tr>{preview.columns.map(name => <th key={name}>{name}</th>)}</tr></thead><tbody>{preview.rows.map((row, index) => <tr key={index}>{preview.columns.map(name => <td key={name}>{asText(row[name])}</td>)}</tr>)}</tbody></table></div></>}
+      {error && <p className="form-error">{error}</p>}{!preview && !error && <p role="status">正在读取资产预览…</p>}{preview && <DataAssetPreview key={active.id} preview={preview} />}
       <h3>最近治理结果</h3><pre>{JSON.stringify(active.governance_report_json || {}, null, 2)}</pre><h3>运行记录</h3>{runs.map(item => <p key={item.id}>#{item.id} · {label(item.status)} · {new Date(item.created_at).toLocaleString("zh-CN")} · {asText(item.summary_json.error || item.summary_json.evidence_text)}</p>)}</div></Dialog>}
   </section>;
 }
@@ -197,6 +203,7 @@ export function GovernedAssetTab({ assets, agents, reload, notify }: CommonProps
 const emptyBase = { kb_code: "", kb_name: "", description: "", source_tables: [] as string[], version: "1.0.0", enabled: true };
 const emptyGraph: KnowledgeGraphPayload = { knowledge_base_id: 0, graph_code: "", graph_name: "", description: "", symbol: "", source_tables: [], version: "1.0.0", enabled: true };
 export function GovernedKnowledgeTab({ knowledge, graphs, assets, agents, reload, notify }: CommonProps & { knowledge: KnowledgeBase[]; graphs: KnowledgeGraph[] }) {
+  const [visualGraphId, setVisualGraphId] = useState<number | null>(null);
   const [dialog, setDialog] = useState<"base" | "graph" | "documents" | "explore" | "govern" | null>(null);
   const [base, setBase] = useState<KnowledgeBase | null>(null);
   const [graph, setGraph] = useState<KnowledgeGraph | null>(null);
@@ -251,8 +258,10 @@ export function GovernedKnowledgeTab({ knowledge, graphs, assets, agents, reload
   };
   const graphSources = assets.filter(item => knowledge.find(kb => kb.id === (graph?.knowledge_base_id || graphForm.knowledge_base_id))?.source_tables.includes(item.table_name));
   return <div className="resource-stack">
+    {visualGraphId != null && <KnowledgeGraphDialog initialGraphId={visualGraphId} close={() => setVisualGraphId(null)} />}
     {error && <p className="form-error governance-inline-error">{error}</p>}
     <EvidenceIntake />
+    <KnowledgeGovernancePanel reload={reload} notify={notify} />
     <section className="panel resource-management-panel"><div className="panel-heading"><div><p className="eyebrow">KNOWLEDGE BASES</p><h2>知识库清单</h2><p>知识库管理资料来源；同一知识库可建立多张独立图谱。</p></div><button type="button" onClick={() => { setBase(null); setBaseForm({ ...emptyBase }); setError(""); setDialog("base"); }}>新增知识库</button></div>
       <div className="table-wrap resource-list-wrap"><table><thead><tr><th>知识库</th><th>来源数据资产</th><th>图谱数</th><th>状态</th><th>操作</th></tr></thead><tbody>{knowledge.map(item => <tr key={item.id}>
         <td><strong>{item.kb_name}</strong><code>{item.kb_code} · v{item.version}</code></td><td>{item.source_tables.join("、") || "未配置"}</td><td>{graphs.filter(g => g.knowledge_base_id === item.id).length}</td><td>{item.enabled ? "启用" : "停用"}</td>
@@ -264,7 +273,7 @@ export function GovernedKnowledgeTab({ knowledge, graphs, assets, agents, reload
         <td><input aria-label={`选择${item.graph_name}`} type="checkbox" disabled={item.governance_status === "LOCKED"} checked={selected.includes(item.id)} onChange={() => setSelected(selected.includes(item.id) ? selected.filter(id => id !== item.id) : [...selected, item.id])} /></td>
         <td><strong>{item.graph_name}</strong><code>{item.graph_code} · {knowledge.find(kb => kb.id === item.knowledge_base_id)?.kb_name || item.knowledge_base_id}</code></td>
         <td>{item.symbol || "全部股票"}<br /><small>{item.entity_count.toLocaleString()} 实体 / {item.relation_count.toLocaleString()} 关系</small><CoverageSummary report={item.governance_report_json} /></td><td>{label(item.governance_status)}<br /><small>{governanceTime(item.governance_status, item.last_governed_at)}</small>{item.governance_report_json?.provider_code === "MOCK" && <><br /><small>本地模拟分析</small></>}</td><td>{item.enabled ? "启用" : "停用"}</td>
-        <td className="button-row"><button type="button" onClick={() => void openGraph(item)}>查询关系</button><button type="button" onClick={() => { setGraph(item); setGraphForm({ knowledge_base_id: item.knowledge_base_id, graph_code: item.graph_code, graph_name: item.graph_name, description: item.description || "", symbol: item.symbol || "", source_tables: [...item.source_tables], version: item.version, enabled: item.enabled }); setDialog("graph"); }}>编辑</button>
+        <td className="button-row"><button type="button" onClick={() => setVisualGraphId(item.id)}>可视化浏览</button><button type="button" onClick={() => void openGraph(item)}>查询关系</button><button type="button" onClick={() => { setGraph(item); setGraphForm({ knowledge_base_id: item.knowledge_base_id, graph_code: item.graph_code, graph_name: item.graph_name, description: item.description || "", symbol: item.symbol || "", source_tables: [...item.source_tables], version: item.version, enabled: item.enabled }); setDialog("graph"); }}>编辑</button>
           <button type="button" disabled={item.governance_status === "LOCKED" || busy} onClick={() => { setGraph(item); setSources([]); setAgentId(undefined); setError(""); setDialog("govern"); }}>治理</button><button type="button" onClick={() => void run(() => api.setGraphGovernanceState(item.id, item.governance_status === "LOCKED" ? "PENDING" : "LOCKED"), "图谱状态已更新")}>{item.governance_status === "LOCKED" ? "解锁" : "锁定"}</button>
           <button type="button" onClick={() => void run(() => api.updateKnowledgeGraph(item.id, { enabled: !item.enabled }), "使用状态已更新")}>{item.enabled ? "停用" : "启用"}</button>
           <button type="button" disabled={item.governance_status === "LOCKED"} onClick={() => { if (window.confirm(`删除图谱 ${item.graph_name} 及其实体关系？`)) void run(() => api.deleteKnowledgeGraph(item.id), "图谱已删除"); }}>删除</button></td></tr>)}</tbody></table></div></section>

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import { Building2 } from "lucide-react";
 import { CompanyGraphDialog } from "./CompanyGraphWorkbench";
+import { KnowledgeGraphDialog } from "./KnowledgeGraphExplorer";
 
 import {
   api,
@@ -1139,12 +1140,14 @@ export function StockDetailDrawer({
   onClose: () => void;
 }) {
   const requestId = useRef(0);
+  const detailController = useRef<AbortController | null>(null);
   const [detail, setDetail] = useState<StockF10 | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
   const [remoteError, setRemoteError] = useState("");
   const [companyGraphOpen, setCompanyGraphOpen] = useState(false);
+  const [knowledgeGraphOpen, setKnowledgeGraphOpen] = useState(false);
   const [tab, setTab] = useState<PrimaryTab>("精选");
   const [f10Tab, setF10Tab] = useState<F10Tab>("财务");
   const [newsPage, setNewsPage] = useState(1);
@@ -1162,7 +1165,12 @@ export function StockDetailDrawer({
   async function loadLocalAndRemote() {
     const current = requestId.current + 1;
     requestId.current = current;
+    detailController.current?.abort();
+    const controller = new AbortController();
+    detailController.current = controller;
     setLoading(true);
+    setRefreshing(false);
+    setDetail(null);
     setError("");
     setRemoteError("");
     setNewsRows(null);
@@ -1176,19 +1184,21 @@ export function StockDetailDrawer({
         financialLimit: 20,
         noticeLimit: pageSize,
         newsLimit: pageSize,
+        signal: controller.signal,
       });
-      if (requestId.current === current) setDetail(local);
+      if (requestId.current === current && !controller.signal.aborted) setDetail(local);
     } catch (reason) {
-      if (requestId.current === current) {
+      if (requestId.current === current && !controller.signal.aborted) {
         setError(reason instanceof Error ? reason.message : "本地股票详情加载失败");
       }
     } finally {
-      if (requestId.current === current) setLoading(false);
+      if (requestId.current === current && !controller.signal.aborted) setLoading(false);
     }
-    await refreshRemote(current);
+    if (requestId.current === current && !controller.signal.aborted) await refreshRemote(current, controller.signal);
   }
 
-  async function refreshRemote(current = requestId.current) {
+  async function refreshRemote(current = requestId.current, signal = detailController.current?.signal) {
+    if (requestId.current !== current || signal?.aborted) return;
     setRefreshing(true);
     setRemoteError("");
     try {
@@ -1198,18 +1208,19 @@ export function StockDetailDrawer({
         financialLimit: 20,
         noticeLimit: pageSize,
         newsLimit: pageSize,
+        signal,
       });
-      if (requestId.current === current) {
+      if (requestId.current === current && !signal?.aborted) {
         setDetail(remote);
         setNewsRows(null);
         setNoticeRows(null);
       }
     } catch (reason) {
-      if (requestId.current === current) {
+      if (requestId.current === current && !signal?.aborted) {
         setRemoteError(reason instanceof Error ? reason.message : "远程数据刷新失败，已保留本地缓存");
       }
     } finally {
-      if (requestId.current === current) setRefreshing(false);
+      if (requestId.current === current && !signal?.aborted) setRefreshing(false);
     }
   }
 
@@ -1221,6 +1232,7 @@ export function StockDetailDrawer({
     void loadLocalAndRemote();
     return () => {
       requestId.current += 1;
+      detailController.current?.abort();
     };
   }, [stock.market, stock.symbol]);
 
@@ -1346,12 +1358,14 @@ export function StockDetailDrawer({
           </div>
           <div className="detail-head-actions">
             <button type="button" onClick={() => setCompanyGraphOpen(true)}><Building2 size={15} /> 公司关联</button>
+            <button type="button" onClick={() => setKnowledgeGraphOpen(true)}>知识图谱</button>
             <button type="button" onClick={() => void refreshRemote()} disabled={refreshing}>{refreshing ? "更新中" : "手动更新"}</button>
             <button type="button" onClick={onClose}>关闭</button>
           </div>
         </header>
 
         {companyGraphOpen && <CompanyGraphDialog stock={stock} close={() => setCompanyGraphOpen(false)} />}
+        {knowledgeGraphOpen && <KnowledgeGraphDialog initialStock={stock} close={() => setKnowledgeGraphOpen(false)} />}
         {loading && <p className="empty-state">正在读取本地数据库...</p>}
         {error && <p className="form-error">{error}</p>}
         {remoteError && <p className="form-error soft-error">{remoteError}</p>}

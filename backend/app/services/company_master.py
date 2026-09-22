@@ -19,6 +19,7 @@ from app.models.market_data import StockSymbol
 from app.schemas.company_graph import SourceRecord
 from app.services import company_graph, foundation
 from app.connectors.company_master_sources import expected_secucode, HK_EQUITY_SUBCATEGORIES, CN_EQUITY_TYPES
+from app.connectors.company_sources import _jurisdiction
 
 
 def snapshot_index(snapshot: dict) -> tuple[dict, dict]:
@@ -35,6 +36,18 @@ def _identity(record: dict) -> tuple:
         company.get("jurisdiction"), company.get("identifier_scheme"), company.get("identifier_value"))
 
 
+def _hk_codetable_type(raw: dict, symbol: str) -> str | None:
+    if raw.get("code") != symbol or str(raw.get("market")) != "116" or not isinstance(raw.get("securityType"), list):
+        return None
+    types = {str(value) for value in raw["securityType"]}
+    if str(raw.get("smallType")) == "3" and "102" in types:
+        return "EQUITY"
+    if (str(raw.get("smallType")) == "1" and str(raw.get("extSmallType")) in {"10", "16"}
+            and "6" in types and "102" not in types):
+        return "FUND"
+    return None
+
+
 def _normalized(stock: StockSymbol, record: dict, snapshot: dict) -> SourceRecord:
     if record.get("market") != stock.market or record.get("symbol") != stock.symbol:
         raise ValueError("来源证券与目标股票不一致")
@@ -45,9 +58,12 @@ def _normalized(stock: StockSymbol, record: dict, snapshot: dict) -> SourceRecor
     classification = record.get("security_classification_evidence")
     if stock.market == "HK":
         classified = (classification or {}).get("source_record", {})
-        if (classified.get("Stock Code") != stock.symbol or classified.get("Category") != "Equity"
-                or classified.get("Sub-Category") not in HK_EQUITY_SUBCATEGORIES):
-            raise ValueError("港股缺少可核对的官方普通股分类证据")
+        official = ((classification or {}).get("source_name") == "HKEX" and classified.get("Stock Code") == stock.symbol
+            and classified.get("Category") == "Equity" and classified.get("Sub-Category") in HK_EQUITY_SUBCATEGORIES)
+        provider = ((classification or {}).get("source_name") == "EASTMONEY_CODETABLE"
+            and _hk_codetable_type(classified, stock.symbol) == "EQUITY")
+        if not (official or provider):
+            raise ValueError("港股缺少可核对的权益证券分类证据")
     elif raw.get("SECURITY_TYPE") not in ({"三板股"} if stock.market.startswith("NEEQ") else CN_EQUITY_TYPES):
         raise ValueError("来源证券类型不是对应市场的公司股票")
     company = record["company"]
@@ -55,6 +71,13 @@ def _normalized(stock: StockSymbol, record: dict, snapshot: dict) -> SourceRecor
         raise ValueError("缺少一致的来源发行主体编号")
     if not raw.get("ORG_NAME") or str(raw["ORG_NAME"]).strip() != company.get("name"):
         raise ValueError("缺少来源公司全称，不能按证券简称建立公司")
+    jurisdiction_proof = record.get("registration_jurisdiction_evidence")
+    if jurisdiction_proof:
+        original = jurisdiction_proof.get("source_record") or {}
+        if (str(original.get("ORG_CODE")) != str(raw["ORG_CODE"]) or original.get("ORG_NAME") != raw["ORG_NAME"]
+                or not original.get("REG_PLACE") or not str(original.get("SECUCODE", "")).endswith(".HK")
+                or _jurisdiction(original, "HK").upper() != company["jurisdiction"].upper()):
+            raise ValueError("跨市场注册地证据与发行主体不一致")
     observed = record.get("observed_at") or snapshot.get("retrieved_at")
     evidence = record.get("evidence") or {}
     source_name = record.get("source_name") or snapshot.get("source_name") or "EASTMONEY"
@@ -66,7 +89,8 @@ def _normalized(stock: StockSymbol, record: dict, snapshot: dict) -> SourceRecor
         "observed_at": observed, "company": company,
         "security": {"stock_symbol_id": stock.id, "share_class": share_class},
         "evidence": {"title": f"{company['name']}（{stock.market}:{stock.symbol}）发行主体资料",
-            "content": json.dumps({**raw, **({"_security_classification_evidence": classification} if classification else {})},
+            "content": json.dumps({**raw, **({"_security_classification_evidence": classification} if classification else {}),
+                **({"_registration_jurisdiction_evidence": jurisdiction_proof} if jurisdiction_proof else {})},
                 ensure_ascii=False, sort_keys=True, allow_nan=False),
             "available_at": observed, "published_at": None},
     })
@@ -91,6 +115,10 @@ def _exclusion_result(stock: StockSymbol, exclusion: dict) -> dict:
                 and raw.get("Sub-Category") not in HK_EQUITY_SUBCATEGORIES)))
         if valid:
             reason = "港交所分类为非普通股产品，不适用普通股发行公司映射"
+    elif stock.market == "HK" and exclusion.get("source_name") == "EASTMONEY_CODETABLE":
+        valid = _hk_codetable_type(raw, stock.symbol) == "FUND"
+        if valid:
+            reason = "来源证券码表分类为基金产品，不适用普通股发行公司映射"
     return {"status": "NOT_APPLICABLE" if valid else "CONFLICT", "reason": reason,
         "source_name": exclusion.get("source_name"), "source_record": raw,
         "source_url": exclusion.get("source_url"), "observed_at": exclusion.get("observed_at"),

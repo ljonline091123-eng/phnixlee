@@ -462,7 +462,11 @@ export type DataAssetPayload = {
 
 export type DataPreview = {
   table_name: string;
+  display_name?: string;
+  description?: string;
+  domain?: string;
   columns: string[];
+  column_meta?: Array<{ name: string; label: string; description: string; type: string; nullable: boolean }>;
   row_count: number;
   rows: Array<Record<string, unknown>>;
 };
@@ -744,6 +748,7 @@ export const api = {
       newsLimit?: number;
       noticePage?: number;
       newsPage?: number;
+      signal?: AbortSignal;
     } = {},
   ) => {
     const params = new URLSearchParams({
@@ -756,7 +761,7 @@ export const api = {
       refresh: options.refresh ? "true" : "false",
       local_only: options.localOnly ? "true" : "false",
     });
-    return request<StockF10>(`/stocks/${market}/${symbol}/f10?${params.toString()}`);
+    return request<StockF10>(`/stocks/${market}/${symbol}/f10?${params.toString()}`, { signal: options.signal });
   },
   listStockNoticesPage: (market: string, symbol: string, page = 1, pageSize = 8) =>
     request<StockNoticePage>(`/stocks/${market}/${symbol}/notices/page?page=${page}&page_size=${pageSize}`),
