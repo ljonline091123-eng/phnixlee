@@ -4,7 +4,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
 "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.zhaocai.business.receipt.mapper.ReceiptReconciliationDetailMapper">
     
-    <resultMap type="ReceiptReconciliationDetail" id="ReceiptReconciliationDetailResult">
+    <resultMap type="com.zhaocai.business.receipt.domain.ReceiptReconciliationDetail" id="ReceiptReconciliationDetailResult">
         <result property="id"    column="id"    />
         <result property="actualEntryDate"    column="actual_entry_date"    />
         <result property="conDtlId"    column="con_dtl_id"    />
@@ -46,7 +46,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         select id, actual_entry_date, con_dtl_id, doc_id, material_class_code, material_code, material_name, materials_storage_code, materials_storage_dtl_id, materials_storage_id, measurement_unit, price_type, reconciliation_include_tax, reconciliation_no_tax, reconciliation_tax_money, specification_model, storage_number, tax_rate, unit_include_tax, unit_no_tax, unit_tax_money, create_by, create_id, create_time, update_by, update_id, update_time, del_flag, reconciliation_id from tb_receipt_reconciliation_detail
     </sql>
 
-    <select id="selectReceiptReconciliationDetailList" parameterType="ReceiptReconciliationDetail" resultMap="ReceiptReconciliationDetailResult">
+    <select id="selectReceiptReconciliationDetailList" parameterType="com.zhaocai.business.receipt.domain.ReceiptReconciliationDetail" resultMap="ReceiptReconciliationDetailResult">
         <include refid="selectReceiptReconciliationDetailVo"/>
         <where>  
             <if test="actualEntryDate != null  and actualEntryDate != ''"> and actual_entry_date = #{actualEntryDate}</if>
@@ -80,7 +80,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         where id = #{id}
     </select>
         
-    <insert id="insertReceiptReconciliationDetail" parameterType="ReceiptReconciliationDetail" useGeneratedKeys="true" keyProperty="id">
+    <insert id="insertReceiptReconciliationDetail" parameterType="com.zhaocai.business.receipt.domain.ReceiptReconciliationDetail" useGeneratedKeys="true" keyProperty="id">
         insert into tb_receipt_reconciliation_detail
         <trim prefix="(" suffix=")" suffixOverrides=",">
             <if test="actualEntryDate != null">actual_entry_date,</if>
@@ -144,7 +144,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
          </trim>
     </insert>
 
-    <update id="updateReceiptReconciliationDetail" parameterType="ReceiptReconciliationDetail">
+    <update id="updateReceiptReconciliationDetail" parameterType="com.zhaocai.business.receipt.domain.ReceiptReconciliationDetail">
         update tb_receipt_reconciliation_detail
         <trim prefix="SET" suffixOverrides=",">
             <if test="actualEntryDate != null">actual_entry_date = #{actualEntryDate},</if>
