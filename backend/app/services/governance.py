@@ -12,6 +12,7 @@ from app.core.agent.data_cleaning_runner import run_data_cleaning_agent
 from app.db.session import engine
 from app.models.ai_hub import AgentDataAsset, AgentDefinition, GovernanceRun, KnowledgeBase, KnowledgeGraph
 from app.services.model_hub import ModelHubService
+from app.services.data_dictionary import column_metadata, table_metadata
 from app.services.resource_hub import build_knowledge_graph, inspect_data_asset, is_business_table
 
 
@@ -55,7 +56,8 @@ def preview_table(table_name: str, columns: list[str] | None = None, limit: int 
                   db_engine: Engine = engine) -> dict[str, Any]:
     if table_name not in available_source_tables(db_engine):
         raise ValueError("Data source is unavailable")
-    all_columns = [str(item["name"]) for item in inspect(db_engine).get_columns(table_name)]
+    reflected_columns = inspect(db_engine).get_columns(table_name)
+    all_columns = [str(item["name"]) for item in reflected_columns]
     chosen = [name for name in (columns or all_columns) if name in all_columns]
     if not chosen:
         raise ValueError("No readable columns")
@@ -64,7 +66,16 @@ def preview_table(table_name: str, columns: list[str] | None = None, limit: int 
     with db_engine.connect() as connection:
         rows = [dict(row._mapping) for row in connection.execute(statement, {"limit": min(100, max(1, limit))})]
         count = int(connection.execute(text(f'SELECT COUNT(*) FROM {quote(table_name)}')).scalar_one())
-    return {"table_name": table_name, "columns": chosen, "row_count": count, "rows": rows}
+    metadata_by_name = {str(item["name"]): item for item in reflected_columns}
+    return {
+        "table_name": table_name,
+        **table_metadata(table_name),
+        "columns": chosen,
+        "column_meta": [column_metadata(table_name, metadata_by_name[name]) for name in chosen],
+        "row_count": count,
+        # Preserve full source values for existing API clients and detail views.
+        "rows": rows,
+    }
 
 
 def quality_profile(table_name: str, columns: list[str], db_engine: Engine) -> dict[str, Any]:

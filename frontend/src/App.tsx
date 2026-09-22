@@ -31,12 +31,13 @@ import { SelectionWorkbench } from "./SelectionWatch";
 import { GovernedAssetTab, GovernedKnowledgeTab } from "./ResourceGovernance";
 import { DataFoundation } from "./DataFoundation";
 import { CompanyGraphWorkbench } from "./CompanyGraphWorkbench";
+import { KnowledgeGraphExplorer } from "./KnowledgeGraphExplorer";
 import { EnvironmentBanner } from "./EnvironmentBanner";
 
 type ModuleView = "data" | "model" | "watch" | "research";
 type ModelHubTab =
   "models" | "agents" | "skills" | "assets" | "knowledge" | "logs";
-type DataView = "sources" | "interfaces" | "universe" | "foundation" | "company_graph";
+type DataView = "sources" | "interfaces" | "universe" | "foundation" | "company_graph" | "knowledge_network";
 type ResearchTab = "chat" | "research";
 type ModelTestDialogState = {
   target: string;
@@ -228,7 +229,7 @@ function DataConsolePage() {
         }
       />
       <div className="resource-tabs">
-        {(["sources", "interfaces", "universe", "foundation", "company_graph"] as DataView[]).map((item) => (
+        {(["sources", "interfaces", "universe", "foundation", "company_graph", "knowledge_network"] as DataView[]).map((item) => (
           <button
             type="button"
             key={item}
@@ -243,7 +244,7 @@ function DataConsolePage() {
                   ? "股票主数据"
                   : item === "foundation"
                     ? "主体与关系"
-                    : "公司关系"}
+                    : item === "company_graph" ? "公司关系" : "知识图谱"}
           </button>
         ))}
       </div>
@@ -471,6 +472,7 @@ function DataConsolePage() {
       )}
       {tab === "foundation" && <DataFoundation />}
       {tab === "company_graph" && <CompanyGraphWorkbench />}
+      {tab === "knowledge_network" && <KnowledgeGraphExplorer />}
       {detailStock && (
         <StockDetailDrawer
           stock={detailStock}

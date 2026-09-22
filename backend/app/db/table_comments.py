@@ -18,6 +18,7 @@ class TableDescription:
 TABLE_DESCRIPTIONS: dict[str, TableDescription] = {
     "classification_definition": TableDescription("\u5206\u7c7b\u4e3b\u6570\u636e\u5b9a\u4e49", "\u6570\u636e\u5e95\u5ea7", "\u884c\u4e1a\u3001\u4e3b\u9898\u3001\u7c7b\u578b\u548c\u89c4\u6a21\u6807\u7b7e\u7684\u7248\u672c\u5316\u4e3b\u6570\u636e\u53ca\u5176\u771f\u5b9e\u91ca\u4e49\uff0c\u7528\u4e8e\u524d\u7aef\u89e3\u91ca\u548c\u5206\u7c7b\u6cbb\u7406\u3002"),
     "foundation_source_identity": TableDescription("来源主体标识", "数据底座", "将来源命名空间及稳定发行人标识映射到主体，支持有依据的跨市场同公司关联，不按名称合并。"),
+    "foundation_company_mapping_state": TableDescription("股票公司映射覆盖", "数据底座", "保存各股票发行公司映射的结果、依据及未覆盖原因，不改变既有股票主数据。"),
     "foundation_security_classification": TableDescription("证券分类事实", "数据底座", "直接关联证券、定义版本及证据的分类候选，独立记录业务有效期和审核历史，不强挂发行公司。"),
     "foundation_entity": TableDescription("主数据主体", "数据底座", "保存公司、人物、机构及分类等稳定身份，外部标识在法域内唯一，同名不自动合并。"),
     "foundation_security": TableDescription("主数据证券", "数据底座", "保存独立证券身份、发行公司和股份类别，与上市记录分离。"),
@@ -238,7 +239,7 @@ COMMON_COLUMN_DESCRIPTIONS: dict[str, str] = {
     "skill_name": "Skill 的展示名称。",
     "skill_type": "Skill 类型：提示词 SOP 或可执行工具。",
     "skill_version_used": "生成预测时实际使用的 Skill 版本。",
-    "source": "Skill 历史版本的变更来源。",
+    "source": "记录对应的数据来源；具体口径以所属表及来源说明为准。",
     "source_asset_ids": "本次治理使用的数据资产 ID 列表。",
     "source_code": "数据源的唯一业务编码。",
     "source_health": "数据资产来源表的健康检查结果。",
@@ -313,13 +314,19 @@ COMMON_COLUMN_DESCRIPTIONS: dict[str, str] = {
     "sequence": "Trading-session sequence",
 
     "confirmation_date": "Human review confirmation date",
-    "adjust": "Tracking price adjustment policy; empty means unadjusted close.",
+    "adjust": "价格复权口径；空值表示不复权，其他口径以来源定义为准。",
     "target_hit": "Whether the confirmed target was reached after the required sessions.",
     "stop_hit": "Whether the confirmed stop level was reached during tracking.",
 }
 
 
 TABLE_COLUMN_OVERRIDES: dict[str, dict[str, str]] = {
+    "foundation_company_mapping_state": {
+        "stock_symbol_id": "既有股票主数据的记录标识。", "status": "发行公司映射结果；未映射不表示公司不存在。",
+        "reason": "映射成功、待补充或暂不支持的具体原因。", "source_name": "本次映射使用的来源名称。",
+        "source_snapshot": "用于核对映射依据的来源快照标识或链接。", "attempt_count": "累计尝试映射次数。",
+        "details_json": "映射过程的业务依据、识别结果及待补充信息。", "attempted_at": "最近一次尝试建立映射的时间。",
+    },
     "classification_definition": {
         "id": "\u5206\u7c7b\u5b9a\u4e49\u7a33\u5b9a ID", "taxonomy": "\u5206\u7c7b\u4f53\u7cfb\u540d\u79f0", "dimension": "\u5206\u7c7b\u7ef4\u5ea6\uff0c\u5982\u884c\u4e1a\u3001\u4e3b\u9898\u3001\u7c7b\u578b", "code": "\u6765\u6e90\u6216\u8bcd\u5178\u4ee3\u7801", "label": "\u663e\u793a\u540d\u79f0", "definition": "\u4e3b\u6570\u636e\u771f\u5b9e\u91ca\u4e49", "criteria": "\u7eb3\u5165\u6807\u51c6\u548c\u4e0d\u9002\u7528\u8bf4\u660e", "parent_code": "\u4e0a\u7ea7\u5206\u7c7b\u4ee3\u7801", "jurisdiction": "\u9002\u7528\u6cd5\u57df", "source_name": "\u5b9a\u4e49\u6765\u6e90", "source_url": "\u6765\u6e90\u94fe\u63a5", "definition_version": "\u91ca\u4e49\u7248\u672c", "status": "\u5b9a\u4e49\u72b6\u6001", "valid_from": "\u6709\u6548\u671f\u5f00\u59cb", "valid_to": "\u6709\u6548\u671f\u7ed3\u675f", "properties_json": "\u6269\u5c55\u5c5e\u6027", "created_at": "\u521b\u5efa\u65f6\u95f4", "updated_at": "\u66f4\u65b0\u65f6\u95f4",
     },
