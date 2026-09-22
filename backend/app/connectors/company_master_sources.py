@@ -18,10 +18,11 @@ from zipfile import ZipFile
 
 import httpx
 
-from app.connectors.company_sources import PROFILE_URL, _now, parse_company_profile, valid_cn_uscc
+from app.connectors.company_sources import PROFILE_URL, _jurisdiction, _now, parse_company_profile, valid_cn_uscc
 
 HKEX_SECURITIES_URL = "https://www.hkex.com.hk/eng/services/trading/securities/securitieslists/ListOfSecurities.xlsx"
 HKEX_SDW_URL = "https://www.hkexnews.hk/sdw/search/stocklist.aspx"
+CODETABLE_URL = "https://search-codetable.eastmoney.com/codetable/search/web"
 REPORTS = {"DOMESTIC": "RPT_F10_ORG_BASICINFO", "HK": "RPT_HKF10_INFO_ORGPROFILE"}
 COMMON_COLUMNS = "SECUCODE,SECURITY_CODE,SECURITY_NAME_ABBR,ORG_CODE,ORG_NAME,FOUND_DATE,REG_ADDRESS,ORG_WEB,LISTING_DATE,ORG_TYPE"
 COLUMNS = {
@@ -127,8 +128,52 @@ def parse_master_record(raw: dict, market: str, symbol: str, observed_at: str) -
             "published_at": None, "available_at": observed_at, "content_scope": "PROVIDER_STRUCTURED_RECORD"}}
 
 
+def apply_registration_jurisdictions(records: list[dict], pages: Iterable[dict]) -> None:
+    """Use an explicit registration field, only for an unambiguous issuer identity.
+
+    Existing jurisdiction value conventions are preserved. This adds provenance;
+    it does not rename persisted companies or use their trading venue as domicile.
+    """
+    issuers: dict[str, list[tuple[dict, dict]]] = {}
+    for page in pages:
+        for row in (page.get("raw", {}).get("result") or {}).get("data") or []:
+            if str(row.get("SECUCODE") or "").endswith(".HK") and row.get("ORG_CODE") and row.get("REG_PLACE"):
+                issuers.setdefault(str(row["ORG_CODE"]), []).append((row, page))
+    for record in records:
+        candidates = issuers.get(record["company"]["source_issuer_id"], [])
+        if (not candidates or {row.get("ORG_NAME") for row, _ in candidates} != {record["company"]["name"]}
+                or len({str(row["REG_PLACE"]).strip() for row, _ in candidates}) != 1):
+            continue
+        raw, page = candidates[0]
+        jurisdiction = _jurisdiction(raw, "HK")
+        evidence = {"source_name": "EASTMONEY", "source_url": page["source_url"],
+            "observed_at": page["retrieved_at"], "source_record": raw,
+            "registration_place": raw["REG_PLACE"], "jurisdiction": jurisdiction,
+            "match_rule": "EXACT_ORG_CODE_AND_REGISTERED_NAME_UNIQUE_REG_PLACE"}
+        record["registration_jurisdiction_evidence"] = evidence
+        if record["company"].get("identifier_scheme") == "CN_USCC" and jurisdiction != "CN":
+            record["jurisdiction_conflict"] = "CN_USCC_CONFLICTS_WITH_EXPLICIT_REG_PLACE"
+            continue
+        record["company"]["jurisdiction"] = jurisdiction
+        record["company"].setdefault("properties_json", {})["registration_place"] = raw["REG_PLACE"]
+        record["company"]["properties_json"]["jurisdiction_basis"] = evidence["match_rule"]
+
+
+def codetable_classification(row: dict, symbol: str) -> str | None:
+    """Only documented, independently checked stock/fund type combinations."""
+    if row.get("market") != 116 or row.get("code") != symbol:
+        return None
+    types = row.get("securityType") or []
+    if row.get("smallType") == 3 and 102 in types:
+        return "ORDINARY_EQUITY"
+    if row.get("smallType") == 1 and row.get("extSmallType") in {10, 16} and 6 in types and 102 not in types:
+        return "NON_EQUITY"
+    return None
+
+
 def build_master_result(targets: Iterable[dict], pages: Iterable[dict], hkex: dict | None) -> dict:
     """Keep every target either explicitly mapped, excluded, or unresolved."""
+    pages = list(pages)
     indexed: dict[str, list[tuple[dict, dict]]] = {}
     for page in pages:
         for row in (page.get("raw", {}).get("result") or {}).get("data") or []:
@@ -191,6 +236,7 @@ def build_master_result(targets: Iterable[dict], pages: Iterable[dict], hkex: di
             record["security_classification_evidence"] = {"source_name": "HKEX", "source_url": HKEX_SECURITIES_URL,
                 "observed_at": hkex.get("retrieved_at"), "source_date_label": hkex.get("source_date_label"), "source_record": hk_row}
         records.append(record)
+    apply_registration_jurisdictions(records, pages)
     return {"source_code": "EASTMONEY_COMPANY_MASTER", "source_name": "EASTMONEY", "source_kind": "AGGREGATOR",
         "source_url": PROFILE_URL, "retrieved_at": _now(), "status": "PARTIAL" if unresolved else "SUCCESS",
         "records": records, "exclusions": exclusions, "unresolved": unresolved,
@@ -307,3 +353,79 @@ class CompanyMasterSourcesClient:
             unresolved_count=len(result["unresolved"]), result_path=str(self.cache_dir / "result.json"))
         _write_json(self.cache_dir / "manifest.json", manifest)
         return result
+
+    def collect_supplement(self, targets: Iterable[dict], *, max_requests: int = 100, resume: bool = True) -> dict:
+        """Supplement unresolved codes, keeping the original snapshot untouched."""
+        targets = list(targets)
+        original = json.loads((self.cache_dir / "result.json").read_text(encoding="utf-8"))
+        missing = {(row["market"], row["symbol"]) for row in original["unresolved"]}
+        pages = [json.loads(path.read_text(encoding="utf-8")) for path in sorted((self.cache_dir / "pages").glob("*.json"))
+                 if path.name.startswith(("DOMESTIC_", "HK_"))]
+        hkex_path = self.cache_dir / "hkex_security_classification.json"
+        hkex = json.loads(hkex_path.read_text(encoding="utf-8")) if hkex_path.exists() else None
+        selected = [row for row in targets if (row["market"], row["symbol"]) in missing]
+        supplement = build_master_result(selected, pages, hkex)
+        failures, resolved, attempts = [], set(), 0
+        for missing_row in supplement["unresolved"]:
+            if missing_row["market"] != "HK" or attempts >= max_requests:
+                continue
+            symbol = missing_row["symbol"]
+            params = {"keyword": symbol, "pageIndex": 1, "pageSize": 20}
+            path = self.cache_dir / "pages" / f"CODETABLE_{symbol}.json"
+            try:
+                source = json.loads(path.read_text(encoding="utf-8")) if resume and path.exists() else None
+                if source is None:
+                    attempts += 1
+                    response = self._get(CODETABLE_URL, params=params)
+                    payload = response.json()
+                    if not isinstance(payload.get("result"), list):
+                        raise ValueError("Code-table response has no result array")
+                    source = {"source_name": "EASTMONEY_CODETABLE", "source_url": str(response.url),
+                        "observed_at": _now(), "request": params, "raw": payload}
+                    _write_json(path, source)
+                rows = [row for row in source["raw"]["result"] if row.get("market") == 116 and row.get("code") == symbol]
+                missing_row["classification_source_attempt"] = {"source_name": source["source_name"],
+                    "source_url": source["source_url"], "observed_at": source["observed_at"], "exact_rows": len(rows)}
+                if len(rows) != 1:
+                    continue
+                raw = rows[0]
+                category = codetable_classification(raw, symbol)
+                proof = {key: source[key] for key in ("source_name", "source_url", "observed_at")}
+                proof["source_record"] = raw
+                if category == "NON_EQUITY":
+                    supplement["exclusions"].append({"market": "HK", "symbol": symbol, "reason": "NON_EQUITY", **proof})
+                    resolved.add(("HK", symbol))
+                elif category == "ORDINARY_EQUITY":
+                    candidates = [(row, page) for page in pages for row in page["raw"]["result"]["data"]
+                                  if row.get("SECUCODE") == f"{symbol}.HK"]
+                    if len(candidates) != 1:
+                        continue
+                    company_raw, page = candidates[0]
+                    record = parse_master_record(company_raw, "HK", symbol, page["retrieved_at"])
+                    if record is None:
+                        continue
+                    record.update(source_name="EASTMONEY", source_url=page["source_url"], observed_at=page["retrieved_at"],
+                        source_report=page["report_name"], security_type="ORDINARY_EQUITY", share_class="ORDINARY",
+                        security_classification_evidence=proof)
+                    supplement["records"].append(record)
+                    resolved.add(("HK", symbol))
+                self.progress({"group": "CODETABLE", "symbol": symbol, "classification": category})
+            except (httpx.HTTPError, ValueError, KeyError, TypeError) as error:
+                failures.append({"source": "EASTMONEY_CODETABLE", "symbol": symbol, "error": str(error)[:500]})
+                if isinstance(error, httpx.HTTPStatusError) and error.response.status_code in {401, 403, 429}:
+                    break
+        supplement["unresolved"] = [row for row in supplement["unresolved"] if (row["market"], row["symbol"]) not in resolved]
+        supplement["failures"] = failures
+        supplement["status"] = "PARTIAL" if failures or supplement["unresolved"] else "SUCCESS"
+        apply_registration_jurisdictions(supplement["records"], pages)
+        _write_json(self.cache_dir / "supplemental_result.json", supplement)
+        combined = build_master_result(targets, pages, hkex)
+        for kind in ("records", "exclusions"):
+            by_key = {(row["market"], row["symbol"]): row for row in combined[kind]}
+            by_key.update({(row["market"], row["symbol"]): row for row in supplement[kind]})
+            combined[kind] = list(by_key.values())
+        combined["unresolved"] = [row for row in combined["unresolved"] if (row["market"], row["symbol"]) not in resolved]
+        combined["failures"] = failures
+        combined["status"] = "PARTIAL" if failures or combined["unresolved"] else "SUCCESS"
+        _write_json(self.cache_dir / "combined_result.json", combined)
+        return supplement

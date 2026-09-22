@@ -17,6 +17,7 @@ def main():
     parser.add_argument("--page-size", type=int, default=500)
     parser.add_argument("--delay", type=float, default=0.25)
     parser.add_argument("--no-resume", action="store_true")
+    parser.add_argument("--supplement", action="store_true", help="Supplement unresolved codes and preserve result.json")
     args = parser.parse_args()
     markets = set(args.markets.split(","))
     if not markets or markets - {"CN_A", "HK", "NEEQ", "NEEQ_INNOVATION"}:
@@ -28,7 +29,7 @@ def main():
     def progress(value):
         print(json.dumps(value, ensure_ascii=True), flush=True)
     with CompanyMasterSourcesClient(Path(args.cache_dir).resolve(), page_size=args.page_size, delay=args.delay, progress=progress) as client:
-        result = client.collect(targets, resume=not args.no_resume)
+        result = client.collect_supplement(targets, resume=not args.no_resume) if args.supplement else client.collect(targets, resume=not args.no_resume)
     progress({"status": result["status"], "targets": len(targets), "records": len(result["records"]),
         "exclusions": len(result["exclusions"]), "unresolved": len(result["unresolved"]), "failures": result["failures"]})
     return 1 if result["failures"] else 0

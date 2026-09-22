@@ -1,0 +1,354 @@
+建议把知识图谱设计成“证券主图谱 + 动态事实图谱 + 证据链”三层结构。先建立股票、公司、行业、板块、类型和上下游的稳定骨架，再叠加财务、量价、股东、公告、新闻及外部事件。
+当前系统已经有 STOCK、数据集、新闻、公告、财报、K 线、F10 和事件等实体，但整体仍是“文档驱动”。目前没有独立的公司、行业、板块和类型节点；新闻中的上下游或政策关系也主要是关键词提及，不能直接视为已验证关系。
+一、总体图谱结构
+```mermaid
+graph TD
+    S[Security 证券] -->|ISSUED_BY| C[Company 公司]
+    S -->|LISTED_ON| M[Market 市场]
+    S -->|IN_INDUSTRY| I[Industry 行业]
+    S -->|IN_SECTOR| T[Sector/Theme 板块主题]
+    S -->|HAS_CLASSIFICATION| CT[ClassificationTag 类型标签]
+
+    C --> L[SupplyChainFact 上下游事实]
+    L --> C2[Company/CompanyGroup]
+    L --> P[Product/Material 产品原材料]
+
+    S --> F[FinancialObservation 财务观测]
+    S --> Q[MarketObservation 量价观测]
+    S --> H[ShareholderAction 股东行为]
+    S --> E[CorporateEvent 企业事件]
+    S --> X[ExternalEvent 外部事件]
+
+    F --> D[EvidenceDocument 证据文档]
+    Q --> D
+    H --> D
+    E --> D
+    X --> D
+    D --> DS[DataSource 数据源]
+```
+
+
+
+图谱采用属性图模型：节点表示实体，关系表示连接，节点和关系都可以保存属性；唯一标识应通过约束保证一致性。Neo4j 数据建模文档
+二、第一层：证券主数据图谱
+1. Security：证券节点
+这是用户看到的股票对象，也是所有动态数据的主锚点。
+建议字段：
+security_id
+market
+symbol
+security_name
+exchange
+listing_status
+listed_at
+delisted_at
+currency
+issuer_id
+唯一键建议为：
+market + symbol + 有效时间
+不能只使用股票代码，因为不同市场可能存在相同代码，也要支持股票改名、转板和退市历史。
+2. Company：发行主体节点
+公司和证券必须分开。
+例如：
+Company: 某集团公司
+ ├── Security: A股证券
+ ├── Security: H股证券
+ └── Security: 其他市场证券
+这样可以支持同一家公司多地上市，也能避免把上市证券、公司主体和新闻对象混在一起。
+3. Industry：官方行业节点
+用于描述公司的标准行业归属，例如：
+计算机
+└── 软件和信息技术服务业
+    └── 应用软件
+关系：
+Security -[:IN_INDUSTRY]-> Industry
+Industry -[:SUB_INDUSTRY_OF]-> Industry
+行业应保存：
+taxonomy_code
+taxonomy_name
+taxonomy_version
+source
+valid_from
+valid_to
+因为行业分类可能随着版本调整，不能直接覆盖旧分类。
+4. Sector / Theme：板块和投资主题节点
+“军工”“科技”“新能源”“人工智能”等通常是投资板块或主题，不应与官方行业完全混为一谈。
+例如：
+证券
+ ├── IN_INDUSTRY → 计算机行业
+ ├── IN_SECTOR → 科技板块
+ └── IN_SECTOR → 人工智能主题
+同一只股票可以属于多个板块，但每条关系都要有来源、时间和置信度。
+5. ClassificationTag：类型和风格标签
+用户提出的蓝筹、红筹、大盘、小盘，建议采用标签体系，而不是写死在股票表中。
+标签维度建议分开：
+维度	示例
+市值规模	LARGE_CAP、MID_CAP、SMALL_CAP
+投资风格	BLUE_CHIP、GROWTH、VALUE
+上市属性	RED_CHIP、H_SHARE、A_SHARE
+流动性	HIGH_LIQUIDITY、LOW_LIQUIDITY
+风险属性	HIGH_VOLATILITY、DEFENSIVE
+用户主题	AI、军工、机器人、新能源
+
+
+关系：
+Security -[:HAS_CLASSIFICATION]-> ClassificationTag
+标签必须包含：
+classification_method
+as_of
+valid_from
+valid_to
+source
+confidence
+特别是“大盘、小盘”应根据指定日期的市值分位计算；“蓝筹”也应使用可配置规则或外部名单，不能永久写死。
+三、上下游关系设计
+上下游是图谱中最容易误判的部分，不建议只建立：
+股票A -[:SUPPLIES_TO]-> 股票B
+因为一条上下游关系通常还需要说明产品、材料、金额、时间和证据。
+建议增加事实节点：
+```mermaid
+graph LR
+C1[公司A] -->|SUBJECT| L[SupplyChainFact]
+L -->|OBJECT| C2[公司B]
+L -->|涉及产品| P[产品/原材料]
+L -->|证据| D[证据文档]
+```
+
+
+
+SupplyChainFact 建议包含：
+fact_id
+subject_id
+object_id
+relation_type
+product_or_material
+business_scope
+region
+valid_from
+valid_to
+observed_at
+source_id
+evidence_document_id
+extraction_method
+confidence
+verification_status
+关系类型可以包括：
+SUPPLIES_TO
+DEPENDS_ON
+PURCHASES_FROM
+SELLS_TO
+COMPETES_WITH
+PARTNERS_WITH
+USES_MATERIAL
+同时支持两种层级：
+Company -[:SUPPLIES_TO]-> Company
+Sector  -[:SUPPLIES_TO]-> Sector
+但板块级关系通常是聚合推断，必须标记：
+verification_status = DERIVED
+extraction_method = AGGREGATED
+不能把“两个板块存在产业联系”直接当成两家公司之间存在确定交易关系。
+四、第二层：动态事实图谱
+主图谱建立完成后，再补充动态数据。
+1. 财务事实
+建议把财报拆成标准化观测：
+Security -[:HAS_FINANCIAL_OBSERVATION]-> FinancialObservation
+例如：
+营业收入
+归母净利润
+毛利率
+经营现金流
+合同负债
+研发投入
+市盈率
+市净率
+每个观测都必须有：
+metric_code
+value
+unit
+report_period
+published_at
+source
+restated_flag
+2. 量价和交易量
+Security -[:HAS_MARKET_OBSERVATION]-> MarketObservation
+支持：
+开盘价
+收盘价
+最高价
+最低价
+成交量
+成交额
+换手率
+涨跌幅
+波动率
+资金流向
+异常数据单独形成事件：
+Security -[:HAS_MARKET_EVENT]-> MarketEvent
+事件类型：
+VOLUME_SPIKE
+PRICE_BREAKOUT
+PRICE_DROP
+TURNOVER_SPIKE
+VOLATILITY_EXPANSION
+GAP_UP
+GAP_DOWN
+异常事件只代表检测结果，不能直接推断“主力建仓”或“利好兑现”。
+3. 股东和公司行为
+Security -[:HAS_SHAREHOLDER_ACTION]-> ShareholderAction
+包括：
+增持
+减持
+回购
+股权质押
+解禁
+大宗交易
+股东变更
+高管增减持
+每个事件需要保存：
+actor
+action_type
+quantity
+price
+holding_ratio_before
+holding_ratio_after
+announced_at
+effective_at
+source
+4. 新闻、公告和研究报告
+新闻和公告首先作为证据文档：
+Security -[:HAS_NEWS]-> News
+Security -[:HAS_NOTICE]-> Notice
+Security -[:HAS_RESEARCH_REPORT]-> ResearchReport
+文档中提取出的内容应该先形成：
+EventMention
+只有经过实体解析和证据验证后，才能升级为：
+PolicyEvent
+SupplyChainEvent
+ContractEvent
+RawMaterialEvent
+CorporateEvent
+新闻里出现“供应商”“产业链”“政策影响”等词，只能建立：
+DOCUMENT -[:MENTIONS]-> CandidateEvent
+不能直接建立：
+Company -[:AFFECTED_BY]-> Policy
+除非有明确的主体、时间、方向和原文证据。
+五、统一关系和证据契约
+所有重要关系都应具备统一属性：
+relation_id
+predicate
+subject_id
+object_id
+market
+valid_from
+valid_to
+observed_at
+as_of
+source_id
+evidence_document_id
+extraction_method
+confidence
+verification_status
+version
+建议的状态流转：
+RAW
+  ↓
+NORMALIZED
+  ↓
+CANDIDATE
+  ↓
+VERIFIED
+  ├── REJECTED
+  └── EXPIRED
+其中：
+- RULE：硬规则计算
+- SOURCE：官方或原始来源直接提供
+- LLM：模型抽取候选关系
+- HUMAN：人工确认
+模型只能生成 CANDIDATE，不能直接把关系升级为 VERIFIED。
+来源可信度和模型置信度也要分开：
+source_reliability
+extraction_confidence
+这样可以避免“模型很确定，但来源很弱”的问题。
+六、现有系统到新架构的映射
+当前对象	新架构定位
+STOCK	Security
+COMPANY_PROFILE 文档	拆分为 Company + 证据文档
+stock_symbol	公司和证券主数据
+stock_financial_report	FinancialObservation
+stock_kline	MarketObservation
+stock_realtime_quote	实时市场观测
+stock_f10_cache	F10、股东和公司行为事实
+stock_news	News + EventMention
+stock_notice	Notice + EventMention
+stock_context_event	外部事件、政策、供应链候选事实
+research_report	研究报告和预测证据
+KnowledgeDocument	统一证据资产
+KnowledgeEntity	节点存储
+KnowledgeRelation	关系或事实边存储
+
+
+现有关系表应逐步补充时间、来源、置信度和审核状态；如果关系属性进一步复杂，可以新增独立的 graph_fact 或 relation_fact 表。
+七、图谱构建顺序
+建议严格按以下顺序治理：
+1. 证券和公司主数据
+   - 统一市场、股票代码、公司主体和证券关系。
+2. 行业、板块和类型
+   - 建立行业层级、投资主题和分类标签。
+3. 上下游和股权关系
+   - 先导入已有结构化数据，再从公告、年报和新闻中抽取候选关系。
+4. 财务和估值事实
+   - 统一指标、单位、报告期和修订状态。
+5. 量价与异常事件
+   - 通过 SQL/Python 硬规则计算，模型只负责解释候选原因。
+6. 股东和公司行为
+   - 建立增持、减持、回购、质押和解禁事件。
+7. 新闻、公告、政策和产业链
+   - 先提取事件和提及，再进行实体消歧和关系验证。
+8. 冲突处理和覆盖评估
+   - 识别重复、冲突、过期和缺失信息。
+9. 发布图谱版本
+   - 输出每只股票的覆盖矩阵和治理状态。
+八、每只股票的覆盖矩阵
+每个证券节点都应显示：
+身份信息
+公司主体
+行业
+板块/主题
+类型标签
+上下游关系
+财务数据
+量价数据
+股东行为
+新闻公告
+政策和外部事件
+研究报告
+证据完整性
+数据新鲜度
+待人工审核数量
+图谱状态不能只使用“已治理/未治理”，建议使用：
+PENDING
+PARTIAL
+GOVERNED
+LOCKED
+并且“完成”必须相对于图谱范围判断。例如单股基础图谱已经完整，不代表它的政策、原材料和上下游信息也完整。
+九、后续 Agent 和 Skill 规划
+确定上述对象模型后，再编排以下能力：
+SECURITY_MASTER_RESOLVER
+INDUSTRY_SECTOR_CLASSIFIER
+STYLE_TAG_CLASSIFIER
+SUPPLY_CHAIN_RELATION_EXTRACTOR
+FINANCIAL_FACT_NORMALIZER
+MARKET_ANOMALY_DETECTOR
+SHAREHOLDER_ACTION_EXTRACTOR
+EVENT_EVIDENCE_EXTRACTOR
+KG_ENTITY_RESOLVER
+KG_CONFLICT_RECONCILER
+KG_COVERAGE_AUDITOR
+总调度 Agent：
+STOCK_KNOWLEDGE_GRAPH_BUILDER
+它只负责按顺序调用各 Skill，不直接吞吐全市场原始数据。
+我建议先确认这三个原则：
+1. Security、Company、Industry、Sector/Theme、ClassificationTag 分开建模。
+2. 上下游关系采用带证据和时间的事实模型。
+3. 新闻和大模型只能产生候选事实，不能直接写成已验证关系。
+确认后，下一步应先制定实体编码、关系枚举和字段契约，再盘点数据源，最后编写 Skill、Agent 和治理流程。本轮暂不修改代码或数据库。
