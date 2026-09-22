@@ -10,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.foundation import FoundationEntity, FoundationEvidence, FoundationFact, FoundationListing, FoundationSecurity
-from app.models.company_graph import SecurityClassification
+from app.models.company_graph import SecurityClassification, SourceIdentity
 from app.models.market_data import StockSymbol
 from app.schemas.foundation import EvidenceCreate, FactReviewCreate
 from app.services import company_graph, foundation
@@ -227,6 +227,35 @@ def accept_source_observations(db: Session, imported: dict) -> dict:
     return accepted
 
 
+def _use_existing_master(db: Session, normalized: dict, source_record: dict) -> None:
+    """Retain resolved issuer identity when enriching an existing listing.
+
+    Single-stock parsers historically defaulted A-share domicile and share class.
+    Neither default can replace the source-identified bulk master. Explicit
+    conflicting registration fields still go through the strict import checks.
+    """
+    listing = db.scalar(select(FoundationListing).where(
+        FoundationListing.stock_symbol_id == normalized["security"]["stock_symbol_id"]))
+    if listing is None:
+        return
+    security = db.get(FoundationSecurity, listing.security_id)
+    company = db.get(FoundationEntity, security.entity_id)
+    normalized["security"]["share_class"] = security.share_class
+    incoming = normalized["company"]
+    alias = db.scalar(select(SourceIdentity).where(SourceIdentity.namespace == normalized["source_name"],
+        SourceIdentity.external_id == incoming.get("source_issuer_id"), SourceIdentity.entity_type == "COMPANY"))
+    raw = source_record.get("source_record") or {}
+    if (alias and alias.entity_id == company.id and not raw.get("REG_PLACE")
+            and not incoming.get("identifier_value") and source_record.get("market") == "CN_A"):
+        incoming["jurisdiction"] = company.jurisdiction
+        incoming["properties_json"] = {**incoming.get("properties_json", {}),
+            "jurisdiction_resolution": "EXISTING_SOURCE_IDENTIFIED_COMPANY", "jurisdiction_company_id": company.id}
+    if security.share_class == "DEPOSITARY_RECEIPT":
+        # A domestic trading venue alone does not make a depositary receipt A stock.
+        normalized["classifications"] = [row for row in normalized.get("classifications", [])
+            if row["dimension"] != "LEGAL_LISTING_CLASS"]
+
+
 def import_cached_sources(db: Session, cache_dir: Path, *, accept_structured: bool = False, samples: list[dict] | None = None) -> dict:
     samples = SAMPLE_SECURITIES if samples is None else samples
     profiles = {(item["market"], item["symbol"]): latest_cache(cache_dir, "profile", **item) for item in samples}
@@ -247,7 +276,9 @@ def import_cached_sources(db: Session, cache_dir: Path, *, accept_structured: bo
             item["status"] = "STOCK_MISSING" if not stock else "PROFILE_UNAVAILABLE"
             continue
         item["stock_symbol_id"] = stock.id
-        imported = company_graph.import_batch(db, {"records": [profile_record(source, stock.id, identities)]})
+        normalized = profile_record(source, stock.id, identities)
+        _use_existing_master(db, normalized, source["records"][0])
+        imported = company_graph.import_batch(db, {"records": [normalized]})
         mapped = imported["records"][0]
         item.update(company_id=mapped["company_id"], security_id=mapped["security_id"], status="MAPPED")
         item["evidence_ids"].append(mapped["evidence_id"])
@@ -259,6 +290,7 @@ def import_cached_sources(db: Session, cache_dir: Path, *, accept_structured: bo
         if holders and holders["status"] == "SUCCESS":
             normalized = holder_record(holders, source, stock.id)
             if normalized:
+                _use_existing_master(db, normalized, source["records"][0])
                 holding_import = company_graph.import_batch(db, {"records": [normalized]})
                 item["evidence_ids"].append(holding_import["records"][0]["evidence_id"])
                 if accept_structured:
@@ -274,6 +306,7 @@ def import_cached_sources(db: Session, cache_dir: Path, *, accept_structured: bo
             except (KeyError, TypeError, ValueError, OverflowError) as error:
                 item["sources"]["marketcap"].update(status="INVALID", warnings=[str(error)])
             else:
+                _use_existing_master(db, normalized, source["records"][0])
                 cap_import = company_graph.import_batch(db, {"records": [normalized]})
                 item["evidence_ids"].append(cap_import["records"][0]["evidence_id"])
                 if accept_structured:

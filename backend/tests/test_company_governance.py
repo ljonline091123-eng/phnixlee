@@ -117,6 +117,40 @@ def test_profile_normalization_preserves_identity_direction_and_source_scope(db)
     assert all(row["fact_type"] == "IN_INDUSTRY" for row in unknown["facts"])
 
 
+@pytest.mark.parametrize("share_class, jurisdiction", [("ORDINARY", "CN"), ("DEPOSITARY_RECEIPT", "UNKNOWN"), ("A_SHARE", "HK")])
+def test_enrichment_preserves_bulk_master_share_class_and_resolved_domicile(db, share_class, jurisdiction):
+    source = source_profile()
+    for key in ("identifier_scheme", "identifier_value"):
+        source["records"][0]["company"].pop(key)
+    first = governance.profile_record(source, stock_id(db), {})
+    first["company"]["jurisdiction"] = jurisdiction
+    first["security"]["share_class"] = share_class
+    first["classifications"] = []
+    imported = company_graph.import_batch(db, {"records": [first]})["records"][0]
+    normalized = governance.profile_record(source, stock_id(db), {})
+    governance._use_existing_master(db, normalized, source["records"][0])
+    assert normalized["security"]["share_class"] == share_class
+    assert normalized["company"]["jurisdiction"] == jurisdiction
+    if share_class == "DEPOSITARY_RECEIPT":
+        assert not any(row["dimension"] == "LEGAL_LISTING_CLASS" for row in normalized["classifications"])
+    repeated = company_graph.import_batch(db, {"records": [normalized]})["records"][0]
+    assert repeated["security_id"] == imported["security_id"] and repeated["company_id"] == imported["company_id"]
+
+
+def test_enrichment_does_not_hide_an_explicit_registration_conflict(db):
+    source = source_profile()
+    for key in ("identifier_scheme", "identifier_value"):
+        source["records"][0]["company"].pop(key)
+    first = governance.profile_record(source, stock_id(db), {})
+    company_graph.import_batch(db, {"records": [first]})
+    source["records"][0]["company"]["jurisdiction"] = "HK"
+    source["records"][0]["source_record"] = {"REG_PLACE": "香港"}
+    normalized = governance.profile_record(source, stock_id(db), {})
+    governance._use_existing_master(db, normalized, source["records"][0])
+    with pytest.raises(foundation.FoundationError, match="conflicting legal jurisdictions"):
+        company_graph.import_batch(db, {"records": [normalized]})
+
+
 def test_acceptance_rule_excludes_control_legal_and_size_inferences(db):
     normalized = governance.profile_record(source_profile(), stock_id(db), {"FIXTURE-PARENT": parent_identity()})
     normalized["facts"].append({"source_key": "fixture-case", "fact_type": "LEGAL_CASE", "title": "Fixture case mention",
