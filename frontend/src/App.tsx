@@ -170,6 +170,14 @@ function DataConsolePage() {
   const [notice, setNotice] = useState("");
   const [loading, setLoading] = useState(false);
   const [detailStock, setDetailStock] = useState<StockSymbol | null>(null);
+  const [sourceTest, setSourceTest] = useState<{ source: DataSource; result?: { adapter_type: string; status: string; message: string; capabilities: string[] }; error?: string } | null>(null);
+  const [interfaceDetail, setInterfaceDetail] = useState<DataInterface | null>(null);
+  const categoryNames: Record<string, string> = { SYMBOL_MASTER: "股票主数据", KLINE: "历史量价", NEWS: "新闻", NOTICE: "公告", QUOTE: "实时行情", FINANCIAL: "财务数据", F10: "F10资料", COMPANY_DATA: "公司数据", MARKET_DATA: "市场数据", JUDICIAL_DISCLOSURE: "司法披露", BUSINESS_DISCLOSURE: "经营披露", SUPPLY_CHAIN_DISCLOSURE: "供应链披露" };
+  const modeNames: Record<string, string> = { SYNC: "定时同步", ON_DEMAND: "按需查询" };
+  const marketNames: Record<string, string> = { CN_A: "A股", HK: "港股", NEEQ: "新三板", NEEQ_INNOVATION: "创新层" };
+  const interfaceNames: Record<string, string> = { A_KLINE_ON_DEMAND: "A股历史K线", CN_A_SYMBOLS: "A股股票主数据", FINANCIAL_ON_DEMAND: "财务报告查询", HK_KLINE_ON_DEMAND: "港股历史K线", HK_SYMBOLS: "港股股票主数据", NEEQ_INNOVATION_SYMBOLS: "新三板创新层股票主数据", NEEQ_KLINE_ON_DEMAND: "新三板历史K线", NEEQ_SYMBOLS: "新三板基础层股票主数据", NEWS_ON_DEMAND: "股票新闻查询", NOTICE_ON_DEMAND: "公告查询", QUOTE_ON_DEMAND: "实时行情查询", HKEX_CCASS_REFERENCE: "港股CCASS股东披露入口", F10_PROFILE_HOLDERS: "F10公司简况与股东", F10_REPORTS: "正式财报与披露文件", PYTDX_KLINE_ON_DEMAND: "PyTDX A股日K线", PYTDX_QUOTE_ON_DEMAND: "PyTDX A股实时行情", NEEQ_CAPITAL_RAISE: "新三板定增信息", NEEQ_LAYER_CHANGE: "新三板层级变动", NEEQ_MARKET_MAKER: "新三板做市商明细", MARKET_CAP: "A股市值快照", COMPANY_PROFILE: "公司资料", DISCLOSED_HOLDERS: "披露股东", LEGAL_DISCLOSURE: "司法披露及原文", BUSINESS_DISCLOSURE: "经营披露及原文", SUPPLY_CHAIN_DISCLOSURE: "供应链及年报原文" };
+  const adapterNames: Record<string, string> = { AKSHARE: "AkShare数据适配器", AKSHARE_HK_SINA: "新浪港股适配器", PYTDX: "通达信行情适配器", OFFICIAL_REFERENCE: "官方参考数据适配器", COMPANY_REGISTRY: "公司资料适配器" };
+  const interfaceName = (item: DataInterface) => interfaceNames[item.interface_code] || item.interface_name;
   async function load() {
     setLoading(true);
     try {
@@ -278,7 +286,7 @@ function DataConsolePage() {
                       <code>{source.source_code}</code>
                     </td>
                     <td>{source.source_name}</td>
-                    <td>{source.adapter_type}</td>
+                    <td>{adapterNames[source.adapter_type] || source.adapter_type}</td>
                     <td>{source.priority}</td>
                     <td>
                       <Status enabled={source.enabled} />
@@ -289,11 +297,12 @@ function DataConsolePage() {
                         onClick={async () => {
                           try {
                             const result = await api.testSource(source.id);
-                            setNotice(result.message);
+                            setSourceTest({ source, result });
                           } catch (e) {
                             setNotice(
                               e instanceof Error ? e.message : "数据源测试失败",
                             );
+                            setSourceTest({ source, error: e instanceof Error ? e.message : "数据源测试失败" });
                           }
                         }}
                       >
@@ -350,15 +359,13 @@ function DataConsolePage() {
                 {interfaces.map((item) => (
                   <tr key={item.id}>
                     <td>
-                      <strong>{item.interface_name}</strong>
+                      <button type="button" className="text-button" onClick={() => setInterfaceDetail(item)}><strong>{interfaceName(item)}</strong></button>
                       <code>{item.interface_code}</code>
                     </td>
-                    <td>{item.data_category}</td>
-                    <td>{item.request_mode}</td>
-                    <td>{item.supported_markets.join("、")}</td>
-                    <td>
-                      <Status enabled={item.enabled} />
-                    </td>
+                    <td>{categoryNames[item.data_category] || item.data_category}</td>
+                    <td>{modeNames[item.request_mode] || item.request_mode}</td>
+                    <td>{item.supported_markets.map(market => marketNames[market] || market).join("、")}</td>
+                    <td><Status enabled={item.enabled} /> <button type="button" onClick={async () => { await api.updateInterface(item.id, { enabled: !item.enabled }); setNotice(`接口已${item.enabled ? "停用" : "启用"}`); await load(); }}>{item.enabled ? "停用" : "启用"}</button></td>
                   </tr>
                 ))}
               </tbody>
@@ -473,6 +480,8 @@ function DataConsolePage() {
       {tab === "foundation" && <DataFoundation />}
       {tab === "company_graph" && <CompanyGraphWorkbench />}
       {tab === "knowledge_network" && <KnowledgeGraphExplorer />}
+      {sourceTest && <ResourceDialog eyebrow="数据源测试" title={`连接测试 · ${sourceTest.source.source_name}`} onClose={() => setSourceTest(null)} compact><div className="model-test-result"><strong>{sourceTest.error ? "测试失败" : sourceTest.result?.status === "CONFIGURED" ? "连接配置可用" : sourceTest.result?.status === "PENDING" ? "等待正式接入" : "测试完成"}</strong><p>{sourceTest.error || sourceTest.result?.message}</p>{sourceTest.result && <><p>适配器：{adapterNames[sourceTest.result.adapter_type] || sourceTest.result.adapter_type}</p><p>支持能力：{sourceTest.result.capabilities.map(item => categoryNames[item] || item).join("、") || "未声明"}</p></>}</div></ResourceDialog>}
+      {interfaceDetail && <ResourceDialog eyebrow="接口详情" title={interfaceName(interfaceDetail)} onClose={() => setInterfaceDetail(null)}><dl className="resource-detail-list"><dt>接口编码</dt><dd><code>{interfaceDetail.interface_code}</code></dd><dt>数据分类</dt><dd>{categoryNames[interfaceDetail.data_category] || interfaceDetail.data_category}</dd><dt>请求模式</dt><dd>{modeNames[interfaceDetail.request_mode] || interfaceDetail.request_mode}</dd><dt>适用市场</dt><dd>{interfaceDetail.supported_markets.map(market => marketNames[market] || market).join("、")}</dd><dt>适配方法</dt><dd><code>{interfaceDetail.adapter_method}</code></dd><dt>说明</dt><dd>{interfaceDetail.description || "暂无说明"}</dd><dt>输入结构</dt><dd><pre>{JSON.stringify(interfaceDetail.input_schema || {}, null, 2)}</pre></dd><dt>输出结构</dt><dd><pre>{JSON.stringify(interfaceDetail.output_schema || {}, null, 2)}</pre></dd></dl></ResourceDialog>}
       {detailStock && (
         <StockDetailDrawer
           stock={detailStock}

@@ -320,6 +320,12 @@ class MarketDataFoundationTest(unittest.TestCase):
                 response = client.get("/api/v1/data-sources")
                 self.assertEqual(response.status_code, 200)
                 self.assertGreaterEqual(len(response.json()), 1)
+                interfaces = client.get("/api/v1/data-interfaces")
+                self.assertEqual(interfaces.status_code, 200)
+                selected = interfaces.json()[0]
+                toggled = client.put(f"/api/v1/data-interfaces/{selected['id']}", json={"enabled": not selected["enabled"]})
+                self.assertEqual(toggled.status_code, 200)
+                self.assertEqual(toggled.json()["enabled"], not selected["enabled"])
             finally:
                 client.close()
 
