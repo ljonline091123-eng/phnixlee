@@ -147,6 +147,17 @@ public class MainActivity extends Activity {
     private int score;
     // Snapshot before a player move. A score change means that move cleared a line.
         private int removedCount;
+        private int moveCount;
+        private int lineClearCount;
+        private int bestClearCount;
+        private int[][] undoBoard;
+        private int[] undoPreview;
+        private int undoScore;
+        private int undoRemovedCount;
+        private int undoMoveCount;
+        private int undoLineClearCount;
+        private int undoBestClearCount;
+        private boolean undoAvailable;
         private int selectedRow = -1;
         private int selectedCol = -1;
         private boolean moving;
@@ -219,6 +230,9 @@ public class MainActivity extends Activity {
                 restoreState(savedState);
             } else {
                 resetGame();
+                if (!settings.getBoolean("tutorial_seen", false)) {
+                    postDelayed(this::showTutorial, 450L);
+                }
             }
         }
 
@@ -308,6 +322,12 @@ public class MainActivity extends Activity {
             }
             score = 0;
             removedCount = 0;
+            moveCount = 0;
+            lineClearCount = 0;
+            bestClearCount = 0;
+            undoAvailable = false;
+            undoBoard = null;
+            undoPreview = null;
         selectedRow = -1;
         selectedCol = -1;
         spawnedThisTurn = false;
@@ -1388,6 +1408,7 @@ public class MainActivity extends Activity {
             if (selectedRow >= 0 && selectedCol >= 0) {
                 ArrayList<int[]> path = findShortestPath(selectedRow, selectedCol, row, col);
                 if (path != null) {
+                    captureUndoState();
                     startMove(path);
                 }
             }
@@ -1472,6 +1493,7 @@ public class MainActivity extends Activity {
             int[] from = path.get(0);
             int[] to = path.get(path.size() - 1);
             movingType = board[from[0]][from[1]];
+            moveCount++;
             board[from[0]][from[1]] = EMPTY;
             selectedRow = -1;
             selectedCol = -1;
@@ -1564,7 +1586,7 @@ public class MainActivity extends Activity {
             handler.postDelayed(() -> finishRemoval(token), REMOVE_DURATION_MS);
         }
 
-    private void finishRemoval(int token) {
+        private void finishRemoval(int token) {
         clearedThisTurn = true;
             if (token != moveToken || !removing) {
                 return;
@@ -1578,6 +1600,8 @@ public class MainActivity extends Activity {
             }
             score += pendingLineScore + pendingBlastCount;
             removedCount += pendingLineCount + pendingBlastCount;
+            lineClearCount++;
+            bestClearCount = Math.max(bestClearCount, pendingLineCount + pendingBlastCount);
             removing = false;
             clearPendingRemoval();
             beginResolution(token);
@@ -2151,7 +2175,7 @@ public class MainActivity extends Activity {
                 int padding = dp(22);
                 layout.setPadding(padding, 0, padding, 0);
                 TextView message = new TextView(context);
-                message.setText("\u672c\u5c40\u5f97\u5206\uff1a" + score + "\n\u606d\u559c\u8fdb\u5165\u524d10\uff0c\u8bf7\u7559\u4e0b\u6635\u79f0");
+                message.setText(gameSummary() + "\n\u606d\u559c\u8fdb\u5165\u524d10\uff0c\u8bf7\u7559\u4e0b\u6635\u79f0");
                 message.setTextSize(17f);
                 layout.addView(message);
                 layout.addView(nameInput);
@@ -2172,7 +2196,7 @@ public class MainActivity extends Activity {
             } else {
                 new AlertDialog.Builder(context)
                         .setTitle("\u6e38\u620f\u7ed3\u675f")
-                        .setMessage("\u68cb\u76d8\u5df2\u586b\u6ee1\uff0c\u6700\u7ec8\u5f97\u5206\uff1a" + score)
+                        .setMessage("\u68cb\u76d8\u5df2\u586b\u6ee1\n" + gameSummary())
                         .setPositiveButton("\u91cd\u65b0\u5f00\u59cb", (dialog, which) -> {
                             dialogShowing = false;
                             resetGame();
@@ -2183,19 +2207,92 @@ public class MainActivity extends Activity {
         }
 
         private void showMenu() {
-            String[] items = {"\u65b0\u6e38\u620f", "\u9ad8\u5206\u699c", "\u8bbe\u7f6e"};
+            String[] items = {"\u65b0\u6e38\u620f", "\u64a4\u9500\u4e00\u6b65", "\u73a9\u6cd5\u8bf4\u660e", "\u9ad8\u5206\u699c", "\u8bbe\u7f6e"};
             new AlertDialog.Builder(context)
                     .setTitle("\u83dc\u5355")
                     .setItems(items, (dialog, which) -> {
                         if (which == 0) {
                             resetGame();
                         } else if (which == 1) {
+                            undoLastMove();
+                        } else if (which == 2) {
+                            showTutorial();
+                        } else if (which == 3) {
                             showHighScores();
                         } else {
                             showSettings();
                         }
                     })
                     .show();
+        }
+
+        private String gameSummary() {
+            return String.format(
+                    Locale.US,
+                    "\u672c\u5c40\u5f97\u5206\uff1a%d\n\u79fb\u52a8\uff1a%d \u6b21\n\u6d88\u9664\uff1a%d \u4e2a\n\u5b8c\u6210\u8fde\u7ebf\uff1a%d \u6b21\n\u5355\u6b21\u6700\u591a\u6d88\u9664\uff1a%d \u4e2a",
+                    score,
+                    moveCount,
+                    removedCount,
+                    lineClearCount,
+                    bestClearCount
+            );
+        }
+
+        private void showTutorial() {
+            new AlertDialog.Builder(context)
+                    .setTitle("\u73a9\u6cd5\u8bf4\u660e")
+                    .setMessage("1. \u70b9\u9009\u4e00\u4e2a\u68cb\u5b50\uff0c\u518d\u70b9\u7a7a\u683c\u79fb\u52a8\u3002\n"
+                            + "2. \u6a2a\u3001\u7ad6\u6216\u659c\u7ebf\u8fde\u6210\u4e94\u4e2a\u5373\u53ef\u6d88\u9664\u3002\n"
+                            + "3. \u767d\u8272\u68cb\u5b50\u662f\u4e07\u80fd\u68cb\uff0c\u70b8\u836f\u4f1a\u6e05\u9664\u5bf9\u5e94\u989c\u8272\u3002\n"
+                            + "4. \u6ca1\u6709\u6d88\u9664\u65f6\u4f1a\u751f\u6210\u65b0\u68cb\u5b50\uff0c\u68cb\u76d8\u586b\u6ee1\u540e\u6e38\u620f\u7ed3\u675f\u3002\n\n"
+                            + "\u53ef\u5728\u83dc\u5355\u4e2d\u64a4\u9500\u6700\u8fd1\u4e00\u6b65\u3002")
+                    .setPositiveButton("\u5f00\u59cb\u6e38\u620f", (dialog, which) ->
+                            settings.edit().putBoolean("tutorial_seen", true).apply())
+                    .show();
+        }
+
+        private void captureUndoState() {
+            undoBoard = new int[SIZE][SIZE];
+            for (int row = 0; row < SIZE; row++) {
+                System.arraycopy(board[row], 0, undoBoard[row], 0, SIZE);
+            }
+            undoPreview = Arrays.copyOf(preview, preview.length);
+            undoScore = score;
+            undoRemovedCount = removedCount;
+            undoMoveCount = moveCount;
+            undoLineClearCount = lineClearCount;
+            undoBestClearCount = bestClearCount;
+            undoAvailable = true;
+        }
+
+        private void undoLastMove() {
+            if (!undoAvailable || moving || spawning || removing || gameOver || undoBoard == null) {
+                sound.playClick();
+                return;
+            }
+            moveToken++;
+            for (int row = 0; row < SIZE; row++) {
+                System.arraycopy(undoBoard[row], 0, board[row], 0, SIZE);
+            }
+            System.arraycopy(undoPreview, 0, preview, 0, preview.length);
+            score = undoScore;
+            removedCount = undoRemovedCount;
+            moveCount = undoMoveCount;
+            lineClearCount = undoLineClearCount;
+            bestClearCount = undoBestClearCount;
+            selectedRow = -1;
+            selectedCol = -1;
+            moving = false;
+            spawning = false;
+            removing = false;
+            spawnedThisTurn = false;
+            clearedThisTurn = false;
+            undoAvailable = false;
+            undoBoard = null;
+            clearPendingRemoval();
+            clearSpawnedCells();
+            sound.playClick();
+            invalidate();
         }
 
         private void showHighScores() {
@@ -2558,6 +2655,9 @@ public class MainActivity extends Activity {
             outState.putIntArray("five_lines_preview", preview.clone());
             outState.putInt("five_lines_score", savedScore);
             outState.putInt("five_lines_removed", removedCount + (removing ? pendingLineCount + pendingBlastCount : 0));
+            outState.putInt("five_lines_moves", moveCount);
+            outState.putInt("five_lines_line_clears", lineClearCount);
+            outState.putInt("five_lines_best_clear", bestClearCount);
             outState.putInt("five_lines_selected_row", selectedRow);
             outState.putInt("five_lines_selected_col", selectedCol);
             outState.putBoolean("five_lines_game_over", gameOver);
@@ -2588,6 +2688,11 @@ public class MainActivity extends Activity {
             }
         score = state.getInt("five_lines_score", 0);
             removedCount = state.getInt("five_lines_removed", 0);
+            moveCount = state.getInt("five_lines_moves", 0);
+            lineClearCount = state.getInt("five_lines_line_clears", 0);
+            bestClearCount = state.getInt("five_lines_best_clear", 0);
+            undoAvailable = false;
+            undoBoard = null;
             selectedRow = state.getInt("five_lines_selected_row", -1);
             selectedCol = state.getInt("five_lines_selected_col", -1);
             gameOver = state.getBoolean("five_lines_game_over", false);

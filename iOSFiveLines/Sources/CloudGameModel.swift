@@ -170,8 +170,14 @@ final class CloudGameModel: ObservableObject {
     @Published var selectedIndex: Int?
     @Published var removing: Set<Int> = []
     @Published var score = 0
+    @Published var moves = 0
+    @Published var removedCount = 0
+    @Published var linesCleared = 0
+    @Published var bestClearCount = 0
     @Published var highScores: [ScoreEntry] = []
     @Published var isGameOver = false
+    @Published var showTutorial = false
+    @Published var undoAvailable = false
     @Published var difficulty = CloudGameModel.defaultDifficulty { didSet { saveSettings() } }
     @Published var whiteProbability = CloudGameModel.defaultWhiteProbability { didSet { saveSettings() } }
     @Published var bombProbability = CloudGameModel.defaultBombProbability { didSet { saveSettings() } }
@@ -202,11 +208,19 @@ final class CloudGameModel: ObservableObject {
     private var adminUnlockedByMusic = false
     private var suppressSettingsSave = false
     private var gameToken = 0
+    private var undoBoard: [Tile?]?
+    private var undoNextTiles: [Tile] = []
+    private var undoScore = 0
+    private var undoMoves = 0
+    private var undoRemovedCount = 0
+    private var undoLinesCleared = 0
+    private var undoBestClearCount = 0
 
     init() {
         loadScores()
         loadSettings()
         applyAudioSettings()
+        showTutorial = !UserDefaults.standard.bool(forKey: "FiveLines.tutorialSeen")
         startNewGame()
     }
 
@@ -218,6 +232,9 @@ final class CloudGameModel: ObservableObject {
         board = Array(repeating: nil, count: 81)
         selectedIndex = nil
         removing = []
+        undoBoard = nil
+        undoNextTiles = []
+        undoAvailable = false
         easterLoading = nil
         easterPrompt = nil
         racerTrail = []
@@ -237,6 +254,10 @@ final class CloudGameModel: ObservableObject {
         applyAudioSettings()
         nextTiles = randomPreview()
         score = 0
+        moves = 0
+        removedCount = 0
+        linesCleared = 0
+        bestClearCount = 0
         isGameOver = false
         busy = true
         clearedThisTurn = false
@@ -258,9 +279,11 @@ final class CloudGameModel: ObservableObject {
                 guard let route = shortestPath(from: selected, to: index) else {
                     return
                 }
+                captureUndoState()
                 clearedThisTurn = false
                 selectedIndex = nil
                 busy = true
+                moves += 1
                 audio.playMove()
                 moveAlongPath(tile: board[selected]!, from: selected, route: route, step: 0)
             } else {
@@ -291,6 +314,44 @@ final class CloudGameModel: ObservableObject {
     func dismissGameOverAndRestart() {
         isGameOver = false
         startNewGame()
+    }
+
+    func dismissTutorial() {
+        showTutorial = false
+        UserDefaults.standard.set(true, forKey: "FiveLines.tutorialSeen")
+        audio.playClick()
+    }
+
+    func undoLastMove() {
+        guard let undoBoard, undoAvailable, !busy, !isGameOver else { return }
+        gameToken += 1
+        board = undoBoard
+        nextTiles = undoNextTiles
+        score = undoScore
+        moves = undoMoves
+        removedCount = undoRemovedCount
+        linesCleared = undoLinesCleared
+        bestClearCount = undoBestClearCount
+        selectedIndex = nil
+        removing = []
+        clearedThisTurn = false
+        explodingBombs = []
+        racerTrail = []
+        racerTrailTile = nil
+        undoAvailable = false
+        self.undoBoard = nil
+        audio.playClick()
+    }
+
+    private func captureUndoState() {
+        undoBoard = board
+        undoNextTiles = nextTiles
+        undoScore = score
+        undoMoves = moves
+        undoRemovedCount = removedCount
+        undoLinesCleared = linesCleared
+        undoBestClearCount = bestClearCount
+        undoAvailable = true
     }
 
     func playClick() {
@@ -385,6 +446,9 @@ final class CloudGameModel: ObservableObject {
         let blastOnlyCount = blastCells.subtracting(match.lineCells).count
         score += lineCount >= 5 ? 5 + (lineCount - 5) * 2 : 0
         score += blastOnlyCount
+        removedCount += allCells.count
+        linesCleared += 1
+        bestClearCount = max(bestClearCount, allCells.count)
         removing = allCells
         explodingBombs = Set(match.lineCells.filter { board[$0]?.isBomb == true })
         if explodingBombs.isEmpty {

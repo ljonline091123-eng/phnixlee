@@ -21,6 +21,9 @@ struct CloudContentView: View {
         .background(Color(red: 0.063, green: 0.094, blue: 0.125).ignoresSafeArea())
         .confirmationDialog("菜单", isPresented: $menuPresented, titleVisibility: .visible) {
             Button("新游戏") { game.startNewGame() }
+            Button("撤销一步") { game.undoLastMove() }
+                .disabled(!game.undoAvailable)
+            Button("玩法说明") { game.showTutorial = true }
             Button("高分榜") { scoresPresented = true }
             Button("设置") {
                 game.beginSettingsSession()
@@ -43,6 +46,11 @@ struct CloudContentView: View {
                 .interactiveDismissDisabled()
         }
         .overlay {
+            if game.showTutorial {
+                TutorialOverlay {
+                    game.dismissTutorial()
+                }
+            }
             if let prompt = game.easterPrompt {
                 EasterPromptOverlay(
                     prompt: prompt,
@@ -176,6 +184,32 @@ struct CloudContentView: View {
             RoundedRectangle(cornerRadius: 10)
                 .fill(Color(red: 0.447, green: 0.329, blue: 0.243))
         )
+    }
+}
+
+private struct TutorialOverlay: View {
+    let onDismiss: () -> Void
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.58).ignoresSafeArea()
+            VStack(alignment: .leading, spacing: 14) {
+                Text("玩法说明")
+                    .font(.title2.bold())
+                Text("1. 点选一个棋子，再点空格移动。")
+                Text("2. 横、竖或斜线连成五个即可消除。")
+                Text("3. 白色棋子是万能棋，炸药会清除对应颜色。")
+                Text("4. 没有消除时会生成新棋子，棋盘填满后游戏结束。")
+                    .foregroundStyle(.secondary)
+                Button("开始游戏", action: onDismiss)
+                    .buttonStyle(.borderedProminent)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+            }
+            .padding(22)
+            .frame(maxWidth: 360)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
+        }
+        .transition(.opacity)
     }
 }
 
@@ -1044,6 +1078,12 @@ private struct GameOverView: View {
                 .font(.title.bold())
             Text("本局得分：\(game.score)")
                 .font(.headline)
+            VStack(spacing: 5) {
+                Text("移动 \(game.moves) 次 · 消除 \(game.removedCount) 个")
+                Text("完成 \(game.linesCleared) 次连线 · 单次最多 \(game.bestClearCount) 个")
+            }
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
             if game.qualifiesForHighScore {
                 TextField("昵称", text: $nickname)
                     .textFieldStyle(.roundedBorder)
