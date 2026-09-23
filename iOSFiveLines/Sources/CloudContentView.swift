@@ -6,6 +6,8 @@ struct CloudContentView: View {
     @State private var menuPresented = false
     @State private var scoresPresented = false
     @State private var settingsPresented = false
+    @State private var historyPresented = false
+    @State private var achievementsPresented = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -21,10 +23,13 @@ struct CloudContentView: View {
         .background(Color(red: 0.063, green: 0.094, blue: 0.125).ignoresSafeArea())
         .confirmationDialog("菜单", isPresented: $menuPresented, titleVisibility: .visible) {
             Button("新游戏") { game.startNewGame() }
+            Button("每日挑战") { game.startDailyChallenge() }
             Button("撤销一步") { game.undoLastMove() }
                 .disabled(!game.undoAvailable)
-            Button("玩法说明") { game.showTutorial = true }
+            Button("新手引导") { game.beginTutorial() }
             Button("高分榜") { scoresPresented = true }
+            Button("历史战绩") { historyPresented = true }
+            Button("成就") { achievementsPresented = true }
             Button("设置") {
                 game.beginSettingsSession()
                 settingsPresented = true
@@ -39,6 +44,14 @@ struct CloudContentView: View {
             SettingsView()
                 .environmentObject(game)
         }
+        .sheet(isPresented: $historyPresented) {
+            HistoryView()
+                .environmentObject(game)
+        }
+        .sheet(isPresented: $achievementsPresented) {
+            AchievementsView()
+                .environmentObject(game)
+        }
         .sheet(isPresented: $game.isGameOver) {
             GameOverView()
                 .environmentObject(game)
@@ -46,17 +59,35 @@ struct CloudContentView: View {
                 .interactiveDismissDisabled()
         }
         .overlay {
-            if game.showTutorial {
-                TutorialOverlay {
-                    game.dismissTutorial()
-                }
-            }
             if let prompt = game.easterPrompt {
                 EasterPromptOverlay(
                     prompt: prompt,
                     onSecretTap: { game.tapEasterSecret($0) },
                     onOK: { game.closeEasterPrompt() }
                 )
+            }
+            if let step = game.tutorialStep, step >= 2 {
+                HeaderTutorialCoach(step: step) {
+                    if step == 2 {
+                        game.advanceTutorial()
+                    } else {
+                        game.finishTutorial()
+                        menuPresented = true
+                    }
+                }
+            }
+            if let message = game.achievementToast {
+                VStack {
+                    Text(message)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
+                        .background(Color(red: 0.063, green: 0.094, blue: 0.125), in: Capsule())
+                        .padding(.top, 8)
+                    Spacer()
+                }
+                .allowsHitTesting(false)
             }
         }
     }
@@ -65,10 +96,12 @@ struct CloudContentView: View {
         VStack(spacing: 8) {
             HStack(alignment: .top, spacing: 10) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("五子消除")
+                    Text(game.dailyChallenge ? "每日挑战" : "五子消除")
                         .font(.system(size: 30, weight: .bold))
                         .foregroundStyle(.white)
-                    Text("白色万能球 · 炸药+至少四颗同色球清除全盘")
+                    Text(game.dailyChallenge
+                        ? "今日最佳 \(String(format: "%05d", game.dailyBestScore)) · 每 12 步提升生成压力"
+                        : "白色万能球 · 炸药+至少四颗同色球清除全盘")
                         .font(.system(size: 12))
                         .foregroundStyle(.white.opacity(0.82))
                         .lineLimit(1)
@@ -177,6 +210,11 @@ struct CloudContentView: View {
                     .frame(width: size * 0.92, height: size * 0.42)
                     .allowsHitTesting(false)
             }
+            if let step = game.tutorialStep, step < 2,
+               let index = step == 0 ? game.tutorialSource : game.tutorialTarget {
+                BoardTutorialCoach(step: step, index: index, boardSize: size)
+                    .allowsHitTesting(false)
+            }
         }
         .frame(width: size, height: size)
         .padding(7)
@@ -187,29 +225,75 @@ struct CloudContentView: View {
     }
 }
 
-private struct TutorialOverlay: View {
-    let onDismiss: () -> Void
+private struct BoardTutorialCoach: View {
+    let step: Int
+    let index: Int
+    let boardSize: CGFloat
 
     var body: some View {
-        ZStack {
-            Color.black.opacity(0.58).ignoresSafeArea()
-            VStack(alignment: .leading, spacing: 14) {
-                Text("玩法说明")
-                    .font(.title2.bold())
-                Text("1. 点选一个棋子，再点空格移动。")
-                Text("2. 横、竖或斜线连成五个即可消除。")
-                Text("3. 白色棋子是万能棋，炸药会清除对应颜色。")
-                Text("4. 没有消除时会生成新棋子，棋盘填满后游戏结束。")
-                    .foregroundStyle(.secondary)
-                Button("开始游戏", action: onDismiss)
-                    .buttonStyle(.borderedProminent)
-                    .frame(maxWidth: .infinity, alignment: .trailing)
+        let cell = boardSize / 9
+        let column = CGFloat(index % 9)
+        let row = CGFloat(index / 9)
+        let target = CGRect(x: column * cell + 2, y: row * cell + 2, width: cell - 4, height: cell - 4)
+        ZStack(alignment: .topLeading) {
+            Canvas { context, size in
+                var mask = Path()
+                mask.addRect(CGRect(origin: .zero, size: size))
+                mask.addRoundedRect(in: target.insetBy(dx: -3, dy: -3), cornerSize: CGSize(width: 8, height: 8))
+                context.fill(mask, with: .color(.black.opacity(0.62)), style: FillStyle(eoFill: true))
+                var border = Path()
+                border.addRoundedRect(in: target.insetBy(dx: -3, dy: -3), cornerSize: CGSize(width: 8, height: 8))
+                context.stroke(border, with: .color(.yellow), lineWidth: 3)
             }
-            .padding(22)
-            .frame(maxWidth: 360)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
+            Text(step == 0 ? "第 1 步：点击高亮棋子" : "第 2 步：点击高亮空格完成移动")
+                .font(.subheadline.weight(.bold))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 9)
+                .background(Color(red: 0.063, green: 0.094, blue: 0.125), in: RoundedRectangle(cornerRadius: 8))
+                .frame(maxWidth: boardSize - 24)
+                .position(x: boardSize / 2, y: row < 4 ? boardSize - 30 : 30)
         }
-        .transition(.opacity)
+        .frame(width: boardSize, height: boardSize)
+    }
+}
+
+private struct HeaderTutorialCoach: View {
+    let step: Int
+    let action: () -> Void
+
+    var body: some View {
+        GeometryReader { proxy in
+            let target = step == 2
+                ? CGRect(x: proxy.size.width * 0.50, y: 76, width: proxy.size.width * 0.45 - 20, height: 68)
+                : CGRect(x: proxy.size.width - 118, y: 8, width: 100, height: 56)
+            ZStack(alignment: .top) {
+                Canvas { context, size in
+                    var mask = Path()
+                    mask.addRect(CGRect(origin: .zero, size: size))
+                    mask.addRoundedRect(in: target, cornerSize: CGSize(width: 14, height: 14))
+                    context.fill(mask, with: .color(.black.opacity(0.62)), style: FillStyle(eoFill: true))
+                    var border = Path()
+                    border.addRoundedRect(in: target, cornerSize: CGSize(width: 14, height: 14))
+                    context.stroke(border, with: .color(.yellow), lineWidth: 3)
+                }
+                VStack(spacing: 10) {
+                    Text(step == 2
+                        ? "第 3 步：这里显示下一轮棋子"
+                        : "第 4 步：从菜单进入每日挑战、撤销和成就")
+                        .font(.headline)
+                        .multilineTextAlignment(.center)
+                    Button(step == 2 ? "下一步" : "打开菜单", action: action)
+                        .buttonStyle(.borderedProminent)
+                }
+                .foregroundStyle(.white)
+                .padding(14)
+                .frame(maxWidth: min(340, proxy.size.width - 32))
+                .background(Color(red: 0.063, green: 0.094, blue: 0.125), in: RoundedRectangle(cornerRadius: 10))
+                .padding(.top, 174)
+            }
+        }
+        .ignoresSafeArea(edges: .bottom)
     }
 }
 
@@ -963,6 +1047,81 @@ private struct HighScoresView: View {
     }
 }
 
+private struct HistoryView: View {
+    @EnvironmentObject private var game: CloudGameModel
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            List(game.history) { record in
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        Text(record.dailyChallenge ? "每日挑战" : "普通模式")
+                            .font(.headline)
+                        Spacer()
+                        Text(String(format: "%05d", min(99_999, record.score)))
+                            .font(.headline)
+                            .monospacedDigit()
+                    }
+                    Text("\(record.date) · 移动 \(record.moves) 次 · 消除 \(record.removed) 个")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.vertical, 3)
+            }
+            .overlay {
+                if game.history.isEmpty {
+                    VStack(spacing: 8) {
+                        Image(systemName: "clock.arrow.circlepath")
+                            .font(.title2)
+                        Text("暂无历史战绩")
+                    }
+                    .foregroundStyle(.secondary)
+                }
+            }
+            .navigationTitle("历史战绩")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("完成") { dismiss() }
+                }
+            }
+        }
+    }
+}
+
+private struct AchievementsView: View {
+    @EnvironmentObject private var game: CloudGameModel
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            List(CloudGameModel.achievements) { achievement in
+                let unlocked = game.unlockedAchievementIDs.contains(achievement.id)
+                HStack(spacing: 12) {
+                    Image(systemName: unlocked ? "checkmark.seal.fill" : "lock.fill")
+                        .foregroundStyle(unlocked ? Color.green : Color.secondary)
+                        .frame(width: 28)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(achievement.title)
+                            .font(.headline)
+                        Text(achievement.detail)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .opacity(unlocked ? 1 : 0.62)
+                .padding(.vertical, 3)
+            }
+            .navigationTitle("成就 \(game.unlockedAchievementIDs.count)/\(CloudGameModel.achievements.count)")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("完成") { dismiss() }
+                }
+            }
+        }
+    }
+}
+
 private struct SettingsView: View {
     @EnvironmentObject private var game: CloudGameModel
     @Environment(\.dismiss) private var dismiss
@@ -971,6 +1130,9 @@ private struct SettingsView: View {
         NavigationStack {
             Form {
                 Section("概率与难度") {
+                    Text("每完成 12 次有效移动，每回合会多生成 1 个棋子，最多额外生成 3 个。")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
                     Text(adminModeNote)
                         .font(.footnote)
                         .foregroundStyle(game.adminMode ? .green : .secondary)
@@ -1076,11 +1238,15 @@ private struct GameOverView: View {
                 .foregroundStyle(.orange)
             Text("游戏结束")
                 .font(.title.bold())
+            Text(game.dailyChallenge ? "每日挑战" : "普通模式")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(game.dailyChallenge ? Color.orange : Color.secondary)
             Text("本局得分：\(game.score)")
                 .font(.headline)
             VStack(spacing: 5) {
                 Text("移动 \(game.moves) 次 · 消除 \(game.removedCount) 个")
                 Text("完成 \(game.linesCleared) 次连线 · 单次最多 \(game.bestClearCount) 个")
+                Text("最高连锁 \(game.bestChain) 次 · 引爆炸药 \(game.bombsTriggered) 个")
             }
             .font(.subheadline)
             .foregroundStyle(.secondary)

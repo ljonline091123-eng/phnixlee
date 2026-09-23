@@ -33,7 +33,7 @@ final class CloudGameModel: ObservableObject {
     }
 
     private static let ordinaryTiles: [Tile] = [
-        .red, .yellow, .green, .blue, .purple, .cyan, .pink, .black
+        .red, .yellow, .green, .purple, .pink, .cyan, .black, .blue
     ]
 
     enum MoveSpeed: String, CaseIterable, Identifiable {
@@ -160,6 +160,41 @@ final class CloudGameModel: ObservableObject {
         }
     }
 
+    struct GameRecord: Identifiable, Codable {
+        let id: UUID
+        let date: String
+        let dailyChallenge: Bool
+        let score: Int
+        let moves: Int
+        let removed: Int
+
+        init(date: String, dailyChallenge: Bool, score: Int, moves: Int, removed: Int) {
+            id = UUID()
+            self.date = date
+            self.dailyChallenge = dailyChallenge
+            self.score = score
+            self.moves = moves
+            self.removed = removed
+        }
+    }
+
+    struct Achievement: Identifiable {
+        let id: String
+        let title: String
+        let detail: String
+    }
+
+    static let achievements = [
+        Achievement(id: "first_clear", title: "初次连线", detail: "完成第一次五子消除"),
+        Achievement(id: "big_clear", title: "一网打尽", detail: "单次消除至少 8 个棋子"),
+        Achievement(id: "chain_2", title: "连锁反应", detail: "一次行动触发至少 2 次连续消除"),
+        Achievement(id: "bomb_user", title: "爆破专家", detail: "成功引爆一次炸药"),
+        Achievement(id: "score_50", title: "渐入佳境", detail: "单局达到 50 分"),
+        Achievement(id: "score_100", title: "百分达人", detail: "单局达到 100 分"),
+        Achievement(id: "patient_30", title: "深谋远虑", detail: "单局移动至少 30 次"),
+        Achievement(id: "daily_player", title: "今日挑战", detail: "开始一次每日挑战")
+    ]
+
     private struct MatchResult {
         var lineCells: Set<Int> = []
         var bombColors: Set<Tile> = []
@@ -174,10 +209,19 @@ final class CloudGameModel: ObservableObject {
     @Published var removedCount = 0
     @Published var linesCleared = 0
     @Published var bestClearCount = 0
+    @Published var bestChain = 0
+    @Published var bombsTriggered = 0
     @Published var highScores: [ScoreEntry] = []
+    @Published var history: [GameRecord] = []
+    @Published var unlockedAchievementIDs: Set<String> = []
+    @Published var achievementToast: String?
     @Published var isGameOver = false
-    @Published var showTutorial = false
+    @Published var tutorialStep: Int?
+    @Published var tutorialSource: Int?
+    @Published var tutorialTarget: Int?
     @Published var undoAvailable = false
+    @Published var dailyChallenge = false
+    @Published var dailyBestScore = 0
     @Published var difficulty = CloudGameModel.defaultDifficulty { didSet { saveSettings() } }
     @Published var whiteProbability = CloudGameModel.defaultWhiteProbability { didSet { saveSettings() } }
     @Published var bombProbability = CloudGameModel.defaultBombProbability { didSet { saveSettings() } }
@@ -208,6 +252,10 @@ final class CloudGameModel: ObservableObject {
     private var adminUnlockedByMusic = false
     private var suppressSettingsSave = false
     private var gameToken = 0
+    private var tutorialRequested = false
+    private var dailyRandomState: UInt32 = 0
+    private var gameRecorded = false
+    private var currentChain = 0
     private var undoBoard: [Tile?]?
     private var undoNextTiles: [Tile] = []
     private var undoScore = 0
@@ -215,18 +263,32 @@ final class CloudGameModel: ObservableObject {
     private var undoRemovedCount = 0
     private var undoLinesCleared = 0
     private var undoBestClearCount = 0
+    private var undoDailyRandomState: UInt32 = 0
+    private var undoBestChain = 0
+    private var undoBombsTriggered = 0
 
     init() {
         loadScores()
+        loadHistory()
+        loadAchievements()
         loadSettings()
         applyAudioSettings()
-        showTutorial = !UserDefaults.standard.bool(forKey: "FiveLines.tutorialSeen")
+        tutorialRequested = !UserDefaults.standard.bool(forKey: "FiveLines.tutorialSeen")
         startNewGame()
     }
 
-    func startNewGame() {
+    func startNewGame(daily: Bool = false) {
         gameToken += 1
         let token = gameToken
+        dailyChallenge = daily
+        gameRecorded = false
+        if daily {
+            dailyRandomState = Self.dailySeed()
+            dailyBestScore = UserDefaults.standard.integer(forKey: "FiveLines.dailyBest.\(Self.dateKey())")
+            unlockAchievement("daily_player")
+        } else {
+            dailyBestScore = 0
+        }
         loadingTimer?.invalidate()
         loadingTimer = nil
         board = Array(repeating: nil, count: 81)
@@ -237,6 +299,9 @@ final class CloudGameModel: ObservableObject {
         undoAvailable = false
         easterLoading = nil
         easterPrompt = nil
+        tutorialStep = nil
+        tutorialSource = nil
+        tutorialTarget = nil
         racerTrail = []
         racerTrailTile = nil
         explodingBombs = []
@@ -258,6 +323,9 @@ final class CloudGameModel: ObservableObject {
         removedCount = 0
         linesCleared = 0
         bestClearCount = 0
+        bestChain = 0
+        bombsTriggered = 0
+        currentChain = 0
         isGameOver = false
         busy = true
         clearedThisTurn = false
@@ -267,12 +335,34 @@ final class CloudGameModel: ObservableObject {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.32) { [weak self] in
             guard let self, self.gameToken == token else { return }
             self.busy = false
+            if self.tutorialRequested {
+                self.prepareTutorial()
+            }
         }
+    }
+
+    func startDailyChallenge() {
+        startNewGame(daily: true)
     }
 
     func tap(_ index: Int) {
         guard !busy, !isGameOver else { return }
         guard index >= 0, index < board.count else { return }
+
+        if let step = tutorialStep {
+            if step == 0 {
+                guard index == tutorialSource else { return }
+                selectedIndex = index
+                tutorialStep = 1
+                audio.playClick()
+                return
+            }
+            if step == 1 {
+                guard index == tutorialTarget else { return }
+            } else {
+                return
+            }
+        }
 
         if let selected = selectedIndex {
             if board[index] == nil {
@@ -281,9 +371,11 @@ final class CloudGameModel: ObservableObject {
                 }
                 captureUndoState()
                 clearedThisTurn = false
+                currentChain = 0
                 selectedIndex = nil
                 busy = true
                 moves += 1
+                if moves >= 30 { unlockAchievement("patient_30") }
                 audio.playMove()
                 moveAlongPath(tile: board[selected]!, from: selected, route: route, step: 0)
             } else {
@@ -304,7 +396,7 @@ final class CloudGameModel: ObservableObject {
         highScores = Array(highScores.prefix(10))
         saveScores()
         isGameOver = false
-        startNewGame()
+        startNewGame(daily: dailyChallenge)
     }
 
     var qualifiesForHighScore: Bool {
@@ -313,11 +405,25 @@ final class CloudGameModel: ObservableObject {
 
     func dismissGameOverAndRestart() {
         isGameOver = false
-        startNewGame()
+        startNewGame(daily: dailyChallenge)
     }
 
-    func dismissTutorial() {
-        showTutorial = false
+    func beginTutorial() {
+        tutorialRequested = true
+        if !busy { prepareTutorial() }
+    }
+
+    func advanceTutorial() {
+        guard tutorialStep == 2 else { return }
+        tutorialStep = 3
+        audio.playClick()
+    }
+
+    func finishTutorial() {
+        tutorialStep = nil
+        tutorialSource = nil
+        tutorialTarget = nil
+        tutorialRequested = false
         UserDefaults.standard.set(true, forKey: "FiveLines.tutorialSeen")
         audio.playClick()
     }
@@ -332,6 +438,10 @@ final class CloudGameModel: ObservableObject {
         removedCount = undoRemovedCount
         linesCleared = undoLinesCleared
         bestClearCount = undoBestClearCount
+        bestChain = undoBestChain
+        bombsTriggered = undoBombsTriggered
+        currentChain = 0
+        dailyRandomState = undoDailyRandomState
         selectedIndex = nil
         removing = []
         clearedThisTurn = false
@@ -351,7 +461,23 @@ final class CloudGameModel: ObservableObject {
         undoRemovedCount = removedCount
         undoLinesCleared = linesCleared
         undoBestClearCount = bestClearCount
+        undoBestChain = bestChain
+        undoBombsTriggered = bombsTriggered
+        undoDailyRandomState = dailyRandomState
         undoAvailable = true
+    }
+
+    private func prepareTutorial() {
+        for source in board.indices where board[source] != nil {
+            if let target = neighbors(of: source).first(where: { board[$0] == nil }) {
+                tutorialSource = source
+                tutorialTarget = target
+                selectedIndex = nil
+                tutorialStep = 0
+                return
+            }
+        }
+        tutorialRequested = false
     }
 
     func playClick() {
@@ -380,6 +506,9 @@ final class CloudGameModel: ObservableObject {
 
     private func moveAlongPath(tile: Tile, from current: Int, route: [Int], step: Int) {
         guard step < route.count else {
+            if tutorialStep == 1 {
+                tutorialStep = 2
+            }
             if tryStartCornerEasterEgg() {
                 return
             }
@@ -449,6 +578,20 @@ final class CloudGameModel: ObservableObject {
         removedCount += allCells.count
         linesCleared += 1
         bestClearCount = max(bestClearCount, allCells.count)
+        currentChain += 1
+        bestChain = max(bestChain, currentChain)
+        if currentChain >= 2 { unlockAchievement("chain_2") }
+        let bombCount = match.lineCells.filter { board[$0]?.isBomb == true }.count
+        bombsTriggered += bombCount
+        if bombCount > 0 { unlockAchievement("bomb_user") }
+        unlockAchievement("first_clear")
+        if allCells.count >= 8 { unlockAchievement("big_clear") }
+        if score >= 50 { unlockAchievement("score_50") }
+        if score >= 100 { unlockAchievement("score_100") }
+        if dailyChallenge, score > dailyBestScore {
+            dailyBestScore = score
+            UserDefaults.standard.set(score, forKey: "FiveLines.dailyBest.\(Self.dateKey())")
+        }
         removing = allCells
         explodingBombs = Set(match.lineCells.filter { board[$0]?.isBomb == true })
         if explodingBombs.isEmpty {
@@ -500,14 +643,17 @@ final class CloudGameModel: ObservableObject {
 
     private func spawnCount() -> Int {
         let base = 3
-        guard score >= 50, difficulty > 1 else { return base }
-        let extra = Int(Double(base) * ((Double(score) / 100.0) * (difficulty - 1.0)))
-        return max(base, base + extra)
+        let activeDifficulty = dailyChallenge ? Self.defaultDifficulty : difficulty
+        let scoreExtra = score >= 50 && activeDifficulty > 1
+            ? Int(Double(base) * ((Double(score) / 100.0) * (activeDifficulty - 1.0)))
+            : 0
+        let progressExtra = min(3, moves / 12)
+        return min(9, base + scoreExtra + progressExtra)
     }
 
     @discardableResult
     private func spawnPieces(tiles: [Tile], animated: Bool) -> Bool {
-        let empty = board.indices.filter { board[$0] == nil }.shuffled()
+        let empty = shuffled(board.indices.filter { board[$0] == nil })
         let placements = Array(empty.prefix(tiles.count))
         guard !placements.isEmpty else {
             busy = false
@@ -656,13 +802,37 @@ final class CloudGameModel: ObservableObject {
 
     private func randomTile() -> Tile {
         let base = 1.0 / Double(Self.ordinaryTiles.count + 2)
-        let white = base * whiteProbability
-        let bomb = base * bombProbability
-        let roll = Double.random(in: 0..<1)
+        let white = base * (dailyChallenge ? Self.defaultWhiteProbability : whiteProbability)
+        let bomb = base * (dailyChallenge ? Self.defaultBombProbability : bombProbability)
+        let normal = max(0, (1 - white - bomb) / Double(Self.ordinaryTiles.count))
+        var roll = nextRandomUnit()
+        if roll < bomb { return .bomb }
+        roll -= bomb
         if roll < white { return .white }
-        if roll < white + bomb { return .bomb }
-        let index = Int.random(in: 0..<Self.ordinaryTiles.count)
+        roll -= white
+        let index = min(Self.ordinaryTiles.count - 1, Int(roll / max(0.000_001, normal)))
         return Self.ordinaryTiles[index]
+    }
+
+    private func nextRandomUnit() -> Double {
+        guard dailyChallenge else { return Double.random(in: 0..<1) }
+        dailyRandomState = dailyRandomState &* 1_664_525 &+ 1_013_904_223
+        return Double(dailyRandomState) / 4_294_967_296.0
+    }
+
+    private func nextRandomInt(upperBound: Int) -> Int {
+        guard upperBound > 1 else { return 0 }
+        return min(upperBound - 1, Int(nextRandomUnit() * Double(upperBound)))
+    }
+
+    private func shuffled<T>(_ values: [T]) -> [T] {
+        guard dailyChallenge else { return values.shuffled() }
+        var result = values
+        guard result.count > 1 else { return result }
+        for index in stride(from: result.count - 1, through: 1, by: -1) {
+            result.swapAt(index, nextRandomInt(upperBound: index + 1))
+        }
+        return result
     }
 
     private func bombBlastCells(for match: MatchResult) -> Set<Int> {
@@ -747,7 +917,61 @@ final class CloudGameModel: ObservableObject {
     private func checkGameOver() {
         guard !board.contains(where: { $0 == nil }) else { return }
         busy = false
+        recordCompletedGame()
         isGameOver = true
+    }
+
+    private func recordCompletedGame() {
+        guard !gameRecorded else { return }
+        gameRecorded = true
+        history.insert(
+            GameRecord(
+                date: Self.displayDate(),
+                dailyChallenge: dailyChallenge,
+                score: score,
+                moves: moves,
+                removed: removedCount
+            ),
+            at: 0
+        )
+        history = Array(history.prefix(50))
+        saveHistory()
+        if moves >= 30 { unlockAchievement("patient_30") }
+    }
+
+    private func unlockAchievement(_ id: String) {
+        guard !unlockedAchievementIDs.contains(id),
+              let achievement = Self.achievements.first(where: { $0.id == id }) else { return }
+        unlockedAchievementIDs.insert(id)
+        UserDefaults.standard.set(Array(unlockedAchievementIDs), forKey: "FiveLines.achievements")
+        achievementToast = "成就解锁：\(achievement.title)"
+        let message = achievementToast
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.2) { [weak self] in
+            guard self?.achievementToast == message else { return }
+            self?.achievementToast = nil
+        }
+    }
+
+    private static func dateKey() -> String {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = .current
+        formatter.dateFormat = "yyyyMMdd"
+        return formatter.string(from: Date())
+    }
+
+    private static func dailySeed() -> UInt32 {
+        UInt32(dateKey()) ?? 1
+    }
+
+    private static func displayDate() -> String {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "zh_CN")
+        formatter.timeZone = .current
+        formatter.dateFormat = "yyyy-MM-dd HH:mm"
+        return formatter.string(from: Date())
     }
 
     private var activeStepDuration: Double {
@@ -880,6 +1104,22 @@ final class CloudGameModel: ObservableObject {
     private func saveScores() {
         guard let data = try? JSONEncoder().encode(highScores) else { return }
         UserDefaults.standard.set(data, forKey: "FiveLines.highScores")
+    }
+
+    private func loadHistory() {
+        guard let data = UserDefaults.standard.data(forKey: "FiveLines.history"),
+              let values = try? JSONDecoder().decode([GameRecord].self, from: data) else { return }
+        history = values
+    }
+
+    private func saveHistory() {
+        guard let data = try? JSONEncoder().encode(history) else { return }
+        UserDefaults.standard.set(data, forKey: "FiveLines.history")
+    }
+
+    private func loadAchievements() {
+        let values = UserDefaults.standard.stringArray(forKey: "FiveLines.achievements") ?? []
+        unlockedAchievementIDs = Set(values)
     }
 }
 

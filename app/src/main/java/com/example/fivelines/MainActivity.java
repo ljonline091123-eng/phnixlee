@@ -40,8 +40,11 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Calendar;
+import java.util.HashSet;
 import java.util.Locale;
 import java.util.Random;
+import java.util.Set;
 
 public class MainActivity extends Activity {
     private SoundEngine soundEngine;
@@ -131,6 +134,8 @@ public class MainActivity extends Activity {
 
         private static final String SETTINGS_PREFS = "five_lines_settings";
         private static final String SCORES_PREFS = "five_lines_scores";
+        private static final String HISTORY_PREFS = "five_lines_history";
+        private static final String ACHIEVEMENT_PREFS = "five_lines_achievements";
 
         private final Context context;
         private final SoundEngine sound;
@@ -150,6 +155,9 @@ public class MainActivity extends Activity {
         private int moveCount;
         private int lineClearCount;
         private int bestClearCount;
+        private int currentChain;
+        private int bestChain;
+        private int bombsTriggered;
         private int[][] undoBoard;
         private int[] undoPreview;
         private int undoScore;
@@ -157,7 +165,20 @@ public class MainActivity extends Activity {
         private int undoMoveCount;
         private int undoLineClearCount;
         private int undoBestClearCount;
+        private long undoDailyRandomState;
+        private int undoBestChain;
+        private int undoBombsTriggered;
         private boolean undoAvailable;
+        private boolean dailyChallenge;
+        private long dailyRandomState;
+        private int dailyBestScore;
+        private int tutorialStep = -1;
+        private int tutorialSource = -1;
+        private int tutorialTarget = -1;
+        private final RectF tutorialActionBounds = new RectF();
+        private String achievementToast;
+        private long achievementToastUntil;
+        private boolean gameRecorded;
         private int selectedRow = -1;
         private int selectedCol = -1;
         private boolean moving;
@@ -231,7 +252,7 @@ public class MainActivity extends Activity {
             } else {
                 resetGame();
                 if (!settings.getBoolean("tutorial_seen", false)) {
-                    postDelayed(this::showTutorial, 450L);
+                    postDelayed(this::beginTutorial, 450L);
                 }
             }
         }
@@ -299,9 +320,25 @@ public class MainActivity extends Activity {
         }
 
         private void resetGame() {
+            resetGame(false);
+        }
+
+        private void resetGame(boolean daily) {
             moveToken++;
             handler.removeCallbacksAndMessages(null);
             closeEasterDialog();
+            dailyChallenge = daily;
+            dailyRandomState = daily ? dailySeed() : 0L;
+            dailyBestScore = daily
+                    ? settings.getInt("daily_best_" + dateKey(), 0)
+                    : 0;
+            gameRecorded = false;
+            tutorialStep = -1;
+            tutorialSource = -1;
+            tutorialTarget = -1;
+            if (daily) {
+                unlockAchievement("daily_player", "今日挑战");
+            }
             adminMode = false;
             settingsMusicToggleCount = 0;
             adminUnlockedByMusic = false;
@@ -325,15 +362,14 @@ public class MainActivity extends Activity {
             moveCount = 0;
             lineClearCount = 0;
             bestClearCount = 0;
+            currentChain = 0;
+            bestChain = 0;
+            bombsTriggered = 0;
             undoAvailable = false;
             undoBoard = null;
             undoPreview = null;
-        selectedRow = -1;
-        selectedCol = -1;
-        spawnedThisTurn = false;
-        clearedThisTurn = false;
-        clearedThisTurn = false;
-        clearedThisTurn = false;
+            selectedRow = -1;
+            selectedCol = -1;
             spawnedThisTurn = false;
             clearedThisTurn = false;
             moving = false;
@@ -357,13 +393,15 @@ public class MainActivity extends Activity {
 
         private int randomPieceType() {
             final double baseProbability = 1d / (NORMAL_COLORS + 2d);
-            final double bombProbability = baseProbability * bombProbabilityMultiplier;
-            final double whiteProbability = baseProbability * whiteProbabilityMultiplier;
+            final double bombProbability = baseProbability
+                    * (dailyChallenge ? DEFAULT_BOMB_PROBABILITY : bombProbabilityMultiplier);
+            final double whiteProbability = baseProbability
+                    * (dailyChallenge ? DEFAULT_WHITE_PROBABILITY : whiteProbabilityMultiplier);
             final double normalProbability = Math.max(
                     0d,
                     (1d - bombProbability - whiteProbability) / NORMAL_COLORS
             );
-            double roll = random.nextDouble();
+            double roll = nextRandomUnit();
             if (roll < bombProbability) {
                 return BOMB;
             }
@@ -376,12 +414,43 @@ public class MainActivity extends Activity {
             return Math.max(1, Math.min(NORMAL_COLORS, color));
         }
 
-        private int spawnCount() {
-            if (score < 50) {
-                return BASE_SPAWN_COUNT;
+        private double nextRandomUnit() {
+            if (!dailyChallenge) {
+                return random.nextDouble();
             }
-            float factor = (score / 100f) * (difficultyMultiplier - 1f);
-            return BASE_SPAWN_COUNT + (int) Math.floor(BASE_SPAWN_COUNT * factor);
+            dailyRandomState = (dailyRandomState * 1664525L + 1013904223L) & 0xffffffffL;
+            return dailyRandomState / 4294967296d;
+        }
+
+        private int nextRandomInt(int upperBound) {
+            if (upperBound <= 1) {
+                return 0;
+            }
+            return Math.min(upperBound - 1, (int) (nextRandomUnit() * upperBound));
+        }
+
+        private void shuffleCells(ArrayList<int[]> values) {
+            if (!dailyChallenge) {
+                Collections.shuffle(values, random);
+                return;
+            }
+            for (int i = values.size() - 1; i > 0; i--) {
+                int other = nextRandomInt(i + 1);
+                int[] value = values.get(i);
+                values.set(i, values.get(other));
+                values.set(other, value);
+            }
+        }
+
+        private int spawnCount() {
+            int scoreExtra = 0;
+            float activeDifficulty = dailyChallenge ? DEFAULT_DIFFICULTY : difficultyMultiplier;
+            if (score >= 50 && activeDifficulty > 1f) {
+                float factor = (score / 100f) * (activeDifficulty - 1f);
+                scoreExtra = (int) Math.floor(BASE_SPAWN_COUNT * factor);
+            }
+            int progressExtra = Math.min(3, moveCount / 12);
+            return Math.min(9, BASE_SPAWN_COUNT + scoreExtra + progressExtra);
         }
 
         private void spawnPieces() {
@@ -397,7 +466,7 @@ public class MainActivity extends Activity {
                     }
                 }
             }
-            Collections.shuffle(emptyCells, random);
+            shuffleCells(emptyCells);
             int count = Math.min(spawnCount(), emptyCells.size());
             clearSpawnedCells();
             for (int i = 0; i < count; i++) {
@@ -465,12 +534,19 @@ public class MainActivity extends Activity {
             drawBackground(canvas);
             drawHeader(canvas);
             drawBoard(canvas);
+            if (tutorialStep >= 0) {
+                drawTutorial(canvas);
+            }
+            if (achievementToast != null && SystemClock.uptimeMillis() < achievementToastUntil) {
+                drawAchievementToast(canvas);
+            }
             if (gameOver) {
                 drawGameOverOverlay(canvas);
             }
             canvas.restore();
             if (moving || spawning || removing || easterLoading
-                    || SystemClock.uptimeMillis() < racerTrailUntil) {
+                    || SystemClock.uptimeMillis() < racerTrailUntil
+                    || SystemClock.uptimeMillis() < achievementToastUntil) {
                 postInvalidateOnAnimation();
             }
         }
@@ -509,16 +585,14 @@ public class MainActivity extends Activity {
             paint.setColor(Color.WHITE);
             paint.setFakeBoldText(true);
             paint.setTextSize(34f);
-            canvas.drawText("\u4e94\u5b50\u6d88\u9664", 22f, 43f, paint);
+            canvas.drawText(dailyChallenge ? "\u6bcf\u65e5\u6311\u6218" : "\u4e94\u5b50\u6d88\u9664", 22f, 43f, paint);
 
             paint.setFakeBoldText(false);
             paint.setTextSize(14f);
-            canvas.drawText(
-                    "\u767d\u8272\u4e07\u80fd\u7403  \u00b7  \u70b8\u836f+\u81f3\u5c11\u56db\u9897\u540c\u8272\u7403\u6e05\u9664\u5168\u76d8",
-                    22f,
-                    61f,
-                    paint
-            );
+            String subtitle = dailyChallenge
+                    ? String.format(Locale.US, "\u4eca\u65e5\u6700\u4f73 %05d  \u00b7  \u6bcf12\u6b65\u63d0\u5347\u751f\u6210\u538b\u529b", Math.min(99999, dailyBestScore))
+                    : "\u767d\u8272\u4e07\u80fd\u7403  \u00b7  \u70b8\u836f+\u81f3\u5c11\u56db\u9897\u540c\u8272\u7403\u6e05\u9664\u5168\u76d8";
+            canvas.drawText(subtitle, 22f, 61f, paint);
 
             menuBounds.set(getWidth() - 174f, 24f, getWidth() - 18f, 78f);
             paint.setColor(0xffef5350);
@@ -1378,6 +1452,88 @@ public class MainActivity extends Activity {
             canvas.drawText("\u6700\u7ec8\u5f97\u5206  " + score, getWidth() / 2f - 76f, contentHeight / 2f + 28f, paint);
         }
 
+        private void drawTutorial(Canvas canvas) {
+            RectF focus = new RectF();
+            String message;
+            boolean action = false;
+            if (tutorialStep == 0 || tutorialStep == 1) {
+                int index = tutorialStep == 0 ? tutorialSource : tutorialTarget;
+                if (index < 0) return;
+                int row = index / SIZE;
+                int col = index % SIZE;
+                focus.set(
+                        boardLeft + col * cellSize + 3f,
+                        boardTop + row * cellSize + 3f,
+                        boardLeft + (col + 1) * cellSize - 3f,
+                        boardTop + (row + 1) * cellSize - 3f
+                );
+                message = tutorialStep == 0
+                        ? "\u7b2c1\u6b65\uff1a\u70b9\u51fb\u9ad8\u4eae\u68cb\u5b50"
+                        : "\u7b2c2\u6b65\uff1a\u70b9\u51fb\u9ad8\u4eae\u7a7a\u683c";
+            } else if (tutorialStep == 2) {
+                float left = Math.max(315f, getWidth() - 350f);
+                focus.set(left, 78f, getWidth() - 20f, TOP_HEIGHT - 12f);
+                message = "\u7b2c3\u6b65\uff1a\u89c2\u5bdf\u4e0b\u4e00\u8f6e\u68cb\u5b50";
+                action = true;
+            } else {
+                focus.set(menuBounds);
+                message = "\u7b2c4\u6b65\uff1a\u70b9\u51fb\u83dc\u5355\u67e5\u770b\u66f4\u591a\u73a9\u6cd5";
+            }
+
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(0xa6000000);
+            float contentBottom = getHeight() - statusInset - navigationInset;
+            canvas.drawRect(0f, 0f, getWidth(), focus.top, paint);
+            canvas.drawRect(0f, focus.bottom, getWidth(), contentBottom, paint);
+            canvas.drawRect(0f, focus.top, focus.left, focus.bottom, paint);
+            canvas.drawRect(focus.right, focus.top, getWidth(), focus.bottom, paint);
+
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(4f);
+            paint.setColor(0xffffd000);
+            canvas.drawRoundRect(focus, 9f, 9f, paint);
+
+            float boxLeft = 24f;
+            float boxRight = getWidth() - 24f;
+            float boxHeight = action ? 104f : 72f;
+            float boxTop = focus.centerY() < boardTop + boardSize / 2f
+                    ? boardTop + boardSize - boxHeight - 18f
+                    : boardTop + 18f;
+            float boxBottom = boxTop + boxHeight;
+            tutorialActionBounds.setEmpty();
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(0xff101820);
+            canvas.drawRoundRect(boxLeft, boxTop, boxRight, boxBottom, 12f, 12f, paint);
+            paint.setColor(Color.WHITE);
+            paint.setTextSize(17f);
+            paint.setFakeBoldText(true);
+            canvas.drawText(message, boxLeft + 16f, boxTop + 30f, paint);
+            if (action) {
+                tutorialActionBounds.set(boxRight - 112f, boxTop + 48f, boxRight - 12f, boxBottom - 10f);
+                paint.setColor(0xffef5350);
+                canvas.drawRoundRect(tutorialActionBounds, 9f, 9f, paint);
+                paint.setColor(Color.WHITE);
+                paint.setTextSize(16f);
+                canvas.drawText("\u4e0b\u4e00\u6b65", tutorialActionBounds.left + 20f, tutorialActionBounds.centerY() + 6f, paint);
+            }
+            paint.setFakeBoldText(false);
+        }
+
+        private void drawAchievementToast(Canvas canvas) {
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(0xff101820);
+            float left = 28f;
+            float right = getWidth() - 28f;
+            float top = TOP_HEIGHT + 12f;
+            float bottom = top + 48f;
+            canvas.drawRoundRect(left, top, right, bottom, 20f, 20f, paint);
+            paint.setColor(Color.WHITE);
+            paint.setTextSize(17f);
+            paint.setFakeBoldText(true);
+            canvas.drawText(achievementToast, left + 18f, top + 31f, paint);
+            paint.setFakeBoldText(false);
+        }
+
         @Override
         public boolean onTouchEvent(MotionEvent event) {
             if (event.getAction() != MotionEvent.ACTION_UP) {
@@ -1385,7 +1541,20 @@ public class MainActivity extends Activity {
             }
             float x = event.getX();
             float y = event.getY() - statusInset;
+            if (tutorialStep == 2) {
+                if (tutorialActionBounds.contains(x, y)) {
+                    tutorialStep = 3;
+                    sound.playClick();
+                    invalidate();
+                }
+                return true;
+            }
             if (menuBounds.contains(x, y)) {
+                if (tutorialStep == 3) {
+                    finishTutorial();
+                } else if (tutorialStep >= 0) {
+                    return true;
+                }
                 showMenu();
                 return true;
             }
@@ -1398,6 +1567,27 @@ public class MainActivity extends Activity {
             }
             int row = cell[0];
             int col = cell[1];
+            if (tutorialStep == 0) {
+                if (row * SIZE + col == tutorialSource) {
+                    selectedRow = row;
+                    selectedCol = col;
+                    tutorialStep = 1;
+                    sound.playClick();
+                    invalidate();
+                }
+                return true;
+            }
+            if (tutorialStep == 1) {
+                if (row * SIZE + col != tutorialTarget) {
+                    return true;
+                }
+                ArrayList<int[]> path = findShortestPath(selectedRow, selectedCol, row, col);
+                if (path != null) {
+                    captureUndoState();
+                    startMove(path);
+                }
+                return true;
+            }
             if (board[row][col] != EMPTY) {
                 selectedRow = row;
                 selectedCol = col;
@@ -1494,6 +1684,8 @@ public class MainActivity extends Activity {
             int[] to = path.get(path.size() - 1);
             movingType = board[from[0]][from[1]];
             moveCount++;
+            currentChain = 0;
+            if (moveCount >= 30) unlockAchievement("patient_30", "\u6df1\u8c0b\u8fdc\u8651");
             board[from[0]][from[1]] = EMPTY;
             selectedRow = -1;
             selectedCol = -1;
@@ -1518,6 +1710,9 @@ public class MainActivity extends Activity {
                 board[to[0]][to[1]] = movingType;
                 moving = false;
                 movePath.clear();
+                if (tutorialStep == 1) {
+                    tutorialStep = 2;
+                }
         spawnedThisTurn = false;
         clearedThisTurn = false;
         clearedThisTurn = false;
@@ -1577,6 +1772,13 @@ public class MainActivity extends Activity {
         private void startRemovalAnimation(final int token) {
             removing = true;
             removalStart = SystemClock.uptimeMillis();
+            currentChain++;
+            bestChain = Math.max(bestChain, currentChain);
+            if (currentChain >= 2) unlockAchievement("chain_2", "\u8fde\u9501\u53cd\u5e94");
+            if (!pendingBombs.isEmpty()) {
+                bombsTriggered += pendingBombs.size();
+                unlockAchievement("bomb_user", "\u7206\u7834\u4e13\u5bb6");
+            }
             if (!pendingBombs.isEmpty()) {
                 sound.playExplosion();
             } else {
@@ -1602,6 +1804,16 @@ public class MainActivity extends Activity {
             removedCount += pendingLineCount + pendingBlastCount;
             lineClearCount++;
             bestClearCount = Math.max(bestClearCount, pendingLineCount + pendingBlastCount);
+            unlockAchievement("first_clear", "\u521d\u6b21\u8fde\u7ebf");
+            if (pendingLineCount + pendingBlastCount >= 8) {
+                unlockAchievement("big_clear", "\u4e00\u7f51\u6253\u5c3d");
+            }
+            if (score >= 50) unlockAchievement("score_50", "\u6e10\u5165\u4f73\u5883");
+            if (score >= 100) unlockAchievement("score_100", "\u767e\u5206\u8fbe\u4eba");
+            if (dailyChallenge && score > dailyBestScore) {
+                dailyBestScore = score;
+                settings.edit().putInt("daily_best_" + dateKey(), dailyBestScore).apply();
+            }
             removing = false;
             clearPendingRemoval();
             beginResolution(token);
@@ -1818,6 +2030,8 @@ public class MainActivity extends Activity {
                 return;
             }
             gameOver = true;
+            recordCompletedGame();
+            if (moveCount >= 30) unlockAchievement("patient_30", "\u6df1\u8c0b\u8fdc\u8651");
             invalidate();
             handler.postDelayed(this::showGameOverDialog, 120L);
         }
@@ -2185,11 +2399,11 @@ public class MainActivity extends Activity {
                         .setPositiveButton("\u4fdd\u5b58\u5e76\u65b0\u6e38\u620f", (d, which) -> {
                             saveHighScore(nameInput.getText().toString(), score);
                             dialogShowing = false;
-                            resetGame();
+                            resetGame(dailyChallenge);
                         })
                         .setNegativeButton("\u8df3\u8fc7\u5e76\u65b0\u6e38\u620f", (d, which) -> {
                             dialogShowing = false;
-                            resetGame();
+                            resetGame(dailyChallenge);
                         })
                         .setCancelable(false)
                         .show();
@@ -2199,7 +2413,7 @@ public class MainActivity extends Activity {
                         .setMessage("\u68cb\u76d8\u5df2\u586b\u6ee1\n" + gameSummary())
                         .setPositiveButton("\u91cd\u65b0\u5f00\u59cb", (dialog, which) -> {
                             dialogShowing = false;
-                            resetGame();
+                            resetGame(dailyChallenge);
                         })
                         .setCancelable(false)
                         .show();
@@ -2207,18 +2421,27 @@ public class MainActivity extends Activity {
         }
 
         private void showMenu() {
-            String[] items = {"\u65b0\u6e38\u620f", "\u64a4\u9500\u4e00\u6b65", "\u73a9\u6cd5\u8bf4\u660e", "\u9ad8\u5206\u699c", "\u8bbe\u7f6e"};
+            String[] items = {
+                    "\u65b0\u6e38\u620f", "\u6bcf\u65e5\u6311\u6218", "\u64a4\u9500\u4e00\u6b65", "\u65b0\u624b\u5f15\u5bfc",
+                    "\u9ad8\u5206\u699c", "\u5386\u53f2\u6218\u7ee9", "\u6210\u5c31", "\u8bbe\u7f6e"
+            };
             new AlertDialog.Builder(context)
                     .setTitle("\u83dc\u5355")
                     .setItems(items, (dialog, which) -> {
                         if (which == 0) {
                             resetGame();
                         } else if (which == 1) {
-                            undoLastMove();
+                            resetGame(true);
                         } else if (which == 2) {
-                            showTutorial();
+                            undoLastMove();
                         } else if (which == 3) {
+                            beginTutorial();
+                        } else if (which == 4) {
                             showHighScores();
+                        } else if (which == 5) {
+                            showHistory();
+                        } else if (which == 6) {
+                            showAchievements();
                         } else {
                             showSettings();
                         }
@@ -2229,26 +2452,51 @@ public class MainActivity extends Activity {
         private String gameSummary() {
             return String.format(
                     Locale.US,
-                    "\u672c\u5c40\u5f97\u5206\uff1a%d\n\u79fb\u52a8\uff1a%d \u6b21\n\u6d88\u9664\uff1a%d \u4e2a\n\u5b8c\u6210\u8fde\u7ebf\uff1a%d \u6b21\n\u5355\u6b21\u6700\u591a\u6d88\u9664\uff1a%d \u4e2a",
+                    "%s\n\u672c\u5c40\u5f97\u5206\uff1a%d\n\u79fb\u52a8\uff1a%d \u6b21\n\u6d88\u9664\uff1a%d \u4e2a\n\u5b8c\u6210\u8fde\u7ebf\uff1a%d \u6b21\n\u5355\u6b21\u6700\u591a\u6d88\u9664\uff1a%d \u4e2a\n\u6700\u9ad8\u8fde\u9501\uff1a%d \u6b21\n\u5f15\u7206\u70b8\u836f\uff1a%d \u4e2a",
+                    dailyChallenge ? "\u6bcf\u65e5\u6311\u6218" : "\u666e\u901a\u6a21\u5f0f",
                     score,
                     moveCount,
                     removedCount,
                     lineClearCount,
-                    bestClearCount
+                    bestClearCount,
+                    bestChain,
+                    bombsTriggered
             );
         }
 
-        private void showTutorial() {
-            new AlertDialog.Builder(context)
-                    .setTitle("\u73a9\u6cd5\u8bf4\u660e")
-                    .setMessage("1. \u70b9\u9009\u4e00\u4e2a\u68cb\u5b50\uff0c\u518d\u70b9\u7a7a\u683c\u79fb\u52a8\u3002\n"
-                            + "2. \u6a2a\u3001\u7ad6\u6216\u659c\u7ebf\u8fde\u6210\u4e94\u4e2a\u5373\u53ef\u6d88\u9664\u3002\n"
-                            + "3. \u767d\u8272\u68cb\u5b50\u662f\u4e07\u80fd\u68cb\uff0c\u70b8\u836f\u4f1a\u6e05\u9664\u5bf9\u5e94\u989c\u8272\u3002\n"
-                            + "4. \u6ca1\u6709\u6d88\u9664\u65f6\u4f1a\u751f\u6210\u65b0\u68cb\u5b50\uff0c\u68cb\u76d8\u586b\u6ee1\u540e\u6e38\u620f\u7ed3\u675f\u3002\n\n"
-                            + "\u53ef\u5728\u83dc\u5355\u4e2d\u64a4\u9500\u6700\u8fd1\u4e00\u6b65\u3002")
-                    .setPositiveButton("\u5f00\u59cb\u6e38\u620f", (dialog, which) ->
-                            settings.edit().putBoolean("tutorial_seen", true).apply())
-                    .show();
+        private void beginTutorial() {
+            if (moving || spawning || removing || gameOver) {
+                handler.postDelayed(this::beginTutorial, 180L);
+                return;
+            }
+            int[][] steps = {{-1, 0}, {1, 0}, {0, -1}, {0, 1}};
+            for (int row = 0; row < SIZE; row++) {
+                for (int col = 0; col < SIZE; col++) {
+                    if (board[row][col] == EMPTY) continue;
+                    for (int[] step : steps) {
+                        int targetRow = row + step[0];
+                        int targetCol = col + step[1];
+                        if (inside(targetRow, targetCol) && board[targetRow][targetCol] == EMPTY) {
+                            tutorialSource = row * SIZE + col;
+                            tutorialTarget = targetRow * SIZE + targetCol;
+                            tutorialStep = 0;
+                            selectedRow = -1;
+                            selectedCol = -1;
+                            invalidate();
+                            return;
+                        }
+                    }
+                }
+            }
+        }
+
+        private void finishTutorial() {
+            tutorialStep = -1;
+            tutorialSource = -1;
+            tutorialTarget = -1;
+            settings.edit().putBoolean("tutorial_seen", true).apply();
+            sound.playClick();
+            invalidate();
         }
 
         private void captureUndoState() {
@@ -2262,6 +2510,9 @@ public class MainActivity extends Activity {
             undoMoveCount = moveCount;
             undoLineClearCount = lineClearCount;
             undoBestClearCount = bestClearCount;
+            undoBestChain = bestChain;
+            undoBombsTriggered = bombsTriggered;
+            undoDailyRandomState = dailyRandomState;
             undoAvailable = true;
         }
 
@@ -2280,6 +2531,10 @@ public class MainActivity extends Activity {
             moveCount = undoMoveCount;
             lineClearCount = undoLineClearCount;
             bestClearCount = undoBestClearCount;
+            bestChain = undoBestChain;
+            bombsTriggered = undoBombsTriggered;
+            currentChain = 0;
+            dailyRandomState = undoDailyRandomState;
             selectedRow = -1;
             selectedCol = -1;
             moving = false;
@@ -2327,6 +2582,113 @@ public class MainActivity extends Activity {
                     .show();
         }
 
+        private void showHistory() {
+            SharedPreferences prefs = context.getSharedPreferences(HISTORY_PREFS, Context.MODE_PRIVATE);
+            int count = Math.min(50, prefs.getInt("count", 0));
+            StringBuilder text = new StringBuilder();
+            for (int i = 0; i < count; i++) {
+                String record = prefs.getString("record_" + i, "");
+                String[] fields = record.split("\\|", -1);
+                if (fields.length != 5) continue;
+                if (text.length() > 0) text.append('\n').append('\n');
+                text.append(fields[0]).append("  ")
+                        .append("1".equals(fields[1]) ? "\u6bcf\u65e5\u6311\u6218" : "\u666e\u901a\u6a21\u5f0f")
+                        .append('\n')
+                        .append(String.format(Locale.US, "\u5f97\u5206 %05d  \u79fb\u52a8 %s  \u6d88\u9664 %s",
+                                Integer.parseInt(fields[2]), fields[3], fields[4]));
+            }
+            if (text.length() == 0) text.append("\u6682\u65e0\u5386\u53f2\u6218\u7ee9");
+            TextView view = new TextView(context);
+            view.setText(text.toString());
+            view.setTextSize(16f);
+            view.setPadding(dp(22), dp(8), dp(22), dp(8));
+            ScrollView scroll = new ScrollView(context);
+            scroll.addView(view);
+            new AlertDialog.Builder(context)
+                    .setTitle("\u5386\u53f2\u6218\u7ee9\uff08\u6700\u8fd150\u5c40\uff09")
+                    .setView(scroll)
+                    .setPositiveButton("\u5173\u95ed", null)
+                    .show();
+        }
+
+        private void showAchievements() {
+            String[][] achievements = {
+                    {"first_clear", "\u521d\u6b21\u8fde\u7ebf", "\u5b8c\u6210\u7b2c\u4e00\u6b21\u4e94\u5b50\u6d88\u9664"},
+                    {"big_clear", "\u4e00\u7f51\u6253\u5c3d", "\u5355\u6b21\u6d88\u9664\u81f3\u5c118\u4e2a\u68cb\u5b50"},
+                    {"chain_2", "\u8fde\u9501\u53cd\u5e94", "\u4e00\u6b21\u884c\u52a8\u89e6\u53d1\u81f3\u5c112\u6b21\u8fde\u7eed\u6d88\u9664"},
+                    {"bomb_user", "\u7206\u7834\u4e13\u5bb6", "\u6210\u529f\u5f15\u7206\u4e00\u6b21\u70b8\u836f"},
+                    {"score_50", "\u6e10\u5165\u4f73\u5883", "\u5355\u5c40\u8fbe\u523050\u5206"},
+                    {"score_100", "\u767e\u5206\u8fbe\u4eba", "\u5355\u5c40\u8fbe\u5230100\u5206"},
+                    {"patient_30", "\u6df1\u8c0b\u8fdc\u8651", "\u5355\u5c40\u79fb\u52a8\u81f3\u5c1130\u6b21"},
+                    {"daily_player", "\u4eca\u65e5\u6311\u6218", "\u5f00\u59cb\u4e00\u6b21\u6bcf\u65e5\u6311\u6218"}
+            };
+            Set<String> unlocked = new HashSet<>(context
+                    .getSharedPreferences(ACHIEVEMENT_PREFS, Context.MODE_PRIVATE)
+                    .getStringSet("unlocked", Collections.emptySet()));
+            StringBuilder text = new StringBuilder();
+            for (String[] achievement : achievements) {
+                text.append(unlocked.contains(achievement[0]) ? "[x] " : "[ ] ")
+                        .append(achievement[1]).append('\n')
+                        .append("    ").append(achievement[2]).append('\n').append('\n');
+            }
+            TextView view = new TextView(context);
+            view.setText(text.toString().trim());
+            view.setTextSize(17f);
+            view.setPadding(dp(22), dp(8), dp(22), dp(8));
+            new AlertDialog.Builder(context)
+                    .setTitle(String.format(Locale.US, "\u6210\u5c31 %d/%d", unlocked.size(), achievements.length))
+                    .setView(view)
+                    .setPositiveButton("\u5173\u95ed", null)
+                    .show();
+        }
+
+        private void recordCompletedGame() {
+            if (gameRecorded) return;
+            gameRecorded = true;
+            SharedPreferences prefs = context.getSharedPreferences(HISTORY_PREFS, Context.MODE_PRIVATE);
+            int oldCount = Math.min(49, prefs.getInt("count", 0));
+            SharedPreferences.Editor editor = prefs.edit();
+            for (int i = oldCount; i > 0; i--) {
+                editor.putString("record_" + i, prefs.getString("record_" + (i - 1), ""));
+            }
+            String record = displayDate() + "|" + (dailyChallenge ? "1" : "0") + "|"
+                    + score + "|" + moveCount + "|" + removedCount;
+            editor.putString("record_0", record).putInt("count", oldCount + 1).apply();
+        }
+
+        private void unlockAchievement(String id, String title) {
+            SharedPreferences prefs = context.getSharedPreferences(ACHIEVEMENT_PREFS, Context.MODE_PRIVATE);
+            Set<String> unlocked = new HashSet<>(prefs.getStringSet("unlocked", Collections.emptySet()));
+            if (!unlocked.add(id)) return;
+            prefs.edit().putStringSet("unlocked", unlocked).apply();
+            achievementToast = "\u6210\u5c31\u89e3\u9501\uff1a" + title;
+            achievementToastUntil = SystemClock.uptimeMillis() + 2200L;
+            invalidate();
+        }
+
+        private String dateKey() {
+            Calendar calendar = Calendar.getInstance();
+            return String.format(Locale.US, "%04d%02d%02d",
+                    calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH) + 1,
+                    calendar.get(Calendar.DAY_OF_MONTH));
+        }
+
+        private long dailySeed() {
+            try {
+                return Long.parseLong(dateKey()) & 0xffffffffL;
+            } catch (NumberFormatException ignored) {
+                return 1L;
+            }
+        }
+
+        private String displayDate() {
+            Calendar calendar = Calendar.getInstance();
+            return String.format(Locale.US, "%04d-%02d-%02d %02d:%02d",
+                    calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH) + 1,
+                    calendar.get(Calendar.DAY_OF_MONTH), calendar.get(Calendar.HOUR_OF_DAY),
+                    calendar.get(Calendar.MINUTE));
+        }
+
         private void showSettings() {
             ScrollView scroll = new ScrollView(context);
             LinearLayout root = new LinearLayout(context);
@@ -2334,6 +2696,13 @@ public class MainActivity extends Activity {
             int padding = dp(18);
             root.setPadding(padding, dp(4), padding, dp(4));
             scroll.addView(root);
+
+            TextView progressionNote = new TextView(context);
+            progressionNote.setText("\u6bcf\u5b8c\u621012\u6b21\u6709\u6548\u79fb\u52a8\uff0c\u6bcf\u56de\u5408\u4f1a\u591a\u751f\u62101\u4e2a\u68cb\u5b50\uff0c\u6700\u591a\u989d\u5916\u751f\u62103\u4e2a\u3002");
+            progressionNote.setTextSize(14f);
+            progressionNote.setTextColor(0xff6b7280);
+            progressionNote.setPadding(0, dp(4), 0, dp(10));
+            root.addView(progressionNote);
 
             settingsMusicToggleCount = 0;
             final TextView adminNote = new TextView(context);
@@ -2658,6 +3027,11 @@ public class MainActivity extends Activity {
             outState.putInt("five_lines_moves", moveCount);
             outState.putInt("five_lines_line_clears", lineClearCount);
             outState.putInt("five_lines_best_clear", bestClearCount);
+            outState.putInt("five_lines_best_chain", bestChain);
+            outState.putInt("five_lines_bombs_triggered", bombsTriggered);
+            outState.putBoolean("five_lines_daily_challenge", dailyChallenge);
+            outState.putLong("five_lines_daily_random_state", dailyRandomState);
+            outState.putInt("five_lines_daily_best", dailyBestScore);
             outState.putInt("five_lines_selected_row", selectedRow);
             outState.putInt("five_lines_selected_col", selectedCol);
             outState.putBoolean("five_lines_game_over", gameOver);
@@ -2691,6 +3065,12 @@ public class MainActivity extends Activity {
             moveCount = state.getInt("five_lines_moves", 0);
             lineClearCount = state.getInt("five_lines_line_clears", 0);
             bestClearCount = state.getInt("five_lines_best_clear", 0);
+            bestChain = state.getInt("five_lines_best_chain", 0);
+            bombsTriggered = state.getInt("five_lines_bombs_triggered", 0);
+            currentChain = 0;
+            dailyChallenge = state.getBoolean("five_lines_daily_challenge", false);
+            dailyRandomState = state.getLong("five_lines_daily_random_state", 0L);
+            dailyBestScore = state.getInt("five_lines_daily_best", 0);
             undoAvailable = false;
             undoBoard = null;
             selectedRow = state.getInt("five_lines_selected_row", -1);
