@@ -21,9 +21,28 @@ export type DataInterface = {
   request_mode: "SYNC" | "ON_DEMAND";
   adapter_method: string;
   supported_markets: string[];
+  input_schema: Record<string, unknown>;
+  output_schema: Record<string, unknown>;
   enabled: boolean;
   description?: string;
+  created_at?: string;
+  updated_at?: string;
 };
+
+export type DataSourceTestResult = {
+  source_code: string;
+  adapter_type: string;
+  status: string;
+  message: string;
+  capabilities: string[];
+};
+export type LakehouseStatus = { storage_backend: string; filesystem_root?: string; storage_health: { healthy: boolean; detail: string }; object_count: number; dataset_count: number; chunk_count: number; lineage_count: number };
+export type LakeDataset = { id: number; dataset_code: string; dataset_name: string; layer: string; format: string; current_version?: string; description?: string };
+export type LakeDatasetPreview = { dataset: string; version: string; row_count: number; schema: Record<string, string>; quality: { passed?: boolean; checks?: Record<string, boolean>; [key: string]: unknown }; rows: Record<string, unknown>[] };
+export type LakeExportResult = { dataset_id: number; dataset_code: string; version: string; batch_id: string; row_count: number; quality: { passed: boolean } };
+export type LakeObject = { id: string; object_uri: string; layer: string; bucket?: string; object_key?: string; content_hash: string; content_type: string; byte_size: number; source_table?: string; source_record_id?: string; dataset_version?: string; created_at: string };
+export type LakeDocumentChunk = { id: string; document_key: string; document_id?: string; chunk_index: number; chunk_version: string; content_hash: string; text_preview: string; start_offset: number; end_offset: number; parser_version: string; embedding_model?: string; status: string; created_at: string };
+export type LakeLineage = { id: number; batch_id: string; upstream_type: string; upstream_id: string; downstream_type: string; downstream_id: string; transformation: string; parser_version?: string; dataset_version?: string; created_at: string };
 
 export type StockSymbol = {
   id: number;
@@ -721,10 +740,21 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
 export const api = {
   health: () => fetch(API_BASE_URL.replace("/api/v1", "/health")).then((response) => response.json()),
   listSources: () => request<DataSource[]>("/data-sources"),
-  testSource: (id: number) => request<{ message: string }>(`/data-sources/${id}/test`, { method: "POST" }),
+  testSource: (id: number) => request<DataSourceTestResult>(`/data-sources/${id}/test`, { method: "POST" }),
   updateSource: (id: number, payload: Partial<DataSource>) =>
     request<DataSource>(`/data-sources/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
   listInterfaces: () => request<DataInterface[]>("/data-interfaces"),
+  updateInterface: (id: number, payload: Partial<DataInterface>) =>
+    request<DataInterface>(`/data-interfaces/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
+  lakehouseStatus: () => request<LakehouseStatus>("/lakehouse/status"),
+  lakehouseDatasets: () => request<LakeDataset[]>("/lakehouse/datasets"),
+  lakehouseObjects: (limit = 100) => request<LakeObject[]>(`/lakehouse/objects?limit=${limit}`),
+  lakehouseChunks: (limit = 100) => request<LakeDocumentChunk[]>(`/lakehouse/chunks?limit=${limit}`),
+  lakehouseLineage: (limit = 100) => request<LakeLineage[]>(`/lakehouse/lineage?limit=${limit}`),
+  lakehousePreview: (id: number) => request<LakeDatasetPreview>(`/lakehouse/datasets/${id}/preview`),
+  exportLakeDataset: (payload: { dataset_code: string; dataset_name: string; layer: string; source_table: string; limit: number }) =>
+    request<LakeExportResult>("/lakehouse/datasets/export", { method: "POST", body: JSON.stringify(payload) }),
+  archiveLakeDocuments: (limit = 100) => request<{ document_count: number; created_chunk_count: number; reused_chunk_count: number }>("/lakehouse/documents/archive", { method: "POST", body: JSON.stringify({ limit }) }),
   listSymbols: (params: URLSearchParams) => request<SymbolPage>(`/stocks?${params.toString()}`),
   searchStocks: (market: string, keyword: string, limit = 12, options: RequestOptions = {}) =>
     request<StockSymbol[]>(

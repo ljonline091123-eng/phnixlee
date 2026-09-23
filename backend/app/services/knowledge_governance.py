@@ -226,8 +226,26 @@ def _foundation_links(db: Session, graph: KnowledgeGraph, readable: list[str]) -
         raw = db.get(FoundationEntity, entity_id)
         if raw is None:
             return None
+        entity_key = f"{graph.id}:company:{raw.id}"
+        existing = db.scalar(select(KnowledgeEntity).where(
+            KnowledgeEntity.graph_id == graph.id,
+            KnowledgeEntity.entity_type == raw.entity_type,
+            KnowledgeEntity.entity_key == entity_key,
+        ))
+        if existing is not None:
+            properties = dict(existing.properties_json or {})
+            properties.update({
+                "canonical_entity_id": f"company:{raw.id}" if raw.entity_type == "COMPANY" else f"entity:{raw.id}",
+                "canonical_company_id": f"company:{raw.id}" if raw.entity_type == "COMPANY" else None,
+                "foundation_entity_id": raw.id,
+                "jurisdiction": raw.jurisdiction,
+                "source_record_only": True,
+            })
+            existing.properties_json = properties
+            companies[entity_id] = existing
+            return existing
         node = KnowledgeEntity(knowledge_base_id=graph.knowledge_base_id, graph_id=graph.id,
-            entity_type=raw.entity_type, entity_key=f"{graph.id}:company:{raw.id}", entity_name=raw.name,
+            entity_type=raw.entity_type, entity_key=entity_key, entity_name=raw.name,
             properties_json={"canonical_entity_id": f"company:{raw.id}" if raw.entity_type == "COMPANY" else f"entity:{raw.id}",
                              "canonical_company_id": f"company:{raw.id}" if raw.entity_type == "COMPANY" else None,
                              "foundation_entity_id": raw.id, "jurisdiction": raw.jurisdiction, "source_record_only": True})

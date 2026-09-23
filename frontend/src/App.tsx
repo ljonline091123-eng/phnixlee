@@ -6,6 +6,12 @@ import {
   type DataAsset,
   type DataInterface,
   type DataSource,
+  type LakeDataset,
+  type LakeDatasetPreview,
+  type LakeDocumentChunk,
+  type LakeLineage,
+  type LakeObject,
+  type LakehouseStatus,
   type IpoCalendarResponse,
   type KnowledgeBase,
   type KnowledgeGraph,
@@ -37,7 +43,7 @@ import { EnvironmentBanner } from "./EnvironmentBanner";
 type ModuleView = "data" | "model" | "watch" | "research";
 type ModelHubTab =
   "models" | "agents" | "skills" | "assets" | "knowledge" | "logs";
-type DataView = "sources" | "interfaces" | "universe" | "foundation" | "company_graph" | "knowledge_network";
+type DataView = "sources" | "interfaces" | "universe" | "foundation" | "company_graph" | "knowledge_network" | "lakehouse";
 type ResearchTab = "chat" | "research";
 type ModelTestDialogState = {
   target: string;
@@ -170,6 +176,14 @@ function DataConsolePage() {
   const [notice, setNotice] = useState("");
   const [loading, setLoading] = useState(false);
   const [detailStock, setDetailStock] = useState<StockSymbol | null>(null);
+  const [sourceTest, setSourceTest] = useState<{ source: DataSource; result?: { adapter_type: string; status: string; message: string; capabilities: string[] }; error?: string } | null>(null);
+  const [interfaceDetail, setInterfaceDetail] = useState<DataInterface | null>(null);
+  const categoryNames: Record<string, string> = { SYMBOL_MASTER: "股票主数据", KLINE: "历史量价", NEWS: "新闻", NOTICE: "公告", QUOTE: "实时行情", FINANCIAL: "财务数据", F10: "F10资料", COMPANY_DATA: "公司数据", MARKET_DATA: "市场数据", JUDICIAL_DISCLOSURE: "司法披露", BUSINESS_DISCLOSURE: "经营披露", SUPPLY_CHAIN_DISCLOSURE: "供应链披露" };
+  const modeNames: Record<string, string> = { SYNC: "定时同步", ON_DEMAND: "按需查询" };
+  const marketNames: Record<string, string> = { CN_A: "A股", HK: "港股", NEEQ: "新三板", NEEQ_INNOVATION: "创新层" };
+  const interfaceNames: Record<string, string> = { A_KLINE_ON_DEMAND: "A股历史K线", CN_A_SYMBOLS: "A股股票主数据", FINANCIAL_ON_DEMAND: "财务报告查询", HK_KLINE_ON_DEMAND: "港股历史K线", HK_SYMBOLS: "港股股票主数据", NEEQ_INNOVATION_SYMBOLS: "新三板创新层股票主数据", NEEQ_KLINE_ON_DEMAND: "新三板历史K线", NEEQ_SYMBOLS: "新三板基础层股票主数据", NEWS_ON_DEMAND: "股票新闻查询", NOTICE_ON_DEMAND: "公告查询", QUOTE_ON_DEMAND: "实时行情查询", HKEX_CCASS_REFERENCE: "港股CCASS股东披露入口", F10_PROFILE_HOLDERS: "F10公司简况与股东", F10_REPORTS: "正式财报与披露文件", PYTDX_KLINE_ON_DEMAND: "PyTDX A股日K线", PYTDX_QUOTE_ON_DEMAND: "PyTDX A股实时行情", NEEQ_CAPITAL_RAISE: "新三板定增信息", NEEQ_LAYER_CHANGE: "新三板层级变动", NEEQ_MARKET_MAKER: "新三板做市商明细", MARKET_CAP: "A股市值快照", COMPANY_PROFILE: "公司资料", DISCLOSED_HOLDERS: "披露股东", LEGAL_DISCLOSURE: "司法披露及原文", BUSINESS_DISCLOSURE: "经营披露及原文", SUPPLY_CHAIN_DISCLOSURE: "供应链及年报原文" };
+  const adapterNames: Record<string, string> = { AKSHARE: "AkShare数据适配器", AKSHARE_HK_SINA: "新浪港股适配器", PYTDX: "通达信行情适配器", OFFICIAL_REFERENCE: "官方参考数据适配器", COMPANY_REGISTRY: "公司资料适配器" };
+  const interfaceName = (item: DataInterface) => interfaceNames[item.interface_code] || item.interface_name;
   async function load() {
     setLoading(true);
     try {
@@ -229,7 +243,7 @@ function DataConsolePage() {
         }
       />
       <div className="resource-tabs">
-        {(["sources", "interfaces", "universe", "foundation", "company_graph", "knowledge_network"] as DataView[]).map((item) => (
+        {(["sources", "interfaces", "universe", "foundation", "company_graph", "knowledge_network", "lakehouse"] as DataView[]).map((item) => (
           <button
             type="button"
             key={item}
@@ -244,7 +258,7 @@ function DataConsolePage() {
                   ? "股票主数据"
                   : item === "foundation"
                     ? "主体与关系"
-                    : item === "company_graph" ? "公司关系" : "知识图谱"}
+                    : item === "company_graph" ? "公司关系" : item === "knowledge_network" ? "知识图谱" : "湖仓目录"}
           </button>
         ))}
       </div>
@@ -278,7 +292,7 @@ function DataConsolePage() {
                       <code>{source.source_code}</code>
                     </td>
                     <td>{source.source_name}</td>
-                    <td>{source.adapter_type}</td>
+                    <td>{adapterNames[source.adapter_type] || source.adapter_type}</td>
                     <td>{source.priority}</td>
                     <td>
                       <Status enabled={source.enabled} />
@@ -289,11 +303,12 @@ function DataConsolePage() {
                         onClick={async () => {
                           try {
                             const result = await api.testSource(source.id);
-                            setNotice(result.message);
+                            setSourceTest({ source, result });
                           } catch (e) {
                             setNotice(
                               e instanceof Error ? e.message : "数据源测试失败",
                             );
+                            setSourceTest({ source, error: e instanceof Error ? e.message : "数据源测试失败" });
                           }
                         }}
                       >
@@ -350,15 +365,13 @@ function DataConsolePage() {
                 {interfaces.map((item) => (
                   <tr key={item.id}>
                     <td>
-                      <strong>{item.interface_name}</strong>
+                      <button type="button" className="text-button" onClick={() => setInterfaceDetail(item)}><strong>{interfaceName(item)}</strong></button>
                       <code>{item.interface_code}</code>
                     </td>
-                    <td>{item.data_category}</td>
-                    <td>{item.request_mode}</td>
-                    <td>{item.supported_markets.join("、")}</td>
-                    <td>
-                      <Status enabled={item.enabled} />
-                    </td>
+                    <td>{categoryNames[item.data_category] || item.data_category}</td>
+                    <td>{modeNames[item.request_mode] || item.request_mode}</td>
+                    <td>{item.supported_markets.map(market => marketNames[market] || market).join("、")}</td>
+                    <td><Status enabled={item.enabled} /> <button type="button" onClick={async () => { await api.updateInterface(item.id, { enabled: !item.enabled }); setNotice(`接口已${item.enabled ? "停用" : "启用"}`); await load(); }}>{item.enabled ? "停用" : "启用"}</button></td>
                   </tr>
                 ))}
               </tbody>
@@ -473,6 +486,9 @@ function DataConsolePage() {
       {tab === "foundation" && <DataFoundation />}
       {tab === "company_graph" && <CompanyGraphWorkbench />}
       {tab === "knowledge_network" && <KnowledgeGraphExplorer />}
+      {tab === "lakehouse" && <LakehousePanel />}
+      {sourceTest && <ResourceDialog eyebrow="数据源测试" title={`连接测试 · ${sourceTest.source.source_name}`} onClose={() => setSourceTest(null)} compact><div className="model-test-result"><strong>{sourceTest.error ? "测试失败" : sourceTest.result?.status === "CONFIGURED" ? "连接配置可用" : sourceTest.result?.status === "PENDING" ? "等待正式接入" : "测试完成"}</strong><p>{sourceTest.error || sourceTest.result?.message}</p>{sourceTest.result && <><p>适配器：{adapterNames[sourceTest.result.adapter_type] || sourceTest.result.adapter_type}</p><p>支持能力：{sourceTest.result.capabilities.map(item => categoryNames[item] || item).join("、") || "未声明"}</p></>}</div></ResourceDialog>}
+      {interfaceDetail && <ResourceDialog eyebrow="接口详情" title={interfaceName(interfaceDetail)} onClose={() => setInterfaceDetail(null)}><dl className="resource-detail-list"><dt>接口编码</dt><dd><code>{interfaceDetail.interface_code}</code></dd><dt>数据分类</dt><dd>{categoryNames[interfaceDetail.data_category] || interfaceDetail.data_category}</dd><dt>请求模式</dt><dd>{modeNames[interfaceDetail.request_mode] || interfaceDetail.request_mode}</dd><dt>适用市场</dt><dd>{interfaceDetail.supported_markets.map(market => marketNames[market] || market).join("、")}</dd><dt>适配方法</dt><dd><code>{interfaceDetail.adapter_method}</code></dd><dt>说明</dt><dd>{interfaceDetail.description || "暂无说明"}</dd><dt>输入结构</dt><dd><pre>{JSON.stringify(interfaceDetail.input_schema || {}, null, 2)}</pre></dd><dt>输出结构</dt><dd><pre>{JSON.stringify(interfaceDetail.output_schema || {}, null, 2)}</pre></dd></dl></ResourceDialog>}
       {detailStock && (
         <StockDetailDrawer
           stock={detailStock}
@@ -481,6 +497,73 @@ function DataConsolePage() {
       )}
     </>
   );
+}
+
+function LakehousePanel() {
+  const [status, setStatus] = useState<LakehouseStatus | null>(null);
+  const [datasets, setDatasets] = useState<LakeDataset[]>([]);
+  const [objects, setObjects] = useState<LakeObject[]>([]);
+  const [chunks, setChunks] = useState<LakeDocumentChunk[]>([]);
+  const [lineage, setLineage] = useState<LakeLineage[]>([]);
+  const [catalogView, setCatalogView] = useState<"datasets" | "objects" | "chunks" | "lineage">("datasets");
+  const [sourceTable, setSourceTable] = useState("stock_symbol");
+  const [targetLayer, setTargetLayer] = useState("NORMALIZED");
+  const [preview, setPreview] = useState<LakeDatasetPreview | null>(null);
+  const [busy, setBusy] = useState("");
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  const refresh = () => Promise.all([
+    api.lakehouseStatus(), api.lakehouseDatasets(), api.lakehouseObjects(), api.lakehouseChunks(), api.lakehouseLineage(),
+  ]).then(([s, d, o, c, l]) => { setStatus(s); setDatasets(d); setObjects(o); setChunks(c); setLineage(l); });
+  useEffect(() => { void refresh().catch(e => setError(e instanceof Error ? e.message : "湖仓目录读取失败")); }, []);
+  const sourceNames: Record<string, string> = {
+    stock_symbol: "股票主数据", stock_realtime_quote: "实时行情", stock_kline: "历史量价",
+    stock_news: "股票新闻", stock_notice: "上市公司公告", stock_financial_report: "财务报告",
+    stock_f10_cache: "F10资料", stock_context_event: "外部事件", research_report: "研究报告",
+    knowledge_document: "知识文档", foundation_entity: "公司与主体主数据",
+    foundation_security: "证券主数据", foundation_listing: "股票公司映射",
+    foundation_evidence: "公司关系证据", foundation_fact: "公司关系事实",
+    foundation_security_classification: "证券分类标签",
+  };
+  const layerName = (layer: string) => layer === "RAW" ? "原始层" : layer === "NORMALIZED" ? "标准层" : "服务层";
+  const typeName: Record<string, string> = {
+    SOURCE_TABLE: "来源数据表", DATASET_VERSION: "数据集版本", KNOWLEDGE_DOCUMENT: "知识文档",
+    LAKE_OBJECT: "湖仓对象", DOCUMENT_CHUNK: "文档切片", INGESTION_PAYLOAD: "采集原文",
+  };
+  const transformationName: Record<string, string> = {
+    PARQUET_EXPORT: "导出 Parquet", JSONL_EXPORT: "导出 JSONL", RAW_ARCHIVE: "归档原文",
+    DOCUMENT_CHUNKING: "文档切片", INGESTION_ARCHIVE: "采集归档",
+  };
+  const compact = (value?: string, size = 46) => !value ? "--" : value.length > size ? `${value.slice(0, size)}…` : value;
+  const exportDataset = async () => {
+    setBusy("export"); setError(""); setMessage("");
+    try {
+      const result = await api.exportLakeDataset({ dataset_code: `${sourceTable}_${targetLayer.toLowerCase()}`, dataset_name: sourceNames[sourceTable] || sourceTable, layer: targetLayer, source_table: sourceTable, limit: 10000 });
+      setMessage(`已发布 ${result.row_count} 行，版本 ${result.version}`); await refresh();
+    } catch (e) { setError(e instanceof Error ? e.message : "数据集发布失败"); } finally { setBusy(""); }
+  };
+  const archiveDocuments = async () => {
+    setBusy("archive"); setError(""); setMessage("");
+    try { const result = await api.archiveLakeDocuments(100); setMessage(`已处理 ${result.document_count} 篇文档，新增 ${result.created_chunk_count} 个切片，复用 ${result.reused_chunk_count} 个切片`); await refresh(); }
+    catch (e) { setError(e instanceof Error ? e.message : "文档归档失败"); } finally { setBusy(""); }
+  };
+  const showPreview = async (item: LakeDataset) => {
+    setBusy(`preview-${item.id}`); setError("");
+    try { setPreview(await api.lakehousePreview(item.id)); } catch (e) { setError(e instanceof Error ? e.message : "数据集预览失败"); } finally { setBusy(""); }
+  };
+  const tables = ["stock_symbol", "stock_realtime_quote", "stock_kline", "stock_news", "stock_notice", "stock_financial_report", "stock_f10_cache", "stock_context_event", "research_report", "knowledge_document", "foundation_entity", "foundation_security", "foundation_listing", "foundation_evidence", "foundation_fact", "foundation_security_classification"];
+  return <section className="panel lakehouse-panel">
+    <div className="panel-heading"><div><p className="eyebrow">LAKEHOUSE CATALOG</p><h2>湖仓工作台</h2><p>管理标准化快照、原文归档、文档切片、质量结果与数据血缘。</p></div></div>
+    {error && <p className="form-error">{error}</p>}{message && <p className="success-message">{message}</p>}
+    {status && <><div className="governance-result-summary lakehouse-summary"><div><small>对象存储</small><strong>{status.storage_backend === "minio" ? "MinIO / S3" : "本地文件"}</strong></div><div><small>存储状态</small><strong>{status.storage_health.healthy ? "可用" : "异常"}</strong></div><button type="button" className={catalogView === "objects" ? "active" : ""} onClick={() => setCatalogView("objects")}><small>对象</small><strong>{status.object_count}</strong><span>查看明细</span></button><button type="button" className={catalogView === "datasets" ? "active" : ""} onClick={() => setCatalogView("datasets")}><small>数据集</small><strong>{status.dataset_count}</strong><span>查看明细</span></button><button type="button" className={catalogView === "chunks" ? "active" : ""} onClick={() => setCatalogView("chunks")}><small>切片</small><strong>{status.chunk_count}</strong><span>查看明细</span></button><button type="button" className={catalogView === "lineage" ? "active" : ""} onClick={() => setCatalogView("lineage")}><small>血缘</small><strong>{status.lineage_count}</strong><span>查看明细</span></button></div><p className="muted-text">{status.storage_health.detail}</p></>}
+    <div className="lakehouse-actions"><label>来源数据表<select value={sourceTable} onChange={event => setSourceTable(event.target.value)}>{tables.map(table => <option key={table} value={table}>{sourceNames[table]}（{table}）</option>)}</select></label><label>目标分层<select value={targetLayer} onChange={event => setTargetLayer(event.target.value)}><option value="RAW">原始层（JSONL）</option><option value="NORMALIZED">标准层（Parquet）</option><option value="SERVING">服务层（审核事实）</option></select></label><button type="button" onClick={() => void exportDataset()} disabled={Boolean(busy)}>{busy === "export" ? "正在发布..." : "发布数据快照"}</button><button type="button" onClick={() => void archiveDocuments()} disabled={Boolean(busy)}>{busy === "archive" ? "正在归档..." : "归档知识文档"}</button></div>
+    <div className="lakehouse-catalog-tabs" role="tablist" aria-label="湖仓目录类型">{([['datasets', '数据集'], ['objects', '对象'], ['chunks', '文档切片'], ['lineage', '数据血缘']] as const).map(([key, label]) => <button type="button" role="tab" aria-selected={catalogView === key} className={catalogView === key ? "active" : ""} key={key} onClick={() => setCatalogView(key)}>{label}</button>)}</div>
+    {catalogView === "datasets" && <div className="table-wrap"><table><thead><tr><th>数据集</th><th>分层</th><th>格式</th><th>当前版本</th><th>操作</th></tr></thead><tbody>{datasets.map(item => <tr key={item.id}><td><strong>{item.dataset_name}</strong><br /><code>{item.dataset_code}</code></td><td>{layerName(item.layer)}</td><td>{item.format}</td><td><code title={item.current_version}>{compact(item.current_version, 30)}</code></td><td><button type="button" onClick={() => void showPreview(item)} disabled={!item.current_version || Boolean(busy)}>{busy === `preview-${item.id}` ? "读取中..." : "查看数据与质量"}</button></td></tr>)}{!datasets.length && <tr><td colSpan={5} className="empty-state">尚未发布数据集，请从上方选择来源表创建标准化快照。</td></tr>}</tbody></table></div>}
+    {catalogView === "objects" && <div className="table-wrap"><table><thead><tr><th>对象与位置</th><th>分层</th><th>来源</th><th>大小</th><th>内容哈希</th><th>创建时间</th></tr></thead><tbody>{objects.map(item => <tr key={item.id}><td><strong>{item.bucket || "本地湖仓"}</strong><br /><code title={item.object_uri}>{compact(item.object_key || item.object_uri, 58)}</code></td><td>{layerName(item.layer)}</td><td>{sourceNames[item.source_table || ""] || item.source_table || "--"}<br /><small>{item.source_record_id || "--"}</small></td><td>{item.byte_size.toLocaleString()} 字节</td><td><code title={item.content_hash}>{compact(item.content_hash, 16)}</code></td><td>{formatDate(item.created_at)}</td></tr>)}{!objects.length && <tr><td colSpan={6} className="empty-state">当前没有湖仓对象。</td></tr>}</tbody></table></div>}
+    {catalogView === "chunks" && <div className="table-wrap"><table><thead><tr><th>文档</th><th>切片</th><th>正文预览</th><th>解析版本</th><th>状态</th><th>创建时间</th></tr></thead><tbody>{chunks.map(item => <tr key={item.id}><td><code title={item.document_key}>{compact(item.document_key, 34)}</code><br /><small>文档 ID：{item.document_id || "--"}</small></td><td>第 {item.chunk_index + 1} 段<br /><small>{item.start_offset}–{item.end_offset}</small></td><td className="lakehouse-preview-cell" title={item.text_preview}>{compact(item.text_preview.replace(/\s+/g, " "), 96)}</td><td>{item.parser_version}<br /><small>{item.embedding_model || "尚未生成向量"}</small></td><td>{item.status === "READY" ? "可用" : item.status}</td><td>{formatDate(item.created_at)}</td></tr>)}{!chunks.length && <tr><td colSpan={6} className="empty-state">当前没有文档切片。</td></tr>}</tbody></table></div>}
+    {catalogView === "lineage" && <div className="table-wrap"><table><thead><tr><th>上游</th><th>转换</th><th>下游</th><th>数据集版本</th><th>批次</th><th>创建时间</th></tr></thead><tbody>{lineage.map(item => <tr key={item.id}><td><strong>{typeName[item.upstream_type] || item.upstream_type}</strong><br /><code title={item.upstream_id}>{compact(item.upstream_id, 34)}</code></td><td>{transformationName[item.transformation] || item.transformation}<br /><small>{item.parser_version || "--"}</small></td><td><strong>{typeName[item.downstream_type] || item.downstream_type}</strong><br /><code title={item.downstream_id}>{compact(item.downstream_id, 34)}</code></td><td><code title={item.dataset_version}>{compact(item.dataset_version, 24)}</code></td><td><code title={item.batch_id}>{compact(item.batch_id, 12)}</code></td><td>{formatDate(item.created_at)}</td></tr>)}{!lineage.length && <tr><td colSpan={6} className="empty-state">当前没有数据血缘记录。</td></tr>}</tbody></table></div>}
+    {preview && <ResourceDialog eyebrow="数据集版本" title={`${preview.dataset} · ${preview.version}`} onClose={() => setPreview(null)}><dl className="resource-detail-list"><dt>总行数</dt><dd>{preview.row_count}</dd><dt>质量门禁</dt><dd>{preview.quality.passed ? "通过" : "未通过"}</dd><dt>字段结构</dt><dd><pre>{JSON.stringify(preview.schema, null, 2)}</pre></dd><dt>质量结果</dt><dd><pre>{JSON.stringify(preview.quality, null, 2)}</pre></dd><dt>样例数据</dt><dd><pre>{JSON.stringify(preview.rows, null, 2)}</pre></dd></dl></ResourceDialog>}
+  </section>;
 }
 
 type ProviderForm = ModelProviderPayload & {
