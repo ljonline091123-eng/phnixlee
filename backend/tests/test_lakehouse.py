@@ -5,7 +5,7 @@ from sqlalchemy.pool import StaticPool
 from app.core.config import get_settings
 from app.db.base import Base
 from app.models.ai_hub import KnowledgeBase, KnowledgeDocument
-from app.models.market_data import DataSource, StockSymbol
+from app.models.market_data import DataSource, StockRealtimeQuote, StockSymbol
 from app.services import lakehouse
 
 
@@ -100,3 +100,63 @@ def test_archive_knowledge_documents_builds_raw_objects_and_lineage(tmp_path, mo
         assert result["created_chunk_count"] > 1
         assert db.query(lakehouse.LakeObject).filter_by(layer="RAW").count() == 1
         assert db.query(lakehouse.LakeLineageEvent).count() == result["created_chunk_count"] + 1
+
+
+def test_quality_contract_warns_in_raw_and_blocks_invalid_normalized_data(tmp_path, monkeypatch):
+    _filesystem(monkeypatch, tmp_path)
+    with Session(_engine()) as db:
+        source = DataSource(source_code="TEST", source_name="Test", source_type="TEST", adapter_type="TEST")
+        db.add(source)
+        db.flush()
+        db.add(StockRealtimeQuote(market="HK", symbol="00001", source_id=source.id,
+            current_price=40, open_price=39, high_price=41, low_price=38,
+            turnover_rate=-4.3, raw_payload={"source": "test"}))
+        db.commit()
+        raw = lakehouse.assess_dataset_source(db, source_table="stock_realtime_quote", layer="RAW")
+        assert raw["passed"] is True and raw["level"] == "WARNING"
+        assert raw["invalid_numeric_count"] == 1
+        normalized = lakehouse.assess_dataset_source(db, source_table="stock_realtime_quote", layer="NORMALIZED")
+        assert normalized["passed"] is False and normalized["level"] == "FAILED"
+        assert normalized["issue_samples"][0]["issues"] == ["INVALID_NUMERIC:turnover_rate"]
+        try:
+            lakehouse.export_dataset(db, dataset_code="bad_quote", dataset_name="Bad quote",
+                layer="NORMALIZED", source_table="stock_realtime_quote")
+        except ValueError as exc:
+            assert "quality" in str(exc).lower() or "质量" in str(exc)
+        else:
+            raise AssertionError("invalid normalized data must not be published")
+
+
+def test_quality_assessment_reports_non_numeric_source_values_without_crashing(tmp_path, monkeypatch):
+    _filesystem(monkeypatch, tmp_path)
+    record = {name: None for name in lakehouse._source_schema("stock_realtime_quote")}
+    record.update({
+        "id": 1, "market": "HK", "symbol": "00001", "source_id": 1,
+        "current_price": "-", "previous_close_price": 40, "open_price": 39,
+        "high_price": 41, "low_price": 38,
+        "volume": 100, "amount": 4000, "turnover_rate": 1.2,
+    })
+    records = [record]
+    monkeypatch.setattr(lakehouse, "_records_for_table", lambda *args, **kwargs: records)
+    with Session(_engine()) as db:
+        raw = lakehouse.assess_dataset_source(db, source_table="stock_realtime_quote", layer="RAW")
+        assert raw["passed"] is True and raw["level"] == "WARNING"
+        assert raw["issue_samples"][0]["issues"] == ["INVALID_NUMERIC:current_price"]
+        normalized = lakehouse.assess_dataset_source(
+            db, source_table="stock_realtime_quote", layer="NORMALIZED"
+        )
+        assert normalized["passed"] is False and normalized["level"] == "FAILED"
+
+
+def test_structure_aware_chunks_prefer_paragraph_boundaries_and_keep_offsets(tmp_path, monkeypatch):
+    _filesystem(monkeypatch, tmp_path)
+    text = "# 第一章\n" + "甲" * 170 + "。\n\n# 第二章\n" + "乙" * 170 + "。"
+    with Session(_engine()) as db:
+        result = lakehouse.create_chunks(db, document_key="report:1", document_id="1", text=text,
+            chunk_size=300, overlap=20, parser_version="STRUCTURE_V1", archive_original=False)
+        rows = db.query(lakehouse.DocumentChunkVersion).order_by(lakehouse.DocumentChunkVersion.chunk_index).all()
+        assert result["chunk_method"] == "STRUCTURE_AWARE_V1"
+        assert len(rows) == 2
+        assert rows[0].metadata_json["boundary_type"] == "PARAGRAPH"
+        assert rows[1].metadata_json["section_title"] == "第二章"
+        assert all(text[row.start_offset:row.end_offset] == row.chunk_text for row in rows)

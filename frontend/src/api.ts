@@ -38,10 +38,11 @@ export type DataSourceTestResult = {
 };
 export type LakehouseStatus = { storage_backend: string; filesystem_root?: string; storage_health: { healthy: boolean; detail: string }; object_count: number; dataset_count: number; chunk_count: number; lineage_count: number };
 export type LakeDataset = { id: number; dataset_code: string; dataset_name: string; layer: string; format: string; current_version?: string; description?: string };
-export type LakeDatasetPreview = { dataset: string; version: string; row_count: number; schema: Record<string, string>; quality: { passed?: boolean; checks?: Record<string, boolean>; [key: string]: unknown }; rows: Record<string, unknown>[] };
+export type LakeQualityReport = { passed: boolean; level: "PASS" | "WARNING" | "FAILED"; contract_version: string; table_name: string; layer: string; row_count: number; checks: Record<string, boolean>; hard_checks: string[]; null_counts: Record<string, number>; required_missing: Record<string, number>; duplicate_business_key_count: number; invalid_numeric_count: number; price_range_violation_count: number; missing_content_count: number; traceable_record_count: number; warnings: string[]; issue_samples: Array<{ row_index: number; identity: Record<string, unknown>; issues: string[] }> };
+export type LakeDatasetPreview = { dataset: string; version: string; row_count: number; schema: Record<string, string>; quality: LakeQualityReport; rows: Record<string, unknown>[] };
 export type LakeExportResult = { dataset_id: number; dataset_code: string; version: string; batch_id: string; row_count: number; quality: { passed: boolean } };
 export type LakeObject = { id: string; object_uri: string; layer: string; bucket?: string; object_key?: string; content_hash: string; content_type: string; byte_size: number; source_table?: string; source_record_id?: string; dataset_version?: string; created_at: string };
-export type LakeDocumentChunk = { id: string; document_key: string; document_id?: string; chunk_index: number; chunk_version: string; content_hash: string; text_preview: string; start_offset: number; end_offset: number; parser_version: string; embedding_model?: string; status: string; created_at: string };
+export type LakeDocumentChunk = { id: string; document_key: string; document_id?: string; chunk_index: number; chunk_version: string; content_hash: string; text_preview: string; start_offset: number; end_offset: number; parser_version: string; embedding_model?: string; status: string; section_title?: string; boundary_type?: string; chunk_method?: string; created_at: string };
 export type LakeLineage = { id: number; batch_id: string; upstream_type: string; upstream_id: string; downstream_type: string; downstream_id: string; transformation: string; parser_version?: string; dataset_version?: string; created_at: string };
 
 export type StockSymbol = {
@@ -752,6 +753,8 @@ export const api = {
   lakehouseChunks: (limit = 100) => request<LakeDocumentChunk[]>(`/lakehouse/chunks?limit=${limit}`),
   lakehouseLineage: (limit = 100) => request<LakeLineage[]>(`/lakehouse/lineage?limit=${limit}`),
   lakehousePreview: (id: number) => request<LakeDatasetPreview>(`/lakehouse/datasets/${id}/preview`),
+  assessLakeQuality: (payload: { source_table: string; layer: string; limit: number }) =>
+    request<LakeQualityReport>("/lakehouse/quality/assess", { method: "POST", body: JSON.stringify(payload) }),
   exportLakeDataset: (payload: { dataset_code: string; dataset_name: string; layer: string; source_table: string; limit: number }) =>
     request<LakeExportResult>("/lakehouse/datasets/export", { method: "POST", body: JSON.stringify(payload) }),
   archiveLakeDocuments: (limit = 100) => request<{ document_count: number; created_chunk_count: number; reused_chunk_count: number }>("/lakehouse/documents/archive", { method: "POST", body: JSON.stringify({ limit }) }),

@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.models.lakehouse import DocumentChunkVersion, LakeDataset, LakeDatasetVersion, LakeLineageEvent, LakeObject
-from app.schemas.lakehouse import DatasetExportRequest, DocumentArchiveRequest, DocumentChunkRequest
+from app.schemas.lakehouse import DatasetExportRequest, DatasetQualityRequest, DocumentArchiveRequest, DocumentChunkRequest
 from app.services import lakehouse
 
 router = APIRouter(prefix="/lakehouse", tags=["Lakehouse"])
@@ -58,7 +58,10 @@ def chunks_catalog(document_key: str | None = None, limit: int = 100, db: Sessio
              "content_hash": row.content_hash, "text_preview": row.chunk_text[:300],
              "start_offset": row.start_offset, "end_offset": row.end_offset,
              "parser_version": row.parser_version, "embedding_model": row.embedding_model,
-             "status": row.status, "created_at": row.created_at}
+             "status": row.status, "section_title": (row.metadata_json or {}).get("section_title"),
+             "boundary_type": (row.metadata_json or {}).get("boundary_type"),
+             "chunk_method": (row.metadata_json or {}).get("chunk_method"),
+             "created_at": row.created_at}
             for row in db.scalars(query).all()]
 
 @router.get("/lineage")
@@ -74,6 +77,13 @@ def lineage(batch_id: str | None = None, limit: int = 100, db: Session = Depends
 def export_dataset(payload: DatasetExportRequest, db: Session = Depends(get_db)):
     try: return lakehouse.export_dataset(db, **payload.model_dump())
     except (ValueError, RuntimeError) as exc: raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+@router.post("/quality/assess")
+def assess_quality(payload: DatasetQualityRequest, db: Session = Depends(get_db)):
+    try:
+        return lakehouse.assess_dataset_source(db, **payload.model_dump())
+    except (ValueError, RuntimeError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 @router.post("/documents/chunks")
 def chunks(payload: DocumentChunkRequest, db: Session = Depends(get_db)):
