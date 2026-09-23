@@ -6,7 +6,7 @@ import re
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import delete, func, inspect, select, text
+from sqlalchemy import delete, func, inspect, select, text, tuple_
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, load_only
 
@@ -37,6 +37,7 @@ from app.models.market_data import (
     StockRealtimeQuote,
     StockSymbol,
 )
+from app.models.foundation import FoundationEntity
 from app.schemas.distillation import DistillationOutput
 from app.services.graph_identity import normalize_pair, resolve_many
 
@@ -64,6 +65,10 @@ DEFAULT_DATA_ASSETS = (
     ("FOUNDATION_SECURITY_CLASSIFICATION", "foundation_security_classification", "分类主数据：证券分类事实", "证券的行业、主题、风格及规模分类，保留定义版本、证据和审核状态。"),
     ("FOUNDATION_COMPANY_MAPPING_STATE", "foundation_company_mapping_state", "公司主数据：股票公司映射覆盖", "记录各股票发行公司映射的结果和未覆盖原因，便于检查全市场覆盖情况。"),
     ("CLASSIFICATION_DEFINITION", "classification_definition", "分类主数据：行业与类型释义", "行业、主题、类型和规模标签的真实释义、纳入标准、来源和定义版本。"),
+    ("LAKE_OBJECT", "lake_object", "湖仓：原始与标准化对象", "Raw、Normalized、Serving 对象的 URI、内容哈希、来源记录和数据集版本。"),
+    ("LAKE_DATASET", "lake_dataset", "湖仓：数据集目录", "Parquet 数据集、分层、分区规范和当前版本。"),
+    ("LAKE_LINEAGE", "lake_lineage_event", "湖仓：数据血缘", "来源表到数据集、文档、切片和服务层结果的转换批次与版本链路。"),
+    ("DOCUMENT_CHUNKS", "document_chunk_version", "知识库：文档切片版本", "切片文本、原文偏移、内容哈希、解析器版本和 Embedding 模型版本。"),
 )
 
 DEFAULT_KNOWLEDGE_BASES = (
@@ -426,7 +431,9 @@ def would_create_agent_cycle(db: Session, agent_id: int, child_agent_ids: list[i
 
 def build_knowledge_graph(db: Session, graph: KnowledgeGraph, max_documents: int = 100000, *,
                           source_columns: dict[str, list[str]] | None = None,
-                          enrich_company_identity: bool = True) -> dict[str, int]:
+                          enrich_company_identity: bool = True,
+                          scope_pairs: list[tuple[str, str]] | None = None,
+                          max_documents_per_stock: int | None = None) -> dict[str, int]:
     knowledge_base = db.get(KnowledgeBase, graph.knowledge_base_id)
     if knowledge_base is None:
         raise ValueError("Knowledge base not found")
@@ -434,6 +441,8 @@ def build_knowledge_graph(db: Session, graph: KnowledgeGraph, max_documents: int
     if not allowed_tables:
         raise ValueError("Choose source tables before building a graph")
     symbol_filter = graph.symbol.strip() if graph.symbol else None
+    normalized_scope = sorted({pair for market, symbol in (scope_pairs or [])
+                               if (pair := normalize_pair(market, symbol))})
     documents: list[KnowledgeDocument] = []
     # Keep per-source accounting alongside the materialized documents.  A graph is
     # only considered complete when every configured feed is available and non-empty.
@@ -449,10 +458,16 @@ def build_knowledge_graph(db: Session, graph: KnowledgeGraph, max_documents: int
             return query.options(load_only(*(getattr(model, name) for name in columns), raiseload=True))
         return query
 
+    def scoped(query, model):
+        query = permitted(query, model)
+        if normalized_scope and hasattr(model, "market") and hasattr(model, "symbol"):
+            return query.where(tuple_(model.market, model.symbol).in_(normalized_scope))
+        if symbol_filter and hasattr(model, "symbol"):
+            return query.where(model.symbol == symbol_filter)
+        return query
+
     if "stock_symbol" in allowed_tables:
-        query = permitted(select(StockSymbol), StockSymbol)
-        if symbol_filter:
-            query = query.where(StockSymbol.symbol == symbol_filter)
+        query = scoped(select(StockSymbol), StockSymbol)
         rows = list(db.scalars(query.order_by(StockSymbol.market, StockSymbol.symbol).limit(max_documents)).all())
         documents.extend(
             KnowledgeDocument(
@@ -468,9 +483,7 @@ def build_knowledge_graph(db: Session, graph: KnowledgeGraph, max_documents: int
             for row in rows
         )
     if "stock_news" in allowed_tables:
-        query = permitted(select(StockNews), StockNews)
-        if symbol_filter:
-            query = query.where(StockNews.symbol == symbol_filter)
+        query = scoped(select(StockNews), StockNews)
         rows = list(db.scalars(query.order_by(StockNews.news_time.desc()).limit(max_documents)).all())
         documents.extend(
             KnowledgeDocument(
@@ -487,9 +500,7 @@ def build_knowledge_graph(db: Session, graph: KnowledgeGraph, max_documents: int
             for row in rows
         )
     if "stock_notice" in allowed_tables:
-        query = permitted(select(StockNotice), StockNotice)
-        if symbol_filter:
-            query = query.where(StockNotice.symbol == symbol_filter)
+        query = scoped(select(StockNotice), StockNotice)
         rows = list(db.scalars(query.order_by(StockNotice.notice_date.desc()).limit(max_documents)).all())
         documents.extend(
             KnowledgeDocument(
@@ -507,7 +518,7 @@ def build_knowledge_graph(db: Session, graph: KnowledgeGraph, max_documents: int
     if "stock_financial_report" in allowed_tables:
         rows = list(
             db.scalars(
-                permitted((select(StockFinancialReport).where(StockFinancialReport.symbol == symbol_filter) if symbol_filter else select(StockFinancialReport)), StockFinancialReport)
+                scoped(select(StockFinancialReport), StockFinancialReport)
                 .order_by(StockFinancialReport.report_period.desc())
                 .limit(max_documents)
             ).all()
@@ -532,9 +543,7 @@ def build_knowledge_graph(db: Session, graph: KnowledgeGraph, max_documents: int
             for row in rows
         )
     if "stock_kline" in allowed_tables:
-        query = permitted(select(StockKline), StockKline)
-        if symbol_filter:
-            query = query.where(StockKline.symbol == symbol_filter)
+        query = scoped(select(StockKline), StockKline)
         rows = list(db.scalars(query.order_by(StockKline.trade_date.desc()).limit(max_documents)).all())
         documents.extend(
             KnowledgeDocument(
@@ -558,9 +567,7 @@ def build_knowledge_graph(db: Session, graph: KnowledgeGraph, max_documents: int
             for row in rows
         )
     if "stock_realtime_quote" in allowed_tables:
-        query = permitted(select(StockRealtimeQuote), StockRealtimeQuote)
-        if symbol_filter:
-            query = query.where(StockRealtimeQuote.symbol == symbol_filter)
+        query = scoped(select(StockRealtimeQuote), StockRealtimeQuote)
         rows = list(db.scalars(query.order_by(StockRealtimeQuote.fetched_at.desc()).limit(max_documents)).all())
         documents.extend(
             KnowledgeDocument(
@@ -582,9 +589,7 @@ def build_knowledge_graph(db: Session, graph: KnowledgeGraph, max_documents: int
             for row in rows
         )
     if "stock_f10_cache" in allowed_tables:
-        query = permitted(select(StockF10Cache), StockF10Cache)
-        if symbol_filter:
-            query = query.where(StockF10Cache.symbol == symbol_filter)
+        query = scoped(select(StockF10Cache), StockF10Cache)
         rows = list(db.scalars(query.order_by(StockF10Cache.fetched_at.desc()).limit(max_documents)).all())
         documents.extend(
             KnowledgeDocument(
@@ -602,9 +607,7 @@ def build_knowledge_graph(db: Session, graph: KnowledgeGraph, max_documents: int
             for row in rows
         )
     if "research_report" in allowed_tables:
-        query = permitted(select(ResearchReportRecord), ResearchReportRecord)
-        if symbol_filter:
-            query = query.where(ResearchReportRecord.symbol == symbol_filter)
+        query = scoped(select(ResearchReportRecord), ResearchReportRecord)
         rows = list(db.scalars(query.order_by(ResearchReportRecord.created_at.desc()).limit(max_documents)).all())
         documents.extend(
             KnowledgeDocument(
@@ -644,14 +647,27 @@ def build_knowledge_graph(db: Session, graph: KnowledgeGraph, max_documents: int
             unavailable[table_name] = "TABLE_NOT_AVAILABLE_OR_NOT_ALLOWED"
             continue
         columns = {str(item["name"]) for item in source_inspector.get_columns(table_name)}
-        where = " WHERE symbol = :symbol" if symbol_filter and "symbol" in columns else ""
-        if symbol_filter and "symbol" not in columns:
+        parameters: dict[str, Any] = {"limit": max_documents}
+        where = ""
+        if normalized_scope and {"market", "symbol"}.issubset(columns):
+            clauses = []
+            for index, (market, symbol) in enumerate(normalized_scope):
+                clauses.append(f"(market = :market_{index} AND symbol = :symbol_{index})")
+                parameters[f"market_{index}"] = market
+                parameters[f"symbol_{index}"] = symbol
+            where = f" WHERE {' OR '.join(clauses)}"
+        elif normalized_scope:
+            unavailable[table_name] = "STOCK_SCOPE_NOT_SUPPORTED"
+            continue
+        elif symbol_filter and "symbol" in columns:
+            where = " WHERE symbol = :symbol"
+            parameters["symbol"] = symbol_filter
+        if symbol_filter and not normalized_scope and "symbol" not in columns:
             unavailable[table_name] = "SYMBOL_FILTER_NOT_SUPPORTED"
             continue
         permitted_columns = (source_columns or {}).get(table_name)
         selection = ", ".join(quote(name) for name in permitted_columns if name in columns) if permitted_columns else "*"
         query = text(f'SELECT {selection} FROM {quote(table_name)}{where} LIMIT :limit')
-        parameters = {"limit": max_documents, "symbol": symbol_filter}
         try:
             rows = list(db.execute(query, parameters).mappings().all())
         except Exception as exc:
@@ -693,6 +709,20 @@ def build_knowledge_graph(db: Session, graph: KnowledgeGraph, max_documents: int
             ))
         # Known ORM sources above are counted from their materialized rows.  This
         # keeps coverage useful for both built-in and custom source tables.
+    if max_documents_per_stock is not None:
+        if max_documents_per_stock < 1:
+            raise ValueError("max_documents_per_stock must be positive")
+        bounded_documents: list[KnowledgeDocument] = []
+        scope_counts: dict[tuple[str, str | None, str | None], int] = {}
+        for document in documents:
+            key = (document.source_table, document.market, document.symbol)
+            count = scope_counts.get(key, 0)
+            if count >= max_documents_per_stock:
+                limited_sources.add(document.source_table)
+                continue
+            scope_counts[key] = count + 1
+            bounded_documents.append(document)
+        documents = bounded_documents
     for source_name in allowed_tables:
         if raw_counts.get(source_name, 0):
             continue
@@ -754,6 +784,10 @@ def build_knowledge_graph(db: Session, graph: KnowledgeGraph, max_documents: int
                "mapping_status": "NOT_AUTHORIZED", "identity_version": "SECURITY_COMPANY_V1"}
         for document in documents if document.symbol and (pair := normalize_pair(document.market, document.symbol))
     }
+    company_ids = sorted({identity["company_id"] for identity in stock_identities.values()
+                          if identity.get("mapping_status") == "MAPPED" and identity.get("company_id")})
+    companies = {row.id: row for row in db.scalars(select(FoundationEntity).where(
+        FoundationEntity.id.in_(company_ids))).all()} if company_ids else {}
     for document in documents:
         source_key = ("DATASET", document.source_table)
         if source_key not in entities:
@@ -769,6 +803,7 @@ def build_knowledge_graph(db: Session, graph: KnowledgeGraph, max_documents: int
             db.add(source_entity)
         if document.symbol:
             key = ("STOCK", f"{document.market}:{document.symbol}")
+            identity = stock_identities.get(normalize_pair(document.market, document.symbol), {})
             if key not in entities:
                 entity = KnowledgeEntity(
                     knowledge_base_id=knowledge_base.id,
@@ -777,10 +812,26 @@ def build_knowledge_graph(db: Session, graph: KnowledgeGraph, max_documents: int
                     entity_key=f"{graph.id}:{key[1]}",
                     entity_name=document.symbol,
                     properties_json={"market": document.market, "symbol": document.symbol,
-                        **stock_identities.get(normalize_pair(document.market, document.symbol), {})},
+                        **identity},
                 )
                 entities[key] = entity
                 db.add(entity)
+            company = companies.get(identity.get("company_id"))
+            if company is not None:
+                company_key = ("COMPANY", str(company.id))
+                if company_key not in entities:
+                    company_entity = KnowledgeEntity(
+                        knowledge_base_id=knowledge_base.id, graph_id=graph.id,
+                        entity_type="COMPANY", entity_key=f"{graph.id}:company:{company.id}",
+                        entity_name=company.name,
+                        properties_json={"canonical_company_id": identity.get("canonical_company_id"),
+                                         "company_id": company.id, "jurisdiction": company.jurisdiction,
+                                         "identifier_scheme": company.identifier_scheme,
+                                         "identifier_value": company.identifier_value,
+                                         "identity_version": identity.get("identity_version")},
+                    )
+                    entities[company_key] = company_entity
+                    db.add(company_entity)
         document_key = f"{graph.id}:{document.source_table}:{document.source_record_id or document.id}:{document.symbol}"
         doc_entity = KnowledgeEntity(
             knowledge_base_id=knowledge_base.id,
@@ -851,6 +902,14 @@ def build_knowledge_graph(db: Session, graph: KnowledgeGraph, max_documents: int
                 evidence_document_id=document.id,
             )
         )
+        identity = stock_identities.get(normalize_pair(document.market, document.symbol), {})
+        company_entity = entities.get(("COMPANY", str(identity.get("company_id"))))
+        if document.source_table == "stock_symbol" and company_entity is not None:
+            relations.append(KnowledgeRelation(
+                knowledge_base_id=knowledge_base.id, graph_id=graph.id,
+                subject_entity_id=entity.id, predicate="ISSUED_BY",
+                object_entity_id=company_entity.id, evidence_document_id=document.id,
+            ))
         metadata = document.metadata_json or {}
         if document.source_table == "stock_financial_report" and entity is not None:
             indicator = str(metadata.get("indicator") or document.title.rsplit(" ", 1)[-1])

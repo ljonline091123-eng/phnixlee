@@ -3,7 +3,7 @@ import { request } from "./api";
 export type NetworkLayer = "MASTER" | "FACT" | "EVIDENCE";
 export type NetworkEvidence = {
   id: string; title: string; source_name?: string; source_url?: string | null; url?: string | null;
-  source_table?: string; published_at?: string | null; observed_at?: string | null; excerpt?: string;
+  source_table?: string; document_type?: string; published_at?: string | null; observed_at?: string | null; excerpt?: string;
   content?: string; content_truncated?: boolean; source_record_id?: string | number;
 };
 type NetworkDetail = {

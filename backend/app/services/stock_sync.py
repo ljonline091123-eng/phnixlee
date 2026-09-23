@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import asdict
 from datetime import datetime, timezone
 from typing import Any
 
@@ -113,6 +114,15 @@ class StockSyncService:
             sync_log.completed_at = datetime.now(timezone.utc)
             self.db.commit()
             self.db.refresh(sync_log)
+            try:
+                from app.services.lakehouse import archive_ingestion_payload
+                archive_ingestion_payload(self.db, source_code=used_source.source_code, log_type="data_sync_log",
+                                          log_id=sync_log.id, records=[asdict(item) for item in records])
+            except Exception as archive_exc:
+                details = dict(sync_log.detail_json or {})
+                details["lake_archive_error"] = f"{type(archive_exc).__name__}: {archive_exc}"[:500]
+                sync_log.detail_json = details
+                self.db.commit()
             return sync_log
         except Exception as exc:
             self.db.rollback()

@@ -21,9 +21,25 @@ export type DataInterface = {
   request_mode: "SYNC" | "ON_DEMAND";
   adapter_method: string;
   supported_markets: string[];
+  input_schema: Record<string, unknown>;
+  output_schema: Record<string, unknown>;
   enabled: boolean;
   description?: string;
+  created_at?: string;
+  updated_at?: string;
 };
+
+export type DataSourceTestResult = {
+  source_code: string;
+  adapter_type: string;
+  status: string;
+  message: string;
+  capabilities: string[];
+};
+export type LakehouseStatus = { storage_backend: string; filesystem_root?: string; storage_health: { healthy: boolean; detail: string }; object_count: number; dataset_count: number; chunk_count: number; lineage_count: number };
+export type LakeDataset = { id: number; dataset_code: string; dataset_name: string; layer: string; format: string; current_version?: string; description?: string };
+export type LakeDatasetPreview = { dataset: string; version: string; row_count: number; schema: Record<string, string>; quality: { passed?: boolean; checks?: Record<string, boolean>; [key: string]: unknown }; rows: Record<string, unknown>[] };
+export type LakeExportResult = { dataset_id: number; dataset_code: string; version: string; batch_id: string; row_count: number; quality: { passed: boolean } };
 
 export type StockSymbol = {
   id: number;
@@ -721,10 +737,18 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
 export const api = {
   health: () => fetch(API_BASE_URL.replace("/api/v1", "/health")).then((response) => response.json()),
   listSources: () => request<DataSource[]>("/data-sources"),
-  testSource: (id: number) => request<{ message: string }>(`/data-sources/${id}/test`, { method: "POST" }),
+  testSource: (id: number) => request<DataSourceTestResult>(`/data-sources/${id}/test`, { method: "POST" }),
   updateSource: (id: number, payload: Partial<DataSource>) =>
     request<DataSource>(`/data-sources/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
   listInterfaces: () => request<DataInterface[]>("/data-interfaces"),
+  updateInterface: (id: number, payload: Partial<DataInterface>) =>
+    request<DataInterface>(`/data-interfaces/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
+  lakehouseStatus: () => request<LakehouseStatus>("/lakehouse/status"),
+  lakehouseDatasets: () => request<LakeDataset[]>("/lakehouse/datasets"),
+  lakehousePreview: (id: number) => request<LakeDatasetPreview>(`/lakehouse/datasets/${id}/preview`),
+  exportLakeDataset: (payload: { dataset_code: string; dataset_name: string; layer: string; source_table: string; limit: number }) =>
+    request<LakeExportResult>("/lakehouse/datasets/export", { method: "POST", body: JSON.stringify(payload) }),
+  archiveLakeDocuments: (limit = 100) => request<{ document_count: number; created_chunk_count: number; reused_chunk_count: number }>("/lakehouse/documents/archive", { method: "POST", body: JSON.stringify({ limit }) }),
   listSymbols: (params: URLSearchParams) => request<SymbolPage>(`/stocks?${params.toString()}`),
   searchStocks: (market: string, keyword: string, limit = 12, options: RequestOptions = {}) =>
     request<StockSymbol[]>(
