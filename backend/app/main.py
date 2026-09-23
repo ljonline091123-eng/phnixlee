@@ -7,7 +7,7 @@ from app.api import data_interfaces, data_sources, model_hub, research, resource
 from app.api import context_events
 from app.api import foundation, foundation_jobs
 from app.api import company_graph, company_governance, taxonomy
-from app.api import knowledge_network
+from app.api import knowledge_network, lakehouse
 from app.api import knowledge_governance
 from app.core.config import get_settings
 from app.db.bootstrap import initialize_database
@@ -55,6 +55,7 @@ app.include_router(company_graph.router, prefix=settings.api_v1_prefix)
 app.include_router(company_governance.router, prefix=settings.api_v1_prefix)
 app.include_router(taxonomy.router, prefix=settings.api_v1_prefix)
 app.include_router(knowledge_network.router, prefix=settings.api_v1_prefix)
+app.include_router(lakehouse.router, prefix=settings.api_v1_prefix)
 app.include_router(knowledge_governance.router, prefix=settings.api_v1_prefix)
 
 

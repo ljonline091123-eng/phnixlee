@@ -92,6 +92,25 @@ def test_legal_mentions_remain_candidates_and_no_projection_writes(context):
     assert db.scalar(select(func.count()).select_from(FoundationEvidence)) == count_before
 
 
+def test_company_disclosures_are_visible_but_not_promoted_to_verified_facts(context):
+    db = context
+    company = db.scalar(select(FoundationEntity).where(FoundationEntity.entity_type == "COMPANY"))
+    db.add(FoundationEvidence(entity_id=company.id, source_name="CNINFO", source_key="supply-chain:1",
+        title="年度报告供应商披露", content="公司披露了前五大供应商汇总信息。",
+        available_at=datetime.now(timezone.utc), content_hash="b" * 64, fingerprint="b" * 64, version=1,
+        metadata_json={"document_kind": "SUPPLY_CHAIN_DISCLOSURE", "source_kind": "PUBLIC_DISCLOSURE"}))
+    db.commit()
+    result = explore(db, company_id=company.id, category="business", include_evidence=True)
+    nodes = [node for node in result["nodes"] if node["type"] == "COMPANY_DISCLOSURE"]
+    assert len(nodes) == 1
+    assert nodes[0]["status"] == "SOURCE_REPORTED"
+    assert any(edge["type"] == "HAS_DISCLOSURE" for edge in result["edges"])
+    assert not any(node["type"] == "SUPPLY_CHAIN_FACT" for node in result["nodes"])
+    coverage = {row["key"]: row for row in result["coverage"]}
+    assert coverage["supply_chain"]["status"] == "PARTIAL"
+    assert coverage["supply_chain"]["pending_count"] == 1
+
+
 def test_category_query_validated_and_forwarded(context):
     application = FastAPI()
     application.include_router(router)

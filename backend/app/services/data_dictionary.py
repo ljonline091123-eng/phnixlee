@@ -53,6 +53,17 @@ COLUMN_LABELS: dict[str, str] = {
     "deleted_count": "删除数量", "failed_count": "失败数量", "total_count": "总数",
     "started_at": "开始时间", "completed_at": "完成时间", "finished_at": "结束时间",
     "error_message": "异常说明", "detail_json": "结果详情",
+    "object_uri": "对象存储地址", "layer": "数据分层", "bucket": "存储桶", "object_key": "对象键",
+    "content_type": "内容类型", "byte_size": "文件大小", "source_table": "来源数据表",
+    "source_record_id": "来源记录编号", "dataset_version": "数据集版本", "dataset_code": "数据集编码",
+    "dataset_name": "数据集名称", "format": "存储格式", "partition_spec": "分区规范",
+    "current_version": "当前版本", "batch_id": "处理批次", "upstream_type": "上游对象类型",
+    "upstream_id": "上游对象编号", "downstream_type": "下游对象类型", "downstream_id": "下游对象编号",
+    "transformation": "转换步骤", "parser_version": "解析器版本", "chunk_index": "切片序号",
+    "chunk_version": "切片版本", "chunk_text": "切片正文", "start_offset": "原文起始位置",
+    "end_offset": "原文结束位置", "embedding_model": "向量模型版本", "document_key": "文档稳定键",
+    "document_id": "文档编号", "row_count": "数据行数", "schema_json": "字段结构",
+    "quality_json": "质量检查结果",
 }
 
 TABLE_LABEL_OVERRIDES: dict[str, dict[str, str]] = {

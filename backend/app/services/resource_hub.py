@@ -64,6 +64,10 @@ DEFAULT_DATA_ASSETS = (
     ("FOUNDATION_SECURITY_CLASSIFICATION", "foundation_security_classification", "分类主数据：证券分类事实", "证券的行业、主题、风格及规模分类，保留定义版本、证据和审核状态。"),
     ("FOUNDATION_COMPANY_MAPPING_STATE", "foundation_company_mapping_state", "公司主数据：股票公司映射覆盖", "记录各股票发行公司映射的结果和未覆盖原因，便于检查全市场覆盖情况。"),
     ("CLASSIFICATION_DEFINITION", "classification_definition", "分类主数据：行业与类型释义", "行业、主题、类型和规模标签的真实释义、纳入标准、来源和定义版本。"),
+    ("LAKE_OBJECT", "lake_object", "湖仓：原始与标准化对象", "Raw、Normalized、Serving 对象的 URI、内容哈希、来源记录和数据集版本。"),
+    ("LAKE_DATASET", "lake_dataset", "湖仓：数据集目录", "Parquet 数据集、分层、分区规范和当前版本。"),
+    ("LAKE_LINEAGE", "lake_lineage_event", "湖仓：数据血缘", "来源表到数据集、文档、切片和服务层结果的转换批次与版本链路。"),
+    ("DOCUMENT_CHUNKS", "document_chunk_version", "知识库：文档切片版本", "切片文本、原文偏移、内容哈希、解析器版本和 Embedding 模型版本。"),
 )
 
 DEFAULT_KNOWLEDGE_BASES = (
