@@ -8,6 +8,7 @@ struct CloudContentView: View {
     @State private var settingsPresented = false
     @State private var historyPresented = false
     @State private var achievementsPresented = false
+    @State private var collectionPresented = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -23,13 +24,13 @@ struct CloudContentView: View {
         .background(Color(red: 0.063, green: 0.094, blue: 0.125).ignoresSafeArea())
         .confirmationDialog("菜单", isPresented: $menuPresented, titleVisibility: .visible) {
             Button("新游戏") { game.startNewGame() }
-            Button("每日挑战") { game.startDailyChallenge() }
             Button("撤销一步") { game.undoLastMove() }
                 .disabled(!game.undoAvailable)
             Button("新手引导") { game.beginTutorial() }
             Button("高分榜") { scoresPresented = true }
             Button("历史战绩") { historyPresented = true }
             Button("成就") { achievementsPresented = true }
+            Button("收藏与挑战") { collectionPresented = true }
             Button("设置") {
                 game.beginSettingsSession()
                 settingsPresented = true
@@ -50,6 +51,10 @@ struct CloudContentView: View {
         }
         .sheet(isPresented: $achievementsPresented) {
             AchievementsView()
+                .environmentObject(game)
+        }
+        .sheet(isPresented: $collectionPresented) {
+            CollectionAndChallengesView()
                 .environmentObject(game)
         }
         .sheet(isPresented: $game.isGameOver) {
@@ -222,6 +227,86 @@ struct CloudContentView: View {
             RoundedRectangle(cornerRadius: 10)
                 .fill(Color(red: 0.447, green: 0.329, blue: 0.243))
         )
+    }
+}
+
+private struct CollectionAndChallengesView: View {
+    @EnvironmentObject private var game: CloudGameModel
+    @State private var profileNameInput = ""
+    var body: some View {
+        NavigationStack {
+            List {
+                Section("本地档案") {
+                    LabeledContent("显示名", value: game.profileName)
+                    LabeledContent("玩家 ID", value: game.profileID)
+                    LabeledContent("联网状态", value: "尚未开放联网")
+                    HStack {
+                        TextField("修改本地显示名", text: $profileNameInput)
+                            .textInputAutocapitalization(.never)
+                        Button("保存") { game.updateProfileName(profileNameInput) }
+                            .disabled(profileNameInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    }
+                    LabeledContent("当前等级", value: game.currentMedal.name)
+                    LabeledContent("成长分", value: "\(game.growthPoints)")
+                    if let next = game.nextMedal {
+                        LabeledContent("下一阶", value: "\(next.name) · 还需 \(max(0, next.threshold - game.growthPoints)) 分")
+                    } else {
+                        LabeledContent("下一阶", value: "已达到最高等级")
+                    }
+                    Text("本地玩家档案 · 尚未连接服务端")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Section("每日残局图鉴 · 首期 30 关") {
+                    Text("以下布局与目标为未验证草稿，暂不可游玩。完成解法验证前，不启用通关判定与首通奖励。")
+                        .foregroundStyle(Color.secondary)
+                    ForEach(0..<30, id: \.self) { index in
+                        let puzzle = CloudGameModel.dailyPuzzle(forDay: index + 1)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("\(index + 1). \(puzzle.title)")
+                            Text("\(puzzle.summary) · 目标：\(puzzle.target)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                Section("奖牌与卡册 · \(game.unlockedCardIDs.count)/54") {
+                    ForEach(CloudGameModel.medals) { medal in
+                        HStack {
+                            Image(systemName: game.growthPoints >= medal.threshold ? "medal.fill" : "medal")
+                                .foregroundStyle(game.growthPoints >= medal.threshold ? Color.orange : Color.secondary)
+                            Text(medal.name)
+                            Spacer()
+                            Text("\(medal.threshold) 分")
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    ForEach(CloudGameModel.abilityCards) { card in
+                        VStack(alignment: .leading, spacing: 3) {
+                            HStack {
+                                Image(systemName: game.unlockedCardIDs.contains(card.id) ? "checkmark.circle.fill" : "lock.fill")
+                                    .foregroundStyle(game.unlockedCardIDs.contains(card.id) ? Color.green : Color.secondary)
+                            Text(card.name)
+                                Spacer()
+                                Text(card.group)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Text(game.unlockedCardIDs.contains(card.id) ? "已解锁 · 收藏记录（装备效果尚未开放）" : card.condition)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            if let unlockedAt = game.cardUnlockDates[card.id] {
+                                Text("获得时间：\(unlockedAt.formatted(date: .abbreviated, time: .omitted))")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
+            }
+            .navigationTitle("收藏与挑战")
+            .navigationBarTitleDisplayMode(.inline)
+        }
     }
 }
 

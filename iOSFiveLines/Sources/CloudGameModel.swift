@@ -184,6 +184,86 @@ final class CloudGameModel: ObservableObject {
         let detail: String
     }
 
+    struct DailyPuzzle: Identifiable {
+        let id: String
+        let title: String
+        let summary: String
+        let target: String
+        let layout: [Tile?]
+    }
+
+    struct Medal: Identifiable {
+        let id: String
+        let name: String
+        let threshold: Int
+    }
+
+    struct AbilityCard: Identifiable {
+        let id: String
+        let group: String
+        let name: String
+        let condition: String
+        let equipment: Bool
+    }
+
+    static let medals: [Medal] = [
+        Medal(id: "medal_01", name: "初学之星", threshold: 0), Medal(id: "medal_02", name: "青铜新手", threshold: 100),
+        Medal(id: "medal_03", name: "青铜行者", threshold: 250), Medal(id: "medal_04", name: "白银棋手", threshold: 500),
+        Medal(id: "medal_05", name: "白银连线师", threshold: 900), Medal(id: "medal_06", name: "黄金棋手", threshold: 1400),
+        Medal(id: "medal_07", name: "黄金大师", threshold: 2100), Medal(id: "medal_08", name: "铂金战略家", threshold: 3000),
+        Medal(id: "medal_09", name: "铂金大师", threshold: 4200), Medal(id: "medal_10", name: "钻石宗师", threshold: 5800),
+        Medal(id: "medal_11", name: "星耀传奇", threshold: 7800), Medal(id: "medal_12", name: "五线传说", threshold: 10000)
+    ]
+
+    private static let dailyTitles = ["像素爱心", "坦克阵地", "太空入侵", "复古蘑菇", "迷宫出口", "像素飞船", "经典吃豆路线", "砖墙突破", "方块落影", "街机手柄", "月球基地", "火箭发射", "像素幽灵", "像素皇冠", "幸运星", "复古街机", "八位音符", "像素花朵", "太空轨道", "地下迷宫", "炸药演习", "救援行动", "像素城堡", "海岛地图", "复古机器人", "星星收集", "像素蝴蝶", "经典赛车旗", "最后一条命", "终极街机厅"]
+    private static let dailySummaries = ["清理关键位置，完成爱心轮廓主题目标", "打通棋盘通道并完成指定消除", "限定步数内清除分散目标", "清除指定颜色棋子", "清出通路并完成目标连线", "清理飞船轮廓上的关键位置", "限步清除路线节点", "连续完成指定次数消除", "清除指定形状区域", "清理手柄轮廓上的目标位置", "使用白棋完成指定颜色连线", "限定步数内完成两次消除", "清除棋盘角落的目标棋子", "完成指定长度的连线", "单次消除达到指定数量", "连续两回合完成消除", "按目标完成两条线", "清理花瓣位置并完成中心区域目标", "使用白棋补足指定连线", "在棋盘空间受限时完成消除", "使用炸药清除指定区域", "打开被围住的关键位置", "清理外围目标后完成指定连线", "分区清除指定颜色棋子", "完成一条横线和一条竖线", "达成指定消除数并保留步数", "完成两侧目标区域的清理", "清出棋盘中央通道", "使用少量步数完成指定连线", "综合使用白棋、炸药和普通消除"]
+    private static let dailyTargets = ["清除爱心轮廓上的 8 个目标位置", "完成 2 次横向连线", "12 步内清除 3 个角落目标", "清除 5 个红色棋子", "完成 1 条长度至少 5 的连线", "清除飞船中央 6 个位置", "10 步内清除路线节点", "连续消除 3 次", "清除中央方块区域", "清除手柄两侧目标", "使用白棋完成 1 条连线", "12 步内完成 2 次消除", "清除四角目标", "完成长度至少 6 的连线", "单次消除至少 7 个棋子", "连续两回合消除", "完成 2 条不同方向的线", "清除花瓣并完成中心连线", "使用白棋补足 1 条线", "空间受限时完成 1 次消除", "炸药影响 4 个目标位置", "打开棋盘中央通道", "清除外围后完成 1 条线", "清除两种颜色区域", "完成横线和竖线各 1 条", "消除 12 个棋子并保留 3 步", "清除左右两侧目标", "中央连续 5 格为空", "8 步内完成 1 条连线", "各使用白棋与炸药 1 次"]
+
+    static func dailyPuzzleForToday() -> DailyPuzzle {
+        let day = Calendar.current.ordinality(of: .day, in: .year, for: Date()) ?? 1
+        return dailyPuzzle(forDay: day)
+    }
+
+    static func dailyPuzzle(forDay day: Int) -> DailyPuzzle {
+        let index = (day - 1) % dailyTitles.count
+        return DailyPuzzle(id: String(format: "daily_%02d", index + 1), title: dailyTitles[index], summary: dailySummaries[index], target: dailyTargets[index], layout: dailyLayout(index))
+    }
+
+    private static func dailyLayout(_ index: Int) -> [Tile?] {
+        var result = Array<Tile?>(repeating: nil, count: 81)
+        for row in 0..<9 {
+            for column in 0..<9 where (row + column + index) % 4 == 0 || (row == index % 7 && column >= 2 && column <= 6) || (column == (index * 3) % 7 + 1 && row >= 2 && row <= 6) {
+                let colorIndex = (index + row + column + 2) % Self.ordinaryTiles.count
+                result[row * 9 + column] = Self.ordinaryTiles[colorIndex]
+            }
+        }
+        result[(index * 7) % 81] = .white
+        result[(index * 11 + 20) % 81] = .bomb
+        return result
+    }
+
+    static let abilityCards: [AbilityCard] = {
+        let rows: [(String, [String])] = [
+            ("连线启程", ["初次连线", "首次完成消除", "五连新手", "首次完成五连", "清场见习", "单次消除至少 8 枚棋子", "连线熟手", "单局完成 5 次消除", "横线专精", "累计横向消除 10 次", "竖线专精", "累计纵向消除 10 次", "斜线巧手", "累计斜向消除 10 次", "连线收藏家", "累计消除 100 枚棋子"]),
+            ("分数里程", ["百分达人", "单局达到 100 分", "双百分", "单局达到 200 分", "三百分", "单局达到 300 分", "千分起步", "单局达到 1,000 分", "高分挑战者", "单局达到 2,500 分", "高分专家", "单局达到 5,000 分", "稳步得分", "连续 5 次消除均获得分数", "终局逆转", "棋盘空间紧张时完成有效消除"]),
+            ("特殊棋子", ["白棋初用", "首次使用白棋完成消除", "万能补位", "累计使用白棋补足连线 10 次", "炸药初用", "首次引爆炸药", "精准爆破", "一次炸药影响多个棋子", "双宝连携", "同一局使用白棋和炸药", "危机拆弹", "利用炸药解除棋盘拥堵", "工具达人", "累计使用特殊棋子 20 次", "特殊大师", "同一局完成白棋连线和炸药消除"]),
+            ("连击策略", ["连击初体验", "首次连续回合完成消除", "双连击", "连续 2 回合完成消除", "三连击", "连续 3 回合完成消除", "步步为营", "连续 10 步后仍完成有效消除", "空间整理", "成功清理关键通道并完成消除", "先手布局", "查看棋子预告后完成消除", "多线规划", "单步产生多条有效消除", "棋盘掌控", "完成指定高密度棋盘挑战"]),
+            ("每日挑战", ["每日来客", "完成 1 次每日挑战", "七日挑战者", "累计完成 7 次每日挑战", "残局新秀", "完成 5 种不同残局", "残局专家", "完成 15 种不同残局", "三十关征服者", "完成首期全部 30 关", "无提示通关", "不使用提示完成任意残局", "步数大师", "按关卡要求保留指定步数通关", "全勤记录", "完成一个自然月的每日挑战"]),
+            ("坚持成长", ["初次开局", "完成首局游戏", "十局玩家", "累计完成 10 局", "百局玩家", "累计完成 100 局", "逆境坚持", "棋盘拥堵时仍成功完成消除", "复盘学徒", "使用撤销后完成本局", "新纪录", "刷新个人最高分", "连日归来", "连续游玩 3 天", "长线收藏家", "累计解锁 20 张能力卡"]),
+            ("主题收藏", ["像素之心", "完成像素爱心残局", "街机记忆", "完成任意 5 个复古主题残局", "太空漫游", "完成全部太空主题残局", "拆弹专家", "完成全部炸药主题残局", "彩图鉴赏家", "完成 20 个不同主题残局", "五线全明星", "集齐其余 53 张能力卡"])
+        ]
+        var cards: [AbilityCard] = []
+        var cursor = 1
+        for (group, values) in rows {
+            for index in stride(from: 0, to: values.count, by: 2) {
+                let name = values[index]
+                cards.append(AbilityCard(id: String(format: "card_%02d", cursor), group: group, name: name, condition: values[index + 1], equipment: name == "先手布局" || name == "复盘学徒"))
+                cursor += 1
+            }
+        }
+        return cards
+    }()
+
     static let achievements = [
         Achievement(id: "first_clear", title: "初次连线", detail: "完成第一次五子消除"),
         Achievement(id: "big_clear", title: "一网打尽", detail: "单次消除至少 8 个棋子"),
@@ -214,6 +294,11 @@ final class CloudGameModel: ObservableObject {
     @Published var highScores: [ScoreEntry] = []
     @Published var history: [GameRecord] = []
     @Published var unlockedAchievementIDs: Set<String> = []
+    @Published var growthPoints = 0
+    @Published var unlockedCardIDs: Set<String> = []
+    @Published var cardUnlockDates: [String: Date] = [:]
+    @Published var profileID = ""
+    @Published var profileName = "玩家"
     @Published var achievementToast: String?
     @Published var isGameOver = false
     @Published var tutorialStep: Int?
@@ -271,6 +356,7 @@ final class CloudGameModel: ObservableObject {
         loadScores()
         loadHistory()
         loadAchievements()
+        loadProgression()
         loadSettings()
         applyAudioSettings()
         tutorialRequested = !UserDefaults.standard.bool(forKey: "FiveLines.tutorialSeen")
@@ -285,7 +371,6 @@ final class CloudGameModel: ObservableObject {
         if daily {
             dailyRandomState = Self.dailySeed()
             dailyBestScore = UserDefaults.standard.integer(forKey: "FiveLines.dailyBest.\(Self.dateKey())")
-            unlockAchievement("daily_player")
         } else {
             dailyBestScore = 0
         }
@@ -342,7 +427,11 @@ final class CloudGameModel: ObservableObject {
     }
 
     func startDailyChallenge() {
-        startNewGame(daily: true)
+        // The prototype layouts have not been manually solver-verified yet.
+        achievementToast = "每日残局尚未验证，暂未开放游玩"
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.4) { [weak self] in
+            self?.achievementToast = nil
+        }
     }
 
     func tap(_ index: Int) {
@@ -375,7 +464,7 @@ final class CloudGameModel: ObservableObject {
                 selectedIndex = nil
                 busy = true
                 moves += 1
-                if moves >= 30 { unlockAchievement("patient_30") }
+                if !dailyChallenge && moves >= 30 { unlockAchievement("patient_30") }
                 audio.playMove()
                 moveAlongPath(tile: board[selected]!, from: selected, route: route, step: 0)
             } else {
@@ -484,6 +573,13 @@ final class CloudGameModel: ObservableObject {
         audio.playClick()
     }
 
+    func updateProfileName(_ value: String) {
+        let cleaned = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleaned.isEmpty else { return }
+        profileName = String(cleaned.prefix(12))
+        UserDefaults.standard.set(profileName, forKey: "FiveLines.profileName")
+    }
+
     func setAppActive(_ active: Bool) {
         audio.setAppActive(active)
     }
@@ -573,21 +669,24 @@ final class CloudGameModel: ObservableObject {
         let allCells = match.lineCells.union(blastCells)
         let lineCount = match.lineCells.count
         let blastOnlyCount = blastCells.subtracting(match.lineCells).count
-        score += lineCount >= 5 ? 5 + (lineCount - 5) * 2 : 0
-        score += blastOnlyCount
+        let earnedScore = (lineCount >= 5 ? 5 + (lineCount - 5) * 2 : 0) + blastOnlyCount
+        score += earnedScore
+        if !dailyChallenge { awardGrowth(max(1, earnedScore)) }
         removedCount += allCells.count
         linesCleared += 1
         bestClearCount = max(bestClearCount, allCells.count)
         currentChain += 1
         bestChain = max(bestChain, currentChain)
-        if currentChain >= 2 { unlockAchievement("chain_2") }
+        if currentChain >= 2 && !dailyChallenge { unlockAchievement("chain_2") }
         let bombCount = match.lineCells.filter { board[$0]?.isBomb == true }.count
         bombsTriggered += bombCount
-        if bombCount > 0 { unlockAchievement("bomb_user") }
-        unlockAchievement("first_clear")
-        if allCells.count >= 8 { unlockAchievement("big_clear") }
-        if score >= 50 { unlockAchievement("score_50") }
-        if score >= 100 { unlockAchievement("score_100") }
+        if bombCount > 0 && !dailyChallenge { unlockAchievement("bomb_user") }
+        if !dailyChallenge {
+            unlockAchievement("first_clear")
+            if allCells.count >= 8 { unlockAchievement("big_clear") }
+            if score >= 50 { unlockAchievement("score_50") }
+            if score >= 100 { unlockAchievement("score_100") }
+        }
         if dailyChallenge, score > dailyBestScore {
             dailyBestScore = score
             UserDefaults.standard.set(score, forKey: "FiveLines.dailyBest.\(Self.dateKey())")
@@ -924,6 +1023,7 @@ final class CloudGameModel: ObservableObject {
     private func recordCompletedGame() {
         guard !gameRecorded else { return }
         gameRecorded = true
+        if !dailyChallenge && history.isEmpty { unlockCard("card_41") }
         history.insert(
             GameRecord(
                 date: Self.displayDate(),
@@ -936,13 +1036,50 @@ final class CloudGameModel: ObservableObject {
         )
         history = Array(history.prefix(50))
         saveHistory()
-        if moves >= 30 { unlockAchievement("patient_30") }
+        if !dailyChallenge { awardGrowth(20) }
+        if !dailyChallenge && moves >= 30 { unlockAchievement("patient_30") }
+    }
+
+    private func awardGrowth(_ amount: Int) {
+        guard amount > 0 else { return }
+        let today = Self.dateKey()
+        let savedDate = UserDefaults.standard.string(forKey: "FiveLines.growthDate") ?? ""
+        let earnedToday = savedDate == today ? UserDefaults.standard.integer(forKey: "FiveLines.growthEarnedToday") : 0
+        let awarded = min(amount, max(0, 100 - earnedToday))
+        guard awarded > 0 else { return }
+        growthPoints += awarded
+        UserDefaults.standard.set(today, forKey: "FiveLines.growthDate")
+        UserDefaults.standard.set(earnedToday + awarded, forKey: "FiveLines.growthEarnedToday")
+        saveProgression()
+    }
+
+    private func unlockCard(_ id: String) {
+        guard unlockedCardIDs.insert(id).inserted else { return }
+        cardUnlockDates[id] = Date()
+        saveProgression()
+    }
+
+    var currentMedal: Medal {
+        Self.medals.last(where: { growthPoints >= $0.threshold }) ?? Self.medals[0]
+    }
+
+    var nextMedal: Medal? {
+        Self.medals.first(where: { growthPoints < $0.threshold })
     }
 
     private func unlockAchievement(_ id: String) {
         guard !unlockedAchievementIDs.contains(id),
               let achievement = Self.achievements.first(where: { $0.id == id }) else { return }
         unlockedAchievementIDs.insert(id)
+        let cardID: String?
+        switch id {
+        case "first_clear": cardID = "card_01"
+        case "big_clear": cardID = "card_03"
+        case "score_100": cardID = "card_09"
+        default: cardID = nil
+        }
+        if let cardID { unlockCard(cardID) }
+        saveProgression()
         UserDefaults.standard.set(Array(unlockedAchievementIDs), forKey: "FiveLines.achievements")
         achievementToast = "成就解锁：\(achievement.title)"
         let message = achievementToast
@@ -1120,6 +1257,22 @@ final class CloudGameModel: ObservableObject {
     private func loadAchievements() {
         let values = UserDefaults.standard.stringArray(forKey: "FiveLines.achievements") ?? []
         unlockedAchievementIDs = Set(values)
+    }
+
+    private func loadProgression() {
+        profileID = UserDefaults.standard.string(forKey: "FiveLines.profileID") ?? UUID().uuidString
+        profileName = UserDefaults.standard.string(forKey: "FiveLines.profileName") ?? "玩家"
+        UserDefaults.standard.set(profileID, forKey: "FiveLines.profileID")
+        UserDefaults.standard.set(profileName, forKey: "FiveLines.profileName")
+        growthPoints = UserDefaults.standard.integer(forKey: "FiveLines.growthPoints")
+        unlockedCardIDs = Set(UserDefaults.standard.stringArray(forKey: "FiveLines.unlockedCards") ?? [])
+        cardUnlockDates = UserDefaults.standard.dictionary(forKey: "FiveLines.cardUnlockDates") as? [String: Date] ?? [:]
+    }
+
+    private func saveProgression() {
+        UserDefaults.standard.set(growthPoints, forKey: "FiveLines.growthPoints")
+        UserDefaults.standard.set(Array(unlockedCardIDs), forKey: "FiveLines.unlockedCards")
+        UserDefaults.standard.set(cardUnlockDates, forKey: "FiveLines.cardUnlockDates")
     }
 }
 

@@ -45,6 +45,7 @@ import java.util.HashSet;
 import java.util.Locale;
 import java.util.Random;
 import java.util.Set;
+import java.util.UUID;
 
 public class MainActivity extends Activity {
     private SoundEngine soundEngine;
@@ -136,10 +137,13 @@ public class MainActivity extends Activity {
         private static final String SCORES_PREFS = "five_lines_scores";
         private static final String HISTORY_PREFS = "five_lines_history";
         private static final String ACHIEVEMENT_PREFS = "five_lines_achievements";
+        private static final String PROGRESSION_PREFS = "five_lines_progression";
 
         private final Context context;
         private final SoundEngine sound;
         private final SharedPreferences settings;
+        private String profileId;
+        private String profileName;
         private final int[][] board = new int[SIZE][SIZE];
         private final int[] preview = new int[PREVIEW_COUNT];
         private final Random random = new Random();
@@ -245,6 +249,12 @@ public class MainActivity extends Activity {
             this.context = context;
             this.sound = sound;
             settings = context.getSharedPreferences(SETTINGS_PREFS, Context.MODE_PRIVATE);
+            profileId = settings.getString("profile_id", null);
+            if (profileId == null || profileId.trim().isEmpty()) {
+                profileId = UUID.randomUUID().toString();
+                settings.edit().putString("profile_id", profileId).apply();
+            }
+            profileName = settings.getString("profile_name", "玩家");
             loadSettings();
             setFocusable(true);
             if (savedState != null && savedState.containsKey("five_lines_board")) {
@@ -324,6 +334,14 @@ public class MainActivity extends Activity {
         }
 
         private void resetGame(boolean daily) {
+            if (daily) {
+                new AlertDialog.Builder(context)
+                        .setTitle("每日残局暂未开放")
+                        .setMessage("首期 30 关仍在验证布局与解法，完成验证前暂不开放游玩或发放奖励。")
+                        .setPositiveButton("知道了", null)
+                        .show();
+                return;
+            }
             moveToken++;
             handler.removeCallbacksAndMessages(null);
             closeEasterDialog();
@@ -336,9 +354,6 @@ public class MainActivity extends Activity {
             tutorialStep = -1;
             tutorialSource = -1;
             tutorialTarget = -1;
-            if (daily) {
-                unlockAchievement("daily_player", "今日挑战");
-            }
             adminMode = false;
             settingsMusicToggleCount = 0;
             adminUnlockedByMusic = false;
@@ -1774,8 +1789,8 @@ public class MainActivity extends Activity {
             removalStart = SystemClock.uptimeMillis();
             currentChain++;
             bestChain = Math.max(bestChain, currentChain);
-            if (currentChain >= 2) unlockAchievement("chain_2", "\u8fde\u9501\u53cd\u5e94");
-            if (!pendingBombs.isEmpty()) {
+            if (!dailyChallenge && currentChain >= 2) unlockAchievement("chain_2", "\u8fde\u9501\u53cd\u5e94");
+            if (!pendingBombs.isEmpty() && !dailyChallenge) {
                 bombsTriggered += pendingBombs.size();
                 unlockAchievement("bomb_user", "\u7206\u7834\u4e13\u5bb6");
             }
@@ -1804,12 +1819,13 @@ public class MainActivity extends Activity {
             removedCount += pendingLineCount + pendingBlastCount;
             lineClearCount++;
             bestClearCount = Math.max(bestClearCount, pendingLineCount + pendingBlastCount);
-            unlockAchievement("first_clear", "\u521d\u6b21\u8fde\u7ebf");
+            if (!dailyChallenge) addGrowthPoints(Math.max(1, pendingLineScore + pendingBlastCount));
+            if (!dailyChallenge) unlockAchievement("first_clear", "\u521d\u6b21\u8fde\u7ebf");
             if (pendingLineCount + pendingBlastCount >= 8) {
-                unlockAchievement("big_clear", "\u4e00\u7f51\u6253\u5c3d");
+                if (!dailyChallenge) unlockAchievement("big_clear", "\u4e00\u7f51\u6253\u5c3d");
             }
-            if (score >= 50) unlockAchievement("score_50", "\u6e10\u5165\u4f73\u5883");
-            if (score >= 100) unlockAchievement("score_100", "\u767e\u5206\u8fbe\u4eba");
+            if (!dailyChallenge && score >= 50) unlockAchievement("score_50", "\u6e10\u5165\u4f73\u5883");
+            if (!dailyChallenge && score >= 100) unlockAchievement("score_100", "\u767e\u5206\u8fbe\u4eba");
             if (dailyChallenge && score > dailyBestScore) {
                 dailyBestScore = score;
                 settings.edit().putInt("daily_best_" + dateKey(), dailyBestScore).apply();
@@ -2031,7 +2047,7 @@ public class MainActivity extends Activity {
             }
             gameOver = true;
             recordCompletedGame();
-            if (moveCount >= 30) unlockAchievement("patient_30", "\u6df1\u8c0b\u8fdc\u8651");
+            if (!dailyChallenge && moveCount >= 30) unlockAchievement("patient_30", "\u6df1\u8c0b\u8fdc\u8651");
             invalidate();
             handler.postDelayed(this::showGameOverDialog, 120L);
         }
@@ -2423,7 +2439,7 @@ public class MainActivity extends Activity {
         private void showMenu() {
             String[] items = {
                     "\u65b0\u6e38\u620f", "\u6bcf\u65e5\u6311\u6218", "\u64a4\u9500\u4e00\u6b65", "\u65b0\u624b\u5f15\u5bfc",
-                    "\u9ad8\u5206\u699c", "\u5386\u53f2\u6218\u7ee9", "\u6210\u5c31", "\u8bbe\u7f6e"
+                    "\u9ad8\u5206\u699c", "\u5386\u53f2\u6218\u7ee9", "\u6210\u5c31", "\u6536\u85cf\u4e0e\u6311\u6218", "\u8bbe\u7f6e"
             };
             new AlertDialog.Builder(context)
                     .setTitle("\u83dc\u5355")
@@ -2442,10 +2458,97 @@ public class MainActivity extends Activity {
                             showHistory();
                         } else if (which == 6) {
                             showAchievements();
+                        } else if (which == 7) {
+                            showCollectionAndChallenges();
                         } else {
                             showSettings();
                         }
                     })
+                    .show();
+        }
+
+        private void showCollectionAndChallenges() {
+            SharedPreferences prefs = context.getSharedPreferences(PROGRESSION_PREFS, Context.MODE_PRIVATE);
+            int points = prefs.getInt("growth_points", 0);
+            int medalIndex = 0;
+            for (int i = 0; i < ProgressionCatalog.MEDALS.length; i++) {
+                if (points >= ProgressionCatalog.MEDALS[i].threshold) medalIndex = i;
+            }
+            ProgressionCatalog.Medal medal = ProgressionCatalog.MEDALS[medalIndex];
+            Set<String> cards = new HashSet<>(prefs.getStringSet("cards", Collections.emptySet()));
+            ProgressionCatalog.DailyPuzzle today = ProgressionCatalog.puzzleForDay(
+                    Calendar.getInstance().get(Calendar.DAY_OF_YEAR)
+            );
+            StringBuilder text = new StringBuilder();
+            text.append("本地档案：").append(profileName).append("\n")
+                    .append("玩家 ID：").append(profileId).append("\n")
+                    .append("联网状态：尚未开放联网\n")
+                    .append("当前等级：").append(medal.name).append("（").append(points).append(" 成长分）\n")
+                    .append("下一阶：");
+            if (medalIndex + 1 < ProgressionCatalog.MEDALS.length) {
+                ProgressionCatalog.Medal next = ProgressionCatalog.MEDALS[medalIndex + 1];
+                text.append(next.name).append("，还需 ").append(Math.max(0, next.threshold - points)).append(" 分\n\n");
+            } else {
+                text.append("已达到最高等级\n\n");
+            }
+            text.append("每日残局图鉴：30 个主题草稿（未验证，不可游玩）\n")
+                    .append("布局与目标仅供内容预览，尚未完成人工解法验证；暂不开放通关判定或奖励。\n")
+                    .append("内容版本：首期 30 关\n");
+            for (int day = 1; day <= 30; day++) {
+                ProgressionCatalog.DailyPuzzle puzzle = ProgressionCatalog.puzzleForDay(day);
+                text.append(String.format(Locale.US, "%02d. %s · %s；目标：%s\n",
+                        day, puzzle.title, puzzle.summary, puzzle.target));
+            }
+            text.append("\n奖牌：").append(medalIndex + 1).append("/12\n")
+                    .append("能力卡：").append(cards.size()).append("/54\n\n");
+            for (int group = 0; group < ProgressionCatalog.CARDS.length; group++) {
+                ProgressionCatalog.AbilityCard card = ProgressionCatalog.CARDS[group];
+                if (cards.contains(card.id)) {
+                    long unlockedAt = prefs.getLong("card_unlocked_at_" + card.id, 0L);
+                    text.append(unlockedAt > 0L
+                            ? "[已解锁 " + new java.text.SimpleDateFormat("yyyy-MM-dd", Locale.US).format(new java.util.Date(unlockedAt)) + "] "
+                            : "[已解锁] ");
+                } else {
+                    text.append("[未解锁] ");
+                }
+                text.append(card.name).append(" · ").append(card.group).append(" · ").append(card.condition)
+                        .append("（").append(card.equipment ? "装备效果尚未开放" : "收藏记录")
+                        .append("）\n");
+            }
+            TextView view = new TextView(context);
+            view.setText(text.toString());
+            view.setTextSize(15f);
+            view.setLineSpacing(0f, 1.12f);
+            view.setPadding(dp(22), dp(8), dp(22), dp(8));
+            ScrollView scroll = new ScrollView(context);
+            scroll.addView(view);
+            new AlertDialog.Builder(context)
+                    .setTitle("收藏与挑战")
+                    .setView(scroll)
+                    .setPositiveButton("修改显示名", (dialog, which) -> showProfileNameEditor())
+                    .setNegativeButton("关闭", null)
+                    .show();
+        }
+
+        private void showProfileNameEditor() {
+            EditText input = new EditText(context);
+            input.setSingleLine(true);
+            input.setHint("显示名（最多 12 个字符）");
+            input.setText(profileName);
+            input.setSelection(input.getText().length());
+            int padding = dp(22);
+            input.setPadding(padding, dp(12), padding, dp(8));
+            new AlertDialog.Builder(context)
+                    .setTitle("修改本地显示名")
+                    .setView(input)
+                    .setPositiveButton("保存", (dialog, which) -> {
+                        String candidate = input.getText().toString().trim();
+                        if (!candidate.isEmpty()) {
+                            profileName = candidate.substring(0, Math.min(12, candidate.length()));
+                            settings.edit().putString("profile_name", profileName).apply();
+                        }
+                    })
+                    .setNegativeButton("取消", null)
                     .show();
         }
 
@@ -2620,7 +2723,8 @@ public class MainActivity extends Activity {
                     {"score_50", "\u6e10\u5165\u4f73\u5883", "\u5355\u5c40\u8fbe\u523050\u5206"},
                     {"score_100", "\u767e\u5206\u8fbe\u4eba", "\u5355\u5c40\u8fbe\u5230100\u5206"},
                     {"patient_30", "\u6df1\u8c0b\u8fdc\u8651", "\u5355\u5c40\u79fb\u52a8\u81f3\u5c1130\u6b21"},
-                    {"daily_player", "\u4eca\u65e5\u6311\u6218", "\u5f00\u59cb\u4e00\u6b21\u6bcf\u65e5\u6311\u6218"}
+                    {"daily_player", "\u4eca\u65e5\u6311\u6218", "\u5f00\u59cb\u4e00\u6b21\u6bcf\u65e5\u6311\u6218"},
+                    {"daily_first_clear", "\u6b8b\u5c40\u65b0\u79c0", "\u9996\u6b21\u5b8c\u6210\u6bcf\u65e5\u6b8b\u5c40"}
             };
             Set<String> unlocked = new HashSet<>(context
                     .getSharedPreferences(ACHIEVEMENT_PREFS, Context.MODE_PRIVATE)
@@ -2654,6 +2758,38 @@ public class MainActivity extends Activity {
             String record = displayDate() + "|" + (dailyChallenge ? "1" : "0") + "|"
                     + score + "|" + moveCount + "|" + removedCount;
             editor.putString("record_0", record).putInt("count", oldCount + 1).apply();
+            if (oldCount == 0 && !dailyChallenge) unlockCard("card_41");
+            if (!dailyChallenge) addGrowthPoints(20);
+        }
+
+        private int growthPoints() {
+            return context.getSharedPreferences(PROGRESSION_PREFS, Context.MODE_PRIVATE)
+                    .getInt("growth_points", 0);
+        }
+
+        private void addGrowthPoints(int amount) {
+            if (amount <= 0) return;
+            SharedPreferences prefs = context.getSharedPreferences(PROGRESSION_PREFS, Context.MODE_PRIVATE);
+            String today = dateKey();
+            int earnedToday = prefs.getString("growth_date", "").equals(today)
+                    ? prefs.getInt("growth_earned_today", 0) : 0;
+            int awarded = Math.min(amount, Math.max(0, 100 - earnedToday));
+            if (awarded <= 0) return;
+            int points = prefs.getInt("growth_points", 0) + awarded;
+            prefs.edit().putInt("growth_points", points)
+                    .putString("growth_date", today)
+                    .putInt("growth_earned_today", earnedToday + awarded)
+                    .apply();
+        }
+
+        private void unlockCard(String cardId) {
+            SharedPreferences prefs = context.getSharedPreferences(PROGRESSION_PREFS, Context.MODE_PRIVATE);
+            Set<String> unlocked = new HashSet<>(prefs.getStringSet("cards", Collections.emptySet()));
+            if (unlocked.add(cardId)) {
+                prefs.edit().putStringSet("cards", unlocked)
+                        .putLong("card_unlocked_at_" + cardId, System.currentTimeMillis())
+                        .apply();
+            }
         }
 
         private void unlockAchievement(String id, String title) {
@@ -2661,6 +2797,14 @@ public class MainActivity extends Activity {
             Set<String> unlocked = new HashSet<>(prefs.getStringSet("unlocked", Collections.emptySet()));
             if (!unlocked.add(id)) return;
             prefs.edit().putStringSet("unlocked", unlocked).apply();
+            if (!dailyChallenge) {
+                switch (id) {
+                    case "first_clear": unlockCard("card_01"); break;
+                    case "big_clear": unlockCard("card_03"); break;
+                    case "score_100": unlockCard("card_09"); break;
+                    default: break;
+                }
+            }
             achievementToast = "\u6210\u5c31\u89e3\u9501\uff1a" + title;
             achievementToastUntil = SystemClock.uptimeMillis() + 2200L;
             invalidate();
