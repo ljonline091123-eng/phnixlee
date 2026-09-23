@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhaocai.business.report.mapper.PriceAnalysisReportMapper">
+    <resultMap type="com.zhaocai.business.report.vo.PriceAnalysisReportVo" id="PriceAnalysisReportResult">
+        <result property="projectId" column="project_id"/>
+        <result property="projectCode" column="project_code"/>
+        <result property="projectName" column="project_name"/>
+        <result property="contractId" column="contract_id"/>
+        <result property="contractCode" column="contract_code"/>
+        <result property="contractName" column="contract_name"/>
+        <result property="contractTime" column="contract_time"/>
+        <result property="vendorId" column="vendor_id"/>
+        <result property="schemeId" column="scheme_id"/>
+        <result property="areaCode" column="area_code"/>
+        <result property="areaName" column="area_name"/>
+        <result property="costItemCode" column="cost_item_code"/>
+        <result property="costItemName" column="cost_item_name"/>
+        <result property="costItemBrand" column="cost_item_brand"/>
+        <result property="costItemSpecification" column="cost_item_specification"/>
+        <result property="costItemUnit" column="cost_item_unit"/>
+        <result property="taxUnitPrice" column="tax_unit_price"/>
+        <result property="notTaxUnitPrice" column="not_tax_unit_price"/>
+    </resultMap>
+    <select id="getPriceAnalysisReportResult" parameterType="com.zhaocai.business.report.vo.PriceAnalysisReportVo" resultMap="PriceAnalysisReportResult">
+        select tcp.project_code,tcp.project_name,
+               ta.id as contract_id,ta.agreement_code as contract_code,ta.agreement_name as contract_name,ta.agreement_sign_date as contract_time,ta.vendor_id,ta.scheme_id,
+               tv.enterprise_city_code as area_code,tv.enterprise_city_name as area_name,
+               taml.materials_code as cost_item_code,taml.materials_name as cost_item_name,taml.brand as cost_item_brand,taml.specification as cost_item_specification,taml.unit_measurement as cost_item_unit,
+               tbi.tax_unit_price,tbi.not_tax_unit_price
+        from tb_procurement_plan tpp
+        left join tb_contract_planning tcp on tcp.plan_id = tpp.id
+        left join tb_contract_planning_split tcps on tpp.id = tcps.procurement_plan_id
+        left join tb_agreement ta on tcps.id = ta.contract_split_id
+        left join tb_vendor tv on ta.vendor_id = tv.id
+        left join (select aml.agreement_id,aml.materials_code,aml.materials_name,aml.brand,ml.specification,ml.unit_measurement
+            from tb_agreement_materials_list aml
+            left join tb_materials_list ml on aml.materials_code = ml.materials_code) taml
+        on ta.id = taml.agreement_id
+        left join (select bi.scheme_id,bi.vendor_id,blq.materials_code,blq.tax_unit_price,blq.not_tax_unit_price from tb_bidding_info bi
+            left join tb_bidding_list_quotation blq on bi.id = blq.bidding_info_id) tbi
+        on ta.vendor_id = tbi.vendor_id and ta.scheme_id =tbi.scheme_id and taml.materials_code = tbi.materials_code
+        <where>
+            ta.agreement_state = '3'
+            <if test="costItemCode != null and costItemCode != ''">
+                AND taml.materials_code like concat('%',#{costItemCode},'%')
+            </if>
+            <if test="areaName != null and areaName != ''">
+                AND tv.enterprise_city_name like concat('%',#{areaName},'%')
+            </if>
+            <if test="startTime != null and startTime != '' and endTime != null and endTime != ''">
+                AND ta.agreement_sign_date >= #{startTime} and ta.agreement_sign_date &lt; #{endTime}
+            </if>
+        </where>
+    </select>
+</mapper>

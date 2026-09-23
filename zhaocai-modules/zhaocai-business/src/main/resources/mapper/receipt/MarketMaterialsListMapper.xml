@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhaocai.business.receipt.mapper.MarketMaterialsListMapper">
+
+    <!-- 通用查询映射结果 -->
+    <resultMap id="BaseResultMap" type="com.zhaocai.business.receipt.domain.MarketMaterialsList">
+        <result column="id" property="id" />
+        <result column="plan_id" property="planId" />
+        <result column="materials_name" property="materialsName" />
+        <result column="materials_code" property="materialsCode" />
+        <result column="category" property="category" />
+        <result column="unit_name" property="unitName" />
+        <result column="quantity" property="quantity" />
+        <result column="price" property="price" />
+        <result column="not_tax_price" property="notTaxPrice" />
+        <result column="tax_rate" property="taxRate" />
+        <result column="offer_price" property="offerPrice" />
+        <result column="brand" property="brand" />
+        <result column="goods_code" property="goodsCode" />
+        <result column="goods_name" property="goodsName" />
+        <result column="supply_code" property="supplyCode" />
+        <result column="supply_name" property="supplyName" />
+    </resultMap>
+
+    <!-- 通用查询结果列 -->
+    <sql id="Base_Column_List">
+        id,
+        plan_id, materials_name, materials_code, category, unit_name, quantity, price, not_tax_price, tax_rate, offer_price, brand, goods_code, goods_name, supply_code, supply_name
+    </sql>
+
+</mapper>

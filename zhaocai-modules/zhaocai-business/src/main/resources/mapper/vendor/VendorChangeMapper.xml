@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhaocai.business.vendor.mapper.VendorChangeMapper">
+    <resultMap type="com.zhaocai.business.vendor.domain.VendorChange" id="VendorChangeResult">
+        <result property="id" column="id"/>
+        <result property="enterpriseName" column="enterprise_name"/>
+        <result property="enterpriseCode" column="enterprise_code"/>
+        <result property="isExternal" column="is_external"/>
+        <result property="vendorAttribute" column="vendor_attribute"/>
+        <result property="establishDate" column="establish_date"/>
+        <result property="vendorStatus" column="vendor_status"/>
+        <result property="createdUnit" column="created_unit"/>
+        <result property="socialCreditCode" column="social_credit_code"/>
+        <result property="registeredCapital" column="registered_capital"/>
+        <result property="currencyCode" column="currency_code"/>
+        <result property="accountBranch" column="account_branch"/>
+        <result property="bankAccount" column="bank_account"/>
+        <result property="legalRepresentative" column="legal_representative"/>
+        <result property="legalPhone" column="legal_phone"/>
+        <result property="legalIdCard" column="legal_id_card"/>
+        <result property="enterpriseType" column="enterprise_type"/>
+        <result property="taxpayerType" column="taxpayer_type"/>
+        <result property="invoiceType" column="invoice_type"/>
+        <result property="enterpriseNature" column="enterprise_nature"/>
+        <result property="enterpriseProvinceCode" column="enterprise_province_code"/>
+        <result property="enterpriseProvinceName" column="enterprise_province_name"/>
+        <result property="enterpriseCityCode" column="enterprise_city_code"/>
+        <result property="enterpriseCityName" column="enterprise_city_name"/>
+        <result property="enterpriseAddress" column="enterprise_address"/>
+        <result property="contactPhone" column="contact_phone"/>
+        <result property="businessScope" column="business_scope"/>
+        <result property="enterpriseProfile" column="enterprise_profile"/>
+        <result property="firstCooperationCompanyCode" column="first_cooperation_company_code"/>
+        <result property="firstCooperationCompanyName" column="first_cooperation_company_name"/>
+        <result property="vendorClass" column="vendor_class"/>
+        <result property="vendorLevel" column="vendor_level"/>
+        <result property="state" column="state"/>
+        <result property="isBlack" column="is_black"/>
+        <result property="blackBeginDate" column="black_begin_date"/>
+        <result property="blackEndDate" column="black_end_date"/>
+        <result property="wfProcessId" column="wf_process_id"/>
+        <result property="createBy" column="create_by"/>
+        <result property="createId" column="create_id"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateBy" column="update_by"/>
+        <result property="updateId" column="update_id"/>
+        <result property="updateTime" column="update_time"/>
+        <result property="delFlag" column="del_flag"/>
+        <result property="vendorId" column="vendor_id"/>
+        <result property="version" column="version"/>
+        <result property="changeStatus" column="change_status"/>
+    </resultMap>
+
+</mapper>

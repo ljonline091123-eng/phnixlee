@@ -1,0 +1,187 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhaocai.business.receipt.mapper.ReceiptMaterialsTurnLedgerDtlDtlMapper">
+
+    <resultMap type="com.zhaocai.business.receipt.domain.ReceiptMaterialsTurnLedgerDtlDtl" id="ReceiptMaterialsTurnLedgerDtlDtlResult">
+        <result property="id"    column="id"    />
+        <result property="thirdId"    column="third_id"    />
+        <result property="amtIncludeTax"    column="amt_include_tax"    />
+        <result property="amtNoTax"    column="amt_no_tax"    />
+        <result property="amtTaxMoney"    column="amt_tax_money"    />
+        <result property="inDate"    column="in_date"    />
+        <result property="ledgerDtlId"    column="ledger_dtl_id"    />
+        <result property="ledgerId"    column="ledger_id"    />
+        <result property="inNum"    column="in_num"    />
+        <result property="materialCode"    column="material_code"    />
+        <result property="taxRate"    column="tax_rate"    />
+        <result property="unitIncludeTax"    column="unit_include_tax"    />
+        <result property="unitNoTax"    column="unit_no_tax"    />
+        <result property="unitTaxMoney"    column="unit_tax_money"    />
+        <result property="parntId"    column="parnt_id"    />
+        <result property="createDept"    column="create_dept"    />
+        <result property="createBy"    column="create_by"    />
+        <result property="createId"    column="create_id"    />
+        <result property="createTime"    column="create_time"    />
+        <result property="updateBy"    column="update_by"    />
+        <result property="updateId"    column="update_id"    />
+        <result property="updateTime"    column="update_time"    />
+        <result property="delFlag"    column="del_flag"    />
+    </resultMap>
+
+
+
+    <resultMap type="com.zhaocai.business.receipt.vo.req.ReceiptMaterialsTurnLedgerDtlDtlVO" id="ReceiptMaterialsTurnLedgerDtlDtlResultMap">
+        <result property="id"    column="id"    />
+        <result property="thirdId"    column="third_id"    />
+        <result property="amtIncludeTax"    column="amt_include_tax"    />
+        <result property="amtNoTax"    column="amt_no_tax"    />
+        <result property="amtTaxMoney"    column="amt_tax_money"    />
+        <result property="inDate"    column="in_date"    />
+        <result property="ledgerDtlId"    column="ledger_dtl_id"    />
+        <result property="ledgerId"    column="ledger_id"    />
+        <result property="inNum"    column="in_num"    />
+        <result property="materialCode"    column="material_code"    />
+        <result property="taxRate"    column="tax_rate"    />
+        <result property="unitIncludeTax"    column="unit_include_tax"    />
+        <result property="unitNoTax"    column="unit_no_tax"    />
+        <result property="unitTaxMoney"    column="unit_tax_money"    />
+        <result property="parntId"    column="parnt_id"    />
+        <result property="createDept"    column="create_dept"    />
+        <result property="createBy"    column="create_by"    />
+        <result property="createId"    column="create_id"    />
+        <result property="createTime"    column="create_time"    />
+        <result property="updateBy"    column="update_by"    />
+        <result property="updateId"    column="update_id"    />
+        <result property="updateTime"    column="update_time"    />
+        <result property="delFlag"    column="del_flag"    />
+    </resultMap>
+
+    <sql id="selectReceiptMaterialsTurnLedgerDtlDtlVo">
+        select id, third_id, amt_include_tax, amt_no_tax, amt_tax_money, in_date, ledger_dtl_id, ledger_id, in_num, material_code, tax_rate, unit_include_tax, unit_no_tax, unit_tax_money, parnt_id, create_dept, create_by, create_id, create_time, update_by, update_id, update_time, del_flag from tb_receipt_materials_turn_ledger_dtl_dtl
+    </sql>
+
+    <select id="selectList" parameterType="com.zhaocai.business.receipt.vo.req.ReceiptMaterialsTurnLedgerDtlDtlVO" resultMap="ReceiptMaterialsTurnLedgerDtlDtlResultMap">
+        <include refid="selectReceiptMaterialsTurnLedgerDtlDtlVo"/>
+        <where>
+            <if test="thirdId != null  and thirdId != ''"> and third_id = #{thirdId}</if>
+            <if test="amtIncludeTax != null "> and amt_include_tax = #{amtIncludeTax}</if>
+            <if test="amtNoTax != null "> and amt_no_tax = #{amtNoTax}</if>
+            <if test="amtTaxMoney != null "> and amt_tax_money = #{amtTaxMoney}</if>
+            <if test="inDate != null "> and in_date = #{inDate}</if>
+            <if test="ledgerDtlId != null  and ledgerDtlId != ''"> and ledger_dtl_id = #{ledgerDtlId}</if>
+            <if test="ledgerId != null  and ledgerId != ''"> and ledger_id = #{ledgerId}</if>
+            <if test="inNum != null "> and in_num = #{inNum}</if>
+            <if test="materialCode != null  and materialCode != ''"> and material_code = #{materialCode}</if>
+            <if test="taxRate != null "> and tax_rate = #{taxRate}</if>
+            <if test="unitIncludeTax != null "> and unit_include_tax = #{unitIncludeTax}</if>
+            <if test="unitNoTax != null "> and unit_no_tax = #{unitNoTax}</if>
+            <if test="unitTaxMoney != null "> and unit_tax_money = #{unitTaxMoney}</if>
+            <if test="parntId != null  and parntId != ''"> and parnt_id = #{parntId}</if>
+            <if test="createDept != null  and createDept != ''"> and create_dept = #{createDept}</if>
+            <if test="createId != null "> and create_id = #{createId}</if>
+            <if test="updateId != null "> and update_id = #{updateId}</if>
+        </where>
+        order by create_time desc
+    </select>
+
+    <select id="selectReceiptMaterialsTurnLedgerDtlDtlById" parameterType="Long" resultMap="ReceiptMaterialsTurnLedgerDtlDtlResult">
+        <include refid="selectReceiptMaterialsTurnLedgerDtlDtlVo"/>
+        where id = #{id}
+    </select>
+
+    <insert id="insertReceiptMaterialsTurnLedgerDtlDtl" parameterType="com.zhaocai.business.receipt.domain.ReceiptMaterialsTurnLedgerDtlDtl">
+        insert into tb_receipt_materials_turn_ledger_dtl_dtl
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="id != null">id,</if>
+            <if test="thirdId != null">third_id,</if>
+            <if test="amtIncludeTax != null">amt_include_tax,</if>
+            <if test="amtNoTax != null">amt_no_tax,</if>
+            <if test="amtTaxMoney != null">amt_tax_money,</if>
+            <if test="inDate != null">in_date,</if>
+            <if test="ledgerDtlId != null">ledger_dtl_id,</if>
+            <if test="ledgerId != null">ledger_id,</if>
+            <if test="inNum != null">in_num,</if>
+            <if test="materialCode != null">material_code,</if>
+            <if test="taxRate != null">tax_rate,</if>
+            <if test="unitIncludeTax != null">unit_include_tax,</if>
+            <if test="unitNoTax != null">unit_no_tax,</if>
+            <if test="unitTaxMoney != null">unit_tax_money,</if>
+            <if test="parntId != null">parnt_id,</if>
+            <if test="createDept != null">create_dept,</if>
+            <if test="createBy != null">create_by,</if>
+            <if test="createId != null">create_id,</if>
+            <if test="createTime != null">create_time,</if>
+            <if test="updateBy != null">update_by,</if>
+            <if test="updateId != null">update_id,</if>
+            <if test="updateTime != null">update_time,</if>
+            <if test="delFlag != null">del_flag,</if>
+         </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="id != null">#{id},</if>
+            <if test="thirdId != null">#{thirdId},</if>
+            <if test="amtIncludeTax != null">#{amtIncludeTax},</if>
+            <if test="amtNoTax != null">#{amtNoTax},</if>
+            <if test="amtTaxMoney != null">#{amtTaxMoney},</if>
+            <if test="inDate != null">#{inDate},</if>
+            <if test="ledgerDtlId != null">#{ledgerDtlId},</if>
+            <if test="ledgerId != null">#{ledgerId},</if>
+            <if test="inNum != null">#{inNum},</if>
+            <if test="materialCode != null">#{materialCode},</if>
+            <if test="taxRate != null">#{taxRate},</if>
+            <if test="unitIncludeTax != null">#{unitIncludeTax},</if>
+            <if test="unitNoTax != null">#{unitNoTax},</if>
+            <if test="unitTaxMoney != null">#{unitTaxMoney},</if>
+            <if test="parntId != null">#{parntId},</if>
+            <if test="createDept != null">#{createDept},</if>
+            <if test="createBy != null">#{createBy},</if>
+            <if test="createId != null">#{createId},</if>
+            <if test="createTime != null">#{createTime},</if>
+            <if test="updateBy != null">#{updateBy},</if>
+            <if test="updateId != null">#{updateId},</if>
+            <if test="updateTime != null">#{updateTime},</if>
+            <if test="delFlag != null">#{delFlag},</if>
+         </trim>
+    </insert>
+
+    <update id="updateReceiptMaterialsTurnLedgerDtlDtl" parameterType="com.zhaocai.business.receipt.domain.ReceiptMaterialsTurnLedgerDtlDtl">
+        update tb_receipt_materials_turn_ledger_dtl_dtl
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="thirdId != null">third_id = #{thirdId},</if>
+            <if test="amtIncludeTax != null">amt_include_tax = #{amtIncludeTax},</if>
+            <if test="amtNoTax != null">amt_no_tax = #{amtNoTax},</if>
+            <if test="amtTaxMoney != null">amt_tax_money = #{amtTaxMoney},</if>
+            <if test="inDate != null">in_date = #{inDate},</if>
+            <if test="ledgerDtlId != null">ledger_dtl_id = #{ledgerDtlId},</if>
+            <if test="ledgerId != null">ledger_id = #{ledgerId},</if>
+            <if test="inNum != null">in_num = #{inNum},</if>
+            <if test="materialCode != null">material_code = #{materialCode},</if>
+            <if test="taxRate != null">tax_rate = #{taxRate},</if>
+            <if test="unitIncludeTax != null">unit_include_tax = #{unitIncludeTax},</if>
+            <if test="unitNoTax != null">unit_no_tax = #{unitNoTax},</if>
+            <if test="unitTaxMoney != null">unit_tax_money = #{unitTaxMoney},</if>
+            <if test="parntId != null">parnt_id = #{parntId},</if>
+            <if test="createDept != null">create_dept = #{createDept},</if>
+            <if test="createBy != null">create_by = #{createBy},</if>
+            <if test="createId != null">create_id = #{createId},</if>
+            <if test="createTime != null">create_time = #{createTime},</if>
+            <if test="updateBy != null">update_by = #{updateBy},</if>
+            <if test="updateId != null">update_id = #{updateId},</if>
+            <if test="updateTime != null">update_time = #{updateTime},</if>
+            <if test="delFlag != null">del_flag = #{delFlag},</if>
+        </trim>
+        where id = #{id}
+    </update>
+
+    <delete id="deleteReceiptMaterialsTurnLedgerDtlDtlById" parameterType="Long">
+        delete from tb_receipt_materials_turn_ledger_dtl_dtl where id = #{id}
+    </delete>
+
+    <delete id="deleteReceiptMaterialsTurnLedgerDtlDtlByIds" parameterType="String">
+        delete from tb_receipt_materials_turn_ledger_dtl_dtl where id in
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+</mapper>

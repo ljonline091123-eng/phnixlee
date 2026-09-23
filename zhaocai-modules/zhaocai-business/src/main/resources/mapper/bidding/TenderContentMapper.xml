@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhaocai.business.bidding.mapper.TenderContentMapper">
+    
+    <resultMap type="com.zhaocai.business.bidding.domain.TenderContent" id="TenderContentResult">
+        <result property="id"    column="id"    />
+        <result property="biddingTime"    column="bidding_time"    />
+        <result property="contact"    column="contact"    />
+        <result property="phone"    column="phone"    />
+        <result property="email"    column="email"    />
+        <result property="tenderAttachId"    column="tender_attach_id"    />
+        <result property="evaluatAttachId"    column="evaluat_attach_id"    />
+        <result property="contractAttachId"    column="contract_attach_id"    />
+        <result property="projectId"    column="project_id"    />
+        <result property="schemeId"    column="scheme_id"    />
+        <result property="twiceBiddingTime"    column="twice_bidding_time"    />
+        <result property="createBy"    column="create_by"    />
+        <result property="createId"    column="create_id"    />
+        <result property="createTime"    column="create_time"    />
+        <result property="updateBy"    column="update_by"    />
+        <result property="updateId"    column="update_id"    />
+        <result property="updateTime"    column="update_time"    />
+        <result property="delFlag"    column="del_flag"    />
+    </resultMap>
+
+    <sql id="selectTenderContentVo">
+        select id, bidding_time, contact, phone, email, tender_attach_id, evaluat_attach_id, contract_attach_id, project_id, scheme_id, twice_bidding_time, create_by, create_id, create_time, update_by, update_id, update_time, del_flag from tb_tender_content
+    </sql>
+
+    <select id="selectTenderContentList" parameterType="com.zhaocai.business.bidding.domain.TenderContent" resultMap="TenderContentResult">
+        <include refid="selectTenderContentVo"/>
+        <where>  
+            <if test="biddingTime != null "> and bidding_time = #{biddingTime}</if>
+            <if test="contact != null  and contact != ''"> and contact = #{contact}</if>
+            <if test="phone != null  and phone != ''"> and phone = #{phone}</if>
+            <if test="email != null  and email != ''"> and email = #{email}</if>
+            <if test="tenderAttachId != null "> and tender_attach_id = #{tenderAttachId}</if>
+            <if test="evaluatAttachId != null "> and evaluat_attach_id = #{evaluatAttachId}</if>
+            <if test="contractAttachId != null "> and contract_attach_id = #{contractAttachId}</if>
+            <if test="projectId != null "> and project_id = #{projectId}</if>
+            <if test="schemeId != null "> and scheme_id = #{schemeId}</if>
+            <if test="twiceBiddingTime != null "> and twice_bidding_time = #{twiceBiddingTime}</if>
+            <if test="createId != null "> and create_id = #{createId}</if>
+            <if test="updateId != null "> and update_id = #{updateId}</if>
+            <if test="delFlag != null "> and del_flag = #{delFlag}</if>
+        </where>
+    </select>
+    
+    <select id="selectTenderContentById" parameterType="Long" resultMap="TenderContentResult">
+        <include refid="selectTenderContentVo"/>
+        where id = #{id}
+    </select>
+        
+    <insert id="insertTenderContent" parameterType="com.zhaocai.business.bidding.domain.TenderContent">
+        insert into tb_tender_content
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="id != null">id,</if>
+            <if test="biddingTime != null">bidding_time,</if>
+            <if test="contact != null">contact,</if>
+            <if test="phone != null">phone,</if>
+            <if test="email != null">email,</if>
+            <if test="tenderAttachId != null">tender_attach_id,</if>
+            <if test="evaluatAttachId != null">evaluat_attach_id,</if>
+            <if test="contractAttachId != null">contract_attach_id,</if>
+            <if test="projectId != null">project_id,</if>
+            <if test="schemeId != null">scheme_id,</if>
+            <if test="twiceBiddingTime != null">twice_bidding_time,</if>
+            <if test="createBy != null">create_by,</if>
+            <if test="createId != null">create_id,</if>
+            <if test="createTime != null">create_time,</if>
+            <if test="updateBy != null">update_by,</if>
+            <if test="updateId != null">update_id,</if>
+            <if test="updateTime != null">update_time,</if>
+            <if test="delFlag != null">del_flag,</if>
+         </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="id != null">#{id},</if>
+            <if test="biddingTime != null">#{biddingTime},</if>
+            <if test="contact != null">#{contact},</if>
+            <if test="phone != null">#{phone},</if>
+            <if test="email != null">#{email},</if>
+            <if test="tenderAttachId != null">#{tenderAttachId},</if>
+            <if test="evaluatAttachId != null">#{evaluatAttachId},</if>
+            <if test="contractAttachId != null">#{contractAttachId},</if>
+            <if test="projectId != null">#{projectId},</if>
+            <if test="schemeId != null">#{schemeId},</if>
+            <if test="twiceBiddingTime != null">#{twiceBiddingTime},</if>
+            <if test="createBy != null">#{createBy},</if>
+            <if test="createId != null">#{createId},</if>
+            <if test="createTime != null">#{createTime},</if>
+            <if test="updateBy != null">#{updateBy},</if>
+            <if test="updateId != null">#{updateId},</if>
+            <if test="updateTime != null">#{updateTime},</if>
+            <if test="delFlag != null">#{delFlag},</if>
+         </trim>
+    </insert>
+
+    <update id="updateTenderContent" parameterType="com.zhaocai.business.bidding.domain.TenderContent">
+        update tb_tender_content
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="biddingTime != null">bidding_time = #{biddingTime},</if>
+            <if test="contact != null">contact = #{contact},</if>
+            <if test="phone != null">phone = #{phone},</if>
+            <if test="email != null">email = #{email},</if>
+            <if test="tenderAttachId != null">tender_attach_id = #{tenderAttachId},</if>
+            <if test="evaluatAttachId != null">evaluat_attach_id = #{evaluatAttachId},</if>
+            <if test="contractAttachId != null">contract_attach_id = #{contractAttachId},</if>
+            <if test="projectId != null">project_id = #{projectId},</if>
+            <if test="schemeId != null">scheme_id = #{schemeId},</if>
+            <if test="twiceBiddingTime != null">twice_bidding_time = #{twiceBiddingTime},</if>
+            <if test="createBy != null">create_by = #{createBy},</if>
+            <if test="createId != null">create_id = #{createId},</if>
+            <if test="createTime != null">create_time = #{createTime},</if>
+            <if test="updateBy != null">update_by = #{updateBy},</if>
+            <if test="updateId != null">update_id = #{updateId},</if>
+            <if test="updateTime != null">update_time = #{updateTime},</if>
+            <if test="delFlag != null">del_flag = #{delFlag},</if>
+        </trim>
+        where id = #{id}
+    </update>
+
+    <delete id="deleteTenderContentById" parameterType="Long">
+        delete from tb_tender_content where id = #{id}
+    </delete>
+
+    <delete id="deleteTenderContentByIds" parameterType="String">
+        delete from tb_tender_content where id in 
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+</mapper>

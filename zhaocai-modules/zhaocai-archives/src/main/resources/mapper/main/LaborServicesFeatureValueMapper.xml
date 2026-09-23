@@ -1,0 +1,143 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhaocai.archives.main.mapper.LaborServicesFeatureValueMapper">
+
+    <resultMap type="com.zhaocai.archives.main.domain.LaborServicesFeatureValue" id="LaborServicesFeatureValueResult">
+        <result property="id" column="id"/>
+        <result property="laborServicesFeatureId" column="labor_services_feature_id"/>
+        <result property="featureValueName" column="feature_value_name"/>
+        <result property="featureValueCode" column="feature_value_code"/>
+        <result property="createId" column="create_id"/>
+        <result property="createBy" column="create_by"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateBy" column="update_by"/>
+        <result property="updateTime" column="update_time"/>
+        <result property="valid" column="valid"/>
+        <result property="sonId" column="son_id"/>
+    </resultMap>
+
+    <sql id="selectLaborServicesFeatureValueVo">
+        select id,
+               labor_services_feature_id,
+               feature_value_name,
+               feature_value_code,
+               create_id,
+               create_by,
+               create_time,
+               update_by,
+               update_time,
+               valid,
+               son_id
+        from labor_services_feature_value
+    </sql>
+
+    <select id="selectLaborServicesFeatureValueListCount" parameterType="com.zhaocai.archives.main.domain.LaborServicesFeatureValue"
+            resultType="long">
+        select count(1)
+        from labor_services_feature_value
+        <where>
+            <if test="laborServicesFeatureId != null  and laborServicesFeatureId != ''">and labor_services_feature_id =
+                #{laborServicesFeatureId}
+            </if>
+            <if test="featureValueName != null  and featureValueName != ''">and feature_value_name like concat('%',
+                #{featureValueName}, '%')
+            </if>
+            <if test="featureValueCode != null  and featureValueCode != ''">and feature_value_code =
+                #{featureValueCode}
+            </if>
+            <if test="createId != null  and createId != ''">and create_id = #{createId}</if>
+            <if test="valid != null ">and valid = #{valid}</if>
+            <if test="sonId != null ">and son_id = #{sonId}</if>
+        </where>
+    </select>
+
+
+    <select id="selectLaborServicesFeatureValueList" parameterType="com.zhaocai.archives.main.domain.LaborServicesFeatureValue"
+            resultMap="LaborServicesFeatureValueResult">
+        <include refid="selectLaborServicesFeatureValueVo"/>
+        <where>
+            <if test="laborServicesFeatureId != null  and laborServicesFeatureId != ''">and labor_services_feature_id =
+                #{laborServicesFeatureId}
+            </if>
+            <if test="featureValueName != null  and featureValueName != ''">and feature_value_name like concat('%',
+                #{featureValueName}, '%')
+            </if>
+            <if test="featureValueCode != null  and featureValueCode != ''">and feature_value_code =
+                #{featureValueCode}
+            </if>
+            <if test="createId != null  and createId != ''">and create_id = #{createId}</if>
+            <if test="valid != null ">and valid = #{valid}</if>
+            <if test="sonId != null ">and son_id = #{sonId}</if>
+        </where>
+        order by feature_value_code ASC
+    </select>
+
+    <select id="selectLaborServicesFeatureValueById" parameterType="String" resultMap="LaborServicesFeatureValueResult">
+        <include refid="selectLaborServicesFeatureValueVo"/>
+        where id = #{id}
+    </select>
+
+    <insert id="insertLaborServicesFeatureValue" parameterType="com.zhaocai.archives.main.domain.LaborServicesFeatureValue">
+        insert into labor_services_feature_value
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="id != null">id,</if>
+            <if test="laborServicesFeatureId != null">labor_services_feature_id,</if>
+            <if test="featureValueName != null and featureValueName != ''">feature_value_name,</if>
+            <if test="featureValueCode != null and featureValueCode != ''">feature_value_code,</if>
+            <if test="createId != null">create_id,</if>
+            <if test="createBy != null">create_by,</if>
+            <if test="createTime != null">create_time,</if>
+            <if test="updateBy != null">update_by,</if>
+            <if test="updateTime != null">update_time,</if>
+            <if test="valid != null">valid,</if>
+            <if test="sonId != null">son_id,</if>
+        </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="id != null">#{id},</if>
+            <if test="laborServicesFeatureId != null">#{laborServicesFeatureId},</if>
+            <if test="featureValueName != null and featureValueName != ''">#{featureValueName},</if>
+            <if test="featureValueCode != null and featureValueCode != ''">#{featureValueCode},</if>
+            <if test="createId != null">#{createId},</if>
+            <if test="createBy != null">#{createBy},</if>
+            <if test="createTime != null">#{createTime},</if>
+            <if test="updateBy != null">#{updateBy},</if>
+            <if test="updateTime != null">#{updateTime},</if>
+            <if test="valid != null">#{valid},</if>
+            <if test="sonId != null">#{sonId},</if>
+        </trim>
+    </insert>
+
+    <update id="updateLaborServicesFeatureValue" parameterType="com.zhaocai.archives.main.domain.LaborServicesFeatureValue">
+        update labor_services_feature_value
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="laborServicesFeatureId != null">labor_services_feature_id = #{laborServicesFeatureId},</if>
+            <if test="featureValueName != null and featureValueName != ''">feature_value_name = #{featureValueName},
+            </if>
+            <if test="featureValueCode != null and featureValueCode != ''">feature_value_code = #{featureValueCode},
+            </if>
+            <if test="createId != null">create_id = #{createId},</if>
+            <if test="createBy != null">create_by = #{createBy},</if>
+            <if test="createTime != null">create_time = #{createTime},</if>
+            <if test="updateBy != null">update_by = #{updateBy},</if>
+            <if test="updateTime != null">update_time = #{updateTime},</if>
+            <if test="valid != null">valid = #{valid},</if>
+            <if test="sonId != null">son_id = #{sonId},</if>
+        </trim>
+        where id = #{id}
+    </update>
+
+    <delete id="deleteLaborServicesFeatureValueById" parameterType="String">
+        delete
+        from labor_services_feature_value
+        where id = #{id}
+    </delete>
+
+    <delete id="deleteLaborServicesFeatureValueByIds" parameterType="String">
+        delete from labor_services_feature_value where id in
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+</mapper>

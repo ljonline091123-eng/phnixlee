@@ -1,0 +1,199 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhaocai.archives.main.mapper.LaborServicesArchivesMapper">
+
+    <resultMap type="com.zhaocai.archives.main.domain.LaborServicesArchives" id="LaborServicesArchivesResult">
+        <result property="id" column="id"/>
+        <result property="laborServicesClassId" column="labor_services_class_id"/>
+        <result property="laborServicesCode" column="labor_services_code"/>
+        <result property="laborServicesName" column="labor_services_name"/>
+        <result property="feature" column="feature"/>
+        <result property="measureUnit" column="measure_unit"/>
+        <result property="specs" column="specs"/>
+        <result property="metrologicalRules" column="metrological_rules"/>
+        <result property="basicJob" column="basic_job"/>
+        <result property="createId" column="create_id"/>
+        <result property="createBy" column="create_by"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateBy" column="update_by"/>
+        <result property="updateTime" column="update_time"/>
+        <result property="valid" column="valid"/>
+        <result property="sonId" column="son_id"/>
+    </resultMap>
+
+    <sql id="selectLaborServicesArchivesVo">
+        select id,
+               labor_services_class_id,
+               labor_services_code,
+               labor_services_name,
+               feature,
+               measure_unit,
+               specs,
+               metrological_rules,
+               basic_job,
+               create_id,
+               create_by,
+               create_time,
+               update_by,
+               update_time,
+               valid,
+               son_id
+        from labor_services_archives
+    </sql>
+
+    <select id="selectLaborServicesArchivesListCount" parameterType="com.zhaocai.archives.main.domain.LaborServicesArchives"
+            resultType="long">
+        select count(1)
+        from labor_services_archives
+        <where>
+            <if test="laborServicesClassId != null  and laborServicesClassId != ''">and labor_services_class_id =
+                #{laborServicesClassId}
+            </if>
+            <if test="laborServicesCode != null  and laborServicesCode != ''">and labor_services_code =
+                #{laborServicesCode}
+            </if>
+            <if test="laborServicesName != null  and laborServicesName != ''">and labor_services_name like concat('%',
+                #{laborServicesName}, '%')
+            </if>
+            <if test="feature != null  and feature != ''">and feature = #{feature}</if>
+            <if test="measureUnit != null  and measureUnit != ''">and measure_unit = #{measureUnit}</if>
+            <if test="specs != null  and specs != ''">and specs = #{specs}</if>
+            <if test="metrologicalRules != null  and metrologicalRules != ''">and metrological_rules =
+                #{metrologicalRules}
+            </if>
+            <if test="basicJob != null  and basicJob != ''">and basic_job = #{basicJob}</if>
+            <if test="createId != null  and createId != ''">and create_id = #{createId}</if>
+            <if test="valid != null ">and valid = #{valid}</if>
+            <if test="sonId != null ">and son_id = #{sonId}</if>
+        </where>
+    </select>
+
+    <select id="selectLaborServicesArchivesList" parameterType="com.zhaocai.archives.main.domain.LaborServicesArchives"
+            resultMap="LaborServicesArchivesResult">
+        <include refid="selectLaborServicesArchivesVo"/>
+        <where>
+            <if test="laborServicesClassId != null  and laborServicesClassId != ''">and labor_services_class_id =
+                #{laborServicesClassId}
+            </if>
+            <if test="laborServicesCode != null  and laborServicesCode != ''">and labor_services_code =
+                #{laborServicesCode}
+            </if>
+            <if test="laborServicesName != null  and laborServicesName != ''">and labor_services_name like concat('%',
+                #{laborServicesName}, '%')
+            </if>
+            <if test="feature != null  and feature != ''">and feature = #{feature}</if>
+            <if test="measureUnit != null  and measureUnit != ''">and measure_unit = #{measureUnit}</if>
+            <if test="specs != null  and specs != ''">and specs = #{specs}</if>
+            <if test="metrologicalRules != null  and metrologicalRules != ''">and metrological_rules =
+                #{metrologicalRules}
+            </if>
+            <if test="basicJob != null  and basicJob != ''">and basic_job = #{basicJob}</if>
+            <if test="createId != null  and createId != ''">and create_id = #{createId}</if>
+            <if test="valid != null ">and valid = #{valid}</if>
+            <if test="sonId != null ">and son_id = #{sonId}</if>
+            <if test="ids != null ">
+                and labor_services_class_id in
+                <foreach collection="ids" item="id" open="(" close=")" separator=",">
+                    #{id}
+                </foreach>
+            </if>
+        </where>
+        order by labor_services_code ASC
+    </select>
+
+    <select id="selectLaborServicesArchivesById" parameterType="String" resultMap="LaborServicesArchivesResult">
+        <include refid="selectLaborServicesArchivesVo"/>
+        where id = #{id}
+    </select>
+
+    <insert id="insertLaborServicesArchives" parameterType="com.zhaocai.archives.main.domain.LaborServicesArchives">
+        insert into labor_services_archives
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="id != null">id,</if>
+            <if test="laborServicesClassId != null and laborServicesClassId != ''">labor_services_class_id,</if>
+            <if test="laborServicesCode != null and laborServicesCode != ''">labor_services_code,</if>
+            <if test="laborServicesName != null and laborServicesName != ''">labor_services_name,</if>
+            <if test="feature != null">feature,</if>
+            <if test="measureUnit != null">measure_unit,</if>
+            <if test="specs != null">specs,</if>
+            <if test="metrologicalRules != null">metrological_rules,</if>
+            <if test="basicJob != null">basic_job,</if>
+            <if test="createId != null">create_id,</if>
+            <if test="createBy != null">create_by,</if>
+            <if test="createTime != null">create_time,</if>
+            <if test="updateBy != null">update_by,</if>
+            <if test="updateTime != null">update_time,</if>
+            <if test="valid != null">valid,</if>
+            <if test="sonId != null">son_id,</if>
+        </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="id != null">#{id},</if>
+            <if test="laborServicesClassId != null and laborServicesClassId != ''">#{laborServicesClassId},</if>
+            <if test="laborServicesCode != null and laborServicesCode != ''">#{laborServicesCode},</if>
+            <if test="laborServicesName != null and laborServicesName != ''">#{laborServicesName},</if>
+            <if test="feature != null">#{feature},</if>
+            <if test="measureUnit != null">#{measureUnit},</if>
+            <if test="specs != null">#{specs},</if>
+            <if test="metrologicalRules != null">#{metrologicalRules},</if>
+            <if test="basicJob != null">#{basicJob},</if>
+            <if test="createId != null">#{createId},</if>
+            <if test="createBy != null">#{createBy},</if>
+            <if test="createTime != null">#{createTime},</if>
+            <if test="updateBy != null">#{updateBy},</if>
+            <if test="updateTime != null">#{updateTime},</if>
+            <if test="valid != null">#{valid},</if>
+            <if test="sonId != null">#{sonId},</if>
+        </trim>
+    </insert>
+
+    <update id="updateLaborServicesArchives" parameterType="com.zhaocai.archives.main.domain.LaborServicesArchives">
+        update labor_services_archives
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="laborServicesClassId != null and laborServicesClassId != ''">labor_services_class_id =
+                #{laborServicesClassId},
+            </if>
+            <if test="laborServicesCode != null and laborServicesCode != ''">labor_services_code =
+                #{laborServicesCode},
+            </if>
+            <if test="laborServicesName != null and laborServicesName != ''">labor_services_name =
+                #{laborServicesName},
+            </if>
+            <if test="feature != null">feature = #{feature},</if>
+            <if test="measureUnit != null">measure_unit = #{measureUnit},</if>
+            <if test="specs != null">specs = #{specs},</if>
+            <if test="metrologicalRules != null">metrological_rules = #{metrologicalRules},</if>
+            <if test="basicJob != null">basic_job = #{basicJob},</if>
+            <if test="createId != null">create_id = #{createId},</if>
+            <if test="createBy != null">create_by = #{createBy},</if>
+            <if test="createTime != null">create_time = #{createTime},</if>
+            <if test="updateBy != null">update_by = #{updateBy},</if>
+            <if test="updateTime != null">update_time = #{updateTime},</if>
+            <if test="valid != null">valid = #{valid},</if>
+            <if test="sonId != null">son_id = #{sonId},</if>
+        </trim>
+        where id = #{id}
+    </update>
+
+    <delete id="deleteLaborServicesArchivesById" parameterType="String">
+        delete
+        from labor_services_archives
+        where id = #{id}
+    </delete>
+
+    <delete id="deleteLaborServicesArchivesByIds" parameterType="String">
+        delete from labor_services_archives where id in
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+
+    <select id="getMaxCode" resultType="Integer">
+        select max(CONVERT(replace(labor_services_code, #{oldCode}, ''), SIGNED)) as code
+        from labor_services_archives
+        where labor_services_class_id = #{typeId}
+          and valid = '0'
+
+    </select>
+</mapper>

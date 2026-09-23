@@ -1,0 +1,6 @@
+
+
+ALTER TABLE tb_min_project ADD min_account_simple_name varchar(255) NULL COMMENT '简称';
+
+
+

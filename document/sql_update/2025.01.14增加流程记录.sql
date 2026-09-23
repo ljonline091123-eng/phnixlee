@@ -1,0 +1,17 @@
+
+
+
+CREATE TABLE `tb_bpm_log` (
+  `id` bigint(20) NOT NULL COMMENT '主键 id',
+  `business_id` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '业务id',
+  `wf_process_id` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '流程id',
+  `bpm_type` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '流程类型(提交，审批，撤回，驳回)',
+  `bpm_url` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '流程发送地址',
+  `bpm_key` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '流程key zhaocai-000-ABC',
+  `bpm_param` text CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci COMMENT '提交参数',
+  `bpm_response` text CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci COMMENT '返回参数',
+  `create_by` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '创建人',
+  `create_id` bigint(20) DEFAULT NULL COMMENT '创建人 id',
+  `create_time` datetime DEFAULT NULL COMMENT '创建时间',
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='流程执行记录';

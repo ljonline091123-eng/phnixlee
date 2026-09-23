@@ -1,0 +1,281 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhaocai.business.receipt.mapper.ReceiptContractSettleMechanicalMapper">
+
+    <resultMap type="com.zhaocai.business.receipt.domain.ReceiptContractSettleMechanical" id="PushContractSettleMechanicalResult">
+        <result property="id"    column="id"    />
+        <result property="thirdId"    column="third_id"    />
+        <result property="costCollectionMode"    column="cost_collection_mode"    />
+        <result property="currentNtaxSettleAmount"    column="current_ntax_settle_amount"    />
+        <result property="currentSettleQuantity"    column="current_settle_quantity"    />
+        <result property="currentTax"    column="current_tax"    />
+        <result property="currentTaxSettleAmount"    column="current_tax_settle_amount"    />
+        <result property="currentTotalNtaxSettleAmount"    column="current_total_ntax_settle_amount"    />
+        <result property="currentTotalSettleQuantity"    column="current_total_settle_quantity"    />
+        <result property="currentTotalTax"    column="current_total_tax"    />
+        <result property="currentTotalTaxSettleAmount"    column="current_total_tax_settle_amount"    />
+        <result property="deviceCode"    column="device_code"    />
+        <result property="deviceName"    column="device_name"    />
+        <result property="measureUnit"    column="measure_unit"    />
+        <result property="ntaxPrice"    column="ntax_price"    />
+        <result property="preTotalNtaxSettleAmount"    column="pre_total_ntax_settle_amount"    />
+        <result property="preTotalSettleQuantity"    column="pre_total_settle_quantity"    />
+        <result property="preTotalTax"    column="pre_total_tax"    />
+        <result property="preTotalTaxSettleAmount"    column="pre_total_tax_settle_amount"    />
+        <result property="remark"    column="remark"    />
+        <result property="researchProject"    column="research_project"    />
+        <result property="settleId"    column="settle_id"    />
+        <result property="specs"    column="specs"    />
+        <result property="subjectCode"    column="subject_code"    />
+        <result property="subjectId"    column="subject_id"    />
+        <result property="subjectName"    column="subject_name"    />
+        <result property="tableId"    column="table_id"    />
+        <result property="tableUniqueId"    column="table_unique_id"    />
+        <result property="taxPrice"    column="tax_price"    />
+        <result property="taxRate"    column="tax_rate"    />
+        <result property="parntId"    column="parnt_id"    />
+        <result property="createDept"    column="create_dept"    />
+        <result property="createBy"    column="create_by"    />
+        <result property="createId"    column="create_id"    />
+        <result property="createTime"    column="create_time"    />
+        <result property="updateBy"    column="update_by"    />
+        <result property="updateId"    column="update_id"    />
+        <result property="updateTime"    column="update_time"    />
+        <result property="delFlag"    column="del_flag"    />
+    </resultMap>
+
+
+    <resultMap type="com.zhaocai.business.receipt.vo.req.ReceiptContractSettleMechanicalVO" id="PushContractSettleMechanicalResultMap">
+        <result property="id"    column="id"    />
+        <result property="thirdId"    column="third_id"    />
+        <result property="costCollectionMode"    column="cost_collection_mode"    />
+        <result property="currentNtaxSettleAmount"    column="current_ntax_settle_amount"    />
+        <result property="currentSettleQuantity"    column="current_settle_quantity"    />
+        <result property="currentTax"    column="current_tax"    />
+        <result property="currentTaxSettleAmount"    column="current_tax_settle_amount"    />
+        <result property="currentTotalNtaxSettleAmount"    column="current_total_ntax_settle_amount"    />
+        <result property="currentTotalSettleQuantity"    column="current_total_settle_quantity"    />
+        <result property="currentTotalTax"    column="current_total_tax"    />
+        <result property="currentTotalTaxSettleAmount"    column="current_total_tax_settle_amount"    />
+        <result property="deviceCode"    column="device_code"    />
+        <result property="deviceName"    column="device_name"    />
+        <result property="measureUnit"    column="measure_unit"    />
+        <result property="ntaxPrice"    column="ntax_price"    />
+        <result property="preTotalNtaxSettleAmount"    column="pre_total_ntax_settle_amount"    />
+        <result property="preTotalSettleQuantity"    column="pre_total_settle_quantity"    />
+        <result property="preTotalTax"    column="pre_total_tax"    />
+        <result property="preTotalTaxSettleAmount"    column="pre_total_tax_settle_amount"    />
+        <result property="remark"    column="remark"    />
+        <result property="researchProject"    column="research_project"    />
+        <result property="settleId"    column="settle_id"    />
+        <result property="specs"    column="specs"    />
+        <result property="subjectCode"    column="subject_code"    />
+        <result property="subjectId"    column="subject_id"    />
+        <result property="subjectName"    column="subject_name"    />
+        <result property="tableId"    column="table_id"    />
+        <result property="tableUniqueId"    column="table_unique_id"    />
+        <result property="taxPrice"    column="tax_price"    />
+        <result property="taxRate"    column="tax_rate"    />
+        <result property="parntId"    column="parnt_id"    />
+        <result property="createDept"    column="create_dept"    />
+        <result property="createBy"    column="create_by"    />
+        <result property="createId"    column="create_id"    />
+        <result property="createTime"    column="create_time"    />
+        <result property="updateBy"    column="update_by"    />
+        <result property="updateId"    column="update_id"    />
+        <result property="updateTime"    column="update_time"    />
+        <result property="delFlag"    column="del_flag"    />
+    </resultMap>
+
+    <sql id="selectPushContractSettleMechanicalVo">
+        select id, third_id, cost_collection_mode, current_ntax_settle_amount, current_settle_quantity, current_tax, current_tax_settle_amount, current_total_ntax_settle_amount, current_total_settle_quantity, current_total_tax, current_total_tax_settle_amount, device_code, device_name, measure_unit, ntax_price, pre_total_ntax_settle_amount, pre_total_settle_quantity, pre_total_tax, pre_total_tax_settle_amount, remark, research_project, settle_id, specs, subject_code, subject_id, subject_name, table_id, table_unique_id, tax_price, tax_rate, parnt_id, create_dept, create_by, create_id, create_time, update_by, update_id, update_time, del_flag from tb_receipt_contract_settle_mechanical
+    </sql>
+
+    <select id="selectList" parameterType="com.zhaocai.business.receipt.vo.req.ReceiptContractSettleMechanicalVO" resultMap="PushContractSettleMechanicalResultMap">
+        <include refid="selectPushContractSettleMechanicalVo"/>
+        <where>
+            <if test="thirdId != null  and thirdId != ''"> and third_id = #{thirdId}</if>
+            <if test="costCollectionMode != null  and costCollectionMode != ''"> and cost_collection_mode = #{costCollectionMode}</if>
+            <if test="currentNtaxSettleAmount != null "> and current_ntax_settle_amount = #{currentNtaxSettleAmount}</if>
+            <if test="currentSettleQuantity != null "> and current_settle_quantity = #{currentSettleQuantity}</if>
+            <if test="currentTax != null "> and current_tax = #{currentTax}</if>
+            <if test="currentTaxSettleAmount != null "> and current_tax_settle_amount = #{currentTaxSettleAmount}</if>
+            <if test="currentTotalNtaxSettleAmount != null "> and current_total_ntax_settle_amount = #{currentTotalNtaxSettleAmount}</if>
+            <if test="currentTotalSettleQuantity != null "> and current_total_settle_quantity = #{currentTotalSettleQuantity}</if>
+            <if test="currentTotalTax != null "> and current_total_tax = #{currentTotalTax}</if>
+            <if test="currentTotalTaxSettleAmount != null "> and current_total_tax_settle_amount = #{currentTotalTaxSettleAmount}</if>
+            <if test="deviceCode != null  and deviceCode != ''"> and device_code = #{deviceCode}</if>
+            <if test="deviceName != null  and deviceName != ''"> and device_name like concat('%', #{deviceName}, '%')</if>
+            <if test="measureUnit != null  and measureUnit != ''"> and measure_unit = #{measureUnit}</if>
+            <if test="ntaxPrice != null "> and ntax_price = #{ntaxPrice}</if>
+            <if test="preTotalNtaxSettleAmount != null "> and pre_total_ntax_settle_amount = #{preTotalNtaxSettleAmount}</if>
+            <if test="preTotalSettleQuantity != null "> and pre_total_settle_quantity = #{preTotalSettleQuantity}</if>
+            <if test="preTotalTax != null "> and pre_total_tax = #{preTotalTax}</if>
+            <if test="preTotalTaxSettleAmount != null "> and pre_total_tax_settle_amount = #{preTotalTaxSettleAmount}</if>
+            <if test="researchProject != null  and researchProject != ''"> and research_project = #{researchProject}</if>
+            <if test="settleId != null  and settleId != ''"> and settle_id = #{settleId}</if>
+            <if test="specs != null  and specs != ''"> and specs = #{specs}</if>
+            <if test="subjectCode != null  and subjectCode != ''"> and subject_code = #{subjectCode}</if>
+            <if test="subjectId != null  and subjectId != ''"> and subject_id = #{subjectId}</if>
+            <if test="subjectName != null  and subjectName != ''"> and subject_name like concat('%', #{subjectName}, '%')</if>
+            <if test="tableId != null  and tableId != ''"> and table_id = #{tableId}</if>
+            <if test="tableUniqueId != null  and tableUniqueId != ''"> and table_unique_id = #{tableUniqueId}</if>
+            <if test="taxPrice != null "> and tax_price = #{taxPrice}</if>
+            <if test="taxRate != null "> and tax_rate = #{taxRate}</if>
+            <if test="parntId != null  and parntId != ''"> and parnt_id = #{parntId}</if>
+            <if test="createDept != null  and createDept != ''"> and create_dept = #{createDept}</if>
+            <if test="createId != null "> and create_id = #{createId}</if>
+            <if test="updateId != null "> and update_id = #{updateId}</if>
+        </where>
+        order by create_time desc
+    </select>
+
+    <select id="selectPushContractSettleMechanicalById" parameterType="Long" resultMap="PushContractSettleMechanicalResult">
+        <include refid="selectPushContractSettleMechanicalVo"/>
+        where id = #{id}
+    </select>
+
+    <insert id="insertPushContractSettleMechanical" parameterType="com.zhaocai.business.receipt.domain.ReceiptContractSettleMechanical">
+        insert into tb_receipt_contract_settle_mechanical
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="id != null">id,</if>
+            <if test="thirdId != null">third_id,</if>
+            <if test="costCollectionMode != null">cost_collection_mode,</if>
+            <if test="currentNtaxSettleAmount != null">current_ntax_settle_amount,</if>
+            <if test="currentSettleQuantity != null">current_settle_quantity,</if>
+            <if test="currentTax != null">current_tax,</if>
+            <if test="currentTaxSettleAmount != null">current_tax_settle_amount,</if>
+            <if test="currentTotalNtaxSettleAmount != null">current_total_ntax_settle_amount,</if>
+            <if test="currentTotalSettleQuantity != null">current_total_settle_quantity,</if>
+            <if test="currentTotalTax != null">current_total_tax,</if>
+            <if test="currentTotalTaxSettleAmount != null">current_total_tax_settle_amount,</if>
+            <if test="deviceCode != null">device_code,</if>
+            <if test="deviceName != null">device_name,</if>
+            <if test="measureUnit != null">measure_unit,</if>
+            <if test="ntaxPrice != null">ntax_price,</if>
+            <if test="preTotalNtaxSettleAmount != null">pre_total_ntax_settle_amount,</if>
+            <if test="preTotalSettleQuantity != null">pre_total_settle_quantity,</if>
+            <if test="preTotalTax != null">pre_total_tax,</if>
+            <if test="preTotalTaxSettleAmount != null">pre_total_tax_settle_amount,</if>
+            <if test="remark != null">remark,</if>
+            <if test="researchProject != null">research_project,</if>
+            <if test="settleId != null">settle_id,</if>
+            <if test="specs != null">specs,</if>
+            <if test="subjectCode != null">subject_code,</if>
+            <if test="subjectId != null">subject_id,</if>
+            <if test="subjectName != null">subject_name,</if>
+            <if test="tableId != null">table_id,</if>
+            <if test="tableUniqueId != null">table_unique_id,</if>
+            <if test="taxPrice != null">tax_price,</if>
+            <if test="taxRate != null">tax_rate,</if>
+            <if test="parntId != null">parnt_id,</if>
+            <if test="createDept != null">create_dept,</if>
+            <if test="createBy != null">create_by,</if>
+            <if test="createId != null">create_id,</if>
+            <if test="createTime != null">create_time,</if>
+            <if test="updateBy != null">update_by,</if>
+            <if test="updateId != null">update_id,</if>
+            <if test="updateTime != null">update_time,</if>
+            <if test="delFlag != null">del_flag,</if>
+         </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="id != null">#{id},</if>
+            <if test="thirdId != null">#{thirdId},</if>
+            <if test="costCollectionMode != null">#{costCollectionMode},</if>
+            <if test="currentNtaxSettleAmount != null">#{currentNtaxSettleAmount},</if>
+            <if test="currentSettleQuantity != null">#{currentSettleQuantity},</if>
+            <if test="currentTax != null">#{currentTax},</if>
+            <if test="currentTaxSettleAmount != null">#{currentTaxSettleAmount},</if>
+            <if test="currentTotalNtaxSettleAmount != null">#{currentTotalNtaxSettleAmount},</if>
+            <if test="currentTotalSettleQuantity != null">#{currentTotalSettleQuantity},</if>
+            <if test="currentTotalTax != null">#{currentTotalTax},</if>
+            <if test="currentTotalTaxSettleAmount != null">#{currentTotalTaxSettleAmount},</if>
+            <if test="deviceCode != null">#{deviceCode},</if>
+            <if test="deviceName != null">#{deviceName},</if>
+            <if test="measureUnit != null">#{measureUnit},</if>
+            <if test="ntaxPrice != null">#{ntaxPrice},</if>
+            <if test="preTotalNtaxSettleAmount != null">#{preTotalNtaxSettleAmount},</if>
+            <if test="preTotalSettleQuantity != null">#{preTotalSettleQuantity},</if>
+            <if test="preTotalTax != null">#{preTotalTax},</if>
+            <if test="preTotalTaxSettleAmount != null">#{preTotalTaxSettleAmount},</if>
+            <if test="remark != null">#{remark},</if>
+            <if test="researchProject != null">#{researchProject},</if>
+            <if test="settleId != null">#{settleId},</if>
+            <if test="specs != null">#{specs},</if>
+            <if test="subjectCode != null">#{subjectCode},</if>
+            <if test="subjectId != null">#{subjectId},</if>
+            <if test="subjectName != null">#{subjectName},</if>
+            <if test="tableId != null">#{tableId},</if>
+            <if test="tableUniqueId != null">#{tableUniqueId},</if>
+            <if test="taxPrice != null">#{taxPrice},</if>
+            <if test="taxRate != null">#{taxRate},</if>
+            <if test="parntId != null">#{parntId},</if>
+            <if test="createDept != null">#{createDept},</if>
+            <if test="createBy != null">#{createBy},</if>
+            <if test="createId != null">#{createId},</if>
+            <if test="createTime != null">#{createTime},</if>
+            <if test="updateBy != null">#{updateBy},</if>
+            <if test="updateId != null">#{updateId},</if>
+            <if test="updateTime != null">#{updateTime},</if>
+            <if test="delFlag != null">#{delFlag},</if>
+         </trim>
+    </insert>
+
+    <update id="updatePushContractSettleMechanical" parameterType="com.zhaocai.business.receipt.domain.ReceiptContractSettleMechanical">
+        update tb_receipt_contract_settle_mechanical
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="thirdId != null">third_id = #{thirdId},</if>
+            <if test="costCollectionMode != null">cost_collection_mode = #{costCollectionMode},</if>
+            <if test="currentNtaxSettleAmount != null">current_ntax_settle_amount = #{currentNtaxSettleAmount},</if>
+            <if test="currentSettleQuantity != null">current_settle_quantity = #{currentSettleQuantity},</if>
+            <if test="currentTax != null">current_tax = #{currentTax},</if>
+            <if test="currentTaxSettleAmount != null">current_tax_settle_amount = #{currentTaxSettleAmount},</if>
+            <if test="currentTotalNtaxSettleAmount != null">current_total_ntax_settle_amount = #{currentTotalNtaxSettleAmount},</if>
+            <if test="currentTotalSettleQuantity != null">current_total_settle_quantity = #{currentTotalSettleQuantity},</if>
+            <if test="currentTotalTax != null">current_total_tax = #{currentTotalTax},</if>
+            <if test="currentTotalTaxSettleAmount != null">current_total_tax_settle_amount = #{currentTotalTaxSettleAmount},</if>
+            <if test="deviceCode != null">device_code = #{deviceCode},</if>
+            <if test="deviceName != null">device_name = #{deviceName},</if>
+            <if test="measureUnit != null">measure_unit = #{measureUnit},</if>
+            <if test="ntaxPrice != null">ntax_price = #{ntaxPrice},</if>
+            <if test="preTotalNtaxSettleAmount != null">pre_total_ntax_settle_amount = #{preTotalNtaxSettleAmount},</if>
+            <if test="preTotalSettleQuantity != null">pre_total_settle_quantity = #{preTotalSettleQuantity},</if>
+            <if test="preTotalTax != null">pre_total_tax = #{preTotalTax},</if>
+            <if test="preTotalTaxSettleAmount != null">pre_total_tax_settle_amount = #{preTotalTaxSettleAmount},</if>
+            <if test="remark != null">remark = #{remark},</if>
+            <if test="researchProject != null">research_project = #{researchProject},</if>
+            <if test="settleId != null">settle_id = #{settleId},</if>
+            <if test="specs != null">specs = #{specs},</if>
+            <if test="subjectCode != null">subject_code = #{subjectCode},</if>
+            <if test="subjectId != null">subject_id = #{subjectId},</if>
+            <if test="subjectName != null">subject_name = #{subjectName},</if>
+            <if test="tableId != null">table_id = #{tableId},</if>
+            <if test="tableUniqueId != null">table_unique_id = #{tableUniqueId},</if>
+            <if test="taxPrice != null">tax_price = #{taxPrice},</if>
+            <if test="taxRate != null">tax_rate = #{taxRate},</if>
+            <if test="parntId != null">parnt_id = #{parntId},</if>
+            <if test="createDept != null">create_dept = #{createDept},</if>
+            <if test="createBy != null">create_by = #{createBy},</if>
+            <if test="createId != null">create_id = #{createId},</if>
+            <if test="createTime != null">create_time = #{createTime},</if>
+            <if test="updateBy != null">update_by = #{updateBy},</if>
+            <if test="updateId != null">update_id = #{updateId},</if>
+            <if test="updateTime != null">update_time = #{updateTime},</if>
+            <if test="delFlag != null">del_flag = #{delFlag},</if>
+        </trim>
+        where id = #{id}
+    </update>
+
+    <delete id="deletePushContractSettleMechanicalById" parameterType="Long">
+        delete from tb_receipt_contract_settle_mechanical where id = #{id}
+    </delete>
+
+    <delete id="deletePushContractSettleMechanicalByIds" parameterType="String">
+        delete from tb_receipt_contract_settle_mechanical where id in
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+</mapper>

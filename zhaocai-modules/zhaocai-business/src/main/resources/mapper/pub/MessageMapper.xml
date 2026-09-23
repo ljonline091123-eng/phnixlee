@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhaocai.business.pub.mapper.MessageMapper">
+
+    <resultMap type="com.zhaocai.business.pub.domain.Message" id="MessageResult">
+        <result property="id"    column="id"    />
+        <result property="messageTitle"    column="message_title"    />
+        <result property="messageType"    column="message_type"    />
+        <result property="messageContent"    column="message_content"    />
+        <result property="createBy"    column="create_by"    />
+        <result property="createId"    column="create_id"    />
+        <result property="createTime"    column="create_time"    />
+        <result property="updateBy"    column="update_by"    />
+        <result property="updateId"    column="update_id"    />
+        <result property="updateTime"    column="update_time"    />
+        <result property="delFlag"    column="del_flag"    />
+        <result property="msgMan"    column="msg_man"    />
+        <result property="readFlag"    column="read_flag"    />
+        <result property="businessId"    column="business_id"    />
+        <result property="detailUrl"    column="detail_url"    />
+        <result property="msgManName"    column="msg_man_name"    />
+    </resultMap>
+
+    <sql id="selectMessageVo">
+        select id, message_title, message_type, message_content, create_by, create_id, create_time,
+         update_by, update_id, update_time, del_flag, msg_man, read_flag, business_id, detail_url, msg_man_name from tb_message
+    </sql>
+
+    <select id="selectMessageList" parameterType="com.zhaocai.business.pub.domain.Message" resultMap="MessageResult">
+        <include refid="selectMessageVo"/>
+        <where>
+            <if test="messageTitle != null  and messageTitle != ''"> and message_title = #{messageTitle}</if>
+            <if test="messageType != null "> and message_type = #{messageType}</if>
+            <if test="messageContent != null  and messageContent != ''"> and message_content = #{messageContent}</if>
+            <if test="createId != null "> and create_id = #{createId}</if>
+            <if test="updateId != null "> and update_id = #{updateId}</if>
+            <if test="delFlag != null "> and del_flag = #{delFlag}</if>
+            <if test="msgMan != null "> and msg_man = #{msgMan}</if>
+            <if test="readFlag != null  and readFlag != ''"> and read_flag = #{readFlag}</if>
+            <if test="businessId != null  and businessId != ''"> and business_id = #{businessId}</if>
+            <if test="detailUrl != null  and detailUrl != ''"> and detail_url = #{detailUrl}</if>
+            <if test="msgManName != null  and msgManName != ''"> and msg_man_name = #{msgManName}</if>
+
+        </where>
+    </select>
+
+    <select id="selectMessageById" parameterType="String" resultMap="MessageResult">
+        <include refid="selectMessageVo"/>
+        where id = #{id}
+    </select>
+
+    <insert id="insertMessage" parameterType="com.zhaocai.business.pub.domain.Message">
+        insert into tb_message
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="id != null">id,</if>
+            <if test="messageTitle != null and messageTitle != ''">message_title,</if>
+            <if test="messageType != null">message_type,</if>
+            <if test="messageContent != null and messageContent != ''">message_content,</if>
+            <if test="createBy != null">create_by,</if>
+            <if test="createId != null">create_id,</if>
+            <if test="createTime != null">create_time,</if>
+            <if test="updateBy != null">update_by,</if>
+            <if test="updateId != null">update_id,</if>
+            <if test="updateTime != null">update_time,</if>
+            <if test="delFlag != null">del_flag,</if>
+            <if test="msgMan != null ">msg_man,</if>
+            <if test="readFlag != null  and readFlag != ''">read_flag,</if>
+            <if test="businessId != null  and businessId != ''">business_id,</if>
+            <if test="detailUrl != null  and detailUrl != ''">detail_url,</if>
+            <if test="msgManName != null  and msgManName != ''">msg_man_name,</if>
+         </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="id != null">#{id},</if>
+            <if test="messageTitle != null and messageTitle != ''">#{messageTitle},</if>
+            <if test="messageType != null">#{messageType},</if>
+            <if test="messageContent != null and messageContent != ''">#{messageContent},</if>
+            <if test="createBy != null">#{createBy},</if>
+            <if test="createId != null">#{createId},</if>
+            <if test="createTime != null">#{createTime},</if>
+            <if test="updateBy != null">#{updateBy},</if>
+            <if test="updateId != null">#{updateId},</if>
+            <if test="updateTime != null">#{updateTime},</if>
+            <if test="delFlag != null">#{delFlag},</if>
+            <if test="msgMan != null ">#{msgMan},</if>
+            <if test="readFlag != null  and readFlag != ''">#{readFlag},</if>
+            <if test="businessId != null  and businessId != ''">#{businessId},</if>
+            <if test="detailUrl != null  and detailUrl != ''">#{detailUrl},</if>
+            <if test="msgManName != null  and msgManName != ''">#{msgManName},</if>
+         </trim>
+    </insert>
+
+    <update id="updateMessage" parameterType="com.zhaocai.business.pub.domain.Message">
+        update tb_message
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="messageTitle != null and messageTitle != ''">message_title = #{messageTitle},</if>
+            <if test="messageType != null">message_type = #{messageType},</if>
+            <if test="messageContent != null and messageContent != ''">message_content = #{messageContent},</if>
+            <if test="createBy != null">create_by = #{createBy},</if>
+            <if test="createId != null">create_id = #{createId},</if>
+            <if test="createTime != null">create_time = #{createTime},</if>
+            <if test="updateBy != null">update_by = #{updateBy},</if>
+            <if test="updateId != null">update_id = #{updateId},</if>
+            <if test="updateTime != null">update_time = #{updateTime},</if>
+            <if test="delFlag != null">del_flag = #{delFlag},</if>
+            <if test="msgMan != null ">  msg_man = #{msgMan},</if>
+            <if test="readFlag != null  and readFlag != ''">  read_flag = #{readFlag},</if>
+            <if test="businessId != null  and businessId != ''">  business_id = #{businessId},</if>
+            <if test="detailUrl != null  and detailUrl != ''">  detail_url = #{detailUrl},</if>
+            <if test="msgManName != null  and msgManName != ''">  msg_man_name = #{msgManName}</if>
+        </trim>
+        where id = #{id}
+    </update>
+
+    <delete id="deleteMessageById" parameterType="String">
+        delete from tb_message where id = #{id}
+    </delete>
+
+    <delete id="deleteMessageByIds" parameterType="String">
+        delete from tb_message where id in
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+</mapper>

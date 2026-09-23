@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhaocai.business.expert.mapper.ExpertScoreMapper">
+
+    <resultMap type="com.zhaocai.business.expert.domain.ExpertScore" id="ExpertScoreResult">
+        <result property="id"    column="id"    />
+        <result property="schemeId"    column="scheme_id"    />
+        <result property="noticeId"    column="notice_id"    />
+        <result property="biddingInfoId"    column="bidding_info_id"    />
+        <result property="vendorId"    column="vendor_id"    />
+        <result property="expertId"    column="expert_id"    />
+        <result property="busScore"    column="bus_score"    />
+        <result property="techScore"    column="tech_score"    />
+        <result property="quotation"    column="quotation"    />
+        <result property="evaTime"    column="eva_time"    />
+        <result property="evaOpinion"    column="eva_opinion"    />
+        <result property="evalStatus"    column="eval_status"    />
+        <result property="createBy"    column="create_by"    />
+        <result property="createId"    column="create_id"    />
+        <result property="createTime"    column="create_time"    />
+        <result property="updateBy"    column="update_by"    />
+        <result property="updateId"    column="update_id"    />
+        <result property="updateTime"    column="update_time"    />
+        <result property="delFlag"    column="del_flag"    />
+    </resultMap>
+
+    <sql id="selectExpertScoreVo">
+        select id, scheme_id, notice_id, bidding_info_id, vendor_id, expert_id, bus_score, tech_score,quotation, eva_time, eva_opinion, eval_status, create_by, create_id, create_time, update_by, update_id, update_time, del_flag from tb_expert_score
+    </sql>
+
+    <select id="findNotEvalVendorCount" resultType="java.lang.Integer">
+        SELECT count(bi.id)
+        FROM tb_bidding_info bi
+        inner join tb_tender_notice tn on tn.id = bi.notice_id
+        inner join tb_procurement_scheme ps on ps.id = tn.scheme_id
+        where
+        ps.id = #{queryDTO.schemeId}
+        and bi.vendor_id != #{queryDTO.vendorId}
+        and bi.id not in (
+        select es.bidding_info_id from tb_expert_score es
+        where es.bidding_info_id = bi.id and es.vendor_id = bi.vendor_id and es.expert_id = #{queryDTO.expertId}
+        )
+        <if test="queryDTO.noticeId != null">
+            and tn.id = #{queryDTO.noticeId}
+        </if>
+    </select>
+
+</mapper>

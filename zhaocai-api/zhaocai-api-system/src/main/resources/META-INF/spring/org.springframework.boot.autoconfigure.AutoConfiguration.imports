@@ -1,0 +1,4 @@
+com.zhaocai.system.api.factory.RemoteUserFallbackFactory
+com.zhaocai.system.api.factory.RemoteLogFallbackFactory
+com.zhaocai.system.api.factory.RemoteFileFallbackFactory
+com.zhaocai.system.api.factory.RemoteBusinessFallbackFactory

@@ -1,0 +1,2 @@
+com.zhaocai.common.log.service.AsyncLogService
+com.zhaocai.common.log.aspect.LogAspect

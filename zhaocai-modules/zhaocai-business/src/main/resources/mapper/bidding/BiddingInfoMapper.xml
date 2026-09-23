@@ -1,0 +1,236 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhaocai.business.bidding.mapper.BiddingInfoMapper">
+    <resultMap type="com.zhaocai.business.bidding.domain.BiddingInfo" id="BiddingInfoResult">
+        <result property="id" column="id"/>
+        <result property="parentId" column="parent_id"/>
+        <result property="projectId" column="project_id"/>
+        <result property="schemeId" column="scheme_id"/>
+        <result property="noticeId" column="notice_id"/>
+        <result property="taxPrice" column="tax_price"/>
+        <result property="notTaxPrice" column="not_tax_price"/>
+        <result property="contact" column="contact"/>
+        <result property="phone" column="phone"/>
+        <result property="submitStatus" column="submit_status"/>
+        <result property="biddingStatus" column="bidding_status"/>
+        <result property="ipAddress" column="ip_address"/>
+        <result property="vendorId" column="vendor_id"/>
+        <result property="vendorName" column="vendor_name"/>
+        <result property="collectDeposit" column="collect_deposit"/>
+        <result property="twiceQuot" column="twice_quot"/>
+        <result property="twiceTime" column="twice_time"/>
+        <result property="createBy" column="create_by"/>
+        <result property="createId" column="create_id"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateBy" column="update_by"/>
+        <result property="updateId" column="update_id"/>
+        <result property="updateTime" column="update_time"/>
+        <result property="delFlag" column="del_flag"/>
+        <result property="twiceQuotVersion"    column="twice_quot_version"    />
+        <result property="priceChangeState"    column="price_change_state"    />
+        <result property="expertState"    column="expert_state"    />
+    </resultMap>
+
+    <sql id="selectBiddingInfoVo">
+        select id,
+               parent_id,
+               project_id,
+               scheme_id,
+               notice_id,
+               tax_price,
+               not_tax_price,
+               contact,
+               phone,
+               submit_status,
+               bidding_status,
+               ip_address,
+               vendor_id,
+               vendor_name,
+               collect_deposit,
+               twice_quot,
+               twice_time,
+               create_by,
+               create_id,
+               create_time,
+               update_by,
+               update_id,
+               update_time,
+               del_flag,
+               twice_quot_version,
+               price_change_state,
+               expert_state
+        from tb_bidding_info
+    </sql>
+
+    <select id="selectBiddingInfoList" resultType="com.zhaocai.business.bidding.vo.res.BiddingInfoListVO">
+        select bi.id,
+               bi.vendor_id,
+               bi.vendor_name,
+               bi.contact,
+               bi.phone,
+               bi.collect_deposit,
+               bi.bidding_status,
+               bi.create_time,
+                bi.update_time,
+               bi.ip_address,
+               bi.tax_price,
+               bi.not_tax_price
+        from tb_bidding_info bi
+        <where>
+            bi.del_flag = 0
+              and (bi.parent_id is null)
+            <if test="query.noticeId != null and query.noticeId != ''">
+                and bi.notice_id = #{query.noticeId}
+            </if>
+            <if test="query.schemeId != null and query.schemeId != ''">
+                and bi.scheme_id = #{query.schemeId}
+            </if>
+            <if test="query.excludeBiddingStatus != null">
+                and bi.bidding_status != #{query.excludeBiddingStatus}
+            </if>
+        </where>
+    </select>
+
+    <select id="selectBiddingInfoOpenList" resultType="com.zhaocai.business.bidding.vo.res.BiddingInfoOpenListVO">
+        select distinct bi.id,
+        bi.vendor_id,
+        bi.vendor_name,
+        bi.contact,
+        bi.phone,
+        bi.collect_deposit,
+        bi.bidding_status,
+        bi.create_time,
+        bi.ip_address,
+        CASE WHEN bop.id is null or bi.id = '' THEN '未设置开标人员'
+        ELSE '已设置开标人员' END openPeopleStatus
+        from tb_bidding_info bi
+        left join tb_bidding_open_people bop on bop.notice_id = bi.notice_id
+        <where>
+            bi.del_flag = 0
+            and bi.parent_id is null
+            <if test="query.noticeId != null and query.noticeId != ''">
+                and bi.notice_id = #{query.noticeId}
+            </if>
+            <if test="query.schemeId != null and query.schemeId != ''">
+                and bi.scheme_id = #{query.schemeId}
+            </if>
+            <if test="query.excludeBiddingStatus != null">
+                and bi.bidding_status != #{query.excludeBiddingStatus}
+            </if>
+        </where>
+    </select>
+
+
+    <select id="findBiddingQuotationListTongJi" resultType="com.zhaocai.business.bidding.vo.res.BiddingQuotationListVO">
+        select bi.id,
+               bi.notice_id,
+               bi.scheme_id,
+               bi.vendor_name,
+               bi.contact,
+               bi.phone,
+               bi.tax_price,
+               bi.not_tax_price,
+               bi.twice_quot,
+               bi.vendor_id,
+               bi.parent_id,
+               bi.twice_time,
+               bi.twice_quot,
+               bi.twice_quot_version,
+               bi.price_change_state
+        from tb_bidding_info bi
+        <where>
+            bi.del_flag = 0 and bi.bidding_status != 3
+            <if test="query.noticeId != null and query.noticeId != ''">
+                and bi.notice_id = #{query.noticeId}
+            </if>
+            <if test="query.schemeId != null and query.schemeId != ''">
+                and bi.scheme_id = #{query.schemeId}
+            </if>
+        </where>
+<!--        order by bi.not_tax_price-->
+    </select>
+
+
+    <select id="findBiddingQuotationList" resultType="com.zhaocai.business.bidding.vo.res.BiddingQuotationListVO">
+        select bi.id,
+        bi.notice_id,
+        bi.scheme_id,
+        bi.vendor_name,
+        bi.contact,
+        bi.phone,
+        bi.tax_price,
+        bi.not_tax_price,
+        bi.twice_quot,
+        bi.vendor_id,
+        bi.parent_id,
+        bi.twice_time,
+        bi.twice_quot,
+        bi.twice_quot_version,
+        bi.price_change_state
+        from tb_bidding_info bi
+        <where>
+            bi.del_flag = 0 and bi.bidding_status != 3
+            and (bi.parent_id is null)
+            <if test="query.noticeId != null and query.noticeId != ''">
+                and bi.notice_id = #{query.noticeId}
+            </if>
+            <if test="query.schemeId != null and query.schemeId != ''">
+                and bi.scheme_id = #{query.schemeId}
+            </if>
+        </where>
+        <!--        order by bi.not_tax_price-->
+    </select>
+
+    <resultMap type="com.zhaocai.business.procurement.vo.res.ProcurementSchemeBiddingVendorVO" id="ProcurementSchemeBiddingVendoResult">
+        <result property="vendorId" column="vendor_id"/>
+        <result property="vendorName" column="vendor_name"/>
+    </resultMap>
+
+    <select id="findCalibrationReportList" resultType="com.zhaocai.business.bidding.vo.res.CalibrationReportListVO">
+        select bi.id biddingInfoId, bi.vendor_name, bi.contact, bi.phone, bi.tax_price, bi.not_tax_price, bi.scheme_id, bi.notice_id,
+        bi.vendor_id
+        from tb_bidding_info bi
+        left join tb_tender_notice tn on tn.id = bi.notice_id
+        <where>
+            bi.del_flag = 0 and tn.del_flag = 0
+            and bi.bidding_status != #{biddingStatus}
+            and tn.notice_status <![CDATA[>=]]> #{noticeStatus}
+            <if test="noticeId != null">
+                and bi.notice_id = #{noticeId}
+            </if>
+        </where>
+    </select>
+
+
+
+    <select id="findBidEvaluationList" resultType="com.zhaocai.business.bidding.vo.res.BidEvaluationExpertScoreVo">
+    SELECT  t1.expert_id ,t1.expert_name, t2.bus_score,t2.tech_score,t2.vendor_id,t2.bidding_info_id
+    FROM  tb_bidding_evaluat_expert t1
+    LEFT JOIN tb_expert_score t2 on t1.expert_id = t2.expert_id and  t1.scheme_id = t2.scheme_id
+    WHERE  t1.notice_id = #{noticeId} and t1.del_flag = 0 and t2.del_flag = 0
+
+
+    </select>
+
+
+    <select id="getMaxPriceVersion" resultMap="BiddingInfoResult">
+        select i.* from tb_bidding_info i
+            inner join (SELECT vendor_id,
+                               max(twice_quot_version) as twice_quot_version
+                        FROM tb_bidding_info
+                        WHERE del_flag = '0' AND notice_id = #{noticeId} AND scheme_id = #{schemeId} AND bidding_status = 1 AND submit_status = 1 AND price_change_state = 1
+                        GROUP BY vendor_id) v
+        WHERE i.vendor_id = v.vendor_id and i.twice_quot_version = v.twice_quot_version
+    </select>
+
+    <update id="updateBiddingStatusBySchemeId">
+        UPDATE tb_bidding_info
+        SET bidding_status = #{status}
+        WHERE scheme_id = #{schemeId}
+    </update>
+
+
+
+</mapper>

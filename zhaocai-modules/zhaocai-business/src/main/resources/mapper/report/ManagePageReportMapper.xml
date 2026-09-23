@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhaocai.business.report.mapper.ManagePageReportMapper">
+    <resultMap type="com.zhaocai.business.report.vo.ManagePageReportVo" id="ManagePageReportResult">
+        <result property="planId" column="plan_id"/>
+        <result property="projectId" column="project_id"/>
+        <result property="projectCode" column="project_code"/>
+        <result property="projectName" column="project_name"/>
+        <result property="contractId" column="contract_id"/>
+        <result property="contractCode" column="contract_code"/>
+        <result property="contractName" column="contract_name"/>
+        <result property="totalAmountIncTax" column="total_amount_inc_tax"/>
+        <result property="agreementState" column="agreement_state"/>
+        <result property="schemeId" column="scheme_id"/>
+        <result property="noticeStatus" column="notice_status"/>
+        <result property="buildUnit" column="buildUnit"/>
+        <result property="responsibleUnit" column="responsibleUnit"/>
+        <result property="projectBusinessCode" column="projectBusinessCode"/>
+        <result property="engineerTypeCode" column="engineerTypeCode"/>
+        <result property="structureTypeCode" column="structureTypeCode"/>
+        <result property="realityBeginDate" column="realityBeginDate"/>
+        <result property="realityFinishDate" column="realityFinishDate"/>
+        <result property="address" column="address"/>
+        <result property="projectStatusName" column="projectStatusName"/>
+    </resultMap>
+    <select id="getManagePageReportResult" parameterType="com.zhaocai.business.report.vo.ManagePageReportVo" resultMap="ManagePageReportResult">
+        select tpp.id as plan_id,tcp.project_code,tcp.project_name,
+               ta.id as contract_id,ta.agreement_code as contract_code,ta.agreement_name as contract_name,ta.total_amount_inc_tax,ta.agreement_state,
+               tpspr.procurement_scheme_id as scheme_id,ttn.notice_status,
+               tmp.constrution_unit buildUnit, sd.dept_name responsibleUnit, tmp.prj_state projectBusinessCode, tmp.prg_type engineerTypeCode, tmp.jg_type structureTypeCode,
+               tmp.actual_begin_date realityBeginDate, tmp.actual_end_date realityFinishDate, tmp.prj_addr_info address, tmp.state projectStatusName
+        from tb_procurement_plan tpp
+        left join tb_contract_planning tcp on tcp.plan_id = tpp.id
+        left join tb_contract_planning_split tcps on tpp.id = tcps.procurement_plan_id
+        left join tb_agreement ta on tcps.id = ta.contract_split_id
+        left join tb_procurement_scheme_plan_relate tpspr on tpp.id = tpspr.procurement_plan_id
+        left join tb_tender_notice ttn on tpspr.procurement_scheme_id = ttn.scheme_id
+        left join tb_min_project tmp on tmp.min_account_code = tcp.project_code
+        left join sys_dept sd on sd.thrid_dept_id = tmp.duty_unit
+        <where>
+            <if test="projectCode != null and projectCode != ''">
+                AND tcp.project_code like concat('%',#{projectCode},'%')
+            </if>
+            <if test="projectName != null and projectName != ''">
+                AND tcp.project_name like concat('%',#{projectName},'%')
+            </if>
+        </where>
+    </select>
+</mapper>

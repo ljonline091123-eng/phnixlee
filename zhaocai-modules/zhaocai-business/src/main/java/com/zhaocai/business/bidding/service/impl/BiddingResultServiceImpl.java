@@ -1,0 +1,632 @@
+package com.zhaocai.business.bidding.service.impl;
+
+import com.alibaba.fastjson.JSON;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.zhaocai.business.agreement.domain.Agreement;
+import com.zhaocai.business.bidding.domain.BiddingInfo;
+import com.zhaocai.business.bidding.domain.BiddingResult;
+import com.zhaocai.business.bidding.domain.TenderNotice;
+import com.zhaocai.business.bidding.domain.model.AwardCandidate;
+import com.zhaocai.business.bidding.domain.model.AwardDecision;
+import com.zhaocai.business.bidding.domain.model.AwardPublicity;
+import com.zhaocai.business.bidding.domain.model.BidSubmissionVersion;
+import com.zhaocai.business.bidding.enums.TenderNoticeApprovalStatusEnum;
+import com.zhaocai.business.bidding.enums.TenderNoticeStatusEnum;
+import com.zhaocai.business.bidding.mapper.BiddingResultMapper;
+import com.zhaocai.business.bidding.mapper.model.AwardCandidateMapper;
+import com.zhaocai.business.bidding.mapper.model.AwardDecisionMapper;
+import com.zhaocai.business.bidding.mapper.model.AwardPublicityMapper;
+import com.zhaocai.business.bidding.mapper.model.BidSubmissionVersionMapper;
+import com.zhaocai.business.bidding.service.IBiddingInfoService;
+import com.zhaocai.business.bidding.service.IBiddingResultService;
+import com.zhaocai.business.bidding.service.IAwardCompatibilityService;
+import com.zhaocai.business.bidding.service.ITenderNoticeService;
+import com.zhaocai.business.bidding.vo.req.CalibrationEntranceVO;
+import com.zhaocai.business.bidding.vo.req.CalibrationReleaseVO;
+import com.zhaocai.business.bidding.vo.req.CalibrationVO;
+import com.zhaocai.business.bidding.vo.req.ResultReleasVO;
+import com.zhaocai.business.bidding.vo.res.*;
+import com.zhaocai.business.common.enums.*;
+import com.zhaocai.business.common.exception.ParamValidateException;
+import com.zhaocai.business.common.utils.ValidateUtils;
+import com.zhaocai.business.manager.http.dto.req.*;
+import com.zhaocai.business.manager.http.dto.res.BpmAuditResponseDTO;
+import com.zhaocai.business.manager.http.dto.res.BpmInitializeResponseDTO;
+import com.zhaocai.business.manager.http.dto.res.BpmListProcessLogResponseDTO;
+import com.zhaocai.business.manager.http.dto.res.BpmLoadTaskDefResponseDTO;
+import com.zhaocai.business.manager.http.service.UnderlingSystemService;
+import com.zhaocai.business.process.service.IBPMProcessService;
+import com.zhaocai.business.process.service.IPBMOverrideService;
+import com.zhaocai.business.procurement.domain.ProcurementScheme;
+import com.zhaocai.business.procurement.service.IMinProjectService;
+import com.zhaocai.business.procurement.service.IProcurementSchemeService;
+import com.zhaocai.business.procurement.vo.res.MinProjectVO;
+import com.zhaocai.business.procurement.vo.res.ProcurementSchemeBiddingVendorVO;
+import com.zhaocai.business.pub.service.IAttachmentService;
+import com.zhaocai.business.vendor.domain.Vendor;
+import com.zhaocai.business.vendor.service.IVendorService;
+import com.zhaocai.common.core.constant.NumberConstant;
+import com.zhaocai.common.core.constant.UserConstants;
+import com.zhaocai.common.core.utils.DateUtils;
+import com.zhaocai.common.core.utils.bean.BeanCopierUtil;
+import com.zhaocai.common.core.web.bean.ResultData;
+import com.zhaocai.common.security.utils.SecurityUtils;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.CollectionUtils;
+import org.springframework.util.ObjectUtils;
+
+import java.io.Serializable;
+import java.util.*;
+import java.util.stream.Collectors;
+
+/**
+ * 投标结果信息Service业务层处理
+ *
+ * @author WH
+ * @date 2024-05-24
+ */
+@Service
+public class BiddingResultServiceImpl extends ServiceImpl<BiddingResultMapper,BiddingResult> implements IBiddingResultService {
+
+    @Lazy
+    @Autowired
+    private ITenderNoticeService tenderNoticeService;
+
+    @Lazy
+    @Autowired
+    private IBiddingInfoService biddingInfoService;
+
+    @Autowired
+    private IAwardCompatibilityService awardCompatibilityService;
+
+    @Autowired
+    private AwardDecisionMapper awardDecisionMapper;
+    @Autowired
+    private AwardCandidateMapper awardCandidateMapper;
+    @Autowired
+    private AwardPublicityMapper awardPublicityMapper;
+    @Autowired
+    private BidSubmissionVersionMapper bidSubmissionVersionMapper;
+    @Autowired
+    private IVendorService vendorService;
+
+    @Autowired
+    private IProcurementSchemeService procurementSchemeService;
+
+    @Autowired
+    private IBPMProcessService processService;
+
+    @Autowired
+    private IAttachmentService attachmentService;
+    @Autowired
+    private IMinProjectService minProjectService;
+    @Autowired
+    private UnderlingSystemService underlingSystemService;
+
+    @Override
+    public BiddingResultDetailVO detail(Long id) {
+        BiddingResult biddingResult = this.getById(id);
+        BiddingResultDetailVO vo = BeanCopierUtil.copyBean(biddingResult, BiddingResultDetailVO.class);
+
+        ProcurementScheme scheme = procurementSchemeService.getOne(new LambdaQueryWrapper<ProcurementScheme>()
+                .eq(ProcurementScheme::getId, vo.getSchemeId()));
+        if (!ObjectUtils.isEmpty(scheme)){
+            vo.setProcurementSchemeName(scheme.getProcurementSchemeName());
+            vo.setProcurementSchemeCode(scheme.getProcurementSchemeCode());
+        }
+
+        //获取投标单数据
+        BiddingInfo biddingInfo = biddingInfoService.getById(biddingResult.getBiddingInfoId());
+        vo.setTaxPrice(biddingInfo.getTaxPrice());
+        vo.setNotTaxPrice(biddingInfo.getNotTaxPrice());
+        vo.setBidTime(biddingInfo.getCreateTime());
+
+        return vo;
+    }
+
+    /*定标-定标*/
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public boolean calibration(CalibrationEntranceVO entranceVO) {
+        List<CalibrationVO> calibrationVOList = entranceVO.getCalibrationVOList();
+        String detailUrl = entranceVO.getDetailUrl();
+        //首先校验招标公告数据状态
+        if (CollectionUtils.isEmpty(calibrationVOList)){
+            throw new ParamValidateException("无定标数据");
+        }
+        Long noticeId = calibrationVOList.get(0).getNoticeId();
+        TenderNotice tenderNotice = tenderNoticeService.getTenderNotice(noticeId);
+        if (!TenderNoticeStatusEnum.CALI_REPORT.getState().equals(tenderNotice.getNoticeStatus())){
+            throw new ParamValidateException("当前数据状态不能定标");
+        }
+        /* 删除之前的数据 */
+        baseMapper.deleteByNoticeId(noticeId);
+
+        /* 获取对应的采购方案 */
+        ProcurementScheme scheme = procurementSchemeService.getById(tenderNotice.getSchemeId());
+
+        //保存定标结果数据
+        List<BiddingResult> results = new ArrayList<>();
+        for (CalibrationVO calibrationVO : calibrationVOList) {
+            BiddingResult result = BeanCopierUtil.copyBean(calibrationVO, BiddingResult.class);
+            results.add(result);
+        }
+        boolean res = this.saveBatch(results, results.size());
+        if (res) {
+            for (BiddingResult result : results) {
+                awardCompatibilityService.syncResult(result);
+            }
+        }
+
+        //保存定标文件附件
+        attachmentService.addAttachment(entranceVO.getCalibrationDocAttachList(), AttachmentTypeEnum.CALIBRATION_DOCUMENT,
+                tenderNotice.getId());
+
+        TenderNoticeSchemeInfoVO detailVO = tenderNoticeService.getTenderNoticeSchemeInfo(noticeId);
+        Integer nextNoticeStatus = tenderNoticeService.nextTenderNoticeStatus(detailVO.getSchemeType(), detailVO.getNoticeStatus());
+//        tenderNoticeService.updateStatus(noticeId, nextNoticeStatus); //审批流监听器去处理状态更新
+
+        //调用第三方审批信息，审批通过之后才能流转到下一环节
+        //接入底层逻辑平台流程
+        Map<String,Object> paramMap = new HashMap<>();
+        paramMap.put("businessId", noticeId);
+        paramMap.put("detailUrl", detailUrl);
+        paramMap.put("projectCode", detailVO.getProjectCode());
+        paramMap.put("businessTitle", "定标环节审批");
+        paramMap.put("businessContent",
+                String.format(ApproveFlowPromptTemplateEnum.BID_CALIBRATION.getDesc(),detailVO.getProcurementSchemeName()));
+        paramMap.put("operateComment", entranceVO.getOperateComment());
+        UserObj userObj = UserObj.builder().businessType(ProcessKeyEnum.ZHAOCAI_TENDER_CALIBRATE.name()).
+                businessId(noticeId.toString()).noticeId(noticeId.toString()).schemeId(tenderNotice.getSchemeId().toString())
+                .toDoType(ToDoTypeEnum.EXAMINE.name()).build();
+        paramMap.put("userObj", JSON.toJSONString(userObj));
+
+        /** 合同类型（contractType），价格(contractMoney)，项目部（parentProjectCode），责任单位（responsibilityDeptId），公司（companyId） */
+        paramMap.put("contractType", ProcurementPlanTypeEnum.getProcessType(scheme.getProcurementPlanType()));/* 采购方案 合同类型 */
+        paramMap.put("contractMoney", scheme.getCeilingPrice());/* 定标(可能存在多个中标人，还是使用采购方案的上限价) 价格 */
+
+        processService.startProcessInstance(ProcessKeyEnum.ZHAOCAI_TENDER_CALIBRATE.getIdentifying(), paramMap);
+
+        //处理额外环节逻辑
+        if (TenderNoticeStatusEnum.RESULT_RELEASE.getState().equals(nextNoticeStatus) &&
+                (!detailVO.getSchemeType().equals(NumberConstant.ONE))){
+            //如果下一阶段是‘结果发布’，并且采购方案类型为（邀请，询价，单一来源）那就直接处理‘中标公示’阶段数据
+            this.updateBiddingResultStatus(noticeId, null);
+        }
+
+        return res;
+    }
+
+
+    /**
+     * 撤回定标
+     * @param id
+     */
+    @Override
+    public void revokeBidding(Long id) {
+        TenderNotice tenderNotice = tenderNoticeService.getTenderNotice(id);
+        ValidateUtils.isNullException(tenderNotice.getWfProcessId(),"非审批中的定标不允许撤回");
+        // 撤回流程
+        Map<String,Object> paramMap = new HashMap<>();
+        paramMap.put("businessId", tenderNotice.getId());
+        paramMap.put("processId", tenderNotice.getWfProcessId());
+        processService.revokeProcess(ProcessKeyEnum.ZHAOCAI_TENDER_CALIBRATE.getIdentifying(),paramMap);
+    }
+
+    /**
+     * 撤回定标 回调方法
+     * @param variables
+     */
+    @Override
+    public void processAuditRevoke(Map<String, Object> variables) {
+        String processId = variables.get("processId").toString();
+        String businessId = variables.get("businessId").toString();
+        /* 设置已经撤回 */
+        tenderNoticeService.update(new LambdaUpdateWrapper<TenderNotice>()
+                .set(TenderNotice::getState, TenderNoticeApprovalStatusEnum.REVOKED.getState())
+                .eq(TenderNotice::getId, Long.valueOf(businessId)));
+    }
+
+
+    @Override
+    public List<BiddingResultListVO> getBiddingResult(Long noticeId) {
+        //校验参数
+        verifyData(noticeId, TenderNoticeStatusEnum.WINNING_BID.getState());
+
+        AwardDecision decision = findAwardDecision(noticeId);
+        if (decision != null) {
+            AwardPublicity publicity = findAwardPublicity(decision.getId());
+            return findAwardCandidates(decision.getId()).stream().map(candidate -> {
+                BiddingResultListVO vo = new BiddingResultListVO();
+                Vendor vendor = vendorService.getById(candidate.getVendorId());
+                vo.setVendorName(vendor == null ? null : vendor.getEnterpriseName());
+                vo.setCandidate(candidateLabel(candidate.getRank()));
+                vo.setBidResult(Objects.equals(decision.getSelectedCandidateId(), candidate.getId()) ? 1 : 0);
+                if (publicity != null) {
+                    vo.setPublicityStartTime(publicity.getStartTime());
+                    vo.setPublicityEndTime(publicity.getEndTime());
+                }
+                return vo;
+            }).collect(Collectors.toList());
+        }
+
+        List<BiddingResult> results = this.list(new LambdaQueryWrapper<BiddingResult>()
+                .eq(BiddingResult::getNoticeId, noticeId)
+                .orderByAsc(BiddingResult::getRank));
+        List<BiddingResultListVO> resultVOList = BeanCopierUtil.copyList(results, BiddingResultListVO.class);
+
+
+
+        return resultVOList;
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public boolean calibrationRelease(CalibrationReleaseVO calibrationReleaseVO) {
+        //更新公示期
+        boolean res = this.update(new LambdaUpdateWrapper<BiddingResult>()
+                .set(BiddingResult::getPublicityStartTime, calibrationReleaseVO.getPublicityStartTime())
+                .set(BiddingResult::getPublicityEndTime, calibrationReleaseVO.getPublicityEndTime())
+                .eq(BiddingResult::getNoticeId, calibrationReleaseVO.getNoticeId()));
+
+        //todo su 暂时这个现在演示不做时间限制，点击发布到下一步  张贵荣06-21
+        /** --------------------------------------------------------- */
+        this.updateBiddingResultStatus(calibrationReleaseVO.getNoticeId(), TenderNoticeStatusEnum.WINNING_BID.getState());
+        Set<Long> noticeIdSet = new HashSet<>();
+        noticeIdSet.add(calibrationReleaseVO.getNoticeId());
+
+        for (Long noticeId : noticeIdSet) {
+            //更新招标公告状态
+            TenderNoticeSchemeInfoVO detailVO = tenderNoticeService.getTenderNoticeSchemeInfo(noticeId);
+            Integer nextNoticeStatus = tenderNoticeService.nextTenderNoticeStatus(detailVO.getSchemeType(), detailVO.getNoticeStatus());
+            tenderNoticeService.updateStatus(noticeId, nextNoticeStatus);
+        }
+        syncLegacyAward(calibrationReleaseVO.getNoticeId());
+        /** --------------------------------------------------------- */
+
+        return res;
+    }
+
+    private void updateBiddingResultStatus(Long noticeId, Integer noticeStatus){
+        //先查招标公告状态为 ‘中标公示’ 的投标结果信息数据
+        List<NoticeBiddingResultListVO> noticeResultList = tenderNoticeService.findNoticeBiddingResultList(
+                noticeId, noticeStatus, null);
+        for (NoticeBiddingResultListVO vo : noticeResultList) {
+            //如果当前数据去人中标，修改此投标结果为中标状态
+            if (NumberConstant.ONE == vo.getSureBid()){
+                this.update(new LambdaUpdateWrapper<BiddingResult>()
+                        .set(BiddingResult::getBidResult, 1)
+                        .eq(BiddingResult::getId, vo.getBiddingResultId()));
+            } else {
+                this.update(new LambdaUpdateWrapper<BiddingResult>()
+                        .set(BiddingResult::getBidResult, 0)
+                        .eq(BiddingResult::getId, vo.getBiddingResultId()));
+            }
+
+            //如果当前数据排名第一，修改此投标结果为中标状态
+            /*if (vo.getRank() == 1){
+                this.update(new LambdaUpdateWrapper<BiddingResult>()
+                        .set(BiddingResult::getBidResult, 1)
+                        .eq(BiddingResult::getId, vo.getBiddingResultId()));
+            } else {
+                this.update(new LambdaUpdateWrapper<BiddingResult>()
+                        .set(BiddingResult::getBidResult, 0)
+                        .eq(BiddingResult::getId, vo.getBiddingResultId()));
+            }*/
+        }
+
+
+    }
+
+    @Override
+    public List<WinningBidResultVO> getWinningBidResult(Long noticeId) {
+        //校验参数
+        verifyData(noticeId, TenderNoticeStatusEnum.RESULT_RELEASE.getState());
+
+        AwardDecision decision = findAwardDecision(noticeId);
+        if (decision != null) {
+            AwardPublicity publicity = findAwardPublicity(decision.getId());
+            ProcurementScheme scheme = procurementSchemeService.getById(decision.getSchemeId());
+            return findAwardCandidates(decision.getId()).stream().map(candidate -> {
+                WinningBidResultVO vo = new WinningBidResultVO();
+                Vendor vendor = vendorService.getById(candidate.getVendorId());
+                BidSubmissionVersion version = bidSubmissionVersionMapper.selectById(candidate.getSubmissionVersionId());
+                vo.setVendorId(candidate.getVendorId());
+                vo.setVendorName(vendor == null ? null : vendor.getEnterpriseName());
+                vo.setCandidate(candidateLabel(candidate.getRank()));
+                int selected = Objects.equals(decision.getSelectedCandidateId(), candidate.getId()) ? 1 : 0;
+                vo.setBidResult(selected);
+                vo.setBidResultText(selected == 1 ? "中标" : "未中标");
+                vo.setProcurementSchemeName(scheme == null ? null : scheme.getProcurementSchemeName());
+                if (version != null) {
+                    vo.setTaxPrice(version.getTaxPrice());
+                    vo.setNotTaxPrice(version.getNotTaxPrice());
+                    vo.setContact(version.getContact());
+                    vo.setPhone(version.getPhone());
+                    vo.setBidTime(version.getSubmittedAt());
+                }
+                if (publicity != null) {
+                    vo.setNotifiTime(publicity.getPublishedAt());
+                }
+                return vo;
+            }).collect(Collectors.toList());
+        }
+
+        List<BiddingResult> results = this.list(new LambdaQueryWrapper<BiddingResult>()
+                .eq(BiddingResult::getNoticeId, noticeId)
+                .orderByAsc(BiddingResult::getRank));
+        List<WinningBidResultVO> resultVOList = new ArrayList<>();
+        Set<Long> schemeIdSet = new HashSet<>();
+        for (BiddingResult result : results) {
+            WinningBidResultVO resultVO = BeanCopierUtil.copyBean(result, WinningBidResultVO.class);
+
+            //获取投标单数据
+            BiddingInfo biddingInfo = biddingInfoService.getById(result.getBiddingInfoId());
+            resultVO.setTaxPrice(biddingInfo.getTaxPrice());
+            resultVO.setNotTaxPrice(biddingInfo.getNotTaxPrice());
+            resultVO.setBidTime(biddingInfo.getCreateTime());
+
+            resultVO.setBidResultText(resultVO.getBidResult() == 1 ? "中标" : "未中标");
+            resultVOList.add(resultVO);
+
+            if (!schemeIdSet.contains(result.getSchemeId())){
+                ProcurementScheme scheme = procurementSchemeService.getOne(new LambdaQueryWrapper<ProcurementScheme>()
+                        .eq(ProcurementScheme::getId, result.getSchemeId()));
+                resultVO.setProcurementSchemeName(scheme.getProcurementSchemeName());
+                schemeIdSet.add(result.getSchemeId());
+            }
+
+        }
+        return resultVOList;
+
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public boolean winningBidResultRelease(ResultReleasVO resultReleasVO) {
+        //更新 中标通知书内容，是否发送通知书，通知书发布时间
+        boolean res = this.update(new LambdaUpdateWrapper<BiddingResult>()
+                .set(BiddingResult::getSendNotified, NumberConstant.ONE)
+                .set(BiddingResult::getNotifiContent, resultReleasVO.getNotifiContent())
+                .set(BiddingResult::getNotifiTime, DateUtils.getNowDate())
+                .eq(BiddingResult::getBidResult, NumberConstant.ONE)
+                .eq(BiddingResult::getNoticeId, resultReleasVO.getNoticeId()));
+
+        //点击发布进入到投标完成环节（结束）
+        Integer nextNoticeStatus = findNextTenderNoticeStatus(resultReleasVO.getNoticeId());
+        tenderNoticeService.updateStatus(resultReleasVO.getNoticeId(), nextNoticeStatus);
+        syncLegacyAward(resultReleasVO.getNoticeId());
+        return res;
+    }
+
+    @Override
+    public List<BidResultVO> getBidResult(Long noticeId) {
+        AwardDecision decision = findAwardDecision(noticeId);
+        if (decision != null && decision.getSelectedCandidateId() != null) {
+            AwardCandidate candidate = awardCandidateMapper.selectById(decision.getSelectedCandidateId());
+            if (candidate == null) {
+                return Collections.emptyList();
+            }
+            Vendor vendor = vendorService.getById(candidate.getVendorId());
+            BidResultVO vo = new BidResultVO();
+            vo.setVendorId(candidate.getVendorId());
+            vo.setVendorName(vendor == null ? null : vendor.getEnterpriseName());
+            vo.setBidResult(1);
+            vo.setBidResultText("中标");
+            return Collections.singletonList(vo);
+        }
+        List<BiddingResult> results = this.list(new LambdaQueryWrapper<BiddingResult>()
+                .eq(BiddingResult::getNoticeId, noticeId)
+                .eq(BiddingResult::getBidResult, NumberConstant.ONE));
+        List<BidResultVO> resultVOList = new ArrayList<>();
+        for (BiddingResult result : results) {
+            BidResultVO resultVO = BeanCopierUtil.copyBean(result, BidResultVO.class);
+            resultVO.setBidResultText(resultVO.getBidResult() == 1 ? "中标" : "未中标");
+            resultVOList.add(resultVO);
+        }
+        return resultVOList;
+    }
+
+    private AwardDecision findAwardDecision(Long noticeId) {
+        return awardDecisionMapper.selectOne(new LambdaQueryWrapper<AwardDecision>()
+                .eq(AwardDecision::getNoticeId, noticeId).last("limit 1"));
+    }
+
+    private List<AwardCandidate> findAwardCandidates(Long decisionId) {
+        return awardCandidateMapper.selectList(new LambdaQueryWrapper<AwardCandidate>()
+                .eq(AwardCandidate::getDecisionId, decisionId)
+                .orderByAsc(AwardCandidate::getRank));
+    }
+
+    private AwardPublicity findAwardPublicity(Long decisionId) {
+        return awardPublicityMapper.selectOne(new LambdaQueryWrapper<AwardPublicity>()
+                .eq(AwardPublicity::getDecisionId, decisionId).last("limit 1"));
+    }
+
+    private String candidateLabel(Integer rank) {
+        return rank == null ? null : "第" + rank + "名";
+    }
+
+    private void syncLegacyAward(Long noticeId) {
+        this.list(new LambdaQueryWrapper<BiddingResult>()
+                        .eq(BiddingResult::getNoticeId, noticeId))
+                .forEach(awardCompatibilityService::syncResult);
+    }
+
+    @Override
+    public List<ProcurementSchemeBiddingVendorVO> listBiddingVendorBySchemeId(Long schemeId) {
+        List<BiddingResult> biddingResults = baseMapper.selectBiddingVendorBySchemeId(schemeId);
+
+        return biddingResults.stream()
+                .map(x -> new ProcurementSchemeBiddingVendorVO(x.getVendorId(),x.getVendorName(),x.getBidResult())).collect(Collectors.toList());
+    }
+
+    private void verifyData(Long noticeId, Integer noticeState){
+        //验证状态
+        TenderNotice tenderNotice = tenderNoticeService.getById(noticeId);
+        if (tenderNotice.getNoticeStatus().compareTo(noticeState) < 0){
+            throw new ParamValidateException("当前公告状态无法查询相关数据");
+        }
+    }
+
+    @Override
+    public void processStart(Map<String, Object> variables) {
+        String processId = variables.get("processId").toString();
+        String businessId = variables.get("businessId").toString();
+        Object flagObj = variables.get("completedFlag");
+        Integer nextNoticeStatus = null;
+        Integer state = TenderNoticeApprovalStatusEnum.IN_APPROVAL.getState();
+        if (!ObjectUtils.isEmpty(flagObj) && ProcessStateEnum.COMPLETED.getDesc().equals(flagObj.toString())){
+            //如果流程状态为已完成，则直接更新状态
+            nextNoticeStatus = findNextTenderNoticeStatus(Long.valueOf(businessId));
+            state = TenderNoticeApprovalStatusEnum.APPROVE.getState();
+        }
+        tenderNoticeService.update(new LambdaUpdateWrapper<TenderNotice>()
+                .set(null != nextNoticeStatus, TenderNotice::getNoticeStatus, nextNoticeStatus)
+                .set(TenderNotice::getWfProcessId, processId)
+                .set(TenderNotice::getState, state)/* 已通过/审批中 */
+                .eq(TenderNotice::getId, Long.valueOf(businessId)));
+    }
+
+    /** 审批通过，可设置状态为 已完成 */
+    @Override
+    public void processAuditPass(Map<String, Object> variables) {
+        String businessId = variables.get("businessId").toString();
+        Integer nextNoticeStatus = findNextTenderNoticeStatus(Long.valueOf(businessId));
+        tenderNoticeService.updateStatus(Long.valueOf(businessId), nextNoticeStatus);
+        /* 审批已通过 */
+        tenderNoticeService.update(new LambdaUpdateWrapper<TenderNotice>()
+                .set(TenderNotice::getState, TenderNoticeApprovalStatusEnum.APPROVE.getState())
+                .eq(TenderNotice::getId, Long.valueOf(businessId)));
+    }
+
+    /** 驳回到发起人 */
+    @Override
+    public void processAuditFreedom(Map<String, Object> variables) {
+        String businessId = variables.get("businessId").toString();
+        /* 已驳回 */
+        tenderNoticeService.update(new LambdaUpdateWrapper<TenderNotice>()
+                .set(TenderNotice::getState, TenderNoticeApprovalStatusEnum.REJECT.getState())
+                .eq(TenderNotice::getId, Long.valueOf(businessId)));
+    }
+
+    /** 驳回到中途节点，可以设置状态为 审批中 */
+    @Override
+    public void processAuditReject(Map<String, Object> variables) {
+
+    }
+
+    @Override
+    public ResultData<BpmInitializeResponseDTO> initialize(BpmInitializeRequestDTO requestDTO) {
+        TenderNoticeSchemeInfoVO detailVO = tenderNoticeService.getTenderNoticeSchemeInfo(Long.valueOf(requestDTO.getBusinessId()));
+        /* 流程角色配置规则传参 */
+        List<PropertyListRequestDTO<Object>> propertyList = new ArrayList<>();
+        /* 最小核算项目 */
+        MinProjectVO minProjectVO = minProjectService.getMinProjectByMinAccountCode(detailVO.getProjectCode());
+        if (null != minProjectVO) {
+            PropertyListRequestDTO.addPropertyToList(propertyList, "groupId", UserConstants.GROUP_DEPT_ID);/* 集团 */
+            PropertyListRequestDTO.addPropertyToList(propertyList, "companyId", underlingSystemService.getL2OrgByOrgId(SecurityUtils.getThridOrgId()));/* 公司 二级单位 */
+            PropertyListRequestDTO.addPropertyToList(propertyList, "responsibilityDeptId", minProjectVO.getDutyUnit());/* 责任单位 三级单位 */
+            PropertyListRequestDTO.addPropertyToList(propertyList, "parentProjectCode", minProjectVO.getParentCode());/* 父项目编码(项目部) */
+
+            /* 获取对应的采购方案 */
+            ProcurementScheme scheme = procurementSchemeService.getById(detailVO.getSchemeId());
+            if (null != scheme) {
+                /** 合同类型（contractType），价格(contractMoney)，项目部（parentProjectCode），责任单位（responsibilityDeptId），公司（companyId） */
+                PropertyListRequestDTO.addPropertyToList(propertyList,"contractType", ProcurementPlanTypeEnum.getProcessType(scheme.getProcurementPlanType()));/* 采购方案 合同类型 */
+                PropertyListRequestDTO.addPropertyToList(propertyList,"contractMoney", scheme.getCeilingPrice());/* 定标(可能存在多个中标人，还是使用采购方案的上限价) 价格 */
+            }
+
+            requestDTO.setPropertyList(propertyList);
+        }
+        requestDTO.setPropertyList(propertyList);
+        return processService.initialize(requestDTO);
+    }
+
+    @Override
+    public ResultData<List<BpmListProcessLogResponseDTO>> listProcessLog(BpmListProcessLogRequestDTO requestDTO) {
+        TenderNoticeSchemeInfoVO detailVO = tenderNoticeService.getTenderNoticeSchemeInfo(Long.valueOf(requestDTO.getBusinessId()));
+        /* 流程角色配置规则传参 */
+        List<PropertyListRequestDTO<Object>> propertyList = new ArrayList<>();
+        /* 最小核算项目 */
+        MinProjectVO minProjectVO = minProjectService.getMinProjectByMinAccountCode(detailVO.getProjectCode());
+        if (null != minProjectVO) {
+            PropertyListRequestDTO.addPropertyToList(propertyList, "groupId", UserConstants.GROUP_DEPT_ID);/* 集团 */
+            PropertyListRequestDTO.addPropertyToList(propertyList, "companyId", underlingSystemService.getL2OrgByOrgId(SecurityUtils.getThridOrgId()));/* 公司 二级单位 */
+            PropertyListRequestDTO.addPropertyToList(propertyList, "responsibilityDeptId", minProjectVO.getDutyUnit());/* 责任单位 三级单位 */
+            PropertyListRequestDTO.addPropertyToList(propertyList, "parentProjectCode", minProjectVO.getParentCode());/* 父项目编码(项目部) */
+
+            /* 获取对应的采购方案 */
+            ProcurementScheme scheme = procurementSchemeService.getById(detailVO.getSchemeId());
+            if (null != scheme) {
+                /** 合同类型（contractType），价格(contractMoney)，项目部（parentProjectCode），责任单位（responsibilityDeptId），公司（companyId） */
+                PropertyListRequestDTO.addPropertyToList(propertyList,"contractType", ProcurementPlanTypeEnum.getProcessType(scheme.getProcurementPlanType()));/* 采购方案 合同类型 */
+                PropertyListRequestDTO.addPropertyToList(propertyList,"contractMoney", scheme.getCeilingPrice());/* 定标(可能存在多个中标人，还是使用采购方案的上限价) 价格 */
+            }
+
+            requestDTO.setPropertyList(propertyList);
+        }
+        requestDTO.setPropertyList(propertyList);
+        return processService.listProcessLog(requestDTO);
+    }
+
+    @Override
+    public String audit(String processKey, Map<String, Object> variables) {
+        TenderNoticeSchemeInfoVO detailVO = tenderNoticeService.getTenderNoticeSchemeInfo(Long.valueOf((String) variables.get("businessId")));
+        /* 最小核算项目 */
+        MinProjectVO minProjectVO = minProjectService.getMinProjectByMinAccountCode(detailVO.getProjectCode());
+        if (null != minProjectVO) {
+            /* 流程角色配置规则传参 */
+            variables.put("groupId", UserConstants.GROUP_DEPT_ID);/* 集团 */
+            variables.put("companyId", underlingSystemService.getL2OrgByOrgId(SecurityUtils.getThridOrgId()));/* 公司 二级单位 */
+            variables.put("responsibilityDeptId", minProjectVO.getDutyUnit());/* 责任单位 三级单位 */
+            variables.put("parentProjectCode", minProjectVO.getParentCode());/* 父项目编码(项目部) */
+            /* 获取对应的采购方案 */
+            ProcurementScheme scheme = procurementSchemeService.getById(detailVO.getSchemeId());
+            if (null != scheme) {
+                /** 合同类型（contractType），价格(contractMoney)，项目部（parentProjectCode），责任单位（responsibilityDeptId），公司（companyId） */
+                variables.put("contractType", ProcurementPlanTypeEnum.getProcessType(scheme.getProcurementPlanType()));/* 采购方案 合同类型 */
+                variables.put("contractMoney", scheme.getCeilingPrice());/* 定标(可能存在多个中标人，还是使用采购方案的上限价) 价格 */
+            }
+        }
+        return processService.auditProcessInstance(ProcessKeyEnum.ZHAOCAI_TENDER_CALIBRATE.getIdentifying(),variables);
+    }
+
+    @Override
+    public ResultData<List<BpmLoadTaskDefResponseDTO>> loadTaskDef(BpmLoadTaskDefRequestDTO requestDTO) {
+        TenderNoticeSchemeInfoVO detailVO = tenderNoticeService.getTenderNoticeSchemeInfo(Long.valueOf(requestDTO.getBusinessId()));
+        /* 流程角色配置规则传参 */
+        List<PropertyListRequestDTO<Object>> propertyList = new ArrayList<>();
+        /* 最小核算项目 */
+        MinProjectVO minProjectVO = minProjectService.getMinProjectByMinAccountCode(detailVO.getProjectCode());
+        if (null != minProjectVO) {
+            PropertyListRequestDTO.addPropertyToList(propertyList, "groupId", UserConstants.GROUP_DEPT_ID);/* 集团 */
+            PropertyListRequestDTO.addPropertyToList(propertyList, "companyId", underlingSystemService.getL2OrgByOrgId(SecurityUtils.getThridOrgId()));/* 公司 二级单位 */
+            PropertyListRequestDTO.addPropertyToList(propertyList, "responsibilityDeptId", minProjectVO.getDutyUnit());/* 责任单位 三级单位 */
+            PropertyListRequestDTO.addPropertyToList(propertyList, "parentProjectCode", minProjectVO.getParentCode());/* 父项目编码(项目部) */
+
+            /* 获取对应的采购方案 */
+            ProcurementScheme scheme = procurementSchemeService.getById(detailVO.getSchemeId());
+            if (null != scheme) {
+                /** 合同类型（contractType），价格(contractMoney)，项目部（parentProjectCode），责任单位（responsibilityDeptId），公司（companyId） */
+                PropertyListRequestDTO.addPropertyToList(propertyList,"contractType", ProcurementPlanTypeEnum.getProcessType(scheme.getProcurementPlanType()));/* 采购方案 合同类型 */
+                PropertyListRequestDTO.addPropertyToList(propertyList,"contractMoney", scheme.getCeilingPrice());/* 定标(可能存在多个中标人，还是使用采购方案的上限价) 价格 */
+            }
+
+            requestDTO.setPropertyList(propertyList);
+        }
+        requestDTO.setPropertyList(propertyList);
+        return processService.loadTaskDef(requestDTO);
+    }
+
+    private Integer findNextTenderNoticeStatus(Long noticeId){
+        TenderNoticeSchemeInfoVO detailVO = tenderNoticeService.getTenderNoticeSchemeInfo(noticeId);
+        return tenderNoticeService.nextTenderNoticeStatus(detailVO.getSchemeType(), detailVO.getNoticeStatus());
+    }
+
+}

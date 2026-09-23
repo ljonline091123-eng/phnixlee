@@ -1,0 +1,227 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhaocai.archives.main.mapper.DeviceClassMapper">
+
+    <resultMap type="com.zhaocai.archives.main.domain.DeviceClass" id="DeviceClassResult">
+        <result property="id" column="id"/>
+        <result property="deviceClassCode" column="device_class_code"/>
+        <result property="deviceClassName" column="device_class_name"/>
+        <result property="deviceClassType" column="device_class_type"/>
+        <result property="measureUnit" column="measure_unit"/>
+        <result property="subjectMatterCode" column="subject_matter_code"/>
+        <result property="subjectMatterName" column="subject_matter_name"/>
+        <result property="subjectMatter" column="subject_matter"/>
+        <result property="classLevel" column="class_level"/>
+        <result property="classLevelCd" column="class_level_cd"/>
+        <result property="parentId" column="parent_id"/>
+        <result property="createId" column="create_id"/>
+        <result property="createBy" column="create_by"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateBy" column="update_by"/>
+        <result property="updateTime" column="update_time"/>
+        <result property="valid" column="valid"/>
+        <result property="sonId" column="son_id"/>
+        <result property="isTb" column="is_tb"/>
+    </resultMap>
+
+    <sql id="selectDeviceClassVo">
+        select id,
+               device_class_code,
+               device_class_name,
+               device_class_type,
+               measure_unit,
+               subject_matter_code,
+               subject_matter_name,
+               subject_matter,
+               class_level,
+               class_level_cd,
+               parent_id,
+               create_id,
+               create_by,
+               create_time,
+               update_by,
+               update_time,
+               valid,
+               is_tb,
+               son_id
+        from device_class
+    </sql>
+
+    <select id="selectDeviceClassListCount" parameterType="com.zhaocai.archives.main.domain.DeviceClass"
+            resultType="long">
+        select count(1)
+        from device_class
+        <where>
+            <if test="deviceClassCode != null  and deviceClassCode != ''">and device_class_code = #{deviceClassCode}
+            </if>
+            <if test="deviceClassName != null  and deviceClassName != ''">and device_class_name like concat('%',
+                #{deviceClassName}, '%')
+            </if>
+            <if test="deviceClassType != null  and deviceClassType != ''">and device_class_type = #{deviceClassType}
+            </if>
+            <if test="measureUnit != null  and measureUnit != ''">and measure_unit = #{measureUnit}</if>
+            <if test="subjectMatterCode != null  and subjectMatterCode != ''">and subject_matter_code =
+                #{subjectMatterCode}
+            </if>
+            <if test="subjectMatterName != null  and subjectMatterName != ''">and subject_matter_name like concat('%',
+                #{subjectMatterName}, '%')
+            </if>
+            <if test="subjectMatter != null ">and subject_matter = #{subjectMatter}</if>
+            <if test="classLevel != null  and classLevel != ''">and class_level = #{classLevel}</if>
+            <if test="classLevelCd != null  and classLevelCd != ''">and class_level_cd = #{classLevelCd}</if>
+            <if test="parentId != null  and parentId != ''">and parent_id = #{parentId}</if>
+            <if test="createId != null  and createId != ''">and create_id = #{createId}</if>
+            <if test="valid != null ">and valid = #{valid}</if>
+            <if test="sonId != null ">and son_id = #{sonId}</if>
+            <if test="isTb != null ">and is_tb = #{isTb}</if>
+        </where>
+        order by device_class_code asc
+    </select>
+
+    <select id="selectDeviceClassList" parameterType="com.zhaocai.archives.main.domain.DeviceClass"
+            resultMap="DeviceClassResult">
+        <include refid="selectDeviceClassVo"/>
+        <where>
+            <if test="deviceClassCode != null  and deviceClassCode != ''">and device_class_code = #{deviceClassCode}
+            </if>
+            <if test="deviceClassName != null  and deviceClassName != ''">and device_class_name like concat('%',
+                #{deviceClassName}, '%')
+            </if>
+            <if test="deviceClassType != null  and deviceClassType != ''">and device_class_type = #{deviceClassType}
+            </if>
+            <if test="measureUnit != null  and measureUnit != ''">and measure_unit = #{measureUnit}</if>
+            <if test="subjectMatterCode != null  and subjectMatterCode != ''">and subject_matter_code =
+                #{subjectMatterCode}
+            </if>
+            <if test="subjectMatterName != null  and subjectMatterName != ''">and subject_matter_name like concat('%',
+                #{subjectMatterName}, '%')
+            </if>
+            <if test="subjectMatter != null ">and subject_matter = #{subjectMatter}</if>
+            <if test="classLevel != null  and classLevel != ''">and class_level = #{classLevel}</if>
+            <if test="classLevelCd != null  and classLevelCd != ''">and class_level_cd = #{classLevelCd}</if>
+            <if test="parentId != null  and parentId != ''">and parent_id = #{parentId}</if>
+            <if test="createId != null  and createId != ''">and create_id = #{createId}</if>
+            <if test="valid != null ">and valid = #{valid}</if>
+            <if test="sonId != null ">and son_id = #{sonId}</if>
+            <if test="isTb != null ">and is_tb = #{isTb}</if>
+        </where>
+        order by device_class_code asc
+    </select>
+
+    <select id="selectDeviceClassById" parameterType="String" resultMap="DeviceClassResult">
+        <include refid="selectDeviceClassVo"/>
+        where id = #{id}
+    </select>
+
+    <insert id="insertDeviceClass" parameterType="com.zhaocai.archives.main.domain.DeviceClass">
+        insert into device_class
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="id != null">id,</if>
+            <if test="deviceClassCode != null and deviceClassCode != ''">device_class_code,</if>
+            <if test="deviceClassName != null and deviceClassName != ''">device_class_name,</if>
+            <if test="deviceClassType != null and deviceClassType != ''">device_class_type,</if>
+            <if test="measureUnit != null">measure_unit,</if>
+            <if test="subjectMatterCode != null">subject_matter_code,</if>
+            <if test="subjectMatterName != null">subject_matter_name,</if>
+            <if test="subjectMatter != null">subject_matter,</if>
+            <if test="classLevel != null">class_level,</if>
+            <if test="classLevelCd != null">class_level_cd,</if>
+            <if test="parentId != null">parent_id,</if>
+            <if test="createId != null">create_id,</if>
+            <if test="createBy != null">create_by,</if>
+            <if test="createTime != null">create_time,</if>
+            <if test="updateBy != null">update_by,</if>
+            <if test="updateTime != null">update_time,</if>
+            <if test="valid != null">valid,</if>
+            <if test="sonId != null">son_id,</if>
+            <if test="isTb != null">is_tb,</if>
+        </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="id != null">#{id},</if>
+            <if test="deviceClassCode != null and deviceClassCode != ''">#{deviceClassCode},</if>
+            <if test="deviceClassName != null and deviceClassName != ''">#{deviceClassName},</if>
+            <if test="deviceClassType != null and deviceClassType != ''">#{deviceClassType},</if>
+            <if test="measureUnit != null">#{measureUnit},</if>
+            <if test="subjectMatterCode != null">#{subjectMatterCode},</if>
+            <if test="subjectMatterName != null">#{subjectMatterName},</if>
+            <if test="subjectMatter != null">#{subjectMatter},</if>
+            <if test="classLevel != null">#{classLevel},</if>
+            <if test="classLevelCd != null">#{classLevelCd},</if>
+            <if test="parentId != null">#{parentId},</if>
+            <if test="createId != null">#{createId},</if>
+            <if test="createBy != null">#{createBy},</if>
+            <if test="createTime != null">#{createTime},</if>
+            <if test="updateBy != null">#{updateBy},</if>
+            <if test="updateTime != null">#{updateTime},</if>
+            <if test="valid != null">#{valid},</if>
+            <if test="sonId != null">#{sonId},</if>
+            <if test="isTb != null">#{isTb},</if>
+        </trim>
+    </insert>
+
+    <update id="updateDeviceClass" parameterType="com.zhaocai.archives.main.domain.DeviceClass">
+        update device_class
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="deviceClassCode != null and deviceClassCode != ''">device_class_code = #{deviceClassCode},</if>
+            <if test="deviceClassName != null and deviceClassName != ''">device_class_name = #{deviceClassName},</if>
+            <if test="deviceClassType != null and deviceClassType != ''">device_class_type = #{deviceClassType},</if>
+            <if test="measureUnit != null">measure_unit = #{measureUnit},</if>
+            <if test="subjectMatterCode != null">subject_matter_code = #{subjectMatterCode},</if>
+            <if test="subjectMatterName != null">subject_matter_name = #{subjectMatterName},</if>
+            <if test="subjectMatter != null">subject_matter = #{subjectMatter},</if>
+            <if test="classLevel != null">class_level = #{classLevel},</if>
+            <if test="classLevelCd != null">class_level_cd = #{classLevelCd},</if>
+            <if test="parentId != null">parent_id = #{parentId},</if>
+            <if test="createId != null">create_id = #{createId},</if>
+            <if test="createBy != null">create_by = #{createBy},</if>
+            <if test="createTime != null">create_time = #{createTime},</if>
+            <if test="updateBy != null">update_by = #{updateBy},</if>
+            <if test="updateTime != null">update_time = #{updateTime},</if>
+            <if test="valid != null">valid = #{valid},</if>
+            <if test="sonId != null">son_id = #{sonId},</if>
+            <if test="isTb != null">is_tb = #{isTb},</if>
+        </trim>
+        where id = #{id}
+    </update>
+
+    <delete id="deleteDeviceClassById" parameterType="String">
+        delete
+        from device_class
+        where id = #{id}
+    </delete>
+
+    <delete id="deleteDeviceClassByIds" parameterType="String">
+        delete from device_class where id in
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+
+    <select id="getMaxCode" resultType="integer">
+        select max(CONVERT(replace(device_class_code, #{upCode}, ''), SIGNED)) as code
+        from device_class
+        where parent_id = #{upId}
+          and valid = '0'
+    </select>
+
+    <select id="getMaterialJoinNoMy" parameterType="string" resultType="int">
+        select sum(a.sl)
+        from (select count(1) as sl
+              from device_archives
+              where device_class_id = #{id}
+                and valid = '0'
+              union all
+              select count(1) as sl
+              from device_feature
+              where device_class_id = #{id}
+                and valid = '0'
+              union all
+              select count(1) as sl
+              from device_class
+              where parent_id = #{id}
+                and valid = '0') as a
+    </select>
+
+</mapper>

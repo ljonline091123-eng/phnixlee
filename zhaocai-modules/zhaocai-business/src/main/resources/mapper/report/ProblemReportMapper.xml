@@ -1,0 +1,247 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhaocai.business.report.mapper.ProblemReportMapper">
+    <resultMap type="com.zhaocai.business.report.domain.ProblemReport" id="ProblemReportResult">
+        <result property="id" column="id"/>
+        <result property="minAccountCode" column="min_account_code"/>
+        <result property="minAccountFullName" column="min_account_full_name"/>
+        <result property="minProjectId" column="min_project_id"/>
+        <result property="projectDepartmentId" column="project_department_id"/>
+        <result property="projectDepartment" column="project_department"/>
+        <result property="deptId" column="dept_id"/>
+        <result property="ancestors" column="ancestors"/>
+        <result property="noticeId" column="notice_id"/>
+        <result property="procurementSchemeName" column="procurement_scheme_name"/>
+        <result property="procurementOfficer" column="procurement_officer"/>
+        <result property="procurementOfficerName" column="procurement_officer_name"/>
+        <result property="vendorInfo" column="vendor_info"/>
+        <result property="createTime" column="create_time"/>
+        <result property="prjAddr" column="prj_addr"/>
+        <result property="prjAddrProvince" column="prj_addr_province"/>
+        <result property="prjAddrCity" column="prj_addr_city"/>
+        <result property="prjAddrRegion" column="prj_addr_region"/>
+        <result property="prjAddrInfo" column="prj_addr_info"/>
+        <result property="type" column="type"/>
+        <result property="typeName" column="type_name"/>
+    </resultMap>
+
+    <resultMap type="com.zhaocai.business.report.vo.ProblemReportVo" id="ProblemReportVOResult">
+        <result property="id" column="id"/>
+        <result property="parentId" column="parent_id"/>
+        <result property="deptName" column="dept_name"/>
+        <result property="deptId" column="dept_id"/>
+        <result property="ancestors" column="ancestors"/>
+        <result property="projectDepartmentId" column="project_department_id"/>
+        <result property="projectDepartment" column="project_department"/>
+        <result property="minAccountCode" column="min_account_code"/>
+        <result property="minAccountFullName" column="min_account_full_name"/>
+        <result property="minProjectId" column="min_project_id"/>
+        <result property="procurementSchemeName" column="procurement_scheme_name"/>
+        <result property="procurementOfficer" column="procurement_officer"/>
+        <result property="procurementOfficerName" column="procurement_officer_name"/>
+        <result property="vendorInfo" column="vendor_info"/>
+        <result property="createTime" column="create_time"/>
+        <result property="prjAddr" column="prj_addr"/>
+        <result property="prjAddrProvince" column="prj_addr_province"/>
+        <result property="prjAddrCity" column="prj_addr_city"/>
+        <result property="prjAddrRegion" column="prj_addr_region"/>
+        <result property="prjAddrInfo" column="prj_addr_info"/>
+        <result property="type" column="type"/>
+        <result property="typeName" column="type_name"/>
+        <result property="num" column="num"/>
+    </resultMap>
+
+    <select id="select" parameterType="com.zhaocai.business.report.vo.ProblemReportVo" resultMap="ProblemReportVOResult">
+        SELECT
+            concat(tpr.min_account_code,'-',tpr.type) as id,
+            count(1) as num,
+            tpr.project_department_id as parentId,
+            tpr.min_project_id,
+            tpr.min_account_code,
+            tpr.min_account_full_name,
+            tpr.project_department_id,
+            tpr.project_department,
+            tpr.dept_id,
+            tpr.ancestors,
+            tpr.notice_id,
+            GROUP_CONCAT(tpr.procurement_scheme_name SEPARATOR ',') AS procurement_scheme_name,
+            tpr.procurement_officer,
+            GROUP_CONCAT(tpr.procurement_officer_name SEPARATOR '-') AS procurement_officer_name,
+            GROUP_CONCAT(REPLACE(tpr.vendor_info, '/', '\n') SEPARATOR '\n') AS vendor_info,
+            GROUP_CONCAT(tpr.create_time SEPARATOR ',') AS create_time,
+            tpr.prj_addr,
+            tpr.prj_addr_province,
+            tpr.prj_addr_city,
+            tpr.prj_addr_region,
+            GROUP_CONCAT(tpr.prj_addr_info SEPARATOR '-') AS prj_addr_info,
+            tpr.type,
+            tpr.type_name
+        FROM tb_problem_report tpr
+            <where>
+                tpr.min_account_code is not null
+                <if test="area != null and area != ''">
+                    AND tpr.prj_addr_info like concat('%',#{area},'%')
+                </if>
+                <if test="startDate != null">
+                    AND tpr.create_time >= #{startDate}
+                </if>
+                <if test="endDate != null">
+                    AND tpr.create_time &lt;= #{endDate}
+                </if>
+                <if test="type != null and type != ''">
+                    AND tpr.type = #{type}
+                </if>
+                <if test="deptId != null">
+                    and ( tpr.dept_id = #{deptId} OR tpr.ancestors like concat('%',#{deptId},'%'))
+                </if>
+                <if test="minAccountCode != null and minAccountCode != ''">
+                    AND tpr.min_account_code = #{minAccountCode}
+                </if>
+                <if test="projectDepartmentId != null and projectDepartmentId != ''">
+                    AND tpr.project_department_id = #{projectDepartmentId}
+                </if>
+            </where>
+        group by tpr.min_account_code,tpr.type
+        order by tpr.project_department_id,tpr.min_account_code,tpr.type
+    </select>
+
+    <select id="getProblemByDept" parameterType="com.zhaocai.business.report.vo.ProblemReportVo" resultMap="ProblemReportVOResult">
+        SELECT
+        tpr.project_department_id as id,
+        count(1) as num,
+        tpr.project_department as dept_name,
+        tpr.min_project_id,
+        tpr.min_account_code,
+        tpr.project_department_id,
+        tpr.project_department,
+        tpr.dept_id,
+        tpr.ancestors
+        FROM tb_problem_report tpr
+        <where>
+            tpr.min_account_code is not null
+            <if test="area != null and area != ''">
+                AND tpr.prj_addr_info like concat('%',#{area},'%')
+            </if>
+            <if test="startDate != null">
+                AND tpr.create_time >= #{startDate}
+            </if>
+            <if test="endDate != null">
+                AND tpr.create_time &lt;= #{endDate}
+            </if>
+            <if test="type != null and type != ''">
+                AND tpr.type = #{type}
+            </if>
+            <if test="deptId != null">
+                and ( tpr.dept_id = #{deptId} OR tpr.ancestors like concat('%',#{deptId},'%'))
+            </if>
+            <if test="minAccountCode != null and minAccountCode != ''">
+                AND tpr.min_account_code = #{minAccountCode}
+            </if>
+        </where>
+        group by tpr.project_department_id
+    </select>
+
+    <select id="selectByDepartment" parameterType="com.zhaocai.business.report.vo.ProblemReportVo" resultMap="ProblemReportVOResult">
+        SELECT
+        project_department_id as id,
+        projectDepartment as dept_name,
+        count(1) as num
+        FROM (
+        SELECT * FROM v_problem_report_1
+        UNION ALL
+        SELECT * FROM v_problem_report_2
+        UNION ALL
+        SELECT * FROM v_problem_report_3
+        UNION ALL
+        SELECT * FROM v_problem_report_4
+        ) AS report
+        <where>
+            report.min_account_code is not null
+            <if test="area != null and area != ''">
+                AND prj_addr_info like concat('%',#{area},'%')
+            </if>
+            <if test="startDate != null">
+                AND create_time >= #{startDate}
+            </if>
+            <if test="endDate != null">
+                AND create_time &lt;= #{endDate}
+            </if>
+            <if test="type != null and type != ''">
+                AND type = #{type}
+            </if>
+            <if test="id != null">
+                and ( project_department_id = #{id} OR project_department_id in (
+                select t.thrid_dept_id from sys_dept t where FIND_IN_SET(
+                (select dept_id from sys_dept where thrid_dept_id = #{id}),
+                t.ancestors)
+                )
+                )
+            </if>
+            <if test="minAccountCode != null and minAccountCode != ''">
+                AND min_account_code = #{minAccountCode}
+            </if>
+        </where>
+        group by report.project_department_id
+        order by report.project_department_id
+    </select>
+
+    <select id="selectAll" resultMap="ProblemReportResult">
+        SELECT
+            report.*,
+            sd.dept_id ,
+            sd.ancestors
+        FROM (
+                 SELECT * FROM v_problem_report_1
+                 UNION ALL
+                 SELECT * FROM v_problem_report_2
+                 UNION ALL
+                 SELECT * FROM v_problem_report_3
+                 UNION ALL
+                 SELECT * FROM v_problem_report_4
+             ) AS report
+                 left join sys_dept sd on sd.thrid_dept_id = report.project_department_id
+        where report.project_department_id  is not null
+    </select>
+
+    <!--
+      问题报表-tab2 供应商评价不合格记录
+      说明(中湘大连改造)：
+      1. 数据源为本地供应商评价表 tb_vendor_evaluate，取"已确认(evaluate_status=1) + 不合格(is_qualified=N)"的记录；
+      2. 该表没有单位/项目字段，无法按登录用户所属单位做数据权限过滤，故此处没有组织机构条件；
+      3. del_flag 由 MyBatis-Plus 的 @TableLogic 处理不了原生 SQL，这里手工过滤。
+    -->
+    <resultMap type="com.zhaocai.business.report.vo.EvaluationBadReportVo" id="EvaluationBadReportResult">
+        <result property="id" column="id"/>
+        <result property="vendorName" column="vendor_name"/>
+        <result property="evaluateType" column="evaluate_type"/>
+        <result property="evaluateFraction" column="evaluate_fraction"/>
+        <result property="evaluateTime" column="evaluate_time"/>
+        <result property="evaluateTimeTxt" column="evaluate_time_txt"/>
+        <result property="createBy" column="create_by"/>
+        <result property="createTime" column="create_time"/>
+    </resultMap>
+
+    <select id="selectEvaluationBad" parameterType="com.zhaocai.business.report.vo.EvaluationBadReportVo" resultMap="EvaluationBadReportResult">
+        SELECT
+            d.id,
+            d.vendor_name,
+            d.evaluate_type,
+            d.evaluate_fraction,
+            d.evaluate_time,
+            d.evaluate_time_txt,
+            d.create_by,
+            d.create_time
+        FROM tb_vendor_evaluate d
+        <where>
+            d.del_flag = '0'
+            AND d.evaluate_status = '1'
+            AND d.is_qualified = 'N'
+            <if test="vendorName != null and vendorName != ''">
+                AND d.vendor_name like concat('%',#{vendorName},'%')
+            </if>
+        </where>
+        ORDER BY d.evaluate_time DESC, d.create_time DESC
+    </select>
+</mapper>

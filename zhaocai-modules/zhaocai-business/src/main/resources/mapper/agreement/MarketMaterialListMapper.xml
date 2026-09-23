@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhaocai.business.agreement.mapper.MarketMaterialListMapper">
+    <resultMap type="com.zhaocai.business.agreement.domain.MarketMaterialList" id="MarketMaterialListResult">
+        <result property="requireId" column="require_id"/>
+        <result property="contractId" column="contract_id"/>
+        <result property="quoteName" column="quote_name"/>
+        <result property="quoteNo" column="quote_no"/>
+        <result property="status" column="status"/>
+        <result property="category" column="category"/>
+        <result property="unitName" column="unit_name"/>
+        <result property="quantity" column="quantity"/>
+        <result property="price" column="price"/>
+        <result property="noTaxPrice" column="no_tax_price"/>
+        <result property="taxRate" column="tax_rate"/>
+        <result property="offerPrice" column="offer_price"/>
+        <result property="offerBrand" column="offer_brand"/>
+        <result property="offerGoodsCode" column="offer_goods_code"/>
+        <result property="createdTime" column="created_time"/>
+        <result property="updatedTime" column="updated_time"/>
+        <result property="offerSupplierName" column="offer_supplier_name"/>
+        <result property="offerSupplierCode" column="offer_supplier_code"/>
+        <result property="goodsName" column="goods_name"/>
+        <result property="skuId" column="sku_id"/>
+    </resultMap>
+</mapper>

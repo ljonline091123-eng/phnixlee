@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhaocai.business.bidding.mapper.BiddingMarkTemplateMapper">
+
+    <resultMap type="com.zhaocai.business.bidding.domain.BiddingMarkTemplate" id="BiddingMarkTemplateResult">
+        <result property="id"    column="id"    />
+        <result property="name"    column="name"    />
+        <result property="state"    column="state"    />
+        <result property="createUser"    column="create_user"    />
+        <result property="useUnit"    column="use_unit"    />
+        <result property="createBy"    column="create_by"    />
+        <result property="createId"    column="create_id"    />
+        <result property="createTime"    column="create_time"    />
+        <result property="updateBy"    column="update_by"    />
+        <result property="updateId"    column="update_id"    />
+        <result property="updateTime"    column="update_time"    />
+        <result property="delFlag"    column="del_flag"    />
+    </resultMap>
+
+    <resultMap type="com.zhaocai.business.bidding.vo.res.BiddingMarkTemplateVO" id="BiddingMarkTemplateListVOResult">
+        <result property="id"    column="id"    />
+        <result property="name"    column="name"    />
+        <result property="state"    column="state"    />
+        <result property="createUser"    column="create_user"    />
+        <result property="useUnit"    column="use_unit"    />
+        <result property="useUnitName"    column="dept_name"    />
+        <result property="createBy"    column="create_by"    />
+        <result property="createId"    column="create_id"    />
+        <result property="createTime"    column="create_time"    />
+        <result property="updateBy"    column="update_by"    />
+        <result property="updateId"    column="update_id"    />
+        <result property="updateTime"    column="update_time"    />
+        <result property="delFlag"    column="del_flag"    />
+    </resultMap>
+
+    <sql id="selectBiddingMarkTemplateVo">
+        select id, name, state, create_user, use_unit, create_by, create_id, create_time, update_by, update_id, update_time, del_flag from tb_bidding_mark_template
+    </sql>
+
+    <select id="page" resultType="com.zhaocai.business.bidding.vo.res.BiddingMarkTemplateListVO">
+        select bmt.* from tb_bidding_mark_template bmt
+        <where>
+            bmt.del_flag = 0
+            <if test="queryVO.name != null and queryVO.name != ''">
+                and bmt.name like CONCAT('%', #{queryVO.name}, '%')
+            </if>
+            <if test="queryVO.state != null">
+                and bmt.state = #{queryVO.state}
+            </if>
+        </where>
+        order by create_time desc
+    </select>
+
+
+    <select id="switchList" resultMap="BiddingMarkTemplateListVOResult">
+        select bmt.*,d.dept_name from tb_bidding_mark_template bmt
+        LEFT JOIN sys_dept d ON bmt.use_unit=d.dept_id
+        <where>
+            bmt.del_flag = 0
+            and use_unit in
+            <foreach collection="ids" item="ids" open="(" separator="," close=")">
+                #{ids}
+            </foreach>
+            <if test="queryVO.name != null and queryVO.name != ''">
+                and bmt.name like CONCAT('%', #{queryVO.name}, '%')
+            </if>
+            <if test="queryVO.state != null">
+                and bmt.state = #{queryVO.state}
+            </if>
+        </where>
+        GROUP BY bmt.id
+        order by create_time desc
+    </select>
+
+
+
+    <select id="multiplexList" resultMap="BiddingMarkTemplateListVOResult">
+        SELECT
+        tt.*,d.dept_name
+        FROM
+        tb_procurement_scheme s
+        LEFT JOIN tb_procurement_scheme_bidding b ON s.id = b.scheme_id
+        LEFT JOIN tb_bidding_mark_template tt ON tt.id = b.evaluation_template_id
+        LEFT JOIN sys_dept d ON tt.use_unit=d.dept_id
+        <where>
+            <if test="queryVO.name != null and queryVO.name != ''">
+                and tt.name like concat('%',#{queryVO.name,jdbcType=VARCHAR},'%')
+            </if>
+            <if test="queryVO.state != null">
+                and tt.state = #{queryVO.state}
+            </if>
+            and tt.del_flag = 0
+        </where>
+        and s.state = '3'
+        GROUP BY tt.id
+        order by tt.create_time desc
+    </select>
+
+
+    <select id="selectList" resultMap="BiddingMarkTemplateListVOResult">
+        select bmt.*,d.dept_name from tb_bidding_mark_template bmt
+        LEFT JOIN sys_dept d ON bmt.use_unit=d.dept_id
+        <where>
+            bmt.del_flag = 0
+            <if test="queryVO.useUnit != null and queryVO.useUnit != ''">
+                and bmt.use_unit in
+                <foreach collection="queryVO.useUnit" open="(" close=")" separator="," index="index" item="item">
+                    #{item, jdbcType=VARCHAR}
+                </foreach>
+            </if>
+            <if test="queryVO.name != null and queryVO.name != ''">
+                and bmt.name like CONCAT('%', #{queryVO.name}, '%')
+            </if>
+            <if test="queryVO.state != null">
+                and bmt.state = #{queryVO.state}
+            </if>
+        </where>
+        GROUP BY bmt.id
+        order by create_time desc
+    </select>
+
+</mapper>

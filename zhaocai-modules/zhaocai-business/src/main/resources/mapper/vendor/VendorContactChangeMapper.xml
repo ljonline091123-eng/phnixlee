@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhaocai.business.vendor.mapper.VendorContactChangeMapper">
+    <resultMap type="com.zhaocai.business.vendor.domain.VendorContactChange" id="VendorContactChangeResult">
+        <result property="id" column="id"/>
+        <result property="vendorId" column="vendor_id"/>
+        <result property="contactName" column="contact_name"/>
+        <result property="contactPhone" column="contact_phone"/>
+        <result property="isManager" column="is_manager"/>
+        <result property="isLegal" column="is_legal"/>
+        <result property="state" column="state"/>
+        <result property="isMainContact" column="is_main_contact"/>
+        <result property="loginUserId" column="login_user_id"/>
+        <result property="certificationId" column="certification_id"/>
+        <result property="createBy" column="create_by"/>
+        <result property="createId" column="create_id"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateBy" column="update_by"/>
+        <result property="updateId" column="update_id"/>
+        <result property="updateTime" column="update_time"/>
+        <result property="delFlag" column="del_flag"/>
+        <result property="wfProcessId" column="wf_process_id"/>
+        <result property="contactId" column="contact_id"/>
+        <result property="version" column="version"/>
+        <result property="changeStatus" column="change_status"/>
+    </resultMap>
+
+</mapper>

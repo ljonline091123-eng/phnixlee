@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhaocai.business.vendor.mapper.VendorPerformanceEvaluationMapper">
+    <resultMap type="com.zhaocai.business.vendor.domain.VendorPerformanceEvaluation"
+               id="VendorPerformanceEvaluationResult">
+        <result property="id" column="id"/>
+        <result property="projectId" column="project_id"/>
+        <result property="vendorId" column="vendor_id"/>
+        <result property="agreementCode" column="agreement_code"/>
+        <result property="agreementName" column="agreement_name"/>
+        <result property="partyAId" column="party_a_id"/>
+        <result property="partyAName" column="party_a_name"/>
+        <result property="partyBId" column="party_b_id"/>
+        <result property="partyBName" column="party_b_name"/>
+        <result property="excellentNum" column="excellent_num"/>
+        <result property="goodNum" column="good_num"/>
+        <result property="qualifiedNum" column="qualified_num"/>
+        <result property="badNum" column="bad_num"/>
+        <result property="delFlag" column="del_flag"/>
+        <result property="createBy" column="create_by"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateBy" column="update_by"/>
+        <result property="updateTime" column="update_time"/>
+    </resultMap>
+
+    <delete id="deleteByVendorId">
+        delete from tb_vendor_performance_evaluation
+        <where>
+            <if test="vendorId != null">
+                vendor_id = #{vendorId,jdbcType=BIGINT}
+            </if>
+        </where>
+    </delete>
+</mapper>

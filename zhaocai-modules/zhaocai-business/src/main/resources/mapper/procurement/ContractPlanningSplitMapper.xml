@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhaocai.business.procurement.mapper.ContractPlanningSplitMapper">
+    <resultMap type="com.zhaocai.business.procurement.domain.ContractPlanningSplit" id="ContractPlanningSplitResult">
+        <result property="id" column="id"/>
+        <result property="procurementPlanId" column="procurement_plan_id"/>
+        <result property="splitContractName" column="split_contract_name"/>
+        <result property="contractScope" column="contract_scope"/>
+        <result property="isUseUp" column="is_use_up"/>
+        <result property="totalPlanAmount" column="total_plan_amount"/>
+        <result property="totalUsedAmount" column="total_used_amount"/>
+        <result property="createBy" column="create_by"/>
+        <result property="createId" column="create_id"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateBy" column="update_by"/>
+        <result property="updateId" column="update_id"/>
+        <result property="updateTime" column="update_time"/>
+        <result property="delFlag" column="del_flag"/>
+    </resultMap>
+
+    <delete id="deleteByPlanId">
+        delete from tb_contract_planning_split where procurement_plan_id = #{planId,jdbcType=BIGINT}
+    </delete>
+
+    <resultMap type="com.zhaocai.business.procurement.vo.res.ProcurementSchemeSplitListVO" id="ProcurementSchemeSplitListResult">
+        <result property="splitId" column="id"/>
+        <result property="splitContractName" column="split_contract_name"/>
+        <result property="contractScope" column="contract_scope"/>
+        <result property="isUseUp" column="is_use_up"/>
+    </resultMap>
+
+    <select id="selectContractSplitListBySchemeId" resultMap="ProcurementSchemeSplitListResult">
+        select tps.id,tps.split_contract_name,tps.contract_scope,tps.is_use_up
+        from tb_contract_planning_split tps
+        inner join tb_procurement_scheme_plan_relate tpr on tps.id = tpr.contract_split_id
+        where tpr.procurement_scheme_id = #{schemeId,jdbcType=BIGINT}
+    </select>
+
+    <resultMap type="com.zhaocai.business.procurement.vo.res.ProcurementPlanContractSplitVO" id="ProcurementPlanContractSplitResult">
+        <result property="planId" column="plan_id"/>
+        <result property="procurementPlanName" column="procurement_plan_name"/>
+        <result property="projectHierarchy" column="project_hierarchy"/>
+        <result property="procurementPlanType" column="procurement_plan_type"/>
+        <result property="splitContractId" column="split_contract_id"/>
+        <result property="splitContractName" column="split_contract_name"/>
+        <result property="contractScope" column="contract_scope"/>
+        <result property="procurementType" column="procurement_type"/>
+        <result property="priceType" column="price_type"/>
+    </resultMap>
+
+    <select id="selectPlanContractSplitList" resultMap="ProcurementPlanContractSplitResult">
+        select tpp.id as plan_id,tpp.procurement_plan_name,tpp.project_hierarchy,tps.id as split_contract_id,tps.split_contract_name,
+                tps.contract_scope,tpp.procurement_plan_type as procurement_plan_type,tpp.procurement_type,tpp.price_type
+        from tb_contract_planning_split tps
+        inner join tb_procurement_plan tpp on tps.procurement_plan_id = tpp.id and tpp.state = 3
+        inner join tb_contract_planning tcp on tcp.plan_id = tpp.id and tcp.project_code = #{queryVO.projectCode,jdbcType=VARCHAR}
+        <where>
+            tps.id not in (
+                select tpr.contract_split_id
+                from tb_procurement_scheme_plan_relate tpr
+                inner join tb_procurement_scheme tps on tps.id = tpr.procurement_scheme_id and tps.state != 2
+            )
+            and
+            tps.id not in (
+                SELECT tml.contract_split_id
+                FROM tb_materials_list tml
+                GROUP BY tml.contract_split_id
+                HAVING COUNT(CASE WHEN tml.push_flag = 'Y' THEN 1 END) = COUNT(*)
+            )
+            <if test="queryVO.procurementPlanName != null and queryVO.procurementPlanName != ''">
+               and tpp.procurement_plan_name like concat('%',#{queryVO.procurementPlanName,jdbcType=VARCHAR},'%')
+            </if>
+            <if test="queryVO.procurementOfficer != null">
+                and tpp.procurement_officer = #{queryVO.procurementOfficer,jdbcType=BIGINT}
+            </if>
+        </where>
+        order by tpp.create_time desc
+    </select>
+
+    <select id="selectExistPlanningSplits" resultMap="ContractPlanningSplitResult">
+        select tps.*
+        from tb_contract_planning_split tps
+        where tps.id in (
+            select tpr.contract_split_id
+            from tb_procurement_scheme_plan_relate tpr
+            inner join tb_procurement_scheme tps on tps.id = tpr.procurement_scheme_id and tps.state != 2
+            <where>
+                tpr.contract_split_id in
+                <foreach collection="contractSplitIds" item="item" open="(" separator="," close=")">
+                    #{item,jdbcType=BIGINT}
+                </foreach>
+            </where>
+        )
+    </select>
+</mapper>

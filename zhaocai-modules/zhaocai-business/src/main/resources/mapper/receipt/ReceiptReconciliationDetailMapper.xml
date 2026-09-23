@@ -1,0 +1,192 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhaocai.business.receipt.mapper.ReceiptReconciliationDetailMapper">
+    
+    <resultMap type="com.zhaocai.business.receipt.domain.ReceiptReconciliationDetail" id="ReceiptReconciliationDetailResult">
+        <result property="id"    column="id"    />
+        <result property="actualEntryDate"    column="actual_entry_date"    />
+        <result property="conDtlId"    column="con_dtl_id"    />
+        <result property="docId"    column="doc_id"    />
+        <result property="materialClassCode"    column="material_class_code"    />
+        <result property="materialCode"    column="material_code"    />
+        <result property="materialName"    column="material_name"    />
+        <result property="materialsStorageCode"    column="materials_storage_code"    />
+        <result property="materialsStorageDtlId"    column="materials_storage_dtl_id"    />
+        <result property="materialsStorageId"    column="materials_storage_id"    />
+        <result property="measurementUnit"    column="measurement_unit"    />
+        <result property="priceType"    column="price_type"    />
+        <result property="reconciliationIncludeTax"    column="reconciliation_include_tax"    />
+        <result property="reconciliationNoTax"    column="reconciliation_no_tax"    />
+        <result property="reconciliationTaxMoney"    column="reconciliation_tax_money"    />
+        <result property="specificationModel"    column="specification_model"    />
+        <result property="storageNumber"    column="storage_number"    />
+        <result property="taxRate"    column="tax_rate"    />
+        <result property="unitIncludeTax"    column="unit_include_tax"    />
+        <result property="unitNoTax"    column="unit_no_tax"    />
+        <result property="unitTaxMoney"    column="unit_tax_money"    />
+        <result property="createBy"    column="create_by"    />
+        <result property="createId"    column="create_id"    />
+        <result property="createTime"    column="create_time"    />
+        <result property="updateBy"    column="update_by"    />
+        <result property="updateId"    column="update_id"    />
+        <result property="updateTime"    column="update_time"    />
+        <result property="delFlag"    column="del_flag"    />
+        <result property="reconciliationId"    column="reconciliation_id"    />
+    </resultMap>
+    
+    <select id="getDetailList" resultType="com.zhaocai.business.receipt.vo.res.ReceiptReconciliationDetailListVO">
+        select rrd.material_name, rrd.specification_model, rrd.measurement_unit, rrd.storage_number, rrd.price_type, rrd.tax_rate, rrd.unit_no_tax, rrd.unit_include_tax, rrd.reconciliation_no_tax, rrd.reconciliation_include_tax, rrd.reconciliation_tax_money
+        from tb_receipt_reconciliation_detail rrd
+        where reconciliation_id = #{id}
+    </select>
+
+    <sql id="selectReceiptReconciliationDetailVo">
+        select id, actual_entry_date, con_dtl_id, doc_id, material_class_code, material_code, material_name, materials_storage_code, materials_storage_dtl_id, materials_storage_id, measurement_unit, price_type, reconciliation_include_tax, reconciliation_no_tax, reconciliation_tax_money, specification_model, storage_number, tax_rate, unit_include_tax, unit_no_tax, unit_tax_money, create_by, create_id, create_time, update_by, update_id, update_time, del_flag, reconciliation_id from tb_receipt_reconciliation_detail
+    </sql>
+
+    <select id="selectReceiptReconciliationDetailList" parameterType="com.zhaocai.business.receipt.domain.ReceiptReconciliationDetail" resultMap="ReceiptReconciliationDetailResult">
+        <include refid="selectReceiptReconciliationDetailVo"/>
+        <where>  
+            <if test="actualEntryDate != null  and actualEntryDate != ''"> and actual_entry_date = #{actualEntryDate}</if>
+            <if test="conDtlId != null  and conDtlId != ''"> and con_dtl_id = #{conDtlId}</if>
+            <if test="docId != null  and docId != ''"> and doc_id = #{docId}</if>
+            <if test="materialClassCode != null  and materialClassCode != ''"> and material_class_code = #{materialClassCode}</if>
+            <if test="materialCode != null  and materialCode != ''"> and material_code = #{materialCode}</if>
+            <if test="materialName != null  and materialName != ''"> and material_name like concat('%', #{materialName}, '%')</if>
+            <if test="materialsStorageCode != null  and materialsStorageCode != ''"> and materials_storage_code = #{materialsStorageCode}</if>
+            <if test="materialsStorageDtlId != null  and materialsStorageDtlId != ''"> and materials_storage_dtl_id = #{materialsStorageDtlId}</if>
+            <if test="materialsStorageId != null  and materialsStorageId != ''"> and materials_storage_id = #{materialsStorageId}</if>
+            <if test="measurementUnit != null  and measurementUnit != ''"> and measurement_unit = #{measurementUnit}</if>
+            <if test="priceType != null  and priceType != ''"> and price_type = #{priceType}</if>
+            <if test="reconciliationIncludeTax != null "> and reconciliation_include_tax = #{reconciliationIncludeTax}</if>
+            <if test="reconciliationNoTax != null "> and reconciliation_no_tax = #{reconciliationNoTax}</if>
+            <if test="reconciliationTaxMoney != null "> and reconciliation_tax_money = #{reconciliationTaxMoney}</if>
+            <if test="specificationModel != null  and specificationModel != ''"> and specification_model = #{specificationModel}</if>
+            <if test="storageNumber != null "> and storage_number = #{storageNumber}</if>
+            <if test="taxRate != null "> and tax_rate = #{taxRate}</if>
+            <if test="unitIncludeTax != null "> and unit_include_tax = #{unitIncludeTax}</if>
+            <if test="unitNoTax != null "> and unit_no_tax = #{unitNoTax}</if>
+            <if test="unitTaxMoney != null "> and unit_tax_money = #{unitTaxMoney}</if>
+            <if test="createId != null "> and create_id = #{createId}</if>
+            <if test="updateId != null "> and update_id = #{updateId}</if>
+            <if test="reconciliationId != null "> and reconciliation_id = #{reconciliationId}</if>
+        </where>
+    </select>
+    
+    <select id="selectReceiptReconciliationDetailById" parameterType="Long" resultMap="ReceiptReconciliationDetailResult">
+        <include refid="selectReceiptReconciliationDetailVo"/>
+        where id = #{id}
+    </select>
+        
+    <insert id="insertReceiptReconciliationDetail" parameterType="com.zhaocai.business.receipt.domain.ReceiptReconciliationDetail" useGeneratedKeys="true" keyProperty="id">
+        insert into tb_receipt_reconciliation_detail
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="actualEntryDate != null">actual_entry_date,</if>
+            <if test="conDtlId != null">con_dtl_id,</if>
+            <if test="docId != null">doc_id,</if>
+            <if test="materialClassCode != null">material_class_code,</if>
+            <if test="materialCode != null">material_code,</if>
+            <if test="materialName != null">material_name,</if>
+            <if test="materialsStorageCode != null">materials_storage_code,</if>
+            <if test="materialsStorageDtlId != null">materials_storage_dtl_id,</if>
+            <if test="materialsStorageId != null">materials_storage_id,</if>
+            <if test="measurementUnit != null">measurement_unit,</if>
+            <if test="priceType != null">price_type,</if>
+            <if test="reconciliationIncludeTax != null">reconciliation_include_tax,</if>
+            <if test="reconciliationNoTax != null">reconciliation_no_tax,</if>
+            <if test="reconciliationTaxMoney != null">reconciliation_tax_money,</if>
+            <if test="specificationModel != null">specification_model,</if>
+            <if test="storageNumber != null">storage_number,</if>
+            <if test="taxRate != null">tax_rate,</if>
+            <if test="unitIncludeTax != null">unit_include_tax,</if>
+            <if test="unitNoTax != null">unit_no_tax,</if>
+            <if test="unitTaxMoney != null">unit_tax_money,</if>
+            <if test="createBy != null">create_by,</if>
+            <if test="createId != null">create_id,</if>
+            <if test="createTime != null">create_time,</if>
+            <if test="updateBy != null">update_by,</if>
+            <if test="updateId != null">update_id,</if>
+            <if test="updateTime != null">update_time,</if>
+            <if test="delFlag != null">del_flag,</if>
+            <if test="reconciliationId != null">reconciliation_id,</if>
+         </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="actualEntryDate != null">#{actualEntryDate},</if>
+            <if test="conDtlId != null">#{conDtlId},</if>
+            <if test="docId != null">#{docId},</if>
+            <if test="materialClassCode != null">#{materialClassCode},</if>
+            <if test="materialCode != null">#{materialCode},</if>
+            <if test="materialName != null">#{materialName},</if>
+            <if test="materialsStorageCode != null">#{materialsStorageCode},</if>
+            <if test="materialsStorageDtlId != null">#{materialsStorageDtlId},</if>
+            <if test="materialsStorageId != null">#{materialsStorageId},</if>
+            <if test="measurementUnit != null">#{measurementUnit},</if>
+            <if test="priceType != null">#{priceType},</if>
+            <if test="reconciliationIncludeTax != null">#{reconciliationIncludeTax},</if>
+            <if test="reconciliationNoTax != null">#{reconciliationNoTax},</if>
+            <if test="reconciliationTaxMoney != null">#{reconciliationTaxMoney},</if>
+            <if test="specificationModel != null">#{specificationModel},</if>
+            <if test="storageNumber != null">#{storageNumber},</if>
+            <if test="taxRate != null">#{taxRate},</if>
+            <if test="unitIncludeTax != null">#{unitIncludeTax},</if>
+            <if test="unitNoTax != null">#{unitNoTax},</if>
+            <if test="unitTaxMoney != null">#{unitTaxMoney},</if>
+            <if test="createBy != null">#{createBy},</if>
+            <if test="createId != null">#{createId},</if>
+            <if test="createTime != null">#{createTime},</if>
+            <if test="updateBy != null">#{updateBy},</if>
+            <if test="updateId != null">#{updateId},</if>
+            <if test="updateTime != null">#{updateTime},</if>
+            <if test="delFlag != null">#{delFlag},</if>
+            <if test="reconciliationId != null">#{reconciliationId},</if>
+         </trim>
+    </insert>
+
+    <update id="updateReceiptReconciliationDetail" parameterType="com.zhaocai.business.receipt.domain.ReceiptReconciliationDetail">
+        update tb_receipt_reconciliation_detail
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="actualEntryDate != null">actual_entry_date = #{actualEntryDate},</if>
+            <if test="conDtlId != null">con_dtl_id = #{conDtlId},</if>
+            <if test="docId != null">doc_id = #{docId},</if>
+            <if test="materialClassCode != null">material_class_code = #{materialClassCode},</if>
+            <if test="materialCode != null">material_code = #{materialCode},</if>
+            <if test="materialName != null">material_name = #{materialName},</if>
+            <if test="materialsStorageCode != null">materials_storage_code = #{materialsStorageCode},</if>
+            <if test="materialsStorageDtlId != null">materials_storage_dtl_id = #{materialsStorageDtlId},</if>
+            <if test="materialsStorageId != null">materials_storage_id = #{materialsStorageId},</if>
+            <if test="measurementUnit != null">measurement_unit = #{measurementUnit},</if>
+            <if test="priceType != null">price_type = #{priceType},</if>
+            <if test="reconciliationIncludeTax != null">reconciliation_include_tax = #{reconciliationIncludeTax},</if>
+            <if test="reconciliationNoTax != null">reconciliation_no_tax = #{reconciliationNoTax},</if>
+            <if test="reconciliationTaxMoney != null">reconciliation_tax_money = #{reconciliationTaxMoney},</if>
+            <if test="specificationModel != null">specification_model = #{specificationModel},</if>
+            <if test="storageNumber != null">storage_number = #{storageNumber},</if>
+            <if test="taxRate != null">tax_rate = #{taxRate},</if>
+            <if test="unitIncludeTax != null">unit_include_tax = #{unitIncludeTax},</if>
+            <if test="unitNoTax != null">unit_no_tax = #{unitNoTax},</if>
+            <if test="unitTaxMoney != null">unit_tax_money = #{unitTaxMoney},</if>
+            <if test="createBy != null">create_by = #{createBy},</if>
+            <if test="createId != null">create_id = #{createId},</if>
+            <if test="createTime != null">create_time = #{createTime},</if>
+            <if test="updateBy != null">update_by = #{updateBy},</if>
+            <if test="updateId != null">update_id = #{updateId},</if>
+            <if test="updateTime != null">update_time = #{updateTime},</if>
+            <if test="delFlag != null">del_flag = #{delFlag},</if>
+            <if test="reconciliationId != null">reconciliation_id = #{reconciliationId},</if>
+        </trim>
+        where id = #{id}
+    </update>
+
+    <delete id="deleteReceiptReconciliationDetailById" parameterType="Long">
+        delete from tb_receipt_reconciliation_detail where id = #{id}
+    </delete>
+
+    <delete id="deleteReceiptReconciliationDetailByIds" parameterType="String">
+        delete from tb_receipt_reconciliation_detail where id in 
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+</mapper>

@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhaocai.business.bidding.mapper.BiddingListQuotationMapper">
+    <resultMap type="com.zhaocai.business.bidding.domain.BiddingListQuotation" id="BiddingListQuotationResult">
+        <result property="id" column="id"/>
+        <result property="materialsCode" column="materials_code"/>
+        <result property="biddingInfoId" column="bidding_info_id"/>
+        <result property="taxUnitPrice" column="tax_unit_price"/>
+        <result property="notTaxUnitPrice" column="not_tax_unit_price"/>
+        <result property="taxPrice" column="tax_price"/>
+        <result property="notTaxPrice" column="not_tax_price"/>
+        <result property="taxRate" column="tax_rate"/>
+        <result property="taxRateCode" column="tax_rate_code"/>
+        <result property="taxRateName" column="tax_rate_name"/>
+        <result property="billType" column="bill_type"/>
+        <result property="createBy" column="create_by"/>
+        <result property="createId" column="create_id"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateBy" column="update_by"/>
+        <result property="updateId" column="update_id"/>
+        <result property="updateTime" column="update_time"/>
+        <result property="delFlag" column="del_flag"/>
+        <result property="floatingPrice" column="floating_price"/>
+        <result property="floatingRate" column="floating_rate"/>
+        <result property="unloadingFee" column="unloading_fee"/>
+        <result property="basePrice" column="base_price"/>
+        <result property="splitId" column="split_id"/>
+        <result property="materialsId" column="materials_id"/>
+    </resultMap>
+
+    <resultMap type="com.zhaocai.business.bidding.vo.res.VendorBiddingListQuotationListVO" id="BiddingMaterialsListResult">
+        <result property="materialsListId" column="materials_id"/>
+        <result property="materialsCode" column="materials_code"/>
+        <result property="materialsName" column="materials_name"/>
+        <result property="subjectMatterCode" column="subject_matter_code"/>
+        <result property="subjectMatterName" column="subject_matter_name"/>
+        <result property="specification" column="specification"/>
+        <result property="unitMeasurement" column="unit_measurement"/>
+        <result property="measurementRules" column="measurement_rules"/>
+        <result property="workContent" column="work_content"/>
+        <result property="costAccount" column="cost_account_name"/>
+        <result property="count" column="count"/>
+        <result property="usedCount" column="used_count"/>
+        <result property="taxRate" column="tax_rate"/>
+        <result property="taxRateCode" column="tax_rate_code"/>
+        <result property="taxRateName" column="tax_rate_name"/>
+        <result property="taxUnitPrice" column="tax_unit_price"/>
+        <result property="notTaxUnitPrice" column="not_tax_unit_price"/>
+        <result property="taxPrice" column="tax_price"/>
+        <result property="notTaxPrice" column="not_tax_price"/>
+        <result property="billType" column="bill_type"/>
+        <result property="biddingListQuotationId" column="bidding_list_quotation_id"/>
+        <result property="floatingPrice" column="floating_price"/>
+        <result property="floatingRate" column="floating_rate"/>
+        <result property="unloadingFee" column="unloading_fee"/>
+        <result property="basePrice" column="base_price"/>
+        <result property="rentMode" column="rent_mode"/>
+        <result property="rentTime" column="rent_time"/>
+        <result property="rentQuantity" column="rent_quantity"/>
+        <result property="priceType" column="price_type"/>
+    </resultMap>
+
+    <!-- 合同签订新增合同时查询获取供应商的报价清单 -->
+    <select id="selectVendorBiddingListQuotation" resultMap="BiddingMaterialsListResult">
+        select tml.id as materials_id, tml.materials_code,tml.materials_name,tml.subject_matter_code,tml.subject_matter_name,tml.specification,tml.unit_measurement,
+                tml.count,tml.used_count,tlr.tax_rate,tlr.tax_rate_code,tlr.tax_rate_name,tlr.floating_price,tlr.floating_rate,tlr.unloading_fee,tlr.base_price,
+                tlr.tax_price,tlr.tax_unit_price,tlr.not_tax_unit_price,tlr.not_tax_price,tlr.bill_type,tlr.id as bidding_list_quotation_id,
+                tml.cost_account_name,tml.measurement_rules,tml.work_content,tml.rent_mode,
+                tml.rent_time,tml.rent_quantity,tml.price_type
+        from tb_materials_list tml
+        inner join (
+            select tbl.id,tbl.split_id,tbl.materials_id, tbl.materials_code,tbl.tax_rate,tbl.tax_rate_code,tbl.tax_rate_name,tbl.tax_unit_price,tbl.not_tax_unit_price,tbl.tax_price,
+                    tbl.not_tax_price,tbl.bill_type,tbl.floating_price,tbl.floating_rate,tbl.unloading_fee,tbl.base_price
+            from tb_bidding_list_quotation tbl
+            inner join (
+                    select tbi.id from tb_bidding_info tbi
+                    where tbi.vendor_id = #{vendorId,jdbcType=BIGINT} and tbi.scheme_id = #{schemeId,jdbcType=BIGINT}  and (tbi.price_change_state = 1 or tbi.price_change_state is null)
+                    order by tbi.create_time desc limit 1
+            ) tbir on tbir.id = tbl.bidding_info_id
+            where tbl.split_id = #{splitId,jdbcType=BIGINT} and tbl.del_flag = 0
+        ) tlr  on tml.id = tlr.materials_id
+        where tml.contract_split_id =  #{splitId,jdbcType=BIGINT} and tml.push_flag = 'N'
+        order by tml.materials_code
+    </select>
+
+    <select id="selectVendorBiddingListQuotationList" resultMap="BiddingListQuotationResult">
+        select tbl.*
+        from tb_bidding_list_quotation tbl
+        inner join (
+            select tbi.id from tb_bidding_info tbi
+            where tbi.vendor_id = #{vendorId,jdbcType=BIGINT} and tbi.scheme_id = #{schemeId,jdbcType=BIGINT}  and (tbi.price_change_state = 1 or tbi.price_change_state is null)
+            order by tbi.create_time desc limit 1
+        ) tbir on tbir.id = tbl.bidding_info_id
+        where tbl.split_id = #{contractSplitId,jdbcType=BIGINT} and tbl.del_flag = 0
+    </select>
+</mapper>

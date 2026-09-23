@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhaocai.business.pub.mapper.BankMapper">
+
+    <resultMap type="com.zhaocai.business.pub.domain.DwCdBank" id="BankResult">
+        <result property="id"    column="id"    />
+        <result property="parentName"    column="parent_name"    />
+        <result property="code"    column="code"    />
+        <result property="deptId"    column="dept_id"    />
+        <result property="orderNum"    column="order_num"    />
+        <result property="remark"    column="remark"    />
+        <result property="updateTime"    column="update_time"    />
+        <result property="dr"    column="dr"    />
+        <result property="internalId"    column="internal_id"    />
+        <result property="createBy"    column="create_by"    />
+        <result property="createTime"    column="create_time"    />
+        <result property="updateBy"    column="update_by"    />
+        <result property="name"    column="name"    />
+    </resultMap>
+
+    <sql id="selectBankVo">
+        select id, parent_name, code, dept_id, order_num, remark, update_time, dr, internal_id,create_by,create_time,update_by,name from dw_cd_bank
+    </sql>
+
+    <select id="selectBankList" parameterType="com.zhaocai.business.pub.domain.DwCdBank" resultMap="BankResult">
+        <include refid="selectBankVo"/>
+        <where>
+            <if test="dwCdBank.parentName != null  and dwCdBank.parentName != ''"> and parent_name like concat('%', #{dwCdBank.parentName}, '%')</if>
+            <if test="dwCdBank.name != null  and dwCdBank.name != ''"> and name like concat('%', #{dwCdBank.name}, '%')</if>
+            <if test="dwCdBank.internalId != null  and dwCdBank.internalId != ''"> and internal_id = #{dwCdBank.internalId}</if>
+            <if test="dwCdBank.code != null  and dwCdBank.code != ''"> and code like concat('%', #{dwCdBank.code}, '%')</if>
+        </where>
+    </select>
+
+    <select id="selectBankById" parameterType="String" resultMap="BankResult">
+        <include refid="selectBankVo"/>
+        where id = #{id}
+    </select>
+
+    <insert id="insertBank" parameterType="com.zhaocai.business.pub.domain.DwCdBank">
+        insert into dw_cd_bank
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="id != null">id,</if>
+            <if test="parentName != null">parent_name,</if>
+            <if test="code != null">code,</if>
+            <if test="deptId != null">dept_id,</if>
+            <if test="orderNum != null">order_num,</if>
+            <if test="remark != null">remark,</if>
+            <if test="updateTime != null">update_time,</if>
+            <if test="dr != null">dr,</if>
+            <if test="internalId != null">internal_id,</if>
+            <if test="createBy != null">create_by,</if>
+            <if test="createTime != null">create_time,</if>
+            <if test="updateBy != null">update_by,</if>
+            <if test="name != null">name,</if>
+         </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="id != null">#{id},</if>
+            <if test="parentName != null">#{parentName},</if>
+            <if test="code != null">#{code},</if>
+            <if test="deptId != null">#{deptId},</if>
+            <if test="orderNum != null">#{orderNum},</if>
+            <if test="remark != null">#{remark},</if>
+            <if test="updateTime != null">#{updateTime},</if>
+            <if test="dr != null">#{dr},</if>
+            <if test="internalId != null">#{internalId},</if>
+            <if test="createBy != null">#{createBy},</if>
+            <if test="createTime != null">#{createTime},</if>
+            <if test="updateBy != null">#{updateBy},</if>
+            <if test="name != null">#{name},</if>
+         </trim>
+    </insert>
+
+    <update id="updateBank" parameterType="com.zhaocai.business.pub.domain.DwCdBank">
+        update dw_cd_bank
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="id != null">id = #{id},</if>
+            <if test="parentName != null">parent_name = #{parentName},</if>
+            <if test="code != null">code = #{code},</if>
+            <if test="deptId != null">dept_id = #{deptId},</if>
+            <if test="orderNum != null">order_num = #{orderNum},</if>
+            <if test="remark != null">remark = #{remark},</if>
+            <if test="updateTime != null">update_time = #{updateTime},</if>
+            <if test="dr != null">dr = #{dr},</if>
+            <if test="internalId != null">internal_id = #{internalId},</if>
+            <if test="createBy != null">create_by = #{createBy},</if>
+            <if test="createTime != null">create_time = #{createTime},</if>
+            <if test="updateBy != null">update_by = #{updateBy},</if>
+            <if test="name != null">name = #{name},</if>
+
+        </trim>
+        where id = #{id}
+    </update>
+
+    <delete id="deleteBankById" parameterType="Long">
+        delete from dw_cd_bank where id = #{id}
+    </delete>
+
+    <delete id="deleteBankByIds" parameterType="String">
+        delete from dw_cd_bank where id in
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+
+    <delete id="deleteSyncBank">
+        delete from dw_cd_bank where id is not null;
+    </delete>
+
+</mapper>

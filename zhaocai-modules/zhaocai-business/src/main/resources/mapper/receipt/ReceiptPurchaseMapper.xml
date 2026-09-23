@@ -1,0 +1,283 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhaocai.business.receipt.mapper.ReceiptPurchaseMapper">
+
+    <resultMap type="com.zhaocai.business.receipt.domain.ReceiptPurchase" id="PushPurchaseResult">
+        <result property="id"    column="id"    />
+        <result property="thirdId"    column="third_id"    />
+        <result property="state"    column="state"    />
+        <result property="acceptancePhone"    column="acceptance_phone"    />
+        <result property="acceptanceUserId"    column="acceptance_user_id"    />
+        <result property="acceptanceUserName"    column="acceptance_user_name"    />
+        <result property="attachBusinessId"    column="attach_business_id"    />
+        <result property="conCode"    column="con_code"    />
+        <result property="conId"    column="con_id"    />
+        <result property="conName"    column="con_name"    />
+        <result property="deliveryMethod"    column="delivery_method"    />
+        <result property="detailAddress"    column="detail_address"    />
+        <result property="orderCode"    column="order_code"    />
+        <result property="orderDate"    column="order_date"    />
+        <result property="orderName"    column="order_name"    />
+        <result property="orderStatus"    column="order_status"    />
+        <result property="orgId"    column="org_id"    />
+        <result property="orgName"    column="org_name"    />
+        <result property="planEntryTime"    column="plan_entry_time"    />
+        <result property="procStatus"    column="proc_status"    />
+        <result property="processId"    column="process_id"    />
+        <result property="projectCode"    column="project_code"    />
+        <result property="projectId"    column="project_id"    />
+        <result property="projectName"    column="project_name"    />
+        <result property="purchaseMoney"    column="purchase_money"    />
+        <result property="remark"    column="remark"    />
+        <result property="supplierId"    column="supplier_id"    />
+        <result property="supplierName"    column="supplier_name"    />
+        <result property="createDept"    column="create_dept"    />
+        <result property="createBy"    column="create_by"    />
+        <result property="createId"    column="create_id"    />
+        <result property="createTime"    column="create_time"    />
+        <result property="updateBy"    column="update_by"    />
+        <result property="updateId"    column="update_id"    />
+        <result property="updateTime"    column="update_time"    />
+        <result property="delFlag"    column="del_flag"    />
+    </resultMap>
+
+
+    <resultMap type="com.zhaocai.business.receipt.vo.req.ReceiptPurchaseVO" id="PushPurchaseResultMap">
+        <result property="id"    column="id"    />
+        <result property="thirdId"    column="third_id"    />
+        <result property="state"    column="state"    />
+        <result property="acceptancePhone"    column="acceptance_phone"    />
+        <result property="acceptanceUserId"    column="acceptance_user_id"    />
+        <result property="acceptanceUserName"    column="acceptance_user_name"    />
+        <result property="attachBusinessId"    column="attach_business_id"    />
+        <result property="conCode"    column="con_code"    />
+        <result property="conId"    column="con_id"    />
+        <result property="conName"    column="con_name"    />
+        <result property="deliveryMethod"    column="delivery_method"    />
+        <result property="detailAddress"    column="detail_address"    />
+        <result property="orderCode"    column="order_code"    />
+        <result property="orderDate"    column="order_date"    />
+        <result property="orderName"    column="order_name"    />
+        <result property="orderStatus"    column="order_status"    />
+        <result property="orgId"    column="org_id"    />
+        <result property="orgName"    column="org_name"    />
+        <result property="planEntryTime"    column="plan_entry_time"    />
+        <result property="procStatus"    column="proc_status"    />
+        <result property="processId"    column="process_id"    />
+        <result property="projectCode"    column="project_code"    />
+        <result property="projectId"    column="project_id"    />
+        <result property="projectName"    column="project_name"    />
+        <result property="purchaseMoney"    column="purchase_money"    />
+        <result property="remark"    column="remark"    />
+        <result property="supplierId"    column="supplier_id"    />
+        <result property="supplierName"    column="supplier_name"    />
+        <result property="createDept"    column="create_dept"    />
+        <result property="createBy"    column="create_by"    />
+        <result property="createId"    column="create_id"    />
+        <result property="createTime"    column="create_time"    />
+        <result property="updateBy"    column="update_by"    />
+        <result property="updateId"    column="update_id"    />
+        <result property="updateTime"    column="update_time"    />
+        <result property="delFlag"    column="del_flag"    />
+    </resultMap>
+
+    <sql id="selectPushPurchaseVo">
+        select id, third_id,state, acceptance_phone, acceptance_user_id, acceptance_user_name, attach_business_id, con_code, con_id, con_name, delivery_method, detail_address, order_code, order_date, order_name, order_status, org_id, org_name, plan_entry_time, proc_status, process_id, project_code, project_id, project_name, purchase_money, remark, supplier_id, supplier_name, create_dept, create_by, create_id, create_time, update_by, update_id, update_time, del_flag from tb_receipt_purchase
+    </sql>
+
+    <select id="selectList" parameterType="com.zhaocai.business.receipt.vo.req.ReceiptPurchaseVO" resultMap="PushPurchaseResult">
+        <include refid="selectPushPurchaseVo"/>
+        <where>
+            <if test="thirdId != null  and thirdId != ''"> and third_id = #{thirdId}</if>
+            <if test="state != null  and state != ''"> and state = #{state}</if>
+            <if test="acceptancePhone != null  and acceptancePhone != ''"> and acceptance_phone = #{acceptancePhone}</if>
+            <if test="acceptanceUserId != null  and acceptanceUserId != ''"> and acceptance_user_id = #{acceptanceUserId}</if>
+            <if test="acceptanceUserName != null  and acceptanceUserName != ''"> and acceptance_user_name like concat('%', #{acceptanceUserName}, '%')</if>
+            <if test="attachBusinessId != null  and attachBusinessId != ''"> and attach_business_id = #{attachBusinessId}</if>
+            <if test="conCode != null  and conCode != ''"> and con_code = #{conCode}</if>
+            <if test="conId != null  and conId != ''"> and con_id = #{conId}</if>
+            <if test="conName != null  and conName != ''"> and con_name like concat('%', #{conName}, '%')</if>
+            <if test="deliveryMethod != null  and deliveryMethod != ''"> and delivery_method = #{deliveryMethod}</if>
+            <if test="detailAddress != null  and detailAddress != ''"> and detail_address = #{detailAddress}</if>
+            <if test="orderCode != null  and orderCode != ''"> and order_code = #{orderCode}</if>
+            <if test="orderDate != null "> and order_date = #{orderDate}</if>
+            <if test="orderName != null  and orderName != ''"> and order_name like concat('%', #{orderName}, '%')</if>
+            <if test="orderStatus != null  and orderStatus != ''"> and order_status = #{orderStatus}</if>
+            <if test="orgId != null  and orgId != ''"> and org_id = #{orgId}</if>
+            <if test="orgName != null  and orgName != ''"> and org_name like concat('%', #{orgName}, '%')</if>
+            <if test="planEntryTime != null "> and plan_entry_time = #{planEntryTime}</if>
+            <if test="procStatus != null  and procStatus != ''"> and proc_status = #{procStatus}</if>
+            <if test="processId != null  and processId != ''"> and process_id = #{processId}</if>
+            <if test="projectCode != null  and projectCode != ''"> and project_code = #{projectCode}</if>
+            <if test="projectId != null  and projectId != ''"> and project_id = #{projectId}</if>
+            <if test="projectName != null  and projectName != ''"> and project_name like concat('%', #{projectName}, '%')</if>
+            <if test="purchaseMoney != null "> and purchase_money = #{purchaseMoney}</if>
+            <if test="supplierId != null  and supplierId != ''"> and supplier_id = #{supplierId}</if>
+            <if test="supplierName != null  and supplierName != ''"> and supplier_name like concat('%', #{supplierName}, '%')</if>
+            <if test="createDept != null  and createDept != ''"> and create_dept = #{createDept}</if>
+            <if test="createId != null "> and create_id = #{createId}</if>
+            <if test="updateId != null "> and update_id = #{updateId}</if>
+        </where>
+        order by order_date desc
+    </select>
+
+
+
+    <select id="selectListPge" parameterType="com.zhaocai.business.receipt.vo.req.ReceiptPurchaseVO" resultMap="PushPurchaseResultMap">
+        <include refid="selectPushPurchaseVo"/>
+        <where>
+            <if test="queryVO.orderName != null and queryVO.orderName != ''">
+                order_name like concat('%', #{queryVO.orderName,jdbcType=VARCHAR}, '%')
+            </if>
+            <if test="queryVO.supplierId != null  and queryVO.supplierId != ''">
+                and supplier_id = #{queryVO.supplierId,jdbcType=VARCHAR}
+            </if>
+            <if test="queryVO.supplierName != null  and queryVO.supplierName != ''">
+                and supplier_name like concat('%', #{queryVO.supplierName,jdbcType=VARCHAR}, '%')
+            </if>
+        </where>
+        order by order_date desc
+    </select>
+
+    <select id="selectPushPurchaseById" parameterType="Long" resultMap="PushPurchaseResult">
+        <include refid="selectPushPurchaseVo"/>
+        where id = #{id}
+    </select>
+
+    <insert id="insertPushPurchase" parameterType="com.zhaocai.business.receipt.domain.ReceiptPurchase">
+        insert into tb_receipt_purchase
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="id != null">id,</if>
+            <if test="thirdId != null">third_id,</if>
+            <if test="state != null">state,</if>
+            <if test="acceptancePhone != null">acceptance_phone,</if>
+            <if test="acceptanceUserId != null">acceptance_user_id,</if>
+            <if test="acceptanceUserName != null">acceptance_user_name,</if>
+            <if test="attachBusinessId != null">attach_business_id,</if>
+            <if test="conCode != null">con_code,</if>
+            <if test="conId != null">con_id,</if>
+            <if test="conName != null">con_name,</if>
+            <if test="deliveryMethod != null">delivery_method,</if>
+            <if test="detailAddress != null">detail_address,</if>
+            <if test="orderCode != null">order_code,</if>
+            <if test="orderDate != null">order_date,</if>
+            <if test="orderName != null">order_name,</if>
+            <if test="orderStatus != null">order_status,</if>
+            <if test="orgId != null">org_id,</if>
+            <if test="orgName != null">org_name,</if>
+            <if test="planEntryTime != null">plan_entry_time,</if>
+            <if test="procStatus != null">proc_status,</if>
+            <if test="processId != null">process_id,</if>
+            <if test="projectCode != null">project_code,</if>
+            <if test="projectId != null">project_id,</if>
+            <if test="projectName != null">project_name,</if>
+            <if test="purchaseMoney != null">purchase_money,</if>
+            <if test="remark != null">remark,</if>
+            <if test="supplierId != null">supplier_id,</if>
+            <if test="supplierName != null">supplier_name,</if>
+            <if test="createDept != null">create_dept,</if>
+            <if test="createBy != null">create_by,</if>
+            <if test="createId != null">create_id,</if>
+            <if test="createTime != null">create_time,</if>
+            <if test="updateBy != null">update_by,</if>
+            <if test="updateId != null">update_id,</if>
+            <if test="updateTime != null">update_time,</if>
+            <if test="delFlag != null">del_flag,</if>
+         </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="id != null">#{id},</if>
+            <if test="thirdId != null">#{thirdId},</if>
+            <if test="state != null">#{state},</if>
+            <if test="acceptancePhone != null">#{acceptancePhone},</if>
+            <if test="acceptanceUserId != null">#{acceptanceUserId},</if>
+            <if test="acceptanceUserName != null">#{acceptanceUserName},</if>
+            <if test="attachBusinessId != null">#{attachBusinessId},</if>
+            <if test="conCode != null">#{conCode},</if>
+            <if test="conId != null">#{conId},</if>
+            <if test="conName != null">#{conName},</if>
+            <if test="deliveryMethod != null">#{deliveryMethod},</if>
+            <if test="detailAddress != null">#{detailAddress},</if>
+            <if test="orderCode != null">#{orderCode},</if>
+            <if test="orderDate != null">#{orderDate},</if>
+            <if test="orderName != null">#{orderName},</if>
+            <if test="orderStatus != null">#{orderStatus},</if>
+            <if test="orgId != null">#{orgId},</if>
+            <if test="orgName != null">#{orgName},</if>
+            <if test="planEntryTime != null">#{planEntryTime},</if>
+            <if test="procStatus != null">#{procStatus},</if>
+            <if test="processId != null">#{processId},</if>
+            <if test="projectCode != null">#{projectCode},</if>
+            <if test="projectId != null">#{projectId},</if>
+            <if test="projectName != null">#{projectName},</if>
+            <if test="purchaseMoney != null">#{purchaseMoney},</if>
+            <if test="remark != null">#{remark},</if>
+            <if test="supplierId != null">#{supplierId},</if>
+            <if test="supplierName != null">#{supplierName},</if>
+            <if test="createDept != null">#{createDept},</if>
+            <if test="createBy != null">#{createBy},</if>
+            <if test="createId != null">#{createId},</if>
+            <if test="createTime != null">#{createTime},</if>
+            <if test="updateBy != null">#{updateBy},</if>
+            <if test="updateId != null">#{updateId},</if>
+            <if test="updateTime != null">#{updateTime},</if>
+            <if test="delFlag != null">#{delFlag},</if>
+         </trim>
+    </insert>
+
+    <update id="updatePushPurchase" parameterType="com.zhaocai.business.receipt.domain.ReceiptPurchase">
+        update tb_receipt_purchase
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="thirdId != null">third_id = #{thirdId},</if>
+            <if test="state != null">state = #{state},</if>
+            <if test="acceptancePhone != null">acceptance_phone = #{acceptancePhone},</if>
+            <if test="acceptanceUserId != null">acceptance_user_id = #{acceptanceUserId},</if>
+            <if test="acceptanceUserName != null">acceptance_user_name = #{acceptanceUserName},</if>
+            <if test="attachBusinessId != null">attach_business_id = #{attachBusinessId},</if>
+            <if test="conCode != null">con_code = #{conCode},</if>
+            <if test="conId != null">con_id = #{conId},</if>
+            <if test="conName != null">con_name = #{conName},</if>
+            <if test="deliveryMethod != null">delivery_method = #{deliveryMethod},</if>
+            <if test="detailAddress != null">detail_address = #{detailAddress},</if>
+            <if test="orderCode != null">order_code = #{orderCode},</if>
+            <if test="orderDate != null">order_date = #{orderDate},</if>
+            <if test="orderName != null">order_name = #{orderName},</if>
+            <if test="orderStatus != null">order_status = #{orderStatus},</if>
+            <if test="orgId != null">org_id = #{orgId},</if>
+            <if test="orgName != null">org_name = #{orgName},</if>
+            <if test="planEntryTime != null">plan_entry_time = #{planEntryTime},</if>
+            <if test="procStatus != null">proc_status = #{procStatus},</if>
+            <if test="processId != null">process_id = #{processId},</if>
+            <if test="projectCode != null">project_code = #{projectCode},</if>
+            <if test="projectId != null">project_id = #{projectId},</if>
+            <if test="projectName != null">project_name = #{projectName},</if>
+            <if test="purchaseMoney != null">purchase_money = #{purchaseMoney},</if>
+            <if test="remark != null">remark = #{remark},</if>
+            <if test="supplierId != null">supplier_id = #{supplierId},</if>
+            <if test="supplierName != null">supplier_name = #{supplierName},</if>
+            <if test="createDept != null">create_dept = #{createDept},</if>
+            <if test="createBy != null">create_by = #{createBy},</if>
+            <if test="createId != null">create_id = #{createId},</if>
+            <if test="createTime != null">create_time = #{createTime},</if>
+            <if test="updateBy != null">update_by = #{updateBy},</if>
+            <if test="updateId != null">update_id = #{updateId},</if>
+            <if test="updateTime != null">update_time = #{updateTime},</if>
+            <if test="delFlag != null">del_flag = #{delFlag},</if>
+        </trim>
+        where
+        <if test="thirdId != null">third_id = #{thirdId}</if>
+        <if test="id != null"> id = #{id}</if>
+    </update>
+
+    <delete id="deletePushPurchaseById" parameterType="Long">
+        delete from tb_receipt_purchase where id = #{id}
+    </delete>
+
+    <delete id="deletePushPurchaseByIds" parameterType="String">
+        delete from tb_receipt_purchase where id in
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+</mapper>

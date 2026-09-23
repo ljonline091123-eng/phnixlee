@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhaocai.business.pub.mapper.CountryMapper">
+    
+    <resultMap type="com.zhaocai.business.pub.domain.Country" id="CountryResult">
+        <result property="id"    column="id"    />
+        <result property="arabicNumeralCode"    column="arabic_numeral_code"    />
+        <result property="chineseAsName"    column="chinese_as_name"    />
+        <result property="chineseFullName"    column="chinese_full_name"    />
+        <result property="englishAsName"    column="english_as_name"    />
+        <result property="englishFullName"    column="english_full_name"    />
+        <result property="thridId"    column="thrid_id"    />
+        <result property="threeCharCode"    column="three_char_code"    />
+        <result property="twoCharCode"    column="two_char_code"    />
+    </resultMap>
+
+    <sql id="selectCountryVo">
+        select id, arabic_numeral_code, chinese_as_name, chinese_full_name, english_as_name, english_full_name, thrid_id, three_char_code, two_char_code from tb_country
+    </sql>
+
+    <select id="selectCountryList" parameterType="com.zhaocai.business.pub.domain.Country" resultMap="CountryResult">
+        <include refid="selectCountryVo"/>
+        <where>  
+            <if test="arabicNumeralCode != null  and arabicNumeralCode != ''"> and arabic_numeral_code = #{arabicNumeralCode}</if>
+            <if test="chineseAsName != null  and chineseAsName != ''"> and chinese_as_name like concat('%', #{chineseAsName}, '%')</if>
+            <if test="chineseFullName != null  and chineseFullName != ''"> and chinese_full_name like concat('%', #{chineseFullName}, '%')</if>
+            <if test="englishAsName != null  and englishAsName != ''"> and english_as_name like concat('%', #{englishAsName}, '%')</if>
+            <if test="englishFullName != null  and englishFullName != ''"> and english_full_name like concat('%', #{englishFullName}, '%')</if>
+            <if test="thridId != null  and thridId != ''"> and thrid_id = #{thridId}</if>
+            <if test="threeCharCode != null  and threeCharCode != ''"> and three_char_code = #{threeCharCode}</if>
+            <if test="twoCharCode != null  and twoCharCode != ''"> and two_char_code = #{twoCharCode}</if>
+        </where>
+    </select>
+    
+    <select id="selectCountryById" parameterType="Long" resultMap="CountryResult">
+        <include refid="selectCountryVo"/>
+        where id = #{id}
+    </select>
+        
+    <insert id="insertCountry" parameterType="com.zhaocai.business.pub.domain.Country">
+        insert into tb_country
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="id != null">id,</if>
+            <if test="arabicNumeralCode != null">arabic_numeral_code,</if>
+            <if test="chineseAsName != null">chinese_as_name,</if>
+            <if test="chineseFullName != null">chinese_full_name,</if>
+            <if test="englishAsName != null">english_as_name,</if>
+            <if test="englishFullName != null">english_full_name,</if>
+            <if test="thridId != null">thrid_id,</if>
+            <if test="threeCharCode != null">three_char_code,</if>
+            <if test="twoCharCode != null">two_char_code,</if>
+         </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="id != null">#{id},</if>
+            <if test="arabicNumeralCode != null">#{arabicNumeralCode},</if>
+            <if test="chineseAsName != null">#{chineseAsName},</if>
+            <if test="chineseFullName != null">#{chineseFullName},</if>
+            <if test="englishAsName != null">#{englishAsName},</if>
+            <if test="englishFullName != null">#{englishFullName},</if>
+            <if test="thridId != null">#{thridId},</if>
+            <if test="threeCharCode != null">#{threeCharCode},</if>
+            <if test="twoCharCode != null">#{twoCharCode},</if>
+         </trim>
+    </insert>
+
+    <update id="updateCountry" parameterType="com.zhaocai.business.pub.domain.Country">
+        update tb_country
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="arabicNumeralCode != null">arabic_numeral_code = #{arabicNumeralCode},</if>
+            <if test="chineseAsName != null">chinese_as_name = #{chineseAsName},</if>
+            <if test="chineseFullName != null">chinese_full_name = #{chineseFullName},</if>
+            <if test="englishAsName != null">english_as_name = #{englishAsName},</if>
+            <if test="englishFullName != null">english_full_name = #{englishFullName},</if>
+            <if test="thridId != null">thrid_id = #{thridId},</if>
+            <if test="threeCharCode != null">three_char_code = #{threeCharCode},</if>
+            <if test="twoCharCode != null">two_char_code = #{twoCharCode},</if>
+        </trim>
+        where id = #{id}
+    </update>
+
+    <delete id="deleteCountryById" parameterType="Long">
+        delete from tb_country where id = #{id}
+    </delete>
+
+    <delete id="deleteCountryByIds" parameterType="String">
+        delete from tb_country where id in 
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+
+    <delete id="deleteSyncCountry">
+        delete from tb_country where thrid_id is not null or thrid_id != '';
+    </delete>
+
+</mapper>

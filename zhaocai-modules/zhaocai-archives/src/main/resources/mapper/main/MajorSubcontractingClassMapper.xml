@@ -1,0 +1,205 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhaocai.archives.main.mapper.MajorSubcontractingClassMapper">
+
+    <resultMap type="com.zhaocai.archives.main.domain.MajorSubcontractingClass" id="MajorSubcontractingClassResult">
+        <result property="id" column="id"/>
+        <result property="majorSubcontractingClassCode" column="major_subcontracting_class_code"/>
+        <result property="majorSubcontractingClassName" column="major_subcontracting_class_name"/>
+        <result property="majorSubcontractingClassType" column="major_subcontracting_class_type"/>
+        <result property="measureUnit" column="measure_unit"/>
+        <result property="parentId" column="parent_id"/>
+        <result property="subjectMatter" column="subject_matter"/>
+        <result property="createId" column="create_id"/>
+        <result property="createBy" column="create_by"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateBy" column="update_by"/>
+        <result property="updateTime" column="update_time"/>
+        <result property="valid" column="valid"/>
+        <result property="sonId" column="son_id"/>
+    </resultMap>
+
+    <sql id="selectMajorSubcontractingClassVo">
+        select id,
+               major_subcontracting_class_code,
+               major_subcontracting_class_name,
+               major_subcontracting_class_type,
+               measure_unit,
+               parent_id,
+               subject_matter,
+               create_id,
+               create_by,
+               create_time,
+               update_by,
+               update_time,
+               valid,
+               son_id
+        from major_subcontracting_class
+    </sql>
+
+    <select id="selectMajorSubcontractingClassListCount" parameterType="com.zhaocai.archives.main.domain.MajorSubcontractingClass"
+            resultType="long">
+        select count(1)
+        from major_subcontracting_class
+        <where>
+            <if test="majorSubcontractingClassCode != null  and majorSubcontractingClassCode != ''">and
+                major_subcontracting_class_code = #{majorSubcontractingClassCode}
+            </if>
+            <if test="majorSubcontractingClassName != null  and majorSubcontractingClassName != ''">and
+                major_subcontracting_class_name like concat('%', #{majorSubcontractingClassName}, '%')
+            </if>
+            <if test="majorSubcontractingClassType != null  and majorSubcontractingClassType != ''">and
+                major_subcontracting_class_type = #{majorSubcontractingClassType}
+            </if>
+            <if test="measureUnit != null  and measureUnit != ''">and measure_unit = #{measureUnit}</if>
+            <if test="parentId != null  and parentId != ''">and parent_id = #{parentId}</if>
+            <if test="subjectMatter != null ">and subject_matter = #{subjectMatter}</if>
+            <if test="createId != null  and createId != ''">and create_id = #{createId}</if>
+            <if test="valid != null ">and valid = #{valid}</if>
+            <if test="sonId != null ">and son_id = #{sonId}</if>
+        </where>
+        order by major_subcontracting_class_code asc
+    </select>
+
+
+    <select id="selectMajorSubcontractingClassList" parameterType="com.zhaocai.archives.main.domain.MajorSubcontractingClass"
+            resultMap="MajorSubcontractingClassResult">
+        <include refid="selectMajorSubcontractingClassVo"/>
+        <where>
+            <if test="majorSubcontractingClassCode != null  and majorSubcontractingClassCode != ''">and
+                major_subcontracting_class_code = #{majorSubcontractingClassCode}
+            </if>
+            <if test="majorSubcontractingClassName != null  and majorSubcontractingClassName != ''">and
+                major_subcontracting_class_name like concat('%', #{majorSubcontractingClassName}, '%')
+            </if>
+            <if test="majorSubcontractingClassType != null  and majorSubcontractingClassType != ''">and
+                major_subcontracting_class_type = #{majorSubcontractingClassType}
+            </if>
+            <if test="measureUnit != null  and measureUnit != ''">and measure_unit = #{measureUnit}</if>
+            <if test="parentId != null  and parentId != ''">and parent_id = #{parentId}</if>
+            <if test="subjectMatter != null ">and subject_matter = #{subjectMatter}</if>
+            <if test="createId != null  and createId != ''">and create_id = #{createId}</if>
+            <if test="valid != null ">and valid = #{valid}</if>
+            <if test="sonId != null ">and son_id = #{sonId}</if>
+        </where>
+        order by major_subcontracting_class_code asc
+    </select>
+
+    <select id="selectMajorSubcontractingClassById" parameterType="String" resultMap="MajorSubcontractingClassResult">
+        <include refid="selectMajorSubcontractingClassVo"/>
+        where id = #{id}
+    </select>
+
+    <insert id="insertMajorSubcontractingClass" parameterType="com.zhaocai.archives.main.domain.MajorSubcontractingClass">
+        insert into major_subcontracting_class
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="id != null">id,</if>
+            <if test="majorSubcontractingClassCode != null and majorSubcontractingClassCode != ''">
+                major_subcontracting_class_code,
+            </if>
+            <if test="majorSubcontractingClassName != null and majorSubcontractingClassName != ''">
+                major_subcontracting_class_name,
+            </if>
+            <if test="majorSubcontractingClassType != null">major_subcontracting_class_type,</if>
+            <if test="measureUnit != null">measure_unit,</if>
+            <if test="parentId != null">parent_id,</if>
+            <if test="subjectMatter != null">subject_matter,</if>
+            <if test="createId != null">create_id,</if>
+            <if test="createBy != null">create_by,</if>
+            <if test="createTime != null">create_time,</if>
+            <if test="updateBy != null">update_by,</if>
+            <if test="updateTime != null">update_time,</if>
+            <if test="valid != null">valid,</if>
+            <if test="sonId != null">son_id,</if>
+        </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="id != null">#{id},</if>
+            <if test="majorSubcontractingClassCode != null and majorSubcontractingClassCode != ''">
+                #{majorSubcontractingClassCode},
+            </if>
+            <if test="majorSubcontractingClassName != null and majorSubcontractingClassName != ''">
+                #{majorSubcontractingClassName},
+            </if>
+            <if test="majorSubcontractingClassType != null">#{majorSubcontractingClassType},</if>
+            <if test="measureUnit != null">#{measureUnit},</if>
+            <if test="parentId != null">#{parentId},</if>
+            <if test="subjectMatter != null">#{subjectMatter},</if>
+            <if test="createId != null">#{createId},</if>
+            <if test="createBy != null">#{createBy},</if>
+            <if test="createTime != null">#{createTime},</if>
+            <if test="updateBy != null">#{updateBy},</if>
+            <if test="updateTime != null">#{updateTime},</if>
+            <if test="valid != null">#{valid},</if>
+            <if test="sonId != null">#{sonId},</if>
+        </trim>
+    </insert>
+
+    <update id="updateMajorSubcontractingClass" parameterType="com.zhaocai.archives.main.domain.MajorSubcontractingClass">
+        update major_subcontracting_class
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="majorSubcontractingClassCode != null and majorSubcontractingClassCode != ''">
+                major_subcontracting_class_code = #{majorSubcontractingClassCode},
+            </if>
+            <if test="majorSubcontractingClassName != null and majorSubcontractingClassName != ''">
+                major_subcontracting_class_name = #{majorSubcontractingClassName},
+            </if>
+            <if test="majorSubcontractingClassType != null">major_subcontracting_class_type =
+                #{majorSubcontractingClassType},
+            </if>
+            <if test="measureUnit != null">measure_unit = #{measureUnit},</if>
+            <if test="parentId != null">parent_id = #{parentId},</if>
+            <if test="subjectMatter != null">subject_matter = #{subjectMatter},</if>
+            <if test="createId != null">create_id = #{createId},</if>
+            <if test="createBy != null">create_by = #{createBy},</if>
+            <if test="createTime != null">create_time = #{createTime},</if>
+            <if test="updateBy != null">update_by = #{updateBy},</if>
+            <if test="updateTime != null">update_time = #{updateTime},</if>
+            <if test="valid != null">valid = #{valid},</if>
+            <if test="sonId != null">son_id = #{sonId},</if>
+        </trim>
+        where id = #{id}
+    </update>
+
+    <delete id="deleteMajorSubcontractingClassById" parameterType="String">
+        delete
+        from major_subcontracting_class
+        where id = #{id}
+    </delete>
+
+    <delete id="deleteMajorSubcontractingClassByIds" parameterType="String">
+        delete from major_subcontracting_class where id in
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+
+    <select id="getMaxCode" resultType="integer">
+        select max(CONVERT(replace(major_subcontracting_class_code, #{upCode}, ''), SIGNED)) as code
+        from major_subcontracting_class
+        where parent_id = #{upId}
+          and valid = '0'
+    </select>
+
+    <select id="getMaterialJoinNoMy" parameterType="string" resultType="int">
+        select sum(a.sl)
+        from (select count(1) as sl
+              from major_subcontracting_archives
+              where major_subcontracting_class_id = #{id}
+                and valid = '0'
+              union all
+              select count(1) as sl
+              from major_subcontracting_feature
+              where major_subcontracting_class_id = #{id}
+                and valid = '0'
+              union all
+              select count(1) as sl
+              from major_subcontracting_class
+              where parent_id = #{id}
+                and valid = '0') as a
+    </select>
+
+
+
+</mapper>

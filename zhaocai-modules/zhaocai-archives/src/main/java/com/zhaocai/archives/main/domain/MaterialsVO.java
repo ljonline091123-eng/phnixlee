@@ -1,0 +1,192 @@
+package com.zhaocai.archives.main.domain;
+
+import io.swagger.annotations.ApiModelProperty;
+import lombok.Data;
+import org.apache.commons.lang3.builder.ToStringBuilder;
+import org.apache.commons.lang3.builder.ToStringStyle;
+
+import java.io.Serializable;
+import java.math.BigDecimal;
+
+/**
+ * 物料清单vo
+ *
+ * @author chenming
+ * @date 2024/05/28
+ */
+@Data
+public class MaterialsVO implements Serializable {
+
+    @ApiModelProperty(value = "id")
+    private Long id;
+
+    @ApiModelProperty(value = "物料 id")
+    private String materialsId;
+
+    @ApiModelProperty(value = "物料清单唯一 id")
+    private String materialsUniqueId;
+
+    @ApiModelProperty(value = "物料编码")
+    private String materialsCode;
+
+    @ApiModelProperty(value = "物料名称")
+    private String materialsName;
+
+    @ApiModelProperty(value = "物料名称（导入）")
+    private String materialsNameImport;
+
+    @ApiModelProperty(value = "交易标的物编码")
+    private String subjectMatterCode;
+
+    @ApiModelProperty(value = "交易标的物名称")
+    private String subjectMatterName;
+
+    @ApiModelProperty(value = "交易标的物标识")
+    private String subjectMatterFlag;
+
+    @ApiModelProperty(value = "规格型号")
+    private String specification;
+
+    @ApiModelProperty(value = "计量规则")
+    private String measurementRules;
+
+    @ApiModelProperty(value = "计量单位")
+    private String unitMeasurement;
+
+    @ApiModelProperty(value = "基本工作内容")
+    private String workContent;
+
+    @ApiModelProperty(value = "成本科目档案 id")
+    private String costAccountId;
+
+    @ApiModelProperty(value = "成本科目编码")
+    private String costAccountCode;
+
+    @ApiModelProperty(value = "成本科目名称")
+    private String costAccountName;
+
+    @ApiModelProperty(value = "数量")
+    private BigDecimal count;
+
+    @ApiModelProperty(value = "转换量")
+    private BigDecimal transferQuantity;
+
+    @ApiModelProperty(value = "税率")
+    private BigDecimal taxRate;
+
+    @ApiModelProperty(value = "税率编码")
+    private String taxRateCode;
+
+    @ApiModelProperty(value = "税率名称")
+    private String taxRateName;
+
+    @ApiModelProperty(value = "单价(不含税)")
+    private BigDecimal unitPriceExclTax;
+
+    @ApiModelProperty(value = "单价(含税) ")
+    private BigDecimal unitPriceInclTax;
+
+    @ApiModelProperty(value = "金额(不含税)")
+    private BigDecimal amountExclTax;
+
+    @ApiModelProperty(value = "金额(含税)")
+    private BigDecimal amountInclTax;
+
+    @ApiModelProperty(value = "税额")
+    private BigDecimal taxAmount;
+
+    @ApiModelProperty(value = "浮动价")
+    private BigDecimal floatingPrice;
+
+    @ApiModelProperty(value = "卸费")
+    private BigDecimal unloadingFee;
+
+    @ApiModelProperty(value = "基价")
+    private BigDecimal basePrice;
+
+    @ApiModelProperty(value = "租赁方式")
+    private String rentMode;
+
+    @ApiModelProperty(value = "租赁时间")
+    private BigDecimal rentTime;
+
+    @ApiModelProperty(value = "租赁数量")
+    private BigDecimal rentQuantity;
+
+    @ApiModelProperty(value = "数量")
+    private String countText;
+
+    @ApiModelProperty(value = "转换量")
+    private String transferQuantityText;
+
+    @ApiModelProperty(value = "单价(含税)")
+    private String unitPriceInclTaxText;
+
+    @ApiModelProperty(value = "浮动价-文本")
+    private String floatingPriceText;
+
+    @ApiModelProperty(value = "卸费-文本")
+    private String unloadingFeeText;
+
+    @ApiModelProperty(value = "基价-文本")
+    private String basePriceText;
+
+    @ApiModelProperty(value = "租赁方式")
+    private String rentModeText;
+
+    @ApiModelProperty(value = "租赁时间")
+    private String rentTimeText;
+
+    @ApiModelProperty(value = "租赁数量")
+    private String rentQuantityText;
+
+    @ApiModelProperty(value = "价格类型")
+    private Integer priceType;
+
+    @ApiModelProperty(value = "商品编号")
+    private String code;
+
+    @ApiModelProperty(value = "商品名称")
+    private String name;
+
+    @ApiModelProperty(value = "商品规格")
+    private String category;
+
+    @ApiModelProperty(value = "商品单位")
+    private String unitName;
+
+    @ApiModelProperty(value = "商品数量")
+    private BigDecimal quantity;
+
+    @ApiModelProperty(value = "易料市集含税单价")
+    private BigDecimal offerPrice;
+
+    @ApiModelProperty(value = "易料市集品牌")
+    private String offerBrand;
+
+    @ApiModelProperty(value = "是否推送 Y:推送 N:未推送")
+    private String pushFlag;
+
+    @ApiModelProperty(value = "易料市集商品id")
+    private String skuId;
+
+    @ApiModelProperty(value = "备注")
+    private String remark;
+
+    @ApiModelProperty(value = "总价(含税)")
+    private BigDecimal totalPrice;
+
+    @ApiModelProperty(value = "总价(含税)")
+    private String totalPriceText;
+
+    @ApiModelProperty(value = "浮动率")
+    private BigDecimal floatingRate;
+
+    @ApiModelProperty(value = "浮动率")
+    private String floatingRateText;
+
+    public BigDecimal getTransferQuantity() {
+        return this.getCount();
+    }
+
+}

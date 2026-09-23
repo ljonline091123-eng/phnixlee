@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhaocai.business.pub.mapper.DwMmServiceInfMapper">
+    <resultMap type="com.zhaocai.business.pub.domain.DwMmServiceInf" id="DwMmServiceInfResult">
+        <result property="id" column="id"/>
+        <result property="serviceClassCode" column="service_class_code"/>
+        <result property="serviceClassName" column="service_class_name"/>
+        <result property="serviceClassLevelExt" column="service_class_level_ext"/>
+        <result property="serviceClassLevel" column="service_class_level"/>
+        <result property="serviceClassLevelCd" column="service_class_level_cd"/>
+        <result property="belgPreServiceClassExt" column="belg_pre_service_class_ext"/>
+        <result property="belgPreServiceClassName" column="belg_pre_service_class_name"/>
+        <result property="belgPreServiceClassId" column="belg_pre_service_class_id"/>
+        <result property="belgPreServiceClassCode" column="belg_pre_service_class_code"/>
+        <result property="isSubjectMatterExt" column="is_subject_matter_ext"/>
+        <result property="isSubjectMatter" column="is_subject_matter"/>
+        <result property="isSubjectMatterCd" column="is_subject_matter_cd"/>
+        <result property="sourceRemark" column="source_remark"/>
+        <result property="standardTaxRate" column="standard_tax_rate"/>
+        <result property="remark" column="remark"/>
+        <result property="ext1" column="ext1"/>
+        <result property="reportStatus" column="report_status"/>
+        <result property="reportTime" column="report_time"/>
+        <result property="internalId" column="internal_id"/>
+        <result property="internalParentId" column="internal_parent_id"/>
+        <result property="instanceId" column="instance_id"/>
+        <result property="approvalStatus" column="approval_status"/>
+        <result property="deptId" column="dept_id"/>
+        <result property="cryptoField" column="crypto_field"/>
+        <result property="createBy" column="create_by"/>
+        <result property="createTime" column="create_time"/>
+    </resultMap>
+
+    <delete id="deleteAll">
+        delete from dw_mm_service_inf
+    </delete>
+
+    <select id="countAllData" resultType="java.lang.Integer">
+        select count(1) from dw_mm_service_inf
+    </select>
+</mapper>

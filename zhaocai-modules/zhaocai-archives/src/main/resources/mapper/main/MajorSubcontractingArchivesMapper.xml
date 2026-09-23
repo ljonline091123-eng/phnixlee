@@ -1,0 +1,206 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhaocai.archives.main.mapper.MajorSubcontractingArchivesMapper">
+
+    <resultMap type="com.zhaocai.archives.main.domain.MajorSubcontractingArchives" id="MajorSubcontractingArchivesResult">
+        <result property="id" column="id"/>
+        <result property="majorSubcontractingClassId" column="major_subcontracting_class_id"/>
+        <result property="majorSubcontractingCode" column="major_subcontracting_code"/>
+        <result property="majorSubcontractingName" column="major_subcontracting_name"/>
+        <result property="feature" column="feature"/>
+        <result property="measureUnit" column="measure_unit"/>
+        <result property="specs" column="specs"/>
+        <result property="metrologicalRules" column="metrological_rules"/>
+        <result property="basicJob" column="basic_job"/>
+        <result property="createId" column="create_id"/>
+        <result property="createBy" column="create_by"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateBy" column="update_by"/>
+        <result property="updateTime" column="update_time"/>
+        <result property="valid" column="valid"/>
+        <result property="sonId" column="son_id"/>
+    </resultMap>
+
+    <sql id="selectMajorSubcontractingArchivesVo">
+        select id,
+               major_subcontracting_class_id,
+               major_subcontracting_code,
+               major_subcontracting_name,
+               feature,
+               measure_unit,
+               specs,
+               metrological_rules,
+               basic_job,
+               create_id,
+               create_by,
+               create_time,
+               update_by,
+               update_time,
+               valid,
+               son_id
+        from major_subcontracting_archives
+    </sql>
+
+
+    <select id="selectMajorSubcontractingArchivesListCount" parameterType="com.zhaocai.archives.main.domain.MajorSubcontractingArchives"
+            resultType="long">
+        select count(1)
+        from major_subcontracting_archives
+        <where>
+            <if test="majorSubcontractingClassId != null  and majorSubcontractingClassId != ''">and
+                major_subcontracting_class_id = #{majorSubcontractingClassId}
+            </if>
+            <if test="majorSubcontractingCode != null  and majorSubcontractingCode != ''">and major_subcontracting_code
+                = #{majorSubcontractingCode}
+            </if>
+            <if test="majorSubcontractingName != null  and majorSubcontractingName != ''">and major_subcontracting_name
+                like concat('%', #{majorSubcontractingName}, '%')
+            </if>
+            <if test="feature != null  and feature != ''">and feature = #{feature}</if>
+            <if test="measureUnit != null  and measureUnit != ''">and measure_unit = #{measureUnit}</if>
+            <if test="specs != null  and specs != ''">and specs = #{specs}</if>
+            <if test="metrologicalRules != null  and metrologicalRules != ''">and metrological_rules =
+                #{metrologicalRules}
+            </if>
+            <if test="basicJob != null  and basicJob != ''">and basic_job = #{basicJob}</if>
+            <if test="createId != null  and createId != ''">and create_id = #{createId}</if>
+            <if test="valid != null ">and valid = #{valid}</if>
+            <if test="sonId != null ">and son_id = #{sonId}</if>
+        </where>
+    </select>
+
+    <select id="selectMajorSubcontractingArchivesList" parameterType="com.zhaocai.archives.main.domain.MajorSubcontractingArchives"
+            resultMap="MajorSubcontractingArchivesResult">
+        <include refid="selectMajorSubcontractingArchivesVo"/>
+        <where>
+            <if test="majorSubcontractingClassId != null  and majorSubcontractingClassId != ''">and
+                major_subcontracting_class_id = #{majorSubcontractingClassId}
+            </if>
+            <if test="majorSubcontractingCode != null  and majorSubcontractingCode != ''">and major_subcontracting_code
+                = #{majorSubcontractingCode}
+            </if>
+            <if test="majorSubcontractingName != null  and majorSubcontractingName != ''">and major_subcontracting_name
+                like concat('%', #{majorSubcontractingName}, '%')
+            </if>
+            <if test="feature != null  and feature != ''">and feature = #{feature}</if>
+            <if test="measureUnit != null  and measureUnit != ''">and measure_unit = #{measureUnit}</if>
+            <if test="specs != null  and specs != ''">and specs = #{specs}</if>
+            <if test="metrologicalRules != null  and metrologicalRules != ''">and metrological_rules =
+                #{metrologicalRules}
+            </if>
+            <if test="basicJob != null  and basicJob != ''">and basic_job = #{basicJob}</if>
+            <if test="createId != null  and createId != ''">and create_id = #{createId}</if>
+            <if test="valid != null ">and valid = #{valid}</if>
+            <if test="sonId != null ">and son_id = #{sonId}</if>
+            <if test="ids != null ">
+                and major_subcontracting_class_id in
+                <foreach collection="ids" item="id" open="(" close=")" separator=",">
+                    #{id}
+                </foreach>
+            </if>
+        </where>
+        order by major_subcontracting_code ASC
+    </select>
+
+    <select id="selectMajorSubcontractingArchivesById" parameterType="String"
+            resultMap="MajorSubcontractingArchivesResult">
+        <include refid="selectMajorSubcontractingArchivesVo"/>
+        where id = #{id}
+    </select>
+
+    <insert id="insertMajorSubcontractingArchives" parameterType="com.zhaocai.archives.main.domain.MajorSubcontractingArchives">
+        insert into major_subcontracting_archives
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="id != null">id,</if>
+            <if test="majorSubcontractingClassId != null and majorSubcontractingClassId != ''">
+                major_subcontracting_class_id,
+            </if>
+            <if test="majorSubcontractingCode != null and majorSubcontractingCode != ''">major_subcontracting_code,</if>
+            <if test="majorSubcontractingName != null and majorSubcontractingName != ''">major_subcontracting_name,</if>
+            <if test="feature != null">feature,</if>
+            <if test="measureUnit != null">measure_unit,</if>
+            <if test="specs != null">specs,</if>
+            <if test="metrologicalRules != null">metrological_rules,</if>
+            <if test="basicJob != null">basic_job,</if>
+            <if test="createId != null">create_id,</if>
+            <if test="createBy != null">create_by,</if>
+            <if test="createTime != null">create_time,</if>
+            <if test="updateBy != null">update_by,</if>
+            <if test="updateTime != null">update_time,</if>
+            <if test="valid != null">valid,</if>
+            <if test="sonId != null">son_id,</if>
+        </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="id != null">#{id},</if>
+            <if test="majorSubcontractingClassId != null and majorSubcontractingClassId != ''">
+                #{majorSubcontractingClassId},
+            </if>
+            <if test="majorSubcontractingCode != null and majorSubcontractingCode != ''">#{majorSubcontractingCode},
+            </if>
+            <if test="majorSubcontractingName != null and majorSubcontractingName != ''">#{majorSubcontractingName},
+            </if>
+            <if test="feature != null">#{feature},</if>
+            <if test="measureUnit != null">#{measureUnit},</if>
+            <if test="specs != null">#{specs},</if>
+            <if test="metrologicalRules != null">#{metrologicalRules},</if>
+            <if test="basicJob != null">#{basicJob},</if>
+            <if test="createId != null">#{createId},</if>
+            <if test="createBy != null">#{createBy},</if>
+            <if test="createTime != null">#{createTime},</if>
+            <if test="updateBy != null">#{updateBy},</if>
+            <if test="updateTime != null">#{updateTime},</if>
+            <if test="valid != null">#{valid},</if>
+            <if test="sonId != null">#{sonId},</if>
+        </trim>
+    </insert>
+
+    <update id="updateMajorSubcontractingArchives" parameterType="com.zhaocai.archives.main.domain.MajorSubcontractingArchives">
+        update major_subcontracting_archives
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="majorSubcontractingClassId != null and majorSubcontractingClassId != ''">
+                major_subcontracting_class_id = #{majorSubcontractingClassId},
+            </if>
+            <if test="majorSubcontractingCode != null and majorSubcontractingCode != ''">major_subcontracting_code =
+                #{majorSubcontractingCode},
+            </if>
+            <if test="majorSubcontractingName != null and majorSubcontractingName != ''">major_subcontracting_name =
+                #{majorSubcontractingName},
+            </if>
+            <if test="feature != null">feature = #{feature},</if>
+            <if test="measureUnit != null">measure_unit = #{measureUnit},</if>
+            <if test="specs != null">specs = #{specs},</if>
+            <if test="metrologicalRules != null">metrological_rules = #{metrologicalRules},</if>
+            <if test="basicJob != null">basic_job = #{basicJob},</if>
+            <if test="createId != null">create_id = #{createId},</if>
+            <if test="createBy != null">create_by = #{createBy},</if>
+            <if test="createTime != null">create_time = #{createTime},</if>
+            <if test="updateBy != null">update_by = #{updateBy},</if>
+            <if test="updateTime != null">update_time = #{updateTime},</if>
+            <if test="valid != null">valid = #{valid},</if>
+            <if test="sonId != null">son_id = #{sonId},</if>
+        </trim>
+        where id = #{id}
+    </update>
+
+    <delete id="deleteMajorSubcontractingArchivesById" parameterType="String">
+        delete
+        from major_subcontracting_archives
+        where id = #{id}
+    </delete>
+
+    <delete id="deleteMajorSubcontractingArchivesByIds" parameterType="String">
+        delete from major_subcontracting_archives where id in
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+
+    <select id="getMaxCode" resultType="Integer">
+        select max(CONVERT(replace(major_subcontracting_code, #{oldCode}, ''), SIGNED)) as code
+        from major_subcontracting_archives
+        where major_subcontracting_class_id = #{typeId}
+          and valid = '0'
+    </select>
+</mapper>

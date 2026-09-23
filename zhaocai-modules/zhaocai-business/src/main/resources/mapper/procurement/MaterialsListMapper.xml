@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhaocai.business.procurement.mapper.MaterialsListMapper">
+    <resultMap type="com.zhaocai.business.procurement.domain.MaterialsList" id="MaterialsListResult">
+        <result property="id" column="id"/>
+        <result property="planId" column="plan_id"/>
+        <result property="contractSplitId" column="contract_split_id"/>
+        <result property="materialsId" column="materials_id"/>
+        <result property="materialsUniqueId" column="materials_unique_id"/>
+        <result property="materialsCode" column="materials_code"/>
+        <result property="materialsName" column="materials_name"/>
+        <result property="materialsNameImport" column="materials_name_import"/>
+        <result property="subjectMatterCode" column="subject_matter_code"/>
+        <result property="subjectMatterName" column="subject_matter_name"/>
+        <result property="subjectMatterFlag" column="subject_matter_flag"/>
+        <result property="specification" column="specification"/>
+        <result property="measurementRules" column="measurement_rules"/>
+        <result property="unitMeasurement" column="unit_measurement"/>
+        <result property="workContent" column="work_content"/>
+        <result property="costAccountId" column="cost_account_Id"/>
+        <result property="costAccountCode" column="cost_account_code"/>
+        <result property="costAccountName" column="cost_account_name"/>
+        <result property="count" column="count"/>
+        <result property="usedCount" column="used_count"/>
+        <result property="taxRate" column="tax_rate"/>
+        <result property="taxRateCode" column="tax_rate_code"/>
+        <result property="taxRateName" column="tax_rate_name"/>
+        <result property="unitPriceExclTax" column="unit_price_excl_tax"/>
+        <result property="unitPriceInclTax" column="unit_price_incl_tax"/>
+        <result property="amountExclTax" column="amount_excl_tax"/>
+        <result property="amountInclTax" column="amount_incl_tax"/>
+        <result property="taxAmount" column="tax_amount"/>
+        <result property="floatingPrice" column="floating_price"/>
+        <result property="unloadingFee" column="unloading_fee"/>
+        <result property="basePrice" column="base_price"/>
+        <result property="rentMode" column="rent_mode"/>
+        <result property="rentTime" column="rent_time"/>
+        <result property="rentQuantity" column="rent_quantity"/>
+        <result property="createBy" column="create_by"/>
+        <result property="createId" column="create_id"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateBy" column="update_by"/>
+        <result property="updateId" column="update_id"/>
+        <result property="updateTime" column="update_time"/>
+        <result property="delFlag" column="del_flag"/>
+        <result property="priceType" column="price_type"/>
+        <result property="code" column="code"/>
+        <result property="name" column="name"/>
+        <result property="category" column="category"/>
+        <result property="unitName" column="unit_name"/>
+        <result property="quantity" column="quantity"/>
+        <result property="pushFlag" column="push_flag"/>
+        <result property="skuId" column="sku_id"/>
+        <result property="totalPrice" column="total_price"/>
+        <result property="floatingRate" column="floating_rate"/>
+        <result property="remark" column="remark"/>
+    </resultMap>
+
+    <resultMap id="materialsListVO" type="com.zhaocai.business.procurement.dto.MaterialsListDTO" extends="MaterialsListResult">
+        <result property="splitId" column="split_id"/>
+        <result property="splitContractName" column="split_contract_name"/>
+        <result property="contractScope" column="contract_scope"/>
+    </resultMap>
+
+    <delete id="deleteByPlanId">
+        delete
+        from tb_materials_list
+        where plan_id = #{planId,jdbcType=BIGINT}
+    </delete>
+
+    <select id="selectMaterialsListByPlanId" resultMap="materialsListVO">
+        select tml.*, tcp.split_contract_name, tcp.contract_scope, tcp.id as split_id
+        from tb_materials_list tml
+        inner join tb_contract_planning_split tcp on tml.contract_split_id = tcp.id
+        where tml.plan_id = #{planId,jdbcType=BIGINT}
+    </select>
+</mapper>

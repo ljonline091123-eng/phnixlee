@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhaocai.business.procurement.mapper.MinProjectMapper">
+    <resultMap type="com.zhaocai.business.procurement.domain.MinProject" id="MinProjectResult">
+        <result property="id" column="id"/>
+        <result property="parentCode" column="parent_code"/>
+        <result property="parentName" column="parent_name"/>
+        <result property="parentSimpleName" column="parent_simple_name"/>
+        <result property="projectCode" column="project_code"/>
+        <result property="minAccountCode" column="min_account_code"/>
+        <result property="minAccountFullName" column="min_account_full_name"/>
+        <result property="minAccountSimpleName" column="min_account_simple_name"/>
+        <result property="projectDepartment" column="project_department"/>
+        <result property="prjState" column="prj_state"/>
+        <result property="prgType" column="prg_type"/>
+        <result property="moneySec" column="money_sec"/>
+        <result property="prjManageModel" column="prj_manage_model"/>
+        <result property="contractingModel" column="contracting_model"/>
+        <result property="busiType" column="busi_type"/>
+        <result property="ziZhi" column="zi_zhi"/>
+        <result property="qualifiedUnit" column="qualified_unit"/>
+        <result property="dutyUnit" column="duty_unit"/>
+        <result property="construtionUnit" column="constrution_unit"/>
+        <result property="projectLeader" column="project_leader"/>
+        <result property="projectLeaderPhone" column="project_leader_phone"/>
+        <result property="technicalDirector" column="technical_director"/>
+        <result property="technicalDirectorPhone" column="technical_director_phone"/>
+        <result property="zbType" column="zb_type"/>
+        <result property="control" column="control"/>
+        <result property="bqcbRate" column="bqcb_rate"/>
+        <result property="biddingPrice" column="bidding_price"/>
+        <result property="provisionalSum" column="provisional_sum"/>
+        <result property="winningTime" column="winning_time"/>
+        <result property="costReductionRate" column="cost_reduction_rate"/>
+        <result property="lxDate" column="lx_date"/>
+        <result property="allArea" column="all_area"/>
+        <result property="downArea" column="down_area"/>
+        <result property="upArea" column="up_area"/>
+        <result property="totalFull" column="total_full"/>
+        <result property="topEaves" column="top_eaves"/>
+        <result property="jgType" column="jg_type"/>
+        <result property="baseType" column="base_type"/>
+        <result property="country" column="country"/>
+        <result property="prjAddr" column="prj_addr"/>
+        <result property="prjAddrInfo" column="prj_addr_info"/>
+        <result property="actualBeginDate" column="actual_begin_date"/>
+        <result property="actualEndDate" column="actual_end_date"/>
+        <result property="actualConstructionPeriod" column="actual_construction_period"/>
+        <result property="taxpayer" column="taxpayer"/>
+        <result property="taxpayerNo" column="taxpayer_no"/>
+        <result property="tax" column="tax"/>
+        <result property="managementOrgId" column="management_org_id"/>
+        <result property="belongingOrgId" column="belonging_org_id"/>
+        <result property="state" column="state"/>
+        <result property="createBy" column="create_by"/>
+        <result property="createId" column="create_id"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateBy" column="update_by"/>
+        <result property="updateId" column="update_id"/>
+        <result property="updateTime" column="update_time"/>
+        <result property="delFlag" column="del_flag"/>
+        <result property="minProjectId" column="min_project_id"/>
+    </resultMap>
+
+    <select id="selectListPage" resultMap="MinProjectResult">
+        SELECT * FROM tb_min_project mp
+        <where>
+            mp.del_flag = 0
+            <!-- 根据 management_org_id 查询 -->
+            <if test="requestDTO.managementOrgId != null and requestDTO.managementOrgId != ''">
+                AND management_org_id = #{requestDTO.managementOrgId}
+            </if>
+            <!-- 根据 min_account_code 查询 -->
+            <if test="requestDTO.minAccountCode != null and requestDTO.minAccountCode != ''">
+                AND min_account_code = #{requestDTO.minAccountCode}
+            </if>
+            <!-- 根据 min_account_full_name 模糊查询 -->
+            <if test="requestDTO.minAccountFullName != null and requestDTO.minAccountFullName != ''">
+                AND min_account_full_name LIKE CONCAT('%', #{requestDTO.minAccountFullName}, '%')
+            </if>
+        </where>
+        <!-- 按照 min_account_code 升序排序 -->
+        ORDER BY create_time desc
+    </select>
+
+    <delete id="deleteMinProjectById" parameterType="Long">
+        delete from tb_min_project where id=#{id}
+    </delete>
+</mapper>

@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhaocai.business.procurement.mapper.ProcurementSchemePlanRelateMapper">
+    <resultMap type="com.zhaocai.business.procurement.domain.ProcurementSchemePlanRelate"
+               id="ProcurementSchemePlanRelateResult">
+        <result property="id" column="id"/>
+        <result property="procurementSchemeId" column="procurement_scheme_id"/>
+        <result property="procurementPlanId" column="procurement_plan_id"/>
+        <result property="contractSplitId" column="contract_split_id"/>
+        <result property="createBy" column="create_by"/>
+        <result property="createId" column="create_id"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateBy" column="update_by"/>
+        <result property="updateId" column="update_id"/>
+        <result property="updateTime" column="update_time"/>
+        <result property="delFlag" column="del_flag"/>
+    </resultMap>
+
+    <select id="selectProcurementSchemeByRelatePlanId"
+            resultType="com.zhaocai.business.procurement.domain.ProcurementScheme">
+        select tbs.id as id,tbs.procurement_scheme_name as procurementSchemeName,tbs.state as state
+        from tb_procurement_scheme tbs
+        inner join tb_procurement_scheme_plan_relate tpr on tpr.procurement_scheme_id = tbs.id
+        where tpr.procurement_plan_id = #{planId,jdbcType=BIGINT}
+    </select>
+</mapper>

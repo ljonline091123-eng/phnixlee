@@ -1,0 +1,144 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhaocai.business.receipt.mapper.ReceiptContractSettleEvaluateMapper">
+
+    <resultMap type="com.zhaocai.business.receipt.domain.ReceiptContractSettleEvaluate" id="PushContractSettleEvaluateResult">
+        <result property="id"    column="id"    />
+        <result property="thirdId"    column="third_id"    />
+        <result property="badNum"    column="bad_num"    />
+        <result property="excellentNum"    column="excellent_num"    />
+        <result property="goodNum"    column="good_num"    />
+        <result property="qualifiedNum"    column="qualified_num"    />
+        <result property="type"    column="type"    />
+        <result property="parntId"    column="parnt_id"    />
+        <result property="createDept"    column="create_dept"    />
+        <result property="createBy"    column="create_by"    />
+        <result property="createId"    column="create_id"    />
+        <result property="createTime"    column="create_time"    />
+        <result property="updateBy"    column="update_by"    />
+        <result property="updateId"    column="update_id"    />
+        <result property="updateTime"    column="update_time"    />
+        <result property="delFlag"    column="del_flag"    />
+    </resultMap>
+
+
+    <resultMap type="com.zhaocai.business.receipt.vo.req.ReceiptContractSettleEvaluateVO" id="PushContractSettleEvaluateResultMap">
+        <result property="id"    column="id"    />
+        <result property="thirdId"    column="third_id"    />
+        <result property="badNum"    column="bad_num"    />
+        <result property="excellentNum"    column="excellent_num"    />
+        <result property="goodNum"    column="good_num"    />
+        <result property="qualifiedNum"    column="qualified_num"    />
+        <result property="type"    column="type"    />
+        <result property="parntId"    column="parnt_id"    />
+        <result property="createDept"    column="create_dept"    />
+        <result property="createBy"    column="create_by"    />
+        <result property="createId"    column="create_id"    />
+        <result property="createTime"    column="create_time"    />
+        <result property="updateBy"    column="update_by"    />
+        <result property="updateId"    column="update_id"    />
+        <result property="updateTime"    column="update_time"    />
+        <result property="delFlag"    column="del_flag"    />
+    </resultMap>
+
+    <sql id="selectPushContractSettleEvaluateVo">
+        select id, third_id, bad_num, excellent_num, good_num, qualified_num, type, parnt_id, create_dept, create_by, create_id, create_time, update_by, update_id, update_time, del_flag from tb_receipt_contract_settle_evaluate
+    </sql>
+
+    <select id="selectList" parameterType="com.zhaocai.business.receipt.vo.req.ReceiptContractSettleEvaluateVO" resultMap="PushContractSettleEvaluateResultMap">
+        <include refid="selectPushContractSettleEvaluateVo"/>
+        <where>
+            <if test="thirdId != null  and thirdId != ''"> and third_id = #{thirdId}</if>
+            <if test="badNum != null "> and bad_num = #{badNum}</if>
+            <if test="excellentNum != null "> and excellent_num = #{excellentNum}</if>
+            <if test="goodNum != null "> and good_num = #{goodNum}</if>
+            <if test="qualifiedNum != null "> and qualified_num = #{qualifiedNum}</if>
+            <if test="type != null  and type != ''"> and type = #{type}</if>
+            <if test="parntId != null  and parntId != ''"> and parnt_id = #{parntId}</if>
+            <if test="createDept != null  and createDept != ''"> and create_dept = #{createDept}</if>
+            <if test="createId != null "> and create_id = #{createId}</if>
+            <if test="updateId != null "> and update_id = #{updateId}</if>
+        </where>
+        order by create_time desc
+    </select>
+
+    <select id="selectPushContractSettleEvaluateById" parameterType="Long" resultMap="PushContractSettleEvaluateResult">
+        <include refid="selectPushContractSettleEvaluateVo"/>
+        where id = #{id}
+    </select>
+
+    <insert id="insertPushContractSettleEvaluate" parameterType="com.zhaocai.business.receipt.domain.ReceiptContractSettleEvaluate">
+        insert into tb_receipt_contract_settle_evaluate
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="id != null">id,</if>
+            <if test="thirdId != null">third_id,</if>
+            <if test="badNum != null">bad_num,</if>
+            <if test="excellentNum != null">excellent_num,</if>
+            <if test="goodNum != null">good_num,</if>
+            <if test="qualifiedNum != null">qualified_num,</if>
+            <if test="type != null">type,</if>
+            <if test="parntId != null">parnt_id,</if>
+            <if test="createDept != null">create_dept,</if>
+            <if test="createBy != null">create_by,</if>
+            <if test="createId != null">create_id,</if>
+            <if test="createTime != null">create_time,</if>
+            <if test="updateBy != null">update_by,</if>
+            <if test="updateId != null">update_id,</if>
+            <if test="updateTime != null">update_time,</if>
+            <if test="delFlag != null">del_flag,</if>
+         </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="id != null">#{id},</if>
+            <if test="thirdId != null">#{thirdId},</if>
+            <if test="badNum != null">#{badNum},</if>
+            <if test="excellentNum != null">#{excellentNum},</if>
+            <if test="goodNum != null">#{goodNum},</if>
+            <if test="qualifiedNum != null">#{qualifiedNum},</if>
+            <if test="type != null">#{type},</if>
+            <if test="parntId != null">#{parntId},</if>
+            <if test="createDept != null">#{createDept},</if>
+            <if test="createBy != null">#{createBy},</if>
+            <if test="createId != null">#{createId},</if>
+            <if test="createTime != null">#{createTime},</if>
+            <if test="updateBy != null">#{updateBy},</if>
+            <if test="updateId != null">#{updateId},</if>
+            <if test="updateTime != null">#{updateTime},</if>
+            <if test="delFlag != null">#{delFlag},</if>
+         </trim>
+    </insert>
+
+    <update id="updatePushContractSettleEvaluate" parameterType="com.zhaocai.business.receipt.domain.ReceiptContractSettleEvaluate">
+        update tb_receipt_contract_settle_evaluate
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="thirdId != null">third_id = #{thirdId},</if>
+            <if test="badNum != null">bad_num = #{badNum},</if>
+            <if test="excellentNum != null">excellent_num = #{excellentNum},</if>
+            <if test="goodNum != null">good_num = #{goodNum},</if>
+            <if test="qualifiedNum != null">qualified_num = #{qualifiedNum},</if>
+            <if test="type != null">type = #{type},</if>
+            <if test="parntId != null">parnt_id = #{parntId},</if>
+            <if test="createDept != null">create_dept = #{createDept},</if>
+            <if test="createBy != null">create_by = #{createBy},</if>
+            <if test="createId != null">create_id = #{createId},</if>
+            <if test="createTime != null">create_time = #{createTime},</if>
+            <if test="updateBy != null">update_by = #{updateBy},</if>
+            <if test="updateId != null">update_id = #{updateId},</if>
+            <if test="updateTime != null">update_time = #{updateTime},</if>
+            <if test="delFlag != null">del_flag = #{delFlag},</if>
+        </trim>
+        where id = #{id}
+    </update>
+
+    <delete id="deletePushContractSettleEvaluateById" parameterType="Long">
+        delete from tb_receipt_contract_settle_evaluate where id = #{id}
+    </delete>
+
+    <delete id="deletePushContractSettleEvaluateByIds" parameterType="String">
+        delete from tb_receipt_contract_settle_evaluate where id in
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+</mapper>

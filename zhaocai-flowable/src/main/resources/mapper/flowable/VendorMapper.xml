@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhaocai.flowable.mapper.VendorMapper">
+
+    <update id="updateVendorState">
+        update tb_vendor set state = 3 where id = #{vendorId,jdbcType=BIGINT}
+    </update>
+
+    <update id="updateVendorContactState">
+        update tb_vendor_contact set state = 1 where id = #{vendorContactId,jdbcType=BIGINT}
+    </update>
+</mapper>

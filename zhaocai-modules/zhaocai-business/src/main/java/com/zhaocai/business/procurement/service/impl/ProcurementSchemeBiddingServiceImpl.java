@@ -1,0 +1,277 @@
+package com.zhaocai.business.procurement.service.impl;
+
+import cn.hutool.core.collection.CollectionUtil;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.zhaocai.business.bidding.domain.BiddingMarkTemplate;
+import com.zhaocai.business.bidding.service.IBiddingMarkTemplateService;
+import com.zhaocai.business.common.enums.AttachmentTypeEnum;
+import com.zhaocai.business.common.exception.ParamValidateException;
+import com.zhaocai.business.common.utils.ValidateUtils;
+import com.zhaocai.business.procurement.domain.ProcurementSchemeBidding;
+import com.zhaocai.business.procurement.mapper.ProcurementSchemeBiddingMapper;
+import com.zhaocai.business.procurement.service.IProcurementSchemeBiddingService;
+import com.zhaocai.business.procurement.vo.req.ProcurementSchemeBiddingSaveVo;
+import com.zhaocai.business.procurement.vo.res.ProcurementSchemeBiddingVO;
+import com.zhaocai.business.procurement.vo.res.ProcurementSchemeOtherFileVO;
+import com.zhaocai.business.procurement.vo.res.ProcurementSchemeTemplateVO;
+import com.zhaocai.business.pub.domain.Attachment;
+import com.zhaocai.business.pub.domain.Template;
+import com.zhaocai.business.pub.service.IAttachmentService;
+import com.zhaocai.business.pub.service.ITemplateService;
+import com.zhaocai.business.pub.vo.res.AttachmentVO;
+import com.zhaocai.common.core.utils.NumberUtil;
+import com.zhaocai.common.core.utils.bean.BeanCopierUtil;
+import com.zhaocai.common.core.web.domain.BaseEntity;
+import org.apache.commons.lang3.ObjectUtils;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+import java.util.List;
+import java.util.stream.Collectors;
+
+/**
+ * 采购方案-招标信息Service业务层处理
+ *
+ * @author WH
+ * @date 2024-05-24
+ */
+@Service
+public class ProcurementSchemeBiddingServiceImpl extends ServiceImpl<ProcurementSchemeBiddingMapper,ProcurementSchemeBidding> implements IProcurementSchemeBiddingService {
+
+    @Autowired
+    private IBiddingMarkTemplateService biddingMarkTemplateService;
+
+    @Autowired
+    private ITemplateService templateService;
+
+    @Autowired
+    private IAttachmentService attachmentService;
+
+    @Override
+    public void saveProcurementSchemeBidding(ProcurementSchemeBiddingSaveVo procurementSchemeBidding, Long schemeId, Integer procurementType) {
+        procurementSchemeBidding.setSchemeId(schemeId);
+        ProcurementSchemeBidding schemeBidding = BeanCopierUtil.copyBean(procurementSchemeBidding, ProcurementSchemeBidding.class);
+        super.save(schemeBidding);
+
+        // 更新招标文件附件
+        attachmentService.updateBusiness(procurementSchemeBidding.getBiddingAttachmentId(), AttachmentTypeEnum.SCHEME_BIDDING,procurementSchemeBidding.getSchemeId());
+        // 更新合同模板附件
+        attachmentService.updateBusiness(procurementSchemeBidding.getContractAttachmentId(), AttachmentTypeEnum.SCHEME_CONTRACT,procurementSchemeBidding.getSchemeId());
+
+
+        // 保存方案其他附件信息
+        if (CollectionUtil.isNotEmpty(procurementSchemeBidding.getOtherAttachmentList())) {
+            procurementSchemeBidding.getOtherAttachmentList().forEach(i->{
+                i.setBusinessId(schemeId);
+                i.setBusinessType(AttachmentTypeEnum.SCHEME_OTHER.getType());
+            });
+            attachmentService.saveOrUpdateBatch(procurementSchemeBidding.getOtherAttachmentList());
+        }
+
+
+        // 更新招标公告附件
+        if (procurementType == 1) {
+            attachmentService.updateBusiness(procurementSchemeBidding.getNoticeAttachmentId(), AttachmentTypeEnum.BIDING_NOTICE_MSG_DOC,procurementSchemeBidding.getSchemeId());
+        }
+    }
+
+    @Override
+    public void updateProcurementSchemeBidding(ProcurementSchemeBiddingSaveVo procurementSchemeBidding, Long schemeId, Integer procurementType) {
+        if (NumberUtil.isNullOrZero(procurementSchemeBidding.getId())) {
+            throw new ParamValidateException("采购方案编辑时，需要传招标文件 id");
+        }
+        procurementSchemeBidding.setSchemeId(schemeId);
+        ProcurementSchemeBidding schemeBidding = BeanCopierUtil.copyBean(procurementSchemeBidding, ProcurementSchemeBidding.class);
+        super.updateById(schemeBidding);
+        //更新其他附件(置空)
+        if(procurementSchemeBidding.getOtherAttachmentId() == null){
+            super.update(new LambdaUpdateWrapper<ProcurementSchemeBidding>()
+                    .set(ProcurementSchemeBidding::getOtherAttachmentId, null)
+                    .eq(ProcurementSchemeBidding::getId,procurementSchemeBidding.getId()));
+        }
+        // 保存方案其他附件信息
+        if (CollectionUtil.isNotEmpty(procurementSchemeBidding.getOtherAttachmentList())) {
+            procurementSchemeBidding.getOtherAttachmentList().forEach(i->{
+                i.setBusinessId(schemeId);
+                i.setBusinessType(AttachmentTypeEnum.SCHEME_OTHER.getType());
+            });
+            attachmentService.saveOrUpdateBatch(procurementSchemeBidding.getOtherAttachmentList());
+        }
+
+        if (CollectionUtil.isNotEmpty(procurementSchemeBidding.getOtherAttachmentList())) {
+            // 删除方案其他附件信息
+            List<Long> ids = procurementSchemeBidding.getOtherAttachmentList().stream().map(BaseEntity::getId).collect(Collectors.toList());
+            attachmentService.update(new LambdaUpdateWrapper<Attachment>()
+                    .set(BaseEntity::getDelFlag,"2")
+                    .eq(Attachment::getBusinessType, AttachmentTypeEnum.SCHEME_OTHER.getType())
+                    .eq(Attachment::getBusinessId, schemeId)
+                    .notIn(BaseEntity::getId, ids));
+        }
+
+        // 更新招标文件附件
+        attachmentService.updateBusiness(procurementSchemeBidding.getBiddingAttachmentId(), AttachmentTypeEnum.SCHEME_BIDDING,procurementSchemeBidding.getSchemeId());
+        // 更新合同模板附件
+        attachmentService.updateBusiness(procurementSchemeBidding.getContractAttachmentId(), AttachmentTypeEnum.SCHEME_CONTRACT,procurementSchemeBidding.getSchemeId());
+        // 更新招标公告附件
+        if (procurementType == 1) {
+            attachmentService.updateBusiness(procurementSchemeBidding.getNoticeAttachmentId(), AttachmentTypeEnum.BIDING_NOTICE_MSG_DOC, procurementSchemeBidding.getSchemeId());
+        }
+    }
+
+    @Override
+    public ProcurementSchemeBiddingVO getBySchemeId(Long schemeId) {
+        ProcurementSchemeBidding schemeBidding = baseMapper.selectOne(new LambdaQueryWrapper<ProcurementSchemeBidding>()
+                .eq(ProcurementSchemeBidding::getSchemeId,schemeId));
+        ValidateUtils.isNullException(schemeBidding,"该采购方案对应的招标信息不存在");
+
+        ProcurementSchemeBiddingVO schemeBiddingVO = BeanCopierUtil.copyBean(schemeBidding,ProcurementSchemeBiddingVO.class);
+
+        // 评分模板
+        BiddingMarkTemplate markTemplate = biddingMarkTemplateService.getById(schemeBidding.getEvaluationTemplateId());
+        if(markTemplate!=null){
+            schemeBiddingVO.setEvaluationTemplate(new ProcurementSchemeTemplateVO(markTemplate.getId(),markTemplate.getName()));
+        }else{
+            schemeBiddingVO.setEvaluationTemplate(null);
+        }
+
+        // 招标文件模板
+        Template template = templateService.getById(schemeBidding.getBiddingTemplateId());
+        if(template!=null){
+            ProcurementSchemeTemplateVO schemeTemplate = new ProcurementSchemeTemplateVO(template.getId(),template.getTemplateName());
+            /* 招标文件附件 */
+            Attachment biddingAttachment = attachmentService.getById(schemeBidding.getBiddingAttachmentId());
+            if(biddingAttachment!=null){
+                schemeTemplate.setAttachmentId(biddingAttachment.getId());
+                schemeTemplate.setFileName(biddingAttachment.getFileName());
+                schemeTemplate.setFileUrl(biddingAttachment.getFileUrl());
+            }
+            schemeBiddingVO.setBiddingTemplate(schemeTemplate);
+        }else{
+            schemeBiddingVO.setBiddingTemplate(null);
+            /* 招标文件附件 */
+            if(schemeBidding.getBiddingAttachmentId()!=null){
+                ProcurementSchemeTemplateVO schemeTemplate = new ProcurementSchemeTemplateVO(null,null);
+                Attachment biddingAttachment = attachmentService.getById(schemeBidding.getBiddingAttachmentId());
+                if(biddingAttachment!=null){
+                    schemeTemplate.setAttachmentId(biddingAttachment.getId());
+                    schemeTemplate.setFileName(biddingAttachment.getFileName());
+                    schemeTemplate.setFileUrl(biddingAttachment.getFileUrl());
+                    schemeBiddingVO.setBiddingTemplate(schemeTemplate);
+                }
+            }
+        }
+
+        // 合同模板
+        template = templateService.getById(schemeBidding.getContractTemplateId());
+        if(template!=null) {
+            ProcurementSchemeTemplateVO schemeTemplate = new ProcurementSchemeTemplateVO(template.getId(),template.getTemplateName());
+            /* 合同(模板)的附件 */
+            AttachmentVO agreementAttachment = templateService.getTemplateAttachmentInfo(schemeBidding.getContractTemplateId());
+            if(agreementAttachment!=null){
+                schemeTemplate.setAttachmentId(agreementAttachment.getId());
+                schemeTemplate.setFileName(agreementAttachment.getFileName());
+                schemeTemplate.setFileUrl(agreementAttachment.getFileUrl());
+            }
+            /* 也可以编辑使用合同模板自己编辑过的附件 */
+            if(schemeBidding.getContractAttachmentId()!=null){
+                Attachment contractAttachment = attachmentService.getById(schemeBidding.getContractAttachmentId());
+                if(contractAttachment!=null){
+                    schemeTemplate.setAttachmentId(contractAttachment.getId());
+                    schemeTemplate.setFileName(contractAttachment.getFileName());
+                    schemeTemplate.setFileUrl(contractAttachment.getFileUrl());
+                }
+            }
+            schemeBiddingVO.setContractTemplate(schemeTemplate);
+        }else{
+            schemeBiddingVO.setContractTemplate(null);
+            /* 也可以编辑使用合同模板自己编辑过的附件 */
+            if(schemeBidding.getContractAttachmentId()!=null){
+                ProcurementSchemeTemplateVO schemeTemplate = new ProcurementSchemeTemplateVO(null,null);
+                Attachment contractAttachment = attachmentService.getById(schemeBidding.getContractAttachmentId());
+                if(contractAttachment!=null){
+                    schemeTemplate.setAttachmentId(contractAttachment.getId());
+                    schemeTemplate.setFileName(contractAttachment.getFileName());
+                    schemeTemplate.setFileUrl(contractAttachment.getFileUrl());
+                    schemeBiddingVO.setContractTemplate(schemeTemplate);
+                }
+            }
+        }
+        // 招标公告
+        if(schemeBidding.getNoticeAttachmentId()!=null){
+            Attachment noticeAttachment = attachmentService.getById(schemeBidding.getNoticeAttachmentId());
+            if(noticeAttachment!=null){
+                ProcurementSchemeTemplateVO schemeTemplate = new ProcurementSchemeTemplateVO(noticeAttachment.getId(), noticeAttachment.getFileName());
+                schemeTemplate.setAttachmentId(noticeAttachment.getId());
+                schemeTemplate.setFileName(noticeAttachment.getFileName());
+                schemeTemplate.setFileUrl(noticeAttachment.getFileUrl());
+                schemeBiddingVO.setNoticeAttachment(schemeTemplate);
+            }
+        }
+
+        //其他文件
+        schemeBiddingVO.setOtherFile(null);
+        /* 也可以编辑使用合同模板自己编辑过的附件 */
+        if(schemeBidding.getOtherAttachmentId()!=null){
+            ProcurementSchemeOtherFileVO otherFileVO = new ProcurementSchemeOtherFileVO(null,null,null);
+            Attachment OtherAttachment = attachmentService.getById(schemeBidding.getOtherAttachmentId());
+            if(OtherAttachment!=null){
+                otherFileVO.setAttachmentId(OtherAttachment.getId());
+                otherFileVO.setFileName(OtherAttachment.getFileName());
+                otherFileVO.setFileUrl(OtherAttachment.getFileUrl());
+                schemeBiddingVO.setOtherFile(otherFileVO);
+            }
+        }
+
+        //其他文件列表
+        List<AttachmentVO> attachmentList = attachmentService.listAttachment(AttachmentTypeEnum.SCHEME_OTHER, schemeId);
+        if (CollectionUtil.isNotEmpty(attachmentList)) {
+            List<Attachment> attachment = BeanCopierUtil.copyList(attachmentList,Attachment.class);
+            schemeBiddingVO.setOtherAttachmentList(attachment);
+        }
+
+        return schemeBiddingVO;
+    }
+
+    @Override
+    public ProcurementSchemeBiddingVO getBiddingTemplateBySchemeId(Long schemeId) {
+        ProcurementSchemeBidding schemeBidding = baseMapper.selectOne(new LambdaQueryWrapper<ProcurementSchemeBidding>()
+                .eq(ProcurementSchemeBidding::getSchemeId,schemeId));
+        ValidateUtils.isNullException(schemeBidding,"该采购方案对应的招标信息不存在");
+
+        ProcurementSchemeBiddingVO schemeBiddingVO = BeanCopierUtil.copyBean(schemeBidding,ProcurementSchemeBiddingVO.class);
+
+        // 评分模板
+        BiddingMarkTemplate markTemplate = biddingMarkTemplateService.getById(schemeBidding.getEvaluationTemplateId());
+        if (ObjectUtils.isNotEmpty(markTemplate)){
+            schemeBiddingVO.setEvaluationTemplate(new ProcurementSchemeTemplateVO(markTemplate.getId(),markTemplate.getName()));
+        }
+
+        // 招标文件模板
+        Attachment biddingAttachment = attachmentService.getById(schemeBidding.getBiddingAttachmentId());
+        if (ObjectUtils.isNotEmpty(biddingAttachment)){
+            schemeBiddingVO.setBiddingTemplate((new ProcurementSchemeTemplateVO(biddingAttachment.getId(),biddingAttachment.getFileUrl(),biddingAttachment.getFileName())));
+        }
+
+        // 合同模板
+        Attachment contractAttachment = attachmentService.getById(schemeBidding.getContractAttachmentId());
+        if (ObjectUtils.isNotEmpty(contractAttachment)){
+            schemeBiddingVO.setContractTemplate((new ProcurementSchemeTemplateVO(contractAttachment.getId(),contractAttachment.getFileUrl(),contractAttachment.getFileName())));
+        }
+
+        // 招标公告附件
+        Attachment noticeAttachment = attachmentService.getById(schemeBidding.getNoticeAttachmentId());
+        if (ObjectUtils.isNotEmpty(noticeAttachment)){
+            schemeBiddingVO.setNoticeAttachment((new ProcurementSchemeTemplateVO(noticeAttachment.getId(),noticeAttachment.getFileUrl(),noticeAttachment.getFileName())));
+        }
+
+        return schemeBiddingVO;
+    }
+
+    @Override
+    public ProcurementSchemeBidding getDomainBySchemeId(Long schemeId) {
+        return super.getOne(new LambdaQueryWrapper<ProcurementSchemeBidding>()
+                .eq(ProcurementSchemeBidding::getSchemeId,schemeId));
+    }
+}

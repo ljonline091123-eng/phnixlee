@@ -1,0 +1,150 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhaocai.business.receipt.mapper.ReceiptMaterialsDeviceLedgerDtlDtlMapper">
+
+    <resultMap type="com.zhaocai.business.receipt.domain.ReceiptMaterialsDeviceLedgerDtlDtl" id="ReceiptMaterialsDeviceLedgerDtlDtlResult">
+        <result property="id"    column="id"    />
+        <result property="thirdId"    column="third_id"    />
+        <result property="endDatetime"    column="end_datetime"    />
+        <result property="ledgerDtlId"    column="ledger_dtl_id"    />
+        <result property="ledgerId"    column="ledger_id"    />
+        <result property="startDatetime"    column="start_datetime"    />
+        <result property="workHours"    column="work_hours"    />
+        <result property="workload"    column="workload"    />
+        <result property="parntId"    column="parnt_id"    />
+        <result property="createDept"    column="create_dept"    />
+        <result property="createBy"    column="create_by"    />
+        <result property="createId"    column="create_id"    />
+        <result property="createTime"    column="create_time"    />
+        <result property="updateBy"    column="update_by"    />
+        <result property="updateId"    column="update_id"    />
+        <result property="updateTime"    column="update_time"    />
+        <result property="delFlag"    column="del_flag"    />
+    </resultMap>
+
+
+    <resultMap type="com.zhaocai.business.receipt.vo.req.ReceiptMaterialsDeviceLedgerDtlDtlVO" id="ReceiptMaterialsDeviceLedgerDtlDtlResultMap">
+        <result property="id"    column="id"    />
+        <result property="thirdId"    column="third_id"    />
+        <result property="endDatetime"    column="end_datetime"    />
+        <result property="ledgerDtlId"    column="ledger_dtl_id"    />
+        <result property="ledgerId"    column="ledger_id"    />
+        <result property="startDatetime"    column="start_datetime"    />
+        <result property="workHours"    column="work_hours"    />
+        <result property="workload"    column="workload"    />
+        <result property="parntId"    column="parnt_id"    />
+        <result property="createDept"    column="create_dept"    />
+        <result property="createBy"    column="create_by"    />
+        <result property="createId"    column="create_id"    />
+        <result property="createTime"    column="create_time"    />
+        <result property="updateBy"    column="update_by"    />
+        <result property="updateId"    column="update_id"    />
+        <result property="updateTime"    column="update_time"    />
+        <result property="delFlag"    column="del_flag"    />
+    </resultMap>
+
+    <sql id="selectReceiptMaterialsDeviceLedgerDtlDtlVo">
+        select id, third_id, end_datetime, ledger_dtl_id, ledger_id, start_datetime, work_hours, workload, parnt_id, create_dept, create_by, create_id, create_time, update_by, update_id, update_time, del_flag from tb_receipt_materials_device_ledger_dtl_dtl
+    </sql>
+
+    <select id="selectList" parameterType="com.zhaocai.business.receipt.vo.req.ReceiptMaterialsDeviceLedgerDtlDtlVO" resultMap="ReceiptMaterialsDeviceLedgerDtlDtlResultMap">
+        <include refid="selectReceiptMaterialsDeviceLedgerDtlDtlVo"/>
+        <where>
+            <if test="thirdId != null  and thirdId != ''"> and third_id = #{thirdId}</if>
+            <if test="endDatetime != null "> and end_datetime = #{endDatetime}</if>
+            <if test="ledgerDtlId != null  and ledgerDtlId != ''"> and ledger_dtl_id = #{ledgerDtlId}</if>
+            <if test="ledgerId != null  and ledgerId != ''"> and ledger_id = #{ledgerId}</if>
+            <if test="startDatetime != null "> and start_datetime = #{startDatetime}</if>
+            <if test="workHours != null "> and work_hours = #{workHours}</if>
+            <if test="workload != null "> and workload = #{workload}</if>
+            <if test="parntId != null  and parntId != ''"> and parnt_id = #{parntId}</if>
+            <if test="createDept != null  and createDept != ''"> and create_dept = #{createDept}</if>
+            <if test="createId != null "> and create_id = #{createId}</if>
+            <if test="updateId != null "> and update_id = #{updateId}</if>
+        </where>
+        order by create_time desc
+    </select>
+
+    <select id="selectReceiptMaterialsDeviceLedgerDtlDtlById" parameterType="Long" resultMap="ReceiptMaterialsDeviceLedgerDtlDtlResult">
+        <include refid="selectReceiptMaterialsDeviceLedgerDtlDtlVo"/>
+        where id = #{id}
+    </select>
+
+    <insert id="insertReceiptMaterialsDeviceLedgerDtlDtl" parameterType="com.zhaocai.business.receipt.domain.ReceiptMaterialsDeviceLedgerDtlDtl">
+        insert into tb_receipt_materials_device_ledger_dtl_dtl
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="id != null">id,</if>
+            <if test="thirdId != null">third_id,</if>
+            <if test="endDatetime != null">end_datetime,</if>
+            <if test="ledgerDtlId != null">ledger_dtl_id,</if>
+            <if test="ledgerId != null">ledger_id,</if>
+            <if test="startDatetime != null">start_datetime,</if>
+            <if test="workHours != null">work_hours,</if>
+            <if test="workload != null">workload,</if>
+            <if test="parntId != null">parnt_id,</if>
+            <if test="createDept != null">create_dept,</if>
+            <if test="createBy != null">create_by,</if>
+            <if test="createId != null">create_id,</if>
+            <if test="createTime != null">create_time,</if>
+            <if test="updateBy != null">update_by,</if>
+            <if test="updateId != null">update_id,</if>
+            <if test="updateTime != null">update_time,</if>
+            <if test="delFlag != null">del_flag,</if>
+         </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="id != null">#{id},</if>
+            <if test="thirdId != null">#{thirdId},</if>
+            <if test="endDatetime != null">#{endDatetime},</if>
+            <if test="ledgerDtlId != null">#{ledgerDtlId},</if>
+            <if test="ledgerId != null">#{ledgerId},</if>
+            <if test="startDatetime != null">#{startDatetime},</if>
+            <if test="workHours != null">#{workHours},</if>
+            <if test="workload != null">#{workload},</if>
+            <if test="parntId != null">#{parntId},</if>
+            <if test="createDept != null">#{createDept},</if>
+            <if test="createBy != null">#{createBy},</if>
+            <if test="createId != null">#{createId},</if>
+            <if test="createTime != null">#{createTime},</if>
+            <if test="updateBy != null">#{updateBy},</if>
+            <if test="updateId != null">#{updateId},</if>
+            <if test="updateTime != null">#{updateTime},</if>
+            <if test="delFlag != null">#{delFlag},</if>
+         </trim>
+    </insert>
+
+    <update id="updateReceiptMaterialsDeviceLedgerDtlDtl" parameterType="com.zhaocai.business.receipt.domain.ReceiptMaterialsDeviceLedgerDtlDtl">
+        update tb_receipt_materials_device_ledger_dtl_dtl
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="thirdId != null">third_id = #{thirdId},</if>
+            <if test="endDatetime != null">end_datetime = #{endDatetime},</if>
+            <if test="ledgerDtlId != null">ledger_dtl_id = #{ledgerDtlId},</if>
+            <if test="ledgerId != null">ledger_id = #{ledgerId},</if>
+            <if test="startDatetime != null">start_datetime = #{startDatetime},</if>
+            <if test="workHours != null">work_hours = #{workHours},</if>
+            <if test="workload != null">workload = #{workload},</if>
+            <if test="parntId != null">parnt_id = #{parntId},</if>
+            <if test="createDept != null">create_dept = #{createDept},</if>
+            <if test="createBy != null">create_by = #{createBy},</if>
+            <if test="createId != null">create_id = #{createId},</if>
+            <if test="createTime != null">create_time = #{createTime},</if>
+            <if test="updateBy != null">update_by = #{updateBy},</if>
+            <if test="updateId != null">update_id = #{updateId},</if>
+            <if test="updateTime != null">update_time = #{updateTime},</if>
+            <if test="delFlag != null">del_flag = #{delFlag},</if>
+        </trim>
+        where id = #{id}
+    </update>
+
+    <delete id="deleteReceiptMaterialsDeviceLedgerDtlDtlById" parameterType="Long">
+        delete from tb_receipt_materials_device_ledger_dtl_dtl where id = #{id}
+    </delete>
+
+    <delete id="deleteReceiptMaterialsDeviceLedgerDtlDtlByIds" parameterType="String">
+        delete from tb_receipt_materials_device_ledger_dtl_dtl where id in
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+</mapper>

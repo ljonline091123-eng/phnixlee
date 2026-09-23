@@ -1,0 +1,144 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhaocai.business.report.mapper.BidReportMapper">
+    <resultMap type="com.zhaocai.business.report.domain.BidReport" id="BidReportResult">
+        <result property="minProjectId" column="min_project_id"/>
+        <result property="minAccountCode" column="min_account_code"/>
+        <result property="minAccountFullName" column="min_account_full_name"/>
+        <result property="projectDepartmentId" column="project_department_id"/>
+        <result property="projectDepartment" column="project_department"/>
+        <result property="managementOrgId" column="management_org_id"/>
+        <result property="managementOrg" column="management_org"/>
+        <result property="deptId" column="dept_id"/>
+        <result property="ancestors" column="ancestors"/>
+        <result property="prjState" column="prj_state"/>
+        <result property="cgNum" column="cg_num"/>
+        <result property="gkNum" column="gk_num"/>
+        <result property="yqNum" column="yq_num"/>
+        <result property="xjNum" column="xj_num"/>
+        <result property="dyNum" column="dy_num"/>
+        <result property="gkTotalNum" column="gk_total_num"/>
+        <result property="ngkTotalNum" column="ngk_total_num"/>
+        <result property="gkRatio" column="gk_ratio"/>
+    </resultMap>
+
+    <resultMap type="com.zhaocai.business.report.vo.VBidCountVo" id="VBidCountResult">
+        <result property="id" column="id"/>
+        <result property="parentId" column="parent_id"/>
+        <result property="deptName" column="dept_name"/>
+        <result property="ancestors" column="ancestors"/>
+        <result property="type" column="type"/>
+        <result property="minAccountFullName" column="min_account_full_name"/>
+        <result property="minAccountCode" column="min_account_code"/>
+        <result property="prjState" column="prj_state"/>
+        <result property="dutyUnit" column="duty_unit"/>
+        <result property="managementOrgId" column="management_org_id"/>
+        <result property="belongingOrgId" column="belonging_org_id"/>
+        <result property="projectDepartmentId" column="project_department_id"/>
+        <result property="cgNum" column="cg_num"/>
+        <result property="gkNum" column="gk_num"/>
+        <result property="yqNum" column="yq_num"/>
+        <result property="xjNum" column="xj_num"/>
+        <result property="dyNum" column="dy_num"/>
+        <result property="gkTotalNum" column="gk_total_num"/>
+        <result property="ngkTotalNum" column="ngk_total_num"/>
+        <result property="gkRatio" column="gk_ratio"/>
+    </resultMap>
+
+    <select id="select" parameterType="com.zhaocai.business.report.vo.VBidCountVo" resultMap="VBidCountResult">
+        select
+        tbr.min_account_code as id,
+        tbr.management_org_id as parent_id,
+        tbr.min_account_full_name,
+        tbr.min_account_code,
+        tbr.prj_state,
+        tbr.management_org_id,
+        tbr.project_department_id,
+        tbr.cg_num,
+        tbr.gk_num,
+        tbr.yq_num,
+        tbr.xj_num,
+        tbr.dy_num,
+        tbr.gk_total_num,
+        tbr.ngk_total_num,
+        tbr.gk_ratio
+        from tb_bid_report tbr
+        <where>
+            tbr.management_org_id is not null
+            <if test="deptId != null">
+                and ( tbr.dept_id = #{deptId} OR tbr.ancestors like concat('%',#{deptId},'%'))
+            </if>
+            <if test="minAccountFullName != null and minAccountFullName != ''">
+                AND tbr.min_account_full_name like concat('%',#{minAccountFullName},'%')
+            </if>
+            <if test="minAccountCode != null and minAccountCode != ''">
+                AND tbr.min_account_code = #{minAccountCode}
+            </if>
+            <if test="prjState != null and prjState != ''">
+                AND tbr.prj_state = #{prjState}
+            </if>
+            <if test="projectDepartmentId != null and projectDepartmentId != ''">
+                AND tbr.management_org_id = #{projectDepartmentId}
+            </if>
+        </where>
+    </select>
+
+    <select id="getBidCountByDept" parameterType="com.zhaocai.business.report.vo.VBidCountVo" resultMap="VBidCountResult">
+        select
+        tbr.management_org_id as id,
+        tbr.management_org as dept_name,
+        tbr.ancestors,
+        sum(tbr.cg_num) as cg_num,
+        sum(tbr.gk_num) as gk_num,
+        sum(tbr.yq_num) as yq_num,
+        sum(tbr.xj_num) as xj_num,
+        sum(tbr.dy_num) as dy_num,
+        sum(tbr.gk_total_num) as gk_total_num,
+        sum(tbr.ngk_total_num) as ngk_total_num,
+        sum(tbr.gk_ratio) as gk_ratio
+        from tb_bid_report tbr
+        <where>
+            tbr.management_org_id is not null
+            <if test="deptId != null">
+                and ( tbr.dept_id = #{deptId} OR tbr.ancestors like concat('%',#{deptId},'%'))
+            </if>
+            <if test="minAccountFullName != null and minAccountFullName != ''">
+                AND tbr.min_account_full_name like concat('%',#{minAccountFullName},'%')
+            </if>
+            <if test="minAccountCode != null and minAccountCode != ''">
+                AND tbr.min_account_code = #{minAccountCode}
+            </if>
+            <if test="prjState != null and prjState != ''">
+                AND tbr.prj_state = #{prjState}
+            </if>
+        </where>
+    group by  tbr.management_org_id, tbr.management_org, tbr.ancestors
+    </select>
+
+    <select id="selectAll" resultMap="BidReportResult">
+        select
+            vbc.min_project_id,
+            vbc.min_account_code,
+            vbc.min_account_full_name,
+            vbc.project_department_id,
+            sd1.dept_name as project_department,
+            vbc.management_org_id,
+            sd2.dept_name as management_org,
+            sd2.dept_id,
+            sd2.ancestors,
+            vbc.prj_state,
+            vbc.cg_num,
+            vbc.gk_num,
+            vbc.yq_num,
+            vbc.xj_num,
+            vbc.dy_num,
+            vbc.gk_total_num,
+            vbc.ngk_total_num,
+            vbc.gk_ratio
+        from v_bid_count vbc
+        left join sys_dept sd1 on sd1.thrid_dept_id = vbc.project_department_id
+        left join sys_dept sd2 on sd2.thrid_dept_id = vbc.management_org_id
+    </select>
+</mapper>

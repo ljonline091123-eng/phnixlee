@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhaocai.business.pub.mapper.IndexStatisticMapper">
+    
+    <resultMap type="com.zhaocai.business.pub.domain.IndexStatistic" id="IndexStatisticResult">
+        <result property="id"    column="id"    />
+        <result property="totalProcurementAmout"    column="total_procurement_amout"    />
+        <result property="totalVendor"    column="total_vendor"    />
+        <result property="createBy"    column="create_by"    />
+        <result property="totalProject"    column="total_project"    />
+        <result property="createId"    column="create_id"    />
+        <result property="createTime"    column="create_time"    />
+        <result property="updateBy"    column="update_by"    />
+        <result property="updateId"    column="update_id"    />
+        <result property="updateTime"    column="update_time"    />
+        <result property="delFlag"    column="del_flag"    />
+    </resultMap>
+
+    <sql id="selectIndexStatisticVo">
+        select id, total_procurement_amout, total_vendor, create_by, total_project, create_id, create_time, update_by, update_id, update_time, del_flag from tb_index_statistic
+    </sql>
+
+    <select id="selectIndexStatisticList" parameterType="com.zhaocai.business.pub.domain.IndexStatistic" resultMap="IndexStatisticResult">
+        <include refid="selectIndexStatisticVo"/>
+        <where>  
+            <if test="totalProcurementAmout != null "> and total_procurement_amout = #{totalProcurementAmout}</if>
+            <if test="totalVendor != null "> and total_vendor = #{totalVendor}</if>
+            <if test="totalProject != null "> and total_project = #{totalProject}</if>
+            <if test="createId != null "> and create_id = #{createId}</if>
+            <if test="updateId != null "> and update_id = #{updateId}</if>
+            <if test="delFlag != null "> and del_flag = #{delFlag}</if>
+        </where>
+    </select>
+    
+    <select id="selectIndexStatisticById" parameterType="Long" resultMap="IndexStatisticResult">
+        <include refid="selectIndexStatisticVo"/>
+        where id = #{id}
+    </select>
+        
+    <insert id="insertIndexStatistic" parameterType="com.zhaocai.business.pub.domain.IndexStatistic">
+        insert into tb_index_statistic
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="id != null">id,</if>
+            <if test="totalProcurementAmout != null">total_procurement_amout,</if>
+            <if test="totalVendor != null">total_vendor,</if>
+            <if test="createBy != null">create_by,</if>
+            <if test="totalProject != null">total_project,</if>
+            <if test="createId != null">create_id,</if>
+            <if test="createTime != null">create_time,</if>
+            <if test="updateBy != null">update_by,</if>
+            <if test="updateId != null">update_id,</if>
+            <if test="updateTime != null">update_time,</if>
+            <if test="delFlag != null">del_flag,</if>
+         </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="id != null">#{id},</if>
+            <if test="totalProcurementAmout != null">#{totalProcurementAmout},</if>
+            <if test="totalVendor != null">#{totalVendor},</if>
+            <if test="createBy != null">#{createBy},</if>
+            <if test="totalProject != null">#{totalProject},</if>
+            <if test="createId != null">#{createId},</if>
+            <if test="createTime != null">#{createTime},</if>
+            <if test="updateBy != null">#{updateBy},</if>
+            <if test="updateId != null">#{updateId},</if>
+            <if test="updateTime != null">#{updateTime},</if>
+            <if test="delFlag != null">#{delFlag},</if>
+         </trim>
+    </insert>
+
+    <update id="updateIndexStatistic" parameterType="com.zhaocai.business.pub.domain.IndexStatistic">
+        update tb_index_statistic
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="totalProcurementAmout != null">total_procurement_amout = #{totalProcurementAmout},</if>
+            <if test="totalVendor != null">total_vendor = #{totalVendor},</if>
+            <if test="createBy != null">create_by = #{createBy},</if>
+            <if test="totalProject != null">total_project = #{totalProject},</if>
+            <if test="createId != null">create_id = #{createId},</if>
+            <if test="createTime != null">create_time = #{createTime},</if>
+            <if test="updateBy != null">update_by = #{updateBy},</if>
+            <if test="updateId != null">update_id = #{updateId},</if>
+            <if test="updateTime != null">update_time = #{updateTime},</if>
+            <if test="delFlag != null">del_flag = #{delFlag},</if>
+        </trim>
+        where id = #{id}
+    </update>
+
+    <delete id="deleteIndexStatisticById" parameterType="Long">
+        delete from tb_index_statistic where id = #{id}
+    </delete>
+
+    <delete id="deleteIndexStatisticByIds" parameterType="String">
+        delete from tb_index_statistic where id in 
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+</mapper>

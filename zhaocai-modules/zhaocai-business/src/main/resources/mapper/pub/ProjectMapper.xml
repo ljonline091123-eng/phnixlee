@@ -1,0 +1,493 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhaocai.business.pub.mapper.ProjectMapper">
+
+    <resultMap type="com.zhaocai.business.pub.domain.Project" id="ProjectResult">
+        <result property="id"    column="id"    />
+        <result property="thirdId"    column="third_id"    />
+        <result property="abnormalStatus"    column="abnormal_status"    />
+        <result property="actualEndTime"    column="actual_end_time"    />
+        <result property="actualStartTime"    column="actual_start_time"    />
+        <result property="actualWork"    column="actual_work"    />
+        <result property="basicForm"    column="basic_form"    />
+        <result property="cityCode"    column="city_code"    />
+        <result property="cityName"    column="city_name"    />
+        <result property="constructionHigh"    column="construction_high"    />
+        <result property="constructionUnit"    column="construction_unit"    />
+        <result property="constructionUnitId"    column="construction_unit_id"    />
+        <result property="contractMode"    column="contract_mode"    />
+        <result property="contractTotalAmount"    column="contract_total_amount"    />
+        <result property="countryCode"    column="country_code"    />
+        <result property="countryName"    column="country_name"    />
+        <result property="countyCode"    column="county_code"    />
+        <result property="countyName"    column="county_name"    />
+        <result property="designUnit"    column="design_unit"    />
+        <result property="designUnitId"    column="design_unit_id"    />
+        <result property="downTotalConstructionArea"    column="down_total_construction_area"    />
+        <result property="financeLeaderId"    column="finance_leader_id"    />
+        <result property="financeLeaderName"    column="finance_leader_name"    />
+        <result property="financeOrgName"    column="finance_org_name"    />
+        <result property="floorNumber"    column="floor_number"    />
+        <result property="fullDropRate"    column="full_drop_rate"    />
+        <result property="manageOrgId"    column="manage_org_id"    />
+        <result property="manageOrgName"    column="manage_org_name"    />
+        <result property="orgId"    column="org_id"    />
+        <result property="orgName"    column="org_name"    />
+        <result property="parentProjectCode"    column="parent_project_code"    />
+        <result property="parentProjectName"    column="parent_project_name"    />
+        <result property="planStartTime"    column="plan_start_time"    />
+        <result property="planWork"    column="plan_work"    />
+        <result property="projectApprovalTime"    column="project_approval_time"    />
+        <result property="projectAsName"    column="project_as_name"    />
+        <result property="projectCode"    column="project_code"    />
+        <result property="projectDepartmentId"    column="project_department_id"    />
+        <result property="projectDepartmentName"    column="project_department_name"    />
+        <result property="projectFormat"    column="project_format"    />
+        <result property="projectFundsSource"    column="project_funds_source"    />
+        <result property="projectLeaderId"    column="project_leader_id"    />
+        <result property="projectLeaderMobile"    column="project_leader_mobile"    />
+        <result property="projectLeaderName"    column="project_leader_name"    />
+        <result property="projectManageModel"    column="project_manage_model"    />
+        <result property="projectName"    column="project_name"    />
+        <result property="projectSite"    column="project_site"    />
+        <result property="projectStatus"    column="project_status"    />
+        <result property="projectType"    column="project_type"    />
+        <result property="provinceCode"    column="province_code"    />
+        <result property="provinceName"    column="province_name"    />
+        <result property="provisionalAmount"    column="provisional_amount"    />
+        <result property="qualificationsUnit"    column="qualifications_unit"    />
+        <result property="qualificationsUnitId"    column="qualifications_unit_id"    />
+        <result property="responsibleUnit"    column="responsible_unit"    />
+        <result property="responsibleUnitId"    column="responsible_unit_id"    />
+        <result property="socialCreditCode"    column="social_credit_code"    />
+        <result property="structureType"    column="structure_type"    />
+        <result property="taxMode"    column="tax_mode"    />
+        <result property="taxPayers"    column="tax_payers"    />
+        <result property="technologyLeaderId"    column="technology_leader_id"    />
+        <result property="technologyLeaderMobile"    column="technology_leader_mobile"    />
+        <result property="technologyLeaderName"    column="technology_leader_name"    />
+        <result property="totalConstructionArea"    column="total_construction_area"    />
+        <result property="upTotalConstructionArea"    column="up_total_construction_area"    />
+        <result property="winningBidAmount"    column="winning_bid_amount"    />
+        <result property="winningBidTime"    column="winning_bid_time"    />
+        <result property="createBy"    column="create_by"    />
+        <result property="createId"    column="create_id"    />
+        <result property="createTime"    column="create_time"    />
+        <result property="updateBy"    column="update_by"    />
+        <result property="updateId"    column="update_id"    />
+        <result property="updateTime"    column="update_time"    />
+        <result property="delFlag"    column="del_flag"    />
+    </resultMap>
+
+
+    <resultMap type="com.zhaocai.business.pub.vo.req.ProjectVO" id="ProjectResultMap">
+        <result property="id"    column="id"    />
+        <result property="thirdId"    column="third_id"    />
+        <result property="abnormalStatus"    column="abnormal_status"    />
+        <result property="actualEndTime"    column="actual_end_time"    />
+        <result property="actualStartTime"    column="actual_start_time"    />
+        <result property="actualWork"    column="actual_work"    />
+        <result property="basicForm"    column="basic_form"    />
+        <result property="cityCode"    column="city_code"    />
+        <result property="cityName"    column="city_name"    />
+        <result property="constructionHigh"    column="construction_high"    />
+        <result property="constructionUnit"    column="construction_unit"    />
+        <result property="constructionUnitId"    column="construction_unit_id"    />
+        <result property="contractMode"    column="contract_mode"    />
+        <result property="contractTotalAmount"    column="contract_total_amount"    />
+        <result property="countryCode"    column="country_code"    />
+        <result property="countryName"    column="country_name"    />
+        <result property="countyCode"    column="county_code"    />
+        <result property="countyName"    column="county_name"    />
+        <result property="designUnit"    column="design_unit"    />
+        <result property="designUnitId"    column="design_unit_id"    />
+        <result property="downTotalConstructionArea"    column="down_total_construction_area"    />
+        <result property="financeLeaderId"    column="finance_leader_id"    />
+        <result property="financeLeaderName"    column="finance_leader_name"    />
+        <result property="financeOrgName"    column="finance_org_name"    />
+        <result property="floorNumber"    column="floor_number"    />
+        <result property="fullDropRate"    column="full_drop_rate"    />
+        <result property="manageOrgId"    column="manage_org_id"    />
+        <result property="manageOrgName"    column="manage_org_name"    />
+        <result property="orgId"    column="org_id"    />
+        <result property="orgName"    column="org_name"    />
+        <result property="parentProjectCode"    column="parent_project_code"    />
+        <result property="parentProjectName"    column="parent_project_name"    />
+        <result property="planStartTime"    column="plan_start_time"    />
+        <result property="planWork"    column="plan_work"    />
+        <result property="projectApprovalTime"    column="project_approval_time"    />
+        <result property="projectAsName"    column="project_as_name"    />
+        <result property="projectCode"    column="project_code"    />
+        <result property="projectDepartmentId"    column="project_department_id"    />
+        <result property="projectDepartmentName"    column="project_department_name"    />
+        <result property="projectFormat"    column="project_format"    />
+        <result property="projectFundsSource"    column="project_funds_source"    />
+        <result property="projectLeaderId"    column="project_leader_id"    />
+        <result property="projectLeaderMobile"    column="project_leader_mobile"    />
+        <result property="projectLeaderName"    column="project_leader_name"    />
+        <result property="projectManageModel"    column="project_manage_model"    />
+        <result property="projectName"    column="project_name"    />
+        <result property="projectSite"    column="project_site"    />
+        <result property="projectStatus"    column="project_status"    />
+        <result property="projectType"    column="project_type"    />
+        <result property="provinceCode"    column="province_code"    />
+        <result property="provinceName"    column="province_name"    />
+        <result property="provisionalAmount"    column="provisional_amount"    />
+        <result property="qualificationsUnit"    column="qualifications_unit"    />
+        <result property="qualificationsUnitId"    column="qualifications_unit_id"    />
+        <result property="responsibleUnit"    column="responsible_unit"    />
+        <result property="responsibleUnitId"    column="responsible_unit_id"    />
+        <result property="socialCreditCode"    column="social_credit_code"    />
+        <result property="structureType"    column="structure_type"    />
+        <result property="taxMode"    column="tax_mode"    />
+        <result property="taxPayers"    column="tax_payers"    />
+        <result property="technologyLeaderId"    column="technology_leader_id"    />
+        <result property="technologyLeaderMobile"    column="technology_leader_mobile"    />
+        <result property="technologyLeaderName"    column="technology_leader_name"    />
+        <result property="totalConstructionArea"    column="total_construction_area"    />
+        <result property="upTotalConstructionArea"    column="up_total_construction_area"    />
+        <result property="winningBidAmount"    column="winning_bid_amount"    />
+        <result property="winningBidTime"    column="winning_bid_time"    />
+        <result property="createBy"    column="create_by"    />
+        <result property="createId"    column="create_id"    />
+        <result property="createTime"    column="create_time"    />
+        <result property="updateBy"    column="update_by"    />
+        <result property="updateId"    column="update_id"    />
+        <result property="updateTime"    column="update_time"    />
+        <result property="delFlag"    column="del_flag"    />
+    </resultMap>
+
+    <sql id="selectProjectVo">
+        select id, third_id, abnormal_status, actual_end_time, actual_start_time, actual_work, basic_form, city_code, city_name, construction_high, construction_unit, construction_unit_id, contract_mode, contract_total_amount, country_code, country_name, county_code, county_name, design_unit, design_unit_id, down_total_construction_area, finance_leader_id, finance_leader_name, finance_org_name, floor_number, full_drop_rate, manage_org_id, manage_org_name, org_id, org_name, parent_project_code, parent_project_name, plan_start_time, plan_work, project_approval_time, project_as_name, project_code, project_department_id, project_department_name, project_format, project_funds_source, project_leader_id, project_leader_mobile, project_leader_name, project_manage_model, project_name, project_site, project_status, project_type, province_code, province_name, provisional_amount, qualifications_unit, qualifications_unit_id, responsible_unit, responsible_unit_id, social_credit_code, structure_type, tax_mode, tax_payers, technology_leader_id, technology_leader_mobile, technology_leader_name, total_construction_area, up_total_construction_area, winning_bid_amount, winning_bid_time, create_by, create_id, create_time, update_by, update_id, update_time, del_flag from tb_project
+    </sql>
+
+    <select id="selectProjectList" parameterType="com.zhaocai.business.pub.domain.Project" resultMap="ProjectResultMap">
+        <include refid="selectProjectVo"/>
+        <where>
+            <if test="thirdId != null  and thirdId != ''"> and third_id = #{thirdId}</if>
+            <if test="abnormalStatus != null  and abnormalStatus != ''"> and abnormal_status = #{abnormalStatus}</if>
+            <if test="actualEndTime != null "> and actual_end_time = #{actualEndTime}</if>
+            <if test="actualStartTime != null "> and actual_start_time = #{actualStartTime}</if>
+            <if test="actualWork != null "> and actual_work = #{actualWork}</if>
+            <if test="basicForm != null  and basicForm != ''"> and basic_form = #{basicForm}</if>
+            <if test="cityCode != null  and cityCode != ''"> and city_code = #{cityCode}</if>
+            <if test="cityName != null  and cityName != ''"> and city_name like concat('%', #{cityName}, '%')</if>
+            <if test="constructionHigh != null "> and construction_high = #{constructionHigh}</if>
+            <if test="constructionUnit != null  and constructionUnit != ''"> and construction_unit = #{constructionUnit}</if>
+            <if test="constructionUnitId != null  and constructionUnitId != ''"> and construction_unit_id = #{constructionUnitId}</if>
+            <if test="contractMode != null  and contractMode != ''"> and contract_mode = #{contractMode}</if>
+            <if test="contractTotalAmount != null "> and contract_total_amount = #{contractTotalAmount}</if>
+            <if test="countryCode != null  and countryCode != ''"> and country_code = #{countryCode}</if>
+            <if test="countryName != null  and countryName != ''"> and country_name like concat('%', #{countryName}, '%')</if>
+            <if test="countyCode != null  and countyCode != ''"> and county_code = #{countyCode}</if>
+            <if test="countyName != null  and countyName != ''"> and county_name like concat('%', #{countyName}, '%')</if>
+            <if test="designUnit != null  and designUnit != ''"> and design_unit = #{designUnit}</if>
+            <if test="designUnitId != null  and designUnitId != ''"> and design_unit_id = #{designUnitId}</if>
+            <if test="downTotalConstructionArea != null "> and down_total_construction_area = #{downTotalConstructionArea}</if>
+            <if test="financeLeaderId != null  and financeLeaderId != ''"> and finance_leader_id = #{financeLeaderId}</if>
+            <if test="financeLeaderName != null  and financeLeaderName != ''"> and finance_leader_name like concat('%', #{financeLeaderName}, '%')</if>
+            <if test="financeOrgName != null  and financeOrgName != ''"> and finance_org_name like concat('%', #{financeOrgName}, '%')</if>
+            <if test="floorNumber != null "> and floor_number = #{floorNumber}</if>
+            <if test="fullDropRate != null "> and full_drop_rate = #{fullDropRate}</if>
+            <if test="manageOrgId != null  and manageOrgId != ''"> and manage_org_id = #{manageOrgId}</if>
+            <if test="manageOrgName != null  and manageOrgName != ''"> and manage_org_name like concat('%', #{manageOrgName}, '%')</if>
+            <if test="orgId != null  and orgId != ''"> and org_id = #{orgId}</if>
+            <if test="orgName != null  and orgName != ''"> and org_name like concat('%', #{orgName}, '%')</if>
+            <if test="parentProjectCode != null  and parentProjectCode != ''"> and parent_project_code = #{parentProjectCode}</if>
+            <if test="parentProjectName != null  and parentProjectName != ''"> and parent_project_name like concat('%', #{parentProjectName}, '%')</if>
+            <if test="planStartTime != null "> and plan_start_time = #{planStartTime}</if>
+            <if test="planWork != null "> and plan_work = #{planWork}</if>
+            <if test="projectApprovalTime != null "> and project_approval_time = #{projectApprovalTime}</if>
+            <if test="projectAsName != null  and projectAsName != ''"> and project_as_name like concat('%', #{projectAsName}, '%')</if>
+            <if test="projectCode != null  and projectCode != ''"> and project_code = #{projectCode}</if>
+            <if test="projectDepartmentId != null  and projectDepartmentId != ''"> and project_department_id = #{projectDepartmentId}</if>
+            <if test="projectDepartmentName != null  and projectDepartmentName != ''"> and project_department_name like concat('%', #{projectDepartmentName}, '%')</if>
+            <if test="projectFormat != null  and projectFormat != ''"> and project_format = #{projectFormat}</if>
+            <if test="projectFundsSource != null  and projectFundsSource != ''"> and project_funds_source = #{projectFundsSource}</if>
+            <if test="projectLeaderId != null  and projectLeaderId != ''"> and project_leader_id = #{projectLeaderId}</if>
+            <if test="projectLeaderMobile != null  and projectLeaderMobile != ''"> and project_leader_mobile = #{projectLeaderMobile}</if>
+            <if test="projectLeaderName != null  and projectLeaderName != ''"> and project_leader_name like concat('%', #{projectLeaderName}, '%')</if>
+            <if test="projectManageModel != null  and projectManageModel != ''"> and project_manage_model = #{projectManageModel}</if>
+            <if test="projectName != null  and projectName != ''"> and project_name like concat('%', #{projectName}, '%')</if>
+            <if test="projectSite != null  and projectSite != ''"> and project_site = #{projectSite}</if>
+            <if test="projectStatus != null  and projectStatus != ''"> and project_status = #{projectStatus}</if>
+            <if test="projectType != null  and projectType != ''"> and project_type = #{projectType}</if>
+            <if test="provinceCode != null  and provinceCode != ''"> and province_code = #{provinceCode}</if>
+            <if test="provinceName != null  and provinceName != ''"> and province_name like concat('%', #{provinceName}, '%')</if>
+            <if test="provisionalAmount != null "> and provisional_amount = #{provisionalAmount}</if>
+            <if test="qualificationsUnit != null  and qualificationsUnit != ''"> and qualifications_unit = #{qualificationsUnit}</if>
+            <if test="qualificationsUnitId != null  and qualificationsUnitId != ''"> and qualifications_unit_id = #{qualificationsUnitId}</if>
+            <if test="responsibleUnit != null  and responsibleUnit != ''"> and responsible_unit = #{responsibleUnit}</if>
+            <if test="responsibleUnitId != null  and responsibleUnitId != ''"> and responsible_unit_id = #{responsibleUnitId}</if>
+            <if test="socialCreditCode != null  and socialCreditCode != ''"> and social_credit_code = #{socialCreditCode}</if>
+            <if test="structureType != null  and structureType != ''"> and structure_type = #{structureType}</if>
+            <if test="taxMode != null  and taxMode != ''"> and tax_mode = #{taxMode}</if>
+            <if test="taxPayers != null  and taxPayers != ''"> and tax_payers = #{taxPayers}</if>
+            <if test="technologyLeaderId != null  and technologyLeaderId != ''"> and technology_leader_id = #{technologyLeaderId}</if>
+            <if test="technologyLeaderMobile != null  and technologyLeaderMobile != ''"> and technology_leader_mobile = #{technologyLeaderMobile}</if>
+            <if test="technologyLeaderName != null  and technologyLeaderName != ''"> and technology_leader_name like concat('%', #{technologyLeaderName}, '%')</if>
+            <if test="totalConstructionArea != null "> and total_construction_area = #{totalConstructionArea}</if>
+            <if test="upTotalConstructionArea != null "> and up_total_construction_area = #{upTotalConstructionArea}</if>
+            <if test="winningBidAmount != null "> and winning_bid_amount = #{winningBidAmount}</if>
+            <if test="winningBidTime != null "> and winning_bid_time = #{winningBidTime}</if>
+            <if test="createId != null "> and create_id = #{createId}</if>
+            <if test="updateId != null "> and update_id = #{updateId}</if>
+        </where>
+    </select>
+
+    <select id="selectProjectById" parameterType="String" resultMap="ProjectResult">
+        <include refid="selectProjectVo"/>
+        where third_id = #{thirdId}
+    </select>
+
+    <insert id="insertProject" parameterType="com.zhaocai.business.pub.domain.Project">
+        insert into tb_project
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="id != null">id,</if>
+            <if test="thirdId != null">third_id,</if>
+            <if test="abnormalStatus != null">abnormal_status,</if>
+            <if test="actualEndTime != null">actual_end_time,</if>
+            <if test="actualStartTime != null">actual_start_time,</if>
+            <if test="actualWork != null">actual_work,</if>
+            <if test="basicForm != null">basic_form,</if>
+            <if test="cityCode != null">city_code,</if>
+            <if test="cityName != null">city_name,</if>
+            <if test="constructionHigh != null">construction_high,</if>
+            <if test="constructionUnit != null">construction_unit,</if>
+            <if test="constructionUnitId != null">construction_unit_id,</if>
+            <if test="contractMode != null">contract_mode,</if>
+            <if test="contractTotalAmount != null">contract_total_amount,</if>
+            <if test="countryCode != null">country_code,</if>
+            <if test="countryName != null">country_name,</if>
+            <if test="countyCode != null">county_code,</if>
+            <if test="countyName != null">county_name,</if>
+            <if test="designUnit != null">design_unit,</if>
+            <if test="designUnitId != null">design_unit_id,</if>
+            <if test="downTotalConstructionArea != null">down_total_construction_area,</if>
+            <if test="financeLeaderId != null">finance_leader_id,</if>
+            <if test="financeLeaderName != null">finance_leader_name,</if>
+            <if test="financeOrgName != null">finance_org_name,</if>
+            <if test="floorNumber != null">floor_number,</if>
+            <if test="fullDropRate != null">full_drop_rate,</if>
+            <if test="manageOrgId != null">manage_org_id,</if>
+            <if test="manageOrgName != null">manage_org_name,</if>
+            <if test="orgId != null">org_id,</if>
+            <if test="orgName != null">org_name,</if>
+            <if test="parentProjectCode != null">parent_project_code,</if>
+            <if test="parentProjectName != null">parent_project_name,</if>
+            <if test="planStartTime != null">plan_start_time,</if>
+            <if test="planWork != null">plan_work,</if>
+            <if test="projectApprovalTime != null">project_approval_time,</if>
+            <if test="projectAsName != null">project_as_name,</if>
+            <if test="projectCode != null">project_code,</if>
+            <if test="projectDepartmentId != null">project_department_id,</if>
+            <if test="projectDepartmentName != null">project_department_name,</if>
+            <if test="projectFormat != null">project_format,</if>
+            <if test="projectFundsSource != null">project_funds_source,</if>
+            <if test="projectLeaderId != null">project_leader_id,</if>
+            <if test="projectLeaderMobile != null">project_leader_mobile,</if>
+            <if test="projectLeaderName != null">project_leader_name,</if>
+            <if test="projectManageModel != null">project_manage_model,</if>
+            <if test="projectName != null">project_name,</if>
+            <if test="projectSite != null">project_site,</if>
+            <if test="projectStatus != null">project_status,</if>
+            <if test="projectType != null">project_type,</if>
+            <if test="provinceCode != null">province_code,</if>
+            <if test="provinceName != null">province_name,</if>
+            <if test="provisionalAmount != null">provisional_amount,</if>
+            <if test="qualificationsUnit != null">qualifications_unit,</if>
+            <if test="qualificationsUnitId != null">qualifications_unit_id,</if>
+            <if test="responsibleUnit != null">responsible_unit,</if>
+            <if test="responsibleUnitId != null">responsible_unit_id,</if>
+            <if test="socialCreditCode != null">social_credit_code,</if>
+            <if test="structureType != null">structure_type,</if>
+            <if test="taxMode != null">tax_mode,</if>
+            <if test="taxPayers != null">tax_payers,</if>
+            <if test="technologyLeaderId != null">technology_leader_id,</if>
+            <if test="technologyLeaderMobile != null">technology_leader_mobile,</if>
+            <if test="technologyLeaderName != null">technology_leader_name,</if>
+            <if test="totalConstructionArea != null">total_construction_area,</if>
+            <if test="upTotalConstructionArea != null">up_total_construction_area,</if>
+            <if test="winningBidAmount != null">winning_bid_amount,</if>
+            <if test="winningBidTime != null">winning_bid_time,</if>
+            <if test="createBy != null">create_by,</if>
+            <if test="createId != null">create_id,</if>
+            <if test="createTime != null">create_time,</if>
+            <if test="updateBy != null">update_by,</if>
+            <if test="updateId != null">update_id,</if>
+            <if test="updateTime != null">update_time,</if>
+            <if test="delFlag != null">del_flag,</if>
+         </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="id != null">#{id},</if>
+            <if test="thirdId != null">#{thirdId},</if>
+            <if test="abnormalStatus != null">#{abnormalStatus},</if>
+            <if test="actualEndTime != null">#{actualEndTime},</if>
+            <if test="actualStartTime != null">#{actualStartTime},</if>
+            <if test="actualWork != null">#{actualWork},</if>
+            <if test="basicForm != null">#{basicForm},</if>
+            <if test="cityCode != null">#{cityCode},</if>
+            <if test="cityName != null">#{cityName},</if>
+            <if test="constructionHigh != null">#{constructionHigh},</if>
+            <if test="constructionUnit != null">#{constructionUnit},</if>
+            <if test="constructionUnitId != null">#{constructionUnitId},</if>
+            <if test="contractMode != null">#{contractMode},</if>
+            <if test="contractTotalAmount != null">#{contractTotalAmount},</if>
+            <if test="countryCode != null">#{countryCode},</if>
+            <if test="countryName != null">#{countryName},</if>
+            <if test="countyCode != null">#{countyCode},</if>
+            <if test="countyName != null">#{countyName},</if>
+            <if test="designUnit != null">#{designUnit},</if>
+            <if test="designUnitId != null">#{designUnitId},</if>
+            <if test="downTotalConstructionArea != null">#{downTotalConstructionArea},</if>
+            <if test="financeLeaderId != null">#{financeLeaderId},</if>
+            <if test="financeLeaderName != null">#{financeLeaderName},</if>
+            <if test="financeOrgName != null">#{financeOrgName},</if>
+            <if test="floorNumber != null">#{floorNumber},</if>
+            <if test="fullDropRate != null">#{fullDropRate},</if>
+            <if test="manageOrgId != null">#{manageOrgId},</if>
+            <if test="manageOrgName != null">#{manageOrgName},</if>
+            <if test="orgId != null">#{orgId},</if>
+            <if test="orgName != null">#{orgName},</if>
+            <if test="parentProjectCode != null">#{parentProjectCode},</if>
+            <if test="parentProjectName != null">#{parentProjectName},</if>
+            <if test="planStartTime != null">#{planStartTime},</if>
+            <if test="planWork != null">#{planWork},</if>
+            <if test="projectApprovalTime != null">#{projectApprovalTime},</if>
+            <if test="projectAsName != null">#{projectAsName},</if>
+            <if test="projectCode != null">#{projectCode},</if>
+            <if test="projectDepartmentId != null">#{projectDepartmentId},</if>
+            <if test="projectDepartmentName != null">#{projectDepartmentName},</if>
+            <if test="projectFormat != null">#{projectFormat},</if>
+            <if test="projectFundsSource != null">#{projectFundsSource},</if>
+            <if test="projectLeaderId != null">#{projectLeaderId},</if>
+            <if test="projectLeaderMobile != null">#{projectLeaderMobile},</if>
+            <if test="projectLeaderName != null">#{projectLeaderName},</if>
+            <if test="projectManageModel != null">#{projectManageModel},</if>
+            <if test="projectName != null">#{projectName},</if>
+            <if test="projectSite != null">#{projectSite},</if>
+            <if test="projectStatus != null">#{projectStatus},</if>
+            <if test="projectType != null">#{projectType},</if>
+            <if test="provinceCode != null">#{provinceCode},</if>
+            <if test="provinceName != null">#{provinceName},</if>
+            <if test="provisionalAmount != null">#{provisionalAmount},</if>
+            <if test="qualificationsUnit != null">#{qualificationsUnit},</if>
+            <if test="qualificationsUnitId != null">#{qualificationsUnitId},</if>
+            <if test="responsibleUnit != null">#{responsibleUnit},</if>
+            <if test="responsibleUnitId != null">#{responsibleUnitId},</if>
+            <if test="socialCreditCode != null">#{socialCreditCode},</if>
+            <if test="structureType != null">#{structureType},</if>
+            <if test="taxMode != null">#{taxMode},</if>
+            <if test="taxPayers != null">#{taxPayers},</if>
+            <if test="technologyLeaderId != null">#{technologyLeaderId},</if>
+            <if test="technologyLeaderMobile != null">#{technologyLeaderMobile},</if>
+            <if test="technologyLeaderName != null">#{technologyLeaderName},</if>
+            <if test="totalConstructionArea != null">#{totalConstructionArea},</if>
+            <if test="upTotalConstructionArea != null">#{upTotalConstructionArea},</if>
+            <if test="winningBidAmount != null">#{winningBidAmount},</if>
+            <if test="winningBidTime != null">#{winningBidTime},</if>
+            <if test="createBy != null">#{createBy},</if>
+            <if test="createId != null">#{createId},</if>
+            <if test="createTime != null">#{createTime},</if>
+            <if test="updateBy != null">#{updateBy},</if>
+            <if test="updateId != null">#{updateId},</if>
+            <if test="updateTime != null">#{updateTime},</if>
+            <if test="delFlag != null">#{delFlag},</if>
+         </trim>
+    </insert>
+
+    <update id="updateProject" parameterType="com.zhaocai.business.pub.domain.Project">
+        update tb_project
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="thirdId != null">third_id = #{thirdId},</if>
+            <if test="abnormalStatus != null">abnormal_status = #{abnormalStatus},</if>
+            <if test="actualEndTime != null">actual_end_time = #{actualEndTime},</if>
+            <if test="actualStartTime != null">actual_start_time = #{actualStartTime},</if>
+            <if test="actualWork != null">actual_work = #{actualWork},</if>
+            <if test="basicForm != null">basic_form = #{basicForm},</if>
+            <if test="cityCode != null">city_code = #{cityCode},</if>
+            <if test="cityName != null">city_name = #{cityName},</if>
+            <if test="constructionHigh != null">construction_high = #{constructionHigh},</if>
+            <if test="constructionUnit != null">construction_unit = #{constructionUnit},</if>
+            <if test="constructionUnitId != null">construction_unit_id = #{constructionUnitId},</if>
+            <if test="contractMode != null">contract_mode = #{contractMode},</if>
+            <if test="contractTotalAmount != null">contract_total_amount = #{contractTotalAmount},</if>
+            <if test="countryCode != null">country_code = #{countryCode},</if>
+            <if test="countryName != null">country_name = #{countryName},</if>
+            <if test="countyCode != null">county_code = #{countyCode},</if>
+            <if test="countyName != null">county_name = #{countyName},</if>
+            <if test="designUnit != null">design_unit = #{designUnit},</if>
+            <if test="designUnitId != null">design_unit_id = #{designUnitId},</if>
+            <if test="downTotalConstructionArea != null">down_total_construction_area = #{downTotalConstructionArea},</if>
+            <if test="financeLeaderId != null">finance_leader_id = #{financeLeaderId},</if>
+            <if test="financeLeaderName != null">finance_leader_name = #{financeLeaderName},</if>
+            <if test="financeOrgName != null">finance_org_name = #{financeOrgName},</if>
+            <if test="floorNumber != null">floor_number = #{floorNumber},</if>
+            <if test="fullDropRate != null">full_drop_rate = #{fullDropRate},</if>
+            <if test="manageOrgId != null">manage_org_id = #{manageOrgId},</if>
+            <if test="manageOrgName != null">manage_org_name = #{manageOrgName},</if>
+            <if test="orgId != null">org_id = #{orgId},</if>
+            <if test="orgName != null">org_name = #{orgName},</if>
+            <if test="parentProjectCode != null">parent_project_code = #{parentProjectCode},</if>
+            <if test="parentProjectName != null">parent_project_name = #{parentProjectName},</if>
+            <if test="planStartTime != null">plan_start_time = #{planStartTime},</if>
+            <if test="planWork != null">plan_work = #{planWork},</if>
+            <if test="projectApprovalTime != null">project_approval_time = #{projectApprovalTime},</if>
+            <if test="projectAsName != null">project_as_name = #{projectAsName},</if>
+            <if test="projectCode != null">project_code = #{projectCode},</if>
+            <if test="projectDepartmentId != null">project_department_id = #{projectDepartmentId},</if>
+            <if test="projectDepartmentName != null">project_department_name = #{projectDepartmentName},</if>
+            <if test="projectFormat != null">project_format = #{projectFormat},</if>
+            <if test="projectFundsSource != null">project_funds_source = #{projectFundsSource},</if>
+            <if test="projectLeaderId != null">project_leader_id = #{projectLeaderId},</if>
+            <if test="projectLeaderMobile != null">project_leader_mobile = #{projectLeaderMobile},</if>
+            <if test="projectLeaderName != null">project_leader_name = #{projectLeaderName},</if>
+            <if test="projectManageModel != null">project_manage_model = #{projectManageModel},</if>
+            <if test="projectName != null">project_name = #{projectName},</if>
+            <if test="projectSite != null">project_site = #{projectSite},</if>
+            <if test="projectStatus != null">project_status = #{projectStatus},</if>
+            <if test="projectType != null">project_type = #{projectType},</if>
+            <if test="provinceCode != null">province_code = #{provinceCode},</if>
+            <if test="provinceName != null">province_name = #{provinceName},</if>
+            <if test="provisionalAmount != null">provisional_amount = #{provisionalAmount},</if>
+            <if test="qualificationsUnit != null">qualifications_unit = #{qualificationsUnit},</if>
+            <if test="qualificationsUnitId != null">qualifications_unit_id = #{qualificationsUnitId},</if>
+            <if test="responsibleUnit != null">responsible_unit = #{responsibleUnit},</if>
+            <if test="responsibleUnitId != null">responsible_unit_id = #{responsibleUnitId},</if>
+            <if test="socialCreditCode != null">social_credit_code = #{socialCreditCode},</if>
+            <if test="structureType != null">structure_type = #{structureType},</if>
+            <if test="taxMode != null">tax_mode = #{taxMode},</if>
+            <if test="taxPayers != null">tax_payers = #{taxPayers},</if>
+            <if test="technologyLeaderId != null">technology_leader_id = #{technologyLeaderId},</if>
+            <if test="technologyLeaderMobile != null">technology_leader_mobile = #{technologyLeaderMobile},</if>
+            <if test="technologyLeaderName != null">technology_leader_name = #{technologyLeaderName},</if>
+            <if test="totalConstructionArea != null">total_construction_area = #{totalConstructionArea},</if>
+            <if test="upTotalConstructionArea != null">up_total_construction_area = #{upTotalConstructionArea},</if>
+            <if test="winningBidAmount != null">winning_bid_amount = #{winningBidAmount},</if>
+            <if test="winningBidTime != null">winning_bid_time = #{winningBidTime},</if>
+            <if test="createBy != null">create_by = #{createBy},</if>
+            <if test="createId != null">create_id = #{createId},</if>
+            <if test="createTime != null">create_time = #{createTime},</if>
+            <if test="updateBy != null">update_by = #{updateBy},</if>
+            <if test="updateId != null">update_id = #{updateId},</if>
+            <if test="updateTime != null">update_time = #{updateTime},</if>
+            <if test="delFlag != null">del_flag = #{delFlag},</if>
+        </trim>
+        where
+        <if test="thirdId != null">third_id = #{thirdId}</if>
+        <if test="id != null"> id = #{id}</if>
+    </update>
+
+    <delete id="deleteProjectById" parameterType="Long">
+        delete from tb_project where id = #{id}
+    </delete>
+
+    <delete id="deleteProjectByIds" parameterType="String">
+        delete from tb_project where id in
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+</mapper>

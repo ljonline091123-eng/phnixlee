@@ -1,0 +1,319 @@
+package com.zhaocai.business.procurement.domain;
+
+import com.baomidou.mybatisplus.annotation.TableField;
+import com.baomidou.mybatisplus.annotation.TableName;
+import com.zhaocai.business.common.annotations.MoneyFormat;
+import com.zhaocai.common.core.web.domain.BaseEntity;
+import io.swagger.annotations.ApiModelProperty;
+import lombok.Getter;
+import lombok.Setter;
+
+import javax.validation.constraints.NotBlank;
+import javax.validation.constraints.NotNull;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+
+/**
+ * 采购物料清单对象 tb_materials_list
+ *
+ * @author WH
+ * @date 2024-05-24
+ */
+@Getter
+@Setter
+@TableName(value = "tb_materials_list")
+public class MaterialsList extends BaseEntity {
+    private static final long serialVersionUID = 1L;
+
+    /**
+     * 采购计划id
+     */
+    @ApiModelProperty(value = "采购计划id")
+    private Long planId;
+
+    /**
+     * 合约采购拆分id
+     */
+    @ApiModelProperty(value = "合约采购拆分id")
+    private Long contractSplitId;
+
+    /**
+     * 物料 id {@link com.zhaocai.business.manager.http.service.ContractPlanService#getContractMaterialsList}
+     */
+    // @NotBlank(message = "采购清单的物料 id不能为空")
+    @ApiModelProperty(value = "物料 id")
+    private String materialsId;
+
+    /**
+     * 物料清单唯一 id
+     */
+    @ApiModelProperty(value = "物料清单唯一 id")
+    private String materialsUniqueId;
+
+    /**
+     * 物料清单编码
+     */
+    // @NotBlank(message = "采购清单的物料清单编码不能为空")
+    @ApiModelProperty(value = "物料清单编码")
+    private String materialsCode;
+
+    /**
+     * 物料清单名称
+     */
+    // @NotBlank(message = "采购清单的物料清单名称不能为空")
+    @ApiModelProperty(value = "物料清单名称")
+    private String materialsName;
+
+    /**
+     * 物料清单名称（导入） = 商务策划:成本子目名称(导入)
+     */
+    @ApiModelProperty(value = "物料清单名称（导入）")
+    private String materialsNameImport;
+
+    /**
+     * 交易标的物编码
+     */
+//    // @NotBlank(message = "交易标的物编码不能为空")
+    @ApiModelProperty(value = "交易标的物编码")
+    private String subjectMatterCode;
+
+    /**
+     * 交易标的物名称
+     */
+//    // @NotBlank(message = "交易标的物名称不能为空")
+    @ApiModelProperty(value = "交易标的物名称")
+    private String subjectMatterName;
+
+    /**
+     * 交易标的物标识
+     */
+//    // @NotBlank(message = "交易标的物标识不能为空")
+    @ApiModelProperty(value = "交易标的物标识")
+    private String subjectMatterFlag;
+
+    /**
+     * 规格型号
+     */
+    @ApiModelProperty(value = "规格型号")
+    private String specification;
+
+    /**
+     * 计量规则
+     */
+    @ApiModelProperty(value = "计量规则")
+    private String measurementRules;
+
+    /**
+     * 计量单位
+     */
+    @ApiModelProperty(value = "计量单位")
+    private String unitMeasurement;
+
+    /**
+     * 基本工作内容
+     */
+    @ApiModelProperty(value = "基本工作内容")
+    private String workContent;
+
+    /**
+     * 成本科目档案 id
+     */
+    @ApiModelProperty(value = "成本科目档案 id")
+    private String costAccountId;
+
+    /**
+     * 成本科目编码
+     */
+    // @NotBlank(message = "采购清单的成本科目编码不能为空")
+    @ApiModelProperty(value = "成本科目编码")
+    private String costAccountCode;
+
+    /**
+     * 成本科目名称
+     */
+    // @NotBlank(message = "采购清单的成本科目名称不能为空")
+    @ApiModelProperty(value = "成本科目名称")
+    private String costAccountName;
+
+    /**
+     * 数量
+     */
+    @ApiModelProperty(value = "数量")
+    private BigDecimal count;
+
+    /**
+     * 已使用数量
+     */
+    @ApiModelProperty(value = "已使用数量")
+    private BigDecimal usedCount;
+
+    /**
+     * 税率
+     */
+    // @NotNull(message = "采购清单的税率不能为空")
+    @ApiModelProperty(value = "税率")
+    private BigDecimal taxRate;
+
+    /**
+     * 增值税税率 财务用的标志VATR2。。
+     */
+    @ApiModelProperty(value = "税率编码")
+    private String taxRateCode;
+
+    /**
+     * 增值税税率名称
+     */
+    @ApiModelProperty(value = "税率名称")
+    private String taxRateName;
+
+    /**
+     * 单价(不含税)
+     */
+    // @NotNull(message = "采购清单的单价(不含税)不能为空")
+    @ApiModelProperty(value = "单价(不含税)")
+    private BigDecimal unitPriceExclTax;
+
+    /**
+     * 单价(含税)
+     */
+    // @NotNull(message = "采购清单的单价(含税) 不能为空")
+    @ApiModelProperty(value = "单价(含税) ")
+    private BigDecimal unitPriceInclTax;
+
+    /**
+     * 金额(不含税)
+     */
+    // @NotNull(message = "采购清单的金额(不含税)不能为空")
+    @ApiModelProperty(value = "金额(不含税)")
+    private BigDecimal amountExclTax;
+
+    /**
+     * 金额(含税)
+     */
+    // @NotNull(message = "采购清单的金额(含税)不能为空")
+    @ApiModelProperty(value = "金额(含税)")
+    private BigDecimal amountInclTax;
+
+    /**
+     * 税额
+     */
+    // @NotNull(message = "采购清单的税额不能为空")
+    @ApiModelProperty(value = "税额")
+    private BigDecimal taxAmount;
+
+    /**
+     * 浮动价
+     */
+    @ApiModelProperty(value = "浮动价")
+    private BigDecimal floatingPrice;
+
+    /**
+     * 卸费
+     */
+    @ApiModelProperty(value = "卸费")
+    private BigDecimal unloadingFee;
+
+    /**
+     * 基价
+     */
+    @ApiModelProperty(value = "基价")
+    private BigDecimal basePrice;
+
+    /**
+     * 租赁方式
+     */
+    @ApiModelProperty(value = "租赁方式")
+    private String rentMode;
+
+    /**
+     * 租赁时间
+     */
+    @ApiModelProperty(value = "租赁时间")
+    private BigDecimal rentTime;
+
+    /**
+     * 租赁数量
+     */
+    @ApiModelProperty(value = "租赁数量")
+    private BigDecimal rentQuantity;
+
+    /**
+     * 价格类型 {@link com.zhaocai.business.common.enums.PriceTypeEnum} 注意：清单列表数据的只有三种(固定价、浮动价、浮动率)
+     */
+    // @NotNull(message = "采购清单的价格类型不能为空")
+    @ApiModelProperty(value = "价格类型")
+    private Integer priceType;
+
+    /**
+     * 商品编号
+     */
+    @ApiModelProperty(value = "商品编号")
+    private String code;
+
+    /**
+     * 商品名称
+     */
+    @ApiModelProperty(value = "商品名称")
+    private String name;
+
+    /**
+     * 商品规格
+     */
+    @ApiModelProperty(value = "商品规格")
+    private String category;
+
+    /**
+     * 商品单位
+     */
+    @ApiModelProperty(value = "商品单位")
+    private String unitName;
+
+    /**
+     * 商品数量
+     */
+    @ApiModelProperty(value = "商品数量")
+    private BigDecimal quantity;
+
+    @ApiModelProperty(value = "易料市集含税单价")
+    private BigDecimal offerPrice;
+
+    @ApiModelProperty(value = "易料市集品牌")
+    private String offerBrand;
+
+    /**
+     * 是否推送 Y:推送 N:未推送
+     */
+    @ApiModelProperty(value = "是否推送")
+    private String pushFlag;
+
+    @ApiModelProperty(value = "易料市集商品id")
+    private String skuId;
+
+    @ApiModelProperty(value = "备注")
+    private String remark;
+
+    /**
+     * 是否选择推送易料
+     */
+    @ApiModelProperty(hidden = true)
+    @TableField(exist = false)
+    private String isSelect;
+
+    @ApiModelProperty(value = "总价(含税)")
+    private BigDecimal totalPrice;
+
+    @ApiModelProperty(value = "浮动率")
+    private BigDecimal floatingRate;
+
+    public BigDecimal getTotalPrice() {
+        if (count == null || unitPriceInclTax == null) {
+            /* 如果count或unitPriceInclTax为空，返回null */
+            return null;
+        }
+        BigDecimal total = count.multiply(unitPriceInclTax);
+        /* 保留两位小数，不进行四舍五入，直接截取 */
+        total = total.setScale(2, RoundingMode.DOWN);
+        return total;
+    }
+
+}

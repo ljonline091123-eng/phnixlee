@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhaocai.business.vendor.mapper.TbVendorEvaluateMapper">
+
+    <resultMap type="com.zhaocai.business.vendor.domain.TbVendorEvaluate" id="TbVendorEvaluateResult">
+        <result property="id"    column="id"    />
+        <result property="evaluateCode"    column="evaluate_code"    />
+        <result property="vendorId"    column="vendor_id"    />
+        <result property="vendorName"    column="vendor_name"    />
+        <result property="evaluateType"    column="evaluate_type"    />
+        <result property="evaluateTime"    column="evaluate_time"    />
+        <result property="evaluateFraction"    column="evaluate_fraction"    />
+        <result property="createBy"    column="create_by"    />
+        <result property="createId"    column="create_id"    />
+        <result property="createTime"    column="create_time"    />
+        <result property="updateBy"    column="update_by"    />
+        <result property="updateId"    column="update_id"    />
+        <result property="updateTime"    column="update_time"    />
+        <result property="delFlag"    column="del_flag"    />
+        <result property="evaluateStatus"    column="evaluate_status"    />
+        <result property="isQualified"    column="is_qualified"    />
+        <result property="evaluateTimeTxt"    column="evaluate_time_txt"    />
+        <result property="appealId"    column="appeal_id"    />
+        <result property="appealStatus"    column="appeal_status"    />
+        <result property="appealDescribe"    column="appeal_describe"    />
+        <result property="appealBy"    column="appeal_by"    />
+        <result property="appealById"    column="appeal_by_id"    />
+        <result property="appealTime"    column="appeal_time"    />
+    </resultMap>
+
+    <sql id="selectTbVendorEvaluateVo">
+        select
+         d.id,
+         d.evaluate_code,
+         d.vendor_id,
+         d.vendor_name,
+         d.evaluate_type,
+         d.evaluate_time,
+         d.evaluate_fraction,
+         d.create_by,
+         d.create_id,
+         d.create_time,
+         d.update_by,
+         d.update_id,
+         d.update_time,
+         d.del_flag,
+         d.evaluate_status,
+         d.is_qualified,
+         d.evaluate_time_txt,
+         d.appeal_id,
+         d.appeal_status,
+         d.appeal_describe,
+         d.appeal_by,
+         d.appeal_by_id,
+         d.appeal_time from tb_vendor_evaluate d
+    </sql>
+
+    <select id="listPage" resultMap="TbVendorEvaluateResult">
+        <include refid="selectTbVendorEvaluateVo"/>
+        <where>
+            d.del_flag = 0
+            <if test="queryVO.evaluateCode != null  and queryVO.evaluateCode != ''"> and d.evaluate_code like concat('%', #{queryVO.evaluateCode}, '%') </if>
+            <if test="queryVO.vendorId != null "> and d.vendor_id = #{queryVO.vendorId}</if>
+            <if test="queryVO.vendorName != null  and queryVO.vendorName != ''"> and d.vendor_name like concat('%', #{queryVO.vendorName}, '%')</if>
+            <if test="queryVO.evaluateType != null  and queryVO.evaluateType != ''"> and d.evaluate_type = #{queryVO.evaluateType}</if>
+            <if test="queryVO.evaluateTime != null and queryVO.evaluateTime != ''"> and d.evaluate_time = #{queryVO.evaluateTime}</if>
+            <if test="queryVO.evaluateFraction != null "> and d.evaluate_fraction = #{queryVO.evaluateFraction}</if>
+            <if test="queryVO.createId != null "> and d.create_id = #{queryVO.createId}</if>
+            <if test="queryVO.updateId != null "> and d.update_id = #{queryVO.updateId}</if>
+            <if test="queryVO.evaluateStatus != null  and queryVO.evaluateStatus != ''"> and d.evaluate_status = #{queryVO.evaluateStatus}</if>
+            <if test="queryVO.isQualified != null  and queryVO.isQualified != ''"> and d.is_qualified = #{queryVO.isQualified}</if>
+            <if test="queryVO.evaluateTimeTxt != null  and queryVO.evaluateTimeTxt != ''"> and d.evaluate_time_txt = #{queryVO.evaluateTimeTxt}</if>
+            <if test="queryVO.updateBy != null  and queryVO.updateBy != ''"> and d.update_by like concat('%', #{queryVO.updateBy}, '%') </if>
+            <if test="queryVO.updateTime != null and queryVO.updateTime != '' "> and DATE_FORMAT(d.update_time, '%Y-%m-%d')  = #{queryVO.updateTime}</if>
+            <if test="queryVO.appealStatus != null  and queryVO.appealStatus != ''"> and d.appeal_status = #{queryVO.appealStatus}</if>
+            <if test="queryVO.appealById != null "> and d.appeal_by_id = #{queryVO.appealById}</if>
+        </where>
+        order by create_time desc
+    </select>
+
+    <select id="getList" resultMap="TbVendorEvaluateResult">
+        <include refid="selectTbVendorEvaluateVo"/>
+        <where>
+            d.del_flag = 0
+            <if test="queryVO.evaluateCode != null  and queryVO.evaluateCode != ''"> and d.evaluate_code like concat('%', #{queryVO.evaluateCode}, '%') </if>
+            <if test="queryVO.vendorId != null "> and d.vendor_id = #{queryVO.vendorId}</if>
+            <if test="queryVO.vendorName != null  and queryVO.vendorName != ''"> and d.vendor_name like concat('%', #{queryVO.vendorName}, '%')</if>
+            <if test="queryVO.evaluateType != null  and queryVO.evaluateType != ''"> and d.evaluate_type = #{queryVO.evaluateType}</if>
+            <if test="queryVO.evaluateTime != null and queryVO.evaluateTime != ''"> and d.evaluate_time = #{queryVO.evaluateTime}</if>
+            <if test="queryVO.evaluateFraction != null "> and d.evaluate_fraction = #{queryVO.evaluateFraction}</if>
+            <if test="queryVO.createId != null "> and d.create_id = #{queryVO.createId}</if>
+            <if test="queryVO.updateId != null "> and d.update_id = #{queryVO.updateId}</if>
+            <if test="queryVO.evaluateStatus != null  and queryVO.evaluateStatus != ''"> and d.evaluate_status = #{queryVO.evaluateStatus}</if>
+            <if test="queryVO.isQualified != null  and queryVO.isQualified != ''"> and d.is_qualified = #{queryVO.isQualified}</if>
+            <if test="queryVO.evaluateTimeTxt != null  and queryVO.evaluateTimeTxt != ''"> and d.evaluate_time_txt = #{queryVO.evaluateTimeTxt}</if>
+            <if test="queryVO.updateBy != null  and queryVO.updateBy != ''"> and d.update_by like concat('%', #{queryVO.updateBy}, '%') </if>
+            <if test="queryVO.updateTime != null and queryVO.updateTime != '' "> and DATE_FORMAT(d.update_time, '%Y-%m-%d')  = #{queryVO.updateTime}</if>
+            <if test="queryVO.appealStatus != null  and queryVO.appealStatus != ''"> and d.appeal_status = #{queryVO.appealStatus}</if>
+            <if test="queryVO.appealById != null "> and d.appeal_by_id = #{queryVO.appealById}</if>
+        </where>
+        order by create_time desc
+    </select>
+    <select id="getIsAppeal" resultType="java.lang.Long">
+        SELECT count(1) FROM tb_vendor_evaluate WHERE evaluate_status = '1'
+        AND evaluate_fraction &lt; 60 and vendor_id = #{id}
+    </select>
+
+</mapper>

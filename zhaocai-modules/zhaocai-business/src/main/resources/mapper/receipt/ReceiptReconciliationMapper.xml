@@ -1,0 +1,275 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhaocai.business.receipt.mapper.ReceiptReconciliationMapper">
+    
+    <resultMap type="com.zhaocai.business.receipt.domain.ReceiptReconciliation" id="ReceiptReconciliationResult">
+        <result property="id"    column="id"    />
+        <result property="thirdId"    column="third_id"    />
+        <result property="orderStatus"    column="order_status"    />
+        <result property="orgId"    column="org_id"    />
+        <result property="orgName"    column="org_name"    />
+        <result property="planBReconcilerName"    column="plan_b_reconciler_name"    />
+        <result property="procStatus"    column="proc_status"    />
+        <result property="projectCode"    column="project_code"    />
+        <result property="projectId"    column="project_id"    />
+        <result property="projectName"    column="project_name"    />
+        <result property="reconciliationCode"    column="reconciliation_code"    />
+        <result property="reconciliationDate"    column="reconciliation_date"    />
+        <result property="reconciliationEndDate"    column="reconciliation_end_date"    />
+        <result property="reconciliationStartDate"    column="reconciliation_start_date"    />
+        <result property="supplierId"    column="supplier_id"    />
+        <result property="supplierName"    column="supplier_name"    />
+        <result property="attachBusinessId"    column="attach_business_id"    />
+        <result property="conCode"    column="con_code"    />
+        <result property="conId"    column="con_id"    />
+        <result property="conName"    column="con_name"    />
+        <result property="thirdCreateBy"    column="third_create_by"    />
+        <result property="thirdCreateTime"    column="third_create_time"    />
+        <result property="createBy"    column="create_by"    />
+        <result property="createId"    column="create_id"    />
+        <result property="createTime"    column="create_time"    />
+        <result property="updateBy"    column="update_by"    />
+        <result property="updateId"    column="update_id"    />
+        <result property="updateTime"    column="update_time"    />
+        <result property="delFlag"    column="del_flag"    />
+    </resultMap>
+
+    <select id="page" resultType="com.zhaocai.business.receipt.vo.res.ReceiptReconciliationListVO">
+        select rr.id, rr.third_id, rr.reconciliation_code, rr.org_name,third_create_time, rr.reconciliation_date, rr.reconciliation_start_date, rr.reconciliation_end_date, rr.supplier_status
+        from tb_receipt_reconciliation rr
+        <where>
+            rr.del_flag = 0
+            <if test="queryVO.supplierName != null and queryVO.supplierName != ''">
+                and rr.supplier_name like CONCAT('%', #{queryVO.supplierName}, '%')
+            </if>
+            <if test="queryVO.reconciliationCode != null and queryVO.reconciliationCode != ''">
+                and rr.reconciliation_code like CONCAT('%', #{queryVO.reconciliationCode}, '%')
+            </if>
+            <if test="queryVO.vendorId != null and queryVO.vendorId != ''">
+                and rr.supplier_id = #{queryVO.vendorId}
+            </if>
+        </where>
+        order by third_create_time desc
+    </select>
+
+    <select id="getDetail" resultType="com.zhaocai.business.receipt.vo.res.ReceiptReconciliationDetailPageVO">
+        select rr.id, rr.reconciliation_code, con_name, rr.reconciliation_date, rr.reconciliation_start_date, rr.reconciliation_end_date
+        from tb_receipt_reconciliation rr
+        where rr.id = #{id}
+    </select>
+
+    <sql id="selectReceiptReconciliationVo">
+        select id, third_id, order_status, org_id, org_name, plan_b_reconciler_name, proc_status, project_code, project_id, project_name, reconciliation_code, reconciliation_date, reconciliation_end_date, reconciliation_start_date, supplier_id, supplier_name, attach_business_id, con_code, con_id, con_name, third_create_by, third_create_time, create_by, create_id, create_time, update_by, update_id, update_time, del_flag from tb_receipt_reconciliation
+    </sql>
+
+    <select id="selectReceiptReconciliationList" parameterType="com.zhaocai.business.receipt.domain.ReceiptReconciliation" resultMap="ReceiptReconciliationResult">
+        <include refid="selectReceiptReconciliationVo"/>
+        <where>  
+            <if test="thirdId != null  and thirdId != ''"> and third_id = #{thirdId}</if>
+            <if test="orderStatus != null  and orderStatus != ''"> and order_status = #{orderStatus}</if>
+            <if test="orgId != null "> and org_id = #{orgId}</if>
+            <if test="orgName != null  and orgName != ''"> and org_name like concat('%', #{orgName}, '%')</if>
+            <if test="planBReconcilerName != null  and planBReconcilerName != ''"> and plan_b_reconciler_name like concat('%', #{planBReconcilerName}, '%')</if>
+            <if test="procStatus != null  and procStatus != ''"> and proc_status = #{procStatus}</if>
+            <if test="projectCode != null  and projectCode != ''"> and project_code = #{projectCode}</if>
+            <if test="projectId != null  and projectId != ''"> and project_id = #{projectId}</if>
+            <if test="projectName != null  and projectName != ''"> and project_name like concat('%', #{projectName}, '%')</if>
+            <if test="reconciliationCode != null  and reconciliationCode != ''"> and reconciliation_code = #{reconciliationCode}</if>
+            <if test="reconciliationDate != null  and reconciliationDate != ''"> and reconciliation_date = #{reconciliationDate}</if>
+            <if test="reconciliationEndDate != null  and reconciliationEndDate != ''"> and reconciliation_end_date = #{reconciliationEndDate}</if>
+            <if test="reconciliationStartDate != null  and reconciliationStartDate != ''"> and reconciliation_start_date = #{reconciliationStartDate}</if>
+            <if test="supplierId != null  and supplierId != ''"> and supplier_id = #{supplierId}</if>
+            <if test="supplierName != null  and supplierName != ''"> and supplier_name like concat('%', #{supplierName}, '%')</if>
+            <if test="attachBusinessId != null  and attachBusinessId != ''"> and attach_business_id = #{attachBusinessId}</if>
+            <if test="conCode != null  and conCode != ''"> and con_code = #{conCode}</if>
+            <if test="conId != null  and conId != ''"> and con_id = #{conId}</if>
+            <if test="conName != null  and conName != ''"> and con_name like concat('%', #{conName}, '%')</if>
+            <if test="thirdCreateBy != null  and thirdCreateBy != ''"> and third_create_by = #{thirdCreateBy}</if>
+            <if test="thirdCreateTime != null  and thirdCreateTime != ''"> and third_create_time = #{thirdCreateTime}</if>
+            <if test="createId != null "> and create_id = #{createId}</if>
+            <if test="updateId != null "> and update_id = #{updateId}</if>
+        </where>
+    </select>
+    
+    <select id="selectReceiptReconciliationById" parameterType="Long" resultMap="ReceiptReconciliationResult">
+        <include refid="selectReceiptReconciliationVo"/>
+        where id = #{id}
+    </select>
+
+    <insert id="insertReconciliation" parameterType="com.zhaocai.business.receipt.domain.ReceiptReconciliation" keyProperty="id" useGeneratedKeys="true">
+        insert into tb_receipt_resonciliation
+        (
+         third_id,
+         order_status,
+         org_id,
+         org_name,
+         plan_b_reconciler_name,
+         proc_status,
+         project_code,
+         project_id,
+         project_name,
+         reconciliation_code,
+         reconciliation_date,
+         reconciliation_end_date,
+         reconciliation_start_date,
+         supplier_id,
+         supplier_name,
+         attach_business_id,
+         con_code,
+         con_id,
+         con_name,
+         third_create_by,
+         third_create_time,
+         create_by,
+         create_id,
+         create_time,
+         update_by,
+         update_id,
+         update_time,
+         del_flag
+        )
+        values
+            (
+                #{thirdId},
+                #{orderStatus},
+                #{orgId},
+                #{orgName},
+                #{planBReconcilerName},
+                #{procStatus},
+                #{projectCode},
+                #{projectId},
+                #{projectName},
+                #{reconciliationCode},
+                #{reconciliationDate},
+                #{reconciliationEndDate},
+                #{reconciliationStartDate},
+                #{supplierId},
+                #{supplierName},
+                #{attachBusinessId},
+                #{conCode},
+                #{conId},
+                #{conName},
+                #{thirdCreateBy},
+                #{thirdCreateTime},
+                #{createBy},
+                #{createId},
+                #{createTime},
+                #{updateBy},
+                #{updateId},
+                #{updateTime},
+                #{delFlag}
+            )
+    </insert>
+        
+    <insert id="insertReceiptReconciliation" parameterType="com.zhaocai.business.receipt.domain.ReceiptReconciliation" useGeneratedKeys="true" keyProperty="id">
+        insert into tb_receipt_reconciliation
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="thirdId != null">third_id,</if>
+            <if test="orderStatus != null">order_status,</if>
+            <if test="orgId != null">org_id,</if>
+            <if test="orgName != null">org_name,</if>
+            <if test="planBReconcilerName != null">plan_b_reconciler_name,</if>
+            <if test="procStatus != null">proc_status,</if>
+            <if test="projectCode != null">project_code,</if>
+            <if test="projectId != null">project_id,</if>
+            <if test="projectName != null">project_name,</if>
+            <if test="reconciliationCode != null">reconciliation_code,</if>
+            <if test="reconciliationDate != null">reconciliation_date,</if>
+            <if test="reconciliationEndDate != null">reconciliation_end_date,</if>
+            <if test="reconciliationStartDate != null">reconciliation_start_date,</if>
+            <if test="supplierId != null">supplier_id,</if>
+            <if test="supplierName != null">supplier_name,</if>
+            <if test="attachBusinessId != null">attach_business_id,</if>
+            <if test="conCode != null">con_code,</if>
+            <if test="conId != null">con_id,</if>
+            <if test="conName != null">con_name,</if>
+            <if test="thirdCreateBy != null">third_create_by,</if>
+            <if test="thirdCreateTime != null">third_create_time,</if>
+            <if test="createBy != null">create_by,</if>
+            <if test="createId != null">create_id,</if>
+            <if test="createTime != null">create_time,</if>
+            <if test="updateBy != null">update_by,</if>
+            <if test="updateId != null">update_id,</if>
+            <if test="updateTime != null">update_time,</if>
+            <if test="delFlag != null">del_flag,</if>
+         </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="thirdId != null">#{thirdId},</if>
+            <if test="orderStatus != null">#{orderStatus},</if>
+            <if test="orgId != null">#{orgId},</if>
+            <if test="orgName != null">#{orgName},</if>
+            <if test="planBReconcilerName != null">#{planBReconcilerName},</if>
+            <if test="procStatus != null">#{procStatus},</if>
+            <if test="projectCode != null">#{projectCode},</if>
+            <if test="projectId != null">#{projectId},</if>
+            <if test="projectName != null">#{projectName},</if>
+            <if test="reconciliationCode != null">#{reconciliationCode},</if>
+            <if test="reconciliationDate != null">#{reconciliationDate},</if>
+            <if test="reconciliationEndDate != null">#{reconciliationEndDate},</if>
+            <if test="reconciliationStartDate != null">#{reconciliationStartDate},</if>
+            <if test="supplierId != null">#{supplierId},</if>
+            <if test="supplierName != null">#{supplierName},</if>
+            <if test="attachBusinessId != null">#{attachBusinessId},</if>
+            <if test="conCode != null">#{conCode},</if>
+            <if test="conId != null">#{conId},</if>
+            <if test="conName != null">#{conName},</if>
+            <if test="thirdCreateBy != null">#{thirdCreateBy},</if>
+            <if test="thirdCreateTime != null">#{thirdCreateTime},</if>
+            <if test="createBy != null">#{createBy},</if>
+            <if test="createId != null">#{createId},</if>
+            <if test="createTime != null">#{createTime},</if>
+            <if test="updateBy != null">#{updateBy},</if>
+            <if test="updateId != null">#{updateId},</if>
+            <if test="updateTime != null">#{updateTime},</if>
+            <if test="delFlag != null">#{delFlag},</if>
+         </trim>
+    </insert>
+
+    <update id="updateReceiptReconciliation" parameterType="com.zhaocai.business.receipt.domain.ReceiptReconciliation">
+        update tb_receipt_reconciliation
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="thirdId != null">third_id = #{thirdId},</if>
+            <if test="orderStatus != null">order_status = #{orderStatus},</if>
+            <if test="orgId != null">org_id = #{orgId},</if>
+            <if test="orgName != null">org_name = #{orgName},</if>
+            <if test="planBReconcilerName != null">plan_b_reconciler_name = #{planBReconcilerName},</if>
+            <if test="procStatus != null">proc_status = #{procStatus},</if>
+            <if test="projectCode != null">project_code = #{projectCode},</if>
+            <if test="projectId != null">project_id = #{projectId},</if>
+            <if test="projectName != null">project_name = #{projectName},</if>
+            <if test="reconciliationCode != null">reconciliation_code = #{reconciliationCode},</if>
+            <if test="reconciliationDate != null">reconciliation_date = #{reconciliationDate},</if>
+            <if test="reconciliationEndDate != null">reconciliation_end_date = #{reconciliationEndDate},</if>
+            <if test="reconciliationStartDate != null">reconciliation_start_date = #{reconciliationStartDate},</if>
+            <if test="supplierId != null">supplier_id = #{supplierId},</if>
+            <if test="supplierName != null">supplier_name = #{supplierName},</if>
+            <if test="attachBusinessId != null">attach_business_id = #{attachBusinessId},</if>
+            <if test="conCode != null">con_code = #{conCode},</if>
+            <if test="conId != null">con_id = #{conId},</if>
+            <if test="conName != null">con_name = #{conName},</if>
+            <if test="thirdCreateBy != null">third_create_by = #{thirdCreateBy},</if>
+            <if test="thirdCreateTime != null">third_create_time = #{thirdCreateTime},</if>
+            <if test="createBy != null">create_by = #{createBy},</if>
+            <if test="createId != null">create_id = #{createId},</if>
+            <if test="createTime != null">create_time = #{createTime},</if>
+            <if test="updateBy != null">update_by = #{updateBy},</if>
+            <if test="updateId != null">update_id = #{updateId},</if>
+            <if test="updateTime != null">update_time = #{updateTime},</if>
+            <if test="delFlag != null">del_flag = #{delFlag},</if>
+        </trim>
+        where id = #{id}
+    </update>
+
+    <delete id="deleteReceiptReconciliationById" parameterType="Long">
+        delete from tb_receipt_reconciliation where id = #{id}
+    </delete>
+
+    <delete id="deleteReceiptReconciliationByIds" parameterType="String">
+        delete from tb_receipt_reconciliation where id in 
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+</mapper>

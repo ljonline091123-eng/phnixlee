@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhaocai.business.bidding.mapper.BiddingAbandonRecordMapper">
+    
+    <resultMap type="com.zhaocai.business.bidding.domain.BiddingAbandonRecord" id="BiddingAbandonRecordResult">
+        <result property="id"    column="id"    />
+        <result property="projectId"    column="project_id"    />
+        <result property="projectName"    column="project_name"    />
+        <result property="reason"    column="reason"    />
+        <result property="attachId"    column="attach_id"    />
+        <result property="schemeId"    column="scheme_id"    />
+        <result property="noticeId"    column="notice_id"    />
+        <result property="biddingInfoIds"    column="bidding_info_ids"    />
+        <result property="createBy"    column="create_by"    />
+        <result property="createId"    column="create_id"    />
+        <result property="createTime"    column="create_time"    />
+        <result property="updateBy"    column="update_by"    />
+        <result property="updateId"    column="update_id"    />
+        <result property="updateTime"    column="update_time"    />
+        <result property="delFlag"    column="del_flag"    />
+    </resultMap>
+
+    <sql id="selectBiddingAbandonRecordVo">
+        select id, project_id, project_name, reason, attach_id, scheme_id, notice_id, bidding_info_ids, create_by, create_id, create_time, update_by, update_id, update_time, del_flag from tb_bidding_abandon_record
+    </sql>
+
+    <select id="selectBiddingAbandonRecordList" parameterType="com.zhaocai.business.bidding.domain.BiddingAbandonRecord" resultMap="BiddingAbandonRecordResult">
+        <include refid="selectBiddingAbandonRecordVo"/>
+        <where>  
+            <if test="projectId != null "> and project_id = #{projectId}</if>
+            <if test="projectName != null  and projectName != ''"> and project_name like concat('%', #{projectName}, '%')</if>
+            <if test="reason != null  and reason != ''"> and reason = #{reason}</if>
+            <if test="attachId != null "> and attach_id = #{attachId}</if>
+            <if test="createId != null "> and create_id = #{createId}</if>
+            <if test="updateId != null "> and update_id = #{updateId}</if>
+            <if test="delFlag != null "> and del_flag = #{delFlag}</if>
+        </where>
+    </select>
+    
+    <select id="selectBiddingAbandonRecordById" parameterType="Long" resultMap="BiddingAbandonRecordResult">
+        <include refid="selectBiddingAbandonRecordVo"/>
+        where id = #{id}
+    </select>
+        
+    <insert id="insertBiddingAbandonRecord" parameterType="com.zhaocai.business.bidding.domain.BiddingAbandonRecord">
+        insert into tb_bidding_abandon_record
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="id != null">id,</if>
+            <if test="projectId != null">project_id,</if>
+            <if test="projectName != null">project_name,</if>
+            <if test="reason != null">reason,</if>
+            <if test="attachId != null">attach_id,</if>
+            <if test="createBy != null">create_by,</if>
+            <if test="createId != null">create_id,</if>
+            <if test="createTime != null">create_time,</if>
+            <if test="updateBy != null">update_by,</if>
+            <if test="updateId != null">update_id,</if>
+            <if test="updateTime != null">update_time,</if>
+            <if test="delFlag != null">del_flag,</if>
+         </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="id != null">#{id},</if>
+            <if test="projectId != null">#{projectId},</if>
+            <if test="projectName != null">#{projectName},</if>
+            <if test="reason != null">#{reason},</if>
+            <if test="attachId != null">#{attachId},</if>
+            <if test="createBy != null">#{createBy},</if>
+            <if test="createId != null">#{createId},</if>
+            <if test="createTime != null">#{createTime},</if>
+            <if test="updateBy != null">#{updateBy},</if>
+            <if test="updateId != null">#{updateId},</if>
+            <if test="updateTime != null">#{updateTime},</if>
+            <if test="delFlag != null">#{delFlag},</if>
+         </trim>
+    </insert>
+
+    <update id="updateBiddingAbandonRecord" parameterType="com.zhaocai.business.bidding.domain.BiddingAbandonRecord">
+        update tb_bidding_abandon_record
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="projectId != null">project_id = #{projectId},</if>
+            <if test="projectName != null">project_name = #{projectName},</if>
+            <if test="reason != null">reason = #{reason},</if>
+            <if test="attachId != null">attach_id = #{attachId},</if>
+            <if test="createBy != null">create_by = #{createBy},</if>
+            <if test="createId != null">create_id = #{createId},</if>
+            <if test="createTime != null">create_time = #{createTime},</if>
+            <if test="updateBy != null">update_by = #{updateBy},</if>
+            <if test="updateId != null">update_id = #{updateId},</if>
+            <if test="updateTime != null">update_time = #{updateTime},</if>
+            <if test="delFlag != null">del_flag = #{delFlag},</if>
+        </trim>
+        where id = #{id}
+    </update>
+
+    <delete id="deleteBiddingAbandonRecordById" parameterType="Long">
+        delete from tb_bidding_abandon_record where id = #{id}
+    </delete>
+
+    <delete id="deleteBiddingAbandonRecordByIds" parameterType="String">
+        delete from tb_bidding_abandon_record where id in 
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+</mapper>

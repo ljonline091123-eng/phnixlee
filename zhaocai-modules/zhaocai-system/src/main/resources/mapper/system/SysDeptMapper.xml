@@ -1,0 +1,359 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhaocai.system.mapper.SysDeptMapper">
+
+    <resultMap type="SysDept" id="SysDeptResult">
+        <id property="deptId" column="dept_id"/>
+        <result property="parentId" column="parent_id"/>
+        <result property="ancestors" column="ancestors"/>
+        <result property="deptName" column="dept_name"/>
+        <result property="simpleName" column="simple_name"/>
+        <result property="interialId" column="interial_id"/>
+        <result property="orderNum" column="order_num"/>
+        <result property="leader" column="leader"/>
+        <result property="phone" column="phone"/>
+        <result property="email" column="email"/>
+        <result property="status" column="status"/>
+        <result property="origin" column="origin"/>
+        <result property="delFlag" column="del_flag"/>
+        <result property="createBy" column="create_by"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateBy" column="update_by"/>
+        <result property="updateTime" column="update_time"/>
+        <result property="thridDeptId" column="thrid_Dept_Id"/>
+        <result property="thridParentId" column="thrid_Parent_Id"/>
+        <result property="thridOrgType" column="thrid_Org_Type"/>
+        <result property="thridOrgLevel" column="thrid_org_level"/>
+        <result property="ztDeptId" column="zt_dept_id"/>
+
+    </resultMap>
+
+    <sql id="selectDeptVo">
+        select d.dept_id,
+               d.zt_dept_id,
+               d.parent_id,
+               d.ancestors,
+               d.dept_name,
+               d.simple_name,
+               d.interial_id,
+               d.order_num,
+               d.leader,
+               d.phone,
+               d.email,
+               d.status,
+               d.del_flag,
+               d.create_by,
+               d.create_time,
+               d.origin,
+               d.thrid_Dept_Id,
+               d.thrid_Parent_Id,
+               d.thrid_Org_Type,
+               d.thrid_org_level
+        from sys_dept d
+    </sql>
+
+    <select id="selectDeptList" parameterType="SysDept" resultMap="SysDeptResult">
+        <include refid="selectDeptVo"/>
+        where d.del_flag = '0'
+        <if test="deptId != null and deptId != 0">
+            AND dept_id = #{deptId}
+        </if>
+        <if test="parentId != null">
+            AND parent_id = #{parentId}
+        </if>
+        <if test="deptName != null and deptName != ''">
+            AND dept_name like concat('%', #{deptName}, '%')
+        </if>
+        <if test="status != null and status != ''">
+            AND status = #{status}
+        </if>
+        <if test="onlyQueryOrg != null and onlyQueryOrg == 1">
+            AND (thrid_org_type is not null and thrid_org_type != '' and thrid_org_type != 'BM')
+        </if>
+        <if test="thridOrgLevel != null and thridOrgLevel != ''">
+            AND thrid_org_level = #{thridOrgLevel}
+        </if>
+        <!-- 数据范围过滤 -->
+        ${params.dataScope}
+        order by d.parent_id, d.order_num
+    </select>
+
+    <select id="selectAllDeptList" parameterType="SysDept" resultMap="SysDeptResult">
+        <include refid="selectDeptVo"/>
+        where d.del_flag = '0'
+        <if test="deptId != null and deptId != 0">
+            AND dept_id = #{deptId}
+        </if>
+        <if test="parentId != null">
+            AND parent_id = #{parentId}
+        </if>
+        <if test="deptName != null and deptName != ''">
+            AND dept_name like concat('%', #{deptName}, '%')
+        </if>
+        <if test="status != null and status != ''">
+            AND status = #{status}
+        </if>
+        <if test="onlyQueryOrg != null and onlyQueryOrg == 1">
+            AND (thrid_org_type is not null and thrid_org_type != '' and thrid_org_type != 'BM')
+        </if>
+        <if test="thridOrgLevel != null and thridOrgLevel != ''">
+            AND thrid_org_level = #{thridOrgLevel}
+        </if>
+        order by d.parent_id, d.order_num
+    </select>
+
+    <select id="selectDeptListByRoleId" resultType="Long">
+        select d.dept_id
+        from sys_dept d
+        left join sys_role_dept rd on d.dept_id = rd.dept_id
+        where rd.role_id = #{roleId}
+        <if test="deptCheckStrictly">
+            and d.dept_id not in (select d.parent_id from sys_dept d inner join sys_role_dept rd on d.dept_id =
+            rd.dept_id and rd.role_id = #{roleId})
+        </if>
+        order by d.parent_id, d.order_num
+    </select>
+
+    <select id="selectDeptById" parameterType="Long" resultMap="SysDeptResult">
+        <include refid="selectDeptVo"/>
+        where dept_id = #{deptId}
+    </select>
+
+    <select id="checkDeptExistUser" parameterType="Long" resultType="int">
+        select count(1)
+        from sys_user
+        where dept_id = #{deptId}
+          and del_flag = '0'
+    </select>
+
+    <select id="hasChildByDeptId" parameterType="Long" resultType="int">
+        select count(1)
+        from sys_dept
+        where del_flag = '0'
+          and parent_id = #{deptId} limit 1
+    </select>
+
+    <select id="selectChildrenDeptById" parameterType="Long" resultMap="SysDeptResult">
+        select *
+        from sys_dept
+        where find_in_set(#{deptId}, ancestors)
+    </select>
+
+    <select id="selectChildrenById" parameterType="Long" resultMap="SysDeptResult">
+        select * from sys_dept d INNER JOIN
+        <if test="templateVal == 1">
+            tb_template tt on tt.using_unit_no = d.dept_id
+        </if>
+        <if test="templateVal == 2">
+            tb_bidding_mark_template tt on tt.use_unit = d.dept_id
+        </if>
+        <where>
+            <if test="group != '1'">
+                (find_in_set(#{deptId},d.ancestors) OR d.dept_id=#{deptId} ) and d.del_flag = '0'
+            </if>
+            <if test="group == '2'">
+                (find_in_set(#{deptId},d.ancestors) OR d.dept_id=#{deptId} or d.thrid_dept_id='1000000000') and
+                d.del_flag = '0'
+            </if>
+        </where>
+        GROUP BY d.dept_id
+    </select>
+
+    <select id="selectNormalChildrenDeptById" parameterType="Long" resultType="int">
+        select count(*)
+        from sys_dept
+        where status = 0
+          and del_flag = '0'
+          and find_in_set(#{deptId}, ancestors)
+    </select>
+
+    <select id="checkDeptNameUnique" resultMap="SysDeptResult">
+        <include refid="selectDeptVo"/>
+        where dept_name=#{deptName} and parent_id = #{parentId} and del_flag = '0' limit 1
+    </select>
+
+    <insert id="insertDept" parameterType="SysDept">
+        insert into sys_dept(
+        <if test="deptId != null and deptId != 0">dept_id,</if>
+        <if test="parentId != null and parentId != 0">parent_id,</if>
+        <if test="deptName != null and deptName != ''">dept_name,</if>
+        <if test="origin != null and origin != ''">origin,</if>
+        <if test="simpleName != null and simpleName != ''">simple_name,</if>
+        <if test="thridDeptId != null and thridDeptId != ''">thrid_dept_id,</if>
+        <if test="thridParentId != null and thridParentId != ''">thrid_parent_id,</if>
+        <if test="thridOrgLevel != null">thrid_org_level,</if>
+        <if test="ancestors != null and ancestors != ''">ancestors,</if>
+        <if test="orderNum != null">order_num,</if>
+        <if test="leader != null and leader != ''">leader,</if>
+        <if test="phone != null and phone != ''">phone,</if>
+        <if test="email != null and email != ''">email,</if>
+        <if test="status != null">status,</if>
+        <if test="createBy != null and createBy != ''">create_by,</if>
+        create_time
+        )values(
+        <if test="deptId != null and deptId != 0">#{deptId},</if>
+        <if test="parentId != null and parentId != 0">#{parentId},</if>
+        <if test="deptName != null and deptName != ''">#{deptName},</if>
+        <if test="origin != null and origin != ''">#{origin},</if>
+        <if test="simpleName != null and simpleName != ''">#{simpleName},</if>
+        <if test="thridDeptId != null and thridDeptId != ''">#{thridDeptId},</if>
+        <if test="thridParentId != null and thridParentId != ''">#{thridParentId},</if>
+        <if test="thridOrgLevel != null">#{thridOrgLevel},</if>
+        <if test="ancestors != null and ancestors != ''">#{ancestors},</if>
+        <if test="orderNum != null">#{orderNum},</if>
+        <if test="leader != null and leader != ''">#{leader},</if>
+        <if test="phone != null and phone != ''">#{phone},</if>
+        <if test="email != null and email != ''">#{email},</if>
+        <if test="status != null">#{status},</if>
+        <if test="createBy != null and createBy != ''">#{createBy},</if>
+        sysdate()
+        )
+    </insert>
+
+    <update id="updateDept" parameterType="SysDept">
+        update sys_dept
+        <set>
+            <if test="parentId != null and parentId != 0">parent_id = #{parentId},</if>
+            <if test="deptName != null and deptName != ''">dept_name = #{deptName},</if>
+            <if test="simpleName != null and simpleName != ''">simple_name = #{simpleName},</if>
+            <if test="thridDeptId != null and thridDeptId != ''">thrid_dept_id = #{thridDeptId},</if>
+            <if test="thridParentId != null and thridParentId != ''">thrid_parent_id = #{thridParentId},</if>
+            <if test="thridOrgLevel != null">thrid_org_level = #{thridOrgLevel},</if>
+            <if test="ancestors != null and ancestors != ''">ancestors = #{ancestors},</if>
+            <if test="orderNum != null">order_num = #{orderNum},</if>
+            <if test="leader != null">leader = #{leader},</if>
+            <if test="phone != null">phone = #{phone},</if>
+            <if test="email != null">email = #{email},</if>
+            <if test="status != null and status != ''">status = #{status},</if>
+            <if test="updateBy != null and updateBy != ''">update_by = #{updateBy},</if>
+            update_time = sysdate()
+        </set>
+        where dept_id = #{deptId}
+    </update>
+
+    <update id="updateDeptChildren" parameterType="java.util.List">
+        update sys_dept set ancestors =
+        <foreach collection="depts" item="item" index="index"
+                 separator=" " open="case dept_id" close="end">
+            when #{item.deptId} then #{item.ancestors}
+        </foreach>
+        where dept_id in
+        <foreach collection="depts" item="item" index="index"
+                 separator="," open="(" close=")">
+            #{item.deptId}
+        </foreach>
+    </update>
+
+    <update id="updateDeptStatusNormal" parameterType="Long">
+        update sys_dept set status = '0' where dept_id in
+        <foreach collection="array" item="deptId" open="(" separator="," close=")">
+            #{deptId}
+        </foreach>
+    </update>
+
+    <delete id="deleteDeptById" parameterType="Long">
+        update sys_dept
+        set del_flag = '2'
+        where dept_id = #{deptId}
+    </delete>
+
+    <delete id="deleteSyncDept">
+        delete
+        from sys_dept
+        where origin = 'syncthird'
+    </delete>
+
+    <select id="findSyncThridDept" resultType="com.zhaocai.system.api.domain.SysDept">
+        <include refid="selectDeptVo"/>
+        where d.del_flag = '0' and d.origin = 'syncthird' and (d.ancestors is null or d.ancestors = '')
+        order by d.order_num
+    </select>
+
+    <select id="findThridDeptCond" resultType="com.zhaocai.system.api.domain.SysDept">
+        <include refid="selectDeptVo"/>
+        where d.origin = 'syncthird'
+        <if test="thridDeptId != null and thridDeptId != ''">
+            AND d.thrid_dept_id = #{thridDeptId}
+        </if>
+        order by d.order_num
+    </select>
+
+    <select id="findListThridDeptCond" resultType="com.zhaocai.system.api.domain.SysDept">
+        <include refid="selectDeptVo"/>
+        where d.origin = 'syncthird' and d.thrid_dept_id in
+        <foreach collection="thridDeptIds" item="thridDeptId" open="(" separator="," close=")">
+            #{thridDeptId}
+        </foreach>
+        order by d.order_num
+    </select>
+
+    <select id="findOrgInfoList" resultType="com.zhaocai.system.api.domain.SysDept">
+        <include refid="selectDeptVo"/>
+        where d.origin = 'syncthird'
+        <if test="ancestors != null and ancestors != ''">
+            AND d.ancestors like CONCAT(#{ancestors}, '%')
+        </if>
+        <if test="queryOrg != null and queryOrg != ''">
+            AND (d.thrid_org_type = 'A' OR d.thrid_org_type = 'F')
+        </if>
+        order by d.order_num
+    </select>
+
+    <select id="findSecondDept" resultType="com.zhaocai.system.api.domain.SysDept">
+        SELECT *
+        FROM sys_dept
+        WHERE dept_id in (SELECT IF(thrid_parent_id LIKE '1%', sys_dept.dept_id,
+                                    SUBSTRING_INDEX(SUBSTRING_INDEX(ancestors, ',', 2), ',', -1)) AS second_id
+                          FROM sys_dept
+                          where sys_dept.del_flag = '0'
+                            AND sys_dept.thrid_dept_id = #{thridDeptId})
+        order by order_num
+    </select>
+
+
+    <select id="getBySwitchListThridDeptId" resultType="com.zhaocai.system.api.domain.SysDept">
+        <include refid="selectDeptVo"/>
+        WHERE d.thrid_dept_id = #{thridDeptId} OR d.thrid_parent_id = #{thridDeptId}
+    </select>
+
+    <select id="getTwoLevelDeptByDeptId" resultType="com.zhaocai.system.api.domain.SysDept">
+        <include refid="selectDeptVo"/>
+        WHERE
+        d.thrid_org_level IS NOT NULL
+        AND (
+        FIND_IN_SET( d.dept_id, ( SELECT ancestors FROM sys_dept s1 WHERE s1.dept_id = #{deptId} ) )
+        OR d.dept_id = #{deptId}
+        )
+        order by thrid_org_level desc limit 1;
+    </select>
+
+    <select id="getDeptByDeptId" resultType="com.zhaocai.system.api.domain.SysDept">
+        <include refid="selectDeptVo"/>
+        WHERE (
+        FIND_IN_SET( d.dept_id, ( SELECT ancestors FROM sys_dept s1 WHERE s1.dept_id = #{deptId} ) )
+        OR d.dept_id = #{deptId}
+        )
+        order by thrid_org_level desc limit 1;
+    </select>
+
+    <select id="getTwoLevelDepts" resultType="com.zhaocai.system.api.domain.SysDept">
+        <include refid="selectDeptVo"/>
+        WHERE
+        d.thrid_org_level IS NOT NULL
+        order by d.parent_id, d.order_num
+    </select>
+
+    <select id="getThreeLevelDepts" resultType="com.zhaocai.system.api.domain.SysDept">
+        <include refid="selectDeptVo"/>
+        WHERE
+        ((d.thrid_parent_id in
+        (select dd.thrid_dept_id from sys_dept dd where dd.thrid_org_level IS NOT NULL AND dd.thrid_org_type not in
+        ('BM','D','X') AND dd.status = '0'))
+        and d.thrid_org_type not in ('BM','D','X') AND d.status = '0')
+        or (d.thrid_org_type not in ('BM','D','X') AND d.status = '0' AND d.thrid_org_level IS NOT NULL )
+        order by d.parent_id, d.order_num
+    </select>
+
+</mapper>

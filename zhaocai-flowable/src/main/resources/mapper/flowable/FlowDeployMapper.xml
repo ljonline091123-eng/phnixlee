@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zhaocai.flowable.mapper.FlowDeployMapper">
+
+    <select id="selectDeployList" resultType="FlowProcDefDto">
+        SELECT
+        rp.id_ as id,
+        rd.id_ as deploymentId,
+        rd.name_ as name,
+        rd.category_ as category,
+        rp.key_ as flowKey,
+        rp.version_ as version,
+        rp.suspension_state_ as suspensionState,
+        rd.deploy_time_  as deploymentTime,
+        sf.form_name as formName,
+        sf.form_id as formId
+        FROM
+        ACT_RE_PROCDEF rp
+        LEFT JOIN ACT_RE_DEPLOYMENT rd ON rp.deployment_id_ = rd.id_
+        LEFT JOIN sys_deploy_form df ON df.deploy_id = rd.id_
+        LEFT JOIN sys_form sf ON sf.form_id = df.form_id
+        <where>
+            <if test="name != null and name != ''">
+                and rd.name_ like concat('%', #{name}, '%')
+            </if>
+        </where>
+        order by rd.deploy_time_ desc
+    </select>
+
+    <select id="selectActReProcDef" parameterType="string" resultType="FlowProcDefDto">
+        SELECT
+            RES.DEPLOYMENT_ID_ AS deploymentId,RES.NAME_ AS name,RES.VERSION_ AS version,SDF.form_id AS formId
+        FROM
+            ACT_RE_PROCDEF RES
+                LEFT JOIN sys_deploy_form SDF ON RES.DEPLOYMENT_ID_=SDF.deploy_id
+        WHERE
+            RES.ID_ = #{processDefinitionId}
+        ORDER BY
+            RES.ID_ ASC
+    </select>
+
+    <select id="selectDeployListLast" resultType="FlowProcDefDto">
+        SELECT *
+        FROM (
+        SELECT
+        ROW_NUMBER() OVER (PARTITION BY rp.KEY_ ORDER BY rp.VERSION_ DESC) AS rn,
+        rp.id_ as id,
+        rd.id_ as deploymentId,
+        rd.name_ as name,
+        rd.category_ as category,
+        rp.key_ as flowKey,
+        rp.version_ as version,
+        rp.suspension_state_ as suspensionState,
+        rd.deploy_time_  as deploymentTime,
+        sf.form_name as formName,
+        sf.form_id as formId
+        FROM
+        ACT_RE_PROCDEF rp
+        LEFT JOIN ACT_RE_DEPLOYMENT rd ON rp.deployment_id_ = rd.id_
+        LEFT JOIN sys_deploy_form df ON df.deploy_id = rd.id_
+        LEFT JOIN sys_form sf ON sf.form_id = df.form_id
+        <where>
+            <if test="name != null and name != ''">
+                and rd.name_ like concat('%', #{name}, '%')
+            </if>
+        </where>
+        ORDER BY
+        rd.deploy_time_ DESC
+        )AS temp
+        WHERE rn = 1
+    </select>
+
+    <select id="selectSysProcessTitle" resultType="SysProcessTitle" parameterType="string">
+        SELECT id,proc_ins_id AS procInsId,process_title AS processTitle FROM sys_process_title WHERE proc_ins_id=#{procInsId}
+    </select>
+
+    <select id="selectSysProcessTitleByProcessTitle" resultType="SysProcessTitle" parameterType="string">
+        SELECT id,proc_ins_id AS procInsId,process_title AS processTitle FROM sys_process_title WHERE process_title like concat('%', #{processTitle}, '%')
+    </select>
+
+
+    <insert id="insertSysProcessTitle" parameterType="SysProcessTitle">
+        INSERT INTO sys_process_title (proc_ins_id, process_title)
+        VALUES
+            (#{procInsId}, #{processTitle} )
+    </insert>
+
+    <delete id="deleteSysProcessTitleByProcInsId" parameterType="string">
+        delete from sys_process_title where proc_ins_id=#{procInsId}
+    </delete>
+
+</mapper>

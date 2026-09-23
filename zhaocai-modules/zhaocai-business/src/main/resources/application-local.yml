@@ -1,0 +1,68 @@
+# 本地脱离 Nacos 的启动兜底配置。
+# 仅用于本机启动验证，生产环境仍由 Nacos 提供真实参数。
+subject-matter:
+  rebar: ""
+  concrete: ""
+  sandStone: ""
+
+dataMiddlePlatform:
+  dataUrl: ""
+  tydtcAppId: ""
+  tydtcAppKey: ""
+  tydtcAppSecret: ""
+  vendorAdd: ""
+  vendorUpdate: ""
+  vendorAcctAdd: ""
+  vendorAcctUpdate: ""
+  vendorAcctRemove: ""
+  vendorAcctEnable: ""
+  vendorAcctDisable: ""
+
+underPlat:
+  baseUrl: ""
+  authCode: ""
+  yjtUrl: ""
+  appId: ""
+  yjtKey: ""
+
+http:
+  maxTotal: 50
+  defaultMaxPerRoute: 20
+  connectTimeout: 3000
+  connectionRequestTimeout: 3000
+  socketTimeout: 5000
+  staleConnectionCheckEnabled: true
+  validateAfterInactivity: 2000
+
+file-yozo:
+  server-url: ""
+  appCode: ""
+  appSecret: ""
+  callback-url: ""
+  tempFilePath: "${java.io.tmpdir}/zhaocai"
+  oldResponsePrefix: ""
+  newResponsePrefix: ""
+
+minio:
+  url: "http://127.0.0.1:9000"
+  accessKey: "local-access-key"
+  secretKey: "local-secret-key"
+  bucketName: "zhaocai-local"
+  replaceUrl: ""
+
+file-z:
+  minio-url: "http://127.0.0.1:9000"
+  minio-url-replace: "http://127.0.0.1:9000"
+
+# 本地不启用电子签章平台；回调控制器仍由公共模块加载，因此保留安全占位值。
+signature:
+  platform: disabled
+  qiyuesuo:
+    callback:
+      aesKey: "0000000000000000"
+      token: "local-callback-token"
+    private:
+      categoryId: ""
+      serviceUrl: ""
+      accessToken: ""
+      accessSecret: ""
