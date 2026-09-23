@@ -5,6 +5,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 DEFAULT_DATABASE_URL = f"sqlite:///{(Path(__file__).resolve().parents[2] / 'quant.db').as_posix()}"
+DEFAULT_ENV_FILE = Path(__file__).resolve().parents[2] / ".env"
 
 
 class Settings(BaseSettings):
@@ -17,9 +18,16 @@ class Settings(BaseSettings):
     data_foundation_enabled: bool = True
     company_research_context_enabled: bool = True
     model_credential_key: str = ""
+    lake_storage_backend: str = "filesystem"
+    lake_filesystem_root: str = str(Path(__file__).resolve().parents[2] / "lake")
+    lake_s3_endpoint: str = "127.0.0.1:9000"
+    lake_s3_access_key: str = "minioadmin"
+    lake_s3_secret_key: str = "minioadmin"
+    lake_s3_bucket: str = "quant-lake"
+    lake_s3_secure: bool = False
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=DEFAULT_ENV_FILE,
         env_file_encoding="utf-8",
         extra="ignore",
     )

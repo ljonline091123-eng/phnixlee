@@ -15,7 +15,7 @@ const layerNames: Record<NetworkLayer, string> = { MASTER: "主数据", FACT: "�
 const typeNames: Record<string, string> = {
   SECURITY: "证券", STOCK: "证券", COMPANY: "公司", LEGAL_ENTITY: "公司", ORGANIZATION: "机构", PERSON: "自然人", HOLDER_ACCOUNT: "股东账户",
   INDUSTRY: "行业", SECTOR: "板块", THEME: "板块主题", CLASSIFICATION: "类型标签", CLASSIFICATION_TAG: "类型标签", MARKET: "市场", EXCHANGE: "交易所",
-  PRODUCT: "产品", MATERIAL: "原材料", SUPPLY_CHAIN_FACT: "供应链事实", OWNERSHIP_FACT: "股权事实", BUSINESS_FACT: "经营往来", LEGAL_CASE: "司法事项", LEGAL_FACT: "司法事项", NAVIGATION_CATEGORY: "一级信息分类",
+  PRODUCT: "产品", MATERIAL: "原材料", SUPPLY_CHAIN_FACT: "供应链事实", OWNERSHIP_FACT: "股权事实", BUSINESS_FACT: "经营往来", LEGAL_CASE: "司法事项", LEGAL_FACT: "司法事项", COMPANY_DISCLOSURE: "公司披露线索", NAVIGATION_CATEGORY: "一级信息分类",
   FINANCIAL_OBSERVATION: "财务观测", FINANCIAL_METRIC: "财务指标", FINANCIAL_REPORT: "财务报告", MARKET_OBSERVATION: "量价观测", MARKET_EVENT: "量价事件", MARKET_ANOMALY: "量价异常", PRICE_SERIES: "历史量价", REALTIME_QUOTE: "实时行情",
   SHAREHOLDER_ACTION: "股东行为", CORPORATE_EVENT: "公司事件", EXTERNAL_EVENT: "外部事件", POLICY_EVENT: "政策事件", EVENT_MENTION: "事件提及", MENTIONED_EVENT: "事件提及", CANDIDATE_EVENT: "候选事件",
   EVIDENCE: "证据文档", EVIDENCE_DOCUMENT: "证据文档", DOCUMENT: "证据文档", SOURCE_DOCUMENT: "原始文档", NEWS: "新闻", NOTICE: "公告", RESEARCH_REPORT: "研究报告", F10_SECTION: "F10资料分区", F10_ITEM: "F10具体资料", F10_SOURCE: "F10原始资料", DATA_SOURCE: "数据源", DATASET: "数据集", COMPANY_PROFILE: "公司资料",
@@ -23,7 +23,7 @@ const typeNames: Record<string, string> = {
 const relationNames: Record<string, string> = {
   ISSUED_BY: "发行主体", LISTED_ON: "上市于", IN_INDUSTRY: "所属行业", SUB_INDUSTRY_OF: "上级行业", IN_SECTOR: "所属板块", HAS_CLASSIFICATION: "分类标签", HAS_THEME: "所属主题",
   HOLDS_EQUITY: "持有股权", OWNS: "持有股权", SHAREHOLDER_OF: "持有股权", CONTROLS: "控制关系", SUPPLIES_TO: "供应给", PURCHASES_FROM: "采购自", SELLS_TO: "销售给", PARTNERS_WITH: "合作关系", COMPETES_WITH: "竞争关系", USES_MATERIAL: "使用原材料", DEPENDS_ON: "依赖于",
-  SUBJECT: "事实主体", OBJECT: "事实客体", HAS_FACT: "关联事实", HAS_LEGAL_CASE: "司法事项", INVOLVED_IN: "涉及事项", SUPPORTED_BY: "证据支持", EVIDENCED_BY: "证据来源", FROM_SOURCE: "来自数据源", MENTIONS: "文档提及", RELATED_TO: "相关联", DESCRIBED_BY: "资料描述", HAS_RECORD: "包含记录",
+  SUBJECT: "事实主体", OBJECT: "事实客体", HAS_FACT: "关联事实", HAS_LEGAL_CASE: "司法事项", HAS_DISCLOSURE: "相关披露", INVOLVED_IN: "涉及事项", SUPPORTED_BY: "证据支持", EVIDENCED_BY: "证据来源", FROM_SOURCE: "来自数据源", MENTIONS: "文档提及", RELATED_TO: "相关联", DESCRIBED_BY: "资料描述", HAS_RECORD: "包含记录",
   HAS_FINANCIAL_OBSERVATION: "财务观测", HAS_FINANCIAL_METRIC: "财务指标", HAS_FINANCIAL_REPORT: "财务报告", HAS_MARKET_OBSERVATION: "量价观测", HAS_MARKET_EVENT: "量价事件", HAS_MARKET_ANOMALY: "量价异常", HAS_PRICE_AND_VOLUME_SERIES: "历史量价", HAS_REALTIME_QUOTE: "实时行情", HAS_SHAREHOLDER_ACTION: "股东行为", HAS_SHAREHOLDER_EVENT: "股东事件", HAS_NEWS: "关联新闻", HAS_NOTICE: "关联公告", HAS_RESEARCH_REPORT: "研究报告", HAS_F10_SECTION: "包含F10资料", HAS_F10_ITEM: "包含具体资料", HAS_POLICY_EVENT: "政策事件", HAS_EXTERNAL_EVENT: "外部事件", HAS_INFORMATION_CATEGORY: "信息分类",
 };
 const stateNames: Record<string, string> = { ACCEPTED: "已审核", VERIFIED: "已验证", SOURCE: "来源记录", SOURCE_REPORTED: "来源披露", NORMALIZED: "已标准化", CANDIDATE: "候选待核实", PENDING: "待核实", PENDING_REVIEW: "待审核", REJECTED: "已驳回", EXPIRED: "已过期", DERIVED: "规则推导", RAW: "原始记录", PRESENT: "已有数据", MISSING: "暂无数据", NOT_COLLECTED: "尚未采集", PARTIAL: "部分覆盖", GOVERNED: "已治理", MAPPED: "已映射", DISCLOSURES_ONLY: "仅有披露线索", EVIDENCE_ONLY: "仅有文档证据", NOT_APPLICABLE: "不适用", AVAILABLE: "已有数据" };
@@ -35,6 +35,7 @@ const valueNames: Record<string, string> = { ...marketNames, ...stateNames, A_SH
 Object.assign(stateNames, { OBSERVED: "来源记录", SOURCE_MISSING: "来源待补充", UNMAPPED: "尚未映射", CONFLICT: "映射待核实" });
 Object.assign(valueNames, { OBSERVED: "来源记录", EQUITY_UNSPECIFIED: "权益证券（细分类待核）", EQUITY: "权益证券", LISTED: "上市", ACTIVE: "正常", DELISTED: "已退市", SUSPENDED: "停牌", CNY: "人民币", HKD: "港元", USD: "美元" });
 Object.assign(fieldNames, { listed_at: "上市日期", current_price: "当前价格", close_price: "收盘价", quote_time: "行情时间", latest_close: "最新收盘价", baseline_volume: "基准成交量", baseline_window: "基准窗口", threshold_multiple: "倍数阈值", threshold_pct: "比例阈值（%）", calculation: "计算说明", raw_field: "原始指标字段", raw_value: "原始数值", adjust: "复权方式", fiscal_period: "财务周期", source_issuer_id: "来源主体编号", source_org_code: "来源机构编号", legal_name: "法定名称" });
+Object.assign(fieldNames, { open_price: "开盘价", high_price: "最高价", low_price: "最低价", previous_close_price: "昨收价", change_amount: "涨跌额", change_pct: "涨跌幅（%）", amount: "成交额", baseline_records: "基准交易日数", series_start: "基准起始日", volume_unit: "成交量单位", amount_unit: "成交额单位", source_record_id: "来源记录编号", document_type: "文档类型", content_truncated: "内容是否截断", matched_keyword: "命中关键词", event_type: "线索类型", source_kind: "来源类型" });
 Object.assign(fieldNames, { registered_name: "注册名称", english_name: "英文名称", company_full_name: "公司全称", registered_address: "注册地址", legal_form: "法律形式", registration_status: "登记状态", registration_number_raw: "来源登记号码", registration_verified: "是否完成登记核验", registry_verified: "是否完成工商核验", registration_source_kind: "登记资料来源", incorporated_on: "成立日期", main_business: "主营业务", business: "主要业务", description: "说明", primary_market: "主要上市市场", industry_label_raw: "来源行业名称", identity_basis: "主体识别依据", identity_source: "主体资料来源", ratio_basis: "持股比例口径", shares_unit: "持股数量单位", holder_rank: "股东排名", temporal_scope: "时间口径", semantic_scope: "事实口径", control_basis: "控制依据", procedure_type: "司法程序类型", party_role: "当事人角色", case_status: "案件状态", amount_type: "金额性质", contract_status: "合同状态", market_cap: "市值", definition_source: "释义来源", definition_status: "释义状态" });
 Object.assign(valueNames, { KY: "开曼群岛", BM: "百慕大", VG: "英属维尔京群岛", AGGREGATOR: "聚合数据来源", SOURCE_IDENTIFIERS: "依据来源主体标识", SOURCE_SCOPED_IDENTIFIER: "依据数据提供方主体编号", REGISTERED_IDENTIFIER: "依据登记标识，尚需工商核验", UNREGISTERED: "尚未建立专属释义", SSE: "上海证券交易所", SZSE: "深圳证券交易所", BSE: "北京证券交易所", HKEX_SDW: "港交所结算披露", USCC: "统一社会信用代码", ORG_CODE: "来源机构编号", TENCENT: "腾讯财经", HKEXnews: "港交所披露易" });
 const errorText = (error: unknown) => error instanceof Error ? error.message : "图谱加载失败，请稍后重试";
@@ -98,8 +99,9 @@ function layout(nodes: NetworkNode[], edges: NetworkEdge[], centerId: string): R
   return points;
 }
 
-function EvidenceCard({ item }: { item: NetworkEvidence }) {
-  const [expanded, setExpanded] = useState(false), [detail, setDetail] = useState<NetworkEvidence | null>(null), [busy, setBusy] = useState(false), [error, setError] = useState("");
+function EvidenceCard({ item, initialExpanded = false }: { item: NetworkEvidence; initialExpanded?: boolean }) {
+  const openDocument = initialExpanded || ["NEWS", "NOTICE"].includes(String(item.document_type || ""));
+  const [expanded, setExpanded] = useState(openDocument), [detail, setDetail] = useState<NetworkEvidence | null>(null), [busy, setBusy] = useState(false), [error, setError] = useState("");
   useEffect(() => {
     if (!expanded || detail || !item.source_table || item.source_record_id == null) return;
     const controller = new AbortController(); setBusy(true); setError("");

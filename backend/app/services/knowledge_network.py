@@ -26,15 +26,22 @@ VERSION = "KNOWLEDGE_NETWORK_V1"
 TYPE_LABELS = {"SECURITY": "证券", "COMPANY": "公司", "MARKET": "交易市场", "INDUSTRY": "行业",
     "THEME": "板块主题", "CLASSIFICATION": "类型标签", "PERSON": "自然人", "ORGANIZATION": "机构",
     "HOLDER_ACCOUNT": "股东账户", "SUPPLY_CHAIN_FACT": "供应链事实", "BUSINESS_FACT": "经营事实",
-    "LEGAL_CASE": "司法事项", "PRODUCT": "产品或材料", "EVIDENCE_DOCUMENT": "证据文档", "DATA_SOURCE": "数据来源"}
+    "LEGAL_CASE": "司法事项", "PRODUCT": "产品或材料", "COMPANY_DISCLOSURE": "公司披露线索",
+    "EVIDENCE_DOCUMENT": "证据文档", "DATA_SOURCE": "数据来源"}
 RELATIONS = {"ISSUED_BY": "发行主体", "LISTED_ON": "上市于", "HOLDS_EQUITY": "直接持股", "CONTROLS": "控制",
     "IN_INDUSTRY": "所属行业", "IN_SECTOR": "所属板块", "MEMBER_OF_THEME": "所属板块", "HAS_CLASSIFICATION": "类型归属",
     "SUB_INDUSTRY_OF": "上级行业", "SUPPLIES_TO": "供应", "PARTNERS_WITH": "合作", "CONTRACT": "合同",
     "GUARANTEES": "担保", "LENDS_TO": "借贷", "COMPETES_WITH": "竞争", "LEGAL_CASE": "涉及司法事项",
-    "SUBJECT": "主体", "OBJECT": "关联对象", "INVOLVES_PRODUCT": "涉及产品", "SUPPORTED_BY": "证据支持", "FROM_SOURCE": "来自来源"}
+    "SUBJECT": "主体", "OBJECT": "关联对象", "INVOLVES_PRODUCT": "涉及产品", "HAS_DISCLOSURE": "相关披露",
+    "SUPPORTED_BY": "证据支持", "FROM_SOURCE": "来自来源"}
 MARKETS = {"CN_A": "中国 A 股", "HK": "香港市场", "NEEQ": "新三板", "NEEQ_INNOVATION": "新三板创新层"}
 FACT_NODES = {"SUPPLIES_TO": "SUPPLY_CHAIN_FACT", "PARTNERS_WITH": "BUSINESS_FACT", "CONTRACT": "BUSINESS_FACT",
     "GUARANTEES": "BUSINESS_FACT", "LENDS_TO": "BUSINESS_FACT", "LEGAL_CASE": "LEGAL_CASE"}
+COMPANY_DISCLOSURE_KINDS = {
+    "SUPPLY_CHAIN_DISCLOSURE": ("SUPPLY_CHAIN", "供应链披露线索"),
+    "BUSINESS_DISCLOSURE": ("BUSINESS", "经营往来披露线索"),
+    "LEGAL_DISCLOSURE": ("LEGAL", "司法披露线索"),
+}
 CATEGORIES = {"identity", "classification", "ownership", "financial", "market", "disclosure", "business", "legal", "evidence"}
 DISCLOSURE_TABLES = {"stock_news", "stock_notice", "research_report", "stock_f10_cache", "stock_context_event"}
 
@@ -325,8 +332,31 @@ def _master(db, p, stock, company, *, depth, include_candidates, budget):
             if fact.fact_type == "HOLDS_EQUITY" and fact.properties_json.get("ratio") is not None:
                 label += f" {fact.properties_json['ratio']}%"
             p.edge("fact:" + fact.id, source, target, fact.fact_type, label=label, **common)
+    disclosure_counts = Counter()
+    if entities:
+        rows = list(db.scalars(select(FoundationEvidence).where(FoundationEvidence.entity_id.in_(list(entities)))
+            .order_by(FoundationEvidence.published_at.desc(), FoundationEvidence.created_at.desc()).limit(121)))
+        p.truncated |= len(rows) > 120
+        for row in rows[:120]:
+            metadata = row.metadata_json or {}
+            kinds = metadata.get("document_kinds") or [metadata.get("document_kind")]
+            kind = next((value for value in kinds if value in COMPANY_DISCLOSURE_KINDS), None)
+            if not kind or row.entity_id not in entities:
+                continue
+            event_type, type_label = COMPANY_DISCLOSURE_KINDS[kind]
+            disclosure_counts[event_type] += 1
+            proof_id = p.proof(row)
+            p.node(proof_id, "COMPANY_DISCLOSURE", row.title, layer="EVIDENCE", status="SOURCE_REPORTED",
+                properties={"document_type": kind, "event_type": event_type, "source_kind": metadata.get("source_kind"),
+                    "source_name": row.source_name, "source_url": row.url, "published_at": row.published_at,
+                    "observed_at": row.available_at, "excerpt": row.content[:1200],
+                    "note": f"{type_label}，仅表示公司披露了相关资料；尚未解析为已核实的交易对手、供应关系或司法事实。"},
+                evidence_ids=[proof_id])
+            p.edge(_key("company-disclosure", row.entity_id, row.id), _entity_id(entities[row.entity_id]), proof_id,
+                "HAS_DISCLOSURE", layer="EVIDENCE", status="SOURCE_REPORTED", evidence_ids=[proof_id],
+                observed_at=row.available_at, properties={"document_type": kind, "event_type": event_type})
     _classifications(db, p, listings, include_candidates)
-    return listings, list(facts.values())
+    return listings, list(facts.values()), disclosure_counts
 
 
 def _attach_evidence(p):
@@ -378,6 +408,11 @@ def _scope_category(p, category, root_id, issuer_id, include_evidence):
             or category == "business" and props.get("event_type") in {"SUPPLY_CHAIN", "CONTRACT", "RAW_MATERIAL"}
         ):
             selected.add(node["id"])
+        if node["type"] == "COMPANY_DISCLOSURE" and (
+            category == "legal" and props.get("event_type") == "LEGAL"
+            or category == "business" and props.get("event_type") in {"SUPPLY_CHAIN", "BUSINESS"}
+        ):
+            selected.add(node["id"])
     for edge in p.edges.values():
         if edge["type"] in predicates.get(category, set()):
             selected.update((edge["source"], edge["target"]))
@@ -389,7 +424,7 @@ def _scope_category(p, category, root_id, issuer_id, include_evidence):
             continue
         if category != "evidence" and edge["type"] == "FROM_SOURCE":
             continue
-        if category not in {"disclosure", "evidence"} and edge.get("layer") == "EVIDENCE":
+        if category not in {"disclosure", "evidence"} and edge.get("layer") == "EVIDENCE" and edge["type"] != "HAS_DISCLOSURE":
             continue
         adjacency.setdefault(edge["source"], []).append(edge["target"])
         adjacency.setdefault(edge["target"], []).append(edge["source"])
@@ -431,7 +466,7 @@ def explore(db: Session, *, market=None, symbol=None, company_id=None, center_id
     stock, company, centers, legacy = _resolve_root(db, market=market, symbol=symbol, company_id=company_id,
         center_id=center_id, graph_id=graph_id)
     p = Projection()
-    listings, facts = _master(db, p, stock, company, depth=depth, include_candidates=include_candidates, budget=min(60, max_edges // 3))
+    listings, facts, company_disclosures = _master(db, p, stock, company, depth=depth, include_candidates=include_candidates, budget=min(60, max_edges // 3))
     root_id = canonical_security_id(stock.market, stock.symbol) if stock else canonical_company_id(company.id)
     from app.services.knowledge_network_dynamic import build_dynamic_projection
     targets = [stock] if stock else [db.get(StockSymbol, listing.stock_symbol_id) for listing in listings
@@ -496,12 +531,21 @@ def explore(db: Session, *, market=None, symbol=None, company_id=None, center_id
     dynamic_labels = {"financial": "财务观测", "market": "日线量价", "realtime": "实时行情", "news": "新闻", "notices": "公告", "research": "研究报告",
         "f10": "F10资料", "external_events": "外部事件", "shareholder_actions": "股东行为"}
     dimensions += [(key, dynamic_labels.get(key, key), count) for key, count in coverage_counts.items()]
-    coverage = [{"key": key, "label": label, "status": "PRESENT" if count else "NOT_COLLECTED", "count": count}
-        for key, label, count in dimensions]
+    disclosure_by_dimension = {"supply_chain": company_disclosures["SUPPLY_CHAIN"],
+        "business": company_disclosures["BUSINESS"], "legal": company_disclosures["LEGAL"]}
+    coverage = []
+    for key, label, count in dimensions:
+        disclosed = disclosure_by_dimension.get(key, 0)
+        coverage.append({"key": key, "label": label,
+            "status": "PRESENT" if count else "PARTIAL" if disclosed else "NOT_COLLECTED",
+            "count": count or disclosed,
+            **({"pending_count": disclosed,
+                "note": "已有公司披露资料，尚未全部解析和审核为结构化关系事实。"} if disclosed else {})})
     coverage_scope = {key: {"count_unit": "SOURCE_RECORDS" if key in coverage_counts else
+        "DISCLOSURE_DOCUMENTS" if disclosure_by_dimension.get(key) and not dimension_count else
         "PROJECTED_FACTS" if key in {"ownership", "supply_chain", "business", "legal"} else "PROJECTED_NODES",
         "count_scope": "SELECTED_SECURITIES" if key in coverage_counts else "BOUNDED_NEIGHBORHOOD",
-        **({"sampled_records": sampled_counts[key]} if key in coverage_counts else {})} for key, _, _ in dimensions}
+        **({"sampled_records": sampled_counts[key]} if key in coverage_counts else {})} for key, _, dimension_count in dimensions}
     used_proofs = {proof for item in [*nodes, *edges] for proof in item.get("evidence_ids", [])}
     evidence = [proof for key, proof in p.evidence.items() if key in used_proofs]
     return {"center_id": root_id, "centers": centers, "nodes": nodes, "edges": edges, "evidence": evidence,

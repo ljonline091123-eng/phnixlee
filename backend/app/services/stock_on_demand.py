@@ -715,7 +715,17 @@ class StockOnDemandService:
         log.completed_at = datetime.now(timezone.utc)
         self.db.commit()
         self.db.refresh(log)
-        return log, [asdict(item) for item in records]
+        serialized = [asdict(item) for item in records]
+        try:
+            from app.services.lakehouse import archive_ingestion_payload
+            archive_ingestion_payload(self.db, source_code=f"source:{log.source_id}", log_type="data_fetch_log",
+                                      log_id=log.id, records=serialized)
+        except Exception as exc:
+            details = dict(log.request_json or {})
+            details["lake_archive_error"] = f"{type(exc).__name__}: {exc}"[:500]
+            log.request_json = details
+            self.db.commit()
+        return log, serialized
 
     def _finish_failure(self, log: DataFetchLog, exc: Exception) -> OnDemandFetchError:
         self.db.rollback()
