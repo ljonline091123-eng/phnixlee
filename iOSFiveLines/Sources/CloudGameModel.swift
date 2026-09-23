@@ -4,6 +4,7 @@ import Darwin
 import AVFoundation
 
 final class CloudGameModel: ObservableObject {
+    static let verifiedDailyPuzzleCount = 1
     static let defaultDifficulty = 1.1
     static let defaultWhiteProbability = 0.8
     static let defaultBombProbability = 0.4
@@ -196,6 +197,8 @@ final class CloudGameModel: ObservableObject {
         let id: String
         let name: String
         let threshold: Int
+        let mark: String
+        let colorName: String
     }
 
     struct AbilityCard: Identifiable {
@@ -204,20 +207,27 @@ final class CloudGameModel: ObservableObject {
         let name: String
         let condition: String
         let equipment: Bool
+        let effect: String
     }
 
     static let medals: [Medal] = [
-        Medal(id: "medal_01", name: "初学之星", threshold: 0), Medal(id: "medal_02", name: "青铜新手", threshold: 100),
-        Medal(id: "medal_03", name: "青铜行者", threshold: 250), Medal(id: "medal_04", name: "白银棋手", threshold: 500),
-        Medal(id: "medal_05", name: "白银连线师", threshold: 900), Medal(id: "medal_06", name: "黄金棋手", threshold: 1400),
-        Medal(id: "medal_07", name: "黄金大师", threshold: 2100), Medal(id: "medal_08", name: "铂金战略家", threshold: 3000),
-        Medal(id: "medal_09", name: "铂金大师", threshold: 4200), Medal(id: "medal_10", name: "钻石宗师", threshold: 5800),
-        Medal(id: "medal_11", name: "星耀传奇", threshold: 7800), Medal(id: "medal_12", name: "五线传说", threshold: 10000)
+        Medal(id: "medal_01", name: "初学之星", threshold: 0, mark: "★", colorName: "银灰"),
+        Medal(id: "medal_02", name: "青铜新手", threshold: 100, mark: "I", colorName: "铜棕"),
+        Medal(id: "medal_03", name: "青铜行者", threshold: 250, mark: "II", colorName: "赤铜"),
+        Medal(id: "medal_04", name: "白银棋手", threshold: 500, mark: "III", colorName: "银白"),
+        Medal(id: "medal_05", name: "白银连线师", threshold: 900, mark: "IV", colorName: "冰蓝"),
+        Medal(id: "medal_06", name: "黄金棋手", threshold: 1400, mark: "V", colorName: "金黄"),
+        Medal(id: "medal_07", name: "黄金大师", threshold: 2100, mark: "VI", colorName: "琥珀"),
+        Medal(id: "medal_08", name: "铂金战略家", threshold: 3000, mark: "VII", colorName: "青蓝"),
+        Medal(id: "medal_09", name: "铂金大师", threshold: 4200, mark: "VIII", colorName: "蓝紫"),
+        Medal(id: "medal_10", name: "钻石宗师", threshold: 5800, mark: "◆", colorName: "钻蓝"),
+        Medal(id: "medal_11", name: "星耀传奇", threshold: 7800, mark: "✦", colorName: "紫红"),
+        Medal(id: "medal_12", name: "五线传说", threshold: 10000, mark: "♛", colorName: "彩虹金")
     ]
 
     private static let dailyTitles = ["像素爱心", "坦克阵地", "太空入侵", "复古蘑菇", "迷宫出口", "像素飞船", "经典吃豆路线", "砖墙突破", "方块落影", "街机手柄", "月球基地", "火箭发射", "像素幽灵", "像素皇冠", "幸运星", "复古街机", "八位音符", "像素花朵", "太空轨道", "地下迷宫", "炸药演习", "救援行动", "像素城堡", "海岛地图", "复古机器人", "星星收集", "像素蝴蝶", "经典赛车旗", "最后一条命", "终极街机厅"]
-    private static let dailySummaries = ["清理关键位置，完成爱心轮廓主题目标", "打通棋盘通道并完成指定消除", "限定步数内清除分散目标", "清除指定颜色棋子", "清出通路并完成目标连线", "清理飞船轮廓上的关键位置", "限步清除路线节点", "连续完成指定次数消除", "清除指定形状区域", "清理手柄轮廓上的目标位置", "使用白棋完成指定颜色连线", "限定步数内完成两次消除", "清除棋盘角落的目标棋子", "完成指定长度的连线", "单次消除达到指定数量", "连续两回合完成消除", "按目标完成两条线", "清理花瓣位置并完成中心区域目标", "使用白棋补足指定连线", "在棋盘空间受限时完成消除", "使用炸药清除指定区域", "打开被围住的关键位置", "清理外围目标后完成指定连线", "分区清除指定颜色棋子", "完成一条横线和一条竖线", "达成指定消除数并保留步数", "完成两侧目标区域的清理", "清出棋盘中央通道", "使用少量步数完成指定连线", "综合使用白棋、炸药和普通消除"]
-    private static let dailyTargets = ["清除爱心轮廓上的 8 个目标位置", "完成 2 次横向连线", "12 步内清除 3 个角落目标", "清除 5 个红色棋子", "完成 1 条长度至少 5 的连线", "清除飞船中央 6 个位置", "10 步内清除路线节点", "连续消除 3 次", "清除中央方块区域", "清除手柄两侧目标", "使用白棋完成 1 条连线", "12 步内完成 2 次消除", "清除四角目标", "完成长度至少 6 的连线", "单次消除至少 7 个棋子", "连续两回合消除", "完成 2 条不同方向的线", "清除花瓣并完成中心连线", "使用白棋补足 1 条线", "空间受限时完成 1 次消除", "炸药影响 4 个目标位置", "打开棋盘中央通道", "清除外围后完成 1 条线", "清除两种颜色区域", "完成横线和竖线各 1 条", "消除 12 个棋子并保留 3 步", "清除左右两侧目标", "中央连续 5 格为空", "8 步内完成 1 条连线", "各使用白棋与炸药 1 次"]
+    private static let dailySummaries = ["移动唯一红棋，补上像素爱心中线缺口", "打通棋盘通道并完成指定消除", "限定步数内清除分散目标", "清除指定颜色棋子", "清出通路并完成目标连线", "清理飞船轮廓上的关键位置", "限步清除路线节点", "连续完成指定次数消除", "清除指定形状区域", "清理手柄轮廓上的目标位置", "使用白棋完成指定颜色连线", "限定步数内完成两次消除", "清除棋盘角落的目标棋子", "完成指定长度的连线", "单次消除达到指定数量", "连续两回合完成消除", "按目标完成两条线", "清理花瓣位置并完成中心区域目标", "使用白棋补足指定连线", "在棋盘空间受限时完成消除", "使用炸药清除指定区域", "打开被围住的关键位置", "清理外围目标后完成指定连线", "分区清除指定颜色棋子", "完成一条横线和一条竖线", "达成指定消除数并保留步数", "完成两侧目标区域的清理", "清出棋盘中央通道", "使用少量步数完成指定连线", "综合使用白棋、炸药和普通消除"]
+    private static let dailyTargets = ["1 步内完成爱心中线的红色五连", "完成 2 次横向连线", "12 步内清除 3 个角落目标", "清除 5 个红色棋子", "完成 1 条长度至少 5 的连线", "清除飞船中央 6 个位置", "10 步内清除路线节点", "连续消除 3 次", "清除中央方块区域", "清除手柄两侧目标", "使用白棋完成 1 条连线", "12 步内完成 2 次消除", "清除四角目标", "完成长度至少 6 的连线", "单次消除至少 7 个棋子", "连续两回合消除", "完成 2 条不同方向的线", "清除花瓣并完成中心连线", "使用白棋补足 1 条线", "空间受限时完成 1 次消除", "炸药影响 4 个目标位置", "打开棋盘中央通道", "清除外围后完成 1 条线", "清除两种颜色区域", "完成横线和竖线各 1 条", "消除 12 个棋子并保留 3 步", "清除左右两侧目标", "中央连续 5 格为空", "8 步内完成 1 条连线", "各使用白棋与炸药 1 次"]
 
     static func dailyPuzzleForToday() -> DailyPuzzle {
         let day = Calendar.current.ordinality(of: .day, in: .year, for: Date()) ?? 1
@@ -231,6 +241,20 @@ final class CloudGameModel: ObservableObject {
 
     private static func dailyLayout(_ index: Int) -> [Tile?] {
         var result = Array<Tile?>(repeating: nil, count: 81)
+        if index == 0 {
+            let values: [Tile?] = [
+                nil,.yellow,.green,.green,.yellow,nil,nil,nil,nil,
+                .green,.yellow,.green,.yellow,.green,.yellow,.green,nil,nil,
+                .yellow,.green,.yellow,.green,.yellow,.green,.yellow,nil,nil,
+                nil,.red,.red,.red,.red,nil,.green,nil,nil,
+                nil,nil,nil,nil,nil,nil,nil,nil,nil,
+                nil,nil,nil,nil,nil,nil,nil,nil,nil,
+                nil,nil,nil,nil,nil,nil,nil,nil,nil,
+                nil,nil,nil,nil,nil,nil,nil,nil,nil,
+                .red,nil,nil,nil,nil,nil,nil,nil,nil
+            ]
+            return values
+        }
         for row in 0..<9 {
             for column in 0..<9 where (row + column + index) % 4 == 0 || (row == index % 7 && column >= 2 && column <= 6) || (column == (index * 3) % 7 + 1 && row >= 2 && row <= 6) {
                 let colorIndex = (index + row + column + 2) % Self.ordinaryTiles.count
@@ -252,12 +276,24 @@ final class CloudGameModel: ObservableObject {
             ("坚持成长", ["初次开局", "完成首局游戏", "十局玩家", "累计完成 10 局", "百局玩家", "累计完成 100 局", "逆境坚持", "棋盘拥堵时仍成功完成消除", "复盘学徒", "使用撤销后完成本局", "新纪录", "刷新个人最高分", "连日归来", "连续游玩 3 天", "长线收藏家", "累计解锁 20 张能力卡"]),
             ("主题收藏", ["像素之心", "完成像素爱心残局", "街机记忆", "完成任意 5 个复古主题残局", "太空漫游", "完成全部太空主题残局", "拆弹专家", "完成全部炸药主题残局", "彩图鉴赏家", "完成 20 个不同主题残局", "五线全明星", "集齐其余 53 张能力卡"])
         ]
+        let effects: [[String]] = [
+            ["记录首次消除里程碑", "解锁五连纪念标记", "记录单次消除纪录", "解锁连线统计徽记", "记录横向消除专精", "记录纵向消除专精", "记录斜向消除专精", "展示累计消除纪念章"],
+            ["记录百比分数里程碑", "解锁分数纪念边框", "记录三百分里程碑", "解锁千分纪念标记", "记录高分纪录", "解锁高分档案徽记", "记录稳定得分成就", "记录逆境消除成就"],
+            ["记录白棋入门成就", "解锁白棋外观样式", "记录炸药入门成就", "记录爆破纪录", "解锁特殊棋子组合徽记", "记录危机处理成就", "展示特殊棋子统计", "解锁特殊棋子纪念边框"],
+            ["记录首次连击", "解锁连击纪念标记", "记录三连击纪录", "记录策略坚持成就", "记录棋盘规划成就", "普通模式每局额外显示一次棋子预告", "记录多线消除成就", "解锁棋盘外观主题"],
+            ["记录首次挑战", "解锁挑战纪念标记", "记录残局收集进度", "解锁残局档案边框", "解锁挑战者奖牌装饰", "记录独立解题成就", "记录步数挑战成就", "解锁月份纪念卡面"],
+            ["记录首次完成对局", "解锁累计对局标记", "记录长期游玩里程碑", "记录逆境坚持成就", "普通模式每局额外增加一次撤销机会", "记录个人纪录", "记录连续游玩成就", "展示收藏进度徽记"],
+            ["解锁爱心主题卡面", "解锁复古主题装饰", "解锁太空棋盘外观", "记录炸药挑战专精", "解锁挑战图鉴装饰", "解锁全卡收藏纪念外观"]
+        ]
         var cards: [AbilityCard] = []
         var cursor = 1
-        for (group, values) in rows {
+        for (groupIndex, row) in rows.enumerated() {
+            let (group, values) = row
             for index in stride(from: 0, to: values.count, by: 2) {
                 let name = values[index]
-                cards.append(AbilityCard(id: String(format: "card_%02d", cursor), group: group, name: name, condition: values[index + 1], equipment: name == "先手布局" || name == "复盘学徒"))
+                let equipment = name == "先手布局" || name == "复盘学徒"
+                let effect = effects[groupIndex][index / 2]
+                cards.append(AbilityCard(id: String(format: "card_%02d", cursor), group: group, name: name, condition: values[index + 1], equipment: equipment, effect: effect))
                 cursor += 1
             }
         }
@@ -307,6 +343,7 @@ final class CloudGameModel: ObservableObject {
     @Published var undoAvailable = false
     @Published var dailyChallenge = false
     @Published var dailyBestScore = 0
+    @Published var currentDailyPuzzle: DailyPuzzle?
     @Published var difficulty = CloudGameModel.defaultDifficulty { didSet { saveSettings() } }
     @Published var whiteProbability = CloudGameModel.defaultWhiteProbability { didSet { saveSettings() } }
     @Published var bombProbability = CloudGameModel.defaultBombProbability { didSet { saveSettings() } }
@@ -340,6 +377,7 @@ final class CloudGameModel: ObservableObject {
     private var tutorialRequested = false
     private var dailyRandomState: UInt32 = 0
     private var gameRecorded = false
+    private var dailyChallengeCompleted = false
     private var currentChain = 0
     private var undoBoard: [Tile?]?
     private var undoNextTiles: [Tile] = []
@@ -367,6 +405,8 @@ final class CloudGameModel: ObservableObject {
         gameToken += 1
         let token = gameToken
         dailyChallenge = daily
+        if !daily { currentDailyPuzzle = nil }
+        dailyChallengeCompleted = false
         gameRecorded = false
         if daily {
             dailyRandomState = Self.dailySeed()
@@ -414,21 +454,56 @@ final class CloudGameModel: ObservableObject {
         isGameOver = false
         busy = true
         clearedThisTurn = false
-        let openingTiles = nextTiles
-        _ = spawnPieces(tiles: openingTiles, animated: true)
-        nextTiles = randomPreview()
+        if daily, let puzzle = currentDailyPuzzle {
+            board = puzzle.layout
+            nextTiles = []
+            busy = false
+        } else {
+            let openingTiles = nextTiles
+            _ = spawnPieces(tiles: openingTiles, animated: true)
+            nextTiles = randomPreview()
+        }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.32) { [weak self] in
             guard let self, self.gameToken == token else { return }
             self.busy = false
-            if self.tutorialRequested {
+            if self.tutorialRequested && !daily {
                 self.prepareTutorial()
             }
         }
     }
 
     func startDailyChallenge() {
-        // The prototype layouts have not been manually solver-verified yet.
-        achievementToast = "每日残局尚未验证，暂未开放游玩"
+        let defaults = UserDefaults.standard
+        if defaults.string(forKey: "FiveLines.dailyFailedDate") == Self.dateKey() {
+            showToast("今日挑战已锁定，明天可重新选择")
+            return
+        }
+        let activePuzzle: DailyPuzzle?
+        if defaults.string(forKey: "FiveLines.dailyActiveDate") == Self.dateKey(),
+           let id = defaults.string(forKey: "FiveLines.dailyActiveID") {
+            activePuzzle = (1...Self.verifiedDailyPuzzleCount)
+                .map { Self.dailyPuzzle(forDay: $0) }
+                .first(where: { $0.id == id })
+        } else {
+            activePuzzle = nil
+        }
+        let used = Set(defaults.stringArray(forKey: "FiveLines.dailyUsedIDs") ?? [])
+        let choices = (1...Self.verifiedDailyPuzzleCount)
+            .map { Self.dailyPuzzle(forDay: $0) }
+            .filter { !used.contains($0.id) }
+        guard let puzzle = activePuzzle ?? choices.randomElement() else {
+            showToast("MVP 残局已完成，后续图形待开放")
+            return
+        }
+        defaults.set(Self.dateKey(), forKey: "FiveLines.dailyActiveDate")
+        defaults.set(puzzle.id, forKey: "FiveLines.dailyActiveID")
+        currentDailyPuzzle = puzzle
+        startNewGame(daily: true)
+        showToast("\(puzzle.title)：\(puzzle.target)")
+    }
+
+    private func showToast(_ message: String) {
+        achievementToast = message
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.4) { [weak self] in
             self?.achievementToast = nil
         }
@@ -518,7 +593,7 @@ final class CloudGameModel: ObservableObject {
     }
 
     func undoLastMove() {
-        guard let undoBoard, undoAvailable, !busy, !isGameOver else { return }
+        guard !dailyChallenge, let undoBoard, undoAvailable, !busy, !isGameOver else { return }
         gameToken += 1
         board = undoBoard
         nextTiles = undoNextTiles
@@ -543,6 +618,10 @@ final class CloudGameModel: ObservableObject {
     }
 
     private func captureUndoState() {
+        guard !dailyChallenge else {
+            undoAvailable = false
+            return
+        }
         undoBoard = board
         undoNextTiles = nextTiles
         undoScore = score
@@ -642,6 +721,10 @@ final class CloudGameModel: ObservableObject {
     private func resolveAfterMove() {
         let match = findMatches()
         guard !match.lineCells.isEmpty else {
+            if dailyChallenge {
+                failDailyChallenge()
+                return
+            }
             spawnAfterUnsuccessfulMove()
             return
         }
@@ -671,6 +754,15 @@ final class CloudGameModel: ObservableObject {
         let blastOnlyCount = blastCells.subtracting(match.lineCells).count
         let earnedScore = (lineCount >= 5 ? 5 + (lineCount - 5) * 2 : 0) + blastOnlyCount
         score += earnedScore
+        if dailyChallenge {
+            let target = [28, 29, 30, 31, 32]
+            let goalMet = target.allSatisfy { match.lineCells.contains($0) && board[$0] == .red }
+            guard goalMet else {
+                failDailyChallenge()
+                return
+            }
+            completeDailyChallenge()
+        }
         if !dailyChallenge { awardGrowth(max(1, earnedScore)) }
         removedCount += allCells.count
         linesCleared += 1
@@ -1051,6 +1143,32 @@ final class CloudGameModel: ObservableObject {
         UserDefaults.standard.set(today, forKey: "FiveLines.growthDate")
         UserDefaults.standard.set(earnedToday + awarded, forKey: "FiveLines.growthEarnedToday")
         saveProgression()
+    }
+
+    private func completeDailyChallenge() {
+        guard !dailyChallengeCompleted, let puzzle = currentDailyPuzzle else { return }
+        dailyChallengeCompleted = true
+        let defaults = UserDefaults.standard
+        var used = Set(defaults.stringArray(forKey: "FiveLines.dailyUsedIDs") ?? [])
+        used.insert(puzzle.id)
+        defaults.set(Array(used), forKey: "FiveLines.dailyUsedIDs")
+        defaults.removeObject(forKey: "FiveLines.dailyActiveDate")
+        defaults.removeObject(forKey: "FiveLines.dailyActiveID")
+        growthPoints += 50
+        unlockCard("card_33")
+        saveProgression()
+        showToast("残局完成：+50 成长分，“每日来客”已点亮")
+    }
+
+    private func failDailyChallenge() {
+        UserDefaults.standard.set(Self.dateKey(), forKey: "FiveLines.dailyFailedDate")
+        UserDefaults.standard.removeObject(forKey: "FiveLines.dailyActiveDate")
+        UserDefaults.standard.removeObject(forKey: "FiveLines.dailyActiveID")
+        busy = false
+        showToast("残局未完成，今日选择已锁定")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.4) { [weak self] in
+            self?.startNewGame()
+        }
     }
 
     private func unlockCard(_ id: String) {

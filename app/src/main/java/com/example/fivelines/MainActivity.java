@@ -121,7 +121,7 @@ public class MainActivity extends Activity {
         private static final int EASTER_MOLLY = 2;
         private static final int EASTER_TOUTOU = 3;
 
-        private static final int TOP_HEIGHT = 156;
+        private static final int TOP_HEIGHT = 200;
         private static final long SPAWN_DURATION_MS = 320L;
         private static final long REMOVE_DURATION_MS = 500L;
         private static final long EASTER_FLASH_HALF_MS = 180L;
@@ -150,6 +150,7 @@ public class MainActivity extends Activity {
         private final Handler handler = new Handler(Looper.getMainLooper());
         private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final RectF menuBounds = new RectF();
+        private final RectF profileBounds = new RectF();
         private final RectF shineBounds = new RectF();
         private final Bitmap[] carLogoBitmaps = new Bitmap[10];
 
@@ -174,6 +175,9 @@ public class MainActivity extends Activity {
         private int undoBombsTriggered;
         private boolean undoAvailable;
         private boolean dailyChallenge;
+        private ProgressionCatalog.DailyPuzzle dailyPuzzle;
+        private boolean dailyChallengeCompleted;
+        private boolean dailyChallengeLocked;
         private long dailyRandomState;
         private int dailyBestScore;
         private int tutorialStep = -1;
@@ -335,17 +339,38 @@ public class MainActivity extends Activity {
 
         private void resetGame(boolean daily) {
             if (daily) {
-                new AlertDialog.Builder(context)
-                        .setTitle("每日残局暂未开放")
-                        .setMessage("首期 30 关仍在验证布局与解法，完成验证前暂不开放游玩或发放奖励。")
-                        .setPositiveButton("知道了", null)
-                        .show();
-                return;
+                String today = dateKey();
+                String failedDate = settings.getString("daily_failed_date", "");
+                if (today.equals(failedDate)) {
+                    new AlertDialog.Builder(context)
+                            .setTitle("今日挑战已锁定")
+                            .setMessage("本次残局未完成，今天不能再次选择；明天会开放新的图形。")
+                            .setPositiveButton("知道了", null)
+                            .show();
+                    return;
+                }
+                dailyPuzzle = today.equals(settings.getString("daily_active_date", ""))
+                        ? ProgressionCatalog.puzzleById(settings.getString("daily_active_id", null))
+                        : null;
+                if (dailyPuzzle == null) dailyPuzzle = chooseUnplayedDailyPuzzle();
+                if (dailyPuzzle == null) {
+                    new AlertDialog.Builder(context)
+                            .setTitle("首期残局已完成")
+                            .setMessage("30 张图形都已完成，后续内容会在新版本加入。")
+                            .setPositiveButton("知道了", null)
+                            .show();
+                    return;
+                }
+                settings.edit().putString("daily_active_date", today)
+                        .putString("daily_active_id", dailyPuzzle.id).apply();
+                dailyChallengeCompleted = false;
+                dailyChallengeLocked = false;
             }
             moveToken++;
             handler.removeCallbacksAndMessages(null);
             closeEasterDialog();
             dailyChallenge = daily;
+            if (!daily) dailyPuzzle = null;
             dailyRandomState = daily ? dailySeed() : 0L;
             dailyBestScore = daily
                     ? settings.getInt("daily_best_" + dateKey(), 0)
@@ -396,8 +421,78 @@ public class MainActivity extends Activity {
             clearSpawnedCells();
             clearPendingRemoval();
             preparePreview();
-            spawnPieces();
+            if (daily) {
+                applyDailyPuzzleLayout();
+            } else {
+                spawnPieces();
+            }
             invalidate();
+        }
+
+        private ProgressionCatalog.DailyPuzzle chooseUnplayedDailyPuzzle() {
+            Set<String> used = new HashSet<>(settings.getStringSet("daily_used_ids", Collections.emptySet()));
+            ArrayList<ProgressionCatalog.DailyPuzzle> choices = new ArrayList<>();
+            for (int day = 1; day <= ProgressionCatalog.VERIFIED_DAILY_PUZZLE_COUNT; day++) {
+                ProgressionCatalog.DailyPuzzle candidate = ProgressionCatalog.puzzleForDay(day);
+                if (!used.contains(candidate.id)) choices.add(candidate);
+            }
+            if (choices.isEmpty()) return null;
+            return choices.get(random.nextInt(choices.size()));
+        }
+
+        private void applyDailyPuzzleLayout() {
+            if (dailyPuzzle == null) return;
+            for (int row = 0; row < SIZE; row++) {
+                for (int col = 0; col < SIZE; col++) {
+                    board[row][col] = dailyPuzzle.layout[row * SIZE + col];
+                }
+            }
+            spawning = false;
+            moving = false;
+            Arrays.fill(preview, EMPTY);
+            handler.postDelayed(() -> new AlertDialog.Builder(context)
+                    .setTitle("今日残局 · " + dailyPuzzle.title)
+                    .setMessage(dailyPuzzle.summary + "\n\n目标：" + dailyPuzzle.target
+                            + "\n规则：每天可选择一次；成功后可继续选择未完成图形，失败则当天锁定。")
+                    .setPositiveButton("开始挑战", null)
+                    .show(), 180L);
+        }
+
+        private void completeDailyChallenge() {
+            if (!dailyChallenge || dailyChallengeCompleted || dailyPuzzle == null) return;
+            Set<String> used = new HashSet<>(settings.getStringSet("daily_used_ids", Collections.emptySet()));
+            used.add(dailyPuzzle.id);
+            settings.edit().putStringSet("daily_used_ids", used)
+                    .remove("daily_active_date").remove("daily_active_id").apply();
+            dailyChallengeCompleted = true;
+            SharedPreferences prefs = context.getSharedPreferences(PROGRESSION_PREFS, Context.MODE_PRIVATE);
+            prefs.edit().putInt("growth_points", prefs.getInt("growth_points", 0) + 50).apply();
+            unlockCard("card_33");
+            achievementToast = "残局完成：" + dailyPuzzle.title + " · 可再选一张";
+            achievementToastUntil = SystemClock.uptimeMillis() + 3200L;
+            handler.postDelayed(() -> new AlertDialog.Builder(context)
+                    .setTitle("挑战完成")
+                    .setMessage("获得 50 成长分并点亮“每日来客”能力卡。已完成图形不会再次抽到。")
+                    .setPositiveButton("再选一张", (dialog, which) -> resetGame(true))
+                    .setNegativeButton("返回普通模式", (dialog, which) -> resetGame(false))
+                    .setCancelable(false)
+                    .show(), 220L);
+        }
+
+        private void failDailyChallenge() {
+            if (!dailyChallenge || dailyChallengeCompleted || dailyChallengeLocked) return;
+            dailyChallengeLocked = true;
+            settings.edit().putString("daily_failed_date", dateKey())
+                    .remove("daily_active_date").remove("daily_active_id").apply();
+            achievementToast = "残局未完成：今日选择已锁定";
+            achievementToastUntil = SystemClock.uptimeMillis() + 3200L;
+            gameOver = true;
+            handler.postDelayed(() -> new AlertDialog.Builder(context)
+                    .setTitle("挑战未完成")
+                    .setMessage("今天不能再次选择残局，明天会重新开放。")
+                    .setPositiveButton("返回普通模式", (dialog, which) -> resetGame(false))
+                    .setCancelable(false)
+                    .show(), 220L);
         }
 
         private void preparePreview() {
@@ -605,7 +700,7 @@ public class MainActivity extends Activity {
             paint.setFakeBoldText(false);
             paint.setTextSize(14f);
             String subtitle = dailyChallenge
-                    ? String.format(Locale.US, "\u4eca\u65e5\u6700\u4f73 %05d  \u00b7  \u6bcf12\u6b65\u63d0\u5347\u751f\u6210\u538b\u529b", Math.min(99999, dailyBestScore))
+                    ? (dailyPuzzle == null ? "每日残局" : dailyPuzzle.title + " · " + dailyPuzzle.target)
                     : "\u767d\u8272\u4e07\u80fd\u7403  \u00b7  \u70b8\u836f+\u81f3\u5c11\u56db\u9897\u540c\u8272\u7403\u6e05\u9664\u5168\u76d8";
             canvas.drawText(subtitle, 22f, 61f, paint);
 
@@ -620,13 +715,50 @@ public class MainActivity extends Activity {
 
             drawScoreBar(canvas);
             drawPreview(canvas);
+            drawProfileBar(canvas);
+        }
+
+        private ProgressionCatalog.Medal currentMedal() {
+            int points = growthPoints();
+            ProgressionCatalog.Medal result = ProgressionCatalog.MEDALS[0];
+            for (ProgressionCatalog.Medal medal : ProgressionCatalog.MEDALS) {
+                if (points >= medal.threshold) result = medal;
+            }
+            return result;
+        }
+
+        private void drawProfileBar(Canvas canvas) {
+            ProgressionCatalog.Medal medal = currentMedal();
+            profileBounds.set(20f, 152f, getWidth() - 20f, 190f);
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(0xff394b59);
+            canvas.drawRoundRect(profileBounds, 10f, 10f, paint);
+            paint.setColor(medal.color);
+            canvas.drawCircle(profileBounds.left + 20f, profileBounds.centerY(), 11f, paint);
+            paint.setColor(0xff101820);
+            paint.setTextSize(medal.mark.length() > 2 ? 8f : 12f);
+            paint.setFakeBoldText(true);
+            canvas.drawText(medal.mark, profileBounds.left + (medal.mark.length() > 2 ? 12f : 16f),
+                    profileBounds.centerY() + 5f, paint);
+            paint.setColor(Color.WHITE);
+            paint.setTextSize(16f);
+            canvas.drawText(profileName + "  ·  Lv." + (medalIndex(medal) + 1) + " " + medal.name,
+                    profileBounds.left + 42f, profileBounds.centerY() + 6f, paint);
+            paint.setFakeBoldText(false);
+        }
+
+        private int medalIndex(ProgressionCatalog.Medal target) {
+            for (int i = 0; i < ProgressionCatalog.MEDALS.length; i++) {
+                if (ProgressionCatalog.MEDALS[i].id.equals(target.id)) return i;
+            }
+            return 0;
         }
 
         private void drawScoreBar(Canvas canvas) {
             float left = 20f;
             float top = 78f;
             float right = 300f;
-            float bottom = TOP_HEIGHT - 12f;
+            float bottom = 144f;
             paint.setStyle(Paint.Style.FILL);
             paint.setColor(0xff263746);
             canvas.drawRoundRect(left, top, right, bottom, 12f, 12f, paint);
@@ -652,7 +784,7 @@ public class MainActivity extends Activity {
             float left = Math.max(315f, getWidth() - 350f);
             float top = 78f;
             float right = getWidth() - 20f;
-            float bottom = TOP_HEIGHT - 12f;
+            float bottom = 144f;
             paint.setStyle(Paint.Style.FILL);
             paint.setColor(0xff263746);
             canvas.drawRoundRect(left, top, right, bottom, 12f, 12f, paint);
@@ -1487,7 +1619,7 @@ public class MainActivity extends Activity {
                         : "\u7b2c2\u6b65\uff1a\u70b9\u51fb\u9ad8\u4eae\u7a7a\u683c";
             } else if (tutorialStep == 2) {
                 float left = Math.max(315f, getWidth() - 350f);
-                focus.set(left, 78f, getWidth() - 20f, TOP_HEIGHT - 12f);
+                focus.set(left, 78f, getWidth() - 20f, 144f);
                 message = "\u7b2c3\u6b65\uff1a\u89c2\u5bdf\u4e0b\u4e00\u8f6e\u68cb\u5b50";
                 action = true;
             } else {
@@ -1571,6 +1703,10 @@ public class MainActivity extends Activity {
                     return true;
                 }
                 showMenu();
+                return true;
+            }
+            if (profileBounds.contains(x, y)) {
+                showAbilityCards();
                 return true;
             }
             if (gameOver || moving || spawning || removing) {
@@ -1700,7 +1836,7 @@ public class MainActivity extends Activity {
             movingType = board[from[0]][from[1]];
             moveCount++;
             currentChain = 0;
-            if (moveCount >= 30) unlockAchievement("patient_30", "\u6df1\u8c0b\u8fdc\u8651");
+            if (!dailyChallenge && moveCount >= 30) unlockAchievement("patient_30", "\u6df1\u8c0b\u8fdc\u8651");
             board[from[0]][from[1]] = EMPTY;
             selectedRow = -1;
             selectedCol = -1;
@@ -1746,6 +1882,10 @@ public class MainActivity extends Activity {
             }
             if (prepareRemovalPlan()) {
                 startRemovalAnimation(token);
+                return;
+            }
+            if (dailyChallenge && moveCount >= 1) {
+                failDailyChallenge();
                 return;
             }
         if (isFull()) {
@@ -1808,6 +1948,7 @@ public class MainActivity extends Activity {
             if (token != moveToken || !removing) {
                 return;
             }
+            boolean dailyGoalMet = dailyChallenge && isDailyGoalMet();
             for (int row = 0; row < SIZE; row++) {
                 for (int col = 0; col < SIZE; col++) {
                     if (pendingRemove[row][col]) {
@@ -1819,6 +1960,10 @@ public class MainActivity extends Activity {
             removedCount += pendingLineCount + pendingBlastCount;
             lineClearCount++;
             bestClearCount = Math.max(bestClearCount, pendingLineCount + pendingBlastCount);
+            if (dailyChallenge) {
+                if (dailyGoalMet) completeDailyChallenge();
+                else failDailyChallenge();
+            }
             if (!dailyChallenge) addGrowthPoints(Math.max(1, pendingLineScore + pendingBlastCount));
             if (!dailyChallenge) unlockAchievement("first_clear", "\u521d\u6b21\u8fde\u7ebf");
             if (pendingLineCount + pendingBlastCount >= 8) {
@@ -2476,9 +2621,6 @@ public class MainActivity extends Activity {
             }
             ProgressionCatalog.Medal medal = ProgressionCatalog.MEDALS[medalIndex];
             Set<String> cards = new HashSet<>(prefs.getStringSet("cards", Collections.emptySet()));
-            ProgressionCatalog.DailyPuzzle today = ProgressionCatalog.puzzleForDay(
-                    Calendar.getInstance().get(Calendar.DAY_OF_YEAR)
-            );
             StringBuilder text = new StringBuilder();
             text.append("本地档案：").append(profileName).append("\n")
                     .append("玩家 ID：").append(profileId).append("\n")
@@ -2491,16 +2633,25 @@ public class MainActivity extends Activity {
             } else {
                 text.append("已达到最高等级\n\n");
             }
-            text.append("每日残局图鉴：30 个主题草稿（未验证，不可游玩）\n")
-                    .append("布局与目标仅供内容预览，尚未完成人工解法验证；暂不开放通关判定或奖励。\n")
+            text.append("每日残局图鉴：30 个主题设计\n")
+                    .append("MVP 已开放：像素爱心；其余 29 关按设计逐关验证后开放。\n")
+                    .append("规则：每日可选一次；成功后可继续抽取未完成关卡，失败当天锁定。\n")
                     .append("内容版本：首期 30 关\n");
             for (int day = 1; day <= 30; day++) {
                 ProgressionCatalog.DailyPuzzle puzzle = ProgressionCatalog.puzzleForDay(day);
-                text.append(String.format(Locale.US, "%02d. %s · %s；目标：%s\n",
-                        day, puzzle.title, puzzle.summary, puzzle.target));
+                text.append(String.format(Locale.US, "%02d. %s%s · %s；目标：%s\n",
+                        day, puzzle.title, day == 1 ? "（MVP 已开放）" : "（设计待验证）",
+                        puzzle.summary, puzzle.target));
             }
             text.append("\n奖牌：").append(medalIndex + 1).append("/12\n")
-                    .append("能力卡：").append(cards.size()).append("/54\n\n");
+                    .append("成长规则：普通消除每日最多 100 分；残局首通固定 50 分。\n");
+            for (int i = 0; i < ProgressionCatalog.MEDALS.length; i++) {
+                ProgressionCatalog.Medal item = ProgressionCatalog.MEDALS[i];
+                text.append(String.format(Locale.US, "%02d. %s · %d 成长分%s\n",
+                        i + 1, item.mark + " " + item.name + "（" + item.colorName + "）",
+                        item.threshold, points >= item.threshold ? " · 已获得" : ""));
+            }
+            text.append("\n能力卡：").append(cards.size()).append("/54\n\n");
             for (int group = 0; group < ProgressionCatalog.CARDS.length; group++) {
                 ProgressionCatalog.AbilityCard card = ProgressionCatalog.CARDS[group];
                 if (cards.contains(card.id)) {
@@ -2511,9 +2662,12 @@ public class MainActivity extends Activity {
                 } else {
                     text.append("[未解锁] ");
                 }
-                text.append(card.name).append(" · ").append(card.group).append(" · ").append(card.condition)
-                        .append("（").append(card.equipment ? "装备效果尚未开放" : "收藏记录")
-                        .append("）\n");
+                text.append(card.name).append(" · ").append(card.group)
+                        .append("\n   条件：").append(card.condition)
+                        .append("\n   ").append(card.equipment ? "装备卡" : "收藏卡")
+                        .append(" · ").append(card.effect);
+                if (card.equipment) text.append("（效果尚未开放）");
+                text.append('\n');
             }
             TextView view = new TextView(context);
             view.setText(text.toString());
@@ -2527,6 +2681,41 @@ public class MainActivity extends Activity {
                     .setView(scroll)
                     .setPositiveButton("修改显示名", (dialog, which) -> showProfileNameEditor())
                     .setNegativeButton("关闭", null)
+                    .show();
+        }
+
+        private void showAbilityCards() {
+            SharedPreferences prefs = context.getSharedPreferences(PROGRESSION_PREFS, Context.MODE_PRIVATE);
+            Set<String> unlocked = new HashSet<>(prefs.getStringSet("cards", Collections.emptySet()));
+            StringBuilder text = new StringBuilder();
+            text.append(profileName).append(" · ").append(currentMedal().name)
+                    .append(" · ").append(growthPoints()).append(" 成长分\n")
+                    .append("已点亮 ").append(unlocked.size()).append("/54\n\n");
+            String lastGroup = "";
+            for (ProgressionCatalog.AbilityCard card : ProgressionCatalog.CARDS) {
+                if (!lastGroup.equals(card.group)) {
+                    lastGroup = card.group;
+                    text.append("【").append(lastGroup).append("】\n");
+                }
+                text.append(unlocked.contains(card.id) ? "● " : "○ ")
+                        .append(card.name).append(" · ").append(card.equipment ? "装备卡" : "收藏卡")
+                        .append("\n   条件：").append(card.condition)
+                        .append("\n   能力：").append(card.effect);
+                if (card.equipment) text.append("（效果尚未开放）");
+                text.append('\n');
+            }
+            TextView view = new TextView(context);
+            view.setText(text.toString());
+            view.setTextSize(15f);
+            view.setLineSpacing(0f, 1.12f);
+            view.setPadding(dp(22), dp(8), dp(22), dp(12));
+            ScrollView scroll = new ScrollView(context);
+            scroll.addView(view);
+            new AlertDialog.Builder(context)
+                    .setTitle("能力卡册")
+                    .setView(scroll)
+                    .setPositiveButton("关闭", null)
+                    .setNeutralButton("修改显示名", (dialog, which) -> showProfileNameEditor())
                     .show();
         }
 
@@ -2602,7 +2791,19 @@ public class MainActivity extends Activity {
             invalidate();
         }
 
+        private boolean isDailyGoalMet() {
+            if (dailyPuzzle == null || !"daily_01".equals(dailyPuzzle.id)) return false;
+            for (int col = 1; col <= 5; col++) {
+                if (board[3][col] != 1 || !pendingLine[3][col]) return false;
+            }
+            return true;
+        }
+
         private void captureUndoState() {
+            if (dailyChallenge) {
+                undoAvailable = false;
+                return;
+            }
             undoBoard = new int[SIZE][SIZE];
             for (int row = 0; row < SIZE; row++) {
                 System.arraycopy(board[row], 0, undoBoard[row], 0, SIZE);
@@ -2620,7 +2821,7 @@ public class MainActivity extends Activity {
         }
 
         private void undoLastMove() {
-            if (!undoAvailable || moving || spawning || removing || gameOver || undoBoard == null) {
+            if (dailyChallenge || !undoAvailable || moving || spawning || removing || gameOver || undoBoard == null) {
                 sound.playClick();
                 return;
             }
@@ -3213,6 +3414,10 @@ public class MainActivity extends Activity {
             bombsTriggered = state.getInt("five_lines_bombs_triggered", 0);
             currentChain = 0;
             dailyChallenge = state.getBoolean("five_lines_daily_challenge", false);
+            dailyPuzzle = dailyChallenge
+                    ? ProgressionCatalog.puzzleById(settings.getString("daily_active_id", null))
+                    : null;
+            if (dailyChallenge && dailyPuzzle == null) dailyChallenge = false;
             dailyRandomState = state.getLong("five_lines_daily_random_state", 0L);
             dailyBestScore = state.getInt("five_lines_daily_best", 0);
             undoAvailable = false;

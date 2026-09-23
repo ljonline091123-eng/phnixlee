@@ -13,7 +13,7 @@ struct CloudContentView: View {
     var body: some View {
         VStack(spacing: 0) {
             header
-                .frame(height: 156)
+                .frame(height: 202)
             GeometryReader { proxy in
                 let size = max(0, min(proxy.size.width - 32, proxy.size.height - 32) - 14)
                 board(size: size)
@@ -105,7 +105,7 @@ struct CloudContentView: View {
                         .font(.system(size: 30, weight: .bold))
                         .foregroundStyle(.white)
                     Text(game.dailyChallenge
-                        ? "今日最佳 \(String(format: "%05d", game.dailyBestScore)) · 每 12 步提升生成压力"
+                        ? "\(game.currentDailyPuzzle?.title ?? "每日残局") · \(game.currentDailyPuzzle?.target ?? "完成目标图形")"
                         : "白色万能球 · 炸药+至少四颗同色球清除全盘")
                         .font(.system(size: 12))
                         .foregroundStyle(.white.opacity(0.82))
@@ -133,11 +133,39 @@ struct CloudContentView: View {
                 previewCard
             }
             .frame(height: 66)
+
+            Button {
+                collectionPresented = true
+            } label: {
+                HStack(spacing: 9) {
+                    Text(game.currentMedal.mark)
+                        .font(.system(size: 16, weight: .black))
+                        .foregroundStyle(Color.yellow)
+                    Text(game.profileName)
+                        .font(.system(size: 16, weight: .bold))
+                    Text("Lv.\(medalLevel) · \(game.currentMedal.name)")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.82))
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .foregroundStyle(.white.opacity(0.65))
+                }
+                .foregroundStyle(.white)
+                .padding(.horizontal, 13)
+                .frame(height: 38)
+                .background(Color(red: 0.224, green: 0.294, blue: 0.349), in: RoundedRectangle(cornerRadius: 8))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("打开账号与能力卡")
         }
         .padding(.horizontal, 20)
         .padding(.top, 10)
         .padding(.bottom, 12)
         .background(Color(red: 0.063, green: 0.094, blue: 0.125))
+    }
+
+    private var medalLevel: Int {
+        (CloudGameModel.medals.firstIndex(where: { $0.id == game.currentMedal.id }) ?? 0) + 1
     }
 
     private var scoreCard: some View {
@@ -258,12 +286,12 @@ private struct CollectionAndChallengesView: View {
                         .foregroundStyle(.secondary)
                 }
                 Section("每日残局图鉴 · 首期 30 关") {
-                    Text("以下布局与目标为未验证草稿，暂不可游玩。完成解法验证前，不启用通关判定与首通奖励。")
+                    Text("规则：每日可选一次；成功后可继续抽取未完成关卡，失败当天锁定。像素爱心 MVP 已开放，其余设计逐关验证后开放。")
                         .foregroundStyle(Color.secondary)
                     ForEach(0..<30, id: \.self) { index in
                         let puzzle = CloudGameModel.dailyPuzzle(forDay: index + 1)
                         VStack(alignment: .leading, spacing: 3) {
-                            Text("\(index + 1). \(puzzle.title)")
+                            Text("\(index + 1). \(puzzle.title) · \(index == 0 ? "MVP 已开放" : "设计待验证")")
                             Text("\(puzzle.summary) · 目标：\(puzzle.target)")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
@@ -273,9 +301,10 @@ private struct CollectionAndChallengesView: View {
                 Section("奖牌与卡册 · \(game.unlockedCardIDs.count)/54") {
                     ForEach(CloudGameModel.medals) { medal in
                         HStack {
-                            Image(systemName: game.growthPoints >= medal.threshold ? "medal.fill" : "medal")
+                            Text(medal.mark)
+                                .frame(width: 32)
                                 .foregroundStyle(game.growthPoints >= medal.threshold ? Color.orange : Color.secondary)
-                            Text(medal.name)
+                            Text("\(medal.name)（\(medal.colorName)）")
                             Spacer()
                             Text("\(medal.threshold) 分")
                                 .foregroundStyle(.secondary)
@@ -292,7 +321,10 @@ private struct CollectionAndChallengesView: View {
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
-                            Text(game.unlockedCardIDs.contains(card.id) ? "已解锁 · 收藏记录（装备效果尚未开放）" : card.condition)
+                            Text("条件：\(card.condition)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Text("\(card.equipment ? "装备卡" : "收藏卡") · \(card.effect)\(card.equipment ? "（效果尚未开放）" : "")")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                             if let unlockedAt = game.cardUnlockDates[card.id] {
