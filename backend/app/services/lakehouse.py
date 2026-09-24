@@ -5,6 +5,7 @@ import io
 import json
 import math
 import re
+import unicodedata
 from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -146,6 +147,7 @@ def put_object(data: bytes, *, layer: str, content_type: str, source_code: str |
         if not path.exists():
             path.write_bytes(data)
         bucket, uri = None, f"file://{path.resolve()}"
+    object_domain = source_table or source_code or "internal"
     result = {"object_uri": uri, "content_hash": digest, "byte_size": len(data), "layer": layer,
               "bucket": bucket, "object_key": key, "content_type": content_type}
     if db is not None:
@@ -153,7 +155,8 @@ def put_object(data: bytes, *, layer: str, content_type: str, source_code: str |
         if existing is None:
             existing = LakeObject(**result, source_code=source_code, source_table=source_table,
                 source_record_id=str(source_record_id) if source_record_id is not None else None,
-                dataset_version=dataset_version, metadata_json=metadata or {})
+                dataset_version=dataset_version, metadata_json={"object_type": object_domain,
+                    "domain": object_domain, **(metadata or {})})
             db.add(existing)
             db.flush()
         elif existing.object_uri != uri:
@@ -227,6 +230,17 @@ def _version() -> str:
 
 def _blank(value: Any) -> bool:
     return value is None or isinstance(value, str) and not value.strip() or isinstance(value, (dict, list)) and not value
+
+
+def _hash_embedding(text: str, dimensions: int = 64) -> list[float]:
+    """Deterministic lexical vector for the local MVP; replaceable by a semantic model."""
+    vector = [0.0] * dimensions
+    tokens = re.findall(r"[A-Za-z0-9_]+|[\u4e00-\u9fff]", unicodedata.normalize("NFKC", text or ""))
+    for token in tokens:
+        index = int.from_bytes(hashlib.sha256(token.encode("utf-8")).digest()[:4], "big") % dimensions
+        vector[index] += 1.0
+    norm = math.sqrt(sum(value * value for value in vector)) or 1.0
+    return [round(value / norm, 6) for value in vector]
 
 
 def _source_schema(table_name: str) -> dict[str, str]:
@@ -428,6 +442,16 @@ def export_dataset(db: Session, *, dataset_code: str, dataset_name: str, layer: 
                    source_table: str, limit: int = 10000,
                    scope_pairs: list[tuple[str, str]] | None = None) -> dict[str, Any]:
     layer = layer.upper()
+    validation_names = {
+        "validation20_stock_master": "股票主数据",
+        "validation20_market": "历史量价数据",
+        "validation20_financial": "财务数据",
+        "validation20_f10": "F10资料",
+        "validation20_news_raw": "新闻原始数据",
+        "validation20_notice_raw": "公告原始数据",
+        "validation20_company_serving": "公司股票映射",
+    }
+    dataset_name = validation_names.get(dataset_code, dataset_name)
     if layer == "SERVING" and source_table not in SERVING_EXPORT_TABLES:
         raise ValueError(f"{source_table} 未通过 Serving 层发布白名单")
     records = _records_for_table(db, source_table, min(limit, 100000), layer, scope_pairs)
@@ -471,6 +495,10 @@ def export_dataset(db: Session, *, dataset_code: str, dataset_name: str, layer: 
         downstream_type="DATASET_VERSION", downstream_id=f"{dataset_code}:{version}",
         transformation="PARQUET_EXPORT", dataset_version=version,
         metadata_json={"row_count": len(records), "object_id": obj.get("object_id")}))
+    db.add(LakeLineageEvent(batch_id=batch_id, upstream_type="DATASET_VERSION",
+        upstream_id=f"{dataset_code}:{version}", downstream_type="LAKE_OBJECT",
+        downstream_id=str(obj.get("object_id")), transformation="DATASET_OBJECT_WRITE",
+        dataset_version=version, metadata_json={"dataset_code": dataset_code, "source_table": source_table}))
     db.commit()
     return {"dataset_id": dataset.id, "dataset_code": dataset_code, "version": version,
             "batch_id": batch_id, "row_count": len(records), "quality": quality, **obj}
@@ -548,8 +576,9 @@ def _chunk_spans(text: str, chunk_size: int, overlap: int) -> list[tuple[int, in
 
 
 def create_chunks(db: Session, *, document_key: str, text: str, document_id: str | None = None,
-                  chunk_size: int = 1800, overlap: int = 180, parser_version: str = "STRUCTURE_V1",
-                  embedding_model: str | None = None, archive_original: bool = True) -> dict[str, Any]:
+                  chunk_size: int = 1800, overlap: int = 180, parser_version: str = "STRUCTURE_V2",
+                  embedding_model: str | None = None, archive_original: bool = True,
+                  section_title: str | None = None) -> dict[str, Any]:
     text = text or ""
     if overlap >= chunk_size:
         raise ValueError("切片重叠长度必须小于切片长度")
@@ -559,7 +588,7 @@ def create_chunks(db: Session, *, document_key: str, text: str, document_id: str
     source_obj = None
     if archive_original:
         source_obj = put_object(source_bytes, layer="RAW", content_type="text/plain; charset=utf-8",
-            source_code="knowledge_document", source_record_id=document_id, db=db,
+            source_code="knowledge_document", source_table="knowledge_document", source_record_id=document_id, db=db,
             metadata={"document_key": document_key, "parser_version": parser_version, "batch_id": batch_id,
                       "quality": document_quality})
         db.add(LakeLineageEvent(batch_id=batch_id, upstream_type="KNOWLEDGE_DOCUMENT",
@@ -583,10 +612,12 @@ def create_chunks(db: Session, *, document_key: str, text: str, document_id: str
         item = DocumentChunkVersion(document_key=document_key, document_id=document_id, chunk_index=index,
             chunk_version=chunk_version, content_hash=digest, chunk_text=chunk,
             start_offset=start, end_offset=end, parser_version=parser_version,
-            embedding_model=embedding_model, metadata_json={"overlap": overlap,
+            embedding_model=embedding_model or "HASH_EMBED_V1", metadata_json={"overlap": overlap,
                 "source_object_id": (source_obj or {}).get("object_id"),
                 "chunk_method": "STRUCTURE_AWARE_V1", "boundary_type": boundary_type,
-                "section_title": _section_title(text, start, end), "document_quality": document_quality})
+                "section_title": _section_title(text, start, end) or section_title or "正文",
+                "embedding_status": "READY", "embedding_dimensions": 64,
+                "embedding": _hash_embedding(chunk)})
         db.add(item)
         db.flush()
         db.add(LakeLineageEvent(batch_id=batch_id, upstream_type="LAKE_OBJECT",
@@ -602,14 +633,14 @@ def create_chunks(db: Session, *, document_key: str, text: str, document_id: str
 
 
 def archive_knowledge_documents(db: Session, *, limit: int = 100, chunk_size: int = 1800,
-                                overlap: int = 180, parser_version: str = "STRUCTURE_V1") -> dict[str, Any]:
+                                overlap: int = 180, parser_version: str = "STRUCTURE_V2") -> dict[str, Any]:
     from app.models.ai_hub import KnowledgeDocument
     documents = db.scalars(select(KnowledgeDocument).order_by(KnowledgeDocument.id).limit(min(limit, 1000))).all()
     archived, chunks, reused, warning_documents = 0, 0, 0, 0
     for document in documents:
         result = create_chunks(db, document_key=f"knowledge_document:{document.id}", document_id=str(document.id),
             text=document.content or document.title, chunk_size=chunk_size, overlap=overlap,
-            parser_version=parser_version, archive_original=True)
+            parser_version=parser_version, archive_original=True, section_title=document.title)
         archived += 1
         chunks += result["created_count"]
         reused += result["reused_count"]

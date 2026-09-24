@@ -30,3 +30,7 @@ class DocumentArchiveRequest(BaseModel):
     chunk_size: int = Field(default=1800, ge=300, le=6000)
     overlap: int = Field(default=180, ge=0, le=1000)
     parser_version: str = Field(default="STRUCTURE_V1", max_length=64)
+
+
+class LakehouseValidationRequest(BaseModel):
+    count: int = Field(default=20, ge=1, le=100)

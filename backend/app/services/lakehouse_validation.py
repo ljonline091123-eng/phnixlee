@@ -108,11 +108,11 @@ def run_validation(db: Session, count: int = 20) -> dict[str, Any]:
             documents = db.scalars(select(KnowledgeDocument).where(
                 KnowledgeDocument.graph_id == graph.id, KnowledgeDocument.market == market,
                 KnowledgeDocument.symbol == symbol, KnowledgeDocument.source_table == source_table)
-                .order_by(KnowledgeDocument.id.desc()).limit(2)).all()
+                .order_by(KnowledgeDocument.id.desc()).limit(20)).all()
             for document in documents:
                 result = lakehouse.create_chunks(db, document_key=f"knowledge_document:{document.id}",
                     document_id=str(document.id), text=document.content or document.title,
-                    parser_version="TEXT_V1", archive_original=True)
+                    parser_version="STRUCTURE_V2", archive_original=True, section_title=document.title)
                 archived_documents += 1
                 created_chunks += result["created_count"]
 

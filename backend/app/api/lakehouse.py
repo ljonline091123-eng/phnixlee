@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.models.lakehouse import DocumentChunkVersion, LakeDataset, LakeDatasetVersion, LakeLineageEvent, LakeObject
-from app.schemas.lakehouse import DatasetExportRequest, DatasetQualityRequest, DocumentArchiveRequest, DocumentChunkRequest
+from app.schemas.lakehouse import DatasetExportRequest, DatasetQualityRequest, DocumentArchiveRequest, DocumentChunkRequest, LakehouseValidationRequest
 from app.services import lakehouse
 
 router = APIRouter(prefix="/lakehouse", tags=["Lakehouse"])
@@ -42,9 +42,14 @@ def objects(layer: str | None = None, limit: int = 100, db: Session = Depends(ge
     query = select(LakeObject).order_by(LakeObject.created_at.desc()).limit(min(limit, 500))
     if layer:
         query = query.where(LakeObject.layer == layer.upper())
-    return [{"id": row.id, "object_uri": row.object_uri, "layer": row.layer, "bucket": row.bucket,
+    return [{"id": row.id, "object_uri": row.object_uri, "layer": row.layer,
+             "bucket": (row.metadata_json or {}).get("object_type") or row.source_table or row.source_code or "内部对象",
+             "storage_bucket": row.bucket,
              "object_key": row.object_key, "content_hash": row.content_hash,
              "content_type": row.content_type, "byte_size": row.byte_size, "source_table": row.source_table,
+             "source_code": row.source_code,
+             "object_type": (row.metadata_json or {}).get("object_type") or row.source_table or row.source_code or "内部对象",
+             "domain": (row.metadata_json or {}).get("domain") or row.source_table or "内部",
              "source_record_id": row.source_record_id, "dataset_version": row.dataset_version,
              "created_at": row.created_at} for row in db.scalars(query).all()]
 
@@ -57,10 +62,13 @@ def chunks_catalog(document_key: str | None = None, limit: int = 100, db: Sessio
              "chunk_index": row.chunk_index, "chunk_version": row.chunk_version,
              "content_hash": row.content_hash, "text_preview": row.chunk_text[:300],
              "start_offset": row.start_offset, "end_offset": row.end_offset,
-             "parser_version": row.parser_version, "embedding_model": row.embedding_model,
+             "parser_version": row.parser_version,
+             "embedding_model": ((row.embedding_model or "") + (f"（{(row.metadata_json or {}).get('embedding_dimensions', 0)}维已生成）" if row.embedding_model else "")),
              "status": row.status, "section_title": (row.metadata_json or {}).get("section_title"),
              "boundary_type": (row.metadata_json or {}).get("boundary_type"),
              "chunk_method": (row.metadata_json or {}).get("chunk_method"),
+             "embedding_status": (row.metadata_json or {}).get("embedding_status") or ("READY" if row.embedding_model else "PENDING"),
+             "embedding_dimensions": (row.metadata_json or {}).get("embedding_dimensions"),
              "created_at": row.created_at}
             for row in db.scalars(query).all()]
 
@@ -70,7 +78,8 @@ def lineage(batch_id: str | None = None, limit: int = 100, db: Session = Depends
     if batch_id: query = query.where(LakeLineageEvent.batch_id == batch_id)
     return [{"id": row.id, "batch_id": row.batch_id, "upstream_type": row.upstream_type, "upstream_id": row.upstream_id,
              "downstream_type": row.downstream_type, "downstream_id": row.downstream_id, "transformation": row.transformation,
-             "parser_version": row.parser_version, "dataset_version": row.dataset_version, "created_at": row.created_at}
+             "parser_version": row.parser_version, "dataset_version": row.dataset_version,
+             "metadata": row.metadata_json or {}, "created_at": row.created_at}
             for row in db.scalars(query).all()]
 
 @router.post("/datasets/export")
@@ -96,5 +105,14 @@ def chunks(payload: DocumentChunkRequest, db: Session = Depends(get_db)):
 def archive_documents(payload: DocumentArchiveRequest, db: Session = Depends(get_db)):
     try:
         return lakehouse.archive_knowledge_documents(db, **payload.model_dump())
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.post("/validation/run")
+def run_validation(payload: LakehouseValidationRequest, db: Session = Depends(get_db)):
+    from app.services.lakehouse_validation import run_validation as execute_validation
+    try:
+        return execute_validation(db, count=payload.count)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

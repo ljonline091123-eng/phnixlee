@@ -5071,3 +5071,19 @@ textarea:focus {
     flex: 0 1 auto;
   }
 }
+.lakehouse-preview-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  padding: 14px 20px;
+  background: #f4f7f1;
+  border-bottom: 1px solid #dfe6dc;
+}
+.lakehouse-preview-summary span { padding: 5px 10px; border-radius: 999px; background: #fff; }
+.lakehouse-preview-summary .quality-pass { color: #206a47; background: #e7f4eb; }
+.lakehouse-preview-summary .quality-fail { color: #9d3029; background: #fdecea; }
+.lakehouse-preview-table-wrap { max-height: 420px; margin: 0; padding: 0 20px 18px; }
+.lakehouse-preview-table-wrap table { min-width: 900px; }
+.lakehouse-preview-table-wrap td { max-width: 240px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lakehouse-preview-details { margin: 0 20px 20px; }
