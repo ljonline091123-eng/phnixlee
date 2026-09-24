@@ -4,6 +4,7 @@ import java.util.Locale;
 
 /** Stable, local content definitions shared by the progression UI and daily mode. */
 final class ProgressionCatalog {
+    static final int VERIFIED_DAILY_PUZZLE_COUNT = 1;
     static final class DailyPuzzle {
         final String id;
         final String title;
@@ -24,11 +25,17 @@ final class ProgressionCatalog {
         final String id;
         final String name;
         final int threshold;
+        final String mark;
+        final String colorName;
+        final int color;
 
-        Medal(String id, String name, int threshold) {
+        Medal(String id, String name, int threshold, String mark, String colorName, int color) {
             this.id = id;
             this.name = name;
             this.threshold = threshold;
+            this.mark = mark;
+            this.colorName = colorName;
+            this.color = color;
         }
     }
 
@@ -38,13 +45,15 @@ final class ProgressionCatalog {
         final String name;
         final String condition;
         final boolean equipment;
+        final String effect;
 
-        AbilityCard(String id, String group, String name, String condition, boolean equipment) {
+        AbilityCard(String id, String group, String name, String condition, boolean equipment, String effect) {
             this.id = id;
             this.group = group;
             this.name = name;
             this.condition = condition;
             this.equipment = equipment;
+            this.effect = effect;
         }
     }
 
@@ -56,7 +65,7 @@ final class ProgressionCatalog {
     };
 
     private static final String[] PUZZLE_SUMMARIES = {
-            "清理关键位置，完成爱心轮廓主题目标", "打通棋盘通道并完成指定消除", "限定步数内清除分散目标",
+            "移动唯一红棋，补上像素爱心中线缺口", "打通棋盘通道并完成指定消除", "限定步数内清除分散目标",
             "清除指定颜色棋子", "清出通路并完成目标连线", "清理飞船轮廓上的关键位置", "限步清除路线节点",
             "连续完成指定次数消除", "清除指定形状区域", "清理手柄轮廓上的目标位置", "使用白棋完成指定颜色连线",
             "限定步数内完成两次消除", "清除棋盘角落的目标棋子", "完成指定长度的连线", "单次消除达到指定数量",
@@ -67,7 +76,7 @@ final class ProgressionCatalog {
     };
 
     private static final String[] PUZZLE_TARGETS = {
-            "清除爱心轮廓上的 8 个目标位置", "完成 2 次横向连线", "12 步内清除 3 个角落目标", "清除 5 个红色棋子",
+            "1 步内完成爱心中线的红色五连", "完成 2 次横向连线", "12 步内清除 3 个角落目标", "清除 5 个红色棋子",
             "完成 1 条长度至少 5 的连线", "清除飞船中央 6 个位置", "10 步内清除路线节点", "连续消除 3 次",
             "清除中央方块区域", "清除手柄两侧目标", "使用白棋完成 1 条连线", "12 步内完成 2 次消除",
             "清除四角目标", "完成长度至少 6 的连线", "单次消除至少 7 个棋子", "连续两回合消除",
@@ -78,12 +87,18 @@ final class ProgressionCatalog {
     };
 
     static final Medal[] MEDALS = {
-            new Medal("medal_01", "初学之星", 0), new Medal("medal_02", "青铜新手", 100),
-            new Medal("medal_03", "青铜行者", 250), new Medal("medal_04", "白银棋手", 500),
-            new Medal("medal_05", "白银连线师", 900), new Medal("medal_06", "黄金棋手", 1400),
-            new Medal("medal_07", "黄金大师", 2100), new Medal("medal_08", "铂金战略家", 3000),
-            new Medal("medal_09", "铂金大师", 4200), new Medal("medal_10", "钻石宗师", 5800),
-            new Medal("medal_11", "星耀传奇", 7800), new Medal("medal_12", "五线传说", 10000)
+            new Medal("medal_01", "初学之星", 0, "★", "银灰", 0xffb0bec5),
+            new Medal("medal_02", "青铜新手", 100, "I", "铜棕", 0xffa66a3f),
+            new Medal("medal_03", "青铜行者", 250, "II", "赤铜", 0xffc86b45),
+            new Medal("medal_04", "白银棋手", 500, "III", "银白", 0xffe2e8f0),
+            new Medal("medal_05", "白银连线师", 900, "IV", "冰蓝", 0xff7dd3fc),
+            new Medal("medal_06", "黄金棋手", 1400, "V", "金黄", 0xffffd54f),
+            new Medal("medal_07", "黄金大师", 2100, "VI", "琥珀", 0xffffb020),
+            new Medal("medal_08", "铂金战略家", 3000, "VII", "青蓝", 0xff22b8cf),
+            new Medal("medal_09", "铂金大师", 4200, "VIII", "蓝紫", 0xff7c6ee6),
+            new Medal("medal_10", "钻石宗师", 5800, "◆", "钻蓝", 0xff38bdf8),
+            new Medal("medal_11", "星耀传奇", 7800, "✦", "紫红", 0xffd946ef),
+            new Medal("medal_12", "五线传说", 10000, "♛", "彩虹金", 0xffffc107)
     };
 
     private static final String[][] CARD_ROWS = {
@@ -96,7 +111,32 @@ final class ProgressionCatalog {
             {"主题收藏", "像素之心", "完成像素爱心残局", "街机记忆", "完成任意 5 个复古主题残局", "太空漫游", "完成全部太空主题残局", "拆弹专家", "完成全部炸药主题残局", "彩图鉴赏家", "完成 20 个不同主题残局", "五线全明星", "集齐其余 53 张能力卡"}
     };
 
+    private static final String[][] CARD_EFFECT_ROWS = {
+            {"记录首次消除里程碑", "解锁五连纪念标记", "记录单次消除纪录", "解锁连线统计徽记", "记录横向消除专精", "记录纵向消除专精", "记录斜向消除专精", "展示累计消除纪念章"},
+            {"记录百比分数里程碑", "解锁分数纪念边框", "记录三百分里程碑", "解锁千分纪念标记", "记录高分纪录", "解锁高分档案徽记", "记录稳定得分成就", "记录逆境消除成就"},
+            {"记录白棋入门成就", "解锁白棋外观样式", "记录炸药入门成就", "记录爆破纪录", "解锁特殊棋子组合徽记", "记录危机处理成就", "展示特殊棋子统计", "解锁特殊棋子纪念边框"},
+            {"记录首次连击", "解锁连击纪念标记", "记录三连击纪录", "记录策略坚持成就", "记录棋盘规划成就", "普通模式每局额外显示一次棋子预告", "记录多线消除成就", "解锁棋盘外观主题"},
+            {"记录首次挑战", "解锁挑战纪念标记", "记录残局收集进度", "解锁残局档案边框", "解锁挑战者奖牌装饰", "记录独立解题成就", "记录步数挑战成就", "解锁月份纪念卡面"},
+            {"记录首次完成对局", "解锁累计对局标记", "记录长期游玩里程碑", "记录逆境坚持成就", "普通模式每局额外增加一次撤销机会", "记录个人纪录", "记录连续游玩成就", "展示收藏进度徽记"},
+            {"解锁爱心主题卡面", "解锁复古主题装饰", "解锁太空棋盘外观", "记录炸药挑战专精", "解锁挑战图鉴装饰", "解锁全卡收藏纪念外观"}
+    };
+
     static final AbilityCard[] CARDS = buildCards();
+
+    static {
+        if (MEDALS.length != 12 || CARDS.length != 54) {
+            throw new IllegalStateException("Progression catalog counts are invalid");
+        }
+        int[] mvp = puzzleForDay(1).layout;
+        if (mvp.length != 81 || mvp[43] != 1 || mvp[32] != 0) {
+            throw new IllegalStateException("Daily puzzle MVP layout is invalid");
+        }
+        for (int col = 1; col <= 4; col++) {
+            if (mvp[27 + col] != 1) {
+                throw new IllegalStateException("Daily puzzle MVP target is invalid");
+            }
+        }
+    }
 
     private ProgressionCatalog() { }
 
@@ -111,8 +151,37 @@ final class ProgressionCatalog {
         );
     }
 
+    static DailyPuzzle puzzleById(String id) {
+        if (id == null) return null;
+        for (int day = 1; day <= PUZZLE_TITLES.length; day++) {
+            DailyPuzzle puzzle = puzzleForDay(day);
+            if (puzzle.id.equals(id)) return puzzle;
+        }
+        return null;
+    }
+
     private static int[] createLayout(int index) {
         int[] layout = new int[81];
+        if (index == 0) {
+            // MVP 图形：9x9 像素爱心；红色中线保留缺口，右下方红棋可沿空格移动到缺口。
+            int[][] heart = {
+                    {0, 1, 5, 0, 0, 5, 1, 0, 0},
+                    {5, 1, 1, 5, 5, 1, 1, 5, 0},
+                    {1, 5, 1, 5, 1, 5, 1, 5, 0},
+                    {0, 1, 1, 1, 1, 0, 0, 0, 0},
+                    {0, 0, 5, 1, 1, 5, 0, 1, 0},
+                    {0, 0, 0, 1, 5, 0, 0, 0, 0},
+                    {0, 0, 0, 0, 0, 0, 0, 0, 0},
+                    {0, 0, 0, 0, 0, 0, 0, 0, 0},
+                    {0, 0, 0, 0, 0, 0, 0, 0, 0}
+            };
+            for (int row = 0; row < 9; row++) {
+                for (int col = 0; col < 9; col++) {
+                    layout[row * 9 + col] = heart[row][col];
+                }
+            }
+            return layout;
+        }
         for (int row = 0; row < 9; row++) {
             for (int col = 0; col < 9; col++) {
                 boolean marked = ((row + col + index) % 4 == 0)
@@ -131,16 +200,19 @@ final class ProgressionCatalog {
     private static AbilityCard[] buildCards() {
         AbilityCard[] result = new AbilityCard[54];
         int cursor = 0;
-        for (String[] row : CARD_ROWS) {
+        for (int groupIndex = 0; groupIndex < CARD_ROWS.length; groupIndex++) {
+            String[] row = CARD_ROWS[groupIndex];
             String group = row[0];
             for (int i = 1; i + 1 < row.length; i += 2) {
                 boolean equipment = row[i].equals("先手布局") || row[i].equals("复盘学徒");
+                String effect = CARD_EFFECT_ROWS[groupIndex][(i - 1) / 2];
                 result[cursor] = new AbilityCard(
                         String.format(Locale.US, "card_%02d", cursor + 1),
                         group,
                         row[i],
                         row[i + 1],
-                        equipment
+                        equipment,
+                        effect
                 );
                 cursor++;
             }

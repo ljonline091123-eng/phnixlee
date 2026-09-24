@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FiveLines 54 张能力卡设计</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; background: #e8edf0; color: #101820; }
+    body { font-family: "Microsoft YaHei", "Noto Sans CJK SC", sans-serif; letter-spacing: 0; }
+    #catalog { width: 2460px; margin: 0 auto; padding: 56px; }
+    .catalog-header { display: flex; align-items: end; justify-content: space-between; padding: 0 4px 34px; }
+    .catalog-header h1 { margin: 0; font-size: 58px; line-height: 1; }
+    .catalog-header p { margin: 12px 0 0; font-size: 24px; color: #52616b; }
+    .catalog-count { font: 800 42px/1 Consolas, monospace; color: #ef5350; }
+    .group { --accent: #ef5350; --accent2: #22b8cf; --soft: #fff1ef; margin-bottom: 54px; }
+    .group-heading { display: flex; align-items: center; gap: 20px; margin: 0 4px 20px; }
+    .group-mark { width: 74px; height: 74px; display: grid; place-items: center; border-radius: 8px; background: var(--accent); color: white; font-size: 38px; font-weight: 900; }
+    .group-heading h2 { margin: 0; font-size: 34px; }
+    .group-heading span { margin-left: auto; font: 700 22px/1 Consolas, monospace; color: #607d8b; }
+    .cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px; }
+    .ability-card { position: relative; width: 568px; height: 796px; overflow: hidden; border: 4px solid #101820; border-radius: 8px; background: #f8fafb; box-shadow: 0 12px 0 #101820; }
+    .ability-card::before { content: ""; position: absolute; inset: 0 0 auto; height: 18px; background: linear-gradient(90deg, var(--accent) 0 58%, var(--accent2) 58% 100%); }
+    .card-top { height: 108px; display: flex; align-items: center; padding: 26px 28px 12px; background: #101820; color: white; }
+    .card-no { font: 900 28px/1 Consolas, monospace; color: var(--accent2); }
+    .card-kind { margin-left: auto; padding: 9px 14px; border: 2px solid var(--accent); border-radius: 6px; font-size: 18px; font-weight: 700; }
+    .art { position: relative; height: 306px; display: grid; place-items: center; overflow: hidden; background: var(--soft); border-bottom: 3px solid #101820; }
+    .pixel-grid { position: absolute; inset: 0; opacity: .18; background-image: linear-gradient(#101820 2px, transparent 2px), linear-gradient(90deg, #101820 2px, transparent 2px); background-size: 52px 52px; }
+    .orbital { position: absolute; width: 244px; height: 244px; border: 5px solid var(--accent2); border-radius: 50%; opacity: .55; }
+    .orbital::before, .orbital::after { content: ""; position: absolute; inset: 32px; border: 4px solid var(--accent); transform: rotate(45deg); }
+    .orbital::after { inset: 66px; border-radius: 50%; transform: none; background: #fff8; }
+    .symbol { position: relative; z-index: 2; width: 156px; height: 156px; display: grid; place-items: center; border: 7px solid #101820; border-radius: 50%; background: var(--accent); color: white; font: 900 76px/1 Consolas, "Microsoft YaHei", sans-serif; box-shadow: 12px 12px 0 var(--accent2); }
+    .level-pips { position: absolute; left: 28px; bottom: 22px; display: flex; gap: 8px; }
+    .level-pips i { display: block; width: 22px; height: 22px; border: 3px solid #101820; background: #fff; }
+    .level-pips i.on { background: var(--accent); }
+    .card-body { height: 324px; padding: 26px 30px; background: #f8fafb; }
+    .card-group { color: var(--accent); font-size: 20px; font-weight: 800; }
+    .card-name { margin: 7px 0 20px; font-size: 42px; line-height: 1.15; font-weight: 900; }
+    .meta { margin-top: 14px; }
+    .meta-label { display: inline-block; min-width: 88px; margin-right: 10px; color: #607d8b; font-size: 18px; font-weight: 800; }
+    .meta-text { font-size: 20px; line-height: 1.55; font-weight: 650; }
+    .card-footer { position: absolute; left: 0; right: 0; bottom: 0; height: 58px; display: flex; align-items: center; padding: 0 30px; background: #101820; color: white; font-size: 17px; font-weight: 700; }
+    .card-footer .state { margin-left: auto; color: var(--accent2); }
+    .group[data-group="line"] { --accent:#ef5350; --accent2:#22b8cf; --soft:#fff0ed; }
+    .group[data-group="score"] { --accent:#f3b34c; --accent2:#ef5350; --soft:#fff7db; }
+    .group[data-group="special"] { --accent:#009688; --accent2:#f72585; --soft:#e6f7f3; }
+    .group[data-group="combo"] { --accent:#4361ee; --accent2:#ff8f3d; --soft:#edf0ff; }
+    .group[data-group="daily"] { --accent:#1769aa; --accent2:#ffd166; --soft:#e7f3ff; }
+    .group[data-group="growth"] { --accent:#22a06b; --accent2:#ef5350; --soft:#e7f6ec; }
+    .group[data-group="theme"] { --accent:#d946ef; --accent2:#00a6a6; --soft:#fbeafd; }
+    .single-mode #catalog { width: 680px; padding: 56px; }
+    .single-mode .catalog-header, .single-mode .group-heading, .single-mode .ability-card:not(.capture) { display: none; }
+    .single-mode .group { margin: 0; }
+    .single-mode .cards { display: block; }
+    .single-mode .ability-card.capture { display: block; }
+  </style>
+</head>
+<body>
+  <main id="catalog">
+    <header class="catalog-header">
+      <div><h1>FiveLines 能力卡册</h1><p>收藏、点亮、装备 · MVP 视觉设计稿</p></div>
+      <div class="catalog-count">54 CARDS</div>
+    </header>
+    <div id="groups"></div>
+  </main>
+  <script>
+    const groups = [
+      { key:'line', name:'连线启程', mark:'五', icon:'5', cards:[
+        ['初次连线','首次完成消除','记录首次消除里程碑'],['五连新手','首次完成五连','解锁五连纪念标记'],['清场见习','单次消除至少 8 枚棋子','记录单次消除纪录'],['连线熟手','单局完成 5 次消除','解锁连线统计徽记'],['横线专精','累计横向消除 10 次','记录横向消除专精'],['竖线专精','累计纵向消除 10 次','记录纵向消除专精'],['斜线巧手','累计斜向消除 10 次','记录斜向消除专精'],['连线收藏家','累计消除 100 枚棋子','展示累计消除纪念章'] ]},
+      { key:'score', name:'分数里程', mark:'分', icon:'+', cards:[
+        ['百分达人','单局达到 100 分','记录百比分数里程碑'],['双百分','单局达到 200 分','解锁分数纪念边框'],['三百分','单局达到 300 分','记录三百分里程碑'],['千分起步','单局达到 1,000 分','解锁千分纪念标记'],['高分挑战者','单局达到 2,500 分','记录高分纪录'],['高分专家','单局达到 5,000 分','解锁高分档案徽记'],['稳步得分','连续 5 次消除均获得分数','记录稳定得分成就'],['终局逆转','棋盘空间紧张时完成有效消除','记录逆境消除成就'] ]},
+      { key:'special', name:'特殊棋子', mark:'特', icon:'✦', cards:[
+        ['白棋初用','首次使用白棋完成消除','记录白棋入门成就'],['万能补位','累计使用白棋补足连线 10 次','解锁白棋外观样式'],['炸药初用','首次引爆炸药','记录炸药入门成就'],['精准爆破','一次炸药影响多个棋子','记录爆破纪录'],['双宝连携','同一局使用白棋和炸药','解锁特殊棋子组合徽记'],['危机拆弹','利用炸药解除棋盘拥堵','记录危机处理成就'],['工具达人','累计使用特殊棋子 20 次','展示特殊棋子统计'],['特殊大师','同一局完成白棋连线和炸药消除','解锁特殊棋子纪念边框'] ]},
+      { key:'combo', name:'连击策略', mark:'连', icon:'×', cards:[
+        ['连击初体验','首次连续回合完成消除','记录首次连击'],['双连击','连续 2 回合完成消除','解锁连击纪念标记'],['三连击','连续 3 回合完成消除','记录三连击纪录'],['步步为营','连续 10 步后仍完成有效消除','记录策略坚持成就'],['空间整理','成功清理关键通道并完成消除','记录棋盘规划成就'],['先手布局','查看棋子预告后完成消除','普通模式每局额外显示一次棋子预告','装备卡'],['多线规划','单步产生多条有效消除','记录多线消除成就'],['棋盘掌控','完成指定高密度棋盘挑战','解锁棋盘外观主题'] ]},
+      { key:'daily', name:'每日挑战', mark:'日', icon:'日', cards:[
+        ['每日来客','完成 1 次每日挑战','记录首次挑战'],['七日挑战者','累计完成 7 次每日挑战','解锁挑战纪念标记'],['残局新秀','完成 5 种不同残局','记录残局收集进度'],['残局专家','完成 15 种不同残局','解锁残局档案边框'],['三十关征服者','完成首期全部 30 关','解锁挑战者奖牌装饰'],['无提示通关','不使用提示完成任意残局','记录独立解题成就'],['步数大师','按关卡要求保留指定步数通关','记录步数挑战成就'],['全勤记录','完成一个自然月的每日挑战','解锁月份纪念卡面'] ]},
+      { key:'growth', name:'坚持成长', mark:'长', icon:'↑', cards:[
+        ['初次开局','完成首局游戏','记录首次完成对局'],['十局玩家','累计完成 10 局','解锁累计对局标记'],['百局玩家','累计完成 100 局','记录长期游玩里程碑'],['逆境坚持','棋盘拥堵时仍成功完成消除','记录逆境坚持成就'],['复盘学徒','使用撤销后完成本局','普通模式每局额外增加一次撤销机会','装备卡'],['新纪录','刷新个人最高分','记录个人纪录'],['连日归来','连续游玩 3 天','记录连续游玩成就'],['长线收藏家','累计解锁 20 张能力卡','展示收藏进度徽记'] ]},
+      { key:'theme', name:'主题收藏', mark:'藏', icon:'♥', cards:[
+        ['像素之心','完成像素爱心残局','解锁爱心主题卡面'],['街机记忆','完成任意 5 个复古主题残局','解锁复古主题装饰'],['太空漫游','完成全部太空主题残局','解锁太空棋盘外观'],['拆弹专家','完成全部炸药主题残局','记录炸药挑战专精'],['彩图鉴赏家','完成 20 个不同主题残局','解锁挑战图鉴装饰'],['五线全明星','集齐其余 53 张能力卡','解锁全卡收藏纪念外观'] ]}
+    ];
+    let cursor = 1;
+    const root = document.querySelector('#groups');
+    for (const group of groups) {
+      const section = document.createElement('section');
+      section.className = 'group';
+      section.dataset.group = group.key;
+      section.innerHTML = `<header class="group-heading"><div class="group-mark">${group.mark}</div><h2>${group.name}</h2><span>${String(cursor).padStart(2,'0')}—${String(cursor + group.cards.length - 1).padStart(2,'0')}</span></header><div class="cards"></div>`;
+      const cards = section.querySelector('.cards');
+      group.cards.forEach((card, level) => {
+        const number = String(cursor++).padStart(2, '0');
+        const type = card[3] || '收藏卡';
+        const pips = Array.from({length: 8}, (_, i) => `<i class="${i <= level ? 'on' : ''}"></i>`).join('');
+        cards.insertAdjacentHTML('beforeend', `<article class="ability-card" data-card="${number}">
+          <div class="card-top"><span class="card-no">FL-${number}</span><span class="card-kind">${type}</span></div>
+          <div class="art"><div class="pixel-grid"></div><div class="orbital"></div><div class="symbol">${group.icon}${level + 1}</div><div class="level-pips">${pips}</div></div>
+          <div class="card-body"><div class="card-group">${group.name}</div><h3 class="card-name">${card[0]}</h3><div class="meta"><span class="meta-label">点亮条件</span><span class="meta-text">${card[1]}</span></div><div class="meta"><span class="meta-label">卡片能力</span><span class="meta-text">${card[2]}</span></div></div>
+          <footer class="card-footer"><span>FIVELINES ABILITY</span><span class="state">待点亮 ◇</span></footer>
+        </article>`);
+      });
+      root.appendChild(section);
+    }
+    const selected = new URLSearchParams(location.search).get('card');
+    if (selected) {
+      document.body.classList.add('single-mode');
+      const card = document.querySelector(`[data-card="${selected.padStart(2,'0')}"]`);
+      if (card) card.classList.add('capture');
+    }
+  </script>
+</body>
+</html>
