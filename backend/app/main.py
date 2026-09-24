@@ -9,6 +9,7 @@ from app.api import foundation, foundation_jobs
 from app.api import company_graph, company_governance, taxonomy
 from app.api import knowledge_network, lakehouse
 from app.api import knowledge_governance
+from app.api import skill_evaluation, knowledge_pipeline
 from app.core.config import get_settings
 from app.db.bootstrap import initialize_database
 from app.db.session import engine
@@ -57,6 +58,8 @@ app.include_router(taxonomy.router, prefix=settings.api_v1_prefix)
 app.include_router(knowledge_network.router, prefix=settings.api_v1_prefix)
 app.include_router(lakehouse.router, prefix=settings.api_v1_prefix)
 app.include_router(knowledge_governance.router, prefix=settings.api_v1_prefix)
+app.include_router(skill_evaluation.router, prefix=settings.api_v1_prefix)
+app.include_router(knowledge_pipeline.router, prefix=settings.api_v1_prefix)
 
 
 @app.get("/health", tags=["System"])

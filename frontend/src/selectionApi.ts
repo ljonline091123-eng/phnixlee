@@ -1,9 +1,86 @@
 import { request } from "./api";
 
+// GraphRAG payloads are intentionally extensible across source adapters;
+// rendering code narrows individual fields with textOf/jsonPreview helpers.
+export type SelectionRecord = Record<string, any>;
+export type SelectionEvidence = SelectionRecord & {
+  data_mode?: string;
+  as_of?: string | null;
+  data_cutoff?: string | null;
+  context_version?: string | null;
+  context_hash?: string | null;
+  graph_version?: string | null;
+  lakehouse_version?: string | null;
+  document_version?: string | null;
+  skill_code?: string | null;
+  skill_version?: string | null;
+  model_version?: string | null;
+  identity?: SelectionRecord;
+  documents?: SelectionRecord[];
+  relations?: SelectionRecord[];
+  facts?: SelectionRecord[];
+  structured_observations?: Record<string, SelectionRecord[]>;
+  chunks?: SelectionRecord[];
+  graph_paths?: SelectionRecord[];
+  evidence_span?: SelectionRecord[];
+  lineage?: SelectionRecord[];
+  lakehouse_datasets?: SelectionRecord[];
+  missing_data?: unknown;
+  counts?: SelectionRecord;
+};
+
+export type SelectionAuditSnapshot = SelectionRecord & {
+  id: number;
+  candidate_id: number;
+  run_id: number;
+  snapshot_kind: string;
+  decision: string;
+  as_of: string;
+  data_cutoff?: string | null;
+  data_version?: string | null;
+  graph_version?: string | null;
+  skill_code?: string | null;
+  skill_version?: string | null;
+  model_instance_code?: string | null;
+  payload_json?: SelectionRecord;
+  evidence_json?: SelectionEvidence;
+  created_at: string;
+};
+
+export type SelectionRetrospective = SelectionRecord & {
+  id: number;
+  snapshot_id: number;
+  tracking_id?: number | null;
+  revision: number;
+  market: string;
+  symbol: string;
+  status: string;
+  evaluated_at: string;
+  observed_sessions: number;
+  entry_price?: number | null;
+  final_price?: number | null;
+  return_pct?: number | null;
+  max_drawdown_pct?: number | null;
+  target_hit?: boolean | null;
+  stop_hit?: boolean | null;
+  direction_hit?: boolean | null;
+  attribution_json?: SelectionRecord;
+  error_tags_json?: string[];
+  summary?: string | null;
+  reviewer?: string;
+  created_at: string;
+};
+
+export type SelectionAudit = {
+  candidate_id: number;
+  snapshots: SelectionAuditSnapshot[];
+  retrospectives: SelectionRetrospective[];
+};
+
 export type SelectionCandidate = {
   id: number; run_id: number; market: string; symbol: string; name: string | null;
   entry_price: number | null; entry_date: string | null; hard_score: number;
-  hard_rules_json: Record<string, unknown>; evidence_json: Record<string, unknown>; analysis_json: Record<string, unknown>;
+  hard_rules_json: Record<string, unknown>; evidence_json: SelectionEvidence; analysis_json: Record<string, unknown>;
   decision: string; review_notes: string | null; target_price: number | null; stop_price: number | null;
   target_return_pct: number | null; confidence: number | null; prediction_id: number | null;
   reviewed_at: string | null; created_at: string; tracking_id: number | null;
@@ -37,5 +114,14 @@ export const selectionApi = {
   review: (id: number, payload: SelectionReview) => request<SelectionCandidate>(`/selection/candidates/${id}/review`, { method: "POST", body: JSON.stringify(payload) }),
   listTracking: () => request<SelectionTracking[]>("/selection/tracking"),
   getTracking: (id: number) => request<SelectionTracking>(`/selection/tracking/${id}`),
+  candidateAudit: (id: number) => request<SelectionAudit>(`/selection/candidates/${id}/audit`),
+  trackingRetrospectives: (id: number) => request<SelectionRetrospective[]>(`/selection/tracking/${id}/retrospectives`),
+  context: (market: string, symbol: string, knowledgeBaseIds: number[] = [], graphIds: number[] = []) => {
+    const params = new URLSearchParams();
+    knowledgeBaseIds.forEach(id => params.append("knowledge_base_ids", String(id)));
+    graphIds.forEach(id => params.append("graph_ids", String(id)));
+    const query = params.toString();
+    return request<SelectionEvidence>(`/selection/context/${encodeURIComponent(market)}/${encodeURIComponent(symbol)}${query ? `?${query}` : ""}`);
+  },
   refresh: (tracking_ids: number[] = []) => request<Record<string, unknown>>("/selection/refresh", { method: "POST", body: JSON.stringify({ tracking_ids }) }),
 };

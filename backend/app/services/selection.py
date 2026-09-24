@@ -240,7 +240,7 @@ def _evidence(db: Session, market: str, symbol: str, kb_ids: list[int], graph_id
          if item.evidence_document_id in relation_docs else ""}
         for item in relations[:20]
     ]
-    return {
+    result = {
         "knowledge_documents": len(docs),
         "knowledge_entities": len(entities),
         "knowledge_relations": len(relations),
@@ -257,6 +257,35 @@ def _evidence(db: Session, market: str, symbol: str, kb_ids: list[int], graph_id
         "missing_data": (["知识库缺少该股票资料"] if not docs else []) + (["图谱缺少该股票关系"] if not relations else []) + (["缺少财务指标"] if not financial_count else []),
         "sources": ["stock_realtime_quote", "stock_kline", "stock_news", "stock_notice", "stock_financial_report", "knowledge_document", "knowledge_entity", "knowledge_relation"],
     }
+    # Enrich the historical evidence contract with a bounded, versioned
+    # GraphRAG context.  The legacy keys above intentionally remain unchanged
+    # for existing clients and tests.
+    try:
+        from app.services.graph_rag import build_selection_context
+
+        context = build_selection_context(
+            db, market, symbol, knowledge_base_ids=kb_ids, graph_ids=graph_ids,
+            max_documents=12, max_relations=30, max_facts=30, max_chunks=8,
+        )
+        for key in ("facts", "chunks", "structured_observations", "graph_paths", "evidence_span", "lineage", "lakehouse_datasets",
+                    "graph_version", "lakehouse_version", "document_version", "context_version", "context_hash",
+                    "data_cutoff", "identity", "missing_data", "counts", "evidence_fact_ids", "evidence_source_ids",
+                    "evidence_record_refs"):
+            if key in context:
+                result[key] = context[key]
+        # Keep document IDs from the legacy scope as the model's allow-list;
+        # context documents can include an explicitly linked relation proof.
+        result["context_document_ids"] = context.get("evidence_document_ids", [])
+        # The legacy ``document_ids`` key remains the old, explicitly scoped
+        # allow-list for compatibility.  Model validation uses the union so a
+        # relation-proof document discovered by GraphRAG is not rejected.
+        result["model_document_ids"] = sorted(set(result.get("document_ids", [])) |
+                                               set(result["context_document_ids"]))
+        result["evidence_context"] = context
+    except Exception as exc:
+        result["context_error"] = str(exc)[:300]
+        result.setdefault("missing_data", []).append("GraphRAG 上下文暂不可用")
+    return result
 
 
 def _candidate_payload(db: Session, run: SelectionRun, quote: StockRealtimeQuote, bars: list[StockKline]) -> tuple[dict[str, Any] | None, list[str]]:
@@ -328,6 +357,14 @@ def create_selection_run(db: Session, payload: SelectionRunCreate) -> SelectionR
         raise ValueError("Selected knowledge bases are missing or disabled")
     if len(graphs) != len(set(payload.graph_ids)) or any(not row.enabled or row.knowledge_base_id not in payload.knowledge_base_ids for row in graphs):
         raise ValueError("Selected graphs must be enabled and belong to the selected knowledge bases")
+    # A live model may only be called when a governed KB/graph context is
+    # explicitly selected.  MOCK runs remain available for deterministic unit
+    # tests and local dry-runs; real runs without a governed context degrade to
+    # the auditable hard-rule path instead of sending an unbounded prompt.
+    governed_context = bool(bases and graphs) and all(
+        row.governance_status in {"GOVERNED", "LOCKED"} for row in graphs
+    )
+    model_requested = bool(payload.use_model and (payload.data_mode == "MOCK" or governed_context))
     run = SelectionRun(
         market=market,
         universe_scope=payload.universe_scope,
@@ -337,7 +374,7 @@ def create_selection_run(db: Session, payload: SelectionRunCreate) -> SelectionR
         knowledge_base_ids_json=list(payload.knowledge_base_ids),
         graph_ids_json=list(payload.graph_ids),
         data_mode=payload.data_mode,
-        analysis_mode="MODEL_REQUESTED" if payload.use_model else "LOCAL_EVIDENCE",
+        analysis_mode="MODEL_REQUESTED" if model_requested else "LOCAL_EVIDENCE",
         status="RUNNING",
         as_of=_now(),
     )
@@ -390,10 +427,37 @@ def create_selection_run(db: Session, payload: SelectionRunCreate) -> SelectionR
         item["analysis_json"]["evidence"] = evidence["evidence_text"]
     priced_symbols = {row.symbol for row in quotes}
     missing.extend(f"{market}:{symbol}:quote" for symbol in stock_map if symbol not in priced_symbols)
-    if payload.use_model and candidates:
+    if payload.use_model and not model_requested:
+        missing.append("缺少已治理知识库/图谱，已降级为本地规则分析")
+    if model_requested and candidates:
         _apply_model_analysis(db, run, candidates)
+    # Make the Skill/model boundary explicit in the persisted evidence.  The
+    # immutable audit row below repeats these values so a later Skill edit
+    # cannot change the interpretation of this run.
+    selected_skill = db.scalar(select(ModelSkill).where(ModelSkill.skill_code == "STOCK_SELECTION_ANALYST"))
     for item, _score in candidates[: run.candidate_limit]:
-        db.add(SelectionCandidate(run_id=run.id, **item))
+        item["evidence_json"] = {
+            **(item.get("evidence_json") or {}),
+            "as_of": run.as_of.isoformat(),
+            "data_cutoff": run.as_of.date().isoformat(),
+            "skill_code": "STOCK_SELECTION_ANALYST",
+            "skill_version": selected_skill.version if selected_skill else "UNREGISTERED",
+            "model_version": run.model_instance_code,
+        }
+        item["analysis_json"] = {
+            **(item.get("analysis_json") or {}),
+            "skill_code": "STOCK_SELECTION_ANALYST",
+            "skill_version": selected_skill.version if selected_skill else "UNREGISTERED",
+            "model_version": run.model_instance_code,
+        }
+        candidate = SelectionCandidate(run_id=run.id, **item)
+        db.add(candidate)
+        db.flush()
+        from app.services.selection_audit import capture_decision_snapshot
+        capture_decision_snapshot(
+            db, candidate, snapshot_kind="CANDIDATE", decision="PENDING",
+            evidence=candidate.evidence_json, as_of=run.as_of,
+        )
     run.candidate_count = min(len(candidates), run.candidate_limit)
     run.missing_data_json = sorted(set((run.missing_data_json or []) + missing))[:100]
     run.status = "REVIEW" if run.candidate_count else "PARTIAL"
@@ -434,7 +498,7 @@ def _apply_model_analysis(db: Session, run: SelectionRun, candidates: list[tuple
                 instance_code=run.model_instance_code,
                 messages=[
                     {"role": "system", "content": "本次为选股盯盘工作流。SOP 的硬筛选和上下文加载已由调度器执行。沿用 SOP 的证据边界与分析要求，输出格式采用以下本次调用的 JSON Schema，替代 SOP 中通用研报格式；返回且只返回此契约的 JSON：" + json.dumps(schema, ensure_ascii=False)},
-                    {"role": "user", "content": "仅分析以下硬过滤候选，不要编造行情或外部事实。逐只综合知识文档与图谱关系，返回 WATCH/PASS、置信度、理由及引用的文档 ID。给出未来 10 个交易日的预测目标价和观察止损价，明确这些是推断；证据不足则价格返回 null 并说明缺口。候选上下文：" + context},
+                    {"role": "user", "content": "仅分析以下硬过滤候选，不要编造行情或外部事实。逐只综合 GraphRAG 上下文中的身份、结构化观测、已验证事实、图谱路径、文档切片和血缘，返回 WATCH/PASS、置信度、理由及引用的文档/事实/切片 ID。只引用候选上下文白名单中的 ID；区分 SOURCE/CANDIDATE/VERIFIED 状态。给出未来 10 个交易日的预测目标价和观察止损价，明确这些是推断；证据不足则价格返回 null 并说明缺口。候选上下文：" + context},
                 ],
                 max_tokens=8192,
                 metadata_json={"candidate_count": len(batch), "batch_index": batch_index, "skill_code": "STOCK_SELECTION_ANALYST",
@@ -447,9 +511,19 @@ def _apply_model_analysis(db: Session, run: SelectionRun, candidates: list[tuple
             if len(by_symbol) != len(parsed.candidates) or set(by_symbol) != {item["symbol"] for item in batch}:
                 raise ValueError("模型必须逐一返回候选池中的股票，不能遗漏、重复或增加股票")
             for item in batch:
-                allowed_ids = set(item["evidence_json"].get("document_ids", []))
+                allowed_ids = set(item["evidence_json"].get("model_document_ids") or
+                                  item["evidence_json"].get("document_ids", []))
                 if not set(by_symbol[item["symbol"]]["evidence_document_ids"]).issubset(allowed_ids):
                     raise ValueError("模型引用了候选上下文之外的文档")
+                allowed_facts = set(item["evidence_json"].get("evidence_fact_ids", []))
+                returned_facts = set(by_symbol[item["symbol"]].get("evidence_fact_ids") or [])
+                if not returned_facts.issubset(allowed_facts):
+                    raise ValueError("模型引用了候选上下文之外的事实")
+                allowed_chunks = {str(row.get("id")) for row in item["evidence_json"].get("chunks", [])
+                                  if isinstance(row, dict) and row.get("id")}
+                returned_chunks = {str(value) for value in (by_symbol[item["symbol"]].get("evidence_chunk_ids") or [])}
+                if not returned_chunks.issubset(allowed_chunks):
+                    raise ValueError("模型引用了候选上下文之外的文档切片")
                 predictions[item["symbol"]] = (by_symbol[item["symbol"]], log.id, log.instance_code)
         for item, _score in candidates:
             prediction = predictions.get(str(item["symbol"]))
@@ -491,6 +565,7 @@ def review_candidate(db: Session, candidate_id: int, payload: SelectionReviewReq
             SelectionCandidate.run_id == run.id,
             SelectionCandidate.decision != "PENDING",
         )).all())
+    tracking = None
     if payload.decision == "APPROVED":
         if candidate.entry_price is None:
             raise ValueError("candidate has no real entry price")
@@ -515,7 +590,7 @@ def review_candidate(db: Session, candidate_id: int, payload: SelectionReviewReq
         if not entry_date:
             raise ValueError("candidate has no trade date; cannot start tracking")
         candidate.target_return_pct = target_return
-        db.add(SelectionTracking(
+        tracking = SelectionTracking(
             candidate_id=candidate.id, market=candidate.market, symbol=candidate.symbol,
             entry_price=candidate.entry_price, entry_date=entry_date,
             # Confirmation is anchored to the latest completed local-market
@@ -524,9 +599,19 @@ def review_candidate(db: Session, candidate_id: int, payload: SelectionReviewReq
             target_price=payload.target_price, stop_price=payload.stop_price,
             target_return_pct=target_return, confidence=payload.confidence,
             data_mode=run.data_mode if run else "REAL",
-        ))
+        )
+        db.add(tracking)
+        db.flush()
         if run:
             run.tracking_count += 1
+    from app.services.selection_audit import capture_decision_snapshot
+    capture_decision_snapshot(
+        db, candidate, snapshot_kind="REVIEW", decision=payload.decision,
+        tracking_id=tracking.id if tracking else None,
+        prediction_id=candidate.prediction_id,
+        evidence=candidate.evidence_json,
+        as_of=candidate.reviewed_at or _now(),
+    )
     if run and run.reviewed_count >= run.candidate_count:
         run.status = "TRACKING" if run.tracking_count else "COMPLETED"
     db.commit()
@@ -571,6 +656,8 @@ def _refresh_one(db: Session, tracking: SelectionTracking) -> SelectionTracking:
             tracking.review_json = {**(tracking.review_json or {}), "data_fetch_error": str(exc)[:300]}
     if not bars:
         tracking.status = "PENDING_DATA"
+        from app.services.selection_audit import capture_retrospective
+        capture_retrospective(db, tracking)
         return tracking
     # Late-arriving bars are reconciled at their true chronological position.
     # Once the first ten valid sessions are complete, their result is frozen.
@@ -590,6 +677,8 @@ def _refresh_one(db: Session, tracking: SelectionTracking) -> SelectionTracking:
     valid_bars = sorted(by_date.values(), key=lambda row: row.trade_date)[:tracking.required_sessions]
     if not valid_bars:
         tracking.status = "PENDING_DATA"
+        from app.services.selection_audit import capture_retrospective
+        capture_retrospective(db, tracking)
         return tracking
     db.execute(delete(SelectionSnapshot).where(SelectionSnapshot.tracking_id == tracking.id))
     peak = tracking.entry_price
@@ -604,6 +693,8 @@ def _refresh_one(db: Session, tracking: SelectionTracking) -> SelectionTracking:
     all_snapshots = list(db.scalars(select(SelectionSnapshot).where(SelectionSnapshot.tracking_id == tracking.id).order_by(SelectionSnapshot.sequence)).all())
     if not all_snapshots:
         tracking.status = "PENDING_DATA"
+        from app.services.selection_audit import capture_retrospective
+        capture_retrospective(db, tracking)
         return tracking
     latest = all_snapshots[-1]
     tracking.observed_sessions = len(all_snapshots)
@@ -662,6 +753,11 @@ def _refresh_one(db: Session, tracking: SelectionTracking) -> SelectionTracking:
             prediction.price_as_of = datetime.fromisoformat(latest.trade_date).replace(tzinfo=timezone.utc)
             prediction.evaluated_at = _now()
             prediction.evaluation_json = {**tracking.review_json, "workflow": "selection_tracking", "tracking_id": tracking.id}
+    # Append a review revision for both in-progress and completed states.  The
+    # state hash makes repeated scheduler runs idempotent and preserves late
+    # arriving-bar corrections as a new revision.
+    from app.services.selection_audit import capture_retrospective
+    capture_retrospective(db, tracking)
     return tracking
 
 

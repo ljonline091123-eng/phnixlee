@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.models.selection import SelectionCandidate, SelectionRun, SelectionSnapshot, SelectionTracking
+from app.models.decision_review import SelectionDecisionSnapshot, SelectionRetrospective
 from app.schemas.selection import (
     SelectionCandidateRead,
     SelectionRefreshRequest,
@@ -16,6 +17,8 @@ from app.schemas.selection import (
     SelectionTrackingRead,
 )
 from app.services.selection import create_selection_run, refresh_tracking, review_candidate
+from app.services.graph_rag import build_selection_context
+from app.services.selection_audit import retrospective_read, snapshot_read
 
 router = APIRouter(prefix="/selection", tags=["Selection Watch"])
 
@@ -119,6 +122,40 @@ def get_tracking(tracking_id: int, db: Session = Depends(get_db)) -> SelectionTr
     if row is None:
         raise HTTPException(status_code=404, detail="selection tracking not found")
     return _tracking_read(db, row)
+
+
+@router.get("/candidates/{candidate_id}/audit")
+def candidate_audit(candidate_id: int, db: Session = Depends(get_db)) -> dict:
+    candidate = db.get(SelectionCandidate, candidate_id)
+    if candidate is None:
+        raise HTTPException(status_code=404, detail="selection candidate not found")
+    snapshots = list(db.scalars(select(SelectionDecisionSnapshot).where(
+        SelectionDecisionSnapshot.candidate_id == candidate_id,
+    ).order_by(SelectionDecisionSnapshot.created_at, SelectionDecisionSnapshot.id)).all())
+    snapshot_ids = [row.id for row in snapshots]
+    retrospectives = list(db.scalars(select(SelectionRetrospective).where(
+        SelectionRetrospective.snapshot_id.in_(snapshot_ids)
+    ).order_by(SelectionRetrospective.created_at, SelectionRetrospective.id)).all()) if snapshot_ids else []
+    return {"candidate_id": candidate_id, "snapshots": [snapshot_read(row) for row in snapshots],
+            "retrospectives": [retrospective_read(row) for row in retrospectives]}
+
+
+@router.get("/tracking/{tracking_id}/retrospectives")
+def tracking_retrospectives(tracking_id: int, db: Session = Depends(get_db)) -> list[dict]:
+    tracking = db.get(SelectionTracking, tracking_id)
+    if tracking is None:
+        raise HTTPException(status_code=404, detail="selection tracking not found")
+    rows = db.scalars(select(SelectionRetrospective).where(
+        SelectionRetrospective.tracking_id == tracking_id,
+    ).order_by(SelectionRetrospective.revision)).all()
+    return [retrospective_read(row) for row in rows]
+
+
+@router.get("/context/{market}/{symbol}")
+def selection_context(market: str, symbol: str, knowledge_base_ids: list[int] = Query(default=[]),
+                      graph_ids: list[int] = Query(default=[]), db: Session = Depends(get_db)) -> dict:
+    """Expose the same bounded context contract used by the LLA prompt."""
+    return build_selection_context(db, market, symbol, knowledge_base_ids=knowledge_base_ids, graph_ids=graph_ids)
 
 
 @router.post("/refresh")

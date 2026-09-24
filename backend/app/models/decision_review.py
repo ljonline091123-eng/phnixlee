@@ -51,10 +51,10 @@ class SelectionDecisionSnapshot(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     candidate_id: Mapped[int] = mapped_column(
-        ForeignKey("selection_candidate.id", ondelete="CASCADE"), nullable=False, index=True
+        ForeignKey("selection_candidate.id", ondelete="RESTRICT"), nullable=False, index=True
     )
     run_id: Mapped[int] = mapped_column(
-        ForeignKey("selection_run.id", ondelete="CASCADE"), nullable=False, index=True
+        ForeignKey("selection_run.id", ondelete="RESTRICT"), nullable=False, index=True
     )
     tracking_id: Mapped[int | None] = mapped_column(
         ForeignKey("selection_tracking.id", ondelete="SET NULL"), index=True
@@ -96,7 +96,7 @@ class SelectionRetrospective(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     snapshot_id: Mapped[int] = mapped_column(
-        ForeignKey("selection_decision_snapshot.id", ondelete="CASCADE"), nullable=False, index=True
+        ForeignKey("selection_decision_snapshot.id", ondelete="RESTRICT"), nullable=False, index=True
     )
     tracking_id: Mapped[int | None] = mapped_column(
         ForeignKey("selection_tracking.id", ondelete="SET NULL"), index=True

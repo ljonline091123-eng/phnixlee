@@ -30,6 +30,12 @@ class SelectionModelRecommendation(BaseModel):
     stop_price: float | None = Field(gt=0)
     horizon_sessions: Literal[10]
     evidence_document_ids: list[int]
+    # Optional typed references let the model point to structured facts and
+    # document chunks without breaking older model routes that only return
+    # document IDs.  The service validates these IDs against the bounded
+    # GraphRAG context before persisting the analysis.
+    evidence_fact_ids: list[str] = Field(default_factory=list)
+    evidence_chunk_ids: list[str] = Field(default_factory=list)
 
 
 class SelectionModelOutput(BaseModel):

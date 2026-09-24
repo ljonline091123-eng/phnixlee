@@ -21,11 +21,14 @@ SUPPORTED_EXPORT_TABLES = {
     "stock_symbol", "stock_realtime_quote", "stock_kline", "stock_news", "stock_notice",
     "stock_financial_report", "stock_f10_cache", "stock_context_event", "research_report",
     "knowledge_document", "foundation_entity", "foundation_security", "foundation_listing",
-    "foundation_evidence", "foundation_fact", "foundation_security_classification",
+    "foundation_evidence", "foundation_fact", "foundation_fact_evidence", "foundation_fact_review",
+    "foundation_security_classification", "foundation_source_identity",
+    "foundation_company_mapping_state", "classification_definition",
 }
 SERVING_EXPORT_TABLES = {
     "stock_symbol", "foundation_entity", "foundation_security", "foundation_listing",
-    "foundation_fact", "foundation_security_classification",
+    "foundation_fact", "foundation_fact_evidence", "foundation_security_classification",
+    "classification_definition",
 }
 
 QUALITY_CONTRACT_VERSION = "LAKE_QUALITY_V2"
@@ -62,11 +65,37 @@ QUALITY_CONTRACTS: dict[str, dict[str, tuple[str, ...]]] = {
                             "business_key": ("id",), "content_any": ("content", "url")},
     "foundation_fact": {"required": ("id", "subject_entity_id", "fact_type", "status"), "business_key": ("id",)},
     "foundation_security_classification": {"required": ("id", "security_id", "dimension", "code", "status"), "business_key": ("id",)},
+    "foundation_fact_evidence": {"required": ("fact_id", "evidence_id"), "business_key": ("fact_id", "evidence_id")},
+    "foundation_fact_review": {"required": ("id", "fact_id", "decision", "reviewer"), "business_key": ("id",)},
+    "foundation_source_identity": {"required": ("id", "entity_id", "namespace", "external_id", "entity_type"), "business_key": ("namespace", "external_id", "entity_type")},
+    "foundation_company_mapping_state": {"required": ("stock_symbol_id", "status", "reason"), "business_key": ("stock_symbol_id",)},
+    "classification_definition": {"required": ("id", "taxonomy", "dimension", "code", "label", "definition", "definition_version", "status"), "business_key": ("taxonomy", "dimension", "code", "definition_version")},
 }
 
 
 def _sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
+
+
+def _hash_embedding(text: str, dimensions: int = 32) -> list[float]:
+    """Build a small deterministic local vector for the lightweight MVP.
+
+    This is deliberately not presented as a semantic model embedding.  It is
+    dependency-free, reproducible across machines, and sufficient to support
+    smoke tests and deterministic lexical retrieval until a licensed embedding
+    service is configured.
+    """
+    tokens = re.findall(r"[A-Za-z0-9_]+|[\u4e00-\u9fff]", (text or "").lower())
+    vector = [0.0] * dimensions
+    for token in tokens:
+        digest = hashlib.sha256(token.encode("utf-8")).digest()
+        index = int.from_bytes(digest[:4], "big") % dimensions
+        sign = 1.0 if digest[4] & 1 else -1.0
+        vector[index] += sign
+    norm = math.sqrt(sum(value * value for value in vector))
+    if norm:
+        vector = [round(value / norm, 8) for value in vector]
+    return vector
 
 
 def _safe(value: str) -> str:
@@ -188,7 +217,7 @@ def read_object(row: LakeObject) -> bytes:
 
 
 def _model_for_table(table_name: str):
-    from app.models import ai_hub, company_graph, context_event, foundation, market_data
+    from app.models import ai_hub, company_graph, company_mapping, context_event, foundation, market_data, taxonomy
     models = {
         "stock_symbol": market_data.StockSymbol, "stock_realtime_quote": market_data.StockRealtimeQuote,
         "stock_kline": market_data.StockKline, "stock_news": market_data.StockNews,
@@ -197,8 +226,12 @@ def _model_for_table(table_name: str):
         "research_report": ai_hub.ResearchReportRecord, "knowledge_document": ai_hub.KnowledgeDocument,
         "foundation_entity": foundation.FoundationEntity, "foundation_security": foundation.FoundationSecurity,
         "foundation_listing": foundation.FoundationListing, "foundation_evidence": foundation.FoundationEvidence,
-        "foundation_fact": foundation.FoundationFact,
+        "foundation_fact": foundation.FoundationFact, "foundation_fact_evidence": foundation.FoundationFactEvidence,
+        "foundation_fact_review": foundation.FoundationFactReview,
         "foundation_security_classification": company_graph.SecurityClassification,
+        "foundation_source_identity": company_graph.SourceIdentity,
+        "foundation_company_mapping_state": company_mapping.CompanyMappingState,
+        "classification_definition": taxonomy.ClassificationDefinition,
     }
     if table_name not in SUPPORTED_EXPORT_TABLES or table_name not in models:
         raise ValueError(f"不支持导出的数据表: {table_name}")
@@ -210,9 +243,8 @@ def _records_for_table(db: Session, table_name: str, limit: int, layer: str,
     model = _model_for_table(table_name)
     query = select(model)
     normalized_scope = sorted({(str(market).upper(), str(symbol).upper()) for market, symbol in (scope_pairs or [])})
-    if normalized_scope:
-        if not hasattr(model, "market") or not hasattr(model, "symbol"):
-            raise ValueError(f"{table_name} 不支持证券范围过滤")
+    scope_supported = hasattr(model, "market") and hasattr(model, "symbol")
+    if normalized_scope and scope_supported:
         query = query.where(tuple_(model.market, model.symbol).in_(normalized_scope))
     if layer == "SERVING" and table_name in {"foundation_fact", "foundation_security_classification"}:
         query = query.where(model.status == "ACCEPTED")
@@ -465,8 +497,10 @@ def export_dataset(db: Session, *, dataset_code: str, dataset_name: str, layer: 
         db.add(dataset)
         db.flush()
     dataset.dataset_name, dataset.layer, dataset.format, dataset.current_version = dataset_name, layer, output_format, version
+    scope_applied = bool(scope_pairs) and hasattr(_model_for_table(source_table), "market") and hasattr(_model_for_table(source_table), "symbol")
     quality.update({"source_table": source_table, "content_hash": obj["content_hash"], "batch_id": batch_id,
-                    "scope_pairs": scope_pairs or []})
+                    "scope_pairs": scope_pairs or [], "scope_applied": scope_applied,
+                    "scope_note": "按证券范围过滤" if scope_applied else ("公司主数据按全量快照导出" if scope_pairs else "未指定证券范围")})
     version_row = LakeDatasetVersion(dataset_id=dataset.id, version=version, object_id=obj.get("object_id"),
         row_count=len(records), schema_json=schema, quality_json=quality, status="PUBLISHED")
     db.add(version_row)
@@ -583,13 +617,17 @@ def create_chunks(db: Session, *, document_key: str, text: str, document_id: str
         if existing is not None:
             reused += 1
             continue
+        embedding = _hash_embedding(chunk) if embedding_model else None
         item = DocumentChunkVersion(document_key=document_key, document_id=document_id, chunk_index=index,
             chunk_version=chunk_version, content_hash=digest, chunk_text=chunk,
             start_offset=start, end_offset=end, parser_version=parser_version,
             embedding_model=embedding_model, metadata_json={"overlap": overlap,
                 "source_object_id": (source_obj or {}).get("object_id"),
                 "chunk_method": "STRUCTURE_AWARE_V1", "boundary_type": boundary_type,
-                "section_title": _section_title(text, start, end), "document_quality": document_quality})
+                "section_title": _section_title(text, start, end), "document_quality": document_quality,
+                "embedding": {"model": embedding_model, "dimension": len(embedding), "vector": embedding,
+                               "model_quality": "DETERMINISTIC_HASH"}
+                if embedding is not None else None})
         db.add(item)
         db.flush()
         db.add(LakeLineageEvent(batch_id=batch_id, upstream_type="LAKE_OBJECT",

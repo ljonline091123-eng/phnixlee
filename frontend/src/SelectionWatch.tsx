@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { api, type KnowledgeBase, type KnowledgeGraph, type ModelInstance, type ModelProvider } from "./api";
-import { selectionApi, type SelectionCandidate, type SelectionRun, type SelectionTracking } from "./selectionApi";
+import { selectionApi, type SelectionAudit, type SelectionCandidate, type SelectionEvidence, type SelectionRecord, type SelectionRetrospective, type SelectionRun, type SelectionTracking } from "./selectionApi";
 import "./SelectionWatch.css";
 
 const labels: Record<string, string> = { PENDING: "待复选", PENDING_REVIEW: "待人工复选", REVIEW: "待人工复选", PARTIAL: "数据不足", PENDING_DATA: "等待行情", LOCAL_EVIDENCE: "本地规则预选", MODEL_REQUESTED: "模型分析中", MODEL_COMPLETED: "模型综合分析", MODEL_FAILED_FALLBACK_LOCAL: "模型失败 · 规则预选", APPROVED: "已入选", REJECTED: "已排除", COMPLETED: "已完成", FAILED: "执行失败", RUNNING: "生成中", TRACKING: "跟踪中", WAITING_DATA: "等待行情", REVIEWED: "已复盘", REAL: "真实数据", MOCK: "模拟数据", RULES_ONLY: "规则预选", MODEL: "模型综合分析", LLM: "模型综合分析", CN_A: "A 股", HK: "港股", NEEQ: "新三板", NEEQ_INNOVATION: "创新层" };
@@ -9,8 +9,16 @@ const numberOf = (value: unknown, digits = 2) => typeof value === "number" && Nu
 const pct = (value: unknown) => value == null ? "—" : `${numberOf(value)}%`;
 const dateOf = (value: string | null) => value ? new Date(value).toLocaleString("zh-CN") : "—";
 const strings = (value: unknown): string[] => Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
-const records = (value: unknown): Record<string, unknown>[] => Array.isArray(value) ? value.filter((item): item is Record<string, unknown> => !!item && typeof item === "object") : [];
+const records = (value: unknown): SelectionRecord[] => Array.isArray(value) ? value.filter((item): item is SelectionRecord => !!item && typeof item === "object") : [];
 const textOf = (value: unknown) => typeof value === "string" || typeof value === "number" ? String(value) : "";
+const recordLabel = (record: SelectionRecord, keys: string[], fallback: string) => keys.map(key => textOf(record[key])).find(Boolean) || fallback;
+const recordDetail = (record: SelectionRecord, keys: string[]) => keys.map(key => textOf(record[key])).filter(Boolean).join(" · ");
+const boolOf = (value: unknown) => value == null ? "--" : value === true ? "是" : value === false ? "否" : textOf(value);
+const jsonPreview = (value: unknown, limit = 1200) => {
+  if (value == null) return "";
+  const text: string = typeof value === "string" ? value : JSON.stringify(value, null, 2) ?? String(value);
+  return text.length > limit ? `${text.slice(0, limit)}…` : text;
+};
 const errorOf = (error: unknown) => error instanceof Error ? error.message : "请求失败，请重试";
 function Badge({ value }: { value: string }) { return <span className={`selection-badge ${["PENDING_REVIEW", "WAITING_DATA", "FAILED", "MOCK", "RULES_ONLY"].includes(value) ? "warning" : ""}`}>{nameOf(value)}</span>; }
 
@@ -36,7 +44,7 @@ function ReturnChart({ item }: { item: SelectionTracking }) {
   </svg>;
 }
 
-function Evidence({ candidate }: { candidate: SelectionCandidate }) {
+function LegacyEvidence({ candidate }: { candidate: SelectionCandidate }) {
   const evidence = candidate.evidence_json;
   const documents = records(evidence.documents);
   const relations = records(evidence.relations);
@@ -51,6 +59,77 @@ function Evidence({ candidate }: { candidate: SelectionCandidate }) {
     {relations.slice(0, 20).map((relation, i) => <div className="selection-evidence" key={i}><strong>{textOf(relation.head) || textOf(relation.from_name)} → {textOf(relation.type) || textOf(relation.relation_type) || textOf(relation.relation)} → {textOf(relation.tail) || textOf(relation.to_name)}</strong><p>{textOf(relation.evidence_text) || textOf(relation.evidence) || "请在知识图谱页查看关联原文。"}</p></div>)}
     {gaps.length > 0 && <><h3>仍待补充的数据</h3><ul className="selection-help">{gaps.map((gap, i) => <li key={i}>{gap}</li>)}</ul></>}
   </>;
+}
+
+function EvidenceVersionStrip({ evidence }: { evidence: SelectionEvidence }) {
+  const items = ([
+    ["证据时点", evidence.as_of],
+    ["数据截止", evidence.data_cutoff],
+    ["上下文版本", evidence.context_version],
+    ["图谱版本", evidence.graph_version],
+    ["湖仓版本", evidence.lakehouse_version],
+    ["文档版本", evidence.document_version],
+    ["Skill 版本", evidence.skill_version],
+    ["模型版本", evidence.model_version],
+    ["上下文哈希", evidence.context_hash],
+  ] as Array<[string, unknown]>).filter((item): item is [string, string] => typeof item[1] === "string" && item[1].length > 0);
+  if (!items.length) return null;
+  return <section className="selection-evidence-snapshot"><h3>证据与版本快照</h3><div className="selection-evidence-meta">{items.map(([label, value]) => <span key={label}><small>{label}</small><strong title={value}>{value}</strong></span>)}</div></section>;
+}
+
+function IdentityEvidence({ identity }: { identity: SelectionRecord | undefined }) {
+  if (!identity) return null;
+  const security = identity.security as SelectionRecord | undefined;
+  const company = identity.company as SelectionRecord | undefined;
+  const fields: Array<[string, unknown]> = [
+    ["证券规范标识", identity.canonical_security_id],
+    ["公司规范标识", identity.canonical_company_id],
+    ["映射状态", identity.mapping_status],
+    ["身份版本", identity.identity_version],
+    ["证券主数据 ID", identity.security_id || identity.stock_symbol_id],
+    ["公司主数据 ID", identity.company_id],
+    ["上市关系 ID", identity.listing_id],
+  ].filter((item): item is [string, string | number] => item[1] !== null && item[1] !== undefined && String(item[1]).length > 0);
+  return <section className="selection-evidence-block"><h3>股票与公司身份</h3><div className="selection-identity-grid">{fields.map(([label, value]) => <div key={label}><small>{label}</small><strong>{String(value)}</strong></div>)}</div>{security && <details className="selection-evidence"><summary>证券主数据</summary><p>{recordDetail(security, ["name", "market", "symbol", "exchange", "asset_type", "status", "list_date"])}</p></details>}{company && <details className="selection-evidence"><summary>公司主数据</summary><p>{recordDetail(company, ["name", "entity_type", "jurisdiction", "identifier_scheme", "identifier_value", "id"])}</p>{company.properties && <pre>{jsonPreview(company.properties)}</pre>}</details>}</section>;
+}
+
+function StructuredEvidence({ evidence }: { evidence: SelectionEvidence }) {
+  const facts = records(evidence.facts);
+  const grouped: SelectionRecord[] = Object.entries(evidence.structured_observations || {}).flatMap(([category, values]) => records(values).map(item => ({ ...item, _category: category })));
+  const rows: SelectionRecord[] = [...facts, ...grouped.filter(item => !facts.some(fact => String(fact.id || "") === String(item.id || "")))];
+  if (!rows.length) return null;
+  return <section className="selection-evidence-block"><h3>结构化事实与观测 · {rows.length}</h3><div className="selection-fact-grid">{rows.slice(0, 60).map((fact, index) => <article className="selection-evidence selection-fact" key={`${textOf(fact.id)}-${index}`}><strong>{recordLabel(fact, ["title", "fact_type", "_category", "indicator", "name"], "结构化观测")}</strong><small>{recordDetail(fact, ["source_table", "source_record_id", "observed_at", "report_period", "status"])}</small>{fact.properties && <pre>{jsonPreview(fact.properties)}</pre>}{fact.evidence && <small>证据引用：{jsonPreview(fact.evidence, 360)}</small>}</article>)}</div></section>;
+}
+
+function ChunkEvidence({ chunks }: { chunks: SelectionRecord[] | undefined }) {
+  if (!chunks?.length) return null;
+  return <section className="selection-evidence-block"><h3>知识切片 · {chunks.length}</h3>{chunks.slice(0, 40).map((chunk, index) => <details className="selection-evidence" key={`${textOf(chunk.id)}-${index}`}><summary>{recordLabel(chunk, ["section_title", "title", "chunk_id"], `切片 ${index + 1}`)} · {recordLabel(chunk, ["embedding_status"], "未声明向量")}</summary><small>{recordDetail(chunk, ["document_id", "chunk_version", "parser_version", "embedding_model", "embedding_quality", "start_offset", "end_offset"])}</small><p>{recordLabel(chunk, ["text", "content", "text_preview", "excerpt"], "暂无切片文本")}</p></details>)}</section>;
+}
+
+function GraphPathEvidence({ paths }: { paths: SelectionRecord[] | undefined }) {
+  if (!paths?.length) return null;
+  return <section className="selection-evidence-block"><h3>图谱路径 · {paths.length}</h3>{paths.slice(0, 40).map((path, index) => <article className="selection-evidence" key={`${textOf(path.id)}-${index}`}><strong>{recordLabel(path, ["subject_name", "subject", "source"], `节点 ${index + 1}`)} → {recordLabel(path, ["predicate", "relation", "type"], "关联")} → {recordLabel(path, ["object_name", "object", "target"], "目标节点")}</strong><small>{recordDetail(path, ["evidence_document_id", "verification_status", "confidence", "extraction_method"])}</small><p>{recordLabel(path, ["evidence_excerpt", "evidence_text", "excerpt"], "暂无路径证据摘录")}</p></article>)}</section>;
+}
+
+function LineageEvidence({ lineage, datasets }: { lineage: SelectionRecord[] | undefined; datasets: SelectionRecord[] | undefined }) {
+  if ((!lineage || !lineage.length) && (!datasets || !datasets.length)) return null;
+  return <section className="selection-evidence-block"><h3>湖仓版本与数据血缘</h3>{datasets?.slice(0, 30).map((dataset, index) => <article className="selection-evidence" key={`dataset-${textOf(dataset.dataset_id)}-${index}`}><strong>{recordLabel(dataset, ["dataset_code", "dataset_name"], "数据集")}</strong><small>{recordDetail(dataset, ["layer", "format", "version", "version_id", "object_id", "row_count"])}</small>{dataset.quality && <p>质量：{jsonPreview(dataset.quality, 500)}</p>}</article>)}{lineage?.slice(0, 60).map((row, index) => <article className="selection-evidence" key={`lineage-${textOf(row.id)}-${index}`}><strong>{recordLabel(row, ["upstream_type"], "上游")}:{recordLabel(row, ["upstream_id"], "--")} → {recordLabel(row, ["transformation"], "转换")} → {recordLabel(row, ["downstream_type"], "下游")}:{recordLabel(row, ["downstream_id"], "--")}</strong><small>{recordDetail(row, ["dataset_version", "parser_version", "batch_id", "created_at"])}</small>{row.metadata && <p>{jsonPreview(row.metadata, 500)}</p>}</article>)}</section>;
+}
+
+function Evidence({ candidate }: { candidate: SelectionCandidate }) {
+  const evidence = candidate.evidence_json;
+  return <><EvidenceVersionStrip evidence={evidence} /><IdentityEvidence identity={evidence.identity} /><StructuredEvidence evidence={evidence} /><ChunkEvidence chunks={evidence.chunks} /><GraphPathEvidence paths={evidence.graph_paths} /><LineageEvidence lineage={evidence.lineage} datasets={evidence.lakehouse_datasets} /><LegacyEvidence candidate={candidate} /></>;
+}
+
+function AuditTrail({ audit, busy, error }: { audit: SelectionAudit | null; busy: boolean; error: string }) {
+  if (busy) return <p className="selection-help">正在读取不可变决策快照与复盘版本…</p>;
+  if (error) return <p className="form-error">审计记录读取失败：{error}</p>;
+  if (!audit) return <p className="selection-help">尚未读取决策审计记录。</p>;
+  return <section className="selection-evidence-block"><h3>决策快照与复盘审计</h3>{audit.snapshots.length > 0 ? audit.snapshots.map(snapshot => <details className="selection-evidence" key={snapshot.id}><summary>{snapshot.snapshot_kind} · {nameOf(snapshot.decision)} · {dateOf(snapshot.as_of)}</summary><div className="selection-audit-meta"><span>图谱：{snapshot.graph_version || "--"}</span><span>数据：{snapshot.data_version || "--"}</span><span>Skill：{snapshot.skill_code || "--"} / {snapshot.skill_version || "--"}</span><span>模型：{snapshot.model_instance_code || "--"}</span><span>哈希：{snapshot.payload_hash || "--"}</span></div>{snapshot.evidence_json && <pre>{jsonPreview({ counts: snapshot.evidence_json.counts, context_hash: snapshot.evidence_json.context_hash, evidence_fact_ids: snapshot.evidence_json.evidence_fact_ids, document_ids: snapshot.evidence_json.document_ids }, 1800)}</pre>}</details>) : <p className="selection-help">暂无不可变决策快照。</p>}{audit.retrospectives.length > 0 && <><h4>复盘修订 · {audit.retrospectives.length}</h4>{audit.retrospectives.map(row => <article className="selection-evidence" key={row.id}><strong>第 {row.revision} 版 · {nameOf(row.status)}</strong><small>{dateOf(row.evaluated_at)} · {row.observed_sessions} 个交易日 · 结果 {pct(row.return_pct)} · 回撤 {pct(row.max_drawdown_pct)}</small><p>{row.summary || "暂无复盘摘要"}</p>{row.error_tags_json?.length ? <small>误差标签：{row.error_tags_json.join("、")}</small> : null}</article>)}</>}</section>;
+}
+
+function RetrospectiveTrail({ rows, error }: { rows: SelectionRetrospective[]; error: string }) {
+  return <section className="selection-evidence-block"><h3>复盘修订记录 · {rows.length}</h3>{error && <p className="form-error">复盘审计读取失败：{error}</p>}{rows.length ? rows.map(row => <article className="selection-evidence" key={row.id}><strong>第 {row.revision} 版 · {nameOf(row.status)}</strong><small>{dateOf(row.evaluated_at)} · {row.observed_sessions} 个交易日 · 收益 {pct(row.return_pct)} · 回撤 {pct(row.max_drawdown_pct)}</small><p>{row.summary || "暂无复盘摘要"}</p>{row.attribution_json && <details><summary>归因与版本</summary><pre>{jsonPreview(row.attribution_json, 1800)}</pre></details>}{row.error_tags_json?.length ? <small>误差标签：{row.error_tags_json.join("、")}</small> : null}</article>) : !error && <p className="selection-help">当前还没有可展示的复盘修订。</p>}</section>;
 }
 
 export function SelectionWorkbench({ mode }: { mode: "selection" | "tracking" }) {
@@ -68,7 +147,12 @@ export function SelectionWorkbench({ mode }: { mode: "selection" | "tracking" })
   const [notice, setNotice] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [candidate, setCandidate] = useState<SelectionCandidate | null>(null);
+  const [candidateAudit, setCandidateAudit] = useState<SelectionAudit | null>(null);
+  const [auditBusy, setAuditBusy] = useState(false);
+  const [auditError, setAuditError] = useState("");
   const [detail, setDetail] = useState<SelectionTracking | null>(null);
+  const [detailRetrospectives, setDetailRetrospectives] = useState<SelectionRetrospective[]>([]);
+  const [detailAuditError, setDetailAuditError] = useState("");
   const [form, setForm] = useState({ market: "CN_A", symbols: "", candidate_limit: 30, min_abs_change_pct: 2, min_volume_ratio: 1.2, model_instance_code: "", use_model: true, knowledge_base_ids: [] as number[], graph_ids: [] as number[] });
   const [review, setReview] = useState({ target_price: "", stop_price: "", confidence: "", notes: "" });
   async function reload() {
@@ -97,7 +181,12 @@ export function SelectionWorkbench({ mode }: { mode: "selection" | "tracking" })
       setRun(result); await reload(); setCreateOpen(false); setNotice(`选股批次 #${result.id} 已保存，${result.candidate_count} 只候选待人工复选。`);
     } catch (err) { setError(errorOf(err)); } finally { setBusy(false); }
   }
-  function openReview(item: SelectionCandidate) { setCandidate(item); setError(""); setReview({ target_price: item.target_price?.toString() || textOf(item.analysis_json.target_price), stop_price: item.stop_price?.toString() || textOf(item.analysis_json.stop_price), confidence: item.confidence?.toString() || textOf(item.analysis_json.confidence), notes: item.review_notes || "" }); }
+  function openReview(item: SelectionCandidate) {
+    setCandidate(item); setCandidateAudit(null); setAuditError(""); setError("");
+    setReview({ target_price: item.target_price?.toString() || textOf(item.analysis_json.target_price), stop_price: item.stop_price?.toString() || textOf(item.analysis_json.stop_price), confidence: item.confidence?.toString() || textOf(item.analysis_json.confidence), notes: item.review_notes || "" });
+    setAuditBusy(true);
+    void selectionApi.candidateAudit(item.id).then(setCandidateAudit).catch(err => setAuditError(errorOf(err))).finally(() => setAuditBusy(false));
+  }
   async function saveReview(decision: "APPROVED" | "REJECTED") {
     if (!candidate) return;
     setError(""); setBusy(true);
@@ -110,7 +199,7 @@ export function SelectionWorkbench({ mode }: { mode: "selection" | "tracking" })
     } catch (err) { setError(errorOf(err)); } finally { setBusy(false); }
   }
   async function refresh() { setBusy(true); setError(""); try { await selectionApi.refresh(); await reload(); setNotice("已更新跟踪记录。有效行情不足 10 个交易日的股票将继续等待；完成后可查看复盘。"); } catch (err) { setError(errorOf(err)); } finally { setBusy(false); } }
-  async function openTracking(id: number) { setBusy(true); setError(""); try { setDetail(await selectionApi.getTracking(id)); } catch (err) { setError(errorOf(err)); } finally { setBusy(false); } }
+  async function openTracking(id: number) { setBusy(true); setDetailRetrospectives([]); setDetailAuditError(""); setError(""); try { const [nextDetail, nextRetrospectives] = await Promise.all([selectionApi.getTracking(id), selectionApi.trackingRetrospectives(id)]); setDetail(nextDetail); setDetailRetrospectives(nextRetrospectives); } catch (err) { setDetailAuditError(errorOf(err)); try { setDetail(await selectionApi.getTracking(id)); } catch (fallbackError) { setError(errorOf(fallbackError)); } } finally { setBusy(false); } }
   const pending = run?.candidates.filter(item => !["APPROVED", "REJECTED"].includes(item.decision)).length ?? 0;
   const availableGraphs = graphs.filter(item => item.enabled && form.knowledge_base_ids.includes(item.knowledge_base_id));
   return <div className="selection-workbench">
@@ -146,9 +235,9 @@ export function SelectionWorkbench({ mode }: { mode: "selection" | "tracking" })
       {error && <p className="form-error" role="alert">{error}</p>}<footer><button type="button" disabled={busy} onClick={() => setCreateOpen(false)}>取消</button><button className="primary-button" disabled={busy}>{busy ? "正在筛选与分析…" : "生成候选池"}</button></footer>
     </form></Dialog>}
     {candidate && <Dialog title={`${candidate.symbol} ${candidate.name || ""} · 人工复选`} busy={busy} close={() => setCandidate(null)}>
-      <p className="selection-help">行情基准 {numberOf(candidate.entry_price)}（{candidate.entry_date || "缺行情"}）。确认后记录预测与当时证据，后续复盘以确认时快照为准。</p><Evidence candidate={candidate} />
+      <p className="selection-help">行情基准 {numberOf(candidate.entry_price)}（{candidate.entry_date || "缺行情"}）。确认后记录预测与当时证据，后续复盘以确认时快照为准。</p><Evidence candidate={candidate} /><AuditTrail audit={candidateAudit} busy={auditBusy} error={auditError} />
       {!["APPROVED", "REJECTED"].includes(candidate.decision) ? <form className="selection-form" onSubmit={event => { event.preventDefault(); void saveReview("APPROVED"); }}><h3>确认预测</h3><div className="selection-form-grid"><label>预测目标价<input type="number" required min="0.000001" step="any" value={review.target_price} onChange={event => setReview({ ...review, target_price: event.target.value })} /></label><label>观察止损价（选填）<input type="number" min="0.000001" step="any" value={review.stop_price} onChange={event => setReview({ ...review, stop_price: event.target.value })} /></label><label>主观置信度（0–1，选填）<input type="number" min={0} max={1} step="0.01" value={review.confidence} onChange={event => setReview({ ...review, confidence: event.target.value })} /></label></div><label>复选理由 / 调整说明<textarea rows={3} maxLength={4000} value={review.notes} onChange={event => setReview({ ...review, notes: event.target.value })} /></label>{error && <p className="form-error" role="alert">{error}</p>}<footer><button type="button" disabled={busy} onClick={() => void saveReview("REJECTED")}>排除此候选</button><button className="primary-button" disabled={busy || !candidate.entry_price}>{busy ? "保存中…" : "确认入选并开始跟踪"}</button></footer></form> : <div className="selection-evidence"><Badge value={candidate.decision} /><p>目标价：{numberOf(candidate.target_price)} · 确认时间：{dateOf(candidate.reviewed_at)}</p><p>{candidate.review_notes || "未填写人工复选说明"}</p></div>}
     </Dialog>}
-    {detail && <Dialog title={`${detail.symbol} · 跟踪与复盘`} close={() => setDetail(null)}><p className="selection-help">起始 {dateOf(detail.started_at)} · {detail.observed_sessions} / {detail.required_sessions} 个交易日 · {nameOf(detail.status)}</p><ReturnChart item={detail} /><div className="selection-kpis"><div className="selection-kpi"><span>累计收益</span><strong>{pct(detail.cumulative_return_pct)}</strong></div><div className="selection-kpi"><span>最大回撤</span><strong>{pct(detail.max_drawdown_pct)}</strong></div><div className="selection-kpi"><span>预测收益</span><strong>{pct(detail.target_return_pct)}</strong></div><div className="selection-kpi"><span>方向判断</span><strong>{detail.direction_hit == null ? "待复盘" : detail.direction_hit ? "正确" : "偏离"}</strong></div></div><h3>复盘结论</h3><p className="selection-help">{textOf(detail.review_json.summary) || textOf(detail.review_json.conclusion) || textOf(detail.review_json.reason) || (detail.observed_sessions < detail.required_sessions ? "有效跟踪日尚未满 10 个交易日，继续等待行情，不提前判定预测准确。" : "请更新跟踪以生成复盘结果。")}</p>{strings(detail.review_json.adjustments).length > 0 && <ul>{strings(detail.review_json.adjustments).map((item, i) => <li key={i}>{item}</li>)}</ul>}<div className="table-wrap"><table style={{ minWidth: 540 }}><thead><tr><th>交易日序号</th><th>日期</th><th>收盘价</th><th>累计收益</th><th>回撤</th></tr></thead><tbody>{detail.snapshots.map(item => <tr key={item.id}><td>{item.sequence}</td><td>{item.trade_date}</td><td>{numberOf(item.close_price)}</td><td>{pct(item.return_pct)}</td><td>{pct(item.drawdown_pct)}</td></tr>)}</tbody></table></div></Dialog>}
+    {detail && <Dialog title={`${detail.symbol} · 跟踪与复盘`} close={() => setDetail(null)}><p className="selection-help">起始 {dateOf(detail.started_at)} · {detail.observed_sessions} / {detail.required_sessions} 个交易日 · {nameOf(detail.status)}</p><ReturnChart item={detail} /><div className="selection-kpis"><div className="selection-kpi"><span>累计收益</span><strong>{pct(detail.cumulative_return_pct)}</strong></div><div className="selection-kpi"><span>最大回撤</span><strong>{pct(detail.max_drawdown_pct)}</strong></div><div className="selection-kpi"><span>预测收益</span><strong>{pct(detail.target_return_pct)}</strong></div><div className="selection-kpi"><span>方向判断</span><strong>{detail.direction_hit == null ? "待复盘" : detail.direction_hit ? "正确" : "偏离"}</strong></div></div><h3>复盘结论</h3><p className="selection-help">{textOf(detail.review_json.summary) || textOf(detail.review_json.conclusion) || textOf(detail.review_json.reason) || (detail.observed_sessions < detail.required_sessions ? "有效跟踪日尚未满 10 个交易日，继续等待行情，不提前判定预测准确。" : "请更新跟踪以生成复盘结果。")}</p>{strings(detail.review_json.adjustments).length > 0 && <ul>{strings(detail.review_json.adjustments).map((item, i) => <li key={i}>{item}</li>)}</ul>}<RetrospectiveTrail rows={detailRetrospectives} error={detailAuditError} /><div className="table-wrap"><table style={{ minWidth: 540 }}><thead><tr><th>交易日序号</th><th>日期</th><th>收盘价</th><th>累计收益</th><th>回撤</th></tr></thead><tbody>{detail.snapshots.map(item => <tr key={item.id}><td>{item.sequence}</td><td>{item.trade_date}</td><td>{numberOf(item.close_price)}</td><td>{pct(item.return_pct)}</td><td>{pct(item.drawdown_pct)}</td></tr>)}</tbody></table></div></Dialog>}
   </div>;
 }
