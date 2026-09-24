@@ -27,7 +27,7 @@
       <section class="panel">
         <header>
           <h2>我的待办 <span class="badge">{{ todoTotal }}</span></h2>
-          <a class="more" @click="$router.push('/index')">查看更多 ›</a>
+          <a class="more" @click="$router.push('/task/todo')">查看更多 ›</a>
         </header>
         <el-table :data="todoList" class="todo-table">
           <el-table-column label="菜单名称" show-overflow-tooltip>
@@ -405,22 +405,22 @@ export default {
     formatWan(value) {
       return this.formatAmount((Number(value) || 0) / 10000);
     },
-    /** 状态卡 → 采购台账页（报表已移到 2067 分析报表目录下，路由为 /analytical/xxx） */
+    /** 状态卡 → 采购台账页。工作台下钻必须使用报表菜单的真实路由。 */
     goLedger() {
-      this.$router.push("/analytical/purchaseLedger");
+      this.$router.push("/tender-procurement/reportForm/purchaseLedger");
     },
     /** 采购方式分析 → 招标率统计页 */
     goBuildingRate() {
-      this.$router.push("/analytical/buildingRate");
+      this.$router.push("/tender-procurement/reportForm/buildingRate");
     },
     /** TOP5供应商（行/查看更多）→ 供应商报表页 */
     goVendorReport() {
-      this.$router.push("/analytical/vender");
+      this.$router.push("/tender-procurement/reportForm/vendor-bid");
     },
     /** 招采概览 → 采购台账明细"已完成"页签（不带筛选条件） */
     goLedgerDetail() {
       this.$router.push({
-        path: "/analytical/purchaseLedgerDetail",
+        path: "/tender-procurement/reportForm/purchaseLedgerDetail",
         query: { status: "completed" }
       });
     },

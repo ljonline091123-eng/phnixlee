@@ -207,7 +207,7 @@ export default {
         demandType: row.demandType
       };
       this.$router.push({
-        path: "/analytical/purchaseLedgerDetail",
+        path: "/tender-procurement/reportForm/purchaseLedgerDetail",
         query
       });
     },

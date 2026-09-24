@@ -31,23 +31,32 @@ const permission = {
   actions: {
     // 生成路由
     GenerateRoutes({ commit }) {
-      return new Promise(resolve => {
-        // 向后端请求路由数据
-        getRouters().then(res => {
-          const sdata = JSON.parse(JSON.stringify(res.data))
-          const rdata = JSON.parse(JSON.stringify(res.data))
-          const sidebarRoutes = filterAsyncRouter(sdata)
-          const rewriteRoutes = filterAsyncRouter(rdata, false, true)
-          const asyncRoutes = filterDynamicRoutes(dynamicRoutes);
-          rewriteRoutes.push({ path: '*', redirect: '/404', hidden: true })
-          router.addRoutes(asyncRoutes);
-          commit('SET_ROUTES', rewriteRoutes)
-          commit('SET_SIDEBAR_ROUTERS', constantRoutes.concat(sidebarRoutes))
-          commit('SET_DEFAULT_ROUTES', sidebarRoutes)
-          commit('SET_TOPBAR_ROUTES', sidebarRoutes)
-          resolve(rewriteRoutes)
-        })
+      // 登录刚完成时 token 写入和网关鉴权可能存在极短的时序差异。
+      // 菜单请求失败时重试，且只有拿到非空菜单数组才提交到 sidebar，避免把空菜单缓存下来。
+      const load = (attempt = 0) => getRouters().then(res => {
+        if (!res || !Array.isArray(res.data)) {
+          return Promise.reject(new Error('菜单数据格式无效'))
+        }
+        const sdata = JSON.parse(JSON.stringify(res.data))
+        const rdata = JSON.parse(JSON.stringify(res.data))
+        const sidebarRoutes = filterAsyncRouter(sdata)
+        const rewriteRoutes = filterAsyncRouter(rdata, false, true)
+        const asyncRoutes = filterDynamicRoutes(dynamicRoutes)
+        rewriteRoutes.push({ path: '*', redirect: '/404', hidden: true })
+        router.addRoutes(asyncRoutes)
+        commit('SET_ROUTES', rewriteRoutes)
+        commit('SET_SIDEBAR_ROUTERS', constantRoutes.concat(sidebarRoutes))
+        commit('SET_DEFAULT_ROUTES', sidebarRoutes)
+        commit('SET_TOPBAR_ROUTES', sidebarRoutes)
+        return rewriteRoutes
+      }).catch(error => {
+        if (attempt < 2) {
+          return new Promise(resolve => setTimeout(resolve, 250 * (attempt + 1)))
+            .then(() => load(attempt + 1))
+        }
+        return Promise.reject(error)
       })
+      return load()
     }
   }
 }

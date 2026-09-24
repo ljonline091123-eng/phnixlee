@@ -40,7 +40,7 @@
           <svg-icon slot="prefix" icon-class="password" class="el-input__icon input-icon" />
         </el-input>
       </el-form-item>
-      <el-form-item prop="code" v-if="activeName=='code'">
+      <el-form-item prop="code" v-if="captchaEnabled">
         <el-input
           v-model="loginForm.code"
           auto-complete="off"
@@ -50,11 +50,9 @@
         >
           <svg-icon slot="prefix" icon-class="validCode" class="el-input__icon input-icon" />
         </el-input>
-        <div class="login-code" style="font-size: 16px;color: #2B4ACB;" @click="getMessageCode">
+        <div class="login-code" @click="getCode" title="点击刷新验证码">
 
-          <span v-if="isButtonDisabled">{{secondsLeft }}秒后重试</span>
-          <span v-else>获取验证码</span>
-          <!-- <img :src="codeUrl" @click="getCode" class="login-code-img"/> -->
+          <img v-if="codeUrl" :src="codeUrl" class="login-code-img" alt="验证码" />
         </div>
       </el-form-item>
 <!--      <el-checkbox v-model="loginForm.userType" style="margin:5px 0px 25px 0px;">专家</el-checkbox>-->

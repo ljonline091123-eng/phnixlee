@@ -25,18 +25,20 @@ router.beforeEach((to, from, next) => {
         isRelogin.show = true
         // 判断当前用户是否已拉取完user_info信息
         store.dispatch('GetInfo').then(() => {
+          // 用户信息和权限加载完成后再请求菜单；GenerateRoutes 内部会处理短暂的鉴权时序差异。
+          return store.dispatch('GenerateRoutes')
+        }).then(accessRoutes => {
           isRelogin.show = false
-          store.dispatch('GenerateRoutes').then(accessRoutes => {
-            // 根据roles权限生成可访问的路由表
-            router.addRoutes(accessRoutes) // 动态添加可访问路由表
-            next({ ...to, replace: true }) // hack方法 确保addRoutes已完成
-          })
+          // 根据 roles 权限生成可访问的路由表
+          router.addRoutes(accessRoutes)
+          next({ ...to, replace: true })
         }).catch(err => {
-            store.dispatch('LogOut').then(() => {
-              Message.error(err)
-              // next({ path: '/' })
-            })
+          isRelogin.show = false
+          store.dispatch('FedLogOut').finally(() => {
+            Message.error(err && err.message ? err.message : (err || '登录信息加载失败'))
+            next({ path: '/login', query: { redirect: to.fullPath } })
           })
+        })
       } else {
         next()
       }

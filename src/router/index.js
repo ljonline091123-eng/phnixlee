@@ -85,6 +85,21 @@ export const constantRoutes = [
     // redirect:appConstant.platform == "1" ? "/procurement/plan": "/evaluate-expert/evaluate-bids",
     children: []
   },
+  // 工作台不是数据库菜单项，但它是登录后的默认入口，必须作为常量路由注册。
+  // 否则动态菜单加载完成前访问 /workbench 会被通配 404 路由截获。
+  {
+    path: "/workbench",
+    component: Layout,
+    hidden: true,
+    children: [
+      {
+        path: "",
+        component: () => import("@/views/workbench/index"),
+        name: "Workbench",
+        meta: { title: "驾驶舱" },
+      },
+    ],
+  },
   {
     path: "/flowable",
     component: Layout,
@@ -306,6 +321,34 @@ export const constantRoutes = [
         meta: {
           title: "供应商合作记录详情",
           activeMenu: "/vendor/vendor-record",
+        },
+      },
+    ],
+  },
+  // 工作台下钻使用报表菜单路径，但采购台账不是数据库菜单项。
+  // 作为隐藏静态路由注册，避免动态菜单通配路由把下钻请求重定向到 404。
+  {
+    path: "/tender-procurement/reportForm",
+    component: Layout,
+    hidden: true,
+    redirect: "noredirect",
+    children: [
+      {
+        path: "purchaseLedger",
+        component: () => import("@/views/reportForm/purchaseLedger/index"),
+        name: "PurchaseLedger",
+        meta: {
+          title: "采购台账",
+          activeMenu: "/tender-procurement/reportForm/contractLedger",
+        },
+      },
+      {
+        path: "purchaseLedgerDetail",
+        component: () => import("@/views/reportForm/purchaseLedger/detail"),
+        name: "PurchaseLedgerDetail",
+        meta: {
+          title: "采购台账明细",
+          activeMenu: "/tender-procurement/reportForm/contractLedger",
         },
       },
     ],
