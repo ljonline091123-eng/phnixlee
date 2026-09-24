@@ -240,7 +240,7 @@ def _evidence(db: Session, market: str, symbol: str, kb_ids: list[int], graph_id
          if item.evidence_document_id in relation_docs else ""}
         for item in relations[:20]
     ]
-    return {
+    result = {
         "knowledge_documents": len(docs),
         "knowledge_entities": len(entities),
         "knowledge_relations": len(relations),
@@ -257,6 +257,29 @@ def _evidence(db: Session, market: str, symbol: str, kb_ids: list[int], graph_id
         "missing_data": (["知识库缺少该股票资料"] if not docs else []) + (["图谱缺少该股票关系"] if not relations else []) + (["缺少财务指标"] if not financial_count else []),
         "sources": ["stock_realtime_quote", "stock_kline", "stock_news", "stock_notice", "stock_financial_report", "knowledge_document", "knowledge_entity", "knowledge_relation"],
     }
+    # Enrich the historical evidence contract with a bounded, versioned
+    # GraphRAG context.  The legacy keys above intentionally remain unchanged
+    # for existing clients and tests.
+    try:
+        from app.services.graph_rag import build_selection_context
+
+        context = build_selection_context(
+            db, market, symbol, knowledge_base_ids=kb_ids, graph_ids=graph_ids,
+            max_documents=12, max_relations=30, max_facts=30, max_chunks=8,
+        )
+        for key in ("facts", "chunks", "graph_paths", "evidence_span", "lineage", "lakehouse_datasets",
+                    "graph_version", "lakehouse_version", "document_version", "context_version", "context_hash",
+                    "data_cutoff", "identity", "missing_data", "counts", "evidence_fact_ids", "evidence_source_ids"):
+            if key in context:
+                result[key] = context[key]
+        # Keep document IDs from the legacy scope as the model's allow-list;
+        # context documents can include an explicitly linked relation proof.
+        result["context_document_ids"] = context.get("evidence_document_ids", [])
+        result["evidence_context"] = context
+    except Exception as exc:
+        result["context_error"] = str(exc)[:300]
+        result.setdefault("missing_data", []).append("GraphRAG 上下文暂不可用")
+    return result
 
 
 def _candidate_payload(db: Session, run: SelectionRun, quote: StockRealtimeQuote, bars: list[StockKline]) -> tuple[dict[str, Any] | None, list[str]]:
@@ -392,8 +415,33 @@ def create_selection_run(db: Session, payload: SelectionRunCreate) -> SelectionR
     missing.extend(f"{market}:{symbol}:quote" for symbol in stock_map if symbol not in priced_symbols)
     if payload.use_model and candidates:
         _apply_model_analysis(db, run, candidates)
+    # Make the Skill/model boundary explicit in the persisted evidence.  The
+    # immutable audit row below repeats these values so a later Skill edit
+    # cannot change the interpretation of this run.
+    selected_skill = db.scalar(select(ModelSkill).where(ModelSkill.skill_code == "STOCK_SELECTION_ANALYST"))
     for item, _score in candidates[: run.candidate_limit]:
-        db.add(SelectionCandidate(run_id=run.id, **item))
+        item["evidence_json"] = {
+            **(item.get("evidence_json") or {}),
+            "as_of": run.as_of.isoformat(),
+            "data_cutoff": run.as_of.date().isoformat(),
+            "skill_code": "STOCK_SELECTION_ANALYST",
+            "skill_version": selected_skill.version if selected_skill else "UNREGISTERED",
+            "model_version": run.model_instance_code,
+        }
+        item["analysis_json"] = {
+            **(item.get("analysis_json") or {}),
+            "skill_code": "STOCK_SELECTION_ANALYST",
+            "skill_version": selected_skill.version if selected_skill else "UNREGISTERED",
+            "model_version": run.model_instance_code,
+        }
+        candidate = SelectionCandidate(run_id=run.id, **item)
+        db.add(candidate)
+        db.flush()
+        from app.services.selection_audit import capture_decision_snapshot
+        capture_decision_snapshot(
+            db, candidate, snapshot_kind="CANDIDATE", decision="PENDING",
+            evidence=candidate.evidence_json, as_of=run.as_of,
+        )
     run.candidate_count = min(len(candidates), run.candidate_limit)
     run.missing_data_json = sorted(set((run.missing_data_json or []) + missing))[:100]
     run.status = "REVIEW" if run.candidate_count else "PARTIAL"
@@ -491,6 +539,7 @@ def review_candidate(db: Session, candidate_id: int, payload: SelectionReviewReq
             SelectionCandidate.run_id == run.id,
             SelectionCandidate.decision != "PENDING",
         )).all())
+    tracking = None
     if payload.decision == "APPROVED":
         if candidate.entry_price is None:
             raise ValueError("candidate has no real entry price")
@@ -515,7 +564,7 @@ def review_candidate(db: Session, candidate_id: int, payload: SelectionReviewReq
         if not entry_date:
             raise ValueError("candidate has no trade date; cannot start tracking")
         candidate.target_return_pct = target_return
-        db.add(SelectionTracking(
+        tracking = SelectionTracking(
             candidate_id=candidate.id, market=candidate.market, symbol=candidate.symbol,
             entry_price=candidate.entry_price, entry_date=entry_date,
             # Confirmation is anchored to the latest completed local-market
@@ -524,9 +573,19 @@ def review_candidate(db: Session, candidate_id: int, payload: SelectionReviewReq
             target_price=payload.target_price, stop_price=payload.stop_price,
             target_return_pct=target_return, confidence=payload.confidence,
             data_mode=run.data_mode if run else "REAL",
-        ))
+        )
+        db.add(tracking)
+        db.flush()
         if run:
             run.tracking_count += 1
+    from app.services.selection_audit import capture_decision_snapshot
+    capture_decision_snapshot(
+        db, candidate, snapshot_kind="REVIEW", decision=payload.decision,
+        tracking_id=tracking.id if tracking else None,
+        prediction_id=candidate.prediction_id,
+        evidence=candidate.evidence_json,
+        as_of=candidate.reviewed_at or _now(),
+    )
     if run and run.reviewed_count >= run.candidate_count:
         run.status = "TRACKING" if run.tracking_count else "COMPLETED"
     db.commit()
@@ -571,6 +630,8 @@ def _refresh_one(db: Session, tracking: SelectionTracking) -> SelectionTracking:
             tracking.review_json = {**(tracking.review_json or {}), "data_fetch_error": str(exc)[:300]}
     if not bars:
         tracking.status = "PENDING_DATA"
+        from app.services.selection_audit import capture_retrospective
+        capture_retrospective(db, tracking)
         return tracking
     # Late-arriving bars are reconciled at their true chronological position.
     # Once the first ten valid sessions are complete, their result is frozen.
@@ -590,6 +651,8 @@ def _refresh_one(db: Session, tracking: SelectionTracking) -> SelectionTracking:
     valid_bars = sorted(by_date.values(), key=lambda row: row.trade_date)[:tracking.required_sessions]
     if not valid_bars:
         tracking.status = "PENDING_DATA"
+        from app.services.selection_audit import capture_retrospective
+        capture_retrospective(db, tracking)
         return tracking
     db.execute(delete(SelectionSnapshot).where(SelectionSnapshot.tracking_id == tracking.id))
     peak = tracking.entry_price
@@ -604,6 +667,8 @@ def _refresh_one(db: Session, tracking: SelectionTracking) -> SelectionTracking:
     all_snapshots = list(db.scalars(select(SelectionSnapshot).where(SelectionSnapshot.tracking_id == tracking.id).order_by(SelectionSnapshot.sequence)).all())
     if not all_snapshots:
         tracking.status = "PENDING_DATA"
+        from app.services.selection_audit import capture_retrospective
+        capture_retrospective(db, tracking)
         return tracking
     latest = all_snapshots[-1]
     tracking.observed_sessions = len(all_snapshots)
@@ -662,6 +727,11 @@ def _refresh_one(db: Session, tracking: SelectionTracking) -> SelectionTracking:
             prediction.price_as_of = datetime.fromisoformat(latest.trade_date).replace(tzinfo=timezone.utc)
             prediction.evaluated_at = _now()
             prediction.evaluation_json = {**tracking.review_json, "workflow": "selection_tracking", "tracking_id": tracking.id}
+    # Append a review revision for both in-progress and completed states.  The
+    # state hash makes repeated scheduler runs idempotent and preserves late
+    # arriving-bar corrections as a new revision.
+    from app.services.selection_audit import capture_retrospective
+    capture_retrospective(db, tracking)
     return tracking
 
 

@@ -39,6 +39,13 @@ from app.models.schema_catalog import DatabaseTableComment
 from app.models.context_event import StockContextEvent
 from app.models.pipeline import PipelineRun, PipelineStageRun, ScheduledJob
 from app.models.selection import SelectionCandidate, SelectionRun, SelectionSnapshot, SelectionTracking
+from app.models.decision_review import (
+    SelectionDecisionSnapshot,
+    SelectionRetrospective,
+    SkillEvaluationCase,
+    SkillEvaluationRun,
+    SkillEvaluationResult,
+)
 from app.models.foundation import (
     FoundationEntity, FoundationSecurity, FoundationListing, FoundationEvidence,
     FoundationFact, FoundationFactEvidence, FoundationFactReview,
@@ -99,4 +106,9 @@ __all__ = [
     "SelectionCandidate",
     "SelectionTracking",
     "SelectionSnapshot",
+    "SelectionDecisionSnapshot",
+    "SelectionRetrospective",
+    "SkillEvaluationCase",
+    "SkillEvaluationRun",
+    "SkillEvaluationResult",
 ]
