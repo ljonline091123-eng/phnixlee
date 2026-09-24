@@ -206,8 +206,37 @@ class AkshareAdapter(MarketDataAdapter):
     def fetch_news(self, market: str, symbol: str) -> list[NewsRecord]:
         if market in (MARKET_NEEQ, MARKET_NEEQ_INNOVATION):
             return self._fetch_neeq_news(market=market, symbol=symbol)
+        if market == MARKET_HK:
+            return self._fetch_eastmoney_search_news(market, symbol)
         dataframe = ak.stock_news_em(symbol=symbol)
         return self._normalize_news_dataframe(dataframe, market, symbol)
+
+    def _fetch_eastmoney_search_news(self, market: str, symbol: str) -> list[NewsRecord]:
+        """Call Eastmoney search directly; avoids the upstream AkShare regex bug."""
+        callback = "quantNewsCallback"
+        inner = {"uid": "", "keyword": symbol, "type": ["cmsArticleWebOld"],
+                 "client": "web", "clientType": "web", "clientVersion": "curr",
+                 "param": {"cmsArticleWebOld": {"searchScope": "default", "sort": "default",
+                     "pageIndex": 1, "pageSize": 30, "preTag": "<em>", "postTag": "</em>"}}}
+        with httpx.Client(timeout=20.0, trust_env=False, headers={"User-Agent": "Mozilla/5.0",
+                "Referer": f"https://so.eastmoney.com/news/s?keyword={symbol}"}) as client:
+            response = client.get("https://search-api-web.eastmoney.com/search/jsonp",
+                params={"cb": callback, "param": json.dumps(inner, ensure_ascii=False), "_": str(int(time.time() * 1000))})
+            response.raise_for_status()
+        match = re.match(r"^[^(]+\((.*)\)\s*;?$", response.text, re.S)
+        if not match:
+            raise ValueError("Eastmoney news response is not valid JSONP")
+        rows = (json.loads(match.group(1)).get("result") or {}).get("cmsArticleWebOld") or []
+        records: list[NewsRecord] = []
+        for item in rows:
+            title = re.sub(r"</?em>", "", html.unescape(str(item.get("title") or ""))).strip()
+            content = re.sub(r"</?em>", "", html.unescape(str(item.get("content") or ""))).replace("\u3000", " ").strip()
+            news_time = str(item.get("date") or "").strip()
+            if title and news_time:
+                records.append(NewsRecord(market=market, symbol=symbol, news_time=news_time, title=title,
+                    content=content or None, source_name=str(item.get("mediaName") or "东方财富新闻搜索"),
+                    url=str(item.get("url") or "") or None, content_json=self._json_safe(item)))
+        return records
 
     def fetch_extended_data(self, market: str, symbol: str) -> dict[str, Any]:
         """Build the optional sections used by the stock-detail F10 drawer.
@@ -566,23 +595,22 @@ class AkshareAdapter(MarketDataAdapter):
         }
         payload: dict[str, Any] | None = None
         last_error: Exception | None = None
-        for host in ("push2his.eastmoney.com", "82.push2his.eastmoney.com", "push2.eastmoney.com"):
-            try:
-                payload = self._request_eastmoney_json(
-                    f"https://{host}/api/qt/stock/kline/get",
-                    params,
-                    {
-                        "User-Agent": "Mozilla/5.0",
-                        "Accept": "application/json,text/plain,*/*",
-                        "Referer": "https://quote.eastmoney.com/",
-                    },
-                )
-                data = (payload or {}).get("data") or {}
-                if isinstance(data.get("klines"), list):
-                    break
-            except Exception as exc:
-                last_error = exc
-                payload = None
+        for secid in (f"0.{symbol}", f"1.{symbol}", f"2.{symbol}"):
+            params["secid"] = secid
+            for host in ("push2his.eastmoney.com", "82.push2his.eastmoney.com", "push2.eastmoney.com"):
+                try:
+                    candidate = self._request_eastmoney_json(
+                        f"https://{host}/api/qt/stock/kline/get", params,
+                        {"User-Agent": "Mozilla/5.0", "Accept": "application/json,text/plain,*/*",
+                         "Referer": "https://xinsanban.eastmoney.com/"})
+                    data = (candidate or {}).get("data") or {}
+                    if isinstance(data.get("klines"), list) and data.get("klines"):
+                        payload = candidate
+                        break
+                except Exception as exc:
+                    last_error = exc
+            if payload is not None:
+                break
         if payload is None:
             if last_error:
                 raise last_error

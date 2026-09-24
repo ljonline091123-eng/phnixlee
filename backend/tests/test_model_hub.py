@@ -1,12 +1,15 @@
 import unittest
+import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest.mock import patch
 
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 
 from app.db.base import Base
 from app.db.session import get_db
+from app.core.config import get_settings
 from app.models.ai_hub import ModelCallLog, ModelInstance, ModelProvider, ModelRouteRule
 from app.services.model_hub import ModelHubService, seed_default_models
 
@@ -85,6 +88,16 @@ class ModelHubFoundationTest(unittest.TestCase):
         self.assertEqual(log.status, "SUCCESS")
         self.assertIn("已收到", log.response_text)
         self.assertIsNotNone(self.db.scalar(select(ModelCallLog).where(ModelCallLog.id == log.id)))
+
+    def test_gemini_runtime_key_is_used_without_persisting_it(self) -> None:
+        instance = self.db.scalar(select(ModelInstance).where(ModelInstance.instance_code == "GEMINI_FLASH"))
+        self.assertIsNotNone(instance)
+        with patch.dict(os.environ, {"GEMINI_API_KEY": "runtime-secret"}, clear=False):
+            get_settings.cache_clear()
+            routed = ModelHubService(self.db)._to_routed_model(instance)
+            self.assertEqual(routed.instance.api_key, "runtime-secret")
+            self.assertIsNone(instance.api_key)
+        get_settings.cache_clear()
 
     def test_route_falls_back_to_mock_when_preferred_fails(self) -> None:
         provider = ModelProvider(

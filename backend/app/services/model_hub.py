@@ -355,6 +355,14 @@ DEFAULT_MODEL_ROUTES = (
     },
 )
 
+
+def _runtime_api_key(provider: ModelProvider) -> str | None:
+    """Resolve an optional process-level key without writing it to the DB."""
+    if provider.provider_type != "GEMINI_REST" and provider.provider_code != "GEMINI":
+        return None
+    settings = get_settings()
+    return settings.gemini_api_key.strip() or settings.google_api_key.strip() or None
+
 # Upgrade only routes that still match the previous built-in profile. Operators'
 # customized routes must remain untouched across application restarts.
 LEGACY_DEFAULT_ROUTE_OPTIONS = {
@@ -767,7 +775,11 @@ class ModelHubService:
             raise ValueError(f"Model provider not found for instance: {instance.instance_code}")
         if not provider.enabled:
             raise ValueError(f"Model provider is disabled: {provider.provider_code}")
-        api_key = decrypt_api_key(provider.api_key_encrypted) if provider.api_key_encrypted else instance.api_key
+        api_key = (
+            decrypt_api_key(provider.api_key_encrypted)
+            if provider.api_key_encrypted
+            else instance.api_key or _runtime_api_key(provider)
+        )
         resolved = ModelInstance(
             provider_id=instance.provider_id,
             instance_code=instance.instance_code,

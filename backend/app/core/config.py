@@ -18,6 +18,10 @@ class Settings(BaseSettings):
     data_foundation_enabled: bool = True
     company_research_context_enabled: bool = True
     model_credential_key: str = ""
+    # Optional runtime credentials. These are intentionally not persisted in
+    # the model hub; they are useful for single-provider deployments and CI.
+    gemini_api_key: str = ""
+    google_api_key: str = ""
     lake_storage_backend: str = "filesystem"
     lake_filesystem_root: str = str(Path(__file__).resolve().parents[2] / "lake")
     lake_s3_endpoint: str = "127.0.0.1:9000"

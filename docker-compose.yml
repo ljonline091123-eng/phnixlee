@@ -44,6 +44,8 @@ services:
       LAKE_S3_BUCKET: quant-lake
       APP_ENV: docker
       MODEL_CREDENTIAL_KEY: ${MODEL_CREDENTIAL_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
     ports:
       - "8000:8000"
     depends_on:
@@ -71,6 +73,8 @@ services:
       LAKE_S3_BUCKET: quant-lake
       APP_ENV: docker
       MODEL_CREDENTIAL_KEY: ${MODEL_CREDENTIAL_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
     depends_on:
       api:
         condition: service_healthy
@@ -91,6 +95,8 @@ services:
       LAKE_S3_BUCKET: quant-lake
       APP_ENV: docker
       MODEL_CREDENTIAL_KEY: ${MODEL_CREDENTIAL_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
     depends_on:
       api:
         condition: service_healthy

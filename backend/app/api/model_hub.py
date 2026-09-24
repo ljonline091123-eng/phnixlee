@@ -33,6 +33,7 @@ from app.orchestration.model_hub import (
     SkillToolWorkflow,
 )
 from app.services.model_credentials import decrypt_api_key, encrypt_api_key
+from app.services.model_hub import _runtime_api_key
 from app.connectors.model_registry import get_model_adapter
 from app.services.skill_files import delete_skill_file, write_skill_file
 from app.services.skill_registry import rollback_skill, save_skill_content, sync_skill_from_file
@@ -61,7 +62,7 @@ def _redact_config(value):
 def _provider_read(provider: ModelProvider) -> ModelProviderRead:
     data = ModelProviderRead.model_validate(provider)
     data.config_json = _redact_config(provider.config_json or {})
-    data.api_key_configured = bool(provider.api_key_encrypted)
+    data.api_key_configured = bool(provider.api_key_encrypted or _runtime_api_key(provider))
     return data
 
 
@@ -82,7 +83,10 @@ def _instance_or_404(db: Session, instance_id: int) -> ModelInstance:
 def _instance_read(instance: ModelInstance) -> ModelInstanceRead:
     data = ModelInstanceRead.model_validate(instance)
     data.config_json = _redact_config(instance.config_json or {})
-    data.api_key_configured = bool(instance.api_key or (instance.provider and instance.provider.api_key_encrypted))
+    data.api_key_configured = bool(
+        instance.api_key
+        or (instance.provider and (instance.provider.api_key_encrypted or _runtime_api_key(instance.provider)))
+    )
     return data
 
 
@@ -168,7 +172,11 @@ def test_provider(provider_id: int, db: Session = Depends(get_db)) -> ModelTestR
                     instance_code="PROVIDER_TEST",
                     model_code="provider-test",
                     model_name="Provider Test",
-                    api_key=decrypt_api_key(provider.api_key_encrypted) if provider.api_key_encrypted else None,
+                    api_key=(
+                        decrypt_api_key(provider.api_key_encrypted)
+                        if provider.api_key_encrypted
+                        else _runtime_api_key(provider)
+                    ),
                     api_base_url=provider.api_base_url,
                 )
             )

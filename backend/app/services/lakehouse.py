@@ -217,8 +217,11 @@ def _records_for_table(db: Session, table_name: str, limit: int, layer: str,
     if layer == "SERVING" and table_name in {"foundation_fact", "foundation_security_classification"}:
         query = query.where(model.status == "ACCEPTED")
     rows = db.scalars(query.order_by(*model.__table__.primary_key.columns).limit(limit)).all()
-    return [{column.name: _json_value(getattr(row, column.name), serialize_nested=layer != "RAW")
-             for column in model.__table__.columns} for row in rows]
+    records = [{column.name: _json_value(getattr(row, column.name), serialize_nested=layer != "RAW")
+                for column in model.__table__.columns} for row in rows]
+    if layer != "RAW" and table_name == "stock_kline":
+        records = [row for row in records if "\"quality_status\": \"QUARANTINED\"" not in str(row.get("raw_payload"))]
+    return records
 
 
 def _version() -> str:

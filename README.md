@@ -175,6 +175,13 @@ python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().d
 $env:MODEL_CREDENTIAL_KEY="<generated-value>"
 ```
 
+For a single Gemini deployment, you can provide the standard runtime credential
+instead of saving it through the Model Lab. Set `GEMINI_API_KEY` (or
+`GOOGLE_API_KEY`) in `backend/.env` or the process environment. The key is read
+only in memory, is never returned by the API, and takes effect for the seeded
+`GEMINI_FLASH` and `GEMINI_PRO` instances. A provider key saved in the Model Lab
+takes precedence over the environment variable.
+
 For the local Windows setup, the same stable key can be kept in the ignored
 `backend/.env` file as `MODEL_CREDENTIAL_KEY=...`. The Model Lab already contains
 DeepSeek V4 Pro/Flash and Gemini 2.5 Pro/Flash instances. Open **模型实验室 →

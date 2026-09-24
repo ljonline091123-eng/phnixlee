@@ -184,6 +184,10 @@ class GeminiRestAdapter(ModelAdapter):
     def health_check(self, instance: ModelInstance) -> tuple[str, list[str]]:
         if not instance.api_key:
             raise ValueError("GEMINI_REST instance requires api_key")
+        if not instance.api_base_url:
+            raise ValueError("GEMINI_REST instance requires api_base_url")
+        if not instance.model_code:
+            raise ValueError("GEMINI_REST instance requires model_code")
         return ("Gemini REST endpoint is configured.", ["chat"])
 
     def chat(
@@ -194,10 +198,12 @@ class GeminiRestAdapter(ModelAdapter):
         max_tokens: int | None = None,
         metadata_json: dict[str, Any] | None = None,
     ) -> ModelExecutionResult:
-        if not instance.api_key:
-            raise ValueError("GEMINI_REST instance requires api_key")
-        base_url = (instance.api_base_url or "https://generativelanguage.googleapis.com/v1beta").rstrip("/")
-        url = f"{base_url}/models/{instance.model_code}:generateContent"
+        self.health_check(instance)
+        base_url = instance.api_base_url.rstrip("/")
+        model_code = instance.model_code.strip()
+        if model_code.startswith("models/"):
+            model_code = model_code.removeprefix("models/")
+        url = f"{base_url}/models/{model_code}:generateContent"
         system_instruction = "\n".join(item["content"] for item in messages if item["role"] == "system").strip()
         contents = [
             {"role": "model" if item["role"] == "assistant" else "user", "parts": [{"text": item["content"]}]}
