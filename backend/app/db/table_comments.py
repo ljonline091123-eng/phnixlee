@@ -75,7 +75,7 @@ TABLE_DESCRIPTIONS: dict[str, TableDescription] = {
     "skill_evaluation_case": TableDescription("Skill 评测用例", "模型实验室", "保存可重复执行的黄金用例、输入、期望输出和评分规则，用于 Skill 回归验证。"),
     "skill_evaluation_run": TableDescription("Skill 评测运行", "模型实验室", "记录某个 Skill 版本在固定用例集上的评测批次、数据集版本、评测器和汇总结果。"),
     "skill_evaluation_result": TableDescription("Skill 评测结果", "模型实验室", "保存单个评测用例的实际输出、规则指标、证据引用及通过或失败状态。"),
-    "lake_object": TableDescription("湖仓对象目录", "湖仓", "登记本地文件或 MinIO 中的原始对象、标准化对象及其内容哈希、来源和数据集版本。"),
+    "lake_object": TableDescription("湖仓对象目录", "湖仓", "按内容哈希登记本地文件或 MinIO 物理对象；同一内容的不同分层、来源和数据集归属保存在逻辑绑定元数据中。"),
     "lake_dataset": TableDescription("湖仓数据集目录", "湖仓", "登记 Raw、Normalized、Serving 分层的数据集定义、存储格式、分区规范和当前版本。"),
     "lake_dataset_version": TableDescription("湖仓数据集版本", "湖仓", "保存数据集每次发布的版本、对象地址、行数、字段结构和质量检查结果。"),
     "lake_lineage_event": TableDescription("湖仓数据血缘", "湖仓", "记录数据从上游表或文档到下游对象、数据集及知识资产的转换链路和解析版本。"),
@@ -344,7 +344,7 @@ TABLE_COLUMN_OVERRIDES: dict[str, dict[str, str]] = {
         "source_table": "来源数据表名称",
         "source_record_id": "来源记录编号",
         "dataset_version": "关联的数据集版本号",
-        "metadata_json": "对象的扩展元数据",
+        "metadata_json": "对象扩展元数据；logical_bindings 保留同一物理内容在不同分层、来源和数据集中的逻辑归属",
         "created_at": "对象目录记录创建时间",
     },
     "lake_dataset": {

@@ -6,7 +6,12 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.models.decision_review import SkillEvaluationCase, SkillEvaluationResult, SkillEvaluationRun
-from app.schemas.skill_evaluation import SkillEvaluationCaseCreate, SkillEvaluationRunCreate
+from app.schemas.skill_evaluation import (
+    RetrospectiveRepairFlowRequest,
+    RetrospectiveRepairFlowResponse,
+    SkillEvaluationCaseCreate,
+    SkillEvaluationRunCreate,
+)
 from app.services import skill_evaluation
 
 
@@ -66,4 +71,27 @@ def repair_draft(run_id: int, db: Session = Depends(get_db)):
     if draft is None:
         raise HTTPException(status_code=409, detail="该评测没有可生成的待审核修复草案，或当前没有可用的非模拟模型")
     return draft
+
+
+@router.post(
+    "/retrospectives/{retrospective_id}/repair-flow",
+    response_model=RetrospectiveRepairFlowResponse,
+)
+def retrospective_repair_flow(
+    retrospective_id: int,
+    payload: RetrospectiveRepairFlowRequest | None = None,
+    db: Session = Depends(get_db),
+):
+    request = payload or RetrospectiveRepairFlowRequest()
+    try:
+        return skill_evaluation.run_retrospective_repair_flow(
+            db,
+            retrospective_id,
+            evaluation_output=request.evaluation_output,
+            request_repair_draft=request.request_repair_draft,
+        )
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 

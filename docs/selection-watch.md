@@ -15,6 +15,8 @@
 3. 硬规则扫描所选市场的本地结构化行情；模型只接收筛选后的候选和有限证据，按来源保留财报、新闻、量价和事件资料，分批调用以限制上下文。规则预选与模型分析结果分开标记，缺数据或模型失败不会伪装为完整研判。
 4. 在“证据与复选”核验资料、预测目标价和置信度，填写复选理由，然后确认入选或排除。人工确认后才创建预测跟踪；查看历史批次可追溯当时判断。
 
+候选证据使用 `GRAPH_RAG_CONTEXT_V3`。文档、关系、公司审核事实、结构化观测、切片、湖仓版本和血缘均按选股运行的 `as_of` 截断；切片区同时显示“已有有效切片”和“实际载入本次上下文”两种覆盖率。
+
 ## 跟踪与复盘
 
 “跟踪与复盘”显示基准价、目标价、有效交易日进度、累计收益和最大回撤。有效日来源于同一口径的日行情记录，不能用自然日、未来行情或同一天的重复记录凑满十天。数据不足时保持等待状态。
@@ -39,6 +41,8 @@ python -m app.jobs.worker
 
 真实新建预测需要等待未来至少 10 个有效交易日，系统测试中的模拟时间不能作为真实预测业绩。复盘指标用于检验当时假设和数据覆盖，不会自动交易，也不会覆盖原有预测。
 
+复盘出现方向偏离、目标未达或触发止损后，可在复盘记录点击“运行 Skill 回归”。系统只用决策当时可见的证据执行历史盲测，未来收益只参与评分；真实元评审模型可生成待审核草案，Mock 或模型不可用时不会伪造草案。任何修复草案都必须在模型实验室人工审核，不会自动修改现行 Skill。
+
 ## 本次数据覆盖核查
 
 2026-09-18 已备份数据库并用已有本地数据重建未锁定图谱。重建结果为 83,429 篇文档、107,207 个实体和 176,332 条关系，合并重复新闻/公告 1,562 条。数量增长本身不代表信息完整。
@@ -56,7 +60,10 @@ python -m app.jobs.worker
 | 人工确认 / 排除 | `POST /api/v1/selection/candidates/{id}/review` |
 | 跟踪清单 / 详情 | `GET /api/v1/selection/tracking`、`GET /api/v1/selection/tracking/{id}` |
 | 手动更新 | `POST /api/v1/selection/refresh` |
+| 决策审计 / 复盘版本 | `GET /api/v1/selection/candidates/{id}/audit`、`GET /api/v1/selection/tracking/{id}/retrospectives` |
+| GraphRAG 时点上下文 | `GET /api/v1/selection/context/{market}/{symbol}` |
+| 复盘回归与修复草案 | `POST /api/v1/skill-evaluations/retrospectives/{id}/repair-flow` |
 | 补充 / 查询外部证据 | `POST /api/v1/resources/context-events`、`GET /api/v1/resources/context-events` |
 | 图谱证据原文 | `GET /api/v1/resources/knowledge-graphs/{graph_id}/documents/{document_id}` |
 
-新增表为 `selection_run`、`selection_candidate`、`selection_tracking`、`selection_snapshot`、`stock_context_event`。各表及字段释义同步到 `database_table_comment`。原有预测账本继续用于保存预测及复盘关联。
+相关表为 `selection_run`、`selection_candidate`、`selection_tracking`、`selection_snapshot`、`selection_decision_snapshot`、`selection_retrospective`、`skill_evaluation_case`、`skill_evaluation_run`、`skill_evaluation_result` 和 `stock_context_event`。各表及字段释义同步到 `database_table_comment`。原有预测账本继续用于保存预测及复盘关联。

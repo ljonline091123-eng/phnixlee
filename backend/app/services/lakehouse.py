@@ -178,14 +178,24 @@ def put_object(data: bytes, *, layer: str, content_type: str, source_code: str |
     result = {"object_uri": uri, "content_hash": digest, "byte_size": len(data), "layer": layer,
               "bucket": bucket, "object_key": key, "content_type": content_type}
     if db is not None:
+        logical_binding = {
+            "layer": layer,
+            "source_code": source_code,
+            "source_table": source_table,
+            "source_record_id": str(source_record_id) if source_record_id is not None else None,
+            "dataset_version": dataset_version,
+            "metadata": metadata or {},
+        }
         existing = db.scalar(select(LakeObject).where(LakeObject.content_hash == digest))
         if existing is None:
             existing = LakeObject(**result, source_code=source_code, source_table=source_table,
                 source_record_id=str(source_record_id) if source_record_id is not None else None,
-                dataset_version=dataset_version, metadata_json=metadata or {})
+                dataset_version=dataset_version,
+                metadata_json={**(metadata or {}), "logical_bindings": [logical_binding]})
             db.add(existing)
             db.flush()
-        elif existing.object_uri != uri:
+            result["catalog_reused"] = False
+        elif existing.object_uri != uri and existing.object_uri.split(":", 1)[0] != uri.split(":", 1)[0]:
             # Content addressing makes this a safe storage migration: every
             # historical version still resolves to identical bytes.
             existing.object_uri = uri
@@ -193,9 +203,48 @@ def put_object(data: bytes, *, layer: str, content_type: str, source_code: str |
             existing.object_key = key
             existing.content_type = content_type
             existing.byte_size = len(data)
-            existing.metadata_json = {**(existing.metadata_json or {}), "storage_migrated": True}
+            bindings = list((existing.metadata_json or {}).get("logical_bindings") or [])
+            if not bindings:
+                bindings.append({
+                    "layer": existing.layer, "source_code": existing.source_code,
+                    "source_table": existing.source_table, "source_record_id": existing.source_record_id,
+                    "dataset_version": existing.dataset_version,
+                    "metadata": existing.metadata_json or {},
+                })
+            bindings.append(logical_binding)
+            existing.metadata_json = {
+                **(existing.metadata_json or {}), "storage_migrated": True,
+                "logical_bindings": bindings[-200:],
+            }
             db.flush()
+            result["catalog_reused"] = True
+        else:
+            # LakeObject is the physical content-addressed object.  A byte-for-
+            # byte duplicate can legitimately belong to another layer/source;
+            # retain that logical ownership instead of relabeling the original
+            # catalog row or pretending the first source owns every reuse.
+            bindings = list((existing.metadata_json or {}).get("logical_bindings") or [])
+            if not bindings:
+                bindings.append({
+                    "layer": existing.layer, "source_code": existing.source_code,
+                    "source_table": existing.source_table, "source_record_id": existing.source_record_id,
+                    "dataset_version": existing.dataset_version,
+                    "metadata": existing.metadata_json or {},
+                })
+            binding_key = json.dumps(logical_binding, ensure_ascii=False, sort_keys=True, default=str)
+            if all(json.dumps(item, ensure_ascii=False, sort_keys=True, default=str) != binding_key for item in bindings):
+                bindings.append(logical_binding)
+                existing.metadata_json = {**(existing.metadata_json or {}), "logical_bindings": bindings[-200:]}
+                db.flush()
+            result.update({
+                "object_uri": existing.object_uri,
+                "bucket": existing.bucket,
+                "object_key": existing.object_key,
+                "content_type": existing.content_type,
+                "catalog_reused": True,
+            })
         result["object_id"] = existing.id
+        result["logical_binding"] = logical_binding
     return result
 
 
@@ -434,11 +483,14 @@ def _quality(records: list[dict[str, Any]], schema: dict[str, str], *, table_nam
 
 
 def assess_dataset_source(db: Session, *, source_table: str, layer: str = "NORMALIZED",
-                          limit: int = 10000) -> dict[str, Any]:
+                          limit: int = 10000,
+                          scope_pairs: list[tuple[str, str]] | None = None) -> dict[str, Any]:
     layer = layer.upper()
     if layer == "SERVING" and source_table not in SERVING_EXPORT_TABLES:
         raise ValueError(f"{source_table} 未通过 Serving 层发布白名单")
-    records = _records_for_table(db, source_table, min(limit, 100000), layer)
+    records = _records_for_table(
+        db, source_table, min(limit, 100000), layer, scope_pairs,
+    )
     if not records:
         return _quality([], {}, table_name=source_table, layer=layer)
     return _quality(records, _source_schema(source_table), table_name=source_table, layer=layer)
@@ -507,9 +559,12 @@ def export_dataset(db: Session, *, dataset_code: str, dataset_name: str, layer: 
     db.add(LakeLineageEvent(batch_id=batch_id, upstream_type="SOURCE_TABLE", upstream_id=source_table,
         downstream_type="DATASET_VERSION", downstream_id=f"{dataset_code}:{version}",
         transformation="PARQUET_EXPORT", dataset_version=version,
-        metadata_json={"row_count": len(records), "object_id": obj.get("object_id")}))
+        metadata_json={"row_count": len(records), "object_id": obj.get("object_id"),
+                       "source_table": source_table, "scope_pairs": scope_pairs or [],
+                       "scope_applied": scope_applied}))
     db.commit()
     return {"dataset_id": dataset.id, "dataset_code": dataset_code, "version": version,
+            "status": version_row.status,
             "batch_id": batch_id, "row_count": len(records), "quality": quality, **obj}
 
 

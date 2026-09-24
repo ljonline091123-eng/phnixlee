@@ -25,3 +25,31 @@ class SkillEvaluationRunCreate(BaseModel):
     instance_code: str | None = Field(default=None, max_length=64)
     dataset_version: str = Field(default="v1", max_length=64)
 
+
+class RetrospectiveRepairFlowRequest(BaseModel):
+    """Optional frozen output for a retrospective regression run.
+
+    When omitted, the service uses the output stored in the decision snapshot.
+    The repair step remains review-only and never changes the active Skill.
+    """
+
+    evaluation_output: dict[str, Any] | None = None
+    request_repair_draft: bool = True
+
+
+class RetrospectiveRepairFlowResponse(BaseModel):
+    retrospective_id: int
+    case_id: int
+    case_code: str
+    case_created: bool
+    skill_code: str | None = None
+    snapshot_skill_version: str | None = None
+    active_skill_version: str | None = None
+    evaluation_run_id: int | None = None
+    evaluation_status: str
+    evaluation_source: str
+    repair_draft_id: int | None = None
+    repair_draft_status: str | None = None
+    repair_status: str
+    message: str | None = None
+

@@ -51,6 +51,9 @@
 .selection-fact pre, .selection-evidence-block pre { max-height: 260px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; margin: 8px 0 0; padding: 8px; border-radius: 6px; background: #f5f8f5; font: 12px/1.55 ui-monospace, SFMono-Regular, Consolas, monospace; }
 .selection-audit-meta { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 8px 0; color: #61756d; font-size: 12px; }
 .selection-audit-meta span { overflow-wrap: anywhere; }
+.selection-repair-action { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; margin-top: 10px; }
+.selection-repair-action button { display: inline-flex; align-items: center; gap: 7px; }
+.selection-repair-action small { flex: 1 1 280px; overflow-wrap: anywhere; }
 .selection-badge { display: inline-block; padding: 3px 8px; border-radius: 5px; background: #edf3ed; color: #30583d; font-size: 12px; white-space: nowrap; }
 .selection-badge.warning { background: #fff2d9; color: #856027; }
 .selection-steps { color: #61796b; font-size: 14px; line-height: 1.8; }

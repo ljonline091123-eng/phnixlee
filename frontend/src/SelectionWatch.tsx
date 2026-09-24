@@ -1,9 +1,76 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { Wrench } from "lucide-react";
 import { api, type KnowledgeBase, type KnowledgeGraph, type ModelInstance, type ModelProvider } from "./api";
-import { selectionApi, type SelectionAudit, type SelectionCandidate, type SelectionEvidence, type SelectionRecord, type SelectionRetrospective, type SelectionRun, type SelectionTracking } from "./selectionApi";
+import { selectionApi, type RetrospectiveRepairFlow, type SelectionAudit, type SelectionCandidate, type SelectionEvidence, type SelectionRecord, type SelectionRetrospective, type SelectionRun, type SelectionTracking } from "./selectionApi";
 import "./SelectionWatch.css";
 
-const labels: Record<string, string> = { PENDING: "待复选", PENDING_REVIEW: "待人工复选", REVIEW: "待人工复选", PARTIAL: "数据不足", PENDING_DATA: "等待行情", LOCAL_EVIDENCE: "本地规则预选", MODEL_REQUESTED: "模型分析中", MODEL_COMPLETED: "模型综合分析", MODEL_FAILED_FALLBACK_LOCAL: "模型失败 · 规则预选", APPROVED: "已入选", REJECTED: "已排除", COMPLETED: "已完成", FAILED: "执行失败", RUNNING: "生成中", TRACKING: "跟踪中", WAITING_DATA: "等待行情", REVIEWED: "已复盘", REAL: "真实数据", MOCK: "模拟数据", RULES_ONLY: "规则预选", MODEL: "模型综合分析", LLM: "模型综合分析", CN_A: "A 股", HK: "港股", NEEQ: "新三板", NEEQ_INNOVATION: "创新层" };
+const labels: Record<string, string> = {
+  PENDING: "待复选",
+  PENDING_REVIEW: "待人工审核",
+  REVIEW: "待人工复选",
+  PARTIAL: "数据不足",
+  PENDING_DATA: "等待行情",
+  LOCAL_EVIDENCE: "本地规则预选",
+  MODEL_REQUESTED: "模型分析中",
+  MODEL_COMPLETED: "模型综合分析",
+  MODEL_FAILED_FALLBACK_LOCAL: "模型失败 · 规则预选",
+  MODEL_UNAVAILABLE: "真实模型不可用",
+  NOT_RUN: "未运行",
+  NOT_AVAILABLE: "暂不可用",
+  NOT_REQUESTED: "未申请",
+  NOT_ELIGIBLE: "不满足修复条件",
+  NOT_NEEDED: "无需修复",
+  SKILL_VERSION_MISMATCH: "Skill 版本不一致",
+  PASSED: "评测通过",
+  APPROVED: "已入选",
+  REJECTED: "已排除",
+  COMPLETED: "已完成",
+  FAILED: "执行失败",
+  RUNNING: "生成中",
+  TRACKING: "跟踪中",
+  WAITING_DATA: "等待行情",
+  REVIEWED: "已复盘",
+  REAL: "真实数据",
+  MOCK: "模拟数据",
+  RULES_ONLY: "规则预选",
+  MODEL: "模型综合分析",
+  LLM: "模型综合分析",
+  CN_A: "A 股",
+  HK: "港股",
+  NEEQ: "新三板",
+  NEEQ_INNOVATION: "创新层",
+  SOURCE: "来源记录",
+  OBSERVED: "来源记录",
+  NORMALIZED: "已标准化",
+  CANDIDATE: "候选待核实",
+  VERIFIED: "已验证",
+  ACCEPTED: "已审核",
+  SYSTEM: "系统规则",
+  RULE: "确定性规则",
+  KEYWORD_MENTION: "关键词提及",
+  ISSUED_BY: "发行主体",
+  DESCRIBED_BY: "资料描述",
+  HAS_RECORD: "包含记录",
+  HAS_DOCUMENT: "关联文档",
+  HAS_NEWS: "相关新闻",
+  HAS_NOTICE: "相关公告",
+  HAS_FINANCIAL_REPORT: "相关财报",
+  HAS_FINANCIAL_METRIC: "财务指标",
+  HAS_PRICE_AND_VOLUME_SERIES: "量价序列",
+  HAS_REALTIME_QUOTE: "实时行情",
+  HAS_F10_SECTION: "F10 资料",
+  HAS_RESEARCH_REPORT: "研究报告",
+  HAS_MARKET_ANOMALY: "量价异常",
+  HAS_RECORDED_FACT: "关联事实",
+  REFERS_TO: "指向对象",
+  MENTIONS_POLICY: "提及政策",
+  MENTIONS_RAW_MATERIAL: "提及原材料",
+  MENTIONS_SUPPLY_CHAIN: "提及供应链",
+  MENTIONS_SHAREHOLDER: "提及股东事项",
+  MENTIONS_CONTRACT: "提及合同",
+  SUPPORTED_BY: "证据支持",
+  EVIDENCED_BY: "证据来源",
+};
 const nameOf = (value: string) => labels[value] || value;
 const numberOf = (value: unknown, digits = 2) => typeof value === "number" && Number.isFinite(value) ? value.toFixed(digits) : "—";
 const pct = (value: unknown) => value == null ? "—" : `${numberOf(value)}%`;
@@ -101,14 +168,32 @@ function StructuredEvidence({ evidence }: { evidence: SelectionEvidence }) {
   return <section className="selection-evidence-block"><h3>结构化事实与观测 · {rows.length}</h3><div className="selection-fact-grid">{rows.slice(0, 60).map((fact, index) => <article className="selection-evidence selection-fact" key={`${textOf(fact.id)}-${index}`}><strong>{recordLabel(fact, ["title", "fact_type", "_category", "indicator", "name"], "结构化观测")}</strong><small>{recordDetail(fact, ["source_table", "source_record_id", "observed_at", "report_period", "status"])}</small>{fact.properties && <pre>{jsonPreview(fact.properties)}</pre>}{fact.evidence && <small>证据引用：{jsonPreview(fact.evidence, 360)}</small>}</article>)}</div></section>;
 }
 
-function ChunkEvidence({ chunks }: { chunks: SelectionRecord[] | undefined }) {
-  if (!chunks?.length) return null;
-  return <section className="selection-evidence-block"><h3>知识切片 · {chunks.length}</h3>{chunks.slice(0, 40).map((chunk, index) => <details className="selection-evidence" key={`${textOf(chunk.id)}-${index}`}><summary>{recordLabel(chunk, ["section_title", "title", "chunk_id"], `切片 ${index + 1}`)} · {recordLabel(chunk, ["embedding_status"], "未声明向量")}</summary><small>{recordDetail(chunk, ["document_id", "chunk_version", "parser_version", "embedding_model", "embedding_quality", "start_offset", "end_offset"])}</small><p>{recordLabel(chunk, ["text", "content", "text_preview", "excerpt"], "暂无切片文本")}</p></details>)}</section>;
+function ChunkEvidence({ chunks, coverage }: { chunks: SelectionRecord[] | undefined; coverage: SelectionRecord | undefined }) {
+  const rows = chunks || [];
+  const requested = textOf(coverage?.documents_requested);
+  const ready = textOf(coverage?.documents_with_chunks);
+  const included = textOf(coverage?.documents_included);
+  const coverageText = coverage
+    ? Number(coverage.documents_requested || 0) > 0
+      ? `${ready}/${requested} 篇文档有有效切片，${included}/${requested} 篇已载入本次上下文`
+      : "当前范围没有知识文档"
+    : "";
+  if (!rows.length && !coverage) return null;
+  return <section className="selection-evidence-block"><h3>知识切片 · {rows.length}{coverageText ? ` · ${coverageText}` : ""}</h3>{rows.slice(0, 40).map((chunk, index) => <details className="selection-evidence" key={`${textOf(chunk.id)}-${index}`}><summary>{recordLabel(chunk, ["section_title", "title", "chunk_id"], `切片 ${index + 1}`)} · {recordLabel(chunk, ["embedding_status"], "未声明向量")}</summary><small>{recordDetail(chunk, ["document_id", "chunk_version", "parser_version", "embedding_model", "embedding_quality", "start_offset", "end_offset"])}</small><p>{recordLabel(chunk, ["text", "content", "text_preview", "excerpt"], "暂无切片文本")}</p></details>)}</section>;
 }
 
 function GraphPathEvidence({ paths }: { paths: SelectionRecord[] | undefined }) {
   if (!paths?.length) return null;
-  return <section className="selection-evidence-block"><h3>图谱路径 · {paths.length}</h3>{paths.slice(0, 40).map((path, index) => <article className="selection-evidence" key={`${textOf(path.id)}-${index}`}><strong>{recordLabel(path, ["subject_name", "subject", "source"], `节点 ${index + 1}`)} → {recordLabel(path, ["predicate", "relation", "type"], "关联")} → {recordLabel(path, ["object_name", "object", "target"], "目标节点")}</strong><small>{recordDetail(path, ["evidence_document_id", "verification_status", "confidence", "extraction_method"])}</small><p>{recordLabel(path, ["evidence_excerpt", "evidence_text", "excerpt"], "暂无路径证据摘录")}</p></article>)}</section>;
+  return <section className="selection-evidence-block"><h3>图谱路径 · {paths.length}</h3>{paths.slice(0, 40).map((path, index) => {
+    const predicate = recordLabel(path, ["predicate", "relation", "type"], "关联");
+    const details = [
+      path.evidence_document_id != null ? `证据文档：${textOf(path.evidence_document_id)}` : "",
+      textOf(path.verification_status) ? `核验状态：${nameOf(textOf(path.verification_status))}` : "",
+      path.confidence != null ? `置信度：${textOf(path.confidence)}` : "",
+      textOf(path.extraction_method) ? `形成方式：${nameOf(textOf(path.extraction_method))}` : "",
+    ].filter(Boolean).join(" · ");
+    return <article className="selection-evidence" key={`${textOf(path.id)}-${index}`}><strong>{recordLabel(path, ["subject_name", "subject", "source"], `节点 ${index + 1}`)} → {nameOf(predicate)} → {recordLabel(path, ["object_name", "object", "target"], "目标节点")}</strong><small>{details || "当前关系未声明独立证据元数据"}</small><p>{recordLabel(path, ["evidence_excerpt", "evidence_text", "excerpt"], "暂无路径证据摘录")}</p></article>;
+  })}</section>;
 }
 
 function LineageEvidence({ lineage, datasets }: { lineage: SelectionRecord[] | undefined; datasets: SelectionRecord[] | undefined }) {
@@ -118,18 +203,47 @@ function LineageEvidence({ lineage, datasets }: { lineage: SelectionRecord[] | u
 
 function Evidence({ candidate }: { candidate: SelectionCandidate }) {
   const evidence = candidate.evidence_json;
-  return <><EvidenceVersionStrip evidence={evidence} /><IdentityEvidence identity={evidence.identity} /><StructuredEvidence evidence={evidence} /><ChunkEvidence chunks={evidence.chunks} /><GraphPathEvidence paths={evidence.graph_paths} /><LineageEvidence lineage={evidence.lineage} datasets={evidence.lakehouse_datasets} /><LegacyEvidence candidate={candidate} /></>;
+  return <><EvidenceVersionStrip evidence={evidence} /><IdentityEvidence identity={evidence.identity} /><StructuredEvidence evidence={evidence} /><ChunkEvidence chunks={evidence.chunks} coverage={evidence.chunk_coverage} /><GraphPathEvidence paths={evidence.graph_paths} /><LineageEvidence lineage={evidence.lineage} datasets={evidence.lakehouse_datasets} /><LegacyEvidence candidate={candidate} /></>;
+}
+
+function SkillRepairAction({ retrospective }: { retrospective: SelectionRetrospective }) {
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<RetrospectiveRepairFlow | null>(null);
+  const [error, setError] = useState("");
+  if (!retrospective.error_tags_json?.length) return null;
+  async function runRepair() {
+    setBusy(true);
+    setError("");
+    try {
+      setResult(await selectionApi.repairRetrospective(retrospective.id));
+    } catch (nextError) {
+      setError(errorOf(nextError));
+    } finally {
+      setBusy(false);
+    }
+  }
+  return <div className="selection-repair-action">
+    <button type="button" disabled={busy} onClick={() => void runRepair()} title="将本次复盘加入 Skill 回归评测">
+      <Wrench size={16} aria-hidden="true" />{busy ? "正在评测…" : result ? "重新运行 Skill 回归" : "运行 Skill 回归"}
+    </button>
+    {result && <small>
+      用例 #{result.case_id} · 评测 {nameOf(result.evaluation_status)} · 修复 {nameOf(result.repair_status)}
+      {result.repair_draft_id ? ` · 草案 #${result.repair_draft_id} 待人工审核` : ""}
+      {result.message ? ` · ${result.message}` : ""}
+    </small>}
+    {error && <small className="form-error">{error}</small>}
+  </div>;
 }
 
 function AuditTrail({ audit, busy, error }: { audit: SelectionAudit | null; busy: boolean; error: string }) {
   if (busy) return <p className="selection-help">正在读取不可变决策快照与复盘版本…</p>;
   if (error) return <p className="form-error">审计记录读取失败：{error}</p>;
   if (!audit) return <p className="selection-help">尚未读取决策审计记录。</p>;
-  return <section className="selection-evidence-block"><h3>决策快照与复盘审计</h3>{audit.snapshots.length > 0 ? audit.snapshots.map(snapshot => <details className="selection-evidence" key={snapshot.id}><summary>{snapshot.snapshot_kind} · {nameOf(snapshot.decision)} · {dateOf(snapshot.as_of)}</summary><div className="selection-audit-meta"><span>图谱：{snapshot.graph_version || "--"}</span><span>数据：{snapshot.data_version || "--"}</span><span>Skill：{snapshot.skill_code || "--"} / {snapshot.skill_version || "--"}</span><span>模型：{snapshot.model_instance_code || "--"}</span><span>哈希：{snapshot.payload_hash || "--"}</span></div>{snapshot.evidence_json && <pre>{jsonPreview({ counts: snapshot.evidence_json.counts, context_hash: snapshot.evidence_json.context_hash, evidence_fact_ids: snapshot.evidence_json.evidence_fact_ids, document_ids: snapshot.evidence_json.document_ids }, 1800)}</pre>}</details>) : <p className="selection-help">暂无不可变决策快照。</p>}{audit.retrospectives.length > 0 && <><h4>复盘修订 · {audit.retrospectives.length}</h4>{audit.retrospectives.map(row => <article className="selection-evidence" key={row.id}><strong>第 {row.revision} 版 · {nameOf(row.status)}</strong><small>{dateOf(row.evaluated_at)} · {row.observed_sessions} 个交易日 · 结果 {pct(row.return_pct)} · 回撤 {pct(row.max_drawdown_pct)}</small><p>{row.summary || "暂无复盘摘要"}</p>{row.error_tags_json?.length ? <small>误差标签：{row.error_tags_json.join("、")}</small> : null}</article>)}</>}</section>;
+  return <section className="selection-evidence-block"><h3>决策快照与复盘审计</h3>{audit.snapshots.length > 0 ? audit.snapshots.map(snapshot => <details className="selection-evidence" key={snapshot.id}><summary>{snapshot.snapshot_kind} · {nameOf(snapshot.decision)} · {dateOf(snapshot.as_of)}</summary><div className="selection-audit-meta"><span>图谱：{snapshot.graph_version || "--"}</span><span>数据：{snapshot.data_version || "--"}</span><span>Skill：{snapshot.skill_code || "--"} / {snapshot.skill_version || "--"}</span><span>模型：{snapshot.model_instance_code || "--"}</span><span>哈希：{snapshot.payload_hash || "--"}</span></div>{snapshot.evidence_json && <pre>{jsonPreview({ counts: snapshot.evidence_json.counts, context_hash: snapshot.evidence_json.context_hash, evidence_fact_ids: snapshot.evidence_json.evidence_fact_ids, document_ids: snapshot.evidence_json.document_ids }, 1800)}</pre>}</details>) : <p className="selection-help">暂无不可变决策快照。</p>}{audit.retrospectives.length > 0 && <><h4>复盘修订 · {audit.retrospectives.length}</h4>{audit.retrospectives.map(row => <article className="selection-evidence" key={row.id}><strong>第 {row.revision} 版 · {nameOf(row.status)}</strong><small>{dateOf(row.evaluated_at)} · {row.observed_sessions} 个交易日 · 结果 {pct(row.return_pct)} · 回撤 {pct(row.max_drawdown_pct)}</small><p>{row.summary || "暂无复盘摘要"}</p>{row.error_tags_json?.length ? <small>误差标签：{row.error_tags_json.join("、")}</small> : null}<SkillRepairAction retrospective={row} /></article>)}</>}</section>;
 }
 
 function RetrospectiveTrail({ rows, error }: { rows: SelectionRetrospective[]; error: string }) {
-  return <section className="selection-evidence-block"><h3>复盘修订记录 · {rows.length}</h3>{error && <p className="form-error">复盘审计读取失败：{error}</p>}{rows.length ? rows.map(row => <article className="selection-evidence" key={row.id}><strong>第 {row.revision} 版 · {nameOf(row.status)}</strong><small>{dateOf(row.evaluated_at)} · {row.observed_sessions} 个交易日 · 收益 {pct(row.return_pct)} · 回撤 {pct(row.max_drawdown_pct)}</small><p>{row.summary || "暂无复盘摘要"}</p>{row.attribution_json && <details><summary>归因与版本</summary><pre>{jsonPreview(row.attribution_json, 1800)}</pre></details>}{row.error_tags_json?.length ? <small>误差标签：{row.error_tags_json.join("、")}</small> : null}</article>) : !error && <p className="selection-help">当前还没有可展示的复盘修订。</p>}</section>;
+  return <section className="selection-evidence-block"><h3>复盘修订记录 · {rows.length}</h3>{error && <p className="form-error">复盘审计读取失败：{error}</p>}{rows.length ? rows.map(row => <article className="selection-evidence" key={row.id}><strong>第 {row.revision} 版 · {nameOf(row.status)}</strong><small>{dateOf(row.evaluated_at)} · {row.observed_sessions} 个交易日 · 收益 {pct(row.return_pct)} · 回撤 {pct(row.max_drawdown_pct)}</small><p>{row.summary || "暂无复盘摘要"}</p>{row.attribution_json && <details><summary>归因与版本</summary><pre>{jsonPreview(row.attribution_json, 1800)}</pre></details>}{row.error_tags_json?.length ? <small>误差标签：{row.error_tags_json.join("、")}</small> : null}<SkillRepairAction retrospective={row} /></article>) : !error && <p className="selection-help">当前还没有可展示的复盘修订。</p>}</section>;
 }
 
 export function SelectionWorkbench({ mode }: { mode: "selection" | "tracking" }) {

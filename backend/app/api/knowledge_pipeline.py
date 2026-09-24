@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.schemas.knowledge_pipeline import KnowledgePipelineRequest
-from app.services.knowledge_pipeline import run_stock_pipeline
+from app.services.knowledge_pipeline import PipelineConflictError, run_stock_pipeline
 
 
 router = APIRouter(prefix="/knowledge-pipeline", tags=["Knowledge pipeline"])
@@ -15,6 +15,8 @@ router = APIRouter(prefix="/knowledge-pipeline", tags=["Knowledge pipeline"])
 def run(payload: KnowledgePipelineRequest, db: Session = Depends(get_db)):
     try:
         return run_stock_pipeline(db, **payload.model_dump())
+    except PipelineConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
