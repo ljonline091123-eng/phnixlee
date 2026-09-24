@@ -21,6 +21,7 @@ export type SelectionEvidence = SelectionRecord & {
   facts?: SelectionRecord[];
   structured_observations?: Record<string, SelectionRecord[]>;
   chunks?: SelectionRecord[];
+  chunk_coverage?: SelectionRecord;
   graph_paths?: SelectionRecord[];
   evidence_span?: SelectionRecord[];
   lineage?: SelectionRecord[];
@@ -77,6 +78,23 @@ export type SelectionAudit = {
   retrospectives: SelectionRetrospective[];
 };
 
+export type RetrospectiveRepairFlow = {
+  retrospective_id: number;
+  case_id: number;
+  case_code: string;
+  case_created: boolean;
+  skill_code?: string | null;
+  snapshot_skill_version?: string | null;
+  active_skill_version?: string | null;
+  evaluation_run_id?: number | null;
+  evaluation_status: string;
+  evaluation_source: string;
+  repair_draft_id?: number | null;
+  repair_draft_status?: string | null;
+  repair_status: string;
+  message?: string | null;
+};
+
 export type SelectionCandidate = {
   id: number; run_id: number; market: string; symbol: string; name: string | null;
   entry_price: number | null; entry_date: string | null; hard_score: number;
@@ -116,6 +134,10 @@ export const selectionApi = {
   getTracking: (id: number) => request<SelectionTracking>(`/selection/tracking/${id}`),
   candidateAudit: (id: number) => request<SelectionAudit>(`/selection/candidates/${id}/audit`),
   trackingRetrospectives: (id: number) => request<SelectionRetrospective[]>(`/selection/tracking/${id}/retrospectives`),
+  repairRetrospective: (id: number) => request<RetrospectiveRepairFlow>(
+    `/skill-evaluations/retrospectives/${id}/repair-flow`,
+    { method: "POST", body: JSON.stringify({ request_repair_draft: true }) },
+  ),
   context: (market: string, symbol: string, knowledgeBaseIds: number[] = [], graphIds: number[] = []) => {
     const params = new URLSearchParams();
     knowledgeBaseIds.forEach(id => params.append("knowledge_base_ids", String(id)));

@@ -2,6 +2,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from types import SimpleNamespace
 from unittest.mock import patch
+from datetime import datetime, timedelta, timezone
 import json
 
 from app.db.base import Base
@@ -50,6 +51,20 @@ def test_evidence_balances_sources_and_honors_explicit_knowledge_scope():
         assert len(evidence["documents"]) == 4  # two price rows, news and policy
         assert evidence["relations"][0]["evidence_text"] == "Demo evidence"
         assert evidence["relations"][0]["head"] == "Demo company"
+        assert evidence["chunk_coverage"]["scope"] == "BOUNDED_SELECTION_CONTEXT"
+        assert {row["source_table"] for row in evidence["evidence_context"]["documents"]} >= {
+            "stock_kline", "stock_news", "stock_context_event",
+        }
+        cutoff = datetime.now(timezone.utc) + timedelta(seconds=1)
+        future = document("stock_news", "Future evidence", graph.id)
+        future.created_at = cutoff + timedelta(days=1)
+        future.updated_at = cutoff + timedelta(days=1)
+        db.commit()
+        historical = _evidence(
+            db, "CN_A", "DEMO001", [base.id], [graph.id], as_of=cutoff,
+        )
+        assert future.id not in historical["document_ids"]
+        assert historical["data_cutoff"] == cutoff.date().isoformat()
         no_scope = _evidence(db, "CN_A", "DEMO001", [], [])
         assert no_scope["documents"] == [] and no_scope["relations"] == []
         kb_only = _evidence(db, "CN_A", "DEMO001", [base.id], [])

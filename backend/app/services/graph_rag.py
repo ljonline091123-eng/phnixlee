@@ -35,9 +35,10 @@ from app.models.market_data import (
     StockSymbol,
 )
 from app.services.graph_identity import canonical_company_id, canonical_security_id, resolve_many
+from app.services.foundation import facts_query
 
 
-CONTEXT_VERSION = "GRAPH_RAG_CONTEXT_V2"
+CONTEXT_VERSION = "GRAPH_RAG_CONTEXT_V3"
 
 
 def _iso(value: Any) -> str | None:
@@ -293,52 +294,77 @@ def _structured_observations(
     }
 
 
-def _dataset_versions(db: Session, source_tables: set[str]) -> list[dict[str, Any]]:
-    """Resolve current dataset versions through their object metadata first.
-
-    ``LakeDataset`` predates an explicit source-table column.  The object
-    catalog is therefore the authoritative link; dataset-code text matching
-    remains a backwards-compatible fallback for older rows.
-    """
+def _dataset_versions(
+    db: Session,
+    source_tables: set[str],
+    *,
+    market: str,
+    symbol: str,
+    cutoff: datetime | None,
+) -> list[dict[str, Any]]:
+    """Resolve the latest published version matching this security and cutoff."""
     rows = list(db.scalars(select(LakeDataset).order_by(LakeDataset.dataset_code)).all())
     normalized_sources = {str(item).lower() for item in source_tables}
     result: list[dict[str, Any]] = []
     for dataset in rows:
-        version = dataset.current_version
-        row = None
-        obj = None
-        if version:
-            row = db.scalar(select(LakeDatasetVersion).where(
-                LakeDatasetVersion.dataset_id == dataset.id,
-                LakeDatasetVersion.version == version,
-            ))
-            if row is not None and row.object_id:
-                obj = db.get(LakeObject, row.object_id)
-        declared_sources: set[str] = set()
-        if obj is not None and obj.source_table:
-            declared_sources.add(obj.source_table.lower())
-        metadata = obj.metadata_json if obj is not None and isinstance(obj.metadata_json, dict) else {}
-        if metadata.get("source_table"):
-            declared_sources.add(str(metadata["source_table"]).lower())
         marker = f"{dataset.dataset_code} {dataset.description or ''}".lower()
-        text_match = any(table in marker for table in normalized_sources)
-        object_match = bool(declared_sources & normalized_sources)
-        if normalized_sources and not (object_match or text_match):
+        selected: tuple[LakeDatasetVersion, LakeObject | None, set[str], dict[str, Any], list[Any], bool] | None = None
+        versions = list(db.scalars(select(LakeDatasetVersion).where(
+            LakeDatasetVersion.dataset_id == dataset.id,
+            LakeDatasetVersion.status == "PUBLISHED",
+        ).order_by(LakeDatasetVersion.created_at.desc(), LakeDatasetVersion.id.desc())).all())
+        for version_row in versions:
+            if not _known(version_row.created_at, cutoff):
+                continue
+            obj = db.get(LakeObject, version_row.object_id) if version_row.object_id else None
+            if obj is not None and not _known(obj.created_at, cutoff):
+                continue
+            quality = version_row.quality_json if isinstance(version_row.quality_json, dict) else {}
+            metadata = obj.metadata_json if obj is not None and isinstance(obj.metadata_json, dict) else {}
+            declared_sources = {
+                str(value).lower() for value in (
+                    quality.get("source_table"),
+                    obj.source_table if obj is not None else None,
+                    metadata.get("source_table"),
+                ) if value
+            }
+            text_match = any(table in marker for table in normalized_sources)
+            object_match = bool(declared_sources & normalized_sources)
+            if normalized_sources and not (object_match or text_match):
+                continue
+            scope_pairs = quality.get("scope_pairs")
+            if not isinstance(scope_pairs, list):
+                scope_pairs = metadata.get("scope_pairs") if isinstance(metadata.get("scope_pairs"), list) else []
+            scope_applied = quality.get("scope_applied")
+            if scope_applied is None:
+                scope_applied = metadata.get("scope_applied")
+            if scope_applied is True and not any(
+                isinstance(pair, (list, tuple)) and len(pair) >= 2
+                and str(pair[0]).upper() == market and str(pair[1]).upper() == symbol
+                for pair in scope_pairs
+            ):
+                continue
+            selected = (version_row, obj, declared_sources, quality, scope_pairs, bool(scope_applied))
+            break
+        if selected is None:
             continue
+        row, obj, declared_sources, quality, scope_pairs, scope_applied = selected
         result.append({
             "dataset_id": dataset.id,
             "dataset_code": dataset.dataset_code,
             "layer": dataset.layer,
             "format": dataset.format,
-            "version": version,
-            "version_id": row.id if row else None,
-            "object_id": row.object_id if row else None,
+            "version": row.version,
+            "version_id": row.id,
+            "object_id": row.object_id,
             "object_uri": obj.object_uri if obj is not None else None,
             "source_tables": sorted(declared_sources) or sorted(
                 table for table in source_tables if table.lower() in marker
             ),
-            "quality": row.quality_json if row else {},
-            "row_count": row.row_count if row else 0,
+            "scope_pairs": scope_pairs,
+            "scope_applied": scope_applied,
+            "quality": quality,
+            "row_count": row.row_count,
         })
     return result
 
@@ -353,21 +379,25 @@ def _lineage_rows(
     chunk_ids: list[str],
     structured_refs: list[str],
     datasets: list[dict[str, Any]],
+    cutoff: datetime | None,
 ) -> list[dict[str, Any]]:
     """Return lineage touching this security's docs, records or lake objects."""
-    ids = {str(item) for item in document_ids + chunk_ids + structured_refs if item not in (None, "")}
-    dataset_ids = {str(item.get("dataset_id")) for item in datasets if item.get("dataset_id") is not None}
+    document_id_set = {str(item) for item in document_ids if item not in (None, "")}
+    chunk_id_set = {str(item) for item in chunk_ids if item not in (None, "")}
+    structured_id_set = {str(item) for item in structured_refs if item not in (None, "")}
     dataset_versions = {
         f"{item.get('dataset_code')}:{item.get('version')}" for item in datasets
         if item.get("dataset_code") and item.get("version")
     }
     object_ids = {str(item.get("object_id")) for item in datasets if item.get("object_id")}
-    ids.update(dataset_ids | dataset_versions | object_ids)
+    metadata_ids = document_id_set | chunk_id_set | structured_id_set | object_ids
     source_names = {str(item) for item in source_tables if item}
     candidates = list(db.scalars(select(LakeLineageEvent).order_by(
         LakeLineageEvent.created_at.desc(), LakeLineageEvent.id.desc()).limit(1000)).all())
     result: list[dict[str, Any]] = []
     for row in candidates:
+        if not _known(row.created_at, cutoff):
+            continue
         metadata = row.metadata_json if isinstance(row.metadata_json, dict) else {}
         scope_pairs = metadata.get("scope_pairs") or []
         pair_matches = not scope_pairs or any(
@@ -379,10 +409,21 @@ def _lineage_rows(
             str(metadata.get("market", "")).upper() == market and
             str(metadata.get("symbol", "")).upper() == symbol
         )
+        scoped_source_match = bool(scope_pairs) and (
+            row.upstream_type == "SOURCE_TABLE" and str(row.upstream_id) in source_names
+        )
+        metadata_id_match = any(
+            str(metadata.get(key)) in metadata_ids
+            for key in ("document_id", "source_record_id", "object_id")
+            if metadata.get(key) not in (None, "")
+        )
         touched = (
-            str(row.upstream_id) in ids or str(row.downstream_id) in ids or
-            (row.upstream_type == "SOURCE_TABLE" and str(row.upstream_id) in source_names) or
-            metadata_matches
+            (row.upstream_type == "KNOWLEDGE_DOCUMENT" and str(row.upstream_id) in document_id_set) or
+            (row.downstream_type == "DOCUMENT_CHUNK" and str(row.downstream_id) in chunk_id_set) or
+            (row.upstream_type == "LAKE_OBJECT" and str(row.upstream_id) in object_ids) or
+            (row.downstream_type == "LAKE_OBJECT" and str(row.downstream_id) in object_ids) or
+            (row.downstream_type == "DATASET_VERSION" and str(row.downstream_id) in dataset_versions) or
+            scoped_source_match or metadata_matches or metadata_id_match
         )
         if touched and pair_matches:
             result.append({
@@ -403,14 +444,40 @@ def _lineage_rows(
     return result
 
 
-def _chunks(db: Session, document_ids: list[int], limit: int) -> list[dict[str, Any]]:
-    if not document_ids or limit <= 0:
+def _document_source_hash(document: KnowledgeDocument) -> str:
+    text = document.content or document.title or ""
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()[:12]
+
+
+def _eligible_chunk_rows(
+    db: Session,
+    documents: list[KnowledgeDocument],
+    cutoff: datetime | None,
+) -> list[DocumentChunkVersion]:
+    """Return current, ready chunks that existed at the point-in-time cutoff."""
+    if not documents:
         return []
+    expected = {str(row.id): _document_source_hash(row) for row in documents}
     rows = list(db.scalars(select(DocumentChunkVersion).where(
-        DocumentChunkVersion.document_id.in_([str(item) for item in document_ids]),
-    ).order_by(DocumentChunkVersion.document_id, DocumentChunkVersion.chunk_index,
-               DocumentChunkVersion.created_at.desc()).limit(limit)).all())
-    return [{
+        DocumentChunkVersion.document_id.in_(sorted(expected)),
+        DocumentChunkVersion.status == "READY",
+    ).order_by(DocumentChunkVersion.created_at.desc())).all())
+    current: dict[tuple[str, int], DocumentChunkVersion] = {}
+    for row in rows:
+        document_id = str(row.document_id or "")
+        if not _known(row.created_at, cutoff):
+            continue
+        # create_chunks encodes the source-document hash in chunk_version.
+        # Excluding an older source hash prevents stale chunks from being
+        # presented after a KnowledgeDocument has changed.
+        if not str(row.chunk_version or "").endswith(f":{expected.get(document_id, '')}"):
+            continue
+        current.setdefault((document_id, int(row.chunk_index)), row)
+    return list(current.values())
+
+
+def _chunk_payload(row: DocumentChunkVersion) -> dict[str, Any]:
+    return {
         "id": row.id,
         "document_id": row.document_id,
         "chunk_index": row.chunk_index,
@@ -427,7 +494,79 @@ def _chunks(db: Session, document_ids: list[int], limit: int) -> list[dict[str, 
         "section_title": (row.metadata_json or {}).get("section_title"),
         "boundary_type": (row.metadata_json or {}).get("boundary_type"),
         "metadata": row.metadata_json or {},
-    } for row in rows]
+    }
+
+
+def _chunks(
+    rows: list[DocumentChunkVersion],
+    document_ids: list[int],
+    limit: int,
+) -> list[dict[str, Any]]:
+    """Bound context chunks fairly so one long document cannot crowd out all others."""
+    if not rows or not document_ids or limit <= 0:
+        return []
+    grouped: dict[str, list[DocumentChunkVersion]] = {}
+    for row in rows:
+        grouped.setdefault(str(row.document_id), []).append(row)
+    for items in grouped.values():
+        items.sort(key=lambda row: row.chunk_index)
+    ordered_ids = [str(item) for item in document_ids]
+    selected: list[DocumentChunkVersion] = []
+    offset = 0
+    while len(selected) < limit:
+        added = False
+        for document_id in ordered_ids:
+            items = grouped.get(document_id, [])
+            if offset < len(items):
+                selected.append(items[offset])
+                added = True
+                if len(selected) >= limit:
+                    break
+        if not added:
+            break
+        offset += 1
+    return [_chunk_payload(row) for row in selected]
+
+
+def _chunk_coverage(
+    document_ids: list[int],
+    eligible_rows: list[DocumentChunkVersion],
+    included_chunks: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Report both ready-chunk availability and actual prompt inclusion."""
+    requested = {str(item) for item in document_ids if item not in (None, "")}
+    if not requested:
+        return {
+            "scope": "BOUNDED_SELECTION_CONTEXT",
+            "coverage_status": "NO_DOCUMENTS",
+            "documents_requested": 0,
+            "documents_with_chunks": 0,
+            "documents_included": 0,
+            "coverage_ratio": None,
+            "available_chunk_coverage_ratio": None,
+            "context_inclusion_ratio": None,
+            "missing_document_ids": [],
+            "omitted_from_context_document_ids": [],
+        }
+    covered = {str(row.document_id) for row in eligible_rows if row.document_id not in (None, "")}
+    included = {
+        str(row.get("document_id")) for row in included_chunks if row.get("document_id") not in (None, "")
+    }
+    available_ratio = round(len(requested & covered) / len(requested), 6)
+    included_ratio = round(len(requested & included) / len(requested), 6)
+    return {
+        "scope": "BOUNDED_SELECTION_CONTEXT",
+        "coverage_status": "COMPLETE" if requested <= covered else "PARTIAL",
+        "documents_requested": len(requested),
+        "documents_with_chunks": len(requested & covered),
+        "documents_included": len(requested & included),
+        # Compatibility alias for clients already reading coverage_ratio.
+        "coverage_ratio": available_ratio,
+        "available_chunk_coverage_ratio": available_ratio,
+        "context_inclusion_ratio": included_ratio,
+        "missing_document_ids": sorted(requested - covered)[:50],
+        "omitted_from_context_document_ids": sorted((requested & covered) - included)[:50],
+    }
 
 
 def build_selection_context(
@@ -458,13 +597,39 @@ def build_selection_context(
     doc_query = select(KnowledgeDocument).where(
         KnowledgeDocument.market == market,
         KnowledgeDocument.symbol == symbol,
+        KnowledgeDocument.created_at <= cutoff,
+        KnowledgeDocument.updated_at <= cutoff,
     )
     if kb_ids:
         doc_query = doc_query.where(KnowledgeDocument.knowledge_base_id.in_(kb_ids))
     if graph_ids:
         doc_query = doc_query.where(KnowledgeDocument.graph_id.in_(graph_ids))
-    docs = [row for row in db.scalars(doc_query.order_by(KnowledgeDocument.updated_at.desc(), KnowledgeDocument.id.desc()).limit(max_documents * 3)).all()
-            if _known(row.updated_at, cutoff)][:max_documents]
+    doc_candidates = list(db.scalars(
+        doc_query.order_by(KnowledgeDocument.updated_at.desc(), KnowledgeDocument.id.desc())
+        .limit(max(max_documents * 20, max_documents))
+    ).all())
+    by_source: dict[str, list[KnowledgeDocument]] = {}
+    for row in doc_candidates:
+        by_source.setdefault(row.source_table, []).append(row)
+    source_keys = sorted(
+        by_source,
+        key=lambda key: (_aware(by_source[key][0].updated_at) or datetime.min.replace(tzinfo=timezone.utc)),
+        reverse=True,
+    )
+    docs: list[KnowledgeDocument] = []
+    offset = 0
+    while len(docs) < max_documents and source_keys:
+        added = False
+        for source in source_keys:
+            rows = by_source[source]
+            if offset < len(rows):
+                docs.append(rows[offset])
+                added = True
+                if len(docs) >= max_documents:
+                    break
+        if not added:
+            break
+        offset += 1
     document_ids = [row.id for row in docs]
 
     entity_query = select(KnowledgeEntity).where(
@@ -480,7 +645,10 @@ def build_selection_context(
         KnowledgeEntity.entity_key.like(suffixes[0]),
         KnowledgeEntity.entity_key.like(suffixes[1]),
     ))
-    entities = list(db.scalars(entity_query.limit(120)).all())
+    entities = [
+        row for row in db.scalars(entity_query.limit(360)).all()
+        if _known(row.created_at, cutoff)
+    ][:120]
     entity_ids = [row.id for row in entities]
     relations: list[KnowledgeRelation] = []
     if entity_ids:
@@ -491,17 +659,32 @@ def build_selection_context(
             relation_query = relation_query.where(KnowledgeRelation.knowledge_base_id.in_(kb_ids))
         if graph_ids:
             relation_query = relation_query.where(KnowledgeRelation.graph_id.in_(graph_ids))
-        relations = list(db.scalars(relation_query.order_by(KnowledgeRelation.id.desc()).limit(max_relations)).all())
+        relations = [
+            row for row in db.scalars(
+                relation_query.order_by(KnowledgeRelation.id.desc()).limit(max_relations * 4)
+            ).all()
+            if _known(row.created_at, cutoff)
+        ][:max_relations]
     all_relation_entity_ids = _unique(
         [value for relation in relations for value in (relation.subject_entity_id, relation.object_entity_id)]
     )
-    relation_entities = {row.id: row for row in db.scalars(select(KnowledgeEntity).where(
-        KnowledgeEntity.id.in_(all_relation_entity_ids)
-    )).all()} if all_relation_entity_ids else {}
+    relation_entities = {
+        row.id: row for row in db.scalars(select(KnowledgeEntity).where(
+            KnowledgeEntity.id.in_(all_relation_entity_ids)
+        )).all() if _known(row.created_at, cutoff)
+    } if all_relation_entity_ids else {}
     relation_doc_ids = _unique([row.evidence_document_id for row in relations])
-    relation_docs = {row.id: row for row in db.scalars(select(KnowledgeDocument).where(
-        KnowledgeDocument.id.in_(relation_doc_ids)
-    )).all()} if relation_doc_ids else {}
+    relation_docs = {
+        row.id: row for row in db.scalars(select(KnowledgeDocument).where(
+            KnowledgeDocument.id.in_(relation_doc_ids)
+        )).all() if _known(row.created_at, cutoff) and _known(row.updated_at, cutoff)
+    } if relation_doc_ids else {}
+    relations = [
+        row for row in relations
+        if row.subject_entity_id in relation_entities
+        and row.object_entity_id in relation_entities
+        and (row.evidence_document_id is None or row.evidence_document_id in relation_docs)
+    ]
     graph_paths = [{
         "id": row.id,
         "subject_entity_id": row.subject_entity_id,
@@ -509,6 +692,7 @@ def build_selection_context(
         "subject_name": relation_entities.get(row.subject_entity_id).entity_name if row.subject_entity_id in relation_entities else None,
         "object_name": relation_entities.get(row.object_entity_id).entity_name if row.object_entity_id in relation_entities else None,
         "predicate": row.predicate,
+        "created_at": _iso(row.created_at),
         "evidence_document_id": row.evidence_document_id,
         "evidence_excerpt": (relation_docs[row.evidence_document_id].content or "")[:800]
         if row.evidence_document_id in relation_docs else None,
@@ -518,20 +702,11 @@ def build_selection_context(
     facts: list[dict[str, Any]] = []
     fact_evidence_ids: list[str] = []
     if company_id:
-        fact_query = select(FoundationFact).where(
-            FoundationFact.status == "ACCEPTED",
-            (FoundationFact.subject_entity_id == company_id) | (FoundationFact.object_entity_id == company_id),
-        ).order_by(FoundationFact.created_at.desc()).limit(max_facts)
+        fact_query = facts_query(
+            status="ACCEPTED", entity_id=company_id,
+            as_of=cutoff.date(), known_at=cutoff,
+        ).limit(max_facts)
         for fact in db.scalars(fact_query).all():
-            if not _known(fact.created_at, cutoff):
-                continue
-            # A fact can be created before the review cutoff but become valid
-            # only later (or have already expired).  Point-in-time context must
-            # respect the business validity interval as well as ingestion time.
-            if fact.valid_from is not None and fact.valid_from > cutoff.date():
-                continue
-            if fact.valid_to is not None and fact.valid_to < cutoff.date():
-                continue
             links = list(db.scalars(select(FoundationFactEvidence).where(
                 FoundationFactEvidence.fact_id == fact.id,
             )).all())
@@ -572,16 +747,22 @@ def build_selection_context(
     fact_limit = max(0, int(max_facts))
     facts = (facts + structured["facts"])[:fact_limit]
 
-    documents = [_doc_payload(row) for row in docs]
+    context_documents = list(docs)
+    documents = [_doc_payload(row) for row in context_documents]
     # Include relation proof documents in the evidence set, but do not let them
     # displace the source-balanced primary documents above.
     for row in relation_docs.values():
         if row.id not in document_ids and len(documents) < max_documents:
+            context_documents.append(row)
             documents.append(_doc_payload(row))
             document_ids.append(row.id)
-    chunks = _chunks(db, document_ids, max_chunks)
-    source_tables = {row.source_table for row in docs} | set(structured["source_tables"])
-    datasets = _dataset_versions(db, source_tables)
+    eligible_chunks = _eligible_chunk_rows(db, context_documents, cutoff)
+    chunks = _chunks(eligible_chunks, document_ids, max_chunks)
+    chunk_coverage = _chunk_coverage(document_ids, eligible_chunks, chunks)
+    source_tables = {row.source_table for row in context_documents} | set(structured["source_tables"])
+    datasets = _dataset_versions(
+        db, source_tables, market=market, symbol=symbol, cutoff=cutoff,
+    )
     lineage_rows = _lineage_rows(
         db,
         market=market,
@@ -591,21 +772,26 @@ def build_selection_context(
         chunk_ids=[str(item["id"]) for item in chunks],
         structured_refs=structured["source_record_refs"],
         datasets=datasets,
+        cutoff=cutoff,
     )
 
     graph_versions = []
     if graph_ids:
         graph_versions = [{"id": row.id, "code": row.graph_code, "version": row.version,
-                           "status": row.governance_status} for row in db.scalars(select(KnowledgeGraph).where(KnowledgeGraph.id.in_(graph_ids))).all()]
+                           "status": row.governance_status} for row in db.scalars(
+                               select(KnowledgeGraph).where(KnowledgeGraph.id.in_(graph_ids))
+                           ).all() if _known(row.created_at, cutoff)]
     kb_versions = [{"id": row.id, "code": row.kb_code, "version": row.version, "status": row.status}
-                   for row in db.scalars(select(KnowledgeBase).where(KnowledgeBase.id.in_(kb_ids))).all()] if kb_ids else []
+                   for row in db.scalars(select(KnowledgeBase).where(KnowledgeBase.id.in_(kb_ids))).all()
+                   if _known(row.created_at, cutoff)] if kb_ids else []
     graph_version = _hash({"graphs": graph_versions, "kbs": kb_versions, "relations": [row.id for row in relations]})[:32]
     lakehouse_version = _hash({
         "datasets": datasets,
         "lineage": [row["id"] for row in lineage_rows],
         "structured_records": structured["source_record_refs"],
     })[:32]
-    document_version = _hash({"documents": [(row.id, row.updated_at, _hash(row.content or "")) for row in docs],
+    document_version = _hash({"documents": [(row.id, row.updated_at, _hash(row.content or ""))
+                                              for row in context_documents],
                               "chunks": [(row["id"], row["chunk_version"]) for row in chunks]})[:32]
     evidence_span = [{
         "document_id": row["id"],
@@ -621,6 +807,18 @@ def build_selection_context(
         missing.append("公司关系事实/图谱关系")
     if not chunks:
         missing.append("文档切片")
+    elif (chunk_coverage.get("available_chunk_coverage_ratio") or 0) < 1:
+        missing.append(
+            f"部分知识文档尚未切片（{chunk_coverage['documents_with_chunks']}/"
+            f"{chunk_coverage['documents_requested']}）"
+        )
+    if chunks and (chunk_coverage.get("context_inclusion_ratio") or 0) < (
+        chunk_coverage.get("available_chunk_coverage_ratio") or 0
+    ):
+        missing.append(
+            f"部分可用切片因上下文预算未载入（{chunk_coverage['documents_included']}/"
+            f"{chunk_coverage['documents_with_chunks']} 篇文档）"
+        )
     if any(item.get("embedding_status") != "AVAILABLE" for item in chunks):
         missing.append("部分切片尚未生成向量")
     category_labels = {
@@ -649,6 +847,7 @@ def build_selection_context(
         "structured_observations": structured["by_category"],
         "graph_paths": graph_paths,
         "chunks": chunks,
+        "chunk_coverage": chunk_coverage,
         "evidence_span": evidence_span,
         "evidence_document_ids": document_ids,
         # Structured source rows are valid fact references even when the
@@ -660,7 +859,8 @@ def build_selection_context(
         "missing_data": missing,
         "counts": {
             "documents": len(documents), "facts": len(facts), "graph_paths": len(graph_paths),
-            "chunks": len(chunks), "lineage": len(lineage_rows), "datasets": len(datasets),
+            "chunks": len(chunks), "chunk_documents": chunk_coverage["documents_with_chunks"],
+            "lineage": len(lineage_rows), "datasets": len(datasets),
             "structured": structured["counts"],
         },
     }

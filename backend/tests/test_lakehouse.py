@@ -38,6 +38,31 @@ def test_filesystem_object_store_and_idempotent_versioned_chunks(tmp_path, monke
         assert lakehouse.storage_health()["healthy"] is True
 
 
+def test_content_dedup_preserves_each_logical_layer_and_source_binding(tmp_path, monkeypatch):
+    _filesystem(monkeypatch, tmp_path)
+    with Session(_engine()) as db:
+        raw = lakehouse.put_object(
+            b"same bytes", layer="RAW", content_type="text/plain",
+            source_table="stock_news", source_record_id="1", db=db,
+            metadata={"scope_pairs": [["CN_A", "000001"]]},
+        )
+        normalized = lakehouse.put_object(
+            b"same bytes", layer="NORMALIZED", content_type="text/plain",
+            source_table="stock_notice", dataset_version="v2", db=db,
+            metadata={"scope_pairs": [["HK", "00001"]]},
+        )
+        assert normalized["object_id"] == raw["object_id"]
+        assert normalized["catalog_reused"] is True
+        row = db.get(lakehouse.LakeObject, raw["object_id"])
+        assert row is not None
+        assert row.layer == "RAW" and row.source_table == "stock_news"
+        assert normalized["object_uri"] == row.object_uri
+        bindings = row.metadata_json["logical_bindings"]
+        assert {(item["layer"], item["source_table"]) for item in bindings} == {
+            ("RAW", "stock_news"), ("NORMALIZED", "stock_notice"),
+        }
+
+
 def test_export_quality_version_and_preview(tmp_path, monkeypatch):
     _filesystem(monkeypatch, tmp_path)
     with Session(_engine()) as db:
@@ -50,6 +75,7 @@ def test_export_quality_version_and_preview(tmp_path, monkeypatch):
         db.commit()
         exported = lakehouse.export_dataset(db, dataset_code="stock_master", dataset_name="股票主数据",
             layer="NORMALIZED", source_table="stock_symbol", limit=100)
+        assert exported["status"] == "PUBLISHED"
         assert exported["quality"]["passed"] is True
         assert exported["batch_id"]
         preview = lakehouse.preview_dataset(db, exported["dataset_id"])
@@ -57,6 +83,7 @@ def test_export_quality_version_and_preview(tmp_path, monkeypatch):
         assert preview["quality"]["checks"]["non_empty"] is True
         raw = lakehouse.export_dataset(db, dataset_code="stock_master_raw", dataset_name="股票主数据原始快照",
             layer="RAW", source_table="stock_symbol", limit=100)
+        assert raw["status"] == "PUBLISHED"
         raw_preview = lakehouse.preview_dataset(db, raw["dataset_id"])
         assert raw_preview["rows"][0]["name"] == "平安银行"
 

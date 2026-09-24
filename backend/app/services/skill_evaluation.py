@@ -11,7 +11,13 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.ai_hub import ModelCallLog, ModelSkill, SkillOptimizationDraft
-from app.models.decision_review import SkillEvaluationCase, SkillEvaluationResult, SkillEvaluationRun
+from app.models.decision_review import (
+    SelectionDecisionSnapshot,
+    SelectionRetrospective,
+    SkillEvaluationCase,
+    SkillEvaluationResult,
+    SkillEvaluationRun,
+)
 from app.services.model_hub import ModelHubService
 
 
@@ -184,6 +190,211 @@ def run_evaluation(
     return run
 
 
+_SKILL_REPAIRABLE_RETROSPECTIVE_TAGS = frozenset({
+    "DIRECTION_MISS",
+    "TARGET_NOT_HIT",
+    "STOP_HIT",
+})
+
+
+def _retrospective_case_code(row: SelectionRetrospective) -> str:
+    return f"RETROSPECTIVE:{row.id}:{row.state_hash[:24]}"
+
+
+def _evidence_document_ids(
+    snapshot: SelectionDecisionSnapshot,
+    retrospective: SelectionRetrospective,
+) -> list[Any]:
+    snapshot_evidence = snapshot.evidence_json or {}
+    attribution = retrospective.attribution_json or {}
+    values: list[Any] = []
+    for key in ("model_document_ids", "document_ids", "context_document_ids"):
+        candidate = snapshot_evidence.get(key)
+        if isinstance(candidate, list):
+            values.extend(candidate)
+    candidate = attribution.get("evidence_document_ids")
+    if isinstance(candidate, list):
+        values.extend(candidate)
+    # Evidence identifiers can be numeric or string-valued across sources.
+    # JSON serialization gives a stable de-duplication key without coercing them.
+    unique: dict[str, Any] = {}
+    for value in values:
+        if value is not None:
+            unique.setdefault(json.dumps(value, ensure_ascii=False, sort_keys=True, default=str), value)
+    return list(unique.values())
+
+
+def ensure_retrospective_case(
+    db: Session,
+    retrospective_id: int,
+) -> tuple[SkillEvaluationCase, SelectionRetrospective, SelectionDecisionSnapshot, bool]:
+    """Freeze one retrospective into an idempotent regression case."""
+    retrospective = db.get(SelectionRetrospective, retrospective_id)
+    if retrospective is None:
+        raise LookupError("选股复盘记录不存在")
+    snapshot = db.get(SelectionDecisionSnapshot, retrospective.snapshot_id)
+    if snapshot is None:
+        raise LookupError("复盘对应的决策快照不存在")
+
+    case_code = _retrospective_case_code(retrospective)
+    existing = db.scalar(select(SkillEvaluationCase).where(SkillEvaluationCase.case_code == case_code))
+    if existing is not None:
+        return existing, retrospective, snapshot, False
+
+    skill = db.scalar(select(ModelSkill).where(ModelSkill.skill_code == snapshot.skill_code)) if snapshot.skill_code else None
+    task_type = str((skill.config_json or {}).get("task_type") or "stock_screening") if skill else "stock_screening"
+    evidence_ids = _evidence_document_ids(snapshot, retrospective)
+    error_tags = list(retrospective.error_tags_json or [])
+    outcome = {
+        "status": retrospective.status,
+        "observed_sessions": retrospective.observed_sessions,
+        "return_pct": retrospective.return_pct,
+        "max_drawdown_pct": retrospective.max_drawdown_pct,
+        "target_hit": retrospective.target_hit,
+        "stop_hit": retrospective.stop_hit,
+        "direction_hit": retrospective.direction_hit,
+        "error_tags": error_tags,
+        "summary": retrospective.summary,
+    }
+    expected_decision = "PASS" if set(error_tags).intersection(
+        _SKILL_REPAIRABLE_RETROSPECTIVE_TAGS
+    ) else "WATCH"
+    row = SkillEvaluationCase(
+        case_code=case_code,
+        task_type=task_type,
+        description=(
+            f"选股复盘 {retrospective.id}，标的 {retrospective.market}:{retrospective.symbol}；"
+            f"误差标签={','.join(error_tags) or '无'}"
+        ),
+        input_json={
+            "workflow": "SELECTION_RETROSPECTIVE",
+            "retrospective_id": retrospective.id,
+            "snapshot_id": snapshot.id,
+            "prediction_id": snapshot.prediction_id,
+            "market": retrospective.market,
+            "symbol": retrospective.symbol,
+            "decision_snapshot": snapshot.payload_json or {},
+            "evidence": snapshot.evidence_json or {},
+            "allowed_evidence_ids": evidence_ids,
+        },
+        # Outcome labels never enter the model input.  They only define the
+        # historical blind-test expectation used by the deterministic scorer.
+        expected_json={"decision": expected_decision},
+        rubric_json={
+            "required_fields": ["decision"],
+            "review_gate": "HUMAN_REQUIRED",
+            "case_role": "HISTORICAL_BLIND_REGRESSION",
+            "retrospective_outcome": outcome,
+        },
+        dataset_version=(snapshot.data_version or f"retrospective-{retrospective.id}")[:64],
+        source="RETROSPECTIVE",
+        enabled=True,
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return row, retrospective, snapshot, True
+
+
+def _persisted_evaluation_output(snapshot: SelectionDecisionSnapshot) -> tuple[dict[str, Any] | None, str]:
+    payload = snapshot.payload_json or {}
+    analysis = payload.get("analysis")
+    if not isinstance(analysis, dict) or not analysis:
+        return None, "UNAVAILABLE"
+    model_output = analysis.get("model")
+    if isinstance(model_output, dict) and model_output:
+        return dict(model_output), "PERSISTED_MODEL_OUTPUT"
+    return dict(analysis), "PERSISTED_ANALYSIS"
+
+
+def run_retrospective_repair_flow(
+    db: Session,
+    retrospective_id: int,
+    *,
+    evaluation_output: dict[str, Any] | None = None,
+    request_repair_draft: bool = True,
+) -> dict[str, Any]:
+    """Create a regression case, score a frozen output, and request a review-only draft."""
+    case, retrospective, snapshot, case_created = ensure_retrospective_case(db, retrospective_id)
+    skill = db.scalar(select(ModelSkill).where(ModelSkill.skill_code == snapshot.skill_code)) if snapshot.skill_code else None
+    base = {
+        "retrospective_id": retrospective.id,
+        "case_id": case.id,
+        "case_code": case.case_code,
+        "case_created": case_created,
+        "skill_code": snapshot.skill_code,
+        "snapshot_skill_version": snapshot.skill_version,
+        "active_skill_version": skill.version if skill else None,
+        "evaluation_run_id": None,
+        "evaluation_status": "NOT_RUN",
+        "evaluation_source": "EXPLICIT_OUTPUT" if evaluation_output is not None else "UNAVAILABLE",
+        "repair_draft_id": None,
+        "repair_draft_status": None,
+        "repair_status": "NOT_REQUESTED" if not request_repair_draft else "NOT_AVAILABLE",
+        "message": None,
+    }
+    if skill is None:
+        return {**base, "message": "决策快照记录的 Skill 尚未注册。"}
+
+    output = dict(evaluation_output) if evaluation_output is not None else None
+    output_source = "EXPLICIT_OUTPUT"
+    if output is None:
+        output, output_source = _persisted_evaluation_output(snapshot)
+    base["evaluation_source"] = output_source
+    if output is None:
+        return {**base, "message": "没有可用的冻结模型输出或显式评测输出。"}
+    if (evaluation_output is None and snapshot.skill_version not in (None, "UNREGISTERED", skill.version)):
+        return {
+            **base,
+            "evaluation_status": "SKILL_VERSION_MISMATCH",
+            "message": "当前 Skill 版本与冻结决策不一致，需要提供当前版本的显式评测输出。",
+        }
+
+    run = run_evaluation(
+        db,
+        skill_code=skill.skill_code,
+        task_type=case.task_type,
+        case_ids=[case.id],
+        outputs={case.case_code: output},
+        use_model=False,
+        dataset_version=case.dataset_version,
+    )
+    base.update({
+        "evaluation_run_id": run.id,
+        "evaluation_status": run.status,
+        "evaluation_source": output_source,
+    })
+
+    if not request_repair_draft:
+        return base
+    error_tags = set(retrospective.error_tags_json or [])
+    if retrospective.status != "COMPLETED":
+        return {**base, "repair_status": "NOT_ELIGIBLE", "message": "只有已完成的复盘可以申请 Skill 修复草案。"}
+    if not error_tags.intersection(_SKILL_REPAIRABLE_RETROSPECTIVE_TAGS):
+        return {**base, "repair_status": "NOT_ELIGIBLE", "message": "本次复盘没有可归因到 Skill 的结果误差。"}
+    if output_source == "PERSISTED_ANALYSIS":
+        return {**base, "repair_status": "NOT_ELIGIBLE", "message": "冻结决策没有成功的模型输出，不能归因到 Skill。"}
+    if run.status != "FAILED":
+        return {**base, "repair_status": "NOT_NEEDED", "message": "本次复盘回归评测已通过，无需生成修复草案。"}
+
+    draft = propose_repair_draft(db, run.id)
+    if draft is None:
+        return {
+            **base,
+            "repair_status": "MODEL_UNAVAILABLE",
+            "message": "没有可用的非模拟元评审模型返回有效方案，本次未生成修复草案。",
+        }
+    if draft.status != "PENDING_REVIEW":
+        raise ValueError("Skill 修复草案违反人工审核门禁")
+    return {
+        **base,
+        "repair_draft_id": draft.id,
+        "repair_draft_status": draft.status,
+        "repair_status": "PENDING_REVIEW",
+        "message": "已生成待人工审核的修复草案，当前 Skill 未被修改。",
+    }
+
+
 def propose_repair_draft(db: Session, run_id: int) -> SkillOptimizationDraft | None:
     run = db.get(SkillEvaluationRun, run_id)
     if run is None:
@@ -196,21 +407,71 @@ def propose_repair_draft(db: Session, run_id: int) -> SkillOptimizationDraft | N
     results = list(db.scalars(select(SkillEvaluationResult).where(
         SkillEvaluationResult.run_id == run.id, SkillEvaluationResult.passed.is_(False),
     )).all())
-    signature = "EVALUATION:" + _hash({"run": run.id, "skill": skill.skill_code, "version": skill.version,
-                                        "results": [row.id for row in results]})
+    cases = {row.id: row for row in db.scalars(select(SkillEvaluationCase).where(
+        SkillEvaluationCase.id.in_([result.case_id for result in results])
+    )).all()}
+    failure_fingerprints = []
+    for result in sorted(results, key=lambda item: item.case_id):
+        case = cases.get(result.case_id)
+        failure_fingerprints.append({
+            "case_code": case.case_code if case else str(result.case_id),
+            "case_hash": _hash({
+                "input": case.input_json if case else {},
+                "expected": case.expected_json if case else {},
+                "rubric": case.rubric_json if case else {},
+            }),
+            "output_hash": _hash(result.output_json or {}),
+            "error_type": result.error_type,
+        })
+    signature = "EVALUATION:" + _hash({
+        "skill": skill.skill_code,
+        "version": skill.version,
+        "task_type": run.task_type,
+        "failures": failure_fingerprints,
+    })
     existing = db.scalar(select(SkillOptimizationDraft).where(SkillOptimizationDraft.failure_signature == signature))
     if existing is not None:
         return existing
     # A repair proposal is intentionally only a pending draft.  If no live LLA
     # is configured, return no draft rather than fabricating instructions.
     try:
+        repair_cases = []
+        for result in results:
+            case = cases.get(result.case_id)
+            case_input = (case.input_json or {}) if case else {}
+            evidence = case_input.get("evidence") if isinstance(case_input.get("evidence"), dict) else {}
+            repair_cases.append({
+                "case_code": case.case_code if case else str(result.case_id),
+                "description": case.description if case else None,
+                "market": case_input.get("market"),
+                "symbol": case_input.get("symbol"),
+                "retrospective_id": case_input.get("retrospective_id"),
+                "outcome": (case.rubric_json or {}).get("retrospective_outcome") if case else None,
+                "allowed_evidence_ids": case_input.get("allowed_evidence_ids", []),
+                "evidence_refs": {
+                    key: evidence.get(key)
+                    for key in (
+                        "document_ids", "model_document_ids", "context_document_ids",
+                        "evidence_fact_ids", "context_hash", "graph_version",
+                        "data_version", "missing_data",
+                    )
+                    if evidence.get(key) is not None
+                },
+                "expected": case.expected_json if case else {},
+                "rubric": case.rubric_json if case else {},
+                "output": result.output_json,
+                "metrics": result.metrics_json,
+                "error_type": result.error_type,
+            })
         log = ModelHubService(db).chat(
             task_type="meta_review",
             messages=[
                 {"role": "system", "content": "你是 Skill 回归评审器，只能基于失败评测案例提出待人工审核的 Prompt 修订，不得自动启用。请返回 JSON：proposed_instructions、rationale。"},
-                {"role": "user", "content": json.dumps({"skill": skill.instructions, "run": run.summary_json,
-                    "failed_results": [{"output": row.output_json, "metrics": row.metrics_json,
-                                        "error_type": row.error_type} for row in results]}, ensure_ascii=False, default=str)},
+                {"role": "user", "content": json.dumps({
+                    "skill": skill.instructions,
+                    "run": run.summary_json,
+                    "failed_results": repair_cases,
+                }, ensure_ascii=False, default=str)},
             ],
             max_tokens=4096,
             metadata_json={"evaluation_run_id": run.id, "skill_code": skill.skill_code,
@@ -218,7 +479,8 @@ def propose_repair_draft(db: Session, run_id: int) -> SkillOptimizationDraft | N
         )
     except Exception:
         return None
-    if log.status != "SUCCESS" or not log.response_text or log.provider_code == "MOCK":
+    if (log.status != "SUCCESS" or not log.response_text or
+            str(log.provider_code or "").upper().startswith("MOCK")):
         return None
     try:
         proposal = json.loads(log.response_text)
@@ -226,8 +488,13 @@ def propose_repair_draft(db: Session, run_id: int) -> SkillOptimizationDraft | N
         rationale = str(proposal["rationale"])
     except (ValueError, KeyError, TypeError):
         return None
+    prediction_ids = sorted({
+        int(case.input_json["prediction_id"])
+        for case in cases.values()
+        if (case.input_json or {}).get("prediction_id") is not None
+    })
     draft = SkillOptimizationDraft(skill_id=skill.id, base_skill_version=skill.version,
-        failure_signature=signature, prediction_ids=[], proposed_instructions=instructions,
+        failure_signature=signature, prediction_ids=prediction_ids, proposed_instructions=instructions,
         rationale=rationale, model_call_log_id=log.id, status="PENDING_REVIEW")
     db.add(draft)
     db.commit()

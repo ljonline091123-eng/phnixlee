@@ -179,11 +179,22 @@ def _screening_bars(db: Session, market: str, symbols: list[str], as_of: datetim
     return grouped
 
 
-def _evidence(db: Session, market: str, symbol: str, kb_ids: list[int], graph_ids: list[int]) -> dict[str, Any]:
+def _evidence(
+    db: Session,
+    market: str,
+    symbol: str,
+    kb_ids: list[int],
+    graph_ids: list[int],
+    *,
+    as_of: datetime | None = None,
+) -> dict[str, Any]:
+    cutoff = as_of or _now()
     doc_query = select(KnowledgeDocument).where(
         KnowledgeDocument.symbol == symbol,
         KnowledgeDocument.market == market,
         KnowledgeDocument.knowledge_base_id.in_(kb_ids),
+        KnowledgeDocument.created_at <= cutoff,
+        KnowledgeDocument.updated_at <= cutoff,
     )
     if graph_ids:
         doc_query = doc_query.where(KnowledgeDocument.graph_id.in_(graph_ids))
@@ -202,6 +213,7 @@ def _evidence(db: Session, market: str, symbol: str, kb_ids: list[int], graph_id
     ent_query = select(KnowledgeEntity).where(
         KnowledgeEntity.knowledge_base_id.in_(kb_ids),
         KnowledgeEntity.graph_id.in_(graph_ids),
+        KnowledgeEntity.created_at <= cutoff,
         or_(
             KnowledgeEntity.entity_key.like(f"%:{market}:{symbol}"),
             KnowledgeEntity.entity_key.like(f"%:{market}:{symbol}:%"),
@@ -210,6 +222,7 @@ def _evidence(db: Session, market: str, symbol: str, kb_ids: list[int], graph_id
     entities = list(db.scalars(ent_query.limit(100)).all())
     entity_ids = [item.id for item in entities]
     rel_query = select(KnowledgeRelation).where(
+        KnowledgeRelation.created_at <= cutoff,
         or_(
             KnowledgeRelation.subject_entity_id.in_(entity_ids),
             KnowledgeRelation.object_entity_id.in_(entity_ids),
@@ -220,15 +233,25 @@ def _evidence(db: Session, market: str, symbol: str, kb_ids: list[int], graph_id
     relations = list(db.scalars(rel_query.order_by(case(
         (KnowledgeRelation.predicate.in_(["HAS_RECORD", "HAS_NEWS", "HAS_NOTICE", "HAS_PRICE_AND_VOLUME_SERIES"]), 1), else_=0
     ), KnowledgeRelation.id.desc()).limit(30)).all()) if entities else []
-    news_count = int(db.scalar(select(func.count(StockNews.id)).where(StockNews.market == market, StockNews.symbol == symbol)) or 0)
-    notice_count = int(db.scalar(select(func.count(StockNotice.id)).where(StockNotice.market == market, StockNotice.symbol == symbol)) or 0)
-    financial_count = int(db.scalar(select(func.count(StockFinancialReport.id)).where(StockFinancialReport.market == market, StockFinancialReport.symbol == symbol)) or 0)
+    news_count = int(db.scalar(select(func.count(StockNews.id)).where(
+        StockNews.market == market, StockNews.symbol == symbol, StockNews.fetched_at <= cutoff,
+    )) or 0)
+    notice_count = int(db.scalar(select(func.count(StockNotice.id)).where(
+        StockNotice.market == market, StockNotice.symbol == symbol, StockNotice.fetched_at <= cutoff,
+    )) or 0)
+    financial_count = int(db.scalar(select(func.count(StockFinancialReport.id)).where(
+        StockFinancialReport.market == market, StockFinancialReport.symbol == symbol,
+        StockFinancialReport.fetched_at <= cutoff,
+    )) or 0)
     related_ids = {key for relation in relations for key in (relation.subject_entity_id, relation.object_entity_id)}
-    related = {row.id: row for row in db.scalars(select(KnowledgeEntity).where(KnowledgeEntity.id.in_(related_ids))).all()}
+    related = {row.id: row for row in db.scalars(select(KnowledgeEntity).where(
+        KnowledgeEntity.id.in_(related_ids), KnowledgeEntity.created_at <= cutoff,
+    )).all()}
     relation_doc_ids = {row.evidence_document_id for row in relations[:20] if row.evidence_document_id}
     relation_docs = {row.id: row for row in db.scalars(select(KnowledgeDocument).where(
         KnowledgeDocument.id.in_(relation_doc_ids), KnowledgeDocument.knowledge_base_id.in_(kb_ids),
         KnowledgeDocument.graph_id.in_(graph_ids),
+        KnowledgeDocument.created_at <= cutoff, KnowledgeDocument.updated_at <= cutoff,
     )).all()}
     relation_rows = [
         {"id": item.id, "predicate": item.predicate, "subject_entity_id": item.subject_entity_id,
@@ -265,9 +288,10 @@ def _evidence(db: Session, market: str, symbol: str, kb_ids: list[int], graph_id
 
         context = build_selection_context(
             db, market, symbol, knowledge_base_ids=kb_ids, graph_ids=graph_ids,
+            as_of=cutoff,
             max_documents=12, max_relations=30, max_facts=30, max_chunks=8,
         )
-        for key in ("facts", "chunks", "structured_observations", "graph_paths", "evidence_span", "lineage", "lakehouse_datasets",
+        for key in ("facts", "chunks", "chunk_coverage", "structured_observations", "graph_paths", "evidence_span", "lineage", "lakehouse_datasets",
                     "graph_version", "lakehouse_version", "document_version", "context_version", "context_hash",
                     "data_cutoff", "identity", "missing_data", "counts", "evidence_fact_ids", "evidence_source_ids",
                     "evidence_record_refs"):
@@ -420,7 +444,10 @@ def create_selection_run(db: Session, payload: SelectionRunCreate) -> SelectionR
     candidates.sort(key=lambda item: item[1], reverse=True)
     candidates = candidates[:run.candidate_limit]
     for item, _score in candidates:
-        evidence = _evidence(db, market, item["symbol"], payload.knowledge_base_ids, payload.graph_ids)
+        evidence = _evidence(
+            db, market, item["symbol"], payload.knowledge_base_ids, payload.graph_ids,
+            as_of=run.as_of,
+        )
         evidence["data_mode"] = run.data_mode
         evidence["missing_data"] += [f"图谱 {row.graph_name} 尚有待治理事项" for row in graphs if row.governance_status == "PENDING"]
         item["evidence_json"] = evidence
