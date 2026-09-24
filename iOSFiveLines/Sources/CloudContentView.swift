@@ -13,7 +13,7 @@ struct CloudContentView: View {
     var body: some View {
         VStack(spacing: 0) {
             header
-                .frame(height: 156)
+                .frame(height: 202)
             GeometryReader { proxy in
                 let size = max(0, min(proxy.size.width - 32, proxy.size.height - 32) - 14)
                 board(size: size)
@@ -105,9 +105,9 @@ struct CloudContentView: View {
                         .font(.system(size: 30, weight: .bold))
                         .foregroundStyle(.white)
                     Text(game.dailyChallenge
-                        ? "今日最佳 \(String(format: "%05d", game.dailyBestScore)) · 每 12 步提升生成压力"
+                        ? "\(game.currentDailyPuzzle?.title ?? "每日残局") · \(game.currentDailyPuzzle?.target ?? "完成目标图形")"
                         : "白色万能球 · 炸药+至少四颗同色球清除全盘")
-                        .font(.system(size: 12))
+                        .font(.system(size: 15, weight: .medium))
                         .foregroundStyle(.white.opacity(0.82))
                         .lineLimit(1)
                         .minimumScaleFactor(0.72)
@@ -133,6 +133,30 @@ struct CloudContentView: View {
                 previewCard
             }
             .frame(height: 66)
+
+            Button {
+                collectionPresented = true
+            } label: {
+                HStack(spacing: 9) {
+                    Text(game.currentMedal.mark)
+                        .font(.system(size: 16, weight: .black))
+                        .foregroundStyle(Color.yellow)
+                    Text(game.profileName)
+                        .font(.system(size: 18, weight: .bold))
+                    Text("Lv.\(medalLevel) · \(game.currentMedal.name)")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.82))
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .foregroundStyle(.white.opacity(0.65))
+                }
+                .foregroundStyle(.white)
+                .padding(.horizontal, 13)
+                .frame(height: 46)
+                .background(Color(red: 0.224, green: 0.294, blue: 0.349), in: RoundedRectangle(cornerRadius: 8))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("打开账号与能力卡")
         }
         .padding(.horizontal, 20)
         .padding(.top, 10)
@@ -140,13 +164,17 @@ struct CloudContentView: View {
         .background(Color(red: 0.063, green: 0.094, blue: 0.125))
     }
 
+    private var medalLevel: Int {
+        (CloudGameModel.medals.firstIndex(where: { $0.id == game.currentMedal.id }) ?? 0) + 1
+    }
+
     private var scoreCard: some View {
         HStack(spacing: 8) {
             Text("得分")
-                .font(.system(size: 15, weight: .semibold))
+                .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(Color(red: 0.79, green: 0.84, blue: 0.87))
             Text(String(format: "%05d", min(99_999, game.score)))
-                .font(.system(size: 24, weight: .bold, design: .monospaced))
+                .font(.system(size: 27, weight: .bold, design: .monospaced))
                 .foregroundStyle(.white)
                 .monospacedDigit()
                 .minimumScaleFactor(0.72)
@@ -163,7 +191,7 @@ struct CloudContentView: View {
     private var previewCard: some View {
         HStack(spacing: 5) {
             Text("下一轮")
-                .font(.system(size: 12, weight: .semibold))
+                .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(Color(red: 0.79, green: 0.84, blue: 0.87))
                 .fixedSize()
             HStack(spacing: 3) {
@@ -235,78 +263,111 @@ private struct CollectionAndChallengesView: View {
     @State private var profileNameInput = ""
     var body: some View {
         NavigationStack {
-            List {
-                Section("本地档案") {
-                    LabeledContent("显示名", value: game.profileName)
-                    LabeledContent("玩家 ID", value: game.profileID)
-                    LabeledContent("联网状态", value: "尚未开放联网")
-                    HStack {
-                        TextField("修改本地显示名", text: $profileNameInput)
-                            .textInputAutocapitalization(.never)
-                        Button("保存") { game.updateProfileName(profileNameInput) }
-                            .disabled(profileNameInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                    }
-                    LabeledContent("当前等级", value: game.currentMedal.name)
-                    LabeledContent("成长分", value: "\(game.growthPoints)")
-                    if let next = game.nextMedal {
-                        LabeledContent("下一阶", value: "\(next.name) · 还需 \(max(0, next.threshold - game.growthPoints)) 分")
-                    } else {
-                        LabeledContent("下一阶", value: "已达到最高等级")
-                    }
-                    Text("本地玩家档案 · 尚未连接服务端")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                Section("每日残局图鉴 · 首期 30 关") {
-                    Text("以下布局与目标为未验证草稿，暂不可游玩。完成解法验证前，不启用通关判定与首通奖励。")
-                        .foregroundStyle(Color.secondary)
-                    ForEach(0..<30, id: \.self) { index in
-                        let puzzle = CloudGameModel.dailyPuzzle(forDay: index + 1)
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text("\(index + 1). \(puzzle.title)")
-                            Text("\(puzzle.summary) · 目标：\(puzzle.target)")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                }
-                Section("奖牌与卡册 · \(game.unlockedCardIDs.count)/54") {
-                    ForEach(CloudGameModel.medals) { medal in
-                        HStack {
-                            Image(systemName: game.growthPoints >= medal.threshold ? "medal.fill" : "medal")
-                                .foregroundStyle(game.growthPoints >= medal.threshold ? Color.orange : Color.secondary)
-                            Text(medal.name)
-                            Spacer()
-                            Text("\(medal.threshold) 分")
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    ForEach(CloudGameModel.abilityCards) { card in
-                        VStack(alignment: .leading, spacing: 3) {
-                            HStack {
-                                Image(systemName: game.unlockedCardIDs.contains(card.id) ? "checkmark.circle.fill" : "lock.fill")
-                                    .foregroundStyle(game.unlockedCardIDs.contains(card.id) ? Color.green : Color.secondary)
-                            Text(card.name)
-                                Spacer()
-                                Text(card.group)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    profileCard
+                    dailyCard
+                    Text("12 阶奖牌设计 · 当前 \(game.currentMedal.mark) \(game.currentMedal.name)")
+                        .font(.headline)
+                        .padding(.top, 4)
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(CloudGameModel.medals) { medal in
+                                let earned = game.growthPoints >= medal.threshold
+                                VStack(spacing: 3) {
+                                    Text("\(medal.mark)")
+                                        .font(.title3.bold())
+                                    Text(medal.name)
+                                        .font(.caption.bold())
+                                    Text("\(medal.threshold) 分")
+                                        .font(.caption2)
+                                }
+                                .foregroundStyle(earned ? Color.black : Color.secondary)
+                                .frame(width: 92, height: 82)
+                                .background((earned ? Color.orange.opacity(0.78) : Color.gray.opacity(0.16)), in: RoundedRectangle(cornerRadius: 8))
+                                .overlay(RoundedRectangle(cornerRadius: 8).stroke(earned ? Color.orange : Color.gray.opacity(0.35), lineWidth: 1))
                             }
-                            Text(game.unlockedCardIDs.contains(card.id) ? "已解锁 · 收藏记录（装备效果尚未开放）" : card.condition)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            if let unlockedAt = game.cardUnlockDates[card.id] {
-                                Text("获得时间：\(unlockedAt.formatted(date: .abbreviated, time: .omitted))")
+                        }
+                    }
+                    Text("54 张能力卡 · 完成条件后点亮")
+                        .font(.headline)
+                        .padding(.top, 4)
+                    LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
+                        ForEach(CloudGameModel.abilityCards) { card in
+                            let unlocked = game.unlockedCardIDs.contains(card.id)
+                            VStack(alignment: .leading, spacing: 5) {
+                                HStack(alignment: .top, spacing: 5) {
+                                    Image(systemName: unlocked ? "checkmark.circle.fill" : "lock.fill")
+                                        .foregroundStyle(unlocked ? Color.green : Color.secondary)
+                                    Text(card.name)
+                                        .font(.subheadline.bold())
+                                        .lineLimit(2)
+                                    Spacer(minLength: 0)
+                                }
+                                Text("\(card.group) · \(card.equipment ? "装备卡" : "收藏卡")")
                                     .font(.caption2)
                                     .foregroundStyle(.secondary)
+                                Text(unlocked ? "已点亮\n\(card.effect)" : "解锁：\(card.condition)")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(4)
                             }
+                            .padding(10)
+                            .frame(maxWidth: .infinity, minHeight: 108, alignment: .topLeading)
+                            .background((unlocked ? Color.green.opacity(0.12) : Color.gray.opacity(0.10)), in: RoundedRectangle(cornerRadius: 8))
+                            .overlay(RoundedRectangle(cornerRadius: 8).stroke(unlocked ? Color.green.opacity(0.65) : Color.gray.opacity(0.3), lineWidth: 1))
                         }
                     }
                 }
+                .padding(16)
             }
-            .navigationTitle("收藏与挑战")
+            .navigationTitle("账号与能力卡")
             .navigationBarTitleDisplayMode(.inline)
         }
+        .onAppear { profileNameInput = game.profileName }
+    }
+
+    private var profileCard: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text("\(game.profileName)  ·  Lv.\((CloudGameModel.medals.firstIndex(where: { $0.id == game.currentMedal.id }) ?? 0) + 1)  \(game.currentMedal.mark) \(game.currentMedal.name)")
+                .font(.headline)
+            Text("已点亮能力卡 \(game.unlockedCardIDs.count)/54 · 成长分 \(game.growthPoints)")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            HStack {
+                TextField("修改显示名", text: $profileNameInput)
+                    .textInputAutocapitalization(.never)
+                    .textFieldStyle(.roundedBorder)
+                Button("保存") { game.updateProfileName(profileNameInput) }
+                    .buttonStyle(.borderedProminent)
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(red: 0.149, green: 0.216, blue: 0.275), in: RoundedRectangle(cornerRadius: 8))
+        .foregroundStyle(.white)
+    }
+
+    private var dailyCard: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text("每日残局 MVP · 像素心形")
+                .font(.headline)
+            Text("每天选择一次；完成后可继续抽取未完成图形，失败当天锁定。")
+                .font(.subheadline)
+            Text("目标：移动红棋补齐心形中线五连")
+                .font(.subheadline.bold())
+            Button {
+                game.startDailyChallenge()
+            } label: {
+                Label("开始今日挑战", systemImage: "heart.fill")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(.red)
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.orange.opacity(0.18), in: RoundedRectangle(cornerRadius: 8))
     }
 }
 
