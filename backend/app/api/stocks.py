@@ -533,13 +533,18 @@ def _stock_pipeline_statuses(db: Session, stocks: list[StockSymbol]) -> dict[tup
     relation_counts: dict[tuple[str, str], int] = {key: 0 for key in keys}
     all_entity_ids = sorted(entity_stock_key)
     if all_graph_ids and all_entity_ids:
-        relation_rows_by_id: dict[int, tuple[int, int]] = {}
+        relation_rows_by_id: dict[int, tuple[int, int, int]] = {}
         for graph_offset in range(0, len(all_graph_ids), 500):
             graph_batch = all_graph_ids[graph_offset : graph_offset + 500]
             for entity_offset in range(0, len(all_entity_ids), 500):
                 entity_batch = all_entity_ids[entity_offset : entity_offset + 500]
-                for relation_id, subject_id, object_id in db.execute(
-                    select(KnowledgeRelation.id, KnowledgeRelation.subject_entity_id, KnowledgeRelation.object_entity_id)
+                for relation_id, subject_id, object_id, relation_graph_id in db.execute(
+                    select(
+                        KnowledgeRelation.id,
+                        KnowledgeRelation.subject_entity_id,
+                        KnowledgeRelation.object_entity_id,
+                        KnowledgeRelation.graph_id,
+                    )
                     .where(
                         KnowledgeRelation.graph_id.in_(graph_batch),
                         or_(
@@ -551,11 +556,18 @@ def _stock_pipeline_statuses(db: Session, stocks: list[StockSymbol]) -> dict[tup
                     # A relation whose endpoints fall in two entity batches
                     # is returned by both queries; deduplicate by its primary
                     # key before applying per-stock counts.
-                    relation_rows_by_id[int(relation_id)] = (int(subject_id), int(object_id))
-        for subject_id, object_id in relation_rows_by_id.values():
+                    relation_rows_by_id[int(relation_id)] = (
+                        int(subject_id), int(object_id), int(relation_graph_id)
+                    )
+        for subject_id, object_id, relation_graph_id in relation_rows_by_id.values():
             # A self-loop should count once for that stock, matching SQL
             # COUNT(*) rather than incrementing twice for subject/object.
-            touched = {entity_stock_key.get(int(subject_id)), entity_stock_key.get(int(object_id))}
+            touched = {
+                key
+                for entity_id in (int(subject_id), int(object_id))
+                for key in (entity_stock_key.get(entity_id),)
+                if key is not None and relation_graph_id in graph_ids_by_key[key]
+            }
             touched.discard(None)
             for key in touched:
                 relation_counts[key] += 1
