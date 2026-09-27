@@ -101,6 +101,8 @@ class JobWorker:
         job.attempts += 1
         job.started_at = job.started_at or now
         job.lease_until = now + timedelta(seconds=self.lease_seconds)
+        job.completed_at = None
+        job.error_message = None
         pipeline = db.get(PipelineRun, job.pipeline_run_id)
         stage = db.scalar(
             select(PipelineStageRun).where(
@@ -112,11 +114,17 @@ class JobWorker:
             pipeline.status = "RUNNING"
             pipeline.started_at = pipeline.started_at or now
             pipeline.current_stage = job.task_type
+            pipeline.completed_at = None
+            pipeline.error_message = None
         if stage:
             stage.status = "RUNNING"
             stage.attempt = job.attempts
             stage.started_at = stage.started_at or now
             stage.lease_until = job.lease_until
+            stage.next_retry_at = None
+            stage.completed_at = None
+            stage.error_code = None
+            stage.error_message = None
         db.commit()
         db.refresh(job)
         return job

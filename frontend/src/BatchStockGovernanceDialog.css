@@ -1,0 +1,651 @@
+.master-heading-actions,
+.master-batch-toolbar,
+.master-batch-toolbar > div {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.master-heading-actions {
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.master-batch-toolbar {
+  justify-content: space-between;
+  gap: 16px;
+  margin: 0 22px 14px;
+  padding: 12px 14px;
+  border: 1px solid #c8dbc9;
+  border-radius: 10px;
+  background: #f4faf3;
+}
+
+.master-batch-toolbar > div:first-child {
+  display: grid;
+  gap: 3px;
+}
+
+.master-batch-toolbar strong {
+  color: var(--text);
+  font-size: 12px;
+}
+
+.master-batch-toolbar span {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.master-security-table .selection-cell {
+  width: 42px;
+  padding-inline: 12px;
+  text-align: center;
+}
+
+.master-security-table input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: #3c7857;
+  cursor: pointer;
+}
+
+.master-security-table tr.selected-row td {
+  background: #f1f8f1;
+}
+
+.batch-governance-backdrop {
+  z-index: 70;
+}
+
+.batch-governance-dialog {
+  width: min(1180px, 100%);
+}
+
+.batch-governance-dialog .resource-dialog-header > div {
+  min-width: 0;
+}
+
+.batch-governance-dialog .resource-dialog-header p:last-child {
+  margin: 7px 0 0;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.batch-governance-body,
+.batch-governance-form,
+.batch-governance-progress,
+.batch-recent-jobs {
+  display: grid;
+  gap: 18px;
+}
+
+.batch-governance-scope {
+  display: grid;
+  gap: 10px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #f7faf6;
+}
+
+.batch-governance-scope > div:first-child,
+.batch-governance-section-heading,
+.batch-governance-submit,
+.batch-governance-progress > header,
+.batch-progress-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.batch-governance-scope > div:first-child span {
+  color: var(--accent-strong);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.batch-governance-stock-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.batch-governance-stock-list > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid #d5e0d6;
+  border-radius: 7px;
+  background: #fff;
+  font-size: 11px;
+}
+
+.batch-governance-stock-list b {
+  max-width: 96px;
+  overflow: hidden;
+  color: var(--text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.batch-governance-stock-list code {
+  color: var(--text-muted);
+  font-size: 10px;
+}
+
+.batch-governance-stock-list .more {
+  color: var(--accent-strong);
+  background: #edf6ee;
+  font-weight: 700;
+}
+
+.batch-governance-message {
+  padding: 11px 13px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  color: var(--text-muted);
+  background: #f7faf6;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.batch-governance-message.warning {
+  border-color: #dfca92;
+  color: #72581e;
+  background: #fff9e9;
+}
+
+.batch-governance-message.error {
+  border-color: #e2aaa4;
+  color: #8d332d;
+  background: #fff4f2;
+}
+
+.batch-governance-message.success {
+  border-color: #a9cbae;
+  color: #2f704d;
+  background: #f1f9f1;
+}
+
+.batch-governance-message code {
+  margin-left: 4px;
+  padding: 2px 5px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, .65);
+  font-size: 11px;
+}
+
+.batch-governance-stages {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+  padding: 13px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+
+.batch-governance-stages legend {
+  padding: 0 7px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.batch-governance-stages label,
+.batch-governance-type-grid label,
+.batch-governance-agent-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 11px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.batch-governance-stages label.selected,
+.batch-governance-type-grid label.selected,
+.batch-governance-agent-option:has(input:checked) {
+  border-color: #86aa8b;
+  background: #f0f8f0;
+  box-shadow: 0 0 0 2px rgba(79, 121, 91, .08);
+}
+
+.batch-governance-stages input,
+.batch-governance-type-grid input,
+.batch-governance-agent-option input {
+  flex: 0 0 auto;
+  margin-top: 3px;
+  accent-color: #3c7857;
+}
+
+.batch-governance-stages label > span,
+.batch-governance-type-grid label > span,
+.batch-governance-agent-option > span {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.batch-governance-stages label > span > b {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  color: #fff;
+  background: #738c79;
+  font-size: 11px;
+}
+
+.batch-governance-stages label.selected > span > b {
+  background: #3c7857;
+}
+
+.batch-governance-stages strong,
+.batch-governance-type-grid strong,
+.batch-governance-agent-option strong,
+.batch-governance-section-heading strong {
+  color: var(--text);
+  font-size: 12px;
+}
+
+.batch-governance-stages small,
+.batch-governance-type-grid small,
+.batch-governance-agent-option small,
+.batch-governance-section-heading small,
+.batch-governance-settings small {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+.batch-governance-business-types {
+  display: grid;
+  gap: 10px;
+  padding: 13px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fafcf9;
+}
+
+.batch-governance-business-types.disabled {
+  opacity: .58;
+}
+
+.batch-governance-section-heading > div {
+  display: grid;
+  gap: 4px;
+}
+
+.batch-governance-section-heading button {
+  flex: 0 0 auto;
+  min-height: 31px;
+}
+
+.batch-governance-type-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.batch-governance-type-grid label {
+  padding: 9px;
+}
+
+.batch-governance-settings {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 11px;
+}
+
+.batch-governance-settings label {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.batch-governance-settings select,
+.batch-governance-settings input {
+  width: 100%;
+  min-height: 40px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--text);
+  font: inherit;
+}
+
+.batch-governance-agent-option {
+  background: #fafcf9;
+}
+
+.batch-governance-submit {
+  padding: 13px 15px;
+  border: 1px solid #c8dbc9;
+  border-radius: 11px;
+  background: #f4faf3;
+}
+
+.batch-governance-submit > div {
+  display: grid;
+  gap: 4px;
+}
+
+.batch-governance-submit strong {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.batch-governance-submit span {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.batch-governance-progress {
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+.batch-governance-progress > header h4,
+.batch-governance-progress > header p {
+  margin: 0;
+}
+
+.batch-governance-progress > header h4 {
+  margin-top: 2px;
+  color: var(--text);
+  font-size: 18px;
+}
+
+.batch-governance-progress > header span {
+  display: block;
+  margin-top: 5px;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.batch-job-status {
+  flex: 0 0 auto;
+  padding: 6px 10px;
+  border-radius: 999px;
+  color: #617166;
+  background: #edf1ed;
+  font-size: 11px;
+}
+
+.batch-job-status.running,
+.batch-job-status.partial {
+  color: #806018;
+  background: #fff1c8;
+}
+
+.batch-job-status.success {
+  color: #356b4f;
+  background: #e4f3e8;
+}
+
+.batch-job-status.failed {
+  color: #9d342f;
+  background: #fde3df;
+}
+
+.batch-progress-track {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e8eee9;
+}
+
+.batch-progress-track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #3d7757, #7aa27e);
+  transition: width .35s ease;
+}
+
+.batch-progress-meta {
+  margin-top: -11px;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.batch-progress-meta b {
+  color: var(--accent-strong);
+}
+
+.batch-stage-results {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 9px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.batch-stage-results li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 7px 9px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+}
+
+.batch-stage-results li.success {
+  border-color: #a9cbae;
+  background: #f2faf2;
+}
+
+.batch-stage-results li.running,
+.batch-stage-results li.partial {
+  border-color: #e0c98e;
+  background: #fffaf0;
+}
+
+.batch-stage-results li.failed {
+  border-color: #dfaaa4;
+  background: #fff5f3;
+}
+
+.batch-stage-number {
+  display: inline-grid;
+  place-items: center;
+  width: 23px;
+  height: 23px;
+  border-radius: 50%;
+  color: #fff;
+  background: #829286;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.batch-stage-results li.success .batch-stage-number { background: #39805a; }
+.batch-stage-results li.running .batch-stage-number,
+.batch-stage-results li.partial .batch-stage-number { background: #b8872c; }
+.batch-stage-results li.failed .batch-stage-number { background: #bb5148; }
+
+.batch-stage-results li > div {
+  min-width: 0;
+}
+
+.batch-stage-results strong {
+  color: var(--text);
+  font-size: 12px;
+}
+
+.batch-stage-results p {
+  margin: 4px 0 0;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.batch-stage-results li > small {
+  grid-column: 2;
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.batch-governance-errors {
+  padding: 12px 14px;
+  border: 1px solid #dfaaa4;
+  border-radius: 9px;
+  color: #8d332d;
+  background: #fff5f3;
+  font-size: 12px;
+}
+
+.batch-governance-errors ul {
+  margin: 7px 0 0;
+  padding-left: 18px;
+}
+
+.batch-stock-results summary,
+.batch-raw-result summary {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.batch-stock-results .table-wrap {
+  max-height: 300px;
+  margin-top: 10px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+}
+
+.batch-stock-results table {
+  min-width: 640px;
+}
+
+.batch-stock-results th,
+.batch-stock-results td {
+  padding: 10px 12px;
+  font-size: 11px;
+}
+
+.batch-raw-result pre {
+  max-height: 340px;
+  margin: 10px 0 0;
+  padding: 12px;
+  overflow: auto;
+  border-radius: 8px;
+  color: var(--text-muted);
+  background: #f4f7f3;
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.batch-recent-jobs {
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+.batch-recent-jobs > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.batch-recent-jobs h4,
+.batch-recent-jobs p {
+  margin: 0;
+}
+
+.batch-recent-jobs h4 {
+  color: var(--text);
+  font-size: 15px;
+}
+
+.batch-recent-jobs p,
+.batch-recent-jobs > header > span {
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.batch-recent-jobs .table-wrap {
+  max-height: 270px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+}
+
+.batch-recent-jobs table {
+  min-width: 720px;
+}
+
+.batch-recent-jobs th,
+.batch-recent-jobs td {
+  padding: 9px 11px;
+  font-size: 11px;
+}
+
+.batch-recent-jobs td small {
+  color: var(--text-muted);
+}
+
+@media (max-width: 1000px) {
+  .batch-governance-stages,
+  .batch-stage-results,
+  .batch-governance-settings {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .batch-governance-type-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 680px) {
+  .master-batch-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+    margin-inline: 14px;
+  }
+
+  .master-batch-toolbar > div:last-child {
+    justify-content: stretch;
+  }
+
+  .master-batch-toolbar > div:last-child button {
+    flex: 1;
+  }
+
+  .batch-governance-stages,
+  .batch-stage-results,
+  .batch-governance-settings,
+  .batch-governance-type-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .batch-governance-submit,
+  .batch-governance-section-heading,
+  .batch-governance-progress > header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .batch-governance-submit button {
+    width: 100%;
+  }
+}
