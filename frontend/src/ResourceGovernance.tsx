@@ -202,7 +202,7 @@ export function GovernedAssetTab({ assets, agents, reload, notify }: CommonProps
 
 const emptyBase = { kb_code: "", kb_name: "", description: "", source_tables: [] as string[], version: "1.0.0", enabled: true };
 const emptyGraph: KnowledgeGraphPayload = { knowledge_base_id: 0, graph_code: "", graph_name: "", description: "", symbol: "", source_tables: [], version: "1.0.0", enabled: true };
-export function GovernedKnowledgeTab({ knowledge, graphs, assets, agents, reload, notify }: CommonProps & { knowledge: KnowledgeBase[]; graphs: KnowledgeGraph[] }) {
+export function GovernedKnowledgeTab({ knowledge, graphs, assets, agents, reload, notify, mode = "all" }: CommonProps & { knowledge: KnowledgeBase[]; graphs: KnowledgeGraph[]; mode?: "all" | "knowledge" | "graphs" }) {
   const [visualGraphId, setVisualGraphId] = useState<number | null>(null);
   const [dialog, setDialog] = useState<"base" | "graph" | "documents" | "explore" | "govern" | null>(null);
   const [base, setBase] = useState<KnowledgeBase | null>(null);
@@ -257,18 +257,20 @@ export function GovernedKnowledgeTab({ knowledge, graphs, assets, agents, reload
     catch (error) { setError(errText(error)); } finally { setBusy(false); }
   };
   const graphSources = assets.filter(item => knowledge.find(kb => kb.id === (graph?.knowledge_base_id || graphForm.knowledge_base_id))?.source_tables.includes(item.table_name));
+  const showKnowledge = mode === "all" || mode === "knowledge";
+  const showGraphs = mode === "all" || mode === "graphs";
   return <div className="resource-stack">
     {visualGraphId != null && <KnowledgeGraphDialog initialGraphId={visualGraphId} close={() => setVisualGraphId(null)} />}
     {error && <p className="form-error governance-inline-error">{error}</p>}
-    <EvidenceIntake />
-    <KnowledgeGovernancePanel reload={reload} notify={notify} />
-    <section className="panel resource-management-panel"><div className="panel-heading"><div><p className="eyebrow">KNOWLEDGE BASES</p><h2>知识库清单</h2><p>知识库管理资料来源；同一知识库可建立多张独立图谱。</p></div><button type="button" onClick={() => { setBase(null); setBaseForm({ ...emptyBase }); setError(""); setDialog("base"); }}>新增知识库</button></div>
+    {showKnowledge && <EvidenceIntake />}
+    {showKnowledge && <KnowledgeGovernancePanel reload={reload} notify={notify} />}
+    {showKnowledge && <section className="panel resource-management-panel"><div className="panel-heading"><div><p className="eyebrow">KNOWLEDGE BASES</p><h2>知识库清单</h2><p>知识库管理资料来源；同一知识库可建立多张独立图谱。</p></div><button type="button" onClick={() => { setBase(null); setBaseForm({ ...emptyBase }); setError(""); setDialog("base"); }}>新增知识库</button></div>
       <div className="table-wrap resource-list-wrap"><table><thead><tr><th>知识库</th><th>来源数据资产</th><th>图谱数</th><th>状态</th><th>操作</th></tr></thead><tbody>{knowledge.map(item => <tr key={item.id}>
         <td><strong>{item.kb_name}</strong><code>{item.kb_code} · v{item.version}</code></td><td>{item.source_tables.join("、") || "未配置"}</td><td>{graphs.filter(g => g.knowledge_base_id === item.id).length}</td><td>{item.enabled ? "启用" : "停用"}</td>
         <td className="button-row"><button type="button" onClick={() => void openDocuments(item)}>查询资料</button><button type="button" onClick={() => { setBase(item); setBaseForm({ kb_code: item.kb_code, kb_name: item.kb_name, description: item.description || "", source_tables: [...item.source_tables], version: item.version, enabled: item.enabled }); setDialog("base"); }}>编辑</button>
           <button type="button" onClick={() => void run(() => api.updateKnowledgeBase(item.id, { enabled: !item.enabled }), "使用状态已更新")}>{item.enabled ? "停用" : "启用"}</button>
-          <button type="button" onClick={() => { if (window.confirm(`删除知识库 ${item.kb_name}？`)) void run(() => api.deleteKnowledgeBase(item.id), "知识库已删除"); }}>删除</button></td></tr>)}</tbody></table></div></section>
-    <section className="panel resource-management-panel"><div className="panel-heading"><div><p className="eyebrow">KNOWLEDGE GRAPHS</p><h2>知识图谱清单</h2><p>按股票或主题建立图谱，可查询实体、关系和证据。批量治理使用各图谱当前来源。</p></div><div className="panel-actions"><button type="button" disabled={!knowledge.length} onClick={() => { setGraph(null); setGraphForm({ ...emptyGraph, knowledge_base_id: knowledge[0]?.id || 0 }); setError(""); setDialog("graph"); }}>新增图谱</button><button type="button" disabled={!selected.length || busy} onClick={() => void batch()}>批量治理（{selected.length}）</button></div></div>
+          <button type="button" onClick={() => { if (window.confirm(`删除知识库 ${item.kb_name}？`)) void run(() => api.deleteKnowledgeBase(item.id), "知识库已删除"); }}>删除</button></td></tr>)}</tbody></table></div></section>}
+    {showGraphs && <section className="panel resource-management-panel"><div className="panel-heading"><div><p className="eyebrow">MATERIALIZED KNOWLEDGE GRAPHS</p><h2>物化知识图谱清单</h2><p>知识库生成的独立图谱版本，保存实体、关系和证据；治理操作按图谱配置重新构建。</p></div><div className="panel-actions"><button type="button" disabled={!knowledge.length} onClick={() => { setGraph(null); setGraphForm({ ...emptyGraph, knowledge_base_id: knowledge[0]?.id || 0 }); setError(""); setDialog("graph"); }}>新增图谱</button><button type="button" disabled={!selected.length || busy} onClick={() => void batch()}>批量治理（{selected.length}）</button></div></div>
       <div className="table-wrap resource-list-wrap"><table><thead><tr><th>选择</th><th>图谱 / 知识库</th><th>范围与规模</th><th>治理状态</th><th>使用状态</th><th>操作</th></tr></thead><tbody>{graphs.map(item => <tr key={item.id}>
         <td><input aria-label={`选择${item.graph_name}`} type="checkbox" disabled={item.governance_status === "LOCKED"} checked={selected.includes(item.id)} onChange={() => setSelected(selected.includes(item.id) ? selected.filter(id => id !== item.id) : [...selected, item.id])} /></td>
         <td><strong>{item.graph_name}</strong><code>{item.graph_code} · {knowledge.find(kb => kb.id === item.knowledge_base_id)?.kb_name || item.knowledge_base_id}</code></td>
@@ -276,7 +278,7 @@ export function GovernedKnowledgeTab({ knowledge, graphs, assets, agents, reload
         <td className="button-row"><button type="button" onClick={() => setVisualGraphId(item.id)}>可视化浏览</button><button type="button" onClick={() => void openGraph(item)}>查询关系</button><button type="button" onClick={() => { setGraph(item); setGraphForm({ knowledge_base_id: item.knowledge_base_id, graph_code: item.graph_code, graph_name: item.graph_name, description: item.description || "", symbol: item.symbol || "", source_tables: [...item.source_tables], version: item.version, enabled: item.enabled }); setDialog("graph"); }}>编辑</button>
           <button type="button" disabled={item.governance_status === "LOCKED" || busy} onClick={() => { setGraph(item); setSources([]); setAgentId(undefined); setError(""); setDialog("govern"); }}>治理</button><button type="button" onClick={() => void run(() => api.setGraphGovernanceState(item.id, item.governance_status === "LOCKED" ? "PENDING" : "LOCKED"), "图谱状态已更新")}>{item.governance_status === "LOCKED" ? "解锁" : "锁定"}</button>
           <button type="button" onClick={() => void run(() => api.updateKnowledgeGraph(item.id, { enabled: !item.enabled }), "使用状态已更新")}>{item.enabled ? "停用" : "启用"}</button>
-          <button type="button" disabled={item.governance_status === "LOCKED"} onClick={() => { if (window.confirm(`删除图谱 ${item.graph_name} 及其实体关系？`)) void run(() => api.deleteKnowledgeGraph(item.id), "图谱已删除"); }}>删除</button></td></tr>)}</tbody></table></div></section>
+          <button type="button" disabled={item.governance_status === "LOCKED"} onClick={() => { if (window.confirm(`删除图谱 ${item.graph_name} 及其实体关系？`)) void run(() => api.deleteKnowledgeGraph(item.id), "图谱已删除"); }}>删除</button></td></tr>)}</tbody></table></div></section>}
     {dialog === "base" && <Dialog title={base ? "编辑知识库" : "新增知识库"} close={() => setDialog(null)}><form className="governance-form" onSubmit={saveBase}>{error && <p className="form-error">{error}</p>}
       <label>知识库编码<input required disabled={!!base} value={baseForm.kb_code} onChange={event => setBaseForm({ ...baseForm, kb_code: event.target.value.toUpperCase() })} /></label><label>名称<input required value={baseForm.kb_name} onChange={event => setBaseForm({ ...baseForm, kb_name: event.target.value })} /></label>
       <label>来源数据资产</label><div className="governance-source-grid">{assets.map(item => <label key={item.id}><input type="checkbox" checked={baseForm.source_tables.includes(item.table_name)} onChange={() => setBaseForm({ ...baseForm, source_tables: baseForm.source_tables.includes(item.table_name) ? baseForm.source_tables.filter(name => name !== item.table_name) : [...baseForm.source_tables, item.table_name] })} />{item.display_name}</label>)}</div>

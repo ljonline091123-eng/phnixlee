@@ -59,13 +59,13 @@ export function KnowledgeGovernancePanel({ reload, notify }: { reload: () => Pro
   const sources = summary?.source_coverage || catalog?.source_coverage || [];
   const created = summary?.created_knowledge_bases || [];
   return <section className="panel resource-management-panel knowledge-governance-panel" aria-label="智能体与技能知识库治理">
-    <div className="panel-heading"><div><p className="eyebrow">知识治理</p><h2>智能体 + Skill 治理</h2><p>审核多类数据来源，生成分领域知识库及图谱版本，并记录实际覆盖范围。</p></div><button type="button" disabled={loading} onClick={() => setRevision(old => old + 1)}>刷新来源与结果</button></div>
+    <div className="panel-heading"><div><p className="eyebrow">知识治理</p><h2>智能体 + 技能治理</h2><p>审核多类数据来源，生成分领域知识库及图谱版本，并记录实际覆盖范围。</p></div><button type="button" disabled={loading} onClick={() => setRevision(old => old + 1)}>刷新来源与结果</button></div>
     <div className="knowledge-governance-content">
       {error && <p className="form-error" role="alert">{error}</p>}
       {loading && !catalog && <p role="status">正在读取可治理的数据来源…</p>}
       <div className="knowledge-governance-groups">{catalog?.source_groups.map(group => <span key={group.code} title={group.source_tables.join("、")}>{group.name}</span>)}</div>
-      <form className="knowledge-governance-toolbar" onSubmit={event => void govern(event)}><label>每个来源最多处理记录<input aria-label="每个来源处理上限" type="number" min={1} max={500} step={1} required value={recordLimit} disabled={running} onChange={event => setRecordLimit(Number(event.target.value))} /></label><button type="submit" className="primary-button" disabled={!catalog || running || recordLimit < 1 || recordLimit > 500}>{running ? "智能体正在治理…" : "运行智能体与 Skill 治理"}</button></form>
-      <p className="knowledge-governance-note">智能体按 Skill 对每个来源最多 1 条摘要进行审核；程序按所选记录上限生成知识文档和关系。模型未逐条审核全部归档记录。报告区分原始总量、实际生成量和缺口；限定样本不代表全市场覆盖。</p>
+      <form className="knowledge-governance-toolbar" onSubmit={event => void govern(event)}><label>每个来源最多处理记录<input aria-label="每个来源处理上限" type="number" min={1} max={500} step={1} required value={recordLimit} disabled={running} onChange={event => setRecordLimit(Number(event.target.value))} /></label><button type="submit" className="primary-button" disabled={!catalog || running || recordLimit < 1 || recordLimit > 500}>{running ? "智能体正在治理…" : "运行智能体与技能治理"}</button></form>
+      <p className="knowledge-governance-note">智能体按技能对每个来源最多 1 条摘要进行审核；程序按所选记录上限生成知识文档和关系。模型未逐条审核全部归档记录。报告区分原始总量、实际生成量和缺口；限定样本不代表全市场覆盖。</p>
       {running && <p className="knowledge-governance-note" role="status">正在审核来源并生成新版本。页面会定期更新执行状态。</p>}
       <div className="knowledge-governance-report">
         {summary?.error && error !== summary.error && <p className="form-error" role="alert">{summary.error}</p>}

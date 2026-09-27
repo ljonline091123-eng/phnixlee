@@ -49,6 +49,9 @@ popd
 echo Starting backend on http://127.0.0.1:8000 ...
 start "Gemini Quant Agent - Backend" powershell.exe -NoLogo -NoExit -ExecutionPolicy Bypass -Command "Set-Location -LiteralPath '%BACKEND%'; python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload"
 
+echo Starting batch data governance worker ...
+start "Gemini Quant Agent - Batch Worker" powershell.exe -NoLogo -NoExit -ExecutionPolicy Bypass -Command "Set-Location -LiteralPath '%BACKEND%'; python -m app.jobs.worker --task-type stock_batch_governance --lease-seconds 7200"
+
 echo Starting frontend on http://127.0.0.1:5173 ...
 start "Gemini Quant Agent - Frontend" powershell.exe -NoLogo -NoExit -ExecutionPolicy Bypass -Command "Set-Location -LiteralPath '%FRONTEND%'; npm run dev -- --host 127.0.0.1 --port 5173"
 
@@ -57,6 +60,7 @@ echo Gemini Quant Agent is starting.
 echo Frontend: http://127.0.0.1:5173
 echo Backend docs: http://127.0.0.1:8000/docs
 echo Health check: http://127.0.0.1:8000/health
+echo Batch worker: stock_batch_governance
 echo.
 timeout /t 3 /nobreak >nul
 start "" "http://127.0.0.1:5173"
