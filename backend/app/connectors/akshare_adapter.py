@@ -206,10 +206,14 @@ class AkshareAdapter(MarketDataAdapter):
     def fetch_news(self, market: str, symbol: str) -> list[NewsRecord]:
         if market in (MARKET_NEEQ, MARKET_NEEQ_INNOVATION):
             return self._fetch_neeq_news(market=market, symbol=symbol)
-        if market == MARKET_HK:
+        # AkShare's ``stock_news_em`` currently delegates to a JavaScript
+        # regex containing an invalid ``\\u`` escape on recent runtimes.  The
+        # Eastmoney JSONP endpoint is the same upstream feed and lets us parse
+        # the response without that provider-side regex.  Use it for both
+        # mainland and HK symbols; the endpoint accepts either code format.
+        if market in (MARKET_CN_A, MARKET_HK):
             return self._fetch_eastmoney_search_news(market, symbol)
-        dataframe = ak.stock_news_em(symbol=symbol)
-        return self._normalize_news_dataframe(dataframe, market, symbol)
+        raise ValueError(f"Unsupported market: {market}")
 
     def _fetch_eastmoney_search_news(self, market: str, symbol: str) -> list[NewsRecord]:
         """Call Eastmoney search directly; avoids the upstream AkShare regex bug."""

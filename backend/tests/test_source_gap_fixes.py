@@ -1,5 +1,7 @@
 import json
 
+import pytest
+
 from app.connectors.akshare_adapter import AkshareAdapter
 
 
@@ -9,7 +11,8 @@ class _Response:
         return None
 
 
-def test_hk_news_direct_jsonp_parser_avoids_upstream_regex_bug(monkeypatch):
+@pytest.mark.parametrize(("market", "symbol"), [("HK", "00700"), ("CN_A", "000001")])
+def test_news_direct_jsonp_parser_avoids_upstream_regex_bug(monkeypatch, market, symbol):
     row = {"date": "2026-09-23 12:00:00", "title": "腾讯控股(<em>00700</em>.HK)新闻",
            "content": "测试\u3000正文", "mediaName": "测试来源", "url": "https://example.test/news"}
     response = _Response()
@@ -22,10 +25,10 @@ def test_hk_news_direct_jsonp_parser_avoids_upstream_regex_bug(monkeypatch):
         def get(self, *args, **kwargs): return response
 
     monkeypatch.setattr("app.connectors.akshare_adapter.httpx.Client", Client)
-    records = AkshareAdapter().fetch_news("HK", "00700")
+    records = AkshareAdapter().fetch_news(market, symbol)
     assert len(records) == 1
     assert records[0].title == "腾讯控股(00700.HK)新闻"
-    assert records[0].market == "HK"
+    assert records[0].market == market
 
 
 def test_invalid_ohlc_reference_is_not_accepted():
