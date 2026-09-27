@@ -30,6 +30,7 @@ import {
   type ModelTestResponse,
   type SkillOptimizationDraft,
   type StockSymbol,
+  type StockPipelineStatus,
   type SyncLog,
   type WatchlistItem,
 } from "./api";
@@ -40,11 +41,23 @@ import { DataFoundation } from "./DataFoundation";
 import { CompanyGraphWorkbench } from "./CompanyGraphWorkbench";
 import { KnowledgeGraphExplorer } from "./KnowledgeGraphExplorer";
 import { EnvironmentBanner } from "./EnvironmentBanner";
+import { KnowledgePipelinePanel } from "./KnowledgePipelinePanel";
+import { BatchStockGovernanceDialog } from "./BatchStockGovernanceDialog";
+import { OperationsCenter } from "./OperationsCenter";
+import { PlatformOverview, type PlatformNavigationTarget } from "./PlatformOverview";
+import {
+  defaultSections,
+  normalizeRoute,
+  parseRouteHash,
+  routeHash,
+  type ModuleView,
+} from "./navigation";
 
-type ModuleView = "data" | "model" | "watch" | "research";
-type ModelHubTab =
-  "models" | "agents" | "skills" | "assets" | "knowledge" | "logs";
-type DataView = "sources" | "interfaces" | "universe" | "foundation" | "company_graph" | "knowledge_network" | "lakehouse";
+type ModelHubTab = "models" | "agents" | "skills" | "evaluation";
+type DataView = "access" | "master" | "business" | "lakehouse" | "knowledge" | "graphs" | "pipeline";
+type AccessView = "sources" | "interfaces" | "sync";
+type MasterView = "securities" | "entities";
+type ResearchView = "objects" | "selection" | "research";
 type ResearchTab = "chat" | "research";
 type ModelTestDialogState = {
   target: string;
@@ -81,12 +94,78 @@ function Status({ enabled }: { enabled: boolean }) {
     </span>
   );
 }
+
+type StockPipelineStatusKey = "data_collection" | "knowledge_base" | "knowledge_graph";
+
+const stockPipelineStatusNames: Record<string, string> = {
+  NOT_STARTED: "未开始",
+  PARTIAL: "部分完成",
+  COMPLETED: "已完成",
+  FAILED: "失败",
+  PENDING: "处理中",
+};
+
+function stockPipelineStatus(stock: StockSymbol, key: StockPipelineStatusKey): StockPipelineStatus {
+  const summary = stock.status_summary?.[key];
+  if (summary) return summary;
+  const flatKey = `${key}_status` as "data_collection_status" | "knowledge_base_status" | "knowledge_graph_status";
+  const status = stock[flatKey];
+  return status ? { status, label: stockPipelineStatusNames[status] || status } : { status: "NOT_STARTED", label: "未开始" };
+}
+
+function StockPipelineStatusTag({ stock, kind }: { stock: StockSymbol; kind: StockPipelineStatusKey }) {
+  const value = stockPipelineStatus(stock, kind);
+  const status = String(value.status || "NOT_STARTED").toUpperCase();
+  const color = String(value.color || value.color_code || (status === "COMPLETED" ? "green" : status === "PARTIAL" || status === "PENDING" ? "yellow" : status === "FAILED" ? "red" : "gray")).toLowerCase();
+  const label = value.label || stockPipelineStatusNames[status] || status;
+  const completed = value.completed_count;
+  const expected = value.expected_count;
+  const progress = completed != null && expected != null ? `（${completed}/${expected}）` : "";
+  const detail = value.detail ? Object.entries(value.detail).map(([name, count]) => `${name}: ${String(count)}`).join("；") : "";
+  return <span className={`stock-pipeline-status ${color}`} title={[label + progress, value.last_at ? `最近更新：${formatDate(value.last_at)}` : "", detail].filter(Boolean).join("\n")}><i aria-hidden="true" />{label}{progress}</span>;
+}
 function formatDate(value?: string | null) {
   return value ? new Date(value).toLocaleString("zh-CN") : "--";
 }
 
 export default function App() {
-  const [moduleView, setModuleView] = useState<ModuleView>("data");
+  const [route, setRoute] = useState(() => parseRouteHash(window.location.hash));
+  useEffect(() => {
+    if (!window.location.hash) window.history.replaceState(null, "", routeHash(route));
+    const changed = () => setRoute(parseRouteHash(window.location.hash));
+    window.addEventListener("hashchange", changed);
+    return () => window.removeEventListener("hashchange", changed);
+  }, []);
+  const navigate = (module: ModuleView, section = defaultSections[module]) => {
+    const next = normalizeRoute(module, section);
+    const nextHash = routeHash(next);
+    if (window.location.hash === nextHash) setRoute(next);
+    else window.location.hash = nextHash;
+  };
+  const navigateTarget = (target: PlatformNavigationTarget) => {
+    const targets: Record<PlatformNavigationTarget, [ModuleView, string]> = {
+      "data-sources": ["data", "access"],
+      "master-data": ["data", "master"],
+      "business-data": ["data", "business"],
+      lakehouse: ["data", "lakehouse"],
+      "knowledge-bases": ["data", "knowledge"],
+      "knowledge-graphs": ["data", "graphs"],
+      models: ["ai", "models"],
+      agents: ["ai", "agents"],
+      skills: ["ai", "skills"],
+      operations: ["operations", "tasks"],
+      "investment-workbench": ["research", "objects"],
+    };
+    const [module, section] = targets[target];
+    navigate(module, section);
+  };
+  const modules: Array<{ key: ModuleView; label: string; note: string }> = [
+    { key: "overview", label: "平台总览", note: "全链路状态与待办" },
+    { key: "data", label: "数据与知识", note: "从数据接入到知识发布" },
+    { key: "ai", label: "AI能力中心", note: "模型、技能与智能体" },
+    { key: "research", label: "投研工作台", note: "对象分析、选股与研究" },
+    { key: "operations", label: "运营治理", note: "任务、质量与审计" },
+  ];
   return (
     <main className="shell">
       <aside className="sidebar">
@@ -98,47 +177,33 @@ export default function App() {
           </div>
         </div>
         <nav>
-          {(["data", "model", "watch", "research"] as ModuleView[]).map(
-            (view, index) => (
+          {modules.map(
+            (item, index) => (
               <button
-                key={view}
-                className={moduleView === view ? "nav-item active" : "nav-item"}
+                key={item.key}
+                className={route.module === item.key ? "nav-item active" : "nav-item"}
                 type="button"
-                onClick={() => setModuleView(view)}
+                onClick={() => navigate(item.key)}
               >
                 <span>{String(index + 1).padStart(2, "0")}</span>
-                {view === "data"
-                  ? "数据中台"
-                  : view === "model"
-                    ? "模型实验室"
-                    : view === "watch"
-                      ? "选股盯盘"
-                      : "研究中心"}
+                {item.label}
               </button>
             ),
           )}
         </nav>
         <div className="sidebar-note">
           <span className="pulse" />
-          <p>{moduleView === "model" ? "PHASE 02" : "PHASE 01"}</p>
-          <strong>
-            {moduleView === "model"
-              ? "模型、智能体与知识资产"
-              : "数据源接入与标准化"}
-          </strong>
+          <p>ACTIVE SPACE</p>
+          <strong>{modules.find((item) => item.key === route.module)?.note}</strong>
         </div>
       </aside>
       <section className="workspace">
         <EnvironmentBanner />
-        {moduleView === "data" ? (
-          <DataConsolePage />
-        ) : moduleView === "model" ? (
-          <ModelLabPage />
-        ) : moduleView === "watch" ? (
-          <AutoWatchPage />
-        ) : (
-          <ResearchPage />
-        )}
+        {route.module === "overview" && <PlatformOverview onNavigate={navigateTarget} onRunDataSync={() => navigate("data", "master")} onRunKnowledgePipeline={() => navigate("data", "pipeline")} />}
+        {route.module === "data" && <DataConsolePage tab={route.section as DataView} setTab={(section) => navigate("data", section)} />}
+        {route.module === "ai" && <ModelLabPage tab={route.section as ModelHubTab} setTab={(section) => navigate("ai", section)} />}
+        {route.module === "research" && <InvestmentWorkbench tab={route.section as ResearchView} setTab={(section) => navigate("research", section)} />}
+        {route.module === "operations" && <OperationsCenter onNavigate={navigateTarget} />}
       </section>
     </main>
   );
@@ -166,17 +231,25 @@ function PageHeader({
   );
 }
 
-function DataConsolePage() {
-  const [tab, setTab] = useState<DataView>("sources");
+function DataConsolePage({ tab, setTab }: { tab: DataView; setTab: (tab: DataView) => void }) {
+  const [accessView, setAccessView] = useState<AccessView>("sources");
+  const [masterView, setMasterView] = useState<MasterView>("securities");
   const [sources, setSources] = useState<DataSource[]>([]);
   const [interfaces, setInterfaces] = useState<DataInterface[]>([]);
   const [symbols, setSymbols] = useState<StockSymbol[]>([]);
   const [logs, setLogs] = useState<SyncLog[]>([]);
+  const [assets, setAssets] = useState<DataAsset[]>([]);
+  const [agents, setAgents] = useState<AgentDefinition[]>([]);
+  const [knowledge, setKnowledge] = useState<KnowledgeBase[]>([]);
+  const [graphs, setGraphs] = useState<KnowledgeGraph[]>([]);
   const [market, setMarket] = useState("ALL");
   const [keyword, setKeyword] = useState("");
   const [notice, setNotice] = useState("");
   const [loading, setLoading] = useState(false);
   const [detailStock, setDetailStock] = useState<StockSymbol | null>(null);
+  const [selectedStocks, setSelectedStocks] = useState<Record<string, StockSymbol>>({});
+  const [batchGovernanceOpen, setBatchGovernanceOpen] = useState(false);
+  const pageSelectionRef = useRef<HTMLInputElement>(null);
   const [sourceTest, setSourceTest] = useState<{ source: DataSource; result?: { adapter_type: string; status: string; message: string; capabilities: string[] }; error?: string } | null>(null);
   const [interfaceDetail, setInterfaceDetail] = useState<DataInterface | null>(null);
   const categoryNames: Record<string, string> = { SYMBOL_MASTER: "股票主数据", KLINE: "历史量价", NEWS: "新闻", NOTICE: "公告", QUOTE: "实时行情", FINANCIAL: "财务数据", F10: "F10资料", COMPANY_DATA: "公司数据", MARKET_DATA: "市场数据", JUDICIAL_DISCLOSURE: "司法披露", BUSINESS_DISCLOSURE: "经营披露", SUPPLY_CHAIN_DISCLOSURE: "供应链披露" };
@@ -188,14 +261,24 @@ function DataConsolePage() {
   async function load() {
     setLoading(true);
     try {
-      const [s, i, l] = await Promise.all([
+      const results = await Promise.allSettled([
         api.listSources(),
         api.listInterfaces(),
         api.listSyncLogs(),
-      ]);
-      setSources(s);
-      setInterfaces(i);
-      setLogs(l);
+        api.listDataAssets(),
+        api.listAgents(),
+        api.listKnowledgeBases(),
+        api.listKnowledgeGraphs(),
+      ] as const);
+      if (results[0].status === "fulfilled") setSources(results[0].value);
+      if (results[1].status === "fulfilled") setInterfaces(results[1].value);
+      if (results[2].status === "fulfilled") setLogs(results[2].value);
+      if (results[3].status === "fulfilled") setAssets(results[3].value);
+      if (results[4].status === "fulfilled") setAgents(results[4].value);
+      if (results[5].status === "fulfilled") setKnowledge(results[5].value);
+      if (results[6].status === "fulfilled") setGraphs(results[6].value);
+      const failed = results.filter(result => result.status === "rejected");
+      setNotice(failed.length ? `${failed.length} 个资源模块暂时无法读取，其余功能已正常加载。` : "");
     } catch (e) {
       setNotice(e instanceof Error ? e.message : "数据中台连接失败");
     } finally {
@@ -205,6 +288,10 @@ function DataConsolePage() {
   useEffect(() => {
     void load();
   }, []);
+  function message(text: string) {
+    setNotice(text);
+    window.setTimeout(() => setNotice(""), 4000);
+  }
   async function loadSymbols(event?: FormEvent) {
     event?.preventDefault();
     try {
@@ -234,36 +321,78 @@ function DataConsolePage() {
       setNotice(e instanceof Error ? e.message : "同步失败");
     }
   }
+  const stockSelectionKey = (stock: Pick<StockSymbol, "market" | "symbol">) => `${stock.market}:${stock.symbol}`;
+  const selectedStockList = Object.values(selectedStocks);
+  const visibleSelectedCount = symbols.filter((stock) => !!selectedStocks[stockSelectionKey(stock)]).length;
+  const allVisibleSelected = !!symbols.length && visibleSelectedCount === symbols.length;
+  useEffect(() => {
+    if (pageSelectionRef.current) pageSelectionRef.current.indeterminate = visibleSelectedCount > 0 && !allVisibleSelected;
+  }, [allVisibleSelected, visibleSelectedCount]);
+  function toggleStockSelection(stock: StockSymbol) {
+    const key = stockSelectionKey(stock);
+    if (!selectedStocks[key] && selectedStockList.length >= 30) {
+      message("单次最多选择30只股票，请先取消部分选择。");
+      return;
+    }
+    setSelectedStocks((current) => {
+      const next = { ...current };
+      if (next[key]) delete next[key];
+      else next[key] = stock;
+      return next;
+    });
+  }
+  function toggleVisibleStocks() {
+    if (allVisibleSelected) {
+      const visibleKeys = new Set(symbols.map(stockSelectionKey));
+      setSelectedStocks((current) => Object.fromEntries(Object.entries(current).filter(([key]) => !visibleKeys.has(key))));
+      return;
+    }
+    const available = Math.max(0, 30 - selectedStockList.length);
+    const additions = symbols.filter((stock) => !selectedStocks[stockSelectionKey(stock)]).slice(0, available);
+    if (!additions.length) {
+      message("单次最多选择30只股票，请先取消部分选择。");
+      return;
+    }
+    setSelectedStocks((current) => {
+      const next = { ...current };
+      additions.forEach((stock) => { next[stockSelectionKey(stock)] = stock; });
+      return next;
+    });
+    if (additions.length < symbols.length - visibleSelectedCount) message("已达到单次30只上限，其余股票未选中。");
+  }
   return (
     <>
       <PageHeader
-        eyebrow="DATA PLATFORM / PHASE 01"
-        title="数据中台"
+        eyebrow="DATA & KNOWLEDGE"
+        title="数据与知识中心"
         detail={
-          loading ? "正在连接数据中台..." : notice || "本地数据服务已连接"
+          loading ? "正在加载数据与知识资产..." : notice || "数据接入、治理、湖仓与知识发布"
         }
       />
-      <div className="resource-tabs">
-        {(["sources", "interfaces", "universe", "foundation", "company_graph", "knowledge_network", "lakehouse"] as DataView[]).map((item) => (
+      <div className="resource-tabs platform-section-tabs">
+        {(["access", "master", "business", "lakehouse", "knowledge", "graphs", "pipeline"] as DataView[]).map((item) => (
           <button
             type="button"
             key={item}
             className={tab === item ? "active" : ""}
             onClick={() => setTab(item)}
           >
-            {item === "sources"
-              ? "数据源"
-              : item === "interfaces"
-                ? "接口目录"
-                : item === "universe"
-                  ? "股票主数据"
-                  : item === "foundation"
-                    ? "主体与关系"
-                    : item === "company_graph" ? "公司关系" : item === "knowledge_network" ? "知识图谱" : "湖仓目录"}
+            {item === "access" ? "数据接入"
+              : item === "master" ? "主体主数据"
+                : item === "business" ? "业务数据"
+                  : item === "lakehouse" ? "湖仓与资产"
+                    : item === "knowledge" ? "知识库"
+                      : item === "graphs" ? "知识图谱" : "知识生产"}
           </button>
         ))}
       </div>
-      {tab === "sources" && (
+      {tab === "access" && <div className="subsection-tabs" role="tablist" aria-label="数据接入分类">
+        {([['sources', '数据源'], ['interfaces', '接口能力'], ['sync', '同步任务']] as Array<[AccessView, string]>).map(([key, label]) => <button type="button" key={key} className={accessView === key ? "active" : ""} onClick={() => setAccessView(key)}>{label}</button>)}
+      </div>}
+      {tab === "master" && <div className="subsection-tabs" role="tablist" aria-label="主数据分类">
+        {([['securities', '股票与证券'], ['entities', '公司、主体与映射']] as Array<[MasterView, string]>).map(([key, label]) => <button type="button" key={key} className={masterView === key ? "active" : ""} onClick={() => setMasterView(key)}>{label}</button>)}
+      </div>}
+      {tab === "access" && accessView === "sources" && (
         <section className="panel">
           <div className="panel-heading">
             <div>
@@ -343,7 +472,7 @@ function DataConsolePage() {
           </div>
         </section>
       )}
-      {tab === "interfaces" && (
+      {tab === "access" && accessView === "interfaces" && (
         <section className="panel">
           <div className="panel-heading">
             <div>
@@ -380,20 +509,29 @@ function DataConsolePage() {
           </div>
         </section>
       )}
-      {tab === "universe" && (
+      {tab === "access" && accessView === "sync" && (
+        <section className="panel">
+          <div className="panel-heading"><div><p className="eyebrow">SYNC TASKS</p><h2>同步任务与运行记录</h2><p>查看股票主数据及业务接口最近的同步结果；知识更新请在“知识生产”中执行。</p></div><button type="button" onClick={() => void load()}>刷新</button></div>
+          <div className="table-wrap"><table><thead><tr><th>市场</th><th>接口</th><th>状态</th><th>开始时间</th><th>完成时间</th><th>说明</th></tr></thead><tbody>{logs.map(log => <tr key={log.id}><td>{marketLabel[log.market] || log.market}</td><td><code>{log.interface_code}</code></td><td>{log.status === "SUCCESS" ? "成功" : log.status === "RUNNING" ? "执行中" : "失败"}</td><td>{formatDate(log.started_at)}</td><td>{formatDate(log.completed_at)}</td><td>{log.error_message || `新增 ${log.inserted_count} · 更新 ${log.updated_count}`}</td></tr>)}{!logs.length && <tr><td colSpan={6} className="empty-state">暂无同步运行记录</td></tr>}</tbody></table></div>
+        </section>
+      )}
+      {tab === "master" && masterView === "securities" && (
         <section className="panel">
           <div className="panel-heading">
             <div>
               <p className="eyebrow">SECURITY UNIVERSE</p>
               <h2>股票主数据</h2>
+              <p>勾选股票后，可批量采集业务数据并执行湖仓、知识库和知识图谱治理。</p>
             </div>
-            <button
-              className="primary-button"
-              type="button"
-              onClick={() => void sync()}
-            >
-              同步主数据
-            </button>
+            <div className="master-heading-actions">
+              <button type="button" onClick={() => setBatchGovernanceOpen(true)}>最近批量任务</button>
+              <button type="button" disabled={!selectedStockList.length} onClick={() => setBatchGovernanceOpen(true)}>
+                批量采集与治理{selectedStockList.length ? `（${selectedStockList.length}）` : ""}
+              </button>
+              <button className="primary-button" type="button" onClick={() => void sync()}>
+                同步主数据
+              </button>
+            </div>
           </div>
           <form className="inline-form" onSubmit={loadSymbols}>
             <select
@@ -415,21 +553,44 @@ function DataConsolePage() {
             />
             <button type="submit">查询</button>
           </form>
+          <div className="master-batch-toolbar" role="status">
+            <div>
+              <strong>批量数据与知识治理</strong>
+              <span>当前已选 {selectedStockList.length} / 30 只；切换市场或查询条件不会清空已选股票。</span>
+            </div>
+            <div>
+              {selectedStockList.length > 0 && <button type="button" className="quiet-button" onClick={() => setSelectedStocks({})}>清空选择</button>}
+              <button className="primary-button" type="button" disabled={!selectedStockList.length} onClick={() => setBatchGovernanceOpen(true)}>
+                业务数据 · 湖仓 · 知识库 · 图谱
+              </button>
+            </div>
+          </div>
+          <div className="stock-pipeline-legend" aria-label="股票数据治理状态说明">
+            <span><i className="stock-pipeline-dot green" />已完成</span>
+            <span><i className="stock-pipeline-dot yellow" />部分完成 / 处理中</span>
+            <span><i className="stock-pipeline-dot gray" />未开始</span>
+            <span><i className="stock-pipeline-dot red" />失败</span>
+          </div>
           <div className="table-wrap">
-            <table>
+            <table className="master-security-table">
               <thead>
                 <tr>
+                  <th className="selection-cell"><input ref={pageSelectionRef} type="checkbox" checked={allVisibleSelected} aria-label="选择当前页股票" onChange={toggleVisibleStocks} /></th>
                   <th>市场</th>
                   <th>代码</th>
                   <th>名称</th>
                   <th>交易所</th>
                   <th>上市日期</th>
                   <th>状态</th>
+                  <th>数据采集</th>
+                  <th>知识库</th>
+                  <th>知识图谱</th>
                 </tr>
               </thead>
               <tbody>
                 {symbols.map((stock) => (
-                  <tr key={`${stock.market}-${stock.symbol}`}>
+                  <tr key={`${stock.market}-${stock.symbol}`} className={selectedStocks[stockSelectionKey(stock)] ? "selected-row" : ""}>
+                    <td className="selection-cell"><input type="checkbox" checked={!!selectedStocks[stockSelectionKey(stock)]} aria-label={`选择${stock.name}`} onChange={() => toggleStockSelection(stock)} /></td>
                     <td>{marketLabel[stock.market] || stock.market}</td>
                     <td>
                       <button
@@ -453,11 +614,14 @@ function DataConsolePage() {
                     <td>{stock.exchange}</td>
                     <td>{stock.list_date || "--"}</td>
                     <td>{stock.status}</td>
+                    <td><StockPipelineStatusTag stock={stock} kind="data_collection" /></td>
+                    <td><StockPipelineStatusTag stock={stock} kind="knowledge_base" /></td>
+                    <td><StockPipelineStatusTag stock={stock} kind="knowledge_graph" /></td>
                   </tr>
                 ))}
                 {!symbols.length && (
                   <tr>
-                    <td colSpan={6} className="empty-state">
+                    <td colSpan={10} className="empty-state">
                       请输入条件查询股票主数据
                     </td>
                   </tr>
@@ -465,29 +629,14 @@ function DataConsolePage() {
               </tbody>
             </table>
           </div>
-          <div className="log-list">
-            {logs.slice(0, 5).map((log) => (
-              <div className="log-row" key={log.id}>
-                <span
-                  className={
-                    log.status === "SUCCESS"
-                      ? "log-dot success"
-                      : "log-dot failed"
-                  }
-                />
-                <span>
-                  {log.market} / {log.interface_code}
-                </span>
-                <span>{formatDate(log.completed_at || log.started_at)}</span>
-              </div>
-            ))}
-          </div>
         </section>
       )}
-      {tab === "foundation" && <DataFoundation />}
-      {tab === "company_graph" && <CompanyGraphWorkbench />}
-      {tab === "knowledge_network" && <KnowledgeGraphExplorer />}
+      {tab === "master" && masterView === "entities" && <DataFoundation />}
+      {tab === "business" && <div className="resource-stack"><BusinessDataGuide assets={assets} /><GovernedAssetTab assets={assets} agents={agents} reload={load} notify={message} /></div>}
       {tab === "lakehouse" && <LakehousePanel />}
+      {tab === "knowledge" && <GovernedKnowledgeTab mode="knowledge" knowledge={knowledge} graphs={graphs} assets={assets} agents={agents} reload={load} notify={message} />}
+      {tab === "graphs" && <div className="resource-stack"><GovernedKnowledgeTab mode="graphs" knowledge={knowledge} graphs={graphs} assets={assets} agents={agents} reload={load} notify={message} /><section className="graph-view-note"><div><strong>统一实时关系视图</strong><p>以下视图直接读取股票、公司、分类和动态事实表；上方清单则是知识库中的物化图谱版本，两者用途和更新时间不同。</p></div><span>实时查询</span></section><KnowledgeGraphExplorer /></div>}
+      {tab === "pipeline" && <KnowledgePipelinePanel onNotify={message} onProjectionReady={() => void load()} />}
       {sourceTest && <ResourceDialog eyebrow="数据源测试" title={`连接测试 · ${sourceTest.source.source_name}`} onClose={() => setSourceTest(null)} compact><div className="model-test-result"><strong>{sourceTest.error ? "测试失败" : sourceTest.result?.status === "CONFIGURED" ? "连接配置可用" : sourceTest.result?.status === "PENDING" ? "等待正式接入" : "测试完成"}</strong><p>{sourceTest.error || sourceTest.result?.message}</p>{sourceTest.result && <><p>适配器：{adapterNames[sourceTest.result.adapter_type] || sourceTest.result.adapter_type}</p><p>支持能力：{sourceTest.result.capabilities.map(item => categoryNames[item] || item).join("、") || "未声明"}</p></>}</div></ResourceDialog>}
       {interfaceDetail && <ResourceDialog eyebrow="接口详情" title={interfaceName(interfaceDetail)} onClose={() => setInterfaceDetail(null)}><dl className="resource-detail-list"><dt>接口编码</dt><dd><code>{interfaceDetail.interface_code}</code></dd><dt>数据分类</dt><dd>{categoryNames[interfaceDetail.data_category] || interfaceDetail.data_category}</dd><dt>请求模式</dt><dd>{modeNames[interfaceDetail.request_mode] || interfaceDetail.request_mode}</dd><dt>适用市场</dt><dd>{interfaceDetail.supported_markets.map(market => marketNames[market] || market).join("、")}</dd><dt>适配方法</dt><dd><code>{interfaceDetail.adapter_method}</code></dd><dt>说明</dt><dd>{interfaceDetail.description || "暂无说明"}</dd><dt>输入结构</dt><dd><pre>{JSON.stringify(interfaceDetail.input_schema || {}, null, 2)}</pre></dd><dt>输出结构</dt><dd><pre>{JSON.stringify(interfaceDetail.output_schema || {}, null, 2)}</pre></dd></dl></ResourceDialog>}
       {detailStock && (
@@ -496,8 +645,34 @@ function DataConsolePage() {
           onClose={() => setDetailStock(null)}
         />
       )}
+      <BatchStockGovernanceDialog
+        open={batchGovernanceOpen}
+        stocks={selectedStockList}
+        onClose={() => setBatchGovernanceOpen(false)}
+        onNotify={message}
+        onCompleted={() => void load()}
+      />
     </>
   );
+}
+
+function BusinessDataGuide({ assets }: { assets: DataAsset[] }) {
+  const domains = [
+    { label: "行情与量价", description: "实时行情、历史K线、成交量及异动", keys: ["quote", "kline", "market"] },
+    { label: "财务与估值", description: "财务报告、标准化指标和估值观测", keys: ["financial"] },
+    { label: "股东与股权行为", description: "股东结构、增减持、回购和权益变动", keys: ["holder", "shareholder", "equity"] },
+    { label: "新闻、公告与F10", description: "新闻、公告、财报原文和F10资料", keys: ["news", "notice", "f10", "research"] },
+    { label: "供应链与经营往来", description: "供应关系、客户、供应商、合同与经营事项", keys: ["supply", "business", "context"] },
+    { label: "司法事项", description: "诉讼、执行、处罚及相关证据", keys: ["legal", "judicial"] },
+  ];
+  return <section className="panel business-domain-panel">
+    <div className="panel-heading"><div><p className="eyebrow">BUSINESS DATA</p><h2>业务数据目录</h2><p>按业务领域查看覆盖范围，底层表名和技术字段保留在资产详情中。</p></div><span className="domain-total">{assets.length} 项数据资产</span></div>
+    <div className="business-domain-grid">{domains.map(domain => {
+      const matches = assets.filter(asset => domain.keys.some(key => `${asset.asset_code} ${asset.table_name}`.toLowerCase().includes(key)));
+      const rows = matches.reduce((sum, asset) => sum + (asset.row_count || 0), 0);
+      return <article key={domain.label}><strong>{domain.label}</strong><p>{domain.description}</p><small>{matches.length} 项资产 · {rows.toLocaleString()} 条记录</small></article>;
+    })}</div>
+  </section>;
 }
 
 function LakehousePanel() {
@@ -648,8 +823,7 @@ const emptyAgent: AgentForm = {
   data_source_ids: [],
 };
 
-function ModelLabPage() {
-  const [tab, setTab] = useState<ModelHubTab>("models");
+function ModelLabPage({ tab, setTab }: { tab: ModelHubTab; setTab: (tab: ModelHubTab) => void }) {
   const [providers, setProviders] = useState<ModelProvider[]>([]);
   const [sources, setSources] = useState<DataSource[]>([]);
   const [instances, setInstances] = useState<ModelInstance[]>([]);
@@ -918,19 +1092,19 @@ function message(text: string) {
       setEditingSkill(emptySkill);
       setSkillDialogOpen(false);
       await load();
-      message("Skill 已保存");
+      message("技能已保存");
     } catch (e) {
-      message(e instanceof Error ? e.message : "Skill 保存失败");
+      message(e instanceof Error ? e.message : "技能保存失败");
     }
   }
   async function deleteSkill(item: ModelSkill) {
-    if (!window.confirm(`删除 Skill ${item.skill_name}？`)) return;
+    if (!window.confirm(`删除技能 ${item.skill_name}？`)) return;
     try {
       await api.deleteModelSkill(item.id);
       await load();
-      message("Skill 已删除");
+      message("技能已删除");
     } catch (e) {
-      message(e instanceof Error ? e.message : "Skill 可能正在被智能体引用");
+      message(e instanceof Error ? e.message : "技能可能正在被智能体引用");
     }
   }
   async function saveAgent(event: FormEvent) {
@@ -992,21 +1166,12 @@ function message(text: string) {
   return (
     <>
       <PageHeader
-        eyebrow="MODEL LAB / PHASE 02"
-        title="模型实验室"
-        detail={notice || "模型、智能体与知识资产"}
+        eyebrow="AI CAPABILITY CENTER"
+        title="AI能力中心"
+        detail={notice || "模型提供推理，技能沉淀方法，智能体负责组合与执行"}
       />
       <div className="resource-tabs">
-        {(
-          [
-            "models",
-            "agents",
-            "skills",
-            "assets",
-            "knowledge",
-            "logs",
-          ] as ModelHubTab[]
-        ).map((item) => (
+        {(["models", "agents", "skills", "evaluation"] as ModelHubTab[]).map((item) => (
           <button
             type="button"
             key={item}
@@ -1018,12 +1183,8 @@ function message(text: string) {
               : item === "agents"
                 ? "智能体"
                 : item === "skills"
-                  ? "Skills"
-                  : item === "assets"
-                    ? "数据资产"
-                    : item === "knowledge"
-                      ? "知识库"
-                      : "调试与日志"}
+                  ? "技能库"
+                  : "运行与评测"}
           </button>
         ))}
       </div>
@@ -1180,7 +1341,7 @@ function message(text: string) {
               if (approve) await api.approveSkillDraft(draftId);
               else await api.rejectSkillDraft(draftId);
               await load();
-              message(approve ? "已批准并生成新的 Skill 版本" : "已驳回优化建议");
+              message(approve ? "已批准并生成新的技能版本" : "已驳回优化建议");
             } catch (error) {
               message(error instanceof Error ? error.message : "优化建议审核失败");
             }
@@ -1192,9 +1353,9 @@ function message(text: string) {
               setEditingSkill({ ...editingSkill, instructions: updated.instructions, version: updated.version, expected_content_hash: updated.content_hash || undefined });
               setSkillRevisions(await api.listSkillRevisions(editingSkill.id));
               await load();
-              message("已回滚并生成新的 Skill 版本");
+              message("已回滚并生成新的技能版本");
             } catch (error) {
-              message(error instanceof Error ? error.message : "Skill 回滚失败");
+              message(error instanceof Error ? error.message : "技能回滚失败");
             }
           }}
           onEdit={async (item) => {
@@ -1218,25 +1379,8 @@ function message(text: string) {
           onDelete={deleteSkill}
         />
       )}
-      {tab === "assets" && (
-        <GovernedAssetTab
-          assets={assets}
-          agents={agents}
-          reload={load}
-          notify={message}
-        />
-      )}
-      {tab === "knowledge" && (
-        <GovernedKnowledgeTab
-          knowledge={knowledge}
-          graphs={graphs}
-          assets={assets}
-          agents={agents}
-          reload={load}
-          notify={message}
-        />
-      )}
-      {tab === "logs" && (
+      {tab === "evaluation" && <div className="resource-stack">
+        <AiWorkflowGuide agents={agents} skills={skills} knowledge={knowledge} />
         <LogsTab
           logs={logs}
           instances={instances}
@@ -1246,7 +1390,7 @@ function message(text: string) {
           result={chatResult}
           onSend={sendChat}
         />
-      )}
+      </div>}
       {testDialog && (
         <ResourceDialog
           eyebrow="MODEL TEST"
@@ -1264,6 +1408,21 @@ function message(text: string) {
       )}
     </>
   );
+}
+
+function AiWorkflowGuide({ agents, skills, knowledge }: { agents: AgentDefinition[]; skills: ModelSkill[]; knowledge: KnowledgeBase[] }) {
+  const workflows = [
+    { name: "数据治理", detail: "数据质量检查、标准化、去重和资产发布", code: "DATA_GOVERNANCE" },
+    { name: "知识生产", detail: "文档切片、知识库版本、图谱投影和证据审核", code: "KNOWLEDGE" },
+    { name: "选股分析", detail: "规则预选、GraphRAG分析、人工复选和预测固化", code: "SELECTION" },
+    { name: "跟踪与复盘", detail: "交易日跟踪、误差归因、技能回归和修复建议", code: "RETROSPECTIVE" },
+  ];
+  return <section className="panel ai-workflow-panel">
+    <div className="panel-heading"><div><p className="eyebrow">AI ORCHESTRATION</p><h2>能力组合与工作流</h2><p>模型提供推理能力，技能固化专业方法，智能体绑定数据和知识，工作流负责串联业务过程。</p></div></div>
+    <div className="ai-composition-flow"><span>模型路由</span><span>技能库</span><span>知识库 / 图谱</span><strong>智能体</strong><strong>业务工作流</strong></div>
+    <div className="ai-workflow-grid">{workflows.map(item => <article key={item.code}><strong>{item.name}</strong><p>{item.detail}</p><small>{agents.filter(agent => `${agent.agent_code} ${agent.display_name}`.toUpperCase().includes(item.code)).length} 个相关智能体</small></article>)}</div>
+    <p className="ai-workflow-summary">当前已登记 {agents.length} 个智能体、{skills.length} 个技能、{knowledge.length} 个知识库。运行日志必须保留模型、技能、知识及数据版本。</p>
+  </section>;
 }
 
 function ResourceDialog({
@@ -2167,7 +2326,7 @@ function AgentTab({
                     </td>
                     <td>{item.model_instance_code || "自动路由"}</td>
                     <td>
-                      {item.skill_ids.length} Skill / {" "}
+                      {item.skill_ids.length} 技能 / {" "}
                       {item.knowledge_base_ids.length} 知识库 / {" "}
                       {item.data_asset_ids.length} 数据资产
                     </td>
@@ -2325,7 +2484,7 @@ function AgentTab({
                   )}
                 </label>
                 <label>
-                  Skills
+                  技能
                   {skills.length ? (
                     skills.map((item) => (
                       <span key={item.id}>
@@ -2338,7 +2497,7 @@ function AgentTab({
                       </span>
                     ))
                   ) : (
-                    <span>暂无 Skill</span>
+                    <span>暂无技能</span>
                   )}
                 </label>
                 <label>
@@ -2443,26 +2602,26 @@ function SkillTab({
         <div className="panel-heading">
           <div>
             <p className="eyebrow">MARKDOWN SKILLS</p>
-            <h2>Skill 清单</h2>
+            <h2>技能清单</h2>
             <div className="auto-code-note">
               编码可留空由系统自动生成，格式为 SKILL_0001；保存后同步到 backend/skill_docs/*.SKILL.md。
             </div>
           </div>
           <div className="panel-actions">
             <button className="primary-button" type="button" onClick={onOpen}>
-              新增 Skill
+              新增技能
             </button>
           </div>
         </div>
         <div className="resource-list-header">
-          <h3>Skill 列表</h3>
-          <span>{skills.length} 个 Skill</span>
+          <h3>技能列表</h3>
+          <span>{skills.length} 个技能</span>
         </div>
         <div className="table-wrap resource-list-wrap">
           <table>
             <thead>
               <tr>
-                <th>Skill</th>
+                <th>技能</th>
                 <th>类型</th>
                 <th>版本</th>
                 <th>格式</th>
@@ -2497,7 +2656,7 @@ function SkillTab({
               ) : (
                 <tr>
                   <td className="empty-table-cell" colSpan={6}>
-                    暂无 Skill，点击“新增 Skill”创建。
+                    暂无技能，点击“新增技能”创建。
                   </td>
                 </tr>
               )}
@@ -2508,12 +2667,12 @@ function SkillTab({
 
       {drafts.length > 0 && (
         <section className="panel resource-management-panel">
-          <div className="panel-heading"><div><p className="eyebrow">META REVIEW</p><h2>待审核 Skill 优化建议</h2></div></div>
+          <div className="panel-heading"><div><p className="eyebrow">META REVIEW</p><h2>待审核技能优化建议</h2></div></div>
           {drafts.map((draft) => {
             const skill = skills.find((item) => item.id === draft.skill_id);
             return (
               <div className="resource-form-section" key={draft.id}>
-                <div className="resource-section-title">{skill?.skill_name || `Skill #${draft.skill_id}`} · 基于版本 {draft.base_skill_version}</div>
+                <div className="resource-section-title">{skill?.skill_name || `技能 #${draft.skill_id}`} · 基于版本 {draft.base_skill_version}</div>
                 <p>{draft.rationale}</p>
                 <p>关联失败预测：{draft.prediction_ids.join("、")}</p>
                 <details><summary>查看建议 Prompt</summary><pre>{draft.proposed_instructions}</pre></details>
@@ -2530,16 +2689,16 @@ function SkillTab({
       {dialogOpen && (
         <ResourceDialog
           eyebrow="SKILL FORM"
-          title={value.id ? "编辑 Skill" : "新增 Skill"}
+          title={value.id ? "编辑技能" : "新增技能"}
           onClose={onClose}
         >
           <form className="resource-editor-form" onSubmit={onSave}>
             <div className="resource-form-section">
-              <div className="resource-section-title">Skill 内容</div>
+              <div className="resource-section-title">技能内容</div>
               <div className="field-grid">
                 <input
                   className={inputClass}
-                  placeholder="Skill 编码（可留空自动生成）"
+                  placeholder="技能编码（可留空自动生成）"
                   value={value.skill_code || ""}
                   onChange={(e) =>
                     setValue({ ...value, skill_code: e.target.value })
@@ -2547,7 +2706,7 @@ function SkillTab({
                 />
                 <input
                   className={inputClass}
-                  placeholder="Skill 名称"
+                  placeholder="技能名称"
                   value={value.skill_name}
                   onChange={(e) =>
                     setValue({ ...value, skill_name: e.target.value })
@@ -2579,7 +2738,7 @@ function SkillTab({
                       setValue({ ...value, enabled: e.target.checked })
                     }
                   />
-                  启用 Skill
+                  启用技能
                 </label>
                 <textarea
                   className="field-span-2"
@@ -2625,7 +2784,7 @@ function SkillTab({
                 取消
               </button>
               <button className="primary-button" type="submit">
-                {value.id ? "更新 Skill" : "创建 Skill"}
+                {value.id ? "更新技能" : "创建技能"}
               </button>
             </div>
           </form>
@@ -2754,7 +2913,21 @@ function formatSignedPercent(value?: number | string | null) {
   return `${numeric > 0 ? "+" : ""}${numeric.toFixed(2)}%`;
 }
 
-function AutoWatchPage() {
+function InvestmentWorkbench({ tab, setTab }: { tab: ResearchView; setTab: (tab: ResearchView) => void }) {
+  return <>
+    <PageHeader eyebrow="INVESTMENT RESEARCH" title="投研工作台" detail="股票与公司对象分析 · 知识选股 · 跟踪复盘 · 研究问答" />
+    <div className="resource-tabs platform-section-tabs">
+      <button type="button" className={tab === "objects" ? "active" : ""} onClick={() => setTab("objects")}>股票与公司工作台</button>
+      <button type="button" className={tab === "selection" ? "active" : ""} onClick={() => setTab("selection")}>选股、跟踪与复盘</button>
+      <button type="button" className={tab === "research" ? "active" : ""} onClick={() => setTab("research")}>研究问答与研报</button>
+    </div>
+    {tab === "objects" && <CompanyGraphWorkbench />}
+    {tab === "selection" && <AutoWatchPage embedded />}
+    {tab === "research" && <ResearchPage embedded />}
+  </>;
+}
+
+function AutoWatchPage({ embedded = false }: { embedded?: boolean } = {}) {
   const [tab, setTab] = useState<"selection" | "tracking" | "watch" | "ipo">("selection");
   const [items, setItems] = useState<WatchlistItem[]>([]);
   const [ipo, setIpo] = useState<IpoCalendarResponse | null>(null);
@@ -2810,11 +2983,11 @@ function AutoWatchPage() {
   }
   return (
     <>
-      <PageHeader
+      {!embedded && <PageHeader
         eyebrow="SELECTION & MONITORING"
         title="选股盯盘"
         detail={notice || "知识选股 · 人工复选 · 预测跟踪"}
-      />
+      />}
       <div className="resource-tabs">
         <button type="button" className={tab === "selection" ? "active" : ""} onClick={() => setTab("selection")}>选股与复选</button>
         <button type="button" className={tab === "tracking" ? "active" : ""} onClick={() => setTab("tracking")}>跟踪与复盘</button>
@@ -3083,7 +3256,7 @@ function renderResearchMarkdown(text: string) {
   return nodes;
 }
 
-function ResearchPage() {
+function ResearchPage({ embedded = false }: { embedded?: boolean } = {}) {
   const [tab, setTab] = useState<ResearchTab>("chat");
   const [market, setMarket] = useState("CN_A");
   const [query, setQuery] = useState("");
@@ -3231,7 +3404,7 @@ function ResearchPage() {
   }
   return (
     <>
-      <PageHeader
+      {!embedded && <PageHeader
         eyebrow="AI RESEARCH"
         title="研究中心"
         detail={
@@ -3241,7 +3414,7 @@ function ResearchPage() {
               ? "智能体正在回答..."
               : "默认对话页签；研究页签用于生成、保存和复盘研报"
         }
-      />
+      />}
       <div className="resource-tabs">
         <button type="button" className={tab === "chat" ? "active" : ""} onClick={() => setTab("chat")}>
           对话

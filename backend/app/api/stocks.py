@@ -37,6 +37,7 @@ from app.models.market_data import (
     DataSource,
     DataSyncLog,
     StockFinancialReport,
+    StockF10Cache,
     StockKline,
     StockNews,
     StockRealtimeQuote,
@@ -44,6 +45,8 @@ from app.models.market_data import (
     StockSymbol,
     WatchlistItem,
 )
+from app.models.ai_hub import KnowledgeDocument, KnowledgeEntity, KnowledgeGraph, KnowledgeRelation
+from app.models.lakehouse import DocumentChunkVersion
 from app.schemas.market_data import (
     DataFetchLogRead,
     DataSyncLogRead,
@@ -318,8 +321,308 @@ def _display_stock_name(stock: StockSymbol, quote: Any | None = None) -> str:
     return _shorten_hk_chinese_name(chinese_name) or _shorten_hk_english_name(english_name) or base_name
 
 
-def _stock_symbol_read(stock: StockSymbol, quote: Any | None = None) -> dict[str, Any]:
+def _pipeline_coverage_status(completed: int, expected: int, *, last_at: Any = None,
+                              detail: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Return the small, presentation-ready coverage contract for one stock.
+
+    Coverage is deliberately derived from persisted rows, rather than from a
+    job's last message.  A retry, restart, or manually imported record thus
+    produces the same status.  The endpoint remains truthful when only some
+    source types have been collected.
+    """
+    completed = max(0, int(completed))
+    expected = max(0, int(expected))
+    if completed <= 0:
+        status, label, color = "NOT_STARTED", "未开始", "gray"
+    elif expected > 0 and completed >= expected:
+        status, label, color = "COMPLETED", "已完成", "green"
+    else:
+        status, label, color = "PARTIAL", "部分完成", "yellow"
     return {
+        "status": status,
+        "label": label,
+        "color": color,
+        "color_code": color,
+        "completed_count": completed,
+        "expected_count": expected,
+        "last_at": last_at,
+        "detail": detail or {},
+    }
+
+
+def _stock_pipeline_statuses(db: Session, stocks: list[StockSymbol]) -> dict[tuple[str, str], dict[str, Any]]:
+    """Build pipeline status for a page of securities in bounded queries.
+
+    The stock-master page renders a status badge for every row.  The original
+    implementation called the single-stock implementation once per row,
+    which meant roughly a dozen SQL statements per stock (and made a page of
+    30 stocks noticeably slow).  This function deliberately keeps the exact
+    same persisted-row semantics, but aggregates each stage by ``market`` and
+    ``symbol`` and performs one query per source/table.  It is also used by
+    the single-stock endpoint through :func:`_stock_pipeline_status`, so the
+    two views cannot drift apart.
+    """
+    seen: set[tuple[str, str]] = set()
+    for stock in stocks:
+        key = (stock.market, stock.symbol)
+        if key not in seen:
+            seen.add(key)
+    keys = list(seen)
+    if not keys:
+        return {}
+
+    def pair_filter(model: Any):
+        # Group symbols by market instead of using a broad
+        # ``market IN (...) AND symbol IN (...)`` predicate (which includes a
+        # Cartesian product).  Grouping also uses roughly one bind variable
+        # per stock, so the documented page_size=500 remains below SQLite's
+        # default 999-variable limit.
+        by_market: dict[str, set[str]] = {}
+        for market, symbol in keys:
+            by_market.setdefault(market, set()).add(symbol)
+        return or_(*[
+            (model.market == market) & model.symbol.in_(sorted(symbols))
+            for market, symbols in by_market.items()
+        ])
+
+    business_models: dict[str, Any] = {
+        "QUOTE": StockRealtimeQuote,
+        "KLINE": StockKline,
+        "FINANCIAL": StockFinancialReport,
+        "NEWS": StockNews,
+        "NOTICE": StockNotice,
+        "F10": StockF10Cache,
+    }
+    business_counts: dict[tuple[str, str], dict[str, int]] = {
+        key: {name: 0 for name in business_models} for key in keys
+    }
+    business_last: dict[tuple[str, str], list[Any]] = {key: [] for key in keys}
+    for name, model in business_models.items():
+        if name == "F10":
+            # F10 cache rows can exist with an empty payload when an upstream
+            # section is unavailable.  Preserve the single-stock behaviour by
+            # counting only rows carrying a payload.
+            rows = db.execute(
+                select(model.market, model.symbol, model.payload_json, model.fetched_at)
+                .where(pair_filter(model))
+            ).all()
+            for market, symbol, payload, fetched_at in rows:
+                key = (market, symbol)
+                if payload:
+                    business_counts[key][name] += 1
+                    if fetched_at is not None:
+                        business_last[key].append(fetched_at)
+            continue
+
+        rows = db.execute(
+            select(
+                model.market,
+                model.symbol,
+                func.count().label("row_count"),
+                func.max(model.fetched_at).label("last_at"),
+            )
+            .where(pair_filter(model))
+            .group_by(model.market, model.symbol)
+        ).all()
+        for market, symbol, row_count, last_at in rows:
+            key = (market, symbol)
+            business_counts[key][name] = int(row_count or 0)
+            if last_at is not None:
+                business_last[key].append(last_at)
+
+    # Documents and chunks are queried in bulk.  ``document_id`` is a string
+    # in the lakehouse table while KnowledgeDocument.id is an integer, hence
+    # the explicit conversion retained from the original implementation.
+    document_rows = db.execute(
+        select(
+            KnowledgeDocument.id,
+            KnowledgeDocument.market,
+            KnowledgeDocument.symbol,
+            KnowledgeDocument.updated_at,
+            KnowledgeDocument.graph_id,
+        ).where(pair_filter(KnowledgeDocument))
+    ).all()
+    documents_by_key: dict[tuple[str, str], list[Any]] = {key: [] for key in keys}
+    document_ids: list[str] = []
+    for document_id, market, symbol, updated_at, graph_id in document_rows:
+        key = (market, symbol)
+        row = (str(document_id), updated_at, graph_id)
+        documents_by_key.setdefault(key, []).append(row)
+        document_ids.append(str(document_id))
+
+    chunk_counts: dict[str, int] = {}
+    if document_ids:
+        # A source may produce many documents per stock.  Chunk this IN list
+        # as well, otherwise a large page could exceed SQLite's bind limit.
+        for offset in range(0, len(document_ids), 500):
+            document_batch = document_ids[offset : offset + 500]
+            chunk_rows = db.execute(
+                select(DocumentChunkVersion.document_id, func.count().label("chunk_count"))
+                .where(DocumentChunkVersion.document_id.in_(document_batch))
+                .group_by(DocumentChunkVersion.document_id)
+            ).all()
+            chunk_counts.update({str(document_id): int(count or 0) for document_id, count in chunk_rows})
+
+    graph_ids_by_key: dict[tuple[str, str], set[int]] = {key: set() for key in keys}
+    kb_parts: dict[tuple[str, str], dict[str, Any]] = {}
+    for key in keys:
+        rows = documents_by_key.get(key, [])
+        ids = [document_id for document_id, _updated_at, _graph_id in rows]
+        documents_with_chunks = sum(1 for document_id in ids if chunk_counts.get(document_id, 0) > 0)
+        kb_parts[key] = {
+            "document_count": len(rows),
+            "chunk_count": sum(chunk_counts.get(document_id, 0) for document_id in ids),
+            "documents_with_chunks": documents_with_chunks,
+            "last_at": max((updated_at for _document_id, updated_at, _graph_id in rows if updated_at is not None), default=None),
+        }
+        graph_ids_by_key[key] = {
+            int(graph_id) for _document_id, _updated_at, graph_id in rows if graph_id is not None
+        }
+
+    all_graph_ids = sorted({graph_id for graph_ids in graph_ids_by_key.values() for graph_id in graph_ids})
+    graph_rows: list[Any] = []
+    if all_graph_ids:
+        for offset in range(0, len(all_graph_ids), 500):
+            graph_rows.extend(db.execute(
+                select(
+                    KnowledgeGraph.id,
+                    KnowledgeGraph.governance_status,
+                    KnowledgeGraph.created_at,
+                    KnowledgeGraph.last_governed_at,
+                ).where(KnowledgeGraph.id.in_(all_graph_ids[offset : offset + 500]))
+            ).all())
+    graph_info = {
+        int(graph_id): (governance_status, created_at, last_governed_at)
+        for graph_id, governance_status, created_at, last_governed_at in graph_rows
+    }
+
+    # Existing semantics use ``entity_key LIKE '%:<market>:<symbol>'``.  A
+    # suffix check is the equivalent operation once the relevant graph rows
+    # have been restricted above, and avoids one entity query per stock.
+    stock_entity_ids_by_key: dict[tuple[str, str], set[int]] = {key: set() for key in keys}
+    entity_stock_key: dict[int, tuple[str, str]] = {}
+    if all_graph_ids:
+        entity_rows: list[Any] = []
+        for offset in range(0, len(all_graph_ids), 500):
+            entity_rows.extend(db.execute(
+                select(KnowledgeEntity.id, KnowledgeEntity.entity_key, KnowledgeEntity.graph_id)
+                .where(
+                    KnowledgeEntity.graph_id.in_(all_graph_ids[offset : offset + 500]),
+                    KnowledgeEntity.entity_type == "STOCK",
+                )
+            ).all())
+        for entity_id, entity_key, graph_id in entity_rows:
+            text_key = str(entity_key or "")
+            # Entity keys are namespaced strings ending in ``:<market>:<code>``.
+            # Parse that suffix once rather than scanning every page symbol for
+            # every entity (the previous implementation's LIKE predicate had
+            # the same suffix semantics).
+            suffix_parts = text_key.rsplit(":", 2)
+            matched_key = (
+                (suffix_parts[1], suffix_parts[2])
+                if len(suffix_parts) == 3
+                else None
+            )
+            if matched_key not in stock_entity_ids_by_key:
+                matched_key = None
+            if matched_key is None or int(graph_id) not in graph_ids_by_key[matched_key]:
+                continue
+            stock_entity_ids_by_key[matched_key].add(int(entity_id))
+            entity_stock_key[int(entity_id)] = matched_key
+
+    relation_counts: dict[tuple[str, str], int] = {key: 0 for key in keys}
+    all_entity_ids = sorted(entity_stock_key)
+    if all_graph_ids and all_entity_ids:
+        relation_rows_by_id: dict[int, tuple[int, int]] = {}
+        for graph_offset in range(0, len(all_graph_ids), 500):
+            graph_batch = all_graph_ids[graph_offset : graph_offset + 500]
+            for entity_offset in range(0, len(all_entity_ids), 500):
+                entity_batch = all_entity_ids[entity_offset : entity_offset + 500]
+                for relation_id, subject_id, object_id in db.execute(
+                    select(KnowledgeRelation.id, KnowledgeRelation.subject_entity_id, KnowledgeRelation.object_entity_id)
+                    .where(
+                        KnowledgeRelation.graph_id.in_(graph_batch),
+                        or_(
+                            KnowledgeRelation.subject_entity_id.in_(entity_batch),
+                            KnowledgeRelation.object_entity_id.in_(entity_batch),
+                        ),
+                    )
+                ).all():
+                    # A relation whose endpoints fall in two entity batches
+                    # is returned by both queries; deduplicate by its primary
+                    # key before applying per-stock counts.
+                    relation_rows_by_id[int(relation_id)] = (int(subject_id), int(object_id))
+        for subject_id, object_id in relation_rows_by_id.values():
+            # A self-loop should count once for that stock, matching SQL
+            # COUNT(*) rather than incrementing twice for subject/object.
+            touched = {entity_stock_key.get(int(subject_id)), entity_stock_key.get(int(object_id))}
+            touched.discard(None)
+            for key in touched:
+                relation_counts[key] += 1
+
+    statuses: dict[tuple[str, str], dict[str, Any]] = {}
+    for key in keys:
+        counts = business_counts[key]
+        statuses[key] = {
+            "data_collection": _pipeline_coverage_status(
+                sum(1 for count in counts.values() if count > 0),
+                len(business_models),
+                last_at=max(business_last[key]) if business_last[key] else None,
+                detail=counts,
+            ),
+            "knowledge_base": _pipeline_coverage_status(
+                (1 if kb_parts[key]["document_count"] else 0)
+                + (1 if kb_parts[key]["document_count"] > 0 and kb_parts[key]["documents_with_chunks"] == kb_parts[key]["document_count"] else 0),
+                2,
+                last_at=kb_parts[key]["last_at"],
+                detail={
+                    "document_count": kb_parts[key]["document_count"],
+                    "chunk_count": kb_parts[key]["chunk_count"],
+                    "documents_with_chunks": kb_parts[key]["documents_with_chunks"],
+                },
+            ),
+        }
+        graph_ids = graph_ids_by_key[key]
+        entity_count = len(stock_entity_ids_by_key[key])
+        relation_count = relation_counts[key]
+        governed_graph_count = sum(
+            1 for graph_id in graph_ids
+            if graph_info.get(graph_id, (None, None, None))[0] in ("GOVERNED", "LOCKED")
+        )
+        graph_last = max(
+            (
+                value
+                for graph_id in graph_ids
+                for value in graph_info.get(graph_id, (None, None, None))[1:]
+                if value is not None
+            ),
+            default=None,
+        )
+        statuses[key]["knowledge_graph"] = _pipeline_coverage_status(
+            (1 if graph_ids else 0) + (1 if entity_count > 0 else 0) + (1 if relation_count > 0 else 0),
+            3,
+            last_at=graph_last,
+            detail={
+                "graph_count": len(graph_ids),
+                "entity_count": entity_count,
+                "relation_count": relation_count,
+                "governed_graph_count": governed_graph_count,
+            },
+        )
+    return statuses
+
+
+def _stock_pipeline_status(db: Session, stock: StockSymbol) -> dict[str, Any]:
+    """Build data/KB/graph status for one security.
+
+    Kept as a compatibility wrapper for detail endpoints and existing callers;
+    the paged master-data endpoint uses the batch implementation directly.
+    """
+    return _stock_pipeline_statuses(db, [stock])[(stock.market, stock.symbol)]
+
+
+def _stock_symbol_read(stock: StockSymbol, quote: Any | None = None, db: Session | None = None) -> dict[str, Any]:
+    result = {
         "id": stock.id,
         "market": stock.market,
         "symbol": stock.symbol,
@@ -333,10 +636,17 @@ def _stock_symbol_read(stock: StockSymbol, quote: Any | None = None) -> dict[str
         "raw_payload": stock.raw_payload or {},
         "last_synced_at": stock.last_synced_at,
     }
+    if db is not None:
+        summary = _stock_pipeline_status(db, stock)
+        result["status_summary"] = summary
+        result["data_collection_status"] = summary["data_collection"]["status"]
+        result["knowledge_base_status"] = summary["knowledge_base"]["status"]
+        result["knowledge_graph_status"] = summary["knowledge_graph"]["status"]
+    return result
 
 
-def _stock_symbol_view(stock: StockSymbol, quote: Any | None = None) -> SimpleNamespace:
-    return SimpleNamespace(**_stock_symbol_read(stock, quote))
+def _stock_symbol_view(stock: StockSymbol, quote: Any | None = None, db: Session | None = None) -> SimpleNamespace:
+    return SimpleNamespace(**_stock_symbol_read(stock, quote, db))
 
 
 def _latest_quotes_for_stocks(db: Session, stocks: list[StockSymbol]) -> dict[tuple[str, str], StockRealtimeQuote]:
@@ -484,9 +794,16 @@ def list_stock_symbols(
     total = db.scalar(count_statement) or 0
     items = db.scalars(statement.offset((page - 1) * page_size).limit(page_size)).all()
     latest_quotes = _latest_quotes_for_stocks(db, list(items))
+    pipeline_statuses = _stock_pipeline_statuses(db, list(items))
     return StockSymbolPage(
         items=[
-            _stock_symbol_read(item, latest_quotes.get((item.market, item.symbol)))
+            {
+                **_stock_symbol_read(item, latest_quotes.get((item.market, item.symbol))),
+                "status_summary": pipeline_statuses.get((item.market, item.symbol)),
+                "data_collection_status": pipeline_statuses.get((item.market, item.symbol), {}).get("data_collection", {}).get("status"),
+                "knowledge_base_status": pipeline_statuses.get((item.market, item.symbol), {}).get("knowledge_base", {}).get("status"),
+                "knowledge_graph_status": pipeline_statuses.get((item.market, item.symbol), {}).get("knowledge_graph", {}).get("status"),
+            }
             for item in items
         ],
         total=total,
@@ -542,7 +859,7 @@ def search_stock_symbols(
     )[:limit]
     latest_quotes = _latest_quotes_for_stocks(db, list(ranked))
     return [
-        _stock_symbol_view(item, latest_quotes.get((item.market, item.symbol)))
+        _stock_symbol_view(item, latest_quotes.get((item.market, item.symbol)), db)
         for item in ranked
     ]
 
@@ -945,4 +1262,4 @@ def get_stock_symbol(market: str, symbol: str, db: Session = Depends(get_db)) ->
         .where(StockRealtimeQuote.market == normalized_market, StockRealtimeQuote.symbol == normalized_symbol)
         .order_by(StockRealtimeQuote.fetched_at.desc())
     )
-    return _stock_symbol_read(item, quote)
+    return _stock_symbol_read(item, quote, db)

@@ -90,6 +90,31 @@ class StockSyncResponse(BaseModel):
     message: str
 
 
+class StockPipelineStatusRead(BaseModel):
+    """Per-security progress for the data-to-knowledge pipeline.
+
+    ``completed_count`` and ``expected_count`` are deliberately scoped to the
+    stage (six business feeds for collection, documents for the knowledge
+    base, and graph projections for the graph stage).  ``detail`` keeps the
+    underlying counts visible without making the table itself too wide.
+    """
+
+    status: str
+    label: str
+    color: str
+    color_code: str
+    completed_count: int = 0
+    expected_count: int = 0
+    last_at: datetime | None = None
+    detail: dict[str, Any] = Field(default_factory=dict)
+
+
+class StockPipelineStatusSummary(BaseModel):
+    data_collection: StockPipelineStatusRead
+    knowledge_base: StockPipelineStatusRead
+    knowledge_graph: StockPipelineStatusRead
+
+
 class StockSymbolRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -105,6 +130,11 @@ class StockSymbolRead(BaseModel):
     ext_json: dict[str, Any]
     raw_payload: dict[str, Any]
     last_synced_at: datetime
+    status_summary: StockPipelineStatusSummary | None = None
+    # Flat aliases make the fields easy to consume in simple table clients.
+    data_collection_status: str | None = None
+    knowledge_base_status: str | None = None
+    knowledge_graph_status: str | None = None
 
 
 class StockSymbolPage(BaseModel):

@@ -58,6 +58,28 @@ export type StockSymbol = {
   ext_json: Record<string, unknown>;
   raw_payload: Record<string, unknown>;
   last_synced_at: string;
+  /** Per-stock pipeline coverage, populated by the master-data endpoint. */
+  status_summary?: StockPipelineStatusSummary;
+  data_collection_status?: string | null;
+  knowledge_base_status?: string | null;
+  knowledge_graph_status?: string | null;
+};
+
+export type StockPipelineStatus = {
+  status?: string | null;
+  label?: string | null;
+  color?: string | null;
+  color_code?: string | null;
+  completed_count?: number | null;
+  expected_count?: number | null;
+  last_at?: string | null;
+  detail?: Record<string, unknown>;
+};
+
+export type StockPipelineStatusSummary = {
+  data_collection?: StockPipelineStatus;
+  knowledge_base?: StockPipelineStatus;
+  knowledge_graph?: StockPipelineStatus;
 };
 
 export type SymbolPage = {

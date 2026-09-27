@@ -96,3 +96,57 @@ def test_worker_records_retry_without_holding_claim_transaction() -> None:
     finally:
         engine.dispose()
         temporary.cleanup()
+
+
+def test_worker_clears_previous_attempt_error_when_retry_starts() -> None:
+    temporary, engine, sessions = _database()
+    try:
+        with sessions() as db:
+            job = DatabaseJobDispatcher(db).enqueue(
+                task_type="retry_succeeds",
+                idempotency_key="retry_succeeds:1",
+                max_attempts=2,
+            )
+            pipeline = db.get(PipelineRun, job.pipeline_run_id)
+            stage = db.scalar(select(PipelineStageRun).where(
+                PipelineStageRun.pipeline_run_id == job.pipeline_run_id,
+            ))
+            job.status = "RETRY"
+            job.error_message = "previous attempt failed"
+            pipeline.status = "RETRY"
+            pipeline.error_message = "previous attempt failed"
+            stage.status = "RETRY"
+            stage.error_code = "RuntimeError"
+            stage.error_message = "previous attempt failed"
+            db.commit()
+
+        observed: dict[str, object] = {}
+
+        def inspect_running_attempt(_task_type: str, _payload: dict) -> dict:
+            with sessions() as db:
+                job = db.scalar(select(ScheduledJob))
+                pipeline = db.scalar(select(PipelineRun))
+                stage = db.scalar(select(PipelineStageRun))
+                observed.update({
+                    "job_status": job.status,
+                    "job_error": job.error_message,
+                    "pipeline_error": pipeline.error_message,
+                    "stage_error_code": stage.error_code,
+                    "stage_error": stage.error_message,
+                    "next_retry_at": stage.next_retry_at,
+                })
+            return {"ok": True}
+
+        worker = JobWorker(session_factory=sessions, task_executor=inspect_running_attempt)
+        assert worker.run_once() is True
+        assert observed == {
+            "job_status": "RUNNING",
+            "job_error": None,
+            "pipeline_error": None,
+            "stage_error_code": None,
+            "stage_error": None,
+            "next_retry_at": None,
+        }
+    finally:
+        engine.dispose()
+        temporary.cleanup()

@@ -51,6 +51,7 @@ def test_context_contains_structured_observations_and_precise_lakehouse_lineage(
         document = KnowledgeDocument(
             knowledge_base_id=kb.id, source_table="stock_news", source_record_id=1,
             market="CN_A", symbol="000001", title="测试新闻", content="测试新闻正文，包含可追溯证据。",
+            created_at=now, updated_at=now,
         )
         db.add(document)
         db.flush()
@@ -60,6 +61,7 @@ def test_context_contains_structured_observations_and_precise_lakehouse_lineage(
             content_hash="a" * 64, chunk_text="测试新闻切片",
             start_offset=0, end_offset=7, parser_version="TEST", embedding_model="TEST_EMBED",
             metadata_json={"section_title": "测试章节"},
+            created_at=now,
         )
         db.add(chunk)
         db.flush()
@@ -69,12 +71,14 @@ def test_context_contains_structured_observations_and_precise_lakehouse_lineage(
             object_key="stock_kline/v1.parquet", content_hash="b" * 64,
             content_type="application/vnd.apache.parquet", source_table="stock_kline",
             metadata_json={"source_table": "stock_kline", "scope_pairs": [["CN_A", "000001"]]},
+            created_at=now,
         )
         db.add(lake_object)
         db.flush()
         dataset = LakeDataset(
             dataset_code="pipeline_stock_kline_normalized", dataset_name="股票日线标准化数据",
             layer="NORMALIZED", format="PARQUET", current_version="v1",
+            created_at=now, updated_at=now,
         )
         db.add(dataset)
         db.flush()
@@ -82,6 +86,7 @@ def test_context_contains_structured_observations_and_precise_lakehouse_lineage(
             dataset_id=dataset.id, version="v1", object_id=lake_object.id, row_count=1,
             quality_json={"passed": True, "source_table": "stock_kline",
                           "scope_pairs": [["CN_A", "000001"]], "scope_applied": True},
+            created_at=now,
         )
         db.add(version)
         db.add(LakeLineageEvent(
@@ -89,12 +94,14 @@ def test_context_contains_structured_observations_and_precise_lakehouse_lineage(
             downstream_type="DATASET_VERSION", downstream_id="pipeline_stock_kline_normalized:v1",
             transformation="PARQUET_EXPORT", dataset_version="v1",
             metadata_json={"source_table": "stock_kline", "scope_pairs": [["CN_A", "000001"]]},
+            created_at=now,
         ))
         db.add(LakeLineageEvent(
             batch_id="batch-2", upstream_type="LAKE_OBJECT", upstream_id=lake_object.id,
             downstream_type="DOCUMENT_CHUNK", downstream_id=chunk.id,
             transformation="DOCUMENT_CHUNKING", parser_version="TEST",
             metadata_json={"document_id": str(document.id)},
+            created_at=now,
         ))
         hk_object = LakeObject(
             object_uri="file:///tmp/test-hk-stock-kline.parquet", layer="NORMALIZED",

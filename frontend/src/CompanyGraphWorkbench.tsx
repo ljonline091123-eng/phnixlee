@@ -3,7 +3,6 @@ import { Building2, ExternalLink, FileText, GitBranch, Search, X } from "lucide-
 import { createPortal } from "react-dom";
 import { companyGraphApi, type ClassificationDefinition, type CompanyClassification, type CompanyCoverage, type CompanyGraphData, type CompanyProfile, type CompanySearchItem, type CompanySecurity } from "./companyGraphApi";
 import { foundationApi, type FoundationEvidence, type FoundationFact } from "./foundationApi";
-import { EnvironmentBanner } from "./EnvironmentBanner";
 import { CompanyGovernancePanel } from "./CompanyGovernancePanel";
 import "./CompanyGraphWorkbench.css";
 import { KnowledgeGraphDialog } from "./KnowledgeGraphExplorer";
@@ -213,7 +212,7 @@ export function CompanyGraphWorkbench({ initialStock, compact = false }: { initi
     {inspection && <Inspector value={inspection} close={() => setInspection(null)} />}
   </main>;
   if (direct) return <section className="company-graph company-graph-direct">{detail}</section>;
-  return <section className="company-graph"><EnvironmentBanner /><div className="cg-heading"><div><h2>公司关系工作台</h2><p>公司与证券双对象、关系事实和来源证据</p></div></div>
+  return <section className="company-graph"><div className="cg-heading"><div><h2>股票与公司工作台</h2><p>公司与证券双对象、关系事实和来源证据</p></div></div>
     {!compact && <CompanyGovernancePanel changed={() => setRevision(value => value + 1)} />}
     <div className="cg-layout"><aside className="cg-browser"><div className="cg-modes">
       <button className={mode === "security" ? "active" : ""} type="button" onClick={() => changeMode("security")}>股票</button>
