@@ -10,6 +10,7 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.api.stock_batch import (
+    _enrich_stage_results,
     get_stock_batch_governance_job,
     list_stock_batch_governance_jobs,
     router as stock_batch_router,
@@ -369,6 +370,243 @@ def test_global_agent_governance_runs_once_for_cross_market_batch(monkeypatch) -
         assert agent_stage["status"] == "SUCCESS"
         assert agent_stage["scope"] == "GLOBAL_BOUNDED_SOURCE_AUDIT"
         assert len(agent_stage["runs"]) == 1
+    finally:
+        engine.dispose()
+        temporary.cleanup()
+
+
+def test_historical_chunk_detail_infers_selection_and_explains_chunk_only_mode() -> None:
+    historical = _enrich_stage_results({
+        "stage_results": {
+            "DOCUMENT_CHUNKS": {
+                "status": "SUCCESS",
+                "market_runs": [{
+                    "market": "CN_A",
+                    "status": "SUCCESS",
+                    "documents_total": 32,
+                    "documents_with_chunks": 32,
+                    "coverage_status": "COMPLETE",
+                    "knowledge_base_mode": "SCOPED_GRAPH_DOCUMENTS_AND_CHUNKS",
+                }],
+            },
+        },
+    })["DOCUMENT_CHUNKS"]
+    assert {item["code"] for item in historical["completed_items"]} == {
+        "CN_A:DOCUMENT_SELECTION", "CN_A:CHUNK_COVERAGE",
+    }
+    assert historical["incomplete_items"] == []
+
+    chunk_only = _enrich_stage_results({
+        "stage_results": {
+            "DOCUMENT_CHUNKS": {
+                "status": "PARTIAL",
+                "knowledge_base_mode": "EXISTING_DOCUMENTS_ONLY",
+                "market_runs": [{
+                    "market": "CN_A",
+                    "status": "PARTIAL",
+                    "documents_total": 2,
+                    "documents_with_chunks": 2,
+                    "knowledge_base_mode": "EXISTING_DOCUMENTS_ONLY",
+                }],
+            },
+        },
+    })["DOCUMENT_CHUNKS"]
+    assert {item["code"] for item in chunk_only["completed_items"]} == {
+        "CN_A:DOCUMENT_SELECTION", "CN_A:CHUNK_COVERAGE",
+    }
+    assert [item["code"] for item in chunk_only["incomplete_items"]] == [
+        "CN_A:NEW_DATA_MATERIALIZATION",
+    ]
+
+
+def test_job_detail_preserves_verifiable_results_for_every_stage(monkeypatch) -> None:
+    """A terminal task must retain enough facts to explain and verify each stage.
+
+    The dialog is not allowed to reduce a partial result to a colour and a
+    generic sentence.  Business-data operations, dataset publication status,
+    chunk coverage/failures and graph build/governance facts must survive the
+    worker -> PipelineRun -> job-detail round trip.
+    """
+    temporary, engine, sessions = _database()
+    try:
+        request = StockBatchGovernanceRequest.model_validate({
+            "stocks": [{"market": "CN_A", "symbol": "000001"}],
+            "collect_business_data": True,
+            "business_types": ["QUOTE", "KLINE", "FINANCIAL", "NEWS", "NOTICE", "F10"],
+            "export_lakehouse": True,
+            "archive_chunks": True,
+            "run_graph": True,
+        }).model_dump(exclude={"idempotency_key"})
+        with sessions() as db:
+            job = DatabaseJobDispatcher(db).enqueue(
+                task_type=stock_batch.TASK_TYPE,
+                idempotency_key="verifiable-stage-detail",
+                payload={"request": request},
+            )
+            job.payload_json = {
+                "request": request,
+                "orchestration_job_id": job.id,
+                "orchestration_pipeline_run_id": job.pipeline_run_id,
+            }
+            payload = dict(job.payload_json)
+            job_id = job.id
+            db.commit()
+
+        operations = {
+            "QUOTE": {
+                "status": "SUCCESS", "source_code": "QUOTE_SOURCE",
+                "fetch_log_id": 101, "total_count": 1, "persisted_count": 1,
+            },
+            "KLINE": {
+                "status": "SUCCESS", "source_code": "KLINE_SOURCE",
+                "fetch_log_id": 102, "total_count": 30, "persisted_count": 30,
+            },
+            "FINANCIAL": {
+                "status": "SUCCESS", "source_code": "FIN_SOURCE",
+                "fetch_log_id": 103, "total_count": 8, "persisted_count": 8,
+            },
+            "NEWS": {
+                "status": "SUCCESS", "source_code": "NEWS_SOURCE",
+                "fetch_log_id": 104, "total_count": 3, "persisted_count": 3,
+            },
+            "NOTICE": {
+                "status": "FAILED", "source_code": "NOTICE_SOURCE",
+                "fetch_log_id": 105, "total_count": 0, "persisted_count": 0,
+                "error": "上游公告接口限流",
+            },
+            "F10": {
+                "status": "PARTIAL", "source_code": "F10_SOURCE",
+                "section_count": 2, "sections": ["profile", "holders"],
+                "message": "部分F10分区暂未返回",
+            },
+        }
+
+        monkeypatch.setattr(stock_batch, "SessionLocal", sessions)
+        monkeypatch.setattr(stock_batch, "_collect_stock", lambda _db, stock, **_kwargs: {
+            "market": stock.market,
+            "symbol": stock.symbol,
+            "name": stock.name,
+            "status": "PARTIAL",
+            "operations": operations,
+            "errors": [{
+                "data_type": "NOTICE", "message": "上游公告接口限流", "fetch_log_id": 105,
+            }],
+        })
+
+        def run_pipeline(_db, **_kwargs):
+            return {
+                "pipeline_run_id": 201,
+                "status": "PARTIAL",
+                "graph_id": 301,
+                "base_graph_id": 11,
+                "lineage_batch_id": "lineage-verification-1",
+                "exports": {
+                    "stock_symbol": {
+                        "status": "PUBLISHED", "dataset_id": 41,
+                        "dataset_code": "pipeline_stock_symbol_normalized",
+                        "version": "v7", "row_count": 1,
+                    },
+                    "stock_notice": {
+                        "status": "SKIPPED", "error": "当前范围没有公告记录",
+                    },
+                },
+                "chunks": {
+                    "documents": 5,
+                    "documents_total": 8,
+                    "documents_selected": 5,
+                    "documents_with_chunks": 4,
+                    "coverage_status": "PARTIAL",
+                    "coverage_ratio": 0.625,
+                    "document_selection_ratio": 0.625,
+                    "successful_chunk_ratio": 0.8,
+                    "truncated": True,
+                    "selection_policy": "LATEST_PER_SECURITY_THEN_PRIORITY_EVIDENCE_THEN_SOURCE_ROUND_ROBIN",
+                    "failed_documents": 1,
+                    "failed_document_samples": [{
+                        "document_id": 88, "status": "FAILED", "error": "文档解析失败",
+                    }],
+                    "created_chunk_count": 12,
+                    "reused_chunk_count": 3,
+                },
+                "graph": {
+                    "status": "BUILT", "projection": True, "graph_id": 301,
+                    "base_graph_id": 11,
+                    "counts": {"documents": 8, "entities": 20, "relations": 19},
+                },
+                "completion": {
+                    "status": "PARTIAL",
+                    "graph_governance_status": "PENDING",
+                    "issues": [
+                        {
+                            "code": "LAKEHOUSE_EXPORT_INCOMPLETE",
+                            "stage": "LAKEHOUSE_EXPORT",
+                            "detail": ["stock_notice"],
+                        },
+                        {
+                            "code": "CHUNK_SELECTION_TRUNCATED",
+                            "stage": "DOCUMENT_CHUNKS",
+                            "detail": {"selected": 5, "total": 8},
+                        },
+                        {
+                            "code": "GRAPH_PENDING_GOVERNANCE",
+                            "stage": "KNOWLEDGE_GRAPH",
+                            "detail": "PENDING",
+                        },
+                    ],
+                    "next_action": "先补齐湖仓和切片，再治理范围图谱",
+                },
+            }
+
+        monkeypatch.setattr(stock_batch, "run_stock_pipeline", run_pipeline)
+        result = stock_batch.execute_stock_batch_governance(payload)
+        assert result["result_status"] == "PARTIAL"
+
+        with sessions() as db:
+            job = db.get(ScheduledJob, job_id)
+            job.status = "COMPLETED"
+            db.commit()
+            detail = get_stock_batch_governance_job(job_id, db)
+
+        assert detail["status"] == "PARTIAL"
+        stock_detail = detail["stock_results"][0]
+        assert set(stock_detail["operations"]) == {
+            "QUOTE", "KLINE", "FINANCIAL", "NEWS", "NOTICE", "F10",
+        }
+        assert stock_detail["operations"]["NOTICE"]["error"] == "上游公告接口限流"
+        assert stock_detail["operations"]["F10"]["sections"] == ["profile", "holders"]
+
+        stages = detail["stage_results"]
+        for stage_code in ("BUSINESS_DATA", "LAKEHOUSE_EXPORT", "DOCUMENT_CHUNKS", "KNOWLEDGE_GRAPH"):
+            stage = stages[stage_code]
+            assert "completed_items" in stage
+            assert "incomplete_items" in stage
+            assert "pending_items" in stage  # compatibility alias for older UI clients
+            assert "reasons" in stage
+            assert "verification" in stage
+            assert stage.get("verify_target")
+
+        lakehouse_run = stages["LAKEHOUSE_EXPORT"]["market_runs"][0]
+        assert lakehouse_run["dataset_statuses"] == {
+            "stock_symbol": "PUBLISHED", "stock_notice": "SKIPPED",
+        }
+        assert lakehouse_run["datasets"]["stock_symbol"]["dataset_id"] == 41
+        assert lakehouse_run["datasets"]["stock_notice"]["error"] == "当前范围没有公告记录"
+
+        chunk_run = stages["DOCUMENT_CHUNKS"]["market_runs"][0]
+        assert chunk_run["documents_selected"] == 5
+        assert chunk_run["documents_with_chunks"] == 4
+        assert chunk_run["coverage_ratio"] == 0.625
+        assert chunk_run["truncated"] is True
+        assert chunk_run["failed_documents"] == 1
+        assert chunk_run["failed_document_samples"][0]["document_id"] == 88
+        assert chunk_run["selection_policy"].startswith("LATEST_PER_SECURITY")
+
+        graph_run = stages["KNOWLEDGE_GRAPH"]["market_runs"][0]
+        assert graph_run["build_status"] == "BUILT"
+        assert graph_run["governance_status"] == "PENDING"
+        assert graph_run["counts"] == {"documents": 8, "entities": 20, "relations": 19}
+        assert graph_run["completion_issues"][-1]["code"] == "GRAPH_PENDING_GOVERNANCE"
+        assert graph_run["next_action"] == "先补齐湖仓和切片，再治理范围图谱"
     finally:
         engine.dispose()
         temporary.cleanup()

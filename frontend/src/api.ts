@@ -82,6 +82,54 @@ export type StockPipelineStatusSummary = {
   knowledge_graph?: StockPipelineStatus;
 };
 
+export type StockPipelineVerificationRecord = {
+  record_id?: string | number | null;
+  title?: string | null;
+  observed_at?: string | null;
+  source_name?: string | null;
+  source_url?: string | null;
+  verification_path?: string | null;
+  fields?: Record<string, unknown>;
+};
+
+export type StockPipelineDetailItem = {
+  code: string;
+  label: string;
+  status?: string | null;
+  record_count?: number | null;
+  expected_count?: number | null;
+  last_at?: string | null;
+  reason?: string | null;
+  action_hint?: string | null;
+  verification_path?: string | null;
+  latest_attempt?: string | Record<string, unknown> | null;
+  records?: StockPipelineVerificationRecord[];
+};
+
+export type StockPipelineStageDetail = {
+  stage: string;
+  label: string;
+  summary: StockPipelineStatus;
+  completed_items: StockPipelineDetailItem[];
+  incomplete_items: StockPipelineDetailItem[];
+  verification?: {
+    total_count?: number | null;
+    records?: StockPipelineVerificationRecord[];
+  };
+  notes?: string[];
+};
+
+export type StockPipelineStatusDetail = {
+  market: string;
+  symbol: string;
+  name: string;
+  stages: {
+    data_collection?: StockPipelineStageDetail;
+    knowledge_base?: StockPipelineStageDetail;
+    knowledge_graph?: StockPipelineStageDetail;
+  };
+};
+
 export type SymbolPage = {
   items: StockSymbol[];
   total: number;
@@ -781,6 +829,11 @@ export const api = {
     request<LakeExportResult>("/lakehouse/datasets/export", { method: "POST", body: JSON.stringify(payload) }),
   archiveLakeDocuments: (limit = 100) => request<{ document_count: number; created_chunk_count: number; reused_chunk_count: number }>("/lakehouse/documents/archive", { method: "POST", body: JSON.stringify({ limit }) }),
   listSymbols: (params: URLSearchParams) => request<SymbolPage>(`/stocks?${params.toString()}`),
+  getStockPipelineStatusDetail: (market: string, symbol: string, sampleLimit = 5, signal?: AbortSignal) =>
+    request<StockPipelineStatusDetail>(
+      `/stocks/${encodeURIComponent(market)}/${encodeURIComponent(symbol)}/pipeline-status-detail?sample_limit=${sampleLimit}`,
+      { signal },
+    ),
   searchStocks: (market: string, keyword: string, limit = 12, options: RequestOptions = {}) =>
     request<StockSymbol[]>(
       `/stocks/search?market=${encodeURIComponent(market)}&keyword=${encodeURIComponent(keyword)}&limit=${limit}`,

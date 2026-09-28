@@ -40,6 +40,73 @@ const statusNames: Record<string, string> = {
   CANCELLED: "已取消",
 };
 
+const businessTypeNames: Record<string, string> = Object.fromEntries(
+  businessTypeOptions.map((item) => [item.code, item.name]),
+);
+
+const diagnosticFieldNames: Record<string, string> = {
+  market: "市场",
+  symbols: "股票范围",
+  source_code: "数据源",
+  interface_code: "接口",
+  total_count: "上游返回数",
+  persisted_count: "成功入库数",
+  section_count: "有效分区数",
+  sections: "资料分区",
+  fetch_log_id: "采集日志ID",
+  stock_count: "股票数",
+  success_count: "完成股票数",
+  partial_or_failed_count: "部分完成或失败数",
+  failed_count: "失败股票数",
+  documents_total: "知识文档数",
+  documents_with_chunks: "已切片文档数",
+  coverage_status: "切片覆盖状态",
+  knowledge_base_mode: "知识库加工模式",
+  graph_id: "新图谱ID",
+  base_graph_id: "基础图谱ID",
+  selected_graph_id: "选择的图谱ID",
+  governance_status: "图谱治理状态",
+  build_status: "图谱构建状态",
+  dataset_statuses: "数据集发布状态",
+  pipeline_run_id: "知识管道运行ID",
+  lineage_batch_id: "血缘批次ID",
+  audit_status: "智能体审核状态",
+  scope: "审核范围",
+  run_id: "运行ID",
+  dataset_code: "数据集编码",
+  details: "核验明细",
+  verification_path: "核验接口",
+};
+
+const datasetNames: Record<string, string> = {
+  stock_symbol: "股票主数据",
+  stock_realtime_quote: "实时行情",
+  stock_kline: "历史量价",
+  stock_financial_report: "财务报告",
+  stock_news: "股票新闻",
+  stock_notice: "公司公告",
+  stock_f10_cache: "F10资料",
+  stock_context_event: "外部事件",
+  research_report: "研究报告",
+  knowledge_document: "知识文档",
+  foundation_entity: "公司 / 主体主数据",
+  foundation_security: "证券主数据",
+  foundation_listing: "上市关系",
+  foundation_evidence: "主数据证据",
+  foundation_fact: "公司与主体事实",
+  foundation_fact_evidence: "主体事实证据",
+  foundation_fact_review: "主体事实审核",
+  foundation_security_classification: "证券分类",
+  foundation_source_identity: "来源身份映射",
+  foundation_company_mapping_state: "公司映射状态",
+  classification_definition: "分类标签释义",
+};
+
+function datasetName(code: string) {
+  const normalized = code.replace(/^pipeline_/, "").replace(/_(?:raw|normalized|serving)$/i, "");
+  return datasetNames[normalized] || code;
+}
+
 const stageDefinitions = [
   {
     code: "BUSINESS_DATA",
@@ -158,6 +225,320 @@ function stageLabel(stage?: string | null) {
   return stageDefinitions.find((item) => item.aliases.some((alias) => normalized.includes(alias)))?.title || stage || "等待调度";
 }
 
+function diagnosticValue(value: unknown): string {
+  if (value == null || value === "") return "--";
+  if (typeof value === "boolean") return value ? "是" : "否";
+  if (Array.isArray(value)) return value.map((item) => typeof item === "object" ? JSON.stringify(item) : String(item)).join("、") || "--";
+  if (typeof value === "object") {
+    return Object.entries(value as Record<string, unknown>)
+      .map(([key, item]) => `${diagnosticFieldNames[key] || key}：${diagnosticValue(item)}`)
+      .join("；");
+  }
+  const text = String(value);
+  const translations: Record<string, string> = {
+    SUCCESS: "已完成",
+    COMPLETED: "已完成",
+    PUBLISHED: "已发布",
+    PARTIAL: "部分完成",
+    FAILED: "失败",
+    ERROR: "错误",
+    SKIPPED: "未执行",
+    PENDING: "待治理",
+    BUILT: "已构建",
+    GOVERNED: "已治理",
+    LOCKED: "已锁定",
+    COMPLETE: "完整覆盖",
+    EXISTING_DOCUMENTS_ONLY: "仅处理既有知识文档",
+    SCOPED_GRAPH_DOCUMENTS_AND_CHUNKS: "范围图谱文档与切片",
+  };
+  return translations[text.toUpperCase()] || text;
+}
+
+const completionIssueNames: Record<string, string> = {
+  IDENTITY_UNMAPPED: "存在股票身份未完成映射",
+  QUALITY_GATE_NOT_PASSED: "质量门禁未通过",
+  LAKEHOUSE_EXPORT_INCOMPLETE: "湖仓数据集未全部发布",
+  AGENT_GOVERNANCE_NOT_PASSED: "智能体与Skill治理未通过",
+  NO_KNOWLEDGE_DOCUMENTS: "当前范围没有可切片知识文档",
+  CHUNK_SELECTION_TRUNCATED: "切片仅处理了限定样本",
+  CHUNK_FAILURES: "部分知识文档切片失败",
+  GRAPH_BUILD_FAILED: "知识图谱构建失败",
+  GRAPH_PENDING_GOVERNANCE: "知识图谱已生成但尚未治理锁定",
+};
+
+function formatCompletionIssue(issue: Record<string, unknown>): string {
+  const code = String(issue.code || "");
+  const name = completionIssueNames[code] || code;
+  const detail = issue.detail;
+  if (detail == null || detail === "") return name || "存在未完成事项";
+  return `${name || "未完成事项"}：${diagnosticValue(detail)}`;
+}
+
+type BatchStageViewItem = {
+  key: string;
+  title: string;
+  status: string;
+  reason: string;
+  fields: Array<[string, unknown]>;
+};
+
+function knowledgePipelineMarketRuns(job: BatchGovernanceJob) {
+  const result = job.stage_results?.KNOWLEDGE_PIPELINE;
+  return Array.isArray(result?.market_runs) ? result.market_runs.filter((item): item is Record<string, unknown> => !!item && typeof item === "object") : [];
+}
+
+function stageRunReason(
+  stageCode: string,
+  run: Record<string, unknown>,
+  result: BatchGovernanceStageResult | undefined,
+  job: BatchGovernanceJob,
+) {
+  const direct = run.error || run.reason;
+  if (direct) return String(direct);
+  const completionIssues = knowledgePipelineMarketRuns(job)
+    .filter((item) => !run.market || item.market === run.market)
+    .flatMap((item) => {
+      const completion = item.completion;
+      if (!completion || typeof completion !== "object") return [];
+      const issues = (completion as Record<string, unknown>).issues;
+      if (!Array.isArray(issues)) return [];
+      return issues
+        .filter((issue): issue is Record<string, unknown> => !!issue && typeof issue === "object")
+        .filter((issue) => {
+          const issueStage = String(issue.stage || "").toUpperCase();
+          const stageAliases: Record<string, string[]> = {
+            LAKEHOUSE: ["LAKEHOUSE_EXPORT", "QUALITY_GATE"],
+            KNOWLEDGE_BASE: ["DOCUMENT_CHUNKS"],
+            KNOWLEDGE_GRAPH: ["KNOWLEDGE_GRAPH", "AGENT_SKILL_GOVERNANCE"],
+          };
+          return (stageAliases[stageCode] || []).includes(issueStage);
+        })
+        .map(formatCompletionIssue);
+    });
+  const issues = completionIssues;
+  if (issues.length) return [...new Set(issues)].join("；");
+  const status = normalizeStatus(String(run.status || result?.status || "WAITING"));
+  if (stageCode === "LAKEHOUSE" && status !== "SUCCESS") {
+    const datasets = run.dataset_statuses as Record<string, unknown> | undefined;
+    const unfinished = datasets && Object.entries(datasets).filter(([, value]) => String(value).toUpperCase() !== "PUBLISHED");
+    if (unfinished?.length) return `以下数据集尚未发布：${unfinished.map(([name, value]) => `${datasetName(name)}（${String(value)}）`).join("、")}`;
+    return "存在空数据源、质量门禁未通过或数据集未完成发布。";
+  }
+  if (stageCode === "KNOWLEDGE_BASE" && status !== "SUCCESS") {
+    if (run.knowledge_base_mode === "EXISTING_DOCUMENTS_ONLY") return "本次只切分既有知识文档，新采集业务记录尚未全部物化为知识文档。";
+    const total = Number(run.documents_total || 0);
+    const completed = Number(run.documents_with_chunks || 0);
+    return total ? `${Math.max(0, total - completed)} 份知识文档尚未完成切片。` : "本次范围内没有可切片的知识文档。";
+  }
+  if (stageCode === "KNOWLEDGE_GRAPH" && status !== "SUCCESS") {
+    if (String(run.build_status || "").toUpperCase() === "BUILT") return "图谱投影已经生成，但尚未达到已治理或已锁定状态。";
+    return "图谱尚未生成，或构建过程中出现错误。";
+  }
+  return String(result?.message || (status === "SUCCESS" ? "阶段结果已完成并记录。" : "阶段尚未完成，请结合诊断字段核对。"));
+}
+
+function batchStageViewItems(
+  stageCode: string,
+  result: BatchGovernanceStageResult | undefined,
+  job: BatchGovernanceJob,
+): BatchStageViewItem[] {
+  const enrichedCompleted = Array.isArray(result?.completed_items) ? result.completed_items : [];
+  const enrichedIncomplete = Array.isArray(result?.incomplete_items) ? result.incomplete_items : [];
+  if (enrichedCompleted.length || enrichedIncomplete.length) {
+    return [
+      ...enrichedCompleted.map((value, index) => ({ value, index, fallbackStatus: "SUCCESS" })),
+      ...enrichedIncomplete.map((value, index) => ({ value, index, fallbackStatus: "PARTIAL" })),
+    ].filter((entry): entry is { value: Record<string, unknown>; index: number; fallbackStatus: string } => !!entry.value && typeof entry.value === "object")
+      .map(({ value, index, fallbackStatus }) => {
+        const code = String(value.code || value.id || `${fallbackStatus}:${index}`);
+        const rawLabel = String(value.label || value.title || value.code || `阶段项目 ${index + 1}`);
+        const codeParts = code.split(":");
+        const datasetCode = stageCode === "LAKEHOUSE" ? codeParts.at(-1) || rawLabel : "";
+        const marketPrefix = stageCode === "LAKEHOUSE" && codeParts.length > 1 ? `${codeParts[0]} · ` : "";
+        const fields = Object.entries(value).filter(([key]) => !["code", "id", "label", "title", "status", "reason", "message", "action_hint"].includes(key));
+        if (datasetCode && !fields.some(([key]) => key === "dataset_code")) fields.unshift(["dataset_code", datasetCode]);
+        return {
+          key: code,
+          title: stageCode === "LAKEHOUSE" ? `${marketPrefix}${datasetName(datasetCode)}` : rawLabel,
+          status: normalizeStatus(String(value.status || fallbackStatus)),
+          reason: String(value.reason || value.message || value.action_hint || (fallbackStatus === "SUCCESS" ? "服务端已核验完成。" : "服务端标记为待处理。")),
+          fields,
+        };
+      });
+  }
+
+  if (stageCode === "BUSINESS_DATA") {
+    const rows: BatchStageViewItem[] = [];
+    (job.stock_results || []).forEach((stock) => {
+      const operations = stock.operations && typeof stock.operations === "object"
+        ? stock.operations as Record<string, Record<string, unknown>>
+        : {};
+      Object.entries(operations).forEach(([dataType, operation]) => {
+        const status = normalizeStatus(String(operation.status || stock.status || "WAITING"));
+        rows.push({
+          key: `${stock.market}:${stock.symbol}:${dataType}`,
+          title: `${String(stock.name || stock.symbol)} · ${businessTypeNames[dataType] || dataType}`,
+          status,
+          reason: String(operation.error || operation.message || (status === "SUCCESS" ? "数据源返回及持久化结果已记录。" : "该数据类型未完整入库。")),
+          fields: Object.entries(operation).filter(([key]) => !["status", "message", "error"].includes(key)),
+        });
+      });
+      if (!Object.keys(operations).length) {
+        rows.push({
+          key: `${stock.market}:${stock.symbol}`,
+          title: `${String(stock.name || stock.symbol)} · 业务数据`,
+          status: normalizeStatus(stock.status),
+          reason: stock.message || stockErrorMessage(stock.errors) || "任务未返回逐数据类型结果。",
+          fields: [["market", stock.market], ["symbols", [stock.symbol]]],
+        });
+      }
+    });
+    return rows;
+  }
+
+  const rawRuns = Array.isArray(result?.market_runs)
+    ? result.market_runs
+    : Array.isArray(result?.runs) ? result.runs : [];
+  const runs = rawRuns.filter((item): item is Record<string, unknown> => !!item && typeof item === "object");
+  if (runs.length && stageCode === "LAKEHOUSE") {
+    return runs.flatMap((run, runIndex) => {
+      const market = String(run.market || `范围 ${runIndex + 1}`);
+      const datasets = run.dataset_statuses && typeof run.dataset_statuses === "object"
+        ? run.dataset_statuses as Record<string, unknown>
+        : {};
+      if (!Object.keys(datasets).length) return [{
+        key: `${market}:lakehouse`,
+        title: `${market} · 湖仓发布`,
+        status: normalizeStatus(String(run.status || result?.status || "WAITING")),
+        reason: stageRunReason(stageCode, run, result, job),
+        fields: Object.entries(run).filter(([key]) => !["status", "message", "error", "completion"].includes(key)),
+      }];
+      return Object.entries(datasets).map(([dataset, rawStatus]) => {
+        const normalized = normalizeStatus(String(rawStatus || "WAITING"));
+        const status = normalized === "PUBLISHED" ? "SUCCESS" : ["FAILED", "ERROR"].includes(normalized) ? "FAILED" : "PARTIAL";
+        return {
+          key: `${market}:dataset:${dataset}`,
+          title: `${market} · ${datasetName(dataset)}`,
+          status,
+          reason: status === "SUCCESS" ? "数据集已通过质量门禁并完成湖仓发布。" : `数据集发布状态为 ${String(rawStatus || "未返回")}；${stageRunReason(stageCode, run, result, job)}`,
+          fields: [["market", market], ["dataset_code", dataset], ["dataset_statuses", { [dataset]: rawStatus }]] as Array<[string, unknown]>,
+        };
+      });
+    });
+  }
+
+  if (runs.length && stageCode === "KNOWLEDGE_BASE") {
+    return runs.flatMap((run, runIndex) => {
+      const market = String(run.market || `范围 ${runIndex + 1}`);
+      const total = Number(run.documents_total || 0);
+      const withChunks = Number(run.documents_with_chunks || 0);
+      const mode = String(run.knowledge_base_mode || result?.knowledge_base_mode || "");
+      const rows: BatchStageViewItem[] = [{
+        key: `${market}:documents`,
+        title: `${market} · 知识文档`,
+        status: total > 0 ? "SUCCESS" : "PARTIAL",
+        reason: total > 0 ? `已识别 ${total} 份可加工知识文档。` : "当前范围没有可归档、可切片的知识文档。",
+        fields: [["market", market], ["documents_total", total]],
+      }, {
+        key: `${market}:chunks`,
+        title: `${market} · 文档切片覆盖`,
+        status: total > 0 && withChunks >= total ? "SUCCESS" : "PARTIAL",
+        reason: total > 0 && withChunks >= total
+          ? `${withChunks} / ${total} 份知识文档已形成切片。`
+          : stageRunReason(stageCode, run, result, job),
+        fields: [["market", market], ["documents_total", total], ["documents_with_chunks", withChunks], ["coverage_status", run.coverage_status]],
+      }];
+      if (mode === "EXISTING_DOCUMENTS_ONLY") rows.push({
+        key: `${market}:materialization`,
+        title: `${market} · 新业务数据知识物化`,
+        status: "PARTIAL",
+        reason: "本次只处理既有知识文档；刚采集的业务记录尚未全部转换为新知识文档。",
+        fields: [["knowledge_base_mode", mode]],
+      });
+      return rows;
+    });
+  }
+
+  if (runs.length && stageCode === "KNOWLEDGE_GRAPH") {
+    return runs.flatMap((run, runIndex) => {
+      const market = String(run.market || `范围 ${runIndex + 1}`);
+      const buildStatus = normalizeStatus(String(run.build_status || "WAITING"));
+      const governanceStatus = normalizeStatus(String(run.governance_status || "PENDING"));
+      return [{
+        key: `${market}:projection`,
+        title: `${market} · 图谱投影构建`,
+        status: buildStatus === "BUILT" ? "SUCCESS" : buildStatus === "FAILED" ? "FAILED" : "PARTIAL",
+        reason: buildStatus === "BUILT" ? "本批股票范围的独立图谱投影已生成。" : stageRunReason(stageCode, run, result, job),
+        fields: [["market", market], ["build_status", buildStatus], ["graph_id", run.graph_id], ["base_graph_id", run.base_graph_id]],
+      }, {
+        key: `${market}:governance`,
+        title: `${market} · 图谱治理发布`,
+        status: ["GOVERNED", "LOCKED"].includes(governanceStatus) ? "SUCCESS" : "PARTIAL",
+        reason: ["GOVERNED", "LOCKED"].includes(governanceStatus)
+          ? "图谱已完成治理，可作为后续分析的正式知识版本。"
+          : "图谱投影已保留为待治理状态，尚不能视为已验证、已锁定的正式图谱。",
+        fields: [["market", market], ["governance_status", governanceStatus], ["graph_id", run.graph_id]],
+      }];
+    });
+  }
+
+  if (runs.length) return runs.map((run, index) => {
+    const market = String(run.market || run.market_trigger || `范围 ${index + 1}`);
+    const status = normalizeStatus(String(run.status || result?.status || "WAITING"));
+    return {
+      key: `${market}:${index}`,
+      title: `${market} · ${stageDefinitions.find((item) => item.code === stageCode)?.title || stageCode}`,
+      status,
+      reason: stageRunReason(stageCode, run, result, job),
+      fields: Object.entries(run).filter(([key]) => !["status", "message", "error", "completion"].includes(key)),
+    };
+  });
+
+  if (!result) return [];
+  const status = normalizeStatus(result.status);
+  return [{
+    key: `${stageCode}:summary`,
+    title: stageDefinitions.find((item) => item.code === stageCode)?.title || stageCode,
+    status,
+    reason: result.message || (status === "SUCCESS" ? "阶段已完成。" : "服务端尚未返回更细的执行结果。"),
+    fields: Object.entries(result).filter(([key]) => !["status", "message", "market_runs", "runs"].includes(key)),
+  }];
+}
+
+function isCompletedStageItem(status: string) {
+  return ["SUCCESS", "COMPLETED", "PUBLISHED", "GOVERNED", "LOCKED"].includes(normalizeStatus(status));
+}
+
+function BatchStageDetail({
+  definition,
+  result,
+  state,
+  job,
+}: {
+  definition: typeof stageDefinitions[number];
+  result?: BatchGovernanceStageResult;
+  state: string;
+  job: BatchGovernanceJob;
+}) {
+  const items = batchStageViewItems(definition.code, result, job);
+  const completed = items.filter((item) => isCompletedStageItem(item.status));
+  const incomplete = items.filter((item) => !isCompletedStageItem(item.status));
+  const renderItems = (rows: BatchStageViewItem[], emptyText: string) => rows.length
+    ? <div className="batch-stage-detail-list">{rows.map((item) => <article key={item.key} className={statusClass(item.status)}>
+      <header><div><strong>{item.title}</strong><small>{statusLabel(item.status)}</small></div><span className={`batch-job-status ${statusClass(item.status)}`}>{statusLabel(item.status)}</span></header>
+      <p>{item.reason}</p>
+      {!!item.fields.length && <dl>{item.fields.map(([key, value]) => <div key={key}><dt>{diagnosticFieldNames[key] || key}</dt><dd>{diagnosticValue(value)}</dd></div>)}</dl>}
+    </article>)}</div>
+    : <p className="batch-stage-detail-empty">{emptyText}</p>;
+  return <section className="batch-stage-detail" aria-label={`${definition.title}详情`}>
+    <header><div><p className="eyebrow">STAGE DETAIL</p><h5>{definition.title} · {statusLabel(state)}</h5><p>{result?.message || definition.description}</p></div><span className={`batch-job-status ${statusClass(state)}`}>{statusLabel(state)}</span></header>
+    <div className="batch-stage-detail-columns">
+      <section><h6>已完成内容 · {completed.length}</h6>{renderItems(completed, "当前没有可核验的已完成明细。")}</section>
+      <section><h6>未完成 / 待处理 · {incomplete.length}</h6>{renderItems(incomplete, normalizeStatus(state) === "SKIPPED" ? "本次未启用该阶段。" : "当前没有未完成项目。")}</section>
+    </div>
+  </section>;
+}
+
 export function BatchStockGovernanceDialog({
   open,
   stocks,
@@ -186,6 +567,7 @@ export function BatchStockGovernanceDialog({
   const [recentJobs, setRecentJobs] = useState<BatchGovernanceJob[]>([]);
   const [recentLoading, setRecentLoading] = useState(false);
   const [error, setError] = useState("");
+  const [selectedStageCode, setSelectedStageCode] = useState<string | null>(null);
   const completionNotified = useRef<number | null>(null);
 
   useEffect(() => {
@@ -270,6 +652,10 @@ export function BatchStockGovernanceDialog({
     onCompleted?.(job);
     onNotify?.(`批量任务 #${job.job_id} ${statusLabel(job.result_status || job.status)}，已处理 ${job.stock_count} 只股票。`);
   }, [job, onCompleted, onNotify]);
+
+  useEffect(() => {
+    setSelectedStageCode(null);
+  }, [job?.job_id]);
 
   const enabledStageCount = [
     flags.collectBusinessData,
@@ -358,6 +744,16 @@ export function BatchStockGovernanceDialog({
   const currentStage = String(job?.current_stage || "").toUpperCase();
   const progress = progressValue(job);
   const effectiveOptions = job?.effective_options;
+  const stageEnabled = (code: string) => code === "BUSINESS_DATA" ? effectiveOptions?.collect_business_data ?? flags.collectBusinessData
+    : code === "LAKEHOUSE" ? effectiveOptions?.export_lakehouse ?? flags.exportLakehouse
+      : code === "KNOWLEDGE_BASE" ? effectiveOptions?.archive_chunks ?? flags.archiveChunks
+        : effectiveOptions?.run_graph ?? flags.runGraph;
+  const selectedStage = stageDefinitions.find((stage) => stage.code === selectedStageCode);
+  const selectedStageResult = selectedStage ? readStageResult(job, selectedStage.aliases) : undefined;
+  const selectedStageIsCurrent = !!selectedStage && selectedStage.aliases.some((alias) => currentStage.includes(alias));
+  const selectedStageState = !selectedStage ? "WAITING"
+    : !stageEnabled(selectedStage.code) ? "SKIPPED"
+      : selectedStageResult?.status || (selectedStageIsCurrent ? "RUNNING" : "WAITING");
   const activeJobError = job?.job_status === "FAILED" || job?.job_status === "RETRY"
     ? job.error_message
     : null;
@@ -489,20 +885,21 @@ export function BatchStockGovernanceDialog({
           </div>}
           <ol className="batch-stage-results">
             {stageDefinitions.map((stage, index) => {
-              const enabled = stage.code === "BUSINESS_DATA" ? effectiveOptions?.collect_business_data ?? flags.collectBusinessData
-                : stage.code === "LAKEHOUSE" ? effectiveOptions?.export_lakehouse ?? flags.exportLakehouse
-                  : stage.code === "KNOWLEDGE_BASE" ? effectiveOptions?.archive_chunks ?? flags.archiveChunks
-                    : effectiveOptions?.run_graph ?? flags.runGraph;
+              const enabled = stageEnabled(stage.code);
               const result = readStageResult(job, stage.aliases);
               const isCurrent = stage.aliases.some((alias) => currentStage.includes(alias));
               const state = !enabled ? "SKIPPED" : result?.status || (isCurrent ? "RUNNING" : "WAITING");
-              return <li key={stage.code} className={statusClass(state)}>
-                <span className="batch-stage-number">{["SUCCESS", "COMPLETED"].includes(normalizeStatus(state)) ? "✓" : index + 1}</span>
-                <div><strong>{stage.title}</strong><p>{result ? stageSummary(result) : stage.description}</p></div>
-                <small>{statusLabel(state)}</small>
+              const expanded = selectedStageCode === stage.code;
+              return <li key={stage.code} className={`${statusClass(state)}${expanded ? " selected" : ""}`}>
+                <button type="button" aria-expanded={expanded} onClick={() => setSelectedStageCode((current) => current === stage.code ? null : stage.code)}>
+                  <span className="batch-stage-number">{["SUCCESS", "COMPLETED"].includes(normalizeStatus(state)) ? "✓" : index + 1}</span>
+                  <div><strong>{stage.title}</strong><p>{result ? stageSummary(result) : stage.description}</p></div>
+                  <small>{statusLabel(state)} · 查看详情</small>
+                </button>
               </li>;
             })}
           </ol>
+          {selectedStage && <BatchStageDetail definition={selectedStage} result={selectedStageResult} state={selectedStageState} job={job} />}
 
           {!!job.graph_ids?.length && <div className="batch-governance-message success">
             已生成图谱投影：{job.graph_ids.map((id) => `#${id}`).join("、")}。请到“知识图谱”核对范围、来源和治理状态。

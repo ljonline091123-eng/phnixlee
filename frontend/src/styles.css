@@ -2309,6 +2309,16 @@ dd {
   font-weight: 650;
   line-height: 1.2;
   white-space: nowrap;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.stock-pipeline-status:hover,
+.stock-pipeline-status:focus-visible {
+  border-color: #4f795b;
+  box-shadow: 0 0 0 2px rgba(79, 121, 91, .15);
+  outline: none;
 }
 
 .stock-pipeline-status.green { border-color: #b7dec3; color: #246a43; background: #e7f5eb; }

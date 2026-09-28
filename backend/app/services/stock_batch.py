@@ -173,6 +173,165 @@ def _save_progress(
     db.commit()
 
 
+def _attach_verifiable_stage_results(output: dict[str, Any]) -> None:
+    """Persist a compact explain/verify contract alongside raw stage facts.
+
+    The HTTP adapter can derive the same contract for historical runs.  New
+    runs store it directly as well, so PipelineRun consumers outside the UI do
+    not need to reverse-engineer status words.
+    """
+    stages = output.get("stage_results") or {}
+
+    def finish(stage: dict[str, Any], completed: list[dict[str, Any]], incomplete: list[dict[str, Any]],
+               verification: dict[str, Any], verify_target: str) -> None:
+        stage["completed_items"] = completed
+        stage["incomplete_items"] = incomplete
+        stage["pending_items"] = incomplete
+        stage["reasons"] = [
+            {"code": item.get("code"), "reason": item.get("reason")}
+            for item in incomplete
+        ]
+        stage["verification"] = verification
+        stage["verify_target"] = verify_target
+
+    business = stages.get("BUSINESS_DATA") or {}
+    business_completed: list[dict[str, Any]] = []
+    business_incomplete: list[dict[str, Any]] = []
+    labels = {
+        "QUOTE": "实时行情", "KLINE": "历史量价", "FINANCIAL": "财务数据",
+        "NEWS": "新闻资讯", "NOTICE": "公司公告", "F10": "F10资料",
+    }
+    for stock in output.get("stock_results") or []:
+        for code, operation in (stock.get("operations") or {}).items():
+            status = str((operation or {}).get("status") or "UNKNOWN").upper()
+            total = (
+                (operation or {}).get("section_count") if code == "F10"
+                else (operation or {}).get("total_count")
+            )
+            if total is None:
+                total = (operation or {}).get("persisted_count")
+            done = status == "SUCCESS" and int(total or 0) > 0
+            item = {
+                "code": f"{stock.get('market')}:{stock.get('symbol')}:{code}",
+                "label": labels.get(code, code),
+                "status": "COMPLETED" if done else status,
+                "record_count": int(total or 0),
+                "reason": (
+                    f"接口返回 {int(total or 0)} 条记录；完整采集事实见 details。"
+                    if done else (operation or {}).get("error") or (operation or {}).get("message")
+                    or f"采集状态为 {status}。"
+                ),
+                "details": operation or {},
+            }
+            (business_completed if done else business_incomplete).append(item)
+    finish(
+        business, business_completed, business_incomplete,
+        {"records": output.get("stock_results") or []},
+        "/api/v1/stocks/{market}/{symbol}/pipeline-status-detail",
+    )
+    stages["BUSINESS_DATA"] = business
+
+    lake = stages.get("LAKEHOUSE_EXPORT") or {}
+    lake_completed: list[dict[str, Any]] = []
+    lake_incomplete: list[dict[str, Any]] = []
+    for run in lake.get("market_runs") or []:
+        for dataset_code, dataset in (run.get("datasets") or {}).items():
+            status = str((dataset or {}).get("status") or "UNKNOWN").upper()
+            done = status == "PUBLISHED"
+            item = {
+                "code": f"{run.get('market')}:{dataset_code}", "label": dataset_code,
+                "status": "COMPLETED" if done else status,
+                "record_count": (dataset or {}).get("row_count"),
+                "reason": (
+                    "数据集已发布。" if done else (dataset or {}).get("error") or f"发布状态为 {status}。"
+                ),
+                "details": dataset or {},
+            }
+            (lake_completed if done else lake_incomplete).append(item)
+    finish(
+        lake, lake_completed, lake_incomplete,
+        {"market_runs": lake.get("market_runs") or []}, "/api/v1/lakehouse/datasets",
+    )
+    stages["LAKEHOUSE_EXPORT"] = lake
+
+    chunks = stages.get("DOCUMENT_CHUNKS") or {}
+    chunk_completed: list[dict[str, Any]] = []
+    chunk_incomplete: list[dict[str, Any]] = []
+    for run in chunks.get("market_runs") or []:
+        market = run.get("market") or "ALL"
+        total = int(run.get("documents_total") or 0)
+        selected = int(run.get("documents_selected") or 0)
+        covered = int(run.get("documents_with_chunks") or 0)
+        failed = int(run.get("failed_documents") or 0)
+        selection = {
+            "code": f"{market}:DOCUMENT_SELECTION", "label": f"{market} · 知识文档选择",
+            "status": "COMPLETED" if selected else "NOT_STARTED", "record_count": selected,
+            "reason": f"从 {total} 份知识文档中选择 {selected} 份进入切片。" if selected else "没有选出可切片文档。",
+            "details": run,
+        }
+        (chunk_completed if selected else chunk_incomplete).append(selection)
+        fully_covered = bool(total and covered == total and selected == total and not failed)
+        coverage = {
+            "code": f"{market}:CHUNK_COVERAGE", "label": f"{market} · 切片覆盖",
+            "status": "COMPLETED" if fully_covered else ("PARTIAL" if covered else "NOT_STARTED"),
+            "record_count": covered,
+            "reason": (
+                f"已切片 {covered}/{total} 份，失败 {failed} 份。"
+                if total else "该范围没有可切片知识文档。"
+            ),
+            "details": run,
+        }
+        (chunk_completed if fully_covered else chunk_incomplete).append(coverage)
+        if str(run.get("knowledge_base_mode") or chunks.get("knowledge_base_mode") or "").upper() == "EXISTING_DOCUMENTS_ONLY":
+            chunk_incomplete.append({
+                "code": f"{market}:NEW_DATA_MATERIALIZATION",
+                "label": f"{market} · 新业务数据知识物化",
+                "status": "PARTIAL",
+                "record_count": None,
+                "reason": "本次只加工既有知识文档；新采集业务记录尚未全部物化为新知识文档。",
+                "details": {"knowledge_base_mode": "EXISTING_DOCUMENTS_ONLY"},
+            })
+    finish(
+        chunks, chunk_completed, chunk_incomplete,
+        {"market_runs": chunks.get("market_runs") or []}, "/api/v1/lakehouse/chunks",
+    )
+    stages["DOCUMENT_CHUNKS"] = chunks
+
+    graphs = stages.get("KNOWLEDGE_GRAPH") or {}
+    graph_completed: list[dict[str, Any]] = []
+    graph_incomplete: list[dict[str, Any]] = []
+    for run in graphs.get("market_runs") or []:
+        market = run.get("market") or "ALL"
+        built = str(run.get("build_status") or "").upper() == "BUILT"
+        governance = str(run.get("governance_status") or "PENDING").upper()
+        governed = governance in {"GOVERNED", "LOCKED"}
+        build_item = {
+            "code": f"{market}:GRAPH_BUILD", "label": f"{market} · 图谱投影构建",
+            "status": "COMPLETED" if built else str(run.get("build_status") or "NOT_STARTED"),
+            "record_count": (run.get("counts") or {}).get("relations"),
+            "reason": "范围图谱投影已构建。" if built else run.get("error") or "图谱投影尚未构建。",
+            "details": run,
+        }
+        (graph_completed if built else graph_incomplete).append(build_item)
+        governance_item = {
+            "code": f"{market}:GRAPH_GOVERNANCE", "label": f"{market} · 图谱治理发布",
+            "status": "COMPLETED" if governed else governance,
+            "record_count": None,
+            "reason": (
+                f"图谱治理状态为 {governance}。" if governed
+                else run.get("next_action") or f"图谱治理状态为 {governance}，尚未发布。"
+            ),
+            "details": run,
+        }
+        (graph_completed if governed else graph_incomplete).append(governance_item)
+    finish(
+        graphs, graph_completed, graph_incomplete,
+        {"market_runs": graphs.get("market_runs") or []}, "/api/v1/knowledge-network/explore",
+    )
+    stages["KNOWLEDGE_GRAPH"] = graphs
+    output["stage_results"] = stages
+
+
 def execute_stock_batch_governance(payload: dict[str, Any]) -> dict[str, Any]:
     """Worker entry point registered under :data:`TASK_TYPE`."""
     request = StockBatchGovernanceRequest.model_validate(payload.get("request") or payload)
@@ -331,6 +490,10 @@ def execute_stock_batch_governance(payload: dict[str, Any]) -> dict[str, Any]:
                             name: item.get("status") for name, item in exports.items()
                             if isinstance(item, dict)
                         },
+                        # Keep the full child-pipeline result so a reviewer can
+                        # verify dataset ids, versions, row counts, quality and
+                        # errors instead of seeing only a derived status word.
+                        "datasets": exports,
                     })
 
                     chunks = result.get("chunks") or {}
@@ -350,8 +513,19 @@ def execute_stock_batch_governance(payload: dict[str, Any]) -> dict[str, Any]:
                         "market": market,
                         "status": chunk_status,
                         "documents_total": int(chunks.get("documents_total") or 0),
+                        "documents_selected": int(chunks.get("documents_selected") or 0),
                         "documents_with_chunks": int(chunks.get("documents_with_chunks") or 0),
+                        "failed_documents": int(chunks.get("failed_documents") or 0),
+                        "failed_document_samples": chunks.get("failed_document_samples") or [],
+                        "truncated": bool(chunks.get("truncated")),
+                        "coverage_ratio": chunks.get("coverage_ratio"),
+                        "document_selection_ratio": chunks.get("document_selection_ratio"),
+                        "successful_chunk_ratio": chunks.get("successful_chunk_ratio"),
+                        "selection_policy": chunks.get("selection_policy"),
+                        "created_chunk_count": int(chunks.get("created_chunk_count") or 0),
+                        "reused_chunk_count": int(chunks.get("reused_chunk_count") or 0),
                         "coverage_status": chunks.get("coverage_status"),
+                        "details": chunks,
                         "knowledge_base_mode": (
                             "EXISTING_DOCUMENTS_ONLY" if existing_documents_only
                             else "SCOPED_GRAPH_DOCUMENTS_AND_CHUNKS"
@@ -379,6 +553,14 @@ def execute_stock_batch_governance(payload: dict[str, Any]) -> dict[str, Any]:
                         "graph_id": new_graph_id,
                         "base_graph_id": result.get("base_graph_id"),
                         "governance_status": graph_governance_status or None,
+                        "counts": graph_payload.get("counts") or {},
+                        "error": graph_payload.get("error"),
+                        "details": graph_payload,
+                        "completion_issues": [
+                            issue for issue in ((result.get("completion") or {}).get("issues") or [])
+                            if issue.get("stage") == "KNOWLEDGE_GRAPH"
+                        ],
+                        "next_action": (result.get("completion") or {}).get("next_action"),
                     })
 
                     if run_global_agent_audit:
@@ -406,6 +588,10 @@ def execute_stock_batch_governance(payload: dict[str, Any]) -> dict[str, Any]:
                         "base_graph_id": result.get("base_graph_id"),
                         "completion": result.get("completion") or {},
                         "lineage_batch_id": result.get("lineage_batch_id"),
+                        "exports": exports,
+                        "chunks": chunks,
+                        "graph": graph_payload,
+                        "agent_governance": result.get("agent_governance") or {},
                         "knowledge_base_mode": (
                             "EXISTING_DOCUMENTS_ONLY" if existing_documents_only
                             else "SCOPED_GRAPH_DOCUMENTS_AND_CHUNKS"
@@ -517,6 +703,11 @@ def execute_stock_batch_governance(payload: dict[str, Any]) -> dict[str, Any]:
             output["stage_results"]["KNOWLEDGE_PIPELINE"] = {
                 "status": "SKIPPED", "message": "本次未选择湖仓或知识加工阶段",
             }
+
+        # Persist the explainable stage contract for newly completed runs.
+        # The API additionally derives it for historical runs written before
+        # this field existed.
+        _attach_verifiable_stage_results(output)
 
         has_failed_child = any(status == "FAILED" for status in child_statuses)
         has_partial_child = (
