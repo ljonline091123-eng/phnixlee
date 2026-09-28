@@ -436,13 +436,32 @@
 }
 
 .batch-stage-results li {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 7px 9px;
-  padding: 12px;
+  overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 10px;
   background: #fff;
+}
+
+.batch-stage-results li > button {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 7px 9px;
+  width: 100%;
+  min-height: 100%;
+  padding: 12px;
+  border: 0;
+  border-radius: inherit;
+  color: inherit;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.batch-stage-results li > button:hover,
+.batch-stage-results li > button:focus-visible,
+.batch-stage-results li.selected > button {
+  box-shadow: inset 0 0 0 2px rgba(79, 121, 91, .16);
+  outline: none;
 }
 
 .batch-stage-results li.success {
@@ -478,7 +497,7 @@
 .batch-stage-results li.partial .batch-stage-number { background: #b8872c; }
 .batch-stage-results li.failed .batch-stage-number { background: #bb5148; }
 
-.batch-stage-results li > div {
+.batch-stage-results li > button > div {
   min-width: 0;
 }
 
@@ -495,11 +514,148 @@
   overflow-wrap: anywhere;
 }
 
-.batch-stage-results li > small {
+.batch-stage-results li > button > small {
   grid-column: 2;
   color: var(--text-muted);
   font-size: 10px;
   font-weight: 800;
+}
+
+.batch-stage-detail {
+  display: grid;
+  gap: 13px;
+  padding: 14px;
+  border: 1px solid #c9d8ca;
+  border-radius: 11px;
+  background: #f8fbf7;
+}
+
+.batch-stage-detail > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.batch-stage-detail > header h5,
+.batch-stage-detail > header p {
+  margin: 0;
+}
+
+.batch-stage-detail > header h5 {
+  margin-top: 2px;
+  color: var(--text);
+  font-size: 14px;
+}
+
+.batch-stage-detail > header > div > p:last-child {
+  margin-top: 5px;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.batch-stage-detail-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 11px;
+}
+
+.batch-stage-detail-columns > section {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-width: 0;
+}
+
+.batch-stage-detail-columns h6 {
+  margin: 0;
+  color: var(--text);
+  font-size: 11px;
+}
+
+.batch-stage-detail-list {
+  display: grid;
+  gap: 7px;
+}
+
+.batch-stage-detail-list article {
+  display: grid;
+  gap: 7px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.batch-stage-detail-list article.success { border-color: #b8d6bd; }
+.batch-stage-detail-list article.partial,
+.batch-stage-detail-list article.running { border-color: #e0c98e; background: #fffdf7; }
+.batch-stage-detail-list article.failed { border-color: #dfaaa4; background: #fff8f6; }
+
+.batch-stage-detail-list article > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.batch-stage-detail-list article > header > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.batch-stage-detail-list article strong {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.batch-stage-detail-list article small {
+  color: var(--text-muted);
+  font-size: 9px;
+}
+
+.batch-stage-detail-list article > p,
+.batch-stage-detail-empty {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.batch-stage-detail-list article > dl {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+}
+
+.batch-stage-detail-list article > dl > div {
+  display: grid;
+  grid-template-columns: minmax(90px, auto) minmax(0, 1fr);
+  gap: 7px;
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.batch-stage-detail-list dt { color: var(--text-muted); }
+.batch-stage-detail-list dd { margin: 0; color: var(--text); overflow-wrap: anywhere; }
+.batch-stage-detail-empty { padding: 10px; border-radius: 7px; background: rgba(255, 255, 255, .75); }
+
+.batch-stage-verification-link {
+  justify-self: start;
+  color: #2f6642;
+  font-size: 10px;
+  font-weight: 750;
+  text-decoration: none;
+}
+
+.batch-stage-verification-link:hover,
+.batch-stage-verification-link:focus-visible {
+  text-decoration: underline;
 }
 
 .batch-governance-errors {
@@ -640,9 +796,14 @@
 
   .batch-governance-submit,
   .batch-governance-section-heading,
-  .batch-governance-progress > header {
+  .batch-governance-progress > header,
+  .batch-stage-detail > header {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .batch-stage-detail-columns {
+    grid-template-columns: 1fr;
   }
 
   .batch-governance-submit button {

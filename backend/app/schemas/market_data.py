@@ -115,6 +115,51 @@ class StockPipelineStatusSummary(BaseModel):
     knowledge_graph: StockPipelineStatusRead
 
 
+class StockPipelineVerificationRecord(BaseModel):
+    """A bounded, human-readable record used to verify a stage result."""
+
+    record_id: str
+    title: str
+    observed_at: str | None = None
+    source_name: str | None = None
+    source_url: str | None = None
+    verification_path: str | None = None
+    fields: dict[str, Any] = Field(default_factory=dict)
+
+
+class StockPipelineDetailItem(BaseModel):
+    """One completion criterion within a stock pipeline stage."""
+
+    code: str
+    label: str
+    status: str
+    record_count: int = 0
+    expected_count: int | None = None
+    last_at: datetime | None = None
+    reason: str
+    action_hint: str | None = None
+    verification_path: str | None = None
+    latest_attempt: dict[str, Any] | None = None
+    records: list[StockPipelineVerificationRecord] = Field(default_factory=list)
+
+
+class StockPipelineStageDetailRead(BaseModel):
+    stage: str
+    label: str
+    summary: StockPipelineStatusRead
+    completed_items: list[StockPipelineDetailItem] = Field(default_factory=list)
+    incomplete_items: list[StockPipelineDetailItem] = Field(default_factory=list)
+    verification: dict[str, Any] = Field(default_factory=dict)
+    notes: list[str] = Field(default_factory=list)
+
+
+class StockPipelineStatusDetailRead(BaseModel):
+    market: str
+    symbol: str
+    name: str
+    stages: dict[str, StockPipelineStageDetailRead]
+
+
 class StockSymbolRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

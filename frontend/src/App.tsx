@@ -43,6 +43,7 @@ import { KnowledgeGraphExplorer } from "./KnowledgeGraphExplorer";
 import { EnvironmentBanner } from "./EnvironmentBanner";
 import { KnowledgePipelinePanel } from "./KnowledgePipelinePanel";
 import { BatchStockGovernanceDialog } from "./BatchStockGovernanceDialog";
+import { StockPipelineStatusDialog, type StockPipelineStatusKey } from "./StockPipelineStatusDialog";
 import { OperationsCenter } from "./OperationsCenter";
 import { PlatformOverview, type PlatformNavigationTarget } from "./PlatformOverview";
 import {
@@ -95,8 +96,6 @@ function Status({ enabled }: { enabled: boolean }) {
   );
 }
 
-type StockPipelineStatusKey = "data_collection" | "knowledge_base" | "knowledge_graph";
-
 const stockPipelineStatusNames: Record<string, string> = {
   NOT_STARTED: "未开始",
   PARTIAL: "部分完成",
@@ -113,7 +112,7 @@ function stockPipelineStatus(stock: StockSymbol, key: StockPipelineStatusKey): S
   return status ? { status, label: stockPipelineStatusNames[status] || status } : { status: "NOT_STARTED", label: "未开始" };
 }
 
-function StockPipelineStatusTag({ stock, kind }: { stock: StockSymbol; kind: StockPipelineStatusKey }) {
+function StockPipelineStatusTag({ stock, kind, onClick }: { stock: StockSymbol; kind: StockPipelineStatusKey; onClick?: () => void }) {
   const value = stockPipelineStatus(stock, kind);
   const status = String(value.status || "NOT_STARTED").toUpperCase();
   const color = String(value.color || value.color_code || (status === "COMPLETED" ? "green" : status === "PARTIAL" || status === "PENDING" ? "yellow" : status === "FAILED" ? "red" : "gray")).toLowerCase();
@@ -122,7 +121,8 @@ function StockPipelineStatusTag({ stock, kind }: { stock: StockSymbol; kind: Sto
   const expected = value.expected_count;
   const progress = completed != null && expected != null ? `（${completed}/${expected}）` : "";
   const detail = value.detail ? Object.entries(value.detail).map(([name, count]) => `${name}: ${String(count)}`).join("；") : "";
-  return <span className={`stock-pipeline-status ${color}`} title={[label + progress, value.last_at ? `最近更新：${formatDate(value.last_at)}` : "", detail].filter(Boolean).join("\n")}><i aria-hidden="true" />{label}{progress}</span>;
+  const title = [label + progress, value.last_at ? `最近更新：${formatDate(value.last_at)}` : "", detail, "点击查看完成项、未完成项和核验详情"].filter(Boolean).join("\n");
+  return <button type="button" className={`stock-pipeline-status ${color}`} title={title} onClick={onClick} aria-label={`${label}${progress}，点击查看详情`}><i aria-hidden="true" />{label}{progress}</button>;
 }
 function formatDate(value?: string | null) {
   return value ? new Date(value).toLocaleString("zh-CN") : "--";
@@ -247,6 +247,7 @@ function DataConsolePage({ tab, setTab }: { tab: DataView; setTab: (tab: DataVie
   const [notice, setNotice] = useState("");
   const [loading, setLoading] = useState(false);
   const [detailStock, setDetailStock] = useState<StockSymbol | null>(null);
+  const [pipelineStatusDetail, setPipelineStatusDetail] = useState<{ stock: StockSymbol; kind: StockPipelineStatusKey } | null>(null);
   const [selectedStocks, setSelectedStocks] = useState<Record<string, StockSymbol>>({});
   const [batchGovernanceOpen, setBatchGovernanceOpen] = useState(false);
   const pageSelectionRef = useRef<HTMLInputElement>(null);
@@ -614,9 +615,9 @@ function DataConsolePage({ tab, setTab }: { tab: DataView; setTab: (tab: DataVie
                     <td>{stock.exchange}</td>
                     <td>{stock.list_date || "--"}</td>
                     <td>{stock.status}</td>
-                    <td><StockPipelineStatusTag stock={stock} kind="data_collection" /></td>
-                    <td><StockPipelineStatusTag stock={stock} kind="knowledge_base" /></td>
-                    <td><StockPipelineStatusTag stock={stock} kind="knowledge_graph" /></td>
+                    <td><StockPipelineStatusTag stock={stock} kind="data_collection" onClick={() => setPipelineStatusDetail({ stock, kind: "data_collection" })} /></td>
+                    <td><StockPipelineStatusTag stock={stock} kind="knowledge_base" onClick={() => setPipelineStatusDetail({ stock, kind: "knowledge_base" })} /></td>
+                    <td><StockPipelineStatusTag stock={stock} kind="knowledge_graph" onClick={() => setPipelineStatusDetail({ stock, kind: "knowledge_graph" })} /></td>
                   </tr>
                 ))}
                 {!symbols.length && (
@@ -645,6 +646,12 @@ function DataConsolePage({ tab, setTab }: { tab: DataView; setTab: (tab: DataVie
           onClose={() => setDetailStock(null)}
         />
       )}
+      {pipelineStatusDetail && <StockPipelineStatusDialog
+        stock={pipelineStatusDetail.stock}
+        kind={pipelineStatusDetail.kind}
+        summary={stockPipelineStatus(pipelineStatusDetail.stock, pipelineStatusDetail.kind)}
+        onClose={() => setPipelineStatusDetail(null)}
+      />}
       <BatchStockGovernanceDialog
         open={batchGovernanceOpen}
         stocks={selectedStockList}

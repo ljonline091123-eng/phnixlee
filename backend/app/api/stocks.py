@@ -1,3 +1,4 @@
+import json
 from types import SimpleNamespace
 from typing import Any
 
@@ -65,6 +66,7 @@ from app.schemas.market_data import (
     StockNoticeRead,
     StockNoticePage,
     StockF10Read,
+    StockPipelineStatusDetailRead,
     StockSymbolPage,
     StockSymbolRead,
     StockSyncRequest,
@@ -631,6 +633,597 @@ def _stock_pipeline_status(db: Session, stock: StockSymbol) -> dict[str, Any]:
     the paged master-data endpoint uses the batch implementation directly.
     """
     return _stock_pipeline_statuses(db, [stock])[(stock.market, stock.symbol)]
+
+
+_BUSINESS_STAGE_ITEMS: dict[str, tuple[str, Any, str]] = {
+    # There is no standalone GET /quote endpoint; use the auditable pipeline
+    # detail route so the UI's verification link always resolves and still
+    # exposes the persisted quote sample together with its source metadata.
+    "QUOTE": ("实时行情", StockRealtimeQuote, "pipeline-status-detail?sample_limit=5"),
+    "KLINE": ("历史量价", StockKline, "kline"),
+    "FINANCIAL": ("财务数据", StockFinancialReport, "financials"),
+    "NEWS": ("新闻资讯", StockNews, "news/page"),
+    "NOTICE": ("公司公告", StockNotice, "notices/page"),
+    "F10": ("F10资料", StockF10Cache, "f10?local_only=true"),
+}
+
+
+def _pipeline_text(value: Any) -> str | None:
+    if value is None:
+        return None
+    if hasattr(value, "isoformat"):
+        return value.isoformat()
+    return str(value)
+
+
+def _pipeline_preview(value: Any, limit: int = 260) -> str:
+    if value in (None, "", {}, []):
+        return ""
+    if isinstance(value, str):
+        text = value
+    else:
+        text = json.dumps(value, ensure_ascii=False, default=str, separators=(",", ":"))
+    return text if len(text) <= limit else f"{text[:limit]}…"
+
+
+def _pipeline_source_names(db: Session, source_ids: set[int]) -> dict[int, str]:
+    if not source_ids:
+        return {}
+    return {
+        int(source_id): str(source_name)
+        for source_id, source_name in db.execute(
+            select(DataSource.id, DataSource.source_name).where(DataSource.id.in_(source_ids))
+        ).all()
+    }
+
+
+def _pipeline_record(
+    *,
+    record_id: Any,
+    title: str,
+    observed_at: Any = None,
+    source_name: str | None = None,
+    source_url: str | None = None,
+    verification_path: str | None = None,
+    fields: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    return {
+        "record_id": str(record_id),
+        "title": title,
+        "observed_at": _pipeline_text(observed_at),
+        "source_name": source_name,
+        "source_url": source_url,
+        "verification_path": verification_path,
+        "fields": fields or {},
+    }
+
+
+def _business_sample_rows(
+    db: Session,
+    stock: StockSymbol,
+    *,
+    sample_limit: int,
+) -> dict[str, list[Any]]:
+    pair = lambda model: (model.market == stock.market) & (model.symbol == stock.symbol)
+    return {
+        "QUOTE": list(db.scalars(
+            select(StockRealtimeQuote).where(pair(StockRealtimeQuote))
+            .order_by(StockRealtimeQuote.fetched_at.desc()).limit(sample_limit)
+        ).all()),
+        "KLINE": list(db.scalars(
+            select(StockKline).where(pair(StockKline))
+            .order_by(StockKline.trade_date.desc(), StockKline.id.desc()).limit(sample_limit)
+        ).all()),
+        "FINANCIAL": list(db.scalars(
+            select(StockFinancialReport).where(pair(StockFinancialReport))
+            .order_by(StockFinancialReport.report_period.desc(), StockFinancialReport.id.desc()).limit(sample_limit)
+        ).all()),
+        "NEWS": list(db.scalars(
+            select(StockNews).where(pair(StockNews))
+            .order_by(StockNews.news_time.desc(), StockNews.id.desc()).limit(sample_limit)
+        ).all()),
+        "NOTICE": list(db.scalars(
+            select(StockNotice).where(pair(StockNotice))
+            .order_by(StockNotice.notice_date.desc(), StockNotice.id.desc()).limit(sample_limit)
+        ).all()),
+        "F10": [
+            row for row in db.scalars(
+                select(StockF10Cache).where(pair(StockF10Cache))
+                .order_by(StockF10Cache.fetched_at.desc(), StockF10Cache.id.desc())
+                .limit(max(sample_limit * 4, sample_limit))
+            ).all()
+            if row.payload_json
+        ][:sample_limit],
+    }
+
+
+def _business_record(
+    code: str,
+    row: Any,
+    *,
+    source_names: dict[int, str],
+    verification_path: str,
+) -> dict[str, Any]:
+    source_name = source_names.get(int(row.source_id)) if getattr(row, "source_id", None) else None
+    if code == "QUOTE":
+        return _pipeline_record(
+            record_id=row.id, title=f"{row.quote_time or '最新'} 实时行情",
+            observed_at=row.quote_time or row.fetched_at, source_name=source_name,
+            verification_path=verification_path,
+            fields={"当前价": row.current_price, "涨跌幅": row.change_pct, "成交量": row.volume,
+                    "成交额": row.amount, "换手率": row.turnover_rate},
+        )
+    if code == "KLINE":
+        return _pipeline_record(
+            record_id=row.id, title=f"{row.trade_date} 日线",
+            observed_at=row.trade_date, source_name=source_name, verification_path=verification_path,
+            fields={"开盘价": row.open_price, "最高价": row.high_price, "最低价": row.low_price,
+                    "收盘价": row.close_price, "成交量": row.volume, "成交额": row.amount,
+                    "换手率": row.turnover_rate},
+        )
+    if code == "FINANCIAL":
+        return _pipeline_record(
+            record_id=row.id, title=f"{row.report_period} · {row.indicator}",
+            observed_at=row.report_period, source_name=source_name, source_url=row.url,
+            verification_path=verification_path,
+            fields={"报告期": row.report_period, "指标类型": row.indicator, "币种": row.currency,
+                    "数据摘要": _pipeline_preview(row.data_json)},
+        )
+    if code == "NEWS":
+        return _pipeline_record(
+            record_id=row.id, title=row.title, observed_at=row.news_time,
+            source_name=row.source_name or source_name, source_url=row.url,
+            verification_path=verification_path,
+            fields={"正文摘要": _pipeline_preview(row.content or row.content_json)},
+        )
+    if code == "NOTICE":
+        return _pipeline_record(
+            record_id=row.id, title=row.title, observed_at=row.notice_date,
+            source_name=source_name, source_url=row.url, verification_path=verification_path,
+            fields={"公告类型": row.notice_type, "内容摘要": _pipeline_preview(row.content_json)},
+        )
+    return _pipeline_record(
+        record_id=row.id, title=f"F10 · {row.section}", observed_at=row.fetched_at,
+        source_name=source_name, verification_path=verification_path,
+        fields={"资料分区": row.section, "内容摘要": _pipeline_preview(row.payload_json)},
+    )
+
+
+def _fetch_log_category(interface_code: str) -> str | None:
+    upper = str(interface_code or "").upper()
+    for code in ("FINANCIAL", "NOTICE", "KLINE", "QUOTE", "NEWS", "F10"):
+        if code in upper:
+            return code
+    return None
+
+
+def _latest_business_attempts(db: Session, stock: StockSymbol) -> dict[str, dict[str, Any]]:
+    attempts: dict[str, dict[str, Any]] = {}
+    logs = db.scalars(
+        select(DataFetchLog)
+        .where(DataFetchLog.market == stock.market, DataFetchLog.symbol == stock.symbol)
+        .order_by(DataFetchLog.started_at.desc(), DataFetchLog.id.desc())
+        .limit(100)
+    ).all()
+    source_names = _pipeline_source_names(db, {int(row.source_id) for row in logs})
+    for row in logs:
+        code = _fetch_log_category(row.interface_code)
+        if not code or code in attempts:
+            continue
+        attempts[code] = {
+            "fetch_log_id": row.id,
+            "interface_code": row.interface_code,
+            "status": row.status,
+            "total_count": int(row.total_count or 0),
+            "persisted_count": int(row.persisted_count or 0),
+            "source_name": source_names.get(int(row.source_id)),
+            "error_message": row.error_message,
+            "started_at": row.started_at,
+            "completed_at": row.completed_at,
+        }
+    return attempts
+
+
+def _data_collection_stage_detail(
+    db: Session,
+    stock: StockSymbol,
+    summary: dict[str, Any],
+    *,
+    sample_limit: int,
+) -> dict[str, Any]:
+    counts = {code: int((summary.get("detail") or {}).get(code) or 0) for code in _BUSINESS_STAGE_ITEMS}
+    rows_by_code = _business_sample_rows(db, stock, sample_limit=sample_limit)
+    source_ids = {
+        int(row.source_id)
+        for rows in rows_by_code.values() for row in rows
+        if getattr(row, "source_id", None) is not None
+    }
+    source_names = _pipeline_source_names(db, source_ids)
+    attempts = _latest_business_attempts(db, stock)
+    completed_items: list[dict[str, Any]] = []
+    incomplete_items: list[dict[str, Any]] = []
+    verification_records: list[dict[str, Any]] = []
+    for code, (label, _model, path_suffix) in _BUSINESS_STAGE_ITEMS.items():
+        count = counts[code]
+        api_path = f"/api/v1/stocks/{stock.market}/{stock.symbol}/{path_suffix}"
+        records = [
+            _business_record(
+                code, row, source_names=source_names, verification_path=api_path,
+            )
+            for row in rows_by_code[code]
+        ]
+        verification_records.extend(records)
+        latest_attempt = attempts.get(code)
+        if count > 0:
+            reason = f"已形成 {count} 条可追溯的持久化记录。"
+            action_hint = None
+            if latest_attempt and latest_attempt.get("status") == "FAILED":
+                reason += f" 最近一次刷新失败：{latest_attempt.get('error_message') or '数据源调用失败'}"
+                action_hint = "现有记录仍可核验；建议稍后重新采集以恢复数据新鲜度。"
+            item_status = "COMPLETED"
+            target = completed_items
+        elif latest_attempt and latest_attempt.get("status") == "FAILED":
+            item_status = "FAILED"
+            reason = f"最近一次采集失败：{latest_attempt.get('error_message') or '数据源调用失败'}"
+            action_hint = "检查数据源可用性、接口限流或参数后重新采集。"
+            target = incomplete_items
+        elif latest_attempt and latest_attempt.get("status") == "RUNNING":
+            item_status = "PROCESSING"
+            reason = "采集任务正在执行，尚未产生持久化记录。"
+            action_hint = "等待当前任务完成后刷新状态。"
+            target = incomplete_items
+        elif latest_attempt and latest_attempt.get("status") == "SUCCESS":
+            item_status = "EMPTY"
+            reason = "最近一次接口调用成功，但未返回或未持久化有效记录。"
+            action_hint = "核对上游覆盖范围与返回内容；必要时切换备用数据源。"
+            target = incomplete_items
+        else:
+            item_status = "NOT_STARTED"
+            reason = "尚未发现该类业务数据，也没有可关联的采集日志。"
+            action_hint = "在股票主数据页勾选该股票并执行业务数据采集。"
+            target = incomplete_items
+        target.append({
+            "code": code,
+            "label": label,
+            "status": item_status,
+            "record_count": count,
+            "expected_count": 1,
+            "last_at": max(
+                (getattr(row, "fetched_at", None) for row in rows_by_code[code] if getattr(row, "fetched_at", None)),
+                default=None,
+            ),
+            "reason": reason,
+            "action_hint": action_hint,
+            "verification_path": api_path,
+            "latest_attempt": latest_attempt,
+            "records": records,
+        })
+    return {
+        "stage": "data_collection",
+        "label": "业务数据采集",
+        "summary": summary,
+        "completed_items": completed_items,
+        "incomplete_items": incomplete_items,
+        "verification": {
+            "total_count": sum(counts.values()),
+            "sample_count": len(verification_records),
+            "records": verification_records,
+        },
+        "notes": ["完成状态按数据库中的实际持久化记录判定；最近采集失败不会抹除已有记录。"],
+    }
+
+
+def _document_chunk_counts(db: Session, document_ids: list[str]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for offset in range(0, len(document_ids), 500):
+        batch = document_ids[offset : offset + 500]
+        if not batch:
+            continue
+        counts.update({
+            str(document_id): int(count or 0)
+            for document_id, count in db.execute(
+                select(DocumentChunkVersion.document_id, func.count())
+                .where(DocumentChunkVersion.document_id.in_(batch))
+                .group_by(DocumentChunkVersion.document_id)
+            ).all()
+        })
+    return counts
+
+
+def _knowledge_base_stage_detail(
+    db: Session,
+    stock: StockSymbol,
+    summary: dict[str, Any],
+    *,
+    sample_limit: int,
+) -> dict[str, Any]:
+    documents = list(db.scalars(
+        select(KnowledgeDocument)
+        .where(KnowledgeDocument.market == stock.market, KnowledgeDocument.symbol == stock.symbol)
+        .order_by(KnowledgeDocument.updated_at.desc(), KnowledgeDocument.id.desc())
+    ).all())
+    chunk_counts = _document_chunk_counts(db, [str(row.id) for row in documents])
+    chunked = [row for row in documents if chunk_counts.get(str(row.id), 0) > 0]
+    unchunked = [row for row in documents if chunk_counts.get(str(row.id), 0) <= 0]
+
+    def document_record(row: KnowledgeDocument, *, missing_reason: str | None = None) -> dict[str, Any]:
+        path = (
+            f"/api/v1/resources/knowledge-graphs/{row.graph_id}/documents/{row.id}"
+            if row.graph_id else None
+        )
+        fields: dict[str, Any] = {
+            "来源表": row.source_table,
+            "来源记录ID": row.source_record_id,
+            "切片数": chunk_counts.get(str(row.id), 0),
+            "正文长度": len(row.content or ""),
+            "正文摘要": _pipeline_preview(row.content),
+        }
+        if missing_reason:
+            fields["未完成原因"] = missing_reason
+        return _pipeline_record(
+            record_id=row.id, title=row.title, observed_at=row.updated_at,
+            source_name=row.source_table, verification_path=path, fields=fields,
+        )
+
+    document_records = [document_record(row) for row in documents[:sample_limit]]
+    chunked_records = [document_record(row) for row in chunked[:sample_limit]]
+    unchunked_records = [
+        document_record(
+            row,
+            missing_reason=(
+                "文档正文为空，无法生成有效切片。"
+                if not (row.content or "").strip()
+                else "该文档尚未被切片任务覆盖，或切片写入未成功。"
+            ),
+        )
+        for row in unchunked[:sample_limit]
+    ]
+    completed_items: list[dict[str, Any]] = []
+    incomplete_items: list[dict[str, Any]] = []
+
+    if documents:
+        completed_items.append({
+            "code": "KNOWLEDGE_DOCUMENTS", "label": "知识文档",
+            "status": "COMPLETED", "record_count": len(documents), "expected_count": 1,
+            "last_at": max((row.updated_at for row in documents), default=None),
+            "reason": f"已生成 {len(documents)} 份可追溯知识文档。",
+            "action_hint": None, "verification_path": None, "latest_attempt": None,
+            "records": document_records,
+        })
+    else:
+        incomplete_items.append({
+            "code": "KNOWLEDGE_DOCUMENTS", "label": "知识文档",
+            "status": "NOT_STARTED", "record_count": 0, "expected_count": 1,
+            "last_at": None,
+            "reason": "尚未找到与该股票关联的知识文档。",
+            "action_hint": "执行知识库加工；若业务数据已采集，确认所选知识库覆盖对应来源表。",
+            "verification_path": None, "latest_attempt": None, "records": [],
+        })
+
+    if documents and not unchunked:
+        completed_items.append({
+            "code": "DOCUMENT_CHUNKS", "label": "文档切片",
+            "status": "COMPLETED", "record_count": len(chunked), "expected_count": len(documents),
+            "last_at": max((row.updated_at for row in chunked), default=None),
+            "reason": f"{len(documents)} 份文档均已生成切片，共 {sum(chunk_counts.values())} 个切片。",
+            "action_hint": None, "verification_path": "/api/v1/lakehouse/chunks",
+            "latest_attempt": None, "records": chunked_records,
+        })
+    else:
+        chunk_status = "PARTIAL" if chunked else "NOT_STARTED"
+        reason = (
+            f"已切片 {len(chunked)}/{len(documents)} 份文档，仍有 {len(unchunked)} 份未完成。"
+            if documents else "没有可供切片的知识文档。"
+        )
+        incomplete_items.append({
+            "code": "DOCUMENT_CHUNKS", "label": "文档切片",
+            "status": chunk_status, "record_count": len(chunked), "expected_count": len(documents),
+            "last_at": max((row.updated_at for row in chunked), default=None),
+            "reason": reason,
+            "action_hint": "重新执行知识库与切片阶段，并检查空正文、范围截断和切片失败记录。",
+            "verification_path": "/api/v1/lakehouse/chunks",
+            "latest_attempt": None, "records": unchunked_records,
+        })
+
+    return {
+        "stage": "knowledge_base",
+        "label": "知识库与切片",
+        "summary": summary,
+        "completed_items": completed_items,
+        "incomplete_items": incomplete_items,
+        "verification": {
+            "document_count": len(documents),
+            "documents_with_chunks": len(chunked),
+            "documents_without_chunks": len(unchunked),
+            "chunk_count": sum(chunk_counts.values()),
+            "records": document_records,
+            "incomplete_records": unchunked_records,
+        },
+        "notes": ["知识文档与切片分别核验；有文档不等于切片已完整覆盖。"],
+    }
+
+
+def _knowledge_graph_stage_detail(
+    db: Session,
+    stock: StockSymbol,
+    summary: dict[str, Any],
+    *,
+    sample_limit: int,
+) -> dict[str, Any]:
+    graph_ids = {
+        int(graph_id)
+        for graph_id in db.scalars(
+            select(KnowledgeDocument.graph_id).where(
+                KnowledgeDocument.market == stock.market,
+                KnowledgeDocument.symbol == stock.symbol,
+                KnowledgeDocument.graph_id.is_not(None),
+            )
+        ).all()
+        if graph_id is not None
+    }
+    graphs = list(db.scalars(
+        select(KnowledgeGraph).where(KnowledgeGraph.id.in_(sorted(graph_ids)))
+        .order_by(KnowledgeGraph.updated_at.desc(), KnowledgeGraph.id.desc())
+    ).all()) if graph_ids else []
+    entities: list[KnowledgeEntity] = []
+    if graph_ids:
+        suffix = f":{stock.market}:{stock.symbol}"
+        entities = [
+            row for row in db.scalars(
+                select(KnowledgeEntity).where(
+                    KnowledgeEntity.graph_id.in_(sorted(graph_ids)),
+                    KnowledgeEntity.entity_type == "STOCK",
+                )
+            ).all()
+            if str(row.entity_key or "").endswith(suffix)
+        ]
+    entity_ids = [row.id for row in entities]
+    relations: list[KnowledgeRelation] = []
+    if entity_ids:
+        relations = list(db.scalars(
+            select(KnowledgeRelation).where(
+                KnowledgeRelation.graph_id.in_(sorted(graph_ids)),
+                or_(
+                    KnowledgeRelation.subject_entity_id.in_(entity_ids),
+                    KnowledgeRelation.object_entity_id.in_(entity_ids),
+                ),
+            ).order_by(KnowledgeRelation.id.desc()).limit(max(sample_limit, 1))
+        ).all())
+    relation_entity_ids = {
+        int(entity_id)
+        for row in relations
+        for entity_id in (row.subject_entity_id, row.object_entity_id)
+    }
+    entity_names = {
+        int(entity_id): {"name": entity_name, "type": entity_type}
+        for entity_id, entity_name, entity_type in db.execute(
+            select(KnowledgeEntity.id, KnowledgeEntity.entity_name, KnowledgeEntity.entity_type)
+            .where(KnowledgeEntity.id.in_(sorted(relation_entity_ids)))
+        ).all()
+    } if relation_entity_ids else {}
+
+    graph_records = [
+        _pipeline_record(
+            record_id=row.id, title=row.graph_name,
+            observed_at=row.last_governed_at or row.updated_at,
+            source_name="知识图谱",
+            verification_path=f"/api/v1/resources/knowledge-graphs/{row.id}/explore",
+            fields={"图谱代码": row.graph_code, "版本": row.version,
+                    "治理状态": row.governance_status, "实体数": row.entity_count,
+                    "关系数": row.relation_count, "来源表": row.source_tables},
+        )
+        for row in graphs[:sample_limit]
+    ]
+    entity_records = [
+        _pipeline_record(
+            record_id=row.id, title=row.entity_name, observed_at=row.updated_at,
+            source_name="知识实体",
+            verification_path=f"/api/v1/resources/knowledge-graphs/{row.graph_id}/explore",
+            fields={"实体类型": row.entity_type, "实体标识": row.entity_key,
+                    "图谱ID": row.graph_id, "属性": _pipeline_preview(row.properties_json)},
+        )
+        for row in entities[:sample_limit]
+    ]
+    relation_records = [
+        _pipeline_record(
+            record_id=row.id,
+            title=(
+                f"{entity_names.get(row.subject_entity_id, {}).get('name', row.subject_entity_id)} "
+                f"—{row.predicate}→ "
+                f"{entity_names.get(row.object_entity_id, {}).get('name', row.object_entity_id)}"
+            ),
+            source_name="知识关系",
+            verification_path=f"/api/v1/resources/knowledge-graphs/{row.graph_id}/explore",
+            fields={
+                "关系类型": row.predicate,
+                "主体类型": entity_names.get(row.subject_entity_id, {}).get("type"),
+                "客体类型": entity_names.get(row.object_entity_id, {}).get("type"),
+                "证据文档ID": row.evidence_document_id,
+                "图谱ID": row.graph_id,
+            },
+        )
+        for row in relations
+    ]
+    governed_count = sum(row.governance_status in {"GOVERNED", "LOCKED"} for row in graphs)
+    criteria = [
+        ("GRAPH_PROJECTION", "图谱投影", len(graphs), graph_records,
+         "已找到与该股票知识文档绑定的图谱投影。",
+         "尚未找到与该股票知识文档绑定的图谱投影。",
+         "执行知识图谱投影；确认知识文档已绑定 graph_id。"),
+        ("STOCK_ENTITY", "股票实体", len(entities), entity_records,
+         "图谱中已建立统一股票实体。",
+         "图谱存在，但未找到该市场与代码对应的股票实体。",
+         "检查统一身份标识与 STOCK 实体键后重新投影。"),
+        ("GRAPH_RELATIONS", "关联关系", int((summary.get("detail") or {}).get("relation_count") or 0), relation_records,
+         "股票实体已与其他知识节点建立关系。",
+         "已有股票实体，但尚未形成可核验关联关系。",
+         "检查来源文档是否产生实体，并重新执行关系构建。"),
+    ]
+    completed_items: list[dict[str, Any]] = []
+    incomplete_items: list[dict[str, Any]] = []
+    for code, label, count, records, ok_reason, missing_reason, action_hint in criteria:
+        completed = count > 0
+        target = completed_items if completed else incomplete_items
+        target.append({
+            "code": code, "label": label,
+            "status": "COMPLETED" if completed else "NOT_STARTED",
+            "record_count": count, "expected_count": 1,
+            "last_at": max(
+                (row.last_governed_at or row.updated_at for row in graphs), default=None,
+            ) if graphs else None,
+            "reason": ok_reason if completed else missing_reason,
+            "action_hint": None if completed else action_hint,
+            "verification_path": (
+                f"/api/v1/resources/knowledge-graphs/{graphs[0].id}/explore" if graphs else None
+            ),
+            "latest_attempt": None, "records": records,
+        })
+    notes = ["图谱完成按投影、股票实体和关联关系三项持久化结果判定。"]
+    if graphs and governed_count < len(graphs):
+        notes.append(f"{len(graphs) - governed_count} 个图谱投影尚未达到 GOVERNED/LOCKED，仍需治理复核。")
+    return {
+        "stage": "knowledge_graph",
+        "label": "知识图谱",
+        "summary": summary,
+        "completed_items": completed_items,
+        "incomplete_items": incomplete_items,
+        "verification": {
+            "graph_count": len(graphs),
+            "entity_count": len(entities),
+            "relation_count": int((summary.get("detail") or {}).get("relation_count") or 0),
+            "governed_graph_count": governed_count,
+            "graphs": graph_records,
+            "entities": entity_records,
+            "relations": relation_records,
+            "records": graph_records + entity_records + relation_records,
+        },
+        "notes": notes,
+    }
+
+
+def _stock_pipeline_status_detail(
+    db: Session,
+    stock: StockSymbol,
+    *,
+    sample_limit: int = 5,
+) -> dict[str, Any]:
+    summary = _stock_pipeline_status(db, stock)
+    return {
+        "market": stock.market,
+        "symbol": stock.symbol,
+        "name": stock.name,
+        "stages": {
+            "data_collection": _data_collection_stage_detail(
+                db, stock, summary["data_collection"], sample_limit=sample_limit,
+            ),
+            "knowledge_base": _knowledge_base_stage_detail(
+                db, stock, summary["knowledge_base"], sample_limit=sample_limit,
+            ),
+            "knowledge_graph": _knowledge_graph_stage_detail(
+                db, stock, summary["knowledge_graph"], sample_limit=sample_limit,
+            ),
+        },
+    }
 
 
 def _stock_symbol_read(stock: StockSymbol, quote: Any | None = None, db: Session | None = None) -> dict[str, Any]:
@@ -1257,6 +1850,32 @@ def list_fetch_logs(
     return list(db.scalars(statement).all())
 
 
+@router.get(
+    "/{market}/{symbol}/pipeline-status-detail",
+    response_model=StockPipelineStatusDetailRead,
+)
+def get_stock_pipeline_status_detail(
+    market: str,
+    symbol: str,
+    sample_limit: int = 5,
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    """Explain and verify each persisted data-to-knowledge stage for one stock."""
+    if sample_limit < 1 or sample_limit > 20:
+        raise HTTPException(status_code=422, detail="样本数量必须在 1 到 20 之间")
+    normalized_market = market.upper()
+    if normalized_market not in MASTER_MARKETS:
+        raise HTTPException(status_code=422, detail=f"市场必须是以下之一：{', '.join(MASTER_MARKETS)}")
+    normalized_symbol = _normalize_symbol(normalized_market, symbol)
+    stock = db.scalar(select(StockSymbol).where(
+        StockSymbol.market == normalized_market,
+        StockSymbol.symbol == normalized_symbol,
+    ))
+    if stock is None:
+        raise HTTPException(status_code=404, detail="股票主数据不存在")
+    return _stock_pipeline_status_detail(db, stock, sample_limit=sample_limit)
+
+
 @router.get("/{market}/{symbol}", response_model=StockSymbolRead)
 def get_stock_symbol(market: str, symbol: str, db: Session = Depends(get_db)) -> dict[str, Any]:
     normalized_market = market.upper()
@@ -1268,7 +1887,7 @@ def get_stock_symbol(market: str, symbol: str, db: Session = Depends(get_db)) ->
         )
     )
     if not item:
-        raise HTTPException(status_code=404, detail="Stock symbol not found")
+        raise HTTPException(status_code=404, detail="股票主数据不存在")
     quote = db.scalar(
         select(StockRealtimeQuote)
         .where(StockRealtimeQuote.market == normalized_market, StockRealtimeQuote.symbol == normalized_symbol)
