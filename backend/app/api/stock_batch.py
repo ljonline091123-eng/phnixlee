@@ -479,7 +479,10 @@ def _job_view(db: Session, job: ScheduledJob, *, details: bool = True) -> dict:
         "completed_at": job.completed_at,
         "worker_required": job.status in {"PENDING", "RETRY"},
         "worker_task_type": TASK_TYPE,
-        "worker_command": f"python -m app.jobs.worker --task-type {TASK_TYPE} --lease-seconds 7200",
+        "worker_command": (
+            f"python -m app.jobs.worker --task-type {TASK_TYPE} "
+            "--lease-seconds 7200 --reload"
+        ),
     }
     if details:
         status.update({

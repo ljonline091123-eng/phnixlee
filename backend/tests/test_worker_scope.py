@@ -119,3 +119,38 @@ def test_cli_without_flags_keeps_continuous_global_worker(monkeypatch):
         worker_module.main([])
     assert calls == [("init", {"seed_defaults": False}),
                      ("worker", {"task_types": None, "lease_seconds": 900}), ("sleep", 2)]
+
+
+def test_cli_reload_restarts_worker_after_source_change(monkeypatch):
+    calls = []
+    signatures = iter(((10, 100, 1000), (10, 101, 1000)))
+
+    class WorkerRestarted(Exception):
+        pass
+
+    class StubWorker:
+        def __init__(self, **kwargs):
+            calls.append(("worker", kwargs))
+
+        def run_once(self):
+            calls.append(("run", {}))
+            return False
+
+    def restart(arguments):
+        calls.append(("restart", arguments))
+        raise WorkerRestarted
+
+    monkeypatch.setattr(worker_module, "initialize_database", lambda **kwargs: calls.append(("init", kwargs)))
+    monkeypatch.setattr(worker_module, "JobWorker", StubWorker)
+    monkeypatch.setattr(worker_module, "_source_signature", lambda: next(signatures))
+    monkeypatch.setattr(worker_module, "_restart_current_worker", restart)
+
+    arguments = ["--task-type", "stock_batch_governance", "--lease-seconds", "7200", "--reload"]
+    with pytest.raises(WorkerRestarted):
+        worker_module.main(arguments)
+
+    assert calls == [
+        ("init", {"seed_defaults": False}),
+        ("worker", {"task_types": ("stock_batch_governance",), "lease_seconds": 7200}),
+        ("restart", arguments),
+    ]

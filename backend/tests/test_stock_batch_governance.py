@@ -110,6 +110,7 @@ def test_submit_is_idempotent_and_exposes_worker_contract() -> None:
             assert detail["worker_required"] is True
             assert detail["worker_task_type"] == "stock_batch_governance"
             assert "--task-type stock_batch_governance" in detail["worker_command"]
+            assert "--reload" in detail["worker_command"]
             listing = list_stock_batch_governance_jobs(limit=20, db=db)
             assert listing["total"] == 1
             assert listing["items"][0]["job_id"] == first["job_id"]

@@ -5,9 +5,11 @@ from __future__ import annotations
 import argparse
 import os
 import socket
+import sys
 import time
 from datetime import datetime, timedelta, timezone
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 from sqlalchemy import or_, select
@@ -21,6 +23,37 @@ from app.models.pipeline import PipelineRun, PipelineStageRun, ScheduledJob
 
 def utc_now() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _source_signature(source_root: Path | None = None) -> tuple[int, int, int]:
+    """Return a cheap signature for Python sources loaded by this worker.
+
+    The API development server reloads itself, while the queue worker is a
+    separate long-lived process.  Watching file metadata lets the local
+    worker restart between jobs whenever backend code changes, so a new API
+    payload is never consumed by an old in-memory schema.
+    """
+    root = source_root or Path(__file__).resolve().parents[1]
+    file_count = 0
+    latest_mtime_ns = 0
+    total_size = 0
+    for path in root.rglob("*.py"):
+        try:
+            stat = path.stat()
+        except OSError:
+            continue
+        file_count += 1
+        latest_mtime_ns = max(latest_mtime_ns, stat.st_mtime_ns)
+        total_size += stat.st_size
+    return file_count, latest_mtime_ns, total_size
+
+
+def _restart_current_worker(arguments: list[str]) -> None:
+    """Replace the current process after its loaded source becomes stale."""
+    os.execv(
+        sys.executable,
+        [sys.executable, "-m", "app.jobs.worker", *arguments],
+    )
 
 
 class JobWorker:
@@ -196,13 +229,19 @@ class JobWorker:
 
 
 def main(argv: list[str] | None = None) -> None:
+    arguments = list(argv) if argv is not None else sys.argv[1:]
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--task-type", action="append", choices=sorted(TASK_HANDLERS),
                         help="Only claim this task type; repeat to allow more types")
     parser.add_argument("--once", action="store_true",
                         help="Attempt one eligible job and then exit, even if the queue is empty")
     parser.add_argument("--lease-seconds", type=int, default=900)
-    args = parser.parse_args(argv)
+    parser.add_argument(
+        "--reload",
+        action="store_true",
+        help="Restart between jobs when backend Python source files change",
+    )
+    args = parser.parse_args(arguments)
     if args.lease_seconds <= 0:
         parser.error("--lease-seconds must be positive")
     initialize_database(seed_defaults=False)
@@ -211,7 +250,11 @@ def main(argv: list[str] | None = None) -> None:
     if args.once:
         worker.run_once()
         return
+    source_signature = _source_signature() if args.reload else None
     while True:
+        if args.reload and _source_signature() != source_signature:
+            _restart_current_worker(arguments)
+            return
         if not worker.run_once():
             time.sleep(2)
 
