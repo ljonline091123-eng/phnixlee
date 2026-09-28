@@ -15,9 +15,17 @@ from sqlalchemy.orm import Session
 
 from app.core.markets import MARKET_CN_A, digit_length_for_market
 from app.db.session import SessionLocal
+from app.models.ai_hub import KnowledgeDocument
+from app.models.lakehouse import DocumentChunkVersion
 from app.models.market_data import DataFetchLog, DataSource, StockSymbol
 from app.models.pipeline import PipelineRun
-from app.schemas.stock_batch import MASTER_BUSINESS_TYPES, StockBatchGovernanceRequest
+from app.schemas.stock_batch import (
+    DOCUMENT_CHUNKS_CONTINUATION,
+    MASTER_BUSINESS_TYPES,
+    SCOPED_GRAPH_CONTINUATION,
+    StockBatchGovernanceRequest,
+)
+from app.services import lakehouse
 from app.services.catalog import select_data_source
 from app.services.f10 import _fetch_and_cache_f10_extended_data, _section_has_payload
 from app.services.knowledge_pipeline import run_stock_pipeline
@@ -173,6 +181,115 @@ def _save_progress(
     db.commit()
 
 
+def _chunked_document_ids(db: Session, document_ids: list[str]) -> set[str]:
+    chunked: set[str] = set()
+    for offset in range(0, len(document_ids), 500):
+        batch = document_ids[offset : offset + 500]
+        if not batch:
+            continue
+        document_keys = {
+            f"knowledge_document:{document_id}": document_id
+            for document_id in batch
+        }
+        chunked.update(
+            document_keys[str(item)]
+            for item in db.scalars(
+                select(DocumentChunkVersion.document_key)
+                .where(DocumentChunkVersion.document_key.in_(list(document_keys)))
+                .distinct()
+            ).all()
+            if item is not None and str(item) in document_keys
+        )
+    return chunked
+
+
+def _complete_missing_document_chunks(db: Session, stock: StockSymbol) -> dict[str, Any]:
+    """Fill the actual chunk gaps for one stock across every graph version."""
+    documents = list(db.scalars(
+        select(KnowledgeDocument)
+        .where(
+            KnowledgeDocument.market == stock.market,
+            KnowledgeDocument.symbol == stock.symbol,
+        )
+        .order_by(KnowledgeDocument.id)
+    ).all())
+    document_ids = [str(document.id) for document in documents]
+    before_chunked = _chunked_document_ids(db, document_ids)
+    missing = [document for document in documents if str(document.id) not in before_chunked]
+    failures: list[dict[str, Any]] = []
+    result_samples: list[dict[str, Any]] = []
+    created_chunks = 0
+    reused_chunks = 0
+    for document in missing:
+        try:
+            result = lakehouse.create_chunks(
+                db,
+                document_key=f"knowledge_document:{document.id}",
+                document_id=str(document.id),
+                text=document.content or document.title,
+                chunk_size=1800,
+                overlap=180,
+                parser_version="PIPELINE_STRUCTURE_V1",
+                embedding_model="HASH_EMBED_V1",
+                archive_original=True,
+            )
+            created_chunks += int(result.get("created_count") or 0)
+            reused_chunks += int(result.get("reused_count") or 0)
+            if int(result.get("chunk_count") or 0) <= 0:
+                failures.append({
+                    "document_id": document.id,
+                    "title": document.title,
+                    "error": "文档没有可生成切片的正文或标题",
+                })
+            elif len(result_samples) < 50:
+                result_samples.append({
+                    "document_id": document.id,
+                    "graph_id": document.graph_id,
+                    "title": document.title,
+                    "created_count": int(result.get("created_count") or 0),
+                    "reused_count": int(result.get("reused_count") or 0),
+                })
+        except Exception as exc:
+            db.rollback()
+            failures.append({
+                "document_id": document.id,
+                "graph_id": document.graph_id,
+                "title": document.title,
+                "error": f"{type(exc).__name__}: {str(exc)[:300]}",
+            })
+
+    after_chunked = _chunked_document_ids(db, document_ids)
+    remaining_ids = [
+        int(document.id) for document in documents if str(document.id) not in after_chunked
+    ]
+    graph_ids = sorted({int(document.graph_id) for document in documents if document.graph_id is not None})
+    return {
+        "market": stock.market,
+        "symbol": stock.symbol,
+        "status": "SUCCESS" if documents and not remaining_ids else "PARTIAL",
+        "continuation_action": DOCUMENT_CHUNKS_CONTINUATION,
+        "knowledge_base_mode": "ALL_GRAPH_VERSIONS_MISSING_ONLY",
+        "documents_total": len(documents),
+        "documents_selected": len(missing),
+        "documents_with_chunks": len(after_chunked),
+        "missing_documents_before": len(missing),
+        "missing_documents_after": len(remaining_ids),
+        "remaining_document_ids": remaining_ids[:50],
+        "failed_documents": len(remaining_ids),
+        "failed_document_samples": failures[:50],
+        "created_chunk_count": created_chunks,
+        "reused_chunk_count": reused_chunks,
+        "graph_count": len(graph_ids),
+        "graph_ids": graph_ids,
+        "result_samples": result_samples,
+        "coverage_ratio": round(len(after_chunked) / len(documents), 6) if documents else None,
+        "coverage_status": (
+            "NO_DOCUMENTS" if not documents else "COMPLETE" if not remaining_ids else "PARTIAL"
+        ),
+        "truncated": False,
+    }
+
+
 def _attach_verifiable_stage_results(output: dict[str, Any]) -> None:
     """Persist a compact explain/verify contract alongside raw stage facts.
 
@@ -265,19 +382,32 @@ def _attach_verifiable_stage_results(output: dict[str, Any]) -> None:
         selected = int(run.get("documents_selected") or 0)
         covered = int(run.get("documents_with_chunks") or 0)
         failed = int(run.get("failed_documents") or 0)
+        continuation_mode = (
+            str(run.get("continuation_action") or "").upper() == DOCUMENT_CHUNKS_CONTINUATION
+        )
         selection = {
-            "code": f"{market}:DOCUMENT_SELECTION", "label": f"{market} · 知识文档选择",
-            "status": "COMPLETED" if selected else "NOT_STARTED", "record_count": selected,
-            "reason": f"从 {total} 份知识文档中选择 {selected} 份进入切片。" if selected else "没有选出可切片文档。",
+            "code": f"{market}:DOCUMENT_SELECTION",
+            "label": f"{market} · 实际缺口识别" if continuation_mode else f"{market} · 知识文档选择",
+            "status": "COMPLETED" if (selected or continuation_mode) else "NOT_STARTED",
+            "record_count": selected,
+            "reason": (
+                f"跨 {run.get('graph_count', 0)} 个图谱版本识别到 {selected} 份未切片文档。"
+                if continuation_mode else (
+                    f"从 {total} 份知识文档中选择 {selected} 份进入切片。"
+                    if selected else "没有选出可切片文档。"
+                )
+            ),
             "details": run,
         }
-        (chunk_completed if selected else chunk_incomplete).append(selection)
-        fully_covered = bool(total and covered == total and selected == total and not failed)
+        (chunk_completed if (selected or continuation_mode) else chunk_incomplete).append(selection)
+        fully_covered = bool(total and covered == total and not failed)
         coverage = {
             "code": f"{market}:CHUNK_COVERAGE", "label": f"{market} · 切片覆盖",
             "status": "COMPLETED" if fully_covered else ("PARTIAL" if covered else "NOT_STARTED"),
             "record_count": covered,
             "reason": (
+                f"已切片 {covered}/{total} 份，仍有 {run.get('missing_documents_after', failed)} 份未覆盖。"
+                if continuation_mode and total else
                 f"已切片 {covered}/{total} 份，失败 {failed} 份。"
                 if total else "该范围没有可切片知识文档。"
             ),
@@ -302,6 +432,10 @@ def _attach_verifiable_stage_results(output: dict[str, Any]) -> None:
     graphs = stages.get("KNOWLEDGE_GRAPH") or {}
     graph_completed: list[dict[str, Any]] = []
     graph_incomplete: list[dict[str, Any]] = []
+    scoped_graph_continuation = (
+        str((output.get("effective_options") or {}).get("continuation_action") or "").upper()
+        == SCOPED_GRAPH_CONTINUATION
+    )
     for run in graphs.get("market_runs") or []:
         market = run.get("market") or "ALL"
         built = str(run.get("build_status") or "").upper() == "BUILT"
@@ -315,20 +449,25 @@ def _attach_verifiable_stage_results(output: dict[str, Any]) -> None:
             "details": run,
         }
         (graph_completed if built else graph_incomplete).append(build_item)
-        governance_item = {
-            "code": f"{market}:GRAPH_GOVERNANCE", "label": f"{market} · 图谱治理发布",
-            "status": "COMPLETED" if governed else governance,
-            "record_count": None,
-            "reason": (
-                f"图谱治理状态为 {governance}。" if governed
-                else run.get("next_action") or f"图谱治理状态为 {governance}，尚未发布。"
-            ),
-            "details": run,
-        }
-        (graph_completed if governed else graph_incomplete).append(governance_item)
+        if not scoped_graph_continuation:
+            governance_item = {
+                "code": f"{market}:GRAPH_GOVERNANCE", "label": f"{market} · 图谱治理发布",
+                "status": "COMPLETED" if governed else governance,
+                "record_count": None,
+                "reason": (
+                    f"图谱治理状态为 {governance}。" if governed
+                    else run.get("next_action") or f"图谱治理状态为 {governance}，尚未发布。"
+                ),
+                "details": run,
+            }
+            (graph_completed if governed else graph_incomplete).append(governance_item)
     finish(
         graphs, graph_completed, graph_incomplete,
-        {"market_runs": graphs.get("market_runs") or []}, "/api/v1/knowledge-network/explore",
+        {
+            "market_runs": graphs.get("market_runs") or [],
+            "governance_follow_up": scoped_graph_continuation,
+        },
+        "/api/v1/knowledge-network/explore",
     )
     stages["KNOWLEDGE_GRAPH"] = graphs
     output["stage_results"] = stages
@@ -345,6 +484,7 @@ def execute_stock_batch_governance(payload: dict[str, Any]) -> dict[str, Any]:
         "archive_chunks": request.archive_chunks,
         "run_graph": request.run_graph,
         "run_agent_governance": request.run_agent_governance,
+        "continuation_action": request.continuation_action,
         "agent_governance_scope": (
             "GLOBAL_BOUNDED_SOURCE_AUDIT" if request.run_agent_governance else "NOT_REQUESTED"
         ),
@@ -381,6 +521,60 @@ def execute_stock_batch_governance(payload: dict[str, Any]) -> dict[str, Any]:
         output["stage_results"]["VALIDATION"] = {
             "status": "SUCCESS", "stock_count": len(targets), "message": "股票主数据校验通过",
         }
+        if request.continuation_action == DOCUMENT_CHUNKS_CONTINUATION:
+            _save_progress(db, outer_run_id, output, stage="DOCUMENT_CHUNKS", progress=10)
+            chunk_run = _complete_missing_document_chunks(db, targets[0])
+            chunk_status = str(chunk_run.get("status") or "PARTIAL").upper()
+            output["stage_results"].update({
+                "BUSINESS_DATA": {
+                    "status": "SKIPPED", "message": "本次只补齐既有知识文档切片",
+                },
+                "LAKEHOUSE_EXPORT": {
+                    "status": "SKIPPED", "message": "切片续作不重复发布湖仓数据集",
+                },
+                "DOCUMENT_CHUNKS": {
+                    "status": chunk_status,
+                    "market_runs": [chunk_run],
+                    "continuation_action": DOCUMENT_CHUNKS_CONTINUATION,
+                    "knowledge_base_mode": "ALL_GRAPH_VERSIONS_MISSING_ONLY",
+                    "message": "已按股票范围补齐全部图谱版本中的实际未切片文档",
+                },
+                "KNOWLEDGE_GRAPH": {
+                    "status": "SKIPPED", "message": "切片续作不会重建或治理知识图谱",
+                },
+                "AGENT_SKILL_GOVERNANCE": {
+                    "status": "SKIPPED", "scope": "NOT_REQUESTED",
+                    "message": "切片续作不执行智能体治理",
+                },
+                "KNOWLEDGE_PIPELINE": {
+                    "status": chunk_status,
+                    "market_runs": [{
+                        "market": targets[0].market,
+                        "symbols": [targets[0].symbol],
+                        "status": chunk_status,
+                        "chunks": chunk_run,
+                        "continuation_action": DOCUMENT_CHUNKS_CONTINUATION,
+                    }],
+                    "message": "文档切片续作已完成实际缺口核验",
+                },
+            })
+            output["errors"].extend({
+                "stage": "DOCUMENT_CHUNKS",
+                "market": targets[0].market,
+                "symbol": targets[0].symbol,
+                **item,
+            } for item in chunk_run.get("failed_document_samples") or [])
+            _attach_verifiable_stage_results(output)
+            result_status = "COMPLETED" if chunk_status == "SUCCESS" else "PARTIAL"
+            output["result_status"] = result_status
+            output["stage_results"]["COMPLETE"] = {
+                "status": result_status,
+                "completed_at": datetime.now(timezone.utc).isoformat(),
+                "message": "文档切片续作任务已结束",
+            }
+            _save_progress(db, outer_run_id, output, stage="COMPLETE", progress=100)
+            return output
+
         _save_progress(db, outer_run_id, output, stage="BUSINESS_DATA", progress=5)
 
         business_issues = 0
@@ -457,9 +651,9 @@ def execute_stock_batch_governance(payload: dict[str, Any]) -> dict[str, Any]:
                         run_agent_governance=run_global_agent_audit,
                         include_company_tables=True,
                         idempotency_key=child_key,
+                        resume_incomplete=True,
                     )
                     child_status = str(result.get("status") or "UNKNOWN")
-                    child_statuses.append(child_status)
                     child_run_id = result.get("pipeline_run_id")
                     graph_payload = result.get("graph") or {}
                     new_graph_id = (
@@ -505,6 +699,8 @@ def execute_stock_batch_governance(payload: dict[str, Any]) -> dict[str, Any]:
                         chunk_status = "PARTIAL"
                     elif (
                         int(chunks.get("documents_total") or 0) > 0
+                        and int(chunks.get("documents_with_chunks") or 0)
+                            == int(chunks.get("documents_total") or 0)
                         and not chunks.get("truncated")
                         and not int(chunks.get("failed_documents") or 0)
                     ):
@@ -538,8 +734,18 @@ def execute_stock_batch_governance(payload: dict[str, Any]) -> dict[str, Any]:
                     graph_governance_status = str(
                         (result.get("completion") or {}).get("graph_governance_status") or ""
                     ).upper()
+                    graph_counts = graph_payload.get("counts") or {}
+                    scoped_projection_complete = bool(
+                        request.continuation_action == SCOPED_GRAPH_CONTINUATION
+                        and raw_graph_status == "BUILT"
+                        and new_graph_id
+                        and int(graph_counts.get("documents_created", graph_counts.get("documents", 0)) or 0) > 0
+                        and int(graph_counts.get("entities_created", graph_counts.get("entities", 0)) or 0) > 0
+                        and int(graph_counts.get("relations_created", graph_counts.get("relations", 0)) or 0) > 0
+                    )
                     graph_status = (
                         "SKIPPED" if not request.run_graph
+                        else "SUCCESS" if scoped_projection_complete
                         else "SUCCESS" if (
                             raw_graph_status == "BUILT"
                             and graph_governance_status in {"GOVERNED", "LOCKED"}
@@ -555,7 +761,7 @@ def execute_stock_batch_governance(payload: dict[str, Any]) -> dict[str, Any]:
                         "graph_id": new_graph_id,
                         "base_graph_id": result.get("base_graph_id"),
                         "governance_status": graph_governance_status or None,
-                        "counts": graph_payload.get("counts") or {},
+                        "counts": graph_counts,
                         "error": graph_payload.get("error"),
                         "details": graph_payload,
                         "completion_issues": [
@@ -580,10 +786,18 @@ def execute_stock_batch_governance(payload: dict[str, Any]) -> dict[str, Any]:
                             "scope": "GLOBAL_BOUNDED_SOURCE_AUDIT",
                             "run_id": agent_payload.get("run_id"),
                         })
+                    effective_child_status = child_status
+                    if request.continuation_action == SCOPED_GRAPH_CONTINUATION:
+                        effective_child_status = (
+                            "COMPLETED" if graph_status == "SUCCESS" and chunk_status == "SUCCESS"
+                            else "FAILED" if graph_status == "FAILED" or chunk_status == "FAILED"
+                            else "PARTIAL"
+                        )
+                    child_statuses.append(effective_child_status)
                     market_results.append({
                         "market": market,
                         "symbols": symbols,
-                        "status": child_status,
+                        "status": effective_child_status,
                         "pipeline_run_id": child_run_id,
                         "graph_id": new_graph_id,
                         "selected_graph_id": result.get("graph_id"),
@@ -658,7 +872,11 @@ def execute_stock_batch_governance(payload: dict[str, Any]) -> dict[str, Any]:
             output["stage_results"]["KNOWLEDGE_GRAPH"] = {
                 "status": graph_stage_status,
                 "market_runs": graph_runs,
-                "message": "仅返回本批新建的范围投影图；PENDING投影保留为PARTIAL，基础图谱不会计入新生成图谱",
+                "message": (
+                    "单股续作仅核验新投影、实体和关系；PENDING治理状态作为后续发布提示，不覆盖历史图谱"
+                    if request.continuation_action == SCOPED_GRAPH_CONTINUATION
+                    else "仅返回本批新建的范围投影图；PENDING投影保留为PARTIAL，基础图谱不会计入新生成图谱"
+                ),
             }
             output["stage_results"]["AGENT_SKILL_GOVERNANCE"] = {
                 "status": agent_stage_status,

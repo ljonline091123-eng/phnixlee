@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { Play, RefreshCw } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   api,
   type StockPipelineDetailItem,
@@ -8,6 +9,10 @@ import {
   type StockPipelineVerificationRecord,
   type StockSymbol,
 } from "./api";
+import {
+  batchGovernanceApi,
+  type BatchGovernanceJob,
+} from "./batchGovernanceApi";
 import "./StockPipelineStatusDialog.css";
 
 export type StockPipelineStatusKey = "data_collection" | "knowledge_base" | "knowledge_graph";
@@ -20,14 +25,21 @@ const stageNames: Record<StockPipelineStatusKey, string> = {
 
 const statusNames: Record<string, string> = {
   NOT_STARTED: "未开始",
+  QUEUED: "已进入队列",
   WAITING: "等待处理",
   PENDING: "处理中",
+  RETRY: "等待重试",
+  RUNNING: "执行中",
+  STALE: "执行超时",
   PARTIAL: "部分完成",
   COMPLETED: "已完成",
   SUCCESS: "已完成",
   EMPTY: "无有效数据",
   FAILED: "失败",
+  CANCELLED: "已取消",
 };
+
+const terminalJobStatuses = new Set(["SUCCESS", "COMPLETED", "PARTIAL", "FAILED", "CANCELLED"]);
 
 const businessItems = [
   ["QUOTE", "实时行情"],
@@ -87,14 +99,60 @@ function formatDate(value?: string | null) {
 function statusClass(status?: string | null) {
   const normalized = String(status || "NOT_STARTED").toUpperCase();
   if (["COMPLETED", "SUCCESS"].includes(normalized)) return "success";
-  if (["PARTIAL", "PENDING", "RUNNING", "WAITING"].includes(normalized)) return "partial";
-  if (normalized === "FAILED") return "failed";
+  if (["PARTIAL", "PENDING", "QUEUED", "RETRY", "RUNNING", "WAITING"].includes(normalized)) return "partial";
+  if (["FAILED", "CANCELLED", "STALE"].includes(normalized)) return "failed";
   return "empty";
 }
 
 function statusLabel(status?: string | null) {
   const normalized = String(status || "NOT_STARTED").toUpperCase();
   return statusNames[normalized] || normalized;
+}
+
+function taskStageLabel(stage?: string | null) {
+  const normalized = String(stage || "").toUpperCase();
+  if (normalized.includes("BUSINESS")) return "业务数据采集";
+  if (normalized.includes("LAKEHOUSE")) return "湖仓数据发布";
+  if (normalized.includes("DOCUMENT") || normalized.includes("CHUNK")) return "知识文档切片";
+  if (normalized.includes("GRAPH")) return "知识图谱处理";
+  if (["QUEUED", "PENDING", "WAITING"].includes(normalized)) return "等待调度";
+  return stage || "等待调度";
+}
+
+function jobLifecycleStatus(job?: BatchGovernanceJob | null) {
+  return String(job?.job_status || job?.status || "WAITING").toUpperCase();
+}
+
+function isTerminalJob(job?: BatchGovernanceJob | null) {
+  return !!job && terminalJobStatuses.has(jobLifecycleStatus(job));
+}
+
+function normalizedJobStatus(job?: BatchGovernanceJob | null) {
+  const lifecycle = jobLifecycleStatus(job);
+  return isTerminalJob(job) && job?.result_status
+    ? String(job.result_status).toUpperCase()
+    : lifecycle;
+}
+
+function jobProgress(job?: BatchGovernanceJob | null) {
+  if (isTerminalJob(job) && job?.progress == null) return 100;
+  const raw = Number(job?.progress ?? 0);
+  if (!Number.isFinite(raw)) return 0;
+  return Math.max(0, Math.min(100, raw > 0 && raw <= 1 ? raw * 100 : raw));
+}
+
+function jobError(job?: BatchGovernanceJob | null) {
+  const errors = [job?.error_message, ...(job?.errors || [])]
+    .filter(Boolean)
+    .map((value) => typeof value === "string" ? value : JSON.stringify(value));
+  return [...new Set(errors)].join("；");
+}
+
+function continuationIdempotencyKey() {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return `stock-pipeline-continue-${crypto.randomUUID()}`;
+  }
+  return `stock-pipeline-continue-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
 function missingItem(code: string, label: string, reason: string, actionHint: string): StockPipelineDetailItem {
@@ -145,17 +203,17 @@ function fallbackStage(
     const documentsWithChunks = numberValue(detail.documents_with_chunks);
     if (documentCount > 0) completed.push(completedItem("DOCUMENTS", "知识文档", documentCount, summary.last_at));
     else incomplete.push(missingItem(
-      "DOCUMENTS",
+      "KNOWLEDGE_DOCUMENTS",
       "知识文档",
       "当前股票尚未生成可追溯的知识文档。",
       "先把新闻、公告、财报或F10等业务记录物化为知识文档。",
     ));
     if (documentCount > 0 && documentsWithChunks >= documentCount) {
-      completed.push(completedItem("CHUNKS", "文档切片", chunkCount, summary.last_at));
+      completed.push(completedItem("DOCUMENT_CHUNKS", "文档切片", chunkCount, summary.last_at));
     } else {
       incomplete.push({
         ...missingItem(
-          "CHUNKS",
+          "DOCUMENT_CHUNKS",
           "文档切片",
           documentCount > 0
             ? `已有 ${documentCount} 份文档，其中 ${Math.max(0, documentCount - documentsWithChunks)} 份尚未形成切片。`
@@ -247,7 +305,23 @@ function LatestAttempt({ value }: { value: string | Record<string, unknown> }) {
   return <dl className="pipeline-attempt-fields">{entries.map(([key, item]) => <div key={key}><dt>{fieldNames[key] || key}</dt><dd>{valueText(item)}</dd></div>)}</dl>;
 }
 
-function DetailItem({ item, incomplete = false }: { item: StockPipelineDetailItem; incomplete?: boolean }) {
+function DetailItem({
+  item,
+  incomplete = false,
+  continuing = false,
+  continueDisabled = false,
+  canContinue = true,
+  blockedReason,
+  onContinue,
+}: {
+  item: StockPipelineDetailItem;
+  incomplete?: boolean;
+  continuing?: boolean;
+  continueDisabled?: boolean;
+  canContinue?: boolean;
+  blockedReason?: string | null;
+  onContinue?: () => void;
+}) {
   const records = item.records || [];
   const apiUrl = verificationHref(item.verification_path);
   const latestAttempt = item.latest_attempt;
@@ -261,10 +335,23 @@ function DetailItem({ item, incomplete = false }: { item: StockPipelineDetailIte
       {item.last_at && <p><b>最近更新：</b>{formatDate(item.last_at)}</p>}
       {item.reason && <p className="pipeline-detail-reason"><b>原因：</b>{item.reason}</p>}
       {item.action_hint && <p className="pipeline-detail-action"><b>建议：</b>{item.action_hint}</p>}
+      {incomplete && !canContinue && blockedReason && <p className="pipeline-detail-blocked"><b>暂不可续作：</b>{blockedReason}</p>}
       {latestAttempt && <details className="pipeline-latest-attempt"><summary>查看最近一次执行信息</summary><LatestAttempt value={latestAttempt} /></details>}
       {!!records.length && <div className="pipeline-verification-list">{records.map((record, index) => <VerificationRecord key={`${record.record_id ?? index}:${index}`} record={record} index={index} />)}</div>}
       {!records.length && !item.reason && <p className="pipeline-detail-muted">状态已由数据库记录核验；当前接口未返回单条样本，可通过下方核验入口或对应业务页面继续查看。</p>}
-      {apiUrl && <a className="pipeline-api-link" href={apiUrl} target="_blank" rel="noopener noreferrer">打开核验接口 ↗</a>}
+      <div className="pipeline-detail-item-actions">
+        {apiUrl && <a className="pipeline-api-link" href={apiUrl} target="_blank" rel="noopener noreferrer">打开核验接口 ↗</a>}
+        {incomplete && canContinue && <button
+          className="pipeline-continue-button"
+          type="button"
+          disabled={continueDisabled || !canContinue}
+          onClick={onContinue}
+          title={!canContinue ? blockedReason || "当前项目暂不支持自动续作" : undefined}
+        >
+          {continuing ? <RefreshCw size={14} aria-hidden="true" className="spin" /> : <Play size={14} aria-hidden="true" />}
+          {continuing ? "正在提交…" : "继续完成此项"}
+        </button>}
+      </div>
     </div>
   </details>;
 }
@@ -274,22 +361,41 @@ export function StockPipelineStatusDialog({
   kind,
   summary,
   onClose,
+  onCompleted,
 }: {
   stock: StockSymbol;
   kind: StockPipelineStatusKey;
   summary: StockPipelineStatus;
   onClose: () => void;
+  onCompleted?: (job: BatchGovernanceJob) => void;
 }) {
   const [detail, setDetail] = useState<StockPipelineStatusDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [continuingKey, setContinuingKey] = useState("");
+  const [continuationJob, setContinuationJob] = useState<BatchGovernanceJob | null>(null);
+  const [continuationError, setContinuationError] = useState("");
+  const [refreshingAfterJob, setRefreshingAfterJob] = useState(false);
+  const continuationLock = useRef(false);
+  const continuationKeys = useRef<Record<string, string>>({});
+  const completedJob = useRef<number | null>(null);
+  const onCompletedRef = useRef(onCompleted);
+
+  useEffect(() => {
+    onCompletedRef.current = onCompleted;
+  }, [onCompleted]);
+
+  const loadDetail = useCallback(async (signal?: AbortSignal) => {
+    const next = await api.getStockPipelineStatusDetail(stock.market, stock.symbol, 5, signal);
+    setDetail(next);
+    return next;
+  }, [stock.market, stock.symbol]);
 
   useEffect(() => {
     const controller = new AbortController();
     setLoading(true);
     setError("");
-    api.getStockPipelineStatusDetail(stock.market, stock.symbol, 5, controller.signal)
-      .then(setDetail)
+    loadDetail(controller.signal)
       .catch((reason) => {
         if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : "状态详情读取失败");
       })
@@ -297,7 +403,67 @@ export function StockPipelineStatusDialog({
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [stock.market, stock.symbol]);
+  }, [loadDetail]);
+
+  useEffect(() => {
+    continuationLock.current = false;
+    continuationKeys.current = {};
+    completedJob.current = null;
+    setContinuingKey("");
+    setContinuationJob(null);
+    setContinuationError("");
+    setRefreshingAfterJob(false);
+  }, [kind, stock.market, stock.symbol]);
+
+  const continuationActive = !!continuationJob && !isTerminalJob(continuationJob);
+
+  useEffect(() => {
+    if (!continuationJob?.job_id || !continuationActive) return;
+    let disposed = false;
+    let timer: number | undefined;
+    const controller = new AbortController();
+    const poll = async () => {
+      try {
+        const next = await batchGovernanceApi.get(continuationJob.job_id, controller.signal);
+        if (disposed) return;
+        setContinuationJob(next);
+        setContinuationError("");
+        if (!isTerminalJob(next)) timer = window.setTimeout(poll, 1400);
+      } catch (reason) {
+        if (disposed || controller.signal.aborted) return;
+        setContinuationError(`任务进度读取失败：${reason instanceof Error ? reason.message : "未知错误"}`);
+        timer = window.setTimeout(poll, 3000);
+      }
+    };
+    timer = window.setTimeout(poll, 900);
+    return () => {
+      disposed = true;
+      controller.abort();
+      if (timer) window.clearTimeout(timer);
+    };
+  }, [continuationActive, continuationJob?.job_id]);
+
+  useEffect(() => {
+    if (!continuationJob?.job_id || !isTerminalJob(continuationJob)) return;
+    if (completedJob.current === continuationJob.job_id) return;
+    completedJob.current = continuationJob.job_id;
+    const controller = new AbortController();
+    setRefreshingAfterJob(true);
+    loadDetail(controller.signal)
+      .then(() => setError(""))
+      .catch((reason) => {
+        if (!controller.signal.aborted) {
+          setContinuationError(`任务已结束，但状态重新核验失败：${reason instanceof Error ? reason.message : "未知错误"}`);
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) {
+          setRefreshingAfterJob(false);
+          onCompletedRef.current?.(continuationJob);
+        }
+      });
+    return () => controller.abort();
+  }, [continuationJob, loadDetail]);
 
   useEffect(() => {
     const close = (event: KeyboardEvent) => {
@@ -314,10 +480,45 @@ export function StockPipelineStatusDialog({
   const stageSummary = stage.summary || summary;
   const completed = stage.completed_items || [];
   const incomplete = stage.incomplete_items || [];
+  const actionableIncomplete = detail
+    ? incomplete.filter((item) => item.can_continue === true && !!item.continuation_action)
+    : [];
+  const continuationActionCount = new Set(
+    actionableIncomplete.map((item) => item.continuation_action),
+  ).size;
+  const canContinueAll = actionableIncomplete.length > 0 && continuationActionCount === 1;
   const verificationRecords = stage.verification?.records || [];
   const itemRecordsAvailable = [...completed, ...incomplete].some((item) => (item.records || []).length > 0);
   const completedCount = stageSummary.completed_count ?? completed.length;
   const expectedCount = stageSummary.expected_count ?? completed.length + incomplete.length;
+  const taskBusy = !!continuingKey || continuationActive || refreshingAfterJob;
+  const progress = jobProgress(continuationJob);
+  const taskError = jobError(continuationJob);
+
+  async function continueIncomplete(itemCodes: string[], actionKey: string) {
+    if (!itemCodes.length || continuationLock.current || continuationActive) return;
+    continuationLock.current = true;
+    setContinuingKey(actionKey);
+    setContinuationError("");
+    const fingerprint = `${stock.market}:${stock.symbol}:${kind}:${[...itemCodes].sort().join(",")}`;
+    const idempotencyKey = continuationKeys.current[fingerprint] || continuationIdempotencyKey();
+    continuationKeys.current[fingerprint] = idempotencyKey;
+    try {
+      const created = await batchGovernanceApi.continueStockPipeline(stock.market, stock.symbol, {
+        stage: kind,
+        item_codes: itemCodes,
+        idempotency_key: idempotencyKey,
+      });
+      delete continuationKeys.current[fingerprint];
+      completedJob.current = null;
+      setContinuationJob(created);
+    } catch (reason) {
+      setContinuationError(reason instanceof Error ? reason.message : "续作任务提交失败");
+    } finally {
+      continuationLock.current = false;
+      setContinuingKey("");
+    }
+  }
 
   return <div className="resource-dialog-backdrop pipeline-status-backdrop" role="presentation" onMouseDown={(event) => {
     if (event.target === event.currentTarget) onClose();
@@ -336,6 +537,23 @@ export function StockPipelineStatusDialog({
 
         {loading && <div className="pipeline-detail-message" role="status">正在读取完成项、缺失项和核验样本…</div>}
         {error && <div className="pipeline-detail-message warning" role="status">详情接口暂时无法读取：{error}。以下先展示主数据列表中的持久化计数。</div>}
+        {continuationJob && <section className={`pipeline-continuation-progress ${statusClass(normalizedJobStatus(continuationJob))}`} aria-live="polite">
+          <header>
+            <div><strong>续作任务 #{continuationJob.job_id}</strong><small>当前阶段：{taskStageLabel(continuationJob.current_stage)}</small></div>
+            <span>{statusLabel(normalizedJobStatus(continuationJob))}</span>
+          </header>
+          <div
+            className="pipeline-continuation-track"
+            role="progressbar"
+            aria-label="续作任务进度"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={Math.round(progress)}
+          ><span style={{ width: `${progress}%` }} /></div>
+          <footer><span>{refreshingAfterJob ? "任务已结束，正在重新核验数据库状态…" : continuationActive ? "任务正在后台执行，本页会自动更新。" : "任务已结束，已按数据库实际记录重新核验。"}</span><b>{Math.round(progress)}%</b></footer>
+          {taskError && <p className="pipeline-continuation-error">{taskError}</p>}
+        </section>}
+        {continuationError && <div className="pipeline-detail-message warning" role="alert">{continuationError}</div>}
 
         <section className="pipeline-detail-section">
           <header><div><h4>已完成内容</h4><p>点击具体项目可查看记录数量、更新时间、样本数据和核验入口。</p></div><span>{completed.length} 项</span></header>
@@ -346,9 +564,43 @@ export function StockPipelineStatusDialog({
         </section>
 
         <section className="pipeline-detail-section incomplete-section">
-          <header><div><h4>未完成 / 待处理</h4><p>展示缺失内容、判断原因及建议处理方式。</p></div><span>{incomplete.length} 项</span></header>
+          <header>
+            <div><h4>未完成 / 待处理</h4><p>展示缺失内容、判断原因及建议处理方式。</p></div>
+            <div className="pipeline-section-actions">
+              <span>{incomplete.length} 项</span>
+              {!!incomplete.length && <button
+                className="pipeline-continue-button"
+                type="button"
+                disabled={taskBusy || loading || !canContinueAll}
+                title={!actionableIncomplete.length
+                  ? "当前未完成项需要先处理其前置条件，暂不能自动续作"
+                  : continuationActionCount > 1
+                    ? "未完成项需要不同的续作动作，请先逐项处理"
+                    : undefined}
+                onClick={() => void continueIncomplete(actionableIncomplete.map((item) => item.code), "all")}
+              >
+                {continuingKey === "all" ? <RefreshCw size={14} aria-hidden="true" className="spin" /> : <Play size={14} aria-hidden="true" />}
+                {continuingKey === "all" ? "正在提交…" : "继续完成全部"}
+              </button>}
+            </div>
+          </header>
           <div className="pipeline-detail-list">
-            {incomplete.map((item) => <DetailItem key={item.code} item={item} incomplete />)}
+            {incomplete.map((item) => <DetailItem
+              key={item.code}
+              item={item}
+              incomplete
+              continuing={continuingKey === item.code}
+              continueDisabled={taskBusy || loading}
+              canContinue={!!detail && item.can_continue === true && !!item.continuation_action}
+              blockedReason={!detail
+                ? "状态详情未成功读取，无法安全判断续作范围。"
+                : item.can_continue === true && !item.continuation_action
+                  ? "服务端未返回安全的续作动作，请刷新后重试。"
+                  : item.blocked_reason}
+              onContinue={detail && item.can_continue === true && item.continuation_action
+                ? () => void continueIncomplete([item.code], item.code)
+                : undefined}
+            />)}
             {!incomplete.length && <p className="pipeline-detail-empty success">当前口径下没有未完成项目。</p>}
           </div>
         </section>

@@ -20,6 +20,8 @@ from app.db.base import Base
 from app.db.session import get_db
 from app.jobs.dispatcher import DatabaseJobDispatcher
 from app.jobs.tasks import TASK_HANDLERS
+from app.models.ai_hub import KnowledgeBase, KnowledgeDocument, KnowledgeGraph
+from app.models.lakehouse import DocumentChunkVersion
 from app.models.market_data import DataSource, StockSymbol
 from app.models.pipeline import PipelineRun, ScheduledJob
 from app.schemas.stock_batch import StockBatchGovernanceRequest
@@ -96,6 +98,9 @@ def test_submit_is_idempotent_and_exposes_worker_contract() -> None:
             first = submit_stock_batch_governance(request, db)
             second = submit_stock_batch_governance(request, db)
             assert first["job_id"] == second["job_id"]
+            alternate_key = request.model_copy(update={"idempotency_key": "screen-selection-2"})
+            coalesced = submit_stock_batch_governance(alternate_key, db)
+            assert coalesced["job_id"] == first["job_id"]
             assert first["stock_count"] == 1
             assert first["current_stage"] == "QUEUED"
             assert db.scalar(select(ScheduledJob)).task_type == stock_batch.TASK_TYPE
@@ -128,6 +133,260 @@ def test_submit_is_idempotent_and_exposes_worker_contract() -> None:
             with pytest.raises(HTTPException) as exc:
                 submit_stock_batch_governance(different, db)
             assert exc.value.status_code == 409
+    finally:
+        engine.dispose()
+        temporary.cleanup()
+
+
+def test_chunk_continuation_fills_actual_gaps_across_graph_versions(monkeypatch) -> None:
+    temporary, engine, sessions = _database()
+    try:
+        with sessions() as db:
+            kb = KnowledgeBase(
+                kb_code="CONTINUE_KB", kb_name="续作测试知识库", source_tables=["stock_news"],
+            )
+            db.add(kb)
+            db.flush()
+            first_graph = KnowledgeGraph(
+                knowledge_base_id=kb.id, graph_code="CONTINUE_G1",
+                graph_name="续作图谱一", source_tables=["stock_news"],
+            )
+            second_graph = KnowledgeGraph(
+                knowledge_base_id=kb.id, graph_code="CONTINUE_G2",
+                graph_name="续作图谱二", source_tables=["stock_news"],
+            )
+            db.add_all([first_graph, second_graph])
+            db.flush()
+            documents = [
+                KnowledgeDocument(
+                    knowledge_base_id=kb.id, graph_id=first_graph.id,
+                    source_table="stock_news", source_record_id=1,
+                    market="CN_A", symbol="000001", title="图一已切片", content="正文一",
+                ),
+                KnowledgeDocument(
+                    knowledge_base_id=kb.id, graph_id=first_graph.id,
+                    source_table="stock_news", source_record_id=2,
+                    market="CN_A", symbol="000001", title="图一待切片", content="正文二",
+                ),
+                KnowledgeDocument(
+                    knowledge_base_id=kb.id, graph_id=second_graph.id,
+                    source_table="stock_news", source_record_id=3,
+                    market="CN_A", symbol="000001", title="图二待切片", content="正文三",
+                ),
+            ]
+            db.add_all(documents)
+            db.flush()
+            db.add(DocumentChunkVersion(
+                document_key=f"knowledge_document:{documents[0].id}",
+                document_id=str(documents[0].id), chunk_index=0,
+                chunk_version="test:v1", content_hash="1" * 64,
+                chunk_text="正文一", parser_version="test",
+            ))
+            db.add(DocumentChunkVersion(
+                document_key=f"notice:{documents[1].id}",
+                document_id=str(documents[1].id), chunk_index=0,
+                chunk_version="collision:v1", content_hash="c" * 64,
+                chunk_text="同号但不属于知识文档的切片", parser_version="test",
+            ))
+            db.commit()
+
+        created_document_ids: list[str] = []
+
+        def create_chunk(db, *, document_key, document_id, text, **_kwargs):
+            created_document_ids.append(str(document_id))
+            db.add(DocumentChunkVersion(
+                document_key=document_key, document_id=str(document_id), chunk_index=0,
+                chunk_version="test:continued", content_hash=f"{int(document_id):064x}",
+                chunk_text=text, parser_version="test",
+            ))
+            db.commit()
+            return {"chunk_count": 1, "created_count": 1, "reused_count": 0}
+
+        monkeypatch.setattr(stock_batch, "SessionLocal", sessions)
+        monkeypatch.setattr(stock_batch.lakehouse, "create_chunks", create_chunk)
+        request = StockBatchGovernanceRequest.model_validate({
+            "stocks": [{"market": "CN_A", "symbol": "000001"}],
+            "collect_business_data": False,
+            "export_lakehouse": False,
+            "archive_chunks": False,
+            "run_graph": False,
+            "run_agent_governance": False,
+            "business_types": [],
+            "continuation_action": "COMPLETE_DOCUMENT_CHUNKS",
+        }).model_dump(exclude={"idempotency_key"})
+
+        first = stock_batch.execute_stock_batch_governance({"request": request})
+        chunk_run = first["stage_results"]["DOCUMENT_CHUNKS"]["market_runs"][0]
+        assert first["result_status"] == "COMPLETED"
+        assert chunk_run["documents_total"] == 3
+        assert chunk_run["documents_selected"] == 2
+        assert chunk_run["documents_with_chunks"] == 3
+        assert chunk_run["missing_documents_after"] == 0
+        assert chunk_run["graph_count"] == 2
+        assert len(created_document_ids) == 2
+
+        with sessions() as db:
+            document_ids = [str(item) for item in db.scalars(select(KnowledgeDocument.id)).all()]
+            covered_ids = {
+                str(item) for item in db.scalars(
+                    select(DocumentChunkVersion.document_id)
+                    .where(DocumentChunkVersion.document_id.in_(document_ids))
+                    .distinct()
+                ).all()
+            }
+            assert set(document_ids) == covered_ids
+
+        second = stock_batch.execute_stock_batch_governance({"request": request})
+        second_run = second["stage_results"]["DOCUMENT_CHUNKS"]["market_runs"][0]
+        assert second["result_status"] == "COMPLETED"
+        assert second_run["documents_selected"] == 0
+        assert second_run["missing_documents_after"] == 0
+        assert len(created_document_ids) == 2
+    finally:
+        engine.dispose()
+        temporary.cleanup()
+
+
+def test_scoped_graph_continuation_completes_without_publishing_shared_lakehouse(monkeypatch) -> None:
+    temporary, engine, sessions = _database()
+    try:
+        request = StockBatchGovernanceRequest.model_validate({
+            "stocks": [{"market": "CN_A", "symbol": "000001"}],
+            "collect_business_data": False,
+            "export_lakehouse": False,
+            "archive_chunks": False,
+            "run_graph": False,
+            "run_agent_governance": False,
+            "business_types": [],
+            "continuation_action": "BUILD_SCOPED_GRAPH",
+            "continuation_stage": "knowledge_graph",
+            "continuation_item_codes": ["GRAPH_PROJECTION", "STOCK_ENTITY", "GRAPH_RELATIONS"],
+        }).model_dump(exclude={"idempotency_key"})
+        monkeypatch.setattr(stock_batch, "SessionLocal", sessions)
+        calls: list[dict] = []
+
+        def run_pipeline(_db, **kwargs):
+            calls.append(kwargs)
+            return {
+                "pipeline_run_id": 901,
+                "status": "PARTIAL",
+                "graph_id": 902,
+                "base_graph_id": 12,
+                "exports": {},
+                "chunks": {
+                    "documents_total": 2,
+                    "documents_selected": 2,
+                    "documents_with_chunks": 2,
+                    "failed_documents": 0,
+                    "truncated": False,
+                },
+                "graph": {
+                    "status": "BUILT",
+                    "projection": True,
+                    "graph_id": 902,
+                    "base_graph_id": 12,
+                    "counts": {
+                        "documents_created": 2,
+                        "entities_created": 5,
+                        "relations_created": 4,
+                    },
+                },
+                "completion": {
+                    "status": "PARTIAL",
+                    "graph_governance_status": "PENDING",
+                    "issues": [{
+                        "code": "GRAPH_PENDING_GOVERNANCE",
+                        "stage": "KNOWLEDGE_GRAPH",
+                        "detail": "PENDING",
+                    }],
+                    "next_action": "治理并锁定所选知识图谱后，方可调用真实模型选股",
+                },
+            }
+
+        monkeypatch.setattr(stock_batch, "run_stock_pipeline", run_pipeline)
+        result = stock_batch.execute_stock_batch_governance({"request": request})
+
+        assert len(calls) == 1
+        assert calls[0]["export_lakehouse"] is False
+        assert calls[0]["archive_chunks"] is True
+        assert calls[0]["run_graph"] is True
+        assert result["result_status"] == "COMPLETED"
+        assert result["stage_results"]["LAKEHOUSE_EXPORT"]["status"] == "SKIPPED"
+        assert result["stage_results"]["DOCUMENT_CHUNKS"]["status"] == "SUCCESS"
+        graph_stage = result["stage_results"]["KNOWLEDGE_GRAPH"]
+        assert graph_stage["status"] == "SUCCESS"
+        assert graph_stage["incomplete_items"] == []
+        assert graph_stage["verification"]["governance_follow_up"] is True
+        assert graph_stage["market_runs"][0]["governance_status"] == "PENDING"
+        assert graph_stage["market_runs"][0]["completion_issues"][0]["code"] == "GRAPH_PENDING_GOVERNANCE"
+    finally:
+        engine.dispose()
+        temporary.cleanup()
+
+
+def test_scoped_graph_continuation_does_not_complete_an_empty_projection(monkeypatch) -> None:
+    temporary, engine, sessions = _database()
+    try:
+        request = StockBatchGovernanceRequest.model_validate({
+            "stocks": [{"market": "CN_A", "symbol": "000001"}],
+            "collect_business_data": False,
+            "export_lakehouse": False,
+            "archive_chunks": False,
+            "run_graph": False,
+            "run_agent_governance": False,
+            "business_types": [],
+            "continuation_action": "BUILD_SCOPED_GRAPH",
+            "continuation_stage": "knowledge_graph",
+            "continuation_item_codes": ["GRAPH_PROJECTION", "STOCK_ENTITY", "GRAPH_RELATIONS"],
+        }).model_dump(exclude={"idempotency_key"})
+        monkeypatch.setattr(stock_batch, "SessionLocal", sessions)
+        monkeypatch.setattr(stock_batch, "run_stock_pipeline", lambda _db, **_kwargs: {
+            "pipeline_run_id": 911,
+            "status": "PARTIAL",
+            "graph_id": 912,
+            "base_graph_id": 12,
+            "exports": {},
+            "chunks": {
+                "documents_total": 0,
+                "documents_selected": 0,
+                "documents_with_chunks": 0,
+                "failed_documents": 0,
+                "truncated": False,
+            },
+            "graph": {
+                "status": "BUILT",
+                "projection": True,
+                "graph_id": 912,
+                "base_graph_id": 12,
+                "counts": {
+                    "documents_created": 0,
+                    "entities_created": 0,
+                    "relations_created": 0,
+                },
+            },
+            "completion": {
+                "status": "PARTIAL",
+                "graph_governance_status": "PENDING",
+                "issues": [
+                    {"code": "NO_KNOWLEDGE_DOCUMENTS", "stage": "DOCUMENT_CHUNKS"},
+                    {"code": "GRAPH_PENDING_GOVERNANCE", "stage": "KNOWLEDGE_GRAPH"},
+                ],
+                "next_action": "所选来源没有该股票可物化的知识记录",
+            },
+        })
+
+        result = stock_batch.execute_stock_batch_governance({"request": request})
+
+        assert result["result_status"] == "PARTIAL"
+        assert result["stage_results"]["DOCUMENT_CHUNKS"]["status"] == "PARTIAL"
+        graph_stage = result["stage_results"]["KNOWLEDGE_GRAPH"]
+        assert graph_stage["status"] == "PARTIAL"
+        assert graph_stage["market_runs"][0]["counts"] == {
+            "documents_created": 0,
+            "entities_created": 0,
+            "relations_created": 0,
+        }
+        assert "可物化" in graph_stage["market_runs"][0]["next_action"]
     finally:
         engine.dispose()
         temporary.cleanup()

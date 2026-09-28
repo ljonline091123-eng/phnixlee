@@ -320,6 +320,7 @@ def run_stock_pipeline(
     overlap: int = 180,
     chunk_document_limit: int | None = 10000,
     idempotency_key: str | None = None,
+    resume_incomplete: bool = False,
 ) -> dict[str, Any]:
     market = market.strip().upper()
     normalized = sorted(set(str(item).strip().upper() for item in symbols if str(item).strip()))
@@ -337,7 +338,10 @@ def run_stock_pipeline(
             select(KnowledgeBase).where(KnowledgeBase.kb_code == "STOCK_FULL_KG")
         )
         graph = db.get(KnowledgeGraph, graph_id) if graph_id else (db.scalar(
-            select(KnowledgeGraph).where(KnowledgeGraph.knowledge_base_id == kb.id).order_by(KnowledgeGraph.id)
+            select(KnowledgeGraph).where(
+                KnowledgeGraph.knowledge_base_id == kb.id,
+                KnowledgeGraph.enabled.is_(True),
+            ).order_by(KnowledgeGraph.id)
         ) if kb else None)
     if kb is None:
         raise ValueError("知识库不存在")
@@ -363,12 +367,20 @@ def run_stock_pipeline(
     if run is not None:
         if run.pipeline_type != "STOCK_KNOWLEDGE_LAKEHOUSE" or (run.input_json or {}) != request_input:
             raise PipelineConflictError("幂等键已被不同的知识管道请求使用，请更换幂等键")
-        return {"pipeline_run_id": run.id, "status": run.status, **(run.output_json or {})}
-    run = PipelineRun(pipeline_type="STOCK_KNOWLEDGE_LAKEHOUSE", trigger_type="API",
-                      status="RUNNING", correlation_id=str(uuid4()), idempotency_key=idempotency_key,
-                      input_json=request_input)
-    db.add(run)
-    db.flush()
+        if run.status in {"COMPLETED", "PARTIAL", "SUCCESS"} or not resume_incomplete:
+            return {"pipeline_run_id": run.id, "status": run.status, **(run.output_json or {})}
+        run.status = "RUNNING"
+        run.current_stage = "RESUMING"
+        run.output_json = {}
+        run.error_message = None
+        run.completed_at = None
+        db.flush()
+    else:
+        run = PipelineRun(pipeline_type="STOCK_KNOWLEDGE_LAKEHOUSE", trigger_type="API",
+                          status="RUNNING", correlation_id=str(uuid4()), idempotency_key=idempotency_key,
+                          input_json=request_input)
+        db.add(run)
+        db.flush()
     pairs = [(market, symbol) for symbol in normalized]
     identities = resolve_many(db, pairs)
     identity_payload = _json_identities(identities)
@@ -470,19 +482,29 @@ def run_stock_pipeline(
             # A scoped build must never delete the user's existing full graph.
             # Materialize a separate projection graph for this pipeline run;
             # the original graph remains the historical source of truth.
-            projection = KnowledgeGraph(
-                knowledge_base_id=graph.knowledge_base_id,
-                graph_code=f"{graph.graph_code}_PIPE_{run.id}",
-                graph_name=f"{graph.graph_name} · 管道投影 #{run.id}",
-                description=f"{graph.description or ''}\n范围：{market}:{','.join(normalized)}",
-                symbol=None,
-                source_tables=list(graph.source_tables or kb.source_tables or []),
-                version=graph.version,
-                governance_status="PENDING",
-                enabled=True,
-            )
-            db.add(projection)
-            db.flush()
+            code_suffix = f"_PIPE_{run.id}"
+            name_suffix = f" · 管道投影 #{run.id}"
+            projection_code = f"{graph.graph_code[:max(0, 64 - len(code_suffix))]}{code_suffix}"
+            projection_name = f"{graph.graph_name[:max(0, 128 - len(name_suffix))]}{name_suffix}"
+            projection = db.scalar(select(KnowledgeGraph).where(
+                KnowledgeGraph.graph_code == projection_code,
+            ))
+            if projection is None:
+                projection = KnowledgeGraph(
+                    knowledge_base_id=graph.knowledge_base_id,
+                    graph_code=projection_code,
+                    graph_name=projection_name,
+                    description=f"{graph.description or ''}\n范围：{market}:{','.join(normalized)}",
+                    symbol=None,
+                    source_tables=list(graph.source_tables or kb.source_tables or []),
+                    version=graph.version,
+                    governance_status="PENDING",
+                    enabled=True,
+                )
+                db.add(projection)
+                db.flush()
+            elif projection.knowledge_base_id != graph.knowledge_base_id:
+                raise PipelineConflictError("续作投影标识已被其他知识库占用")
             counts = build_knowledge_graph(
                 db, projection, scope_pairs=pairs,
                 max_documents_per_stock=graph_documents_per_stock,

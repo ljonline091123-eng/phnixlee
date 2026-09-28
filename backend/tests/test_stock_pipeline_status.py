@@ -1,11 +1,16 @@
 import unittest
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+from unittest.mock import patch
 
 from fastapi import HTTPException
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
-from app.api.stocks import _stock_pipeline_statuses, get_stock_pipeline_status_detail
+from app.api.stocks import (
+    _stock_pipeline_statuses,
+    continue_stock_pipeline,
+    get_stock_pipeline_status_detail,
+)
 from app.db.base import Base
 from app.models.ai_hub import KnowledgeBase, KnowledgeDocument, KnowledgeEntity, KnowledgeGraph, KnowledgeRelation
 from app.models.lakehouse import DocumentChunkVersion
@@ -20,6 +25,8 @@ from app.models.market_data import (
     StockRealtimeQuote,
     StockSymbol,
 )
+from app.models.pipeline import ScheduledJob
+from app.schemas.stock_batch import StockPipelineContinuationRequest
 
 
 class StockPipelineStatusTest(unittest.TestCase):
@@ -63,6 +70,21 @@ class StockPipelineStatusTest(unittest.TestCase):
         self.assertEqual(summary["knowledge_graph"]["status"], "NOT_STARTED")
         self.assertEqual(summary["data_collection"]["expected_count"], 6)
 
+        detail = get_stock_pipeline_status_detail(
+            market="CN_A", symbol="000001", sample_limit=5, db=self.db,
+        )
+        knowledge_items = detail["stages"]["knowledge_base"]["incomplete_items"]
+        self.assertEqual(
+            {item["continuation_action"] for item in knowledge_items},
+            {"BUILD_SCOPED_GRAPH"},
+        )
+        graph_items = detail["stages"]["knowledge_graph"]["incomplete_items"]
+        self.assertEqual(
+            {item["continuation_action"] for item in graph_items},
+            {"BUILD_SCOPED_GRAPH"},
+        )
+        self.assertTrue(all(item["can_continue"] for item in knowledge_items + graph_items))
+
     def test_status_uses_persisted_rows_and_chunks(self) -> None:
         now = datetime.now(timezone.utc)
         self.db.add_all([
@@ -98,7 +120,7 @@ class StockPipelineStatusTest(unittest.TestCase):
         self.db.add(document)
         self.db.flush()
         self.db.add(DocumentChunkVersion(
-            document_key="status:document:1",
+            document_key=f"knowledge_document:{document.id}",
             document_id=str(document.id),
             chunk_index=0,
             chunk_version="v1",
@@ -151,6 +173,11 @@ class StockPipelineStatusTest(unittest.TestCase):
                 total_count=0, persisted_count=0, error_message="公告接口限流",
                 started_at=now, completed_at=now,
             ),
+            DataFetchLog(
+                source_id=self.source.id, interface_code="A_KLINE_ON_DEMAND",
+                market="CN_A", symbol="000001", status="RUNNING",
+                total_count=0, persisted_count=0, started_at=now,
+            ),
         ])
         kb = KnowledgeBase(
             kb_code="DETAIL_KB", kb_name="详情测试知识库", source_tables=["stock_news"],
@@ -176,6 +203,19 @@ class StockPipelineStatusTest(unittest.TestCase):
             title="尚未切片的新闻文档",
             content="该文档故意不创建切片，用于验证未完成原因。",
         ))
+        self.db.flush()
+        document = self.db.scalar(select(KnowledgeDocument).where(
+            KnowledgeDocument.graph_id == graph.id,
+        ))
+        self.db.add(DocumentChunkVersion(
+            document_key=f"notice:{document.id}",
+            document_id=str(document.id),
+            chunk_index=0,
+            chunk_version="collision:v1",
+            content_hash="c" * 64,
+            chunk_text="同号但不属于知识文档的切片",
+            parser_version="test",
+        ))
         self.db.commit()
 
         detail = get_stock_pipeline_status_detail(
@@ -195,6 +235,14 @@ class StockPipelineStatusTest(unittest.TestCase):
         self.assertEqual(incomplete["NOTICE"]["status"], "FAILED")
         self.assertIn("公告接口限流", incomplete["NOTICE"]["reason"])
         self.assertTrue(incomplete["NOTICE"]["action_hint"])
+        self.assertTrue(incomplete["NOTICE"]["can_continue"])
+        self.assertEqual(incomplete["NOTICE"]["continuation_action"], "RETRY_BUSINESS_DATA")
+        self.assertEqual(incomplete["KLINE"]["status"], "PROCESSING")
+        self.assertFalse(incomplete["KLINE"]["can_continue"])
+        self.assertIsNone(incomplete["KLINE"]["continuation_action"])
+        self.assertIn("正在执行", incomplete["KLINE"]["blocked_reason"])
+        self.assertFalse(completed["QUOTE"]["can_continue"])
+        self.assertTrue(completed["QUOTE"]["blocked_reason"])
 
         kb_stage = detail["stages"]["knowledge_base"]
         kb_incomplete = {item["code"]: item for item in kb_stage["incomplete_items"]}
@@ -203,10 +251,156 @@ class StockPipelineStatusTest(unittest.TestCase):
         self.assertEqual(kb_incomplete["DOCUMENT_CHUNKS"]["expected_count"], 1)
         self.assertIn("未完成", kb_incomplete["DOCUMENT_CHUNKS"]["reason"])
         self.assertEqual(kb_stage["verification"]["documents_without_chunks"], 1)
+        self.assertTrue(kb_incomplete["DOCUMENT_CHUNKS"]["can_continue"])
+        self.assertEqual(
+            kb_incomplete["DOCUMENT_CHUNKS"]["continuation_action"],
+            "COMPLETE_DOCUMENT_CHUNKS",
+        )
         self.assertEqual(
             kb_stage["verification"]["incomplete_records"][0]["title"],
             "尚未切片的新闻文档",
         )
+
+    def test_continuation_retries_exact_business_types_and_is_idempotent(self) -> None:
+        payload = StockPipelineContinuationRequest(
+            stage="data_collection",
+            item_codes=["notice", "kline", "notice"],
+            idempotency_key="detail-retry-1",
+        )
+        first = continue_stock_pipeline("CN_A", "1", payload, self.db)
+        second = continue_stock_pipeline("CN_A", "000001", payload, self.db)
+        self.assertEqual(first["job_id"], second["job_id"])
+        job = self.db.scalar(select(ScheduledJob).where(ScheduledJob.id == first["job_id"]))
+        request = (job.payload_json or {})["request"]
+        self.assertEqual(request["business_types"], ["NOTICE", "KLINE"])
+        self.assertTrue(request["collect_business_data"])
+        self.assertFalse(request["export_lakehouse"])
+        self.assertFalse(request["archive_chunks"])
+        self.assertFalse(request["run_graph"])
+        self.assertIsNone(request["continuation_action"])
+        self.assertEqual(request["continuation_stage"], "data_collection")
+        self.assertEqual(request["continuation_item_codes"], ["NOTICE", "KLINE"])
+
+        self.db.add_all([
+            StockNotice(
+                market="CN_A", symbol="000001", source_id=self.source.id,
+                notice_date="2026-09-29", title="幂等重试测试公告",
+                fetched_at=datetime.now(timezone.utc),
+            ),
+            StockKline(
+                market="CN_A", symbol="000001", source_id=self.source.id,
+                trade_date="2026-09-29", fetched_at=datetime.now(timezone.utc),
+            ),
+        ])
+        self.db.commit()
+        completed_retry = continue_stock_pipeline("CN_A", "000001", payload, self.db)
+        self.assertEqual(first["job_id"], completed_retry["job_id"])
+
+        different = StockPipelineContinuationRequest(
+            stage="data_collection", item_codes=["NEWS"],
+            idempotency_key="detail-retry-1",
+        )
+        with self.assertRaises(HTTPException) as conflict:
+            continue_stock_pipeline("CN_A", "000001", different, self.db)
+        self.assertEqual(conflict.exception.status_code, 409)
+        self.assertIn("幂等键", conflict.exception.detail)
+
+    def test_continuation_rejects_an_already_completed_item(self) -> None:
+        self.db.add(StockRealtimeQuote(
+            market="CN_A", symbol="000001", source_id=self.source.id,
+            fetched_at=datetime.now(timezone.utc),
+        ))
+        self.db.commit()
+        payload = StockPipelineContinuationRequest(
+            stage="data_collection", item_codes=["QUOTE"],
+        )
+        with self.assertRaises(HTTPException) as completed:
+            continue_stock_pipeline("CN_A", "000001", payload, self.db)
+        self.assertEqual(completed.exception.status_code, 409)
+        self.assertIn("已经完成", completed.exception.detail["message"])
+
+        unknown_payload = StockPipelineContinuationRequest(
+            stage="data_collection", item_codes=["UNKNOWN"],
+        )
+        with self.assertRaises(HTTPException) as unknown:
+            continue_stock_pipeline("CN_A", "000001", unknown_payload, self.db)
+        self.assertEqual(unknown.exception.status_code, 422)
+
+    def test_stale_running_fetch_is_explained_and_can_be_continued(self) -> None:
+        self.db.add(DataFetchLog(
+            source_id=self.source.id, interface_code="A_KLINE_ON_DEMAND",
+            market="CN_A", symbol="000001", status="RUNNING",
+            total_count=0, persisted_count=0,
+            started_at=datetime.now(timezone.utc) - timedelta(hours=3),
+        ))
+        self.db.commit()
+
+        detail = get_stock_pipeline_status_detail(
+            market="CN_A", symbol="000001", sample_limit=1, db=self.db,
+        )
+        incomplete = {
+            item["code"]: item
+            for item in detail["stages"]["data_collection"]["incomplete_items"]
+        }
+        self.assertEqual(incomplete["KLINE"]["status"], "STALE")
+        self.assertTrue(incomplete["KLINE"]["can_continue"])
+        self.assertEqual(incomplete["KLINE"]["continuation_action"], "RETRY_BUSINESS_DATA")
+        self.assertIn("超过2小时", incomplete["KLINE"]["reason"])
+
+    def test_continuation_preserves_a_blocked_item_reason(self) -> None:
+        payload = StockPipelineContinuationRequest(
+            stage="knowledge_graph", item_codes=["GRAPH_RELATIONS"],
+        )
+        blocked_detail = {
+            "stages": {
+                "knowledge_graph": {
+                    "completed_items": [],
+                    "incomplete_items": [{
+                        "code": "GRAPH_RELATIONS",
+                        "label": "关联关系",
+                        "can_continue": False,
+                        "blocked_reason": "需要先明确目标图谱范围。",
+                    }],
+                },
+            },
+        }
+        with patch("app.api.stocks._stock_pipeline_status_detail", return_value=blocked_detail):
+            with self.assertRaises(HTTPException) as blocked:
+                continue_stock_pipeline("CN_A", "000001", payload, self.db)
+        self.assertEqual(blocked.exception.status_code, 409)
+        self.assertEqual(blocked.exception.detail["items"][0]["code"], "GRAPH_RELATIONS")
+        self.assertEqual(
+            blocked.exception.detail["items"][0]["blocked_reason"],
+            "需要先明确目标图谱范围。",
+        )
+
+    def test_continue_all_graph_gaps_enqueues_one_bounded_projection(self) -> None:
+        kb = KnowledgeBase(
+            kb_code="STOCK_FULL_KG", kb_name="默认股票知识库", source_tables=["stock_symbol"],
+        )
+        self.db.add(kb)
+        self.db.flush()
+        graph = KnowledgeGraph(
+            knowledge_base_id=kb.id, graph_code="STOCK_FULL_GRAPH",
+            graph_name="默认股票图谱", source_tables=["stock_symbol"],
+        )
+        self.db.add(graph)
+        self.db.commit()
+        payload = StockPipelineContinuationRequest(
+            stage="knowledge_graph",
+            item_codes=["GRAPH_PROJECTION", "STOCK_ENTITY", "GRAPH_RELATIONS"],
+            idempotency_key="build-scoped-graph-1",
+        )
+        result = continue_stock_pipeline("CN_A", "000001", payload, self.db)
+        job = self.db.get(ScheduledJob, result["job_id"])
+        request = (job.payload_json or {})["request"]
+        self.assertTrue(request["run_graph"])
+        self.assertTrue(request["archive_chunks"])
+        self.assertFalse(request["export_lakehouse"])
+        self.assertFalse(request["collect_business_data"])
+        self.assertEqual(request["continuation_action"], "BUILD_SCOPED_GRAPH")
+        self.assertEqual(request["graph_id"], graph.id)
+        self.assertEqual(request["stocks"], [{"market": "CN_A", "symbol": "000001"}])
 
     def test_detail_returns_graph_verification_records_for_a_completed_graph(self) -> None:
         kb = KnowledgeBase(

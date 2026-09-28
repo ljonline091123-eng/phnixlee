@@ -141,6 +141,9 @@ class StockPipelineDetailItem(BaseModel):
     verification_path: str | None = None
     latest_attempt: dict[str, Any] | None = None
     records: list[StockPipelineVerificationRecord] = Field(default_factory=list)
+    can_continue: bool = False
+    continuation_action: str | None = None
+    blocked_reason: str | None = None
 
 
 class StockPipelineStageDetailRead(BaseModel):

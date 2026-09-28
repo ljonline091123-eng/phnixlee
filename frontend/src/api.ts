@@ -104,6 +104,9 @@ export type StockPipelineDetailItem = {
   verification_path?: string | null;
   latest_attempt?: string | Record<string, unknown> | null;
   records?: StockPipelineVerificationRecord[];
+  can_continue?: boolean;
+  continuation_action?: string | null;
+  blocked_reason?: string | null;
 };
 
 export type StockPipelineStageDetail = {

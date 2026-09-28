@@ -126,10 +126,57 @@
   line-height: 1.5;
 }
 
-.pipeline-detail-section > header > span {
+.pipeline-detail-section > header > span,
+.pipeline-section-actions > span {
   flex: 0 0 auto;
   color: var(--text-muted);
   font-size: 11px;
+}
+
+.pipeline-section-actions,
+.pipeline-detail-item-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 9px;
+  flex-wrap: wrap;
+}
+
+.pipeline-continue-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 6px 10px;
+  border: 1px solid #7da486;
+  border-radius: 7px;
+  color: #285f40;
+  background: #edf7ef;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.pipeline-continue-button:hover:not(:disabled),
+.pipeline-continue-button:focus-visible:not(:disabled) {
+  border-color: #4f805d;
+  background: #e2f1e5;
+  outline: none;
+}
+
+.pipeline-continue-button:disabled {
+  opacity: .56;
+  cursor: not-allowed;
+}
+
+.pipeline-continue-button .spin {
+  animation: pipeline-spin .8s linear infinite;
+}
+
+@keyframes pipeline-spin {
+  to { transform: rotate(360deg); }
 }
 
 .pipeline-detail-list {
@@ -208,10 +255,81 @@
 .pipeline-detail-item-body b { color: var(--text); }
 .pipeline-detail-reason { color: #815f22; }
 .pipeline-detail-action { color: #37694b; }
+.pipeline-detail-blocked { color: #8b4b31; }
 .pipeline-detail-muted,
 .pipeline-detail-empty { color: var(--text-muted); }
 .pipeline-detail-empty { margin: 0; padding: 12px; border-radius: 8px; background: #f6f8f5; font-size: 12px; }
 .pipeline-detail-empty.success { color: #356b4f; background: #eff8ef; }
+
+.pipeline-detail-item-actions {
+  justify-content: space-between;
+  min-height: 32px;
+}
+
+.pipeline-continuation-progress {
+  display: grid;
+  gap: 10px;
+  padding: 13px 15px;
+  border: 1px solid #dec889;
+  border-radius: 9px;
+  background: #fffaf0;
+}
+
+.pipeline-continuation-progress.success {
+  border-color: #a9cbae;
+  background: #f1f9f1;
+}
+
+.pipeline-continuation-progress.failed {
+  border-color: #e2aaa4;
+  background: #fff4f2;
+}
+
+.pipeline-continuation-progress > header,
+.pipeline-continuation-progress > footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.pipeline-continuation-progress > header > div {
+  display: grid;
+  gap: 3px;
+}
+
+.pipeline-continuation-progress strong { color: var(--text); font-size: 12px; }
+.pipeline-continuation-progress small,
+.pipeline-continuation-progress footer { color: var(--text-muted); font-size: 10px; }
+.pipeline-continuation-progress > header > span { color: #7a5a18; font-size: 11px; font-weight: 800; }
+.pipeline-continuation-progress.success > header > span { color: #356b4f; }
+.pipeline-continuation-progress.failed > header > span { color: #9d342f; }
+
+.pipeline-continuation-track {
+  height: 7px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #ebe8dc;
+}
+
+.pipeline-continuation-track > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #b8872c;
+  transition: width .35s ease;
+}
+
+.pipeline-continuation-progress.success .pipeline-continuation-track > span { background: #3d7757; }
+.pipeline-continuation-progress.failed .pipeline-continuation-track > span { background: #bb5148; }
+.pipeline-continuation-progress footer b { color: var(--text); }
+
+.pipeline-continuation-error {
+  margin: 0;
+  color: #983c34;
+  font-size: 11px;
+  line-height: 1.5;
+}
 
 .pipeline-latest-attempt summary {
   color: var(--accent-strong);
@@ -345,5 +463,10 @@
 @media (max-width: 680px) {
   .pipeline-status-dialog .resource-dialog-header { align-items: stretch; flex-direction: column; }
   .pipeline-detail-section > header { flex-direction: column; gap: 5px; }
+  .pipeline-section-actions { width: 100%; justify-content: space-between; }
+  .pipeline-detail-item-actions { align-items: stretch; flex-direction: column; }
+  .pipeline-continue-button { width: 100%; }
+  .pipeline-continuation-progress > header,
+  .pipeline-continuation-progress > footer { align-items: flex-start; flex-direction: column; }
   .pipeline-verification-record dl { grid-template-columns: 1fr; }
 }

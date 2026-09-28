@@ -651,6 +651,10 @@ function DataConsolePage({ tab, setTab }: { tab: DataView; setTab: (tab: DataVie
         kind={pipelineStatusDetail.kind}
         summary={stockPipelineStatus(pipelineStatusDetail.stock, pipelineStatusDetail.kind)}
         onClose={() => setPipelineStatusDetail(null)}
+        onCompleted={() => {
+          void loadSymbols();
+          void load();
+        }}
       />}
       <BatchStockGovernanceDialog
         open={batchGovernanceOpen}

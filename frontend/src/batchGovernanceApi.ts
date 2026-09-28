@@ -28,6 +28,14 @@ export type BatchGovernanceRequest = {
   idempotency_key?: string;
 };
 
+export type StockPipelineContinuationRequest = {
+  stage: "data_collection" | "knowledge_base" | "knowledge_graph";
+  item_codes: string[];
+  idempotency_key?: string;
+  kline_days?: number;
+  disclosure_days?: number;
+};
+
 export type BatchGovernanceStageResult = {
   status?: string;
   message?: string;
@@ -87,5 +95,16 @@ export const batchGovernanceApi = {
 
   list(limit = 20, signal?: AbortSignal) {
     return request<BatchGovernanceJob[] | { items: BatchGovernanceJob[]; total?: number }>(`/stocks/batch-governance/jobs?limit=${limit}`, { signal });
+  },
+
+  continueStockPipeline(
+    market: string,
+    symbol: string,
+    payload: StockPipelineContinuationRequest,
+  ) {
+    return request<BatchGovernanceJob>(
+      `/stocks/${encodeURIComponent(market)}/${encodeURIComponent(symbol)}/pipeline-status/continue`,
+      { method: "POST", body: JSON.stringify(payload) },
+    );
   },
 };

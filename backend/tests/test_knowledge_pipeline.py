@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from app.db.base import Base
 from app.models.ai_hub import KnowledgeBase, KnowledgeDocument, KnowledgeGraph
 from app.models.market_data import DataSource, StockSymbol
-from app.models.pipeline import PipelineStageRun
+from app.models.pipeline import PipelineRun, PipelineStageRun
 from app.services import knowledge_pipeline
 
 
@@ -76,6 +76,9 @@ def test_scoped_graph_build_creates_projection_without_replacing_base_graph(monk
     engine = _db()
     with Session(engine) as db:
         _kb, graph = _seed(db)
+        graph.graph_code = "G" * 64
+        graph.graph_name = "长" * 128
+        db.commit()
         monkeypatch.setattr(knowledge_pipeline.lakehouse, "assess_dataset_source",
                             lambda *args, **kwargs: {"passed": True, "level": "PASS"})
         monkeypatch.setattr(knowledge_pipeline.lakehouse, "export_dataset",
@@ -103,8 +106,12 @@ def test_scoped_graph_build_creates_projection_without_replacing_base_graph(monk
             item["code"] for item in result["completion"]["issues"]
         }
         assert result["completion"]["model_selection_ready"] is False
-        assert db.get(KnowledgeGraph, graph.id).graph_code == "STOCK_GRAPH"
-        assert db.scalar(select(KnowledgeGraph).where(KnowledgeGraph.id == result["graph_id"])) is not None
+        assert db.get(KnowledgeGraph, graph.id).graph_code == "G" * 64
+        projection = db.scalar(select(KnowledgeGraph).where(KnowledgeGraph.id == result["graph_id"]))
+        assert projection is not None
+        assert len(projection.graph_code) <= 64
+        assert len(projection.graph_name) <= 128
+        assert projection.graph_code.endswith(f"_PIPE_{result['pipeline_run_id']}")
     engine.dispose()
 
 
@@ -222,4 +229,63 @@ def test_pipeline_idempotency_key_rejects_a_different_request(monkeypatch):
                 archive_chunks=False, run_graph=False, include_company_tables=False,
                 idempotency_key="same-key",
             )
+    engine.dispose()
+
+
+def test_pipeline_can_resume_a_nonterminal_idempotent_run(monkeypatch):
+    engine = _db()
+    with Session(engine) as db:
+        kb, graph = _seed(db)
+        monkeypatch.setattr(
+            knowledge_pipeline.lakehouse,
+            "assess_dataset_source",
+            lambda *args, **kwargs: {"passed": True, "level": "PASS"},
+        )
+        request_input = {
+            "market": "CN_A",
+            "symbols": ["000001"],
+            "knowledge_base_id": kb.id,
+            "graph_id": graph.id,
+            "export_lakehouse": False,
+            "archive_chunks": False,
+            "run_graph": False,
+            "run_agent_governance": False,
+            "governance_record_limit": 50,
+            "governance_run_key": None,
+            "include_company_tables": False,
+            "dataset_limit": 10000,
+            "graph_documents_per_stock": 50,
+            "chunk_size": 1800,
+            "overlap": 180,
+            "chunk_document_limit": 10000,
+        }
+        interrupted = PipelineRun(
+            pipeline_type="STOCK_KNOWLEDGE_LAKEHOUSE",
+            trigger_type="API",
+            status="RUNNING",
+            idempotency_key="resume-key",
+            input_json=request_input,
+            output_json={"interrupted": True},
+            current_stage="DOCUMENT_CHUNKS",
+        )
+        db.add(interrupted)
+        db.commit()
+
+        replay = knowledge_pipeline.run_stock_pipeline(
+            db, market="CN_A", symbols=["000001"], graph_id=graph.id,
+            export_lakehouse=False, archive_chunks=False, run_graph=False,
+            include_company_tables=False, idempotency_key="resume-key",
+        )
+        assert replay["status"] == "RUNNING"
+        assert replay["interrupted"] is True
+
+        resumed = knowledge_pipeline.run_stock_pipeline(
+            db, market="CN_A", symbols=["000001"], graph_id=graph.id,
+            export_lakehouse=False, archive_chunks=False, run_graph=False,
+            include_company_tables=False, idempotency_key="resume-key",
+            resume_incomplete=True,
+        )
+        assert resumed["pipeline_run_id"] == interrupted.id
+        assert resumed["status"] in {"COMPLETED", "PARTIAL"}
+        assert db.get(PipelineRun, interrupted.id).current_stage == "COMPLETE"
     engine.dispose()

@@ -15,7 +15,12 @@ from app.jobs.dispatcher import DatabaseJobDispatcher
 from app.models.ai_hub import KnowledgeBase, KnowledgeGraph
 from app.models.market_data import StockSymbol
 from app.models.pipeline import PipelineRun, ScheduledJob
-from app.schemas.stock_batch import StockBatchGovernanceRequest, StockBatchGovernanceResponse
+from app.schemas.stock_batch import (
+    DOCUMENT_CHUNKS_CONTINUATION,
+    SCOPED_GRAPH_CONTINUATION,
+    StockBatchGovernanceRequest,
+    StockBatchGovernanceResponse,
+)
 from app.services.stock_batch import TASK_TYPE
 
 
@@ -93,6 +98,9 @@ def _validate_targets(db: Session, payload: StockBatchGovernanceRequest) -> None
         ).order_by(KnowledgeGraph.id))
         if selected_graph is None:
             raise HTTPException(status_code=422, detail="所选知识库没有可用的基础知识图谱")
+    if payload.run_graph and selected_graph is not None:
+        payload.graph_id = selected_graph.id
+        payload.knowledge_base_id = selected_graph.knowledge_base_id
 
 
 def _canonical_request(payload: StockBatchGovernanceRequest) -> dict:
@@ -104,6 +112,22 @@ def _job_key(payload: StockBatchGovernanceRequest) -> str:
         return f"{TASK_TYPE}:{uuid4()}"
     digest = sha256(payload.idempotency_key.encode("utf-8")).hexdigest()
     return f"{TASK_TYPE}:{digest}"
+
+
+def find_stock_batch_job_by_client_key(
+    db: Session,
+    client_key: str,
+) -> ScheduledJob | None:
+    """Resolve the durable job behind a client idempotency key."""
+    digest = sha256(client_key.encode("utf-8")).hexdigest()
+    return db.scalar(select(ScheduledJob).where(
+        ScheduledJob.idempotency_key == f"{TASK_TYPE}:{digest}",
+    ))
+
+
+def stock_batch_job_view(db: Session, job: ScheduledJob) -> dict:
+    """Expose the stable response contract to continuation endpoints."""
+    return _job_view(db, job, details=False)
 
 
 _BUSINESS_LABELS = {
@@ -157,6 +181,10 @@ def _enrich_stage_results(output: dict) -> dict:
     enriched = dict(stage_results)
     completion = (output.get("completion") or {}) if isinstance(output.get("completion"), dict) else {}
     completion_issues = list(completion.get("issues") or [])
+    scoped_graph_continuation = (
+        str((output.get("effective_options") or {}).get("continuation_action") or "").upper()
+        == SCOPED_GRAPH_CONTINUATION
+    )
     completion_by_market: dict[str, dict] = {}
     knowledge_market_runs = (
         (stage_results.get("KNOWLEDGE_PIPELINE") or {}).get("market_runs") or []
@@ -314,22 +342,32 @@ def _enrich_stage_results(output: dict) -> dict:
                     if selected_value is not None
                     else min(total, with_chunks)
                 )
+                continuation_mode = (
+                    str(run.get("continuation_action") or "").upper()
+                    == DOCUMENT_CHUNKS_CONTINUATION
+                )
                 selection_item = _stage_item(
-                    f"{market}:DOCUMENT_SELECTION", f"{market} · 知识文档选择",
-                    "COMPLETED" if selected > 0 else status,
+                    f"{market}:DOCUMENT_SELECTION",
+                    f"{market} · 实际缺口识别" if continuation_mode else f"{market} · 知识文档选择",
+                    "COMPLETED" if (selected > 0 or continuation_mode) else status,
                     reason=(
+                        f"跨 {run.get('graph_count', 0)} 个图谱版本识别到 {selected} 份未切片文档。"
+                        if continuation_mode else
                         f"已从 {total} 份知识文档中选择 {selected} 份进入切片。"
                         if selected > 0 else "该范围没有选出可供切片的知识文档。"
                     ), record_count=selected, details=run, verify_target=verify_target,
                 )
                 (stage_completed if selection_item["status"] == "COMPLETED" else stage_incomplete).append(selection_item)
-                coverage_complete = bool(total and selected == total and with_chunks == selected and not failed)
+                coverage_complete = bool(total and with_chunks == total and not failed)
                 coverage_item = _stage_item(
                     f"{market}:CHUNK_COVERAGE", f"{market} · 切片覆盖",
                     "COMPLETED" if coverage_complete else ("PARTIAL" if with_chunks else status),
                     reason=(
                         f"{market} 已完成 {with_chunks}/{total} 份文档切片。"
                         if coverage_complete else (
+                            f"{market} 已切片 {with_chunks}/{total} 份，仍有 "
+                            f"{run.get('missing_documents_after', max(total - with_chunks, 0))} 份未覆盖。"
+                            if continuation_mode and total else
                             f"{market} 已切片 {with_chunks}/{total} 份；选择 {selected} 份，"
                             f"仍有 {max(total - with_chunks, 0)} 份未覆盖，失败 {failed} 份。"
                             if total else "该范围没有可切片文档。"
@@ -376,24 +414,27 @@ def _enrich_stage_results(output: dict) -> dict:
                     ),
                 )
                 (stage_completed if build_item["status"] == "COMPLETED" else stage_incomplete).append(build_item)
-                governance_complete = governance in {"GOVERNED", "LOCKED"}
-                governance_item = _stage_item(
-                    f"{market}:GRAPH_GOVERNANCE", f"{market} · 图谱治理发布",
-                    "COMPLETED" if governance_complete else (governance or "PENDING"),
-                    reason=(
-                        f"图谱已完成治理，当前状态为 {governance}。"
-                        if governance_complete else next_action or f"图谱治理状态为 {governance or 'PENDING'}，尚未发布为已治理事实。"
-                    ),
-                    details={**run, "completion_issues": graph_issues, "next_action": next_action},
-                    verify_target=(
-                        f"/api/v1/resources/knowledge-graphs/{run.get('graph_id')}/explore"
-                        if run.get("graph_id") else verify_target
-                    ),
-                )
-                (stage_completed if governance_item["status"] == "COMPLETED" else stage_incomplete).append(governance_item)
+                if not scoped_graph_continuation:
+                    governance_complete = governance in {"GOVERNED", "LOCKED"}
+                    governance_item = _stage_item(
+                        f"{market}:GRAPH_GOVERNANCE", f"{market} · 图谱治理发布",
+                        "COMPLETED" if governance_complete else (governance or "PENDING"),
+                        reason=(
+                            f"图谱已完成治理，当前状态为 {governance}。"
+                            if governance_complete else next_action or f"图谱治理状态为 {governance or 'PENDING'}，尚未发布为已治理事实。"
+                        ),
+                        details={**run, "completion_issues": graph_issues, "next_action": next_action},
+                        verify_target=(
+                            f"/api/v1/resources/knowledge-graphs/{run.get('graph_id')}/explore"
+                            if run.get("graph_id") else verify_target
+                        ),
+                    )
+                    (stage_completed if governance_item["status"] == "COMPLETED" else stage_incomplete).append(governance_item)
         reasons.extend({"code": item["code"], "reason": item["reason"]} for item in stage_incomplete)
         # Older output may have no market_runs but does have completion issues.
         for issue in issue_for(stage_code):
+            if scoped_graph_continuation and issue.get("code") == "GRAPH_PENDING_GOVERNANCE":
+                continue
             if not any(reason.get("code") == issue.get("code") for reason in reasons):
                 reasons.append({"code": issue.get("code"), "reason": issue.get("detail")})
         stage["completed_items"] = stage_completed
@@ -404,6 +445,7 @@ def _enrich_stage_results(output: dict) -> dict:
             "market_runs": market_runs,
             "completed_count": len(stage_completed),
             "incomplete_count": len(stage_incomplete),
+            "governance_follow_up": scoped_graph_continuation and stage_code == "KNOWLEDGE_GRAPH",
         }
         stage["market_runs"] = market_runs
         stage["verify_target"] = verify_target
@@ -471,6 +513,14 @@ def submit_stock_batch_governance(
             )
         return _job_view(db, existing, details=False)
 
+    active_jobs = db.scalars(select(ScheduledJob).where(
+        ScheduledJob.task_type == TASK_TYPE,
+        ScheduledJob.status.in_(("PENDING", "RUNNING", "RETRY")),
+    ).order_by(ScheduledJob.id.desc())).all()
+    for active_job in active_jobs:
+        if ((active_job.payload_json or {}).get("request") or {}) == canonical:
+            return _job_view(db, active_job, details=False)
+
     job = DatabaseJobDispatcher(db).enqueue(
         task_type=TASK_TYPE,
         pipeline_type="STOCK_BATCH_DATA_KNOWLEDGE_GOVERNANCE",
@@ -479,6 +529,12 @@ def submit_stock_batch_governance(
         payload={"request": canonical},
         max_attempts=3,
     )
+    enqueued_request = ((job.payload_json or {}).get("request") or {})
+    if enqueued_request != canonical:
+        raise HTTPException(
+            status_code=409,
+            detail="相同幂等键已用于不同的批量请求，请更换幂等键",
+        )
     job.payload_json = {
         "request": canonical,
         "orchestration_job_id": job.id,

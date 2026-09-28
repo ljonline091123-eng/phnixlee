@@ -1,4 +1,5 @@
 import json
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from typing import Any
 
@@ -73,6 +74,20 @@ from app.schemas.market_data import (
     StockSyncResponse,
     WatchlistItemCreate,
     WatchlistItemRead,
+)
+from app.schemas.stock_batch import (
+    BUSINESS_DATA_CONTINUATION,
+    DOCUMENT_CHUNKS_CONTINUATION,
+    MASTER_BUSINESS_TYPES,
+    SCOPED_GRAPH_CONTINUATION,
+    StockBatchGovernanceRequest,
+    StockBatchGovernanceResponse,
+    StockPipelineContinuationRequest,
+)
+from app.api.stock_batch import (
+    find_stock_batch_job_by_client_key,
+    stock_batch_job_view,
+    submit_stock_batch_governance,
 )
 from app.services.ipo_calendar import IpoCalendarService
 from app.services.stock_on_demand import OnDemandFetchError, StockOnDemandService
@@ -432,9 +447,10 @@ def _stock_pipeline_statuses(db: Session, stocks: list[StockSymbol]) -> dict[tup
             if last_at is not None:
                 business_last[key].append(last_at)
 
-    # Documents and chunks are queried in bulk.  ``document_id`` is a string
-    # in the lakehouse table while KnowledgeDocument.id is an integer, hence
-    # the explicit conversion retained from the original implementation.
+    # Documents and chunks are queried in bulk.  ``document_id`` is shared by
+    # several document domains, so the canonical knowledge-document key must
+    # participate in the match to avoid treating e.g. ``notice:1`` as chunks
+    # for ``knowledge_document:1``.
     document_rows = db.execute(
         select(
             KnowledgeDocument.id,
@@ -458,12 +474,19 @@ def _stock_pipeline_statuses(db: Session, stocks: list[StockSymbol]) -> dict[tup
         # as well, otherwise a large page could exceed SQLite's bind limit.
         for offset in range(0, len(document_ids), 500):
             document_batch = document_ids[offset : offset + 500]
+            document_keys = {
+                f"knowledge_document:{document_id}": document_id
+                for document_id in document_batch
+            }
             chunk_rows = db.execute(
-                select(DocumentChunkVersion.document_id, func.count().label("chunk_count"))
-                .where(DocumentChunkVersion.document_id.in_(document_batch))
-                .group_by(DocumentChunkVersion.document_id)
+                select(DocumentChunkVersion.document_key, func.count().label("chunk_count"))
+                .where(DocumentChunkVersion.document_key.in_(list(document_keys)))
+                .group_by(DocumentChunkVersion.document_key)
             ).all()
-            chunk_counts.update({str(document_id): int(count or 0) for document_id, count in chunk_rows})
+            for document_key, count in chunk_rows:
+                document_id = document_keys.get(str(document_key))
+                if document_id is not None:
+                    chunk_counts[document_id] = int(count or 0)
 
     graph_ids_by_key: dict[tuple[str, str], set[int]] = {key: set() for key in keys}
     kb_parts: dict[tuple[str, str], dict[str, Any]] = {}
@@ -806,18 +829,31 @@ def _latest_business_attempts(db: Session, stock: StockSymbol) -> dict[str, dict
         .limit(100)
     ).all()
     source_names = _pipeline_source_names(db, {int(row.source_id) for row in logs})
+    stale_before = datetime.now(timezone.utc) - timedelta(hours=2)
     for row in logs:
         code = _fetch_log_category(row.interface_code)
         if not code or code in attempts:
             continue
+        started_at = row.started_at
+        comparable_started_at = started_at
+        if comparable_started_at is not None and comparable_started_at.tzinfo is None:
+            comparable_started_at = comparable_started_at.replace(tzinfo=timezone.utc)
+        stale_running = bool(
+            str(row.status or "").upper() == "RUNNING"
+            and comparable_started_at is not None
+            and comparable_started_at < stale_before
+        )
         attempts[code] = {
             "fetch_log_id": row.id,
             "interface_code": row.interface_code,
-            "status": row.status,
+            "status": "STALE" if stale_running else row.status,
             "total_count": int(row.total_count or 0),
             "persisted_count": int(row.persisted_count or 0),
             "source_name": source_names.get(int(row.source_id)),
-            "error_message": row.error_message,
+            "error_message": (
+                "采集执行超过2小时且未写入终态，可安全重新提交续作。"
+                if stale_running else row.error_message
+            ),
             "started_at": row.started_at,
             "completed_at": row.completed_at,
         }
@@ -872,6 +908,11 @@ def _data_collection_stage_detail(
             reason = "采集任务正在执行，尚未产生持久化记录。"
             action_hint = "等待当前任务完成后刷新状态。"
             target = incomplete_items
+        elif latest_attempt and latest_attempt.get("status") == "STALE":
+            item_status = "STALE"
+            reason = "最近一次采集执行超过2小时且未写入终态，已视为超时任务。"
+            action_hint = "可使用继续完成功能重新提交；新任务会按幂等规则执行。"
+            target = incomplete_items
         elif latest_attempt and latest_attempt.get("status") == "SUCCESS":
             item_status = "EMPTY"
             reason = "最近一次接口调用成功，但未返回或未持久化有效记录。"
@@ -919,14 +960,18 @@ def _document_chunk_counts(db: Session, document_ids: list[str]) -> dict[str, in
         batch = document_ids[offset : offset + 500]
         if not batch:
             continue
-        counts.update({
-            str(document_id): int(count or 0)
-            for document_id, count in db.execute(
-                select(DocumentChunkVersion.document_id, func.count())
-                .where(DocumentChunkVersion.document_id.in_(batch))
-                .group_by(DocumentChunkVersion.document_id)
-            ).all()
-        })
+        document_keys = {
+            f"knowledge_document:{document_id}": document_id
+            for document_id in batch
+        }
+        for document_key, count in db.execute(
+            select(DocumentChunkVersion.document_key, func.count())
+            .where(DocumentChunkVersion.document_key.in_(list(document_keys)))
+            .group_by(DocumentChunkVersion.document_key)
+        ).all():
+            document_id = document_keys.get(str(document_key))
+            if document_id is not None:
+                counts[document_id] = int(count or 0)
     return counts
 
 
@@ -1208,7 +1253,7 @@ def _stock_pipeline_status_detail(
     sample_limit: int = 5,
 ) -> dict[str, Any]:
     summary = _stock_pipeline_status(db, stock)
-    return {
+    detail = {
         "market": stock.market,
         "symbol": stock.symbol,
         "name": stock.name,
@@ -1224,6 +1269,45 @@ def _stock_pipeline_status_detail(
             ),
         },
     }
+    for stage_code, stage in detail["stages"].items():
+        for item in stage["completed_items"]:
+            item.update({
+                "can_continue": False,
+                "continuation_action": None,
+                "blocked_reason": "该项已经完成，无需继续执行。",
+            })
+        for item in stage["incomplete_items"]:
+            item_code = str(item.get("code") or "").upper()
+            can_continue = False
+            action = None
+            blocked_reason = None
+            if stage_code == "data_collection" and item_code in MASTER_BUSINESS_TYPES:
+                if str(item.get("status") or "").upper() == "PROCESSING":
+                    blocked_reason = "该数据采集任务正在执行，请等待当前任务完成后刷新状态。"
+                else:
+                    can_continue = True
+                    action = BUSINESS_DATA_CONTINUATION
+            elif stage_code == "knowledge_base" and item_code == "DOCUMENT_CHUNKS":
+                if int(stage["verification"].get("document_count") or 0) > 0:
+                    can_continue = True
+                    action = DOCUMENT_CHUNKS_CONTINUATION
+                else:
+                    can_continue = True
+                    action = SCOPED_GRAPH_CONTINUATION
+            elif stage_code == "knowledge_base":
+                can_continue = True
+                action = SCOPED_GRAPH_CONTINUATION
+            elif item_code in {"GRAPH_PROJECTION", "STOCK_ENTITY", "GRAPH_RELATIONS"}:
+                can_continue = True
+                action = SCOPED_GRAPH_CONTINUATION
+            else:
+                blocked_reason = "为避免无范围重建或覆盖历史图谱，请先明确目标图谱后再治理。"
+            item.update({
+                "can_continue": can_continue,
+                "continuation_action": action,
+                "blocked_reason": blocked_reason,
+            })
+    return detail
 
 
 def _stock_symbol_read(stock: StockSymbol, quote: Any | None = None, db: Session | None = None) -> dict[str, Any]:
@@ -1874,6 +1958,114 @@ def get_stock_pipeline_status_detail(
     if stock is None:
         raise HTTPException(status_code=404, detail="股票主数据不存在")
     return _stock_pipeline_status_detail(db, stock, sample_limit=sample_limit)
+
+
+@router.post(
+    "/{market}/{symbol}/pipeline-status/continue",
+    status_code=202,
+    response_model=StockBatchGovernanceResponse,
+)
+def continue_stock_pipeline(
+    market: str,
+    symbol: str,
+    payload: StockPipelineContinuationRequest,
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    """Enqueue only requested criteria that remain incomplete for one stock."""
+    normalized_market = market.upper()
+    if normalized_market not in MASTER_MARKETS:
+        raise HTTPException(status_code=422, detail=f"市场必须是以下之一：{', '.join(MASTER_MARKETS)}")
+    normalized_symbol = _normalize_symbol(normalized_market, symbol)
+    stock = db.scalar(select(StockSymbol).where(
+        StockSymbol.market == normalized_market,
+        StockSymbol.symbol == normalized_symbol,
+    ))
+    if stock is None:
+        raise HTTPException(status_code=404, detail="股票主数据不存在")
+
+    continuation_client_key = (
+        f"pipeline-continuation:{normalized_market}:{normalized_symbol}:{payload.idempotency_key}"
+        if payload.idempotency_key else None
+    )
+    if continuation_client_key:
+        existing_job = find_stock_batch_job_by_client_key(db, continuation_client_key)
+        if existing_job is not None:
+            existing_request = ((existing_job.payload_json or {}).get("request") or {})
+            existing_targets = existing_request.get("stocks") or []
+            same_request = (
+                existing_targets == [{"market": normalized_market, "symbol": normalized_symbol}]
+                and existing_request.get("continuation_stage") == payload.stage
+                and sorted(existing_request.get("continuation_item_codes") or []) == sorted(payload.item_codes)
+                and int(existing_request.get("kline_days") or 365) == payload.kline_days
+                and int(existing_request.get("disclosure_days") or 730) == payload.disclosure_days
+            )
+            if not same_request:
+                raise HTTPException(
+                    status_code=409,
+                    detail="相同幂等键已用于不同的续作请求，请更换幂等键",
+                )
+            return stock_batch_job_view(db, existing_job)
+
+    status_detail = _stock_pipeline_status_detail(db, stock, sample_limit=1)
+    stage = status_detail["stages"].get(payload.stage)
+    if stage is None:
+        raise HTTPException(status_code=422, detail="续作阶段不存在")
+    completed = {str(item.get("code") or "").upper(): item for item in stage["completed_items"]}
+    incomplete = {str(item.get("code") or "").upper(): item for item in stage["incomplete_items"]}
+    known_codes = set(completed) | set(incomplete)
+    unknown_codes = [code for code in payload.item_codes if code not in known_codes]
+    if unknown_codes:
+        raise HTTPException(status_code=422, detail={
+            "message": "续作项目不存在或不属于所选阶段",
+            "item_codes": unknown_codes,
+        })
+    completed_codes = [code for code in payload.item_codes if code in completed]
+    if completed_codes:
+        raise HTTPException(status_code=409, detail={
+            "message": "所选项目已经完成，请刷新状态详情",
+            "item_codes": completed_codes,
+        })
+    blocked = [incomplete[code] for code in payload.item_codes if not incomplete[code].get("can_continue")]
+    if blocked:
+        raise HTTPException(status_code=409, detail={
+            "message": "所选项目当前不能自动续作",
+            "items": [{
+                "code": item.get("code"),
+                "label": item.get("label"),
+                "blocked_reason": item.get("blocked_reason"),
+            } for item in blocked],
+        })
+    actions = {incomplete[code].get("continuation_action") for code in payload.item_codes}
+    if len(actions) != 1:
+        raise HTTPException(status_code=422, detail="一次续作请求只能包含同一种执行动作")
+    action = actions.pop()
+    request_values: dict[str, Any] = {
+        "stocks": [{"market": normalized_market, "symbol": normalized_symbol}],
+        "collect_business_data": False,
+        "export_lakehouse": False,
+        "archive_chunks": False,
+        "run_graph": False,
+        "run_agent_governance": False,
+        "business_types": [],
+        "continuation_stage": payload.stage,
+        "continuation_item_codes": payload.item_codes,
+        "kline_days": payload.kline_days,
+        "disclosure_days": payload.disclosure_days,
+        "idempotency_key": continuation_client_key,
+    }
+    if action == BUSINESS_DATA_CONTINUATION:
+        request_values.update({
+            "collect_business_data": True,
+            "business_types": payload.item_codes,
+        })
+    elif action == DOCUMENT_CHUNKS_CONTINUATION:
+        request_values["continuation_action"] = DOCUMENT_CHUNKS_CONTINUATION
+    elif action == SCOPED_GRAPH_CONTINUATION:
+        request_values["continuation_action"] = SCOPED_GRAPH_CONTINUATION
+    else:
+        raise HTTPException(status_code=409, detail="所选项目没有安全的自动续作动作")
+    batch_request = StockBatchGovernanceRequest.model_validate(request_values)
+    return submit_stock_batch_governance(batch_request, db)
 
 
 @router.get("/{market}/{symbol}", response_model=StockSymbolRead)

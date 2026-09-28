@@ -37,36 +37,36 @@ class DatabaseJobDispatcher:
         if existing is not None:
             return existing
 
-        pipeline = PipelineRun(
-            pipeline_type=pipeline_type or task_type,
-            trigger_type=trigger_type,
-            status="PENDING",
-            idempotency_key=idempotency_key,
-            input_json=payload or {},
-            current_stage=task_type,
-        )
-        self.db.add(pipeline)
-        self.db.flush()
-        self.db.add(
-            PipelineStageRun(
-                pipeline_run_id=pipeline.id,
-                stage_code=task_type,
-                status="PENDING",
-                max_attempts=max_attempts,
-                input_json=payload or {},
-            )
-        )
-        job = ScheduledJob(
-            task_type=task_type,
-            status="PENDING",
-            idempotency_key=idempotency_key,
-            payload_json=payload or {},
-            max_attempts=max_attempts,
-            run_after=run_after or utc_now(),
-            pipeline_run_id=pipeline.id,
-        )
-        self.db.add(job)
         try:
+            pipeline = PipelineRun(
+                pipeline_type=pipeline_type or task_type,
+                trigger_type=trigger_type,
+                status="PENDING",
+                idempotency_key=idempotency_key,
+                input_json=payload or {},
+                current_stage=task_type,
+            )
+            self.db.add(pipeline)
+            self.db.flush()
+            self.db.add(
+                PipelineStageRun(
+                    pipeline_run_id=pipeline.id,
+                    stage_code=task_type,
+                    status="PENDING",
+                    max_attempts=max_attempts,
+                    input_json=payload or {},
+                )
+            )
+            job = ScheduledJob(
+                task_type=task_type,
+                status="PENDING",
+                idempotency_key=idempotency_key,
+                payload_json=payload or {},
+                max_attempts=max_attempts,
+                run_after=run_after or utc_now(),
+                pipeline_run_id=pipeline.id,
+            )
+            self.db.add(job)
             self.db.commit()
         except IntegrityError:
             self.db.rollback()
