@@ -330,13 +330,14 @@ class AkshareAdapter(MarketDataAdapter):
         holders["institutional"] = self._safe_optional_records(
             getattr(ak, "stock_fund_stock_holder", None), {"symbol": symbol}, limit=50
         )
+        holders["holder_count"] = self._safe_holder_count(symbol)
         dividends = self._safe_optional_records(
             getattr(ak, "stock_history_dividend_detail", None),
             {"symbol": symbol, "indicator": "分红"}, limit=50,
         )
         concepts: list[dict[str, Any]] = []
         profile_fields = profile.get("fields") if isinstance(profile.get("fields"), dict) else {}
-        raw_concepts = profile_fields.get("所属概念") or profile_fields.get("概念") or profile_fields.get("入选指数")
+        raw_concepts = profile_fields.get("所属概念") or profile_fields.get("概念")
         if raw_concepts:
             concepts = [
                 {"name": item.strip(), "definition": "来源披露的行业/概念标签，需结合原文核验。"}
@@ -346,8 +347,8 @@ class AkshareAdapter(MarketDataAdapter):
             "concepts": concepts,
             "dividends": dividends,
             "dividend_source": "AkShare stock_history_dividend_detail" if dividends else "暂无",
-            "margin_history": [],
-            "margin_source": "暂无公开个股融资融券明细",
+            "margin_history": self._safe_cn_margin_history(symbol),
+            "margin_source": "东方财富/交易所融资融券明细",
         }
         research_reports = self._safe_optional_records(
             getattr(ak, "stock_research_report_em", None), {"symbol": symbol}, limit=100,
@@ -358,9 +359,13 @@ class AkshareAdapter(MarketDataAdapter):
                 getattr(ak, "stock_profit_forecast_ths", None),
                 {"symbol": symbol, "indicator": "预测报告每股收益"}, limit=50,
             ),
-            "institution_forecast": self._safe_optional_records(
+            # The CNINFO ranking endpoint is a market-wide feed and has
+            # returned malformed schemas in several AkShare versions.  Use
+            # only rows explicitly carrying this security code; an unknown
+            # schema is represented as unavailable rather than mixing stocks.
+            "institution_forecast": self._safe_security_filtered_records(
                 getattr(ak, "stock_rank_forecast_cninfo", None),
-                {"date": datetime.now().strftime("%Y%m%d")}, limit=100,
+                {"date": datetime.now().strftime("%Y%m%d")}, symbol, limit=100,
             ),
             "latest_reports": research_reports[:10],
             "reports": research_reports,
@@ -2556,6 +2561,86 @@ class AkshareAdapter(MarketDataAdapter):
             return cls._safe_dataframe_records(dataframe, limit=limit)
         except Exception:
             return []
+
+    @classmethod
+    def _safe_security_filtered_records(
+        cls, method: Any, kwargs: dict[str, Any], symbol: str, *, limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        """Return optional rows only when the provider identifies the security.
+
+        Some rating endpoints are full-market tables despite accepting a date
+        argument.  Never show such rows on a single-stock page without an
+        explicit code column.
+        """
+        if not method:
+            return []
+        try:
+            dataframe = method(**kwargs)
+            if dataframe is None or dataframe.empty:
+                return []
+            columns = list(dataframe.columns)
+            code_column = next((column for column in columns if any(token in str(column) for token in ("股票代码", "证券代码", "代码", "symbol", "code"))), None)
+            if code_column is None:
+                return []
+            target = str(symbol).zfill(6)
+            mask = dataframe[code_column].map(lambda value: str(value).strip().zfill(6) == target)
+            return cls._safe_dataframe_records(dataframe[mask], limit=limit)
+        except Exception:
+            return []
+
+    @classmethod
+    def _safe_holder_count(cls, symbol: str, *, limit: int = 24) -> list[dict[str, Any]]:
+        method = getattr(ak, "stock_zh_a_gdhs_detail_em", None)
+        if not method:
+            return []
+        try:
+            dataframe = method(symbol=symbol)
+            if dataframe is None or dataframe.empty:
+                return []
+            code_column = next((column for column in dataframe.columns if any(token in str(column) for token in ("股票代码", "证券代码", "代码"))), None)
+            if code_column is not None:
+                target = str(symbol).zfill(6)
+                dataframe = dataframe[dataframe[code_column].map(lambda value: str(value).strip().zfill(6) == target)]
+            date_column = next((column for column in dataframe.columns if "统计截止日" in str(column) or str(column) in {"截止日期", "截至日期"}), None)
+            if date_column:
+                dataframe = dataframe.assign(__sort=pd.to_datetime(dataframe[date_column], errors="coerce"))
+                dataframe = dataframe.sort_values("__sort", ascending=False).drop(columns=["__sort"])
+            return cls._safe_dataframe_records(dataframe, limit=limit)
+        except Exception:
+            return []
+
+    @classmethod
+    def _safe_cn_margin_history(cls, symbol: str, *, max_days: int = 22) -> list[dict[str, Any]]:
+        """Fetch recent exchange margin rows and retain only this security."""
+        if symbol.startswith(("4", "8", "92")):
+            return []  # public BSE endpoint is not an individual-security feed
+        method_name = "stock_margin_detail_sse" if symbol.startswith("6") else "stock_margin_detail_szse"
+        method = getattr(ak, method_name, None)
+        if not method:
+            return []
+        rows: list[dict[str, Any]] = []
+        today = date.today()
+        for offset in range(max_days * 2 + 5):
+            if len(rows) >= max_days:
+                break
+            day = today.fromordinal(today.toordinal() - offset)
+            if day.weekday() >= 5:
+                continue
+            try:
+                dataframe = method(date=day.strftime("%Y%m%d"))
+                if dataframe is None or dataframe.empty:
+                    continue
+                code_column = next((column for column in dataframe.columns if any(token in str(column) for token in ("证券代码", "股票代码", "代码"))), None)
+                if code_column is None:
+                    continue
+                target = str(symbol).zfill(6)
+                selected = dataframe[dataframe[code_column].map(lambda value: str(value).strip().zfill(6) == target)]
+                for item in cls._safe_dataframe_records(selected, limit=3):
+                    item.setdefault("交易日期", day.isoformat())
+                    rows.append(item)
+            except Exception:
+                continue
+        return rows[:max_days]
 
     def _fetch_cn_a_symbols(self) -> list[SymbolRecord]:
         exchange_records = self._fetch_cn_a_symbols_from_exchange_tables()

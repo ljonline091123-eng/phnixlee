@@ -35,6 +35,8 @@ from app.services.f10 import (
     NOTICE_CATEGORIES,
 )
 from app.services.stock_on_demand import StockOnDemandService
+from app.services.notice_read_model import CanonicalNotice, deduplicate_notice_rows
+from app.services.stock_classification import build_classification_groups
 
 
 class F10WorkflowError(Exception):
@@ -70,7 +72,12 @@ def _normalize_symbol(market: str, symbol: str) -> str:
     return value.zfill(digit_length_for_market(normalized_market)) if value.isdigit() else value
 
 
-def _notice_view(row: StockNotice, latest_date: str | None = None) -> dict[str, Any]:
+def _notice_view(row: StockNotice, latest_date: str | None = None,
+                 canonical: CanonicalNotice | None = None) -> dict[str, Any]:
+    provenance = canonical.metadata() if canonical is not None else {
+        "source_ids": [row.source_id], "source_urls": [row.url] if row.url else [],
+        "source_count": 1, "duplicate_count": 0,
+    }
     return {
         "id": row.id,
         "market": row.market,
@@ -84,6 +91,10 @@ def _notice_view(row: StockNotice, latest_date: str | None = None) -> dict[str, 
         "url": row.url,
         "content_json": row.content_json,
         "source_id": row.source_id,
+        "source_ids": provenance["source_ids"],
+        "source_urls": provenance["source_urls"],
+        "source_count": provenance["source_count"],
+        "duplicate_count": provenance["duplicate_count"],
         "fetched_at": row.fetched_at,
     }
 
@@ -170,16 +181,27 @@ class F10Workflow:
             extended_data=extended_data,
         )
         extended_data = normalize_f10_sections(extended_data)
+        # Add a typed, read-only classification projection for the stock page.
+        # It separates industry, theme/sector, listing board, indexes and
+        # security type; provider raw fields remain untouched.
+        profile_payload = extended_data.get("profile")
+        if isinstance(profile_payload, dict):
+            profile_fields = profile_payload.get("fields") if isinstance(profile_payload.get("fields"), dict) else {}
+            profile_payload["classification_groups"] = build_classification_groups(
+                self.db, snapshot.stock, profile_fields
+            )
         if _hydrate_symbol_from_f10(snapshot.stock, extended_data):
             self.db.commit()
 
+        canonical_notices = deduplicate_notice_rows(snapshot.report_notices)
+        canonical_by_id = {item.row.id: item for item in canonical_notices}
         return StockF10Read(
             symbol=self.symbol_reader(snapshot.stock, snapshot.quote),
             realtime_quote=snapshot.quote,
             recent_klines=snapshot.klines,
             financial_reports=snapshot.financials,
             notices=[
-                _notice_view(item, max((row.notice_date for row in snapshot.notices), default=None))
+                _notice_view(item, max((row.notice_date for row in snapshot.notices), default=None), canonical_by_id.get(item.id))
                 for item in snapshot.notices
             ],
             news=snapshot.news,

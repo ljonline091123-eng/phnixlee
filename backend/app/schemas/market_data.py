@@ -364,6 +364,10 @@ class StockNoticeRead(BaseModel):
     url: str | None
     content_json: dict[str, Any]
     source_id: int
+    source_ids: list[int] = Field(default_factory=list)
+    source_urls: list[str] = Field(default_factory=list)
+    source_count: int = 1
+    duplicate_count: int = 0
     fetched_at: datetime
 
 

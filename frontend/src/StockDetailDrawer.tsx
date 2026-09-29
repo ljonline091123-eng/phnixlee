@@ -174,6 +174,45 @@ function findMetricFromRows(rows: unknown, aliases: string[], periods: string[] 
   return match ? toNumber(match.value) : null;
 }
 
+/** 将公司主数据中的行业、主题板块、指数和类型分开显示。
+ * 旧缓存只有“所属行业/入选指数”字段，新缓存可能提供 sectors/themes/tags；
+ * 这里做兼容读取，但不把指数误标为概念板块。
+ */
+function sectorGroups(profile: JsonRecord, fields: JsonRecord): Array<{ label: string; values: string[] }> {
+  const result: Array<{ label: string; values: string[] }> = [];
+  const toValues = (value: unknown): string[] => {
+    if (Array.isArray(value)) return value.flatMap((item) => {
+      if (item && typeof item === "object") {
+        const row = asRecord(item);
+        return [pickValue(row, ["name", "label", "title", "名称", "名称", "板块", "主题"])].filter(Boolean).map(String);
+      }
+      return [String(item)];
+    }).flatMap((item) => item.split(/[，,;；|]/).map((part) => part.trim())).filter(Boolean);
+    if (value === undefined || value === null || value === "") return [];
+    return String(value).split(/[，,;；|]/).map((item) => item.trim()).filter(Boolean);
+  };
+  const add = (label: string, value: unknown) => {
+    const values = [...new Set(toValues(value))].slice(0, 12);
+    if (values.length) result.push({ label, values });
+  };
+  const typedGroups = asArray(profile.classification_groups);
+  if (typedGroups.length) {
+    typedGroups.forEach((group) => {
+      const title = String(pickValue(group, ["title", "label", "名称"]) || "分类");
+      const values = asArray(group.items).flatMap((item) => [pickValue(item, ["label", "name", "名称"])].filter(Boolean).map(String));
+      if (values.length) result.push({ label: title, values: [...new Set(values)].slice(0, 12) });
+    });
+    if (result.length) return result;
+  }
+  add("行业", pickValue(profile, ["industry", "industry_name", "行业", "所属行业"]) ?? pickValue(fields, ["三级行业", "所属行业", "行业"]));
+  add("板块/主题", pickValue(profile, ["sectors", "sector", "themes", "theme", "板块", "主题", "所属板块"]));
+  add("指数", pickValue(profile, ["indices", "index_memberships", "index", "入选指数"] ) ?? pickValue(fields, ["入选指数", "指数"]));
+  add("类型", pickValue(profile, ["classifications", "classification_tags", "tags", "类型", "股票类型"]));
+  // Some providers put the actual theme list under fields as a JSON-like array.
+  if (!result.some((group) => group.label === "板块/主题")) add("板块/主题", pickValue(fields, ["板块", "主题", "所属板块", "所属概念", "概念"]));
+  return result;
+}
+
 function shareholderRows(rows: unknown): JsonRecord[] {
   if (Array.isArray(rows)) {
     return rows.map((row) => asRecord(row)).filter((row) => Object.keys(row).length > 0);
@@ -571,6 +610,7 @@ function ResearchInsightSummary({
   agentSnapshots,
   quote,
   summary,
+  profile,
   profileFields,
   klines,
 }: {
@@ -580,6 +620,7 @@ function ResearchInsightSummary({
   agentSnapshots: Array<ResearchFundamentalAgent | ResearchTechnicalAgent>;
   quote: StockF10["realtime_quote"];
   summary: JsonRecord;
+  profile: JsonRecord;
   profileFields: JsonRecord;
   klines: StockKline[];
 }) {
@@ -665,13 +706,13 @@ function ResearchInsightSummary({
         ))}
       </div>
       <div className="stock-sector-strip">
-        <span>所属板块</span>
-        <div>
-          {(() => {
-            const raw = findValue(profileFields, ["所属板块", "所属行业", "行业", "概念", "所属概念", "入选指数"]);
-            const values = String(raw || "暂无").split(/[，,;；]/).map((item) => item.trim()).filter(Boolean).slice(0, 10);
-            return values.length ? values.map((item) => <em key={item}>{item}</em>) : <small>暂无板块数据</small>;
-          })()}
+        <span>股票分类</span>
+        <div className="stock-sector-groups">
+          {sectorGroups(profile, profileFields).length ? sectorGroups(profile, profileFields).map((group) => (
+            <span className="stock-sector-group" key={group.label}>
+              <b>{group.label}</b>{group.values.map((item) => <em key={`${group.label}-${item}`}>{item}</em>)}
+            </span>
+          )) : <small>暂无行业、板块或类型数据</small>}
         </div>
       </div>
       <div className="research-brief-grid">
@@ -931,13 +972,17 @@ function F10SectionBlock({
   section,
   onOpen,
   holderRows = false,
+  footer,
 }: {
   section: JsonRecord;
   onOpen?: (section: JsonRecord) => void;
   holderRows?: boolean;
+  footer?: ReactNode;
 }) {
+  const [expanded, setExpanded] = useState(false);
   const rows = sectionRows(section);
   const status = String(section.status || (rows.length ? "AVAILABLE" : "UNAVAILABLE"));
+  const statusLabel = status === "AVAILABLE" ? "已获取" : status === "PARTIAL" ? "部分获取" : status === "PENDING" ? "待核验" : "暂无数据";
   const actionLabel = String(
     section.action_label || (section.key === "anomaly" ? "融资融券近一个月" : "查看详细数据"),
   );
@@ -950,7 +995,7 @@ function F10SectionBlock({
       {rows.length ? (
         holderRows ? <ShareholderTable rows={rows} title={String(section.title || "股东数据")} /> : (
           <div className="f10-section-row-list">
-            {rows.slice(0, 50).map((row, index) => {
+            {rows.slice(0, expanded ? 100 : 8).map((row, index) => {
               const label = String(pickValue(row, ["label", "name", "项目", "指标", "metric", "股东名称"]) || `项目 ${index + 1}`);
               const value = pickValue(row, ["value", "data", "数值", "内容", "summary"]) ?? row;
               return <div className="financial-value-row" key={`${label}-${index}`}><span>{label}</span><strong>{valueText(value)}</strong></div>;
@@ -958,8 +1003,9 @@ function F10SectionBlock({
           </div>
         )
       ) : <p className="empty-state compact-empty">{String(section.message || "当前数据源未返回该分区数据")}</p>}
+      {footer}
       <div className="f10-section-meta"><span>来源：{String(section.source || "暂无")}</span>{section.as_of ? <span>截至：{formatDate(String(section.as_of))}</span> : null}</div>
-      {onOpen ? <button type="button" className="f10-detail-link" onClick={() => onOpen({ ...section, detail_title: section.detail_title || actionLabel })}>{actionLabel}</button> : null}
+      {rows.length && (rows.length > 8 || onOpen) ? <button type="button" className="f10-detail-link" onClick={() => onOpen ? onOpen({ ...section, detail_title: section.detail_title || actionLabel }) : setExpanded((value) => !value)}>{onOpen ? actionLabel : (expanded ? "收起详细数据" : "查看详细数据")}</button> : null}
     </section>
   );
 }
@@ -989,7 +1035,6 @@ function F10Panel({ detail, activeTab, setActiveTab }: { detail: StockF10; activ
       </div>
       {activeTab === "财务" && (
         <>
-          <FinancialHighlights summary={summary} quote={detail.realtime_quote} profileFields={profileFields} />
           {financialSections.length ? financialSections.map((section) => <F10SectionBlock key={String(section.key)} section={section} onOpen={openDetail} />) : (
             <>
               <div className="financial-block metrics-block"><div className="financial-block-heading"><div><span className="financial-section-mark" /><h3>主要指标</h3></div><span className="financial-period">{periods[0] || "最新报告期"}</span></div><MetricRows rows={summary.rows} periods={periods} limit={18} /></div>
@@ -1008,8 +1053,11 @@ function F10Panel({ detail, activeTab, setActiveTab }: { detail: StockF10; activ
       )}
       {activeTab === "简况" && (
         <>
-          {overviewSections.length ? overviewSections.map((section) => <F10SectionBlock key={String(section.key)} section={section} onOpen={openDetail} />) : <F10SectionBlock section={{ key: "basic", title: "基本情况", rows: Object.entries(profileFields).map(([label, value]) => ({ label, value })), source: profile.source }} onOpen={openDetail} />}
-          <section className="financial-block concept-detail-block"><div className="financial-block-heading"><div><span className="financial-section-mark" /><h3>概念</h3></div><button type="button" className="f10-detail-link" onClick={() => openDetail({ key: "concepts", title: "概念详情", rows: asArray(profile.concepts), source: profile.source })}>概念详细解析</button></div><div className="concept-chip-list">{asArray(profile.concepts).length ? asArray(profile.concepts).map((item) => <button type="button" key={String(item.name)} onClick={() => openDetail({ key: "concept", title: String(item.name || "概念详情"), rows: [item], source: profile.source })}>{String(item.name || item.label || "概念")}</button>) : <span>暂无概念数据</span>}</div></section>
+          {(overviewSections.length ? overviewSections : [{ key: "basic", title: "基本情况", rows: Object.entries(profileFields).map(([label, value]) => ({ label, value })), source: profile.source }]).map((section) => {
+            const basic = String(section.key) === "basic";
+            const concepts = asArray(profile.concepts);
+            return <F10SectionBlock key={String(section.key)} section={basic && concepts.length ? { ...section, rows: [...sectionRows(section), { label: "概念", value: concepts.map((item) => String(item.name || item.label || "")).filter(Boolean).join("、") }] } : section} onOpen={openDetail} footer={basic ? <button type="button" className="f10-detail-link concept-inline-link" onClick={() => openDetail({ key: "concepts", title: "概念详细解析", rows: concepts, source: profile.source })}>概念详细解析</button> : undefined} />;
+          })}
         </>
       )}
       {activeTab === "财报" && (
@@ -1150,6 +1198,7 @@ export function StockDetailDrawer({
   const [researchReport, setResearchReport] = useState("");
   const [researchRunning, setResearchRunning] = useState(false);
   const [researchStage, setResearchStage] = useState("");
+  const [researchDetail, setResearchDetail] = useState<JsonRecord | null>(null);
   const [agentSnapshots, setAgentSnapshots] = useState<Array<ResearchFundamentalAgent | ResearchTechnicalAgent>>([]);
 
   const pageSize = 8;
@@ -1419,6 +1468,7 @@ export function StockDetailDrawer({
                     agentSnapshots={agentSnapshots}
                     quote={quote}
                     summary={asRecord(detail.financial_summary)}
+                    profile={profile}
                     profileFields={profileFields}
                     klines={detail.recent_klines}
                   />
@@ -1458,9 +1508,9 @@ export function StockDetailDrawer({
               {tab === "资金" && <FundFlowPanel data={asRecord(detail.fund_flow)} />}
               {tab === "F10" && <F10Panel detail={detail} activeTab={f10Tab} setActiveTab={setF10Tab} />}
               {tab === "研究" && (
-                <>
-                  <section className="research-section-grid">
-                    {researchSections.length ? researchSections.map((section) => <F10SectionBlock key={String(section.key)} section={section} />) : <p className="empty-state">暂无研究分区数据，请先拉取最新 F10。</p>}
+                  <>
+                    <section className="research-section-grid">
+                    {researchSections.length ? researchSections.map((section) => <F10SectionBlock key={String(section.key)} section={section} onOpen={(item) => setResearchDetail(item)} />) : <p className="empty-state">暂无研究分区数据，请先拉取最新 F10。</p>}
                   </section>
                   <section className="f10-section inner-section research-detail-section">
                     <div className="f10-section-head">
@@ -1485,8 +1535,9 @@ export function StockDetailDrawer({
                     <article className="research-markdown detail-research-markdown">
                       {researchReport ? renderMarkdown(researchReport) : <p className="empty-state">点击按钮后，研报会以打字机流式效果显示在这里。</p>}
                     </article>
-                  </section>
-                </>
+                    </section>
+                    {researchDetail ? <div className="f10-detail-overlay" role="dialog" aria-modal="true"><div className="f10-detail-dialog"><header><h3>{String(researchDetail.title || "研究详情")}</h3><button type="button" onClick={() => setResearchDetail(null)}>关闭</button></header><div className="f10-detail-body">{sectionRows(researchDetail).length ? sectionRows(researchDetail).map((row, index) => <div className="f10-detail-row" key={index}><strong>{String(pickValue(row, ["label", "name", "项目", "指标"]) || `项目 ${index + 1}`)}</strong><span>{valueText(pickValue(row, ["value", "data", "内容", "summary"]) ?? row)}</span></div>) : <p className="empty-state">{String(researchDetail.message || "当前数据源未返回详细数据")}</p>}<small>来源：{String(researchDetail.source || "暂无")}</small></div></div></div> : null}
+                  </>
               )}
             </section>
           </>

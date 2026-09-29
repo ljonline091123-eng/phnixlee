@@ -94,6 +94,7 @@ from app.api.stock_batch import (
 from app.services.ipo_calendar import IpoCalendarService
 from app.services.lakehouse import current_knowledge_document_chunk_counts
 from app.services.stock_on_demand import OnDemandFetchError, StockOnDemandService
+from app.services.notice_read_model import CanonicalNotice, deduplicate_notice_rows
 
 router = APIRouter(prefix="/stocks", tags=["Stock Master Data"])
 
@@ -104,7 +105,15 @@ def _watch_symbol(value: str, market: str) -> str:
     return text.zfill(digit_length_for_market(normalized_market)) if text.isdigit() else text
 
 
-def _notice_read_payload(row: StockNotice, latest_date: str | None = None) -> dict[str, Any]:
+def _notice_read_payload(
+    row: StockNotice,
+    latest_date: str | None = None,
+    canonical: CanonicalNotice | None = None,
+) -> dict[str, Any]:
+    provenance = canonical.metadata() if canonical is not None else {
+        "source_ids": [row.source_id], "source_urls": [row.url] if row.url else [],
+        "source_count": 1, "duplicate_count": 0,
+    }
     return {
         "id": row.id,
         "market": row.market,
@@ -118,6 +127,10 @@ def _notice_read_payload(row: StockNotice, latest_date: str | None = None) -> di
         "url": row.url,
         "content_json": row.content_json,
         "source_id": row.source_id,
+        "source_ids": provenance["source_ids"],
+        "source_urls": provenance["source_urls"],
+        "source_count": provenance["source_count"],
+        "duplicate_count": provenance["duplicate_count"],
         "fetched_at": row.fetched_at,
     }
 
@@ -1914,13 +1927,13 @@ def list_notices(
         db.scalars(
             select(StockNotice)
             .where(StockNotice.market == normalized_market, StockNotice.symbol == normalized_symbol)
-            .order_by(StockNotice.notice_date.desc())
-            .limit(limit)
+            .order_by(StockNotice.notice_date.desc(), StockNotice.id.desc())
         ).all()
     )
-    filtered = [row for row in rows if not category or category == "全部" or classify_notice(row.title, row.notice_type) == category]
-    latest = max((row.notice_date for row in filtered), default=None)
-    return [_notice_read_payload(row, latest) for row in filtered]
+    canonical = deduplicate_notice_rows(rows)
+    filtered = [item for item in canonical if not category or category == "全部" or classify_notice(item.row.title, item.row.notice_type) == category]
+    latest = max((item.row.notice_date for item in filtered), default=None)
+    return [_notice_read_payload(item.row, latest, item) for item in filtered[:limit]]
 
 
 @router.get("/{market}/{symbol}/notices/page", response_model=StockNoticePage)
@@ -1943,11 +1956,12 @@ def list_notices_page(
         .where(StockNotice.market == normalized_market, StockNotice.symbol == normalized_symbol)
         .order_by(StockNotice.notice_date.desc(), StockNotice.id.desc())
     ).all())
-    filtered = [row for row in rows if not category or category == "全部" or classify_notice(row.title, row.notice_type) == category]
-    latest = max((row.notice_date for row in filtered), default=None)
+    canonical = deduplicate_notice_rows(rows)
+    filtered = [item for item in canonical if not category or category == "全部" or classify_notice(item.row.title, item.row.notice_type) == category]
+    latest = max((item.row.notice_date for item in filtered), default=None)
     start = (page - 1) * page_size
     return StockNoticePage(
-        items=[_notice_read_payload(row, latest) for row in filtered[start : start + page_size]],
+        items=[_notice_read_payload(item.row, latest, item) for item in filtered[start : start + page_size]],
         total=len(filtered), page=page, page_size=page_size,
     )
 

@@ -122,10 +122,13 @@ def _display_section(
     message: str | None = None,
 ) -> dict[str, Any]:
     rows = rows or []
+    normalized_status = "AVAILABLE" if rows else "UNAVAILABLE"
+    if rows and message and message not in {"", "当前数据源未返回该分区数据"}:
+        normalized_status = "PARTIAL"
     return {
         "key": key,
         "title": title,
-        "status": "AVAILABLE" if rows else "UNAVAILABLE",
+        "status": normalized_status,
         "rows": rows,
         "source": source or "暂无",
         "as_of": as_of,
@@ -147,9 +150,17 @@ def normalize_f10_sections(extended_data: dict[str, dict[str, Any]]) -> dict[str
     holders = extended_data.setdefault("holders", {})
     composition = extended_data.setdefault("business_composition", {})
 
+    def payload_as_of(payload: dict[str, Any] | None) -> str | None:
+        if not isinstance(payload, dict):
+            return None
+        return payload.get("as_of") or payload.get("report_date") or (payload.get("_meta") or {}).get("fetched_at")
+
     concepts = profile.get("concepts") if isinstance(profile.get("concepts"), list) else []
     if not concepts:
-        raw_concepts = fields.get("所属概念") or fields.get("概念") or fields.get("入选指数")
+        # Index membership is a separate dimension and must not be presented
+        # as an investment concept.  Legacy caches may have no concept field;
+        # leave that section empty rather than inventing a theme from indexes.
+        raw_concepts = fields.get("所属概念") or fields.get("概念")
         if raw_concepts:
             concepts = [
                 {"name": item.strip(), "definition": "来源披露的行业/概念标签，需结合原文核验。"}
@@ -162,8 +173,9 @@ def normalize_f10_sections(extended_data: dict[str, dict[str, Any]]) -> dict[str
         "异动揭秘",
         rows=profile.get("margin_history"),
         source=profile.get("margin_source"),
-        message="融资融券明细暂未从公开接口返回",
+        message=("" if profile.get("margin_history") else "融资融券明细暂未从公开接口返回"),
     )
+    anomaly_section["as_of"] = payload_as_of(profile)
     anomaly_section["action_label"] = "融资融券近一个月"
     anomaly_section["detail_title"] = "融资融券近一个月"
     profile["overview_sections"] = [
@@ -171,34 +183,34 @@ def normalize_f10_sections(extended_data: dict[str, dict[str, Any]]) -> dict[str
             {"label": key, "value": fields.get(key)}
             for key in ("公司名称", "所属行业", "所属市场", "所属板块", "上市日期", "法人代表")
             if fields.get(key) not in (None, "")
-        ], source=profile.get("source")),
-        _display_section("indicators", "主要指标", rows=summary.get("rows"), source=summary.get("source")),
+        ], source=profile.get("source"), as_of=payload_as_of(profile)),
+        _display_section("indicators", "主要指标", rows=summary.get("rows"), source=summary.get("source"), as_of=payload_as_of(summary)),
         anomaly_section,
-        _display_section("insight", "道破天机", rows=holders.get("insight_rows"), source=holders.get("source")),
-        _display_section("dividend", "分红配送", rows=profile.get("dividends"), source=profile.get("dividend_source"), message="暂无分红配送明细"),
+        _display_section("insight", "道破天机", rows=holders.get("insight_rows"), source=holders.get("source"), as_of=payload_as_of(holders)),
+        _display_section("dividend", "分红配送", rows=profile.get("dividends"), source=profile.get("dividend_source"), as_of=payload_as_of(profile), message="" if profile.get("dividends") else "暂无分红配送明细"),
         _display_section("company", "公司相关", rows=[
             {"label": key, "value": fields.get(key)}
             for key in ("公司名称", "注册地址", "办公地址", "主营业务", "经营范围", "公司网址")
             if fields.get(key) not in (None, "")
-        ], source=profile.get("source")),
+        ], source=profile.get("source"), as_of=payload_as_of(profile)),
         _display_section("issuance", "发行相关", rows=[
             {"label": key, "value": fields.get(key)}
             for key in ("发行价", "发行数量", "发行市盈率", "上市日期", "每手股数")
             if fields.get(key) not in (None, "")
-        ], source=profile.get("source")),
+        ], source=profile.get("source"), as_of=payload_as_of(profile)),
     ]
     # Always rebuild the canonical seven-part holder read model. Older cache
     # rows may contain only the original ``major``/``circulating`` payloads or
     # a partial section list; rebuilding keeps the page shape stable without
     # deleting any raw provider fields from the cache.
     holders["sections"] = [
-        _display_section("capital_structure", "股本结构", rows=holders.get("capital_structure"), source=holders.get("source")),
-        _display_section("restricted_release", "限售解禁", rows=holders.get("restricted_release"), source=holders.get("source")),
-        _display_section("institutional", "机构持股", rows=holders.get("institutional"), source=holders.get("source")),
-        _display_section("holder_count", "股东户数", rows=holders.get("holder_count"), source=holders.get("source")),
-        _display_section("top_ten_circulating", "十大流通股东", rows=holders.get("circulating"), source=holders.get("source")),
-        _display_section("top_ten", "十大股东", rows=holders.get("major"), source=holders.get("source")),
-        _display_section("control", "控股股东与实际控制人", rows=holders.get("control"), source=holders.get("source")),
+        _display_section("capital_structure", "股本结构", rows=holders.get("capital_structure"), source=holders.get("source"), as_of=payload_as_of(holders)),
+        _display_section("restricted_release", "限售解禁", rows=holders.get("restricted_release"), source=holders.get("source"), as_of=payload_as_of(holders)),
+        _display_section("institutional", "机构持股", rows=holders.get("institutional"), source=holders.get("source"), as_of=payload_as_of(holders)),
+        _display_section("holder_count", "股东户数", rows=holders.get("holder_count"), source=holders.get("source"), as_of=payload_as_of(holders)),
+        _display_section("top_ten_circulating", "十大流通股东", rows=holders.get("circulating"), source=holders.get("source"), as_of=payload_as_of(holders)),
+        _display_section("top_ten", "十大股东", rows=holders.get("major"), source=holders.get("source"), as_of=payload_as_of(holders)),
+        _display_section("control", "控股股东与实际控制人", rows=holders.get("control"), source=holders.get("source"), as_of=payload_as_of(holders)),
     ]
     composition_rows: list[dict[str, Any]] = []
     for section in composition.get("sections") or []:
@@ -217,11 +229,11 @@ def normalize_f10_sections(extended_data: dict[str, dict[str, Any]]) -> dict[str
                 "category": category,
             })
     summary["financial_sections"] = [
-        _display_section("composition", "主营构成", rows=composition_rows, source=composition.get("source")),
-        _display_section("indicators", "主要指标", rows=summary.get("rows"), source=summary.get("source")),
-        _display_section("income", "利润表", rows=(statements.get("income_statement") or {}).get("rows"), source=statements.get("source")),
-        _display_section("balance", "资产负债表", rows=(statements.get("balance_sheet") or {}).get("rows"), source=statements.get("source")),
-        _display_section("cash_flow", "现金流量表", rows=(statements.get("cash_flow") or {}).get("rows"), source=statements.get("source")),
+        _display_section("composition", "主营构成", rows=composition_rows, source=composition.get("source"), as_of=payload_as_of(composition)),
+        _display_section("indicators", "主要指标", rows=summary.get("rows"), source=summary.get("source"), as_of=payload_as_of(summary)),
+        _display_section("income", "利润表", rows=(statements.get("income_statement") or {}).get("rows"), source=statements.get("source"), as_of=payload_as_of(statements)),
+        _display_section("balance", "资产负债表", rows=(statements.get("balance_sheet") or {}).get("rows"), source=statements.get("source"), as_of=payload_as_of(statements)),
+        _display_section("cash_flow", "现金流量表", rows=(statements.get("cash_flow") or {}).get("rows"), source=statements.get("source"), as_of=payload_as_of(statements)),
     ]
     research = extended_data.setdefault("research_sections", {})
     # ``latest_reports`` used to be populated with the complete report list.
@@ -237,12 +249,12 @@ def normalize_f10_sections(extended_data: dict[str, dict[str, Any]]) -> dict[str
     # Rebuild the fixed six-part research layout for both new and legacy
     # caches. Raw ``qa``/forecast/report arrays remain untouched above.
     research["sections"] = [
-        _display_section("industry_concepts", "行业概念", rows=concepts, source=profile.get("source")),
-        _display_section("qa", "问董秘", rows=research.get("qa"), source=research.get("source"), message="当前未接入问董秘公开接口"),
-        _display_section("earnings_forecast", "盈利预测", rows=research.get("earnings_forecast"), source=research.get("source")),
-        _display_section("institution_forecast", "机构预测（评级统计）", rows=research.get("institution_forecast"), source=research.get("source")),
-        _display_section("latest_reports", "最新研报", rows=research.get("latest_reports"), source=research.get("source")),
-        _display_section("reports", "研报", rows=research.get("reports"), source=research.get("source")),
+        _display_section("industry_concepts", "行业概念", rows=concepts, source=profile.get("source"), as_of=payload_as_of(profile)),
+        _display_section("qa", "问董秘", rows=research.get("qa"), source=research.get("source"), as_of=payload_as_of(research), message="当前未接入问董秘公开接口"),
+        _display_section("earnings_forecast", "盈利预测", rows=research.get("earnings_forecast"), source=research.get("source"), as_of=payload_as_of(research)),
+        _display_section("institution_forecast", "机构预测（评级统计）", rows=research.get("institution_forecast"), source=research.get("source"), as_of=payload_as_of(research)),
+        _display_section("latest_reports", "最新研报", rows=research.get("latest_reports"), source=research.get("source"), as_of=payload_as_of(research)),
+        _display_section("reports", "研报", rows=research.get("reports"), source=research.get("source"), as_of=payload_as_of(research)),
     ]
     return extended_data
 
