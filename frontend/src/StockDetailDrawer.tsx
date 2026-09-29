@@ -60,12 +60,88 @@ function valueText(value: unknown): string {
   if (Array.isArray(value)) return value.map(valueText).join("、");
   if (typeof value === "object") {
     const record = asRecord(value);
-    return Object.entries(record)
-      .slice(0, 6)
-      .map(([key, item]) => `${key}: ${valueText(item)}`)
-      .join(" · ");
+    const entries = Object.entries(record)
+      .filter(([, item]) => item !== undefined && item !== null && item !== "")
+      .map(([key, item]) => ({ label: humanFieldLabel(key), item }))
+      .filter((entry) => entry.label)
+      .slice(0, 6);
+    if (entries.length) {
+      return entries.map(({ label, item }) => `${label}: ${valueText(item)}`).join(" · ");
+    }
+    // Provider payloads can contain a field that is not yet in the Chinese
+    // glossary.  Show its value rather than leaking an English raw key into
+    // the stock page; the complete payload remains available from the source
+    // record and is not discarded.
+    return Object.values(record).slice(0, 6).map(valueText).join(" · ") || "--";
   }
   return String(value);
+}
+
+/** Stable Chinese labels for normalized/provider fields used by F10 cards. */
+const FIELD_LABELS: Record<string, string> = {
+  metric: "指标",
+  indicator: "指标",
+  name: "名称",
+  label: "项目",
+  title: "标题",
+  value: "数值",
+  data: "数据",
+  amount: "金额",
+  content: "内容",
+  summary: "摘要",
+  source: "来源",
+  source_name: "来源名称",
+  source_url: "来源链接",
+  source_id: "来源编号",
+  report_name: "报告名称",
+  report_type: "报告类型",
+  report_date: "报告日期",
+  notice_date: "公告日期",
+  published_at: "发布日期",
+  institution: "机构",
+  rating: "评级",
+  report_count: "研报数量",
+  rating_count: "评级数量",
+  forecast_year: "预测年度",
+  eps: "每股收益",
+  pe: "市盈率",
+  pb: "市净率",
+  net_profit: "净利润",
+  url: "原文链接",
+  code: "代码",
+  symbol: "股票代码",
+  stock_code: "股票代码",
+  market: "市场",
+  ratio: "比例",
+  percent: "比例",
+  shares: "持股数量",
+  rank: "序号",
+  date: "日期",
+  change: "变动",
+  status: "状态",
+  definition: "释义",
+  criteria: "判定口径",
+};
+
+function humanFieldLabel(key: string): string {
+  const text = String(key || "").trim();
+  if (!text) return "";
+  // Chinese provider labels are already user-facing and should be preserved.
+  if (/[\u3400-\u9fff]/.test(text)) return text;
+  return FIELD_LABELS[text] || FIELD_LABELS[text.toLowerCase()] || "";
+}
+
+function rowValueText(row: JsonRecord): string {
+  const direct = pickValue(row, ["value", "值", "data", "数据", "数值", "content", "内容", "summary", "摘要"]);
+  if (direct !== undefined) return valueText(direct);
+  const labelKeys = new Set(["label", "name", "metric", "indicator", "title", "项目", "名称", "指标"]);
+  const entries = Object.entries(row)
+    .filter(([key, item]) => !labelKeys.has(key) && item !== undefined && item !== null && item !== "")
+    .map(([key, item]) => ({ label: humanFieldLabel(key), item }))
+    .filter((entry) => entry.label)
+    .slice(0, 8);
+  if (entries.length) return entries.map(({ label, item }) => `${label}: ${valueText(item)}`).join(" · ");
+  return "--";
 }
 
 function formatNumber(value?: number | null, digits = 2): string {
@@ -719,7 +795,7 @@ function ResearchInsightSummary({
         <div className="stock-sector-groups">
           {sectorGroups(profile, profileFields).length ? sectorGroups(profile, profileFields).map((group) => (
             <span className="stock-sector-group" key={group.label}>
-              <b>{group.label}</b>{group.values.map((item) => <em key={`${group.label}-${item}`} title={[item.definition, item.criteria, item.source].filter(Boolean).join("\n")}>{item.text || String(item)}</em>)}
+              <b>{group.label}</b>{group.values.map((item) => <em key={`${group.label}-${item.text}`} title={[item.definition, item.criteria, item.source].filter(Boolean).join("\n")}>{item.text}</em>)}
             </span>
           )) : <small>暂无行业、板块或类型数据</small>}
         </div>
@@ -942,7 +1018,7 @@ function FundFlowPanel({ data }: { data: JsonRecord }) {
             <table className="mini-table fund-flow-table">
               <thead>
                 <tr>
-                  {Object.keys(latest).slice(0, 8).map((key) => <th key={key}>{key}</th>)}
+                  {Object.keys(latest).slice(0, 8).map((key) => <th key={key}>{humanFieldLabel(key) || key}</th>)}
                 </tr>
               </thead>
               <tbody>
@@ -1006,8 +1082,7 @@ function F10SectionBlock({
           <div className="f10-section-row-list">
             {rows.slice(0, expanded ? 100 : 8).map((row, index) => {
               const label = String(pickValue(row, ["label", "name", "项目", "指标", "metric", "股东名称"]) || `项目 ${index + 1}`);
-              const value = pickValue(row, ["value", "data", "数值", "内容", "summary"]) ?? row;
-              return <div className="financial-value-row" key={`${label}-${index}`}><span>{label}</span><strong>{valueText(value)}</strong></div>;
+              return <div className="financial-value-row" key={`${label}-${index}`}><span>{label}</span><strong>{rowValueText(row)}</strong></div>;
             })}
           </div>
         )
@@ -1104,7 +1179,7 @@ function F10Panel({ detail, activeTab, setActiveTab }: { detail: StockF10; activ
           ) : null}
         </section>
       )}
-      {detailSection ? <div className="f10-detail-overlay" role="dialog" aria-modal="true"><div className="f10-detail-dialog"><header><h3>{String(detailSection.detail_title || detailSection.title || "详细数据")}</h3><button type="button" onClick={closeDetail}>关闭</button></header><div className="f10-detail-body">{sectionRows(detailSection).length ? sectionRows(detailSection).map((row, index) => <div className="f10-detail-row" key={index}><strong>{String(pickValue(row, ["label", "name", "项目", "指标"]) || `项目 ${index + 1}`)}</strong><span>{valueText(pickValue(row, ["value", "data", "内容", "summary"]) ?? row)}</span></div>) : <p className="empty-state">{String(detailSection.message || "当前数据源未返回详细数据")}</p>}<small>来源：{String(detailSection.source || "暂无")}</small></div></div></div> : null}
+      {detailSection ? <div className="f10-detail-overlay" role="dialog" aria-modal="true"><div className="f10-detail-dialog"><header><h3>{String(detailSection.detail_title || detailSection.title || "详细数据")}</h3><button type="button" onClick={closeDetail}>关闭</button></header><div className="f10-detail-body">{sectionRows(detailSection).length ? sectionRows(detailSection).map((row, index) => <div className="f10-detail-row" key={index}><strong>{String(pickValue(row, ["label", "name", "项目", "指标"]) || `项目 ${index + 1}`)}</strong><span>{rowValueText(row)}</span></div>) : <p className="empty-state">{String(detailSection.message || "当前数据源未返回详细数据")}</p>}<small>来源：{String(detailSection.source || "暂无")}</small></div></div></div> : null}
     </>
   );
 }
@@ -1545,7 +1620,7 @@ export function StockDetailDrawer({
                       {researchReport ? renderMarkdown(researchReport) : <p className="empty-state">点击按钮后，研报会以打字机流式效果显示在这里。</p>}
                     </article>
                     </section>
-                    {researchDetail ? <div className="f10-detail-overlay" role="dialog" aria-modal="true"><div className="f10-detail-dialog"><header><h3>{String(researchDetail.title || "研究详情")}</h3><button type="button" onClick={() => setResearchDetail(null)}>关闭</button></header><div className="f10-detail-body">{sectionRows(researchDetail).length ? sectionRows(researchDetail).map((row, index) => <div className="f10-detail-row" key={index}><strong>{String(pickValue(row, ["label", "name", "项目", "指标"]) || `项目 ${index + 1}`)}</strong><span>{valueText(pickValue(row, ["value", "data", "内容", "summary"]) ?? row)}</span></div>) : <p className="empty-state">{String(researchDetail.message || "当前数据源未返回详细数据")}</p>}<small>来源：{String(researchDetail.source || "暂无")}</small></div></div></div> : null}
+                    {researchDetail ? <div className="f10-detail-overlay" role="dialog" aria-modal="true"><div className="f10-detail-dialog"><header><h3>{String(researchDetail.title || "研究详情")}</h3><button type="button" onClick={() => setResearchDetail(null)}>关闭</button></header><div className="f10-detail-body">{sectionRows(researchDetail).length ? sectionRows(researchDetail).map((row, index) => <div className="f10-detail-row" key={index}><strong>{String(pickValue(row, ["label", "name", "项目", "指标"]) || `项目 ${index + 1}`)}</strong><span>{rowValueText(row)}</span></div>) : <p className="empty-state">{String(researchDetail.message || "当前数据源未返回详细数据")}</p>}<small>来源：{String(researchDetail.source || "暂无")}</small></div></div></div> : null}
                   </>
               )}
             </section>

@@ -199,6 +199,11 @@ export type StockNotice = {
   url?: string;
   content_json: Record<string, unknown>;
   source_id: number;
+  /** Canonical notice provenance when records from multiple feeds collapse. */
+  source_ids?: number[];
+  source_urls?: string[];
+  source_count?: number;
+  duplicate_count?: number;
   fetched_at: string;
 };
 

@@ -315,20 +315,35 @@ class AkshareAdapter(MarketDataAdapter):
             "institutional": [],
             "holder_count": [],
             "control": [],
+            # Keep provenance at section level.  The old payload exposed one
+            # aggregate source (新浪财经), even though the optional panels
+            # below are supplied by different providers.  A read model can
+            # now show the exact source for each panel without changing raw
+            # provider rows.
+            "capital_structure_source": "巨潮资讯 CNINFO 股本变动接口",
+            "restricted_release_source": "东方财富 限售解禁接口",
+            "institutional_source": "新浪财经 机构持股接口",
+            "holder_count_source": "东方财富 股东户数接口",
+            "major_source": "新浪财经 十大股东接口",
+            "circulating_source": "新浪财经 十大流通股东接口",
+            "control_source": "暂无可靠公开接口",
         }
-        share_changes = self._safe_optional_records(
+        share_changes = self._safe_security_optional_records(
             getattr(ak, "stock_share_change_cninfo", None),
             {"symbol": symbol, "start_date": "20000101", "end_date": datetime.now().strftime("%Y%m%d")},
+            symbol=symbol,
             limit=24,
         )
         if share_changes:
             latest = share_changes[0]
             holders["capital_structure"] = [latest]
-        holders["restricted_release"] = self._safe_optional_records(
-            getattr(ak, "stock_restricted_release_queue_em", None), {"symbol": symbol}, limit=50
+        holders["restricted_release"] = self._safe_security_optional_records(
+            getattr(ak, "stock_restricted_release_queue_em", None), {"symbol": symbol},
+            symbol=symbol, limit=50, provider_scoped=True,
         )
-        holders["institutional"] = self._safe_optional_records(
-            getattr(ak, "stock_fund_stock_holder", None), {"symbol": symbol}, limit=50
+        holders["institutional"] = self._safe_security_optional_records(
+            getattr(ak, "stock_fund_stock_holder", None), {"symbol": symbol},
+            symbol=symbol, limit=50, provider_scoped=True,
         )
         holders["holder_count"] = self._safe_holder_count(symbol)
         dividends = self._safe_optional_records(
