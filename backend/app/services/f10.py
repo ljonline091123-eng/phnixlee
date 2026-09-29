@@ -10,6 +10,7 @@ from __future__ import annotations
 from datetime import date
 from typing import Any
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.connectors.akshare_adapter import AkshareAdapter
@@ -21,6 +22,14 @@ from app.models.market_data import (
     StockNotice,
     StockRealtimeQuote,
     StockSymbol,
+)
+from app.models.foundation import (
+    FoundationEntity,
+    FoundationEvidence,
+    FoundationFact,
+    FoundationFactEvidence,
+    FoundationListing,
+    FoundationSecurity,
 )
 from app.services.stock_on_demand import StockOnDemandService, _merge_f10_payload
 from app.services.stock_classification import _looks_like_index
@@ -48,6 +57,67 @@ NOTICE_CATEGORIES = (
     "对外投资",
     "其他公告",
 )
+
+
+def project_company_control_facts(db: Session, stock: StockSymbol) -> dict[str, Any]:
+    """Project source-backed company control facts into the F10 read model.
+
+    F10 providers do not expose a stable controlling-holder endpoint for every
+    security.  The company graph already stores explicit ``CONTROLS`` facts;
+    this read-only projection makes those facts visible without inferring
+    control from a percentage.  Pending facts remain visibly pending and every
+    row carries its evidence provenance.  Missing foundation tables/data are a
+    normal unavailable state, not an exception from the stock detail route.
+    """
+    empty = {"rows": [], "source": "公司关系图谱", "message": "暂无已登记的控股股东或实际控制人事实"}
+    try:
+        listing = db.scalar(select(FoundationListing).where(FoundationListing.stock_symbol_id == stock.id))
+        if listing is None:
+            return empty
+        security = db.get(FoundationSecurity, listing.security_id)
+        if security is None or not security.entity_id:
+            return empty
+        company_id = security.entity_id
+        facts = list(db.scalars(select(FoundationFact).where(
+            FoundationFact.fact_type == "CONTROLS",
+            FoundationFact.object_entity_id == company_id,
+            FoundationFact.status.in_(("ACCEPTED", "PENDING")),
+        ).order_by(FoundationFact.updated_at.desc(), FoundationFact.id)).all())
+        if not facts:
+            return empty
+        rows: list[dict[str, Any]] = []
+        for fact in facts:
+            subject = db.get(FoundationEntity, fact.subject_entity_id)
+            if subject is None:
+                continue
+            properties = fact.properties_json if isinstance(fact.properties_json, dict) else {}
+            evidence_links = list(db.scalars(select(FoundationEvidence).join(
+                FoundationFactEvidence, FoundationFactEvidence.evidence_id == FoundationEvidence.id
+            ).where(FoundationFactEvidence.fact_id == fact.id).order_by(FoundationEvidence.created_at.desc())).all())
+            evidence = evidence_links[0] if evidence_links else None
+            row: dict[str, Any] = {
+                "主体名称": subject.name,
+                "关系": "控股股东/实际控制人",
+                "事实状态": fact.status,
+                "status": fact.status,
+                "control_basis": properties.get("control_basis") or "来源明确披露，未根据持股比例推断",
+                "fact_id": fact.id,
+                "evidence_id": evidence.id if evidence else None,
+                "source_name": evidence.source_name if evidence else "公司关系图谱",
+                "source_url": evidence.url if evidence else None,
+                "source_title": evidence.title if evidence else fact.title,
+                "observed_at": evidence.available_at.isoformat() if evidence else None,
+            }
+            # Ratios are copied only when explicitly disclosed on the related
+            # fact; no ratio means no fabricated percentage.
+            for key in ("ratio", "direct_ratio", "indirect_ratio", "ratio_basis"):
+                if properties.get(key) not in (None, ""):
+                    row[key] = properties[key]
+            rows.append(row)
+        return {"rows": rows, "source": "公司关系图谱（来源证据）", "message": "" if rows else empty["message"]}
+    except Exception:
+        # Optional foundation tables may be absent in a legacy installation.
+        return empty
 
 
 def classify_notice(title: str | None, notice_type: str | None = None) -> str:

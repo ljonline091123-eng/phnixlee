@@ -31,6 +31,7 @@ from app.services.f10 import (
     _merge_local_report_notices,
     _needs_f10_refresh,
     normalize_f10_sections,
+    project_company_control_facts,
     classify_notice,
     NOTICE_CATEGORIES,
 )
@@ -189,6 +190,17 @@ class F10Workflow:
             profile_payload["classification_groups"] = build_classification_groups(
                 self.db, snapshot.stock, profile_fields
             )
+        # The optional provider control endpoint is not reliable across
+        # markets.  Reuse explicit, evidence-backed company-graph CONTROLS
+        # facts as a read-only F10 projection; never infer control from a
+        # holding percentage.
+        holders_payload = extended_data.get("holders")
+        if isinstance(holders_payload, dict) and not holders_payload.get("control"):
+            control_projection = project_company_control_facts(self.db, snapshot.stock)
+            if control_projection.get("rows"):
+                holders_payload["control"] = control_projection["rows"]
+                holders_payload["control_source"] = control_projection.get("source")
+                holders_payload["control_message"] = control_projection.get("message") or ""
         # Build the fixed F10 section read model after the typed projection so
         # legacy caches can derive the industry/theme concept panel from the
         # same source without treating index membership as a concept.
@@ -198,13 +210,22 @@ class F10Workflow:
 
         canonical_notices = deduplicate_notice_rows(snapshot.report_notices)
         canonical_by_id = {item.row.id: item for item in canonical_notices}
+        # ``snapshot.notices`` is already paged.  Derive the latest marker from
+        # the complete canonical, category-filtered set so page 2 cannot be
+        # incorrectly labelled as the latest disclosure.
+        latest_candidates = [
+            item.row for item in canonical_notices
+            if not command.notice_category or command.notice_category == "全部"
+            or classify_notice(item.row.title, item.row.notice_type) == command.notice_category
+        ]
+        latest_notice_date = max((row.notice_date for row in latest_candidates), default=None)
         return StockF10Read(
             symbol=self.symbol_reader(snapshot.stock, snapshot.quote),
             realtime_quote=snapshot.quote,
             recent_klines=snapshot.klines,
             financial_reports=snapshot.financials,
             notices=[
-                _notice_view(item, max((row.notice_date for row in snapshot.notices), default=None), canonical_by_id.get(item.id))
+                _notice_view(item, latest_notice_date, canonical_by_id.get(item.id))
                 for item in snapshot.notices
             ],
             news=snapshot.news,

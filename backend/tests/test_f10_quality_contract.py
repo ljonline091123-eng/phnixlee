@@ -4,7 +4,7 @@ from unittest.mock import Mock
 import pandas as pd
 
 from app.connectors.akshare_adapter import AkshareAdapter
-from app.services.f10 import normalize_f10_sections
+from app.services.f10 import normalize_f10_sections, project_company_control_facts
 from app.services.stock_classification import _attach_definition
 
 
@@ -85,3 +85,34 @@ def test_holder_section_contract_uses_per_section_source() -> None:
     assert sections["capital_structure"]["source"] == "CNINFO 股本变动"
     assert sections["institutional"]["source"] == "新浪机构持股"
     assert sections["control"]["source"] == "暂无可靠公开接口"
+
+
+def test_classification_api_accepts_typed_index_board_and_security_type_dimensions() -> None:
+    from app.schemas.company_graph import ClassificationInput
+
+    for dimension in ("INDEX", "BOARD", "TYPE"):
+        row = ClassificationInput(
+            dimension=dimension, code="TEST", label="测试标签",
+            definition_version="TEST_V1", method="SOURCE",
+        )
+        assert row.dimension == dimension
+
+
+def test_control_projection_is_unavailable_without_company_mapping() -> None:
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import Session
+    from app.db.base import Base
+    from app.models.market_data import DataSource, StockSymbol
+
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    with Session(engine) as db:
+        source = DataSource(source_code="F10_CONTROL_TEST", source_name="测试来源", adapter_type="MOCK")
+        db.add(source)
+        db.flush()
+        stock = StockSymbol(market="CN_A", symbol="000001", name="测试股票", exchange="SZ", source_id=source.id)
+        db.add(stock)
+        db.flush()
+        result = project_company_control_facts(db, stock)
+        assert result["rows"] == []
+        assert "暂无" in result["message"]

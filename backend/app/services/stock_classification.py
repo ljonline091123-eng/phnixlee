@@ -328,9 +328,15 @@ def build_classification_groups(db: Session | None, stock: StockSymbol,
     # at the final projection boundary also covers legacy foundation facts and
     # avoids mutating their source payloads.
     for group in groups:
-        dimension = {"industry": "INDUSTRY", "board": "BOARD", "theme": "THEME",
-                     "index": "INDEX", "type": "TYPE"}.get(str(group.get("key")), "")
         for item in group.get("items", []):
+            # A combined display group (notably ``type``) can contain SIZE,
+            # STYLE, LEGAL_LISTING_CLASS, etc. facts.  Resolve the glossary
+            # using each fact's original dimension instead of overwriting its
+            # master metadata with the UI group dimension.
+            dimension = str(item.get("classification_dimension") or "").upper()
+            if not dimension:
+                dimension = {"industry": "INDUSTRY", "board": "BOARD", "theme": "THEME",
+                             "index": "INDEX", "type": "TYPE"}.get(str(group.get("key")), "")
             if dimension:
                 _attach_definition(item, definitions, dimension)
     return [item for item in groups if item]

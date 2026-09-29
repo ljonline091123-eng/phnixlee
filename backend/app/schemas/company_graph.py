@@ -65,7 +65,12 @@ class SourceFact(StrictInput):
 
 
 class ClassificationInput(StrictInput):
-    dimension: Literal["SIZE", "STYLE", "QUALITY", "LEGAL_LISTING_CLASS", "LIQUIDITY", "RISK", "THEME", "INDUSTRY"]
+    # Keep legacy dimensions and accept the typed dimensions already emitted
+    # by the stock classification read model.
+    dimension: Literal[
+        "SIZE", "STYLE", "QUALITY", "LEGAL_LISTING_CLASS", "LIQUIDITY", "RISK",
+        "THEME", "INDUSTRY", "INDEX", "BOARD", "TYPE",
+    ]
     code: str = Field(min_length=1, max_length=128)
     label: str = Field(min_length=1, max_length=256)
     definition_version: str = Field(min_length=1, max_length=128)
