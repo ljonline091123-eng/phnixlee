@@ -281,19 +281,92 @@ class AkshareAdapter(MarketDataAdapter):
         fund_flow = self._safe_cn_fund_flow(symbol)
         business_composition = self._safe_cn_business_composition(symbol)
         published_reports = self._safe_cn_financial_reports(symbol)
+        extended_sections = self._fetch_cn_a_extended_sections(symbol, profile)
+        holder_sections = extended_sections.pop("holders", {})
+        profile_sections = extended_sections.pop("profile", {})
         return {
-            "profile": profile,
+            "profile": {**profile, **profile_sections},
             "holders": {
                 "source": "新浪财经",
                 "major": major_holders,
                 "circulating": circulating_holders,
+                **holder_sections,
             },
             "fund_flow": fund_flow,
             "financial_summary": financial_summary,
             "financial_statements": financial_statements,
             "business_composition": business_composition,
             "published_reports": published_reports,
+            "research_sections": extended_sections.get("research_sections", {}),
         }
+
+    def _fetch_cn_a_extended_sections(self, symbol: str, profile: dict[str, Any]) -> dict[str, Any]:
+        """Fetch optional F10 subsections without making them prerequisites.
+
+        AkShare changes some endpoint schemas frequently. Every call is
+        isolated so a provider failure leaves the already cached core F10
+        sections usable and exposes an explicit unavailable state in the UI.
+        """
+        holder_source = "东方财富/巨潮公开接口"
+        holders: dict[str, Any] = {
+            "source": holder_source,
+            "capital_structure": [],
+            "restricted_release": [],
+            "institutional": [],
+            "holder_count": [],
+            "control": [],
+        }
+        share_changes = self._safe_optional_records(
+            getattr(ak, "stock_share_change_cninfo", None),
+            {"symbol": symbol, "start_date": "20000101", "end_date": datetime.now().strftime("%Y%m%d")},
+            limit=24,
+        )
+        if share_changes:
+            latest = share_changes[0]
+            holders["capital_structure"] = [latest]
+        holders["restricted_release"] = self._safe_optional_records(
+            getattr(ak, "stock_restricted_release_queue_em", None), {"symbol": symbol}, limit=50
+        )
+        holders["institutional"] = self._safe_optional_records(
+            getattr(ak, "stock_fund_stock_holder", None), {"symbol": symbol}, limit=50
+        )
+        dividends = self._safe_optional_records(
+            getattr(ak, "stock_history_dividend_detail", None),
+            {"symbol": symbol, "indicator": "分红"}, limit=50,
+        )
+        concepts: list[dict[str, Any]] = []
+        profile_fields = profile.get("fields") if isinstance(profile.get("fields"), dict) else {}
+        raw_concepts = profile_fields.get("所属概念") or profile_fields.get("概念") or profile_fields.get("入选指数")
+        if raw_concepts:
+            concepts = [
+                {"name": item.strip(), "definition": "来源披露的行业/概念标签，需结合原文核验。"}
+                for item in str(raw_concepts).replace("，", ",").split(",") if item.strip()
+            ]
+        profile_result = {
+            "concepts": concepts,
+            "dividends": dividends,
+            "dividend_source": "AkShare stock_history_dividend_detail" if dividends else "暂无",
+            "margin_history": [],
+            "margin_source": "暂无公开个股融资融券明细",
+        }
+        research_reports = self._safe_optional_records(
+            getattr(ak, "stock_research_report_em", None), {"symbol": symbol}, limit=100,
+        )
+        research = {
+            "source": "AkShare 东方财富/同花顺公开接口",
+            "earnings_forecast": self._safe_optional_records(
+                getattr(ak, "stock_profit_forecast_ths", None),
+                {"symbol": symbol, "indicator": "预测报告每股收益"}, limit=50,
+            ),
+            "institution_forecast": self._safe_optional_records(
+                getattr(ak, "stock_rank_forecast_cninfo", None),
+                {"date": datetime.now().strftime("%Y%m%d")}, limit=100,
+            ),
+            "latest_reports": research_reports[:10],
+            "reports": research_reports,
+            "qa": [],
+        }
+        return {"holders": holders, "profile": profile_result, "research_sections": research}
 
     def _fetch_hk_extended_data(self, symbol: str) -> dict[str, Any]:
         company = self._safe_dataframe_first_row(
@@ -352,6 +425,11 @@ class AkshareAdapter(MarketDataAdapter):
             "financial_statements": financial_statements,
             "business_composition": business_composition,
             "published_reports": published_reports,
+            "research_sections": {
+                "source": "暂无港股公开研究聚合接口",
+                "sections": [],
+                "message": "港股研究、问董秘和评级数据需授权数据源。",
+            },
         }
 
     def _fetch_neeq_json(self, path: str, params: dict[str, Any] | None = None) -> Any:
@@ -1056,6 +1134,11 @@ class AkshareAdapter(MarketDataAdapter):
                 "source": "Eastmoney NEEQ announcements",
                 "reports": report_entries,
                 "message": "" if report_entries else "No NEEQ financial reports returned.",
+            },
+            "research_sections": {
+                "source": "暂无新三板公开研究聚合接口",
+                "sections": [],
+                "message": "当前未接入新三板问董秘、盈利预测和机构评级聚合接口。",
             },
         }
 
@@ -2450,6 +2533,29 @@ class AkshareAdapter(MarketDataAdapter):
             {str(key): cls._json_safe(value) for key, value in row.items()}
             for row in dataframe.head(limit).to_dict(orient="records")
         ]
+
+    @classmethod
+    def _safe_optional_records(
+        cls,
+        method: Any,
+        kwargs: dict[str, Any],
+        *,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        """Call an optional provider endpoint and normalize its rows.
+
+        Optional F10 panels must never make the whole stock detail request
+        fail. Errors are represented by an empty section and kept out of the
+        original source payload; the section contract adds the user-facing
+        unavailable explanation.
+        """
+        if not method:
+            return []
+        try:
+            dataframe = method(**kwargs)
+            return cls._safe_dataframe_records(dataframe, limit=limit)
+        except Exception:
+            return []
 
     def _fetch_cn_a_symbols(self) -> list[SymbolRecord]:
         exchange_records = self._fetch_cn_a_symbols_from_exchange_tables()

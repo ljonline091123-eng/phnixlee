@@ -88,6 +88,7 @@ F10_EXTENDED_SECTIONS: tuple[str, ...] = (
     "financial_summary",
     "financial_statements",
     "business_composition",
+    "research_sections",
 )
 
 
@@ -398,6 +399,7 @@ class StockToolsService:
                 "message": message,
             },
             "business_composition": {"source": "LOCAL_DB", "report_date": None, "sections": [], "message": message},
+            "research_sections": {"source": "LOCAL_DB", "sections": [], "message": message},
             "published_reports": {"source": "LOCAL_DB", "reports": [], "message": message},
         }
 

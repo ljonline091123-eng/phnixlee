@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -47,6 +48,8 @@ class StockF10Repository:
         notice_page: int,
         news_limit: int,
         news_page: int,
+        notice_category: str | None = None,
+        notice_classifier: Any | None = None,
     ) -> StockF10Snapshot:
         stock = self.db.scalar(
             select(StockSymbol).where(
@@ -78,19 +81,18 @@ class StockF10Repository:
                 select(StockNotice)
                 .where(StockNotice.market == market, StockNotice.symbol == symbol)
                 .order_by(StockNotice.notice_date.desc(), StockNotice.id.desc())
-                .limit(500)
+                .limit(2000)
             ).all()
         )
+        classifier = notice_classifier or (lambda _title, _notice_type: None)
+        filtered_notices = [
+            item for item in report_notices
+            if not notice_category or notice_category == "全部"
+            or classifier(item.title, item.notice_type) == notice_category
+        ]
         notice_start = (notice_page - 1) * notice_limit
-        notices = report_notices[notice_start : notice_start + notice_limit]
-        notice_total = int(
-            self.db.scalar(
-                select(func.count())
-                .select_from(StockNotice)
-                .where(StockNotice.market == market, StockNotice.symbol == symbol)
-            )
-            or 0
-        )
+        notices = filtered_notices[notice_start : notice_start + notice_limit]
+        notice_total = len(filtered_notices)
         quote = self.db.scalar(
             select(StockRealtimeQuote)
             .where(

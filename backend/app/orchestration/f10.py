@@ -30,6 +30,9 @@ from app.services.f10 import (
     _merge_f10_extended_data,
     _merge_local_report_notices,
     _needs_f10_refresh,
+    normalize_f10_sections,
+    classify_notice,
+    NOTICE_CATEGORIES,
 )
 from app.services.stock_on_demand import StockOnDemandService
 
@@ -56,6 +59,7 @@ class GetStockF10Command:
     notice_page: int = 1
     news_limit: int = 8
     news_page: int = 1
+    notice_category: str | None = None
     refresh: bool = False
     local_only: bool = False
 
@@ -64,6 +68,24 @@ def _normalize_symbol(market: str, symbol: str) -> str:
     normalized_market = normalize_market(market)
     value = symbol.strip().upper()
     return value.zfill(digit_length_for_market(normalized_market)) if value.isdigit() else value
+
+
+def _notice_view(row: StockNotice, latest_date: str | None = None) -> dict[str, Any]:
+    return {
+        "id": row.id,
+        "market": row.market,
+        "symbol": row.symbol,
+        "notice_date": row.notice_date,
+        "title": row.title,
+        "notice_type": row.notice_type,
+        "raw_notice_type": row.notice_type,
+        "category": classify_notice(row.title, row.notice_type),
+        "is_latest": bool(latest_date and row.notice_date == latest_date),
+        "url": row.url,
+        "content_json": row.content_json,
+        "source_id": row.source_id,
+        "fetched_at": row.fetched_at,
+    }
 
 
 class F10Workflow:
@@ -147,6 +169,7 @@ class F10Workflow:
             notices=snapshot.report_notices,
             extended_data=extended_data,
         )
+        extended_data = normalize_f10_sections(extended_data)
         if _hydrate_symbol_from_f10(snapshot.stock, extended_data):
             self.db.commit()
 
@@ -155,7 +178,10 @@ class F10Workflow:
             realtime_quote=snapshot.quote,
             recent_klines=snapshot.klines,
             financial_reports=snapshot.financials,
-            notices=snapshot.notices,
+            notices=[
+                _notice_view(item, max((row.notice_date for row in snapshot.notices), default=None))
+                for item in snapshot.notices
+            ],
             news=snapshot.news,
             notice_total=snapshot.notice_total,
             notice_page=command.notice_page,
@@ -168,6 +194,7 @@ class F10Workflow:
             financial_summary=extended_data.get("financial_summary") or {},
             financial_statements=extended_data.get("financial_statements") or {},
             business_composition=extended_data.get("business_composition") or {},
+            research_sections=extended_data.get("research_sections") or {},
         )
 
     @staticmethod
@@ -179,6 +206,8 @@ class F10Workflow:
             raise F10ValidationError("F10 detail limits must be between 1 and 100")
         if command.notice_page < 1 or command.news_page < 1:
             raise F10ValidationError("notice_page and news_page must be >= 1")
+        if command.notice_category and command.notice_category not in NOTICE_CATEGORIES:
+            raise F10ValidationError(f"notice_category must be one of: {', '.join(NOTICE_CATEGORIES)}")
         if command.kline_limit < 1 or command.kline_limit > 5000:
             raise F10ValidationError("kline_limit must be between 1 and 5000")
 
@@ -192,6 +221,8 @@ class F10Workflow:
             notice_page=command.notice_page,
             news_limit=command.news_limit,
             news_page=command.news_page,
+            notice_category=command.notice_category,
+            notice_classifier=classify_notice,
         )
 
     def _explicit_refresh(

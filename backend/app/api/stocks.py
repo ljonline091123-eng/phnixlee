@@ -33,6 +33,8 @@ from app.services.f10 import (
     _fetch_and_cache_f10_extended_data,
     _hk_published_reports_need_refresh,
     _needs_f10_refresh,
+    NOTICE_CATEGORIES,
+    classify_notice,
 )
 from app.models.market_data import (
     DataFetchLog,
@@ -100,6 +102,24 @@ def _watch_symbol(value: str, market: str) -> str:
     normalized_market = normalize_market(market)
     text = value.strip().upper()
     return text.zfill(digit_length_for_market(normalized_market)) if text.isdigit() else text
+
+
+def _notice_read_payload(row: StockNotice, latest_date: str | None = None) -> dict[str, Any]:
+    return {
+        "id": row.id,
+        "market": row.market,
+        "symbol": row.symbol,
+        "notice_date": row.notice_date,
+        "title": row.title,
+        "notice_type": row.notice_type,
+        "raw_notice_type": row.notice_type,
+        "category": classify_notice(row.title, row.notice_type),
+        "is_latest": bool(latest_date and row.notice_date == latest_date),
+        "url": row.url,
+        "content_json": row.content_json,
+        "source_id": row.source_id,
+        "fetched_at": row.fetched_at,
+    }
 
 
 def _rank_stock_candidate(item: StockSymbol, query: str, market: str) -> tuple[int, int, str]:
@@ -1881,13 +1901,16 @@ def list_notices(
     market: str,
     symbol: str,
     limit: int = 100,
+    category: str | None = None,
     db: Session = Depends(get_db),
-) -> list[StockNotice]:
+) -> list[dict[str, Any]]:
     if limit < 1 or limit > 500:
         raise HTTPException(status_code=422, detail="limit must be between 1 and 500")
     normalized_market = market.upper()
     normalized_symbol = _normalize_symbol(normalized_market, symbol)
-    return list(
+    if category and category not in NOTICE_CATEGORIES:
+        raise HTTPException(status_code=422, detail=f"公告分类必须是以下之一：{', '.join(NOTICE_CATEGORIES)}")
+    rows = list(
         db.scalars(
             select(StockNotice)
             .where(StockNotice.market == normalized_market, StockNotice.symbol == normalized_symbol)
@@ -1895,6 +1918,9 @@ def list_notices(
             .limit(limit)
         ).all()
     )
+    filtered = [row for row in rows if not category or category == "全部" or classify_notice(row.title, row.notice_type) == category]
+    latest = max((row.notice_date for row in filtered), default=None)
+    return [_notice_read_payload(row, latest) for row in filtered]
 
 
 @router.get("/{market}/{symbol}/notices/page", response_model=StockNoticePage)
@@ -1903,25 +1929,27 @@ def list_notices_page(
     symbol: str,
     page: int = 1,
     page_size: int = 8,
+    category: str | None = None,
     db: Session = Depends(get_db),
 ) -> StockNoticePage:
     if page < 1 or page_size < 1 or page_size > 100:
         raise HTTPException(status_code=422, detail="page must be >= 1 and page_size must be between 1 and 100")
     normalized_market = market.upper()
     normalized_symbol = _normalize_symbol(normalized_market, symbol)
-    filters = [
-        StockNotice.market == normalized_market,
-        StockNotice.symbol == normalized_symbol,
-    ]
-    total = db.scalar(select(func.count()).select_from(StockNotice).where(*filters)) or 0
-    items = db.scalars(
+    if category and category not in NOTICE_CATEGORIES:
+        raise HTTPException(status_code=422, detail=f"公告分类必须是以下之一：{', '.join(NOTICE_CATEGORIES)}")
+    rows = list(db.scalars(
         select(StockNotice)
-        .where(*filters)
+        .where(StockNotice.market == normalized_market, StockNotice.symbol == normalized_symbol)
         .order_by(StockNotice.notice_date.desc(), StockNotice.id.desc())
-        .offset((page - 1) * page_size)
-        .limit(page_size)
-    ).all()
-    return StockNoticePage(items=list(items), total=total, page=page, page_size=page_size)
+    ).all())
+    filtered = [row for row in rows if not category or category == "全部" or classify_notice(row.title, row.notice_type) == category]
+    latest = max((row.notice_date for row in filtered), default=None)
+    start = (page - 1) * page_size
+    return StockNoticePage(
+        items=[_notice_read_payload(row, latest) for row in filtered[start : start + page_size]],
+        total=len(filtered), page=page, page_size=page_size,
+    )
 
 
 @router.get("/{market}/{symbol}/news/page", response_model=StockNewsPage)
@@ -1959,6 +1987,7 @@ def get_stock_f10(
     financial_limit: int = 8,
     notice_limit: int = 8,
     notice_page: int = 1,
+    notice_category: str | None = None,
     news_limit: int = 8,
     news_page: int = 1,
     refresh: bool = False,
@@ -1977,6 +2006,7 @@ def get_stock_f10(
         financial_limit=financial_limit,
         notice_limit=notice_limit,
         notice_page=notice_page,
+        notice_category=notice_category,
         news_limit=news_limit,
         news_page=news_page,
         refresh=refresh,
