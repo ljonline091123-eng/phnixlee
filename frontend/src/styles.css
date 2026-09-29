@@ -4539,6 +4539,14 @@ textarea:focus {
 .f10-data-status.pending { color: #55758d; }
 .f10-section-row-list { display: grid; gap: 0; }
 .f10-section-meta { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 8px; color: var(--text-muted, #718078); font-size: 11px; }
+.f10-source-links { display: inline-flex; flex-wrap: wrap; gap: 8px; }
+.f10-source-links a { color: #34769a; text-decoration: none; }
+.f10-source-links a:hover { text-decoration: underline; }
+.f10-detail-source { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-top: 12px; color: var(--text-muted, #718078); font-size: 11px; }
+.metric-trend { display: inline-block; margin-left: 8px; font-size: 11px; font-style: normal; font-weight: 700; }
+.metric-trend.positive { color: #d33f4a; }
+.metric-trend.negative { color: #14945a; }
+.metric-trend.neutral { color: var(--text-muted, #718078); }
 .f10-detail-link { border: 0; padding: 0; color: #b43d47; background: transparent; font-size: 12px; cursor: pointer; }
 .f10-section-card > .f10-detail-link { display: inline-block; margin-top: 10px; }
 .concept-inline-link { margin-top: 8px; }

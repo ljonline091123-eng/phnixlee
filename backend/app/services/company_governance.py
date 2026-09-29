@@ -41,11 +41,16 @@ def profile_record(source: dict, stock_id: int, identities: dict[str, dict]) -> 
                 "level": industry.get("level"),
                 "acceptance_rule": RULE_VERSION, "semantic_scope": "PROVIDER_REPORTED_CLASSIFICATION"}})
     for mention in record.get("controller_mentions", []):
-        related = identities.get(mention.get("source_issuer_id"))
-        if not related or related["name"] != mention["name"] or mention["mention_type"] != "CONTROLLING_HOLDER":
+        mention_type = str(mention.get("mention_type") or "").upper()
+        if mention_type not in {"CONTROLLING_HOLDER", "ACTUAL_CONTROLLER"}:
             continue
+        identity_key = mention.get("source_issuer_id") or mention.get("source_entity_code")
+        related = identities.get(identity_key)
+        if not related or related["name"] != mention["name"]:
+            continue
+        control_role = mention_type
         ratio = mention.get("direct_ratio")
-        if ratio is not None:
+        if ratio is not None and control_role == "CONTROLLING_HOLDER":
             facts.append({"source_key": "reported-direct-holding:" + related["source_issuer_id"],
                 "fact_type": "HOLDS_EQUITY", "direction": "INCOMING",
                 "title": "来源披露直接持股：" + related["name"],
@@ -54,9 +59,11 @@ def profile_record(source: dict, stock_id: int, identities: dict[str, dict]) -> 
                     "acceptance_rule": RULE_VERSION, "semantic_scope": "PROVIDER_REPORTED_DIRECT_RATIO",
                     "temporal_scope": "SOURCE_SNAPSHOT_UNKNOWN_BUSINESS_DATE",
                     "not_beneficial_ownership_verified": True}})
-        facts.append({"source_key": "reported-control:" + related["source_issuer_id"], "fact_type": "CONTROLS",
+        source_prefix = "reported-control:" if control_role == "CONTROLLING_HOLDER" else "reported-actual-control:"
+        facts.append({"source_key": source_prefix + related["source_issuer_id"], "fact_type": "CONTROLS",
             "direction": "INCOMING", "title": "来源披露控股主体：" + related["name"], "object": related,
-            "properties_json": {"control_basis": "EASTMONEY explicit CONTROL_HOLDER and CONTROL_HOLDER_CODE fields; not inferred from ratio",
+            "properties_json": {"control_role": control_role,
+                "control_basis": "EASTMONEY explicit controller fields; not inferred from ratio",
                 "semantic_scope": "SOURCE_REPORTED_CONTROL_REQUIRES_REVIEW"}})
     classifications = [{"dimension": "LEGAL_LISTING_CLASS", "code": "A_SHARE" if record["market"] == "CN_A" else "H_SHARE",
         "label": "A股" if record["market"] == "CN_A" else "H股", "definition_version": "LISTING_IDENTITY_V1",

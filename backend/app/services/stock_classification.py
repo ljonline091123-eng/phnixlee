@@ -84,7 +84,7 @@ def _looks_like_index(label: Any, code: Any = None) -> bool:
     code_text = str(code or "").strip().upper()
     if not text:
         return False
-    if any(token in text for token in ("MSCI", "HS300", "沪深", "中证", "上证", "深证", "富时", "恒生", "红利", "指数", "指", "中盘", "精选")):
+    if any(token in text for token in ("MSCI", "HS300", "沪深", "中证", "上证", "深证", "富时", "恒生", "指数")):
         return True
     if re.search(r"(?:^|[A-Z])(?:A|R)?(?:50|100|300|500)(?:$|[A-Z])", text):
         return True

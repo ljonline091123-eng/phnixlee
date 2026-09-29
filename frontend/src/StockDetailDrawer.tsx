@@ -16,7 +16,7 @@ import {
 
 type JsonRecord = Record<string, unknown>;
 type PrimaryTab = "精选" | "新闻" | "公告" | "资金" | "F10" | "研究";
-type F10Tab = "财务" | "股东" | "简况" | "财报";
+type F10Tab = "财务" | "股东" | "概况" | "财报";
 
 const noticeCategories = ["全部", "财务业绩", "重大事项", "风险提示", "抵押担保", "增持回购", "对外投资", "其他公告"] as const;
 
@@ -121,6 +121,38 @@ const FIELD_LABELS: Record<string, string> = {
   status: "状态",
   definition: "释义",
   criteria: "判定口径",
+  agent: "研究智能体",
+  source_count: "来源数量",
+  duplicate_count: "重复数量",
+  change_pct: "涨跌幅",
+  yoy: "同比",
+  qoq: "环比",
+  delta: "变动",
+  delta_pct: "变动比例",
+  MA5: "5日均线",
+  MA20: "20日均线",
+  MA60: "60日均线",
+  VOL: "成交量",
+  agent_name: "研究智能体",
+  score: "评分",
+  trend: "趋势",
+  capital_intent: "资金倾向",
+  positive_factors: "积极因素",
+  negative_factors: "风险因素",
+  data_gaps: "数据缺口",
+  report_period: "报告期",
+  as_of: "截至日期",
+  fetched_at: "采集时间",
+  updated_at: "更新时间",
+  forecast: "预测值",
+  target_price: "目标价",
+  current_price: "当前价",
+  previous_close_price: "昨收",
+  open_price: "今开",
+  high_price: "最高",
+  low_price: "最低",
+  volume: "成交量",
+  turnover_rate: "换手率",
 };
 
 function humanFieldLabel(key: string): string {
@@ -142,6 +174,66 @@ function rowValueText(row: JsonRecord): string {
     .slice(0, 8);
   if (entries.length) return entries.map(({ label, item }) => `${label}: ${valueText(item)}`).join(" · ");
   return "--";
+}
+
+function sourceUrls(section: JsonRecord): Array<{ url: string; label: string }> {
+  const values: unknown[] = [];
+  ["source_url", "url"].forEach((key) => {
+    if (section[key]) values.push(section[key]);
+  });
+  if (Array.isArray(section.source_urls)) values.push(...section.source_urls);
+  const links: Array<{ url: string; label: string }> = [];
+  values.forEach((value) => {
+    if (value && typeof value === "object") {
+      const record = asRecord(value);
+      const url = String(record.url || record.source_url || "").trim();
+      if (url) links.push({ url, label: String(record.title || record.name || "查看原文") });
+      return;
+    }
+    const url = String(value || "").trim();
+    if (/^https?:\/\//i.test(url)) links.push({ url, label: "查看原文" });
+  });
+  return [...new Map(links.map((item) => [item.url, item])).values()];
+}
+
+function SourceLinks({ section }: { section: JsonRecord }) {
+  const links = [...sourceUrls(section), ...sectionRows(section).flatMap((row) => sourceUrls(row))];
+  if (!links.length) return null;
+  return (
+    <span className="f10-source-links">
+      {links.slice(0, 3).map((link) => (
+        <a key={link.url} href={link.url} target="_blank" rel="noreferrer">{link.label}</a>
+      ))}
+    </span>
+  );
+}
+
+function trendFromRow(row: JsonRecord): { tone: "positive" | "negative" | "neutral"; text: string } | null {
+  const raw = pickValue(row, ["同比", "同比增长", "环比", "变动比例", "涨跌幅", "yoy", "qoq", "change_pct", "delta_pct"]);
+  if (raw === undefined || raw === null || raw === "") return null;
+  const numeric = toNumber(raw);
+  if (numeric !== null) {
+    return { tone: numeric > 0 ? "positive" : numeric < 0 ? "negative" : "neutral", text: `${numeric > 0 ? "↑" : numeric < 0 ? "↓" : "—"} ${formatPercent(numeric)}` };
+  }
+  const text = String(raw);
+  const positive = /增持|增加|上升|增长|上涨|利好|↑|正/.test(text);
+  const negative = /减持|减少|下降|下跌|利空|↓|负/.test(text);
+  return { tone: positive ? "positive" : negative ? "negative" : "neutral", text: `${positive ? "↑" : negative ? "↓" : "—"} ${text}` };
+}
+
+function agentDisplayName(agent: unknown): string {
+  const key = String(agent || "").toLowerCase();
+  const labels: Record<string, string> = {
+    fundamental: "基本面研究",
+    fundamental_agent: "基本面研究",
+    technical: "技术面研究",
+    technical_agent: "技术面研究",
+    sentiment: "情绪研究",
+    valuation: "估值研究",
+    risk: "风险研究",
+    research: "研究智能体",
+  };
+  return labels[key] || (key ? "研究智能体" : "研究智能体");
 }
 
 function formatNumber(value?: number | null, digits = 2): string {
@@ -237,7 +329,7 @@ function buildRows(rows: unknown, periods: string[] = [], limit = 12) {
     .map((row, index) => {
       const record = asRecord(row);
       const label = getRowLabel(record, index);
-      return { label, value: getRowValue(record, periods) };
+      return { label, value: getRowValue(record, periods), source: record };
     });
 }
 
@@ -507,10 +599,10 @@ function StockKlinePanel({
           <text className="chart-axis-label month" x="630" y="306">{formatDate(visible[visible.length - 1]?.trade_date)}</text>
         </svg>
         <div className="chart-formulas">
-          <span>MA5: {formatNumber(ma(closes, 5))}</span>
-          <span>MA20: {formatNumber(ma(closes, 20))}</span>
-          <span>MA60: {formatNumber(ma(closes, 60))}</span>
-          <span>VOL: {formatNumber(volumes[volumes.length - 1], 0)}</span>
+          <span>5日均线：{formatNumber(ma(closes, 5))}</span>
+          <span>20日均线：{formatNumber(ma(closes, 20))}</span>
+          <span>60日均线：{formatNumber(ma(closes, 60))}</span>
+          <span>成交量：{formatNumber(volumes[volumes.length - 1], 0)}</span>
         </div>
         <div className="kline-zoom-controls">
           <button type="button" className="zoom-button" onClick={() => { setCrosshair(null); setWindowSize((size) => Math.max(20, size - 40)); }} disabled={windowSize <= 20}>−</button>
@@ -564,7 +656,13 @@ function MetricRows({ rows, periods, limit = 12 }: { rows: unknown; periods?: st
         list.map((row, index) => (
           <div className="financial-value-row" key={`${row.label}-${index}`}>
             <span>{row.label}</span>
-            <strong>{displayByLabel(row.label, row.value)}</strong>
+            <strong>
+              {displayByLabel(row.label, row.value)}
+              {(() => {
+                const trend = trendFromRow(asRecord(row.source));
+                return trend ? <em className={`metric-trend ${trend.tone}`}>{trend.text}</em> : null;
+              })()}
+            </strong>
           </div>
         ))
       ) : (
@@ -972,7 +1070,7 @@ function FundFlowPanel({ data }: { data: JsonRecord }) {
           <div className="fund-flow-overview">
             <article className="fund-flow-hero">
               <div className="fund-flow-hero-head">
-                <span className="fund-flow-eyebrow">CAPITAL FLOW</span>
+                <span className="fund-flow-eyebrow">资金流向</span>
                 <strong>{isHongKongMode ? "港股通持股" : "主力资金"}</strong>
               </div>
               <div className={`fund-flow-hero-value ${heroTone}`}>
@@ -1018,7 +1116,7 @@ function FundFlowPanel({ data }: { data: JsonRecord }) {
             <table className="mini-table fund-flow-table">
               <thead>
                 <tr>
-                  {Object.keys(latest).slice(0, 8).map((key) => <th key={key}>{humanFieldLabel(key) || key}</th>)}
+                  {Object.keys(latest).slice(0, 8).map((key, index) => <th key={key}>{humanFieldLabel(key) || `字段${index + 1}`}</th>)}
                 </tr>
               </thead>
               <tbody>
@@ -1066,8 +1164,9 @@ function F10SectionBlock({
 }) {
   const [expanded, setExpanded] = useState(false);
   const rows = sectionRows(section);
-  const status = String(section.status || (rows.length ? "AVAILABLE" : "UNAVAILABLE"));
-  const statusLabel = status === "AVAILABLE" ? "已获取" : status === "PARTIAL" ? "部分获取" : status === "PENDING" ? "待核验" : "暂无数据";
+  const rowPending = rows.some((row) => ["PENDING", "待核验", "待审核"].includes(String(pickValue(row, ["status", "事实状态", "verification_status"]) || "").toUpperCase()));
+  const status = rowPending ? "PENDING" : String(section.status || (rows.length ? "AVAILABLE" : "UNAVAILABLE"));
+  const statusLabel = status === "AVAILABLE" ? "已获取" : status === "PARTIAL" ? "部分获取" : status === "PENDING" ? (/未接入|需授权/.test(String(section.message || "")) ? "未接入" : "待核验") : "暂无数据";
   const actionLabel = String(
     section.action_label || (section.key === "anomaly" ? "融资融券近一个月" : "查看详细数据"),
   );
@@ -1082,13 +1181,14 @@ function F10SectionBlock({
           <div className="f10-section-row-list">
             {rows.slice(0, expanded ? 100 : 8).map((row, index) => {
               const label = String(pickValue(row, ["label", "name", "项目", "指标", "metric", "股东名称"]) || `项目 ${index + 1}`);
-              return <div className="financial-value-row" key={`${label}-${index}`}><span>{label}</span><strong>{rowValueText(row)}</strong></div>;
+              const trend = trendFromRow(row);
+              return <div className="financial-value-row" key={`${label}-${index}`}><span>{label}</span><strong>{rowValueText(row)}{trend ? <em className={`metric-trend ${trend.tone}`}>{trend.text}</em> : null}</strong></div>;
             })}
           </div>
         )
       ) : <p className="empty-state compact-empty">{String(section.message || "当前数据源未返回该分区数据")}</p>}
       {footer}
-      <div className="f10-section-meta"><span>来源：{String(section.source || "暂无")}</span>{section.as_of ? <span>截至：{formatDate(String(section.as_of))}</span> : null}</div>
+      <div className="f10-section-meta"><span>来源：{String(section.source || "暂无")}</span><SourceLinks section={section} />{section.as_of ? <span>截至：{formatDate(String(section.as_of))}</span> : null}</div>
       {(onOpen || rows.length > 8) ? <button type="button" className="f10-detail-link" onClick={() => onOpen ? onOpen({ ...section, detail_title: section.detail_title || actionLabel }) : setExpanded((value) => !value)}>{onOpen ? actionLabel : (expanded ? "收起详细数据" : "查看详细数据")}</button> : null}
     </section>
   );
@@ -1101,6 +1201,16 @@ function F10Panel({ detail, activeTab, setActiveTab }: { detail: StockF10; activ
   const holders = asRecord(detail.holders);
   const profile = asRecord(detail.profile);
   const profileFields = asRecord(profile.fields);
+  const composition = asRecord(detail.business_composition);
+  const compositionRows = asArray(composition.sections).flatMap((item) => {
+    const category = String(pickValue(item, ["category", "name", "分类", "类别"]) || "主营业务");
+    const items = asArray(item.items);
+    if (!items.length) return [{ label: category, value: pickValue(item, ["summary", "摘要", "value", "数据"]) || item }];
+    return items.map((row) => ({
+      label: String(pickValue(row, ["name", "项目", "label", "主营构成"]) || category),
+      value: pickValue(row, ["value", "amount", "data", "summary", "数值", "金额"]) || row,
+    }));
+  });
   const reports = detail.published_reports?.reports || [];
   const [detailSection, setDetailSection] = useState<JsonRecord | null>(null);
   const holderSections = asArray(holders.sections);
@@ -1113,18 +1223,17 @@ function F10Panel({ detail, activeTab, setActiveTab }: { detail: StockF10; activ
   return (
     <>
       <div className="detail-sub-tabs">
-        {(["财务", "股东", "简况", "财报"] as const).map((item) => (
+        {(["财务", "股东", "概况", "财报"] as const).map((item) => (
           <button type="button" key={item} className={activeTab === item ? "active" : ""} onClick={() => setActiveTab(item)}>{item}</button>
         ))}
       </div>
       {activeTab === "财务" && (
         <>
-          {financialSections.length ? financialSections.map((section) => <F10SectionBlock key={String(section.key)} section={section} onOpen={openDetail} />) : (
-            <>
-              <div className="financial-block metrics-block"><div className="financial-block-heading"><div><span className="financial-section-mark" /><h3>主要指标</h3></div><span className="financial-period">{periods[0] || "最新报告期"}</span></div><MetricRows rows={summary.rows} periods={periods} limit={18} /></div>
-              {(["income_statement", "balance_sheet", "cash_flow"] as const).map((key) => { const block = asRecord(statements[key]); return <div className="financial-block statement-block" key={key}><div className="financial-block-heading"><div><span className="financial-section-mark" /><h3>{String(block.label || block.report_name || statementName(key))}</h3></div><span className="financial-period">{formatDate(String(block.report_date || ""))}</span></div><MetricRows rows={block.rows} limit={12} /></div>; })}
-            </>
-          )}
+          {(financialSections.length ? financialSections : [
+            { key: "composition", title: "主营构成", rows: compositionRows, source: composition.source, status: compositionRows.length ? "AVAILABLE" : "UNAVAILABLE", message: composition.message },
+            { key: "indicators", title: "主要指标", rows: summary.rows, source: summary.source, status: Array.isArray(summary.rows) && summary.rows.length ? "AVAILABLE" : "UNAVAILABLE" },
+            ...(["income_statement", "balance_sheet", "cash_flow"] as const).map((key) => { const block = asRecord(statements[key]); return { key, title: String(block.label || block.report_name || statementName(key)), rows: block.rows, source: block.source || statements.source, status: Array.isArray(block.rows) && block.rows.length ? "AVAILABLE" : "UNAVAILABLE", as_of: block.report_date }; }),
+          ]).map((section) => <F10SectionBlock key={String(section.key)} section={section} onOpen={openDetail} />)}
         </>
       )}
       {activeTab === "股东" && (
@@ -1135,12 +1244,12 @@ function F10Panel({ detail, activeTab, setActiveTab }: { detail: StockF10; activ
           {asArray(holders.official_links).length ? <div className="extended-source-links">{asArray(holders.official_links).map((link, index) => <a className="extended-source-link" href={String(link.url || "#")} target="_blank" rel="noreferrer" key={index}>{String(link.name || `官方入口 ${index + 1}`)}</a>)}</div> : null}
         </>
       )}
-      {activeTab === "简况" && (
+      {activeTab === "概况" && (
         <>
           {(overviewSections.length ? overviewSections : [{ key: "basic", title: "基本情况", rows: Object.entries(profileFields).map(([label, value]) => ({ label, value })), source: profile.source }]).map((section) => {
             const basic = String(section.key) === "basic";
             const concepts = asArray(profile.concepts);
-            return <F10SectionBlock key={String(section.key)} section={basic && concepts.length ? { ...section, rows: [...sectionRows(section), { label: "概念", value: concepts.map((item) => String(item.name || item.label || "")).filter(Boolean).join("、") }] } : section} onOpen={openDetail} footer={basic ? <button type="button" className="f10-detail-link concept-inline-link" onClick={() => openDetail({ key: "concepts", title: "概念详细解析", rows: concepts, source: profile.source })}>概念详细解析</button> : undefined} />;
+            return <F10SectionBlock key={String(section.key)} section={basic && concepts.length ? { ...section, rows: [...sectionRows(section), { label: "概念", value: concepts.map((item) => String(item.name || item.label || "")).filter(Boolean).join("、") }] } : section} onOpen={openDetail} footer={basic && concepts.length ? <button type="button" className="f10-detail-link concept-inline-link" onClick={() => openDetail({ key: "concepts", title: "概念详细解析", rows: concepts, source: profile.source })}>概念详细解析</button> : undefined} />;
           })}
         </>
       )}
@@ -1179,7 +1288,7 @@ function F10Panel({ detail, activeTab, setActiveTab }: { detail: StockF10; activ
           ) : null}
         </section>
       )}
-      {detailSection ? <div className="f10-detail-overlay" role="dialog" aria-modal="true"><div className="f10-detail-dialog"><header><h3>{String(detailSection.detail_title || detailSection.title || "详细数据")}</h3><button type="button" onClick={closeDetail}>关闭</button></header><div className="f10-detail-body">{sectionRows(detailSection).length ? sectionRows(detailSection).map((row, index) => <div className="f10-detail-row" key={index}><strong>{String(pickValue(row, ["label", "name", "项目", "指标"]) || `项目 ${index + 1}`)}</strong><span>{rowValueText(row)}</span></div>) : <p className="empty-state">{String(detailSection.message || "当前数据源未返回详细数据")}</p>}<small>来源：{String(detailSection.source || "暂无")}</small></div></div></div> : null}
+      {detailSection ? <div className="f10-detail-overlay" role="dialog" aria-modal="true"><div className="f10-detail-dialog"><header><h3>{String(detailSection.detail_title || detailSection.title || "详细数据")}</h3><button type="button" onClick={closeDetail}>关闭</button></header><div className="f10-detail-body">{sectionRows(detailSection).length ? sectionRows(detailSection).map((row, index) => <div className="f10-detail-row" key={index}><strong>{String(pickValue(row, ["label", "name", "项目", "指标"]) || `项目 ${index + 1}`)}</strong><span>{rowValueText(row)}</span></div>) : <p className="empty-state">{String(detailSection.message || "当前数据源未返回详细数据")}</p>}<div className="f10-detail-source"><span>来源：{String(detailSection.source || "暂无")}</span><SourceLinks section={detailSection} /></div></div></div></div> : null}
     </>
   );
 }
@@ -1322,10 +1431,10 @@ export function StockDetailDrawer({
     } finally {
       if (requestId.current === current && !controller.signal.aborted) setLoading(false);
     }
-    if (requestId.current === current && !controller.signal.aborted) await refreshRemote(current, controller.signal);
+    if (requestId.current === current && !controller.signal.aborted) await refreshRemote(current, controller.signal, "全部");
   }
 
-  async function refreshRemote(current = requestId.current, signal = detailController.current?.signal) {
+  async function refreshRemote(current = requestId.current, signal = detailController.current?.signal, category = noticeCategory) {
     if (requestId.current !== current || signal?.aborted) return;
     setRefreshing(true);
     setRemoteError("");
@@ -1335,7 +1444,7 @@ export function StockDetailDrawer({
         klineLimit: 5000,
         financialLimit: 20,
         noticeLimit: pageSize,
-        noticeCategory,
+        noticeCategory: category,
         newsLimit: pageSize,
         signal,
       });
@@ -1610,7 +1719,7 @@ export function StockDetailDrawer({
                       <div className="agent-score-grid">
                         {agentSnapshots.map((agent) => (
                           <article className="info-item" key={agent.agent}>
-                            <span>{agent.agent}</span>
+                            <span>{agentDisplayName(agent.agent)}</span>
                             <strong>{"score" in agent ? `${agent.score} · ${"rating" in agent ? agent.rating : agent.trend}` : "--"}</strong>
                           </article>
                         ))}
@@ -1620,7 +1729,7 @@ export function StockDetailDrawer({
                       {researchReport ? renderMarkdown(researchReport) : <p className="empty-state">点击按钮后，研报会以打字机流式效果显示在这里。</p>}
                     </article>
                     </section>
-                    {researchDetail ? <div className="f10-detail-overlay" role="dialog" aria-modal="true"><div className="f10-detail-dialog"><header><h3>{String(researchDetail.title || "研究详情")}</h3><button type="button" onClick={() => setResearchDetail(null)}>关闭</button></header><div className="f10-detail-body">{sectionRows(researchDetail).length ? sectionRows(researchDetail).map((row, index) => <div className="f10-detail-row" key={index}><strong>{String(pickValue(row, ["label", "name", "项目", "指标"]) || `项目 ${index + 1}`)}</strong><span>{rowValueText(row)}</span></div>) : <p className="empty-state">{String(researchDetail.message || "当前数据源未返回详细数据")}</p>}<small>来源：{String(researchDetail.source || "暂无")}</small></div></div></div> : null}
+                    {researchDetail ? <div className="f10-detail-overlay" role="dialog" aria-modal="true"><div className="f10-detail-dialog"><header><h3>{String(researchDetail.title || "研究详情")}</h3><button type="button" onClick={() => setResearchDetail(null)}>关闭</button></header><div className="f10-detail-body">{sectionRows(researchDetail).length ? sectionRows(researchDetail).map((row, index) => <div className="f10-detail-row" key={index}><strong>{String(pickValue(row, ["label", "name", "项目", "指标"]) || `项目 ${index + 1}`)}</strong><span>{rowValueText(row)}</span></div>) : <p className="empty-state">{String(researchDetail.message || "当前数据源未返回详细数据")}</p>}<div className="f10-detail-source"><span>来源：{String(researchDetail.source || "暂无")}</span><SourceLinks section={researchDetail} /></div></div></div></div> : null}
                   </>
               )}
             </section>

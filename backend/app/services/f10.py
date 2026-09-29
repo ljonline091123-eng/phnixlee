@@ -11,6 +11,7 @@ from datetime import date
 from typing import Any
 
 from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.connectors.akshare_adapter import AkshareAdapter
@@ -91,13 +92,18 @@ def project_company_control_facts(db: Session, stock: StockSymbol) -> dict[str, 
             if subject is None:
                 continue
             properties = fact.properties_json if isinstance(fact.properties_json, dict) else {}
+            control_role = str(properties.get("control_role") or "CONTROLLING_HOLDER").upper()
+            if control_role not in {"CONTROLLING_HOLDER", "ACTUAL_CONTROLLER"}:
+                control_role = "CONTROLLING_HOLDER"
+            role_label = "实际控制人" if control_role == "ACTUAL_CONTROLLER" else "控股股东"
             evidence_links = list(db.scalars(select(FoundationEvidence).join(
                 FoundationFactEvidence, FoundationFactEvidence.evidence_id == FoundationEvidence.id
             ).where(FoundationFactEvidence.fact_id == fact.id).order_by(FoundationEvidence.created_at.desc())).all())
             evidence = evidence_links[0] if evidence_links else None
             row: dict[str, Any] = {
                 "主体名称": subject.name,
-                "关系": "控股股东/实际控制人",
+                "关系": role_label,
+                "control_role": control_role,
                 "事实状态": fact.status,
                 "status": fact.status,
                 "control_basis": properties.get("control_basis") or "来源明确披露，未根据持股比例推断",
@@ -115,7 +121,7 @@ def project_company_control_facts(db: Session, stock: StockSymbol) -> dict[str, 
                     row[key] = properties[key]
             rows.append(row)
         return {"rows": rows, "source": "公司关系图谱（来源证据）", "message": "" if rows else empty["message"]}
-    except Exception:
+    except SQLAlchemyError:
         # Optional foundation tables may be absent in a legacy installation.
         return empty
 
@@ -194,8 +200,17 @@ def _display_section(
 ) -> dict[str, Any]:
     rows = rows or []
     normalized_status = "AVAILABLE" if rows else "UNAVAILABLE"
-    if rows and message and message not in {"", "当前数据源未返回该分区数据"}:
+    if any(
+        isinstance(row, dict)
+        and str(row.get("status") or row.get("事实状态") or row.get("verification_status") or "").upper()
+        in {"PENDING", "待核验", "待审核"}
+        for row in rows
+    ):
+        normalized_status = "PENDING"
+    elif rows and message and message not in {"", "当前数据源未返回该分区数据"}:
         normalized_status = "PARTIAL"
+    elif not rows and message and any(token in message for token in ("未接入", "待核验", "需授权")):
+        normalized_status = "PENDING"
     return {
         "key": key,
         "title": title,
@@ -316,7 +331,14 @@ def normalize_f10_sections(extended_data: dict[str, dict[str, Any]]) -> dict[str
         _display_section("holder_count", "股东户数", rows=holders.get("holder_count"), source=holders.get("holder_count_source") or holders.get("source"), as_of=payload_as_of(holders)),
         _display_section("top_ten_circulating", "十大流通股东", rows=holders.get("circulating"), source=holders.get("circulating_source") or holders.get("source"), as_of=payload_as_of(holders)),
         _display_section("top_ten", "十大股东", rows=holders.get("major"), source=holders.get("major_source") or holders.get("source"), as_of=payload_as_of(holders)),
-        _display_section("control", "控股股东与实际控制人", rows=holders.get("control"), source=holders.get("control_source") or holders.get("source"), as_of=payload_as_of(holders)),
+        _display_section(
+            "control",
+            "控股股东与实际控制人",
+            rows=holders.get("control"),
+            source=holders.get("control_source") or holders.get("source"),
+            as_of=payload_as_of(holders),
+            message=holders.get("control_message"),
+        ),
     ]
     composition_rows: list[dict[str, Any]] = []
     for section in composition.get("sections") or []:
@@ -404,7 +426,13 @@ def _section_has_payload(section: str, payload: dict | None, market: str | None 
             return False
         return True
     if section == "holders":
-        return bool(payload.get("major")) or bool(payload.get("circulating")) or bool(payload.get("official_links"))
+        return any(
+            bool(payload.get(key))
+            for key in (
+                "major", "circulating", "capital_structure", "restricted_release",
+                "institutional", "holder_count", "control", "official_links",
+            )
+        )
     if section == "fund_flow":
         return bool(payload.get("rows"))
     if section == "financial_summary":
@@ -416,9 +444,12 @@ def _section_has_payload(section: str, payload: dict | None, market: str | None 
                 return True
         return False
     if section == "business_composition":
-        return bool(payload.get("sections")) or str(payload.get("source") or "") not in {"", "暂无"}
+        return bool(payload.get("sections"))
     if section == "research_sections":
-        return bool(payload.get("sections")) or str(payload.get("source") or "") not in {"", "暂无"}
+        return any(
+            bool(payload.get(key))
+            for key in ("sections", "reports", "earnings_forecast", "institution_forecast", "qa")
+        )
     if section == "published_reports":
         reports = payload.get("reports")
         if not isinstance(reports, list):

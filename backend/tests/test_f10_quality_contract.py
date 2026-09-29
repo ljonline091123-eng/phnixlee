@@ -5,7 +5,8 @@ import pandas as pd
 
 from app.connectors.akshare_adapter import AkshareAdapter
 from app.services.f10 import normalize_f10_sections, project_company_control_facts
-from app.services.stock_classification import _attach_definition
+from app.services.company_governance import profile_record
+from app.services.stock_classification import _attach_definition, _looks_like_index
 
 
 def test_optional_security_panel_filters_rows_by_security_code() -> None:
@@ -116,3 +117,51 @@ def test_control_projection_is_unavailable_without_company_mapping() -> None:
         result = project_company_control_facts(db, stock)
         assert result["rows"] == []
         assert "暂无" in result["message"]
+
+
+def test_control_section_preserves_pending_fact_status() -> None:
+    payload = normalize_f10_sections({
+        "profile": {"fields": {}},
+        "holders": {
+            "control": [{"主体名称": "待核验主体", "status": "PENDING"}],
+            "control_source": "公司关系图谱（来源证据）",
+        },
+        "financial_summary": {},
+        "financial_statements": {},
+        "business_composition": {},
+        "research_sections": {},
+    })
+    control = next(row for row in payload["holders"]["sections"] if row["key"] == "control")
+    assert control["status"] == "PENDING"
+
+
+def test_profile_record_keeps_actual_controller_role_separate() -> None:
+    source = {
+        "source_name": "测试来源",
+        "source_key": "profile:test",
+        "source_url": "https://example.test/profile",
+        "retrieved_at": "2026-09-30T00:00:00+00:00",
+        "records": [{
+            "market": "CN_A",
+            "company": {"name": "测试公司", "jurisdiction": "CN", "source_issuer_id": "ISSUER"},
+            "industries": [],
+            "themes": [],
+            "controller_mentions": [{
+                "name": "实际控制人甲", "source_issuer_id": "CONTROLLER",
+                "mention_type": "ACTUAL_CONTROLLER",
+            }],
+            "evidence": {"source_key": "evidence:test", "title": "主体资料", "content": "原文", "available_at": "2026-09-30T00:00:00+00:00"},
+            "source_record": {},
+        }],
+    }
+    identities = {"CONTROLLER": {"name": "实际控制人甲", "source_issuer_id": "CONTROLLER", "jurisdiction": "CN"}}
+    result = profile_record(source, 1, identities)
+    control = next(item for item in result["facts"] if item["fact_type"] == "CONTROLS")
+    assert control["properties_json"]["control_role"] == "ACTUAL_CONTROLLER"
+
+
+def test_index_projection_does_not_drop_real_theme_labels() -> None:
+    assert _looks_like_index("沪深300") is True
+    assert _looks_like_index("融资融券") is False
+    assert _looks_like_index("红利低波") is False
+    assert _looks_like_index("精选消费") is False

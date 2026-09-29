@@ -197,10 +197,10 @@ class F10Workflow:
         holders_payload = extended_data.get("holders")
         if isinstance(holders_payload, dict) and not holders_payload.get("control"):
             control_projection = project_company_control_facts(self.db, snapshot.stock)
+            holders_payload["control_source"] = control_projection.get("source") or holders_payload.get("control_source")
+            holders_payload["control_message"] = control_projection.get("message") or holders_payload.get("control_message") or ""
             if control_projection.get("rows"):
                 holders_payload["control"] = control_projection["rows"]
-                holders_payload["control_source"] = control_projection.get("source")
-                holders_payload["control_message"] = control_projection.get("message") or ""
         # Build the fixed F10 section read model after the typed projection so
         # legacy caches can derive the industry/theme concept panel from the
         # same source without treating index membership as a concept.
