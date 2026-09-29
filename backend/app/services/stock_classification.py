@@ -45,7 +45,8 @@ def _clean_industry(value: Any) -> list[str]:
 def _item(label: Any, *, code: Any = None, source: str = "证券主数据", status: str = "SOURCE",
           definition: str | None = None, criteria: str | None = None,
           source_name: str | None = None, definition_version: str | None = None,
-          source_url: str | None = None, level: Any = None) -> dict[str, Any] | None:
+          source_url: str | None = None, level: Any = None,
+          classification_dimension: str | None = None) -> dict[str, Any] | None:
     text = str(label or "").strip()
     if not text:
         return None
@@ -63,6 +64,8 @@ def _item(label: Any, *, code: Any = None, source: str = "证券主数据", stat
         row["source_url"] = source_url
     if level is not None:
         row["level"] = level
+    if classification_dimension:
+        row["classification_dimension"] = str(classification_dimension).upper()
     return row
 
 
@@ -106,15 +109,26 @@ def _definition_lookup(db: Session | None) -> dict[tuple[str, str], Classificati
 def _definition_for(
     definitions: dict[tuple[str, str], ClassificationDefinition],
     dimension: str,
+    code: Any = None,
 ) -> ClassificationDefinition | None:
+    normalized_dimension = str(dimension or "").upper()
+    normalized_code = str(code or "").upper()
+    # Concrete definitions (for example SIZE/LARGE_CAP or
+    # LEGAL_LISTING_CLASS/A_SHARE) are more precise than the dimension-level
+    # fallback.  Prefer them whenever the fact carries a code.
+    if normalized_code:
+        exact = definitions.get((normalized_dimension, normalized_code))
+        if exact is not None:
+            return exact
     candidates = {
         "INDUSTRY": ("EASTMONEY_LEVEL1", "CSRC_LEVEL1"),
         "THEME": ("PROVIDER_CONCEPT",),
         "INDEX": ("INDEX_MEMBERSHIP", "PROVIDER_CONCEPT"),
         "BOARD": ("LISTED_BOARD", "EASTMONEY_LEVEL1"),
         "TYPE": ("SECURITY_TYPE", "A_SHARE", "H_SHARE"),
-    }.get(dimension.upper(), ())
-    return next((definitions.get((dimension.upper(), code)) for code in candidates if definitions.get((dimension.upper(), code))), None)
+    }.get(normalized_dimension, ())
+    return next((definitions.get((normalized_dimension, candidate)) for candidate in candidates
+                 if definitions.get((normalized_dimension, candidate))), None)
 
 
 def _attach_definition(
@@ -129,7 +143,7 @@ def _attach_definition(
     can show the precise definition first and the master-data explanation as a
     fallback.
     """
-    definition = _definition_for(definitions, dimension)
+    definition = _definition_for(definitions, dimension, item.get("code"))
     if definition is not None:
         # Preserve concrete fact-level values.  The ``master_*`` fields are
         # intentionally separate and versioned, making provenance clear to
@@ -153,12 +167,27 @@ def _attach_definition(
         item["master_source_name"] = definition.source_name
         item["master_source_url"] = definition.source_url
         item["master_definition_version"] = definition.definition_version
-        item["dimension"] = definition.dimension
+        # ``dimension`` is the master-data dimension for legacy callers.  A
+        # typed fact can retain its original dimension separately so SIZE,
+        # STYLE and LEGAL_LISTING_CLASS remain auditable inside the combined
+        # display group.
+        fact_dimension = item.get("classification_dimension")
+        item["dimension"] = str(fact_dimension or definition.dimension)
+        item["master_dimension"] = definition.dimension
         item["taxonomy"] = definition.taxonomy
     return item
 
 
-def _foundation_classifications(db: Session, stock: StockSymbol) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+def _foundation_classifications(
+    db: Session,
+    stock: StockSymbol,
+) -> tuple[
+    list[dict[str, Any]],  # industries
+    list[dict[str, Any]],  # themes
+    list[dict[str, Any]],  # indexes
+    list[dict[str, Any]],  # listed boards
+    list[dict[str, Any]],  # security/type classifications
+]:
     """Read provider classifications already imported into the company graph.
 
     Some older test databases do not contain foundation tables.  In that case
@@ -170,10 +199,10 @@ def _foundation_classifications(db: Session, stock: StockSymbol) -> tuple[list[d
         required = {FoundationListing.__tablename__, FoundationSecurity.__tablename__,
                     FoundationEvidence.__tablename__, SecurityClassification.__tablename__}
         if not required.issubset(tables):
-            return [], [], []
+            return [], [], [], [], []
         listing = db.scalar(select(FoundationListing).where(FoundationListing.stock_symbol_id == stock.id))
         if listing is None:
-            return [], [], []
+            return [], [], [], [], []
         rows = list(db.scalars(select(SecurityClassification).where(
             SecurityClassification.security_id == listing.security_id,
             SecurityClassification.status.in_(("ACCEPTED", "PENDING")),
@@ -181,13 +210,38 @@ def _foundation_classifications(db: Session, stock: StockSymbol) -> tuple[list[d
         industries: list[dict[str, Any]] = []
         themes: list[dict[str, Any]] = []
         indexes: list[dict[str, Any]] = []
+        boards: list[dict[str, Any]] = []
+        type_values: list[dict[str, Any]] = []
         for row in rows:
-            target = industries if row.dimension.upper() == "INDUSTRY" else themes if row.dimension.upper() == "THEME" else None
+            dimension = str(row.dimension or "").upper()
+            if dimension == "INDUSTRY":
+                target = industries
+            elif dimension == "THEME":
+                target = themes
+            elif dimension == "INDEX":
+                target = indexes
+            elif dimension == "BOARD":
+                target = boards
+            elif dimension in {"SIZE", "STYLE", "QUALITY", "LEGAL_LISTING_CLASS", "LIQUIDITY", "RISK", "TYPE"}:
+                target = type_values
+            else:
+                target = None
             if target is None:
                 continue
             props = row.properties_json if isinstance(row.properties_json, dict) else {}
-            value = _item(row.label, code=row.code, source="公司/证券分类主数据", status=row.status,
-                          definition=props.get("definition"), level=props.get("level"))
+            value = _item(
+                row.label,
+                code=row.code,
+                source="公司/证券分类主数据",
+                status=row.status,
+                definition=props.get("definition"),
+                criteria=props.get("criteria"),
+                source_name=props.get("source_name"),
+                source_url=props.get("source_url"),
+                definition_version=row.definition_version,
+                level=props.get("level"),
+                classification_dimension=dimension,
+            )
             if value:
                 target.append(value)
         # The imported evidence contains the complete Eastmoney board/theme
@@ -199,7 +253,7 @@ def _foundation_classifications(db: Session, stock: StockSymbol) -> tuple[list[d
                 label, code = raw.get(f"BOARD_NAME_{level}LEVEL"), raw.get(f"BOARD_CODE_BK_{level}LEVEL")
                 value = _item(label, code=code, source="东方财富公司主数据", status="SOURCE", level=level)
                 if value:
-                    industries.append(value)
+                    boards.append(value)
             labels = _split(raw.get("BLGAINIAN"))
             codes = _split(raw.get("BLGAINIAN_CODE"))
             for index, label in enumerate(labels):
@@ -207,9 +261,9 @@ def _foundation_classifications(db: Session, stock: StockSymbol) -> tuple[list[d
                               source="东方财富主题板块", status="SOURCE")
                 if value:
                     (indexes if _looks_like_index(label, value.get("code")) else themes).append(value)
-        return industries, themes, indexes
+        return industries, themes, indexes, boards, type_values
     except (ValueError, TypeError, json.JSONDecodeError):
-        return [], [], []
+        return [], [], [], [], []
 
 
 def build_classification_groups(db: Session | None, stock: StockSymbol,
@@ -217,11 +271,14 @@ def build_classification_groups(db: Session | None, stock: StockSymbol,
     fields = profile_fields if isinstance(profile_fields, dict) else {}
     groups: list[dict[str, Any]] = []
     definitions = _definition_lookup(db)
-    industry_values, theme_values, index_values = _foundation_classifications(db, stock) if db is not None else ([], [], [])
+    industry_values, theme_values, index_values, board_values, type_values = (
+        _foundation_classifications(db, stock) if db is not None else ([], [], [], [], [])
+    )
 
     if not industry_values:
         for index, value in enumerate(_clean_industry(fields.get("所属行业") or fields.get("行业"))):
-            item = _item(value, source="公司资料 / F10", status="SOURCE", level=index + 1)
+            item = _item(value, source="公司资料 / F10", status="SOURCE", level=index + 1,
+                         classification_dimension="INDUSTRY")
             if item:
                 industry_values.append(item)
     industry_values = [_attach_definition(item, definitions, "INDUSTRY") for item in industry_values]
@@ -230,8 +287,12 @@ def build_classification_groups(db: Session | None, stock: StockSymbol,
         # displayed separately below and indexes never enter either group.
         groups.append(_group("industry", "所属行业", industry_values))
 
-    board_values = _split(fields.get("板块") or fields.get("上市板块") or fields.get("所属市场"))
-    board_items = [_item(value, source="证券主数据 / F10", status="SOURCE") for value in board_values]
+    board_values = board_values or []
+    board_values.extend(
+        _item(value, source="证券主数据 / F10", status="SOURCE", classification_dimension="BOARD")
+        for value in _split(fields.get("板块") or fields.get("上市板块") or fields.get("所属市场"))
+    )
+    board_items = [item for item in board_values if item]
     board_items = [item for item in board_items if item]
     if board_items:
         groups.append(_group("board", "上市板块", board_items))
@@ -240,7 +301,7 @@ def build_classification_groups(db: Session | None, stock: StockSymbol,
         # ``所属概念`` is accepted only as a theme fallback.  ``入选指数`` is
         # intentionally not read here, since an index is its own dimension.
         for value in _split(fields.get("所属概念") or fields.get("概念")):
-            item = _item(value, source="F10 概念字段", status="SOURCE")
+            item = _item(value, source="F10 概念字段", status="SOURCE", classification_dimension="THEME")
             if item:
                 theme_values.append(item)
     theme_values = [_attach_definition(item, definitions, "THEME") for item in theme_values if not _looks_like_index(item.get("label"), item.get("code"))]
@@ -248,21 +309,19 @@ def build_classification_groups(db: Session | None, stock: StockSymbol,
         groups.append(_group("theme", "主题板块", theme_values))
 
     index_items = [_attach_definition(item, definitions, "INDEX") for item in index_values]
-    index_items.extend(_attach_definition(_item(value, source="F10 入选指数", status="SOURCE"), definitions, "INDEX") for value in _split(fields.get("入选指数")))
+    index_items.extend(_attach_definition(_item(value, source="F10 入选指数", status="SOURCE", classification_dimension="INDEX"), definitions, "INDEX") for value in _split(fields.get("入选指数")))
     index_items = [item for item in index_items if item]
     if index_items:
         groups.append(_group("index", "入选指数", index_items))
 
-    type_items: list[dict[str, Any]] = []
+    type_items: list[dict[str, Any]] = list(type_values)
     if stock.asset_type:
-        item = _attach_definition(_item(stock.asset_type, source="证券主数据", status="SOURCE"), definitions, "TYPE")
+        item = _attach_definition(_item(stock.asset_type, source="证券主数据", status="SOURCE",
+                                        classification_dimension="TYPE"), definitions, "TYPE")
         if item:
             type_items.append(item)
-    if stock.market:
-        item = _attach_definition(_item({"CN_A": "A股", "HK": "港股", "NEEQ": "新三板", "NEEQ_INNOVATION": "创新层"}.get(stock.market, stock.market),
-                     code=stock.market, source="证券主数据", status="SOURCE"), definitions, "TYPE")
-        if item:
-            type_items.append(item)
+    type_items = [_attach_definition(item, definitions, item.get("classification_dimension") or "TYPE")
+                  for item in type_items if item]
     if type_items:
         groups.append(_group("type", "证券类型", type_items))
     # Enrich every emitted label with the versioned glossary.  Applying this
