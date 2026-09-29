@@ -680,7 +680,20 @@ class StockOnDemandService:
             .where(StockF10Cache.market == market, StockF10Cache.symbol == symbol)
             .order_by(StockF10Cache.section.asc())
         ).all()
-        return {item.section: item.payload_json for item in records}
+        # Preserve the raw provider payload while carrying cache provenance to
+        # the read-model normalizer.  ``payload_json`` is copied so adding
+        # metadata never mutates SQLAlchemy's JSON value in place.
+        result: dict[str, dict[str, Any]] = {}
+        for item in records:
+            payload = dict(item.payload_json or {})
+            metadata = dict(payload.get("_meta") or {})
+            metadata.update({
+                "fetched_at": item.fetched_at.isoformat() if item.fetched_at else None,
+                "source_id": item.source_id,
+            })
+            payload["_meta"] = metadata
+            result[item.section] = payload
+        return result
 
     def _start_log(
         self,

@@ -330,13 +330,14 @@ class AkshareAdapter(MarketDataAdapter):
         holders["institutional"] = self._safe_optional_records(
             getattr(ak, "stock_fund_stock_holder", None), {"symbol": symbol}, limit=50
         )
+        holders["holder_count"] = self._safe_holder_count(symbol)
         dividends = self._safe_optional_records(
             getattr(ak, "stock_history_dividend_detail", None),
             {"symbol": symbol, "indicator": "分红"}, limit=50,
         )
         concepts: list[dict[str, Any]] = []
         profile_fields = profile.get("fields") if isinstance(profile.get("fields"), dict) else {}
-        raw_concepts = profile_fields.get("所属概念") or profile_fields.get("概念") or profile_fields.get("入选指数")
+        raw_concepts = profile_fields.get("所属概念") or profile_fields.get("概念")
         if raw_concepts:
             concepts = [
                 {"name": item.strip(), "definition": "来源披露的行业/概念标签，需结合原文核验。"}
@@ -346,22 +347,20 @@ class AkshareAdapter(MarketDataAdapter):
             "concepts": concepts,
             "dividends": dividends,
             "dividend_source": "AkShare stock_history_dividend_detail" if dividends else "暂无",
-            "margin_history": [],
-            "margin_source": "暂无公开个股融资融券明细",
+            "margin_history": self._safe_cn_margin_history(symbol),
+            "margin_source": "东方财富/交易所融资融券明细",
         }
-        research_reports = self._safe_optional_records(
-            getattr(ak, "stock_research_report_em", None), {"symbol": symbol}, limit=100,
-        )
+        # ``stock_research_report_em`` is occasionally returned as a full
+        # market feed by the upstream provider even when a symbol argument is
+        # supplied.  Keep a strict, code-aware projection here.  Both the
+        # earnings and rating panels below are derived from this already
+        # filtered list, so a malformed/full-market response can never leak a
+        # different security into the current stock page.
+        research_reports = self._safe_research_report_records(symbol, limit=100)
         research = {
-            "source": "AkShare 东方财富/同花顺公开接口",
-            "earnings_forecast": self._safe_optional_records(
-                getattr(ak, "stock_profit_forecast_ths", None),
-                {"symbol": symbol, "indicator": "预测报告每股收益"}, limit=50,
-            ),
-            "institution_forecast": self._safe_optional_records(
-                getattr(ak, "stock_rank_forecast_cninfo", None),
-                {"date": datetime.now().strftime("%Y%m%d")}, limit=100,
-            ),
+            "source": "AkShare 东方财富研究报告接口",
+            "earnings_forecast": self._derive_research_earnings_forecast(research_reports, symbol),
+            "institution_forecast": self._derive_institution_forecast(research_reports, symbol),
             "latest_reports": research_reports[:10],
             "reports": research_reports,
             "qa": [],
@@ -2556,6 +2555,330 @@ class AkshareAdapter(MarketDataAdapter):
             return cls._safe_dataframe_records(dataframe, limit=limit)
         except Exception:
             return []
+
+    @classmethod
+    def _safe_research_report_records(
+        cls, symbol: str, *, limit: int = 100
+    ) -> list[dict[str, Any]]:
+        """Read and normalize the current security's public research reports.
+
+        AkShare has changed ``stock_research_report_em`` between releases. In
+        some versions the ``symbol`` parameter is ignored and a market-wide
+        table is returned.  A report is accepted only when the response has a
+        recognizable security-code column and that code matches ``symbol``;
+        an unknown schema therefore fails closed instead of contaminating a
+        stock's F10 page with another security's reports.
+
+        The raw provider keys are retained for traceability and stable Chinese
+        display aliases are added for consumers that should not depend on a
+        provider's exact column spelling.
+        """
+        method = getattr(ak, "stock_research_report_em", None)
+        if not method:
+            return []
+        try:
+            dataframe = method(symbol=symbol)
+            if dataframe is None or not hasattr(dataframe, "empty") or dataframe.empty:
+                return []
+            code_column = next(
+                (
+                    column
+                    for column in dataframe.columns
+                    if cls._is_security_code_column(column)
+                ),
+                None,
+            )
+            if code_column is None:
+                return []
+            target = cls._normalize_security_code(symbol)
+            selected = dataframe[
+                dataframe[code_column].map(
+                    lambda value: cls._normalize_security_code(value) == target
+                )
+            ]
+            records = cls._safe_dataframe_records(selected, limit=limit)
+            return [cls._normalize_research_report_row(row, target) for row in records]
+        except Exception:
+            # Research is an optional F10 panel; a provider failure must not
+            # make the rest of the stock detail request fail.
+            return []
+
+    @staticmethod
+    def _is_security_code_column(column: Any) -> bool:
+        text = str(column).strip().lower()
+        # Avoid treating an ordinary numeric field (for example a report
+        # sequence) as a security code.  These names are the variants emitted
+        # by Eastmoney/AkShare across recent releases.
+        if any(token in text for token in ("股票代码", "证券代码", "证券代碼", "stockcode", "securitycode", "symbol")):
+            return True
+        return text in {"代码", "code"}
+
+    @staticmethod
+    def _normalize_security_code(value: Any) -> str:
+        """Normalize provider code variants (numeric, suffix, whitespace)."""
+        text = str(value or "").strip().upper()
+        if not text or text in {"NAN", "NONE", "NAT"}:
+            return ""
+        # Dataframes can expose integer-like codes as ``2.0`` and exchange
+        # feeds often append ``.SZ``/``.SH``.  Keep only the security code.
+        text = re.sub(r"\.0+$", "", text)
+        text = re.split(r"[.：:]", text, maxsplit=1)[0]
+        digits = re.sub(r"\D", "", text)
+        return digits.zfill(6) if digits else text
+
+    @classmethod
+    def _normalize_research_report_row(
+        cls, row: dict[str, Any], symbol: str
+    ) -> dict[str, Any]:
+        """Add stable Chinese aliases while preserving the provider payload."""
+        normalized = {str(key): cls._json_safe(value) for key, value in row.items()}
+
+        def value(*keys: str) -> Any:
+            for key in keys:
+                if key in normalized and normalized[key] not in (None, ""):
+                    candidate = normalized[key]
+                    if isinstance(candidate, str) and candidate.strip().lower() in {"nan", "none", "nat"}:
+                        continue
+                    return candidate
+            return None
+
+        report_date = cls._coerce_report_date(value("日期", "报告日期", "REPORT_DATE"))
+        aliases = {
+            "股票代码": value("股票代码", "证券代码", "symbol") or symbol,
+            "股票简称": value("股票简称", "证券简称", "股票名称", "证券名称"),
+            "报告名称": value("报告名称", "报告标题", "title", "report_name"),
+            "东财评级": value("东财评级", "评级", "评级名称", "rating"),
+            "机构": value("机构", "研究机构", "机构名称", "institution"),
+            "近一月个股研报数": value("近一月个股研报数", "近一个月个股研报数"),
+            "行业": value("行业", "所属行业", "industry"),
+            "日期": report_date or value("日期", "报告日期"),
+            "报告PDF链接": value("报告PDF链接", "报告PDF链接地址", "PDF链接", "url"),
+        }
+        # Keep absent fields absent rather than rendering Python ``None`` in a
+        # detail dialog.  A code and title are the minimum useful report key.
+        for key, item in aliases.items():
+            if item not in (None, ""):
+                normalized[key] = item
+        if report_date:
+            normalized["report_date"] = report_date
+        if normalized.get("报告名称"):
+            normalized.setdefault("title", normalized["报告名称"])
+            normalized.setdefault("report_name", normalized["报告名称"])
+        if normalized.get("机构"):
+            normalized.setdefault("institution", normalized["机构"])
+        if normalized.get("东财评级"):
+            normalized.setdefault("rating", normalized["东财评级"])
+        if normalized.get("报告PDF链接"):
+            normalized.setdefault("url", normalized["报告PDF链接"])
+        return normalized
+
+    @classmethod
+    def _derive_research_earnings_forecast(
+        cls, reports: list[dict[str, Any]], symbol: str
+    ) -> list[dict[str, Any]]:
+        """Project per-report/per-year earnings estimates from filtered reports.
+
+        ``stock_research_report_em`` embeds year-specific columns such as
+        ``2026-盈利预测-收益`` and ``2026-盈利预测-市盈率``.  We expose those
+        values as rows rather than returning a separate, potentially
+        unfiltered market endpoint.  This keeps the section useful when the
+        optional THS endpoint is unavailable and preserves report-level
+        provenance (institution, date and PDF URL).
+        """
+        projected: list[dict[str, Any]] = []
+        for report in reports:
+            if not isinstance(report, dict):
+                continue
+            years: set[str] = set()
+            for key in report:
+                match = re.match(r"^(20\d{2})[-—](?:盈利预测|盈利預測)[-—](.+)$", str(key))
+                if match:
+                    years.add(match.group(1))
+            for year in sorted(years):
+                eps = cls._first_nonempty(
+                    report.get(f"{year}-盈利预测-收益"),
+                    report.get(f"{year}-盈利预测-每股收益"),
+                    report.get(f"{year}-盈利预测-每股收益(元)"),
+                )
+                pe = cls._first_nonempty(
+                    report.get(f"{year}-盈利预测-市盈率"),
+                    report.get(f"{year}-盈利预测-PE"),
+                )
+                net_profit = cls._first_nonempty(
+                    report.get(f"{year}-盈利预测-净利润"),
+                    report.get(f"{year}-盈利预测-归母净利润"),
+                )
+                if eps is None and pe is None and net_profit is None:
+                    continue
+                row = {
+                    "股票代码": report.get("股票代码") or symbol,
+                    "预测年度": year,
+                    "预测每股收益": cls._json_safe(eps),
+                    "预测市盈率": cls._json_safe(pe),
+                    "预测净利润": cls._json_safe(net_profit),
+                    "报告名称": report.get("报告名称") or report.get("title"),
+                    "机构": report.get("机构") or report.get("institution"),
+                    "东财评级": report.get("东财评级") or report.get("rating"),
+                    "日期": report.get("日期") or report.get("report_date"),
+                    "报告PDF链接": report.get("报告PDF链接") or report.get("url"),
+                    # Generic F10 cards look for a label/value pair.  Keep
+                    # this compact projection in addition to the explicit
+                    # fields so the card never falls back to “项目 1”.
+                    "label": f"{year}年盈利预测",
+                    "value": {
+                        "每股收益": cls._json_safe(eps),
+                        "市盈率": cls._json_safe(pe),
+                        "净利润": cls._json_safe(net_profit),
+                    },
+                    # English aliases make programmatic consumers stable while
+                    # the UI uses the Chinese labels above.
+                    "forecast_year": year,
+                    "eps": cls._json_safe(eps),
+                    "pe": cls._json_safe(pe),
+                }
+                projected.append({key: value for key, value in row.items() if value not in (None, "")})
+        projected.sort(key=lambda row: (str(row.get("预测年度") or ""), str(row.get("日期") or "")), reverse=True)
+        return projected[:200]
+
+    @classmethod
+    def _derive_institution_forecast(
+        cls, reports: list[dict[str, Any]], symbol: str
+    ) -> list[dict[str, Any]]:
+        """Aggregate ratings strictly from this stock's filtered reports."""
+        grouped: dict[tuple[str, str], list[dict[str, Any]]] = {}
+        for report in reports:
+            if not isinstance(report, dict):
+                continue
+            institution = str(report.get("机构") or report.get("institution") or "").strip()
+            rating = str(report.get("东财评级") or report.get("rating") or "").strip()
+            if not institution and not rating:
+                continue
+            key = (institution or "未披露机构", rating or "未披露评级")
+            grouped.setdefault(key, []).append(report)
+        result: list[dict[str, Any]] = []
+        for (institution, rating), items in grouped.items():
+            ordered = sorted(items, key=lambda item: str(item.get("日期") or item.get("report_date") or ""), reverse=True)
+            latest = ordered[0] if ordered else {}
+            row = {
+                "股票代码": symbol,
+                "机构": institution,
+                "东财评级": rating,
+                "评级数量": len(items),
+                "研报数量": len(items),
+                "最新报告日期": latest.get("日期") or latest.get("report_date"),
+                "最新报告名称": latest.get("报告名称") or latest.get("title"),
+                "报告PDF链接": latest.get("报告PDF链接") or latest.get("url"),
+                "label": institution,
+                "value": {
+                    "评级": rating,
+                    "评级数量": len(items),
+                    "最新报告日期": latest.get("日期") or latest.get("report_date"),
+                },
+                "institution": institution,
+                "rating": rating,
+                "report_count": len(items),
+            }
+            result.append({key: value for key, value in row.items() if value not in (None, "")})
+        # Rank the most frequently covered institutions first, with the most
+        # recent report breaking ties.  This is a display ordering only; all
+        # rows still retain the individual report provenance above.
+        result.sort(
+            key=lambda row: (int(row.get("评级数量") or 0), str(row.get("最新报告日期") or "")),
+            reverse=True,
+        )
+        return result[:100]
+
+    @staticmethod
+    def _first_nonempty(*values: Any) -> Any:
+        for value in values:
+            if value is None:
+                continue
+            if isinstance(value, float) and pd.isna(value):
+                continue
+            if isinstance(value, str) and value.strip().lower() in {"", "nan", "none", "nat"}:
+                continue
+            return value
+        return None
+
+    @classmethod
+    def _safe_security_filtered_records(
+        cls, method: Any, kwargs: dict[str, Any], symbol: str, *, limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        """Return optional rows only when the provider identifies the security.
+
+        Some rating endpoints are full-market tables despite accepting a date
+        argument.  Never show such rows on a single-stock page without an
+        explicit code column.
+        """
+        if not method:
+            return []
+        try:
+            dataframe = method(**kwargs)
+            if dataframe is None or dataframe.empty:
+                return []
+            columns = list(dataframe.columns)
+            code_column = next((column for column in columns if any(token in str(column) for token in ("股票代码", "证券代码", "代码", "symbol", "code"))), None)
+            if code_column is None:
+                return []
+            target = cls._normalize_security_code(symbol)
+            mask = dataframe[code_column].map(lambda value: cls._normalize_security_code(value) == target)
+            return cls._safe_dataframe_records(dataframe[mask], limit=limit)
+        except Exception:
+            return []
+
+    @classmethod
+    def _safe_holder_count(cls, symbol: str, *, limit: int = 24) -> list[dict[str, Any]]:
+        method = getattr(ak, "stock_zh_a_gdhs_detail_em", None)
+        if not method:
+            return []
+        try:
+            dataframe = method(symbol=symbol)
+            if dataframe is None or dataframe.empty:
+                return []
+            code_column = next((column for column in dataframe.columns if any(token in str(column) for token in ("股票代码", "证券代码", "代码"))), None)
+            if code_column is not None:
+                target = str(symbol).zfill(6)
+                dataframe = dataframe[dataframe[code_column].map(lambda value: str(value).strip().zfill(6) == target)]
+            date_column = next((column for column in dataframe.columns if "统计截止日" in str(column) or str(column) in {"截止日期", "截至日期"}), None)
+            if date_column:
+                dataframe = dataframe.assign(__sort=pd.to_datetime(dataframe[date_column], errors="coerce"))
+                dataframe = dataframe.sort_values("__sort", ascending=False).drop(columns=["__sort"])
+            return cls._safe_dataframe_records(dataframe, limit=limit)
+        except Exception:
+            return []
+
+    @classmethod
+    def _safe_cn_margin_history(cls, symbol: str, *, max_days: int = 22) -> list[dict[str, Any]]:
+        """Fetch recent exchange margin rows and retain only this security."""
+        if symbol.startswith(("4", "8", "92")):
+            return []  # public BSE endpoint is not an individual-security feed
+        method_name = "stock_margin_detail_sse" if symbol.startswith("6") else "stock_margin_detail_szse"
+        method = getattr(ak, method_name, None)
+        if not method:
+            return []
+        rows: list[dict[str, Any]] = []
+        today = date.today()
+        for offset in range(max_days * 2 + 5):
+            if len(rows) >= max_days:
+                break
+            day = today.fromordinal(today.toordinal() - offset)
+            if day.weekday() >= 5:
+                continue
+            try:
+                dataframe = method(date=day.strftime("%Y%m%d"))
+                if dataframe is None or dataframe.empty:
+                    continue
+                code_column = next((column for column in dataframe.columns if any(token in str(column) for token in ("证券代码", "股票代码", "代码"))), None)
+                if code_column is None:
+                    continue
+                target = str(symbol).zfill(6)
+                selected = dataframe[dataframe[code_column].map(lambda value: str(value).strip().zfill(6) == target)]
+                for item in cls._safe_dataframe_records(selected, limit=3):
+                    item.setdefault("交易日期", day.isoformat())
+                    rows.append(item)
+            except Exception:
+                continue
+        return rows[:max_days]
 
     def _fetch_cn_a_symbols(self) -> list[SymbolRecord]:
         exchange_records = self._fetch_cn_a_symbols_from_exchange_tables()

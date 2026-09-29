@@ -16,6 +16,7 @@ from app.models.market_data import (
     StockRealtimeQuote,
     StockSymbol,
 )
+from app.services.notice_read_model import deduplicate_notice_rows
 
 
 @dataclass(slots=True)
@@ -26,6 +27,7 @@ class StockF10Snapshot:
     report_notices: list[StockNotice]
     notices: list[StockNotice]
     notice_total: int
+    notice_metadata: dict[int, dict[str, Any]]
     quote: StockRealtimeQuote | None
     news: list[StockNews]
     news_total: int
@@ -76,19 +78,18 @@ class StockF10Repository:
                 .limit(financial_limit)
             ).all()
         )
-        report_notices = list(
-            self.db.scalars(
-                select(StockNotice)
-                .where(StockNotice.market == market, StockNotice.symbol == symbol)
-                .order_by(StockNotice.notice_date.desc(), StockNotice.id.desc())
-                .limit(2000)
-            ).all()
-        )
+        report_notices = list(self.db.scalars(
+            select(StockNotice)
+            .where(StockNotice.market == market, StockNotice.symbol == symbol)
+            .order_by(StockNotice.notice_date.desc(), StockNotice.id.desc())
+        ).all())
         classifier = notice_classifier or (lambda _title, _notice_type: None)
+        canonical_notices = deduplicate_notice_rows(report_notices)
+        notice_metadata = {item.row.id: item.metadata() for item in canonical_notices}
         filtered_notices = [
-            item for item in report_notices
+            item.row for item in canonical_notices
             if not notice_category or notice_category == "全部"
-            or classifier(item.title, item.notice_type) == notice_category
+            or classifier(item.row.title, item.row.notice_type) == notice_category
         ]
         notice_start = (notice_page - 1) * notice_limit
         notices = filtered_notices[notice_start : notice_start + notice_limit]
@@ -125,6 +126,7 @@ class StockF10Repository:
             report_notices=report_notices,
             notices=notices,
             notice_total=notice_total,
+            notice_metadata=notice_metadata,
             quote=quote,
             news=news,
             news_total=news_total,

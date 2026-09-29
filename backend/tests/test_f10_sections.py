@@ -50,6 +50,42 @@ class F10SectionContractTest(unittest.TestCase):
         self.assertEqual(anomaly["action_label"], "融资融券近一个月")
         self.assertEqual(anomaly["detail_title"], "融资融券近一个月")
 
+    def test_concepts_are_projected_from_typed_industry_theme_groups_not_indexes(self) -> None:
+        payload = normalize_f10_sections(
+            {
+                "profile": {
+                    "source": "分类主数据",
+                    "fields": {},
+                    # A legacy cache may contain only index-labelled concepts.
+                    "concepts": [{"name": "沪深300"}],
+                    "classification_groups": [
+                        {"key": "industry", "title": "所属行业", "items": [
+                            {"name": "房地产", "code": "IND-1", "definition": "行业定义"},
+                        ]},
+                        {"key": "theme", "title": "主题板块", "items": [
+                            {"name": "保障性住房", "code": "THEME-1", "definition": "主题定义"},
+                        ]},
+                        {"key": "index", "title": "入选指数", "items": [
+                            {"name": "沪深300", "code": "IDX-1", "definition": "指数定义"},
+                        ]},
+                    ],
+                },
+                "holders": {},
+                "financial_summary": {},
+                "financial_statements": {},
+                "business_composition": {},
+                "research_sections": {"reports": []},
+            }
+        )
+        concepts = payload["profile"]["concepts"]
+        self.assertEqual([item["name"] for item in concepts], ["房地产", "保障性住房"])
+        self.assertEqual(concepts[1]["definition"], "主题定义")
+        research_concepts = next(
+            section for section in payload["research_sections"]["sections"]
+            if section["key"] == "industry_concepts"
+        )
+        self.assertEqual(len(research_concepts["rows"]), 2)
+
 
 if __name__ == "__main__":
     unittest.main()
