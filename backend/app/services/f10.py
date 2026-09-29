@@ -157,6 +157,15 @@ def normalize_f10_sections(extended_data: dict[str, dict[str, Any]]) -> dict[str
                 if item.strip()
             ]
     profile["concepts"] = concepts
+    anomaly_section = _display_section(
+        "anomaly",
+        "异动揭秘",
+        rows=profile.get("margin_history"),
+        source=profile.get("margin_source"),
+        message="融资融券明细暂未从公开接口返回",
+    )
+    anomaly_section["action_label"] = "融资融券近一个月"
+    anomaly_section["detail_title"] = "融资融券近一个月"
     profile["overview_sections"] = [
         _display_section("basic", "基本情况", rows=[
             {"label": key, "value": fields.get(key)}
@@ -164,7 +173,7 @@ def normalize_f10_sections(extended_data: dict[str, dict[str, Any]]) -> dict[str
             if fields.get(key) not in (None, "")
         ], source=profile.get("source")),
         _display_section("indicators", "主要指标", rows=summary.get("rows"), source=summary.get("source")),
-        _display_section("anomaly", "异动揭秘", rows=profile.get("margin_history"), source=profile.get("margin_source"), message="融资融券明细暂未从公开接口返回"),
+        anomaly_section,
         _display_section("insight", "道破天机", rows=holders.get("insight_rows"), source=holders.get("source")),
         _display_section("dividend", "分红配送", rows=profile.get("dividends"), source=profile.get("dividend_source"), message="暂无分红配送明细"),
         _display_section("company", "公司相关", rows=[
@@ -178,18 +187,19 @@ def normalize_f10_sections(extended_data: dict[str, dict[str, Any]]) -> dict[str
             if fields.get(key) not in (None, "")
         ], source=profile.get("source")),
     ]
-    holder_sections = holders.get("sections") if isinstance(holders.get("sections"), list) else []
-    if not holder_sections:
-        holder_sections = [
-            _display_section("capital_structure", "股本结构", rows=holders.get("capital_structure"), source=holders.get("source")),
-            _display_section("restricted_release", "限售解禁", rows=holders.get("restricted_release"), source=holders.get("source")),
-            _display_section("institutional", "机构持股", rows=holders.get("institutional"), source=holders.get("source")),
-            _display_section("holder_count", "股东户数", rows=holders.get("holder_count"), source=holders.get("source")),
-            _display_section("top_ten_circulating", "十大流通股东", rows=holders.get("circulating"), source=holders.get("source")),
-            _display_section("top_ten", "十大股东", rows=holders.get("major"), source=holders.get("source")),
-            _display_section("control", "控股股东与实际控制人", rows=holders.get("control"), source=holders.get("source")),
-        ]
-    holders["sections"] = holder_sections
+    # Always rebuild the canonical seven-part holder read model. Older cache
+    # rows may contain only the original ``major``/``circulating`` payloads or
+    # a partial section list; rebuilding keeps the page shape stable without
+    # deleting any raw provider fields from the cache.
+    holders["sections"] = [
+        _display_section("capital_structure", "股本结构", rows=holders.get("capital_structure"), source=holders.get("source")),
+        _display_section("restricted_release", "限售解禁", rows=holders.get("restricted_release"), source=holders.get("source")),
+        _display_section("institutional", "机构持股", rows=holders.get("institutional"), source=holders.get("source")),
+        _display_section("holder_count", "股东户数", rows=holders.get("holder_count"), source=holders.get("source")),
+        _display_section("top_ten_circulating", "十大流通股东", rows=holders.get("circulating"), source=holders.get("source")),
+        _display_section("top_ten", "十大股东", rows=holders.get("major"), source=holders.get("source")),
+        _display_section("control", "控股股东与实际控制人", rows=holders.get("control"), source=holders.get("source")),
+    ]
     composition_rows: list[dict[str, Any]] = []
     for section in composition.get("sections") or []:
         if not isinstance(section, dict):
@@ -214,15 +224,26 @@ def normalize_f10_sections(extended_data: dict[str, dict[str, Any]]) -> dict[str
         _display_section("cash_flow", "现金流量表", rows=(statements.get("cash_flow") or {}).get("rows"), source=statements.get("source")),
     ]
     research = extended_data.setdefault("research_sections", {})
-    if not isinstance(research.get("sections"), list) or not research.get("sections"):
-        research["sections"] = [
-            _display_section("industry_concepts", "行业概念", rows=concepts, source=profile.get("source")),
-            _display_section("qa", "问董秘", rows=research.get("qa"), source=research.get("source"), message="当前未接入问董秘公开接口"),
-            _display_section("earnings_forecast", "盈利预测", rows=research.get("earnings_forecast"), source=research.get("source")),
-            _display_section("institution_forecast", "机构预测（评级统计）", rows=research.get("institution_forecast"), source=research.get("source")),
-            _display_section("latest_reports", "最新研报", rows=research.get("latest_reports"), source=research.get("source")),
-            _display_section("reports", "研报", rows=research.get("reports"), source=research.get("source")),
-        ]
+    # ``latest_reports`` used to be populated with the complete report list.
+    # Normalize old snapshots as a read-model projection so the latest panel
+    # is a strict subset of the full report panel and never duplicates it.
+    reports = research.get("reports")
+    if isinstance(reports, list):
+        research["latest_reports"] = reports[:10]
+    elif isinstance(research.get("latest_reports"), list):
+        research["latest_reports"] = research["latest_reports"][:10]
+    else:
+        research["latest_reports"] = []
+    # Rebuild the fixed six-part research layout for both new and legacy
+    # caches. Raw ``qa``/forecast/report arrays remain untouched above.
+    research["sections"] = [
+        _display_section("industry_concepts", "行业概念", rows=concepts, source=profile.get("source")),
+        _display_section("qa", "问董秘", rows=research.get("qa"), source=research.get("source"), message="当前未接入问董秘公开接口"),
+        _display_section("earnings_forecast", "盈利预测", rows=research.get("earnings_forecast"), source=research.get("source")),
+        _display_section("institution_forecast", "机构预测（评级统计）", rows=research.get("institution_forecast"), source=research.get("source")),
+        _display_section("latest_reports", "最新研报", rows=research.get("latest_reports"), source=research.get("source")),
+        _display_section("reports", "研报", rows=research.get("reports"), source=research.get("source")),
+    ]
     return extended_data
 
 def _load_f10_extended_data(db: Session, market: str, symbol: str) -> dict[str, dict]:

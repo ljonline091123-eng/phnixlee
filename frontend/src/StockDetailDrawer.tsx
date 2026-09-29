@@ -938,6 +938,9 @@ function F10SectionBlock({
 }) {
   const rows = sectionRows(section);
   const status = String(section.status || (rows.length ? "AVAILABLE" : "UNAVAILABLE"));
+  const actionLabel = String(
+    section.action_label || (section.key === "anomaly" ? "融资融券近一个月" : "查看详细数据"),
+  );
   return (
     <section className={`financial-block f10-section-card ${status.toLowerCase()}`}>
       <div className="financial-block-heading">
@@ -956,7 +959,7 @@ function F10SectionBlock({
         )
       ) : <p className="empty-state compact-empty">{String(section.message || "当前数据源未返回该分区数据")}</p>}
       <div className="f10-section-meta"><span>来源：{String(section.source || "暂无")}</span>{section.as_of ? <span>截至：{formatDate(String(section.as_of))}</span> : null}</div>
-      {onOpen ? <button type="button" className="f10-detail-link" onClick={() => onOpen(section)}>查看详细数据</button> : null}
+      {onOpen ? <button type="button" className="f10-detail-link" onClick={() => onOpen({ ...section, detail_title: section.detail_title || actionLabel })}>{actionLabel}</button> : null}
     </section>
   );
 }
@@ -1005,7 +1008,7 @@ function F10Panel({ detail, activeTab, setActiveTab }: { detail: StockF10; activ
       )}
       {activeTab === "简况" && (
         <>
-          {overviewSections.length ? overviewSections.map((section) => <F10SectionBlock key={String(section.key)} section={section} onOpen={openDetail} />) : <F10SectionBlock section={{ key: "basic", title: "基本情况", rows: Object.entries(profileFields).map(([label, value]) => ({ label, value })), source: profile.source }} />}
+          {overviewSections.length ? overviewSections.map((section) => <F10SectionBlock key={String(section.key)} section={section} onOpen={openDetail} />) : <F10SectionBlock section={{ key: "basic", title: "基本情况", rows: Object.entries(profileFields).map(([label, value]) => ({ label, value })), source: profile.source }} onOpen={openDetail} />}
           <section className="financial-block concept-detail-block"><div className="financial-block-heading"><div><span className="financial-section-mark" /><h3>概念</h3></div><button type="button" className="f10-detail-link" onClick={() => openDetail({ key: "concepts", title: "概念详情", rows: asArray(profile.concepts), source: profile.source })}>概念详细解析</button></div><div className="concept-chip-list">{asArray(profile.concepts).length ? asArray(profile.concepts).map((item) => <button type="button" key={String(item.name)} onClick={() => openDetail({ key: "concept", title: String(item.name || "概念详情"), rows: [item], source: profile.source })}>{String(item.name || item.label || "概念")}</button>) : <span>暂无概念数据</span>}</div></section>
         </>
       )}
@@ -1044,7 +1047,7 @@ function F10Panel({ detail, activeTab, setActiveTab }: { detail: StockF10; activ
           ) : null}
         </section>
       )}
-      {detailSection ? <div className="f10-detail-overlay" role="dialog" aria-modal="true"><div className="f10-detail-dialog"><header><h3>{String(detailSection.title || "详细数据")}</h3><button type="button" onClick={closeDetail}>关闭</button></header><div className="f10-detail-body">{sectionRows(detailSection).length ? sectionRows(detailSection).map((row, index) => <div className="f10-detail-row" key={index}><strong>{String(pickValue(row, ["label", "name", "项目", "指标"]) || `项目 ${index + 1}`)}</strong><span>{valueText(pickValue(row, ["value", "data", "内容", "summary"]) ?? row)}</span></div>) : <p className="empty-state">{String(detailSection.message || "当前数据源未返回详细数据")}</p>}<small>来源：{String(detailSection.source || "暂无")}</small></div></div></div> : null}
+      {detailSection ? <div className="f10-detail-overlay" role="dialog" aria-modal="true"><div className="f10-detail-dialog"><header><h3>{String(detailSection.detail_title || detailSection.title || "详细数据")}</h3><button type="button" onClick={closeDetail}>关闭</button></header><div className="f10-detail-body">{sectionRows(detailSection).length ? sectionRows(detailSection).map((row, index) => <div className="f10-detail-row" key={index}><strong>{String(pickValue(row, ["label", "name", "项目", "指标"]) || `项目 ${index + 1}`)}</strong><span>{valueText(pickValue(row, ["value", "data", "内容", "summary"]) ?? row)}</span></div>) : <p className="empty-state">{String(detailSection.message || "当前数据源未返回详细数据")}</p>}<small>来源：{String(detailSection.source || "暂无")}</small></div></div></div> : null}
     </>
   );
 }
