@@ -2902,8 +2902,12 @@ class AkshareAdapter(MarketDataAdapter):
                 return []
             code_column = next((column for column in dataframe.columns if any(token in str(column) for token in ("股票代码", "证券代码", "代码"))), None)
             if code_column is not None:
-                target = str(symbol).zfill(6)
-                dataframe = dataframe[dataframe[code_column].map(lambda value: str(value).strip().zfill(6) == target)]
+                target = cls._normalize_security_code(symbol)
+                dataframe = dataframe[
+                    dataframe[code_column].map(
+                        lambda value: cls._normalize_security_code(value) == target
+                    )
+                ]
             date_column = next((column for column in dataframe.columns if "统计截止日" in str(column) or str(column) in {"截止日期", "截至日期"}), None)
             if date_column:
                 dataframe = dataframe.assign(__sort=pd.to_datetime(dataframe[date_column], errors="coerce"))
