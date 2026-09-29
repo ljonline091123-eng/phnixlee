@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -180,7 +181,11 @@ def test_chunk_continuation_fills_actual_gaps_across_graph_versions(monkeypatch)
             db.add(DocumentChunkVersion(
                 document_key=f"knowledge_document:{documents[0].id}",
                 document_id=str(documents[0].id), chunk_index=0,
-                chunk_version="test:v1", content_hash="1" * 64,
+                chunk_version=(
+                    "test:"
+                    + hashlib.sha256(documents[0].content.encode("utf-8")).hexdigest()[:12]
+                ),
+                content_hash="1" * 64,
                 chunk_text="正文一", parser_version="test",
             ))
             db.add(DocumentChunkVersion(
@@ -189,15 +194,22 @@ def test_chunk_continuation_fills_actual_gaps_across_graph_versions(monkeypatch)
                 chunk_version="collision:v1", content_hash="c" * 64,
                 chunk_text="同号但不属于知识文档的切片", parser_version="test",
             ))
+            db.add(DocumentChunkVersion(
+                document_key=f"knowledge_document:{documents[2].id}",
+                document_id=str(documents[2].id), chunk_index=0,
+                chunk_version="stale:000000000000", content_hash="d" * 64,
+                chunk_text="图谱重建前的旧正文", parser_version="test",
+            ))
             db.commit()
 
         created_document_ids: list[str] = []
 
         def create_chunk(db, *, document_key, document_id, text, **_kwargs):
             created_document_ids.append(str(document_id))
+            source_hash = hashlib.sha256(text.encode("utf-8")).hexdigest()[:12]
             db.add(DocumentChunkVersion(
                 document_key=document_key, document_id=str(document_id), chunk_index=0,
-                chunk_version="test:continued", content_hash=f"{int(document_id):064x}",
+                chunk_version=f"test:{source_hash}", content_hash=f"{int(document_id):064x}",
                 chunk_text=text, parser_version="test",
             ))
             db.commit()

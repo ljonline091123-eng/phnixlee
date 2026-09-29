@@ -7,6 +7,8 @@ tables, and can be moved behind the worker without changing the contracts.
 
 from __future__ import annotations
 
+import hashlib
+import json
 from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
@@ -465,12 +467,14 @@ def run_stock_pipeline(
         "truncated": False,
     }
     if archive_chunks:
+        # Completion is reported for the stock, not for only the currently
+        # selected graph.  A stock can legitimately appear in several
+        # historical graph projections, and GraphRAG can retrieve evidence
+        # from any of them.  Chunk every persisted document in the requested
+        # stock scope; ``create_chunks`` is content-versioned and therefore
+        # safely reuses already current chunks.
         doc_query = select(KnowledgeDocument).where(KnowledgeDocument.market == market,
                                                     KnowledgeDocument.symbol.in_(normalized))
-        if graph:
-            doc_query = doc_query.where(KnowledgeDocument.graph_id == graph.id)
-        elif kb:
-            doc_query = doc_query.where(KnowledgeDocument.knowledge_base_id == kb.id)
         docs = list(db.scalars(doc_query.order_by(KnowledgeDocument.id)).all())
         chunks, chunk_summary = _archive_document_chunks(
             db, docs, chunk_document_limit=chunk_document_limit, priority_document_ids=None,
@@ -505,13 +509,35 @@ def run_stock_pipeline(
                 db.flush()
             elif projection.knowledge_base_id != graph.knowledge_base_id:
                 raise PipelineConflictError("续作投影标识已被其他知识库占用")
+            projection_scope = [
+                {"market": item_market, "symbol": item_symbol}
+                for item_market, item_symbol in pairs
+            ]
+            scope_hash = hashlib.sha256(json.dumps(
+                projection_scope, ensure_ascii=False, sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")).hexdigest()
+            projection.governance_report_json = {
+                **(projection.governance_report_json or {}),
+                "projection_metadata": {
+                    "projection_kind": "PIPELINE_SCOPE_SNAPSHOT",
+                    "base_graph_id": graph.id,
+                    "pipeline_run_id": run.id,
+                    "scope": projection_scope,
+                    "scope_size": len(projection_scope),
+                    "scope_hash": scope_hash,
+                },
+            }
             counts = build_knowledge_graph(
                 db, projection, scope_pairs=pairs,
                 max_documents_per_stock=graph_documents_per_stock,
             )
             graph_result = {"status": "BUILT", "counts": counts,
                             "graph_id": projection.id, "base_graph_id": graph.id,
-                            "projection": True}
+                            "projection": True,
+                            "projection_kind": "PIPELINE_SCOPE_SNAPSHOT",
+                            "scope_size": len(projection_scope),
+                            "scope_hash": scope_hash}
         except Exception as exc:
             graph_result = {"status": "FAILED", "error": str(exc)[:300]}
     # A scoped projection creates fresh KnowledgeDocument IDs.  Archive those

@@ -36,6 +36,7 @@ from app.models.market_data import (
 )
 from app.services.graph_identity import canonical_company_id, canonical_security_id, resolve_many
 from app.services.foundation import facts_query
+from app.services.lakehouse import current_knowledge_document_chunks, knowledge_document_source_hash
 
 
 CONTEXT_VERSION = "GRAPH_RAG_CONTEXT_V3"
@@ -559,8 +560,7 @@ def _lineage_rows(
 
 
 def _document_source_hash(document: KnowledgeDocument) -> str:
-    text = document.content or document.title or ""
-    return hashlib.sha256(text.encode("utf-8")).hexdigest()[:12]
+    return knowledge_document_source_hash(document)
 
 
 def _eligible_chunk_rows(
@@ -569,25 +569,8 @@ def _eligible_chunk_rows(
     cutoff: datetime | None,
 ) -> list[DocumentChunkVersion]:
     """Return current, ready chunks that existed at the point-in-time cutoff."""
-    if not documents:
-        return []
-    expected = {str(row.id): _document_source_hash(row) for row in documents}
-    rows = list(db.scalars(select(DocumentChunkVersion).where(
-        DocumentChunkVersion.document_id.in_(sorted(expected)),
-        DocumentChunkVersion.status == "READY",
-    ).order_by(DocumentChunkVersion.created_at.desc())).all())
-    current: dict[tuple[str, int], DocumentChunkVersion] = {}
-    for row in rows:
-        document_id = str(row.document_id or "")
-        if not _known(row.created_at, cutoff):
-            continue
-        # create_chunks encodes the source-document hash in chunk_version.
-        # Excluding an older source hash prevents stale chunks from being
-        # presented after a KnowledgeDocument has changed.
-        if not str(row.chunk_version or "").endswith(f":{expected.get(document_id, '')}"):
-            continue
-        current.setdefault((document_id, int(row.chunk_index)), row)
-    return list(current.values())
+    grouped = current_knowledge_document_chunks(db, documents, known_at=cutoff)
+    return [row for document in documents for row in grouped.get(str(document.id), [])]
 
 
 def _chunk_payload(row: DocumentChunkVersion) -> dict[str, Any]:

@@ -290,6 +290,55 @@ function VerificationRecord({ record, index }: { record: StockPipelineVerificati
   </article>;
 }
 
+const verificationPageSize = 5;
+
+function PaginatedVerificationList({
+  records,
+  resetKey,
+}: {
+  records: StockPipelineVerificationRecord[];
+  resetKey: string;
+}) {
+  const [page, setPage] = useState(1);
+  const totalPages = Math.max(1, Math.ceil(records.length / verificationPageSize));
+  const currentPage = Math.min(page, totalPages);
+  const startIndex = (currentPage - 1) * verificationPageSize;
+  const visibleRecords = records.slice(startIndex, startIndex + verificationPageSize);
+
+  useEffect(() => {
+    setPage(1);
+  }, [records, resetKey]);
+
+  return <div className="pipeline-verification-browser">
+    <div className="pipeline-verification-list">
+      {visibleRecords.map((record, index) => {
+        const absoluteIndex = startIndex + index;
+        return <VerificationRecord
+          key={`${record.record_id ?? absoluteIndex}:${absoluteIndex}`}
+          record={record}
+          index={absoluteIndex}
+        />;
+      })}
+    </div>
+    {totalPages > 1 && <nav className="pipeline-record-pagination" aria-label="核验记录分页">
+      <span>共 {records.length} 条 · 每页 {verificationPageSize} 条</span>
+      <div>
+        <button
+          type="button"
+          disabled={currentPage <= 1}
+          onClick={() => setPage(Math.max(1, currentPage - 1))}
+        >上一页</button>
+        <b aria-live="polite">第 {currentPage} / {totalPages} 页</b>
+        <button
+          type="button"
+          disabled={currentPage >= totalPages}
+          onClick={() => setPage(Math.min(totalPages, currentPage + 1))}
+        >下一页</button>
+      </div>
+    </nav>}
+  </div>;
+}
+
 function LatestAttempt({ value }: { value: string | Record<string, unknown> }) {
   if (typeof value === "string") return <p className="pipeline-latest-attempt-text">{value}</p>;
   const priority = [
@@ -307,6 +356,7 @@ function LatestAttempt({ value }: { value: string | Record<string, unknown> }) {
 
 function DetailItem({
   item,
+  resetKey,
   incomplete = false,
   continuing = false,
   continueDisabled = false,
@@ -315,6 +365,7 @@ function DetailItem({
   onContinue,
 }: {
   item: StockPipelineDetailItem;
+  resetKey: string;
   incomplete?: boolean;
   continuing?: boolean;
   continueDisabled?: boolean;
@@ -337,7 +388,7 @@ function DetailItem({
       {item.action_hint && <p className="pipeline-detail-action"><b>建议：</b>{item.action_hint}</p>}
       {incomplete && !canContinue && blockedReason && <p className="pipeline-detail-blocked"><b>暂不可续作：</b>{blockedReason}</p>}
       {latestAttempt && <details className="pipeline-latest-attempt"><summary>查看最近一次执行信息</summary><LatestAttempt value={latestAttempt} /></details>}
-      {!!records.length && <div className="pipeline-verification-list">{records.map((record, index) => <VerificationRecord key={`${record.record_id ?? index}:${index}`} record={record} index={index} />)}</div>}
+      {!!records.length && <PaginatedVerificationList records={records} resetKey={`${resetKey}:${item.code}`} />}
       {!records.length && !item.reason && <p className="pipeline-detail-muted">状态已由数据库记录核验；当前接口未返回单条样本，可通过下方核验入口或对应业务页面继续查看。</p>}
       <div className="pipeline-detail-item-actions">
         {apiUrl && <a className="pipeline-api-link" href={apiUrl} target="_blank" rel="noopener noreferrer">打开核验接口 ↗</a>}
@@ -494,6 +545,7 @@ export function StockPipelineStatusDialog({
   const taskBusy = !!continuingKey || continuationActive || refreshingAfterJob;
   const progress = jobProgress(continuationJob);
   const taskError = jobError(continuationJob);
+  const detailResetKey = `${stock.market}:${stock.symbol}:${kind}`;
 
   async function continueIncomplete(itemCodes: string[], actionKey: string) {
     if (!itemCodes.length || continuationLock.current || continuationActive) return;
@@ -558,7 +610,7 @@ export function StockPipelineStatusDialog({
         <section className="pipeline-detail-section">
           <header><div><h4>已完成内容</h4><p>点击具体项目可查看记录数量、更新时间、样本数据和核验入口。</p></div><span>{completed.length} 项</span></header>
           <div className="pipeline-detail-list">
-            {completed.map((item) => <DetailItem key={item.code} item={item} />)}
+            {completed.map((item) => <DetailItem key={item.code} item={item} resetKey={detailResetKey} />)}
             {!completed.length && <p className="pipeline-detail-empty">该阶段尚无已完成项目。</p>}
           </div>
         </section>
@@ -588,6 +640,7 @@ export function StockPipelineStatusDialog({
             {incomplete.map((item) => <DetailItem
               key={item.code}
               item={item}
+              resetKey={detailResetKey}
               incomplete
               continuing={continuingKey === item.code}
               continueDisabled={taskBusy || loading}
@@ -606,8 +659,8 @@ export function StockPipelineStatusDialog({
         </section>
 
         {!!verificationRecords.length && !itemRecordsAvailable && <section className="pipeline-detail-section">
-          <header><div><h4>阶段核验样本</h4><p>接口返回 {stage.verification?.total_count?.toLocaleString() || verificationRecords.length} 条可核验记录，当前展示最多 {verificationRecords.length} 条。</p></div></header>
-          <div className="pipeline-verification-list">{verificationRecords.map((record, index) => <VerificationRecord key={`${record.record_id ?? index}:${index}`} record={record} index={index} />)}</div>
+          <header><div><h4>阶段核验样本</h4><p>共核验 {stage.verification?.total_count?.toLocaleString() || verificationRecords.length} 条记录，可分页查看当前返回的 {verificationRecords.length} 条。</p></div></header>
+          <PaginatedVerificationList records={verificationRecords} resetKey={`${detailResetKey}:stage-verification`} />
         </section>}
 
         {!!stage.notes?.length && <section className="pipeline-detail-notes"><strong>口径说明</strong><ul>{stage.notes.map((note, index) => <li key={index}>{note}</li>)}</ul></section>}

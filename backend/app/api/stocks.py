@@ -48,7 +48,7 @@ from app.models.market_data import (
     WatchlistItem,
 )
 from app.models.ai_hub import KnowledgeDocument, KnowledgeEntity, KnowledgeGraph, KnowledgeRelation
-from app.models.lakehouse import DocumentChunkVersion
+from app.models.pipeline import PipelineRun
 from app.schemas.market_data import (
     DataFetchLogRead,
     DataSyncLogRead,
@@ -90,6 +90,7 @@ from app.api.stock_batch import (
     submit_stock_batch_governance,
 )
 from app.services.ipo_calendar import IpoCalendarService
+from app.services.lakehouse import current_knowledge_document_chunk_counts
 from app.services.stock_on_demand import OnDemandFetchError, StockOnDemandService
 
 router = APIRouter(prefix="/stocks", tags=["Stock Master Data"])
@@ -451,42 +452,15 @@ def _stock_pipeline_statuses(db: Session, stocks: list[StockSymbol]) -> dict[tup
     # several document domains, so the canonical knowledge-document key must
     # participate in the match to avoid treating e.g. ``notice:1`` as chunks
     # for ``knowledge_document:1``.
-    document_rows = db.execute(
-        select(
-            KnowledgeDocument.id,
-            KnowledgeDocument.market,
-            KnowledgeDocument.symbol,
-            KnowledgeDocument.updated_at,
-            KnowledgeDocument.graph_id,
-        ).where(pair_filter(KnowledgeDocument))
-    ).all()
+    document_rows = list(db.scalars(
+        select(KnowledgeDocument).where(pair_filter(KnowledgeDocument))
+    ).all())
     documents_by_key: dict[tuple[str, str], list[Any]] = {key: [] for key in keys}
-    document_ids: list[str] = []
-    for document_id, market, symbol, updated_at, graph_id in document_rows:
-        key = (market, symbol)
-        row = (str(document_id), updated_at, graph_id)
+    for document in document_rows:
+        key = (document.market, document.symbol)
+        row = (str(document.id), document.updated_at, document.graph_id)
         documents_by_key.setdefault(key, []).append(row)
-        document_ids.append(str(document_id))
-
-    chunk_counts: dict[str, int] = {}
-    if document_ids:
-        # A source may produce many documents per stock.  Chunk this IN list
-        # as well, otherwise a large page could exceed SQLite's bind limit.
-        for offset in range(0, len(document_ids), 500):
-            document_batch = document_ids[offset : offset + 500]
-            document_keys = {
-                f"knowledge_document:{document_id}": document_id
-                for document_id in document_batch
-            }
-            chunk_rows = db.execute(
-                select(DocumentChunkVersion.document_key, func.count().label("chunk_count"))
-                .where(DocumentChunkVersion.document_key.in_(list(document_keys)))
-                .group_by(DocumentChunkVersion.document_key)
-            ).all()
-            for document_key, count in chunk_rows:
-                document_id = document_keys.get(str(document_key))
-                if document_id is not None:
-                    chunk_counts[document_id] = int(count or 0)
+    chunk_counts = current_knowledge_document_chunk_counts(db, document_rows)
 
     graph_ids_by_key: dict[tuple[str, str], set[int]] = {key: set() for key in keys}
     kb_parts: dict[tuple[str, str], dict[str, Any]] = {}
@@ -954,25 +928,11 @@ def _data_collection_stage_detail(
     }
 
 
-def _document_chunk_counts(db: Session, document_ids: list[str]) -> dict[str, int]:
-    counts: dict[str, int] = {}
-    for offset in range(0, len(document_ids), 500):
-        batch = document_ids[offset : offset + 500]
-        if not batch:
-            continue
-        document_keys = {
-            f"knowledge_document:{document_id}": document_id
-            for document_id in batch
-        }
-        for document_key, count in db.execute(
-            select(DocumentChunkVersion.document_key, func.count())
-            .where(DocumentChunkVersion.document_key.in_(list(document_keys)))
-            .group_by(DocumentChunkVersion.document_key)
-        ).all():
-            document_id = document_keys.get(str(document_key))
-            if document_id is not None:
-                counts[document_id] = int(count or 0)
-    return counts
+def _document_chunk_counts(
+    db: Session,
+    documents: list[KnowledgeDocument],
+) -> dict[str, int]:
+    return current_knowledge_document_chunk_counts(db, documents)
 
 
 def _knowledge_base_stage_detail(
@@ -987,7 +947,7 @@ def _knowledge_base_stage_detail(
         .where(KnowledgeDocument.market == stock.market, KnowledgeDocument.symbol == stock.symbol)
         .order_by(KnowledgeDocument.updated_at.desc(), KnowledgeDocument.id.desc())
     ).all())
-    chunk_counts = _document_chunk_counts(db, [str(row.id) for row in documents])
+    chunk_counts = _document_chunk_counts(db, documents)
     chunked = [row for row in documents if chunk_counts.get(str(row.id), 0) > 0]
     unchunked = [row for row in documents if chunk_counts.get(str(row.id), 0) <= 0]
 
@@ -1110,6 +1070,136 @@ def _knowledge_graph_stage_detail(
         select(KnowledgeGraph).where(KnowledgeGraph.id.in_(sorted(graph_ids)))
         .order_by(KnowledgeGraph.updated_at.desc(), KnowledgeGraph.id.desc())
     ).all()) if graph_ids else []
+    document_scopes: dict[int, list[dict[str, str]]] = {}
+    if graph_ids:
+        for graph_id, market, symbol in db.execute(
+            select(
+                KnowledgeDocument.graph_id,
+                KnowledgeDocument.market,
+                KnowledgeDocument.symbol,
+            )
+            .where(
+                KnowledgeDocument.graph_id.in_(sorted(graph_ids)),
+                KnowledgeDocument.market.is_not(None),
+                KnowledgeDocument.symbol.is_not(None),
+            )
+            .distinct()
+            .order_by(
+                KnowledgeDocument.graph_id,
+                KnowledgeDocument.market,
+                KnowledgeDocument.symbol,
+            )
+        ).all():
+            document_scopes.setdefault(int(graph_id), []).append({
+                "market": str(market),
+                "symbol": str(symbol),
+            })
+
+    def positive_int(value: Any) -> int | None:
+        try:
+            result = int(value)
+        except (TypeError, ValueError):
+            return None
+        return result if result > 0 else None
+
+    def projection_run_id(row: KnowledgeGraph) -> int | None:
+        report = row.governance_report_json or {}
+        metadata = report.get("projection_metadata") or {}
+        explicit = positive_int(metadata.get("pipeline_run_id"))
+        if explicit:
+            return explicit
+        # Historical projections predate projection_metadata. Their stable
+        # graph-code suffix still provides an auditable link to PipelineRun.
+        marker = "_PIPE_"
+        code = str(row.graph_code or "")
+        if marker not in code:
+            return None
+        suffix = code.rsplit(marker, 1)[-1]
+        return positive_int(suffix) if suffix.isdigit() else None
+
+    projection_run_ids = {
+        run_id for row in graphs if (run_id := projection_run_id(row)) is not None
+    }
+    pipeline_runs = {
+        row.id: row
+        for row in db.scalars(
+            select(PipelineRun).where(PipelineRun.id.in_(sorted(projection_run_ids)))
+        ).all()
+    } if projection_run_ids else {}
+
+    projection_kind_labels = {
+        "PIPELINE_SCOPE_SNAPSHOT": "管道范围快照",
+        "PIPELINE_PROJECTION": "管道投影",
+        "LAKEHOUSE_VALIDATION": "湖仓验收图谱",
+        "BASE_GRAPH": "基础图谱",
+    }
+
+    def normalized_scope(value: Any) -> list[dict[str, str]]:
+        if not isinstance(value, list):
+            return []
+        result: list[dict[str, str]] = []
+        seen: set[tuple[str, str]] = set()
+        for item in value:
+            if not isinstance(item, dict):
+                continue
+            market = str(item.get("market") or "").strip().upper()
+            symbol = str(item.get("symbol") or "").strip().upper()
+            if not market or not symbol or (market, symbol) in seen:
+                continue
+            seen.add((market, symbol))
+            result.append({"market": market, "symbol": symbol})
+        return result
+
+    def projection_fields(row: KnowledgeGraph) -> dict[str, Any]:
+        report = row.governance_report_json or {}
+        metadata = report.get("projection_metadata") or {}
+        run_id = projection_run_id(row)
+        pipeline_run = pipeline_runs.get(run_id) if run_id else None
+        run_input = (pipeline_run.input_json or {}) if pipeline_run else {}
+        run_output = (pipeline_run.output_json or {}) if pipeline_run else {}
+
+        scope = normalized_scope(metadata.get("scope"))
+        if not scope:
+            scope = normalized_scope(report.get("scope"))
+        if not scope and run_input.get("market") and isinstance(run_input.get("symbols"), list):
+            scope = normalized_scope([
+                {"market": run_input.get("market"), "symbol": symbol}
+                for symbol in run_input["symbols"]
+            ])
+        if not scope:
+            scope = document_scopes.get(row.id, [])
+
+        scope_size = positive_int(metadata.get("scope_size")) or len(scope)
+        scope_preview = "、".join(
+            f"{item['market']}:{item['symbol']}" for item in scope[:5]
+        )
+        if scope_size > 5:
+            scope_preview = f"{scope_preview} 等 {scope_size} 只"
+        elif not scope_preview:
+            scope_preview = "未记录"
+
+        kind_code = str(metadata.get("projection_kind") or "").strip().upper()
+        if not kind_code:
+            if run_id:
+                kind_code = "PIPELINE_PROJECTION"
+            elif "LAKEHOUSE" in str(row.graph_code or "").upper() or report.get("validation"):
+                kind_code = "LAKEHOUSE_VALIDATION"
+            else:
+                kind_code = "BASE_GRAPH"
+
+        base_graph_id = positive_int(metadata.get("base_graph_id"))
+        if base_graph_id is None and run_id:
+            base_graph_id = (
+                positive_int(run_output.get("base_graph_id"))
+                or positive_int(run_input.get("graph_id"))
+            )
+        return {
+            "投影类型": projection_kind_labels.get(kind_code, kind_code or "基础图谱"),
+            "来源管道ID": run_id,
+            "覆盖范围": scope_preview,
+            "覆盖股票数": scope_size,
+            "基础图谱ID": base_graph_id,
+        }
     entities: list[KnowledgeEntity] = []
     if graph_ids:
         suffix = f":{stock.market}:{stock.symbol}"
@@ -1157,8 +1247,12 @@ def _knowledge_graph_stage_detail(
                     "治理状态": row.governance_status, "实体数": row.entity_count,
                     "关系数": row.relation_count, "来源表": row.source_tables},
         )
-        for row in graphs[:sample_limit]
+        # Unlike generic data samples, graph projections form a complete list
+        # that the client paginates. Do not silently hide records after five.
+        for row in graphs
     ]
+    for row, record in zip(graphs, graph_records):
+        record["fields"].update(projection_fields(row))
     entity_records = [
         _pipeline_record(
             record_id=row.id, title=row.entity_name, observed_at=row.updated_at,

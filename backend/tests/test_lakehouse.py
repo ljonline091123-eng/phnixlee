@@ -1,3 +1,6 @@
+from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
+
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
@@ -36,6 +39,73 @@ def test_filesystem_object_store_and_idempotent_versioned_chunks(tmp_path, monke
         assert second["reused_count"] == first["chunk_count"]
         assert db.query(lakehouse.LakeLineageEvent).count() == first["created_count"] + 2
         assert lakehouse.storage_health()["healthy"] is True
+
+
+def test_current_knowledge_document_chunks_reject_stale_collision_and_nonready_versions():
+    now = datetime(2026, 9, 29, tzinfo=timezone.utc)
+    document = SimpleNamespace(id=7, content="当前正文", title="标题")
+    expected = lakehouse.knowledge_document_source_hash(document)
+    with Session(_engine()) as db:
+        db.add_all([
+            lakehouse.DocumentChunkVersion(
+                document_key="knowledge_document:7", document_id="7", chunk_index=0,
+                chunk_version=f"OLD:{'0' * 12}", content_hash="1" * 64,
+                chunk_text="旧正文", parser_version="OLD", status="READY",
+                created_at=now - timedelta(days=1),
+            ),
+            lakehouse.DocumentChunkVersion(
+                document_key="notice:7", document_id="7", chunk_index=1,
+                chunk_version=f"TEST:{expected}", content_hash="2" * 64,
+                chunk_text="其他文档域", parser_version="TEST", status="READY",
+                created_at=now,
+            ),
+            lakehouse.DocumentChunkVersion(
+                document_key="knowledge_document:7", document_id="7", chunk_index=2,
+                chunk_version=f"TEST:{expected}", content_hash="3" * 64,
+                chunk_text="未就绪", parser_version="TEST", status="FAILED",
+                created_at=now,
+            ),
+            lakehouse.DocumentChunkVersion(
+                document_key="knowledge_document:7", document_id="7", chunk_index=0,
+                chunk_version=f"TEST:{expected}", content_hash="4" * 64,
+                chunk_text="当前版本", parser_version="TEST", status="READY",
+                created_at=now,
+            ),
+            lakehouse.DocumentChunkVersion(
+                document_key="knowledge_document:7", document_id="7", chunk_index=3,
+                chunk_version=f"FUTURE:{expected}", content_hash="5" * 64,
+                chunk_text="未来才可用", parser_version="FUTURE", status="READY",
+                created_at=now + timedelta(days=1),
+            ),
+        ])
+        db.commit()
+
+        current = lakehouse.current_knowledge_document_chunks(db, [document], known_at=now)
+        assert [row.chunk_text for row in current["7"]] == ["当前版本"]
+        assert lakehouse.current_knowledge_document_chunk_counts(
+            db, [document], known_at=now,
+        ) == {"7": 1}
+        assert len(lakehouse.current_knowledge_document_chunks(db, [document])["7"]) == 2
+
+
+def test_current_knowledge_document_chunks_batches_more_than_sqlite_bind_limit():
+    documents = [SimpleNamespace(id=index, content=f"正文{index}", title="") for index in range(1, 502)]
+    with Session(_engine()) as db:
+        for document in (documents[0], documents[-1]):
+            source_hash = lakehouse.knowledge_document_source_hash(document)
+            db.add(lakehouse.DocumentChunkVersion(
+                document_key=f"knowledge_document:{document.id}",
+                document_id=str(document.id), chunk_index=0,
+                chunk_version=f"TEST:{source_hash}", content_hash=f"{document.id:064x}",
+                chunk_text=document.content, parser_version="TEST", status="READY",
+            ))
+        db.commit()
+
+        counts = lakehouse.current_knowledge_document_chunk_counts(db, documents)
+        assert len(counts) == 501
+        assert counts["1"] == 1
+        assert counts["501"] == 1
+        assert sum(counts.values()) == 2
 
 
 def test_content_dedup_preserves_each_logical_layer_and_source_binding(tmp_path, monkeypatch):

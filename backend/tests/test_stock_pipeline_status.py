@@ -25,8 +25,9 @@ from app.models.market_data import (
     StockRealtimeQuote,
     StockSymbol,
 )
-from app.models.pipeline import ScheduledJob
+from app.models.pipeline import PipelineRun, ScheduledJob
 from app.schemas.stock_batch import StockPipelineContinuationRequest
+from app.services.lakehouse import knowledge_document_source_hash
 
 
 class StockPipelineStatusTest(unittest.TestCase):
@@ -123,7 +124,7 @@ class StockPipelineStatusTest(unittest.TestCase):
             document_key=f"knowledge_document:{document.id}",
             document_id=str(document.id),
             chunk_index=0,
-            chunk_version="v1",
+            chunk_version=f"test:{knowledge_document_source_hash(document)}",
             content_hash="a" * 64,
             chunk_text="测试正文",
             parser_version="test",
@@ -216,6 +217,28 @@ class StockPipelineStatusTest(unittest.TestCase):
             chunk_text="同号但不属于知识文档的切片",
             parser_version="test",
         ))
+        self.db.add_all([
+            DocumentChunkVersion(
+                document_key=f"knowledge_document:{document.id}",
+                document_id=str(document.id),
+                chunk_index=0,
+                chunk_version="test:stale-source-hash",
+                content_hash="d" * 64,
+                chunk_text="正文已经变化前留下的过期切片",
+                parser_version="test",
+                status="READY",
+            ),
+            DocumentChunkVersion(
+                document_key=f"knowledge_document:{document.id}",
+                document_id=str(document.id),
+                chunk_index=1,
+                chunk_version=f"test:{knowledge_document_source_hash(document)}",
+                content_hash="e" * 64,
+                chunk_text="哈希匹配但处理失败的切片",
+                parser_version="test",
+                status="FAILED",
+            ),
+        ])
         self.db.commit()
 
         detail = get_stock_pipeline_status_detail(
@@ -472,6 +495,87 @@ class StockPipelineStatusTest(unittest.TestCase):
             f"/api/v1/resources/knowledge-graphs/{graph.id}/explore",
             completed["GRAPH_PROJECTION"]["verification_path"],
         )
+
+    def test_graph_projection_records_are_complete_and_describe_legacy_pipeline_scope(self) -> None:
+        kb = KnowledgeBase(
+            kb_code="GRAPH_PAGE_KB",
+            kb_name="图谱分页测试知识库",
+            source_tables=["stock_symbol"],
+        )
+        self.db.add(kb)
+        self.db.flush()
+        base_graph = KnowledgeGraph(
+            knowledge_base_id=kb.id,
+            graph_code="GRAPH_PAGE_BASE",
+            graph_name="图谱分页基础图谱",
+            source_tables=["stock_symbol"],
+        )
+        self.db.add(base_graph)
+        self.db.flush()
+        pipeline_run = PipelineRun(
+            pipeline_type="STOCK_KNOWLEDGE_LAKEHOUSE",
+            trigger_type="API",
+            status="COMPLETED",
+            input_json={
+                "market": "CN_A",
+                "symbols": ["000001", "600000"],
+                "graph_id": base_graph.id,
+            },
+            output_json={"base_graph_id": base_graph.id},
+        )
+        self.db.add(pipeline_run)
+        self.db.flush()
+        legacy_projection = KnowledgeGraph(
+            knowledge_base_id=kb.id,
+            graph_code=f"GRAPH_PAGE_BASE_PIPE_{pipeline_run.id}",
+            graph_name="历史管道投影",
+            source_tables=["stock_symbol"],
+        )
+        self.db.add(legacy_projection)
+        self.db.flush()
+        graphs = [base_graph, legacy_projection]
+        for index in range(5):
+            graph = KnowledgeGraph(
+                knowledge_base_id=kb.id,
+                graph_code=f"GRAPH_PAGE_{index}",
+                graph_name=f"历史图谱 {index}",
+                source_tables=["stock_symbol"],
+            )
+            self.db.add(graph)
+            self.db.flush()
+            graphs.append(graph)
+        for graph in graphs:
+            self.db.add(KnowledgeDocument(
+                knowledge_base_id=kb.id,
+                graph_id=graph.id,
+                source_table="stock_symbol",
+                source_record_id=self.stock.id,
+                market="CN_A",
+                symbol="000001",
+                title=f"{graph.graph_name}证据",
+                content="证券主数据证据",
+            ))
+        self.db.commit()
+
+        detail = get_stock_pipeline_status_detail(
+            market="CN_A", symbol="000001", sample_limit=5, db=self.db,
+        )
+        graph_stage = detail["stages"]["knowledge_graph"]
+        completed = {item["code"]: item for item in graph_stage["completed_items"]}
+        records = completed["GRAPH_PROJECTION"]["records"]
+
+        self.assertEqual(graph_stage["verification"]["graph_count"], 7)
+        self.assertEqual(len(records), 7)
+        self.assertEqual(len(graph_stage["verification"]["graphs"]), 7)
+        projection_record = next(
+            item for item in records if item["record_id"] == str(legacy_projection.id)
+        )
+        self.assertEqual(projection_record["fields"]["投影类型"], "管道投影")
+        self.assertEqual(projection_record["fields"]["来源管道ID"], pipeline_run.id)
+        self.assertEqual(projection_record["fields"]["基础图谱ID"], base_graph.id)
+        self.assertEqual(projection_record["fields"]["覆盖股票数"], 2)
+        self.assertIn("CN_A:000001", projection_record["fields"]["覆盖范围"])
+        self.assertIn("CN_A:600000", projection_record["fields"]["覆盖范围"])
 
     def test_detail_rejects_invalid_scope_and_missing_stock(self) -> None:
         with self.assertRaises(HTTPException) as invalid_limit:

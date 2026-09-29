@@ -112,6 +112,96 @@ def test_scoped_graph_build_creates_projection_without_replacing_base_graph(monk
         assert len(projection.graph_code) <= 64
         assert len(projection.graph_name) <= 128
         assert projection.graph_code.endswith(f"_PIPE_{result['pipeline_run_id']}")
+        metadata = projection.governance_report_json["projection_metadata"]
+        assert metadata["projection_kind"] == "PIPELINE_SCOPE_SNAPSHOT"
+        assert metadata["pipeline_run_id"] == result["pipeline_run_id"]
+        assert metadata["base_graph_id"] == graph.id
+        assert metadata["scope"] == [{"market": "CN_A", "symbol": "000001"}]
+        assert metadata["scope_size"] == 1
+        assert len(metadata["scope_hash"]) == 64
+    engine.dispose()
+
+
+def test_pipeline_chunks_stock_documents_across_all_historical_graphs(monkeypatch):
+    engine = _db()
+    with Session(engine) as db:
+        kb, selected_graph = _seed(db)
+        historical_graph = KnowledgeGraph(
+            knowledge_base_id=kb.id,
+            graph_code="HISTORICAL_GRAPH",
+            graph_name="历史投影",
+            source_tables=["stock_symbol"],
+            governance_status="PENDING",
+        )
+        other_kb = KnowledgeBase(kb_code="OTHER_KB", kb_name="其他知识库")
+        db.add_all([historical_graph, other_kb])
+        db.flush()
+        other_graph = KnowledgeGraph(
+            knowledge_base_id=other_kb.id,
+            graph_code="OTHER_GRAPH",
+            graph_name="其他知识库投影",
+            governance_status="PENDING",
+        )
+        db.add(other_graph)
+        db.flush()
+        documents = [
+            KnowledgeDocument(
+                knowledge_base_id=target.knowledge_base_id,
+                graph_id=target.id,
+                source_table="stock_news",
+                source_record_id=str(index),
+                market="CN_A",
+                symbol="000001",
+                title=f"文档{index}",
+                content=f"正文{index}",
+            )
+            for index, target in enumerate(
+                (selected_graph, historical_graph, other_graph), start=1,
+            )
+        ]
+        db.add_all(documents)
+        db.commit()
+
+        monkeypatch.setattr(
+            knowledge_pipeline.lakehouse,
+            "assess_dataset_source",
+            lambda *args, **kwargs: {"passed": True, "level": "PASS"},
+        )
+        captured: list[int] = []
+
+        def archive(_db, rows, **_kwargs):
+            captured.extend(row.id for row in rows)
+            count = len(rows)
+            return ({str(row.id): {"chunk_count": 1} for row in rows}, {
+                "documents_total": count,
+                "documents_selected": count,
+                "documents_with_chunks": count,
+                "coverage_ratio": 1.0,
+                "document_selection_ratio": 1.0,
+                "successful_chunk_ratio": 1.0,
+                "coverage_status": "COMPLETE",
+                "securities_total": 1,
+                "securities_selected": 1,
+                "security_selection_ratio": 1.0,
+                "truncated": False,
+                "failed_documents": 0,
+            })
+
+        monkeypatch.setattr(knowledge_pipeline, "_archive_document_chunks", archive)
+        result = knowledge_pipeline.run_stock_pipeline(
+            db,
+            market="CN_A",
+            symbols=["000001"],
+            graph_id=selected_graph.id,
+            export_lakehouse=False,
+            archive_chunks=True,
+            run_graph=False,
+            include_company_tables=False,
+        )
+
+        assert set(captured) == {document.id for document in documents}
+        assert result["chunks"]["documents_total"] == 3
+        assert result["chunks"]["documents_with_chunks"] == 3
     engine.dispose()
 
 

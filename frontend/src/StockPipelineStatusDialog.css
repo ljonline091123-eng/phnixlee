@@ -373,6 +373,59 @@
   gap: 8px;
 }
 
+.pipeline-verification-browser {
+  display: grid;
+  gap: 10px;
+}
+
+.pipeline-record-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 2px;
+  color: var(--text-muted);
+  font-size: 10px;
+}
+
+.pipeline-record-pagination > div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pipeline-record-pagination b {
+  min-width: 72px;
+  color: var(--text);
+  text-align: center;
+  font-size: 10px;
+}
+
+.pipeline-record-pagination button {
+  min-height: 28px;
+  padding: 4px 9px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--accent-strong);
+  background: #fff;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.pipeline-record-pagination button:hover:not(:disabled),
+.pipeline-record-pagination button:focus-visible:not(:disabled) {
+  border-color: var(--accent-strong);
+  background: #f1f7f1;
+  outline: none;
+}
+
+.pipeline-record-pagination button:disabled {
+  color: var(--text-muted);
+  opacity: .52;
+  cursor: not-allowed;
+}
+
 .pipeline-verification-record {
   display: grid;
   gap: 8px;
@@ -469,4 +522,6 @@
   .pipeline-continuation-progress > header,
   .pipeline-continuation-progress > footer { align-items: flex-start; flex-direction: column; }
   .pipeline-verification-record dl { grid-template-columns: 1fr; }
+  .pipeline-record-pagination { align-items: flex-start; flex-direction: column; }
+  .pipeline-record-pagination > div { width: 100%; justify-content: space-between; }
 }

@@ -16,7 +16,6 @@ from sqlalchemy.orm import Session
 from app.core.markets import MARKET_CN_A, digit_length_for_market
 from app.db.session import SessionLocal
 from app.models.ai_hub import KnowledgeDocument
-from app.models.lakehouse import DocumentChunkVersion
 from app.models.market_data import DataFetchLog, DataSource, StockSymbol
 from app.models.pipeline import PipelineRun
 from app.schemas.stock_batch import (
@@ -26,6 +25,7 @@ from app.schemas.stock_batch import (
     StockBatchGovernanceRequest,
 )
 from app.services import lakehouse
+from app.services.lakehouse import current_knowledge_document_chunk_counts
 from app.services.catalog import select_data_source
 from app.services.f10 import _fetch_and_cache_f10_extended_data, _section_has_payload
 from app.services.knowledge_pipeline import run_stock_pipeline
@@ -181,26 +181,9 @@ def _save_progress(
     db.commit()
 
 
-def _chunked_document_ids(db: Session, document_ids: list[str]) -> set[str]:
-    chunked: set[str] = set()
-    for offset in range(0, len(document_ids), 500):
-        batch = document_ids[offset : offset + 500]
-        if not batch:
-            continue
-        document_keys = {
-            f"knowledge_document:{document_id}": document_id
-            for document_id in batch
-        }
-        chunked.update(
-            document_keys[str(item)]
-            for item in db.scalars(
-                select(DocumentChunkVersion.document_key)
-                .where(DocumentChunkVersion.document_key.in_(list(document_keys)))
-                .distinct()
-            ).all()
-            if item is not None and str(item) in document_keys
-        )
-    return chunked
+def _chunked_document_ids(db: Session, documents: list[KnowledgeDocument]) -> set[str]:
+    counts = current_knowledge_document_chunk_counts(db, documents)
+    return {document_id for document_id, count in counts.items() if count > 0}
 
 
 def _complete_missing_document_chunks(db: Session, stock: StockSymbol) -> dict[str, Any]:
@@ -213,8 +196,7 @@ def _complete_missing_document_chunks(db: Session, stock: StockSymbol) -> dict[s
         )
         .order_by(KnowledgeDocument.id)
     ).all())
-    document_ids = [str(document.id) for document in documents]
-    before_chunked = _chunked_document_ids(db, document_ids)
+    before_chunked = _chunked_document_ids(db, documents)
     missing = [document for document in documents if str(document.id) not in before_chunked]
     failures: list[dict[str, Any]] = []
     result_samples: list[dict[str, Any]] = []
@@ -258,7 +240,7 @@ def _complete_missing_document_chunks(db: Session, stock: StockSymbol) -> dict[s
                 "error": f"{type(exc).__name__}: {str(exc)[:300]}",
             })
 
-    after_chunked = _chunked_document_ids(db, document_ids)
+    after_chunked = _chunked_document_ids(db, documents)
     remaining_ids = [
         int(document.id) for document in documents if str(document.id) not in after_chunked
     ]

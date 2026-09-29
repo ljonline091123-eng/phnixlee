@@ -69,7 +69,18 @@ def _ensure_graph(db: Session, scope: list[dict[str, Any]]) -> KnowledgeGraph:
         db.add(graph)
         db.flush()
     graph.source_tables = GRAPH_SOURCES
-    graph.governance_report_json = {"scope": [{"market": item["market"], "symbol": item["symbol"]} for item in scope]}
+    validation_scope = [{"market": item["market"], "symbol": item["symbol"]} for item in scope]
+    graph.governance_report_json = {
+        **(graph.governance_report_json or {}),
+        "scope": validation_scope,
+        "projection_metadata": {
+            "projection_kind": "LAKEHOUSE_VALIDATION",
+            "base_graph_id": None,
+            "pipeline_run_id": None,
+            "scope": validation_scope,
+            "scope_size": len(validation_scope),
+        },
+    }
     return graph
 
 
@@ -103,18 +114,35 @@ def run_validation(db: Session, count: int = 20) -> dict[str, Any]:
 
     archived_documents = 0
     created_chunks = 0
-    for market, symbol in pairs:
-        for source_table in ("stock_news", "stock_notice", "stock_context_event", "research_report"):
-            documents = db.scalars(select(KnowledgeDocument).where(
-                KnowledgeDocument.graph_id == graph.id, KnowledgeDocument.market == market,
-                KnowledgeDocument.symbol == symbol, KnowledgeDocument.source_table == source_table)
-                .order_by(KnowledgeDocument.id.desc()).limit(2)).all()
-            for document in documents:
-                result = lakehouse.create_chunks(db, document_key=f"knowledge_document:{document.id}",
-                    document_id=str(document.id), text=document.content or document.title,
-                    parser_version="TEXT_V1", archive_original=True)
-                archived_documents += 1
-                created_chunks += result["created_count"]
+    reused_chunks = 0
+    # The validation graph is an end-to-end acceptance artifact.  Sampling
+    # only two documents per source made every stock look permanently
+    # partially chunked and did not verify the real GraphRAG corpus.  Process
+    # the complete materialized graph; chunk creation remains idempotent and
+    # content-versioned.
+    documents = list(db.scalars(select(KnowledgeDocument).where(
+        KnowledgeDocument.graph_id == graph.id,
+        KnowledgeDocument.market.in_([market for market, _symbol in pairs]),
+        KnowledgeDocument.symbol.in_([symbol for _market, symbol in pairs]),
+    ).order_by(KnowledgeDocument.id)).all())
+    scoped_pairs = set(pairs)
+    documents = [
+        document for document in documents
+        if (document.market, document.symbol) in scoped_pairs
+    ]
+    for document in documents:
+        result = lakehouse.create_chunks(
+            db,
+            document_key=f"knowledge_document:{document.id}",
+            document_id=str(document.id),
+            text=document.content or document.title,
+            parser_version="PIPELINE_STRUCTURE_V1",
+            embedding_model="HASH_EMBED_V1",
+            archive_original=True,
+        )
+        archived_documents += 1
+        created_chunks += result["created_count"]
+        reused_chunks += result["reused_count"]
 
     stock_nodes = db.scalar(select(func.count(KnowledgeEntity.id)).where(
         KnowledgeEntity.graph_id == graph.id, KnowledgeEntity.entity_type == "STOCK")) or 0
@@ -131,7 +159,7 @@ def run_validation(db: Session, count: int = 20) -> dict[str, Any]:
                   "stock_nodes": int(stock_nodes), "company_nodes": int(company_nodes),
                   "issued_by_relations": int(issued_by), "evidence_relations": int(evidence_relations)},
         "datasets": datasets, "archived_documents": archived_documents,
-        "created_chunks": created_chunks,
+        "created_chunks": created_chunks, "reused_chunks": reused_chunks,
     }
     graph.governance_report_json = {**(graph.governance_report_json or {}), "validation": report}
     db.commit()

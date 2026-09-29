@@ -77,6 +77,83 @@ def _sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+def knowledge_document_source_hash(document: Any) -> str:
+    """Return the source hash encoded by ``create_chunks`` for a document.
+
+    Knowledge-document integer IDs can be reused by SQLite after a scoped
+    graph is rebuilt.  A matching ``document_key`` alone is consequently not
+    proof that a chunk still belongs to the current document body.
+    """
+    text = getattr(document, "content", None) or getattr(document, "title", None) or ""
+    return _sha256(str(text).encode("utf-8"))[:12]
+
+
+def _known_at(value: datetime | None, cutoff: datetime | None) -> bool:
+    if cutoff is None or value is None:
+        return True
+    left = value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value
+    right = cutoff.replace(tzinfo=timezone.utc) if cutoff.tzinfo is None else cutoff
+    return left <= right
+
+
+def current_knowledge_document_chunks(
+    db: Session,
+    documents: list[Any],
+    *,
+    known_at: datetime | None = None,
+) -> dict[str, list[DocumentChunkVersion]]:
+    """Return current READY chunks, grouped by knowledge-document ID.
+
+    This is the shared truth used by pipeline status, continuation jobs and
+    GraphRAG.  It deliberately requires the canonical knowledge-document key
+    and the current source hash, thereby excluding same-ID chunks from other
+    domains and stale versions left by a historical graph rebuild.
+    """
+    by_id = {str(document.id): document for document in documents if document.id is not None}
+    grouped: dict[str, list[DocumentChunkVersion]] = {document_id: [] for document_id in by_id}
+    document_ids = sorted(by_id)
+    for offset in range(0, len(document_ids), 500):
+        batch_ids = document_ids[offset : offset + 500]
+        canonical_keys = {
+            f"knowledge_document:{document_id}": document_id for document_id in batch_ids
+        }
+        rows = list(db.scalars(select(DocumentChunkVersion).where(
+            DocumentChunkVersion.document_key.in_(list(canonical_keys)),
+            DocumentChunkVersion.status == "READY",
+        ).order_by(DocumentChunkVersion.created_at.desc())).all())
+        current: dict[tuple[str, int], DocumentChunkVersion] = {}
+        for row in rows:
+            document_id = canonical_keys.get(str(row.document_key or ""))
+            if document_id is None or str(row.document_id or "") != document_id:
+                continue
+            if not _known_at(row.created_at, known_at):
+                continue
+            expected_hash = knowledge_document_source_hash(by_id[document_id])
+            if not str(row.chunk_version or "").endswith(f":{expected_hash}"):
+                continue
+            current.setdefault((document_id, int(row.chunk_index)), row)
+        for (document_id, _chunk_index), row in current.items():
+            grouped[document_id].append(row)
+    for rows in grouped.values():
+        rows.sort(key=lambda row: int(row.chunk_index))
+    return grouped
+
+
+def current_knowledge_document_chunk_counts(
+    db: Session,
+    documents: list[Any],
+    *,
+    known_at: datetime | None = None,
+) -> dict[str, int]:
+    """Count current chunks per document using the shared validity rule."""
+    return {
+        document_id: len(rows)
+        for document_id, rows in current_knowledge_document_chunks(
+            db, documents, known_at=known_at,
+        ).items()
+    }
+
+
 def _hash_embedding(text: str, dimensions: int = 32) -> list[float]:
     """Build a small deterministic local vector for the lightweight MVP.
 
