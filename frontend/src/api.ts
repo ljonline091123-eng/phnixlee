@@ -193,6 +193,9 @@ export type StockNotice = {
   notice_date: string;
   title: string;
   notice_type?: string;
+  category?: string;
+  raw_notice_type?: string | null;
+  is_latest?: boolean;
   url?: string;
   content_json: Record<string, unknown>;
   source_id: number;
@@ -267,6 +270,7 @@ export type StockF10 = {
   financial_summary: F10DataSection;
   financial_statements: F10DataSection;
   business_composition: F10DataSection;
+  research_sections: F10DataSection;
 };
 
 export type StockNoticePage = {
@@ -858,6 +862,7 @@ export const api = {
       noticeLimit?: number;
       newsLimit?: number;
       noticePage?: number;
+      noticeCategory?: string;
       newsPage?: number;
       signal?: AbortSignal;
     } = {},
@@ -869,13 +874,14 @@ export const api = {
       news_limit: String(options.newsLimit ?? 8),
       notice_page: String(options.noticePage ?? 1),
       news_page: String(options.newsPage ?? 1),
+      ...(options.noticeCategory && options.noticeCategory !== "全部" ? { notice_category: options.noticeCategory } : {}),
       refresh: options.refresh ? "true" : "false",
       local_only: options.localOnly ? "true" : "false",
     });
     return request<StockF10>(`/stocks/${market}/${symbol}/f10?${params.toString()}`, { signal: options.signal });
   },
-  listStockNoticesPage: (market: string, symbol: string, page = 1, pageSize = 8) =>
-    request<StockNoticePage>(`/stocks/${market}/${symbol}/notices/page?page=${page}&page_size=${pageSize}`),
+  listStockNoticesPage: (market: string, symbol: string, page = 1, pageSize = 8, category?: string) =>
+    request<StockNoticePage>(`/stocks/${market}/${symbol}/notices/page?page=${page}&page_size=${pageSize}${category && category !== "全部" ? `&category=${encodeURIComponent(category)}` : ""}`),
   listStockNewsPage: (market: string, symbol: string, page = 1, pageSize = 8) =>
     request<StockNewsPage>(`/stocks/${market}/${symbol}/news/page?page=${page}&page_size=${pageSize}`),
   getStockKlines: (market: string, symbol: string, limit = 5000) =>

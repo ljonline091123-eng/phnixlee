@@ -34,6 +34,50 @@ F10_EXTENDED_SECTIONS = (
     "financial_statements",
     "business_composition",
 )
+F10_OPTIONAL_SECTIONS = ("research_sections",)
+F10_CACHE_SECTIONS = F10_EXTENDED_SECTIONS + F10_OPTIONAL_SECTIONS
+
+NOTICE_CATEGORIES = (
+    "全部",
+    "财务业绩",
+    "重大事项",
+    "风险提示",
+    "抵押担保",
+    "增持回购",
+    "对外投资",
+    "其他公告",
+)
+
+
+def classify_notice(title: str | None, notice_type: str | None = None) -> str:
+    """Normalize source-specific notice labels to the stock-page taxonomy.
+
+    The original source label is retained by the caller.  This classifier is
+    intentionally conservative: a keyword match creates a display category,
+    not a business fact or an investment signal.
+    """
+    text = "".join(str(value or "") for value in (title, notice_type)).replace(" ", "")
+    if any(word in text for word in (
+        "年度报告", "年报", "半年度报告", "半年报", "中期报告", "季度报告", "一季报", "三季报",
+        "业绩预告", "业绩快报", "财务报表", "财务报告", "审计报告", "利润分配",
+    )):
+        return "财务业绩"
+    if any(word in text for word in ("担保", "抵押", "质押", "借款", "授信", "保证")):
+        return "抵押担保"
+    if any(word in text for word in ("增持", "减持", "回购", "股份变动", "持股变动")):
+        return "增持回购"
+    if any(word in text for word in ("对外投资", "投资设立", "投资项目", "设立子公司", "收购", "并购")):
+        return "对外投资"
+    if any(word in text for word in (
+        "风险", "退市", "警示", "立案", "处罚", "诉讼", "仲裁", "无法表示意见", "延期披露",
+    )):
+        return "风险提示"
+    if any(word in text for word in (
+        "重大事项", "重大合同", "重大资产", "重组", "关联交易", "股权转让", "停牌", "复牌",
+        "中标", "合同", "订单", "董事会", "股东大会", "人事任免",
+    )):
+        return "重大事项"
+    return "其他公告"
 
 def _empty_extended_data(message: str) -> dict[str, dict]:
     """Keep optional F10 modules available even when an upstream source is unavailable."""
@@ -55,6 +99,11 @@ def _empty_extended_data(message: str) -> dict[str, dict]:
             "sections": [],
             "message": message,
         },
+        "research_sections": {
+            "source": "暂无",
+            "sections": [],
+            "message": message,
+        },
         "published_reports": {
             "source": "暂无",
             "reports": [],
@@ -62,10 +111,124 @@ def _empty_extended_data(message: str) -> dict[str, dict]:
         },
     }
 
+
+def _display_section(
+    key: str,
+    title: str,
+    *,
+    rows: list[dict[str, Any]] | None = None,
+    source: str | None = None,
+    as_of: str | None = None,
+    message: str | None = None,
+) -> dict[str, Any]:
+    rows = rows or []
+    return {
+        "key": key,
+        "title": title,
+        "status": "AVAILABLE" if rows else "UNAVAILABLE",
+        "rows": rows,
+        "source": source or "暂无",
+        "as_of": as_of,
+        "message": message or ("" if rows else "当前数据源未返回该分区数据"),
+    }
+
+
+def normalize_f10_sections(extended_data: dict[str, dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    """Attach stable section contracts to the existing F10 cache payloads.
+
+    The cache keeps the original provider payloads. These derived sections are
+    read-model metadata, so old data remains compatible while the UI gets a
+    fixed seven/five/six-section layout and explicit unavailable states.
+    """
+    profile = extended_data.setdefault("profile", {})
+    fields = profile.get("fields") if isinstance(profile.get("fields"), dict) else {}
+    summary = extended_data.setdefault("financial_summary", {})
+    statements = extended_data.setdefault("financial_statements", {})
+    holders = extended_data.setdefault("holders", {})
+    composition = extended_data.setdefault("business_composition", {})
+
+    concepts = profile.get("concepts") if isinstance(profile.get("concepts"), list) else []
+    if not concepts:
+        raw_concepts = fields.get("所属概念") or fields.get("概念") or fields.get("入选指数")
+        if raw_concepts:
+            concepts = [
+                {"name": item.strip(), "definition": "来源披露的行业/概念标签，需结合原文核验。"}
+                for item in str(raw_concepts).replace("，", ",").split(",")
+                if item.strip()
+            ]
+    profile["concepts"] = concepts
+    profile["overview_sections"] = [
+        _display_section("basic", "基本情况", rows=[
+            {"label": key, "value": fields.get(key)}
+            for key in ("公司名称", "所属行业", "所属市场", "所属板块", "上市日期", "法人代表")
+            if fields.get(key) not in (None, "")
+        ], source=profile.get("source")),
+        _display_section("indicators", "主要指标", rows=summary.get("rows"), source=summary.get("source")),
+        _display_section("anomaly", "异动揭秘", rows=profile.get("margin_history"), source=profile.get("margin_source"), message="融资融券明细暂未从公开接口返回"),
+        _display_section("insight", "道破天机", rows=holders.get("insight_rows"), source=holders.get("source")),
+        _display_section("dividend", "分红配送", rows=profile.get("dividends"), source=profile.get("dividend_source"), message="暂无分红配送明细"),
+        _display_section("company", "公司相关", rows=[
+            {"label": key, "value": fields.get(key)}
+            for key in ("公司名称", "注册地址", "办公地址", "主营业务", "经营范围", "公司网址")
+            if fields.get(key) not in (None, "")
+        ], source=profile.get("source")),
+        _display_section("issuance", "发行相关", rows=[
+            {"label": key, "value": fields.get(key)}
+            for key in ("发行价", "发行数量", "发行市盈率", "上市日期", "每手股数")
+            if fields.get(key) not in (None, "")
+        ], source=profile.get("source")),
+    ]
+    holder_sections = holders.get("sections") if isinstance(holders.get("sections"), list) else []
+    if not holder_sections:
+        holder_sections = [
+            _display_section("capital_structure", "股本结构", rows=holders.get("capital_structure"), source=holders.get("source")),
+            _display_section("restricted_release", "限售解禁", rows=holders.get("restricted_release"), source=holders.get("source")),
+            _display_section("institutional", "机构持股", rows=holders.get("institutional"), source=holders.get("source")),
+            _display_section("holder_count", "股东户数", rows=holders.get("holder_count"), source=holders.get("source")),
+            _display_section("top_ten_circulating", "十大流通股东", rows=holders.get("circulating"), source=holders.get("source")),
+            _display_section("top_ten", "十大股东", rows=holders.get("major"), source=holders.get("source")),
+            _display_section("control", "控股股东与实际控制人", rows=holders.get("control"), source=holders.get("source")),
+        ]
+    holders["sections"] = holder_sections
+    composition_rows: list[dict[str, Any]] = []
+    for section in composition.get("sections") or []:
+        if not isinstance(section, dict):
+            continue
+        category = section.get("category") or section.get("name") or "主营业务"
+        items = section.get("items") if isinstance(section.get("items"), list) else []
+        if not items:
+            composition_rows.append({"label": category, "value": section.get("summary") or section})
+            continue
+        for item in items:
+            item_record = item if isinstance(item, dict) else {"value": item}
+            composition_rows.append({
+                "label": item_record.get("name") or item_record.get("项目") or category,
+                "value": item_record.get("value") or item_record.get("amount") or item_record.get("data") or item_record.get("summary") or item_record,
+                "category": category,
+            })
+    summary["financial_sections"] = [
+        _display_section("composition", "主营构成", rows=composition_rows, source=composition.get("source")),
+        _display_section("indicators", "主要指标", rows=summary.get("rows"), source=summary.get("source")),
+        _display_section("income", "利润表", rows=(statements.get("income_statement") or {}).get("rows"), source=statements.get("source")),
+        _display_section("balance", "资产负债表", rows=(statements.get("balance_sheet") or {}).get("rows"), source=statements.get("source")),
+        _display_section("cash_flow", "现金流量表", rows=(statements.get("cash_flow") or {}).get("rows"), source=statements.get("source")),
+    ]
+    research = extended_data.setdefault("research_sections", {})
+    if not isinstance(research.get("sections"), list) or not research.get("sections"):
+        research["sections"] = [
+            _display_section("industry_concepts", "行业概念", rows=concepts, source=profile.get("source")),
+            _display_section("qa", "问董秘", rows=research.get("qa"), source=research.get("source"), message="当前未接入问董秘公开接口"),
+            _display_section("earnings_forecast", "盈利预测", rows=research.get("earnings_forecast"), source=research.get("source")),
+            _display_section("institution_forecast", "机构预测（评级统计）", rows=research.get("institution_forecast"), source=research.get("source")),
+            _display_section("latest_reports", "最新研报", rows=research.get("latest_reports"), source=research.get("source")),
+            _display_section("reports", "研报", rows=research.get("reports"), source=research.get("source")),
+        ]
+    return extended_data
+
 def _load_f10_extended_data(db: Session, market: str, symbol: str) -> dict[str, dict]:
     cached = StockOnDemandService(db).load_f10_cache(market, symbol)
     extended_data = _empty_extended_data("本地暂无缓存，可点击“拉取最新”获取。")
-    for section in F10_EXTENDED_SECTIONS:
+    for section in F10_CACHE_SECTIONS:
         payload = cached.get(section)
         if isinstance(payload, dict):
             extended_data[section] = payload
@@ -97,6 +260,8 @@ def _section_has_payload(section: str, payload: dict | None, market: str | None 
         return False
     if section == "business_composition":
         return bool(payload.get("sections")) or str(payload.get("source") or "") not in {"", "暂无"}
+    if section == "research_sections":
+        return bool(payload.get("sections")) or str(payload.get("source") or "") not in {"", "暂无"}
     if section == "published_reports":
         reports = payload.get("reports")
         if not isinstance(reports, list):
@@ -116,6 +281,11 @@ def _needs_f10_refresh(extended_data: dict[str, dict], market: str | None = None
             for section in ("profile", "financial_summary", "published_reports")
         )
     if any(not _section_has_payload(section, extended_data.get(section), market) for section in F10_EXTENDED_SECTIONS):
+        return True
+    # Research aggregates are an optional CN A enhancement.  Existing HK and
+    # NEEQ snapshots should remain usable without repeatedly retrying a source
+    # that does not publish the same endpoints.
+    if market == "CN_A" and not _section_has_payload("research_sections", extended_data.get("research_sections"), market):
         return True
     if market == "HK":
         if _hk_fund_flow_is_stale(extended_data.get("fund_flow")):
@@ -203,7 +373,7 @@ def _hk_published_reports_need_refresh(
 
 def _merge_f10_extended_data(base: dict[str, dict], fresh: dict[str, dict]) -> dict[str, dict]:
     merged = dict(base)
-    for section in F10_EXTENDED_SECTIONS:
+    for section in F10_CACHE_SECTIONS:
         payload = fresh.get(section)
         if isinstance(payload, dict) and payload:
             existing = merged.get(section)
@@ -544,7 +714,7 @@ def _fetch_and_cache_f10_extended_data(
 ) -> dict[str, dict]:
     extended_data = get_adapter(source.adapter_type).fetch_extended_data(market, symbol)
     service = StockOnDemandService(db)
-    for section in F10_EXTENDED_SECTIONS:
+    for section in F10_CACHE_SECTIONS:
         payload = extended_data.get(section)
         if isinstance(payload, dict):
             service.upsert_f10_cache(source, market, symbol, section, payload)

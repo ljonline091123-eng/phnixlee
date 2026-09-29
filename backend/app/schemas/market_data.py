@@ -358,6 +358,9 @@ class StockNoticeRead(BaseModel):
     notice_date: str
     title: str
     notice_type: str | None
+    category: str = "其他公告"
+    raw_notice_type: str | None = None
+    is_latest: bool = False
     url: str | None
     content_json: dict[str, Any]
     source_id: int
@@ -463,3 +466,4 @@ class StockF10Read(BaseModel):
     financial_summary: dict[str, Any] = Field(default_factory=dict)
     financial_statements: dict[str, Any] = Field(default_factory=dict)
     business_composition: dict[str, Any] = Field(default_factory=dict)
+    research_sections: dict[str, Any] = Field(default_factory=dict)
