@@ -120,18 +120,41 @@ def _definition_for(
 def _attach_definition(
     item: dict[str, Any], definitions: dict[tuple[str, str], ClassificationDefinition], dimension: str,
 ) -> dict[str, Any]:
-    """Attach the versioned glossary metadata without changing raw facts."""
+    """Attach glossary metadata while preserving a fact's precise definition.
+
+    ``SecurityClassification.properties_json`` may contain a definition for a
+    concrete provider label (for example a particular theme).  The built-in
+    dimension definition explains only the taxonomy as a whole and must not
+    overwrite that more specific fact.  Keep both values explicit so callers
+    can show the precise definition first and the master-data explanation as a
+    fallback.
+    """
     definition = _definition_for(definitions, dimension)
     if definition is not None:
-        item.update({
-            "definition": definition.definition,
-            "criteria": definition.criteria,
-            "source_name": definition.source_name,
-            "source_url": definition.source_url,
-            "definition_version": definition.definition_version,
-            "dimension": definition.dimension,
-            "taxonomy": definition.taxonomy,
-        })
+        # Preserve concrete fact-level values.  The ``master_*`` fields are
+        # intentionally separate and versioned, making provenance clear to
+        # both the UI and downstream model consumers.
+        concrete_definition = item.get("definition")
+        if concrete_definition in (None, ""):
+            item["definition"] = definition.definition
+        elif concrete_definition != definition.definition:
+            item.setdefault("fact_definition", concrete_definition)
+        concrete_criteria = item.get("criteria")
+        if concrete_criteria in (None, ""):
+            item["criteria"] = definition.criteria
+        elif concrete_criteria != definition.criteria:
+            item.setdefault("fact_criteria", concrete_criteria)
+        if item.get("source_name") in (None, ""):
+            item["source_name"] = definition.source_name
+        item.setdefault("source_url", definition.source_url)
+        item.setdefault("definition_version", definition.definition_version)
+        item["master_definition"] = definition.definition
+        item["master_criteria"] = definition.criteria
+        item["master_source_name"] = definition.source_name
+        item["master_source_url"] = definition.source_url
+        item["master_definition_version"] = definition.definition_version
+        item["dimension"] = definition.dimension
+        item["taxonomy"] = definition.taxonomy
     return item
 
 

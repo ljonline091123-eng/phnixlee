@@ -307,7 +307,7 @@ class AkshareAdapter(MarketDataAdapter):
         isolated so a provider failure leaves the already cached core F10
         sections usable and exposes an explicit unavailable state in the UI.
         """
-        holder_source = "东方财富/巨潮公开接口"
+        holder_source = "多来源（新浪财经、巨潮资讯、东方财富）"
         holders: dict[str, Any] = {
             "source": holder_source,
             "capital_structure": [],
@@ -2569,6 +2569,56 @@ class AkshareAdapter(MarketDataAdapter):
             dataframe = method(**kwargs)
             return cls._safe_dataframe_records(dataframe, limit=limit)
         except Exception:
+            return []
+
+    @classmethod
+    def _safe_security_optional_records(
+        cls,
+        method: Any,
+        kwargs: dict[str, Any],
+        *,
+        symbol: str,
+        limit: int = 50,
+        provider_scoped: bool = False,
+    ) -> list[dict[str, Any]]:
+        """Fetch an optional security panel without allowing cross-stock rows.
+
+        A few AkShare endpoints accept ``symbol`` but have historically
+        returned a market-wide table (or changed their response columns).  A
+        single-stock F10 response must fail closed when a response contains a
+        recognizable security-code column and a row belongs to another code.
+        For endpoints whose URL is intrinsically scoped to the requested
+        security (for example the Sina institution-holder page),
+        ``provider_scoped=True`` permits a response without a code column but
+        still filters it when a code column is present.
+        """
+        if not method:
+            return []
+        try:
+            dataframe = method(**kwargs)
+            if dataframe is None or not hasattr(dataframe, "empty") or dataframe.empty:
+                return []
+            code_column = next(
+                (column for column in dataframe.columns if cls._is_security_code_column(column)),
+                None,
+            )
+            target = cls._normalize_security_code(symbol)
+            if code_column is None:
+                if not provider_scoped:
+                    return []
+                # The provider request itself is the security boundary.  Do
+                # not invent a code from an unrelated field when the endpoint
+                # has no security identifier column.
+                selected = dataframe
+            else:
+                selected = dataframe[
+                    dataframe[code_column].map(
+                        lambda value: cls._normalize_security_code(value) == target
+                    )
+                ]
+            return cls._safe_dataframe_records(selected, limit=limit)
+        except Exception:
+            # Optional panels must not make the core F10 request fail.
             return []
 
     @classmethod

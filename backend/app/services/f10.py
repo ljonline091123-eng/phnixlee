@@ -222,7 +222,7 @@ def normalize_f10_sections(extended_data: dict[str, dict[str, Any]]) -> dict[str
         ], source=profile.get("source"), as_of=payload_as_of(profile)),
         _display_section("indicators", "主要指标", rows=summary.get("rows"), source=summary.get("source"), as_of=payload_as_of(summary)),
         anomaly_section,
-        _display_section("insight", "道破天机", rows=holders.get("insight_rows"), source=holders.get("source"), as_of=payload_as_of(holders)),
+        _display_section("insight", "道破天机", rows=holders.get("insight_rows"), source=holders.get("insight_source") or holders.get("source"), as_of=payload_as_of(holders)),
         _display_section("dividend", "分红配送", rows=profile.get("dividends"), source=profile.get("dividend_source"), as_of=payload_as_of(profile), message="" if profile.get("dividends") else "暂无分红配送明细"),
         _display_section("company", "公司相关", rows=[
             {"label": key, "value": fields.get(key)}
@@ -240,13 +240,13 @@ def normalize_f10_sections(extended_data: dict[str, dict[str, Any]]) -> dict[str
     # a partial section list; rebuilding keeps the page shape stable without
     # deleting any raw provider fields from the cache.
     holders["sections"] = [
-        _display_section("capital_structure", "股本结构", rows=holders.get("capital_structure"), source=holders.get("source"), as_of=payload_as_of(holders)),
-        _display_section("restricted_release", "限售解禁", rows=holders.get("restricted_release"), source=holders.get("source"), as_of=payload_as_of(holders)),
-        _display_section("institutional", "机构持股", rows=holders.get("institutional"), source=holders.get("source"), as_of=payload_as_of(holders)),
-        _display_section("holder_count", "股东户数", rows=holders.get("holder_count"), source=holders.get("source"), as_of=payload_as_of(holders)),
-        _display_section("top_ten_circulating", "十大流通股东", rows=holders.get("circulating"), source=holders.get("source"), as_of=payload_as_of(holders)),
-        _display_section("top_ten", "十大股东", rows=holders.get("major"), source=holders.get("source"), as_of=payload_as_of(holders)),
-        _display_section("control", "控股股东与实际控制人", rows=holders.get("control"), source=holders.get("source"), as_of=payload_as_of(holders)),
+        _display_section("capital_structure", "股本结构", rows=holders.get("capital_structure"), source=holders.get("capital_structure_source") or holders.get("source"), as_of=payload_as_of(holders)),
+        _display_section("restricted_release", "限售解禁", rows=holders.get("restricted_release"), source=holders.get("restricted_release_source") or holders.get("source"), as_of=payload_as_of(holders)),
+        _display_section("institutional", "机构持股", rows=holders.get("institutional"), source=holders.get("institutional_source") or holders.get("source"), as_of=payload_as_of(holders)),
+        _display_section("holder_count", "股东户数", rows=holders.get("holder_count"), source=holders.get("holder_count_source") or holders.get("source"), as_of=payload_as_of(holders)),
+        _display_section("top_ten_circulating", "十大流通股东", rows=holders.get("circulating"), source=holders.get("circulating_source") or holders.get("source"), as_of=payload_as_of(holders)),
+        _display_section("top_ten", "十大股东", rows=holders.get("major"), source=holders.get("major_source") or holders.get("source"), as_of=payload_as_of(holders)),
+        _display_section("control", "控股股东与实际控制人", rows=holders.get("control"), source=holders.get("control_source") or holders.get("source"), as_of=payload_as_of(holders)),
     ]
     composition_rows: list[dict[str, Any]] = []
     for section in composition.get("sections") or []:
