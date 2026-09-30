@@ -37,7 +37,10 @@ from app.services.f10 import (
 )
 from app.services.stock_on_demand import StockOnDemandService
 from app.services.notice_read_model import CanonicalNotice, deduplicate_notice_rows
-from app.services.stock_classification import build_classification_groups
+from app.services.stock_classification import (
+    build_classification_groups,
+    enrich_classification_groups_with_members,
+)
 
 
 class F10WorkflowError(Exception):
@@ -187,8 +190,9 @@ class F10Workflow:
         profile_payload = extended_data.get("profile")
         if isinstance(profile_payload, dict):
             profile_fields = profile_payload.get("fields") if isinstance(profile_payload.get("fields"), dict) else {}
-            profile_payload["classification_groups"] = build_classification_groups(
-                self.db, snapshot.stock, profile_fields
+            profile_payload["classification_groups"] = enrich_classification_groups_with_members(
+                self.db,
+                build_classification_groups(self.db, snapshot.stock, profile_fields),
             )
         # The optional provider control endpoint is not reliable across
         # markets.  Reuse explicit, evidence-backed company-graph CONTROLS

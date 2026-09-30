@@ -1,6 +1,6 @@
 import unittest
 
-from app.services.f10 import NOTICE_CATEGORIES, classify_notice, normalize_f10_sections
+from app.services.f10 import NOTICE_CATEGORIES, build_rating_statistics, classify_notice, normalize_f10_sections
 
 
 class F10SectionContractTest(unittest.TestCase):
@@ -85,6 +85,79 @@ class F10SectionContractTest(unittest.TestCase):
             if section["key"] == "industry_concepts"
         )
         self.assertEqual(len(research_concepts["rows"]), 2)
+
+    def test_provider_concept_placeholder_is_enriched_by_typed_glossary(self) -> None:
+        payload = normalize_f10_sections({
+            "profile": {
+                "fields": {},
+                "concepts": [{
+                    "name": "人工智能",
+                    "definition": "来源披露的行业/概念标签，需结合原文核验。",
+                }],
+                "classification_groups": [{
+                    "key": "theme",
+                    "title": "主题板块",
+                    "items": [{
+                        "name": "人工智能",
+                        "code": "AI",
+                        "definition": "与人工智能算法、模型、算力或应用产业链相关的主题标签。",
+                        "criteria": "仅在来源主数据明确列示该主题时纳入。",
+                        "source_name": "主题分类主数据",
+                        "definition_version": "THEME_TEST_V1",
+                    }],
+                }],
+            },
+            "holders": {},
+            "financial_summary": {},
+            "financial_statements": {},
+            "business_composition": {},
+            "research_sections": {"reports": []},
+        })
+        concept = payload["profile"]["concepts"][0]
+        self.assertEqual(concept["definition"], "与人工智能算法、模型、算力或应用产业链相关的主题标签。")
+        self.assertEqual(concept["criteria"], "仅在来源主数据明确列示该主题时纳入。")
+        self.assertEqual(concept["definition_version"], "THEME_TEST_V1")
+
+    def test_rating_statistics_anchor_to_latest_observed_report(self) -> None:
+        projection = build_rating_statistics([
+            {"机构": "甲机构", "东财评级": "买入", "最新报告日期": "2024-04-30"},
+            {"机构": "乙机构", "东财评级": "增持", "最新报告日期": "2024-04-15"},
+            {"机构": "丙机构", "东财评级": "中性", "最新报告日期": "2023-06-01"},
+        ])
+        self.assertEqual(projection["reference_date"], "2024-04-30")
+        self.assertEqual(projection["reference_basis"], "最新报告日期")
+        buckets = {row["period"]: row for row in projection["buckets"]}
+        self.assertEqual(buckets["1个月内"]["buy"], 1)
+        self.assertEqual(buckets["1个月内"]["add"], 1)
+        self.assertEqual(buckets["1个月内"]["total"], 2)
+        self.assertEqual(buckets["1年内"]["neutral"], 1)
+
+    def test_generic_theme_definition_is_replaced_by_label_definition(self) -> None:
+        payload = normalize_f10_sections({
+            "profile": {
+                "fields": {},
+                "concepts": [],
+                "classification_groups": [{
+                    "key": "theme",
+                    "items": [{
+                        "name": "智能家居",
+                        "code": "BK0680",
+                        "definition": "数据提供方根据公司业务、产品、公告或市场约定整理的投资主题集合，一只证券可同时属于多个主题。",
+                        "master_definition": "数据提供方根据公司业务、产品、公告或市场约定整理的投资主题集合，一只证券可同时属于多个主题。",
+                        "master_dimension": "THEME",
+                    }],
+                }],
+            },
+            "holders": {},
+            "financial_summary": {},
+            "financial_statements": {},
+            "business_composition": {},
+            "research_sections": {"reports": []},
+        })
+        concept = payload["profile"]["concepts"][0]
+        self.assertIn("家庭物联网", concept["definition"])
+        self.assertEqual(concept["definition_source"], "系统概念释义词典")
+        self.assertEqual(concept["definition_version"], "CONCEPT_GLOSSARY_V1")
 
 
 if __name__ == "__main__":

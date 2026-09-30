@@ -7,7 +7,8 @@ the transport layer.
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime, timedelta
+import re
 from typing import Any
 
 from sqlalchemy import select
@@ -58,6 +59,176 @@ NOTICE_CATEGORIES = (
     "对外投资",
     "其他公告",
 )
+
+# The provider's security profile exposes concept names and codes but does not
+# publish a stable explanation field.  Keep a small, auditable glossary for
+# common Chinese investment themes so the detail dialog shows an actual
+# definition instead of the old one-line placeholder.  Unknown labels retain
+# a label-specific fallback and remain marked as source observations.
+CONCEPT_GLOSSARY: dict[str, str] = {
+    "深圳特区": "与深圳经济特区区域发展、地方产业政策或注册经营主体相关的证券主题。",
+    "养老概念": "业务涉及养老服务、康养地产、养老金融、医疗照护或相关设施运营的主题集合。",
+    "智能家居": "涉及家庭物联网、智能家电、家居控制系统或相关软硬件产品的主题。",
+    "超级品牌": "由来源机构按照品牌知名度、市场影响力或消费认知整理的品牌主题，并非监管分类。",
+    "租售同权": "与住房租赁服务、租赁权益保障及相关城市住房政策方向有关的主题。",
+    "装配建筑": "采用预制部品、模块化施工或工业化建造方式的建筑产业主题。",
+    "REITs概念": "与基础设施或不动产投资信托基金设立、运营、资产管理或相关服务有关的主题。",
+    "AH股": "同一发行主体同时在境内A股和香港H股市场挂牌交易的证券关系标签。",
+    "融资融券": "证券被纳入融资融券业务标的或与融资融券交易机制有关的来源标签。",
+    "深股通": "证券符合深圳市场互联互通机制下深股通投资范围的来源标签。",
+    "破净股": "按来源采集时点证券市场价格低于每股净资产的估值状态标签。",
+    "中盘股": "按来源口径以总市值或流通市值分位划分的中等规模证券标签，阈值随样本和日期变化。",
+    "中盘价值": "由来源按中等市值规模与相对价值特征组合识别的风格标签，不等同于法定行业或投资建议。",
+    "低市净率": "按来源采集时点市净率处于较低区间的估值风格标签，不代表未来收益。",
+    "房地产": "来源行业/板块对房地产开发、经营、服务及相关产业链企业的归类。",
+    "房地产开发": "以住宅、商业或综合不动产开发销售及配套运营为主要业务的行业板块。",
+    "住宅开发": "以住宅项目开发、建设和销售为主要业务范围的房地产细分板块。",
+}
+
+
+def _concept_definition(name: str, dimension: str | None = None) -> str:
+    text = str(name or "").strip()
+    if text in CONCEPT_GLOSSARY:
+        return CONCEPT_GLOSSARY[text]
+    prefix = "行业归属" if str(dimension or "").upper() == "INDUSTRY" else "投资主题"
+    return f"{text}是来源主数据登记的{prefix}标签，反映证券在该来源和采集时点的归属；不代表公司全部收入来自该主题，也不构成投资建议。"
+
+
+def _normalize_concept_rows(rows: list[Any]) -> list[dict[str, Any]]:
+    normalized: list[dict[str, Any]] = []
+    seen: set[tuple[str, str]] = set()
+    for raw in rows:
+        if not isinstance(raw, dict):
+            continue
+        name = str(raw.get("name") or raw.get("label") or "").strip()
+        if not name or _looks_like_index(name, raw.get("code")):
+            continue
+        dimension = str(raw.get("dimension") or raw.get("classification_dimension") or "THEME").upper()
+        key = (dimension, name)
+        if key in seen:
+            continue
+        seen.add(key)
+        item = dict(raw)
+        item["name"] = name
+        item.setdefault("label", name)
+        item["dimension"] = dimension
+        item["relevance_label"] = item.get("relevance_label") or "最相关"
+        existing_definition = str(item.get("definition") or "").strip()
+        glossary_definition = CONCEPT_GLOSSARY.get(name)
+        generic_theme_definition = (
+            "数据提供方根据公司业务、产品、公告或市场约定整理的投资主题集合" in existing_definition
+            or "数据提供方标注的行业名称" in existing_definition
+            or existing_definition == str(item.get("master_definition") or "").strip()
+            and bool(item.get("master_dimension"))
+        )
+        if glossary_definition and (not existing_definition or "需结合原文核验" in existing_definition
+                                     or "版本化主数据释义" in existing_definition or generic_theme_definition):
+            if existing_definition and existing_definition != glossary_definition:
+                item.setdefault("fact_definition", existing_definition)
+            item["definition"] = glossary_definition
+            item["definition_source"] = "系统概念释义词典"
+            item["definition_version"] = "CONCEPT_GLOSSARY_V1"
+        elif not existing_definition or "需结合原文核验" in existing_definition or "版本化主数据释义" in existing_definition:
+            item["definition"] = _concept_definition(name, dimension)
+        else:
+            item["definition"] = existing_definition
+        item["definition_source"] = item.get("definition_source") or item.get("source_name") or item.get("source") or "证券分类主数据"
+        item["related_stocks"] = item.get("related_stocks") if isinstance(item.get("related_stocks"), list) else []
+        normalized.append(item)
+    return normalized
+
+
+RATING_STATISTIC_PERIODS: tuple[tuple[str, int], ...] = (
+    ("1个月内", 31),
+    ("2个月内", 62),
+    ("3个月内", 93),
+    ("6个月内", 186),
+    ("1年内", 366),
+)
+
+
+def _parse_research_date(value: Any) -> date | None:
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    text = str(value or "").strip()
+    if not text:
+        return None
+    text = re.sub(r"年|月", "-", text.replace("日", ""))
+    text = text.replace("/", "-").replace(".", "-")
+    if re.fullmatch(r"\d{8}", text):
+        text = f"{text[:4]}-{text[4:6]}-{text[6:]}"
+    text = text[:10]
+    try:
+        return datetime.strptime(text, "%Y-%m-%d").date()
+    except ValueError:
+        return None
+
+
+def _research_rating(value: Any) -> str:
+    text = str(value or "").strip()
+    if re.search(r"强烈?买入|买入|推荐", text):
+        return "买入"
+    if re.search(r"强烈?增持|增持", text):
+        return "增持"
+    if re.search(r"中性|持有", text):
+        return "中性"
+    if re.search(r"减持", text):
+        return "减持"
+    if re.search(r"卖出|回避", text):
+        return "卖出"
+    return ""
+
+
+def build_rating_statistics(rows: list[Any]) -> dict[str, Any]:
+    """Build rating counts against the latest available report date.
+
+    The provider may be stale or may return no reports for the current
+    calendar year.  Using ``date.today()`` would make every historical bucket
+    appear empty, so this read model uses the newest report date as its
+    explicit observation anchor.  Counts represent institution/rating rows,
+    matching the UI's “家数” wording rather than the number of reports.
+    """
+    dated_rows: list[tuple[dict[str, Any], date]] = []
+    for raw in rows or []:
+        if not isinstance(raw, dict):
+            continue
+        report_date = _parse_research_date(
+            raw.get("最新报告日期") or raw.get("日期") or raw.get("报告日期") or raw.get("report_date")
+        )
+        if report_date is not None:
+            dated_rows.append((raw, report_date))
+    anchor = max((item[1] for item in dated_rows), default=None)
+    buckets: list[dict[str, Any]] = []
+    for period, days in RATING_STATISTIC_PERIODS:
+        counts = {"buy": 0, "add": 0, "neutral": 0, "reduce": 0, "sell": 0}
+        if anchor is not None:
+            cutoff = anchor - timedelta(days=days)
+            for row, report_date in dated_rows:
+                if report_date < cutoff or report_date > anchor:
+                    continue
+                rating = _research_rating(row.get("评级") or row.get("东财评级") or row.get("rating"))
+                if rating == "买入":
+                    counts["buy"] += 1
+                elif rating == "增持":
+                    counts["add"] += 1
+                elif rating == "中性":
+                    counts["neutral"] += 1
+                elif rating == "减持":
+                    counts["reduce"] += 1
+                elif rating == "卖出":
+                    counts["sell"] += 1
+        buckets.append({
+            "period": period,
+            **counts,
+            "total": sum(counts.values()),
+        })
+    return {
+        "reference_date": anchor.isoformat() if anchor else None,
+        "reference_basis": "最新报告日期" if anchor else "无可解析报告日期",
+        "buckets": buckets,
+    }
 
 
 def project_company_control_facts(db: Session, stock: StockSymbol) -> dict[str, Any]:
@@ -249,45 +420,86 @@ def normalize_f10_sections(extended_data: dict[str, dict[str, Any]]) -> dict[str
         if isinstance(item, dict)
         and not _looks_like_index(item.get("name") or item.get("label"), item.get("code"))
     ]
-    # The typed stock-classification projection is the authoritative source
-    # for the concept panel when an older cache only contained index labels.
-    # Keep industry and theme observations, but never promote index
-    # membership into a concept.  This also carries the versioned glossary
-    # fields through to the concept-detail dialog and hover text.
-    if not concepts:
-        groups = profile.get("classification_groups")
-        if isinstance(groups, list):
-            for group in groups:
-                if not isinstance(group, dict) or str(group.get("key") or "").lower() not in {"industry", "theme"}:
+    # The typed stock-classification projection is the authoritative glossary
+    # for the concept panel.  Older caches may already contain provider labels
+    # with a generic placeholder definition; merge the typed item into that
+    # fact instead of dropping the provider row.  Index membership remains a
+    # separate dimension and is never promoted to an industry/theme card.
+    groups = profile.get("classification_groups")
+    typed_concepts: dict[str, dict[str, Any]] = {}
+    if isinstance(groups, list):
+        for group in groups:
+            if not isinstance(group, dict) or str(group.get("key") or "").lower() not in {"industry", "theme", "board"}:
+                continue
+            dimension = {"industry": "INDUSTRY", "theme": "THEME", "board": "BOARD"}[str(group.get("key") or "").lower()]
+            for item in group.get("items") or []:
+                if not isinstance(item, dict):
                     continue
-                dimension = "INDUSTRY" if str(group.get("key") or "").lower() == "industry" else "THEME"
-                for item in group.get("items") or []:
-                    if not isinstance(item, dict):
-                        continue
-                    name = item.get("name") or item.get("label")
-                    if name and not _looks_like_index(name, item.get("code")):
-                        concepts.append({
-                            "name": str(name),
-                            "label": str(item.get("label") or name),
-                            "code": item.get("code"),
-                            "dimension": dimension,
-                            "definition": item.get("definition"),
-                            "criteria": item.get("criteria"),
-                            "source": item.get("source"),
-                            "source_name": item.get("source_name"),
-                            "definition_version": item.get("definition_version"),
-                        })
+                name = item.get("name") or item.get("label")
+                if not name or _looks_like_index(name, item.get("code")):
+                    continue
+                typed = dict(item)
+                typed.update({
+                    "name": str(name),
+                    "label": str(item.get("label") or name),
+                    "dimension": item.get("dimension") or dimension,
+                })
+                typed_concepts.setdefault(str(name).strip().casefold(), typed)
+
+    merged_concepts: list[dict[str, Any]] = []
+    seen_concepts: set[str] = set()
+    placeholder_definitions = {
+        "来源披露的行业/概念标签，需结合原文核验。",
+        "来源披露的行业/概念标签，需结合原文核验",
+    }
+    for raw_item in concepts:
+        if not isinstance(raw_item, dict):
+            continue
+        name = raw_item.get("name") or raw_item.get("label")
+        if not name or _looks_like_index(name, raw_item.get("code")):
+            continue
+        key = str(name).strip().casefold()
+        typed = typed_concepts.get(key)
+        item = dict(raw_item)
+        if typed:
+            # Preserve concrete provider wording as fact_definition, while
+            # using the versioned classification glossary for display.
+            concrete_definition = item.get("definition")
+            typed_definition = typed.get("definition")
+            if typed_definition and (not concrete_definition or concrete_definition in placeholder_definitions):
+                item["definition"] = typed_definition
+            elif concrete_definition and typed_definition and concrete_definition != typed_definition:
+                item.setdefault("fact_definition", concrete_definition)
+            for field in ("label", "code", "dimension", "criteria", "source", "source_name",
+                          "source_url", "definition_version", "master_definition", "master_criteria",
+                          "master_source_name", "master_source_url", "master_definition_version", "taxonomy"):
+                if item.get(field) in (None, "") and typed.get(field) not in (None, ""):
+                    item[field] = typed[field]
+        item.setdefault("name", str(name))
+        item.setdefault("label", str(name))
+        item.setdefault("definition_status", "MASTER_DATA" if item.get("definition_version") else "UNRESOLVED")
+        merged_concepts.append(item)
+        seen_concepts.add(key)
+
+    for key, typed in typed_concepts.items():
+        if key not in seen_concepts:
+            merged_concepts.append(typed)
+    concepts = _normalize_concept_rows(merged_concepts)
     if not concepts:
         # Index membership is a separate dimension and must not be presented
         # as an investment concept.  Legacy caches may have no concept field;
         # leave that section empty rather than inventing a theme from indexes.
         raw_concepts = fields.get("所属概念") or fields.get("概念")
         if raw_concepts:
-            concepts = [
-                {"name": item.strip(), "definition": "来源披露的行业/概念标签，需结合原文核验。"}
+            concepts = _normalize_concept_rows([
+                {
+                    "name": item.strip(),
+                    "dimension": "THEME",
+                    "definition_status": "UNRESOLVED",
+                }
                 for item in str(raw_concepts).replace("，", ",").split(",")
                 if item.strip()
-            ]
+            ])
     profile["concepts"] = concepts
     anomaly_section = _display_section(
         "anomaly",
@@ -394,11 +606,22 @@ def normalize_f10_sections(extended_data: dict[str, dict[str, Any]]) -> dict[str
             research["institution_forecast"] = AkshareAdapter._derive_institution_forecast(reports, report_symbol)
     # Rebuild the fixed six-part research layout for both new and legacy
     # caches. Raw ``qa``/forecast/report arrays remain untouched above.
+    institution_section = _display_section(
+        "institution_forecast",
+        "机构预测（评级统计）",
+        rows=research.get("institution_forecast"),
+        source=research.get("source"),
+        as_of=payload_as_of(research),
+    )
+    rating_projection = build_rating_statistics(research.get("institution_forecast") or [])
+    institution_section["rating_statistics"] = rating_projection["buckets"]
+    institution_section["rating_statistics_reference_date"] = rating_projection["reference_date"]
+    institution_section["rating_statistics_basis"] = rating_projection["reference_basis"]
     research["sections"] = [
         _display_section("industry_concepts", "行业概念", rows=concepts, source=profile.get("source"), as_of=payload_as_of(profile)),
         _display_section("qa", "问董秘", rows=research.get("qa"), source=research.get("source"), as_of=payload_as_of(research), message="当前未接入问董秘公开接口"),
         _display_section("earnings_forecast", "盈利预测", rows=research.get("earnings_forecast"), source=research.get("source"), as_of=payload_as_of(research)),
-        _display_section("institution_forecast", "机构预测（评级统计）", rows=research.get("institution_forecast"), source=research.get("source"), as_of=payload_as_of(research)),
+        institution_section,
         _display_section("latest_reports", "最新研报", rows=research.get("latest_reports"), source=research.get("source"), as_of=payload_as_of(research)),
         _display_section("reports", "研报", rows=research.get("reports"), source=research.get("source"), as_of=payload_as_of(research)),
     ]
