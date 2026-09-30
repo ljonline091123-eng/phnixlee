@@ -22,6 +22,7 @@ from app.models.company_graph import SecurityClassification
 from app.models.foundation import FoundationEvidence, FoundationListing, FoundationSecurity
 from app.models.market_data import StockRealtimeQuote, StockSymbol
 from app.models.taxonomy import ClassificationDefinition
+from app.services.taxonomy import label_definition
 
 
 def _split(value: Any) -> list[str]:
@@ -216,9 +217,13 @@ def _definition_for(
     definitions: dict[tuple[str, str], ClassificationDefinition],
     dimension: str,
     code: Any = None,
-) -> ClassificationDefinition | None:
+    label: Any = None,
+) -> ClassificationDefinition | dict[str, Any] | None:
     normalized_dimension = str(dimension or "").upper()
     normalized_code = str(code or "").upper()
+    label_master = label_definition(label, normalized_dimension)
+    if label_master and str(label_master.get("dimension") or "").upper() == normalized_dimension:
+        return label_master
     # Concrete definitions (for example SIZE/LARGE_CAP or
     # LEGAL_LISTING_CLASS/A_SHARE) are more precise than the dimension-level
     # fallback.  Prefer them whenever the fact carries a code.
@@ -237,6 +242,12 @@ def _definition_for(
                  if definitions.get((normalized_dimension, candidate))), None)
 
 
+def _definition_value(definition: ClassificationDefinition | dict[str, Any], key: str) -> Any:
+    if isinstance(definition, dict):
+        return definition.get(key)
+    return getattr(definition, key, None)
+
+
 def _attach_definition(
     item: dict[str, Any], definitions: dict[tuple[str, str], ClassificationDefinition], dimension: str,
 ) -> dict[str, Any]:
@@ -249,38 +260,60 @@ def _attach_definition(
     can show the precise definition first and the master-data explanation as a
     fallback.
     """
-    definition = _definition_for(definitions, dimension, item.get("code"))
+    label_master = label_definition(item.get("label") or item.get("name"), dimension)
+    if label_master and str(label_master.get("dimension") or "").upper() != str(dimension or "").upper():
+        label_master = None
+    definition = label_master or _definition_for(
+        definitions, dimension, item.get("code"), item.get("label") or item.get("name")
+    )
     if definition is not None:
         # Preserve concrete fact-level values.  The ``master_*`` fields are
         # intentionally separate and versioned, making provenance clear to
         # both the UI and downstream model consumers.
         concrete_definition = item.get("definition")
-        if concrete_definition in (None, ""):
-            item["definition"] = definition.definition
-        elif concrete_definition != definition.definition:
+        master_definition = _definition_value(definition, "definition")
+        if label_master is not None:
+            # The label-level explanation is user-facing. Preserve provider
+            # wording separately so the observed fact remains auditable.
+            if concrete_definition not in (None, "") and concrete_definition != master_definition:
+                item.setdefault("fact_definition", concrete_definition)
+            item["definition"] = master_definition
+        elif concrete_definition in (None, ""):
+            item["definition"] = master_definition
+        elif concrete_definition != master_definition:
             item.setdefault("fact_definition", concrete_definition)
         concrete_criteria = item.get("criteria")
+        master_criteria = _definition_value(definition, "criteria")
         if concrete_criteria in (None, ""):
-            item["criteria"] = definition.criteria
-        elif concrete_criteria != definition.criteria:
+            item["criteria"] = master_criteria
+        elif concrete_criteria != master_criteria:
             item.setdefault("fact_criteria", concrete_criteria)
         if item.get("source_name") in (None, ""):
-            item["source_name"] = definition.source_name
-        item.setdefault("source_url", definition.source_url)
-        item.setdefault("definition_version", definition.definition_version)
-        item["master_definition"] = definition.definition
-        item["master_criteria"] = definition.criteria
-        item["master_source_name"] = definition.source_name
-        item["master_source_url"] = definition.source_url
-        item["master_definition_version"] = definition.definition_version
+            item["source_name"] = _definition_value(definition, "source_name")
+        item.setdefault("source_url", _definition_value(definition, "source_url"))
+        definition_version = _definition_value(definition, "definition_version")
+        if label_master is not None:
+            existing_version = item.get("definition_version")
+            if existing_version not in (None, "", definition_version):
+                item.setdefault("fact_definition_version", existing_version)
+            item["definition_version"] = definition_version
+        else:
+            item.setdefault("definition_version", definition_version)
+        item["master_definition"] = master_definition
+        item["master_criteria"] = master_criteria
+        item["master_source_name"] = _definition_value(definition, "source_name")
+        item["master_source_url"] = _definition_value(definition, "source_url")
+        item["master_definition_version"] = definition_version
         # ``dimension`` is the master-data dimension for legacy callers.  A
         # typed fact can retain its original dimension separately so SIZE,
         # STYLE and LEGAL_LISTING_CLASS remain auditable inside the combined
         # display group.
         fact_dimension = item.get("classification_dimension")
-        item["dimension"] = str(fact_dimension or definition.dimension)
-        item["master_dimension"] = definition.dimension
-        item["taxonomy"] = definition.taxonomy
+        item["dimension"] = str(fact_dimension or _definition_value(definition, "dimension"))
+        item["master_dimension"] = _definition_value(definition, "dimension")
+        item["taxonomy"] = _definition_value(definition, "taxonomy")
+        item["definition_source"] = _definition_value(definition, "source_name")
+        item["definition_status"] = "MASTER_DATA"
     return item
 
 

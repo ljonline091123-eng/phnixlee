@@ -6,7 +6,8 @@ import pandas as pd
 from app.connectors.akshare_adapter import AkshareAdapter
 from app.services.f10 import normalize_f10_sections, project_company_control_facts
 from app.services.company_governance import profile_record
-from app.services.stock_classification import _attach_definition, _looks_like_index
+from app.services.stock_classification import _attach_definition, _looks_like_index, build_classification_groups
+from app.services.taxonomy import LABEL_DEFINITION_OVERRIDES, label_definition, seed_builtin_definitions
 
 
 def test_optional_security_panel_filters_rows_by_security_code() -> None:
@@ -165,3 +166,59 @@ def test_index_projection_does_not_drop_real_theme_labels() -> None:
     assert _looks_like_index("融资融券") is False
     assert _looks_like_index("红利低波") is False
     assert _looks_like_index("精选消费") is False
+
+
+def test_label_definition_overrides_cover_industry_board_and_theme() -> None:
+    expected = {
+        ("INDUSTRY", "房地产业"): "房地产开发经营",
+        ("BOARD", "房地产开发"): "不动产开发",
+        ("BOARD", "深交所主板"): "深圳证券交易所主板",
+        ("THEME", "智能家居"): "家庭物联网",
+    }
+    assert len(LABEL_DEFINITION_OVERRIDES) >= len(expected)
+    for (dimension, label), fragment in expected.items():
+        definition = label_definition(label, dimension)
+        assert definition is not None
+        assert fragment in definition["definition"]
+        assert definition["definition_version"] == "LABEL_GLOSSARY_V1"
+
+
+def test_stock_classification_uses_label_master_data_without_database() -> None:
+    from app.models.market_data import StockSymbol
+
+    stock = StockSymbol(market="CN_A", symbol="000001", exchange="SZ", name="测试股票")
+    groups = build_classification_groups(stock=stock, db=None, profile_fields={
+        "所属行业": "房地产业",
+        "板块": "深交所主板",
+        "所属概念": "智能家居",
+    })
+    items = {
+        (item["classification_dimension"], item["label"]): item
+        for group in groups
+        for item in group["items"]
+    }
+    assert "房地产开发经营" in items[("INDUSTRY", "房地产业")]["definition"]
+    assert "深圳证券交易所主板" in items[("BOARD", "深交所主板")]["definition"]
+    assert "家庭物联网" in items[("THEME", "智能家居")]["definition"]
+
+
+def test_seed_writes_label_definitions_to_taxonomy_table() -> None:
+    from sqlalchemy import create_engine, select
+    from sqlalchemy.orm import Session
+
+    from app.db.base import Base
+    from app.models.taxonomy import ClassificationDefinition
+
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    with Session(engine) as db:
+        created = seed_builtin_definitions(db)
+        assert created >= len(LABEL_DEFINITION_OVERRIDES)
+        row = db.scalar(select(ClassificationDefinition).where(
+            ClassificationDefinition.dimension == "BOARD",
+            ClassificationDefinition.code == "LABEL_BOARD_SZ_MAIN",
+        ))
+        assert row is not None
+        assert row.label == "深交所主板"
+        assert "深圳证券交易所主板" in row.definition
+        assert row.definition_version == "LABEL_GLOSSARY_V1"

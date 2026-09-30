@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
-import { ArrowLeft, Building2 } from "lucide-react";
+import { ArrowLeft, Building2, X } from "lucide-react";
 import { CompanyGraphDialog } from "./CompanyGraphWorkbench";
 import { KnowledgeGraphDialog } from "./KnowledgeGraphExplorer";
 
@@ -83,6 +83,16 @@ function valueText(value: unknown): string {
     return Object.values(record).slice(0, 6).map(valueText).join(" · ") || "--";
   }
   return String(value);
+}
+
+/** Report periods are identifiers, not amounts; keep years free of thousands separators. */
+function reportPeriodText(value: unknown): string {
+  if (typeof value === "number" && Number.isInteger(value) && value >= 1900 && value <= 2200) {
+    return String(value);
+  }
+  const text = String(value ?? "").trim();
+  if (/^\d{4}$/.test(text)) return text;
+  return valueText(value);
 }
 
 /** Stable Chinese labels for normalized/provider fields used by F10 cards. */
@@ -345,7 +355,7 @@ function ResearchForecastPanel({ section }: { section: JsonRecord }) {
                 || (ratingDate(row)?.getFullYear() ?? "--");
               const ratingTone = rating === "买入" || rating === "增持" ? "positive" : rating === "减持" || rating === "卖出" ? "negative" : "neutral";
               return <tr key={`${institution}-${rating}-${index}`}>
-                <td>{valueText(reportPeriod)}</td>
+                <td>{reportPeriodText(reportPeriod)}</td>
                 <td className="research-forecast-institution">{institution}</td>
                 <td><span className={`research-rating ${ratingTone}`}>{rating}</span></td>
                 <td>{valueText(pickValue(row, ["评级数量", "评级数", "report_count"]))}</td>
@@ -387,6 +397,19 @@ function formatDate(value?: string | null): string {
   if (/^\d{4}-\d{2}-\d{2}/.test(text)) return text.slice(0, 10);
   if (/^\d{8}$/.test(text)) return `${text.slice(0, 4)}-${text.slice(4, 6)}-${text.slice(6, 8)}`;
   return text;
+}
+
+function friendlyRefreshError(reason: unknown): string {
+  const raw = reason instanceof Error ? reason.message : String(reason || "");
+  if (/abort|cancel/i.test(raw)) return "";
+  if (!raw || /failed to fetch|networkerror|load failed|timeout|timed out/i.test(raw)) {
+    return "远程数据暂时不可用，已继续显示本地缓存";
+  }
+  // Keep useful server-side Chinese diagnostics, but never expose a raw
+  // browser/transport error such as "Failed to fetch" in the user interface.
+  return /[\u3400-\u9fff]/.test(raw)
+    ? `远程更新未完成，已继续显示本地缓存：${raw}`
+    : "远程更新未完成，已继续显示本地缓存";
 }
 
 function pickValue(record: JsonRecord, keys: string[]): unknown {
@@ -2081,6 +2104,12 @@ export function StockDetailDrawer({
 
   const pageSize = 8;
 
+  useEffect(() => {
+    if (!remoteError) return;
+    const timer = window.setTimeout(() => setRemoteError(""), 6000);
+    return () => window.clearTimeout(timer);
+  }, [remoteError]);
+
   async function loadLocalAndRemote() {
     const current = requestId.current + 1;
     requestId.current = current;
@@ -2152,7 +2181,7 @@ export function StockDetailDrawer({
       }
     } catch (reason) {
       if (requestId.current === current && !signal?.aborted) {
-        setRemoteError(reason instanceof Error ? reason.message : "远程数据刷新失败，已保留本地缓存");
+        setRemoteError(friendlyRefreshError(reason));
         setRefreshStage("更新失败，继续使用本地缓存");
       }
     } finally {
@@ -2349,7 +2378,7 @@ export function StockDetailDrawer({
         {knowledgeGraphOpen && <KnowledgeGraphDialog initialStock={stock} close={() => setKnowledgeGraphOpen(false)} />}
         {loading && <p className="empty-state">正在读取本地数据库...</p>}
         {error && <p className="form-error">{error}</p>}
-        {remoteError && <p className="form-error soft-error">{remoteError}</p>}
+        {remoteError && <div className="form-error soft-error" role="status" aria-live="polite"><span>{remoteError}</span><button type="button" aria-label="关闭远程更新提示" title="关闭提示" onClick={() => setRemoteError("")}><X size={14} aria-hidden="true" /></button></div>}
 
         {detail && (
           <>

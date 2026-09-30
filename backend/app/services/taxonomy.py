@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import unicodedata
+from typing import Any
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -50,18 +53,45 @@ LABEL_DEFINITION_OVERRIDES = (
 )
 
 
-def label_definition(label: str | None, dimension: str | None = None) -> dict[str, str] | None:
-    """Return a concrete, label-level definition when one is registered."""
-    text = str(label or "").strip()
+LABEL_DEFINITION_VERSION = "LABEL_GLOSSARY_V1"
+LABEL_DEFINITION_SOURCE = "系统分类标签释义"
+
+
+def _normalized_label(value: Any) -> str:
+    """Normalize provider labels without changing their user-facing text."""
+    return unicodedata.normalize("NFKC", str(value or "")).strip().casefold()
+
+
+def _label_definition_record(item: dict[str, Any]) -> dict[str, Any]:
+    """Return a complete, persistence-ready label definition record."""
+    record = dict(item)
+    record.setdefault("taxonomy", "CN_SECURITIES")
+    record.setdefault("source_name", LABEL_DEFINITION_SOURCE)
+    record.setdefault("definition_version", LABEL_DEFINITION_VERSION)
+    record.setdefault("jurisdiction", "CN")
+    return record
+
+
+def label_definition(label: str | None, dimension: str | None = None) -> dict[str, Any] | None:
+    """Return a concrete, label-level definition when one is registered.
+
+    The lookup deliberately includes the classification dimension.  A label
+    such as ``房地产`` can be a provider industry or a thematic board, and
+    those meanings must not be silently merged.
+    """
+    normalized_label = _normalized_label(label)
     normalized_dimension = str(dimension or "").upper()
     for item in LABEL_DEFINITION_OVERRIDES:
-        if item["label"] == text and (not normalized_dimension or item["dimension"] == normalized_dimension):
-            return item
-    # A label may move between provider dimensions across API versions.  A
-    # dimension-free fallback is safer than showing a wrong board definition.
-    for item in LABEL_DEFINITION_OVERRIDES:
-        if item["label"] == text:
-            return item
+        if (_normalized_label(item["label"]) == normalized_label
+                and (not normalized_dimension or item["dimension"] == normalized_dimension)):
+            return _label_definition_record(item)
+    # A dimension-free lookup is useful for legacy callers.  When a caller
+    # supplies an unknown dimension, however, do not return a definition from
+    # another dimension and silently give the label the wrong meaning.
+    if not normalized_dimension:
+        for item in LABEL_DEFINITION_OVERRIDES:
+            if _normalized_label(item["label"]) == normalized_label:
+                return _label_definition_record(item)
     return None
 
 
@@ -85,12 +115,19 @@ BUILTIN_DEFINITIONS = (
 
 def seed_builtin_definitions(db: Session) -> int:
     created = 0
-    for item in BUILTIN_DEFINITIONS:
+    seed_items = tuple(BUILTIN_DEFINITIONS) + tuple(
+        _label_definition_record(item) for item in LABEL_DEFINITION_OVERRIDES
+    )
+    for item in seed_items:
         row = db.scalar(select(ClassificationDefinition).where(
             ClassificationDefinition.taxonomy == item["taxonomy"], ClassificationDefinition.dimension == item["dimension"],
             ClassificationDefinition.code == item["code"], ClassificationDefinition.definition_version == item["definition_version"]))
         if row is None:
-            db.add(ClassificationDefinition(**item, status="ACTIVE", properties_json={}))
+            db.add(ClassificationDefinition(
+                **item,
+                status="ACTIVE",
+                properties_json={},
+            ))
             created += 1
     if created:
         db.flush()

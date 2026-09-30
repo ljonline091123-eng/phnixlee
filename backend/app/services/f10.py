@@ -35,6 +35,7 @@ from app.models.foundation import (
 )
 from app.services.stock_on_demand import StockOnDemandService, _merge_f10_payload
 from app.services.stock_classification import _looks_like_index
+from app.services.taxonomy import LABEL_DEFINITION_OVERRIDES, label_definition
 
 
 F10_EXTENDED_SECTIONS = (
@@ -60,34 +61,18 @@ NOTICE_CATEGORIES = (
     "其他公告",
 )
 
-# The provider's security profile exposes concept names and codes but does not
-# publish a stable explanation field.  Keep a small, auditable glossary for
-# common Chinese investment themes so the detail dialog shows an actual
-# definition instead of the old one-line placeholder.  Unknown labels retain
-# a label-specific fallback and remain marked as source observations.
+# Keep the historical import name for callers while making taxonomy.py the
+# single source of truth for label-level explanations.
 CONCEPT_GLOSSARY: dict[str, str] = {
-    "深圳特区": "与深圳经济特区区域发展、地方产业政策或注册经营主体相关的证券主题。",
-    "养老概念": "业务涉及养老服务、康养地产、养老金融、医疗照护或相关设施运营的主题集合。",
-    "智能家居": "涉及家庭物联网、智能家电、家居控制系统或相关软硬件产品的主题。",
-    "超级品牌": "由来源机构按照品牌知名度、市场影响力或消费认知整理的品牌主题，并非监管分类。",
-    "租售同权": "与住房租赁服务、租赁权益保障及相关城市住房政策方向有关的主题。",
-    "装配建筑": "采用预制部品、模块化施工或工业化建造方式的建筑产业主题。",
-    "REITs概念": "与基础设施或不动产投资信托基金设立、运营、资产管理或相关服务有关的主题。",
-    "AH股": "同一发行主体同时在境内A股和香港H股市场挂牌交易的证券关系标签。",
-    "融资融券": "证券被纳入融资融券业务标的或与融资融券交易机制有关的来源标签。",
-    "深股通": "证券符合深圳市场互联互通机制下深股通投资范围的来源标签。",
-    "破净股": "按来源采集时点证券市场价格低于每股净资产的估值状态标签。",
-    "中盘股": "按来源口径以总市值或流通市值分位划分的中等规模证券标签，阈值随样本和日期变化。",
-    "中盘价值": "由来源按中等市值规模与相对价值特征组合识别的风格标签，不等同于法定行业或投资建议。",
-    "低市净率": "按来源采集时点市净率处于较低区间的估值风格标签，不代表未来收益。",
-    "房地产": "来源行业/板块对房地产开发、经营、服务及相关产业链企业的归类。",
-    "房地产开发": "以住宅、商业或综合不动产开发销售及配套运营为主要业务的行业板块。",
-    "住宅开发": "以住宅项目开发、建设和销售为主要业务范围的房地产细分板块。",
+    item["label"]: item["definition"] for item in LABEL_DEFINITION_OVERRIDES
 }
 
 
 def _concept_definition(name: str, dimension: str | None = None) -> str:
     text = str(name or "").strip()
+    master = label_definition(text, dimension)
+    if master and str(master.get("dimension") or "").upper() == str(dimension or "").upper():
+        return str(master.get("definition") or "")
     if text in CONCEPT_GLOSSARY:
         return CONCEPT_GLOSSARY[text]
     prefix = "行业归属" if str(dimension or "").upper() == "INDUSTRY" else "投资主题"
@@ -114,14 +99,29 @@ def _normalize_concept_rows(rows: list[Any]) -> list[dict[str, Any]]:
         item["dimension"] = dimension
         item["relevance_label"] = item.get("relevance_label") or "最相关"
         existing_definition = str(item.get("definition") or "").strip()
-        glossary_definition = CONCEPT_GLOSSARY.get(name)
+        master = label_definition(name, dimension)
+        if master and str(master.get("dimension") or "").upper() != dimension:
+            master = None
+        glossary_definition = str(master.get("definition") or "") if master else CONCEPT_GLOSSARY.get(name)
         generic_theme_definition = (
             "数据提供方根据公司业务、产品、公告或市场约定整理的投资主题集合" in existing_definition
             or "数据提供方标注的行业名称" in existing_definition
             or existing_definition == str(item.get("master_definition") or "").strip()
             and bool(item.get("master_dimension"))
         )
-        if glossary_definition and (not existing_definition or "需结合原文核验" in existing_definition
+        if master and glossary_definition:
+            if existing_definition and existing_definition != glossary_definition:
+                item.setdefault("fact_definition", existing_definition)
+            item["definition"] = glossary_definition
+            if not item.get("criteria") or generic_theme_definition:
+                item["criteria"] = master.get("criteria")
+            item["definition_source"] = master.get("source_name") or "系统分类标签释义"
+            item["definition_version"] = master.get("definition_version") or "LABEL_GLOSSARY_V1"
+            item["taxonomy"] = master.get("taxonomy") or "CN_SECURITIES"
+            item["master_definition"] = glossary_definition
+            item["master_criteria"] = master.get("criteria")
+            item["master_definition_version"] = item["definition_version"]
+        elif glossary_definition and (not existing_definition or "需结合原文核验" in existing_definition
                                      or "版本化主数据释义" in existing_definition or generic_theme_definition):
             if existing_definition and existing_definition != glossary_definition:
                 item.setdefault("fact_definition", existing_definition)
@@ -426,7 +426,7 @@ def normalize_f10_sections(extended_data: dict[str, dict[str, Any]]) -> dict[str
     # fact instead of dropping the provider row.  Index membership remains a
     # separate dimension and is never promoted to an industry/theme card.
     groups = profile.get("classification_groups")
-    typed_concepts: dict[str, dict[str, Any]] = {}
+    typed_concepts: dict[tuple[str, str], dict[str, Any]] = {}
     if isinstance(groups, list):
         for group in groups:
             if not isinstance(group, dict) or str(group.get("key") or "").lower() not in {"industry", "theme", "board"}:
@@ -444,10 +444,11 @@ def normalize_f10_sections(extended_data: dict[str, dict[str, Any]]) -> dict[str
                     "label": str(item.get("label") or name),
                     "dimension": item.get("dimension") or dimension,
                 })
-                typed_concepts.setdefault(str(name).strip().casefold(), typed)
+                typed_key = (str(typed.get("dimension") or dimension).upper(), str(name).strip().casefold())
+                typed_concepts.setdefault(typed_key, typed)
 
     merged_concepts: list[dict[str, Any]] = []
-    seen_concepts: set[str] = set()
+    seen_concepts: set[tuple[str, str]] = set()
     placeholder_definitions = {
         "来源披露的行业/概念标签，需结合原文核验。",
         "来源披露的行业/概念标签，需结合原文核验",
@@ -458,7 +459,7 @@ def normalize_f10_sections(extended_data: dict[str, dict[str, Any]]) -> dict[str
         name = raw_item.get("name") or raw_item.get("label")
         if not name or _looks_like_index(name, raw_item.get("code")):
             continue
-        key = str(name).strip().casefold()
+        key = (str(raw_item.get("dimension") or "THEME").upper(), str(name).strip().casefold())
         typed = typed_concepts.get(key)
         item = dict(raw_item)
         if typed:

@@ -156,8 +156,32 @@ class F10SectionContractTest(unittest.TestCase):
         })
         concept = payload["profile"]["concepts"][0]
         self.assertIn("家庭物联网", concept["definition"])
-        self.assertEqual(concept["definition_source"], "系统概念释义词典")
-        self.assertEqual(concept["definition_version"], "CONCEPT_GLOSSARY_V1")
+        self.assertEqual(concept["definition_source"], "系统分类标签释义")
+        self.assertEqual(concept["definition_version"], "LABEL_GLOSSARY_V1")
+
+    def test_f10_concepts_use_dimension_aware_label_definitions(self) -> None:
+        payload = normalize_f10_sections({
+            "profile": {
+                "fields": {},
+                "concepts": [
+                    {"name": "房地产业", "dimension": "INDUSTRY"},
+                    {"name": "房地产开发", "dimension": "BOARD"},
+                    {"name": "深交所主板", "dimension": "BOARD"},
+                    {"name": "智能家居", "dimension": "THEME"},
+                ],
+            },
+            "holders": {},
+            "financial_summary": {},
+            "financial_statements": {},
+            "business_composition": {},
+            "research_sections": {"reports": []},
+        })
+        concepts = {item["name"]: item for item in payload["profile"]["concepts"]}
+        self.assertIn("房地产开发经营", concepts["房地产业"]["definition"])
+        self.assertIn("不动产开发", concepts["房地产开发"]["definition"])
+        self.assertIn("深圳证券交易所主板", concepts["深交所主板"]["definition"])
+        self.assertIn("家庭物联网", concepts["智能家居"]["definition"])
+        self.assertTrue(all(item["definition_version"] == "LABEL_GLOSSARY_V1" for item in concepts.values()))
 
 
 if __name__ == "__main__":
