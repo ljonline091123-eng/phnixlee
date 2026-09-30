@@ -4575,8 +4575,16 @@ textarea:focus {
   .research-forecast-heading > .f10-data-status { display: none; }
   .research-forecast-tabs { flex: 1; justify-content: flex-end; gap: 14px; min-width: 0; }
   .research-forecast-tabs button { padding: 4px 0 7px; font-size: 13px; white-space: nowrap; }
-  .research-forecast-table, .rating-stat-table { min-width: 620px; font-size: 12px; }
-  .research-forecast-table th, .research-forecast-table td, .rating-stat-table th, .rating-stat-table td { padding: 10px 8px; }
+  /* The reference mobile tables expose every column in the viewport.  Keep
+     long institution names clipped, but do not force a desktop-width table
+     that hides the sell/total rating columns behind horizontal scrolling. */
+  .research-forecast-table, .rating-stat-table { min-width: 0; table-layout: fixed; font-size: 10px; }
+  .research-forecast-table th, .research-forecast-table td, .rating-stat-table th, .rating-stat-table td { padding: 9px 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .research-forecast-table th:first-child, .research-forecast-table td:first-child { width: 16%; }
+  .research-forecast-table th:nth-child(2), .research-forecast-table td:nth-child(2) { width: 28%; }
+  .research-forecast-table th:nth-child(n + 3), .research-forecast-table td:nth-child(n + 3) { width: 18.66%; }
+  .rating-stat-table th:first-child, .rating-stat-table td:first-child { width: 28%; }
+  .rating-stat-table th:not(:first-child), .rating-stat-table td:not(:first-child) { width: 12%; }
   .research-forecast-meta { margin: 6px 0 0; font-size: 10px; }
   .research-detail-section,
   .detail-research-markdown { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
@@ -5542,6 +5550,16 @@ textarea:focus {
 .f10-mobile-fullpage h3 { color: #fff; }
 .f10-mobile-fullpage > header button { display: inline-flex; align-items: center; gap: 4px; color: #fff; font-size: 13px; }
 @media (max-width: 760px) {
+  /* The restored detail view owns the full viewport.  The legacy drawer
+     padding would offset the sticky red quote header and expose stale rows
+     above it while changing tabs. */
+  .restored-stock-detail {
+    width: 100vw;
+    max-width: 100vw;
+    padding: 0 !important;
+    border-left: 0;
+  }
+  .restored-stock-detail .detail-market-header { width: 100%; }
   .restored-stock-detail { --stock-detail-sticky-header-height: 140px; }
   .restored-stock-detail .detail-market-header { min-height: 0; padding: 8px 12px; }
   .restored-stock-detail .detail-market-header > div:first-child { flex: 1 1 100%; min-width: 0; }
@@ -5556,6 +5574,13 @@ textarea:focus {
   .f10-mobile-fullpage h3 { flex: 1; text-align: center; }
   .f10-mobile-fullpage > header button { position: absolute; left: 14px; border: 0; background: transparent; }
   .f10-mobile-fullpage > .f10-detail-body { padding: 12px 16px; }
+  .f10-mobile-fullpage .f10-mobile-table { min-width: 0; table-layout: fixed; font-size: 10px; }
+  .f10-mobile-fullpage .f10-mobile-table th,
+  .f10-mobile-fullpage .f10-mobile-table td { padding: 8px 4px; overflow: hidden; text-overflow: ellipsis; }
+  .f10-mobile-fullpage .f10-mobile-table th:first-child,
+  .f10-mobile-fullpage .f10-mobile-table td:first-child { width: 24%; }
+  .f10-mobile-fullpage .f10-mobile-table th:not(:first-child),
+  .f10-mobile-fullpage .f10-mobile-table td:not(:first-child) { width: 25.33%; }
 }
 @media (max-width: 420px) {
   .f10-mobile-section { padding-right: 13px; padding-left: 13px; }
@@ -5565,4 +5590,6 @@ textarea:focus {
   .f10-composition-donut { width: 90px; }
   .f10-composition-donut::after { inset: 21px; }
   .f10-statement-row { grid-template-columns: minmax(82px, .75fr) minmax(0, 1fr) 12px; gap: 5px; font-size: 11px; }
+  .f10-holder-top_ten .f10-mobile-table,
+  .f10-holder-top_ten_circulating .f10-mobile-table { min-width: 0; table-layout: fixed; }
 }

@@ -1573,7 +1573,7 @@ function F10ConceptDetail({ section }: { section: JsonRecord }) {
     const definition = pickValue(concept, ["definition", "释义", "概念解析", "概念说明", "解释", "description"]);
     const importance = pickValue(concept, ["relevance_label", "相关度标签"]);
     return <article className="f10-concept-detail-item" key={`${name}-${index}`}>
-      <header><h4>{name}</h4>{importance ? <span>{String(importance)}</span> : null}</header>
+      <header><h4>{name}</h4><span>{String(importance || "最相关")}</span></header>
       <p>{valueText(definition || "暂无可核验的概念释义")}</p>
     </article>;
   })}</div> : <p className="f10-mobile-empty">{String(section.message || "暂无概念详情")}</p>;
