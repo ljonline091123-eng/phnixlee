@@ -4531,6 +4531,31 @@ textarea:focus {
 .notice-category-badge { color: #9b4d28; background: #fff2e7; }
 .notice-latest-badge { color: #fff; background: #e4393c; }
 .research-section-grid { display: grid; gap: 12px; margin-bottom: 14px; }
+.research-forecast-panel { padding: 18px; border: 1px solid var(--line, #dfe6df); border-radius: 8px; background: #fff; }
+.research-forecast-heading { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 16px; margin-bottom: 14px; }
+.research-forecast-heading > div:first-child { display: flex; align-items: center; gap: 10px; }
+.research-forecast-heading h3 { margin: 0; font-size: 18px; }
+.research-forecast-tabs { display: inline-flex; align-items: center; gap: 22px; }
+.research-forecast-tabs button { padding: 3px 0 8px; border: 0; border-bottom: 3px solid transparent; color: var(--text-muted, #718078); background: transparent; font-size: 16px; cursor: pointer; }
+.research-forecast-tabs button.active { border-bottom-color: #dd3e4d; color: #1f3029; font-weight: 700; }
+.research-forecast-list { display: grid; }
+.research-forecast-row { display: grid; grid-template-columns: minmax(140px, .35fr) minmax(0, 1fr); gap: 18px; align-items: center; padding: 10px 0; border-bottom: 1px dashed #e4e8e4; font-size: 14px; }
+.research-forecast-row strong { text-align: right; font-weight: 600; }
+.rating-stat-table-wrap { overflow-x: auto; }
+.rating-stat-table { width: 100%; min-width: 620px; border-collapse: separate; border-spacing: 0; font-size: 15px; }
+.rating-stat-table th, .rating-stat-table td { padding: 13px 18px; text-align: center; white-space: nowrap; }
+.rating-stat-table thead th { color: #858b87; font-weight: 500; }
+.rating-stat-table tbody th { color: #313b35; font-weight: 500; text-align: left; }
+.rating-stat-table tbody td:nth-child(2), .rating-stat-table tbody td:nth-child(3) { background: #f6f8fa; }
+.rating-stat-table .rating-buy { color: #e8a01c; font-weight: 700; }
+@media (max-width: 720px) {
+  .research-forecast-heading { grid-template-columns: 1fr auto; gap: 8px; }
+  .research-forecast-heading > .f10-data-status { grid-column: 2; grid-row: 1; }
+  .research-forecast-tabs { grid-column: 1 / -1; grid-row: 2; justify-content: flex-start; }
+  .research-forecast-row { grid-template-columns: 1fr; gap: 4px; }
+  .research-forecast-row strong { text-align: left; font-size: 13px; }
+  .rating-stat-table th, .rating-stat-table td { padding: 12px 14px; }
+}
 .f10-section-card { position: relative; }
 .f10-section-card.unavailable { background: #fbfcfb; }
 .f10-data-status { color: #16834a; font-size: 11px; }

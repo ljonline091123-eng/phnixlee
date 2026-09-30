@@ -236,6 +236,81 @@ function agentDisplayName(agent: unknown): string {
   return labels[key] || (key ? "研究智能体" : "研究智能体");
 }
 
+type RatingBucket = { period: string; buy: number; add: number; neutral: number; reduce: number; sell: number; total: number };
+
+function ratingText(value: unknown): string {
+  const text = String(value || "").trim();
+  if (!text) return "未披露评级";
+  if (/强烈?买入|买入|推荐/.test(text)) return "买入";
+  if (/强烈?增持|增持/.test(text)) return "增持";
+  if (/中性|持有/.test(text)) return "中性";
+  if (/减持/.test(text)) return "减持";
+  if (/卖出|回避/.test(text)) return "卖出";
+  return text;
+}
+
+function ratingDate(row: JsonRecord): Date | null {
+  const raw = pickValue(row, ["最新报告日期", "日期", "报告日期", "report_date"]);
+  if (!raw) return null;
+  const date = new Date(String(raw).replace(/年|月/g, "-").replace(/日/g, ""));
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function ratingStatistics(rows: JsonRecord[]): RatingBucket[] {
+  const now = new Date();
+  const ranges = [
+    { period: "1个月内", days: 31 },
+    { period: "2个月内", days: 62 },
+    { period: "3个月内", days: 93 },
+    { period: "6个月内", days: 186 },
+    { period: "1年内", days: 366 },
+  ];
+  return ranges.map(({ period, days }) => {
+    const cutoff = now.getTime() - days * 86400000;
+    const counts = { buy: 0, add: 0, neutral: 0, reduce: 0, sell: 0 };
+    rows.forEach((row) => {
+      const date = ratingDate(row);
+      if (!date || date.getTime() < cutoff || date.getTime() > now.getTime() + 86400000) return;
+      const rating = ratingText(pickValue(row, ["rating", "评级", "东财评级"]));
+      if (rating === "买入") counts.buy += 1;
+      else if (rating === "增持") counts.add += 1;
+      else if (rating === "中性") counts.neutral += 1;
+      else if (rating === "减持") counts.reduce += 1;
+      else if (rating === "卖出") counts.sell += 1;
+    });
+    return { period, ...counts, total: counts.buy + counts.add + counts.neutral + counts.reduce + counts.sell };
+  });
+}
+
+function ResearchForecastPanel({ section }: { section: JsonRecord }) {
+  const rows = sectionRows(section);
+  const [mode, setMode] = useState<"forecast" | "rating">("forecast");
+  const statistics = useMemo(() => ratingStatistics(rows), [rows]);
+  return (
+    <section className="research-forecast-panel">
+      <div className="research-forecast-heading">
+        <div><span className="financial-section-mark" /><h3>机构预测</h3></div>
+        <div className="research-forecast-tabs" role="tablist" aria-label="机构预测视图">
+          <button type="button" className={mode === "forecast" ? "active" : ""} onClick={() => setMode("forecast")}>机构预测</button>
+          <button type="button" className={mode === "rating" ? "active" : ""} onClick={() => setMode("rating")}>评级统计</button>
+        </div>
+        <span className="f10-data-status available">{rows.length ? "已获取" : "暂无数据"}</span>
+      </div>
+      {mode === "forecast" ? (
+        rows.length ? <div className="research-forecast-list">{rows.slice(0, 100).map((row, index) => {
+          const institution = String(pickValue(row, ["机构", "institution"]) || "未披露机构");
+          const rating = ratingText(pickValue(row, ["评级", "东财评级", "rating"]));
+          return <div className="research-forecast-row" key={`${institution}-${index}`}><span>{institution}</span><strong>评级：{rating} · 评级数量：{valueText(pickValue(row, ["评级数量", "评级数", "report_count"]))} · 最新报告日期：{formatDate(String(pickValue(row, ["最新报告日期", "日期", "report_date"]) || ""))}</strong></div>;
+        })}</div> : <p className="empty-state">{String(section.message || "当前数据源未返回机构预测")}</p>
+      ) : (
+        <div className="rating-stat-table-wrap"><table className="rating-stat-table"><thead><tr><th>时间段</th><th>买入</th><th>增持</th><th>中性</th><th>减持</th><th>卖出</th><th>总家数</th></tr></thead><tbody>{statistics.map((row) => <tr key={row.period}><th>{row.period}</th><td className="rating-buy">{row.buy}</td><td>{row.add}</td><td>{row.neutral}</td><td>{row.reduce}</td><td>{row.sell}</td><td>{row.total}</td></tr>)}</tbody></table></div>
+      )}
+      <div className="f10-section-meta"><span>来源：{String(section.source || "暂无")}</span>{section.as_of ? <span>截至：{formatDate(String(section.as_of))}</span> : null}</div>
+      {mode === "forecast" && rows.length > 8 ? <button type="button" className="f10-detail-link" onClick={() => setMode("rating")}>查看评级统计</button> : null}
+    </section>
+  );
+}
+
 function formatNumber(value?: number | null, digits = 2): string {
   if (value === undefined || value === null || !Number.isFinite(value)) return "--";
   return new Intl.NumberFormat("zh-CN", { maximumFractionDigits: digits }).format(value);
@@ -1702,9 +1777,15 @@ export function StockDetailDrawer({
               {tab === "F10" && <F10Panel detail={detail} activeTab={f10Tab} setActiveTab={setF10Tab} />}
               {tab === "研究" && (
                   <>
-                    <section className="research-section-grid">
-                    {researchSections.length ? researchSections.map((section) => <F10SectionBlock key={String(section.key)} section={section} onOpen={(item) => setResearchDetail(item)} />) : <p className="empty-state">暂无研究分区数据，请先拉取最新 F10。</p>}
-                  </section>
+                    {researchSections.length ? (
+                      <section className="research-section-grid">
+                        {researchSections.filter((section) => String(section.key) !== "institution_forecast").map((section) => <F10SectionBlock key={String(section.key)} section={section} onOpen={(item) => setResearchDetail(item)} />)}
+                        {(() => {
+                          const institution = researchSections.find((section) => String(section.key) === "institution_forecast");
+                          return institution ? <ResearchForecastPanel section={institution} /> : null;
+                        })()}
+                      </section>
+                    ) : <p className="empty-state">暂无研究分区数据，请先拉取最新 F10。</p>}
                   <section className="f10-section inner-section research-detail-section">
                     <div className="f10-section-head">
                       <div>
