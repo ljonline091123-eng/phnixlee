@@ -1237,7 +1237,11 @@ function ShareholderTable({ rows, title }: { rows: unknown; title: string }) {
 }
 
 function FundFlowPanel({ data }: { data: JsonRecord }) {
-  const rows = asArray(data.rows);
+  const rows = asArray(data.rows).sort((left, right) => {
+    const leftDate = String(findValue(left, ["日期", "交易日期", "持股日期", "date", "trade_date"]) || "");
+    const rightDate = String(findValue(right, ["日期", "交易日期", "持股日期", "date", "trade_date"]) || "");
+    return rightDate.localeCompare(leftDate);
+  });
   const latest = rows[0] || {};
   const [flowMode, setFlowMode] = useState<"main" | "institution" | "hot">("main");
   const [fundSection, setFundSection] = useState<"flow" | "dragon" | "block" | "analysis">("flow");
@@ -1452,7 +1456,7 @@ function F10SectionBlock({
       ) : <p className="empty-state compact-empty">{String(section.message || "当前数据源未返回该分区数据")}</p>}
       {footer}
       <div className="f10-section-meta"><span>来源：{String(section.source || "暂无")}</span><SourceLinks section={section} />{section.as_of ? <span>截至：{formatDate(String(section.as_of))}</span> : null}</div>
-      {(onOpen || rows.length > 8) ? <button type="button" className="f10-detail-link" onClick={() => onOpen ? onOpen({ ...section, detail_title: section.detail_title || actionLabel }) : setExpanded((value) => !value)}>{onOpen ? actionLabel : (expanded ? "收起详细数据" : "查看详细数据")}</button> : null}
+      {((onOpen && rows.length > 0) || rows.length > 8) ? <button type="button" className="f10-detail-link" onClick={() => onOpen ? onOpen({ ...section, detail_title: section.detail_title || actionLabel }) : setExpanded((value) => !value)}>{onOpen ? actionLabel : (expanded ? "收起详细数据" : "查看详细数据")}</button> : null}
     </section>
   );
 }
@@ -1526,16 +1530,18 @@ function F10SectionSource({ section }: { section: JsonRecord }) {
 
 function ResearchIndustryConcepts({ section, onOpen }: { section: JsonRecord; onOpen: (section: JsonRecord) => void }) {
   const rows = sectionRows(section);
+  const [expanded, setExpanded] = useState(false);
   if (!rows.length) {
     return <F10SectionBlock section={section} onOpen={onOpen} />;
   }
+  const visibleRows = expanded ? rows : rows.slice(0, 24);
   return <section className="research-industry-panel" aria-labelledby="research-industry-title">
     <header className="research-industry-heading">
       <div><span className="financial-section-mark" aria-hidden="true" /><h3 id="research-industry-title">行业概念</h3></div>
       <span>{rows.length} 个分类</span>
     </header>
     <div className="research-industry-cards">
-      {rows.slice(0, 24).map((row, index) => {
+      {visibleRows.map((row, index) => {
         const name = String(pickValue(row, ["name", "label", "概念名称", "概念", "行业", "板块"]) || `分类${index + 1}`);
         const dimension = String(pickValue(row, ["dimension", "classification_dimension"]) || "").toUpperCase();
         const dimensionLabel = dimension === "INDUSTRY" ? "行业" : dimension === "THEME" ? "主题板块" : dimension === "BOARD" ? "上市板块" : "来源标签";
@@ -1560,7 +1566,17 @@ function ResearchIndustryConcepts({ section, onOpen }: { section: JsonRecord; on
         </button>;
       })}
     </div>
-    {rows.length > 24 ? <p className="research-industry-more">已展示前 24 个分类，点击“更多”查看完整列表。</p> : null}
+    {rows.length > 24 ? (
+      <button
+        type="button"
+        className="research-industry-more"
+        aria-expanded={expanded}
+        onClick={() => setExpanded((value) => !value)}
+      >
+        {expanded ? "收起分类" : `查看全部 ${rows.length} 个分类`}
+        <span aria-hidden="true">{expanded ? "↑" : "↓"}</span>
+      </button>
+    ) : null}
     <F10SectionSource section={section} />
   </section>;
 }
@@ -1811,6 +1827,7 @@ function dividendDate(row: JsonRecord): string {
 
 function dividendTableRows(rows: JsonRecord[]): JsonRecord[] {
   return rows.map((row) => {
+    const sourcePlan = findValue(row, ["方案", "实施方案分红说明", "分红方案", "分配方案"]);
     const planParts = [
       ["送股", findValue(row, ["送股", "送股比例"])],
       ["转增", findValue(row, ["转增", "转增比例"])],
@@ -1819,7 +1836,7 @@ function dividendTableRows(rows: JsonRecord[]): JsonRecord[] {
       .map(([label, value]) => `${label}${valueText(value)}`);
     return {
       year: dividendDate(row).slice(0, 4) || "--",
-      plan: planParts.length ? planParts.join("；") : String(findValue(row, ["方案", "分配方案", "进度"]) || "--"),
+      plan: sourcePlan ? String(sourcePlan) : planParts.length ? planParts.join("；") : String(findValue(row, ["进度"]) || "--"),
       ex_date: findValue(row, ["除权除息日", "除权日", "除息日", "ex_date"]),
       record_date: findValue(row, ["股权登记日", "登记日", "record_date"]),
       raw: row,
@@ -1829,15 +1846,12 @@ function dividendTableRows(rows: JsonRecord[]): JsonRecord[] {
 
 function F10DividendSection({ section, onOpen }: { section: JsonRecord; onOpen: (section: JsonRecord) => void }) {
   const rows = sectionRows(section);
-  const byYear = new Map<string, JsonRecord>();
-  rows.forEach((row) => {
-    const year = dividendDate(row).slice(0, 4);
-    if (year && !byYear.has(year)) byYear.set(year, row);
-  });
-  const recent = [...byYear.entries()]
-    .sort(([left], [right]) => right.localeCompare(left))
-    .slice(0, 3)
-    .map(([, row]) => row);
+  const recentYears = [...new Set(rows.map((row) => dividendDate(row).slice(0, 4)).filter(Boolean))]
+    .sort((left, right) => right.localeCompare(left))
+    .slice(0, 3);
+  // Keep every interim/annual distribution within the latest three calendar
+  // years.  Collapsing to one row per year hides valid dividend events.
+  const recent = rows.filter((row) => recentYears.includes(dividendDate(row).slice(0, 4)));
   const tableRows = dividendTableRows(recent.length ? recent : rows.slice(0, 3));
   return <section className="f10-mobile-section f10-overview-dividend">
     <F10SectionHeading section={section} onOpen={rows.length ? () => onOpen({ ...section, key: "dividend_detail", detail_title: "分红配送全部" }) : undefined} />
@@ -2559,7 +2573,7 @@ export function StockDetailDrawer({
                       {researchReport ? renderMarkdown(researchReport) : <p className="empty-state">点击按钮后，研报会以打字机流式效果显示在这里。</p>}
                     </article>
                     </section>
-                    {researchDetail ? <div className="f10-detail-overlay" role="dialog" aria-modal="true"><div className="f10-detail-dialog"><header><h3>{String(researchDetail.title || "研究详情")}</h3><button type="button" onClick={() => setResearchDetail(null)}>关闭</button></header><div className="f10-detail-body">{sectionRows(researchDetail).length ? sectionRows(researchDetail).map((row, index) => <div className="f10-detail-row" key={index}><strong>{String(pickValue(row, ["label", "name", "项目", "指标"]) || `项目 ${index + 1}`)}</strong><span>{rowValueText(row)}</span></div>) : <p className="empty-state">{String(researchDetail.message || "当前数据源未返回详细数据")}</p>}<div className="f10-detail-source"><span>来源：{String(researchDetail.source || "暂无")}</span><SourceLinks section={researchDetail} /></div></div></div></div> : null}
+                    {researchDetail ? <div className="f10-detail-overlay" role="dialog" aria-modal="true"><div className="f10-detail-dialog"><header><h3>{String(researchDetail.detail_title || researchDetail.title || "研究详情")}</h3><button type="button" onClick={() => setResearchDetail(null)}>关闭</button></header><div className="f10-detail-body">{sectionRows(researchDetail).length ? sectionRows(researchDetail).map((row, index) => <div className="f10-detail-row" key={index}><strong>{String(pickValue(row, ["label", "name", "项目", "指标"]) || `项目 ${index + 1}`)}</strong><span>{rowValueText(row)}</span></div>) : <p className="empty-state">{String(researchDetail.message || "当前数据源未返回详细数据")}</p>}<div className="f10-detail-source"><span>来源：{String(researchDetail.source || "暂无")}</span><SourceLinks section={researchDetail} /></div></div></div></div> : null}
                   </>
               )}
             </section>

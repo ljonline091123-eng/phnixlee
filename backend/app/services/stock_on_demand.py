@@ -345,9 +345,31 @@ def _merge_f10_payload(
     if section == "fund_flow":
         incoming_rows = incoming.get("rows")
         if isinstance(incoming_rows, list) and incoming_rows:
-            merged["rows"] = incoming_rows
+            merged["rows"] = sorted(
+                incoming_rows,
+                key=lambda row: max(
+                    (
+                        str(row.get(name) or "")[:19]
+                        for name in ("日期", "交易日期", "持股日期", "date", "trade_date")
+                        if isinstance(row, dict)
+                    ),
+                    default="",
+                ),
+                reverse=True,
+            )
         elif existing.get("rows"):
-            merged["rows"] = existing["rows"]
+            merged["rows"] = sorted(
+                existing["rows"],
+                key=lambda row: max(
+                    (
+                        str(row.get(name) or "")[:19]
+                        for name in ("日期", "交易日期", "持股日期", "date", "trade_date")
+                        if isinstance(row, dict)
+                    ),
+                    default="",
+                ),
+                reverse=True,
+            )
         return merged
 
     if section == "business_composition":

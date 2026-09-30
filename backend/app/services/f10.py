@@ -407,6 +407,37 @@ def normalize_f10_sections(extended_data: dict[str, dict[str, Any]]) -> dict[str
     holders = extended_data.setdefault("holders", {})
     composition = extended_data.setdefault("business_composition", {})
 
+    def sort_rows_latest(payload: dict[str, Any], field_names: tuple[str, ...]) -> None:
+        rows = payload.get("rows")
+        if not isinstance(rows, list):
+            return
+        payload["rows"] = sorted(
+            rows,
+            key=lambda row: max(
+                (str(row.get(name) or "")[:19] for name in field_names if isinstance(row, dict)),
+                default="",
+            ),
+            reverse=True,
+        )
+
+    fund_payload = extended_data.get("fund_flow")
+    if isinstance(fund_payload, dict):
+        sort_rows_latest(fund_payload, ("日期", "交易日期", "持股日期", "date", "trade_date"))
+    dividend_rows = profile.get("dividends")
+    if isinstance(dividend_rows, list):
+        profile["dividends"] = sorted(
+            dividend_rows,
+            key=lambda row: max(
+                (
+                    str(row.get(name) or "")[:19]
+                    for name in ("公告日期", "实施方案公告日期", "除权日", "股权登记日", "最新公告日期", "date")
+                    if isinstance(row, dict)
+                ),
+                default="",
+            ),
+            reverse=True,
+        )
+
     def payload_as_of(payload: dict[str, Any] | None) -> str | None:
         if not isinstance(payload, dict):
             return None

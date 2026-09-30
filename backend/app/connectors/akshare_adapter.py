@@ -65,6 +65,16 @@ class AkshareAdapter(MarketDataAdapter):
         compact = re.sub(r"[\s_()（）%]", "", text).upper()
         if not compact:
             return False
+        # Provider indicator snapshots put amounts, ratios and turnover
+        # measures in the same JSON row.  A broad substring check such as
+        # ``PROFIT`` would incorrectly round fields like
+        # ``PARENTNETPROFITTZ`` (profit growth) or ``FIXED_ASSET_TR``.  Reject
+        # the common ratio/growth suffixes before looking for amount names.
+        if re.search(
+            r"(?:TZ|YOY|QOQ|MOM|TB|HB|TR|TS|RATIO|RATE|MARGIN|PCT|PERCENT|ROE|ROA|EPS|BPS|PE|PB|CYCLE)$",
+            compact,
+        ):
+            return False
         excluded = (
             "RATIO", "PCT", "PERCENT", "YOY", "QOQ", "MOM", "EPS",
             "PB", "ROE", "ROA", "MARGIN", "SHARES", "SHARE",
@@ -75,10 +85,18 @@ class AkshareAdapter(MarketDataAdapter):
         )
         if any(token in compact or token in text for token in excluded):
             return False
+        if compact.startswith(("PER", "MG", "ZZ", "FC_", "FC", "NCO_", "NCO", "NETPROFITRPHB")):
+            # PER_*/MG*/ZZ* are Eastmoney per-share, margin and turnover
+            # indicators rather than currency observations.  FCFF is the one
+            # cash-flow exception and is handled explicitly below.
+            if compact.startswith("FCFF"):
+                pass
+            else:
+                return False
         if re.search(r"(?:^|_)P(?:E|ER)(?:_|$)", str(key or "").upper()):
             return False
         amount_tokens = (
-            "REVENUE", "INCOME", "PROFIT", "ASSET", "LIABIL", "EQUITY", "CASH",
+            "REVENUE", "INCOME", "PROFIT", "ASSET", "LIABIL", "EQUITY", "CASH", "FCFF",
             "AMOUNT", "VALUE", "COST", "EXPENSE", "CAPITAL", "MVALUE", "NETCASH",
             "OPERATE", "费用", "收入", "利润", "资产", "负债", "权益", "现金",
             "金额", "市值", "成本", "费用", "股本", "净额",
@@ -444,10 +462,7 @@ class AkshareAdapter(MarketDataAdapter):
             symbol=symbol, limit=50, provider_scoped=True,
         )
         holders["holder_count"] = self._safe_holder_count(symbol)
-        dividends = self._safe_optional_records(
-            getattr(ak, "stock_history_dividend_detail", None),
-            {"symbol": symbol, "indicator": "分红"}, limit=50,
-        )
+        dividends = self._safe_cn_dividend_records(symbol)
         concepts: list[dict[str, Any]] = []
         profile_fields = profile.get("fields") if isinstance(profile.get("fields"), dict) else {}
         raw_concepts = profile_fields.get("所属概念") or profile_fields.get("概念")
@@ -459,7 +474,11 @@ class AkshareAdapter(MarketDataAdapter):
         profile_result = {
             "concepts": concepts,
             "dividends": dividends,
-            "dividend_source": "AkShare stock_history_dividend_detail" if dividends else "暂无",
+            "dividend_source": (
+                "巨潮资讯历史分红"
+                if any("实施方案公告日期" in row for row in dividends)
+                else ("新浪财经历史分红（兼容回退）" if dividends else "暂无")
+            ),
             "margin_history": self._safe_cn_margin_history(symbol),
             "margin_source": "东方财富/交易所融资融券明细",
         }
@@ -500,6 +519,7 @@ class AkshareAdapter(MarketDataAdapter):
         financial_statements = self._safe_hk_financial_statements(symbol)
         published_reports = self._safe_hk_financial_reports(symbol)
         business_composition = self._safe_hk_business_composition(symbol)
+        dividends = self._safe_hk_dividend_records(symbol)
         profile_fields = self._normalize_hk_profile_fields(
             {
                 **(company.get("fields") or {}),
@@ -512,6 +532,8 @@ class AkshareAdapter(MarketDataAdapter):
             "profile": {
                 "source": " / ".join(profile_sources) or "暂无",
                 "fields": profile_fields,
+                "dividends": dividends,
+                "dividend_source": "东方财富港股分红派息" if dividends else "暂无",
             },
             "holders": {
                 "source": "港交所 DI / CCASS 官方查询入口",
@@ -2459,6 +2481,7 @@ class AkshareAdapter(MarketDataAdapter):
             rows = self._safe_dataframe_records(dataframe, limit=30)
             if not rows:
                 return self._fetch_cn_fund_flow_http(symbol)
+            rows.sort(key=lambda row: str(row.get("日期") or row.get("交易日期") or row.get("date") or ""), reverse=True)
             return {
                 "source": "东方财富个股资金流",
                 "rows": rows,
@@ -2487,20 +2510,42 @@ class AkshareAdapter(MarketDataAdapter):
             "Referer": "https://data.eastmoney.com/zjlx/detail.html",
             "Connection": "close",
         }
-        for host in ("push2his.eastmoney.com", "82.push2his.eastmoney.com"):
-            for scheme in ("https", "http"):
-                try:
-                    url = f"{scheme}://{host}/api/qt/stock/fflow/daykline/get"
-                    payload = self._request_eastmoney_json(url, params, headers)
-                    rows = self._build_cn_fund_flow_rows(payload)
-                    if rows:
-                        return {
-                            "source": "东方财富个股资金流 HTTP 备用接口",
-                            "rows": rows,
-                            "message": "资金流按交易日返回，金额单位为元。",
-                        }
-                except Exception:
-                    continue
+        # Eastmoney has exposed two variants of the same flow endpoint over
+        # time.  ``daykline`` is the richer historical feed, while ``kline``
+        # is often the only endpoint that returns the current trading day
+        # when the former is rate-limited or closes the connection.  Probe both
+        # and merge by date so a fresh one-row response does not discard an
+        # older but still useful history returned by another host.
+        merged: dict[str, dict[str, Any]] = {}
+        for path in ("/api/qt/stock/fflow/kline/get", "/api/qt/stock/fflow/daykline/get"):
+            for host in ("push2.eastmoney.com", "push2his.eastmoney.com", "82.push2his.eastmoney.com"):
+                for scheme in ("https", "http"):
+                    try:
+                        url = f"{scheme}://{host}{path}"
+                        payload = self._request_eastmoney_json(url, params, headers)
+                        rows = self._build_cn_fund_flow_rows(payload)
+                        for row in rows:
+                            date_key = str(row.get("日期") or "")
+                            if date_key:
+                                existing = merged.get(date_key, {})
+                                merged[date_key] = {
+                                    **row,
+                                    **{key: value for key, value in existing.items() if value not in (None, "")},
+                                }
+                    except Exception:
+                        continue
+            # A current-day response is sufficient to stop probing the second
+            # endpoint when no historical rows were available.  Otherwise the
+            # loop continues and tries to enrich it with history.
+            if len(merged) >= 30:
+                break
+        if merged:
+            rows = sorted(merged.values(), key=lambda row: str(row.get("日期") or ""), reverse=True)[:30]
+            return {
+                "source": "东方财富个股资金流 HTTP 备用接口",
+                "rows": rows,
+                "message": "资金流按交易日返回，金额单位为元。",
+            }
         return {"source": "东方财富个股资金流", "rows": [], "message": "资金流接口暂时不可用，请稍后重试。"}
 
     def _build_cn_fund_flow_rows(self, payload: dict[str, Any], limit: int = 30) -> list[dict[str, Any]]:
@@ -2693,6 +2738,139 @@ class AkshareAdapter(MarketDataAdapter):
         try:
             dataframe = method(**kwargs)
             return cls._safe_dataframe_records(dataframe, limit=limit)
+        except Exception:
+            return []
+
+    @classmethod
+    def _normalize_dividend_date(cls, value: Any) -> str | None:
+        """Normalize provider dividend dates, including epoch-millisecond values."""
+        if value in (None, ""):
+            return None
+        # Some provider versions serialize epoch milliseconds as strings rather
+        # than numeric values.  Convert those explicitly before pandas gets a
+        # chance to interpret them as nanoseconds.
+        text = str(value).strip()
+        if re.fullmatch(r"\d{10,13}", text):
+            try:
+                number = int(text)
+                if len(text) <= 10:
+                    number *= 1000
+                value = number
+            except (TypeError, ValueError):
+                pass
+        normalized = cls._coerce_report_date(value)
+        if normalized and normalized.lower() in {"nat", "nan", "none", "null"}:
+            return None
+        return normalized
+
+    @classmethod
+    def _normalize_dividend_row(cls, row: dict[str, Any], market: str) -> dict[str, Any]:
+        """Keep raw dividend fields and add a stable Chinese read-model contract."""
+        item = {str(key): cls._json_safe(value) for key, value in row.items()}
+
+        def first(*keys: str) -> Any:
+            for key in keys:
+                value = item.get(key)
+                if value not in (None, ""):
+                    return value
+            return None
+
+        def set_alias(alias: str, value: Any) -> None:
+            if value not in (None, "") and item.get(alias) in (None, ""):
+                item[alias] = value
+
+        if market == "HK":
+            date_fields = {
+                "公告日期": ("最新公告日期", "公告日期", "分红公告日期"),
+                "除净日": ("除净日", "除权日", "除息日"),
+                "发放日": ("发放日", "派息日"),
+            }
+            set_alias("公告日期", cls._normalize_dividend_date(first(*date_fields["公告日期"])))
+            set_alias("除权日", cls._normalize_dividend_date(first(*date_fields["除净日"])))
+            set_alias("发放日", cls._normalize_dividend_date(first(*date_fields["发放日"])))
+            set_alias("报告期", first("财政年度", "报告期", "年度"))
+            set_alias("方案", first("分红方案", "方案"))
+            set_alias("分红类型", first("分配类型", "分红类型"))
+            # Keep the source spelling too, but make date fields consistently
+            # ISO-formatted for callers that inspect raw provider columns.
+            for key in ("最新公告日期", "除净日", "发放日", "公告日期", "除权日", "派息日"):
+                if key in item:
+                    item[key] = cls._normalize_dividend_date(item[key])
+            sort_date = first("公告日期", "最新公告日期", "除权日", "除净日", "发放日")
+        else:
+            date_fields = {
+                "公告日期": ("实施方案公告日期", "公告日期", "分红公告日期"),
+                "股权登记日": ("股权登记日", "登记日"),
+                "除权日": ("除权日", "除权除息日", "除息日"),
+                "派息日": ("派息日", "发放日"),
+            }
+            set_alias("公告日期", cls._normalize_dividend_date(first(*date_fields["公告日期"])))
+            set_alias("股权登记日", cls._normalize_dividend_date(first(*date_fields["股权登记日"])))
+            set_alias("除权日", cls._normalize_dividend_date(first(*date_fields["除权日"])))
+            set_alias("派息日", cls._normalize_dividend_date(first(*date_fields["派息日"])))
+            set_alias("报告期", first("报告时间", "报告期", "财政年度", "年度"))
+            set_alias("分红类型", first("分红类型", "分配类型"))
+            set_alias("送股", first("送股比例", "送股"))
+            set_alias("转增", first("转增比例", "转增"))
+            set_alias("派息", first("派息比例", "派息", "现金分红", "分红"))
+            set_alias("方案", first("实施方案分红说明", "分红方案", "方案"))
+            for key in (
+                "实施方案公告日期", "公告日期", "股权登记日", "登记日", "除权日",
+                "除权除息日", "除息日", "派息日", "发放日",
+            ):
+                if key in item:
+                    item[key] = cls._normalize_dividend_date(item[key])
+            sort_date = first("公告日期", "实施方案公告日期", "除权日", "股权登记日", "派息日")
+
+        item["_sort_date"] = cls._normalize_dividend_date(sort_date) or ""
+        return item
+
+    @classmethod
+    def _normalize_dividend_dataframe(cls, dataframe: Any, market: str) -> list[dict[str, Any]]:
+        if dataframe is None or not hasattr(dataframe, "empty") or dataframe.empty:
+            return []
+        try:
+            # Dividend endpoints return a bounded history.  Use the exact frame
+            # length so the detail dialog can expose every provider row.
+            limit = max(1, len(dataframe))
+        except (TypeError, ValueError):
+            limit = 5000
+        rows = cls._safe_dataframe_records(dataframe, limit=limit)
+        normalized = [cls._normalize_dividend_row(row, market) for row in rows]
+        normalized.sort(key=lambda row: str(row.pop("_sort_date", "")), reverse=True)
+        return normalized
+
+    @classmethod
+    def _safe_cn_dividend_records(cls, symbol: str) -> list[dict[str, Any]]:
+        """Fetch A-share cash/stock dividend history with a legacy fallback."""
+        primary = getattr(ak, "stock_dividend_cninfo", None)
+        if primary:
+            try:
+                rows = cls._normalize_dividend_dataframe(primary(symbol=symbol), "CN_A")
+                if rows:
+                    return rows
+            except Exception:
+                pass
+        # Older AkShare releases may not expose the CNINFO endpoint.  Retain
+        # the historical Sina detail endpoint as a best-effort fallback.
+        fallback = getattr(ak, "stock_history_dividend_detail", None)
+        if not fallback:
+            return []
+        try:
+            return cls._normalize_dividend_dataframe(
+                fallback(symbol=symbol, indicator="分红"),
+                "CN_A",
+            )
+        except Exception:
+            return []
+
+    @classmethod
+    def _safe_hk_dividend_records(cls, symbol: str) -> list[dict[str, Any]]:
+        method = getattr(ak, "stock_hk_dividend_payout_em", None)
+        if not method:
+            return []
+        try:
+            return cls._normalize_dividend_dataframe(method(symbol=symbol), "HK")
         except Exception:
             return []
 

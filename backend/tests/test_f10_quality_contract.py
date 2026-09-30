@@ -43,6 +43,11 @@ def test_financial_source_payload_rounds_amounts_but_preserves_ratios_and_eps() 
         "TOTAL_OPERATE_INCOME": 123456789.126,
         "PARENT_NETPROFIT": -987654321.125,
         "TOTAL_OPERATE_INCOME_YOY": 12.345678,
+        "PARENTNETPROFITTZ": 3.321270607157,
+        "FIXED_ASSET_TR": 29.740736041932,
+        "NCO_NETPROFIT": 8.367528855,
+        "FC_LIABILITIES": 15.955679443974,
+        "FCFF_FORWARD": 32314539.7299969,
         "EPS": 1.234567,
         "ROE": 8.765432,
         "REPORT_DATE": "2026-06-30",
@@ -50,7 +55,12 @@ def test_financial_source_payload_rounds_amounts_but_preserves_ratios_and_eps() 
 
     assert payload["TOTAL_OPERATE_INCOME"] == 123456789.13
     assert payload["PARENT_NETPROFIT"] == -987654321.13
-    assert payload["TOTAL_OPERATE_INCOME_YOY"] == 12.345678
+        assert payload["TOTAL_OPERATE_INCOME_YOY"] == 12.345678
+        assert payload["PARENTNETPROFITTZ"] == 3.321270607157
+        assert payload["FIXED_ASSET_TR"] == 29.740736041932
+        assert payload["NCO_NETPROFIT"] == 8.367528855
+        assert payload["FC_LIABILITIES"] == 15.955679443974
+        assert payload["FCFF_FORWARD"] == 32314539.73
     assert payload["EPS"] == 1.234567
     assert payload["ROE"] == 8.765432
 
