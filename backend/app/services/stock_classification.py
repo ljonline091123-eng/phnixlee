@@ -43,6 +43,83 @@ def _clean_industry(value: Any) -> list[str]:
     return values
 
 
+_EASTMONEY_BK_CODE_RE = re.compile(r"^BK\d{4,}$", re.IGNORECASE)
+
+
+def _is_eastmoney_industry_code(code: Any) -> bool:
+    """Return whether *code* is an Eastmoney BK provider code.
+
+    Eastmoney uses the same ``BK`` namespace for industry and concept boards.
+    The namespace alone is therefore not a semantic claim; callers should use
+    this helper only when the source field/dimension says the value is an
+    industry hierarchy (or when repairing a legacy BOARD row).
+    """
+    return bool(_EASTMONEY_BK_CODE_RE.fullmatch(str(code or "").strip().upper()))
+
+
+_PROVIDER_INDUSTRY_LABEL_DEFINITIONS: dict[str, str] = {
+    "银行": "以吸收存款、发放贷款、支付结算及其他银行金融服务为主要业务的东方财富行业板块。",
+    "银行Ⅱ": "银行行业的第二级细分板块，通常用于进一步区分银行业成分证券。",
+    "股份制银行Ⅲ": "银行行业下按股份制商业银行口径归集的第三级细分板块。",
+    "货币金融服务": "以货币金融中介、银行及相关金融服务为主的来源行业板块。",
+    "房地产": "按房地产开发、经营、物业服务及相关产业链成分证券归集的来源行业板块。",
+    "房地产开发": "按住宅、商业或综合不动产开发、销售及配套运营成分证券归集的来源行业板块。",
+}
+
+
+def _provider_industry_definition(
+    label: Any,
+    code: Any = None,
+    level: Any = None,
+) -> dict[str, Any] | None:
+    """Build a concrete, source-scoped definition for an industry label.
+
+    The provider does not publish a prose glossary for every changing BK
+    board.  We still expose a label-specific explanation and retain the exact
+    provider code/level, instead of showing the misleading exchange-board
+    definition used by older projections.
+    """
+    text = str(label or "").strip()
+    if not text:
+        return None
+    if not (_is_eastmoney_industry_code(code) or text in _PROVIDER_INDUSTRY_LABEL_DEFINITIONS):
+        return None
+    base = _PROVIDER_INDUSTRY_LABEL_DEFINITIONS.get(
+        text,
+        f"按东方财富行业板块“{text}”归集的相关证券分类，具体成分以采集时点的来源名单为准。",
+    )
+    code_text = str(code or "").strip()
+    level_text = f"第{level}级" if level not in (None, "") else ""
+    detail = f"{base}"
+    if code_text:
+        detail += f"来源代码为{code_text}"
+        if level_text:
+            detail += f"，属于{level_text}行业层级"
+        detail += "。"
+    return {
+        "taxonomy": "EASTMONEY_INDUSTRY",
+        "dimension": "INDUSTRY",
+        "code": code_text or f"LABEL_PROVIDER_INDUSTRY_{text}",
+        "label": text,
+        "definition": detail,
+        "criteria": "仅表示来源行业板块归属；成员、层级和走势随来源快照变化，不等同于交易所上市板块或投资建议。",
+        "source_name": "东方财富行业板块主数据",
+        "definition_version": "EASTMONEY_INDUSTRY_LABEL_V1",
+        "jurisdiction": "CN",
+    }
+
+
+def _is_legacy_industry_board(dimension: str, code: Any, properties: dict[str, Any]) -> bool:
+    """Identify BK rows historically persisted under the BOARD dimension."""
+    if str(dimension or "").upper() != "BOARD" or not _is_eastmoney_industry_code(code):
+        return False
+    taxonomy = str(properties.get("taxonomy") or properties.get("source_taxonomy") or "").upper()
+    # A real exchange-board fact should carry an explicit listing taxonomy.
+    # Older imports did not, so BK rows without that marker are treated as
+    # provider industry hierarchy and exposed under INDUSTRY.
+    return taxonomy not in {"LISTED_BOARD", "EXCHANGE_BOARD", "EXCHANGE_LISTING_BOARD"}
+
+
 def _item(label: Any, *, code: Any = None, source: str = "证券主数据", status: str = "SOURCE",
           definition: str | None = None, criteria: str | None = None,
           source_name: str | None = None, definition_version: str | None = None,
@@ -218,6 +295,7 @@ def _definition_for(
     dimension: str,
     code: Any = None,
     label: Any = None,
+    level: Any = None,
 ) -> ClassificationDefinition | dict[str, Any] | None:
     normalized_dimension = str(dimension or "").upper()
     normalized_code = str(code or "").upper()
@@ -231,6 +309,13 @@ def _definition_for(
         exact = definitions.get((normalized_dimension, normalized_code))
         if exact is not None:
             return exact
+    # ``BOARD_NAME_*LEVEL`` is an Eastmoney industry hierarchy, even though
+    # the upstream field name contains BOARD.  Resolve it to a concrete
+    # industry explanation before falling back to the dimension-level glossary
+    # (which describes an exchange listing board and would be misleading).
+    provider_definition = _provider_industry_definition(label, normalized_code, level)
+    if provider_definition and normalized_dimension == "INDUSTRY":
+        return provider_definition
     candidates = {
         "INDUSTRY": ("EASTMONEY_LEVEL1", "CSRC_LEVEL1"),
         "THEME": ("PROVIDER_CONCEPT",),
@@ -264,7 +349,11 @@ def _attach_definition(
     if label_master and str(label_master.get("dimension") or "").upper() != str(dimension or "").upper():
         label_master = None
     definition = label_master or _definition_for(
-        definitions, dimension, item.get("code"), item.get("label") or item.get("name")
+        definitions,
+        dimension,
+        item.get("code"),
+        item.get("label") or item.get("name"),
+        item.get("level"),
     )
     if definition is not None:
         # Preserve concrete fact-level values.  The ``master_*`` fields are
@@ -313,7 +402,11 @@ def _attach_definition(
         item["master_dimension"] = _definition_value(definition, "dimension")
         item["taxonomy"] = _definition_value(definition, "taxonomy")
         item["definition_source"] = _definition_value(definition, "source_name")
-        item["definition_status"] = "MASTER_DATA"
+        item["definition_status"] = (
+            "SOURCE_DERIVED"
+            if str(definition_version or "").startswith("EASTMONEY_INDUSTRY_LABEL")
+            else "MASTER_DATA"
+        )
     return item
 
 
@@ -353,7 +446,13 @@ def _foundation_classifications(
         type_values: list[dict[str, Any]] = []
         for row in rows:
             dimension = str(row.dimension or "").upper()
-            if dimension == "INDUSTRY":
+            props = row.properties_json if isinstance(row.properties_json, dict) else {}
+            # Older governance runs stored the provider's BK industry
+            # hierarchy as BOARD because the source column is named
+            # ``BOARD_NAME_*LEVEL``.  Re-project those facts as INDUSTRY while
+            # retaining the original dimension for auditability.
+            legacy_industry_board = _is_legacy_industry_board(dimension, row.code, props)
+            if dimension == "INDUSTRY" or legacy_industry_board:
                 target = industries
             elif dimension == "THEME":
                 target = themes
@@ -367,11 +466,10 @@ def _foundation_classifications(
                 target = None
             if target is None:
                 continue
-            props = row.properties_json if isinstance(row.properties_json, dict) else {}
             value = _item(
                 row.label,
                 code=row.code,
-                source="公司/证券分类主数据",
+                source=("东方财富行业板块（原上市板块字段）" if legacy_industry_board else "公司/证券分类主数据"),
                 status=row.status,
                 definition=props.get("definition"),
                 criteria=props.get("criteria"),
@@ -379,20 +477,30 @@ def _foundation_classifications(
                 source_url=props.get("source_url"),
                 definition_version=row.definition_version,
                 level=props.get("level"),
-                classification_dimension=dimension,
+                classification_dimension=("INDUSTRY" if legacy_industry_board else dimension),
             )
             if value:
+                if legacy_industry_board:
+                    value["provider_dimension"] = "BOARD"
                 target.append(value)
-        # The imported evidence contains the complete Eastmoney board/theme
-        # hierarchy even when classifications were not reviewed yet.
+        # The imported evidence contains the complete Eastmoney industry/theme
+        # hierarchy even when classifications were not reviewed yet.  The
+        # BOARD_NAME fields are industry levels, not exchange listing boards.
         evidence = db.get(FoundationEvidence, listing.evidence_id)
         raw = json.loads(evidence.content) if evidence and evidence.content else {}
         if isinstance(raw, dict):
             for level in (1, 2, 3):
                 label, code = raw.get(f"BOARD_NAME_{level}LEVEL"), raw.get(f"BOARD_CODE_BK_{level}LEVEL")
-                value = _item(label, code=code, source="东方财富公司主数据", status="SOURCE", level=level)
+                value = _item(
+                    label,
+                    code=code,
+                    source="东方财富行业板块主数据",
+                    status="SOURCE",
+                    level=level,
+                    classification_dimension="INDUSTRY",
+                )
                 if value:
-                    boards.append(value)
+                    industries.append(value)
             labels = _split(raw.get("BLGAINIAN"))
             codes = _split(raw.get("BLGAINIAN_CODE"))
             for index, label in enumerate(labels):

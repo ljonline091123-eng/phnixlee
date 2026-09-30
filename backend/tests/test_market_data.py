@@ -348,6 +348,165 @@ class MarketDataFoundationTest(unittest.TestCase):
         self.assertAlmostEqual(rows[0]["收盘价"], 11.89)
         self.assertAlmostEqual(rows[1]["涨跌幅"], -0.25)
 
+    def test_cn_fund_flow_http_merges_current_kline_with_historical_feed(self) -> None:
+        adapter = AkshareAdapter()
+        current = {
+            "data": {
+                "klines": [
+                    "2026-09-30,125061199.0,-71487229.0,-53573968.0,151634160.0,-26572961.0",
+                ]
+            }
+        }
+        history = {
+            "data": {
+                "klines": [
+                    "2026-09-29,1,2,3,4,5,0,0,0,0,0,11,1",
+                    "2026-09-30,9,8,7,6,5,0,0,0,0,0,12,2",
+                ]
+            }
+        }
+        calls: list[str] = []
+
+        def response(url, params, headers):
+            calls.append(url)
+            if url.endswith("/kline/get") and "push2.eastmoney.com" in url:
+                return current
+            if url.endswith("/kline/get"):
+                return history
+            raise ConnectionError("daykline unavailable")
+
+        with patch.object(adapter, "_request_eastmoney_json", side_effect=response):
+            result = adapter._fetch_cn_fund_flow_http("000001")
+
+        self.assertEqual(len(result["rows"]), 2)
+        self.assertEqual(result["rows"][0]["日期"], "2026-09-30")
+        # The current endpoint has the same date and should win over the
+        # historical copy for fields it actually provides.
+        self.assertEqual(result["rows"][0]["主力净流入-净额"], 125061199.0)
+        self.assertIn("/kline/get", calls[0])
+
+    def test_cn_fund_flow_provider_rows_are_sorted_newest_first(self) -> None:
+        adapter = AkshareAdapter()
+        frame = pd.DataFrame([
+            {"日期": "2026-09-03", "主力净流入": 1},
+            {"日期": "2026-09-04", "主力净流入": 2},
+        ])
+        with patch("app.connectors.akshare_adapter.ak.stock_individual_fund_flow", return_value=frame):
+            result = adapter._safe_cn_fund_flow("000001")
+        self.assertEqual([row["日期"] for row in result["rows"]], ["2026-09-04", "2026-09-03"])
+
+    def test_cn_dividends_prefer_cninfo_and_keep_full_iso_sorted_history(self) -> None:
+        adapter = AkshareAdapter()
+        dataframe = pd.DataFrame(
+            [
+                {
+                    "实施方案公告日期": "2025-06-10",
+                    "分红类型": "年度分红",
+                    "送股比例": None,
+                    "转增比例": None,
+                    "派息比例": 3.6,
+                    "股权登记日": "2025-06-18",
+                    "除权日": "2025-06-19",
+                    "派息日": "2025-06-19",
+                    "实施方案分红说明": "10派3.6元(含税)",
+                    "报告时间": "2024年报",
+                },
+                {
+                    "实施方案公告日期": 1789603200000,
+                    "分红类型": "中期分红",
+                    "送股比例": None,
+                    "转增比例": None,
+                    "派息比例": 2.49,
+                    "股权登记日": 1790121600000,
+                    "除权日": 1790208000000,
+                    "派息日": 1790208000000,
+                    "实施方案分红说明": "10派2.49元(含税)",
+                    "报告时间": "2026半年报",
+                },
+            ]
+        )
+        with patch(
+            "app.connectors.akshare_adapter.ak.stock_dividend_cninfo",
+            return_value=dataframe,
+        ) as primary, patch(
+            "app.connectors.akshare_adapter.ak.stock_history_dividend_detail",
+            side_effect=AssertionError("legacy dividend endpoint must not be called when CNINFO succeeds"),
+        ):
+            rows = adapter._safe_cn_dividend_records("000001")
+
+        primary.assert_called_once_with(symbol="000001")
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(rows[0]["公告日期"], "2026-09-17")
+        self.assertEqual(rows[0]["股权登记日"], "2026-09-23")
+        self.assertEqual(rows[0]["除权日"], "2026-09-24")
+        self.assertEqual(rows[0]["派息"], 2.49)
+        self.assertEqual(rows[0]["方案"], "10派2.49元(含税)")
+        self.assertEqual(rows[1]["公告日期"], "2025-06-10")
+        self.assertNotIn("_sort_date", rows[0])
+
+    def test_cn_dividends_fallback_to_legacy_endpoint_when_cninfo_empty(self) -> None:
+        adapter = AkshareAdapter()
+        fallback_frame = pd.DataFrame(
+            [
+                {
+                    "公告日期": "2024-05-01",
+                    "分红方案": "10派1元",
+                    "除权日": "2024-05-10",
+                }
+            ]
+        )
+        with patch(
+            "app.connectors.akshare_adapter.ak.stock_dividend_cninfo",
+            return_value=pd.DataFrame(),
+        ), patch(
+            "app.connectors.akshare_adapter.ak.stock_history_dividend_detail",
+            return_value=fallback_frame,
+        ) as fallback:
+            rows = adapter._safe_cn_dividend_records("000001")
+
+        fallback.assert_called_once_with(symbol="000001", indicator="分红")
+        self.assertEqual(rows[0]["公告日期"], "2024-05-01")
+        self.assertEqual(rows[0]["方案"], "10派1元")
+
+    def test_hk_dividends_normalize_epoch_dates_and_keep_all_rows(self) -> None:
+        adapter = AkshareAdapter()
+        dataframe = pd.DataFrame(
+            [
+                {
+                    "最新公告日期": 1747180800000,
+                    "财政年度": "2024",
+                    "分红方案": "每股派港币4.5元",
+                    "分配类型": "年度分配",
+                    "除净日": 1747353600000,
+                    "截止过户日": "2025/05/20-2025/05/21",
+                    "发放日": 1748563200000,
+                },
+                {
+                    "最新公告日期": 1778630400000,
+                    "财政年度": "2025",
+                    "分红方案": "每股派港币5.3元",
+                    "分配类型": "年度分配",
+                    "除净日": 1778803200000,
+                    "截止过户日": "2026/05/19-2026/05/20",
+                    "发放日": 1780272000000,
+                },
+            ]
+        )
+        with patch(
+            "app.connectors.akshare_adapter.ak.stock_hk_dividend_payout_em",
+            return_value=dataframe,
+        ) as provider:
+            rows = adapter._safe_hk_dividend_records("00700")
+
+        provider.assert_called_once_with(symbol="00700")
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(rows[0]["公告日期"], "2026-05-13")
+        self.assertEqual(rows[0]["报告期"], "2025")
+        self.assertEqual(rows[0]["方案"], "每股派港币5.3元")
+        self.assertEqual(rows[0]["除权日"], "2026-05-15")
+        self.assertEqual(rows[0]["发放日"], "2026-06-01")
+        self.assertEqual(rows[1]["公告日期"], "2025-05-14")
+
     def test_hk_fund_flow_is_sorted_by_latest_holding_date(self) -> None:
         adapter = AkshareAdapter()
         dataframe = pd.DataFrame(
