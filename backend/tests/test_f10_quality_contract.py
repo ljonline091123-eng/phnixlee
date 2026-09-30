@@ -6,7 +6,13 @@ import pandas as pd
 from app.connectors.akshare_adapter import AkshareAdapter
 from app.services.f10 import normalize_f10_sections, project_company_control_facts
 from app.services.company_governance import profile_record
-from app.services.stock_classification import _attach_definition, _looks_like_index, build_classification_groups
+from app.services.stock_classification import (
+    _attach_definition,
+    _is_legacy_industry_board,
+    _looks_like_index,
+    _provider_industry_definition,
+    build_classification_groups,
+)
 from app.services.taxonomy import LABEL_DEFINITION_OVERRIDES, label_definition, seed_builtin_definitions
 
 
@@ -43,6 +49,11 @@ def test_financial_source_payload_rounds_amounts_but_preserves_ratios_and_eps() 
         "TOTAL_OPERATE_INCOME": 123456789.126,
         "PARENT_NETPROFIT": -987654321.125,
         "TOTAL_OPERATE_INCOME_YOY": 12.345678,
+        "PARENTNETPROFITTZ": 3.321270607157,
+        "FIXED_ASSET_TR": 29.740736041932,
+        "NCO_NETPROFIT": 8.367528855,
+        "FC_LIABILITIES": 15.955679443974,
+        "FCFF_FORWARD": 32314539.7299969,
         "EPS": 1.234567,
         "ROE": 8.765432,
         "REPORT_DATE": "2026-06-30",
@@ -51,6 +62,11 @@ def test_financial_source_payload_rounds_amounts_but_preserves_ratios_and_eps() 
     assert payload["TOTAL_OPERATE_INCOME"] == 123456789.13
     assert payload["PARENT_NETPROFIT"] == -987654321.13
     assert payload["TOTAL_OPERATE_INCOME_YOY"] == 12.345678
+    assert payload["PARENTNETPROFITTZ"] == 3.321270607157
+    assert payload["FIXED_ASSET_TR"] == 29.740736041932
+    assert payload["NCO_NETPROFIT"] == 8.367528855
+    assert payload["FC_LIABILITIES"] == 15.955679443974
+    assert payload["FCFF_FORWARD"] == 32314539.73
     assert payload["EPS"] == 1.234567
     assert payload["ROE"] == 8.765432
 
@@ -68,6 +84,29 @@ def test_holder_source_payload_keeps_shares_and_rounds_percentages() -> None:
     assert payload["持股比例"] == 49.57
     assert payload["平均持股数"] == 25578.12
     assert payload["股东名称"] == "测试主体"
+
+
+def test_holder_source_payload_rounds_period_change_percentages() -> None:
+    adapter = AkshareAdapter()
+    payload = adapter._normalize_holder_payload({
+        "区间涨跌幅": -6.31125884,
+        "变化率": 12.3456,
+        "持股变动": -1000.123,
+    })
+
+    assert payload["区间涨跌幅"] == -6.31
+    assert payload["变化率"] == 12.35
+    # An absolute share change remains a quantity, not a percentage.
+    assert payload["持股变动"] == -1000.123
+
+
+def test_legacy_eastmoney_industry_board_is_retyped() -> None:
+    assert _is_legacy_industry_board("BOARD", "BK1283", {}) is True
+    assert _is_legacy_industry_board("BOARD", "LISTED_MAIN", {"taxonomy": "LISTED_BOARD"}) is False
+    definition = _provider_industry_definition("银行Ⅱ", "BK1283", 2)
+    assert definition is not None
+    assert "第二级" in definition["definition"]
+    assert definition["dimension"] == "INDUSTRY"
 
 
 def test_classification_fact_definition_is_not_overwritten_by_dimension_glossary() -> None:

@@ -183,6 +183,52 @@ class F10SectionContractTest(unittest.TestCase):
         self.assertIn("家庭物联网", concepts["智能家居"]["definition"])
         self.assertTrue(all(item["definition_version"] == "LABEL_GLOSSARY_V1" for item in concepts.values()))
 
+    def test_latest_read_models_sort_fund_flow_and_dividends_descending(self) -> None:
+        payload = normalize_f10_sections({
+            "profile": {
+                "fields": {},
+                "dividends": [
+                    {"公告日期": "2024-06-01"},
+                    {"公告日期": "2026-09-17"},
+                    {"公告日期": "2025-06-05"},
+                ],
+            },
+            "fund_flow": {
+                "rows": [
+                    {"日期": "2026-08-19", "主力净流入-净额": 1},
+                    {"日期": "2026-09-30", "主力净流入-净额": 2},
+                ],
+            },
+            "holders": {},
+            "financial_summary": {},
+            "financial_statements": {},
+            "business_composition": {},
+            "research_sections": {"reports": []},
+        })
+        self.assertEqual(payload["fund_flow"]["rows"][0]["日期"], "2026-09-30")
+        self.assertEqual(payload["profile"]["dividends"][0]["公告日期"], "2026-09-17")
+
+    def test_holder_read_model_adds_period_delta_and_status(self) -> None:
+        payload = normalize_f10_sections({
+            "profile": {"fields": {}},
+            "holders": {
+                "major": [
+                    {"股东名称": "甲", "报告期": "2026-06-30", "持股数量": 1200.0},
+                    {"股东名称": "甲", "报告期": "2026-03-31", "持股数量": 1000.0},
+                    {"股东名称": "乙", "报告期": "2026-06-30", "持股数量": 50.0},
+                ],
+            },
+            "financial_summary": {}, "financial_statements": {},
+            "business_composition": {}, "research_sections": {"reports": []},
+        })
+        rows = payload["holders"]["major"]
+        current = next(row for row in rows if row["股东名称"] == "甲" and row["报告期"] == "2026-06-30")
+        newcomer = next(row for row in rows if row["股东名称"] == "乙")
+        self.assertEqual(current["holding_delta"], 200.0)
+        self.assertEqual(current["变动值"], 200.0)
+        self.assertEqual(current["变动"], "↑ 增持")
+        self.assertEqual(newcomer["变动"], "新进")
+
 
 if __name__ == "__main__":
     unittest.main()

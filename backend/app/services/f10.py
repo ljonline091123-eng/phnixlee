@@ -67,16 +67,42 @@ CONCEPT_GLOSSARY: dict[str, str] = {
     item["label"]: item["definition"] for item in LABEL_DEFINITION_OVERRIDES
 }
 
+# Frequently returned provider labels that are more specific than the generic
+# dimension glossary.  Keep these local read-model definitions so older caches
+# become useful immediately; the source label/code remains attached to each
+# row and can later be promoted into the versioned taxonomy table.
+PROVIDER_CONCEPT_DEFINITIONS: dict[tuple[str, str], str] = {
+    ("INDUSTRY", "货币金融服务"): "以货币金融中介、银行及相关金融服务为主的来源行业分类。",
+    ("INDUSTRY", "银行"): "以吸收存款、发放贷款、支付结算及其他银行金融服务为主的来源行业分类。",
+    ("INDUSTRY", "银行Ⅱ"): "银行行业下用于细分银行业成分证券的第二级来源行业分类。",
+    ("INDUSTRY", "股份制银行Ⅲ"): "银行行业下按股份制商业银行口径归集的第三级来源行业分类。",
+    ("INDUSTRY", "房地产开发"): "按住宅、商业或综合不动产开发、销售及配套运营成分证券归集的来源行业分类。",
+    ("THEME", "大盘价值"): "按来源将较大市值规模与相对价值特征组合识别的投资风格主题，随市值和估值时点变化。",
+    ("THEME", "大盘股"): "按来源口径以总市值或流通市值区间划分的较大规模证券主题，必须结合采集日期和口径解释。",
+    ("THEME", "低市净率"): "按来源采集时点市净率处于较低区间的估值风格主题，不代表未来收益。",
+}
+
 
 def _concept_definition(name: str, dimension: str | None = None) -> str:
     text = str(name or "").strip()
+    normalized_dimension = str(dimension or "THEME").upper()
     master = label_definition(text, dimension)
-    if master and str(master.get("dimension") or "").upper() == str(dimension or "").upper():
+    if master and str(master.get("dimension") or "").upper() == normalized_dimension:
         return str(master.get("definition") or "")
+    concrete = PROVIDER_CONCEPT_DEFINITIONS.get((normalized_dimension, text))
+    if concrete:
+        return concrete
     if text in CONCEPT_GLOSSARY:
         return CONCEPT_GLOSSARY[text]
-    prefix = "行业归属" if str(dimension or "").upper() == "INDUSTRY" else "投资主题"
-    return f"{text}是来源主数据登记的{prefix}标签，反映证券在该来源和采集时点的归属；不代表公司全部收入来自该主题，也不构成投资建议。"
+    prefix = "行业归属" if normalized_dimension == "INDUSTRY" else "投资主题"
+    # Do not present a broad dimension sentence as if it were a real
+    # definition for an unknown label.  The explicit unresolved wording is
+    # useful to users and downstream quality checks, while preserving the
+    # observed label for later taxonomy enrichment.
+    return (
+        f"“{text}”当前仅是来源主数据登记的{prefix}标签，系统尚未建立该标签的专属释义；"
+        "请结合来源代码、成分名单和原始披露核验，不代表公司全部收入或投资建议。"
+    )
 
 
 def _normalize_concept_rows(rows: list[Any]) -> list[dict[str, Any]]:
@@ -135,6 +161,78 @@ def _normalize_concept_rows(rows: list[Any]) -> list[dict[str, Any]]:
         item["definition_source"] = item.get("definition_source") or item.get("source_name") or item.get("source") or "证券分类主数据"
         item["related_stocks"] = item.get("related_stocks") if isinstance(item.get("related_stocks"), list) else []
         normalized.append(item)
+    return normalized
+
+
+def _holder_value(row: dict[str, Any], aliases: tuple[str, ...]) -> Any:
+    """Read an exact holder field without fuzzy substitution."""
+    for alias in aliases:
+        if row.get(alias) not in (None, ""):
+            return row.get(alias)
+    normalized = {str(key).lower().replace("_", "").replace("-", ""): value for key, value in row.items()}
+    for alias in aliases:
+        key = alias.lower().replace("_", "").replace("-", "")
+        if normalized.get(key) not in (None, ""):
+            return normalized[key]
+    return None
+
+
+def _holder_period(row: dict[str, Any]) -> str:
+    value = _holder_value(row, ("报告期", "截止日期", "截至日期", "股东户数统计截止日", "持股日期", "date", "report_date"))
+    return str(value or "").strip()[:19]
+
+
+def _holder_name(row: dict[str, Any]) -> str:
+    return str(_holder_value(row, ("股东名称", "股东", "名称", "股东全称", "name")) or "").strip()
+
+
+def _holder_shares(row: dict[str, Any]) -> float | None:
+    value = _holder_value(row, ("持股数量", "持股数", "股份数", "数量", "shares", "holdings"))
+    try:
+        return float(value) if value not in (None, "") else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _normalize_holder_read_rows(rows: Any) -> list[dict[str, Any]]:
+    """Normalize legacy holder caches and add period-over-period deltas.
+
+    Fresh adapter responses already carry these fields, but old F10 snapshots
+    must receive the same contract when read.  A delta is emitted only when a
+    named holder appears in two actual reporting periods; missing history is
+    deliberately left unknown rather than labelled as a new holder.
+    """
+    if not isinstance(rows, list):
+        return rows if isinstance(rows, list) else []
+    normalized = [AkshareAdapter._normalize_holder_payload(row) if isinstance(row, dict) else row for row in rows]
+    dict_rows = [row for row in normalized if isinstance(row, dict)]
+    periods = sorted({period for row in dict_rows if (period := _holder_period(row))}, reverse=True)
+    if len(periods) < 2:
+        return normalized
+    current_period, previous_period = periods[0], periods[1]
+    previous_by_name = {
+        _holder_name(row): row
+        for row in dict_rows
+        if _holder_period(row) == previous_period and _holder_name(row)
+    }
+    for row in dict_rows:
+        if _holder_period(row) != current_period:
+            continue
+        name = _holder_name(row)
+        if not name:
+            continue
+        current = _holder_shares(row)
+        previous = _holder_shares(previous_by_name.get(name, {})) if name in previous_by_name else None
+        if current is not None and previous is not None:
+            delta = round(current - previous, 2)
+            row.setdefault("holding_delta", delta)
+            row.setdefault("变动值", delta)
+            row.setdefault("holding_change", "不变" if abs(delta) < 1e-9 else ("↑ 增持" if delta > 0 else "↓ 减持"))
+            row.setdefault("变动", row["holding_change"])
+        elif name not in previous_by_name:
+            row.setdefault("holding_delta", None)
+            row.setdefault("holding_change", "新进")
+            row.setdefault("变动", "新进")
     return normalized
 
 
@@ -406,6 +504,47 @@ def normalize_f10_sections(extended_data: dict[str, dict[str, Any]]) -> dict[str
     statements = extended_data.setdefault("financial_statements", {})
     holders = extended_data.setdefault("holders", {})
     composition = extended_data.setdefault("business_composition", {})
+
+    # Bring historical caches to the same holder contract as newly fetched
+    # rows.  This is read-model normalization only; raw provider payloads are
+    # retained in the cache for auditability.
+    for holder_key in (
+        "major", "circulating", "institutional", "holder_count",
+        "restricted_release", "capital_structure", "control",
+    ):
+        if isinstance(holders.get(holder_key), list):
+            holders[holder_key] = _normalize_holder_read_rows(holders[holder_key])
+
+    def sort_rows_latest(payload: dict[str, Any], field_names: tuple[str, ...]) -> None:
+        rows = payload.get("rows")
+        if not isinstance(rows, list):
+            return
+        payload["rows"] = sorted(
+            rows,
+            key=lambda row: max(
+                (str(row.get(name) or "")[:19] for name in field_names if isinstance(row, dict)),
+                default="",
+            ),
+            reverse=True,
+        )
+
+    fund_payload = extended_data.get("fund_flow")
+    if isinstance(fund_payload, dict):
+        sort_rows_latest(fund_payload, ("日期", "交易日期", "持股日期", "date", "trade_date"))
+    dividend_rows = profile.get("dividends")
+    if isinstance(dividend_rows, list):
+        profile["dividends"] = sorted(
+            dividend_rows,
+            key=lambda row: max(
+                (
+                    str(row.get(name) or "")[:19]
+                    for name in ("公告日期", "实施方案公告日期", "除权日", "股权登记日", "最新公告日期", "date")
+                    if isinstance(row, dict)
+                ),
+                default="",
+            ),
+            reverse=True,
+        )
 
     def payload_as_of(payload: dict[str, Any] | None) -> str | None:
         if not isinstance(payload, dict):
