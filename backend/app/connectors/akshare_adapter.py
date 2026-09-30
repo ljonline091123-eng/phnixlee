@@ -6,6 +6,7 @@ import html
 import json
 import re
 import time
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from typing import Any
 from urllib.parse import urlencode
 
@@ -32,6 +33,23 @@ from app.connectors.base import (
 
 class AkshareAdapter(MarketDataAdapter):
     adapter_type = "AKSHARE"
+
+    @staticmethod
+    def _round_yuan(value: Any) -> Any:
+        """Persist financial currency observations in yuan at cent precision."""
+        if value in (None, "") or isinstance(value, bool):
+            return value
+        try:
+            return float(Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
+        except (InvalidOperation, ValueError, TypeError):
+            return value
+
+    @staticmethod
+    def _is_yuan_metric(label: str) -> bool:
+        text = str(label or "")
+        return bool(re.search(r"收入|利润|资产|负债|权益|现金|净额|市值|金额|营业成本|费用|股本", text)) and not bool(
+            re.search(r"率|比率|比例|增长|同比|环比|每股|占比|权益乘数|权益比", text)
+        )
 
     def health_check(self) -> tuple[str, list[str]]:
         required_methods = ("stock_info_a_code_name", "stock_hk_spot_em", "stock_news_em")
@@ -2049,7 +2067,11 @@ class AkshareAdapter(MarketDataAdapter):
         summary_rows: list[dict[str, Any]] = []
         for field, label in metric_map:
             values = {
-                period: cls._json_safe(item.get(field))
+                period: cls._json_safe(
+                    cls._round_yuan(item.get(field))
+                    if cls._is_yuan_metric(label)
+                    else item.get(field)
+                )
                 for period, item in zip(periods, period_rows)
                 if item.get(field) not in (None, "")
             }
@@ -2173,7 +2195,14 @@ class AkshareAdapter(MarketDataAdapter):
         for field, metric_label in metric_map:
             value = latest.get(field)
             if value not in (None, ""):
-                rows.append({"指标": metric_label, "值": cls._json_safe(value)})
+                rows.append({
+                    "指标": metric_label,
+                    "值": cls._json_safe(
+                        cls._round_yuan(value)
+                        if cls._is_yuan_metric(metric_label)
+                        else value
+                    ),
+                })
         periods = []
         if rows:
             periods.append(
@@ -2310,11 +2339,11 @@ class AkshareAdapter(MarketDataAdapter):
                     items.append(
                         {
                             "name": name,
-                            "revenue": self._to_float(item.get("主营收入")),
+                            "revenue": self._round_yuan(self._to_float(item.get("主营收入"))),
                             "revenue_ratio": self._to_float(item.get("收入比例")),
-                            "cost": self._to_float(item.get("主营成本")),
+                            "cost": self._round_yuan(self._to_float(item.get("主营成本"))),
                             "cost_ratio": self._to_float(item.get("成本比例")),
-                            "profit": self._to_float(item.get("主营利润")),
+                            "profit": self._round_yuan(self._to_float(item.get("主营利润"))),
                             "profit_ratio": self._to_float(item.get("利润比例")),
                             "gross_margin": self._to_float(item.get("毛利率")),
                         }
@@ -2532,10 +2561,25 @@ class AkshareAdapter(MarketDataAdapter):
                 return []
             date_column = next((column for column in date_columns if column in dataframe.columns), None)
             if date_column:
-                latest = dataframe[date_column].dropna().astype(str).max()
-                if latest:
-                    dataframe = dataframe[dataframe[date_column].astype(str) == latest]
-            return cls._safe_dataframe_records(dataframe, limit=20)
+                # Preserve the latest two reporting periods so the F10 view
+                # can show period-over-period holder changes.  The provider
+                # table normally has ten rows per period; 40 keeps room for
+                # both major and circulating-holder variants without turning
+                # the cache into an unbounded historical feed.
+                dates = sorted(
+                    {
+                        str(value).strip()
+                        for value in dataframe[date_column].dropna().tolist()
+                        if str(value).strip()
+                        and str(value).strip().lower() not in {"nat", "nan", "none", "null"}
+                    },
+                    reverse=True,
+                )
+                if dates:
+                    dataframe = dataframe[dataframe[date_column].astype(str).isin(dates[:2])]
+                    dataframe = dataframe.assign(__f10_report_date=dataframe[date_column].astype(str))
+                    dataframe = dataframe.sort_values("__f10_report_date", ascending=False, kind="stable").drop(columns=["__f10_report_date"])
+            return cls._safe_dataframe_records(dataframe, limit=40)
         except Exception:
             return []
 

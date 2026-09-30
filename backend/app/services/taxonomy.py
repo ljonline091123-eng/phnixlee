@@ -8,6 +8,63 @@ from sqlalchemy.orm import Session
 from app.models.taxonomy import ClassificationDefinition
 
 
+# Label-level master data takes precedence over dimension-level descriptions.
+# Provider feeds often put industry hierarchy names in a ``BOARD`` field, so
+# a dimension-only fallback such as "交易市场或交易所板块" is misleading for
+# labels like 房地产开发.  These definitions describe the observed label and
+# keep the provider taxonomy as provenance rather than silently asserting an
+# official regulatory classification.
+LABEL_DEFINITION_OVERRIDES = (
+    dict(dimension="INDUSTRY", code="LABEL_REAL_ESTATE_INDUSTRY", label="房地产业", definition="以房地产开发经营、物业服务、房地产租赁及相关服务为主要业务的行业分类。", criteria="按来源行业字段归类；不代表公司全部收入均来自该行业。"),
+    dict(dimension="INDUSTRY", code="LABEL_BANKING", label="银行业", definition="以吸收存款、发放贷款、支付结算及其他银行金融服务为主要业务的行业分类。", criteria="按来源行业字段归类；不构成对单只证券的投资建议。"),
+    dict(dimension="INDUSTRY", code="LABEL_NON_BANK_FINANCE", label="非银金融", definition="以证券、保险、信托、期货或其他非银行金融服务为主要业务的行业分类。", criteria="按来源行业字段归类；具体子行业以来源版本为准。"),
+    dict(dimension="INDUSTRY", code="LABEL_COMPUTER", label="计算机", definition="以计算机设备、软件、信息技术服务或相关数字化业务为主的行业分类。", criteria="按来源行业字段归类；不由概念名称推断经营因果。"),
+    dict(dimension="INDUSTRY", code="LABEL_ELECTRONICS", label="电子", definition="以电子元器件、电子设备、集成电路或相关制造服务为主的行业分类。", criteria="按来源行业字段归类；具体业务以公司披露为准。"),
+    dict(dimension="INDUSTRY", code="LABEL_PHARMACEUTICAL", label="医药生物", definition="以药品、医疗器械、生物技术或医疗服务相关业务为主的行业分类。", criteria="按来源行业字段归类；不等同于单一产品疗效判断。"),
+    dict(dimension="INDUSTRY", code="LABEL_DEFENSE", label="国防军工", definition="以军工装备、国防科研生产或军民融合相关产品和服务为主的行业分类。", criteria="按来源行业字段归类；具体资质和订单以公开披露为准。"),
+    dict(dimension="INDUSTRY", code="LABEL_NEW_ENERGY", label="电力设备", definition="以电力设备、电网设备、电池、储能或相关能源装备为主的行业分类。", criteria="按来源行业字段归类；不代表证券必然属于某一主题。"),
+    dict(dimension="INDUSTRY", code="LABEL_AUTOMOBILE", label="汽车", definition="以整车、汽车零部件、汽车服务或相关出行产品为主的行业分类。", criteria="按来源行业字段归类；具体产品范围以来源版本为准。"),
+    dict(dimension="INDUSTRY", code="LABEL_FOOD_BEVERAGE", label="食品饮料", definition="以食品、饮料、调味品或相关消费品生产经营为主的行业分类。", criteria="按来源行业字段归类；品牌标签与行业分类分开保存。"),
+    dict(dimension="BOARD", code="LABEL_BOARD_REAL_ESTATE", label="房地产", definition="按房地产开发、经营、服务及相关产业链成分股编制的行业板块，不是交易所上市板块。", criteria="保留东方财富板块代码和采集时点，板块成分随来源调整。"),
+    dict(dimension="BOARD", code="LABEL_BOARD_REAL_ESTATE_DEV", label="房地产开发", definition="按住宅、商业或综合不动产开发、销售及配套运营企业归集的细分行业板块。", criteria="按来源板块成分归集，不根据股票名称推断成员资格。"),
+    dict(dimension="BOARD", code="LABEL_BOARD_RESIDENTIAL_DEV", label="住宅开发", definition="按住宅项目开发、建设、销售及相关运营企业归集的细分行业板块。", criteria="按来源板块成分归集，成员和走势以采集快照为准。"),
+    dict(dimension="BOARD", code="LABEL_BOARD_SZ_MAIN", label="深交所主板", definition="深圳证券交易所主板上市板块，采用深交所主板的上市、交易和信息披露规则。", criteria="依据证券主数据中的交易所和上市板块字段确定。"),
+    dict(dimension="BOARD", code="LABEL_BOARD_SH_MAIN", label="上交所主板", definition="上海证券交易所主板上市板块，采用上交所主板的上市、交易和信息披露规则。", criteria="依据证券主数据中的交易所和上市板块字段确定。"),
+    dict(dimension="BOARD", code="LABEL_BOARD_CHINEXT", label="创业板", definition="深圳证券交易所创业板上市板块，面向成长型创新创业企业并适用相应交易规则。", criteria="依据证券主数据中的交易所和上市板块字段确定。"),
+    dict(dimension="BOARD", code="LABEL_BOARD_STAR", label="科创板", definition="上海证券交易所科创板上市板块，面向符合定位的科技创新企业并适用相应交易规则。", criteria="依据证券主数据中的交易所和上市板块字段确定。"),
+    dict(dimension="BOARD", code="LABEL_BOARD_BSE", label="北交所", definition="北京证券交易所上市板块，服务创新型中小企业并适用北交所上市交易规则。", criteria="依据证券主数据中的交易所和上市板块字段确定。"),
+    dict(dimension="THEME", code="LABEL_THEME_SHENZHEN_SEZ", label="深圳特区", definition="与深圳经济特区区域发展、地方产业政策或深圳区域经营主体相关的来源主题。", criteria="仅表示来源主题标签，不代表公司全部业务或政策因果。"),
+    dict(dimension="THEME", code="LABEL_THEME_ELDERLY", label="养老概念", definition="涉及养老服务、康养地产、养老金融、医疗照护或相关设施运营的来源主题。", criteria="以来源明确列示的成分或业务证据为准。"),
+    dict(dimension="THEME", code="LABEL_THEME_SMART_HOME", label="智能家居", definition="涉及家庭物联网、智能家电、家居控制系统或相关软硬件产品的来源主题。", criteria="来源标签不等同于公司全部收入来自智能家居。"),
+    dict(dimension="THEME", code="LABEL_THEME_SUPER_BRAND", label="超级品牌", definition="来源机构按品牌知名度、市场影响力或消费认知整理的品牌主题，不是监管分类。", criteria="保留来源标签和代码，不将品牌标签升级为经营事实。"),
+    dict(dimension="THEME", code="LABEL_THEME_RENTAL_EQUALITY", label="租售同权", definition="与住房租赁服务、租赁权益保障及相关城市住房政策方向有关的来源主题。", criteria="仅表示主题关联，不直接证明公司已获得政策收益。"),
+    dict(dimension="THEME", code="LABEL_THEME_ASSEMBLED_BUILDING", label="装配建筑", definition="采用预制部品、模块化施工或工业化建造方式的建筑产业来源主题。", criteria="以来源成分和公司披露为准，不由名称推断订单。"),
+    dict(dimension="THEME", code="LABEL_THEME_REITS", label="REITs概念", definition="与基础设施或不动产投资信托基金设立、运营、资产管理或相关服务有关的来源主题。", criteria="主题标签不代表证券已发行或持有REITs产品。"),
+    dict(dimension="THEME", code="LABEL_THEME_AH", label="AH股", definition="同一发行主体同时在境内A股和香港H股市场挂牌交易的证券关系标签。", criteria="需结合公司主体和跨市场证券映射确认，不按名称推断。"),
+    dict(dimension="THEME", code="LABEL_THEME_MARGIN", label="融资融券", definition="证券被纳入融资融券业务标的或与融资融券交易机制有关的来源标签。", criteria="标签不等同于当日融资余额变化或资金方向。"),
+    dict(dimension="THEME", code="LABEL_THEME_SHENZHEN_CONNECT", label="深股通", definition="证券符合深港股票市场交易互联互通机制下深股通投资范围的来源标签。", criteria="以交易所或来源名单为准，不代表北向资金当日净流入。"),
+    dict(dimension="THEME", code="LABEL_THEME_BROKEN_BOOK", label="破净股", definition="按来源采集时点证券市场价格低于每股净资产的估值状态标签。", criteria="该状态随价格和财务报告变化，不代表未来收益或风险结论。"),
+    dict(dimension="THEME", code="LABEL_THEME_MID_CAP", label="中盘股", definition="按来源口径以总市值或流通市值区间划分的中等规模证券主题。", criteria="必须结合来源口径和采集日期，不是永久固定属性。"),
+    dict(dimension="THEME", code="LABEL_THEME_MID_VALUE", label="中盘价值", definition="按来源将中等市值规模与相对价值特征组合识别的风格主题。", criteria="风格标签不等同于法定行业或投资建议。"),
+    dict(dimension="THEME", code="LABEL_THEME_LOW_PB", label="低市净率", definition="按来源采集时点市净率处于较低区间的估值风格主题。", criteria="应同时记录估值时点和计算口径，不代表未来收益。"),
+)
+
+
+def label_definition(label: str | None, dimension: str | None = None) -> dict[str, str] | None:
+    """Return a concrete, label-level definition when one is registered."""
+    text = str(label or "").strip()
+    normalized_dimension = str(dimension or "").upper()
+    for item in LABEL_DEFINITION_OVERRIDES:
+        if item["label"] == text and (not normalized_dimension or item["dimension"] == normalized_dimension):
+            return item
+    # A label may move between provider dimensions across API versions.  A
+    # dimension-free fallback is safer than showing a wrong board definition.
+    for item in LABEL_DEFINITION_OVERRIDES:
+        if item["label"] == text:
+            return item
+    return None
+
+
 # Provider concepts remain observations and are not silently treated as legal industries.
 BUILTIN_DEFINITIONS = (
     dict(taxonomy="CN_SECURITIES", dimension="INDUSTRY", code="CSRC_LEVEL1", label="\u8bc1\u76d1\u4f1a\u884c\u4e1a\uff08\u4e00\u7ea7\uff09", definition="\u6309\u4e2d\u56fd\u8bc1\u76d1\u4f1a\u4e0a\u5e02\u516c\u53f8\u884c\u4e1a\u5206\u7c7b\u6807\u51c6\uff0c\u6839\u636e\u53d1\u884c\u4eba\u4e3b\u8425\u4e1a\u52a1\u5f52\u5165\u4e00\u7ea7\u884c\u4e1a\u3002", criteria="\u4ee5\u6765\u6e90\u673a\u6784\u63d0\u4f9b\u7684\u5206\u7c7b\u548c\u7248\u672c\u4e3a\u51c6\uff0c\u65e0\u8bc1\u636e\u65f6\u4e0d\u63a8\u65ad\u3002", source_name="\u4e2d\u56fd\u8bc1\u76d1\u4f1a\u884c\u4e1a\u5206\u7c7b\u6807\u51c6", definition_version="CSRC_CURRENT_V1", jurisdiction="CN"),
