@@ -1461,7 +1461,7 @@ function F10SectionBlock({
       ) : <p className="empty-state compact-empty">{String(section.message || "当前数据源未返回该分区数据")}</p>}
       {footer}
       <div className="f10-section-meta"><span>来源：{String(section.source || "暂无")}</span><SourceLinks section={section} />{section.as_of ? <span>截至：{formatDate(String(section.as_of))}</span> : null}</div>
-      {((onOpen && rows.length > 0) || rows.length > 8) ? <button type="button" className="f10-detail-link" onClick={() => onOpen ? onOpen({ ...section, detail_title: section.detail_title || actionLabel }) : setExpanded((value) => !value)}>{onOpen ? actionLabel : (expanded ? "收起详细数据" : "查看详细数据")}</button> : null}
+      {((onOpen && rows.length > 0) || (rows.length > 8 && String(section.key || "") !== "qa" && String(section.status || "") !== "UNAVAILABLE")) ? <button type="button" className="f10-detail-link" onClick={() => onOpen ? onOpen({ ...section, detail_title: section.detail_title || actionLabel }) : setExpanded((value) => !value)}>{onOpen ? actionLabel : (expanded ? "收起详细数据" : "查看详细数据")}</button> : null}
     </section>
   );
 }
