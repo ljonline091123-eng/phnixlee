@@ -323,7 +323,11 @@ function projectedRatingStatistics(section: JsonRecord, rows: JsonRecord[]): { b
     sell: toNumber(row.sell) ?? 0,
     total: toNumber(row.total) ?? 0,
   })).filter((row) => row.period);
-  const referenceDate = String(projection.reference_date || section.rating_statistics_reference_date || "");
+  const observedDates = rows.map(ratingDate).filter((value): value is Date => value !== null);
+  const fallbackReferenceDate = observedDates.length
+    ? new Date(Math.max(...observedDates.map((value) => value.getTime()))).toISOString().slice(0, 10)
+    : "";
+  const referenceDate = String(projection.reference_date || section.rating_statistics_reference_date || fallbackReferenceDate);
   const basis = String(projection.reference_basis || section.rating_statistics_basis || "最新报告日期");
   return { buckets: buckets.length ? buckets : ratingStatistics(rows), referenceDate, basis };
 }
@@ -428,6 +432,26 @@ function findValue(record: JsonRecord, aliases: string[]): unknown {
     if (normalizedAliases.some((alias) => normalized.includes(alias) || alias.includes(normalized))) {
       if (value !== undefined && value !== null && value !== "") return value;
     }
+  }
+  return undefined;
+}
+
+/**
+ * Resolve a provider field only when its key is an exact alias.
+ *
+ * F10 shareholder payloads commonly contain both `持股数量` and
+ * `平均持股数`/`股东总数`.  The generic fuzzy resolver is useful for loosely
+ * shaped provider records, but it can silently substitute one of those
+ * similarly named fields when the requested value is null.  Tables that
+ * compare reporting periods must treat a null source value as unknown.
+ */
+function findExactValue(record: JsonRecord, aliases: string[]): unknown {
+  const direct = pickValue(record, aliases);
+  if (direct !== undefined) return direct;
+  const normalizedAliases = aliases.map((key) => key.toLowerCase().replace(/[\s_()（）-]/g, ""));
+  for (const [key, value] of Object.entries(record)) {
+    const normalized = key.toLowerCase().replace(/[\s_()（）-]/g, "");
+    if (normalizedAliases.includes(normalized) && value !== undefined && value !== null && value !== "") return value;
   }
   return undefined;
 }
@@ -580,7 +604,7 @@ function shareholderRows(rows: unknown): JsonRecord[] {
 }
 
 function shareholderField(row: JsonRecord, aliases: string[]): unknown {
-  return findValue(row, aliases);
+  return findExactValue(row, aliases);
 }
 
 function ma(values: number[], size: number): number | null {
@@ -1216,6 +1240,7 @@ function FundFlowPanel({ data }: { data: JsonRecord }) {
   const rows = asArray(data.rows);
   const latest = rows[0] || {};
   const [flowMode, setFlowMode] = useState<"main" | "institution" | "hot">("main");
+  const [fundSection, setFundSection] = useState<"flow" | "dragon" | "block" | "analysis">("flow");
   const isHongKongMode = String(data.mode || data.source || "").includes("港股") || findValue(latest, ["持股市值"]) !== undefined;
   const netKeyAliases = isHongKongMode
     ? ["持股市值变化-1日", "持股市值变动-1日", "市值变化-1日"]
@@ -1272,19 +1297,26 @@ function FundFlowPanel({ data }: { data: JsonRecord }) {
     const number = toNumber(value);
     return number === null ? "--" : `${formatNumber(number / 10000, 2)}万元`;
   };
+  const fundSectionMeta: Record<typeof fundSection, { label: string; empty: string; matcher: RegExp }> = {
+    flow: { label: "资金流向", empty: "暂无资金流向数据", matcher: /./ },
+    dragon: { label: "龙虎榜", empty: "当前数据源未接入该股票龙虎榜明细", matcher: /龙虎榜|上榜|营业部|买入金额|卖出金额/ },
+    block: { label: "大宗交易", empty: "当前数据源未接入该股票大宗交易明细", matcher: /大宗|成交价|成交量|折溢价|买方营业部|卖方营业部/ },
+    analysis: { label: "解盘", empty: "当前数据源未返回解盘分析", matcher: /解盘|研判|分析|观点/ },
+  };
+  const auxiliaryRows = fundSection === "flow" ? [] : rows.filter((row) => fundSectionMeta[fundSection].matcher.test(Object.keys(row).join(" ")));
 
   return (
     <section className="f10-section inner-section">
       <nav className="fund-flow-nav" aria-label="资金数据分类">
-        {(["资金流向", "龙虎榜", "大宗交易", "解盘"] as const).map((item, index) => <button type="button" className={index === 0 ? "active" : ""} key={item}>{item}</button>)}
+        {([["flow", "资金流向"], ["dragon", "龙虎榜"], ["block", "大宗交易"], ["analysis", "解盘"]] as const).map(([key, item]) => <button type="button" className={fundSection === key ? "active" : ""} aria-pressed={fundSection === key} key={key} onClick={() => setFundSection(key)}>{item}</button>)}
       </nav>
       <div className="f10-section-head">
         <div>
-          <h3>{isHongKongMode ? "港股通持股 / 资金参考" : "资金流向"}</h3>
+          <h3>{fundSection === "flow" && isHongKongMode ? "港股通持股 / 资金参考" : fundSectionMeta[fundSection].label}</h3>
           <span>{String(data.source || "本地资金数据")}</span>
         </div>
       </div>
-      {rows.length ? (
+      {fundSection === "flow" && rows.length ? (
         <>
           <div className="fund-flow-overview">
             <article className="fund-flow-hero">
@@ -1355,6 +1387,11 @@ function FundFlowPanel({ data }: { data: JsonRecord }) {
             </table>
           </div>
         </>
+      ) : fundSection !== "flow" ? (
+        auxiliaryRows.length ? <div className="fund-flow-auxiliary-panel">
+          <p className="fund-flow-auxiliary-note">{fundSectionMeta[fundSection].label}数据</p>
+          <div className="fund-flow-table-wrap"><table className="mini-table fund-flow-table"><thead><tr>{Object.keys(auxiliaryRows[0]).slice(0, 8).map((key, index) => <th key={key}>{humanFieldLabel(key) || `字段${index + 1}`}</th>)}</tr></thead><tbody>{auxiliaryRows.slice(0, 30).map((row, index) => <tr key={index}>{Object.keys(auxiliaryRows[0]).slice(0, 8).map((key) => <td key={key}>{displayByLabel(key, row[key])}</td>)}</tr>)}</tbody></table></div>
+        </div> : <p className="empty-state">{fundSectionMeta[fundSection].empty}</p>
       ) : (
         <p className="empty-state">{String(data.message || "暂无资金流向数据")}</p>
       )}
@@ -1449,16 +1486,26 @@ function F10SectionHeading({ section, onOpen, pin = false }: { section: JsonReco
   );
 }
 
+function latestPeriodValue(value: unknown): unknown {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return value;
+  const record = asRecord(value);
+  const entries = Object.entries(record).filter(([, item]) => item !== undefined && item !== null && item !== "");
+  const periodEntries = entries.filter(([key]) => /^(?:20\d{2}(?:$|[-/]\d{2}(?:[-/]\d{2})?|Q[1-4]|年|中报|一季报|三季报|年报))/.test(key.trim()));
+  if (!periodEntries.length) return value;
+  periodEntries.sort(([left], [right]) => right.localeCompare(left));
+  return periodEntries[0][1];
+}
+
 function F10FactRows({ rows, onOpenRow, emptyText }: { rows: JsonRecord[]; onOpenRow?: (row: JsonRecord) => void; emptyText?: string }) {
   const facts = rows.flatMap((row) => {
     const label = pickValue(row, f10RowLabelKeys);
     const directValue = pickValue(row, f10RowValueKeys);
     if (label !== undefined || directValue !== undefined) {
-      return [{ label: String(label || "资料"), value: directValue ?? row, row }];
+      return [{ label: String(label || "资料"), value: latestPeriodValue(directValue ?? row), row }];
     }
     return Object.entries(row)
       .filter(([key, value]) => !["id", "source", "source_name", "source_id", "url", "source_url", "status", "verification_status", "report_period", "date"].includes(key) && value !== null && value !== undefined && value !== "")
-      .map(([key, value]) => ({ label: humanFieldLabel(key) || key, value, row }));
+      .map(([key, value]) => ({ label: humanFieldLabel(key) || key, value: latestPeriodValue(value), row }));
   });
   return facts.length ? (
     <div className="f10-mobile-facts">
@@ -1543,10 +1590,24 @@ function ClassificationDetailDialog({ group, item, onClose }: { group: string; i
   </div>;
 }
 
-type CompactColumn = { key: string; label: string; aliases: string[]; format?: "date" | "number" | "ratio" };
+type CompactColumn = { key: string; label: string; aliases: string[]; format?: "date" | "number" | "ratio"; exact?: boolean };
 
 function shareholderName(row: JsonRecord): string {
-  return String(findValue(row, ["股东名称", "股东", "名称", "name", "股东全称"]) || "").trim();
+  return String(findExactValue(row, ["股东名称", "股东", "名称", "name", "股东全称"]) || "").trim();
+}
+
+function controlRelationText(value: unknown): string {
+  const text = String(value ?? "").trim();
+  if (!text) return "";
+  if (/[\u3400-\u9fff]/.test(text)) return text;
+  const labels: Record<string, string> = {
+    CONTROLLING_HOLDER: "控股股东",
+    ULTIMATE_CONTROLLER: "实际控制人",
+    CONTROL_HOLDER: "控股股东",
+    ACTUAL_CONTROLLER: "实际控制人",
+    CONTROLLER: "控制人",
+  };
+  return labels[text.toUpperCase()] || "";
 }
 
 function holdingChangeText(value: unknown): string {
@@ -1563,14 +1624,14 @@ function holdingChangeText(value: unknown): string {
 
 function shareholderChangeRows(rows: JsonRecord[], selectedPeriod: string, periods: string[]): JsonRecord[] {
   if (!selectedPeriod || periods.length < 2) {
-    return rows.map((row) => ({ ...row, holding_change: holdingChangeText(findValue(row, ["变动", "持股变动", "增减", "change", "变化"])) }));
+    return rows.map((row) => ({ ...row, holding_change: holdingChangeText(findExactValue(row, ["变动", "持股变动", "增减", "change", "变化"])) }));
   }
   const index = periods.indexOf(selectedPeriod);
   const previousPeriod = index >= 0 ? periods[index + 1] : undefined;
   const previousRows = previousPeriod ? rows.filter((row) => f10Period(row) === previousPeriod) : [];
   const previousByName = new Map(previousRows.map((row) => [shareholderName(row), row]));
   return rows.filter((row) => f10Period(row) === selectedPeriod).map((row) => {
-    const existing = findValue(row, ["变动", "持股变动", "增减", "change", "变化"]);
+    const existing = findExactValue(row, ["变动", "持股变动", "增减", "change", "变化"]);
     const previous = previousByName.get(shareholderName(row));
     // A missing comparison period is unknown, not evidence of a new holder.
     // Only label “新进” when a real prior-period table exists and this name
@@ -1579,8 +1640,8 @@ function shareholderChangeRows(rows: JsonRecord[], selectedPeriod: string, perio
       return { ...row, holding_change: existing ? holdingChangeText(existing) : "--" };
     }
     if (!previous) return { ...row, holding_change: existing ? holdingChangeText(existing) : "新进" };
-    const currentShares = toNumber(findValue(row, ["持股数量", "持股数", "股份数", "数量", "shares"]));
-    const previousShares = toNumber(findValue(previous, ["持股数量", "持股数", "股份数", "数量", "shares"]));
+    const currentShares = toNumber(findExactValue(row, ["持股数量", "持股数", "股份数", "数量", "shares"]));
+    const previousShares = toNumber(findExactValue(previous, ["持股数量", "持股数", "股份数", "数量", "shares"]));
     if (currentShares !== null && previousShares !== null) {
       const delta = currentShares - previousShares;
       return { ...row, holding_change: Math.abs(delta) < 1e-9 ? "不变" : delta > 0 ? "↑ 增持" : "↓ 减持" };
@@ -1596,7 +1657,7 @@ function F10CompactTable({ rows, columns, title, emptyText }: { rows: JsonRecord
         <thead><tr>{columns.map((column) => <th key={column.key}>{column.label}</th>)}</tr></thead>
         <tbody>{rows.map((row, index) => <tr key={`${title}-${index}`}>
           {columns.map((column) => {
-            const value = findValue(row, column.aliases);
+            const value = column.exact ? findExactValue(row, column.aliases) : findValue(row, column.aliases);
             const rendered = column.format === "date" ? formatDate(String(value || "")) : ["year", "plan", "name", "relation", "subject"].includes(column.key) ? valueText(value) : displayByLabel(column.label, value);
             const change = column.key === "change" ? holdingChangeText(value) : rendered;
             const tone = column.key === "change" ? (change.startsWith("↑") || change === "新进" ? "positive" : change.startsWith("↓") ? "negative" : "neutral") : "";
@@ -1634,30 +1695,30 @@ function F10ShareholderSection({ section, onOpen, currentShareFields = {} }: { s
     const ratioLabel = key === "top_ten_circulating" ? "占流通比" : "占总股本比";
     return <section className={`f10-mobile-section f10-holder-${key}`}>
       <F10ReportPeriodTable section={section} onOpen={onOpen} compareShareholders columns={[
-        { key: "name", label: "股东名称", aliases: ["股东名称", "股东", "名称", "name", "股东全称"] },
-        { key: "ratio", label: ratioLabel, aliases: ["持股比例", "持股比", "占流通股比例", "占流通比", "占总股本比例", "占总股本比", "比例", "ratio"], format: "ratio" },
-        { key: "shares", label: "持股数量", aliases: ["持股数量", "持股数", "股份数", "数量", "shares"], format: "number" },
-        { key: "change", label: "变动", aliases: ["holding_change", "变动", "持股变动", "增减", "变化", "change"] },
+        { key: "name", label: "股东名称", aliases: ["股东名称", "股东", "名称", "name", "股东全称"], exact: true },
+        { key: "ratio", label: ratioLabel, aliases: ["持股比例", "持股比", "占流通股比例", "占流通比", "占总股本比例", "占总股本比", "比例", "ratio"], format: "ratio", exact: true },
+        { key: "shares", label: "持股数量", aliases: ["持股数量", "持股数", "股份数", "数量", "shares"], format: "number", exact: true },
+        { key: "change", label: "变动", aliases: ["holding_change", "变动", "持股变动", "增减", "变化", "change"], exact: true },
       ]} />
     </section>;
   }
   const tableColumns: Record<string, CompactColumn[]> = {
     restricted_release: [
-      { key: "date", label: "解禁时间", aliases: ["解禁时间", "解禁日期", "上市日期", "日期", "解除限售日期", "date"], format: "date" },
-      { key: "shares", label: "解禁数量", aliases: ["解禁数量", "解禁股数", "上市流通数量", "数量", "shares"], format: "number" },
-      { key: "ratio", label: "占总股本比", aliases: ["占总股本比", "占总股本比例", "总股本比例", "比例", "ratio"], format: "ratio" },
+      { key: "date", label: "解禁时间", aliases: ["解禁时间", "解禁日期", "上市日期", "日期", "解除限售日期", "date"], format: "date", exact: true },
+      { key: "shares", label: "解禁数量", aliases: ["解禁数量", "解禁股数", "上市流通数量", "数量", "shares"], format: "number", exact: true },
+      { key: "ratio", label: "占总股本比", aliases: ["占总股本比", "占总股本比例", "总股本比例", "比例", "ratio"], format: "ratio", exact: true },
     ],
     institutional: [
-      { key: "period", label: "报告期", aliases: ["报告期", "截止日期", "截至日期", "report_period", "date"], format: "date" },
-      { key: "shares", label: "持股数量", aliases: ["持股数量", "持股数", "机构持股数量", "shares"], format: "number" },
-      { key: "ratio", label: "占流通股", aliases: ["占流通股", "占流通股比例", "持股比例", "比例", "ratio"], format: "ratio" },
-      { key: "institutions", label: "机构家数", aliases: ["机构家数", "机构数量", "机构数"] },
-      { key: "funds", label: "基金家数", aliases: ["基金家数", "基金数量", "基金数"] },
+      { key: "period", label: "报告期", aliases: ["报告期", "截止日期", "截至日期", "report_period", "date"], format: "date", exact: true },
+      { key: "shares", label: "持股数量", aliases: ["持股数量", "持股数", "机构持股数量", "shares"], format: "number", exact: true },
+      { key: "ratio", label: "占流通股", aliases: ["占流通股", "占流通股比例", "持股比例", "比例", "ratio"], format: "ratio", exact: true },
+      { key: "institutions", label: "机构家数", aliases: ["机构家数", "机构数量", "机构数"], exact: true },
+      { key: "funds", label: "基金家数", aliases: ["基金家数", "基金数量", "基金数"], exact: true },
     ],
     holder_count: [
-      { key: "date", label: "截止日期", aliases: ["股东户数统计截止日", "截止日期", "截至日期", "报告期", "date"], format: "date" },
-      { key: "count", label: "股东户数(户)", aliases: ["股东户数-本次", "股东户数", "股东户数(户)", "股东人数", "户数", "count"], format: "number" },
-      { key: "average", label: "户均持股(股)", aliases: ["户均持股数量", "户均持股", "户均持股数", "每户持股", "average"], format: "number" },
+      { key: "date", label: "截止日期", aliases: ["股东户数统计截止日", "截止日期", "截至日期", "报告期", "date"], format: "date", exact: true },
+      { key: "count", label: "股东户数(户)", aliases: ["股东户数-本次", "股东户数", "股东户数(户)", "股东人数", "户数", "count"], format: "number", exact: true },
+      { key: "average", label: "户均持股(股)", aliases: ["户均持股数量", "户均持股", "户均持股数", "每户持股", "average"], format: "number", exact: true },
     ],
   };
   if (key === "capital_structure") {
@@ -1705,20 +1766,20 @@ function F10ShareholderSection({ section, onOpen, currentShareFields = {} }: { s
     </section>;
   }
   if (key === "control") {
-    const facts = rows.flatMap((row) => {
-      const actualController = pickValue(row, ["实际控制人", "实际控制人名称", "ultimate_controller"]);
-      const controllingShareholder = pickValue(row, ["控股股东", "控股股东名称", "controlling_shareholder"]);
+    const controlRows = rows.flatMap((row) => {
+      const relation = controlRelationText(pickValue(row, ["关系", "控股关系", "relation", "control_relation"]) ?? pickValue(row, ["control_role"]));
+      const subject = pickValue(row, ["主体名称", "主体", "subject_name", "subject", "实际控制人", "实际控制人名称", "控股股东", "控股股东名称", "ultimate_controller", "controlling_shareholder"]);
       const ratio = pickValue(row, ["持股比例", "持股比", "持股比例(%)", "shareholding_ratio"]);
-      return [
-        ...(actualController ? [{ label: "实际控制人", value: actualController }] : []),
-        ...(controllingShareholder ? [{ label: "控股股东", value: controllingShareholder }] : []),
-        ...(ratio !== undefined ? [{ label: "持股比例", value: ratio }] : []),
-      ];
+      if (!relation && !subject) return [];
+      const displayRelation = relation || "关联主体";
+      const displaySubject = subject || "--";
+      return [{ label: displayRelation, value: displaySubject, relation: displayRelation, subject: displaySubject, ratio }];
     });
-    const controlRows = facts.map((fact) => ({ relation: fact.label, subject: fact.value }));
+    const hasRatio = controlRows.some((row) => row.ratio !== undefined && row.ratio !== null && row.ratio !== "");
+    const openControlDetail = controlRows.length ? () => onOpen({ ...section, rows: controlRows, detail_title: "控股股东与实际控制人" }) : undefined;
     return <section className={`f10-mobile-section f10-holder-${key}`}>
-      <F10SectionHeading section={section} onOpen={rows.length ? onOpen : undefined} />
-      {facts.length ? <F10CompactTable rows={controlRows} columns={[{ key: "relation", label: "关系", aliases: ["relation"] }, { key: "subject", label: "主体", aliases: ["subject"] }]} title="控股股东与实际控制人" /> : <F10FactRows rows={rows} emptyText={String(section.message || "暂无可核验的控股股东或实际控制人信息")} />}
+      <F10SectionHeading section={section} onOpen={openControlDetail} />
+      {controlRows.length ? <F10CompactTable rows={controlRows} columns={[{ key: "relation", label: "关系", aliases: ["relation"], exact: true }, { key: "subject", label: "主体", aliases: ["subject"], exact: true }, ...(hasRatio ? [{ key: "ratio", label: "持股比例", aliases: ["ratio"], format: "ratio" as const, exact: true }] : [])]} title="控股股东与实际控制人" /> : <p className="f10-mobile-empty">{String(section.message || "暂无可核验的控股股东或实际控制人信息")}</p>}
       <F10SectionSource section={section} />
     </section>;
   }

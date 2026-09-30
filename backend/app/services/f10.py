@@ -699,12 +699,49 @@ def _needs_f10_refresh(extended_data: dict[str, dict], market: str | None = None
     # that does not publish the same endpoints.
     if market == "CN_A" and not _section_has_payload("research_sections", extended_data.get("research_sections"), market):
         return True
-    if market == "HK":
-        if _hk_fund_flow_is_stale(extended_data.get("fund_flow")):
+    if market in {"CN_A", "HK"}:
+        if _fund_flow_is_stale(extended_data.get("fund_flow"), market=market):
             return True
+    if market == "HK":
         if _hk_published_reports_need_refresh(extended_data.get("published_reports")):
             return True
     return False
+
+
+def _fund_flow_is_stale(payload: dict | None, *, market: str | None = None, max_age_days: int = 5) -> bool:
+    """Check freshness from the latest business date, not cache fetch time.
+
+    A cache can be fetched successfully while the provider still returns an
+    older trading day.  Both A-share and HK pages use the same read-model
+    contract, with a small weekend/holiday tolerance so opening a page does
+    not trigger a refresh loop when exchanges are closed.
+    """
+    if not isinstance(payload, dict):
+        return True
+    rows = payload.get("rows")
+    if not isinstance(rows, list) or not rows:
+        return True
+    candidates: list[date] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        for key in ("日期", "交易日期", "持股日期", "date", "trade_date"):
+            value = row.get(key)
+            if not value:
+                continue
+            text = str(value).strip().replace("/", "-").split(" ", 1)[0]
+            try:
+                candidates.append(date.fromisoformat(text[:10]))
+            except ValueError:
+                continue
+            break
+    if not candidates:
+        return True
+    latest = max(candidates)
+    # ``market`` is intentionally accepted for future exchange-specific
+    # holidays; the current tolerance is valid for both CN_A and HK.
+    _ = market
+    return (date.today() - latest).days > max_age_days
 
 def _hk_fund_flow_is_stale(payload: dict | None) -> bool:
     if not isinstance(payload, dict):

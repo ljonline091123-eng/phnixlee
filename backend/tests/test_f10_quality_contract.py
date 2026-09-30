@@ -37,6 +37,39 @@ def test_optional_security_panel_fails_closed_when_unscoped_response_has_no_code
     assert rows == [{"机构": "other", "数值": 1}]
 
 
+def test_financial_source_payload_rounds_amounts_but_preserves_ratios_and_eps() -> None:
+    adapter = AkshareAdapter()
+    payload = adapter._normalize_financial_payload({
+        "TOTAL_OPERATE_INCOME": 123456789.126,
+        "PARENT_NETPROFIT": -987654321.125,
+        "TOTAL_OPERATE_INCOME_YOY": 12.345678,
+        "EPS": 1.234567,
+        "ROE": 8.765432,
+        "REPORT_DATE": "2026-06-30",
+    })
+
+    assert payload["TOTAL_OPERATE_INCOME"] == 123456789.13
+    assert payload["PARENT_NETPROFIT"] == -987654321.13
+    assert payload["TOTAL_OPERATE_INCOME_YOY"] == 12.345678
+    assert payload["EPS"] == 1.234567
+    assert payload["ROE"] == 8.765432
+
+
+def test_holder_source_payload_keeps_shares_and_rounds_percentages() -> None:
+    adapter = AkshareAdapter()
+    payload = adapter._normalize_holder_payload({
+        "持股数量": 9618540236.789,
+        "持股比例": 49.5667,
+        "平均持股数": 25578.1234,
+        "股东名称": "测试主体",
+    })
+
+    assert payload["持股数量"] == 9618540236.79
+    assert payload["持股比例"] == 49.57
+    assert payload["平均持股数"] == 25578.12
+    assert payload["股东名称"] == "测试主体"
+
+
 def test_classification_fact_definition_is_not_overwritten_by_dimension_glossary() -> None:
     item = {"label": "人工智能", "definition": "该标签具体表示公司披露的人工智能业务。"}
     master = SimpleNamespace(

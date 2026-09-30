@@ -26,6 +26,7 @@ from app.services.catalog import seed_default_catalog
 from app.services.ipo_calendar import IpoCalendarService
 from app.services.stock_on_demand import StockOnDemandService
 from app.services.stock_sync import StockSyncService
+from app.services.f10 import _fund_flow_is_stale
 
 
 class MarketDataFoundationTest(unittest.TestCase):
@@ -482,6 +483,13 @@ class MarketDataFoundationTest(unittest.TestCase):
         stale_payload = dict(fresh_payload)
         stale_payload["fund_flow"] = {"source": "test", "rows": [{"date": "2026-08-01", "value": 1}]}
         self.assertTrue(_needs_f10_refresh(stale_payload, "HK"))
+
+    @patch("app.services.f10.date", wraps=date)
+    def test_cn_snapshot_refreshes_when_fund_flow_cache_is_stale(self, mock_date) -> None:
+        mock_date.today.return_value = date(2026, 9, 5)
+        self.assertFalse(_fund_flow_is_stale({"rows": [{"日期": "2026-09-04", "主力净流入-净额": 1}]}, market="CN_A"))
+        self.assertTrue(_fund_flow_is_stale({"rows": [{"日期": "2026-08-01", "主力净流入-净额": 1}]}, market="CN_A"))
+        self.assertTrue(_fund_flow_is_stale({"rows": []}, market="CN_A"))
 
     def test_ipo_calendar_parses_cninfo_and_persists_placeholder_symbol(self) -> None:
         service = IpoCalendarService(self.db)

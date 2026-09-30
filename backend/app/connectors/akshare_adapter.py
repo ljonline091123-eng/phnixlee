@@ -51,6 +51,86 @@ class AkshareAdapter(MarketDataAdapter):
             re.search(r"率|比率|比例|增长|同比|环比|每股|占比|权益乘数|权益比", text)
         )
 
+    @staticmethod
+    def _financial_amount_key(key: Any) -> bool:
+        """Return whether a provider field is a currency amount in source units.
+
+        AkShare exposes both monetary observations and ratios/counts in the
+        same row.  Normalizing every number would corrupt EPS, percentages and
+        dates, so the raw financial cache uses a conservative field contract:
+        recognized amount fields are rounded to two decimals and all other
+        values are preserved verbatim.
+        """
+        text = str(key or "")
+        compact = re.sub(r"[\s_()（）%]", "", text).upper()
+        if not compact:
+            return False
+        excluded = (
+            "RATIO", "PCT", "PERCENT", "YOY", "QOQ", "MOM", "EPS",
+            "PB", "ROE", "ROA", "MARGIN", "SHARES", "SHARE",
+            "COUNT", "NUMBER", "NUM", "DAYS", "DATE", "YEAR", "PERIOD",
+            "CODE", "PRICE", "TURNOVER", "VOLUME", "QUANTITY", "每股",
+            "比例", "比率", "占比", "增长", "同比", "环比", "收益率", "毛利率",
+            "净利率", "持股数量", "持仓数量", "股数", "户数", "人数", "日期",
+        )
+        if any(token in compact or token in text for token in excluded):
+            return False
+        if re.search(r"(?:^|_)P(?:E|ER)(?:_|$)", str(key or "").upper()):
+            return False
+        amount_tokens = (
+            "REVENUE", "INCOME", "PROFIT", "ASSET", "LIABIL", "EQUITY", "CASH",
+            "AMOUNT", "VALUE", "COST", "EXPENSE", "CAPITAL", "MVALUE", "NETCASH",
+            "OPERATE", "费用", "收入", "利润", "资产", "负债", "权益", "现金",
+            "金额", "市值", "成本", "费用", "股本", "净额",
+        )
+        return any(token in compact or token in text.upper() for token in amount_tokens)
+
+    @classmethod
+    def _normalize_financial_payload(cls, value: Any) -> Any:
+        """Round monetary fields in a financial source row to yuan cents.
+
+        The provider rows are retained as JSON evidence.  This recursive
+        normalizer only changes fields whose names unambiguously describe a
+        monetary amount; ratios, per-share metrics, counts and dates remain
+        untouched.  Public CN/HK endpoints report amounts in the issuer's
+        currency unit (CNY/HKD), which is also recorded on ``FinancialRecord``.
+        """
+        if isinstance(value, dict):
+            return {
+                str(key): cls._round_yuan(item) if cls._financial_amount_key(key) and not isinstance(item, (dict, list))
+                else cls._normalize_financial_payload(item)
+                for key, item in value.items()
+            }
+        if isinstance(value, list):
+            return [cls._normalize_financial_payload(item) for item in value]
+        return value
+
+    @staticmethod
+    def _holder_field_kind(key: Any) -> str | None:
+        text = str(key or "")
+        compact = re.sub(r"[\s_()（）%]", "", text).upper()
+        if any(token in compact or token in text for token in ("比例", "占流通", "占总股本", "RATIO", "PCT", "PERCENT")):
+            return "ratio"
+        if any(token in compact or token in text for token in ("持股数量", "持仓数量", "股份数", "股数", "SHARES", "HOLDINGS")):
+            return "shares"
+        return None
+
+    @classmethod
+    def _normalize_holder_payload(cls, value: Any) -> Any:
+        """Keep holder quantities in shares and ratios at two decimals."""
+        if isinstance(value, dict):
+            normalized: dict[str, Any] = {}
+            for key, item in value.items():
+                kind = cls._holder_field_kind(key)
+                if kind in {"ratio", "shares"} and not isinstance(item, (dict, list)):
+                    normalized[str(key)] = cls._round_yuan(item)
+                else:
+                    normalized[str(key)] = cls._normalize_holder_payload(item)
+            return normalized
+        if isinstance(value, list):
+            return [cls._normalize_holder_payload(item) for item in value]
+        return value
+
     def health_check(self) -> tuple[str, list[str]]:
         required_methods = ("stock_info_a_code_name", "stock_hk_spot_em", "stock_news_em")
         missing = [method for method in required_methods if not hasattr(ak, method)]
@@ -811,7 +891,7 @@ class AkshareAdapter(MarketDataAdapter):
                     indicator=indicator or "NEEQ_FINANCIAL_INDICATORS",
                     report_period=row["REPORTDATE"],
                     currency=None,
-                    data_json=self._json_safe(row),
+                    data_json=self._normalize_financial_payload(self._json_safe(row)),
                 )
             ]
         rows = self._neeq_result(payload)
@@ -829,7 +909,7 @@ class AkshareAdapter(MarketDataAdapter):
                     indicator=indicator or "NEEQ_FINANCIAL_INDICATORS",
                     report_period=report_period,
                     currency=None,
-                    data_json=self._json_safe(row),
+                    data_json=self._normalize_financial_payload(self._json_safe(row)),
                 )
             )
         return records
@@ -2579,7 +2659,8 @@ class AkshareAdapter(MarketDataAdapter):
                     dataframe = dataframe[dataframe[date_column].astype(str).isin(dates[:2])]
                     dataframe = dataframe.assign(__f10_report_date=dataframe[date_column].astype(str))
                     dataframe = dataframe.sort_values("__f10_report_date", ascending=False, kind="stable").drop(columns=["__f10_report_date"])
-            return cls._safe_dataframe_records(dataframe, limit=40)
+            rows = cls._safe_dataframe_records(dataframe, limit=40)
+            return [cls._normalize_holder_payload(row) for row in rows]
         except Exception:
             return []
 
@@ -2660,7 +2741,8 @@ class AkshareAdapter(MarketDataAdapter):
                         lambda value: cls._normalize_security_code(value) == target
                     )
                 ]
-            return cls._safe_dataframe_records(selected, limit=limit)
+            rows = cls._safe_dataframe_records(selected, limit=limit)
+            return [cls._normalize_holder_payload(row) for row in rows]
         except Exception:
             # Optional panels must not make the core F10 request fail.
             return []
@@ -2956,7 +3038,8 @@ class AkshareAdapter(MarketDataAdapter):
             if date_column:
                 dataframe = dataframe.assign(__sort=pd.to_datetime(dataframe[date_column], errors="coerce"))
                 dataframe = dataframe.sort_values("__sort", ascending=False).drop(columns=["__sort"])
-            return cls._safe_dataframe_records(dataframe, limit=limit)
+            rows = cls._safe_dataframe_records(dataframe, limit=limit)
+            return [cls._normalize_holder_payload(row) for row in rows]
         except Exception:
             return []
 
@@ -3452,7 +3535,7 @@ class AkshareAdapter(MarketDataAdapter):
                     indicator=indicator,
                     report_period=report_period,
                     currency=str(currency) if currency is not None else None,
-                    data_json=self._json_safe(item),
+                    data_json=self._normalize_financial_payload(self._json_safe(item)),
                     url=str(report_url).strip() if report_url else None,
                 )
             )
