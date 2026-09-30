@@ -16,7 +16,7 @@ import {
 
 type JsonRecord = Record<string, unknown>;
 type PrimaryTab = "精选" | "新闻" | "公告" | "资金" | "F10" | "研究";
-type F10Tab = "财务" | "股东" | "概况" | "财报";
+type F10Tab = "财务" | "股东" | "简况" | "财报";
 
 const noticeCategories = ["全部", "财务业绩", "重大事项", "风险提示", "抵押担保", "增持回购", "对外投资", "其他公告"] as const;
 
@@ -252,7 +252,8 @@ function ratingText(value: unknown): string {
 function ratingDate(row: JsonRecord): Date | null {
   const raw = pickValue(row, ["最新报告日期", "日期", "报告日期", "report_date"]);
   if (!raw) return null;
-  const date = new Date(String(raw).replace(/年|月/g, "-").replace(/日/g, ""));
+  const normalized = String(raw).trim().replace(/[年/.]/g, "-").replace(/月/g, "-").replace(/日/g, "");
+  const date = new Date(normalized);
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
@@ -291,22 +292,36 @@ function ResearchForecastPanel({ section }: { section: JsonRecord }) {
       <div className="research-forecast-heading">
         <div><span className="financial-section-mark" /><h3>机构预测</h3></div>
         <div className="research-forecast-tabs" role="tablist" aria-label="机构预测视图">
-          <button type="button" className={mode === "forecast" ? "active" : ""} onClick={() => setMode("forecast")}>机构预测</button>
-          <button type="button" className={mode === "rating" ? "active" : ""} onClick={() => setMode("rating")}>评级统计</button>
+          <button type="button" role="tab" aria-selected={mode === "forecast"} className={mode === "forecast" ? "active" : ""} onClick={() => setMode("forecast")}>机构预测</button>
+          <button type="button" role="tab" aria-selected={mode === "rating"} className={mode === "rating" ? "active" : ""} onClick={() => setMode("rating")}>评级统计</button>
         </div>
-        <span className="f10-data-status available">{rows.length ? "已获取" : "暂无数据"}</span>
+        <span className="f10-data-status available" aria-live="polite">{rows.length ? "已获取" : "暂无数据"}</span>
       </div>
       {mode === "forecast" ? (
-        rows.length ? <div className="research-forecast-list">{rows.slice(0, 100).map((row, index) => {
-          const institution = String(pickValue(row, ["机构", "institution"]) || "未披露机构");
-          const rating = ratingText(pickValue(row, ["评级", "东财评级", "rating"]));
-          return <div className="research-forecast-row" key={`${institution}-${index}`}><span>{institution}</span><strong>评级：{rating} · 评级数量：{valueText(pickValue(row, ["评级数量", "评级数", "report_count"]))} · 最新报告日期：{formatDate(String(pickValue(row, ["最新报告日期", "日期", "report_date"]) || ""))}</strong></div>;
-        })}</div> : <p className="empty-state">{String(section.message || "当前数据源未返回机构预测")}</p>
+        rows.length ? <div className="research-forecast-table-wrap" role="tabpanel" aria-label="机构预测">
+          <table className="research-forecast-table">
+            <thead><tr><th scope="col">报告期</th><th scope="col">机构</th><th scope="col">评级</th><th scope="col">评级数量</th><th scope="col">最新报告日期</th></tr></thead>
+            <tbody>{rows.slice(0, 100).map((row, index) => {
+              const institution = String(pickValue(row, ["机构", "institution"]) || "未披露机构");
+              const rating = ratingText(pickValue(row, ["评级", "东财评级", "rating"]));
+              const reportDate = String(pickValue(row, ["最新报告日期", "日期", "report_date"]) || "");
+              const reportPeriod = pickValue(row, ["报告期", "预测年度", "年度", "report_period", "forecast_year"])
+                || (ratingDate(row)?.getFullYear() ?? "--");
+              const ratingTone = rating === "买入" || rating === "增持" ? "positive" : rating === "减持" || rating === "卖出" ? "negative" : "neutral";
+              return <tr key={`${institution}-${rating}-${index}`}>
+                <td>{valueText(reportPeriod)}</td>
+                <td className="research-forecast-institution">{institution}</td>
+                <td><span className={`research-rating ${ratingTone}`}>{rating}</span></td>
+                <td>{valueText(pickValue(row, ["评级数量", "评级数", "report_count"]))}</td>
+                <td>{formatDate(reportDate)}</td>
+              </tr>;
+            })}</tbody>
+          </table>
+        </div> : <p className="empty-state" role="tabpanel">{String(section.message || "当前数据源未返回机构预测")}</p>
       ) : (
-        <div className="rating-stat-table-wrap"><table className="rating-stat-table"><thead><tr><th>时间段</th><th>买入</th><th>增持</th><th>中性</th><th>减持</th><th>卖出</th><th>总家数</th></tr></thead><tbody>{statistics.map((row) => <tr key={row.period}><th>{row.period}</th><td className="rating-buy">{row.buy}</td><td>{row.add}</td><td>{row.neutral}</td><td>{row.reduce}</td><td>{row.sell}</td><td>{row.total}</td></tr>)}</tbody></table></div>
+        <div className="rating-stat-table-wrap" role="tabpanel" aria-label="评级统计"><table className="rating-stat-table"><thead><tr><th scope="col">时间段</th><th scope="col">买入</th><th scope="col">增持</th><th scope="col">中性</th><th scope="col">减持</th><th scope="col">卖出</th><th scope="col">总家数</th></tr></thead><tbody>{statistics.map((row) => <tr key={row.period}><th scope="row">{row.period}</th><td className="rating-buy">{row.buy}</td><td>{row.add}</td><td>{row.neutral}</td><td>{row.reduce}</td><td>{row.sell}</td><td>{row.total}</td></tr>)}</tbody></table></div>
       )}
-      <div className="f10-section-meta"><span>来源：{String(section.source || "暂无")}</span>{section.as_of ? <span>截至：{formatDate(String(section.as_of))}</span> : null}</div>
-      {mode === "forecast" && rows.length > 8 ? <button type="button" className="f10-detail-link" onClick={() => setMode("rating")}>查看评级统计</button> : null}
+      <div className="f10-section-meta research-forecast-meta"><span>来源：{String(section.source || "暂无")}</span>{section.as_of ? <span>截至：{formatDate(String(section.as_of))}</span> : null}</div>
     </section>
   );
 }
@@ -1269,6 +1284,187 @@ function F10SectionBlock({
   );
 }
 
+const f10RowLabelKeys = ["label", "name", "metric", "indicator", "title", "项目", "名称", "指标"];
+const f10RowValueKeys = ["value", "data", "amount", "content", "summary", "数值", "金额", "数据"];
+
+function f10Period(row: JsonRecord): string {
+  const raw = String(pickValue(row, ["报告期", "截止日期", "截至日期", "report_period", "report_date", "date", "日期"]) || "");
+  const match = raw.match(/(20\d{2})[-/]?(\d{2})[-/]?(\d{2})/);
+  if (!match) return raw;
+  const [, year, month, day] = match;
+  if (month === "06" && day === "30") return `${year}中报`;
+  if (month === "03" && day === "31") return `${year}一季报`;
+  if (month === "09" && day === "30") return `${year}三季报`;
+  if (month === "12" && day === "31") return `${year}年报`;
+  return `${year}-${month}-${day}`;
+}
+
+function F10SectionHeading({ section, onOpen, pin = false }: { section: JsonRecord; onOpen?: (section: JsonRecord) => void; pin?: boolean }) {
+  const rows = sectionRows(section);
+  return (
+    <header className="f10-mobile-heading">
+      <div className="f10-mobile-heading-title"><span aria-hidden="true" /><h3>{String(section.title || "资料分区")}</h3></div>
+      <div className="f10-mobile-heading-actions">
+        {pin ? <span className="f10-pin-label">置顶</span> : null}
+        {onOpen && rows.length ? <button type="button" onClick={() => onOpen(section)}>更多 <span aria-hidden="true">›</span></button> : null}
+      </div>
+    </header>
+  );
+}
+
+function F10FactRows({ rows, onOpenRow }: { rows: JsonRecord[]; onOpenRow?: (row: JsonRecord) => void }) {
+  const facts = rows.flatMap((row) => {
+    const label = pickValue(row, f10RowLabelKeys);
+    const directValue = pickValue(row, f10RowValueKeys);
+    if (label !== undefined || directValue !== undefined) {
+      return [{ label: String(label || "资料"), value: directValue ?? row, row }];
+    }
+    return Object.entries(row)
+      .filter(([key, value]) => !["id", "source", "source_name", "source_id", "url", "source_url", "status", "verification_status", "report_period", "date"].includes(key) && value !== null && value !== undefined && value !== "")
+      .map(([key, value]) => ({ label: humanFieldLabel(key) || key, value, row }));
+  });
+  return facts.length ? (
+    <div className="f10-mobile-facts">
+      {facts.map((fact, index) => (
+        <button type="button" className={`f10-mobile-fact ${onOpenRow ? "is-clickable" : ""}`} key={`${fact.label}-${index}`} onClick={onOpenRow ? () => onOpenRow(fact.row) : undefined}>
+          <span>{fact.label}</span><strong>{valueText(fact.value)}</strong>
+        </button>
+      ))}
+    </div>
+  ) : <p className="f10-mobile-empty">暂无该分区数据</p>;
+}
+
+type CompactColumn = { key: string; label: string; aliases: string[]; format?: "date" | "number" | "ratio" };
+
+function F10CompactTable({ rows, columns, title }: { rows: JsonRecord[]; columns: CompactColumn[]; title: string }) {
+  return rows.length ? (
+    <div className="f10-mobile-table-wrap">
+      <table className="f10-mobile-table" aria-label={title}>
+        <thead><tr>{columns.map((column) => <th key={column.key}>{column.label}</th>)}</tr></thead>
+        <tbody>{rows.map((row, index) => <tr key={`${title}-${index}`}>
+          {columns.map((column) => {
+            const value = findValue(row, column.aliases);
+            const rendered = column.format === "date" ? formatDate(String(value || "")) : column.format === "ratio" ? displayByLabel(column.label, value) : column.format === "number" ? displayByLabel(column.label, value) : valueText(value);
+            return <td key={column.key}>{rendered}</td>;
+          })}
+        </tr>)}</tbody>
+      </table>
+    </div>
+  ) : <p className="f10-mobile-empty">暂无{title}数据</p>;
+}
+
+function F10ReportPeriodTable({ section, columns, onOpen }: { section: JsonRecord; columns: CompactColumn[]; onOpen?: (section: JsonRecord) => void }) {
+  const rows = sectionRows(section);
+  const periods = [...new Set(rows.map(f10Period).filter(Boolean))];
+  const [selectedPeriod, setSelectedPeriod] = useState(periods[0] || "");
+  const selected = periods.includes(selectedPeriod) ? selectedPeriod : periods[0];
+  const filtered = selected ? rows.filter((row) => f10Period(row) === selected) : rows;
+  return (
+    <>
+      <div className="f10-mobile-heading-row"><F10SectionHeading section={section} onOpen={onOpen} pin /><span className="f10-period-asof">{selected || ""}</span></div>
+      {periods.length > 1 ? <div className="f10-period-tabs" role="tablist" aria-label={`${String(section.title)}报告期`}>
+        {periods.slice(0, 6).map((period) => <button type="button" role="tab" aria-selected={period === selected} className={period === selected ? "active" : ""} key={period} onClick={() => setSelectedPeriod(period)}>{period}</button>)}
+      </div> : null}
+      <F10CompactTable rows={filtered} columns={columns} title={String(section.title || "股东数据")} />
+    </>
+  );
+}
+
+function F10ShareholderSection({ section, onOpen }: { section: JsonRecord; onOpen: (section: JsonRecord) => void }) {
+  const key = String(section.key || "");
+  const rows = sectionRows(section);
+  if (["top_ten", "top_ten_circulating"].includes(key)) {
+    const ratioLabel = key === "top_ten_circulating" ? "占流通比" : "占总股本比";
+    return <section className={`f10-mobile-section f10-holder-${key}`}>
+      <F10ReportPeriodTable section={section} onOpen={onOpen} columns={[
+        { key: "name", label: "股东名称", aliases: ["股东名称", "股东", "名称", "name", "股东全称"] },
+        { key: "ratio", label: ratioLabel, aliases: ["持股比例", "持股比", "占流通股比例", "占流通比", "占总股本比例", "占总股本比", "比例", "ratio"], format: "ratio" },
+        { key: "shares", label: "持股数量", aliases: ["持股数量", "持股数", "股份数", "数量", "shares"], format: "number" },
+        { key: "change", label: "变动", aliases: ["变动", "持股变动", "增减", "变化", "change"] },
+      ]} />
+    </section>;
+  }
+  const tableColumns: Record<string, CompactColumn[]> = {
+    restricted_release: [
+      { key: "date", label: "解禁时间", aliases: ["解禁时间", "解禁日期", "上市日期", "日期", "解除限售日期", "date"], format: "date" },
+      { key: "shares", label: "解禁数量", aliases: ["解禁数量", "解禁股数", "上市流通数量", "数量", "shares"], format: "number" },
+      { key: "ratio", label: "占总股本比", aliases: ["占总股本比", "占总股本比例", "总股本比例", "比例", "ratio"], format: "ratio" },
+    ],
+    institutional: [
+      { key: "period", label: "报告期", aliases: ["报告期", "截止日期", "截至日期", "report_period", "date"], format: "date" },
+      { key: "shares", label: "持股数量", aliases: ["持股数量", "持股数", "机构持股数量", "shares"], format: "number" },
+      { key: "ratio", label: "占流通股", aliases: ["占流通股", "占流通股比例", "持股比例", "比例", "ratio"], format: "ratio" },
+      { key: "institutions", label: "机构家数", aliases: ["机构家数", "机构数量", "机构数"] },
+      { key: "funds", label: "基金家数", aliases: ["基金家数", "基金数量", "基金数"] },
+    ],
+    holder_count: [
+      { key: "date", label: "截止日期", aliases: ["截止日期", "截至日期", "报告期", "date"], format: "date" },
+      { key: "count", label: "股东户数(户)", aliases: ["股东户数", "股东户数(户)", "股东人数", "户数", "count"], format: "number" },
+      { key: "average", label: "户均持股(股)", aliases: ["户均持股", "户均持股数", "每户持股", "average"], format: "number" },
+    ],
+  };
+  return <section className={`f10-mobile-section f10-holder-${key}`}>
+    <F10SectionHeading section={section} onOpen={onOpen} pin={key !== "capital_structure"} />
+    {tableColumns[key] ? <F10CompactTable rows={rows} columns={tableColumns[key]} title={String(section.title || "股东数据")} /> : <F10FactRows rows={rows} onOpenRow={(row) => onOpen({ ...section, rows: [row], detail_title: String(pickValue(row, f10RowLabelKeys) || section.title) })} />}
+  </section>;
+}
+
+function F10OverviewSection({ section, concepts, onOpen }: { section: JsonRecord; concepts: JsonRecord[]; onOpen: (section: JsonRecord) => void }) {
+  const key = String(section.key || "");
+  const rows = sectionRows(section);
+  const isBasic = key === "basic";
+  const isAnomaly = key === "anomaly";
+  return <section className={`f10-mobile-section f10-overview-${key}`}>
+    <F10SectionHeading section={section} onOpen={!isAnomaly && rows.length ? onOpen : undefined} />
+    {isBasic && concepts.length ? <div className="f10-concept-tags">{concepts.map((concept, index) => <span key={`${String(concept.name || concept.label)}-${index}`}>{String(concept.name || concept.label || "概念")}</span>)}</div> : null}
+    {isAnomaly ? <button type="button" className="f10-margin-shortcut" onClick={() => onOpen({ ...section, detail_title: section.detail_title || "融资融券近一个月" })}>融资融券近一个月 <span aria-hidden="true">›</span></button> : <F10FactRows rows={rows} />}
+    {isBasic && concepts.length ? <button type="button" className="f10-concept-detail-link" onClick={() => onOpen({ key: "concepts", title: "概念详细解析", rows: concepts, source: section.source, detail_title: "概念详细解析" })}>概念详细解析 <span aria-hidden="true">››</span></button> : null}
+  </section>;
+}
+
+function F10CompositionSection({ section, sourceRows, onOpen }: { section: JsonRecord; sourceRows: JsonRecord[]; onOpen: (section: JsonRecord) => void }) {
+  const rows = sourceRows.length ? sourceRows : sectionRows(section);
+  const amounts = rows.map((row) => toNumber(pickValue(row, ["ratio", "占比", "收入占比", "amount", "value", "value_amount", "金额"])));
+  const total = amounts.reduce<number>((sum, value) => sum + (value && value > 0 ? value : 0), 0);
+  let cursor = 0;
+  const palette = ["#d63f48", "#e8a33a", "#3e8f77", "#5279a7", "#9a6cab", "#8c9d50"];
+  const stops = amounts.map((value, index) => {
+    const portion = total ? Math.max(0, value || 0) / total * 100 : 0;
+    const start = cursor;
+    cursor += portion;
+    return `${palette[index % palette.length]} ${start}% ${cursor}%`;
+  }).filter((stop) => !stop.endsWith(" 0%"));
+  const style = stops.length ? { background: `conic-gradient(${stops.join(", ")})` } : undefined;
+  return <section className="f10-mobile-section f10-financial-composition">
+    <F10SectionHeading section={section} onOpen={onOpen} />
+    <div className="f10-composition-layout">
+      <div className="f10-composition-donut" style={style} aria-label="主营业务收入构成" />
+      <div className="f10-composition-legend">{rows.slice(0, 6).map((row, index) => <div className="f10-composition-row" key={index}>
+        <i style={{ background: palette[index % palette.length] }} />
+        <span>{String(pickValue(row, f10RowLabelKeys) || `业务${index + 1}`)}</span>
+        <strong>{valueText(pickValue(row, f10RowValueKeys))}</strong>
+      </div>)}</div>
+    </div>
+  </section>;
+}
+
+function F10FinancialSection({ section, onOpen, compositionRows }: { section: JsonRecord; onOpen: (section: JsonRecord) => void; compositionRows: JsonRecord[] }) {
+  const key = String(section.key || "");
+  if (key === "composition") return <F10CompositionSection section={section} sourceRows={compositionRows} onOpen={onOpen} />;
+  const rows = sectionRows(section);
+  const isStatement = ["income", "balance", "cash_flow", "income_statement", "balance_sheet"].includes(key);
+  return <section className={`f10-mobile-section f10-financial-${key}`}>
+    <F10SectionHeading section={section} onOpen={onOpen} />
+    {isStatement && rows.length ? <div className="f10-statement-rows">{rows.map((row, index) => {
+      const label = String(pickValue(row, f10RowLabelKeys) || `项目${index + 1}`);
+      const trend = trendFromRow(row);
+      return <button className="f10-statement-row" type="button" key={`${label}-${index}`} onClick={() => onOpen({ ...section, rows: [row], detail_title: label })}>
+        <span>{label}</span><strong>{rowValueText(row)}{trend ? <em className={`metric-trend ${trend.tone}`}>{trend.text}</em> : null}</strong><b aria-hidden="true">›</b>
+      </button>;
+    })}</div> : <F10FactRows rows={rows} onOpenRow={(row) => onOpen({ ...section, rows: [row], detail_title: String(pickValue(row, f10RowLabelKeys) || section.title) })} />}
+  </section>;
+}
+
 function F10Panel({ detail, activeTab, setActiveTab }: { detail: StockF10; activeTab: F10Tab; setActiveTab: (tab: F10Tab) => void }) {
   const summary = asRecord(detail.financial_summary);
   const periods = Array.isArray(summary.periods) ? summary.periods.map(String) : [];
@@ -1298,7 +1494,7 @@ function F10Panel({ detail, activeTab, setActiveTab }: { detail: StockF10; activ
   return (
     <>
       <div className="detail-sub-tabs">
-        {(["财务", "股东", "概况", "财报"] as const).map((item) => (
+        {(["财务", "股东", "简况", "财报"] as const).map((item) => (
           <button type="button" key={item} className={activeTab === item ? "active" : ""} onClick={() => setActiveTab(item)}>{item}</button>
         ))}
       </div>
@@ -1319,7 +1515,7 @@ function F10Panel({ detail, activeTab, setActiveTab }: { detail: StockF10; activ
           {asArray(holders.official_links).length ? <div className="extended-source-links">{asArray(holders.official_links).map((link, index) => <a className="extended-source-link" href={String(link.url || "#")} target="_blank" rel="noreferrer" key={index}>{String(link.name || `官方入口 ${index + 1}`)}</a>)}</div> : null}
         </>
       )}
-      {activeTab === "概况" && (
+      {activeTab === "简况" && (
         <>
           {(overviewSections.length ? overviewSections : [{ key: "basic", title: "基本情况", rows: Object.entries(profileFields).map(([label, value]) => ({ label, value })), source: profile.source }]).map((section) => {
             const basic = String(section.key) === "basic";
