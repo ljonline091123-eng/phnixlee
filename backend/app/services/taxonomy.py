@@ -50,6 +50,13 @@ LABEL_DEFINITION_OVERRIDES = (
     dict(dimension="THEME", code="LABEL_THEME_MID_CAP", label="中盘股", definition="按来源口径以总市值或流通市值区间划分的中等规模证券主题。", criteria="必须结合来源口径和采集日期，不是永久固定属性。"),
     dict(dimension="THEME", code="LABEL_THEME_MID_VALUE", label="中盘价值", definition="按来源将中等市值规模与相对价值特征组合识别的风格主题。", criteria="风格标签不等同于法定行业或投资建议。"),
     dict(dimension="THEME", code="LABEL_THEME_LOW_PB", label="低市净率", definition="按来源采集时点市净率处于较低区间的估值风格主题。", criteria="应同时记录估值时点和计算口径，不代表未来收益。"),
+    dict(dimension="THEME", code="LABEL_THEME_LARGE_VALUE", label="大盘价值", definition="按来源将较大市值规模与相对价值特征组合识别的投资风格主题，通常关注规模较大的公司及其估值、盈利或现金流特征。", criteria="必须同时保留来源代码、采集日期和市值/估值口径；主题标签不等同于法定行业或投资建议。"),
+    dict(dimension="THEME", code="LABEL_THEME_LARGE_CAP", label="大盘股", definition="按来源总市值或流通市值处于较高区间归集的证券主题，成员会随市值和来源阈值变化。", criteria="以来源快照的市值字段、分位或阈值为准，不把大盘标签视为永久属性。"),
+    dict(dimension="THEME", code="LABEL_THEME_VALUE", label="价值股", definition="按来源将相对估值较低、盈利或现金流相对稳定、分红或资产基础受到关注的证券归集的风格主题。", criteria="应记录估值指标、报告期和来源规则；价值标签不保证未来收益，也不替代财务分析。"),
+    dict(dimension="THEME", code="LABEL_THEME_INSTITUTIONAL_HOLDING", label="机构重仓", definition="按来源统计期内被基金、保险、社保、券商或其他机构持有，且持仓规模或机构覆盖达到来源口径的证券主题。", criteria="必须保留统计期、机构类型、持股数量或比例及来源；不得仅凭股票名称推断机构持仓。"),
+    dict(dimension="THEME", code="LABEL_THEME_CROSS_BORDER_PAYMENT", label="跨境支付", definition="与跨境收付款、国际结算、清算网络、外汇支付或为跨境交易提供支付技术和服务有关的来源主题。", criteria="仅表示来源主题关联，具体业务范围和收入贡献以公司公告、年报或业务数据为准。"),
+    dict(dimension="THEME", code="LABEL_THEME_BLOCKCHAIN", label="区块链", definition="与分布式账本、区块链底层技术、数字身份、智能合约或区块链行业应用有关的来源主题。", criteria="需以来源成分名单或公司披露为证据；概念标签不证明已形成规模化收入或业务落地。"),
+    dict(dimension="THEME", code="LABEL_THEME_INTERNET_FINANCE", label="互联网金融", definition="利用互联网或数字平台开展支付、信贷、财富管理、保险、证券信息服务或金融科技基础设施相关业务的来源主题。", criteria="需区分金融机构牌照业务、技术服务和概念关联，不能由名称直接推断经营范围。"),
 )
 
 
