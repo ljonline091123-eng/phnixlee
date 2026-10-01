@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
-import { ArrowLeft, Building2, X } from "lucide-react";
+import { ArrowLeft, Building2, CalendarDays, ExternalLink, FileText, X } from "lucide-react";
 import { CompanyGraphDialog } from "./CompanyGraphWorkbench";
 import { KnowledgeGraphDialog } from "./KnowledgeGraphExplorer";
 
@@ -310,6 +310,29 @@ function ratingStatistics(rows: JsonRecord[]): RatingBucket[] {
 }
 
 function projectedRatingStatistics(section: JsonRecord, rows: JsonRecord[]): { buckets: RatingBucket[]; referenceDate: string; basis: string } {
+  const providerProjection = asRecord(section.provider_rating_statistics);
+  const providerCounts = {
+    buy: toNumber(providerProjection.buy) ?? 0,
+    add: toNumber(providerProjection.add) ?? 0,
+    neutral: toNumber(providerProjection.neutral) ?? 0,
+    reduce: toNumber(providerProjection.reduce) ?? 0,
+    sell: toNumber(providerProjection.sell) ?? 0,
+  };
+  const providerHasCounts = ["buy", "add", "neutral", "reduce", "sell", "total"]
+    .some((key) => providerProjection[key] !== undefined && providerProjection[key] !== null && providerProjection[key] !== "");
+  if (providerHasCounts) {
+    const total = toNumber(providerProjection.total)
+      ?? providerCounts.buy + providerCounts.add + providerCounts.neutral + providerCounts.reduce + providerCounts.sell;
+    return {
+      buckets: [{
+        period: String(providerProjection.reference_period || "近六个月"),
+        ...providerCounts,
+        total,
+      }],
+      referenceDate: String(providerProjection.as_of || section.as_of || ""),
+      basis: String(providerProjection.source_name || "东方财富原生评级汇总"),
+    };
+  }
   const rawProjection = section.rating_statistics;
   const projection = Array.isArray(rawProjection)
     ? { buckets: rawProjection }
@@ -332,48 +355,430 @@ function projectedRatingStatistics(section: JsonRecord, rows: JsonRecord[]): { b
   return { buckets: buckets.length ? buckets : ratingStatistics(rows), referenceDate, basis };
 }
 
-function ResearchForecastPanel({ section }: { section: JsonRecord }) {
+function ResearchSectionHeading({ title, note }: { title: string; note?: ReactNode }) {
+  return <header className="research-source-heading">
+    <div><span className="financial-section-mark" aria-hidden="true" /><h3>{title}</h3></div>
+    {note ? <span>{note}</span> : null}
+  </header>;
+}
+
+function ResearchSectionSource({ section }: { section: JsonRecord }) {
+  const source = String(section.source_name || section.source || "").trim();
+  const asOf = section.as_of ? formatDate(String(section.as_of)) : "";
+  return source || asOf || sourceUrls(section).length ? <footer className="research-source-footer">
+    {source ? <span>来源：{source}</span> : null}
+    {asOf ? <span>截至：{asOf}</span> : null}
+    <SourceLinks section={section} />
+  </footer> : null;
+}
+
+function researchDateText(row: JsonRecord): string {
+  return String(pickValue(row, ["report_date", "报告日期", "日期", "最新报告日期", "answered_at", "回复时间", "updated_at", "更新时间", "asked_at", "提问时间"]) || "");
+}
+
+function researchDateValue(row: JsonRecord): number {
+  const raw = researchDateText(row).trim();
+  if (!raw) return 0;
+  const normalized = /^\d{8}$/.test(raw) ? `${raw.slice(0, 4)}-${raw.slice(4, 6)}-${raw.slice(6, 8)}` : raw.replace(/[年/.]/g, "-").replace(/月/g, "-").replace(/日/g, "");
+  const value = new Date(normalized).getTime();
+  return Number.isFinite(value) ? value : 0;
+}
+
+function sortedResearchRows(rows: JsonRecord[]): JsonRecord[] {
+  return [...rows].sort((left, right) => researchDateValue(right) - researchDateValue(left));
+}
+
+function stringList(value: unknown): string[] {
+  if (value === undefined || value === null || value === "") return [];
+  if (Array.isArray(value)) return value.flatMap(stringList);
+  if (typeof value === "object") {
+    const row = asRecord(value);
+    const label = pickValue(row, ["name", "label", "title", "tag", "名称", "标签"]);
+    return label ? [String(label)] : [];
+  }
+  return String(value).split(/[，,;；|]/).map((item) => item.trim()).filter(Boolean);
+}
+
+function normalizedForecastPeriod(value: unknown, assumedForecast = false): string {
+  const text = String(value ?? "").trim();
+  const match = text.match(/((?:19|20)\d{2})\s*([AE])?/i);
+  if (!match) return text;
+  const suffix = match[2]?.toUpperCase()
+    || (/实际|actual/i.test(text) ? "A" : /预测|forecast|estimate|一致预期/i.test(text) || assumedForecast ? "E" : "");
+  return `${match[1]}${suffix}`;
+}
+
+function forecastPeriodOrder(period: string): number {
+  const match = period.match(/((?:19|20)\d{2})([AE])?/i);
+  if (!match) return Number.MAX_SAFE_INTEGER;
+  return Number(match[1]) * 10 + (match[2]?.toUpperCase() === "E" ? 2 : match[2]?.toUpperCase() === "A" ? 0 : 1);
+}
+
+function declaredForecastPeriods(section: JsonRecord): string[] {
+  const raw = section.forecast_periods || section.periods || section.earnings_forecast_periods;
+  const values = Array.isArray(raw) ? raw : raw && typeof raw === "object" ? Object.keys(asRecord(raw)) : stringList(raw);
+  return [...new Set(values.map((item) => {
+    if (item && typeof item === "object") {
+      const row = asRecord(item);
+      return normalizedForecastPeriod(pickValue(row, ["period", "year", "年度", "报告期"]), /预测/.test(String(row.type || "")));
+    }
+    return normalizedForecastPeriod(item);
+  }).filter(Boolean))].sort((left, right) => forecastPeriodOrder(left) - forecastPeriodOrder(right));
+}
+
+function periodValuesFromRecord(row: JsonRecord): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+  const records = [row, asRecord(row.values), asRecord(row.series), asRecord(row.data), asRecord(row.forecasts)];
+  records.forEach((record) => Object.entries(record).forEach(([key, value]) => {
+    const match = key.match(/((?:19|20)\d{2})\s*([AE])?/i);
+    if (!match || value === null || value === undefined || value === "" || typeof value === "object") return;
+    const period = normalizedForecastPeriod(key, /预测|forecast|estimate/i.test(key));
+    result[period] = value;
+  }));
+  return result;
+}
+
+type EarningsMatrixRow = { label: string; values: Record<string, unknown> };
+
+function earningsForecastMatrix(section: JsonRecord): { periods: string[]; rows: EarningsMatrixRow[] } {
   const rows = sectionRows(section);
+  const matrix = new Map<string, EarningsMatrixRow>();
+  const addMetric = (label: string, values: Record<string, unknown>) => {
+    const usable = Object.entries(values).filter(([, value]) => value !== null && value !== undefined && value !== "");
+    if (!label || !usable.length) return;
+    const current = matrix.get(label) || { label, values: {} };
+    usable.forEach(([period, value]) => { current.values[normalizedForecastPeriod(period)] = value; });
+    matrix.set(label, current);
+  };
+  rows.forEach((row, index) => {
+    const label = String(pickValue(row, ["预测指标", "指标", "metric", "indicator", "name", "项目", "label"]) || "");
+    const values = periodValuesFromRecord(row);
+    if (label && Object.keys(values).length) addMetric(label, values);
+
+    const yearValue = pickValue(row, ["预测年度", "forecast_year", "年度", "year", "报告期"]);
+    if (!yearValue) return;
+    const period = normalizedForecastPeriod(yearValue, true);
+    const fallbackMetrics: Array<[string, unknown]> = [
+      ["每股收益（元）", pickValue(row, ["预测每股收益", "每股收益", "eps", "EPS"])],
+      ["归母净利润", pickValue(row, ["预测净利润", "归母净利润", "净利润", "net_profit"])],
+      ["市盈率（倍）", pickValue(row, ["预测市盈率", "市盈率", "pe", "PE"])],
+    ];
+    fallbackMetrics.forEach(([metric, value]) => {
+      if (value === undefined || value === null || value === "") return;
+      const key = [...matrix.keys()].find((existing) => existing.includes(metric.slice(0, 4))) || metric;
+      const current = matrix.get(key) || { label: key, values: {} };
+      const existing = toNumber(current.values[period]);
+      const incoming = toNumber(value);
+      if (existing !== null && incoming !== null) current.values[period] = formatNumber((existing * index + incoming) / (index + 1));
+      else if (current.values[period] === undefined) current.values[period] = value;
+      matrix.set(key, current);
+    });
+  });
+
+  const addSeries = (label: string, raw: unknown) => {
+    if (Array.isArray(raw)) {
+      const values: Record<string, unknown> = {};
+      asArray(raw).forEach((row) => {
+        const period = normalizedForecastPeriod(pickValue(row, ["period", "year", "年度", "预测年度", "report_period"]), true);
+        const value = pickValue(row, ["value", "forecast", "数值", "预测值", "eps", "net_profit"]);
+        if (period && value !== undefined) values[period] = value;
+      });
+      addMetric(label, values);
+      return;
+    }
+    if (raw && typeof raw === "object") addMetric(label, asRecord(raw));
+  };
+  addSeries("每股收益（元）", section.earnings_forecast_eps || section.eps_series);
+  addSeries("归母净利润", section.earnings_forecast_net_profit || section.net_profit_series);
+
+  const explicitPeriods = declaredForecastPeriods(section);
+  const observedPeriods = [...matrix.values()].flatMap((row) => Object.keys(row.values));
+  const periods = [...new Set([...explicitPeriods, ...observedPeriods])]
+    .filter(Boolean)
+    .sort((left, right) => forecastPeriodOrder(left) - forecastPeriodOrder(right));
+  return { periods: periods.length > 7 ? periods.slice(-7) : periods, rows: [...matrix.values()] };
+}
+
+function forecastCellText(label: string, value: unknown): string {
+  if (value === null || value === undefined || value === "") return "--";
+  const text = String(value).trim();
+  if (!text || /^(?:nan|nat|none|null|--?)$/i.test(text)) return "--";
+  if (/[％%亿元倍]/.test(text)) return text;
+  const numeric = toNumber(value);
+  if (numeric === null) return text;
+  if (/同比|增速|增长率|比例|占比/.test(label)) return formatPercent(numeric);
+  return formatNumber(numeric, /每股收益|EPS/i.test(label) ? 3 : 2);
+}
+
+function ResearchEarningsForecastPanel({ section }: { section: JsonRecord }) {
+  const matrix = useMemo(() => earningsForecastMatrix(section), [section]);
+  return <section className="research-source-section research-earnings-section">
+    <ResearchSectionHeading title="盈利预测" note={matrix.rows.length ? "实际值 / 一致预期" : "暂无可用预测"} />
+    {matrix.rows.length && matrix.periods.length ? <div className="research-matrix-wrap">
+      <table className="research-matrix-table">
+        <thead><tr><th scope="col">指标</th>{matrix.periods.map((period) => <th scope="col" key={period}>{period}</th>)}</tr></thead>
+        <tbody>{matrix.rows.map((row) => <tr key={row.label}><th scope="row">{row.label}</th>{matrix.periods.map((period) => <td key={period}>{forecastCellText(row.label, row.values[period])}</td>)}</tr>)}</tbody>
+      </table>
+    </div> : <p className="research-true-empty">{String(section.message || "当前数据源未返回可核验的盈利预测")}</p>}
+    <ResearchSectionSource section={section} />
+  </section>;
+}
+
+function institutionForecastPeriods(section: JsonRecord, rows: JsonRecord[]): string[] {
+  const periods = new Set(declaredForecastPeriods(section));
+  rows.forEach((row) => {
+    Object.keys(row).forEach((key) => {
+      if (!/每股收益|EPS|盈利预测.*收益/i.test(key)) return;
+      const match = key.match(/((?:19|20)\d{2})/);
+      if (match) periods.add(normalizedForecastPeriod(match[1], true));
+    });
+    [row.eps_forecasts, row.eps, row.forecasts, row.forecast].forEach((value) => {
+      Object.keys(asRecord(value)).forEach((key) => {
+        const match = key.match(/((?:19|20)\d{2})/);
+        if (match) periods.add(normalizedForecastPeriod(match[1], true));
+      });
+    });
+  });
+  return [...periods].filter(Boolean).sort((left, right) => forecastPeriodOrder(left) - forecastPeriodOrder(right)).slice(-4);
+}
+
+function institutionForecastValue(row: JsonRecord, period: string): unknown {
+  const year = period.match(/(?:19|20)\d{2}/)?.[0] || period;
+  const aliases = [
+    `${year}-盈利预测-收益`, `${year}年每股收益`, `${year}每股收益`, `${year}E EPS`, `${year}EPS`,
+    `${year}_eps`, `eps_${year}`, `${year}预测EPS`,
+  ];
+  const direct = pickValue(row, aliases);
+  if (direct !== undefined) return direct;
+  for (const [key, value] of Object.entries(row)) {
+    if (key.includes(year) && /每股收益|EPS|盈利预测.*收益/i.test(key) && value !== null && value !== "") return value;
+  }
+  for (const nested of [row.eps_forecasts, row.eps, row.forecasts, row.forecast]) {
+    const record = asRecord(nested);
+    const candidate = record[period] ?? record[year] ?? record[`${year}E`];
+    if (candidate && typeof candidate === "object") return pickValue(asRecord(candidate), ["eps", "EPS", "每股收益", "value", "预测值"]);
+    if (candidate !== undefined && candidate !== null && candidate !== "") return candidate;
+  }
+  return undefined;
+}
+
+function ResearchInstitutionForecastPanel({ section }: { section: JsonRecord }) {
+  const rows = useMemo(() => sortedResearchRows(sectionRows(section)), [section]);
   const [mode, setMode] = useState<"forecast" | "rating">("forecast");
   const ratingProjection = useMemo(() => projectedRatingStatistics(section, rows), [section, rows]);
-  const statistics = ratingProjection.buckets;
-  return (
-    <section className="research-forecast-panel">
-      <div className="research-forecast-heading">
-        <div><span className="financial-section-mark" /><h3>机构预测</h3></div>
-        <div className="research-forecast-tabs" role="tablist" aria-label="机构预测视图">
-          <button type="button" role="tab" aria-selected={mode === "forecast"} className={mode === "forecast" ? "active" : ""} onClick={() => setMode("forecast")}>机构预测</button>
-          <button type="button" role="tab" aria-selected={mode === "rating"} className={mode === "rating" ? "active" : ""} onClick={() => setMode("rating")}>评级统计</button>
-        </div>
-        <span className="f10-data-status available" aria-live="polite">{rows.length ? "已获取" : "暂无数据"}</span>
+  const periods = useMemo(() => institutionForecastPeriods(section, rows), [section, rows]);
+  return <section className="research-source-section research-forecast-panel">
+    <div className="research-forecast-heading">
+      <div><span className="financial-section-mark" aria-hidden="true" /><h3>机构预测</h3></div>
+      <div className="research-forecast-tabs" role="tablist" aria-label="机构预测视图">
+        <button type="button" role="tab" aria-selected={mode === "forecast"} className={mode === "forecast" ? "active" : ""} onClick={() => setMode("forecast")}>机构预测</button>
+        <button type="button" role="tab" aria-selected={mode === "rating"} className={mode === "rating" ? "active" : ""} onClick={() => setMode("rating")}>评级统计</button>
       </div>
-      {mode === "forecast" ? (
-        rows.length ? <div className="research-forecast-table-wrap" role="tabpanel" aria-label="机构预测">
-          <table className="research-forecast-table">
-            <thead><tr><th scope="col">报告期</th><th scope="col">机构</th><th scope="col">评级</th><th scope="col">评级数量</th><th scope="col">最新报告日期</th></tr></thead>
-            <tbody>{rows.slice(0, 100).map((row, index) => {
-              const institution = String(pickValue(row, ["机构", "institution"]) || "未披露机构");
-              const rating = ratingText(pickValue(row, ["评级", "东财评级", "rating"]));
-              const reportDate = String(pickValue(row, ["最新报告日期", "日期", "report_date"]) || "");
-              const reportPeriod = pickValue(row, ["报告期", "预测年度", "年度", "report_period", "forecast_year"])
-                || (ratingDate(row)?.getFullYear() ?? "--");
-              const ratingTone = rating === "买入" || rating === "增持" ? "positive" : rating === "减持" || rating === "卖出" ? "negative" : "neutral";
-              return <tr key={`${institution}-${rating}-${index}`}>
-                <td>{reportPeriodText(reportPeriod)}</td>
-                <td className="research-forecast-institution">{institution}</td>
-                <td><span className={`research-rating ${ratingTone}`}>{rating}</span></td>
-                <td>{valueText(pickValue(row, ["评级数量", "评级数", "report_count"]))}</td>
-                <td>{formatDate(reportDate)}</td>
-              </tr>;
-            })}</tbody>
-          </table>
-        </div> : <p className="empty-state" role="tabpanel">{String(section.message || "当前数据源未返回机构预测")}</p>
-      ) : (
-        <div className="rating-stat-table-wrap" role="tabpanel" aria-label="评级统计"><table className="rating-stat-table"><thead><tr><th scope="col">时间段</th><th scope="col">买入</th><th scope="col">增持</th><th scope="col">中性</th><th scope="col">减持</th><th scope="col">卖出</th><th scope="col">总家数</th></tr></thead><tbody>{statistics.map((row) => <tr key={row.period}><th scope="row">{row.period}</th><td className="rating-buy">{row.buy}</td><td>{row.add}</td><td>{row.neutral}</td><td>{row.reduce}</td><td>{row.sell}</td><td>{row.total}</td></tr>)}</tbody></table></div>
-      )}
-      <div className="f10-section-meta research-forecast-meta"><span>来源：{String(section.source || "暂无")}</span>{section.as_of ? <span>截至：{formatDate(String(section.as_of))}</span> : null}{mode === "rating" && ratingProjection.referenceDate ? <span>统计基准：{formatDate(ratingProjection.referenceDate)}（{ratingProjection.basis}）</span> : null}</div>
+    </div>
+    {mode === "forecast" ? rows.length ? <div className="research-forecast-table-wrap" role="tabpanel" aria-label="机构预测">
+      <table className="research-forecast-table">
+        <thead><tr><th scope="col">报告日期</th><th scope="col">机构 / 分析师</th><th scope="col">评级</th>{periods.length ? periods.map((period) => <th scope="col" key={period}>{period} EPS</th>) : <th scope="col">研报数</th>}</tr></thead>
+        <tbody>{rows.slice(0, 100).map((row, index) => {
+          const institution = String(pickValue(row, ["机构", "institution", "机构名称"]) || "未披露机构");
+          const analysts = stringList(pickValue(row, ["analysts", "分析师", "研究员"])).join("、");
+          const rating = ratingText(pickValue(row, ["评级", "东财评级", "rating"]));
+          const ratingTone = rating === "买入" || rating === "增持" ? "positive" : rating === "减持" || rating === "卖出" ? "negative" : "neutral";
+          return <tr key={`${institution}-${researchDateText(row)}-${index}`}>
+            <td>{formatDate(researchDateText(row))}</td>
+            <td className="research-forecast-institution"><strong>{institution}</strong>{analysts ? <small>{analysts}</small> : null}</td>
+            <td><span className={`research-rating ${ratingTone}`}>{rating}</span></td>
+            {periods.length ? periods.map((period) => <td key={period}>{forecastCellText("每股收益", institutionForecastValue(row, period))}</td>) : <td>{valueText(pickValue(row, ["评级数量", "研报数量", "report_count"]))}</td>}
+          </tr>;
+        })}</tbody>
+      </table>
+    </div> : <p className="research-true-empty" role="tabpanel">{String(section.message || "当前数据源未返回机构预测")}</p> : (
+      <div className="rating-stat-table-wrap" role="tabpanel" aria-label="评级统计">
+        <table className="rating-stat-table"><thead><tr><th scope="col">时间段</th><th scope="col">买入</th><th scope="col">增持</th><th scope="col">中性</th><th scope="col">减持</th><th scope="col">卖出</th><th scope="col">总家数</th></tr></thead><tbody>{ratingProjection.buckets.map((row) => <tr key={row.period}><th scope="row">{row.period}</th><td className="rating-buy">{row.buy}</td><td>{row.add}</td><td>{row.neutral}</td><td>{row.reduce}</td><td>{row.sell}</td><td>{row.total}</td></tr>)}</tbody></table>
+        {!ratingProjection.buckets.some((row) => row.total > 0) ? <p className="research-table-note">当前时间窗内暂无可统计的机构评级。</p> : null}
+      </div>
+    )}
+    {mode === "rating" && ratingProjection.referenceDate ? <p className="research-table-note">统计基准：{formatDate(ratingProjection.referenceDate)}（{ratingProjection.basis}）</p> : null}
+    <ResearchSectionSource section={section} />
+  </section>;
+}
+
+function classificationName(row: JsonRecord, index = 0): string {
+  return String(pickValue(row, ["classification_name", "name", "label", "概念名称", "概念", "行业", "板块"]) || `分类${index + 1}`);
+}
+
+function classificationDimension(row: JsonRecord): string {
+  const dimension = String(pickValue(row, ["dimension", "classification_dimension", "分类维度", "类型"]) || "").toUpperCase();
+  if (dimension === "INDUSTRY" || /行业/.test(dimension)) return "行业";
+  if (dimension === "THEME" || /概念|主题/.test(dimension)) return "概念";
+  if (dimension === "INDEX" || /指数/.test(dimension)) return "指数";
+  if (dimension === "BOARD") return "板块";
+  return "分类";
+}
+
+function ResearchTopicPanel({ section, fallbackRows, onOpen }: { section: JsonRecord; fallbackRows: JsonRecord[]; onOpen: (section: JsonRecord) => void }) {
+  const sourceRows = sectionRows(section);
+  const rows = sourceRows.length ? sourceRows : fallbackRows;
+  const [expanded, setExpanded] = useState(false);
+  const industries = rows.filter((row) => classificationDimension(row) === "行业");
+  const concepts = rows.filter((row) => classificationDimension(row) !== "行业");
+  const visibleConcepts = expanded ? concepts : concepts.slice(0, 10);
+  const renderChip = (row: JsonRecord, index: number) => {
+    const name = classificationName(row, index);
+    const trend = toNumber(pickValue(row, ["average_change_pct", "trend_pct", "平均涨跌幅", "整体涨跌幅"]));
+    return <button type="button" className="research-topic-chip" key={`${name}-${index}`} onClick={() => onOpen({ ...section, rows: [row], detail_title: `${name}详细解析`, _research_detail_kind: "concept" })}>
+      <span>{name}</span>{trend !== null ? <em className={trend > 0 ? "positive" : trend < 0 ? "negative" : "neutral"}>{trend > 0 ? "+" : ""}{formatPercent(trend)}</em> : null}
+    </button>;
+  };
+  return <section className="research-source-section research-topic-section">
+    <ResearchSectionHeading title="行业概念" note={rows.length ? `${rows.length} 个分类` : "暂无分类"} />
+    {rows.length ? <div className="research-topic-groups">
+      <div className="research-topic-row"><strong>所属行业</strong><div>{industries.length ? industries.map(renderChip) : <span className="research-inline-empty">未返回行业分类</span>}</div></div>
+      <div className="research-topic-row"><strong>行业概念</strong><div>{visibleConcepts.length ? visibleConcepts.map(renderChip) : <span className="research-inline-empty">未返回概念标签</span>}</div></div>
+      {concepts.length > 10 ? <button type="button" className="research-text-action" onClick={() => setExpanded((value) => !value)}>{expanded ? "收起" : `展开其余 ${concepts.length - 10} 个标签`}</button> : null}
+    </div> : <p className="research-true-empty">{String(section.message || "当前数据源未返回行业与概念标签")}</p>}
+    <ResearchSectionSource section={section} />
+  </section>;
+}
+
+function ResearchIndustryPerformancePanel({ section, conceptSection, onOpen }: { section: JsonRecord; conceptSection: JsonRecord; onOpen: (section: JsonRecord) => void }) {
+  const directRows = sectionRows(section);
+  const rows = directRows.length ? directRows : sectionRows(conceptSection).filter((row) => pickValue(row, ["average_change_pct", "trend_pct", "整体涨跌幅"]) !== undefined);
+  const [expanded, setExpanded] = useState(false);
+  const visibleRows = expanded ? rows : rows.slice(0, 4);
+  return <section className="research-source-section research-industry-performance">
+    <ResearchSectionHeading title="行业表现" note={rows.length > 4 ? <button type="button" className="research-heading-action" onClick={() => setExpanded((value) => !value)}>{expanded ? "收起" : "更多"}<span aria-hidden="true"> ›</span></button> : undefined} />
+    {visibleRows.length ? <div className="research-performance-list">{visibleRows.map((row, index) => {
+      const name = classificationName(row, index);
+      const average = toNumber(pickValue(row, ["average_change_pct", "trend_pct", "平均涨跌幅", "整体涨跌幅"]));
+      const sampleSize = toNumber(pickValue(row, ["sample_size", "样本数"]));
+      const memberCount = toNumber(pickValue(row, ["member_count", "成分股数量", "相关股票数"]));
+      const rise = toNumber(pickValue(row, ["rise_count", "上涨家数"]));
+      const fall = toNumber(pickValue(row, ["fall_count", "下跌家数"]));
+      return <button type="button" className="research-performance-row" key={`${name}-${index}`} onClick={() => onOpen({ ...conceptSection, rows: [row], detail_title: `${name}行业表现`, _research_detail_kind: "concept" })}>
+        <span><strong>{name}</strong><small>{sampleSize !== null ? `${formatNumber(sampleSize, 0)} 只有效样本` : memberCount !== null ? `${formatNumber(memberCount, 0)} 只成分股` : "样本数量未披露"}</small></span>
+        <span className="research-performance-counts">{rise !== null ? `涨 ${formatNumber(rise, 0)}` : ""}{fall !== null ? ` · 跌 ${formatNumber(fall, 0)}` : ""}</span>
+        <em className={average !== null && average > 0 ? "positive" : average !== null && average < 0 ? "negative" : "neutral"}>{average === null ? "暂无走势" : `${average > 0 ? "+" : ""}${formatPercent(average)}`}</em>
+      </button>;
+    })}</div> : <p className="research-true-empty">{String(section.message || "当前数据源未返回行业成分股的整体走势")}</p>}
+    <ResearchSectionSource section={directRows.length ? section : conceptSection} />
+  </section>;
+}
+
+function ResearchQaPanel({ section, onOpen }: { section: JsonRecord; onOpen: (section: JsonRecord) => void }) {
+  const rows = useMemo(() => sortedResearchRows(sectionRows(section)), [section]);
+  const [expanded, setExpanded] = useState(false);
+  const visibleRows = expanded ? rows : rows.slice(0, 4);
+  return <section className="research-source-section research-qa-section">
+    <ResearchSectionHeading title="问董秘" note={rows.length > 4 ? <button type="button" className="research-heading-action" onClick={() => setExpanded((value) => !value)}>{expanded ? "收起" : "更多"}<span aria-hidden="true"> ›</span></button> : rows.length ? `${rows.length} 条互动` : undefined} />
+    {visibleRows.length ? <div className="research-qa-list">{visibleRows.map((row, index) => {
+      const question = String(pickValue(row, ["question", "提问", "问题", "提问内容"]) || "问题内容未披露");
+      const answer = String(pickValue(row, ["answer", "回复", "回答", "回复内容"]) || "公司尚未回复");
+      const answered = Boolean(pickValue(row, ["answer", "回复", "回答", "回复内容"]));
+      return <button type="button" className="research-qa-item" key={`${String(row.question_id || row.answer_id || index)}`} onClick={() => onOpen({ ...section, ...row, rows: [row], detail_title: "问董秘详情", _research_detail_kind: "qa" })}>
+        <span className="research-qa-question"><b>问</b><strong>{question}</strong></span>
+        <span className="research-qa-answer"><b>答</b><span>{answer}</span></span>
+        <small><CalendarDays size={12} aria-hidden="true" /> {formatDate(researchDateText(row))}<em className={answered ? "answered" : "pending"}>{answered ? "已回复" : "待回复"}</em></small>
+      </button>;
+    })}</div> : <p className="research-true-empty">{String(section.message || "当前数据源未返回该公司的互动问答")}</p>}
+    <ResearchSectionSource section={section} />
+  </section>;
+}
+
+function reportTitle(row: JsonRecord): string {
+  return String(pickValue(row, ["title", "report_name", "报告名称", "报告标题", "标题"]) || "未命名研报");
+}
+
+function reportTags(row: JsonRecord): string[] {
+  return [...new Set([
+    ...stringList(row.tags),
+    ...stringList(pickValue(row, ["institution", "机构", "研究机构"])),
+    ...stringList(pickValue(row, ["rating", "东财评级", "评级"])),
+    ...stringList(pickValue(row, ["industry", "行业", "所属行业"])),
+  ])].filter((item) => !/^(?:nan|none|null)$/i.test(item)).slice(0, 5);
+}
+
+function reportSummary(row: JsonRecord): string {
+  return String(pickValue(row, ["summary", "abstract", "摘要", "内容摘要", "观点", "conclusion"]) || "");
+}
+
+function openResearchReport(section: JsonRecord, row: JsonRecord, onOpen: (section: JsonRecord) => void) {
+  onOpen({ ...section, ...row, rows: [row], detail_title: reportTitle(row), _research_detail_kind: "report" });
+}
+
+function ReportTagList({ row }: { row: JsonRecord }) {
+  const tags = reportTags(row);
+  return tags.length ? <span className="research-report-tags">{tags.map((tag, index) => <em className={index === 1 ? "warm" : index === 2 ? "green" : ""} key={`${tag}-${index}`}>{tag}</em>)}</span> : null;
+}
+
+function ResearchLatestReportsPanel({ section, onOpen }: { section: JsonRecord; onOpen: (section: JsonRecord) => void }) {
+  const rows = useMemo(() => sortedResearchRows(sectionRows(section)), [section]);
+  return <section className="research-source-section research-latest-reports">
+    <ResearchSectionHeading title="最新研报" note={rows.length ? `${rows.length} 篇` : undefined} />
+    {rows.length ? <div className="research-latest-list">{rows.slice(0, 10).map((row, index) => <button type="button" className="research-latest-item" key={`${String(row.report_id || reportTitle(row))}-${index}`} onClick={() => openResearchReport(section, row, onOpen)}>
+      <span className="research-latest-icon"><FileText size={18} aria-hidden="true" /></span>
+      <span className="research-latest-content"><strong>{reportTitle(row)}</strong>{reportSummary(row) ? <span>{reportSummary(row)}</span> : null}<ReportTagList row={row} /></span>
+      <time>{formatDate(researchDateText(row))}</time>
+    </button>)}</div> : <p className="research-true-empty">{String(section.message || "当前数据源未返回最新研报")}</p>}
+    <ResearchSectionSource section={section} />
+  </section>;
+}
+
+function ResearchReportListPanel({ section, onOpen }: { section: JsonRecord; onOpen: (section: JsonRecord) => void }) {
+  const rows = useMemo(() => sortedResearchRows(sectionRows(section)), [section]);
+  const [expanded, setExpanded] = useState(false);
+  const visibleRows = expanded ? rows : rows.slice(0, 30);
+  return <section className="research-source-section research-report-archive">
+    <ResearchSectionHeading title="研报" note={rows.length ? `共 ${rows.length} 篇` : undefined} />
+    {visibleRows.length ? <div className="research-report-list">{visibleRows.map((row, index) => <button type="button" className="research-report-row" key={`${String(row.report_id || reportTitle(row))}-${index}`} onClick={() => openResearchReport(section, row, onOpen)}>
+      <span><strong>{reportTitle(row)}</strong><ReportTagList row={row} /></span><time>{formatDate(researchDateText(row))}</time><span className="research-report-arrow" aria-hidden="true">›</span>
+    </button>)}</div> : <p className="research-true-empty">{String(section.message || "当前数据源未返回历史研报")}</p>}
+    {rows.length > 30 ? <button type="button" className="research-load-more" onClick={() => setExpanded((value) => !value)}>{expanded ? "收起研报" : `查看全部 ${rows.length} 篇研报`}</button> : null}
+    <ResearchSectionSource section={section} />
+  </section>;
+}
+
+function researchDetailLinks(detail: JsonRecord): Array<{ url: string; label: string }> {
+  const candidates: Array<[unknown, string]> = [
+    [detail.pdf_url || detail["报告PDF链接"], "查看研报 PDF"],
+    [detail.detail_url, "查看详情"],
+    [detail.url, "查看研报原文"],
+    [detail.source_url, "查看来源"],
+  ];
+  return [...new Map(candidates.flatMap(([value, label]) => {
+    const url = String(value || "").trim();
+    return /^https?:\/\//i.test(url) ? [[url, { url, label }] as const] : [];
+  })).values()];
+}
+
+function ResearchDetailDialog({ detail, onClose }: { detail: JsonRecord; onClose: () => void }) {
+  const kind = String(detail._research_detail_kind || "generic");
+  const row = sectionRows(detail)[0] || detail;
+  const links = researchDetailLinks({ ...detail, ...row });
+  const title = String(detail.detail_title || detail.title || "研究详情");
+  const renderLinks = () => links.length ? <div className="research-detail-links">{links.map((link) => <a href={link.url} target="_blank" rel="noreferrer" key={link.url}><ExternalLink size={14} aria-hidden="true" />{link.label}</a>)}</div> : null;
+  return <div className="f10-detail-overlay research-detail-overlay" role="presentation" onClick={onClose}>
+    <section className="f10-detail-dialog research-detail-dialog" role="dialog" aria-modal="true" aria-label={title} onClick={(event) => event.stopPropagation()}>
+      <header><h3>{title}</h3><button type="button" aria-label="关闭研究详情" title="关闭" onClick={onClose}><X size={18} aria-hidden="true" /></button></header>
+      <div className="f10-detail-body research-detail-body">
+        {kind === "concept" ? <F10ConceptDetail section={detail} /> : null}
+        {kind === "qa" ? <article className="research-qa-detail">
+          <div><b>问</b><p>{String(pickValue(row, ["question", "提问", "问题", "提问内容"]) || "问题内容未披露")}</p></div>
+          <small>提问时间：{formatDate(String(pickValue(row, ["asked_at", "提问时间", "question_time"]) || ""))}{pickValue(row, ["questioner", "提问者"]) ? ` · 提问者：${String(pickValue(row, ["questioner", "提问者"]))}` : ""}</small>
+          <div className="answer"><b>答</b><p>{String(pickValue(row, ["answer", "回复", "回答", "回复内容"]) || "公司尚未回复")}</p></div>
+          <small>回复时间：{formatDate(String(pickValue(row, ["answered_at", "回复时间", "answer_time"]) || ""))}{pickValue(row, ["answerer", "回复人", "回复者"]) ? ` · 回复人：${String(pickValue(row, ["answerer", "回复人", "回复者"]))}` : ""}</small>
+          {renderLinks()}
+        </article> : null}
+        {kind === "report" ? <article className="research-report-detail">
+          <div className="research-report-detail-meta"><span>{formatDate(researchDateText(row))}</span><ReportTagList row={row} /></div>
+          {reportSummary(row) ? <blockquote>{reportSummary(row)}</blockquote> : null}
+          {pickValue(row, ["content", "report_content", "正文", "研报正文", "body"]) ? <div className="research-markdown">{renderMarkdown(String(pickValue(row, ["content", "report_content", "正文", "研报正文", "body"])))}</div> : <p className="research-true-empty">当前数据源仅返回研报标题、评级与原文入口，未提供可展示的正文。</p>}
+          {renderLinks()}
+        </article> : null}
+        {kind === "generic" ? sectionRows(detail).length ? sectionRows(detail).map((item, index) => <div className="f10-detail-row" key={index}><strong>{String(pickValue(item, ["label", "name", "项目", "指标"]) || `项目 ${index + 1}`)}</strong><span>{rowValueText(item)}</span></div>) : <p className="research-true-empty">{String(detail.message || "当前数据源未返回详细数据")}</p> : null}
+        <div className="f10-detail-source"><span>来源：{String(row.source_name || detail.source_name || detail.source || "暂无")}</span></div>
+      </div>
     </section>
-  );
+  </div>;
 }
 
 function formatNumber(value?: number | null, digits = 2): string {
@@ -2405,18 +2810,32 @@ export function StockDetailDrawer({
   };
   const derived = asRecord(asRecord(quote?.raw_payload).derived);
   const financialSummary = asRecord(detail?.financial_summary);
-  const researchSections = asArray(asRecord(detail?.research_sections).sections);
+  const rawResearchSections = asRecord(detail?.research_sections);
+  const researchSections = asArray(rawResearchSections.sections);
   const researchSectionsByKey = new Map(researchSections.map((section) => [String(section.key || ""), section]));
-  const orderedResearchSections = [
-    ...researchSectionOrder.map(({ key, title }) => researchSectionsByKey.get(key) || {
-      key,
-      title,
-      status: "UNAVAILABLE",
-      rows: [],
-      message: key === "qa" ? "当前未接入问董秘公开接口" : "暂无该分区数据",
-    }),
-    ...researchSections.filter((section) => !researchSectionOrder.some(({ key }) => key === String(section.key || ""))),
-  ];
+  const researchSection = (key: string, title: string, message = "暂无该分区数据"): JsonRecord => {
+    const direct = rawResearchSections[key];
+    if (researchSectionsByKey.has(key)) return researchSectionsByKey.get(key) as JsonRecord;
+    if (Array.isArray(direct)) return { key, title, status: direct.length ? "AVAILABLE" : "UNAVAILABLE", rows: direct, source: rawResearchSections.source, message };
+    if (direct && typeof direct === "object") {
+      const record = asRecord(direct);
+      return { key, title, ...record, rows: sectionRows(record), source: record.source || rawResearchSections.source, message: record.message || message };
+    }
+    return {
+    key,
+    title,
+    status: "UNAVAILABLE",
+    rows: [],
+    message: key === "qa" ? "当前未接入问董秘公开接口" : message,
+    };
+  };
+  const industryConceptSection = researchSection("industry_concepts", "行业概念", "当前数据源未返回行业与概念标签");
+  const qaSection = researchSection("qa", "问董秘", "当前未接入问董秘公开接口");
+  const earningsForecastSection = researchSection("earnings_forecast", "盈利预测", "当前数据源未返回可核验的盈利预测");
+  const institutionForecastSection = researchSection("institution_forecast", "机构预测（评级统计）", "当前数据源未返回机构预测");
+  const latestReportsSection = researchSection("latest_reports", "最新研报", "当前数据源未返回最新研报");
+  const reportsSection = researchSection("reports", "研报", "当前数据源未返回历史研报");
+  const profileConcepts = asArray(profile.concepts);
   const summaryPeriods = Array.isArray(financialSummary.periods)
     ? financialSummary.periods.map(String)
     : [];
@@ -2585,11 +3004,12 @@ export function StockDetailDrawer({
               {tab === "研究" && (
                   <>
                     <section className="research-section-grid">
-                      {orderedResearchSections.map((section) => String(section.key) === "institution_forecast"
-                        ? <ResearchForecastPanel key={String(section.key)} section={section} />
-                        : String(section.key) === "industry_concepts"
-                          ? <ResearchIndustryConcepts key={String(section.key)} section={section} onOpen={(item) => setResearchDetail(item)} />
-                        : <F10SectionBlock key={String(section.key)} section={section} onOpen={(item) => setResearchDetail(item)} />)}
+                      <ResearchTopicPanel section={industryConceptSection} fallbackRows={profileConcepts} onOpen={(item) => setResearchDetail(item)} />
+                      <ResearchQaPanel section={qaSection} onOpen={(item) => setResearchDetail(item)} />
+                      <ResearchEarningsForecastPanel section={earningsForecastSection} />
+                      <ResearchInstitutionForecastPanel section={institutionForecastSection} />
+                      <ResearchLatestReportsPanel section={latestReportsSection} onOpen={(item) => setResearchDetail(item)} />
+                      <ResearchReportListPanel section={reportsSection} onOpen={(item) => setResearchDetail(item)} />
                     </section>
                   <section className="f10-section inner-section research-detail-section">
                     <div className="f10-section-head">
@@ -2615,7 +3035,7 @@ export function StockDetailDrawer({
                       {researchReport ? renderMarkdown(researchReport) : <p className="empty-state">点击按钮后，研报会以打字机流式效果显示在这里。</p>}
                     </article>
                     </section>
-                    {researchDetail ? <div className="f10-detail-overlay" role="dialog" aria-modal="true"><div className="f10-detail-dialog"><header><h3>{String(researchDetail.detail_title || researchDetail.title || "研究详情")}</h3><button type="button" onClick={() => setResearchDetail(null)}>关闭</button></header><div className="f10-detail-body">{sectionRows(researchDetail).length ? sectionRows(researchDetail).map((row, index) => <div className="f10-detail-row" key={index}><strong>{String(pickValue(row, ["label", "name", "项目", "指标"]) || `项目 ${index + 1}`)}</strong><span>{rowValueText(row)}</span></div>) : <p className="empty-state">{String(researchDetail.message || "当前数据源未返回详细数据")}</p>}<div className="f10-detail-source"><span>来源：{String(researchDetail.source || "暂无")}</span><SourceLinks section={researchDetail} /></div></div></div></div> : null}
+                    {researchDetail ? <ResearchDetailDialog detail={researchDetail} onClose={() => setResearchDetail(null)} /> : null}
                   </>
               )}
             </section>

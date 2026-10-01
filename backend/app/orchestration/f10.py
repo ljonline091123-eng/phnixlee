@@ -193,6 +193,10 @@ class F10Workflow:
             profile_payload["classification_groups"] = enrich_classification_groups_with_members(
                 self.db,
                 build_classification_groups(self.db, snapshot.stock, profile_fields),
+                # Local reads remain deterministic and never trigger provider
+                # traffic.  A refresh may fill absent provider universes and
+                # attach one bounded realtime batch for trend statistics.
+                fetch_remote=not command.local_only,
             )
         # The optional provider control endpoint is not reliable across
         # markets.  Reuse explicit, evidence-backed company-graph CONTROLS
