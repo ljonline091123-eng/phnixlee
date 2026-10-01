@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from functools import lru_cache
+import hashlib
 import html
 import json
 import re
@@ -500,18 +501,35 @@ class AkshareAdapter(MarketDataAdapter):
         }
         # ``stock_research_report_em`` is occasionally returned as a full
         # market feed by the upstream provider even when a symbol argument is
-        # supplied.  Keep a strict, code-aware projection here.  Both the
-        # earnings and rating panels below are derived from this already
-        # filtered list, so a malformed/full-market response can never leak a
-        # different security into the current stock page.
-        research_reports = self._safe_research_report_records(symbol, limit=100)
+        # supplied.  Keep a strict, code-aware projection here.  The report
+        # list remains the historical fallback, while the current forecast
+        # panels use the security-scoped Tonghuashun endpoints when available.
+        # Keep the full bounded provider history for the archive; the read
+        # model projects the first ten rows into ``latest_reports``.
+        research_reports = self._safe_research_report_records(symbol, limit=500)
+        qa_rows = self._safe_qa_records(symbol, limit=100)
+        earnings_rows = self._safe_profit_forecast_records(symbol)
+        institution_rows = self._safe_institution_forecast_records(
+            symbol, research_reports
+        )
+        rating_projection = self._safe_provider_rating_projection(symbol)
+        if not earnings_rows:
+            earnings_rows = self._derive_research_earnings_forecast(research_reports, symbol)
+        if not institution_rows:
+            institution_rows = self._derive_institution_forecast(research_reports, symbol)
         research = {
-            "source": "AkShare 东方财富研究报告接口",
-            "earnings_forecast": self._derive_research_earnings_forecast(research_reports, symbol),
-            "institution_forecast": self._derive_institution_forecast(research_reports, symbol),
+            "source": "多来源：巨潮资讯互动易 / 同花顺盈利预测 / 东方财富研究报告",
+            "qa_source": "巨潮资讯互动易",
+            "qa": qa_rows,
+            "qa_message": "" if qa_rows else "巨潮资讯互动易暂无可用问答数据。",
+            "earnings_forecast_source": "同花顺盈利预测" if earnings_rows else "东方财富研究报告接口",
+            "earnings_forecast": earnings_rows,
+            "institution_forecast_source": "同花顺业绩预测详表-机构" if institution_rows else "东方财富研究报告接口",
+            "institution_forecast": institution_rows,
+            "provider_rating_statistics": rating_projection,
+            "report_source": "东方财富研究报告",
             "latest_reports": research_reports[:10],
             "reports": research_reports,
-            "qa": [],
         }
         return {"holders": holders, "profile": profile_result, "research_sections": research}
 
@@ -2982,7 +3000,15 @@ class AkshareAdapter(MarketDataAdapter):
                 )
             ]
             records = cls._safe_dataframe_records(selected, limit=limit)
-            return [cls._normalize_research_report_row(row, target) for row in records]
+            normalized = [cls._normalize_research_report_row(row, target) for row in records]
+            # The upstream table is usually newest-first, but pagination and
+            # provider revisions have returned unstable ordering.  Make the
+            # read model deterministic and explicit about newest-first order.
+            normalized.sort(
+                key=lambda row: str(row.get("report_date") or row.get("日期") or ""),
+                reverse=True,
+            )
+            return normalized[:limit]
         except Exception:
             # Research is an optional F10 panel; a provider failure must not
             # make the rest of the stock detail request fail.
@@ -3055,7 +3081,381 @@ class AkshareAdapter(MarketDataAdapter):
             normalized.setdefault("rating", normalized["东财评级"])
         if normalized.get("报告PDF链接"):
             normalized.setdefault("url", normalized["报告PDF链接"])
+            normalized.setdefault("pdf_url", normalized["报告PDF链接"])
+        # Eastmoney exposes a stock-level report list rather than a stable
+        # report-detail API.  Keep an opaque deterministic key for UI rows and
+        # retain the official list URL as provenance; never invent report
+        # content when only a PDF link is provided.
+        title = str(normalized.get("报告名称") or normalized.get("title") or "").strip()
+        institution = str(normalized.get("机构") or normalized.get("institution") or "").strip()
+        date_key = str(normalized.get("report_date") or normalized.get("日期") or "").strip()
+        digest = hashlib.sha1(
+            "|".join((symbol, date_key, institution, title)).encode("utf-8")
+        ).hexdigest()[:20]
+        normalized.setdefault("report_id", f"EM-{symbol}-{digest}")
+        normalized.setdefault("source_name", "东方财富研究报告")
+        normalized.setdefault("source_url", "https://data.eastmoney.com/report/stock.jshtml")
+        normalized.setdefault("detail_url", normalized.get("source_url"))
+        if title:
+            normalized.setdefault("tags", [item for item in (institution, normalized.get("东财评级"), normalized.get("行业")) if item])
         return normalized
+
+    @staticmethod
+    def _normalize_source_datetime(value: Any) -> str | None:
+        """Normalize source timestamps while retaining time-of-day evidence."""
+        if value in (None, ""):
+            return None
+        if isinstance(value, (int, float)) and not pd.isna(value):
+            parsed = pd.to_datetime(value, unit="ms", errors="coerce")
+        else:
+            parsed = pd.to_datetime(value, errors="coerce")
+        if pd.isna(parsed):
+            text = str(value).strip()
+            return text or None
+        try:
+            return parsed.strftime("%Y-%m-%d %H:%M:%S")
+        except (AttributeError, ValueError):
+            return str(value)
+
+    @classmethod
+    def _normalize_qa_row(cls, row: dict[str, Any], symbol: str) -> dict[str, Any] | None:
+        """Project 巨潮互动易 rows into the research read-model contract."""
+        normalized = {str(key): cls._json_safe(value) for key, value in row.items()}
+
+        def first(*keys: str) -> Any:
+            for key in keys:
+                value = normalized.get(key)
+                if value not in (None, ""):
+                    if isinstance(value, str) and value.strip().lower() in {"nan", "none", "nat", "null"}:
+                        continue
+                    return value
+            return None
+
+        code = cls._normalize_security_code(first("股票代码", "证券代码", "symbol") or symbol)
+        if code != cls._normalize_security_code(symbol):
+            return None
+        question_id = str(first("问题编号", "question_id", "indexId") or "").strip()
+        if not question_id:
+            # A question id is the only stable key for a detail URL.  Do not
+            # display a row that cannot be traced back to the official source.
+            return None
+        answer_id = first("回答ID", "answer_id", "attachedId")
+        asked_at = cls._normalize_source_datetime(first("提问时间", "asked_at", "question_time", "pubDate"))
+        updated_at = cls._normalize_source_datetime(first("更新时间", "updated_at", "updateDate"))
+        answered_at = cls._normalize_source_datetime(first("回答时间", "answered_at", "replyDate"))
+        answer = first("回答内容", "answer", "回复", "回复内容", "attachedContent")
+        if answer not in (None, "") and not answered_at:
+            # The list endpoint omits the dedicated reply timestamp in some
+            # AkShare versions but exposes the official row update time. Keep
+            # the fallback basis explicit instead of leaving a populated
+            # answer with an apparently unknown date.
+            answered_at = updated_at
+        source_url = f"https://irm.cninfo.com.cn/ircs/question/questionDetail?questionId={question_id}"
+        item = dict(normalized)
+        aliases = {
+            "股票代码": code,
+            "公司简称": first("公司简称", "股票简称", "公司名称"),
+            "question_id": question_id,
+            "answer_id": str(answer_id).strip() if answer_id not in (None, "") else None,
+            "question": first("问题", "question", "提问内容", "mainContent"),
+            "answer": str(answer).strip() if answer not in (None, "") else None,
+            "questioner": first("提问者", "questioner", "authorName", "提问者编号", "author"),
+            "answerer": first("回答者", "answerer", "回复人", "attachedAuthor"),
+            "asked_at": asked_at,
+            "updated_at": updated_at,
+            "answered_at": answered_at,
+            "answer_time_basis": "巨潮互动易回答时间" if first("回答时间", "replyDate") else (
+                "巨潮互动易更新时间" if answer not in (None, "") and updated_at else None
+            ),
+            "status": "ANSWERED" if answer not in (None, "") else "PENDING_REPLY",
+            "source_name": "巨潮资讯互动易",
+            "source_url": source_url,
+            "detail_url": source_url,
+        }
+        item.update({key: value for key, value in aliases.items() if value not in (None, "")})
+        # Keep the Chinese aliases used by the legacy table and the English
+        # read-model aliases used by the research drawer at the same time.
+        if item.get("question") and not item.get("问题"):
+            item["问题"] = item["question"]
+        if item.get("answer") and not item.get("回答内容"):
+            item["回答内容"] = item["answer"]
+        return item
+
+    def _safe_qa_records(self, symbol: str, *, limit: int = 100) -> list[dict[str, Any]]:
+        """Fetch and sort CNINFO investor-relations questions for one stock."""
+        cls = type(self)
+        method = getattr(ak, "stock_irm_cninfo", None)
+        if not method:
+            return []
+        # Use the common optional wrapper so callers/tests can disable this
+        # network panel without affecting the core F10 refresh.
+        rows = self._safe_optional_records(method, {"symbol": symbol}, limit=limit)
+        result: list[dict[str, Any]] = []
+        for raw in rows:
+            item = cls._normalize_qa_row(raw, symbol)
+            if item is None:
+                continue
+            # A few CNINFO responses omit the inline answer although an answer
+            # id is present.  Resolve only those rows and retain the original
+            # question payload if the detail endpoint is unavailable.
+            if not item.get("answer") and item.get("answer_id"):
+                detail_method = getattr(ak, "stock_irm_ans_cninfo", None)
+                detail_rows = self._safe_optional_records(
+                    detail_method,
+                    {"symbol": item["question_id"]},
+                    limit=1,
+                )
+                if detail_rows:
+                    detail = cls._normalize_qa_row(
+                        {**raw, **detail_rows[0]}, symbol
+                    )
+                    if detail:
+                        item.update({
+                            key: detail[key]
+                            for key in ("answer", "answerer", "answered_at", "回答内容")
+                            if detail.get(key) not in (None, "")
+                        })
+            result.append(item)
+        result.sort(
+            key=lambda row: str(
+                row.get("updated_at") or row.get("asked_at") or row.get("提问时间") or ""
+            ),
+            reverse=True,
+        )
+        return result[:limit]
+
+    def _safe_profit_forecast_records(self, symbol: str) -> list[dict[str, Any]]:
+        """Read Tonghuashun's per-year consensus forecast aggregates."""
+        cls = type(self)
+        method = getattr(ak, "stock_profit_forecast_ths", None)
+        if not method:
+            return []
+        indicator_labels = (
+            ("预测年报每股收益", "每股收益（元）"),
+            ("预测年报净利润", "归母净利润"),
+        )
+        result: list[dict[str, Any]] = []
+        for indicator, metric in indicator_labels:
+            rows = self._safe_optional_records(
+                method,
+                {"symbol": symbol, "indicator": indicator},
+                limit=20,
+            )
+            for raw in rows:
+                item = {str(key): cls._json_safe(value) for key, value in raw.items()}
+                year = cls._first_nonempty(item.get("年度"), item.get("预测年度"), item.get("year"))
+                if year in (None, ""):
+                    continue
+                year_text = str(year).strip()[:4]
+                if not re.fullmatch(r"20\d{2}", year_text):
+                    continue
+                aliases = {
+                    "预测年度": year_text,
+                    "forecast_year": year_text,
+                    "预测指标": metric,
+                    "metric": metric,
+                    "预测机构数": cls._first_nonempty(item.get("预测机构数"), item.get("机构数")),
+                    "prediction_count": cls._first_nonempty(item.get("预测机构数"), item.get("机构数")),
+                    "最小值": cls._first_nonempty(item.get("最小值"), item.get("min")),
+                    "均值": cls._first_nonempty(item.get("均值"), item.get("平均值"), item.get("mean")),
+                    "最大值": cls._first_nonempty(item.get("最大值"), item.get("max")),
+                    "行业平均数": cls._first_nonempty(item.get("行业平均数"), item.get("行业均值"), item.get("industry_average")),
+                    "source_name": "同花顺盈利预测",
+                    "source_url": f"https://basic.10jqka.com.cn/new/{symbol}/worth.html",
+                    "detail_url": f"https://basic.10jqka.com.cn/new/{symbol}/worth.html",
+                }
+                item.update({key: value for key, value in aliases.items() if value not in (None, "")})
+                mean_value = item.get("均值")
+                # The matrix renderer consumes year-keyed scalar fields. Keep
+                # the provider's min/max/industry fields alongside a mean
+                # scalar so both compact cards and a detailed dialog can use
+                # the same source row.
+                item[f"{year_text}E"] = mean_value
+                item["mean"] = mean_value
+                item["minimum"] = item.get("最小值")
+                item["maximum"] = item.get("最大值")
+                item["industry_average"] = item.get("行业平均数")
+                if metric == "每股收益（元）":
+                    item["预测每股收益"] = mean_value
+                elif metric == "归母净利润":
+                    item["预测净利润"] = mean_value
+                # Generic matrix renderers understand these aliases directly.
+                item["label"] = f"{year_text}{metric}"
+                item["value"] = {
+                    key: item[key]
+                    for key in ("预测机构数", "最小值", "均值", "最大值", "行业平均数")
+                    if key in item
+                }
+                result.append(item)
+        metric_order = {"每股收益（元）": 0, "归母净利润": 1}
+        result.sort(
+            key=lambda row: (
+                str(row.get("预测年度") or ""),
+                metric_order.get(str(row.get("预测指标") or ""), 99),
+            )
+        )
+        return result
+
+    def _safe_institution_forecast_records(
+        self, symbol: str, reports: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
+        """Read dated institution-level forecast rows and attach report ratings."""
+        cls = type(self)
+        method = getattr(ak, "stock_profit_forecast_ths", None)
+        if not method:
+            return []
+        raw_rows = self._safe_optional_records(
+            method,
+            {"symbol": symbol, "indicator": "业绩预测详表-机构"},
+            limit=200,
+        )
+        if not raw_rows:
+            return []
+        # Match an Eastmoney rating by institution and nearest report date. The
+        # rating is supplemental and is left absent when no source row matches.
+        report_candidates = [item for item in reports if isinstance(item, dict)]
+        result: list[dict[str, Any]] = []
+        for raw in raw_rows:
+            item = {str(key): cls._json_safe(value) for key, value in raw.items()}
+            institution = cls._first_nonempty(item.get("机构名称"), item.get("机构"), item.get("institution"))
+            analyst = cls._first_nonempty(item.get("研究员"), item.get("分析师"), item.get("analysts"))
+            report_date = cls._normalize_source_datetime(
+                cls._first_nonempty(item.get("报告日期"), item.get("日期"), item.get("report_date"))
+            )
+            normalized = dict(item)
+            aliases = {
+                "股票代码": cls._normalize_security_code(symbol),
+                "机构": institution,
+                "机构名称": institution,
+                "研究员": analyst,
+                "analysts": [str(analyst)] if analyst not in (None, "") else [],
+                "报告日期": report_date,
+                "report_date": report_date,
+                "source_name": "同花顺业绩预测详表-机构",
+                "source_url": f"https://basic.10jqka.com.cn/new/{symbol}/worth.html",
+                "detail_url": f"https://basic.10jqka.com.cn/new/{symbol}/worth.html",
+            }
+            normalized.update({key: value for key, value in aliases.items() if value not in (None, "")})
+            # Preserve the report rating when a same-institution Eastmoney
+            # row exists; no rating is inferred from EPS direction.
+            match = cls._match_report_rating(report_candidates, institution, report_date)
+            if match:
+                for key in ("东财评级", "评级", "rating", "报告名称", "报告PDF链接", "pdf_url"):
+                    if match.get(key) not in (None, ""):
+                        normalized.setdefault(key, match[key])
+                if match.get("东财评级") and not normalized.get("rating"):
+                    normalized["rating"] = match["东财评级"]
+            result.append(normalized)
+        # Eastmoney's report feed contains a longer, dated institution history
+        # than the current Tonghuashun consensus table.  Project those rows as
+        # supplemental institution observations so a research page does not
+        # collapse to a single institution merely because the latest THS page
+        # has one active analyst row.  Every supplemental row keeps its PDF
+        # provenance and is de-duplicated by institution/date/title.
+        for report in report_candidates:
+            if not isinstance(report, dict):
+                continue
+            institution = str(report.get("机构") or report.get("institution") or "").strip()
+            report_date = cls._coerce_report_date(report.get("日期") or report.get("report_date"))
+            if not institution or not report_date:
+                continue
+            supplemental = dict(report)
+            supplemental.setdefault("股票代码", cls._normalize_security_code(symbol))
+            supplemental.setdefault("机构", institution)
+            supplemental.setdefault("机构名称", institution)
+            supplemental.setdefault("研究员", report.get("研究员") or report.get("分析师"))
+            supplemental.setdefault("报告日期", report_date)
+            supplemental.setdefault("report_date", report_date)
+            supplemental.setdefault("source_name", "东方财富研究报告")
+            supplemental.setdefault("source_url", "https://data.eastmoney.com/report/stock.jshtml")
+            supplemental.setdefault("detail_url", report.get("detail_url") or report.get("source_url"))
+            # The report rows use ``YYYY-盈利预测-收益`` keys, which are
+            # intentionally retained for the UI's EPS matrix renderer.
+            result.append(supplemental)
+        deduped: dict[tuple[str, str, str], dict[str, Any]] = {}
+        for row in result:
+            institution = str(row.get("机构") or row.get("institution") or "").strip()
+            report_date = str(row.get("报告日期") or row.get("report_date") or "").strip()
+            title = str(row.get("报告名称") or row.get("title") or "").strip()
+            key = (institution, report_date, title)
+            existing = deduped.get(key)
+            # Prefer a row with explicit year EPS fields and then one with a
+            # direct PDF link; this preserves the richest source observation.
+            if existing is None:
+                deduped[key] = row
+            else:
+                existing_eps = sum(1 for field in existing if re.search(r"(?:每股收益|EPS|盈利预测.*收益)", str(field), re.I))
+                row_eps = sum(1 for field in row if re.search(r"(?:每股收益|EPS|盈利预测.*收益)", str(field), re.I))
+                existing_url = bool(existing.get("报告PDF链接") or existing.get("pdf_url") or existing.get("url"))
+                row_url = bool(row.get("报告PDF链接") or row.get("pdf_url") or row.get("url"))
+                if (row_eps, row_url) > (existing_eps, existing_url):
+                    deduped[key] = row
+        result = list(deduped.values())
+        result.sort(key=lambda row: str(row.get("报告日期") or row.get("report_date") or ""), reverse=True)
+        return result
+
+    @classmethod
+    def _match_report_rating(
+        cls, reports: list[dict[str, Any]], institution: Any, report_date: str | None
+    ) -> dict[str, Any] | None:
+        name = str(institution or "").strip()
+        if not name:
+            return None
+        same = [
+            item for item in reports
+            if str(item.get("机构") or item.get("institution") or "").strip() == name
+        ]
+        if not same:
+            return None
+        target = cls._coerce_report_date(report_date) if report_date else None
+        same.sort(
+            key=lambda item: (
+                0 if target and cls._coerce_report_date(item.get("日期") or item.get("report_date")) == target else 1,
+                str(item.get("日期") or item.get("report_date") or ""),
+            )
+        )
+        return same[0]
+
+    def _safe_provider_rating_projection(self, symbol: str) -> dict[str, Any]:
+        """Return Eastmoney's native six-month institution rating summary."""
+        cls = type(self)
+        method = getattr(ak, "stock_profit_forecast_em", None)
+        if not method:
+            return {}
+        # The endpoint is a market-wide table in some AkShare releases; use
+        # the shared optional wrapper then require an explicit matching code.
+        rows = self._safe_optional_records(method, {}, limit=5000)
+        target = cls._normalize_security_code(symbol)
+        selected: list[dict[str, Any]] = []
+        for row in rows:
+            code = next(
+                (row.get(key) for key in ("代码", "股票代码", "证券代码", "symbol") if row.get(key) not in (None, "")),
+                None,
+            )
+            if code is not None and cls._normalize_security_code(code) == target:
+                selected.append(row)
+        if not selected:
+            return {}
+        row = selected[0]
+        aliases = {
+            "buy": "机构投资评级(近六个月)-买入",
+            "add": "机构投资评级(近六个月)-增持",
+            "neutral": "机构投资评级(近六个月)-中性",
+            "reduce": "机构投资评级(近六个月)-减持",
+            "sell": "机构投资评级(近六个月)-卖出",
+        }
+        counts = {
+            key: int(float(row[field])) if row.get(field) not in (None, "") else 0
+            for key, field in aliases.items()
+        }
+        counts["total"] = sum(counts.values())
+        return {
+            "source_name": "东方财富盈利预测评级汇总",
+            "source_url": "https://data.eastmoney.com/report/profitforecast.jshtml",
+            "reference_period": "近六个月",
+            "股票代码": target,
+            **counts,
+        }
 
     @classmethod
     def _derive_research_earnings_forecast(

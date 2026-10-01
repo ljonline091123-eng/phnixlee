@@ -15,8 +15,13 @@ DEFAULT_SOURCES = (
         "config_json": {
             "fallback_source_code": "AKSHARE_HK_SINA",
             "market_scope": ["CN_A", "HK", MARKET_NEEQ, MARKET_NEEQ_INNOVATION],
-            "capabilities": ["SYMBOL_MASTER", "KLINE", "QUOTE", "NEWS", "NOTICE", "FINANCIAL"],
-            "official_sources": ["AkShare", "Eastmoney"],
+            "capabilities": [
+                "SYMBOL_MASTER", "KLINE", "QUOTE", "NEWS", "NOTICE", "FINANCIAL",
+                "RESEARCH", "QA", "FORECAST", "RATING",
+            ],
+            "official_sources": [
+                "AkShare", "Eastmoney", "CNINFO 互动易", "同花顺盈利预测",
+            ],
         },
         "description": "Market-data adapter using AkShare, official CNINFO A-share disclosures, and Eastmoney NEEQ master data.",
     },
@@ -207,6 +212,33 @@ AKSHARE_INTERFACES = (
         "supported_markets": ["CN_A", MARKET_HK, MARKET_NEEQ, MARKET_NEEQ_INNOVATION],
         "description": "Fetches recent company and market news for a selected stock.",
     },
+    {
+        "interface_code": "CN_A_IRM_QA_ON_DEMAND",
+        "interface_name": "A股互动易问董秘",
+        "data_category": "QA",
+        "request_mode": "ON_DEMAND",
+        "adapter_method": "stock_irm_cninfo / stock_irm_ans_cninfo",
+        "supported_markets": ["CN_A"],
+        "description": "巨潮资讯互动易提问、回答及问题详情；保留问题编号和官方详情链接。",
+    },
+    {
+        "interface_code": "CN_A_RESEARCH_REPORT_ON_DEMAND",
+        "interface_name": "A股个股研究报告",
+        "data_category": "RESEARCH",
+        "request_mode": "ON_DEMAND",
+        "adapter_method": "stock_research_report_em",
+        "supported_markets": ["CN_A"],
+        "description": "东方财富个股研报列表，返回标题、日期、机构、评级及 PDF 原文链接。",
+    },
+    {
+        "interface_code": "CN_A_PROFIT_FORECAST_ON_DEMAND",
+        "interface_name": "A股盈利预测与机构明细",
+        "data_category": "FORECAST",
+        "request_mode": "ON_DEMAND",
+        "adapter_method": "stock_profit_forecast_ths / stock_profit_forecast_em",
+        "supported_markets": ["CN_A"],
+        "description": "同花顺年度盈利预测和机构明细，东方财富近六个月评级汇总。",
+    },
 )
 
 AKSHARE_HK_SINA_INTERFACES = (
@@ -282,7 +314,20 @@ def seed_default_catalog(db: Session) -> None:
             db.add(source)
             db.flush()
         else:
-            merged_config = {**item["config_json"], **(source.config_json or {})}
+            # Keep operator-provided keys while allowing newly registered
+            # capabilities/sources to be added on subsequent boots.  The old
+            # merge order silently preserved a stale ``capabilities`` list,
+            # making the research interfaces invisible in existing catalogs.
+            existing_config = dict(source.config_json or {})
+            default_config = dict(item["config_json"] or {})
+            merged_config = {**default_config, **existing_config}
+            for list_key in ("capabilities", "official_sources"):
+                values = list(dict.fromkeys([
+                    *(existing_config.get(list_key) or []),
+                    *(default_config.get(list_key) or []),
+                ]))
+                if values:
+                    merged_config[list_key] = values
             source.config_json = merged_config
             source.source_name = item["source_name"]
             source.source_type = item["source_type"]

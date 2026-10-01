@@ -14,10 +14,13 @@ import json
 import re
 import unicodedata
 from typing import Any
+from urllib.parse import urlencode
 
+import httpx
 from sqlalchemy import inspect, select
 from sqlalchemy.orm import Session
 
+from app.connectors.akshare_adapter import AkshareAdapter
 from app.models.company_graph import SecurityClassification
 from app.models.foundation import FoundationEvidence, FoundationListing, FoundationSecurity
 from app.models.market_data import StockRealtimeQuote, StockSymbol
@@ -181,99 +184,320 @@ def _looks_like_index(label: Any, code: Any = None) -> bool:
     return code_text.startswith(("BK05", "BK06", "BK07", "BK08")) and text.endswith("R")
 
 
-def enrich_classification_groups_with_members(
-    db: Session,
-    groups: list[dict[str, Any]],
-    *,
-    limit_per_group: int = 30,
-) -> list[dict[str, Any]]:
-    """Attach source-backed member stocks and an observed group trend.
+_EASTMONEY_PROFILE_URL = "https://datacenter.eastmoney.com/securities/api/data/v1/get"
+_EASTMONEY_BOARD_URL = "https://quote.eastmoney.com/center/boardlist.html"
+_TENCENT_QUOTE_URL = "https://qt.gtimg.cn/q="
 
-    The classification table is versioned independently from ``stock_symbol``
-    and older imports can point to superseded security identities.  The
-    immutable Eastmoney evidence payload therefore remains the safest join
-    key for this read model: it carries the source security code/name beside
-    the classification fact.  This function only enriches the response and
-    never promotes a theme into a business relationship.
-    """
-    if not groups:
-        return groups
-    wanted: dict[str, set[str]] = {}
+
+def _as_of(value: Any) -> str | None:
+    """Serialize provider availability without inventing a publication date."""
+    if value is None:
+        return None
+    if hasattr(value, "isoformat"):
+        return value.isoformat()
+    text = str(value).strip()
+    return text or None
+
+
+def _member_from_payload(payload: dict[str, Any], evidence: FoundationEvidence | None = None,
+                         *, classification_code: str | None = None) -> dict[str, Any] | None:
+    raw_code = payload.get("SECURITY_CODE") or payload.get("security_code")
+    raw_name = payload.get("SECURITY_NAME_ABBR") or payload.get("SECURITY_NAME") or payload.get("ORG_NAME")
+    if not raw_code or not raw_name:
+        return None
+    code = str(raw_code).strip().upper()
+    secu_code = str(payload.get("SECUCODE") or "").upper()
+    market = "HK" if secu_code.endswith(".HK") else "CN_A"
+    symbol = code.zfill(5 if market == "HK" else 6) if code.isdigit() else code
+    member = {
+        "market": market,
+        "symbol": symbol,
+        "name": str(raw_name).strip(),
+        "classification_code": classification_code,
+    }
+    if evidence is not None:
+        member.update(
+            source_name=evidence.source_name,
+            source_url=evidence.url,
+            as_of=_as_of(evidence.available_at),
+        )
+    return member
+
+
+def _classification_source_url(code: str, dimension: str, level: Any = None) -> str | None:
+    """Return the exact public query used for a provider classification."""
+    dimension = str(dimension or "").upper()
+    if not code:
+        return None
+    if dimension == "INDUSTRY":
+        try:
+            level_number = int(level or 1)
+        except (TypeError, ValueError):
+            level_number = 1
+        level_number = min(max(level_number, 1), 3)
+        field = f"BOARD_CODE_BK_{level_number}LEVEL"
+        params = {
+            "reportName": "RPT_F10_ORG_BASICINFO",
+            "columns": "SECUCODE,SECURITY_CODE,SECURITY_NAME_ABBR,BOARD_CODE_BK_1LEVEL,BOARD_NAME_1LEVEL,BOARD_CODE_BK_2LEVEL,BOARD_NAME_2LEVEL,BOARD_CODE_BK_3LEVEL,BOARD_NAME_3LEVEL",
+            "pageNumber": "1", "pageSize": "500", "source": "F10", "client": "PC",
+            "filter": f'({field}="{code}")',
+        }
+        return f"{_EASTMONEY_PROFILE_URL}?{urlencode(params)}"
+    if dimension in {"THEME", "INDEX"}:
+        return f"{_EASTMONEY_BOARD_URL}#concept_board/{code}"
+    return None
+
+
+def _target_specs(groups: list[dict[str, Any]]) -> dict[str, list[tuple[str, dict[str, Any]]]]:
+    specs: dict[str, list[tuple[str, dict[str, Any]]]] = {}
     for group in groups:
+        group_key = str(group.get("key") or "")
         for item in group.get("items") or []:
             code = str(item.get("code") or "").strip()
             if code:
-                wanted.setdefault(code, set()).add(str(group.get("key") or ""))
-    if not wanted:
-        return groups
+                specs.setdefault(code, []).append((group_key, item))
+    return specs
+
+
+def _payload_matches(payload: dict[str, Any], group_key: str, item: dict[str, Any], code: str) -> bool:
+    dimension = str(item.get("classification_dimension") or "").upper()
+    if not dimension:
+        dimension = {"industry": "INDUSTRY", "theme": "THEME", "index": "INDEX"}.get(group_key, "")
+    if dimension == "INDUSTRY":
+        level = item.get("level")
+        fields = [f"BOARD_CODE_BK_{int(level)}LEVEL"] if str(level or "").isdigit() else [
+            "BOARD_CODE_BK_1LEVEL", "BOARD_CODE_BK_2LEVEL", "BOARD_CODE_BK_3LEVEL"
+        ]
+        return any(str(payload.get(field) or "").strip().upper() == code.upper() for field in fields)
+    if dimension in {"THEME", "INDEX"}:
+        return code.upper() in {part.upper() for part in _split(payload.get("BLGAINIAN_CODE"))}
+    return False
+
+
+def _load_foundation_members(db: Session, groups: list[dict[str, Any]],
+                             members: dict[tuple[str, str], dict[tuple[str, str], dict[str, Any]]],
+                             source_urls: dict[str, str]) -> None:
+    """Project members from immutable EASTMONEY profile evidence.
+
+    ``SecurityClassification`` is intentionally not the only source here:
+    governance may leave an imported fact pending, while the same immutable
+    profile evidence already contains the complete provider membership lists.
+    """
+    specs = _target_specs(groups)
+    if not specs:
+        return
     try:
         rows = db.execute(
-            select(SecurityClassification, FoundationEvidence)
-            .join(FoundationEvidence, FoundationEvidence.id == SecurityClassification.evidence_id)
-            .where(
-                SecurityClassification.code.in_(list(wanted)),
-                SecurityClassification.status.in_(("ACCEPTED", "PENDING")),
-            )
-            .order_by(SecurityClassification.updated_at.desc())
+            select(FoundationListing, FoundationEvidence)
+            .join(FoundationEvidence, FoundationEvidence.id == FoundationListing.evidence_id)
         ).all()
     except Exception:
-        return groups
-
-    members: dict[str, dict[tuple[str, str], dict[str, Any]]] = {}
-    for classification, evidence in rows:
+        return
+    for listing, evidence in rows:
         try:
             payload = json.loads(evidence.content or "{}")
         except (TypeError, ValueError, json.JSONDecodeError):
             continue
         if not isinstance(payload, dict):
             continue
-        raw_code = payload.get("SECURITY_CODE") or payload.get("security_code")
-        raw_name = payload.get("SECURITY_NAME_ABBR") or payload.get("SECURITY_NAME") or payload.get("ORG_NAME")
-        if not raw_code or not raw_name:
+        member = _member_from_payload(payload, evidence)
+        if member is None:
             continue
-        code = str(raw_code).strip().upper()
-        secu_code = str(payload.get("SECUCODE") or "").upper()
-        market = "HK" if secu_code.endswith(".HK") else "CN_A"
-        symbol = code.zfill(5 if market == "HK" else 6) if code.isdigit() else code
-        member = {
-            "market": market,
-            "symbol": symbol,
-            "name": str(raw_name).strip(),
-            "classification_code": str(classification.code),
-            "source_name": evidence.source_name,
-            "source_url": evidence.url,
-        }
-        bucket = members.setdefault(str(classification.code), {})
-        bucket.setdefault((market, symbol), member)
+        for code, code_specs in specs.items():
+            for group_key, item in code_specs:
+                if not _payload_matches(payload, group_key, item, code):
+                    continue
+                member_copy = {**member, "classification_code": code}
+                key = (str(group_key), code)
+                members.setdefault(key, {}).setdefault((member_copy["market"], member_copy["symbol"]), member_copy)
+                source_urls.setdefault(code, evidence.url or "")
 
-    # Latest quote is optional enrichment; no quote means the trend remains
-    # visibly unavailable rather than being inferred from the theme label.
-    quote_map: dict[tuple[str, str], float] = {}
-    pairs = [(market, symbol) for bucket in members.values() for market, symbol in bucket]
-    if pairs:
+
+def _load_reviewed_members(db: Session, groups: list[dict[str, Any]],
+                           members: dict[tuple[str, str], dict[tuple[str, str], dict[str, Any]]]) -> None:
+    """Keep reviewed/pending classification evidence as a compatibility path."""
+    specs = _target_specs(groups)
+    if not specs:
+        return
+    try:
+        rows = db.execute(
+            select(SecurityClassification, FoundationEvidence)
+            .join(FoundationEvidence, FoundationEvidence.id == SecurityClassification.evidence_id)
+            .where(SecurityClassification.code.in_(list(specs)), SecurityClassification.status.in_(("ACCEPTED", "PENDING")))
+            .order_by(SecurityClassification.updated_at.desc())
+        ).all()
+    except Exception:
+        return
+    for classification, evidence in rows:
+        classification_code = getattr(classification, "code", None)
+        if not classification_code:
+            continue
         try:
-            quotes = db.scalars(
-                select(StockRealtimeQuote).where(
-                    StockRealtimeQuote.market.in_({pair[0] for pair in pairs}),
-                    StockRealtimeQuote.symbol.in_({pair[1] for pair in pairs}),
-                )
-            ).all()
+            payload = json.loads(evidence.content or "{}")
+        except (TypeError, ValueError, json.JSONDecodeError):
+            continue
+        if not isinstance(payload, dict):
+            continue
+        member = _member_from_payload(payload, evidence, classification_code=str(classification_code))
+        if member is None:
+            continue
+        for group_key, item in specs.get(str(classification.code), []):
+            key = (str(group_key), str(classification.code))
+            members.setdefault(key, {}).setdefault((member["market"], member["symbol"]), member)
+
+
+def _fetch_remote_industry_members(groups: list[dict[str, Any]],
+                                   members: dict[tuple[str, str], dict[tuple[str, str], dict[str, Any]]],
+                                   source_urls: dict[str, str], *, timeout: float = 12.0) -> None:
+    """Fill an absent industry universe through the public Eastmoney F10 API."""
+    requests: list[tuple[str, str, str]] = []
+    for group in groups:
+        for item in group.get("items") or []:
+            dimension = str(item.get("classification_dimension") or "").upper()
+            code = str(item.get("code") or "").strip()
+            # A local evidence snapshot can be complete or partial.  During
+            # an explicit refresh always probe the provider and merge any
+            # newer/additional members instead of treating a non-empty local
+            # bucket as proof that its universe is complete.
+            if dimension != "INDUSTRY" or not code:
+                continue
+            try:
+                level = min(max(int(item.get("level") or 1), 1), 3)
+            except (TypeError, ValueError):
+                level = 1
+            requests.append((str(group.get("key") or ""), code, f"BOARD_CODE_BK_{level}LEVEL"))
+    if not requests:
+        return
+    base = {
+        "reportName": "RPT_F10_ORG_BASICINFO",
+        "columns": "SECUCODE,SECURITY_CODE,SECURITY_NAME_ABBR",
+        "pageNumber": "1", "pageSize": "500", "source": "F10", "client": "PC",
+    }
+    try:
+        with httpx.Client(timeout=timeout, follow_redirects=True, trust_env=False,
+                          headers={"User-Agent": "Mozilla/5.0", "Referer": "https://emweb.securities.eastmoney.com/"}) as client:
+            for group_key, code, field in requests:
+                params = {**base, "filter": f'({field}="{code}")'}
+                try:
+                    response = client.get(_EASTMONEY_PROFILE_URL, params=params)
+                    response.raise_for_status()
+                    result = (response.json() or {}).get("result") or {}
+                    rows = result.get("data") or []
+                except (httpx.HTTPError, ValueError, TypeError):
+                    continue
+                key = (group_key, code)
+                for payload in rows:
+                    member = _member_from_payload(payload)
+                    if member is not None:
+                        members.setdefault(key, {}).setdefault((member["market"], member["symbol"]), member)
+                source_urls.setdefault(code, str(response.url))
+    except httpx.HTTPError:
+        return
+
+
+def _fetch_tencent_changes(pairs: list[tuple[str, str]], *, timeout: float = 12.0) -> tuple[dict[tuple[str, str], float], str | None]:
+    """Read current percent changes in bounded Tencent batches."""
+    result: dict[tuple[str, str], float] = {}
+    if not pairs:
+        return result, None
+    codes = [AkshareAdapter._tencent_code(market, symbol) for market, symbol in pairs if market in {"CN_A", "HK"}]
+    try:
+        parser = AkshareAdapter()
+        with httpx.Client(timeout=timeout, trust_env=False, headers={"User-Agent": "Mozilla/5.0"}) as client:
+            for start in range(0, len(codes), 80):
+                batch = codes[start:start + 80]
+                if not batch:
+                    continue
+                url = _TENCENT_QUOTE_URL + ",".join(batch)
+                response = client.get(url)
+                response.raise_for_status()
+                for line in response.text.split(";"):
+                    match = re.search(r"v_([a-z]{2})(\d+)=\"([^\"]*)\"", line)
+                    if not match:
+                        continue
+                    prefix, symbol, raw = match.groups()
+                    market = "HK" if prefix == "hk" else "CN_A"
+                    normalized = symbol.zfill(5 if market == "HK" else 6)
+                    quote = parser._parse_tencent_quote(
+                        f'v_{prefix}{symbol}="{raw}";', market, normalized
+                    )
+                    if quote.change_pct is not None:
+                        result[(market, normalized)] = float(quote.change_pct)
+        # Keep the response compact.  The exact requested symbols are already
+        # source-backed member rows; this URL identifies the provider endpoint
+        # without duplicating a multi-thousand-symbol query on every item.
+        return result, _TENCENT_QUOTE_URL
+    except (httpx.HTTPError, ValueError, TypeError):
+        return result, None
+
+
+def enrich_classification_groups_with_members(
+    db: Session,
+    groups: list[dict[str, Any]],
+    *,
+    limit_per_group: int = 30,
+    fetch_remote: bool = False,
+) -> list[dict[str, Any]]:
+    """Attach source-backed member stocks, counts and observed group trends.
+
+    Membership comes from immutable EASTMONEY profile evidence first.  During
+    a remote F10 refresh an absent industry universe is filled from the same
+    provider's public F10 query, and current changes are read in one bounded
+    Tencent batch.  A missing remote response remains explicitly unavailable;
+    it is never replaced with a fabricated zero or inferred trend.
+    """
+    if not groups:
+        return groups
+    members: dict[tuple[str, str], dict[tuple[str, str], dict[str, Any]]] = {}
+    source_urls: dict[str, str] = {}
+    _load_reviewed_members(db, groups, members)
+    _load_foundation_members(db, groups, members, source_urls)
+    if fetch_remote:
+        _fetch_remote_industry_members(groups, members, source_urls)
+
+    pairs = list({(market, symbol) for bucket in members.values() for market, symbol in bucket})
+    quote_map: dict[tuple[str, str], float] = {}
+    trend_url: str | None = None
+    try:
+        if pairs:
+            quotes = db.scalars(select(StockRealtimeQuote).where(
+                StockRealtimeQuote.market.in_({pair[0] for pair in pairs}),
+                StockRealtimeQuote.symbol.in_({pair[1] for pair in pairs}),
+            )).all()
             for quote in quotes:
                 if quote.change_pct is not None:
                     quote_map[(quote.market, quote.symbol)] = float(quote.change_pct)
-        except Exception:
-            quote_map = {}
+    except Exception:
+        quote_map = {}
+    if fetch_remote and pairs:
+        remote_quotes, trend_url = _fetch_tencent_changes(pairs)
+        quote_map.update(remote_quotes)
 
     for group in groups:
+        group_key = str(group.get("key") or "")
         for item in group.get("items") or []:
             code = str(item.get("code") or "").strip()
-            bucket = list(members.get(code, {}).values())[:limit_per_group] if code else []
-            for member in bucket:
+            bucket_map = members.get((group_key, code), {}) if code else {}
+            for member in bucket_map.values():
                 member["change_pct"] = quote_map.get((member["market"], member["symbol"]))
+            bucket = list(bucket_map.values())[:limit_per_group]
             item["related_stocks"] = bucket
-            item["member_count"] = len(members.get(code, {})) if code else 0
-            changes = [member["change_pct"] for member in bucket if member.get("change_pct") is not None]
+            item["member_count"] = len(bucket_map)
+            changes = [member["change_pct"] for member in bucket_map.values() if member.get("change_pct") is not None]
             item["trend_pct"] = round(sum(changes) / len(changes), 2) if changes else None
+            if not item.get("source_url"):
+                item["source_url"] = _classification_source_url(
+                    code, str(item.get("classification_dimension") or ""), item.get("level")
+                ) or source_urls.get(code)
+            observed_dates = [str(member.get("as_of")) for member in bucket_map.values() if member.get("as_of")]
+            if observed_dates:
+                # A classification is a point-in-time snapshot; expose the
+                # latest observed evidence boundary while retaining each
+                # member's own ``as_of`` for audit detail.
+                item["as_of"] = max(observed_dates)
+            item["trend_source_url"] = trend_url
+            item["trend_status"] = "OBSERVED" if changes else "UNAVAILABLE"
+            item["member_status"] = "OBSERVED" if bucket_map else "UNAVAILABLE"
     return groups
 
 

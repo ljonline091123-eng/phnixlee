@@ -58,7 +58,13 @@ class MarketDataFoundationTest(unittest.TestCase):
         source = self.db.scalar(select(DataSource).where(DataSource.source_code == "AKSHARE"))
         self.assertIsNotNone(source)
         self.assertEqual(source.adapter_type, "AKSHARE")
-        self.assertEqual(len(source.interfaces), 8)
+        interface_codes = {item.interface_code for item in source.interfaces}
+        self.assertEqual(len(interface_codes), 11)
+        self.assertTrue({
+            "CN_A_IRM_QA_ON_DEMAND",
+            "CN_A_RESEARCH_REPORT_ON_DEMAND",
+            "CN_A_PROFIT_FORECAST_ON_DEMAND",
+        }.issubset(interface_codes))
         fallback = self.db.scalar(select(DataSource).where(DataSource.source_code == "AKSHARE_HK_SINA"))
         self.assertIsNotNone(fallback)
         self.assertEqual(source.config_json["fallback_source_code"], fallback.source_code)

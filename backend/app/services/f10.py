@@ -491,6 +491,61 @@ def _display_section(
     }
 
 
+def _research_industry_performance_rows(concepts: list[Any]) -> list[dict[str, Any]]:
+    """Project observed member-stock changes for the research tab.
+
+    Classification labels without source-backed members deliberately stay out
+    of this section.  A missing quote is unknown and is never converted into a
+    zero return, so the page can distinguish an unavailable trend from a flat
+    one.
+    """
+    result: list[dict[str, Any]] = []
+    for raw in concepts or []:
+        if not isinstance(raw, dict):
+            continue
+        members = raw.get("related_stocks")
+        if not isinstance(members, list) or not members:
+            continue
+        changes: list[float] = []
+        rise = fall = 0
+        for member in members:
+            if not isinstance(member, dict):
+                continue
+            value = member.get("change_pct")
+            try:
+                numeric = float(value)
+            except (TypeError, ValueError):
+                continue
+            changes.append(numeric)
+            if numeric > 0:
+                rise += 1
+            elif numeric < 0:
+                fall += 1
+        if not changes:
+            continue
+        name = str(raw.get("name") or raw.get("label") or "").strip()
+        if not name:
+            continue
+        result.append({
+            "name": name,
+            "label": name,
+            "dimension": raw.get("dimension") or raw.get("classification_dimension") or "THEME",
+            "classification_dimension": raw.get("classification_dimension") or raw.get("dimension") or "THEME",
+            "code": raw.get("code"),
+            "average_change_pct": round(sum(changes) / len(changes), 2),
+            "trend_pct": round(sum(changes) / len(changes), 2),
+            "sample_size": len(changes),
+            "member_count": len(members),
+            "rise_count": rise,
+            "fall_count": fall,
+            "related_stocks": members,
+            "source_name": raw.get("source_name") or raw.get("source") or "分类成分股行情快照",
+            "source_url": raw.get("source_url"),
+        })
+    result.sort(key=lambda row: str(row.get("name") or ""))
+    return result
+
+
 def normalize_f10_sections(extended_data: dict[str, dict[str, Any]]) -> dict[str, dict[str, Any]]:
     """Attach stable section contracts to the existing F10 cache payloads.
 
@@ -721,6 +776,14 @@ def normalize_f10_sections(extended_data: dict[str, dict[str, Any]]) -> dict[str
     # is a strict subset of the full report panel and never duplicates it.
     reports = research.get("reports")
     if isinstance(reports, list):
+        # Legacy snapshots may have been written in provider order.  Keep the
+        # complete archive and latest projection consistently newest-first.
+        reports.sort(
+            key=lambda row: str(
+                row.get("report_date") or row.get("报告日期") or row.get("日期") or ""
+            ) if isinstance(row, dict) else "",
+            reverse=True,
+        )
         research["latest_reports"] = reports[:10]
     elif isinstance(research.get("latest_reports"), list):
         research["latest_reports"] = research["latest_reports"][:10]
@@ -750,21 +813,50 @@ def normalize_f10_sections(extended_data: dict[str, dict[str, Any]]) -> dict[str
         "institution_forecast",
         "机构预测（评级统计）",
         rows=research.get("institution_forecast"),
-        source=research.get("source"),
+        source=research.get("institution_forecast_source") or research.get("source"),
         as_of=payload_as_of(research),
     )
-    rating_projection = build_rating_statistics(research.get("institution_forecast") or [])
+    # Consensus rows can be newer than the report feed and may have no
+    # investment rating. Anchor rating windows to actual report observations
+    # so an unrated forecast does not shift the date forward and zero out all
+    # legitimate rated reports.
+    rating_rows = reports if isinstance(reports, list) and reports else (research.get("institution_forecast") or [])
+    rating_projection = build_rating_statistics(rating_rows)
     institution_section["rating_statistics"] = rating_projection["buckets"]
     institution_section["rating_statistics_reference_date"] = rating_projection["reference_date"]
     institution_section["rating_statistics_basis"] = rating_projection["reference_basis"]
-    research["sections"] = [
+    provider_rating = research.get("provider_rating_statistics")
+    if isinstance(provider_rating, dict) and provider_rating:
+        institution_section["provider_rating_statistics"] = provider_rating
+    performance_rows = _research_industry_performance_rows(concepts)
+    research_sections = [
         _display_section("industry_concepts", "行业概念", rows=concepts, source=profile.get("source"), as_of=payload_as_of(profile)),
-        _display_section("qa", "问董秘", rows=research.get("qa"), source=research.get("source"), as_of=payload_as_of(research), message="当前未接入问董秘公开接口"),
-        _display_section("earnings_forecast", "盈利预测", rows=research.get("earnings_forecast"), source=research.get("source"), as_of=payload_as_of(research)),
-        institution_section,
-        _display_section("latest_reports", "最新研报", rows=research.get("latest_reports"), source=research.get("source"), as_of=payload_as_of(research)),
-        _display_section("reports", "研报", rows=research.get("reports"), source=research.get("source"), as_of=payload_as_of(research)),
     ]
+    if performance_rows:
+        research_sections.append(
+            _display_section(
+                "industry_performance",
+                "行业表现",
+                rows=performance_rows,
+                source="分类成分股行情快照",
+                as_of=payload_as_of(profile),
+            )
+        )
+    research_sections.extend([
+        _display_section(
+            "qa",
+            "问董秘",
+            rows=research.get("qa"),
+            source=research.get("qa_source") or research.get("source"),
+            as_of=payload_as_of(research),
+            message="" if research.get("qa") else (research.get("qa_message") or "当前未接入问董秘公开接口"),
+        ),
+        _display_section("earnings_forecast", "盈利预测", rows=research.get("earnings_forecast"), source=research.get("earnings_forecast_source") or research.get("source"), as_of=payload_as_of(research)),
+        institution_section,
+        _display_section("latest_reports", "最新研报", rows=research.get("latest_reports"), source=research.get("report_source") or research.get("source"), as_of=payload_as_of(research)),
+        _display_section("reports", "研报", rows=research.get("reports"), source=research.get("report_source") or research.get("source"), as_of=payload_as_of(research)),
+    ])
+    research["sections"] = research_sections
     return extended_data
 
 def _load_f10_extended_data(db: Session, market: str, symbol: str) -> dict[str, dict]:
