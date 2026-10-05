@@ -3760,10 +3760,43 @@ class AkshareAdapter(MarketDataAdapter):
                 ext_json=merged_ext,
                 raw_payload=existing.raw_payload or record.raw_payload,
             )
+        # AkShare's broad A-share code/name table is a third independent
+        # fallback.  It often contains newly listed STAR/ChiNext securities
+        # while an exchange table is temporarily incomplete and the public
+        # Eastmoney endpoint is unavailable.  Always union it; do not let a
+        # non-empty first source hide a larger, valid universe.
+        try:
+            dataframe = ak.stock_info_a_code_name()
+            broad_records = self._normalize_dataframe(dataframe=dataframe, market="CN_A")
+        except Exception:
+            broad_records = []
+        for record in broad_records:
+            existing = records_by_symbol.get(record.symbol)
+            if existing is None:
+                records_by_symbol[record.symbol] = record
+                continue
+            merged_ext = dict(existing.ext_json or {})
+            supplementary_sources = merged_ext.get("supplementary_sources")
+            if not isinstance(supplementary_sources, list):
+                supplementary_sources = []
+            if "AkShare stock_info_a_code_name" not in supplementary_sources:
+                supplementary_sources.append("AkShare stock_info_a_code_name")
+            merged_ext["supplementary_sources"] = supplementary_sources
+            merged_ext["supplementary_code_name"] = record.name
+            records_by_symbol[record.symbol] = SymbolRecord(
+                market=existing.market,
+                symbol=existing.symbol,
+                exchange=existing.exchange or record.exchange,
+                name=existing.name or record.name,
+                asset_type=existing.asset_type or record.asset_type,
+                status=existing.status or record.status,
+                list_date=existing.list_date or record.list_date,
+                ext_json=merged_ext,
+                raw_payload=existing.raw_payload or record.raw_payload,
+            )
         if records_by_symbol:
             return list(records_by_symbol.values())
-        dataframe = ak.stock_info_a_code_name()
-        return self._normalize_dataframe(dataframe=dataframe, market="CN_A")
+        return broad_records
 
     def _fetch_hk_symbols(self) -> list[SymbolRecord]:
         dataframe = ak.stock_hk_spot_em()

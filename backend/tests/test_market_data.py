@@ -164,6 +164,26 @@ class MarketDataFoundationTest(unittest.TestCase):
         self.assertEqual(hk_records[0].symbol, "00005")
         self.assertEqual(hk_records[0].exchange, "HKEX")
 
+    def test_cn_a_symbol_master_unions_exchange_and_broad_code_sources(self) -> None:
+        adapter = AkshareAdapter()
+        exchange_record = SymbolRecord(
+            market="CN_A", symbol="600000", exchange="SSE", name="浦发银行",
+            asset_type="STOCK", status="LISTED", list_date=None,
+            ext_json={"source": "exchange"}, raw_payload={"source": "exchange"},
+        )
+        broad = pd.DataFrame([
+            {"code": "600000", "name": "浦发银行"},
+            {"code": "688328", "name": "深科达"},
+        ])
+        with patch.object(adapter, "_fetch_cn_a_symbols_from_exchange_tables", return_value=[exchange_record]), \
+             patch.object(adapter, "_fetch_cn_a_symbols_from_eastmoney", return_value=[]), \
+             patch("app.connectors.akshare_adapter.ak.stock_info_a_code_name", return_value=broad):
+            records = adapter._fetch_cn_a_symbols()
+        by_symbol = {record.symbol: record for record in records}
+        self.assertEqual(set(by_symbol), {"600000", "688328"})
+        self.assertEqual(by_symbol["600000"].exchange, "SSE")
+        self.assertIn("AkShare stock_info_a_code_name", by_symbol["600000"].ext_json["supplementary_sources"])
+
     def test_symbol_upsert_updates_existing_master_data(self) -> None:
         source = self.db.scalar(select(DataSource).where(DataSource.source_code == "AKSHARE"))
         service = StockSyncService(self.db)
