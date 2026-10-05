@@ -30,6 +30,7 @@ from app.connectors.base import (
     QuoteRecord,
     SymbolRecord,
 )
+from app.connectors.sina_research import fetch_sina_research_reports
 
 
 class AkshareAdapter(MarketDataAdapter):
@@ -506,7 +507,11 @@ class AkshareAdapter(MarketDataAdapter):
         # panels use the security-scoped Tonghuashun endpoints when available.
         # Keep the full bounded provider history for the archive; the read
         # model projects the first ten rows into ``latest_reports``.
-        research_reports = self._safe_research_report_records(symbol, limit=500)
+        eastmoney_reports = self._safe_research_report_records(symbol, limit=500)
+        sina_reports = self._safe_sina_research_report_records(symbol, limit=100)
+        research_reports = self._merge_research_report_sources(
+            eastmoney_reports, sina_reports, limit=500
+        )
         qa_rows = self._safe_qa_records(symbol, limit=100)
         earnings_rows = self._safe_profit_forecast_records(symbol)
         institution_rows = self._safe_institution_forecast_records(
@@ -515,8 +520,6 @@ class AkshareAdapter(MarketDataAdapter):
         rating_projection = self._safe_provider_rating_projection(symbol)
         if not earnings_rows:
             earnings_rows = self._derive_research_earnings_forecast(research_reports, symbol)
-        if not institution_rows:
-            institution_rows = self._derive_institution_forecast(research_reports, symbol)
         research = {
             "source": "多来源：巨潮资讯互动易 / 同花顺盈利预测 / 东方财富研究报告",
             "qa_source": "巨潮资讯互动易",
@@ -524,11 +527,11 @@ class AkshareAdapter(MarketDataAdapter):
             "qa_message": "" if qa_rows else "巨潮资讯互动易暂无可用问答数据。",
             "earnings_forecast_source": "同花顺盈利预测" if earnings_rows else "东方财富研究报告接口",
             "earnings_forecast": earnings_rows,
-            "institution_forecast_source": "同花顺业绩预测详表-机构" if institution_rows else "东方财富研究报告接口",
+            "institution_forecast_source": "同花顺业绩预测详表-机构" if institution_rows else "暂无可用机构预测明细",
             "institution_forecast": institution_rows,
             "provider_rating_statistics": rating_projection,
-            "report_source": "东方财富研究报告",
-            "latest_reports": research_reports[:10],
+            "report_source": "新浪财经机构研报 / 东方财富研究报告",
+            "latest_reports": research_reports,
             "reports": research_reports,
         }
         return {"holders": holders, "profile": profile_result, "research_sections": research}
@@ -3196,7 +3199,7 @@ class AkshareAdapter(MarketDataAdapter):
             if item is None:
                 continue
             # A few CNINFO responses omit the inline answer although an answer
-            # id is present.  Resolve only those rows and retain the original
+            # id is present. Resolve only those rows and retain the original
             # question payload if the detail endpoint is unavailable.
             if not item.get("answer") and item.get("answer_id"):
                 detail_method = getattr(ak, "stock_irm_ans_cninfo", None)
@@ -3206,9 +3209,7 @@ class AkshareAdapter(MarketDataAdapter):
                     limit=1,
                 )
                 if detail_rows:
-                    detail = cls._normalize_qa_row(
-                        {**raw, **detail_rows[0]}, symbol
-                    )
+                    detail = cls._normalize_qa_row({**raw, **detail_rows[0]}, symbol)
                     if detail:
                         item.update({
                             key: detail[key]
@@ -3223,6 +3224,89 @@ class AkshareAdapter(MarketDataAdapter):
             reverse=True,
         )
         return result[:limit]
+
+    @staticmethod
+    def _safe_sina_research_report_records(
+        symbol: str, *, limit: int = 100
+    ) -> list[dict[str, Any]]:
+        try:
+            return fetch_sina_research_reports(symbol, limit=limit, detail_limit=10, timeout=10.0)
+        except Exception:
+            # The Eastmoney feed remains available as an independent fallback;
+            # a Sina network or parsing failure must not break the F10 page.
+            return []
+
+    @classmethod
+    def _merge_research_report_sources(
+        cls,
+        *sources: list[dict[str, Any]],
+        limit: int = 500,
+    ) -> list[dict[str, Any]]:
+        """Merge report providers without replacing newer/richer observations."""
+        merged: dict[tuple[str, str], dict[str, Any]] = {}
+        semantic: dict[tuple[str, str, str], tuple[str, str]] = {}
+        for rows in sources:
+            for raw in rows or []:
+                if not isinstance(raw, dict):
+                    continue
+                row = dict(raw)
+                source_code = str(row.get("source_code") or "EASTMONEY").upper()
+                external_id = str(
+                    row.get("external_id") or row.get("report_id") or ""
+                ).strip()
+                if not external_id:
+                    external_id = hashlib.sha1(
+                        "|".join((
+                            str(row.get("report_date") or row.get("日期") or ""),
+                            str(row.get("institution") or row.get("机构") or ""),
+                            str(row.get("title") or row.get("报告名称") or ""),
+                        )).encode("utf-8")
+                    ).hexdigest()[:24]
+                row["source_code"] = source_code
+                row["external_id"] = external_id.replace(f"{source_code}-", "")
+                row.setdefault("report_id", f"{source_code}-{row['external_id']}")
+                key = (source_code, row["external_id"])
+                existing = merged.get(key)
+                if existing is None or cls._research_report_richness(row) > cls._research_report_richness(existing):
+                    merged[key] = row
+
+                semantic_key = (
+                    str(row.get("report_date") or row.get("日期") or "")[:10],
+                    re.sub(r"\s+", "", str(row.get("institution") or row.get("机构") or "")).casefold(),
+                    re.sub(r"\s+", "", str(row.get("title") or row.get("报告名称") or "")).casefold(),
+                )
+                current_key = semantic.get(semantic_key)
+                if current_key is None:
+                    semantic[semantic_key] = key
+                elif current_key != key:
+                    current = merged[current_key]
+                    preferred = row if cls._research_report_richness(row) > cls._research_report_richness(current) else current
+                    preferred_key = key if preferred is row else current_key
+                    merged[preferred_key] = {**current, **row, **preferred}
+                    if preferred_key != current_key:
+                        merged.pop(current_key, None)
+                    if preferred_key != key:
+                        merged.pop(key, None)
+                    semantic[semantic_key] = preferred_key
+        result = list(merged.values())
+        result.sort(
+            key=lambda row: (
+                str(row.get("report_date") or row.get("日期") or ""),
+                cls._research_report_richness(row),
+            ),
+            reverse=True,
+        )
+        return result[:limit]
+
+    @staticmethod
+    def _research_report_richness(row: dict[str, Any]) -> tuple[int, int, int, int]:
+        content = str(row.get("content") or row.get("content_text") or "")
+        return (
+            1 if content else 0,
+            len(content),
+            1 if row.get("rating") or row.get("东财评级") else 0,
+            1 if row.get("pdf_url") or row.get("报告PDF链接") else 0,
+        )
 
     def _safe_profit_forecast_records(self, symbol: str) -> list[dict[str, Any]]:
         """Read Tonghuashun's per-year consensus forecast aggregates."""
@@ -3346,32 +3430,6 @@ class AkshareAdapter(MarketDataAdapter):
                 if match.get("东财评级") and not normalized.get("rating"):
                     normalized["rating"] = match["东财评级"]
             result.append(normalized)
-        # Eastmoney's report feed contains a longer, dated institution history
-        # than the current Tonghuashun consensus table.  Project those rows as
-        # supplemental institution observations so a research page does not
-        # collapse to a single institution merely because the latest THS page
-        # has one active analyst row.  Every supplemental row keeps its PDF
-        # provenance and is de-duplicated by institution/date/title.
-        for report in report_candidates:
-            if not isinstance(report, dict):
-                continue
-            institution = str(report.get("机构") or report.get("institution") or "").strip()
-            report_date = cls._coerce_report_date(report.get("日期") or report.get("report_date"))
-            if not institution or not report_date:
-                continue
-            supplemental = dict(report)
-            supplemental.setdefault("股票代码", cls._normalize_security_code(symbol))
-            supplemental.setdefault("机构", institution)
-            supplemental.setdefault("机构名称", institution)
-            supplemental.setdefault("研究员", report.get("研究员") or report.get("分析师"))
-            supplemental.setdefault("报告日期", report_date)
-            supplemental.setdefault("report_date", report_date)
-            supplemental.setdefault("source_name", "东方财富研究报告")
-            supplemental.setdefault("source_url", "https://data.eastmoney.com/report/stock.jshtml")
-            supplemental.setdefault("detail_url", report.get("detail_url") or report.get("source_url"))
-            # The report rows use ``YYYY-盈利预测-收益`` keys, which are
-            # intentionally retained for the UI's EPS matrix renderer.
-            result.append(supplemental)
         deduped: dict[tuple[str, str, str], dict[str, Any]] = {}
         for row in result:
             institution = str(row.get("机构") or row.get("institution") or "").strip()

@@ -57,6 +57,10 @@ TABLE_DESCRIPTIONS: dict[str, TableDescription] = {
     "model_skill_revision": TableDescription("Skill 历史版本", "模型实验室", "保存 Skill 每个版本的指令正文、内容哈希和变更来源，支持回滚。"),
     "prediction_ledger": TableDescription("预测账本", "研究复盘", "保存选股或买卖建议、依据与使用的 Skill 版本，并记录后续实际走势和评估。"),
     "research_report": TableDescription("研究报告", "研究复盘", "保存单只股票的 AI 研报、结论、评分、数据来源及历史报告评估。"),
+    "stock_broker_research_report": TableDescription("券商研报资料", "股票研究", "按股票、公开来源和外部报告编号保存券商研报标题、评级、原文正文及来源证据。"),
+    "stock_earnings_consensus": TableDescription("盈利预测共识", "股票研究", "按股票、预测年度和指标保存机构一致预期统计，保留来源及更新时间。"),
+    "stock_institution_forecast": TableDescription("机构盈利预测", "股票研究", "保存单家机构按报告日披露的未来年度盈利预测，不与普通研报列表混为同一对象。"),
+    "stock_investor_qa": TableDescription("投资者互动问答", "股票研究", "保存巨潮资讯互动易公开问答及其问题编号、回答、时间和原文地址。"),
     "skill_optimization_draft": TableDescription("Skill 优化草案", "研究复盘", "保存预测失败后生成的 Skill 修订建议、证据与人工审核状态。"),
     "stock_f10_cache": TableDescription("股票 F10 缓存", "股票数据", "按股票及栏目缓存 F10 公司资料和业务信息。"),
     "stock_financial_report": TableDescription("股票财务报告", "股票数据", "按股票、指标、报告期和来源保存财务报告结构化数据。"),
@@ -331,6 +335,36 @@ COMMON_COLUMN_DESCRIPTIONS: dict[str, str] = {
 
 
 TABLE_COLUMN_OVERRIDES: dict[str, dict[str, str]] = {
+    "stock_broker_research_report": {
+        "external_id": "公开来源中的稳定研报编号。", "report_date": "来源页面披露的研报日期。",
+        "institution": "发布研报的券商或研究机构。", "analysts_json": "来源披露的分析师姓名列表。",
+        "summary": "研报正文摘要，不替代完整正文。", "content_text": "从公开详情页或 PDF 提取的研报正文。",
+        "content_status": "正文获取状态，例如待获取、已就绪或失败。", "fetch_error": "正文获取失败时记录的原因。",
+        "source_url": "研报列表或公开来源页面地址。", "detail_url": "可直接获取研报详情正文的页面地址。",
+        "pdf_url": "来源提供的研报 PDF 地址。", "source_updated_at": "来源记录自身披露或更新的时间。",
+    },
+    "stock_earnings_consensus": {
+        "forecast_year": "盈利一致预期对应的预测年度。", "metric_code": "预测指标稳定编码，例如 EPS 或 NET_PROFIT。",
+        "metric_name": "预测指标中文名称。", "unit": "预测指标展示单位。",
+        "prediction_count": "参与该年度该指标预测的机构数量。", "minimum_value": "来源统计的预测最小值。",
+        "mean_value": "来源统计的预测均值。", "maximum_value": "来源统计的预测最大值。",
+        "industry_average": "来源提供的同行业预测平均值。", "source_url": "盈利预测公开来源页面地址。",
+        "source_updated_at": "来源记录自身披露或更新的时间。",
+    },
+    "stock_institution_forecast": {
+        "external_key": "机构、报告日和分析师组合生成的幂等业务键。", "institution": "披露预测的券商或研究机构。",
+        "analysts_json": "来源披露的分析师姓名列表。", "report_date": "机构预测对应的报告日期。",
+        "forecast_json": "该机构未来年度每股收益、净利润等预测值。", "report_external_id": "可选关联的外部研报编号。",
+        "source_url": "机构预测公开来源页面地址。", "detail_url": "机构预测或关联报告详情页面地址。",
+        "source_updated_at": "来源记录自身披露或更新的时间。",
+    },
+    "stock_investor_qa": {
+        "external_id": "巨潮互动易问题编号。", "question": "投资者公开提问正文。",
+        "answer": "上市公司公开回答正文。", "questioner": "来源披露的提问者标识。",
+        "answerer": "来源披露的回答主体。", "asked_time": "问题提交时间。",
+        "answered_time": "上市公司回答时间。", "updated_time": "该问答在来源中的最近更新时间。",
+        "source_url": "巨潮互动易问题详情地址。", "source_updated_at": "来源记录自身披露或更新的时间。",
+    },
     "lake_object": {
         "id": "湖仓对象 ID",
         "object_uri": "对象存储地址",

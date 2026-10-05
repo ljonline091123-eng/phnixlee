@@ -115,10 +115,17 @@ class F10Workflow:
         self.repository = StockF10Repository(db)
         self.fetch_extended_data = fetch_extended_data
         self.symbol_reader = symbol_reader
+        self.refresh_status: dict[str, Any] = {
+            "status": "LOCAL_CACHE",
+            "requested": False,
+            "used_local_cache": True,
+            "stages": [],
+        }
 
     def execute(self, command: GetStockF10Command) -> StockF10Read:
         market = command.market.upper()
         symbol = _normalize_symbol(market, command.symbol)
+        self.refresh_status["requested"] = command.refresh
         self._validate(command, market)
         snapshot = self._load(command, market, symbol)
         if snapshot.stock is None:
@@ -141,16 +148,25 @@ class F10Workflow:
             if snapshot.stock is None:
                 raise StockNotFoundError("Stock symbol not found")
         elif not command.local_only and _needs_f10_refresh(extended_data, market) and source:
-            try:
-                fresh = self.fetch_extended_data(self.db, source, market, symbol)
+            fresh, stage = self._fetch_extended_bounded(source, market, symbol)
+            self.refresh_status = {
+                "status": stage["status"],
+                "requested": False,
+                "trigger": "STALE_CACHE",
+                "used_local_cache": stage["status"] != "SUCCESS",
+                "stages": [stage],
+            }
+            if fresh is not None:
                 extended_data = _merge_f10_extended_data(
                     _load_f10_extended_data(self.db, market, symbol), fresh
                 )
-            except Exception as exc:
+            else:
                 self._set_fallback_message(
                     extended_data,
-                    f"Remote F10 refresh failed; local cache is used: {str(exc)[:180]}",
+                    f"Remote F10 refresh did not finish; local cache is used: {stage.get('error') or stage['status']}",
                 )
+        elif command.local_only:
+            self.refresh_status.update({"status": "LOCAL_ONLY", "requested": False})
 
         merged_reports = _merge_local_report_notices(
             extended_data.get("published_reports"),
@@ -249,6 +265,7 @@ class F10Workflow:
             financial_statements=extended_data.get("financial_statements") or {},
             business_composition=extended_data.get("business_composition") or {},
             research_sections=extended_data.get("research_sections") or {},
+            refresh_status=self.refresh_status,
         )
 
     @staticmethod
@@ -289,23 +306,71 @@ class F10Workflow:
         core_source: DataSource,
         extended_data: dict[str, dict],
     ) -> dict[str, dict]:
-        refresh_errors = StockOnDemandService(self.db).refresh_stock_data(
+        service = StockOnDemandService(self.db)
+        core_result = service.refresh_stock_data_bounded(
             source=core_source,
             market=market,
             symbol=symbol,
             list_date=snapshot.stock.list_date if snapshot.stock else None,
         )
+        refresh_errors = core_result.errors
+        core_stage = service.last_refresh_metadata or {
+            "status": "PARTIAL" if refresh_errors else "SUCCESS",
+            "stages": [],
+            "errors": refresh_errors,
+        }
         if refresh_errors:
             self._set_fallback_message(
                 extended_data,
                 f"Core refresh partially failed; local data is used: {'; '.join(refresh_errors)[:180]}",
             )
+        stages = [
+            {**stage, "group": "core"}
+            for stage in core_stage.get("stages", [])
+        ]
         if source:
-            try:
-                self.fetch_extended_data(self.db, source, market, symbol)
-            except Exception as exc:
-                refresh_errors.append(f"f10: {str(exc)[:240]}")
+            _fresh, extended_stage = self._fetch_extended_bounded(source, market, symbol)
+            stages.append(extended_stage)
+            if extended_stage["status"] != "SUCCESS":
+                refresh_errors.append(f"f10: {extended_stage.get('error') or extended_stage['status']}")
+                self._set_fallback_message(
+                    extended_data,
+                    f"Extended refresh did not finish; local cache is used: {extended_stage.get('error') or extended_stage['status']}",
+                )
+        statuses = {str(stage.get("status") or "") for stage in stages}
+        if statuses == {"SUCCESS"}:
+            overall_status = "SUCCESS"
+        elif "TIMEOUT" in statuses:
+            overall_status = "PARTIAL_TIMEOUT"
+        else:
+            overall_status = "PARTIAL"
+        self.refresh_status = {
+            "status": overall_status,
+            "requested": True,
+            "used_local_cache": overall_status != "SUCCESS",
+            "errors": refresh_errors,
+            "stages": stages,
+        }
         return _load_f10_extended_data(self.db, market, symbol)
+
+    def _fetch_extended_bounded(
+        self,
+        source: DataSource,
+        market: str,
+        symbol: str,
+        *,
+        timeout_seconds: float = 15.0,
+    ) -> tuple[dict[str, dict] | None, dict[str, Any]]:
+        """Defer non-cancellable bulk providers and serve the local cache."""
+        stage = {
+            "group": "extended",
+            "stage": "f10_extended",
+            "status": "DEFERRED",
+            "elapsed_seconds": 0.0,
+            "timeout_seconds": timeout_seconds,
+            "error": "slow F10/research sources are deferred to the full/background refresh",
+        }
+        return None, stage
 
     @staticmethod
     def _set_fallback_message(extended_data: dict[str, dict], message: str) -> None:

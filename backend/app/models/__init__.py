@@ -55,12 +55,19 @@ from app.models.company_graph import SecurityClassification, SourceIdentity
 from app.models.taxonomy import ClassificationDefinition
 from app.models.company_mapping import CompanyMappingState
 from app.models.lakehouse import LakeObject, LakeDataset, LakeDatasetVersion, LakeLineageEvent, DocumentChunkVersion
+from app.models.research_data import (
+    StockBrokerResearchReport,
+    StockEarningsConsensus,
+    StockInstitutionForecast,
+    StockInvestorQA,
+)
 from app.db.table_comments import apply_table_comments
 
 apply_table_comments(Base.metadata)
 
 __all__ = [
     "CompanyMappingState",
+    "StockBrokerResearchReport", "StockEarningsConsensus", "StockInstitutionForecast", "StockInvestorQA",
     "LakeObject", "LakeDataset", "LakeDatasetVersion", "LakeLineageEvent", "DocumentChunkVersion",
     "SecurityClassification", "SourceIdentity", "ClassificationDefinition",
     "FoundationEntity", "FoundationSecurity", "FoundationListing", "FoundationEvidence",

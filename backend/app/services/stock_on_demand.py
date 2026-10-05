@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import json
-from dataclasses import asdict
+import time
+from dataclasses import asdict, dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
@@ -30,6 +31,46 @@ class OnDemandFetchError(RuntimeError):
         self.fetch_log_id = fetch_log_id
 
 
+@dataclass(slots=True)
+class RefreshStageResult:
+    stage: str
+    status: str
+    elapsed_seconds: float
+    total_count: int = 0
+    persisted_count: int = 0
+    error: str | None = None
+    start_date: str | None = None
+    end_date: str | None = None
+
+    def as_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(slots=True)
+class CoreRefreshResult:
+    status: str
+    elapsed_seconds: float
+    budget_seconds: float
+    stages: list[RefreshStageResult] = field(default_factory=list)
+
+    @property
+    def errors(self) -> list[str]:
+        return [
+            f"{item.stage}: {item.error or item.status.lower()}"
+            for item in self.stages
+            if item.status not in {"SUCCESS"}
+        ]
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "status": self.status,
+            "elapsed_seconds": self.elapsed_seconds,
+            "budget_seconds": self.budget_seconds,
+            "stages": [item.as_dict() for item in self.stages],
+            "errors": self.errors,
+        }
+
+
 def _parse_timestamp(value: Any) -> datetime | None:
     if isinstance(value, datetime):
         parsed = value
@@ -55,6 +96,13 @@ def _parse_timestamp(value: Any) -> datetime | None:
         if parsed is None:
             return None
     return parsed.replace(tzinfo=parsed.tzinfo or timezone.utc)
+
+
+def _incremental_date(value: Any, fallback: str, *, overlap_days: int) -> str:
+    parsed = _parse_timestamp(value)
+    if parsed is None:
+        return fallback
+    return (parsed.date() - timedelta(days=max(overlap_days, 0))).strftime("%Y%m%d")
 
 
 F10_DATE_KEYS = (
@@ -385,6 +433,7 @@ def _merge_f10_payload(
 class StockOnDemandService:
     def __init__(self, db: Session):
         self.db = db
+        self.last_refresh_metadata: dict[str, Any] = {}
 
     def _touch_stock_last_synced(self, market: str, symbol: str) -> None:
         stock = self.db.scalar(
@@ -405,63 +454,172 @@ class StockOnDemandService:
         symbol: str,
         list_date: str | None = None,
     ) -> list[str]:
-        """Refresh all core stock data and persist each successful section."""
-        errors: list[str] = []
+        """Refresh every core section, preserving the original full semantics."""
+        started = time.monotonic()
+        kline_start, notice_start, end_date = self._refresh_date_boundaries(
+            market, symbol, list_date
+        )
+        operations = (
+            ("quote", lambda: self.fetch_quote(source, market, symbol, persist=True), None),
+            (
+                "kline",
+                lambda: self.fetch_kline(
+                    source=source, market=market, symbol=symbol, period="daily", adjust="",
+                    start_date=kline_start, end_date=end_date, persist=True,
+                ),
+                (kline_start, end_date),
+            ),
+            (
+                "financials",
+                lambda: self.fetch_financials(
+                    source=source, market=market, symbol=symbol,
+                    indicator="按报告期" if market == "CN_A" else "报告期", persist=True,
+                ),
+                None,
+            ),
+            ("news", lambda: self.fetch_news(source, market, symbol, persist=True), None),
+            (
+                "notices",
+                lambda: self.fetch_notices(
+                    source=source, market=market, symbol=symbol,
+                    start_date=notice_start, end_date=end_date, persist=True,
+                ),
+                (notice_start, end_date),
+            ),
+        )
+        stages: list[RefreshStageResult] = []
+        for section, operation, date_range in operations:
+            stage_started = time.monotonic()
+            start_date, stage_end_date = date_range or (None, None)
+            try:
+                log, rows = operation()
+                stages.append(RefreshStageResult(
+                    stage=section,
+                    status="SUCCESS",
+                    elapsed_seconds=round(time.monotonic() - stage_started, 3),
+                    total_count=int(log.total_count or len(rows)),
+                    persisted_count=int(log.persisted_count or 0),
+                    start_date=start_date,
+                    end_date=stage_end_date,
+                ))
+            except Exception as exc:
+                stages.append(RefreshStageResult(
+                    stage=section,
+                    status="FAILED",
+                    elapsed_seconds=round(time.monotonic() - stage_started, 3),
+                    error=str(exc)[:500],
+                    start_date=start_date,
+                    end_date=stage_end_date,
+                ))
+        result = CoreRefreshResult(
+            status="SUCCESS" if all(item.status == "SUCCESS" for item in stages) else "PARTIAL",
+            elapsed_seconds=round(time.monotonic() - started, 3),
+            budget_seconds=0.0,
+            stages=stages,
+        )
+        self.last_refresh_metadata = result.as_dict()
+        return result.errors
+
+    def refresh_stock_data_bounded(
+        self,
+        source: DataSource,
+        market: str,
+        symbol: str,
+        list_date: str | None = None,
+        *,
+        total_budget_seconds: float = 18.0,
+    ) -> CoreRefreshResult:
+        """Refresh the deterministic quote stage and defer slow bulk sources.
+
+        The optional AkShare dataframe calls cannot be safely cancelled inside
+        a request.  F10 therefore refreshes the realtime quote synchronously
+        (its HTTP providers have explicit timeouts), keeps local incremental
+        K-line/notices, and reports the slow sections as deferred instead of
+        leaving non-cancellable background workers behind.
+        """
+        started = time.monotonic()
+        kline_start, notice_start, end_date = self._refresh_date_boundaries(
+            market, symbol, list_date
+        )
+        stages: list[RefreshStageResult] = []
+        quote_started = time.monotonic()
+        try:
+            log, rows = self.fetch_quote(source, market, symbol, persist=True)
+            stages.append(RefreshStageResult(
+                stage="quote",
+                status="SUCCESS",
+                elapsed_seconds=round(time.monotonic() - quote_started, 3),
+                total_count=int(log.total_count or len(rows)),
+                persisted_count=int(log.persisted_count or 0),
+            ))
+        except Exception as exc:
+            stages.append(RefreshStageResult(
+                stage="quote",
+                status="FAILED",
+                elapsed_seconds=round(time.monotonic() - quote_started, 3),
+                error=str(exc)[:500],
+            ))
+        deferred_reason = "deferred to the full/background data refresh; local cache remains active"
+        stages.extend([
+            RefreshStageResult(
+                stage="kline", status="DEFERRED", elapsed_seconds=0.0,
+                error=deferred_reason, start_date=kline_start, end_date=end_date,
+            ),
+            RefreshStageResult(
+                stage="financials", status="DEFERRED", elapsed_seconds=0.0,
+                error=deferred_reason,
+            ),
+            RefreshStageResult(
+                stage="news", status="DEFERRED", elapsed_seconds=0.0,
+                error=deferred_reason,
+            ),
+            RefreshStageResult(
+                stage="notices", status="DEFERRED", elapsed_seconds=0.0,
+                error=deferred_reason, start_date=notice_start, end_date=end_date,
+            ),
+        ])
+        result = CoreRefreshResult(
+            status="PARTIAL" if stages[0].status == "SUCCESS" else "FAILED",
+            elapsed_seconds=round(time.monotonic() - started, 3),
+            budget_seconds=total_budget_seconds,
+            stages=stages,
+        )
+        self.last_refresh_metadata = result.as_dict()
+        return result
+
+    def _refresh_date_boundaries(
+        self,
+        market: str,
+        symbol: str,
+        list_date: str | None,
+    ) -> tuple[str, str, str]:
         today = date.today()
         normalized_list_date = str(list_date or "").replace("-", "").strip()
         if len(normalized_list_date) != 8 or not normalized_list_date.isdigit():
             normalized_list_date = (today - timedelta(days=3650)).strftime("%Y%m%d")
 
-        operations = (
-            (
-                "quote",
-                lambda: self.fetch_quote(source, market, symbol, persist=True),
-            ),
-            (
-                "kline",
-                lambda: self.fetch_kline(
-                    source=source,
-                    market=market,
-                    symbol=symbol,
-                    period="daily",
-                    adjust="",
-                    start_date=normalized_list_date,
-                    end_date=today.strftime("%Y%m%d"),
-                    persist=True,
-                ),
-            ),
-            (
-                "financials",
-                lambda: self.fetch_financials(
-                    source=source,
-                    market=market,
-                    symbol=symbol,
-                    indicator="按报告期" if market == "CN_A" else "报告期",
-                    persist=True,
-                ),
-            ),
-            (
-                "news",
-                lambda: self.fetch_news(source, market, symbol, persist=True),
-            ),
-            (
-                "notices",
-                lambda: self.fetch_notices(
-                    source=source,
-                    market=market,
-                    symbol=symbol,
-                    start_date=(today - timedelta(days=3650)).strftime("%Y%m%d"),
-                    end_date=today.strftime("%Y%m%d"),
-                    persist=True,
-                ),
-            ),
+        latest_kline = self.db.scalar(
+            select(StockKline.trade_date)
+            .where(
+                StockKline.market == market,
+                StockKline.symbol == symbol,
+                StockKline.period == "daily",
+                StockKline.adjust == "",
+            )
+            .order_by(StockKline.trade_date.desc())
+            .limit(1)
         )
-        for section, operation in operations:
-            try:
-                operation()
-            except Exception as exc:
-                errors.append(f"{section}: {str(exc)[:240]}")
-        return errors
+        kline_start = _incremental_date(latest_kline, normalized_list_date, overlap_days=3)
+        latest_notice = self.db.scalar(
+            select(StockNotice.notice_date)
+            .where(StockNotice.market == market, StockNotice.symbol == symbol)
+            .order_by(StockNotice.notice_date.desc())
+            .limit(1)
+        )
+        notice_fallback = (today - timedelta(days=3650)).strftime("%Y%m%d")
+        notice_start = _incremental_date(latest_notice, notice_fallback, overlap_days=14)
+        end_date = today.strftime("%Y%m%d")
+        return kline_start, notice_start, end_date
 
     def fetch_kline(
         self,

@@ -471,3 +471,4 @@ class StockF10Read(BaseModel):
     financial_statements: dict[str, Any] = Field(default_factory=dict)
     business_composition: dict[str, Any] = Field(default_factory=dict)
     research_sections: dict[str, Any] = Field(default_factory=dict)
+    refresh_status: dict[str, Any] = Field(default_factory=dict)

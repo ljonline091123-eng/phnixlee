@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import re
+import time
 import unicodedata
 from typing import Any
 from urllib.parse import urlencode
@@ -20,11 +21,13 @@ import httpx
 from sqlalchemy import inspect, select
 from sqlalchemy.orm import Session
 
+from app.connectors.base import QuoteRecord
 from app.connectors.akshare_adapter import AkshareAdapter
 from app.models.company_graph import SecurityClassification
 from app.models.foundation import FoundationEvidence, FoundationListing, FoundationSecurity
-from app.models.market_data import StockRealtimeQuote, StockSymbol
+from app.models.market_data import DataSource, StockRealtimeQuote, StockSymbol
 from app.models.taxonomy import ClassificationDefinition
+from app.services.stock_on_demand import StockOnDemandService, _parse_timestamp
 from app.services.taxonomy import label_definition
 
 
@@ -348,10 +351,13 @@ def _load_reviewed_members(db: Session, groups: list[dict[str, Any]],
 
 def _fetch_remote_industry_members(groups: list[dict[str, Any]],
                                    members: dict[tuple[str, str], dict[tuple[str, str], dict[str, Any]]],
-                                   source_urls: dict[str, str], *, timeout: float = 12.0) -> None:
+                                   source_urls: dict[str, str], *, timeout: float = 4.0,
+                                   total_budget_seconds: float = 7.0,
+                                   minimum_members: int = 10) -> None:
     """Fill an absent industry universe through the public Eastmoney F10 API."""
     requests: list[tuple[str, str, str]] = []
     for group in groups:
+        group_key = str(group.get("key") or "")
         for item in group.get("items") or []:
             dimension = str(item.get("classification_dimension") or "").upper()
             code = str(item.get("code") or "").strip()
@@ -361,11 +367,13 @@ def _fetch_remote_industry_members(groups: list[dict[str, Any]],
             # bucket as proof that its universe is complete.
             if dimension != "INDUSTRY" or not code:
                 continue
+            if len(members.get((group_key, code), {})) >= max(minimum_members, 1):
+                continue
             try:
                 level = min(max(int(item.get("level") or 1), 1), 3)
             except (TypeError, ValueError):
                 level = 1
-            requests.append((str(group.get("key") or ""), code, f"BOARD_CODE_BK_{level}LEVEL"))
+            requests.append((group_key, code, f"BOARD_CODE_BK_{level}LEVEL"))
     if not requests:
         return
     base = {
@@ -373,13 +381,21 @@ def _fetch_remote_industry_members(groups: list[dict[str, Any]],
         "columns": "SECUCODE,SECURITY_CODE,SECURITY_NAME_ABBR",
         "pageNumber": "1", "pageSize": "500", "source": "F10", "client": "PC",
     }
+    deadline = time.monotonic() + max(total_budget_seconds, 0.1)
     try:
-        with httpx.Client(timeout=timeout, follow_redirects=True, trust_env=False,
+        with httpx.Client(timeout=min(timeout, total_budget_seconds), follow_redirects=True, trust_env=False,
                           headers={"User-Agent": "Mozilla/5.0", "Referer": "https://emweb.securities.eastmoney.com/"}) as client:
             for group_key, code, field in requests:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    break
                 params = {**base, "filter": f'({field}="{code}")'}
                 try:
-                    response = client.get(_EASTMONEY_PROFILE_URL, params=params)
+                    response = client.get(
+                        _EASTMONEY_PROFILE_URL,
+                        params=params,
+                        timeout=max(min(timeout, remaining), 0.1),
+                    )
                     response.raise_for_status()
                     result = (response.json() or {}).get("result") or {}
                     rows = result.get("data") or []
@@ -395,22 +411,55 @@ def _fetch_remote_industry_members(groups: list[dict[str, Any]],
         return
 
 
-def _fetch_tencent_changes(pairs: list[tuple[str, str]], *, timeout: float = 12.0) -> tuple[dict[tuple[str, str], float], str | None]:
-    """Read current percent changes in bounded Tencent batches."""
-    result: dict[tuple[str, str], float] = {}
+def _fetch_tencent_quotes(
+    pairs: list[tuple[str, str]],
+    *,
+    timeout: float = 8.0,
+    batch_size: int = 60,
+    retries: int = 2,
+    total_budget_seconds: float = 10.0,
+) -> tuple[dict[tuple[str, str], QuoteRecord], str | None]:
+    """Read complete quotes in bounded batches with per-batch retry."""
+    result: dict[tuple[str, str], QuoteRecord] = {}
     if not pairs:
         return result, None
-    codes = [AkshareAdapter._tencent_code(market, symbol) for market, symbol in pairs if market in {"CN_A", "HK"}]
+    normalized_pairs = list(dict.fromkeys(
+        (market, symbol) for market, symbol in pairs if market in {"CN_A", "HK"}
+    ))
+    codes = [AkshareAdapter._tencent_code(market, symbol) for market, symbol in normalized_pairs]
+    any_response = False
+    deadline = time.monotonic() + max(total_budget_seconds, 0.1)
     try:
         parser = AkshareAdapter()
-        with httpx.Client(timeout=timeout, trust_env=False, headers={"User-Agent": "Mozilla/5.0"}) as client:
-            for start in range(0, len(codes), 80):
-                batch = codes[start:start + 80]
+        with httpx.Client(
+            timeout=min(timeout, total_budget_seconds),
+            trust_env=False,
+            headers={"User-Agent": "Mozilla/5.0"},
+        ) as client:
+            for start in range(0, len(codes), max(batch_size, 1)):
+                if time.monotonic() >= deadline:
+                    break
+                batch = codes[start:start + max(batch_size, 1)]
                 if not batch:
                     continue
                 url = _TENCENT_QUOTE_URL + ",".join(batch)
-                response = client.get(url)
-                response.raise_for_status()
+                response = None
+                for _attempt in range(max(retries, 1)):
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        break
+                    try:
+                        try:
+                            response = client.get(url, timeout=max(min(timeout, remaining), 0.1))
+                        except TypeError:  # lightweight test clients may not accept timeout=
+                            response = client.get(url)
+                        response.raise_for_status()
+                        break
+                    except httpx.HTTPError:
+                        response = None
+                if response is None:
+                    continue
+                any_response = True
                 for line in response.text.split(";"):
                     match = re.search(r"v_([a-z]{2})(\d+)=\"([^\"]*)\"", line)
                     if not match:
@@ -421,14 +470,69 @@ def _fetch_tencent_changes(pairs: list[tuple[str, str]], *, timeout: float = 12.
                     quote = parser._parse_tencent_quote(
                         f'v_{prefix}{symbol}="{raw}";', market, normalized
                     )
-                    if quote.change_pct is not None:
-                        result[(market, normalized)] = float(quote.change_pct)
-        # Keep the response compact.  The exact requested symbols are already
-        # source-backed member rows; this URL identifies the provider endpoint
-        # without duplicating a multi-thousand-symbol query on every item.
-        return result, _TENCENT_QUOTE_URL
+                    if quote.current_price is not None or quote.change_pct is not None:
+                        result[(market, normalized)] = quote
+        return result, _TENCENT_QUOTE_URL if any_response else None
     except (httpx.HTTPError, ValueError, TypeError):
         return result, None
+
+
+def _fetch_tencent_changes(
+    pairs: list[tuple[str, str]],
+    *,
+    timeout: float = 8.0,
+) -> tuple[dict[tuple[str, str], float], str | None]:
+    """Compatibility projection for callers that only need percent changes."""
+    quotes, source_url = _fetch_tencent_quotes(pairs, timeout=timeout)
+    return {
+        key: float(quote.change_pct)
+        for key, quote in quotes.items()
+        if quote.change_pct is not None
+    }, source_url
+
+
+def _persist_classification_quotes(
+    db: Session,
+    quotes: dict[tuple[str, str], QuoteRecord],
+) -> set[tuple[str, str]]:
+    if not quotes:
+        return set()
+    try:
+        source = db.scalar(
+            select(DataSource)
+            .where(
+                DataSource.source_code == "TENCENT_QUOTE",
+                DataSource.enabled.is_(True),
+            )
+            .limit(1)
+        )
+        if source is None:
+            source = DataSource(
+                source_code="TENCENT_QUOTE",
+                source_name="腾讯证券实时行情",
+                source_type="MARKET_DATA",
+                adapter_type="AKSHARE",
+                priority=140,
+                enabled=True,
+                config_json={
+                    "provider": "TENCENT",
+                    "capabilities": ["QUOTE"],
+                    "official_url": _TENCENT_QUOTE_URL,
+                },
+                description="腾讯证券公开实时行情接口，用于分类成分股当日涨跌幅补充。",
+            )
+            db.add(source)
+            db.flush()
+        service = StockOnDemandService(db)
+        persisted: set[tuple[str, str]] = set()
+        for key, quote in quotes.items():
+            service._upsert_quote(source.id, quote)
+            persisted.add(key)
+        db.commit()
+        return persisted
+    except Exception:
+        db.rollback()
+        return set()
 
 
 def enrich_classification_groups_with_members(
@@ -455,8 +559,14 @@ def enrich_classification_groups_with_members(
     if fetch_remote:
         _fetch_remote_industry_members(groups, members, source_urls)
 
-    pairs = list({(market, symbol) for bucket in members.values() for market, symbol in bucket})
+    pairs = list(dict.fromkeys(
+        (market, symbol)
+        for bucket in members.values()
+        for market, symbol in list(bucket)[:limit_per_group]
+    ))
     quote_map: dict[tuple[str, str], float] = {}
+    quote_times: dict[tuple[str, str], str] = {}
+    quote_statuses: dict[tuple[str, str], str] = {}
     trend_url: str | None = None
     try:
         if pairs:
@@ -465,13 +575,45 @@ def enrich_classification_groups_with_members(
                 StockRealtimeQuote.symbol.in_({pair[1] for pair in pairs}),
             )).all()
             for quote in quotes:
+                key = (quote.market, quote.symbol)
                 if quote.change_pct is not None:
-                    quote_map[(quote.market, quote.symbol)] = float(quote.change_pct)
+                    quote_map[key] = float(quote.change_pct)
+                    quote_statuses[key] = "CACHED"
+                else:
+                    quote_statuses[key] = "CACHED_NO_CHANGE_PCT"
+                observed_at = quote.quote_time or (
+                    quote.fetched_at.isoformat() if quote.fetched_at else None
+                )
+                if observed_at:
+                    quote_times[key] = observed_at
     except Exception:
         quote_map = {}
+        quote_times = {}
+        quote_statuses = {}
     if fetch_remote and pairs:
-        remote_quotes, trend_url = _fetch_tencent_changes(pairs)
-        quote_map.update(remote_quotes)
+        remote_quotes, trend_url = _fetch_tencent_quotes(pairs)
+        persisted_keys = _persist_classification_quotes(db, remote_quotes)
+        for key, quote in remote_quotes.items():
+            cached_time = quote_times.get(key)
+            incoming_time = quote.quote_time
+            cached_timestamp = _parse_timestamp(cached_time)
+            incoming_timestamp = _parse_timestamp(incoming_time)
+            if cached_timestamp and incoming_timestamp and incoming_timestamp < cached_timestamp:
+                continue
+            if cached_time and not incoming_time and key in quote_map:
+                continue
+            if quote.change_pct is not None:
+                quote_map[key] = float(quote.change_pct)
+                quote_statuses[key] = (
+                    "OBSERVED_PERSISTED" if key in persisted_keys else "REMOTE_NOT_PERSISTED"
+                )
+            else:
+                quote_statuses[key] = (
+                    "OBSERVED_NO_CHANGE_PCT_PERSISTED"
+                    if key in persisted_keys else "REMOTE_NOT_PERSISTED"
+                )
+            if quote.quote_time:
+                quote_times[key] = quote.quote_time
 
     for group in groups:
         group_key = str(group.get("key") or "")
@@ -479,11 +621,16 @@ def enrich_classification_groups_with_members(
             code = str(item.get("code") or "").strip()
             bucket_map = members.get((group_key, code), {}) if code else {}
             for member in bucket_map.values():
-                member["change_pct"] = quote_map.get((member["market"], member["symbol"]))
+                pair = (member["market"], member["symbol"])
+                member["change_pct"] = quote_map.get(pair)
+                member["quote_time"] = quote_times.get(pair)
+                member["quote_status"] = quote_statuses.get(pair, "UNAVAILABLE")
             bucket = list(bucket_map.values())[:limit_per_group]
             item["related_stocks"] = bucket
             item["member_count"] = len(bucket_map)
-            changes = [member["change_pct"] for member in bucket_map.values() if member.get("change_pct") is not None]
+            changes = [member["change_pct"] for member in bucket if member.get("change_pct") is not None]
+            item["quote_observed_count"] = len(changes)
+            item["quote_unavailable_count"] = max(len(bucket) - len(changes), 0)
             item["trend_pct"] = round(sum(changes) / len(changes), 2) if changes else None
             if not item.get("source_url"):
                 item["source_url"] = _classification_source_url(

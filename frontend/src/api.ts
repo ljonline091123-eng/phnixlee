@@ -276,6 +276,26 @@ export type StockF10 = {
   financial_statements: F10DataSection;
   business_composition: F10DataSection;
   research_sections: F10DataSection;
+  refresh_status?: {
+    status?: string;
+    background_status?: string;
+    used_local_cache?: boolean;
+    errors?: string[];
+    stages?: Array<Record<string, unknown>>;
+  };
+};
+
+export type StockFetchLog = {
+  id: number;
+  interface_code: string;
+  market: string;
+  symbol: string;
+  status: string;
+  total_count: number;
+  persisted_count: number;
+  error_message?: string | null;
+  started_at: string;
+  completed_at?: string | null;
 };
 
 export type StockNoticePage = {
@@ -290,6 +310,18 @@ export type StockNewsPage = {
   total: number;
   page: number;
   page_size: number;
+};
+
+export type ExternalResearchReportDetail = Record<string, unknown> & {
+  market?: string;
+  symbol?: string;
+  source_code?: string;
+  external_id?: string;
+  title?: string;
+  content?: string;
+  report_content?: string;
+  report_markdown?: string;
+  content_status?: string;
 };
 
 export type OnDemandFetchResponse = {
@@ -885,6 +917,20 @@ export const api = {
     });
     return request<StockF10>(`/stocks/${market}/${symbol}/f10?${params.toString()}`, { signal: options.signal });
   },
+  getExternalResearchReportDetail: (
+    market: string,
+    symbol: string,
+    sourceCode: string,
+    externalId: string,
+    signal?: AbortSignal,
+  ) => request<ExternalResearchReportDetail>(
+    `/stocks/${encodeURIComponent(market)}/${encodeURIComponent(symbol)}/research/reports/${encodeURIComponent(sourceCode)}/${encodeURIComponent(externalId)}`,
+    { signal },
+  ),
+  listStockFetchLogs: (market: string, symbol: string, limit = 20, signal?: AbortSignal) => request<StockFetchLog[]>(
+    `/stocks/fetch-logs/list?market=${encodeURIComponent(market)}&symbol=${encodeURIComponent(symbol)}&limit=${limit}`,
+    { signal },
+  ),
   listStockNoticesPage: (market: string, symbol: string, page = 1, pageSize = 8, category?: string) =>
     request<StockNoticePage>(`/stocks/${market}/${symbol}/notices/page?page=${page}&page_size=${pageSize}${category && category !== "全部" ? `&category=${encodeURIComponent(category)}` : ""}`),
   listStockNewsPage: (market: string, symbol: string, page = 1, pageSize = 8) =>

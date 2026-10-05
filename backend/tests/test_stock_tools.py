@@ -2,6 +2,7 @@ import unittest
 from datetime import datetime, timezone
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
@@ -214,9 +215,12 @@ class StockToolsFoundationTest(unittest.TestCase):
 
         with patch.object(
             StockOnDemandService,
-            "refresh_stock_data",
+            "refresh_stock_data_bounded",
             autospec=True,
-            side_effect=fake_refresh,
+            side_effect=lambda service, source, market, symbol, list_date=None: (
+                fake_refresh(service, source, market, symbol, list_date)
+                or SimpleNamespace(errors=[], as_dict=lambda: {"status": "PARTIAL", "stages": []})
+            ),
         ), patch("app.api.stocks._fetch_and_cache_f10_extended_data", return_value={}):
             snapshot = get_stock_f10(
                 market="CN_A",
@@ -230,7 +234,7 @@ class StockToolsFoundationTest(unittest.TestCase):
         self.assertEqual(snapshot.notices[0].title, "刷新后公告")
 
     def test_f10_local_only_does_not_trigger_remote_refresh(self) -> None:
-        with patch.object(StockOnDemandService, "refresh_stock_data") as mocked_refresh, patch(
+        with patch.object(StockOnDemandService, "refresh_stock_data_bounded") as mocked_refresh, patch(
             "app.api.stocks._fetch_and_cache_f10_extended_data"
         ) as mocked_f10:
             snapshot = get_stock_f10(
@@ -350,9 +354,12 @@ class StockToolsFoundationTest(unittest.TestCase):
 
         with patch.object(
             StockOnDemandService,
-            "refresh_stock_data",
+            "refresh_stock_data_bounded",
             autospec=True,
-            side_effect=fake_refresh,
+            side_effect=lambda service, source, market, symbol, list_date=None: (
+                fake_refresh(service, source, market, symbol, list_date)
+                or SimpleNamespace(errors=[], as_dict=lambda: {"status": "PARTIAL", "stages": []})
+            ),
         ), patch("app.api.stocks._fetch_and_cache_f10_extended_data", return_value={}):
             refreshed = get_stock_f10(market="HK", symbol="00001", refresh=True, db=self.db)
             reopened = get_stock_f10(market="HK", symbol="00001", refresh=False, db=self.db)

@@ -31,7 +31,10 @@ class F10SectionContractTest(unittest.TestCase):
                 "business_composition": {"source": "测试来源", "sections": []},
                 "research_sections": {
                     "source": "测试来源",
-                    "reports": [{"title": str(index)} for index in range(12)],
+                    "reports": [
+                        {"title": str(index), "report_date": f"2026-09-{12 - index:02d}"}
+                        for index in range(12)
+                    ],
                     # Legacy snapshots could contain the full list here.
                     "latest_reports": [{"title": "旧缓存"} for _ in range(50)],
                     "qa": [],
@@ -44,11 +47,42 @@ class F10SectionContractTest(unittest.TestCase):
         self.assertEqual(len(payload["holders"]["sections"]), 7)
         self.assertEqual(len(payload["financial_summary"]["financial_sections"]), 5)
         self.assertEqual(len(payload["research_sections"]["sections"]), 6)
-        self.assertEqual(len(payload["research_sections"]["latest_reports"]), 10)
+        self.assertEqual(len(payload["research_sections"]["latest_reports"]), 12)
         self.assertEqual(payload["research_sections"]["latest_reports"][0]["title"], "0")
         anomaly = next(item for item in payload["profile"]["overview_sections"] if item["key"] == "anomaly")
         self.assertEqual(anomaly["action_label"], "融资融券近一个月")
         self.assertEqual(anomaly["detail_title"], "融资融券近一个月")
+
+    def test_legacy_report_archive_is_not_exposed_as_institution_forecast(self) -> None:
+        payload = normalize_f10_sections({
+            "profile": {"fields": {}},
+            "holders": {},
+            "financial_summary": {},
+            "financial_statements": {},
+            "business_composition": {},
+            "research_sections": {
+                "reports": [],
+                "earnings_forecast": [],
+                "institution_forecast": [
+                    {
+                        "source_name": "同花顺业绩预测详表-机构",
+                        "institution": "光大证券",
+                        "report_date": "2026-05-13",
+                        "2026-盈利预测-收益": -3.43,
+                    },
+                    {
+                        "source_name": "东方财富研究报告",
+                        "institution": "开源证券",
+                        "report_date": "2025-08-27",
+                        "title": "公司信息更新报告",
+                        "2026-盈利预测-收益": 0.05,
+                    },
+                ],
+            },
+        })
+        rows = payload["research_sections"]["institution_forecast"]["rows"]
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["institution"], "光大证券")
 
     def test_concepts_are_projected_from_typed_industry_theme_groups_not_indexes(self) -> None:
         payload = normalize_f10_sections(

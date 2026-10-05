@@ -1,9 +1,10 @@
 import json
 from datetime import datetime, timedelta, timezone
+from threading import Lock
 from types import SimpleNamespace
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
@@ -16,7 +17,7 @@ from app.core.markets import (
     digit_length_for_market,
     normalize_market,
 )
-from app.db.session import get_db
+from app.db.session import SessionLocal, get_db
 from app.orchestration.f10 import (
     F10ValidationError,
     F10Workflow,
@@ -36,6 +37,8 @@ from app.services.f10 import (
     NOTICE_CATEGORIES,
     classify_notice,
 )
+from app.services.catalog import select_data_source
+from app.services.research_store import get_or_fetch_report_detail
 from app.models.market_data import (
     DataFetchLog,
     DataSource,
@@ -1993,6 +1996,73 @@ def list_news_page(
     return StockNewsPage(items=list(items), total=total, page=page, page_size=page_size)
 
 
+_F10_BACKGROUND_KEYS: set[tuple[str, str]] = set()
+_F10_BACKGROUND_LOCK = Lock()
+
+
+def _reserve_f10_background_refresh(market: str, symbol: str) -> bool:
+    key = (market, symbol)
+    with _F10_BACKGROUND_LOCK:
+        if key in _F10_BACKGROUND_KEYS:
+            return False
+        _F10_BACKGROUND_KEYS.add(key)
+        return True
+
+
+def _refresh_stock_f10_background(market: str, symbol: str) -> None:
+    key = (market, symbol)
+    try:
+        with SessionLocal() as db:
+            stock = db.scalar(select(StockSymbol).where(
+                StockSymbol.market == market,
+                StockSymbol.symbol == symbol,
+            ))
+            core_source = db.scalar(select(DataSource).where(
+                DataSource.source_code == "AKSHARE",
+                DataSource.enabled.is_(True),
+            ))
+            if stock is not None and core_source is not None and market in LIVE_REFRESH_MARKETS:
+                StockOnDemandService(db).refresh_stock_data(
+                    source=core_source,
+                    market=market,
+                    symbol=symbol,
+                    list_date=stock.list_date,
+                )
+
+            f10_source = select_data_source(db, market, "F10", fallback_code="AKSHARE")
+            if f10_source is None:
+                return
+            log = DataFetchLog(
+                source_id=f10_source.id,
+                interface_code="F10_EXTENDED_BACKGROUND",
+                market=market,
+                symbol=symbol,
+                request_json={"mode": "BACKGROUND_INCREMENTAL"},
+                status="RUNNING",
+            )
+            db.add(log)
+            db.commit()
+            db.refresh(log)
+            try:
+                payload = _fetch_and_cache_f10_extended_data(db, f10_source, market, symbol)
+                log.status = "SUCCESS"
+                log.total_count = sum(1 for value in payload.values() if isinstance(value, dict))
+                log.persisted_count = log.total_count
+                log.completed_at = datetime.now(timezone.utc)
+                db.commit()
+            except Exception as exc:
+                db.rollback()
+                failed_log = db.get(DataFetchLog, log.id)
+                if failed_log is not None:
+                    failed_log.status = "FAILED"
+                    failed_log.error_message = str(exc)[:4000]
+                    failed_log.completed_at = datetime.now(timezone.utc)
+                    db.commit()
+    finally:
+        with _F10_BACKGROUND_LOCK:
+            _F10_BACKGROUND_KEYS.discard(key)
+
+
 @router.get("/{market}/{symbol}/f10", response_model=StockF10Read)
 def get_stock_f10(
     market: str,
@@ -2006,6 +2076,7 @@ def get_stock_f10(
     news_page: int = 1,
     refresh: bool = False,
     local_only: bool = False,
+    background_tasks: BackgroundTasks = None,
     response: Response = None,
     db: Session = Depends(get_db),
 ) -> StockF10Read:
@@ -2027,15 +2098,47 @@ def get_stock_f10(
         local_only=local_only,
     )
     try:
-        return F10Workflow(
+        snapshot = F10Workflow(
             db,
             fetch_extended_data=_fetch_and_cache_f10_extended_data,
             symbol_reader=_stock_symbol_read,
         ).execute(command)
+        if refresh and not local_only and background_tasks is not None:
+            queued = _reserve_f10_background_refresh(command.market.upper(), _normalize_symbol(command.market.upper(), command.symbol))
+            if queued:
+                background_tasks.add_task(
+                    _refresh_stock_f10_background,
+                    command.market.upper(),
+                    _normalize_symbol(command.market.upper(), command.symbol),
+                )
+            snapshot.refresh_status["background_status"] = (
+                "BACKGROUND_QUEUED" if queued else "BACKGROUND_ALREADY_RUNNING"
+            )
+        return snapshot
     except F10ValidationError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except StockNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.get("/{market}/{symbol}/research/reports/{source_code}/{external_id}")
+def get_stock_research_report_detail(
+    market: str,
+    symbol: str,
+    source_code: str,
+    external_id: str,
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    row = get_or_fetch_report_detail(
+        db,
+        normalize_market(market),
+        _normalize_symbol(normalize_market(market), symbol),
+        source_code,
+        external_id,
+    )
+    if row is None:
+        raise HTTPException(status_code=404, detail="未找到该股票的研报记录")
+    return row
 
 
 @router.get("/sync-logs/list", response_model=list[DataSyncLogRead])

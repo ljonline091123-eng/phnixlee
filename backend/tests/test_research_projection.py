@@ -86,7 +86,10 @@ class ResearchProjectionTest(unittest.TestCase):
                     payload = adapter._fetch_cn_a_extended_sections("000002", {"fields": {}})
 
         self.assertEqual(payload["research_sections"]["earnings_forecast"][0]["股票代码"], "000002")
-        self.assertEqual(payload["research_sections"]["institution_forecast"][0]["机构"], "机构A")
+        # Ordinary research reports are no longer promoted into institution
+        # forecast rows. Only the dedicated THS institution forecast endpoint
+        # may populate this panel.
+        self.assertEqual(payload["research_sections"]["institution_forecast"], [])
         self.assertFalse(any("000001" in str(row) for row in payload["research_sections"]["earnings_forecast"]))
 
 

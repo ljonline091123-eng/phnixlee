@@ -246,7 +246,7 @@ function DataConsolePage({ tab, setTab }: { tab: DataView; setTab: (tab: DataVie
   const [keyword, setKeyword] = useState("");
   const [notice, setNotice] = useState("");
   const [loading, setLoading] = useState(false);
-  const [detailStock, setDetailStock] = useState<StockSymbol | null>(null);
+  const [detailStock, setDetailStock] = useState<Pick<StockSymbol, "market" | "symbol" | "name"> | null>(null);
   const [pipelineStatusDetail, setPipelineStatusDetail] = useState<{ stock: StockSymbol; kind: StockPipelineStatusKey } | null>(null);
   const [selectedStocks, setSelectedStocks] = useState<Record<string, StockSymbol>>({});
   const [batchGovernanceOpen, setBatchGovernanceOpen] = useState(false);
@@ -643,6 +643,7 @@ function DataConsolePage({ tab, setTab }: { tab: DataView; setTab: (tab: DataVie
       {detailStock && (
         <StockDetailDrawer
           stock={detailStock}
+          onOpenStock={setDetailStock}
           onClose={() => setDetailStock(null)}
         />
       )}
@@ -3196,6 +3197,7 @@ function AutoWatchPage({ embedded = false }: { embedded?: boolean } = {}) {
       {detailStock && (
         <StockDetailDrawer
           stock={detailStock}
+          onOpenStock={setDetailStock}
           onClose={() => setDetailStock(null)}
         />
       )}

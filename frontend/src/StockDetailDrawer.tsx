@@ -15,6 +15,7 @@ import {
 } from "./api";
 
 type JsonRecord = Record<string, unknown>;
+type StockNavigationTarget = Pick<StockSymbol, "market" | "symbol" | "name">;
 type PrimaryTab = "精选" | "新闻" | "公告" | "资金" | "F10" | "研究";
 type F10Tab = "财务" | "股东" | "简况" | "财报";
 
@@ -262,10 +263,22 @@ function ratingText(value: unknown): string {
   if (!text) return "未披露评级";
   if (/强烈?买入|买入|推荐/.test(text)) return "买入";
   if (/强烈?增持|增持/.test(text)) return "增持";
-  if (/中性|持有/.test(text)) return "中性";
+  if (/持有/.test(text)) return "持有";
+  if (/中性/.test(text)) return "中性";
   if (/减持/.test(text)) return "减持";
   if (/卖出|回避/.test(text)) return "卖出";
   return text;
+}
+
+function ratingClass(value: unknown): string {
+  const rating = ratingText(value);
+  if (rating === "买入") return "rating-buy";
+  if (rating === "增持") return "rating-add";
+  if (rating === "持有") return "rating-hold";
+  if (rating === "中性") return "rating-neutral";
+  if (rating === "减持") return "rating-reduce";
+  if (rating === "卖出") return "rating-sell";
+  return "rating-other";
 }
 
 function ratingDate(row: JsonRecord): Date | null {
@@ -301,7 +314,7 @@ function ratingStatistics(rows: JsonRecord[]): RatingBucket[] {
       const rating = ratingText(pickValue(row, ["rating", "评级", "东财评级"]));
       if (rating === "买入") counts.buy += 1;
       else if (rating === "增持") counts.add += 1;
-      else if (rating === "中性") counts.neutral += 1;
+      else if (rating === "中性" || rating === "持有") counts.neutral += 1;
       else if (rating === "减持") counts.reduce += 1;
       else if (rating === "卖出") counts.sell += 1;
     });
@@ -310,34 +323,12 @@ function ratingStatistics(rows: JsonRecord[]): RatingBucket[] {
 }
 
 function projectedRatingStatistics(section: JsonRecord, rows: JsonRecord[]): { buckets: RatingBucket[]; referenceDate: string; basis: string } {
-  const providerProjection = asRecord(section.provider_rating_statistics);
-  const providerCounts = {
-    buy: toNumber(providerProjection.buy) ?? 0,
-    add: toNumber(providerProjection.add) ?? 0,
-    neutral: toNumber(providerProjection.neutral) ?? 0,
-    reduce: toNumber(providerProjection.reduce) ?? 0,
-    sell: toNumber(providerProjection.sell) ?? 0,
-  };
-  const providerHasCounts = ["buy", "add", "neutral", "reduce", "sell", "total"]
-    .some((key) => providerProjection[key] !== undefined && providerProjection[key] !== null && providerProjection[key] !== "");
-  if (providerHasCounts) {
-    const total = toNumber(providerProjection.total)
-      ?? providerCounts.buy + providerCounts.add + providerCounts.neutral + providerCounts.reduce + providerCounts.sell;
-    return {
-      buckets: [{
-        period: String(providerProjection.reference_period || "近六个月"),
-        ...providerCounts,
-        total,
-      }],
-      referenceDate: String(providerProjection.as_of || section.as_of || ""),
-      basis: String(providerProjection.source_name || "东方财富原生评级汇总"),
-    };
-  }
   const rawProjection = section.rating_statistics;
   const projection = Array.isArray(rawProjection)
     ? { buckets: rawProjection }
     : asRecord(rawProjection as RatingStatisticsProjection);
-  const buckets = asArray(projection.buckets).map((row) => ({
+  const serverRows = Array.isArray(rawProjection) ? asArray(rawProjection) : asArray(projection.buckets);
+  const serverBuckets = serverRows.map((row) => ({
     period: String(row.period || ""),
     buy: toNumber(row.buy) ?? 0,
     add: toNumber(row.add) ?? 0,
@@ -346,13 +337,49 @@ function projectedRatingStatistics(section: JsonRecord, rows: JsonRecord[]): { b
     sell: toNumber(row.sell) ?? 0,
     total: toNumber(row.total) ?? 0,
   })).filter((row) => row.period);
+  const fallback = ratingStatistics(rows);
+  const aliases: Array<[string, RegExp]> = [
+    ["1个月内", /(?:近)?1个?月|一月/],
+    ["2个月内", /(?:近)?2个?月|二月/],
+    ["3个月内", /(?:近)?3个?月|三月/],
+    ["6个月内", /(?:近)?6个?月|六月|半年/],
+    ["1年内", /(?:近)?1年|一年|12个?月/],
+  ];
+  const buckets = aliases.map(([period, pattern], index) => {
+    const match = serverBuckets.find((item) => pattern.test(item.period));
+    return match ? { ...match, period } : fallback[index];
+  });
+  const providerProjection = asRecord(section.provider_rating_statistics);
+  const providerHasCounts = ["buy", "add", "neutral", "reduce", "sell", "total"]
+    .some((key) => providerProjection[key] !== undefined && providerProjection[key] !== null && providerProjection[key] !== "");
+  if (providerHasCounts && !serverBuckets.some((item) => /6个?月|六月|半年/.test(item.period))) {
+    const providerCounts = {
+      buy: toNumber(providerProjection.buy) ?? 0,
+      add: toNumber(providerProjection.add) ?? 0,
+      neutral: toNumber(providerProjection.neutral) ?? 0,
+      reduce: toNumber(providerProjection.reduce) ?? 0,
+      sell: toNumber(providerProjection.sell) ?? 0,
+    };
+    buckets[3] = {
+      period: "6个月内",
+      ...providerCounts,
+      total: toNumber(providerProjection.total)
+        ?? providerCounts.buy + providerCounts.add + providerCounts.neutral + providerCounts.reduce + providerCounts.sell,
+    };
+  }
   const observedDates = rows.map(ratingDate).filter((value): value is Date => value !== null);
   const fallbackReferenceDate = observedDates.length
     ? new Date(Math.max(...observedDates.map((value) => value.getTime()))).toISOString().slice(0, 10)
     : "";
-  const referenceDate = String(projection.reference_date || section.rating_statistics_reference_date || fallbackReferenceDate);
-  const basis = String(projection.reference_basis || section.rating_statistics_basis || "最新报告日期");
-  return { buckets: buckets.length ? buckets : ratingStatistics(rows), referenceDate, basis };
+  const referenceDate = String(
+    section.rating_reference_date
+    || projection.reference_date
+    || section.rating_statistics_reference_date
+    || providerProjection.as_of
+    || fallbackReferenceDate,
+  );
+  const basis = String(projection.reference_basis || section.rating_statistics_basis || "按最新研报日期滚动统计");
+  return { buckets, referenceDate, basis };
 }
 
 function ResearchSectionHeading({ title, note }: { title: string; note?: ReactNode }) {
@@ -510,11 +537,76 @@ function forecastCellText(label: string, value: unknown): string {
   return formatNumber(numeric, /每股收益|EPS/i.test(label) ? 3 : 2);
 }
 
+type StructuredEarningsMetric = {
+  code: string;
+  name: string;
+  unit: string;
+  values: Record<string, JsonRecord>;
+};
+
+function structuredEarningsForecast(section: JsonRecord): { years: string[]; actualYears: Set<string>; metrics: StructuredEarningsMetric[] } {
+  const rawMetrics = asArray(section.metrics || section.earnings_metrics);
+  const metrics = rawMetrics.map((metric, index) => ({
+    code: String(metric.metric_code || metric.metric || `metric-${index}`),
+    name: String(metric.metric_name || metric.label || metric.name || metric.metric_code || `预测指标${index + 1}`),
+    unit: String(metric.unit || ""),
+    values: Object.fromEntries(Object.entries({ ...asRecord(metric.actual_values), ...asRecord(metric.values) }).map(([year, value]) => [String(year), typeof value === "object" ? asRecord(value) : { value }])),
+  }));
+  const forecastYears = stringList(section.forecast_years || section.years).map((year) => String(year).match(/(?:19|20)\d{2}/)?.[0] || String(year));
+  const actualYears = new Set(stringList(section.actual_years).map((year) => String(year).match(/(?:19|20)\d{2}/)?.[0] || String(year)));
+  const observedYears = metrics.flatMap((metric) => Object.keys(metric.values));
+  observedYears.forEach((year) => {
+    if (!forecastYears.includes(year) && metrics.some((metric) => Boolean(metric.values[year]?.actual))) actualYears.add(year);
+  });
+  const latestActual = [...actualYears].sort((left, right) => Number(right) - Number(left)).slice(0, 1);
+  const years = [...new Set([...latestActual, ...forecastYears.slice(-3), ...observedYears.filter((year) => forecastYears.includes(year)).slice(-3)])]
+    .filter((year) => /(?:19|20)\d{2}/.test(year))
+    .sort((left, right) => Number(left) - Number(right))
+    .slice(-4);
+  return { years, actualYears, metrics };
+}
+
+function earningsStatisticRows(metric: StructuredEarningsMetric, years: string[]): Array<{ key: string; label: string; values: Record<string, unknown> }> {
+  const definitions: Array<[string, string, string[]]> = [
+    ["value", "指标值", ["value", "forecast", "prediction", "consensus", "mean"]],
+    ["prediction_count", "预测机构数", ["prediction_count", "institution_count", "count"]],
+    ["min", "最小值", ["min", "minimum"]],
+    ["mean", "平均值", ["mean", "average", "avg"]],
+    ["max", "最大值", ["max", "maximum"]],
+    ["industry_average", "行业平均", ["industry_average", "industry_mean", "industry_avg"]],
+  ];
+  const result = definitions.map(([key, label, aliases]) => ({
+    key,
+    label,
+    values: Object.fromEntries(years.map((year) => [year, pickValue(metric.values[year] || {}, aliases)])),
+  })).filter((row) => years.some((year) => row.values[year] !== undefined && row.values[year] !== null && row.values[year] !== ""));
+  const valueRow = result.find((row) => row.key === "value");
+  const meanRow = result.find((row) => row.key === "mean");
+  if (valueRow && meanRow && years.every((year) => String(valueRow.values[year] ?? "") === String(meanRow.values[year] ?? ""))) {
+    return result.filter((row) => row.key !== "value");
+  }
+  return result;
+}
+
 function ResearchEarningsForecastPanel({ section }: { section: JsonRecord }) {
+  const structured = useMemo(() => structuredEarningsForecast(section), [section]);
   const matrix = useMemo(() => earningsForecastMatrix(section), [section]);
+  const hasStructured = structured.metrics.some((metric) => earningsStatisticRows(metric, structured.years).length > 0) && structured.years.length > 0;
   return <section className="research-source-section research-earnings-section">
-    <ResearchSectionHeading title="盈利预测" note={matrix.rows.length ? "实际值 / 一致预期" : "暂无可用预测"} />
-    {matrix.rows.length && matrix.periods.length ? <div className="research-matrix-wrap">
+    <ResearchSectionHeading title="盈利预测" note={hasStructured || matrix.rows.length ? "实际值 / 未来三年一致预期" : "暂无可用预测"} />
+    {hasStructured ? <div className="research-matrix-wrap">
+      <table className="research-matrix-table research-earnings-structured-table">
+        <thead><tr><th scope="col">预测指标</th><th scope="col">统计口径</th>{structured.years.map((year) => <th scope="col" key={year}>{year}{structured.actualYears.has(year) ? "A" : "E"}</th>)}</tr></thead>
+        <tbody>{structured.metrics.flatMap((metric) => {
+          const rows = earningsStatisticRows(metric, structured.years);
+          return rows.map((row, rowIndex) => <tr key={`${metric.code}-${row.key}`}>
+            {rowIndex === 0 ? <th scope="rowgroup" rowSpan={rows.length}><strong>{metric.name}</strong>{metric.unit ? <small>（{metric.unit}）</small> : null}</th> : null}
+            <th scope="row">{row.label}</th>
+            {structured.years.map((year) => <td key={year}>{row.key === "prediction_count" ? formatNumber(toNumber(row.values[year]), 0) : forecastCellText(metric.name, row.values[year])}</td>)}
+          </tr>);
+        })}</tbody>
+      </table>
+    </div> : matrix.rows.length && matrix.periods.length ? <div className="research-matrix-wrap">
       <table className="research-matrix-table">
         <thead><tr><th scope="col">指标</th>{matrix.periods.map((period) => <th scope="col" key={period}>{period}</th>)}</tr></thead>
         <tbody>{matrix.rows.map((row) => <tr key={row.label}><th scope="row">{row.label}</th>{matrix.periods.map((period) => <td key={period}>{forecastCellText(row.label, row.values[period])}</td>)}</tr>)}</tbody>
@@ -525,7 +617,8 @@ function ResearchEarningsForecastPanel({ section }: { section: JsonRecord }) {
 }
 
 function institutionForecastPeriods(section: JsonRecord, rows: JsonRecord[]): string[] {
-  const periods = new Set(declaredForecastPeriods(section));
+  const explicit = stringList(section.forecast_years).map((year) => normalizedForecastPeriod(year, true));
+  const periods = new Set([...explicit, ...declaredForecastPeriods(section)]);
   rows.forEach((row) => {
     Object.keys(row).forEach((key) => {
       if (!/每股收益|EPS|盈利预测.*收益/i.test(key)) return;
@@ -539,7 +632,7 @@ function institutionForecastPeriods(section: JsonRecord, rows: JsonRecord[]): st
       });
     });
   });
-  return [...periods].filter(Boolean).sort((left, right) => forecastPeriodOrder(left) - forecastPeriodOrder(right)).slice(-4);
+  return [...periods].filter(Boolean).sort((left, right) => forecastPeriodOrder(left) - forecastPeriodOrder(right)).slice(-3);
 }
 
 function institutionForecastValue(row: JsonRecord, period: string): unknown {
@@ -582,11 +675,10 @@ function ResearchInstitutionForecastPanel({ section }: { section: JsonRecord }) 
           const institution = String(pickValue(row, ["机构", "institution", "机构名称"]) || "未披露机构");
           const analysts = stringList(pickValue(row, ["analysts", "分析师", "研究员"])).join("、");
           const rating = ratingText(pickValue(row, ["评级", "东财评级", "rating"]));
-          const ratingTone = rating === "买入" || rating === "增持" ? "positive" : rating === "减持" || rating === "卖出" ? "negative" : "neutral";
           return <tr key={`${institution}-${researchDateText(row)}-${index}`}>
             <td>{formatDate(researchDateText(row))}</td>
             <td className="research-forecast-institution"><strong>{institution}</strong>{analysts ? <small>{analysts}</small> : null}</td>
-            <td><span className={`research-rating ${ratingTone}`}>{rating}</span></td>
+            <td><span className={`research-rating ${ratingClass(rating)}`}>{rating}</span></td>
             {periods.length ? periods.map((period) => <td key={period}>{forecastCellText("每股收益", institutionForecastValue(row, period))}</td>) : <td>{valueText(pickValue(row, ["评级数量", "研报数量", "report_count"]))}</td>}
           </tr>;
         })}</tbody>
@@ -707,14 +799,25 @@ function openResearchReport(section: JsonRecord, row: JsonRecord, onOpen: (secti
 
 function ReportTagList({ row }: { row: JsonRecord }) {
   const tags = reportTags(row);
-  return tags.length ? <span className="research-report-tags">{tags.map((tag, index) => <em className={index === 1 ? "warm" : index === 2 ? "green" : ""} key={`${tag}-${index}`}>{tag}</em>)}</span> : null;
+  return tags.length ? <span className="research-report-tags">{tags.map((tag, index) => {
+    const normalizedRating = ratingText(tag);
+    const isRating = ["买入", "增持", "持有", "中性", "减持", "卖出"].includes(normalizedRating);
+    return <em className={isRating ? ratingClass(normalizedRating) : "report-tag-default"} key={`${tag}-${index}`}>{tag}</em>;
+  })}</span> : null;
+}
+
+function isReportWithinLastYear(row: JsonRecord): boolean {
+  const value = researchDateValue(row);
+  if (!value) return false;
+  const cutoff = Date.now() - 365 * 86400000;
+  return value >= cutoff && value <= Date.now() + 86400000;
 }
 
 function ResearchLatestReportsPanel({ section, onOpen }: { section: JsonRecord; onOpen: (section: JsonRecord) => void }) {
-  const rows = useMemo(() => sortedResearchRows(sectionRows(section)), [section]);
+  const rows = useMemo(() => sortedResearchRows(sectionRows(section)).filter(isReportWithinLastYear), [section]);
   return <section className="research-source-section research-latest-reports">
     <ResearchSectionHeading title="最新研报" note={rows.length ? `${rows.length} 篇` : undefined} />
-    {rows.length ? <div className="research-latest-list">{rows.slice(0, 10).map((row, index) => <button type="button" className="research-latest-item" key={`${String(row.report_id || reportTitle(row))}-${index}`} onClick={() => openResearchReport(section, row, onOpen)}>
+    {rows.length ? <div className="research-latest-list">{rows.map((row, index) => <button type="button" className="research-latest-item" key={`${String(row.report_id || reportTitle(row))}-${index}`} onClick={() => openResearchReport(section, row, onOpen)}>
       <span className="research-latest-icon"><FileText size={18} aria-hidden="true" /></span>
       <span className="research-latest-content"><strong>{reportTitle(row)}</strong>{reportSummary(row) ? <span>{reportSummary(row)}</span> : null}<ReportTagList row={row} /></span>
       <time>{formatDate(researchDateText(row))}</time>
@@ -724,7 +827,7 @@ function ResearchLatestReportsPanel({ section, onOpen }: { section: JsonRecord; 
 }
 
 function ResearchReportListPanel({ section, onOpen }: { section: JsonRecord; onOpen: (section: JsonRecord) => void }) {
-  const rows = useMemo(() => sortedResearchRows(sectionRows(section)), [section]);
+  const rows = useMemo(() => sortedResearchRows(sectionRows(section)).filter((row) => !isReportWithinLastYear(row)), [section]);
   const [expanded, setExpanded] = useState(false);
   const visibleRows = expanded ? rows : rows.slice(0, 30);
   return <section className="research-source-section research-report-archive">
@@ -750,17 +853,60 @@ function researchDetailLinks(detail: JsonRecord): Array<{ url: string; label: st
   })).values()];
 }
 
-function ResearchDetailDialog({ detail, onClose }: { detail: JsonRecord; onClose: () => void }) {
+function ResearchDetailDialog({
+  detail,
+  market,
+  symbol,
+  onOpenStock,
+  onClose,
+}: {
+  detail: JsonRecord;
+  market: string;
+  symbol: string;
+  onOpenStock?: (stock: StockNavigationTarget) => void;
+  onClose: () => void;
+}) {
   const kind = String(detail._research_detail_kind || "generic");
   const row = sectionRows(detail)[0] || detail;
-  const links = researchDetailLinks({ ...detail, ...row });
+  const [resolvedReport, setResolvedReport] = useState<JsonRecord>(row);
+  const [reportLoading, setReportLoading] = useState(false);
+  const [reportError, setReportError] = useState("");
+  const displayRow = kind === "report" ? resolvedReport : row;
+  const links = researchDetailLinks({ ...detail, ...displayRow });
   const title = String(detail.detail_title || detail.title || "研究详情");
+  useEffect(() => {
+    setResolvedReport(row);
+    setReportError("");
+    if (kind !== "report") return;
+    const sourceCode = String(pickValue(row, ["source_code", "provider", "source", "source_name"]) || "").trim();
+    const externalId = String(pickValue(row, ["external_id", "report_id", "info_code", "id"]) || "").trim();
+    if (!sourceCode || !externalId) {
+      if (!pickValue(row, ["content", "report_content", "report_markdown", "正文", "研报正文", "body"])) {
+        setReportError("该研报缺少来源编号，暂时无法自动获取正文。");
+      }
+      return;
+    }
+    const controller = new AbortController();
+    setReportLoading(true);
+    void api.getExternalResearchReportDetail(market, symbol, sourceCode, externalId, controller.signal)
+      .then((result) => {
+        const payload = asRecord(asRecord(result).report || asRecord(result).data || result);
+        setResolvedReport((current) => ({ ...current, ...payload }));
+      })
+      .catch((reason) => {
+        if (!controller.signal.aborted) setReportError(reason instanceof Error ? reason.message : "研报正文获取失败");
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setReportLoading(false);
+      });
+    return () => controller.abort();
+  }, [detail, kind, market, symbol]);
   const renderLinks = () => links.length ? <div className="research-detail-links">{links.map((link) => <a href={link.url} target="_blank" rel="noreferrer" key={link.url}><ExternalLink size={14} aria-hidden="true" />{link.label}</a>)}</div> : null;
   return <div className="f10-detail-overlay research-detail-overlay" role="presentation" onClick={onClose}>
     <section className="f10-detail-dialog research-detail-dialog" role="dialog" aria-modal="true" aria-label={title} onClick={(event) => event.stopPropagation()}>
       <header><h3>{title}</h3><button type="button" aria-label="关闭研究详情" title="关闭" onClick={onClose}><X size={18} aria-hidden="true" /></button></header>
       <div className="f10-detail-body research-detail-body">
-        {kind === "concept" ? <F10ConceptDetail section={detail} /> : null}
+        {kind === "concept" ? <F10ConceptDetail section={detail} onOpenStock={onOpenStock} /> : null}
         {kind === "qa" ? <article className="research-qa-detail">
           <div><b>问</b><p>{String(pickValue(row, ["question", "提问", "问题", "提问内容"]) || "问题内容未披露")}</p></div>
           <small>提问时间：{formatDate(String(pickValue(row, ["asked_at", "提问时间", "question_time"]) || ""))}{pickValue(row, ["questioner", "提问者"]) ? ` · 提问者：${String(pickValue(row, ["questioner", "提问者"]))}` : ""}</small>
@@ -769,13 +915,16 @@ function ResearchDetailDialog({ detail, onClose }: { detail: JsonRecord; onClose
           {renderLinks()}
         </article> : null}
         {kind === "report" ? <article className="research-report-detail">
-          <div className="research-report-detail-meta"><span>{formatDate(researchDateText(row))}</span><ReportTagList row={row} /></div>
-          {reportSummary(row) ? <blockquote>{reportSummary(row)}</blockquote> : null}
-          {pickValue(row, ["content", "report_content", "正文", "研报正文", "body"]) ? <div className="research-markdown">{renderMarkdown(String(pickValue(row, ["content", "report_content", "正文", "研报正文", "body"])))}</div> : <p className="research-true-empty">当前数据源仅返回研报标题、评级与原文入口，未提供可展示的正文。</p>}
+          <div className="research-report-detail-meta"><span>{formatDate(researchDateText(displayRow))}</span><ReportTagList row={displayRow} /></div>
+          {reportSummary(displayRow) ? <blockquote>{reportSummary(displayRow)}</blockquote> : null}
+          {reportLoading ? <p className="research-report-loading">正在从本地缓存或远程来源加载研报正文…</p> : null}
+          {!reportLoading && pickValue(displayRow, ["content", "report_content", "report_markdown", "正文", "研报正文", "body"]) ? <div className="research-markdown">{renderMarkdown(String(pickValue(displayRow, ["content", "report_content", "report_markdown", "正文", "研报正文", "body"])))}</div> : null}
+          {!reportLoading && reportError ? <p className="research-true-empty research-report-error">正文自动获取失败：{reportError}</p> : null}
+          {!reportLoading && !reportError && !pickValue(displayRow, ["content", "report_content", "report_markdown", "正文", "研报正文", "body"]) ? <p className="research-true-empty">数据源暂未提供可展示的研报正文。</p> : null}
           {renderLinks()}
         </article> : null}
         {kind === "generic" ? sectionRows(detail).length ? sectionRows(detail).map((item, index) => <div className="f10-detail-row" key={index}><strong>{String(pickValue(item, ["label", "name", "项目", "指标"]) || `项目 ${index + 1}`)}</strong><span>{rowValueText(item)}</span></div>) : <p className="research-true-empty">{String(detail.message || "当前数据源未返回详细数据")}</p> : null}
-        <div className="f10-detail-source"><span>来源：{String(row.source_name || detail.source_name || detail.source || "暂无")}</span></div>
+        <div className="f10-detail-source"><span>来源：{String(displayRow.source_name || detail.source_name || detail.source || "暂无")}</span></div>
       </div>
     </section>
   </div>;
@@ -2003,7 +2152,17 @@ function ResearchIndustryConcepts({ section, onOpen }: { section: JsonRecord; on
   </section>;
 }
 
-function ClassificationDetailDialog({ group, item, onClose }: { group: string; item: SectorGroupValue; onClose: () => void }) {
+function ClassificationDetailDialog({
+  group,
+  item,
+  onOpenStock,
+  onClose,
+}: {
+  group: string;
+  item: SectorGroupValue;
+  onOpenStock?: (stock: StockNavigationTarget) => void;
+  onClose: () => void;
+}) {
   const members = item.related_stocks || [];
   const trend = item.trend_pct ?? null;
   const values = members.map((member) => toNumber(member.change_pct)).filter((value): value is number => value !== null).slice(0, 20);
@@ -2020,8 +2179,7 @@ function ClassificationDetailDialog({ group, item, onClose }: { group: string; i
           const change = toNumber(member.change_pct);
           const market = String(member.market || "CN_A");
           const symbol = String(member.symbol || "");
-          const href = member.source_url || (market === "HK" ? `https://quote.eastmoney.com/hk/${symbol}.html` : `https://quote.eastmoney.com/${symbol}.html`);
-          return <a href={String(href)} target="_blank" rel="noreferrer" key={`${market}-${symbol}-${index}`}><span>{String(member.name || symbol)}</span><small>{symbol}</small>{change !== null ? <em className={change >= 0 ? "positive" : "negative"}>{change >= 0 ? "↑" : "↓"}{formatPercent(Math.abs(change))}</em> : null}</a>;
+          return <button type="button" disabled={!symbol} onClick={() => symbol && onOpenStock?.({ market, symbol, name: String(member.name || symbol) })} key={`${market}-${symbol}-${index}`}><span>{String(member.name || symbol)}</span><small>{symbol}</small>{change !== null ? <em className={change >= 0 ? "positive" : "negative"}>{change >= 0 ? "↑" : "↓"}{formatPercent(Math.abs(change))}</em> : <em className="unavailable">行情待更新</em>}</button>;
         }) : <p className="classification-detail-empty">该分类暂未返回成分股清单。</p>}</div>
       </div>
     </section>
@@ -2366,7 +2524,7 @@ function F10FinancialSection({ section, onOpen, compositionRows }: { section: Js
   </section>;
 }
 
-function F10ConceptDetail({ section }: { section: JsonRecord }) {
+function F10ConceptDetail({ section, onOpenStock }: { section: JsonRecord; onOpenStock?: (stock: StockNavigationTarget) => void }) {
   const concepts = sectionRows(section);
   return concepts.length ? <div className="f10-concept-detail-list">{concepts.map((concept, index) => {
     const name = String(pickValue(concept, ["name", "label", "概念名称", "概念"]) || "未命名概念");
@@ -2392,8 +2550,7 @@ function F10ConceptDetail({ section }: { section: JsonRecord }) {
         const market = String(stock.market || "CN_A");
         const symbol = String(stock.symbol || "");
         const change = toNumber(stock.change_pct);
-        const href = stock.source_url || (market === "HK" ? `https://quote.eastmoney.com/hk/${symbol}.html` : `https://quote.eastmoney.com/${symbol}.html`);
-        return <a key={`${market}-${symbol}-${stockIndex}`} href={String(href)} target="_blank" rel="noreferrer" title="打开来源行情页面"><span>{String(stock.name || symbol)}</span><small>{symbol}</small>{change !== null ? <em className={change >= 0 ? "positive" : "negative"}>{change >= 0 ? "↑" : "↓"}{formatPercent(Math.abs(change))}</em> : null}</a>;
+        return <button type="button" key={`${market}-${symbol}-${stockIndex}`} disabled={!symbol} onClick={() => symbol && onOpenStock?.({ market, symbol, name: String(stock.name || symbol) })} title="在系统内打开股票详情"><span>{String(stock.name || symbol)}</span><small>{symbol}</small>{change !== null ? <em className={change >= 0 ? "positive" : "negative"}>{change >= 0 ? "↑" : "↓"}{formatPercent(Math.abs(change))}</em> : <em className="unavailable">行情待更新</em>}</button>;
       })}</div> : <p className="f10-concept-related-empty">当前主数据未返回该分类的成分股清单。</p>}
     </article>;
   })}</div> : <p className="f10-mobile-empty">{String(section.message || "暂无概念详情")}</p>;
@@ -2591,9 +2748,11 @@ function renderMarkdown(text: string) {
 
 export function StockDetailDrawer({
   stock,
+  onOpenStock,
   onClose,
 }: {
-  stock: Pick<StockSymbol, "market" | "symbol" | "name">;
+  stock: StockNavigationTarget;
+  onOpenStock?: (stock: StockNavigationTarget) => void;
   onClose: () => void;
 }) {
   const requestId = useRef(0);
@@ -2623,6 +2782,12 @@ export function StockDetailDrawer({
   const [researchDetail, setResearchDetail] = useState<JsonRecord | null>(null);
   const [classificationDetail, setClassificationDetail] = useState<{ group: string; item: SectorGroupValue } | null>(null);
   const [agentSnapshots, setAgentSnapshots] = useState<Array<ResearchFundamentalAgent | ResearchTechnicalAgent>>([]);
+
+  const openStockDetail = (target: StockNavigationTarget) => {
+    setClassificationDetail(null);
+    setResearchDetail(null);
+    onOpenStock?.(target);
+  };
 
   const pageSize = 8;
 
@@ -2672,17 +2837,82 @@ export function StockDetailDrawer({
     if (requestId.current === current && !controller.signal.aborted) await refreshRemote(current, controller.signal, "全部");
   }
 
+  async function waitForBackgroundRefresh(
+    current: number,
+    signal: AbortSignal | undefined,
+    category: (typeof noticeCategories)[number],
+    requestedAt: number,
+  ) {
+    const startedAfter = requestedAt - 5000;
+    for (let attempt = 0; attempt < 36; attempt += 1) {
+      await new Promise<void>((resolve) => window.setTimeout(resolve, attempt === 0 ? 1500 : 5000));
+      if (requestId.current !== current || signal?.aborted) return;
+      try {
+        const logs = await api.listStockFetchLogs(stock.market, stock.symbol, 20, signal);
+        const background = logs.find((row) => (
+          row.interface_code === "F10_EXTENDED_BACKGROUND"
+          && Date.parse(row.started_at || "") >= startedAfter
+        ));
+        if (!background || background.status === "RUNNING") {
+          setRefreshStage("行情已更新，财务、披露与研究数据正在后台同步");
+          continue;
+        }
+        const local = await api.getStockF10(stock.market, stock.symbol, {
+          localOnly: true,
+          klineLimit: 5000,
+          financialLimit: 20,
+          noticeLimit: pageSize,
+          noticeCategory: category,
+          newsLimit: pageSize,
+          signal,
+        });
+        if (requestId.current !== current || signal?.aborted) return;
+        setDetail(local);
+        setNewsRows(null);
+        setNoticeRows(null);
+        setNoticeTotal(undefined);
+        setRefreshProgress(100);
+        if (background.status === "SUCCESS") {
+          setRefreshStage("远程数据已同步并保存至本地数据库");
+          setRemoteError("");
+        } else {
+          setRefreshStage("部分远程来源失败，已保留本地可用数据");
+          setRemoteError(background.error_message || "部分远程来源未完成同步");
+        }
+        setRefreshing(false);
+        window.setTimeout(() => {
+          if (requestId.current === current) {
+            setRefreshProgress(0);
+            setRefreshStage("");
+          }
+        }, 2200);
+        return;
+      } catch (reason) {
+        if (requestId.current !== current || signal?.aborted) return;
+        if (attempt === 35) setRemoteError(friendlyRefreshError(reason));
+      }
+    }
+    if (requestId.current === current && !signal?.aborted) {
+      setRefreshProgress(100);
+      setRefreshStage("后台同步仍在执行，可继续查看本地数据并稍后重试");
+      setRefreshing(false);
+    }
+  }
+
   async function refreshRemote(current = requestId.current, signal = detailController.current?.signal, category = noticeCategory) {
     if (requestId.current !== current || signal?.aborted) return;
+    const requestedAt = Date.now();
+    let backgroundQueued = false;
     setRefreshing(true);
-    setRefreshProgress(12);
+    setRefreshProgress(15);
     setRefreshStage("正在连接数据源");
     setRemoteError("");
-    let progressTimer: number | undefined;
-    progressTimer = window.setInterval(() => {
-      setRefreshProgress((value) => Math.min(88, value + (value < 40 ? 8 : 3)));
-      setRefreshStage((value) => value || "正在同步行情、财务与披露");
-    }, 420);
+    const stageTimers = [
+      window.setTimeout(() => { setRefreshProgress(35); setRefreshStage("正在同步行情与财务数据"); }, 1200),
+      window.setTimeout(() => { setRefreshProgress(55); setRefreshStage("正在同步公告、新闻与 F10"); }, 8000),
+      window.setTimeout(() => { setRefreshProgress(70); setRefreshStage("正在同步研究预测与研报正文索引"); }, 20000),
+      window.setTimeout(() => { setRefreshProgress(78); setRefreshStage("部分远程来源响应较慢，本地数据仍可正常查看"); }, 45000),
+    ];
     try {
       const remote = await api.getStockF10(stock.market, stock.symbol, {
         refresh: true,
@@ -2695,8 +2925,10 @@ export function StockDetailDrawer({
       });
       if (requestId.current === current && !signal?.aborted) {
         setDetail(remote);
-        setRefreshProgress(96);
-        setRefreshStage("正在整理 F10 与研究数据");
+        backgroundQueued = ["BACKGROUND_QUEUED", "BACKGROUND_ALREADY_RUNNING"]
+          .includes(String(remote.refresh_status?.background_status || ""));
+        setRefreshProgress(backgroundQueued ? 82 : 96);
+        setRefreshStage(backgroundQueued ? "行情已更新，慢速数据转入后台同步" : "正在整理 F10 与研究数据");
         setNewsRows(null);
         setNoticeRows(null);
         setNoticeTotal(undefined);
@@ -2707,17 +2939,21 @@ export function StockDetailDrawer({
         setRefreshStage("更新失败，继续使用本地缓存");
       }
     } finally {
-      if (progressTimer !== undefined) window.clearInterval(progressTimer);
+      stageTimers.forEach((timer) => window.clearTimeout(timer));
       if (requestId.current === current && !signal?.aborted) {
-        setRefreshProgress(100);
-        setRefreshStage((value) => value || "数据更新完成");
-        setRefreshing(false);
-        window.setTimeout(() => {
-          if (requestId.current === current) {
-            setRefreshProgress(0);
-            setRefreshStage("");
-          }
-        }, 1200);
+        if (backgroundQueued) {
+          void waitForBackgroundRefresh(current, signal, category, requestedAt);
+        } else {
+          setRefreshProgress(100);
+          setRefreshStage((value) => value || "数据更新完成");
+          setRefreshing(false);
+          window.setTimeout(() => {
+            if (requestId.current === current) {
+              setRefreshProgress(0);
+              setRefreshStage("");
+            }
+          }, 1200);
+        }
       }
     }
   }
@@ -2905,9 +3141,9 @@ export function StockDetailDrawer({
           </div>
         </header>
 
-        {(refreshing || refreshProgress > 0) ? <div className={`stock-refresh-progress ${refreshProgress === 100 ? "complete" : ""}`} role="status" aria-live="polite">
-          <div className="stock-refresh-progress-head"><span>{refreshStage || "正在更新数据"}</span><strong>{Math.round(refreshProgress)}%</strong></div>
-          <div className="stock-refresh-progress-track" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(refreshProgress)}><i style={{ width: `${refreshProgress}%` }} /></div>
+        {(refreshing || refreshProgress > 0) ? <div className={`stock-refresh-progress ${refreshing ? "indeterminate" : ""} ${refreshProgress === 100 ? "complete" : ""} ${remoteError ? "failed" : ""}`} role="status" aria-live="polite">
+          <div className="stock-refresh-progress-head"><span>{refreshStage || "正在更新数据"}</span><strong>{refreshing ? "同步中" : remoteError ? "部分完成" : "已完成"}</strong></div>
+          <div className="stock-refresh-progress-track" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={refreshing ? undefined : Math.round(refreshProgress)} aria-valuetext={refreshing ? refreshStage : undefined}><i style={refreshing ? undefined : { width: `${refreshProgress}%` }} /></div>
         </div> : null}
 
         {companyGraphOpen && <CompanyGraphDialog stock={stock} close={() => setCompanyGraphOpen(false)} />}
@@ -3035,13 +3271,13 @@ export function StockDetailDrawer({
                       {researchReport ? renderMarkdown(researchReport) : <p className="empty-state">点击按钮后，研报会以打字机流式效果显示在这里。</p>}
                     </article>
                     </section>
-                    {researchDetail ? <ResearchDetailDialog detail={researchDetail} onClose={() => setResearchDetail(null)} /> : null}
+                    {researchDetail ? <ResearchDetailDialog detail={researchDetail} market={stock.market} symbol={stock.symbol} onOpenStock={openStockDetail} onClose={() => setResearchDetail(null)} /> : null}
                   </>
               )}
             </section>
           </>
         )}
-        {classificationDetail ? <ClassificationDetailDialog group={classificationDetail.group} item={classificationDetail.item} onClose={() => setClassificationDetail(null)} /> : null}
+        {classificationDetail ? <ClassificationDetailDialog group={classificationDetail.group} item={classificationDetail.item} onOpenStock={openStockDetail} onClose={() => setClassificationDetail(null)} /> : null}
       </aside>
     </div>
   );

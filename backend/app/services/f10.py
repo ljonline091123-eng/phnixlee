@@ -36,6 +36,7 @@ from app.models.foundation import (
 from app.services.stock_on_demand import StockOnDemandService, _merge_f10_payload
 from app.services.stock_classification import _looks_like_index
 from app.services.taxonomy import LABEL_DEFINITION_OVERRIDES, label_definition
+from app.services.research_store import load_research_sections, persist_research_sections
 
 
 F10_EXTENDED_SECTIONS = (
@@ -270,7 +271,9 @@ def _research_rating(value: Any) -> str:
         return "买入"
     if re.search(r"强烈?增持|增持", text):
         return "增持"
-    if re.search(r"中性|持有", text):
+    if re.search(r"持有", text):
+        return "持有"
+    if re.search(r"中性", text):
         return "中性"
     if re.search(r"减持", text):
         return "减持"
@@ -300,7 +303,7 @@ def build_rating_statistics(rows: list[Any]) -> dict[str, Any]:
     anchor = max((item[1] for item in dated_rows), default=None)
     buckets: list[dict[str, Any]] = []
     for period, days in RATING_STATISTIC_PERIODS:
-        counts = {"buy": 0, "add": 0, "neutral": 0, "reduce": 0, "sell": 0}
+        counts = {"buy": 0, "add": 0, "neutral": 0, "hold": 0, "reduce": 0, "sell": 0}
         if anchor is not None:
             cutoff = anchor - timedelta(days=days)
             for row, report_date in dated_rows:
@@ -313,6 +316,8 @@ def build_rating_statistics(rows: list[Any]) -> dict[str, Any]:
                     counts["add"] += 1
                 elif rating == "中性":
                     counts["neutral"] += 1
+                elif rating == "持有":
+                    counts["hold"] += 1
                 elif rating == "减持":
                     counts["reduce"] += 1
                 elif rating == "卖出":
@@ -489,6 +494,158 @@ def _display_section(
         "as_of": as_of,
         "message": message or ("" if rows else "当前数据源未返回该分区数据"),
     }
+
+
+def _research_rows(value: Any) -> list[dict[str, Any]]:
+    if isinstance(value, dict):
+        value = value.get("rows")
+    return [row for row in value if isinstance(row, dict)] if isinstance(value, list) else []
+
+
+def _forecast_years(*row_sets: list[dict[str, Any]]) -> list[str]:
+    years: set[int] = set()
+    for rows in row_sets:
+        for row in rows:
+            for key, value in row.items():
+                if value in (None, ""):
+                    continue
+                match = re.search(r"20\d{2}", str(key))
+                if match:
+                    years.add(int(match.group(0)))
+            direct = str(row.get("forecast_year") or row.get("预测年度") or "")[:4]
+            if re.fullmatch(r"20\d{2}", direct):
+                years.add(int(direct))
+            forecast = row.get("forecast")
+            if isinstance(forecast, dict):
+                for values in forecast.values():
+                    if isinstance(values, dict):
+                        years.update(int(year) for year in values if re.fullmatch(r"20\d{2}", str(year)))
+    future = sorted(year for year in years if year >= date.today().year)
+    start = future[0] if future else date.today().year
+    return [str(year) for year in range(start, start + 3)]
+
+
+def _is_dedicated_institution_forecast(row: dict[str, Any]) -> bool:
+    """Reject legacy brokerage-report rows once mixed into this section.
+
+    Older caches appended the complete Eastmoney research-report archive to
+    ``institution_forecast``.  Those rows often carry EPS estimates, so merely
+    checking for forecast values is insufficient.  Keep provider rows that are
+    explicitly sourced from the institution-forecast feed (currently THS), and
+    retain title-less legacy forecast rows as a compatibility fallback.
+    """
+    source_code = str(row.get("source_code") or "").upper()
+    source_name = str(row.get("source_name") or row.get("source") or "")
+    if source_code:
+        return source_code == "TONGHUASHUN"
+    if "同花顺" in source_name and ("预测" in source_name or "机构" in source_name):
+        return True
+    if any(token in source_name.upper() for token in ("EASTMONEY", "东方财富", "研究报告", "研报")):
+        return False
+    return not bool(row.get("title") or row.get("报告名称"))
+
+
+def build_research_contract(research: dict[str, Any]) -> dict[str, Any]:
+    """Project persisted/raw research rows into one fixed frontend contract."""
+    result = dict(research or {})
+    earnings_rows = _research_rows(result.get("earnings_forecast"))
+    institution_rows = [
+        row for row in _research_rows(result.get("institution_forecast"))
+        if _is_dedicated_institution_forecast(row)
+    ]
+    report_rows = _research_rows(result.get("reports"))
+    report_rows.sort(
+        key=lambda row: str(row.get("report_date") or row.get("报告日期") or row.get("日期") or ""),
+        reverse=True,
+    )
+    years = _forecast_years(earnings_rows, institution_rows)
+    metric_map: dict[str, dict[str, Any]] = {}
+    for row in earnings_rows:
+        metric_name = str(row.get("metric") or row.get("预测指标") or "").strip()
+        year = str(row.get("forecast_year") or row.get("预测年度") or "")[:4]
+        if not metric_name or year not in years:
+            continue
+        metric_code = "EPS" if "每股收益" in metric_name else "NET_PROFIT" if "净利润" in metric_name else metric_name
+        metric = metric_map.setdefault(metric_code, {
+            "metric_code": metric_code,
+            "metric_name": metric_name,
+            "unit": "元/股" if metric_code == "EPS" else "亿元" if metric_code == "NET_PROFIT" else "",
+            "values": {},
+        })
+        metric["values"][year] = {
+            "prediction_count": row.get("prediction_count") or row.get("预测机构数"),
+            "min": row.get("minimum") or row.get("最小值"),
+            "mean": row.get("mean") or row.get("均值"),
+            "max": row.get("maximum") or row.get("最大值"),
+            "industry_average": row.get("industry_average") or row.get("行业平均数"),
+        }
+    result["earnings_forecast"] = {
+        "forecast_years": years,
+        "metrics": list(metric_map.values()),
+        "rows": earnings_rows,
+        "source": result.get("earnings_forecast_source") or result.get("source"),
+    }
+
+    normalized_institutions: list[dict[str, Any]] = []
+    for raw in institution_rows:
+        row = dict(raw)
+        forecast = row.get("forecast") if isinstance(row.get("forecast"), dict) else {}
+        eps = dict(forecast.get("eps") or {}) if isinstance(forecast, dict) else {}
+        net_profit = dict(forecast.get("net_profit") or {}) if isinstance(forecast, dict) else {}
+        for key, value in row.items():
+            match = re.search(r"(20\d{2})", str(key))
+            if not match or value in (None, ""):
+                continue
+            if re.search(r"每股收益|EPS|盈利预测.*收益", str(key), re.I):
+                eps.setdefault(match.group(1), value)
+            elif re.search(r"净利润|归母净利", str(key)):
+                net_profit.setdefault(match.group(1), value)
+        row.update({
+            "institution": row.get("institution") or row.get("机构") or row.get("机构名称"),
+            "report_date": row.get("report_date") or row.get("报告日期"),
+            "rating": row.get("rating") or row.get("评级") or row.get("东财评级"),
+            "eps": {year: eps.get(year) for year in years if year in eps},
+            "net_profit": {year: net_profit.get(year) for year in years if year in net_profit},
+        })
+        normalized_institutions.append(row)
+    rating = build_rating_statistics(report_rows)
+    result["institution_forecast"] = {
+        "forecast_years": years,
+        "rows": normalized_institutions,
+        "rating_statistics": rating["buckets"],
+        "rating_reference_date": rating["reference_date"],
+        "rating_reference_basis": rating["reference_basis"],
+        "source": result.get("institution_forecast_source") or result.get("source"),
+    }
+
+    cutoff = date.today() - timedelta(days=365)
+    latest: list[dict[str, Any]] = []
+    archive: list[dict[str, Any]] = []
+    for raw in report_rows:
+        row = dict(raw)
+        source_code = str(row.get("source_code") or "EASTMONEY").upper()
+        external_id = str(row.get("external_id") or row.get("report_id") or "")
+        row["source_code"] = source_code
+        row["external_id"] = external_id
+        row["detail_api_url"] = (
+            f"/api/v1/stocks/{{market}}/{{symbol}}/research/reports/{source_code}/{external_id}"
+        )
+        parsed = _parse_research_date(row.get("report_date") or row.get("报告日期") or row.get("日期"))
+        (latest if parsed and parsed >= cutoff else archive).append(row)
+    if not latest and report_rows and not any(
+        _parse_research_date(row.get("report_date") or row.get("报告日期") or row.get("日期"))
+        for row in report_rows
+    ):
+        # Legacy provider snapshots sometimes omitted every report date while
+        # retaining newest-first order. Keep a bounded compatibility preview
+        # without inventing dates; all remaining rows stay in the archive.
+        latest = archive[:10]
+        archive = archive[10:]
+        for row in latest:
+            row.setdefault("date_status", "UNKNOWN_LEGACY_ORDER")
+    result["latest_reports"] = latest
+    result["reports"] = archive
+    return result
 
 
 def _research_industry_performance_rows(concepts: list[Any]) -> list[dict[str, Any]]:
@@ -771,29 +928,11 @@ def normalize_f10_sections(extended_data: dict[str, dict[str, Any]]) -> dict[str
         _display_section("cash_flow", "现金流量表", rows=(statements.get("cash_flow") or {}).get("rows"), source=statements.get("source"), as_of=payload_as_of(statements)),
     ]
     research = extended_data.setdefault("research_sections", {})
-    # ``latest_reports`` used to be populated with the complete report list.
-    # Normalize old snapshots as a read-model projection so the latest panel
-    # is a strict subset of the full report panel and never duplicates it.
-    reports = research.get("reports")
-    if isinstance(reports, list):
-        # Legacy snapshots may have been written in provider order.  Keep the
-        # complete archive and latest projection consistently newest-first.
-        reports.sort(
-            key=lambda row: str(
-                row.get("report_date") or row.get("报告日期") or row.get("日期") or ""
-            ) if isinstance(row, dict) else "",
-            reverse=True,
-        )
-        research["latest_reports"] = reports[:10]
-    elif isinstance(research.get("latest_reports"), list):
-        research["latest_reports"] = research["latest_reports"][:10]
-    else:
-        research["latest_reports"] = []
-    # Rebuild optional research projections for legacy cache rows.  The raw
-    # report list is already isolated by the cache's market/symbol key; the
-    # adapter helpers only derive facts from those rows and never call a
-    # market-wide endpoint here.
-    if isinstance(reports, list) and reports:
+    reports = _research_rows(research.get("reports"))
+    # Legacy cache rows may contain only report-derived earnings estimates.
+    # Preserve that fallback for the earnings panel, but never manufacture an
+    # institution forecast from ordinary研报 rows.
+    if reports:
         report_symbol = next(
             (
                 str(item.get("股票代码") or item.get("证券代码") or item.get("symbol") or "")
@@ -803,28 +942,22 @@ def normalize_f10_sections(extended_data: dict[str, dict[str, Any]]) -> dict[str
             ),
             "",
         )
-        if not isinstance(research.get("earnings_forecast"), list) or not research.get("earnings_forecast"):
+        if not _research_rows(research.get("earnings_forecast")):
             research["earnings_forecast"] = AkshareAdapter._derive_research_earnings_forecast(reports, report_symbol)
-        if not isinstance(research.get("institution_forecast"), list) or not research.get("institution_forecast"):
-            research["institution_forecast"] = AkshareAdapter._derive_institution_forecast(reports, report_symbol)
-    # Rebuild the fixed six-part research layout for both new and legacy
-    # caches. Raw ``qa``/forecast/report arrays remain untouched above.
+    research = build_research_contract(research)
+    extended_data["research_sections"] = research
     institution_section = _display_section(
         "institution_forecast",
         "机构预测（评级统计）",
-        rows=research.get("institution_forecast"),
+        rows=(research.get("institution_forecast") or {}).get("rows"),
         source=research.get("institution_forecast_source") or research.get("source"),
         as_of=payload_as_of(research),
     )
-    # Consensus rows can be newer than the report feed and may have no
-    # investment rating. Anchor rating windows to actual report observations
-    # so an unrated forecast does not shift the date forward and zero out all
-    # legitimate rated reports.
-    rating_rows = reports if isinstance(reports, list) and reports else (research.get("institution_forecast") or [])
-    rating_projection = build_rating_statistics(rating_rows)
-    institution_section["rating_statistics"] = rating_projection["buckets"]
-    institution_section["rating_statistics_reference_date"] = rating_projection["reference_date"]
-    institution_section["rating_statistics_basis"] = rating_projection["reference_basis"]
+    institution_contract = research.get("institution_forecast") or {}
+    institution_section["forecast_years"] = institution_contract.get("forecast_years") or []
+    institution_section["rating_statistics"] = institution_contract.get("rating_statistics") or []
+    institution_section["rating_statistics_reference_date"] = institution_contract.get("rating_reference_date")
+    institution_section["rating_statistics_basis"] = institution_contract.get("rating_reference_basis")
     provider_rating = research.get("provider_rating_statistics")
     if isinstance(provider_rating, dict) and provider_rating:
         institution_section["provider_rating_statistics"] = provider_rating
@@ -843,7 +976,7 @@ def normalize_f10_sections(extended_data: dict[str, dict[str, Any]]) -> dict[str
             as_of=payload_as_of(research),
             message="" if research.get("qa") else (research.get("qa_message") or "当前未接入问董秘公开接口"),
         ),
-        _display_section("earnings_forecast", "盈利预测", rows=research.get("earnings_forecast"), source=research.get("earnings_forecast_source") or research.get("source"), as_of=payload_as_of(research)),
+        _display_section("earnings_forecast", "盈利预测", rows=(research.get("earnings_forecast") or {}).get("rows"), source=research.get("earnings_forecast_source") or research.get("source"), as_of=payload_as_of(research)),
         institution_section,
         _display_section("latest_reports", "最新研报", rows=research.get("latest_reports"), source=research.get("report_source") or research.get("source"), as_of=payload_as_of(research)),
         _display_section("reports", "研报", rows=research.get("reports"), source=research.get("report_source") or research.get("source"), as_of=payload_as_of(research)),
@@ -858,6 +991,15 @@ def _load_f10_extended_data(db: Session, market: str, symbol: str) -> dict[str, 
         payload = cached.get(section)
         if isinstance(payload, dict):
             extended_data[section] = payload
+    normalized_research = load_research_sections(db, market, symbol)
+    if any(normalized_research.get(key) for key in ("reports", "earnings_forecast", "institution_forecast", "qa")):
+        legacy = extended_data.get("research_sections")
+        merged_research = dict(legacy) if isinstance(legacy, dict) else {}
+        for key, rows in normalized_research.items():
+            if rows:
+                merged_research[key] = rows
+        merged_research["source"] = "本地研究规范表 / stock_f10_cache"
+        extended_data["research_sections"] = merged_research
     if cached:
         extended_data["profile"]["message"] = extended_data["profile"].get("message") or "本地缓存已加载。"
     return extended_data
@@ -1385,6 +1527,12 @@ def _fetch_and_cache_f10_extended_data(
     symbol: str,
 ) -> dict[str, dict]:
     extended_data = get_adapter(source.adapter_type).fetch_extended_data(market, symbol)
+    research = extended_data.get("research_sections")
+    if isinstance(research, dict):
+        persist_research_sections(db, market, symbol, research)
+        db.commit()
+        persisted = load_research_sections(db, market, symbol)
+        research.update({key: rows for key, rows in persisted.items() if rows})
     service = StockOnDemandService(db)
     for section in F10_CACHE_SECTIONS:
         payload = extended_data.get(section)

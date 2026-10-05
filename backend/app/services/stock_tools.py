@@ -369,6 +369,7 @@ class StockToolsService:
             financial_summary=extended_data.get("financial_summary") or {},
             financial_statements=extended_data.get("financial_statements") or {},
             business_composition=extended_data.get("business_composition") or {},
+            research_sections=extended_data.get("research_sections") or {},
         )
 
     def generate_analysis_prompt(self, market: str, symbol: str) -> str:
