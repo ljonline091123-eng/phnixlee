@@ -213,6 +213,7 @@ class F10Workflow:
                 # traffic.  A refresh may fill absent provider universes and
                 # attach one bounded realtime batch for trend statistics.
                 fetch_remote=not command.local_only,
+                refresh_quotes=command.refresh,
             )
         # The optional provider control endpoint is not reliable across
         # markets.  Reuse explicit, evidence-backed company-graph CONTROLS

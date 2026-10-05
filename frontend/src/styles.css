@@ -4634,6 +4634,7 @@ textarea:focus {
 .classification-detail-body { padding: 16px 18px 20px; }
 .classification-detail-definition { margin: 0; color: #3f5047; font-size: 13px; line-height: 1.75; }
 .classification-detail-criteria { margin: 8px 0 0; color: #7c8a82; font-size: 11px; line-height: 1.6; }
+.classification-detail-provenance { margin: 7px 0 0; color: #8a968f; font-size: 10px; line-height: 1.5; }
 .classification-detail-summary { display: flex; gap: 24px; margin-top: 15px; color: #7a887f; font-size: 12px; }
 .classification-detail-summary strong { margin-left: 3px; color: #33483d; font-size: 15px; }
 .classification-detail-summary strong.positive { color: #c8444d; }
@@ -4651,6 +4652,9 @@ textarea:focus {
 .classification-detail-stocks button em.negative { color: #168a58; }
 .classification-detail-stocks button em.unavailable { color: #9aa49e; font-size: 10px; }
 .classification-detail-empty { margin: 14px 0 0; color: #8d9992; font-size: 11px; }
+.classification-detail-pagination { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 14px; color: #718178; font-size: 11px; }
+.classification-detail-pagination button { border: 1px solid #d8e2da; border-radius: 3px; padding: 5px 9px; color: #456153; background: #f7faf8; cursor: pointer; }
+.classification-detail-pagination button:disabled { color: #aab5ae; background: #f0f3f1; cursor: default; }
 .f10-concept-detail-item > header small { display: block; margin-top: 3px; color: #8b9690; font-size: 10px; font-weight: 500; }
 .f10-concept-related-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 12px; color: #46564d; font-size: 12px; }
 .f10-concept-related-head em { font-size: 11px; font-style: normal; }

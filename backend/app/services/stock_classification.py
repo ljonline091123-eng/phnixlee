@@ -14,11 +14,12 @@ import json
 import re
 import time
 import unicodedata
+from datetime import datetime, timezone
 from typing import Any
 from urllib.parse import urlencode
 
 import httpx
-from sqlalchemy import inspect, select
+from sqlalchemy import inspect, select, tuple_
 from sqlalchemy.orm import Session
 
 from app.connectors.base import QuoteRecord
@@ -188,6 +189,7 @@ def _looks_like_index(label: Any, code: Any = None) -> bool:
 
 
 _EASTMONEY_PROFILE_URL = "https://datacenter.eastmoney.com/securities/api/data/v1/get"
+_EASTMONEY_BOARD_MEMBERS_URL = "https://push2.eastmoney.com/api/qt/clist/get"
 _EASTMONEY_BOARD_URL = "https://quote.eastmoney.com/center/boardlist.html"
 _TENCENT_QUOTE_URL = "https://qt.gtimg.cn/q="
 
@@ -202,6 +204,23 @@ def _as_of(value: Any) -> str | None:
     return text or None
 
 
+def _freshness_status(as_of: str | None, *, max_age_days: int = 7) -> str:
+    """Classify a source snapshot without treating an absent date as fresh."""
+    if not as_of:
+        return "UNKNOWN"
+    parsed = _parse_timestamp(as_of)
+    if parsed is None:
+        return "UNKNOWN"
+    try:
+        now = datetime.now(timezone.utc)
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        age_seconds = (now - parsed).total_seconds()
+    except (TypeError, ValueError):
+        return "UNKNOWN"
+    return "FRESH" if age_seconds <= max_age_days * 86400 else "STALE"
+
+
 def _member_from_payload(payload: dict[str, Any], evidence: FoundationEvidence | None = None,
                          *, classification_code: str | None = None) -> dict[str, Any] | None:
     raw_code = payload.get("SECURITY_CODE") or payload.get("security_code")
@@ -211,6 +230,15 @@ def _member_from_payload(payload: dict[str, Any], evidence: FoundationEvidence |
     code = str(raw_code).strip().upper()
     secu_code = str(payload.get("SECUCODE") or "").upper()
     market = "HK" if secu_code.endswith(".HK") else "CN_A"
+    # The public F10 filter is broader than the application's current
+    # ``CN_A`` master universe: it may return Shanghai/Shenzhen B shares,
+    # Beijing Exchange and NEEQ securities.  Do not silently relabel those
+    # rows as A shares; their provider totals remain available for coverage
+    # comparison and a future market adapter can ingest them explicitly.
+    if market == "CN_A":
+        normalized_code = code.zfill(6) if code.isdigit() else code
+        if not _is_supported_cn_a_board_symbol(normalized_code):
+            return None
     symbol = code.zfill(5 if market == "HK" else 6) if code.isdigit() else code
     member = {
         "market": market,
@@ -351,7 +379,8 @@ def _load_reviewed_members(db: Session, groups: list[dict[str, Any]],
 
 def _fetch_remote_industry_members(groups: list[dict[str, Any]],
                                    members: dict[tuple[str, str], dict[tuple[str, str], dict[str, Any]]],
-                                   source_urls: dict[str, str], *, timeout: float = 4.0,
+                                   source_urls: dict[str, str],
+                                   provider_counts: dict[str, int] | None = None, *, timeout: float = 4.0,
                                    total_budget_seconds: float = 7.0,
                                    minimum_members: int = 10) -> None:
     """Fill an absent industry universe through the public Eastmoney F10 API."""
@@ -367,7 +396,7 @@ def _fetch_remote_industry_members(groups: list[dict[str, Any]],
             # bucket as proof that its universe is complete.
             if dimension != "INDUSTRY" or not code:
                 continue
-            if len(members.get((group_key, code), {})) >= max(minimum_members, 1):
+            if minimum_members > 0 and len(members.get((group_key, code), {})) >= minimum_members:
                 continue
             try:
                 level = min(max(int(item.get("level") or 1), 1), 3)
@@ -379,7 +408,7 @@ def _fetch_remote_industry_members(groups: list[dict[str, Any]],
     base = {
         "reportName": "RPT_F10_ORG_BASICINFO",
         "columns": "SECUCODE,SECURITY_CODE,SECURITY_NAME_ABBR",
-        "pageNumber": "1", "pageSize": "500", "source": "F10", "client": "PC",
+        "pageSize": "500", "source": "F10", "client": "PC",
     }
     deadline = time.monotonic() + max(total_budget_seconds, 0.1)
     try:
@@ -389,24 +418,205 @@ def _fetch_remote_industry_members(groups: list[dict[str, Any]],
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:
                     break
-                params = {**base, "filter": f'({field}="{code}")'}
-                try:
-                    response = client.get(
-                        _EASTMONEY_PROFILE_URL,
-                        params=params,
-                        timeout=max(min(timeout, remaining), 0.1),
-                    )
-                    response.raise_for_status()
-                    result = (response.json() or {}).get("result") or {}
-                    rows = result.get("data") or []
-                except (httpx.HTTPError, ValueError, TypeError):
-                    continue
                 key = (group_key, code)
-                for payload in rows:
-                    member = _member_from_payload(payload)
-                    if member is not None:
-                        members.setdefault(key, {}).setdefault((member["market"], member["symbol"]), member)
-                source_urls.setdefault(code, str(response.url))
+                page_number = 1
+                provider_total: int | None = None
+                while True:
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        break
+                    params = {
+                        **base,
+                        "pageNumber": str(page_number),
+                        "filter": f'({field}="{code}")',
+                    }
+                    try:
+                        response = client.get(
+                            _EASTMONEY_PROFILE_URL,
+                            params=params,
+                            timeout=max(min(timeout, remaining), 0.1),
+                        )
+                        response.raise_for_status()
+                        result = (response.json() or {}).get("result") or {}
+                        rows = result.get("data") or []
+                        if provider_total is None:
+                            try:
+                                provider_total = int(result.get("count") or 0)
+                            except (TypeError, ValueError):
+                                provider_total = None
+                        if provider_counts is not None and provider_total is not None:
+                            provider_counts[code] = provider_total
+                    except (httpx.HTTPError, ValueError, TypeError):
+                        break
+                    for payload in rows:
+                        member = _member_from_payload(payload)
+                        if member is not None:
+                            members.setdefault(key, {}).setdefault((member["market"], member["symbol"]), member)
+                    source_urls.setdefault(code, str(response.url))
+                    if not rows or len(rows) < int(base["pageSize"]):
+                        break
+                    if provider_total is not None and page_number * int(base["pageSize"]) >= provider_total:
+                        break
+                    page_number += 1
+    except httpx.HTTPError:
+        return
+
+
+def _is_supported_cn_a_board_symbol(symbol: str) -> bool:
+    """Return whether a public board code belongs to the CN_A universe.
+
+    Eastmoney's board endpoint can mix A shares, B shares and Beijing/NEEQ
+    securities.  The application has no ``CN_B`` market identity, so those
+    rows must not be silently relabelled as A shares.  They remain visible in
+    the provider audit (via ``provider_total``), while the stock detail
+    projection only publishes securities that can be resolved by the current
+    master-data contract.
+    """
+    value = str(symbol or "").strip().zfill(6)
+    return bool(re.fullmatch(r"(?:000|001|002|003|300|301|600|601|603|605|688|689)\d{3}", value))
+
+
+def _fetch_remote_board_members(
+    groups: list[dict[str, Any]],
+    members: dict[tuple[str, str], dict[tuple[str, str], dict[str, Any]]],
+    source_urls: dict[str, str],
+    provider_counts: dict[str, int] | None = None,
+    *,
+    timeout: float = 4.0,
+    total_budget_seconds: float = 12.0,
+    max_requests: int = 12,
+) -> None:
+    """Refresh provider-backed BK industry/theme membership with pagination.
+
+    ``RPT_F10_ORG_BASICINFO`` is the identity/industry verification source;
+    this public board endpoint is the source closest to securities terminals
+    for a board's complete member list and current percentage change.  The
+    result is merged with immutable local evidence, never used to delete it.
+    Unsupported B-share/NEEQ rows are counted by the provider but are not
+    relabelled as A shares in the application projection.
+    """
+    targets: list[tuple[str, str]] = []
+    seen: set[str] = set()
+    for group in groups:
+        group_key = str(group.get("key") or "")
+        if group_key not in {"industry", "theme"}:
+            continue
+        for item in group.get("items") or []:
+            code = str(item.get("code") or "").strip().upper()
+            dimension = str(item.get("classification_dimension") or "").upper()
+            if not code.startswith("BK") or dimension not in {"INDUSTRY", "THEME"} or code in seen:
+                continue
+            bucket = members.get((group_key, code), {})
+            # Cached members with both a price and percentage change already
+            # have a usable local snapshot.  Only incomplete groups trigger
+            # the bounded public board request on ordinary page reads.
+            if bucket and all(
+                member.get("change_pct") is not None and member.get("current_price") is not None
+                for member in bucket.values()
+            ):
+                continue
+            seen.add(code)
+            targets.append((group_key, code))
+            if len(targets) >= max(max_requests, 1):
+                break
+        if len(targets) >= max(max_requests, 1):
+            break
+    if not targets:
+        return
+
+    deadline = time.monotonic() + max(total_budget_seconds, 0.1)
+    params_base = {
+        "po": "1", "np": "1", "ut": "bd1d9ddb04089700cf9c27f6f7426281",
+        "fltt": "2", "invt": "2", "fid": "f3", "pz": "500",
+        "fields": "f12,f14,f2,f3,f100,f102",
+    }
+    try:
+        with httpx.Client(
+            timeout=min(timeout, total_budget_seconds),
+            follow_redirects=True,
+            trust_env=False,
+            headers={
+                "User-Agent": "Mozilla/5.0",
+                "Referer": "https://quote.eastmoney.com/",
+            },
+        ) as client:
+            for group_key, code in targets:
+                page = 1
+                provider_total: int | None = None
+                while True:
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        return
+                    params = {**params_base, "pn": str(page), "fs": f"b:{code}"}
+                    try:
+                        response = client.get(
+                            _EASTMONEY_BOARD_MEMBERS_URL,
+                            params=params,
+                            timeout=max(min(timeout, remaining), 0.1),
+                        )
+                        response.raise_for_status()
+                        data = (response.json() or {}).get("data") or {}
+                        rows = data.get("diff") or []
+                        if isinstance(rows, dict):
+                            rows = list(rows.values())
+                        if provider_total is None:
+                            try:
+                                provider_total = int(data.get("total") or 0)
+                            except (TypeError, ValueError):
+                                provider_total = None
+                        if provider_counts is not None and provider_total is not None:
+                            provider_counts[code] = provider_total
+                    except (httpx.HTTPError, ValueError, TypeError):
+                        break
+                    source_url = str(response.url)
+                    source_urls.setdefault(code, source_url)
+                    bucket = members.setdefault((group_key, code), {})
+                    for row in rows:
+                        if not isinstance(row, dict):
+                            continue
+                        raw_symbol = str(row.get("f12") or "").strip()
+                        if not raw_symbol or not _is_supported_cn_a_board_symbol(raw_symbol):
+                            continue
+                        symbol = raw_symbol.zfill(6)
+                        raw_price = row.get("f2")
+                        raw_change = row.get("f3")
+                        try:
+                            current_price = float(raw_price) if raw_price not in (None, "", "-") else None
+                        except (TypeError, ValueError):
+                            current_price = None
+                        try:
+                            change_pct = float(raw_change) if raw_change not in (None, "", "-") else None
+                        except (TypeError, ValueError):
+                            change_pct = None
+                        member = {
+                            "market": "CN_A",
+                            "symbol": symbol,
+                            "name": str(row.get("f14") or symbol).strip(),
+                            "classification_code": code,
+                            "current_price": current_price,
+                            "change_pct": change_pct,
+                            "quote_status": "OBSERVED_PROVIDER",
+                            "quote_time": None,
+                            "source_name": "东方财富板块行情接口",
+                            "source_url": source_url,
+                            "provider_total": provider_total,
+                            "provider_rank": (page - 1) * 500 + len(bucket) + 1,
+                        }
+                        existing = bucket.get(("CN_A", symbol))
+                        if existing is None:
+                            bucket[("CN_A", symbol)] = member
+                        else:
+                            # Keep the evidence-backed identity and merge the
+                            # newer provider quote/provenance fields into it.
+                            existing.update({
+                                key: value for key, value in member.items()
+                                if value not in (None, "")
+                            })
+                    if not rows or len(rows) < 500:
+                        break
+                    if provider_total is not None and page * 500 >= provider_total:
+                        break
+                    page += 1
     except httpx.HTTPError:
         return
 
@@ -539,8 +749,9 @@ def enrich_classification_groups_with_members(
     db: Session,
     groups: list[dict[str, Any]],
     *,
-    limit_per_group: int = 30,
+    limit_per_group: int | None = None,
     fetch_remote: bool = False,
+    refresh_quotes: bool = False,
 ) -> list[dict[str, Any]]:
     """Attach source-backed member stocks, counts and observed group trends.
 
@@ -554,28 +765,47 @@ def enrich_classification_groups_with_members(
         return groups
     members: dict[tuple[str, str], dict[tuple[str, str], dict[str, Any]]] = {}
     source_urls: dict[str, str] = {}
+    provider_counts: dict[str, int] = {}
     _load_reviewed_members(db, groups, members)
     _load_foundation_members(db, groups, members, source_urls)
     if fetch_remote:
-        _fetch_remote_industry_members(groups, members, source_urls)
+        _fetch_remote_industry_members(
+            groups,
+            members,
+            source_urls,
+            provider_counts,
+            minimum_members=0 if refresh_quotes else 10,
+        )
+        _fetch_remote_board_members(groups, members, source_urls, provider_counts)
+
+    def _limited_pairs(bucket: dict[tuple[str, str], dict[str, Any]]) -> list[tuple[str, str]]:
+        pairs = list(bucket)
+        if limit_per_group is not None and limit_per_group > 0:
+            return pairs[:limit_per_group]
+        return pairs
 
     pairs = list(dict.fromkeys(
-        (market, symbol)
+        pair
         for bucket in members.values()
-        for market, symbol in list(bucket)[:limit_per_group]
+        for pair in _limited_pairs(bucket)
     ))
     quote_map: dict[tuple[str, str], float] = {}
+    price_map: dict[tuple[str, str], float] = {}
     quote_times: dict[tuple[str, str], str] = {}
     quote_statuses: dict[tuple[str, str], str] = {}
     trend_url: str | None = None
     try:
         if pairs:
+            # Do not use independent ``market IN`` and ``symbol IN`` filters:
+            # they can cross-match an HK code with a CN_A market row.  The
+            # composite predicate keeps identity stable for every member.
             quotes = db.scalars(select(StockRealtimeQuote).where(
-                StockRealtimeQuote.market.in_({pair[0] for pair in pairs}),
-                StockRealtimeQuote.symbol.in_({pair[1] for pair in pairs}),
+                tuple_(StockRealtimeQuote.market, StockRealtimeQuote.symbol).in_(pairs),
             )).all()
             for quote in quotes:
                 key = (quote.market, quote.symbol)
+                if quote.current_price is not None:
+                    price_map[key] = float(quote.current_price)
                 if quote.change_pct is not None:
                     quote_map[key] = float(quote.change_pct)
                     quote_statuses[key] = "CACHED"
@@ -591,7 +821,10 @@ def enrich_classification_groups_with_members(
         quote_times = {}
         quote_statuses = {}
     if fetch_remote and pairs:
-        remote_quotes, trend_url = _fetch_tencent_quotes(pairs)
+        remote_pairs = pairs if refresh_quotes else [
+            pair for pair in pairs if pair not in quote_map
+        ]
+        remote_quotes, trend_url = _fetch_tencent_quotes(remote_pairs)
         persisted_keys = _persist_classification_quotes(db, remote_quotes)
         for key, quote in remote_quotes.items():
             cached_time = quote_times.get(key)
@@ -614,6 +847,8 @@ def enrich_classification_groups_with_members(
                 )
             if quote.quote_time:
                 quote_times[key] = quote.quote_time
+            if quote.current_price is not None:
+                price_map[key] = float(quote.current_price)
 
     for group in groups:
         group_key = str(group.get("key") or "")
@@ -622,15 +857,41 @@ def enrich_classification_groups_with_members(
             bucket_map = members.get((group_key, code), {}) if code else {}
             for member in bucket_map.values():
                 pair = (member["market"], member["symbol"])
-                member["change_pct"] = quote_map.get(pair)
-                member["quote_time"] = quote_times.get(pair)
-                member["quote_status"] = quote_statuses.get(pair, "UNAVAILABLE")
-            bucket = list(bucket_map.values())[:limit_per_group]
+                if pair in price_map:
+                    member["current_price"] = price_map[pair]
+                if pair in quote_map:
+                    member["change_pct"] = quote_map[pair]
+                elif "change_pct" not in member:
+                    member["change_pct"] = None
+                if pair in quote_times:
+                    member["quote_time"] = quote_times[pair]
+                else:
+                    member.setdefault("quote_time", None)
+                if pair in quote_statuses:
+                    member["quote_status"] = quote_statuses[pair]
+                else:
+                    member.setdefault("quote_status", "UNAVAILABLE")
+            bucket = list(bucket_map.values())
+            if limit_per_group is not None and limit_per_group > 0:
+                bucket = bucket[:limit_per_group]
+            if any(member.get("current_price") is not None for member in bucket):
+                bucket.sort(key=lambda member: (
+                    member.get("current_price") is None,
+                    -(float(member.get("current_price")) if member.get("current_price") is not None else 0.0),
+                    str(member.get("symbol") or ""),
+                ))
             item["related_stocks"] = bucket
             item["member_count"] = len(bucket_map)
+            item["returned_count"] = len(bucket)
+            item["member_truncated"] = len(bucket) < len(bucket_map)
+            provider_total = provider_counts.get(code)
+            if provider_total is not None:
+                item["provider_member_count"] = provider_total
+                item["provider_missing_count"] = max(provider_total - len(bucket_map), 0)
             changes = [member["change_pct"] for member in bucket if member.get("change_pct") is not None]
             item["quote_observed_count"] = len(changes)
             item["quote_unavailable_count"] = max(len(bucket) - len(changes), 0)
+            item["quote_coverage_ratio"] = round(len(changes) / len(bucket), 6) if bucket else None
             item["trend_pct"] = round(sum(changes) / len(changes), 2) if changes else None
             if not item.get("source_url"):
                 item["source_url"] = _classification_source_url(
@@ -642,6 +903,11 @@ def enrich_classification_groups_with_members(
                 # latest observed evidence boundary while retaining each
                 # member's own ``as_of`` for audit detail.
                 item["as_of"] = max(observed_dates)
+            item["classification_as_of"] = item.get("as_of")
+            item["freshness_status"] = _freshness_status(item.get("classification_as_of"))
+            quote_dates = [str(member.get("quote_time")) for member in bucket if member.get("quote_time")]
+            item["quote_as_of"] = max(quote_dates) if quote_dates else None
+            item["quote_freshness_status"] = _freshness_status(item.get("quote_as_of"), max_age_days=1)
             item["trend_source_url"] = trend_url
             item["trend_status"] = "OBSERVED" if changes else "UNAVAILABLE"
             item["member_status"] = "OBSERVED" if bucket_map else "UNAVAILABLE"

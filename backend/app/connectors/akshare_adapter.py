@@ -3729,12 +3729,39 @@ class AkshareAdapter(MarketDataAdapter):
         return rows[:max_days]
 
     def _fetch_cn_a_symbols(self) -> list[SymbolRecord]:
-        exchange_records = self._fetch_cn_a_symbols_from_exchange_tables()
-        if exchange_records:
-            return exchange_records
-        eastmoney_records = self._fetch_cn_a_symbols_from_eastmoney()
-        if eastmoney_records:
-            return eastmoney_records
+        # Exchange tables are the preferred identity source, but they are not
+        # a complete universe on every day (for example, newly listed
+        # 科创板/创业板 rows may be absent while Eastmoney already exposes
+        # them).  Merge the independent public sources instead of returning
+        # the first non-empty result; this prevents silently dropping valid
+        # securities before classification coverage is rebuilt.
+        records_by_symbol: dict[str, SymbolRecord] = {
+            record.symbol: record
+            for record in self._fetch_cn_a_symbols_from_exchange_tables()
+        }
+        for record in self._fetch_cn_a_symbols_from_eastmoney():
+            existing = records_by_symbol.get(record.symbol)
+            if existing is None:
+                records_by_symbol[record.symbol] = record
+                continue
+            # Preserve the exchange-provided identity fields and retain the
+            # provider payload as an auditable supplementary source.
+            merged_ext = dict(existing.ext_json or {})
+            merged_ext["supplementary_source"] = "Eastmoney push2 clist"
+            merged_ext["supplementary_raw_payload"] = record.raw_payload
+            records_by_symbol[record.symbol] = SymbolRecord(
+                market=existing.market,
+                symbol=existing.symbol,
+                exchange=existing.exchange or record.exchange,
+                name=existing.name or record.name,
+                asset_type=existing.asset_type or record.asset_type,
+                status=existing.status or record.status,
+                list_date=existing.list_date or record.list_date,
+                ext_json=merged_ext,
+                raw_payload=existing.raw_payload or record.raw_payload,
+            )
+        if records_by_symbol:
+            return list(records_by_symbol.values())
         dataframe = ak.stock_info_a_code_name()
         return self._normalize_dataframe(dataframe=dataframe, market="CN_A")
 

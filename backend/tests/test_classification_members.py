@@ -75,6 +75,50 @@ def test_classification_members_are_projected_from_immutable_profile_evidence():
     assert theme["member_count"] == 2
 
 
+def test_classification_members_are_not_truncated_and_include_tail_symbols():
+    groups = [{"key": "industry", "title": "所属行业", "items": [{
+        "label": "测试行业", "code": "BK1202", "classification_dimension": "INDUSTRY", "level": 1,
+    }]}]
+    rows = [
+        _evidence(str(100 + index).zfill(6), f"测试{index}", industry="BK1202", theme="BK0680")
+        for index in range(42)
+    ]
+    result = enrich_classification_groups_with_members(_DB(rows), groups, fetch_remote=False)
+    item = result[0]["items"][0]
+    symbols = {row["symbol"] for row in item["related_stocks"]}
+    assert item["member_count"] == 42
+    assert item["returned_count"] == 42
+    assert item["member_truncated"] is False
+    assert len(symbols) == 42
+
+
+def test_classification_member_quote_coverage_is_reported_for_all_members():
+    class _QuoteDB(_DB):
+        def scalars(self, _statement):
+            return _Rows([
+                SimpleNamespace(
+                    market="CN_A", symbol=str(100 + index).zfill(6), current_price=10 + index,
+                    change_pct=round(index / 10, 2), quote_time="2026-10-02T15:00:00",
+                    fetched_at=None,
+                )
+                for index in range(42)
+            ])
+
+    groups = [{"key": "industry", "title": "所属行业", "items": [{
+        "label": "测试行业", "code": "BK1202", "classification_dimension": "INDUSTRY", "level": 1,
+    }]}]
+    rows = [
+        _evidence(str(100 + index).zfill(6), f"测试{index}", industry="BK1202", theme="BK0680")
+        for index in range(42)
+    ]
+    result = enrich_classification_groups_with_members(_QuoteDB(rows), groups, fetch_remote=False)
+    item = result[0]["items"][0]
+    assert item["quote_observed_count"] == 42
+    assert item["quote_unavailable_count"] == 0
+    assert item["quote_coverage_ratio"] == 1.0
+    assert item["related_stocks"][0]["current_price"] == 51
+
+
 def test_industry_source_url_is_a_reproducible_provider_query():
     url = _classification_source_url("BK1202", "INDUSTRY", 1)
     assert url is not None

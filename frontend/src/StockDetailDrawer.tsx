@@ -1103,7 +1103,28 @@ function findMetricFromRows(rows: unknown, aliases: string[], periods: string[] 
  * 旧缓存只有“所属行业/入选指数”字段，新缓存可能提供 sectors/themes/tags；
  * 这里做兼容读取，但不把指数误标为概念板块。
  */
- type SectorGroupValue = { text: string; definition?: string; criteria?: string; source?: string; status?: string; code?: string; related_stocks?: JsonRecord[]; member_count?: number | null; trend_pct?: number | null; dimension?: string };
+ type SectorGroupValue = {
+  text: string;
+  definition?: string;
+  criteria?: string;
+  source?: string;
+  status?: string;
+  code?: string;
+  related_stocks?: JsonRecord[];
+  member_count?: number | null;
+  returned_count?: number | null;
+  provider_member_count?: number | null;
+  member_truncated?: boolean;
+  quote_observed_count?: number | null;
+  quote_unavailable_count?: number | null;
+  quote_coverage_ratio?: number | null;
+  classification_as_of?: string | null;
+  freshness_status?: string;
+  quote_as_of?: string | null;
+  quote_freshness_status?: string;
+  trend_pct?: number | null;
+  dimension?: string;
+ };
 
 function sectorGroups(profile: JsonRecord, fields: JsonRecord): Array<{ label: string; values: SectorGroupValue[] }> {
   const result: Array<{ label: string; values: SectorGroupValue[] }> = [];
@@ -1123,6 +1144,16 @@ function sectorGroups(profile: JsonRecord, fields: JsonRecord): Array<{ label: s
         code: String(pickValue(row, ["code", "分类编码"]) || "") || undefined,
         related_stocks: asArray(row.related_stocks),
         member_count: toNumber(row.member_count),
+        returned_count: toNumber(row.returned_count),
+        provider_member_count: toNumber(row.provider_member_count),
+        member_truncated: Boolean(row.member_truncated),
+        quote_observed_count: toNumber(row.quote_observed_count),
+        quote_unavailable_count: toNumber(row.quote_unavailable_count),
+        quote_coverage_ratio: toNumber(row.quote_coverage_ratio),
+        classification_as_of: String(row.classification_as_of || row.as_of || "") || null,
+        freshness_status: String(row.freshness_status || "") || undefined,
+        quote_as_of: String(row.quote_as_of || "") || null,
+        quote_freshness_status: String(row.quote_freshness_status || "") || undefined,
         trend_pct: toNumber(row.trend_pct),
         dimension: String(pickValue(row, ["dimension", "classification_dimension"]) || "") || undefined,
       }));
@@ -2132,7 +2163,7 @@ function ResearchIndustryConcepts({ section, onOpen }: { section: JsonRecord; on
             <span>{memberCount !== null ? `${formatNumber(memberCount, 0)} 只相关股票` : "相关股票待补充"}</span>
             {trend !== null ? <strong className={trend > 0 ? "positive" : trend < 0 ? "negative" : "neutral"}>{trend > 0 ? "↑" : trend < 0 ? "↓" : "—"} {formatPercent(Math.abs(trend))}</strong> : null}
           </span>
-          {members.length ? <span className="research-industry-member-list">{members.slice(0, 5).map((member, memberIndex) => <span key={`${String(member.symbol || member.name)}-${memberIndex}`}>{String(member.name || member.symbol || "相关股票")}{member.change_pct !== null && member.change_pct !== undefined ? ` ${formatPercent(toNumber(member.change_pct))}` : ""}</span>)}</span> : null}
+          {members.length ? <span className="research-industry-member-list">{members.slice(0, 5).map((member, memberIndex) => <span key={`${String(member.symbol || member.name)}-${memberIndex}`}>{String(member.name || member.symbol || "相关股票")}{member.change_pct !== null && member.change_pct !== undefined ? ` ${formatPercent(toNumber(member.change_pct))}` : ""}</span>)}{members.length > 5 ? <small>预览 {members.length} / {memberCount ?? members.length} 只</small> : null}</span> : null}
           <span className="research-industry-meta">{source ? `来源：${String(source)}` : "来源待补充"}{version ? ` · ${String(version)}` : ""}</span>
         </button>;
       })}
@@ -2165,22 +2196,35 @@ function ClassificationDetailDialog({
 }) {
   const members = item.related_stocks || [];
   const trend = item.trend_pct ?? null;
-  const values = members.map((member) => toNumber(member.change_pct)).filter((value): value is number => value !== null).slice(0, 20);
+  const values = members.map((member) => toNumber(member.change_pct)).filter((value): value is number => value !== null);
   const max = Math.max(...values.map((value) => Math.abs(value)), 1);
+  const pageSize = 50;
+  const [page, setPage] = useState(1);
+  const pageCount = Math.max(1, Math.ceil(members.length / pageSize));
+  const safePage = Math.min(page, pageCount);
+  useEffect(() => {
+    setPage(1);
+  }, [group, item.text, item.code]);
+  const visibleMembers = members.slice((safePage - 1) * pageSize, safePage * pageSize);
+  const firstVisible = members.length ? (safePage - 1) * pageSize + 1 : 0;
+  const lastVisible = Math.min(safePage * pageSize, members.length);
   return <div className="classification-detail-overlay" role="dialog" aria-modal="true" onClick={onClose}>
     <section className="classification-detail-dialog" onClick={(event) => event.stopPropagation()}>
       <header><div><span>{group}</span><h3>{item.text}</h3></div><button type="button" onClick={onClose}>关闭</button></header>
       <div className="classification-detail-body">
         <p className="classification-detail-definition">{item.definition || "该分类来自证券主数据，具体口径请结合来源证据核验。"}</p>
         {item.criteria ? <p className="classification-detail-criteria">判定口径：{item.criteria}</p> : null}
-        <div className="classification-detail-summary"><span>相关股票 <strong>{item.member_count ?? members.length}</strong> 只</span><span>整体走势 <strong className={trend !== null && trend < 0 ? "negative" : "positive"}>{trend === null ? "待补充" : `${trend >= 0 ? "↑" : "↓"} ${formatPercent(Math.abs(trend))}`}</strong></span></div>
+        <div className="classification-detail-summary"><span>相关股票 <strong>{item.member_count ?? members.length}</strong> 只</span><span>已显示 <strong>{firstVisible}-{lastVisible}</strong> / {item.member_count ?? members.length}</span><span>行情覆盖 <strong>{item.quote_observed_count ?? values.length}</strong> 只</span><span>整体走势 <strong className={trend !== null && trend < 0 ? "negative" : "positive"}>{trend === null ? "待补充" : `${trend >= 0 ? "↑" : "↓"} ${formatPercent(Math.abs(trend))}`}</strong></span></div>
+        {(item.classification_as_of || item.quote_as_of || item.provider_member_count !== null && item.provider_member_count !== undefined) ? <p className="classification-detail-provenance">来源成员 {item.provider_member_count ?? "本地快照"} 只 · 分类截至 {item.classification_as_of ? formatDate(item.classification_as_of) : "未知"}（{item.freshness_status === "STALE" ? "已过期" : item.freshness_status === "FRESH" ? "较新" : "未知"}） · 行情截至 {item.quote_as_of ? formatDate(item.quote_as_of) : "未知"}</p> : null}
         {values.length ? <div className="classification-detail-chart" aria-label="分类股票涨跌走势">{values.map((value, index) => <i key={index} className={value >= 0 ? "positive" : "negative"} style={{ height: `${Math.max(8, Math.abs(value) / max * 100)}%` }} title={`${formatPercent(value)}`} />)}</div> : <p className="classification-detail-empty">暂无成员股票的最新涨跌数据。</p>}
-        <div className="classification-detail-stocks">{members.length ? members.map((member, index) => {
+        <div className="classification-detail-stocks">{members.length ? visibleMembers.map((member, index) => {
           const change = toNumber(member.change_pct);
           const market = String(member.market || "CN_A");
           const symbol = String(member.symbol || "");
-          return <button type="button" disabled={!symbol} onClick={() => symbol && onOpenStock?.({ market, symbol, name: String(member.name || symbol) })} key={`${market}-${symbol}-${index}`}><span>{String(member.name || symbol)}</span><small>{symbol}</small>{change !== null ? <em className={change >= 0 ? "positive" : "negative"}>{change >= 0 ? "↑" : "↓"}{formatPercent(Math.abs(change))}</em> : <em className="unavailable">行情待更新</em>}</button>;
+          const price = toNumber(member.current_price);
+          return <button type="button" disabled={!symbol} onClick={() => symbol && onOpenStock?.({ market, symbol, name: String(member.name || symbol) })} key={`${market}-${symbol}-${index}`}><span>{String(member.name || symbol)}</span><small>{symbol}{price !== null ? ` · ${formatNumber(price)}` : ""}</small>{change !== null ? <em className={change >= 0 ? "positive" : "negative"}>{change >= 0 ? "↑" : "↓"}{formatPercent(Math.abs(change))}</em> : <em className="unavailable">行情待更新</em>}</button>;
         }) : <p className="classification-detail-empty">该分类暂未返回成分股清单。</p>}</div>
+        {pageCount > 1 ? <nav className="classification-detail-pagination" aria-label="分类成员分页"><button type="button" disabled={safePage <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>上一页</button><span>第 {safePage} / {pageCount} 页</span><button type="button" disabled={safePage >= pageCount} onClick={() => setPage((value) => Math.min(pageCount, value + 1))}>下一页</button></nav> : null}
       </div>
     </section>
   </div>;
@@ -2546,11 +2590,12 @@ function F10ConceptDetail({ section, onOpenStock }: { section: JsonRecord; onOpe
       <header><div><h4>{name}</h4><small>{dimensionLabel}{memberCount !== null ? ` · ${memberCount} 只相关证券` : ""}</small></div><span>{String(importance || "最相关")}</span></header>
       <p>{valueText(definition || `${name}是来源主数据登记的${dimensionLabel}标签，成员和口径以来源及采集日期为准。`)}</p>
       <div className="f10-concept-related-head"><strong>相关股票</strong>{trend !== null ? <em className={trend >= 0 ? "positive" : "negative"}>整体 {trend >= 0 ? "↑" : "↓"} {formatPercent(Math.abs(trend))}</em> : <small>暂无统一行情</small>}</div>
-      {relatedStocks.length ? <div className="f10-concept-related-list">{relatedStocks.slice(0, 30).map((stock, stockIndex) => {
+      {relatedStocks.length ? <div className="f10-concept-related-list">{relatedStocks.map((stock, stockIndex) => {
         const market = String(stock.market || "CN_A");
         const symbol = String(stock.symbol || "");
         const change = toNumber(stock.change_pct);
-        return <button type="button" key={`${market}-${symbol}-${stockIndex}`} disabled={!symbol} onClick={() => symbol && onOpenStock?.({ market, symbol, name: String(stock.name || symbol) })} title="在系统内打开股票详情"><span>{String(stock.name || symbol)}</span><small>{symbol}</small>{change !== null ? <em className={change >= 0 ? "positive" : "negative"}>{change >= 0 ? "↑" : "↓"}{formatPercent(Math.abs(change))}</em> : <em className="unavailable">行情待更新</em>}</button>;
+        const price = toNumber(stock.current_price);
+        return <button type="button" key={`${market}-${symbol}-${stockIndex}`} disabled={!symbol} onClick={() => symbol && onOpenStock?.({ market, symbol, name: String(stock.name || symbol) })} title="在系统内打开股票详情"><span>{String(stock.name || symbol)}</span><small>{symbol}{price !== null ? ` · ${formatNumber(price)}` : ""}</small>{change !== null ? <em className={change >= 0 ? "positive" : "negative"}>{change >= 0 ? "↑" : "↓"}{formatPercent(Math.abs(change))}</em> : <em className="unavailable">行情待更新</em>}</button>;
       })}</div> : <p className="f10-concept-related-empty">当前主数据未返回该分类的成分股清单。</p>}
     </article>;
   })}</div> : <p className="f10-mobile-empty">{String(section.message || "暂无概念详情")}</p>;
