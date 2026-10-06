@@ -514,6 +514,9 @@ class AkshareAdapter(MarketDataAdapter):
         )
         qa_rows = self._safe_qa_records(symbol, limit=100)
         earnings_rows = self._safe_profit_forecast_records(symbol)
+        detailed_earnings_rows = self._safe_detailed_forecast_records(symbol)
+        if detailed_earnings_rows:
+            earnings_rows = [*earnings_rows, *detailed_earnings_rows]
         institution_rows = self._safe_institution_forecast_records(
             symbol, research_reports
         )
@@ -3338,12 +3341,15 @@ class AkshareAdapter(MarketDataAdapter):
                     "forecast_year": year_text,
                     "预测指标": metric,
                     "metric": metric,
+                    "metric_code": "EPS" if metric == "每股收益（元）" else "NET_PROFIT",
+                    "unit": "元/股" if metric == "每股收益（元）" else "亿元",
                     "预测机构数": cls._first_nonempty(item.get("预测机构数"), item.get("机构数")),
                     "prediction_count": cls._first_nonempty(item.get("预测机构数"), item.get("机构数")),
                     "最小值": cls._first_nonempty(item.get("最小值"), item.get("min")),
                     "均值": cls._first_nonempty(item.get("均值"), item.get("平均值"), item.get("mean")),
                     "最大值": cls._first_nonempty(item.get("最大值"), item.get("max")),
                     "行业平均数": cls._first_nonempty(item.get("行业平均数"), item.get("行业均值"), item.get("industry_average")),
+                    "source_code": "TONGHUASHUN",
                     "source_name": "同花顺盈利预测",
                     "source_url": f"https://basic.10jqka.com.cn/new/{symbol}/worth.html",
                     "detail_url": f"https://basic.10jqka.com.cn/new/{symbol}/worth.html",
@@ -3378,6 +3384,66 @@ class AkshareAdapter(MarketDataAdapter):
                 metric_order.get(str(row.get("预测指标") or ""), 99),
             )
         )
+        return result
+
+    def _safe_detailed_forecast_records(self, symbol: str) -> list[dict[str, Any]]:
+        """Read THS's detailed annual estimates (actual and forecast columns)."""
+        cls = type(self)
+        method = getattr(ak, "stock_profit_forecast_ths", None)
+        if not method:
+            return []
+        rows = self._safe_optional_records(
+            method,
+            {"symbol": symbol, "indicator": "业绩预测详表-详细指标预测"},
+            limit=100,
+        )
+        if not rows:
+            return []
+        metric_aliases = {
+            "营业收入": ("TOTAL_REVENUE", "营业总收入", "亿元"),
+            "营业总收入": ("TOTAL_REVENUE", "营业总收入", "亿元"),
+            "营业收入增长率": ("REVENUE_YOY", "营业总收入同比", "%"),
+            "净利润": ("NET_PROFIT", "归母净利润", "亿元"),
+            "净利润增长率": ("NET_PROFIT_YOY", "归母净利润同比", "%"),
+            "市盈率": ("FORWARD_PE", "预测市盈率", "倍"),
+            "每股净资产": ("BVPS", "每股净资产", "元/股"),
+            "净资产收益率": ("ROE", "净资产收益率", "%"),
+            "每股现金流": ("OCF_PER_SHARE", "每股现金流", "元/股"),
+            "利润总额": ("PRETAX_PROFIT", "利润总额", "亿元"),
+        }
+        result: list[dict[str, Any]] = []
+        for raw in rows:
+            item = {str(key): cls._json_safe(value) for key, value in raw.items()}
+            raw_metric = str(cls._first_nonempty(item.get("预测指标"), item.get("指标"), item.get("metric")) or "").strip()
+            if not raw_metric:
+                continue
+            definition = next((value for key, value in metric_aliases.items() if key in raw_metric), None)
+            if definition is None:
+                continue
+            metric_code, metric_name, unit = definition
+            for column, value in item.items():
+                match = re.match(r"^(预测)?(20\d{2})[-—](实际值|平均)$", str(column))
+                if not match or value in (None, "", "-"):
+                    continue
+                is_forecast = bool(match.group(1)) or match.group(3) == "平均" and int(match.group(2)) >= date.today().year
+                year = match.group(2)
+                result.append({
+                    "预测年度": year,
+                    "forecast_year": year,
+                    "预测指标": metric_name,
+                    "metric": metric_name,
+                    "metric_code": metric_code,
+                    "unit": unit,
+                    "value": value,
+                    "mean": value,
+                    "actual": not is_forecast,
+                    "is_forecast": is_forecast,
+                    "source_code": "TONGHUASHUN",
+                    "source_name": "同花顺业绩预测详表-详细指标预测",
+                    "source_url": f"https://basic.10jqka.com.cn/new/{symbol}/worth.html",
+                    "detail_url": f"https://basic.10jqka.com.cn/new/{symbol}/worth.html",
+                })
+        result.sort(key=lambda row: (str(row.get("forecast_year") or ""), str(row.get("metric_code") or "")))
         return result
 
     def _safe_institution_forecast_records(
@@ -3499,18 +3565,27 @@ class AkshareAdapter(MarketDataAdapter):
             "buy": "机构投资评级(近六个月)-买入",
             "add": "机构投资评级(近六个月)-增持",
             "neutral": "机构投资评级(近六个月)-中性",
+            "hold": "机构投资评级(近六个月)-持有",
             "reduce": "机构投资评级(近六个月)-减持",
             "sell": "机构投资评级(近六个月)-卖出",
         }
-        counts = {
-            key: int(float(row[field])) if row.get(field) not in (None, "") else 0
-            for key, field in aliases.items()
-        }
+        counts: dict[str, int] = {}
+        for key, field in aliases.items():
+            try:
+                counts[key] = int(float(row[field])) if row.get(field) not in (None, "") else 0
+            except (TypeError, ValueError):
+                counts[key] = 0
         counts["total"] = sum(counts.values())
+        observed_at = cls._normalize_source_datetime(cls._first_nonempty(
+            row.get("数据日期"), row.get("统计日期"), row.get("日期"), row.get("更新时间")
+        ))
         return {
+            "source_code": "EASTMONEY",
             "source_name": "东方财富盈利预测评级汇总",
             "source_url": "https://data.eastmoney.com/report/profitforecast.jshtml",
             "reference_period": "近六个月",
+            "as_of": observed_at,
+            "source_updated_at": observed_at,
             "股票代码": target,
             **counts,
         }
@@ -3564,6 +3639,13 @@ class AkshareAdapter(MarketDataAdapter):
                     "东财评级": report.get("东财评级") or report.get("rating"),
                     "日期": report.get("日期") or report.get("report_date"),
                     "报告PDF链接": report.get("报告PDF链接") or report.get("url"),
+                    "source_code": report.get("source_code") or "EASTMONEY",
+                    "source_name": report.get("source_name") or "东方财富研究报告",
+                    "source_url": report.get("source_url"),
+                    "detail_url": report.get("detail_url"),
+                    "pdf_url": report.get("pdf_url") or report.get("报告PDF链接") or report.get("url"),
+                    "external_id": report.get("external_id") or report.get("report_id"),
+                    "report_id": report.get("report_id") or report.get("external_id"),
                     # Generic F10 cards look for a label/value pair.  Keep
                     # this compact projection in addition to the explicit
                     # fields so the card never falls back to “项目 1”.

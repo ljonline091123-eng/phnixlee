@@ -4677,6 +4677,7 @@ textarea:focus {
 .research-forecast-tabs button.active { border-bottom-color: #dd3e4d; color: #1f3029; font-weight: 700; }
 .research-forecast-table-wrap, .rating-stat-table-wrap { overflow-x: auto; overscroll-behavior-x: contain; }
 .research-forecast-table, .rating-stat-table { width: 100%; min-width: 650px; border-collapse: collapse; font-size: 14px; }
+.research-forecast-table { min-width: 980px; }
 .research-forecast-table th, .research-forecast-table td, .rating-stat-table th, .rating-stat-table td { padding: 11px 12px; border-bottom: 1px solid #edf0f2; text-align: center; white-space: nowrap; }
 .research-forecast-table thead th, .rating-stat-table thead th { color: #858b87; background: #fff; font-weight: 500; }
 .research-forecast-table tbody td, .rating-stat-table tbody td { color: #333c37; }
@@ -5889,7 +5890,7 @@ textarea:focus {
 @media (max-width: 720px) {
   /* Research tables retain a readable minimum width and scroll inside their
      own viewport; this keeps the forecast year and rating columns distinct. */
-  .research-source-section .research-forecast-table,
+  .research-source-section .research-forecast-table { min-width: 900px; table-layout: auto; }
   .research-source-section .rating-stat-table { min-width: 560px; table-layout: auto; }
   .research-source-section .research-forecast-table th,
   .research-source-section .research-forecast-table td,

@@ -37,6 +37,7 @@ from app.services.stock_on_demand import StockOnDemandService, _merge_f10_payloa
 from app.services.stock_classification import _looks_like_index
 from app.services.taxonomy import LABEL_DEFINITION_OVERRIDES, label_definition
 from app.services.research_store import load_research_sections, persist_research_sections
+from app.services.research_quality import audit_research_quality
 
 
 F10_EXTENDED_SECTIONS = (
@@ -545,6 +546,177 @@ def _is_dedicated_institution_forecast(row: dict[str, Any]) -> bool:
     return not bool(row.get("title") or row.get("报告名称"))
 
 
+FORECAST_METRIC_CATALOG: tuple[tuple[str, str, str], ...] = (
+    ("TOTAL_REVENUE", "营业总收入", "亿元"),
+    ("REVENUE_YOY", "营业总收入同比", "%"),
+    ("NET_PROFIT", "归母净利润", "亿元"),
+    ("NET_PROFIT_YOY", "归母净利润同比", "%"),
+    ("EPS", "每股收益", "元/股"),
+    ("FORWARD_PE", "预测市盈率", "倍"),
+    ("DIVIDEND_YIELD", "预测股息率", "%"),
+    ("PRETAX_PROFIT", "利润总额", "亿元"),
+    ("OCF_PER_SHARE", "每股现金流", "元/股"),
+    ("BVPS", "每股净资产", "元/股"),
+    ("ROE", "净资产收益率", "%"),
+)
+_FORECAST_METRIC_BY_CODE = {
+    code: {"metric_code": code, "metric_name": name, "unit": unit}
+    for code, name, unit in FORECAST_METRIC_CATALOG
+}
+
+
+def _first_forecast_value(row: dict[str, Any], *keys: str) -> Any:
+    for key in keys:
+        value = row.get(key)
+        if value not in (None, ""):
+            return value
+    return None
+
+
+def _forecast_metric_definition(row: dict[str, Any]) -> dict[str, str] | None:
+    metric_name = str(row.get("metric") or row.get("预测指标") or row.get("metric_name") or "").strip()
+    explicit_code = str(row.get("metric_code") or "").strip().upper()
+    if explicit_code in _FORECAST_METRIC_BY_CODE:
+        definition = dict(_FORECAST_METRIC_BY_CODE[explicit_code])
+        definition["metric_name"] = metric_name or definition["metric_name"]
+        definition["unit"] = str(row.get("unit") or definition["unit"])
+        return definition
+    if not metric_name:
+        return None
+    if "同比" in metric_name and any(token in metric_name for token in ("营业收入", "营业总收入", "营收")):
+        code = "REVENUE_YOY"
+    elif "同比" in metric_name and any(token in metric_name for token in ("净利润", "归母净利")):
+        code = "NET_PROFIT_YOY"
+    elif "利润总额" in metric_name:
+        code = "PRETAX_PROFIT"
+    elif "每股现金流" in metric_name:
+        code = "OCF_PER_SHARE"
+    elif "每股净资产" in metric_name:
+        code = "BVPS"
+    elif "净资产收益率" in metric_name or metric_name.upper() == "ROE":
+        code = "ROE"
+    elif any(token in metric_name for token in ("营业收入", "营业总收入", "营收")):
+        code = "TOTAL_REVENUE"
+    elif "每股收益" in metric_name or re.search(r"\bEPS\b", metric_name, re.I):
+        code = "EPS"
+    elif any(token in metric_name for token in ("净利润", "归母净利")):
+        code = "NET_PROFIT"
+    elif "股息率" in metric_name:
+        code = "DIVIDEND_YIELD"
+    elif "市盈率" in metric_name or re.search(r"(?:预测)?\s*PE", metric_name, re.I):
+        code = "FORWARD_PE"
+    else:
+        code = explicit_code or metric_name
+        return {
+            "metric_code": code,
+            "metric_name": metric_name,
+            "unit": str(row.get("unit") or ""),
+        }
+    definition = dict(_FORECAST_METRIC_BY_CODE[code])
+    definition["metric_name"] = metric_name or definition["metric_name"]
+    definition["unit"] = str(row.get("unit") or definition["unit"])
+    return definition
+
+
+def _forecast_source_code(row: dict[str, Any], fallback: str = "UNKNOWN") -> str:
+    code = str(row.get("source_code") or "").strip().upper()
+    if code:
+        return code
+    name = str(row.get("source_name") or row.get("source") or "").upper()
+    if "同花顺" in name or "THS" in name:
+        return "TONGHUASHUN"
+    if "东方财富" in name or "东财" in name or "EAST" in name:
+        return "EASTMONEY"
+    if "新浪" in name or "SINA" in name:
+        return "SINA_FINANCE"
+    return fallback
+
+
+def _report_level_forecast_observations(report_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Return source-preserving report estimates without promoting them to consensus."""
+    projected = AkshareAdapter._derive_research_earnings_forecast(report_rows, "")
+    observations: list[dict[str, Any]] = []
+    for row in projected:
+        year = str(row.get("forecast_year") or row.get("预测年度") or "")[:4]
+        if not re.fullmatch(r"20\d{2}", year):
+            continue
+        common = {
+            "forecast_year": year,
+            "institution": row.get("institution") or row.get("机构"),
+            "report_date": row.get("report_date") or row.get("日期"),
+            "report_title": row.get("title") or row.get("报告名称"),
+            "rating": row.get("rating") or row.get("东财评级"),
+            "source_code": _forecast_source_code(row, "EASTMONEY"),
+            "source_name": row.get("source_name") or "东方财富研究报告",
+            "source_url": row.get("source_url"),
+            "detail_url": row.get("detail_url"),
+            "pdf_url": row.get("pdf_url") or row.get("报告PDF链接"),
+            "external_id": row.get("external_id") or row.get("report_id"),
+            "value_scope": "REPORT_LEVEL",
+            "methodology": "SOURCE_REPORTED_ESTIMATE",
+        }
+        for code, aliases in (
+            ("EPS", ("eps", "预测每股收益")),
+            ("FORWARD_PE", ("pe", "预测市盈率")),
+            ("NET_PROFIT", ("net_profit", "预测净利润")),
+        ):
+            value = _first_forecast_value(row, *aliases)
+            if value in (None, ""):
+                continue
+            observation = {**common, **_FORECAST_METRIC_BY_CODE[code], "value": value}
+            observations.append({key: item for key, item in observation.items() if item not in (None, "")})
+    deduped: dict[tuple[str, str, str, str, str], dict[str, Any]] = {}
+    for item in observations:
+        key = (
+            str(item.get("metric_code") or ""),
+            str(item.get("forecast_year") or ""),
+            str(item.get("source_code") or ""),
+            str(item.get("external_id") or ""),
+            str(item.get("institution") or ""),
+        )
+        deduped[key] = item
+    return sorted(
+        deduped.values(),
+        key=lambda item: (
+            str(item.get("forecast_year") or ""),
+            str(item.get("report_date") or ""),
+            str(item.get("external_id") or ""),
+        ),
+        reverse=True,
+    )
+
+
+def _provider_rating_bucket(provider: Any) -> dict[str, Any] | None:
+    if not isinstance(provider, dict):
+        return None
+    count_keys = ("buy", "add", "neutral", "hold", "reduce", "sell")
+    if not any(key in provider and provider.get(key) not in (None, "") for key in (*count_keys, "total")):
+        return None
+
+    def count(key: str) -> int:
+        try:
+            return int(float(provider.get(key) or 0))
+        except (TypeError, ValueError):
+            return 0
+
+    counts = {key: count(key) for key in count_keys}
+    try:
+        total = int(float(provider["total"])) if provider.get("total") not in (None, "") else sum(counts.values())
+    except (TypeError, ValueError):
+        total = sum(counts.values())
+    return {
+        "period": "6个月内",
+        **counts,
+        "total": total,
+        "source_code": _forecast_source_code(provider, "EASTMONEY"),
+        "source_name": provider.get("source_name") or "供应商原生评级统计",
+        "source_url": provider.get("source_url"),
+        "reference_date": provider.get("as_of") or provider.get("source_updated_at"),
+        "reference_basis": "供应商原生近六个月评级快照",
+        "calculation_method": "PROVIDER_NATIVE",
+    }
+
+
 def build_research_contract(research: dict[str, Any]) -> dict[str, Any]:
     """Project persisted/raw research rows into one fixed frontend contract."""
     result = dict(research or {})
@@ -558,32 +730,152 @@ def build_research_contract(research: dict[str, Any]) -> dict[str, Any]:
         key=lambda row: str(row.get("report_date") or row.get("报告日期") or row.get("日期") or ""),
         reverse=True,
     )
-    years = _forecast_years(earnings_rows, institution_rows)
+    report_observations = _report_level_forecast_observations(report_rows)
+    years = _forecast_years(earnings_rows, institution_rows, report_observations)
     metric_map: dict[str, dict[str, Any]] = {}
+    source_metadata: dict[tuple[str, str, str], dict[str, Any]] = {}
+
+    def register_source(row: dict[str, Any], *, role: str, methodology: str) -> dict[str, Any]:
+        source_code = _forecast_source_code(row)
+        source_name = str(row.get("source_name") or row.get("source") or source_code).strip()
+        source_url = row.get("source_url") or row.get("detail_url")
+        key = (role, source_code, str(source_url or ""))
+        metadata = source_metadata.setdefault(key, {
+            "role": role,
+            "source_code": source_code,
+            "source_name": source_name,
+            "source_url": source_url,
+            "methodology": methodology,
+        })
+        observed_at = row.get("source_updated_at") or row.get("as_of") or row.get("report_date") or row.get("日期")
+        if observed_at and str(observed_at) > str(metadata.get("observed_at") or ""):
+            metadata["observed_at"] = observed_at
+        return metadata
+
     for row in earnings_rows:
-        metric_name = str(row.get("metric") or row.get("预测指标") or "").strip()
+        definition = _forecast_metric_definition(row)
         year = str(row.get("forecast_year") or row.get("预测年度") or "")[:4]
-        if not metric_name or year not in years:
+        if definition is None or year not in years:
             continue
-        metric_code = "EPS" if "每股收益" in metric_name else "NET_PROFIT" if "净利润" in metric_name else metric_name
+        # Actual historical observations remain in ``rows`` for auditability,
+        # but only forecast observations should populate the forward matrix.
+        if row.get("actual") is True or row.get("is_forecast") is False:
+            continue
+        metric_code = definition["metric_code"]
         metric = metric_map.setdefault(metric_code, {
             "metric_code": metric_code,
-            "metric_name": metric_name,
-            "unit": "元/股" if metric_code == "EPS" else "亿元" if metric_code == "NET_PROFIT" else "",
+            "metric_name": definition["metric_name"],
+            "unit": definition["unit"],
+            "value_scope": "CONSENSUS",
             "values": {},
         })
-        metric["values"][year] = {
-            "prediction_count": row.get("prediction_count") or row.get("预测机构数"),
-            "min": row.get("minimum") or row.get("最小值"),
-            "mean": row.get("mean") or row.get("均值"),
-            "max": row.get("maximum") or row.get("最大值"),
-            "industry_average": row.get("industry_average") or row.get("行业平均数"),
+        source = register_source(row, role="CONSENSUS", methodology="PROVIDER_CONSENSUS")
+        observation = {
+            "prediction_count": _first_forecast_value(row, "prediction_count", "预测机构数"),
+            "min": _first_forecast_value(row, "minimum", "最小值"),
+            "mean": _first_forecast_value(row, "mean", "均值", "value", "预测值"),
+            "max": _first_forecast_value(row, "maximum", "最大值"),
+            "industry_average": _first_forecast_value(row, "industry_average", "行业平均数"),
+            "source_code": source["source_code"],
+            "source_name": source["source_name"],
+            "source_url": source.get("source_url"),
+            "source_updated_at": row.get("source_updated_at") or row.get("as_of"),
+            "value_scope": "CONSENSUS",
+            "methodology": "PROVIDER_CONSENSUS",
         }
+        observation = {key: value for key, value in observation.items() if value not in (None, "")}
+        value_record = metric["values"].setdefault(year, {"consensus_observations": []})
+        value_record["consensus_observations"].append(observation)
+        incoming_priority = 100 if source["source_code"] == "TONGHUASHUN" else 10
+        if incoming_priority > int(value_record.get("_source_priority") or -1):
+            retained_reports = value_record.get("report_observations")
+            retained_consensus = value_record["consensus_observations"]
+            value_record.clear()
+            value_record.update(observation)
+            value_record["consensus_observations"] = retained_consensus
+            if retained_reports:
+                value_record["report_observations"] = retained_reports
+            value_record["_source_priority"] = incoming_priority
+
+    for observation in report_observations:
+        code = str(observation["metric_code"])
+        year = str(observation["forecast_year"])
+        definition = _FORECAST_METRIC_BY_CODE[code]
+        metric = metric_map.setdefault(code, {
+            **definition,
+            "value_scope": "REPORT_LEVEL",
+            "values": {},
+        })
+        register_source(observation, role="REPORT_OBSERVATION", methodology="SOURCE_REPORTED_ESTIMATE")
+        value_record = metric["values"].setdefault(year, {})
+        value_record.setdefault("report_observations", []).append(observation)
+        # A provider consensus remains the primary cell value.  When no
+        # consensus exists, use the latest dated report observation and mark
+        # its narrower scope explicitly instead of presenting it as consensus.
+        if value_record.get("value_scope") != "CONSENSUS" and "mean" not in value_record:
+            current_date = str(value_record.get("report_date") or "")
+            incoming_date = str(observation.get("report_date") or "")
+            if "value" not in value_record or incoming_date >= current_date:
+                value_record.update({
+                    "value": observation["value"],
+                    "source_code": observation.get("source_code"),
+                    "source_name": observation.get("source_name"),
+                    "source_url": observation.get("source_url"),
+                    "report_date": observation.get("report_date"),
+                    "institution": observation.get("institution"),
+                    "external_id": observation.get("external_id"),
+                    "value_scope": "REPORT_LEVEL",
+                    "methodology": "LATEST_SOURCE_REPORT_OBSERVATION",
+                })
+
+    for metric in metric_map.values():
+        for value in metric["values"].values():
+            value.pop("_source_priority", None)
+        scopes = {
+            str(value.get("value_scope") or "")
+            for value in metric["values"].values()
+            if isinstance(value, dict)
+        }
+        metric["value_scope"] = "MIXED" if len(scopes) > 1 else (next(iter(scopes)) if scopes else metric["value_scope"])
+
+    available_codes = sorted(
+        code for code, metric in metric_map.items()
+        if any(
+            any(value.get(key) not in (None, "") for key in ("value", "mean", "min", "max"))
+            for value in metric["values"].values()
+        )
+    )
+    expected_codes = [code for code, _, _ in FORECAST_METRIC_CATALOG]
+    completeness_by_metric = []
+    for code, name, _unit in FORECAST_METRIC_CATALOG:
+        metric = metric_map.get(code)
+        available_years = sorted(
+            year for year, value in (metric.get("values", {}) if metric else {}).items()
+            if any(value.get(key) not in (None, "") for key in ("value", "mean", "min", "max"))
+        )
+        completeness_by_metric.append({
+            "metric_code": code,
+            "metric_name": name,
+            "status": "AVAILABLE" if available_years else "MISSING",
+            "available_years": available_years,
+            "missing_years": [year for year in years if year not in available_years],
+        })
+    completeness_ratio = round(len(available_codes) / len(expected_codes), 4) if expected_codes else 0.0
     result["earnings_forecast"] = {
         "forecast_years": years,
         "metrics": list(metric_map.values()),
         "rows": earnings_rows,
+        "report_level_observations": report_observations,
         "source": result.get("earnings_forecast_source") or result.get("source"),
+        "source_metadata": list(source_metadata.values()),
+        "completeness": {
+            "status": "COMPLETE" if completeness_ratio == 1 else "PARTIAL" if available_codes else "UNAVAILABLE",
+            "coverage_ratio": completeness_ratio,
+            "expected_metric_codes": expected_codes,
+            "available_metric_codes": available_codes,
+            "missing_metric_codes": [code for code in expected_codes if code not in available_codes],
+            "by_metric": completeness_by_metric,
+        },
     }
 
     normalized_institutions: list[dict[str, Any]] = []
@@ -609,12 +901,37 @@ def build_research_contract(research: dict[str, Any]) -> dict[str, Any]:
         })
         normalized_institutions.append(row)
     rating = build_rating_statistics(report_rows)
+    provider_rating = _provider_rating_bucket(result.get("provider_rating_statistics"))
+    rating_buckets = list(rating["buckets"])
+    rating_basis = rating["reference_basis"]
+    if provider_rating is not None:
+        rating_buckets = [
+            provider_rating if row.get("period") == "6个月内" else row
+            for row in rating_buckets
+        ]
+        rating_basis = "供应商原生近六个月评级快照优先；其他窗口按最新研报日期滚动统计"
     result["institution_forecast"] = {
         "forecast_years": years,
         "rows": normalized_institutions,
-        "rating_statistics": rating["buckets"],
+        "rating_statistics": rating_buckets,
         "rating_reference_date": rating["reference_date"],
-        "rating_reference_basis": rating["reference_basis"],
+        "rating_reference_basis": rating_basis,
+        "rating_provider_reference_date": provider_rating.get("reference_date") if provider_rating else None,
+        "rating_source_metadata": ([{
+            "period": "6个月内",
+            "source_code": provider_rating.get("source_code"),
+            "source_name": provider_rating.get("source_name"),
+            "source_url": provider_rating.get("source_url"),
+            "calculation_method": provider_rating.get("calculation_method"),
+            "reference_date": provider_rating.get("reference_date"),
+        }] if provider_rating else []) + [{
+            "periods": [row[0] for row in RATING_STATISTIC_PERIODS if row[0] != "6个月内" or provider_rating is None],
+            "source_code": "LOCAL_REPORT_AGGREGATION",
+            "source_name": "本地研报评级滚动统计",
+            "calculation_method": "LOCAL_ROLLING_WINDOWS",
+            "reference_date": rating["reference_date"],
+        }],
+        "provider_rating_statistics": result.get("provider_rating_statistics") or {},
         "source": result.get("institution_forecast_source") or result.get("source"),
     }
 
@@ -945,7 +1262,21 @@ def normalize_f10_sections(extended_data: dict[str, dict[str, Any]]) -> dict[str
         if not _research_rows(research.get("earnings_forecast")):
             research["earnings_forecast"] = AkshareAdapter._derive_research_earnings_forecast(reports, report_symbol)
     research = build_research_contract(research)
+    research["data_quality"] = audit_research_quality(research, concepts=concepts)
     extended_data["research_sections"] = research
+    earnings_contract = research.get("earnings_forecast") or {}
+    earnings_section = _display_section(
+        "earnings_forecast",
+        "盈利预测",
+        rows=earnings_contract.get("rows"),
+        source=earnings_contract.get("source") or research.get("earnings_forecast_source") or research.get("source"),
+        as_of=payload_as_of(research),
+    )
+    for key in (
+        "forecast_years", "metrics", "report_level_observations",
+        "source_metadata", "completeness",
+    ):
+        earnings_section[key] = earnings_contract.get(key) or ([] if key != "completeness" else {})
     institution_section = _display_section(
         "institution_forecast",
         "机构预测（评级统计）",
@@ -958,7 +1289,9 @@ def normalize_f10_sections(extended_data: dict[str, dict[str, Any]]) -> dict[str
     institution_section["rating_statistics"] = institution_contract.get("rating_statistics") or []
     institution_section["rating_statistics_reference_date"] = institution_contract.get("rating_reference_date")
     institution_section["rating_statistics_basis"] = institution_contract.get("rating_reference_basis")
-    provider_rating = research.get("provider_rating_statistics")
+    institution_section["rating_provider_reference_date"] = institution_contract.get("rating_provider_reference_date")
+    institution_section["rating_source_metadata"] = institution_contract.get("rating_source_metadata") or []
+    provider_rating = institution_contract.get("provider_rating_statistics") or research.get("provider_rating_statistics")
     if isinstance(provider_rating, dict) and provider_rating:
         institution_section["provider_rating_statistics"] = provider_rating
     research_sections = [
@@ -976,7 +1309,7 @@ def normalize_f10_sections(extended_data: dict[str, dict[str, Any]]) -> dict[str
             as_of=payload_as_of(research),
             message="" if research.get("qa") else (research.get("qa_message") or "当前未接入问董秘公开接口"),
         ),
-        _display_section("earnings_forecast", "盈利预测", rows=(research.get("earnings_forecast") or {}).get("rows"), source=research.get("earnings_forecast_source") or research.get("source"), as_of=payload_as_of(research)),
+        earnings_section,
         institution_section,
         _display_section("latest_reports", "最新研报", rows=research.get("latest_reports"), source=research.get("report_source") or research.get("source"), as_of=payload_as_of(research)),
         _display_section("reports", "研报", rows=research.get("reports"), source=research.get("report_source") or research.get("source"), as_of=payload_as_of(research)),
