@@ -77,6 +77,32 @@ def test_ths_forecast_rows_keep_consensus_statistics_and_institution_date_order(
     assert all(row["source_name"] == "同花顺业绩预测详表-机构" for row in institutions)
 
 
+def test_ths_detailed_forecast_rows_normalize_metric_scope_and_provenance() -> None:
+    adapter = AkshareAdapter()
+    with patch(
+        "app.connectors.akshare_adapter.ak.stock_profit_forecast_ths",
+        return_value=pd.DataFrame([
+            {"预测指标": "营业收入(元)", "2025-实际值": "1314.42亿", "预测2026-平均": "1335.97亿"},
+            {"预测指标": "营业收入增长率", "2025-实际值": "-10.40%", "预测2026-平均": "1.64%"},
+            {"预测指标": "净利润(元)", "2025-实际值": "426.33亿", "预测2026-平均": "437.80亿"},
+            {"预测指标": "净利润增长率", "2025-实际值": "-4.21%", "预测2026-平均": "2.86%"},
+            {"预测指标": "市盈率(动态)", "2025-实际值": "5.48", "预测2026-平均": "5.23"},
+        ]),
+    ):
+        rows = adapter._safe_detailed_forecast_records("000001")
+
+    by_metric = {(row["metric_code"], row["forecast_year"]): row for row in rows}
+    assert by_metric[("TOTAL_REVENUE", "2026")]["value"] == "1335.97亿"
+    assert by_metric[("TOTAL_REVENUE", "2026")]["is_forecast"] is True
+    assert by_metric[("TOTAL_REVENUE", "2025")]["actual"] is True
+    assert by_metric[("REVENUE_YOY", "2026")]["unit"] == "%"
+    assert by_metric[("NET_PROFIT", "2026")]["value"] == "437.80亿"
+    assert by_metric[("NET_PROFIT_YOY", "2026")]["value"] == "2.86%"
+    assert by_metric[("FORWARD_PE", "2026")]["value"] == "5.23"
+    assert all(row["source_code"] == "TONGHUASHUN" for row in rows)
+    assert all("worth.html" in row["source_url"] for row in rows)
+
+
 def test_research_report_projection_is_newest_first_and_has_detail_provenance() -> None:
     adapter = AkshareAdapter()
     frame = pd.DataFrame([
