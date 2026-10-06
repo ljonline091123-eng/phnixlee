@@ -655,6 +655,15 @@ function institutionForecastValue(row: JsonRecord, period: string): unknown {
   return undefined;
 }
 
+function institutionForecastMetricValue(row: JsonRecord, period: string, metric: "eps" | "net_profit"): unknown {
+  const year = period.match(/(?:19|20)\d{2}/)?.[0] || period;
+  const values = asRecord(row[metric]);
+  const direct = values[year] ?? values[period] ?? values[`${year}E`];
+  if (direct !== undefined && direct !== null && direct !== "") return direct;
+  const forecast = asRecord(asRecord(row.forecast)[metric]);
+  return forecast[year] ?? forecast[period] ?? forecast[`${year}E`];
+}
+
 function ResearchInstitutionForecastPanel({ section }: { section: JsonRecord }) {
   const rows = useMemo(() => sortedResearchRows(sectionRows(section)), [section]);
   const [mode, setMode] = useState<"forecast" | "rating">("forecast");
@@ -670,7 +679,7 @@ function ResearchInstitutionForecastPanel({ section }: { section: JsonRecord }) 
     </div>
     {mode === "forecast" ? rows.length ? <div className="research-forecast-table-wrap" role="tabpanel" aria-label="机构预测">
       <table className="research-forecast-table">
-        <thead><tr><th scope="col">报告日期</th><th scope="col">机构 / 分析师</th><th scope="col">评级</th>{periods.length ? periods.map((period) => <th scope="col" key={period}>{period} EPS</th>) : <th scope="col">研报数</th>}</tr></thead>
+        <thead><tr><th scope="col">报告日期</th><th scope="col">机构 / 分析师</th><th scope="col">评级</th>{periods.length ? periods.flatMap((period) => [<th scope="col" key={`${period}-eps`}>{period} EPS</th>, <th scope="col" key={`${period}-profit`}>{period} 净利润</th>]) : <th scope="col">研报数</th>}</tr></thead>
         <tbody>{rows.slice(0, 100).map((row, index) => {
           const institution = String(pickValue(row, ["机构", "institution", "机构名称"]) || "未披露机构");
           const analysts = stringList(pickValue(row, ["analysts", "分析师", "研究员"])).join("、");
@@ -679,7 +688,7 @@ function ResearchInstitutionForecastPanel({ section }: { section: JsonRecord }) 
             <td>{formatDate(researchDateText(row))}</td>
             <td className="research-forecast-institution"><strong>{institution}</strong>{analysts ? <small>{analysts}</small> : null}</td>
             <td><span className={`research-rating ${ratingClass(rating)}`}>{rating}</span></td>
-            {periods.length ? periods.map((period) => <td key={period}>{forecastCellText("每股收益", institutionForecastValue(row, period))}</td>) : <td>{valueText(pickValue(row, ["评级数量", "研报数量", "report_count"]))}</td>}
+            {periods.length ? periods.flatMap((period) => [<td key={`${period}-eps`}>{forecastCellText("每股收益", institutionForecastMetricValue(row, period, "eps") ?? institutionForecastValue(row, period))}</td>, <td key={`${period}-profit`}>{valueText(institutionForecastMetricValue(row, period, "net_profit"))}</td>]) : <td>{valueText(pickValue(row, ["评级数量", "研报数量", "report_count"]))}</td>}
           </tr>;
         })}</tbody>
       </table>
