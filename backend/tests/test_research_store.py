@@ -98,3 +98,36 @@ def test_fixed_research_contract_has_three_years_five_rating_windows_and_exclusi
     assert payload["institution_forecast"]["rating_statistics"][0]["hold"] == 1
     assert {row["external_id"] for row in payload["latest_reports"]} == {"new"}
     assert {row["external_id"] for row in payload["reports"]} == {"old"}
+
+
+def test_research_contract_keeps_provider_consensus_and_report_level_estimates_separate() -> None:
+    payload = build_research_contract({
+        "earnings_forecast": [{
+            "forecast_year": "2026", "metric": "每股收益（元）", "mean": 2.17,
+            "source_code": "TONGHUASHUN", "source_name": "同花顺盈利预测",
+        }, {
+            "forecast_year": "2026", "metric": "归母净利润", "mean": 437.80,
+            "source_code": "TONGHUASHUN", "source_name": "同花顺盈利预测",
+        }],
+        "reports": [{
+            "source_code": "EASTMONEY", "external_id": "em-1", "title": "机构盈利预测",
+            "report_date": "2026-09-01", "institution": "测试机构", "rating": "增持",
+            "2026-盈利预测-收益": 2.25, "2026-盈利预测-市盈率": 5.23,
+            "source_url": "https://example.test/report",
+        }],
+        "provider_rating_statistics": {
+            "buy": 2, "add": 3, "neutral": 1, "reduce": 0, "sell": 0,
+            "total": 6, "reference_period": "近六个月", "source_code": "EASTMONEY",
+            "source_name": "东方财富盈利预测评级汇总",
+        },
+    })
+    metrics = {metric["metric_code"]: metric for metric in payload["earnings_forecast"]["metrics"]}
+    eps_2026 = metrics["EPS"]["values"]["2026"]
+    assert eps_2026["mean"] == 2.17
+    assert eps_2026["source_code"] == "TONGHUASHUN"
+    assert eps_2026["report_observations"][0]["value"] == 2.25
+    assert eps_2026["report_observations"][0]["value_scope"] == "REPORT_LEVEL"
+    assert "FORWARD_PE" in metrics
+    assert payload["institution_forecast"]["rating_statistics"][3]["buy"] == 2
+    assert payload["institution_forecast"]["rating_statistics"][3]["source_code"] == "EASTMONEY"
+    assert payload["earnings_forecast"]["completeness"]["status"] == "PARTIAL"

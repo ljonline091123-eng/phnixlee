@@ -3402,9 +3402,7 @@ class AkshareAdapter(MarketDataAdapter):
         metric_aliases = {
             "营业收入": ("TOTAL_REVENUE", "营业总收入", "亿元"),
             "营业总收入": ("TOTAL_REVENUE", "营业总收入", "亿元"),
-            "营业收入增长率": ("REVENUE_YOY", "营业总收入同比", "%"),
             "净利润": ("NET_PROFIT", "归母净利润", "亿元"),
-            "净利润增长率": ("NET_PROFIT_YOY", "归母净利润同比", "%"),
             "市盈率": ("FORWARD_PE", "预测市盈率", "倍"),
             "每股净资产": ("BVPS", "每股净资产", "元/股"),
             "净资产收益率": ("ROE", "净资产收益率", "%"),
@@ -3417,7 +3415,12 @@ class AkshareAdapter(MarketDataAdapter):
             raw_metric = str(cls._first_nonempty(item.get("预测指标"), item.get("指标"), item.get("metric")) or "").strip()
             if not raw_metric:
                 continue
-            definition = next((value for key, value in metric_aliases.items() if key in raw_metric), None)
+            if "营业收入" in raw_metric and any(token in raw_metric for token in ("增长率", "同比")):
+                definition = ("REVENUE_YOY", "营业总收入同比", "%")
+            elif "净利润" in raw_metric and any(token in raw_metric for token in ("增长率", "同比")):
+                definition = ("NET_PROFIT_YOY", "归母净利润同比", "%")
+            else:
+                definition = next((value for key, value in metric_aliases.items() if key in raw_metric), None)
             if definition is None:
                 continue
             metric_code, metric_name, unit = definition
