@@ -2044,10 +2044,31 @@ def _refresh_stock_f10_background(market: str, symbol: str) -> None:
             db.commit()
             db.refresh(log)
             try:
-                payload = _fetch_and_cache_f10_extended_data(db, f10_source, market, symbol)
-                log.status = "SUCCESS"
-                log.total_count = sum(1 for value in payload.values() if isinstance(value, dict))
-                log.persisted_count = log.total_count
+                persistence_stats: dict[str, Any] = {}
+                payload = _fetch_and_cache_f10_extended_data(
+                    db, f10_source, market, symbol,
+                    persistence_stats=persistence_stats,
+                )
+                available_sections = [
+                    section for section, value in payload.items()
+                    if _section_has_payload(section, value, market)
+                ]
+                returned_sections = [
+                    section for section, value in payload.items() if isinstance(value, dict)
+                ]
+                log.status = "SUCCESS" if available_sections else "PARTIAL"
+                log.total_count = len(returned_sections)
+                log.persisted_count = int(persistence_stats.get("updated_cache_sections") or 0)
+                log.request_json = {
+                    **(log.request_json or {}),
+                    "count_unit": "F10缓存分区",
+                    "returned_sections": returned_sections,
+                    "available_sections": available_sections,
+                    "normalized_research_records": persistence_stats.get("research_records") or {},
+                    "updated_cache_section_count": log.persisted_count,
+                }
+                if not available_sections:
+                    log.error_message = "远程刷新请求完成，但没有返回可用的F10扩展资料。"
                 log.completed_at = datetime.now(timezone.utc)
                 db.commit()
             except Exception as exc:

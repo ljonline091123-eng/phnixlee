@@ -58,6 +58,83 @@ def test_research_sections_are_dual_written_and_loaded_from_normalized_tables() 
         assert loaded["qa"][0]["question_id"] == "q-1"
 
 
+def test_research_persistence_deduplicates_rows_without_collapsing_distinct_metrics() -> None:
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    research = {
+        "reports": [{
+            "source_code": "EASTMONEY", "external_id": "report-1", "title": "机构研报",
+            "report_date": "2026-09-08", "institution": "测试机构",
+        }],
+        "latest_reports": [{
+            "source_code": "EASTMONEY", "external_id": "report-1", "title": "机构研报",
+            "report_date": "2026-09-08", "institution": "测试机构",
+            "content": "已获取的完整研报正文", "pdf_url": "https://example.test/report.pdf",
+        }],
+        "earnings_forecast": {"rows": [
+            {
+                "forecast_year": "2026", "metric": "归母净利润", "metric_code": "NET_PROFIT",
+                "prediction_count": 12, "mean": 437.42, "source_code": "TONGHUASHUN",
+            },
+            {
+                "forecast_year": "2026", "metric": "归母净利润同比", "metric_code": "NET_PROFIT",
+                "prediction_count": 12, "mean": 18.5, "source_code": "TONGHUASHUN",
+            },
+            {
+                "forecast_year": "2026", "metric": "归母净利润", "metric_code": "NET_PROFIT",
+                "prediction_count": 12, "mean": 438.0, "source_code": "TONGHUASHUN",
+                "source_updated_at": "2026-09-08",
+            },
+            {
+                "forecast_year": "2027", "metric": "Custom metric", "prediction_count": 2,
+                "mean": 5.0, "source_code": "TONGHUASHUN",
+            },
+        ]},
+        "institution_forecast": {"rows": [
+            {
+                "机构": "摩根大通", "研究员": "分析师甲", "报告日期": "2026-09-08",
+                "预测年报每股收益2026预测": 2.25, "source_name": "同花顺机构预测",
+            },
+            {
+                "机构": "摩根大通", "研究员": "分析师甲", "报告日期": "2026-09-08",
+                "预测年报每股收益2026预测": 2.25, "source_name": "同花顺机构预测",
+            },
+            {
+                "机构": "摩根大通", "研究员": "分析师乙", "报告日期": "2026-09-08",
+                "预测年报每股收益2026预测": 2.3, "source_name": "同花顺机构预测",
+            },
+        ]},
+        "qa": {"rows": [
+            {"question_id": "q-2", "question": "经营情况？", "source_name": "巨潮资讯互动易"},
+            {"question_id": "q-2", "question": "经营情况？", "answer": "以公告披露为准。", "source_name": "巨潮资讯互动易"},
+        ]},
+    }
+    with Session(engine) as db:
+        persist_research_sections(db, "CN_A", "688627", research)
+        db.commit()
+        persist_research_sections(db, "CN_A", "688627", research)
+        db.commit()
+
+        reports = db.scalars(select(StockBrokerResearchReport)).all()
+        earnings = db.scalars(select(StockEarningsConsensus).order_by(StockEarningsConsensus.metric_code)).all()
+        institutions = db.scalars(select(StockInstitutionForecast)).all()
+        qa = db.scalars(select(StockInvestorQA)).all()
+
+        assert len(reports) == 1
+        assert reports[0].content_text == "已获取的完整研报正文"
+        assert len(earnings) == 3
+        by_metric = {row.metric_code: row for row in earnings}
+        assert by_metric["NET_PROFIT"].mean_value == "438.0"
+        assert by_metric["NET_PROFIT_YOY"].mean_value == "18.5"
+        assert by_metric["NET_PROFIT_YOY"].unit == "%"
+        assert by_metric["CUSTOM_METRIC"].mean_value == "5.0"
+        assert len(institutions) == 2
+        assert {tuple(row.analysts_json) for row in institutions} == {("分析师甲",), ("分析师乙",)}
+        assert len(qa) == 1
+        assert qa[0].answer == "以公告披露为准。"
+    engine.dispose()
+
+
 def test_report_detail_is_local_first_and_does_not_repeat_remote_fetch() -> None:
     engine = create_engine("sqlite:///:memory:")
     Base.metadata.create_all(engine)
