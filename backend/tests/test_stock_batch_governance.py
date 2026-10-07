@@ -1,29 +1,32 @@
 from __future__ import annotations
 
 import hashlib
+from datetime import datetime, timezone
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
 import pytest
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, select
+from sqlalchemy import create_engine, select, text
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.api.stock_batch import (
     _enrich_stage_results,
     get_stock_batch_governance_job,
     list_stock_batch_governance_jobs,
+    retry_stock_batch_governance_job,
     router as stock_batch_router,
     submit_stock_batch_governance,
 )
+import app.api.stocks as stocks_api
 from app.db.base import Base
 from app.db.session import get_db
 from app.jobs.dispatcher import DatabaseJobDispatcher
 from app.jobs.tasks import TASK_HANDLERS
 from app.models.ai_hub import KnowledgeBase, KnowledgeDocument, KnowledgeGraph
 from app.models.lakehouse import DocumentChunkVersion
-from app.models.market_data import DataSource, StockSymbol
+from app.models.market_data import DataFetchLog, DataSource, StockSymbol
 from app.models.pipeline import PipelineRun, ScheduledJob
 from app.schemas.stock_batch import StockBatchGovernanceRequest
 from app.services import stock_batch
@@ -135,6 +138,187 @@ def test_submit_is_idempotent_and_exposes_worker_contract() -> None:
             with pytest.raises(HTTPException) as exc:
                 submit_stock_batch_governance(different, db)
             assert exc.value.status_code == 409
+    finally:
+        engine.dispose()
+        temporary.cleanup()
+
+
+def test_partial_batch_job_can_be_retried_without_mutating_original() -> None:
+    temporary, engine, sessions = _database()
+    try:
+        with sessions() as db:
+            request = StockBatchGovernanceRequest.model_validate({
+                "stocks": [{"market": "CN_A", "symbol": "000001"}],
+                "collect_business_data": True,
+                "business_types": ["NEWS"],
+                "export_lakehouse": False,
+                "archive_chunks": False,
+                "run_graph": False,
+            })
+            original = submit_stock_batch_governance(request, db)
+            original_job = db.get(ScheduledJob, original["job_id"])
+            original_run = db.get(PipelineRun, original_job.pipeline_run_id)
+            original_job.status = "COMPLETED"
+            original_run.output_json = {"result_status": "PARTIAL"}
+            db.commit()
+
+            retry = retry_stock_batch_governance_job(original_job.id, db)
+            assert retry["job_id"] != original_job.id
+            assert retry["job_status"] == "PENDING"
+            assert original_job.status == "COMPLETED"
+            assert db.get(PipelineRun, original_job.pipeline_run_id).output_json["result_status"] == "PARTIAL"
+            retry_job = db.get(ScheduledJob, retry["job_id"])
+            retry_request = retry_job.payload_json["request"]
+            assert retry_request["stocks"] == [{"market": "CN_A", "symbol": "000001"}]
+            assert retry_job.idempotency_key != original_job.idempotency_key
+            assert "idempotency_key" not in retry_request
+
+            with pytest.raises(HTTPException) as exc:
+                retry_stock_batch_governance_job(retry_job.id, db)
+            assert exc.value.status_code == 409
+    finally:
+        engine.dispose()
+        temporary.cleanup()
+
+
+def test_retry_lifecycle_hides_stale_running_result_and_exposes_retry_time() -> None:
+    temporary, engine, sessions = _database()
+    try:
+        with sessions() as db:
+            request = StockBatchGovernanceRequest.model_validate({
+                "stocks": [{"market": "CN_A", "symbol": "000001"}],
+                "collect_business_data": True,
+                "business_types": ["NEWS"],
+                "export_lakehouse": False,
+                "archive_chunks": False,
+                "run_graph": False,
+            })
+            submitted = submit_stock_batch_governance(request, db)
+            job = db.get(ScheduledJob, submitted["job_id"])
+            run = db.get(PipelineRun, job.pipeline_run_id)
+            run.output_json = {"result_status": "RUNNING", "progress": 63}
+            job.status = "RETRY"
+            job.run_after = datetime(2026, 10, 7, 23, 0, tzinfo=timezone.utc)
+            db.commit()
+
+            detail = get_stock_batch_governance_job(job.id, db)
+            assert detail["job_status"] == "RETRY"
+            assert detail["status"] == "RETRY"
+            assert detail["result_status"] is None
+            assert detail["run_after"] == job.run_after
+            assert detail["worker_required"] is True
+    finally:
+        engine.dispose()
+        temporary.cleanup()
+
+
+def test_failed_fetch_log_is_reported_in_per_stock_errors(monkeypatch) -> None:
+    temporary, engine, sessions = _database()
+    try:
+        with sessions() as db:
+            stock = db.scalar(select(StockSymbol).where(StockSymbol.market == "CN_A"))
+            monkeypatch.setattr(stock_batch, "_fetch_one", lambda *_args, **_kwargs: {
+                "status": "FAILED",
+                "source_code": "AKSHARE",
+                "fetch_log_id": 82,
+                "error": "remote provider timed out",
+            })
+
+            result = stock_batch._collect_stock(
+                db,
+                stock,
+                business_types=["NEWS"],
+                kline_days=30,
+                disclosure_days=90,
+            )
+
+            assert result["status"] == "FAILED"
+            assert result["operations"]["NEWS"]["status"] == "FAILED"
+            assert result["errors"] == [{
+                "data_type": "NEWS",
+                "status": "FAILED",
+                "message": "remote provider timed out",
+                "fetch_log_id": 82,
+            }]
+    finally:
+        engine.dispose()
+        temporary.cleanup()
+
+
+def test_f10_background_continues_research_refresh_after_core_failure(monkeypatch) -> None:
+    temporary, engine, sessions = _database()
+    try:
+        monkeypatch.setattr(stocks_api, "SessionLocal", sessions)
+
+        def fail_core_refresh(*_args, **_kwargs):
+            raise RuntimeError("core quote provider unavailable")
+
+        monkeypatch.setattr(
+            stocks_api.StockOnDemandService,
+            "refresh_stock_data",
+            fail_core_refresh,
+        )
+        calls = []
+
+        def fetch_f10(_db, _source, _market, _symbol, *, persistence_stats):
+            calls.append(True)
+            persistence_stats["research_records"] = {"reports": 1}
+            persistence_stats["updated_cache_sections"] = 1
+            return {"profile": {"fields": {"name": "test"}}}
+
+        monkeypatch.setattr(stocks_api, "_fetch_and_cache_f10_extended_data", fetch_f10)
+
+        stocks_api._refresh_stock_f10_background("CN_A", "000001")
+
+        with sessions() as db:
+            logs = db.scalars(select(DataFetchLog).where(
+                DataFetchLog.market == "CN_A",
+                DataFetchLog.symbol == "000001",
+                DataFetchLog.interface_code == "F10_EXTENDED_BACKGROUND",
+            )).all()
+            assert len(logs) == 1
+            assert calls == [True]
+            assert logs[0].status == "PARTIAL"
+            assert "core quote provider unavailable" in logs[0].error_message
+            assert logs[0].request_json["stage_results"]["CORE_REFRESH"]["status"] == "FAILED"
+            assert logs[0].request_json["stage_results"]["F10_EXTENDED"]["status"] == "SUCCESS"
+            assert logs[0].request_json["normalized_research_records"] == {"reports": 1}
+            assert logs[0].completed_at is not None
+    finally:
+        engine.dispose()
+        temporary.cleanup()
+
+
+def test_f10_refresh_without_source_is_not_queued(monkeypatch) -> None:
+    from types import SimpleNamespace
+
+    from fastapi import BackgroundTasks
+
+    temporary, engine, sessions = _database()
+    try:
+        with sessions() as db:
+            source = db.scalar(select(DataSource))
+            source.enabled = False
+            db.commit()
+            snapshot = SimpleNamespace(refresh_status={})
+            monkeypatch.setattr(
+                stocks_api,
+                "F10Workflow",
+                lambda *_args, **_kwargs: SimpleNamespace(execute=lambda _command: snapshot),
+            )
+            background_tasks = BackgroundTasks()
+
+            stocks_api.get_stock_f10(
+                "CN_A",
+                "1",
+                refresh=True,
+                background_tasks=background_tasks,
+                db=db,
+            )
+
+            assert snapshot.refresh_status["background_status"] == "BACKGROUND_NO_SOURCE"
+            assert "未配置启用中的 F10 数据源" in snapshot.refresh_status["background_error"]
+            assert background_tasks.tasks == []
     finally:
         engine.dispose()
         temporary.cleanup()
@@ -597,6 +781,48 @@ def test_empty_f10_placeholder_is_not_reported_as_success(monkeypatch) -> None:
             assert result["status"] == "PARTIAL"
             assert result["section_count"] == 0
             assert result["sections"] == []
+    finally:
+        engine.dispose()
+        temporary.cleanup()
+
+
+def test_failed_collection_transactions_do_not_cascade_to_later_types(monkeypatch) -> None:
+    temporary, engine, sessions = _database()
+    try:
+        with sessions() as db:
+            stock = db.scalar(select(StockSymbol).where(StockSymbol.market == "CN_A"))
+            db.execute(text("CREATE TABLE batch_rollback_probe (id INTEGER PRIMARY KEY)"))
+            db.commit()
+
+            def fail_with_integrity_error(session):
+                session.execute(text("INSERT INTO batch_rollback_probe (id) VALUES (1)"))
+                session.execute(text("INSERT INTO batch_rollback_probe (id) VALUES (1)"))
+
+            monkeypatch.setattr(
+                stock_batch, "_run_f10_refresh",
+                lambda session, _market, _symbol: fail_with_integrity_error(session),
+            )
+
+            def fetch_one(session, *, data_type, **_kwargs):
+                if data_type == "NEWS":
+                    fail_with_integrity_error(session)
+                assert session.scalar(text("SELECT COUNT(*) FROM batch_rollback_probe")) == 0
+                return {"status": "SUCCESS"}
+
+            monkeypatch.setattr(stock_batch, "_fetch_one", fetch_one)
+            result = stock_batch._collect_stock(
+                db,
+                stock,
+                business_types=["F10", "NEWS", "NOTICE"],
+                kline_days=30,
+                disclosure_days=90,
+            )
+
+            assert result["status"] == "PARTIAL"
+            assert result["operations"]["F10"]["status"] == "FAILED"
+            assert result["operations"]["NEWS"]["status"] == "FAILED"
+            assert result["operations"]["NOTICE"]["status"] == "SUCCESS"
+            assert len(result["errors"]) == 2
     finally:
         engine.dispose()
         temporary.cleanup()

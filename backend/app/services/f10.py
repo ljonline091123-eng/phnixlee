@@ -1858,19 +1858,25 @@ def _fetch_and_cache_f10_extended_data(
     source: DataSource,
     market: str,
     symbol: str,
+    persistence_stats: dict[str, Any] | None = None,
 ) -> dict[str, dict]:
     extended_data = get_adapter(source.adapter_type).fetch_extended_data(market, symbol)
     research = extended_data.get("research_sections")
     if isinstance(research, dict):
-        persist_research_sections(db, market, symbol, research)
+        research_counts = persist_research_sections(db, market, symbol, research)
         db.commit()
+        if persistence_stats is not None:
+            persistence_stats["research_records"] = research_counts
         persisted = load_research_sections(db, market, symbol)
         research.update({key: rows for key, rows in persisted.items() if rows})
     service = StockOnDemandService(db)
+    updated_cache_sections = 0
     for section in F10_CACHE_SECTIONS:
         payload = extended_data.get(section)
         if isinstance(payload, dict):
-            service.upsert_f10_cache(source, market, symbol, section, payload)
+            updated_cache_sections += service.upsert_f10_cache(source, market, symbol, section, payload)
+    if persistence_stats is not None:
+        persistence_stats["updated_cache_sections"] = updated_cache_sections
     return {**_empty_extended_data("本地暂无缓存，可点击“拉取最新”获取。"), **extended_data}
 
 def _ensure_neeq_f10_from_core(

@@ -457,7 +457,9 @@ def _job_view(db: Session, job: ScheduledJob, *, details: bool = True) -> dict:
     run = db.get(PipelineRun, job.pipeline_run_id)
     output = dict((run.output_json if run else {}) or {})
     stock_count = len(((job.payload_json or {}).get("request") or {}).get("stocks") or [])
-    result_status = output.get("result_status")
+    # PipelineRun keeps the last progress snapshot on worker retry/failure. Its
+    # RUNNING result is not the job's current lifecycle status.
+    result_status = output.get("result_status") if job.status == "COMPLETED" else None
     display_status = result_status if job.status == "COMPLETED" and result_status else job.status
     status = {
         "job_id": job.id,
@@ -473,6 +475,7 @@ def _job_view(db: Session, job: ScheduledJob, *, details: bool = True) -> dict:
         ),
         "attempts": job.attempts,
         "max_attempts": job.max_attempts,
+        "run_after": job.run_after if job.status in {"PENDING", "RETRY"} else None,
         "error_message": job.error_message or (run.error_message if run else None),
         "created_at": job.created_at,
         "started_at": job.started_at,
@@ -575,3 +578,45 @@ def get_stock_batch_governance_job(job_id: int, db: Session = Depends(get_db)) -
     if job is None or job.task_type != TASK_TYPE:
         raise HTTPException(status_code=404, detail="批量采集治理任务不存在")
     return _job_view(db, job, details=True)
+
+
+@router.post("/{job_id}/retry", status_code=202, response_model=StockBatchGovernanceResponse)
+def retry_stock_batch_governance_job(
+    job_id: int,
+    db: Session = Depends(get_db),
+) -> dict:
+    """Retry a terminal/failed batch using its original, validated request.
+
+    A retry is a new durable job and therefore receives a new idempotency key;
+    the original job and its output remain immutable audit history.  Running
+    jobs are deliberately rejected so the UI cannot create concurrent duplicate
+    collection runs by repeatedly clicking a retry control.
+    """
+    job = db.get(ScheduledJob, job_id)
+    if job is None or job.task_type != TASK_TYPE:
+        raise HTTPException(status_code=404, detail="批量采集治理任务不存在")
+
+    lifecycle = str(job.status or "").upper()
+    run = db.get(PipelineRun, job.pipeline_run_id)
+    output = dict((run.output_json if run else {}) or {})
+    result_status = str(output.get("result_status") or "").upper()
+    if lifecycle in {"PENDING", "RUNNING", "RETRY"}:
+        raise HTTPException(status_code=409, detail="任务仍在队列或执行中，请等待当前任务结束")
+    if lifecycle == "COMPLETED" and result_status not in {"PARTIAL", "FAILED"}:
+        raise HTTPException(status_code=409, detail="只有部分完成或失败的任务可以重试")
+    if lifecycle not in {"FAILED", "COMPLETED"}:
+        raise HTTPException(status_code=409, detail=f"当前任务状态不支持重试：{lifecycle or 'UNKNOWN'}")
+
+    original_request = dict(((job.payload_json or {}).get("request") or {}))
+    if not original_request:
+        raise HTTPException(status_code=409, detail="原任务没有可恢复的请求参数")
+    original_request.pop("idempotency_key", None)
+    original_request["idempotency_key"] = f"retry:{job_id}:{uuid4()}"
+    try:
+        retry_request = StockBatchGovernanceRequest.model_validate(original_request)
+    except Exception as exc:
+        raise HTTPException(status_code=409, detail={
+            "message": "原任务请求已不再符合当前批量治理契约，无法安全重试",
+            "error": str(exc)[:800],
+        }) from exc
+    return submit_stock_batch_governance(retry_request, db)

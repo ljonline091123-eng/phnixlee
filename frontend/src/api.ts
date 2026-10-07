@@ -279,6 +279,7 @@ export type StockF10 = {
   refresh_status?: {
     status?: string;
     background_status?: string;
+    background_error?: string;
     used_local_cache?: boolean;
     errors?: string[];
     stages?: Array<Record<string, unknown>>;

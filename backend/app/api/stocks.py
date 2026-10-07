@@ -34,6 +34,7 @@ from app.services.f10 import (
     _fetch_and_cache_f10_extended_data,
     _hk_published_reports_need_refresh,
     _needs_f10_refresh,
+    _section_has_payload,
     NOTICE_CATEGORIES,
     classify_notice,
 )
@@ -2009,27 +2010,16 @@ def _reserve_f10_background_refresh(market: str, symbol: str) -> bool:
         return True
 
 
-def _refresh_stock_f10_background(market: str, symbol: str) -> None:
+def _refresh_stock_f10_background(
+    market: str,
+    symbol: str,
+    source_id: int | None = None,
+) -> None:
     key = (market, symbol)
     try:
         with SessionLocal() as db:
-            stock = db.scalar(select(StockSymbol).where(
-                StockSymbol.market == market,
-                StockSymbol.symbol == symbol,
-            ))
-            core_source = db.scalar(select(DataSource).where(
-                DataSource.source_code == "AKSHARE",
-                DataSource.enabled.is_(True),
-            ))
-            if stock is not None and core_source is not None and market in LIVE_REFRESH_MARKETS:
-                StockOnDemandService(db).refresh_stock_data(
-                    source=core_source,
-                    market=market,
-                    symbol=symbol,
-                    list_date=stock.list_date,
-                )
-
-            f10_source = select_data_source(db, market, "F10", fallback_code="AKSHARE")
+            f10_source = db.get(DataSource, source_id) if source_id is not None else None
+            f10_source = f10_source or select_data_source(db, market, "F10", fallback_code="AKSHARE")
             if f10_source is None:
                 return
             log = DataFetchLog(
@@ -2037,25 +2027,109 @@ def _refresh_stock_f10_background(market: str, symbol: str) -> None:
                 interface_code="F10_EXTENDED_BACKGROUND",
                 market=market,
                 symbol=symbol,
-                request_json={"mode": "BACKGROUND_INCREMENTAL"},
+                request_json={"mode": "BACKGROUND_INCREMENTAL", "stage": "STARTING"},
                 status="RUNNING",
             )
             db.add(log)
             db.commit()
             db.refresh(log)
+            log_id = log.id
+            stage_results: dict[str, dict[str, str]] = {}
+            core_error: str | None = None
             try:
-                payload = _fetch_and_cache_f10_extended_data(db, f10_source, market, symbol)
-                log.status = "SUCCESS"
-                log.total_count = sum(1 for value in payload.values() if isinstance(value, dict))
-                log.persisted_count = log.total_count
+                log.request_json = {**(log.request_json or {}), "stage": "CORE_REFRESH"}
+                db.commit()
+                try:
+                    stock = db.scalar(select(StockSymbol).where(
+                        StockSymbol.market == market,
+                        StockSymbol.symbol == symbol,
+                    ))
+                    core_source = db.scalar(select(DataSource).where(
+                        DataSource.source_code == "AKSHARE",
+                        DataSource.enabled.is_(True),
+                    ))
+                    if stock is not None and core_source is not None and market in LIVE_REFRESH_MARKETS:
+                        StockOnDemandService(db).refresh_stock_data(
+                            source=core_source,
+                            market=market,
+                            symbol=symbol,
+                            list_date=stock.list_date,
+                        )
+                        stage_results["CORE_REFRESH"] = {"status": "SUCCESS"}
+                    else:
+                        stage_results["CORE_REFRESH"] = {"status": "SKIPPED"}
+                except Exception as exc:
+                    db.rollback()
+                    core_error = str(exc)[:1000]
+                    stage_results["CORE_REFRESH"] = {
+                        "status": "FAILED",
+                        "error": core_error,
+                    }
+
+                log = db.get(DataFetchLog, log_id)
+                if log is None:
+                    return
+                log.request_json = {
+                    **(log.request_json or {}),
+                    "stage": "F10_EXTENDED",
+                    "stage_results": stage_results,
+                }
+                db.commit()
+                persistence_stats: dict[str, Any] = {}
+                payload = _fetch_and_cache_f10_extended_data(
+                    db, f10_source, market, symbol,
+                    persistence_stats=persistence_stats,
+                )
+                available_sections = [
+                    section for section, value in payload.items()
+                    if _section_has_payload(section, value, market)
+                ]
+                returned_sections = [
+                    section for section, value in payload.items() if isinstance(value, dict)
+                ]
+                stage_results["F10_EXTENDED"] = {
+                    "status": "SUCCESS" if available_sections else "PARTIAL",
+                }
+                log.status = "SUCCESS" if available_sections and core_error is None else "PARTIAL"
+                log.total_count = len(returned_sections)
+                log.persisted_count = int(persistence_stats.get("updated_cache_sections") or 0)
+                log.request_json = {
+                    **(log.request_json or {}),
+                    "count_unit": "F10缓存分区",
+                    "returned_sections": returned_sections,
+                    "available_sections": available_sections,
+                    "normalized_research_records": persistence_stats.get("research_records") or {},
+                    "updated_cache_section_count": log.persisted_count,
+                    "stage_results": stage_results,
+                }
+                if not available_sections:
+                    log.error_message = "远程刷新请求完成，但没有返回可用的F10扩展资料。"
+                if core_error:
+                    core_message = f"CORE_REFRESH: {core_error}"
+                    log.error_message = f"{core_message}; {log.error_message}" if log.error_message else core_message
                 log.completed_at = datetime.now(timezone.utc)
                 db.commit()
             except Exception as exc:
                 db.rollback()
-                failed_log = db.get(DataFetchLog, log.id)
+                failed_log = db.get(DataFetchLog, log_id)
                 if failed_log is not None:
                     failed_log.status = "FAILED"
-                    failed_log.error_message = str(exc)[:4000]
+                    f10_error = str(exc)[:3000]
+                    core_error = locals().get("core_error")
+                    errors = []
+                    if core_error:
+                        errors.append(f"CORE_REFRESH: {core_error}")
+                    errors.append(f"F10_EXTENDED: {f10_error}")
+                    failed_log.error_message = "; ".join(errors)[:4000]
+                    stage_results = locals().get("stage_results", {})
+                    failed_log.request_json = {
+                        **(failed_log.request_json or {}),
+                        "failed_stage": "F10_EXTENDED",
+                        "stage_results": {
+                            **stage_results,
+                            "F10_EXTENDED": {"status": "FAILED", "error": f10_error},
+                        },
+                    }
                     failed_log.completed_at = datetime.now(timezone.utc)
                     db.commit()
     finally:
@@ -2104,16 +2178,25 @@ def get_stock_f10(
             symbol_reader=_stock_symbol_read,
         ).execute(command)
         if refresh and not local_only and background_tasks is not None:
-            queued = _reserve_f10_background_refresh(command.market.upper(), _normalize_symbol(command.market.upper(), command.symbol))
-            if queued:
-                background_tasks.add_task(
-                    _refresh_stock_f10_background,
-                    command.market.upper(),
-                    _normalize_symbol(command.market.upper(), command.symbol),
+            f10_source = select_data_source(db, command.market.upper(), "F10", fallback_code="AKSHARE")
+            if f10_source is None or not f10_source.enabled:
+                snapshot.refresh_status.update({
+                    "background_status": "BACKGROUND_NO_SOURCE",
+                    "background_error": "未配置启用中的 F10 数据源，远程扩展数据未提交后台更新。",
+                })
+            else:
+                normalized_symbol = _normalize_symbol(command.market.upper(), command.symbol)
+                queued = _reserve_f10_background_refresh(command.market.upper(), normalized_symbol)
+                if queued:
+                    background_tasks.add_task(
+                        _refresh_stock_f10_background,
+                        command.market.upper(),
+                        normalized_symbol,
+                        f10_source.id,
+                    )
+                snapshot.refresh_status["background_status"] = (
+                    "BACKGROUND_QUEUED" if queued else "BACKGROUND_ALREADY_RUNNING"
                 )
-            snapshot.refresh_status["background_status"] = (
-                "BACKGROUND_QUEUED" if queued else "BACKGROUND_ALREADY_RUNNING"
-            )
         return snapshot
     except F10ValidationError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

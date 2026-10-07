@@ -971,6 +971,15 @@ function formatDate(value?: string | null): string {
   return text;
 }
 
+function parseApiTimestamp(value?: string | null): number {
+  const text = String(value || "").trim();
+  if (!text) return Number.NaN;
+  // SQLite drops timezone metadata from UTC DateTime columns. Treat an
+  // unqualified API timestamp as UTC so it remains comparable to Date.now().
+  const hasTimezone = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(text);
+  return Date.parse(hasTimezone ? text : `${text}Z`);
+}
+
 function friendlyRefreshError(reason: unknown): string {
   const raw = reason instanceof Error ? reason.message : String(reason || "");
   if (/abort|cancel/i.test(raw)) return "";
@@ -2905,7 +2914,7 @@ export function StockDetailDrawer({
         const logs = await api.listStockFetchLogs(stock.market, stock.symbol, 20, signal);
         const background = logs.find((row) => (
           row.interface_code === "F10_EXTENDED_BACKGROUND"
-          && Date.parse(row.started_at || "") >= startedAfter
+          && parseApiTimestamp(row.started_at) >= startedAfter
         ));
         if (!background || background.status === "RUNNING") {
           setRefreshStage("行情已更新，财务、披露与研究数据正在后台同步");
@@ -2979,8 +2988,12 @@ export function StockDetailDrawer({
       });
       if (requestId.current === current && !signal?.aborted) {
         setDetail(remote);
+        const backgroundStatus = String(remote.refresh_status?.background_status || "");
         backgroundQueued = ["BACKGROUND_QUEUED", "BACKGROUND_ALREADY_RUNNING"]
-          .includes(String(remote.refresh_status?.background_status || ""));
+          .includes(backgroundStatus);
+        if (backgroundStatus === "BACKGROUND_NO_SOURCE") {
+          setRemoteError(remote.refresh_status?.background_error || "未配置启用中的 F10 数据源，远程扩展数据未更新。");
+        }
         setRefreshProgress(backgroundQueued ? 82 : 96);
         setRefreshStage(backgroundQueued ? "行情已更新，慢速数据转入后台同步" : "正在整理 F10 与研究数据");
         setNewsRows(null);
