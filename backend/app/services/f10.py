@@ -755,11 +755,14 @@ def build_research_contract(research: dict[str, Any]) -> dict[str, Any]:
     for row in earnings_rows:
         definition = _forecast_metric_definition(row)
         year = str(row.get("forecast_year") or row.get("预测年度") or "")[:4]
-        if definition is None or year not in years:
+        if definition is None:
             continue
-        # Actual historical observations remain in ``rows`` for auditability,
-        # but only forecast observations should populate the forward matrix.
-        if row.get("actual") is True or row.get("is_forecast") is False:
+        is_actual = (
+            row.get("actual") is True
+            or row.get("is_forecast") is False
+            or str(row.get("value_scope") or "").upper() == "ACTUAL"
+        )
+        if not is_actual and year not in years:
             continue
         metric_code = definition["metric_code"]
         metric = metric_map.setdefault(metric_code, {
@@ -768,7 +771,43 @@ def build_research_contract(research: dict[str, Any]) -> dict[str, Any]:
             "unit": definition["unit"],
             "value_scope": "CONSENSUS",
             "values": {},
+            "actual_values": {},
         })
+        if is_actual:
+            # Historical observations are deliberately kept beside, rather
+            # than inside, the forward consensus matrix.  This lets the UI
+            # render an explicit ``A`` year and prevents an actual value from
+            # being mistaken for a future estimate.
+            actual_value = _first_forecast_value(
+                row, "value", "actual_value", "mean", "均值", "预测值"
+            )
+            if actual_value in (None, ""):
+                continue
+            source = register_source(
+                row, role="ACTUAL", methodology="SOURCE_HISTORICAL_ACTUAL"
+            )
+            actual_record = {
+                "value": actual_value,
+                "mean": actual_value,
+                "actual": True,
+                "is_forecast": False,
+                "value_scope": "ACTUAL",
+                "source_code": source["source_code"],
+                "source_name": source["source_name"],
+                "source_url": source.get("source_url"),
+                "source_updated_at": row.get("source_updated_at") or row.get("as_of"),
+                "methodology": "SOURCE_HISTORICAL_ACTUAL",
+            }
+            actual_record = {
+                key: value for key, value in actual_record.items()
+                if value not in (None, "")
+            }
+            current = metric["actual_values"].get(year)
+            current_date = str((current or {}).get("source_updated_at") or "")
+            incoming_date = str(actual_record.get("source_updated_at") or "")
+            if current is None or incoming_date >= current_date:
+                metric["actual_values"][year] = actual_record
+            continue
         source = register_source(row, role="CONSENSUS", methodology="PROVIDER_CONSENSUS")
         observation = {
             "prediction_count": _first_forecast_value(row, "prediction_count", "预测机构数"),
@@ -805,6 +844,7 @@ def build_research_contract(research: dict[str, Any]) -> dict[str, Any]:
             **definition,
             "value_scope": "REPORT_LEVEL",
             "values": {},
+            "actual_values": {},
         })
         register_source(observation, role="REPORT_OBSERVATION", methodology="SOURCE_REPORTED_ESTIMATE")
         value_record = metric["values"].setdefault(year, {})
@@ -836,13 +876,30 @@ def build_research_contract(research: dict[str, Any]) -> dict[str, Any]:
             for value in metric["values"].values()
             if isinstance(value, dict)
         }
+        actual_values = metric.get("actual_values") or {}
+        if actual_values:
+            metric["actual_years"] = sorted(actual_values)
+            scopes.add("ACTUAL")
         metric["value_scope"] = "MIXED" if len(scopes) > 1 else (next(iter(scopes)) if scopes else metric["value_scope"])
+
+    actual_years = sorted({
+        year
+        for metric in metric_map.values()
+        for year in (metric.get("actual_values") or {})
+    })
 
     available_codes = sorted(
         code for code, metric in metric_map.items()
         if any(
             any(value.get(key) not in (None, "") for key in ("value", "mean", "min", "max"))
             for value in metric["values"].values()
+        )
+    )
+    actual_codes = sorted(
+        code for code, metric in metric_map.items()
+        if any(
+            any(value.get(key) not in (None, "") for key in ("value", "mean", "min", "max"))
+            for value in (metric.get("actual_values") or {}).values()
         )
     )
     expected_codes = [code for code, _, _ in FORECAST_METRIC_CATALOG]
@@ -856,23 +913,33 @@ def build_research_contract(research: dict[str, Any]) -> dict[str, Any]:
         completeness_by_metric.append({
             "metric_code": code,
             "metric_name": name,
-            "status": "AVAILABLE" if available_years else "MISSING",
+            "status": "AVAILABLE" if available_years else (
+                "ACTUAL_ONLY" if code in actual_codes else "MISSING"
+            ),
             "available_years": available_years,
+            "actual_available_years": sorted(
+                (metric.get("actual_values") or {}).keys()
+            ) if metric else [],
             "missing_years": [year for year in years if year not in available_years],
         })
     completeness_ratio = round(len(available_codes) / len(expected_codes), 4) if expected_codes else 0.0
     result["earnings_forecast"] = {
         "forecast_years": years,
+        "actual_years": actual_years,
         "metrics": list(metric_map.values()),
         "rows": earnings_rows,
         "report_level_observations": report_observations,
         "source": result.get("earnings_forecast_source") or result.get("source"),
         "source_metadata": list(source_metadata.values()),
         "completeness": {
-            "status": "COMPLETE" if completeness_ratio == 1 else "PARTIAL" if available_codes else "UNAVAILABLE",
+            # Historical actuals are useful evidence, but they do not satisfy
+            # forward-consensus coverage.  Keep that distinction visible while
+            # reporting an actual-only payload as PARTIAL instead of empty.
+            "status": "COMPLETE" if completeness_ratio == 1 else "PARTIAL" if (available_codes or actual_codes) else "UNAVAILABLE",
             "coverage_ratio": completeness_ratio,
             "expected_metric_codes": expected_codes,
             "available_metric_codes": available_codes,
+            "actual_metric_codes": actual_codes,
             "missing_metric_codes": [code for code in expected_codes if code not in available_codes],
             "by_metric": completeness_by_metric,
         },
@@ -949,19 +1016,31 @@ def build_research_contract(research: dict[str, Any]) -> dict[str, Any]:
         )
         parsed = _parse_research_date(row.get("report_date") or row.get("报告日期") or row.get("日期"))
         (latest if parsed and parsed >= cutoff else archive).append(row)
-    if not latest and report_rows and not any(
-        _parse_research_date(row.get("report_date") or row.get("报告日期") or row.get("日期"))
-        for row in report_rows
-    ):
-        # Legacy provider snapshots sometimes omitted every report date while
-        # retaining newest-first order. Keep a bounded compatibility preview
-        # without inventing dates; all remaining rows stay in the archive.
+    latest_window_status = "HAS_REPORT_IN_LAST_YEAR" if latest else (
+        "NO_REPORTS" if not report_rows else "NO_REPORT_IN_LAST_YEAR"
+    )
+    latest_date_status = None
+    latest_message = ""
+    if not latest and report_rows:
+        # Do not leave a valid historical dataset looking empty merely because
+        # the requested one-year window has no rows.  Promote a bounded,
+        # newest-first preview to the latest panel and mark it explicitly as a
+        # historical fallback; the archive keeps the remaining rows and the
+        # two lists stay mutually exclusive.
         latest = archive[:10]
         archive = archive[10:]
+        latest_date_status = "HISTORICAL_FALLBACK"
+        latest_message = "近一年暂无公开研报，以下展示最近可用历史研报。"
         for row in latest:
-            row.setdefault("date_status", "UNKNOWN_LEGACY_ORDER")
+            row.setdefault("date_status", latest_date_status)
+    elif not latest and not report_rows:
+        latest_message = "当前数据源未返回研报。"
     result["latest_reports"] = latest
     result["reports"] = archive
+    result["latest_reports_window_status"] = latest_window_status
+    result["latest_reports_date_status"] = latest_date_status
+    result["latest_reports_message"] = latest_message
+    result["reports_window_status"] = "ARCHIVE"
     return result
 
 
@@ -1273,7 +1352,7 @@ def normalize_f10_sections(extended_data: dict[str, dict[str, Any]]) -> dict[str
         as_of=payload_as_of(research),
     )
     for key in (
-        "forecast_years", "metrics", "report_level_observations",
+        "forecast_years", "actual_years", "metrics", "report_level_observations",
         "source_metadata", "completeness",
     ):
         earnings_section[key] = earnings_contract.get(key) or ([] if key != "completeness" else {})
@@ -1311,9 +1390,30 @@ def normalize_f10_sections(extended_data: dict[str, dict[str, Any]]) -> dict[str
         ),
         earnings_section,
         institution_section,
-        _display_section("latest_reports", "最新研报", rows=research.get("latest_reports"), source=research.get("report_source") or research.get("source"), as_of=payload_as_of(research)),
-        _display_section("reports", "研报", rows=research.get("reports"), source=research.get("report_source") or research.get("source"), as_of=payload_as_of(research)),
+        _display_section(
+            "latest_reports",
+            "最新研报",
+            rows=research.get("latest_reports"),
+            source=research.get("report_source") or research.get("source"),
+            as_of=payload_as_of(research),
+            message=research.get("latest_reports_message") or None,
+        ),
+        _display_section(
+            "reports",
+            "研报",
+            rows=research.get("reports"),
+            source=research.get("report_source") or research.get("source"),
+            as_of=payload_as_of(research),
+        ),
     ])
+    latest_section = research_sections[-2]
+    latest_section["window_status"] = research.get("latest_reports_window_status") or (
+        "HAS_REPORT_IN_LAST_YEAR" if latest_section.get("rows") else "NO_REPORTS"
+    )
+    latest_section["date_status"] = research.get("latest_reports_date_status")
+    latest_section["window_message"] = research.get("latest_reports_message") or ""
+    reports_section = research_sections[-1]
+    reports_section["window_status"] = research.get("reports_window_status") or "ARCHIVE"
     research["sections"] = research_sections
     return extended_data
 

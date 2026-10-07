@@ -1,11 +1,123 @@
 from __future__ import annotations
 
+import json
+from datetime import date
 from unittest.mock import patch
 
 import pandas as pd
 
 from app.connectors.akshare_adapter import AkshareAdapter
 from app.services.f10 import normalize_f10_sections
+
+
+def test_ths_html_fallback_maps_yjycdata_to_eps_and_forward_pe() -> None:
+    """The THS HTML third column is PE, never net profit."""
+    current_year = date.today().year
+    rows = [
+        [str(current_year - 2), "0.16", "4.34", "SJ"],
+        [str(current_year - 1), None, "5.25", "SJ"],
+        [str(current_year), None, None, "SJ"],
+        [str(current_year + 1), "9.99", "10.0", "SJ"],
+    ]
+    response = type("Response", (), {
+        "content": (
+            f'<div id="yjycData">{json.dumps(rows, ensure_ascii=False)}</div>'
+        ).encode("utf-8"),
+        "raise_for_status": lambda self: None,
+    })()
+    client = type("Client", (), {
+        "__enter__": lambda self: self,
+        "__exit__": lambda self, *args: None,
+        "get": lambda self, url: response,
+    })()
+    with patch("app.connectors.akshare_adapter.httpx.Client", return_value=client):
+        parsed = AkshareAdapter._safe_ths_historical_forecast_records("000008")
+
+    assert {(row["forecast_year"], row["metric_code"]) for row in parsed} == {
+        (str(current_year - 2), "EPS"),
+        (str(current_year - 2), "FORWARD_PE"),
+        (str(current_year - 1), "FORWARD_PE"),
+    }
+    assert next(row for row in parsed if row["metric_code"] == "FORWARD_PE")["value"] == 4.34
+    assert all(row["metric_code"] != "NET_PROFIT" for row in parsed)
+
+
+def test_historical_only_earnings_are_visible_as_actuals_and_partial() -> None:
+    current_year = date.today().year
+    payload = normalize_f10_sections({
+        "profile": {"fields": {}, "concepts": []},
+        "holders": {},
+        "financial_summary": {},
+        "financial_statements": {},
+        "business_composition": {},
+        "research_sections": {
+            "earnings_forecast": [
+                {
+                    "forecast_year": str(current_year - 1),
+                    "metric": "每股收益",
+                    "metric_code": "EPS",
+                    "value": 0.16,
+                    "actual": True,
+                    "is_forecast": False,
+                    "value_scope": "ACTUAL",
+                },
+                {
+                    "forecast_year": str(current_year - 1),
+                    "metric": "预测市盈率",
+                    "metric_code": "FORWARD_PE",
+                    "value": 4.34,
+                    "actual": True,
+                    "is_forecast": False,
+                    "value_scope": "ACTUAL",
+                },
+            ],
+            "reports": [],
+        },
+    })
+    contract = payload["research_sections"]["earnings_forecast"]
+    assert contract["actual_years"] == [str(current_year - 1)]
+    metrics = {row["metric_code"]: row for row in contract["metrics"]}
+    assert metrics["EPS"]["actual_values"][str(current_year - 1)]["value"] == 0.16
+    assert metrics["FORWARD_PE"]["actual_values"][str(current_year - 1)]["value"] == 4.34
+    assert contract["completeness"]["status"] == "PARTIAL"
+    assert all(year != str(current_year) for year in contract["actual_years"])
+
+
+def test_historical_reports_fallback_keeps_rating_statistics_and_exclusive_lists() -> None:
+    current_year = date.today().year
+    payload = normalize_f10_sections({
+        "profile": {"fields": {}, "concepts": []},
+        "holders": {},
+        "financial_summary": {},
+        "financial_statements": {},
+        "business_composition": {},
+        "research_sections": {
+            "reports": [
+                {
+                    "source_code": "EASTMONEY",
+                    "external_id": "old-1",
+                    "title": "历史研报一",
+                    "report_date": f"{current_year - 2}-09-01",
+                    "rating": "买入",
+                },
+                {
+                    "source_code": "EASTMONEY",
+                    "external_id": "old-2",
+                    "title": "历史研报二",
+                    "report_date": f"{current_year - 2}-08-01",
+                    "rating": "增持",
+                },
+            ],
+            "institution_forecast": [],
+        },
+    })
+    research = payload["research_sections"]
+    assert research["latest_reports_window_status"] == "NO_REPORT_IN_LAST_YEAR"
+    assert {row["external_id"] for row in research["latest_reports"]} == {"old-1", "old-2"}
+    assert research["reports"] == []
+    institution = next(row for row in research["sections"] if row["key"] == "institution_forecast")
+    assert institution["rows"] == []
+    assert any(row["total"] > 0 for row in institution["rating_statistics"])
 
 
 def test_cninfo_qa_rows_are_scoped_sorted_and_traceable() -> None:

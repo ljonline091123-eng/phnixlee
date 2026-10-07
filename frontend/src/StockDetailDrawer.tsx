@@ -255,7 +255,7 @@ function agentDisplayName(agent: unknown): string {
   return labels[key] || (key ? "研究智能体" : "研究智能体");
 }
 
-type RatingBucket = { period: string; buy: number; add: number; neutral: number; reduce: number; sell: number; total: number };
+type RatingBucket = { period: string; buy: number; add: number; neutral: number; hold?: number; reduce: number; sell: number; total: number };
 type RatingStatisticsProjection = { buckets?: unknown; reference_date?: unknown; reference_basis?: unknown };
 
 function ratingText(value: unknown): string {
@@ -332,7 +332,12 @@ function projectedRatingStatistics(section: JsonRecord, rows: JsonRecord[]): { b
     period: String(row.period || ""),
     buy: toNumber(row.buy) ?? 0,
     add: toNumber(row.add) ?? 0,
-    neutral: toNumber(row.neutral) ?? 0,
+    // Some providers distinguish “持有” from “中性”, while the research
+    // table uses one neutral/hold column. Preserve the raw hold count on the
+    // bucket but merge it into the displayed neutral count so ratings are not
+    // silently omitted from the total breakdown.
+    neutral: (toNumber(row.neutral) ?? 0) + (toNumber(row.hold) ?? 0),
+    hold: toNumber(row.hold) ?? 0,
     reduce: toNumber(row.reduce) ?? 0,
     sell: toNumber(row.sell) ?? 0,
     total: toNumber(row.total) ?? 0,
@@ -356,7 +361,8 @@ function projectedRatingStatistics(section: JsonRecord, rows: JsonRecord[]): { b
     const providerCounts = {
       buy: toNumber(providerProjection.buy) ?? 0,
       add: toNumber(providerProjection.add) ?? 0,
-      neutral: toNumber(providerProjection.neutral) ?? 0,
+      neutral: (toNumber(providerProjection.neutral) ?? 0) + (toNumber(providerProjection.hold) ?? 0),
+      hold: toNumber(providerProjection.hold) ?? 0,
       reduce: toNumber(providerProjection.reduce) ?? 0,
       sell: toNumber(providerProjection.sell) ?? 0,
     };
@@ -550,7 +556,7 @@ function structuredEarningsForecast(section: JsonRecord): { years: string[]; act
     code: String(metric.metric_code || metric.metric || `metric-${index}`),
     name: String(metric.metric_name || metric.label || metric.name || metric.metric_code || `预测指标${index + 1}`),
     unit: String(metric.unit || ""),
-    values: Object.fromEntries(Object.entries({ ...asRecord(metric.actual_values), ...asRecord(metric.values) }).map(([year, value]) => [String(year), typeof value === "object" ? asRecord(value) : { value }])),
+    values: Object.fromEntries(Object.entries({ ...asRecord(metric.values), ...asRecord(metric.actual_values) }).map(([year, value]) => [String(year), typeof value === "object" ? asRecord(value) : { value }])),
   }));
   const forecastYears = stringList(section.forecast_years || section.years).map((year) => String(year).match(/(?:19|20)\d{2}/)?.[0] || String(year));
   const actualYears = new Set(stringList(section.actual_years).map((year) => String(year).match(/(?:19|20)\d{2}/)?.[0] || String(year)));
@@ -666,12 +672,25 @@ function institutionForecastMetricValue(row: JsonRecord, period: string, metric:
 
 function ResearchInstitutionForecastPanel({ section }: { section: JsonRecord }) {
   const rows = useMemo(() => sortedResearchRows(sectionRows(section)), [section]);
-  const [mode, setMode] = useState<"forecast" | "rating">("forecast");
   const ratingProjection = useMemo(() => projectedRatingStatistics(section, rows), [section, rows]);
   const periods = useMemo(() => institutionForecastPeriods(section, rows), [section, rows]);
+  const hasRatingData = ratingProjection.buckets.some((row) => row.total > 0);
+  // When the provider has no institution rows but local report ratings are
+  // available, open the useful view immediately.  Users should not have to
+  // discover a hidden tab to see why this section is still partially useful.
+  const [mode, setMode] = useState<"forecast" | "rating">(
+    rows.length ? "forecast" : hasRatingData ? "rating" : "forecast",
+  );
+  useEffect(() => {
+    setMode(rows.length ? "forecast" : hasRatingData ? "rating" : "forecast");
+  }, [rows.length, hasRatingData]);
+  const sectionStatus = researchStatus(section, "status");
+  const dateStatus = researchStatus(section, "date_status");
+  const windowStatus = researchStatus(section, "window_status");
+  const missingDetail = researchMessage(section, "当前数据源未返回机构预测明细");
   return <section className="research-source-section research-forecast-panel">
     <div className="research-forecast-heading">
-      <div><span className="financial-section-mark" aria-hidden="true" /><h3>机构预测</h3></div>
+      <div><span className="financial-section-mark" aria-hidden="true" /><h3>机构预测</h3>{!rows.length && hasRatingData ? <span className="research-forecast-coverage">暂无明细 · 已有评级统计</span> : null}</div>
       <div className="research-forecast-tabs" role="tablist" aria-label="机构预测视图">
         <button type="button" role="tab" aria-selected={mode === "forecast"} className={mode === "forecast" ? "active" : ""} onClick={() => setMode("forecast")}>机构预测</button>
         <button type="button" role="tab" aria-selected={mode === "rating"} className={mode === "rating" ? "active" : ""} onClick={() => setMode("rating")}>评级统计</button>
@@ -692,13 +711,14 @@ function ResearchInstitutionForecastPanel({ section }: { section: JsonRecord }) 
           </tr>;
         })}</tbody>
       </table>
-    </div> : <p className="research-true-empty" role="tabpanel">{String(section.message || "当前数据源未返回机构预测")}</p> : (
+    </div> : <p className="research-true-empty" role="tabpanel">{missingDetail}</p> : (
       <div className="rating-stat-table-wrap" role="tabpanel" aria-label="评级统计">
         <table className="rating-stat-table"><thead><tr><th scope="col">时间段</th><th scope="col">买入</th><th scope="col">增持</th><th scope="col">中性</th><th scope="col">减持</th><th scope="col">卖出</th><th scope="col">总家数</th></tr></thead><tbody>{ratingProjection.buckets.map((row) => <tr key={row.period}><th scope="row">{row.period}</th><td className="rating-buy">{row.buy}</td><td>{row.add}</td><td>{row.neutral}</td><td>{row.reduce}</td><td>{row.sell}</td><td>{row.total}</td></tr>)}</tbody></table>
         {!ratingProjection.buckets.some((row) => row.total > 0) ? <p className="research-table-note">当前时间窗内暂无可统计的机构评级。</p> : null}
+        {!rows.length && hasRatingData ? <p className="research-table-note">机构预测明细暂未由供应商返回；上表为本地已落库研报的评级滚动统计，状态：{sectionStatus || "PARTIAL"}。</p> : null}
       </div>
     )}
-    {mode === "rating" && ratingProjection.referenceDate ? <p className="research-table-note">统计基准：{formatDate(ratingProjection.referenceDate)}（{ratingProjection.basis}）</p> : null}
+    {mode === "rating" && ratingProjection.referenceDate ? <p className="research-table-note">统计基准：{formatDate(ratingProjection.referenceDate)}（{ratingProjection.basis}）{dateStatus || windowStatus ? ` · 数据状态：${dateStatus || windowStatus}` : ""}</p> : null}
     <ResearchSectionSource section={section} />
   </section>;
 }
@@ -822,24 +842,54 @@ function isReportWithinLastYear(row: JsonRecord): boolean {
   return value >= cutoff && value <= Date.now() + 86400000;
 }
 
-function ResearchLatestReportsPanel({ section, onOpen }: { section: JsonRecord; onOpen: (section: JsonRecord) => void }) {
-  const rows = useMemo(() => sortedResearchRows(sectionRows(section)).filter(isReportWithinLastYear), [section]);
+function ResearchLatestReportsPanel({ section, archiveSection, onOpen }: { section: JsonRecord; archiveSection?: JsonRecord; onOpen: (section: JsonRecord) => void }) {
+  const windowStatus = researchStatus(section, "window_status");
+  const dateStatus = researchStatus(section, "date_status");
+  const historicalFallback = windowStatus === "NO_REPORT_IN_LAST_YEAR" || dateStatus === "HISTORICAL_FALLBACK";
+  const rows = useMemo(() => {
+    const sourceRows = sortedResearchRows(sectionRows(section));
+    return historicalFallback ? sourceRows : sourceRows.filter(isReportWithinLastYear);
+  }, [historicalFallback, section]);
+  const archiveRows = useMemo(() => {
+    const persistedArchive = archiveSection ? sortedResearchRows(sectionRows(archiveSection)) : [];
+    // Legacy payloads sometimes put the complete report list in
+    // ``latest_reports``.  Keep those rows available as an explicitly
+    // labelled historical fallback, without mislabelling them as latest.
+    return persistedArchive.length
+      ? persistedArchive
+      : sortedResearchRows(sectionRows(section));
+  }, [archiveSection, section]);
+  const latestArchiveDate = archiveRows.reduce((latest, row) => {
+    const value = researchDateValue(row);
+    return value > latest ? value : latest;
+  }, 0);
+  const emptyMessage = researchMessage(section, "当前数据源未返回最新研报");
   return <section className="research-source-section research-latest-reports">
-    <ResearchSectionHeading title="最新研报" note={rows.length ? `${rows.length} 篇` : undefined} />
+    <ResearchSectionHeading title="最新研报" note={historicalFallback ? "近一年暂无 · 历史回退" : rows.length ? `${rows.length} 篇` : archiveRows.length ? "近一年暂无" : undefined} />
+    {historicalFallback && rows.length ? <p className="research-table-note">{researchMessage(section, "近一年暂无公开研报，以下展示最近可用历史研报。")} </p> : null}
     {rows.length ? <div className="research-latest-list">{rows.map((row, index) => <button type="button" className="research-latest-item" key={`${String(row.report_id || reportTitle(row))}-${index}`} onClick={() => openResearchReport(section, row, onOpen)}>
       <span className="research-latest-icon"><FileText size={18} aria-hidden="true" /></span>
       <span className="research-latest-content"><strong>{reportTitle(row)}</strong>{reportSummary(row) ? <span>{reportSummary(row)}</span> : null}<ReportTagList row={row} /></span>
       <time>{formatDate(researchDateText(row))}</time>
-    </button>)}</div> : <p className="research-true-empty">{String(section.message || "当前数据源未返回最新研报")}</p>}
+    </button>)}</div> : archiveRows.length ? <div className="research-latest-empty-state">
+      <p className="research-true-empty">近一年暂无公开研报。{latestArchiveDate ? ` 最近可用日期：${formatDate(new Date(latestArchiveDate).toISOString().slice(0, 10))}。` : ""}</p>
+      <button type="button" className="research-text-action" onClick={() => document.getElementById("research-report-archive")?.scrollIntoView({ behavior: "smooth", block: "start" })}>
+        查看历史研报（{archiveRows.length + (historicalFallback ? rows.length : 0)} 篇）
+      </button>
+    </div> : <p className="research-true-empty">{emptyMessage}</p>}
     <ResearchSectionSource section={section} />
   </section>;
 }
 
 function ResearchReportListPanel({ section, onOpen }: { section: JsonRecord; onOpen: (section: JsonRecord) => void }) {
-  const rows = useMemo(() => sortedResearchRows(sectionRows(section)).filter((row) => !isReportWithinLastYear(row)), [section]);
+  const serverPartitioned = researchStatus(section, "window_status") === "ARCHIVE";
+  const rows = useMemo(() => {
+    const sourceRows = sortedResearchRows(sectionRows(section));
+    return serverPartitioned ? sourceRows : sourceRows.filter((row) => !isReportWithinLastYear(row));
+  }, [section, serverPartitioned]);
   const [expanded, setExpanded] = useState(false);
   const visibleRows = expanded ? rows : rows.slice(0, 30);
-  return <section className="research-source-section research-report-archive">
+  return <section id="research-report-archive" className="research-source-section research-report-archive">
     <ResearchSectionHeading title="研报" note={rows.length ? `共 ${rows.length} 篇` : undefined} />
     {visibleRows.length ? <div className="research-report-list">{visibleRows.map((row, index) => <button type="button" className="research-report-row" key={`${String(row.report_id || reportTitle(row))}-${index}`} onClick={() => openResearchReport(section, row, onOpen)}>
       <span><strong>{reportTitle(row)}</strong><ReportTagList row={row} /></span><time>{formatDate(researchDateText(row))}</time><span className="research-report-arrow" aria-hidden="true">›</span>
@@ -2026,6 +2076,28 @@ function sectionRows(section: JsonRecord): JsonRecord[] {
   return [];
 }
 
+/**
+ * Research sections have two independent availability dimensions:
+ * ``status`` describes whether the section has any payload, while
+ * ``window_status``/``date_status`` describe the requested time window.
+ * Keep the distinction in the UI so an old but valid report is not shown as
+ * a failed data load.
+ */
+function researchStatus(section: JsonRecord, key: "status" | "window_status" | "date_status"): string {
+  return String(section[key] || "").trim().toUpperCase();
+}
+
+function researchMessage(section: JsonRecord, fallback: string): string {
+  const message = [section.message, section.window_message, section.date_message, section.status_message]
+    .find((value) => value !== undefined && value !== null && String(value).trim());
+  if (message !== undefined) return String(message);
+  const windowStatus = researchStatus(section, "window_status");
+  if (["NO_RECENT_DATA", "OUT_OF_WINDOW", "STALE", "NO_DATA_IN_WINDOW"].includes(windowStatus)) {
+    return "近一年暂无公开数据";
+  }
+  return fallback;
+}
+
 function F10SectionBlock({
   section,
   onOpen,
@@ -3118,7 +3190,21 @@ export function StockDetailDrawer({
   const researchSectionsByKey = new Map(researchSections.map((section) => [String(section.key || ""), section]));
   const researchSection = (key: string, title: string, message = "暂无该分区数据"): JsonRecord => {
     const direct = rawResearchSections[key];
-    if (researchSectionsByKey.has(key)) return researchSectionsByKey.get(key) as JsonRecord;
+    const normalizedSection = researchSectionsByKey.get(key);
+    if (normalizedSection) {
+      // The normalized sections provide display rows and status, while the
+      // direct payload can carry provider metadata (for example rolling
+      // institution-rating counts) that is not repeated in `sections`.
+      return {
+        ...asRecord(direct),
+        ...normalizedSection,
+        key,
+        title: normalizedSection.title || title,
+        rows: sectionRows(normalizedSection).length
+          ? sectionRows(normalizedSection)
+          : sectionRows(asRecord(direct)),
+      };
+    }
     if (Array.isArray(direct)) return { key, title, status: direct.length ? "AVAILABLE" : "UNAVAILABLE", rows: direct, source: rawResearchSections.source, message };
     if (direct && typeof direct === "object") {
       const record = asRecord(direct);
@@ -3311,7 +3397,7 @@ export function StockDetailDrawer({
                       <ResearchQaPanel section={qaSection} onOpen={(item) => setResearchDetail(item)} />
                       <ResearchEarningsForecastPanel section={earningsForecastSection} />
                       <ResearchInstitutionForecastPanel section={institutionForecastSection} />
-                      <ResearchLatestReportsPanel section={latestReportsSection} onOpen={(item) => setResearchDetail(item)} />
+                      <ResearchLatestReportsPanel section={latestReportsSection} archiveSection={reportsSection} onOpen={(item) => setResearchDetail(item)} />
                       <ResearchReportListPanel section={reportsSection} onOpen={(item) => setResearchDetail(item)} />
                     </section>
                   <section className="f10-section inner-section research-detail-section">
