@@ -75,6 +75,7 @@ export type BatchGovernanceJob = {
   created_at?: string;
   started_at?: string | null;
   completed_at?: string | null;
+  run_after?: string | null;
   worker_required?: boolean;
   worker_task_type?: string | null;
   worker_command?: string | null;
@@ -91,6 +92,12 @@ export const batchGovernanceApi = {
 
   get(jobId: number, signal?: AbortSignal) {
     return request<BatchGovernanceJob>(`/stocks/batch-governance/jobs/${jobId}`, { signal });
+  },
+
+  retry(jobId: number) {
+    return request<BatchGovernanceJob>(`/stocks/batch-governance/jobs/${jobId}/retry`, {
+      method: "POST",
+    });
   },
 
   list(limit = 20, signal?: AbortSignal) {

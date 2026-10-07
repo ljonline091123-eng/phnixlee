@@ -140,4 +140,5 @@ class StockBatchGovernanceResponse(BaseModel):
     worker_required: bool
     worker_task_type: str
     worker_command: str
+    run_after: datetime | None = None
     created_at: datetime | None = None
