@@ -66,11 +66,126 @@ def _forecast_values(row: dict[str, Any]) -> dict[str, dict[str, Any]]:
         if not year_match or value in (None, ""):
             continue
         year = year_match.group(1)
-        if re.search(r"每股收益|EPS|盈利预测.*收益", text, re.I):
+        if re.search(r"每股收益|\bEPS\b|盈利预测.*收益", text, re.I):
             result["eps"][year] = value
-        elif re.search(r"净利润|归母净利", text):
+        elif re.search(r"净利润|归母净利|net[_ ]?profit", text, re.I):
             result["net_profit"][year] = value
     return {key: values for key, values in result.items() if values}
+
+
+def _earnings_metric_code(row: dict[str, Any], metric_name: str) -> str:
+    """Normalize forecast metrics without collapsing growth rates into amounts."""
+    code = _text(row.get("metric_code")).upper()
+    is_yoy = bool(re.search(r"同比|增长率|YOY", f"{code} {metric_name}", re.I))
+    if "EPS" in code or re.search(r"每股收益|EPS", metric_name, re.I):
+        return "EPS"
+    if "REVENUE" in code or re.search(r"营业总?收入|营业收入", metric_name, re.I):
+        return "REVENUE_YOY" if is_yoy else "TOTAL_REVENUE"
+    if "NET_PROFIT" in code or re.search(r"净利润|归母", metric_name):
+        return "NET_PROFIT_YOY" if is_yoy else "NET_PROFIT"
+    if "PE" in code or re.search(r"市盈率|\bPE\b", metric_name, re.I):
+        return "FORWARD_PE"
+    if code:
+        return code
+    return re.sub(r"\s+", "_", metric_name.strip().upper())
+
+
+def _row_freshness(row: dict[str, Any]) -> str:
+    return _text(row.get("source_updated_at") or row.get("report_date") or row.get("updated_at"))
+
+
+def _merge_same_batch_rows(
+    rows: list[dict[str, Any]],
+    key_fn: Any,
+    priority_fn: Any,
+) -> list[dict[str, Any]]:
+    """Deduplicate provider rows, preferring richer/newer observations.
+
+    Non-empty fields from the lower-ranked observation fill gaps in the winner;
+    original duplicate rows remain attached as provenance for later review.
+    """
+    grouped: dict[Any, dict[str, Any]] = {}
+    observations: dict[Any, list[dict[str, Any]]] = {}
+    for row in rows:
+        key = key_fn(row)
+        if key is None:
+            continue
+        current = grouped.get(key)
+        if current is None:
+            grouped[key] = dict(row)
+            observations[key] = [dict(row)]
+            continue
+        observations[key].append(dict(row))
+        if priority_fn(row) > priority_fn(current):
+            winner, fallback = dict(row), current
+        else:
+            winner, fallback = current, row
+        for field, value in fallback.items():
+            if winner.get(field) in (None, "", [], {}) and value not in (None, "", [], {}):
+                winner[field] = value
+        winner["_merged_observations"] = observations[key]
+        grouped[key] = winner
+    return list(grouped.values())
+
+
+def _report_priority(row: dict[str, Any]) -> tuple[int, str]:
+    completeness = sum(bool(row.get(key)) for key in (
+        "content", "content_text", "summary", "rating", "institution", "analysts",
+        "pdf_url", "报告PDF链接", "detail_url", "url",
+    ))
+    return completeness, _row_freshness(row)
+
+
+def _earnings_priority(row: dict[str, Any]) -> tuple[int, str]:
+    # Consensus rows with a prediction count outrank detailed/actual-value rows
+    # for the same source, year and metric.
+    completeness = sum(bool(row.get(key)) for key in (
+        "prediction_count", "minimum", "maximum", "mean", "value", "industry_average",
+    ))
+    if row.get("prediction_count") not in (None, ""):
+        completeness += 100
+    return completeness, _row_freshness(row)
+
+
+def _institution_priority(row: dict[str, Any]) -> tuple[int, str]:
+    forecast = _forecast_values(row)
+    return sum(len(values) for values in forecast.values()), _row_freshness(row)
+
+
+def _qa_priority(row: dict[str, Any]) -> tuple[int, str]:
+    return sum(bool(row.get(key)) for key in ("answer", "回答内容", "answerer", "回答者", "answered_at", "回答时间")), _row_freshness(row)
+
+
+def _earnings_row_key(row: dict[str, Any]) -> tuple[str, str, str] | None:
+    """Return the normalized consensus identity used by the database constraint."""
+    year = _text(row.get("forecast_year") or row.get("预测年度"))[:4]
+    metric_name = _text(row.get("metric") or row.get("预测指标"))
+    if not re.fullmatch(r"20\d{2}", year) or not metric_name:
+        return None
+    return _source_code(row, "TONGHUASHUN"), year, _earnings_metric_code(row, metric_name)
+
+
+def _institution_external_key(row: dict[str, Any]) -> str:
+    institution = _text(row.get("institution") or row.get("机构") or row.get("机构名称"))
+    report_date = _text(row.get("report_date") or row.get("报告日期"))[:10]
+    analyst = _text(row.get("researcher") or row.get("analyst") or row.get("研究员") or row.get("分析师"))
+    return sha1("|".join((institution, report_date, analyst)).encode("utf-8")).hexdigest()[:32]
+
+
+def _institution_row_key(row: dict[str, Any]) -> tuple[str, str] | None:
+    """Match the external key algorithm used for StockInstitutionForecast."""
+    institution = _text(row.get("institution") or row.get("机构") or row.get("机构名称"))
+    if not institution or not _forecast_values(row):
+        return None
+    source_code = _source_code(row, "TONGHUASHUN")
+    return source_code, _institution_external_key(row)
+
+
+def _qa_row_key(row: dict[str, Any]) -> tuple[str, str] | None:
+    external_id = _text(row.get("question_id") or row.get("external_id"))
+    if not external_id:
+        return None
+    return _source_code(row, "CNINFO"), external_id
 
 
 def persist_research_sections(
@@ -87,14 +202,14 @@ def persist_research_sections(
         row for row in (*_list(research.get("reports")), *_list(research.get("latest_reports")))
         if isinstance(row, dict)
     ]
-    seen_reports: set[tuple[str, str]] = set()
+    report_rows = _merge_same_batch_rows(
+        report_rows,
+        key_fn=lambda row: (_source_code(row, "EASTMONEY"), _report_external_id(row)),
+        priority_fn=_report_priority,
+    )
     for row in report_rows:
         source_code = _source_code(row, "EASTMONEY")
         external_id = _report_external_id(row)
-        key = (source_code, external_id)
-        if key in seen_reports:
-            continue
-        seen_reports.add(key)
         title = _text(row.get("title") or row.get("报告名称"))
         if not title:
             continue
@@ -135,14 +250,19 @@ def persist_research_sections(
 
     earnings = research.get("earnings_forecast")
     earnings_rows = earnings.get("rows") if isinstance(earnings, dict) else earnings
-    for row in _list(earnings_rows):
+    earnings_rows = _merge_same_batch_rows(
+        [row for row in _list(earnings_rows) if isinstance(row, dict)],
+        key_fn=_earnings_row_key,
+        priority_fn=_earnings_priority,
+    )
+    for row in earnings_rows:
         if not isinstance(row, dict):
             continue
         year = _text(row.get("forecast_year") or row.get("预测年度"))[:4]
         metric_name = _text(row.get("metric") or row.get("预测指标"))
         if not re.fullmatch(r"20\d{2}", year) or not metric_name:
             continue
-        metric_code = "EPS" if "每股收益" in metric_name else "NET_PROFIT" if "净利润" in metric_name else metric_name.upper()
+        metric_code = _earnings_metric_code(row, metric_name)
         source_code = _source_code(row, "TONGHUASHUN")
         record = db.scalar(select(StockEarningsConsensus).where(
             StockEarningsConsensus.market == market, StockEarningsConsensus.symbol == symbol,
@@ -157,10 +277,14 @@ def persist_research_sections(
             )
             db.add(record)
         count = row.get("prediction_count") or row.get("预测机构数")
+        try:
+            count_value = int(float(count)) if count not in (None, "") else None
+        except (TypeError, ValueError):
+            count_value = None
         _nonempty_update(record, {
             "metric_name": metric_name,
-            "unit": "元/股" if metric_code == "EPS" else "亿元" if metric_code == "NET_PROFIT" else None,
-            "prediction_count": int(float(count)) if count not in (None, "") else None,
+            "unit": "元/股" if metric_code == "EPS" else "亿元" if metric_code in {"NET_PROFIT", "TOTAL_REVENUE"} else "%" if metric_code.endswith("_YOY") else None,
+            "prediction_count": count_value,
             "minimum_value": _text(row.get("minimum") or row.get("最小值")) or None,
             "mean_value": _text(row.get("mean") or row.get("均值")) or None,
             "maximum_value": _text(row.get("maximum") or row.get("最大值")) or None,
@@ -173,7 +297,12 @@ def persist_research_sections(
 
     institutions = research.get("institution_forecast")
     institution_rows = institutions.get("rows") if isinstance(institutions, dict) else institutions
-    for row in _list(institution_rows):
+    institution_rows = _merge_same_batch_rows(
+        [row for row in _list(institution_rows) if isinstance(row, dict)],
+        key_fn=_institution_row_key,
+        priority_fn=_institution_priority,
+    )
+    for row in institution_rows:
         if not isinstance(row, dict):
             continue
         institution = _text(row.get("institution") or row.get("机构") or row.get("机构名称"))
@@ -182,7 +311,7 @@ def persist_research_sections(
         if not institution or not forecast:
             continue
         source_code = _source_code(row, "TONGHUASHUN")
-        external_key = sha1("|".join((institution, report_date, _text(row.get("研究员")))).encode("utf-8")).hexdigest()[:32]
+        external_key = _institution_external_key(row)
         record = db.scalar(select(StockInstitutionForecast).where(
             StockInstitutionForecast.market == market, StockInstitutionForecast.symbol == symbol,
             StockInstitutionForecast.source_code == source_code,
@@ -194,7 +323,7 @@ def persist_research_sections(
                 external_key=external_key, institution=institution,
             )
             db.add(record)
-        analyst_text = _text(row.get("研究员") or row.get("分析师"))
+        analyst_text = _text(row.get("researcher") or row.get("analyst") or row.get("研究员") or row.get("分析师"))
         _nonempty_update(record, {
             "institution": institution,
             "analysts_json": row.get("analysts") if isinstance(row.get("analysts"), list) else [item for item in re.split(r"[/、,，]", analyst_text) if item],
@@ -211,7 +340,12 @@ def persist_research_sections(
 
     qa = research.get("qa")
     qa_rows = qa.get("rows") if isinstance(qa, dict) else qa
-    for row in _list(qa_rows):
+    qa_rows = _merge_same_batch_rows(
+        [row for row in _list(qa_rows) if isinstance(row, dict)],
+        key_fn=_qa_row_key,
+        priority_fn=_qa_priority,
+    )
+    for row in qa_rows:
         if not isinstance(row, dict):
             continue
         question = _text(row.get("question") or row.get("问题"))

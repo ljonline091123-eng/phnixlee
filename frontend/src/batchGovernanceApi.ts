@@ -93,6 +93,12 @@ export const batchGovernanceApi = {
     return request<BatchGovernanceJob>(`/stocks/batch-governance/jobs/${jobId}`, { signal });
   },
 
+  retry(jobId: number) {
+    return request<BatchGovernanceJob>(`/stocks/batch-governance/jobs/${jobId}/retry`, {
+      method: "POST",
+    });
+  },
+
   list(limit = 20, signal?: AbortSignal) {
     return request<BatchGovernanceJob[] | { items: BatchGovernanceJob[]; total?: number }>(`/stocks/batch-governance/jobs?limit=${limit}`, { signal });
   },
