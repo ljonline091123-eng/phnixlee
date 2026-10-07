@@ -45,6 +45,7 @@ import { KnowledgePipelinePanel } from "./KnowledgePipelinePanel";
 import { BatchStockGovernanceDialog } from "./BatchStockGovernanceDialog";
 import { StockPipelineStatusDialog, type StockPipelineStatusKey } from "./StockPipelineStatusDialog";
 import { OperationsCenter } from "./OperationsCenter";
+import { GovernanceCenter } from "./GovernanceCenter";
 import { PlatformOverview, type PlatformNavigationTarget } from "./PlatformOverview";
 import {
   defaultSections,
@@ -54,7 +55,7 @@ import {
   type ModuleView,
 } from "./navigation";
 
-type ModelHubTab = "models" | "agents" | "skills" | "evaluation";
+type ModelHubTab = "models" | "agents" | "skills" | "evaluation" | "governance";
 type DataView = "access" | "master" | "business" | "lakehouse" | "knowledge" | "graphs" | "pipeline";
 type AccessView = "sources" | "interfaces" | "sync";
 type MasterView = "securities" | "entities";
@@ -203,10 +204,31 @@ export default function App() {
         {route.module === "data" && <DataConsolePage tab={route.section as DataView} setTab={(section) => navigate("data", section)} />}
         {route.module === "ai" && <ModelLabPage tab={route.section as ModelHubTab} setTab={(section) => navigate("ai", section)} />}
         {route.module === "research" && <InvestmentWorkbench tab={route.section as ResearchView} setTab={(section) => navigate("research", section)} />}
-        {route.module === "operations" && <OperationsCenter onNavigate={navigateTarget} />}
+        {route.module === "operations" && <OperationsGovernancePage tab={route.section as "tasks" | "quality" | "audit"} setTab={(section) => navigate("operations", section)} onNavigate={navigateTarget} />}
       </section>
     </main>
   );
+}
+
+function OperationsGovernancePage({
+  tab,
+  setTab,
+  onNavigate,
+}: {
+  tab: "tasks" | "quality" | "audit";
+  setTab: (tab: "tasks" | "quality" | "audit") => void;
+  onNavigate: (target: PlatformNavigationTarget) => void;
+}) {
+  return <>
+    <div className="resource-tabs">
+      <button type="button" className={tab === "tasks" ? "active" : ""} onClick={() => setTab("tasks")}>任务中心</button>
+      <button type="button" className={tab === "quality" ? "active" : ""} onClick={() => setTab("quality")}>数据质量</button>
+      <button type="button" className={tab === "audit" ? "active" : ""} onClick={() => setTab("audit")}>执行审计</button>
+    </div>
+    {tab === "tasks" && <OperationsCenter onNavigate={onNavigate} />}
+    {tab === "quality" && <GovernanceCenter view="quality" />}
+    {tab === "audit" && <GovernanceCenter view="executions" />}
+  </>;
 }
 function PageHeader({
   eyebrow,
@@ -1183,7 +1205,7 @@ function message(text: string) {
         detail={notice || "模型提供推理，技能沉淀方法，智能体负责组合与执行"}
       />
       <div className="resource-tabs">
-        {(["models", "agents", "skills", "evaluation"] as ModelHubTab[]).map((item) => (
+        {(["models", "agents", "skills", "evaluation", "governance"] as ModelHubTab[]).map((item) => (
           <button
             type="button"
             key={item}
@@ -1196,7 +1218,9 @@ function message(text: string) {
                 ? "智能体"
                 : item === "skills"
                   ? "技能库"
-                  : "运行与评测"}
+                  : item === "evaluation"
+                    ? "运行与评测"
+                    : "治理契约"}
           </button>
         ))}
       </div>
@@ -1403,6 +1427,7 @@ function message(text: string) {
           onSend={sendChat}
         />
       </div>}
+      {tab === "governance" && <GovernanceCenter view="contracts" />}
       {testDialog && (
         <ResourceDialog
           eyebrow="MODEL TEST"

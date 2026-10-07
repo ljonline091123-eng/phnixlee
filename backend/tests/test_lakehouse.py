@@ -8,6 +8,12 @@ from sqlalchemy.pool import StaticPool
 from app.core.config import get_settings
 from app.db.base import Base
 from app.models.ai_hub import KnowledgeBase, KnowledgeDocument
+from app.models.foundation import (
+    FoundationEntity,
+    FoundationEvidence,
+    FoundationFact,
+    FoundationFactEvidence,
+)
 from app.models.market_data import DataSource, StockRealtimeQuote, StockSymbol
 from app.services import lakehouse
 
@@ -281,6 +287,68 @@ def test_quality_assessment_reports_non_numeric_source_values_without_crashing(t
             db, source_table="stock_realtime_quote", layer="NORMALIZED"
         )
         assert normalized["passed"] is False and normalized["level"] == "FAILED"
+
+
+def test_foundation_fact_quality_uses_evidence_association_for_traceability():
+    now = datetime(2026, 10, 7, tzinfo=timezone.utc)
+    with Session(_engine()) as db:
+        db.add(FoundationEntity(
+            id="entity-1",
+            name="测试公司",
+            entity_type="COMPANY",
+            jurisdiction="CN",
+            properties_json={},
+        ))
+        db.add_all([
+            FoundationFact(
+                id="fact-linked",
+                fact_type="OWNERSHIP",
+                title="有证据事实",
+                subject_entity_id="entity-1",
+                properties_json={},
+                status="ACCEPTED",
+            ),
+            FoundationFact(
+                id="fact-unlinked",
+                fact_type="CONTROL",
+                title="无证据事实",
+                subject_entity_id="entity-1",
+                properties_json={},
+                status="ACCEPTED",
+            ),
+            FoundationEvidence(
+                id="evidence-1",
+                entity_id="entity-1",
+                source_name="测试来源",
+                source_key="source:1",
+                title="测试证据",
+                content="可追溯的测试证据正文",
+                url="https://example.com/evidence/1",
+                available_at=now,
+                content_hash="a" * 64,
+                fingerprint="b" * 64,
+                version=1,
+                metadata_json={},
+            ),
+            FoundationFactEvidence(fact_id="fact-linked", evidence_id="evidence-1"),
+        ])
+        db.commit()
+
+        partial = lakehouse.assess_dataset_source(
+            db, source_table="foundation_fact", layer="NORMALIZED",
+        )
+        assert partial["passed"] is True and partial["level"] == "WARNING"
+        assert partial["traceable_record_count"] == 1
+        assert any("1条记录缺少明确来源引用" in warning for warning in partial["warnings"])
+
+        db.add(FoundationFactEvidence(fact_id="fact-unlinked", evidence_id="evidence-1"))
+        db.commit()
+        complete = lakehouse.assess_dataset_source(
+            db, source_table="foundation_fact", layer="NORMALIZED",
+        )
+        assert complete["passed"] is True and complete["level"] == "PASS"
+        assert complete["traceable_record_count"] == 2
+        assert not any("缺少明确来源引用" in warning for warning in complete["warnings"])
 
 
 def test_structure_aware_chunks_prefer_paragraph_boundaries_and_keep_offsets(tmp_path, monkeypatch):

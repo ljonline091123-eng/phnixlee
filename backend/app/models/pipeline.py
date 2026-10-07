@@ -67,6 +67,18 @@ class PipelineStageRun(Base):
     model_call_log_id: Mapped[int | None] = mapped_column(
         ForeignKey("model_call_log.id", ondelete="SET NULL")
     )
+    agent_id: Mapped[int | None] = mapped_column(
+        ForeignKey("agent_definition.id", ondelete="SET NULL"), index=True
+    )
+    agent_version: Mapped[str | None] = mapped_column(String(32))
+    skill_id: Mapped[int | None] = mapped_column(
+        ForeignKey("model_skill.id", ondelete="SET NULL"), index=True
+    )
+    skill_code: Mapped[str | None] = mapped_column(String(64))
+    skill_version: Mapped[str | None] = mapped_column(String(32))
+    input_hash: Mapped[str | None] = mapped_column(String(64))
+    output_hash: Mapped[str | None] = mapped_column(String(64))
+    evidence_ids_json: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

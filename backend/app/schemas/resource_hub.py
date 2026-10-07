@@ -23,6 +23,9 @@ class AgentCreate(BaseModel):
     knowledge_base_ids: list[int] = Field(default_factory=list)
     data_asset_ids: list[int] = Field(default_factory=list)
     data_source_ids: list[int] = Field(default_factory=list)
+    lifecycle_status: str = Field(default="ENABLED", max_length=24)
+    policy_json: dict[str, Any] = Field(default_factory=dict)
+    knowledge_version_policy_json: dict[str, Any] = Field(default_factory=dict)
 
 
 class AgentUpdate(BaseModel):
@@ -41,6 +44,9 @@ class AgentUpdate(BaseModel):
     knowledge_base_ids: list[int] | None = None
     data_asset_ids: list[int] | None = None
     data_source_ids: list[int] | None = None
+    lifecycle_status: str | None = Field(default=None, max_length=24)
+    policy_json: dict[str, Any] | None = None
+    knowledge_version_policy_json: dict[str, Any] | None = None
 
 
 class AgentRead(BaseModel):
@@ -62,6 +68,9 @@ class AgentRead(BaseModel):
     knowledge_base_ids: list[int] = Field(default_factory=list)
     data_asset_ids: list[int] = Field(default_factory=list)
     data_source_ids: list[int] = Field(default_factory=list)
+    lifecycle_status: str = "DRAFT"
+    policy_json: dict[str, Any] = Field(default_factory=dict)
+    knowledge_version_policy_json: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime
     updated_at: datetime
 
@@ -86,6 +95,9 @@ class DataAssetCreate(BaseModel):
     description: str | None = None
     allowed_columns: list[str] = Field(default_factory=list)
     enabled: bool = True
+    asset_type: str = Field(default="DATABASE_TABLE", max_length=32)
+    canonical_identity: str | None = Field(default=None, max_length=256)
+    metadata_json: dict[str, Any] = Field(default_factory=dict)
 
 
 class DataAssetUpdate(BaseModel):
@@ -93,6 +105,9 @@ class DataAssetUpdate(BaseModel):
     description: str | None = None
     allowed_columns: list[str] | None = None
     enabled: bool | None = None
+    asset_type: str | None = Field(default=None, max_length=32)
+    canonical_identity: str | None = Field(default=None, max_length=256)
+    metadata_json: dict[str, Any] | None = None
 
 
 class DataAssetRead(BaseModel):
@@ -112,6 +127,9 @@ class DataAssetRead(BaseModel):
     row_count: int
     enabled: bool
     last_inspected_at: datetime | None
+    asset_type: str = "DATABASE_TABLE"
+    canonical_identity: str | None = None
+    metadata_json: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime
     updated_at: datetime
 

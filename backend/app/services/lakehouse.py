@@ -423,7 +423,7 @@ def _document_quality(text: str, metadata: dict[str, Any] | None = None) -> dict
 
 
 def _quality(records: list[dict[str, Any]], schema: dict[str, str], *, table_name: str,
-             layer: str) -> dict[str, Any]:
+             layer: str, traceable_record_ids: set[str] | None = None) -> dict[str, Any]:
     contract = QUALITY_CONTRACTS.get(table_name, {})
     required = contract.get("required", ())
     business_key = contract.get("business_key", ())
@@ -473,8 +473,10 @@ def _quality(records: list[dict[str, Any]], schema: dict[str, str], *, table_nam
         bool(content_any) and not any(not _blank(row.get(name)) for name in content_any)
         for row in records
     )
+    traceable_record_ids = traceable_record_ids or set()
     traceable = sum(
         any(not _blank(row.get(name)) for name in ("source_id", "source_name", "source_table", "evidence_id", "url"))
+        or str(row.get("id")) in traceable_record_ids
         for row in records
     )
     checks = {
@@ -559,6 +561,33 @@ def _quality(records: list[dict[str, Any]], schema: dict[str, str], *, table_nam
     }
 
 
+def _linked_source_record_ids(db: Session, table_name: str,
+                              records: list[dict[str, Any]]) -> set[str]:
+    """Resolve source references stored in association tables.
+
+    ``foundation_fact`` deliberately keeps evidence in the many-to-many
+    ``foundation_fact_evidence`` table, so looking only at fact columns would
+    incorrectly report every linked fact as missing a source reference.
+    """
+    if table_name != "foundation_fact":
+        return set()
+    fact_ids = {str(row["id"]) for row in records if not _blank(row.get("id"))}
+    if not fact_ids:
+        return set()
+    association = _model_for_table("foundation_fact_evidence")
+    linked: set[str] = set()
+    ordered_fact_ids = sorted(fact_ids)
+    for offset in range(0, len(ordered_fact_ids), 500):
+        batch = ordered_fact_ids[offset : offset + 500]
+        linked.update(
+            str(fact_id)
+            for fact_id in db.scalars(
+                select(association.fact_id).where(association.fact_id.in_(batch))
+            ).all()
+        )
+    return linked
+
+
 def assess_dataset_source(db: Session, *, source_table: str, layer: str = "NORMALIZED",
                           limit: int = 10000,
                           scope_pairs: list[tuple[str, str]] | None = None) -> dict[str, Any]:
@@ -570,7 +599,13 @@ def assess_dataset_source(db: Session, *, source_table: str, layer: str = "NORMA
     )
     if not records:
         return _quality([], {}, table_name=source_table, layer=layer)
-    return _quality(records, _source_schema(source_table), table_name=source_table, layer=layer)
+    return _quality(
+        records,
+        _source_schema(source_table),
+        table_name=source_table,
+        layer=layer,
+        traceable_record_ids=_linked_source_record_ids(db, source_table, records),
+    )
 
 
 def archive_ingestion_payload(db: Session, *, source_code: str, log_type: str, log_id: int,
@@ -603,7 +638,13 @@ def export_dataset(db: Session, *, dataset_code: str, dataset_name: str, layer: 
     if not records:
         raise ValueError(f"来源表 {source_table} 没有可发布的数据")
     schema = _source_schema(source_table)
-    quality = _quality(records, schema, table_name=source_table, layer=layer)
+    quality = _quality(
+        records,
+        schema,
+        table_name=source_table,
+        layer=layer,
+        traceable_record_ids=_linked_source_record_ids(db, source_table, records),
+    )
     if not quality["passed"]:
         raise ValueError(f"数据质量门禁未通过: {quality['checks']}")
     buffer = io.BytesIO()
@@ -741,25 +782,53 @@ def create_chunks(db: Session, *, document_key: str, text: str, document_id: str
         chunk = text[start:end]
         digest = _sha256(chunk.encode("utf-8"))
         chunk_version = f"{parser_version}:{source_hash[:12]}"
+        section_title = _section_title(text, start, end)
+        normalized_embedding_model = str(embedding_model or "").strip()
+        is_hash_embedding = normalized_embedding_model.upper().startswith("HASH")
+        embedding_kind = "HASH" if is_hash_embedding else ("SEMANTIC" if normalized_embedding_model else "NONE")
+        embedding_status = "HASH_ONLY" if is_hash_embedding else ("PENDING" if normalized_embedding_model else "MISSING")
         existing = db.scalar(select(DocumentChunkVersion).where(
             DocumentChunkVersion.document_key == document_key,
             DocumentChunkVersion.content_hash == digest,
             DocumentChunkVersion.chunk_index == index,
             DocumentChunkVersion.chunk_version == chunk_version))
         if existing is not None:
+            existing.section_title = existing.section_title or section_title
+            existing.section_path_json = existing.section_path_json or ([section_title] if section_title else [])
+            existing.section_status = "IDENTIFIED" if existing.section_title else "UNRESOLVED"
+            existing.embedding_kind = embedding_kind
+            existing.embedding_status = embedding_status
+            existing.source_object_id = existing.source_object_id or (source_obj or {}).get("object_id")
+            existing.lineage_batch_id = existing.lineage_batch_id or batch_id
             reused += 1
             continue
-        embedding = _hash_embedding(chunk) if embedding_model else None
+        # The lightweight local fallback only creates deterministic hash
+        # fingerprints. A configured semantic model remains PENDING until a
+        # real embedding provider writes the vector and changes the status.
+        embedding = _hash_embedding(chunk) if is_hash_embedding else None
         item = DocumentChunkVersion(document_key=document_key, document_id=document_id, chunk_index=index,
             chunk_version=chunk_version, content_hash=digest, chunk_text=chunk,
             start_offset=start, end_offset=end, parser_version=parser_version,
-            embedding_model=embedding_model, metadata_json={"overlap": overlap,
+            embedding_model=embedding_model, section_title=section_title,
+            section_path_json=[section_title] if section_title else [],
+            section_status="IDENTIFIED" if section_title else "UNRESOLVED",
+            embedding_status=embedding_status, embedding_kind=embedding_kind,
+            source_object_id=(source_obj or {}).get("object_id"), lineage_batch_id=batch_id,
+            metadata_json={"overlap": overlap,
                 "source_object_id": (source_obj or {}).get("object_id"),
                 "chunk_method": "STRUCTURE_AWARE_V1", "boundary_type": boundary_type,
-                "section_title": _section_title(text, start, end), "document_quality": document_quality,
-                "embedding": {"model": embedding_model, "dimension": len(embedding), "vector": embedding,
-                               "model_quality": "DETERMINISTIC_HASH"}
-                if embedding is not None else None})
+                "section_title": section_title,
+                "section_path": [section_title] if section_title else [],
+                "section_status": "IDENTIFIED" if section_title else "UNRESOLVED",
+                "document_quality": document_quality,
+                "embedding": {
+                    "model": embedding_model,
+                    "kind": embedding_kind,
+                    "status": embedding_status,
+                    "dimension": len(embedding) if embedding is not None else None,
+                    "vector": embedding,
+                    "model_quality": "DETERMINISTIC_HASH" if is_hash_embedding else "NOT_GENERATED",
+                } if embedding_model else None})
         db.add(item)
         db.flush()
         db.add(LakeLineageEvent(batch_id=batch_id, upstream_type="LAKE_OBJECT",

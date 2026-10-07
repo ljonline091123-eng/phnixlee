@@ -56,6 +56,28 @@ def _schema(required_keys: list[str], properties: dict[str, Any]) -> dict[str, A
 _TEXT = {"type": "string", "minLength": 1, "maxLength": 1024, "pattern": r"\S"}
 _AMOUNT = {"type": "number", "minimum": 0}
 _CURRENCY = {"type": "string", "pattern": "^[A-Z]{3}$"}
+_EVENT_TIME = {"type": "string", "format": "date-time"}
+_EVENT_DIRECTION = {"enum": ["POSITIVE", "NEGATIVE", "NEUTRAL", "MIXED", "UNKNOWN"]}
+_CONFIDENCE = {"type": "number", "minimum": 0, "maximum": 1}
+
+
+def _event_schema(*, required: list[str], properties: dict[str, Any] | None = None) -> dict[str, Any]:
+    return _schema(required, {
+        "event_type": _TEXT,
+        "observed_at": _EVENT_TIME,
+        "published_at": _EVENT_TIME,
+        "direction": _EVENT_DIRECTION,
+        "impact_horizon": {"enum": ["INTRADAY", "SHORT", "MEDIUM", "LONG", "UNKNOWN"]},
+        "market": _TEXT,
+        "symbol": _TEXT,
+        "source_reliability": _CONFIDENCE,
+        "extraction_confidence": _CONFIDENCE,
+        "extraction_method": {"enum": ["SOURCE", "RULE", "LLM", "HUMAN", "AGGREGATED"]},
+        "verification_status": {"enum": ["RAW", "NORMALIZED", "CANDIDATE", "VERIFIED", "REJECTED", "EXPIRED", "PARTIAL", "MISSING"]},
+        **(properties or {}),
+    })
+
+
 FACT_SCHEMAS = {
     "HOLDS_EQUITY": {
         **_schema([], {"ratio": {"type": "number", "minimum": 0, "maximum": 100}, "ratio_basis": _TEXT,
@@ -84,6 +106,38 @@ FACT_SCHEMAS = {
         "amount": _AMOUNT, "currency": _CURRENCY,
         "amount_type": {"enum": ["CLAIMED", "JUDGMENT", "ENFORCEMENT", "SETTLEMENT", "PROVISION"]},
     }), "dependentRequired": {"amount": ["currency", "amount_type"], "currency": ["amount", "amount_type"], "amount_type": ["amount", "currency"]}},
+    "NEWS_EVENT": _event_schema(
+        required=["event_type", "published_at", "direction", "extraction_method", "verification_status"],
+        properties={"summary": _TEXT, "topic": _TEXT},
+    ),
+    "NOTICE_EVENT": _event_schema(
+        required=["event_type", "published_at", "direction", "extraction_method", "verification_status"],
+        properties={"announcement_category": _TEXT, "amount": _AMOUNT, "currency": _CURRENCY},
+    ),
+    "MARKET_EVENT": _event_schema(
+        required=["event_type", "observed_at", "direction", "extraction_method", "verification_status"],
+        properties={
+            "metric_code": _TEXT,
+            "value": {"type": "number"},
+            "unit": _TEXT,
+            "window": _TEXT,
+            "threshold": {"type": "number"},
+        },
+    ),
+    "RISK_EVENT": _event_schema(
+        required=["event_type", "observed_at", "direction", "extraction_method", "verification_status"],
+        properties={"risk_level": {"enum": ["LOW", "MEDIUM", "HIGH", "CRITICAL", "UNKNOWN"]}, "amount": _AMOUNT, "currency": _CURRENCY},
+    ),
+    "SHAREHOLDER_EVENT": _event_schema(
+        required=["event_type", "observed_at", "direction", "extraction_method", "verification_status"],
+        properties={
+            "actor": _TEXT,
+            "quantity": _AMOUNT,
+            "quantity_unit": _TEXT,
+            "holding_ratio_before": {"type": "number", "minimum": 0, "maximum": 100},
+            "holding_ratio_after": {"type": "number", "minimum": 0, "maximum": 100},
+        },
+    ),
 }
 
 
@@ -227,9 +281,14 @@ def _validate_endpoints(payload: FactCreate, subject: FoundationEntity, obj: Fou
                         "IN_INDUSTRY": {"INDUSTRY"}, "MEMBER_OF_THEME": {"THEME"},
                         "HAS_CLASSIFICATION": {"CLASSIFICATION"}}
     actor_types = {"COMPANY", "PERSON", "ORGANIZATION"}
+    observation_types = {
+        "NEWS_EVENT", "NOTICE_EVENT", "MARKET_EVENT", "RISK_EVENT", "SHAREHOLDER_EVENT",
+    }
     subject_types = {"COMPANY"} if payload.fact_type in {"IN_INDUSTRY", "MEMBER_OF_THEME", "HAS_CLASSIFICATION"} else actor_types
     if payload.fact_type == "HOLDS_EQUITY":
         subject_types = subject_types | {"HOLDER_ACCOUNT"}
+    if payload.fact_type in observation_types:
+        subject_types = {"COMPANY", "ORGANIZATION"}
     if subject.entity_type not in subject_types:
         raise FoundationError("subject entity type is invalid for this fact")
     if obj and obj.entity_type not in expected_objects.get(payload.fact_type, actor_types | {"PROJECT"}):

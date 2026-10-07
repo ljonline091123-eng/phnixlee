@@ -1,6 +1,8 @@
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
+from jsonschema import Draft202012Validator
+from jsonschema.exceptions import SchemaError
 from sqlalchemy import delete, func, inspect, select, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -40,6 +42,7 @@ from app.services.skill_registry import rollback_skill, save_skill_content, sync
 from app.schemas.skill_tools import DwValidationRequest, PredictionScoreRequest, WatchFilterRequest
 from app.schemas.distillation import ExtractionRequest, ExtractionSource
 from app.schemas.predictions import PredictionCreate, PredictionRead, SkillDraftRead
+from app.schemas.governance import SkillLifecycleUpdate
 from app.services.prediction_review import propose_failed_skill_revisions, review_predictions
 
 router = APIRouter(prefix="/model-hub", tags=["Model Hub"])
@@ -391,11 +394,35 @@ def _validate_skill_type(skill_type: str, config_json: dict) -> None:
             raise HTTPException(status_code=422, detail="Executable tool requires config_json.function_spec with name and parameters")
 
 
+def _validate_skill_governance(values: dict) -> None:
+    for field_name in ("input_contract_json", "output_contract_json"):
+        contract = values.get(field_name)
+        if contract:
+            try:
+                Draft202012Validator.check_schema(contract)
+            except SchemaError as exc:
+                raise HTTPException(status_code=422, detail=f"Invalid {field_name}: {exc.message}") from exc
+    permissions = values.get("permission_policy_json") or {}
+    forbidden = {"arbitrary_sql", "unrestricted_database_write", "raw_database_write"}
+    if any(bool(permissions.get(name)) for name in forbidden):
+        raise HTTPException(
+            status_code=422,
+            detail="Skill permissions cannot allow arbitrary SQL or unrestricted database writes",
+        )
+    if values.get("side_effect_level") in {"CONTROLLED_WRITE", "EXTERNAL_WRITE"}:
+        if not permissions.get("allowed_operations"):
+            raise HTTPException(
+                status_code=422,
+                detail="Write-capable Skill requires permission_policy_json.allowed_operations",
+            )
+
+
 @router.post("/skills", response_model=ModelSkillRead, status_code=status.HTTP_201_CREATED)
 def create_skill(payload: ModelSkillCreate, db: Session = Depends(get_db)) -> ModelSkill:
     values = payload.model_dump()
     values["skill_code"] = values.get("skill_code") or _next_skill_code(db)
     _validate_skill_type(values["skill_type"], values["config_json"])
+    _validate_skill_governance(values)
     skill = ModelSkill(**values)
     db.add(skill)
     try:
@@ -430,6 +457,12 @@ def update_skill(skill_id: int, payload: ModelSkillUpdate, db: Session = Depends
         raise HTTPException(status_code=422, detail="Skill required fields cannot be null")
     instructions = values.pop("instructions", skill.instructions)
     _validate_skill_type(values.get("skill_type", skill.skill_type), values.get("config_json", skill.config_json or {}))
+    _validate_skill_governance({
+        "input_contract_json": values.get("input_contract_json", skill.input_contract_json or {}),
+        "output_contract_json": values.get("output_contract_json", skill.output_contract_json or {}),
+        "permission_policy_json": values.get("permission_policy_json", skill.permission_policy_json or {}),
+        "side_effect_level": values.get("side_effect_level", skill.side_effect_level),
+    })
     for field_name, value in values.items():
         setattr(skill, field_name, value)
     try:
@@ -441,6 +474,70 @@ def update_skill(skill_id: int, payload: ModelSkillUpdate, db: Session = Depends
         raise HTTPException(status_code=409, detail="Skill code already exists") from exc
     if "skill_code" in values and values["skill_code"] != previous_skill_code:
         delete_skill_file(previous_skill_code)
+    db.refresh(skill)
+    return skill
+
+
+@router.get("/skills/{skill_id}/contract")
+def get_skill_contract(skill_id: int, db: Session = Depends(get_db)) -> dict:
+    skill = _skill_or_404(db, skill_id)
+    return {
+        "skill_id": skill.id,
+        "skill_code": skill.skill_code,
+        "skill_name": skill.skill_name,
+        "version": skill.version,
+        "lifecycle_status": skill.lifecycle_status,
+        "enabled": skill.enabled,
+        "input_contract": skill.input_contract_json or {},
+        "output_contract": skill.output_contract_json or {},
+        "permission_policy": skill.permission_policy_json or {},
+        "side_effect_level": skill.side_effect_level,
+        "idempotency_policy": skill.idempotency_policy,
+        "retry_policy": skill.retry_policy_json or {},
+        "error_policy": skill.error_policy_json or {},
+        "function_spec": (skill.config_json or {}).get("function_spec"),
+    }
+
+
+@router.post("/skills/{skill_id}/lifecycle", response_model=ModelSkillRead)
+def update_skill_lifecycle(skill_id: int, payload: SkillLifecycleUpdate,
+                           db: Session = Depends(get_db)) -> ModelSkill:
+    skill = _skill_or_404(db, skill_id)
+    transitions = {
+        "DRAFT": {"TESTING", "DISABLED"},
+        "TESTING": {"DRAFT", "ENABLED", "DISABLED"},
+        "ENABLED": {"TESTING", "DISABLED", "DEPRECATED"},
+        "DISABLED": {"DRAFT", "TESTING", "ENABLED", "DEPRECATED"},
+        "DEPRECATED": {"DISABLED"},
+    }
+    current = skill.lifecycle_status or ("ENABLED" if skill.enabled else "DISABLED")
+    if payload.lifecycle_status != current and payload.lifecycle_status not in transitions.get(current, set()):
+        raise HTTPException(
+            status_code=409,
+            detail=f"Unsupported Skill lifecycle transition: {current} -> {payload.lifecycle_status}",
+        )
+    if payload.lifecycle_status == "ENABLED":
+        if not skill.input_contract_json or not skill.output_contract_json:
+            raise HTTPException(status_code=409, detail="Skill contracts are required before enabling")
+        _validate_skill_governance({
+            "input_contract_json": skill.input_contract_json,
+            "output_contract_json": skill.output_contract_json,
+            "permission_policy_json": skill.permission_policy_json,
+            "side_effect_level": skill.side_effect_level,
+        })
+    skill.lifecycle_status = payload.lifecycle_status
+    skill.enabled = payload.lifecycle_status == "ENABLED"
+    config = dict(skill.config_json or {})
+    history = list(config.get("lifecycle_history") or [])
+    history.append({
+        "from": current,
+        "to": payload.lifecycle_status,
+        "reason": payload.reason,
+        "changed_at": datetime.now(timezone.utc).isoformat(),
+    })
+    config["lifecycle_history"] = history[-50:]
+    skill.config_json = config
+    db.commit()
     db.refresh(skill)
     return skill
 
@@ -593,18 +690,18 @@ def list_call_logs(limit: int = 50, db: Session = Depends(get_db)) -> list[Model
 
 
 @router.post("/skill-tools/validate-dw-records")
-def run_dw_validation(payload: DwValidationRequest) -> dict:
-    return SkillToolWorkflow().execute("validate_dw_records", payload.records)
+def run_dw_validation(payload: DwValidationRequest, db: Session = Depends(get_db)) -> dict:
+    return SkillToolWorkflow(db).execute("validate_dw_records", payload.model_dump(mode="json"))
 
 
 @router.post("/skill-tools/filter-watch-candidates")
-def run_watch_filter(payload: WatchFilterRequest) -> dict:
-    return SkillToolWorkflow().execute("filter_watch_candidates", payload)
+def run_watch_filter(payload: WatchFilterRequest, db: Session = Depends(get_db)) -> dict:
+    return SkillToolWorkflow(db).execute("filter_watch_candidates", payload)
 
 
 @router.post("/skill-tools/score-prediction-outcomes")
-def run_prediction_scoring(payload: PredictionScoreRequest) -> dict:
-    return SkillToolWorkflow().execute("score_prediction_outcomes", payload)
+def run_prediction_scoring(payload: PredictionScoreRequest, db: Session = Depends(get_db)) -> dict:
+    return SkillToolWorkflow(db).execute("score_prediction_outcomes", payload)
 
 
 @router.post("/skill-tools/trigger-ondemand-extraction", response_model=ExtractionSource)

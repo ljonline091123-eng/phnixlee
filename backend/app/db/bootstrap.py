@@ -16,6 +16,7 @@ from app.services.resource_hub import (
     seed_default_knowledge_bases,
 )
 from app.services.taxonomy import seed_builtin_definitions
+from app.services.governance_defaults import seed_default_quality_rules
 
 
 def initialize_database(*, seed_defaults: bool = True) -> None:
@@ -33,4 +34,5 @@ def initialize_database(*, seed_defaults: bool = True) -> None:
         seed_default_graphs(db)
         seed_default_agents(db)
         seed_builtin_definitions(db)
+        seed_default_quality_rules(db)
         db.commit()

@@ -77,6 +77,7 @@ class MarketDataFoundationTest(unittest.TestCase):
             "00700",
         )
         self.assertIsNotNone(quote.current_price)
+        self.assertEqual(quote.turnover_rate, 3.33)
         news = adapter._normalize_news_dataframe(
             pd.DataFrame(
                 [
