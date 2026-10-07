@@ -49,7 +49,7 @@ DEFAULT_DATA_ASSETS = (
     ("STOCK_FINANCIAL", "stock_financial_report", "DW财报：财务报告", "F10 财务指标、报告期、币种和原始财报字段，用于盈利质量与经营现状分析。"),
     ("STOCK_NOTICE", "stock_notice", "DW公告：公司公告", "上市公司及挂牌公司公告、公告类型、发布时间和来源链接，用于事件驱动和风险识别。"),
     ("STOCK_NEWS", "stock_news", "DW新闻：新闻资讯", "股票相关新闻、来源、情绪、摘要和发布时间，用于舆情与外部催化分析。"),
-    ("STOCK_CONTEXT_EVENT", "stock_context_event", "External contextual evidence", "Policy, raw materials, supply chain, contracts and shareholder events with provenance."),
+    ("STOCK_CONTEXT_EVENT", "stock_context_event", "外部线索：政策与产业事件", "政策、原材料、供应链、合同和股东等外部事件线索，保留来源、原文和证据状态。"),
     ("STOCK_F10", "stock_f10_cache", "DW股东/业务：F10资料", "公司简介、股东、基金流、业务构成、财务摘要和财务报表等 F10 分区缓存。"),
     ("RESEARCH_REPORT", "research_report", "DW研究：AI研报", "AI 生成研报、历史结论、评分、模型信息、知识库引用和复盘结果。"),
     ("WATCHLIST", "watchlist_item", "DW用户：自选股", "用户自选股票清单和研究关注标记。"),
@@ -67,8 +67,17 @@ DEFAULT_DATA_ASSETS = (
     ("CLASSIFICATION_DEFINITION", "classification_definition", "分类主数据：行业与类型释义", "行业、主题、类型和规模标签的真实释义、纳入标准、来源和定义版本。"),
     ("LAKE_OBJECT", "lake_object", "湖仓：原始与标准化对象", "Raw、Normalized、Serving 对象的 URI、内容哈希、来源记录和数据集版本。"),
     ("LAKE_DATASET", "lake_dataset", "湖仓：数据集目录", "Parquet 数据集、分层、分区规范和当前版本。"),
+    ("LAKE_DATASET_VERSION", "lake_dataset_version", "湖仓：数据集版本", "数据集每次发布的对象、行数、结构、质量结果和发布状态。"),
     ("LAKE_LINEAGE", "lake_lineage_event", "湖仓：数据血缘", "来源表到数据集、文档、切片和服务层结果的转换批次与版本链路。"),
+    ("KNOWLEDGE_DOCUMENT", "knowledge_document", "知识库：证据文档", "业务记录转换后的证据文档，保留来源表、来源记录、股票身份、标题和原文。"),
     ("DOCUMENT_CHUNKS", "document_chunk_version", "知识库：文档切片版本", "切片文本、原文偏移、内容哈希、解析器版本和 Embedding 模型版本。"),
+    ("KNOWLEDGE_ENTITY", "knowledge_entity", "知识图谱：实体", "股票、公司、文档、财务观测、市场观测和事件等图谱实体。"),
+    ("KNOWLEDGE_RELATION", "knowledge_relation", "知识图谱：关系", "实体间关系及其证据文档引用，保留所属知识库和图谱投影。"),
+    ("DATA_QUALITY_RULE", "data_quality_rule", "质量治理：质量规则", "版本化数据质量规则、适用范围、严重性、阈值和生命周期。"),
+    ("DATA_QUALITY_RUN", "data_quality_run", "质量治理：质量运行", "针对数据资产或数据集版本执行的质量门禁结果和分数。"),
+    ("DATA_QUALITY_ISSUE", "data_quality_issue", "质量治理：质量问题", "质量运行发现的问题、证据、状态和解决记录。"),
+    ("AGENT_EXECUTION_RUN", "agent_execution_run", "AI治理：Agent执行记录", "Agent、模型、知识版本、Skill版本、输入输出哈希和审计记录。"),
+    ("SKILL_EXECUTION_RUN", "skill_execution_run", "AI治理：Skill执行记录", "Skill契约执行、幂等、重试、副作用范围、证据和错误记录。"),
 )
 
 DEFAULT_KNOWLEDGE_BASES = (
@@ -120,11 +129,20 @@ def seed_default_data_assets(db: Session) -> None:
                 description=description,
                 governance_status="PENDING",
                 enabled=True,
+                asset_type="DATABASE_TABLE",
+                canonical_identity=f"table:{table_name}",
+                metadata_json={"catalog_version": "TASK1_GOVERNANCE_V1"},
             )
             db.add(asset)
         else:
             asset.display_name = asset.display_name or display_name
             asset.description = asset.description or description
+            asset.asset_type = asset.asset_type or "DATABASE_TABLE"
+            asset.canonical_identity = asset.canonical_identity or f"table:{table_name}"
+            asset.metadata_json = {
+                **(asset.metadata_json or {}),
+                "catalog_version": "TASK1_GOVERNANCE_V1",
+            }
             if asset.governance_status in {"READY", "MISSING"}:
                 asset.governance_status = "PENDING"
     db.commit()
@@ -243,7 +261,7 @@ DEFAULT_AGENTS = (
         "model_instance_code": "DEEPSEEK_CHAT",
         "max_iterations": 10,
         "description": "用于分析选股、趋势研判、短中长线操作结论和风险条件。",
-        "skill_codes": ["STOCK_SELECTION_ANALYST", "STOCK_TREND_ADVISOR", "RESEARCH_REPORT_REVIEW", "RESEARCH_REVIEW_CORRECTION"],
+        "skill_codes": ["STOCK_SELECTION_ANALYST", "STOCK_TREND_ADVISOR", "RESEARCH_REPORT_REVIEW", "RESEARCH_REVIEW_CORRECTION", "PREDICTION_LEDGER_WRITER"],
         "kb_codes": ["STOCK_FULL_KG"],
         "asset_codes": ["STOCK_SYMBOL", "STOCK_QUOTE", "STOCK_KLINE", "STOCK_FINANCIAL", "STOCK_NOTICE", "STOCK_NEWS", "STOCK_F10", "STOCK_CONTEXT_EVENT", "RESEARCH_REPORT"],
     },
@@ -254,7 +272,7 @@ DEFAULT_AGENTS = (
         "model_instance_code": "DEEPSEEK_CHAT",
         "max_iterations": 10,
         "description": "用于研究中心研究页签，生成并保存研报、比对历史研报。",
-        "skill_codes": ["STOCK_SELECTION_ANALYST", "STOCK_TREND_ADVISOR", "RESEARCH_REPORT_REVIEW", "RESEARCH_REVIEW_CORRECTION"],
+        "skill_codes": ["STOCK_SELECTION_ANALYST", "STOCK_TREND_ADVISOR", "RESEARCH_REPORT_REVIEW", "RESEARCH_REVIEW_CORRECTION", "PREDICTION_LEDGER_WRITER"],
         "kb_codes": ["STOCK_FULL_KG"],
         "asset_codes": ["STOCK_SYMBOL", "STOCK_QUOTE", "STOCK_KLINE", "STOCK_FINANCIAL", "STOCK_NOTICE", "STOCK_NEWS", "STOCK_F10", "STOCK_CONTEXT_EVENT", "RESEARCH_REPORT"],
     },
@@ -265,7 +283,7 @@ DEFAULT_AGENTS = (
         "model_instance_code": "DEEPSEEK_CHAT",
         "max_iterations": 6,
         "description": "用于预警判断、历史研报偏差提示和风险解释。",
-        "skill_codes": ["STOCK_TREND_ADVISOR", "RESEARCH_REPORT_REVIEW", "WATCH_ALERT"],
+        "skill_codes": ["STOCK_TREND_ADVISOR", "RESEARCH_REPORT_REVIEW", "WATCH_ALERT", "PREDICTION_LEDGER_WRITER"],
         "kb_codes": ["STOCK_FULL_KG"],
         "asset_codes": ["STOCK_QUOTE", "STOCK_KLINE", "STOCK_NOTICE", "STOCK_NEWS", "STOCK_FINANCIAL", "STOCK_F10", "STOCK_CONTEXT_EVENT", "RESEARCH_REPORT"],
     },
@@ -288,6 +306,7 @@ def seed_default_agents(db: Session) -> None:
                 context_window_limit=int(agent_config.get("context_window_limit", 12)),
                 json_schema_output=dict(agent_config.get("json_schema_output") or {}),
                 enabled=bool(agent_config.get("enabled", True)),
+                lifecycle_status="ENABLED" if bool(agent_config.get("enabled", True)) else "DISABLED",
                 description=str(agent_config["description"]),
                 version="1.0.1" if agent_config["agent_code"] in {"DATA_GOVERNANCE_AGENT", "QA_QUERY_AGENT"} else "1.0.0",
             )
@@ -310,12 +329,21 @@ def seed_default_agents(db: Session) -> None:
     }
 
     for agent_config in DEFAULT_AGENTS:
-        if agent_config["agent_code"] not in created_codes:
-            continue
         agent = db.scalar(select(AgentDefinition).where(AgentDefinition.agent_code == agent_config["agent_code"]))
         if agent is None:
             continue
         skill_ids = [skill_by_code[code] for code in agent_config["skill_codes"] if code in skill_by_code]
+        if agent_config["agent_code"] not in created_codes:
+            # Preserve all user-maintained bindings on existing Agents.  The
+            # governed prediction writer is a security boundary, so append
+            # only that built-in binding when the Agent is configured to use it.
+            writer_id = skill_by_code.get("PREDICTION_LEDGER_WRITER")
+            if writer_id in skill_ids and not db.scalar(select(AgentSkillLink.id).where(
+                AgentSkillLink.agent_id == agent.id,
+                AgentSkillLink.skill_id == writer_id,
+            )):
+                db.add(AgentSkillLink(agent_id=agent.id, skill_id=writer_id))
+            continue
         kb_ids = [kb_by_code[code] for code in agent_config["kb_codes"] if code in kb_by_code]
         asset_ids = [asset_by_code[code] for code in agent_config["asset_codes"] if code in asset_by_code]
         set_agent_links(db, agent, [], skill_ids, kb_ids, asset_ids)

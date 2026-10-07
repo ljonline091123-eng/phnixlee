@@ -61,6 +61,13 @@ from app.models.research_data import (
     StockInstitutionForecast,
     StockInvestorQA,
 )
+from app.models.governance import (
+    AgentExecutionRun,
+    DataQualityIssue,
+    DataQualityRule,
+    DataQualityRun,
+    SkillExecutionRun,
+)
 from app.db.table_comments import apply_table_comments
 
 apply_table_comments(Base.metadata)
@@ -118,4 +125,9 @@ __all__ = [
     "SkillEvaluationCase",
     "SkillEvaluationRun",
     "SkillEvaluationResult",
+    "DataQualityRule",
+    "DataQualityRun",
+    "DataQualityIssue",
+    "AgentExecutionRun",
+    "SkillExecutionRun",
 ]

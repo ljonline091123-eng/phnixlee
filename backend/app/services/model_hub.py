@@ -571,6 +571,54 @@ DEFAULT_MODEL_SKILLS_V2 = (
 )
 
 
+GENERIC_PROMPT_INPUT_CONTRACT: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "task_type": {"type": "string", "maxLength": 64},
+        "messages": {
+            "type": "array",
+            "maxItems": 200,
+            "items": {
+                "type": "object",
+                "required": ["role", "content"],
+                "properties": {
+                    "role": {"type": "string"},
+                    "content": {"type": "string"},
+                },
+            },
+        },
+        "context": {"type": "object"},
+        "evidence_ids": {
+            "type": "array",
+            "maxItems": 500,
+            "items": {"type": "string", "maxLength": 256},
+        },
+    },
+    "additionalProperties": True,
+}
+
+GENERIC_PROMPT_OUTPUT_CONTRACT: dict[str, Any] = {"type": ["object", "string"]}
+
+GENERIC_READ_ONLY_PERMISSION_POLICY: dict[str, Any] = {
+    "arbitrary_sql": False,
+    "database_write": False,
+    "unrestricted_database_write": False,
+    "allowed_operations": ["READ_GOVERNED_DATA", "RETURN_EVIDENCE_LINKED_RESULT"],
+    "allowed_services": [],
+}
+
+GENERIC_RETRY_POLICY: dict[str, Any] = {
+    "max_attempts": 1,
+    "retry_on": ["TimeoutError", "RuntimeError"],
+}
+
+GENERIC_ERROR_POLICY: dict[str, Any] = {
+    "on_error": "FAIL_CLOSED",
+    "retain_audit": True,
+    "expose_internal_error": False,
+}
+
+
 def seed_default_skills(db: Session) -> None:
     """Seed built-in skills without overwriting user-maintained content."""
     for skill_config in (*DEFAULT_MODEL_SKILLS_V2, *core_skill_rows()):
@@ -588,9 +636,41 @@ def seed_default_skills(db: Session) -> None:
             skill.config_json = _repair_default_text(
                 dict(skill.config_json or {}), dict(skill_config.get("config_json") or {})
             )
+            for field_name, default_value in (
+                ("input_contract_json", skill_config.get("input_contract_json") or GENERIC_PROMPT_INPUT_CONTRACT),
+                ("output_contract_json", skill_config.get("output_contract_json") or GENERIC_PROMPT_OUTPUT_CONTRACT),
+                ("permission_policy_json", skill_config.get("permission_policy_json") or GENERIC_READ_ONLY_PERMISSION_POLICY),
+                ("retry_policy_json", skill_config.get("retry_policy_json") or GENERIC_RETRY_POLICY),
+                ("error_policy_json", skill_config.get("error_policy_json") or GENERIC_ERROR_POLICY),
+            ):
+                if not getattr(skill, field_name, None):
+                    setattr(skill, field_name, default_value)
+            if getattr(skill, "lifecycle_status", "DRAFT") == "DRAFT" and skill.enabled:
+                skill.lifecycle_status = "ENABLED"
+            if not getattr(skill, "side_effect_level", None):
+                skill.side_effect_level = skill_config.get("side_effect_level", "READ_ONLY")
+            if not getattr(skill, "idempotency_policy", None):
+                skill.idempotency_policy = skill_config.get("idempotency_policy", "OPTIONAL")
         sync_skill_from_file(db, skill)
         skill.version = skill.version or "1.0.0"
         skill.format = "MD"
+
+    # Historical and user-created Skills can predate the governance columns.
+    # Fill only missing values so explicit user policies remain authoritative.
+    for skill in db.scalars(select(ModelSkill)).all():
+        if not skill.input_contract_json:
+            skill.input_contract_json = dict(GENERIC_PROMPT_INPUT_CONTRACT)
+        if not skill.output_contract_json:
+            skill.output_contract_json = dict(GENERIC_PROMPT_OUTPUT_CONTRACT)
+        if not skill.permission_policy_json:
+            skill.permission_policy_json = dict(GENERIC_READ_ONLY_PERMISSION_POLICY)
+        if not skill.retry_policy_json:
+            skill.retry_policy_json = dict(GENERIC_RETRY_POLICY)
+        if not skill.error_policy_json:
+            skill.error_policy_json = dict(GENERIC_ERROR_POLICY)
+        skill.version = skill.version or "1.0.0"
+        skill.side_effect_level = skill.side_effect_level or "READ_ONLY"
+        skill.idempotency_policy = skill.idempotency_policy or "NONE"
     db.commit()
 
 

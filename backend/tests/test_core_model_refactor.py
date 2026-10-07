@@ -17,6 +17,7 @@ from app.db.base import Base
 from app.db.session import get_db
 from app.main import app
 from app.models.ai_hub import AgentDefinition, AgentSkillLink, ModelCallLog, ModelInstance, ModelProvider, ModelRouteRule, ModelSkill, PredictionLedger, ResearchReportRecord, SkillOptimizationDraft
+from app.models.governance import SkillExecutionRun
 from app.models.market_data import DataSource, StockKline
 from app.services.model_hub import ModelHubService, seed_default_models, seed_default_skills
 from app.services.model_credentials import decrypt_api_key
@@ -394,7 +395,8 @@ class CoreModelRefactorTest(unittest.TestCase):
         self.db.flush()
         self.db.add(ModelInstance(provider_id=provider.id, instance_code="TEST_ADVICE_MODEL", model_code="test", model_name="Test", api_key="legacy-test-key"))
         agent = AgentDefinition(agent_code="TEST_ADVISOR", display_name="Test advisor", system_prompt="Analyze candidates",
-                                model_instance_code="TEST_ADVICE_MODEL", json_schema_output={"type": "object"})
+                                model_instance_code="TEST_ADVICE_MODEL", json_schema_output={"type": "object"},
+                                lifecycle_status="ENABLED")
         self.db.add(agent)
         self.db.flush()
         self.db.add(AgentSkillLink(agent_id=agent.id, skill_id=skill.id))
@@ -406,14 +408,56 @@ class CoreModelRefactorTest(unittest.TestCase):
                 return ModelExecutionResult(response_text=content, response_json={})
 
         with patch("app.services.model_hub.get_model_adapter", return_value=AdviceAdapter()):
-            response = self.client.post(f"/api/v1/resources/agents/{agent.id}/run", json={
+            candidate_response = self.client.post(f"/api/v1/resources/agents/{agent.id}/run", json={
                 "task_type": "stock_analysis", "messages": [{"role": "user", "content": "Analyze 000001"}],
+            })
+        self.assertEqual(candidate_response.status_code, 200, candidate_response.text)
+        self.assertEqual(candidate_response.json()["prediction_ids"], [])
+        capture = candidate_response.json()["response_json"]["prediction_capture"]
+        self.assertEqual(capture["status"], "CANDIDATE_ONLY")
+        self.assertEqual(capture["reason"], "CONTROLLED_WRITE_SKILL_NOT_BOUND")
+        self.assertEqual(len(capture["candidate_predictions"]), 1)
+        self.assertIsNone(self.db.scalar(select(PredictionLedger)))
+
+        writer = self.db.scalar(select(ModelSkill).where(
+            ModelSkill.skill_code == "PREDICTION_LEDGER_WRITER"
+        ))
+        self.assertIsNotNone(writer)
+        self.db.add(AgentSkillLink(agent_id=agent.id, skill_id=writer.id))
+        self.db.commit()
+        with patch("app.services.model_hub.get_model_adapter", return_value=AdviceAdapter()):
+            response = self.client.post(f"/api/v1/resources/agents/{agent.id}/run", json={
+                "task_type": "stock_analysis",
+                "messages": [{"role": "user", "content": "Analyze 000001"}],
+                "idempotency_key": "test-advice-controlled-write-v1",
+                "evidence_ids": ["quote:CN_A:000001:2026-10-07"],
             })
         self.assertEqual(response.status_code, 200, response.text)
         self.assertEqual(len(response.json()["prediction_ids"]), 1)
         advice = self.db.get(PredictionLedger, response.json()["prediction_ids"][0])
         self.assertEqual(advice.skill_version_used, skill.version)
         self.assertEqual(advice.model_instance_code, "TEST_ADVICE_MODEL")
+        write_run = self.db.scalar(select(SkillExecutionRun).where(
+            SkillExecutionRun.skill_id == writer.id
+        ))
+        self.assertEqual(write_run.status, "SUCCESS")
+        self.assertEqual(write_run.side_effect_level, "CONTROLLED_WRITE")
+        self.assertEqual(write_run.write_scope_json["tables"], ["prediction_ledger"])
+        self.assertEqual(write_run.write_scope_json["database_operations"], ["INSERT"])
+        self.assertFalse(write_run.write_scope_json["direct_sql"])
+        self.assertEqual(write_run.evidence_ids_json, ["quote:CN_A:000001:2026-10-07"])
+        repeated = self.client.post(f"/api/v1/resources/agents/{agent.id}/run", json={
+            "task_type": "stock_analysis",
+            "messages": [{"role": "user", "content": "Analyze 000001"}],
+            "idempotency_key": "test-advice-controlled-write-v1",
+            "evidence_ids": ["quote:CN_A:000001:2026-10-07"],
+        })
+        self.assertEqual(repeated.status_code, 200, repeated.text)
+        self.assertEqual(repeated.json()["prediction_ids"], response.json()["prediction_ids"])
+        self.assertEqual(len(list(self.db.scalars(select(PredictionLedger)).all())), 1)
+        self.assertEqual(len(list(self.db.scalars(select(SkillExecutionRun).where(
+            SkillExecutionRun.skill_id == writer.id
+        )).all())), 1)
 
         report = ResearchReportRecord(market="CN_A", symbol="000001", rating="B", score=68,
                                       conclusion="Positive trend", report_markdown="# Report")
