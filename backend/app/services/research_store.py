@@ -20,6 +20,94 @@ from app.models.research_data import (
 )
 
 
+def repair_legacy_earnings_metrics(
+    db: Session,
+    market: str | None = None,
+    symbol: str | None = None,
+) -> int:
+    """Repair rows written by the pre-contract THS F10 parser.
+
+    The old parser treated the third ``yjycData`` column (PE) as net profit.
+    Those rows are identifiable by the THS ``worth.html`` source and must be
+    migrated in place before the normalized research read model is built.  A
+    correction keeps the original payload as provenance while making the
+    metric contract truthful.  The helper is idempotent and scoped by stock
+    when the caller supplies a market/symbol pair.
+    """
+    statement = select(StockEarningsConsensus).where(
+        StockEarningsConsensus.source_code == "TONGHUASHUN",
+        StockEarningsConsensus.metric_code == "NET_PROFIT",
+    )
+    if market is not None:
+        statement = statement.where(StockEarningsConsensus.market == market)
+    if symbol is not None:
+        statement = statement.where(StockEarningsConsensus.symbol == symbol)
+
+    repaired = 0
+    for legacy in list(db.scalars(statement).all()):
+        raw_payload = dict(legacy.raw_payload or {})
+        source_url = str(
+            legacy.source_url
+            or raw_payload.get("source_url")
+            or raw_payload.get("detail_url")
+            or ""
+        ).lower()
+        if "10jqka.com.cn" not in source_url or "worth.html" not in source_url:
+            continue
+
+        corrected = db.scalar(select(StockEarningsConsensus).where(
+            StockEarningsConsensus.market == legacy.market,
+            StockEarningsConsensus.symbol == legacy.symbol,
+            StockEarningsConsensus.source_code == legacy.source_code,
+            StockEarningsConsensus.forecast_year == legacy.forecast_year,
+            StockEarningsConsensus.metric_code == "FORWARD_PE",
+        ))
+        provenance = {
+            "legacy_metric_code": legacy.metric_code,
+            "legacy_metric_name": legacy.metric_name,
+            "legacy_value": legacy.mean_value,
+            "repaired_at": datetime.now(timezone.utc).isoformat(),
+            "reason": "THS yjycData third column is PE, not net profit",
+        }
+        if corrected is None:
+            legacy.metric_code = "FORWARD_PE"
+            legacy.metric_name = "\u9884\u6d4b\u5e02\u76c8\u7387"
+            legacy.unit = "\u500d"
+            legacy.raw_payload = {
+                **raw_payload,
+                "metric_code": "FORWARD_PE",
+                "metric": "\u9884\u6d4b\u5e02\u76c8\u7387",
+                "\u9884\u6d4b\u6307\u6807": "\u9884\u6d4b\u5e02\u76c8\u7387",
+                "legacy_metric_repair": provenance,
+            }
+            repaired += 1
+            continue
+
+        # A corrected row may already have been written by a newer refresh.
+        # Keep that row as the canonical record, attach provenance, and remove
+        # only the known-invalid duplicate so the unique metric key remains
+        # deterministic.
+        corrected_payload = dict(corrected.raw_payload or {})
+        repairs = corrected_payload.get("legacy_metric_repairs")
+        if not isinstance(repairs, list):
+            repairs = []
+        repairs.append(provenance)
+        corrected.raw_payload = {
+            **corrected_payload,
+            "legacy_metric_repairs": repairs,
+        }
+        if not corrected.mean_value and legacy.mean_value:
+            corrected.mean_value = legacy.mean_value
+        if not corrected.source_url and legacy.source_url:
+            corrected.source_url = legacy.source_url
+        db.delete(legacy)
+        repaired += 1
+
+    if repaired:
+        db.flush()
+    return repaired
+
+
 def _text(value: Any) -> str:
     return str(value or "").strip()
 
@@ -420,6 +508,8 @@ def _report_dict(row: StockBrokerResearchReport) -> dict[str, Any]:
 
 
 def load_research_sections(db: Session, market: str, symbol: str) -> dict[str, Any]:
+    if repair_legacy_earnings_metrics(db, market, symbol):
+        db.commit()
     reports = list(db.scalars(select(StockBrokerResearchReport).where(
         StockBrokerResearchReport.market == market, StockBrokerResearchReport.symbol == symbol,
     ).order_by(StockBrokerResearchReport.report_date.desc(), StockBrokerResearchReport.id.desc())).all())

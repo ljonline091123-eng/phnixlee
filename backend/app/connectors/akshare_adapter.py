@@ -517,6 +517,14 @@ class AkshareAdapter(MarketDataAdapter):
         detailed_earnings_rows = self._safe_detailed_forecast_records(symbol)
         if detailed_earnings_rows:
             earnings_rows = [*earnings_rows, *detailed_earnings_rows]
+        # A few securities (including 000008) are present on the THS F10
+        # page but are omitted by AkShare's tabular forecast endpoints.  The
+        # page still exposes historical actual EPS/PE values in ``yjycData``.
+        # Use that bounded, source-traceable fallback only when both tabular
+        # endpoints are empty; future null cells are never turned into a
+        # forecast.
+        if not earnings_rows:
+            earnings_rows = self._safe_ths_historical_forecast_records(symbol)
         institution_rows = self._safe_institution_forecast_records(
             symbol, research_reports
         )
@@ -3386,6 +3394,124 @@ class AkshareAdapter(MarketDataAdapter):
         )
         return result
 
+    @classmethod
+    def _safe_ths_historical_forecast_records(cls, symbol: str) -> list[dict[str, Any]]:
+        """Parse historical actual EPS/PE values from the THS F10 page.
+
+        ``stock_profit_forecast_ths`` does not return rows for every listed
+        security.  The public F10 HTML has a small JSON array named
+        ``yjycData`` that contains historical actual values and, sometimes,
+        future placeholders.  Its second and third columns are EPS
+        (yuan/share) and PE (times), respectively.  The third column is not
+        net profit; treating it as such would corrupt the persisted metric
+        contract for securities whose tabular forecast endpoint is empty.
+        Only rows strictly before the current year are accepted.  Each value
+        is handled independently so a missing provider cell does not hide the
+        other observed metric.  This deliberately does not manufacture a
+        future consensus estimate or derive a net-profit value from PE.
+        """
+        code = cls._normalize_security_code(symbol)
+        if not code:
+            return []
+        url = f"https://basic.10jqka.com.cn/new/{code}/worth.html"
+        try:
+            with httpx.Client(
+                timeout=20.0,
+                trust_env=False,
+                follow_redirects=True,
+                headers={
+                    "User-Agent": "Mozilla/5.0",
+                    "Referer": f"https://basic.10jqka.com.cn/new/{code}/",
+                },
+            ) as client:
+                response = client.get(url)
+                response.raise_for_status()
+                # THS currently serves UTF-8 even when a legacy header says
+                # otherwise.  Prefer the byte payload to avoid mojibake in
+                # the HTML parser and keep a charset fallback for variants.
+                try:
+                    html_text = response.content.decode("utf-8", errors="ignore")
+                except Exception:
+                    html_text = response.text
+        except Exception:
+            return []
+
+        match = re.search(
+            r"<div[^>]+id=[\"']yjycData[\"'][^>]*>\s*(\[[\s\S]*?\])\s*</div>",
+            html_text,
+            flags=re.IGNORECASE,
+        )
+        if not match:
+            return []
+        try:
+            values = json.loads(html.unescape(match.group(1)))
+        except (TypeError, ValueError, json.JSONDecodeError):
+            return []
+        if not isinstance(values, list):
+            return []
+
+        current_year = date.today().year
+        fetched_at = datetime.now().astimezone().isoformat()
+        result: list[dict[str, Any]] = []
+
+        def number(value: Any) -> Any:
+            if value in (None, ""):
+                return None
+            text = str(value).strip()
+            if text.lower() in {"null", "none", "nan", "-", "--"}:
+                return None
+            try:
+                return float(text.replace(",", ""))
+            except (TypeError, ValueError):
+                return value
+
+        for raw in values:
+            if not isinstance(raw, (list, tuple)) or len(raw) < 3:
+                continue
+            year = str(raw[0] or "").strip()[:4]
+            if not re.fullmatch(r"20\d{2}", year) or int(year) >= current_year:
+                continue
+            eps = number(raw[1])
+            forward_pe = number(raw[2])
+            if eps is None and forward_pe is None:
+                continue
+            common = {
+                "\u80a1\u7968\u4ee3\u7801": code,
+                "symbol": code,
+                "预测年度": year,
+                "forecast_year": year,
+                "actual": True,
+                "is_forecast": False,
+                "value_scope": "ACTUAL",
+                "source_code": "TONGHUASHUN",
+                "source_name": "同花顺F10历史实际值",
+                "source_url": url,
+                "detail_url": url,
+                "source_updated_at": fetched_at,
+                "历史实际值": True,
+            }
+            if eps is not None:
+                result.append({
+                    **common,
+                    "预测指标": "每股收益",
+                    "metric": "每股收益",
+                    "metric_code": "EPS",
+                    "unit": "元/股",
+                    "value": eps,
+                    "mean": eps,
+                })
+            if forward_pe is not None:
+                result.append({
+                    **common,
+                    "预测指标": "预测市盈率",
+                    "metric": "预测市盈率",
+                    "metric_code": "FORWARD_PE",
+                    "unit": "倍",
+                    "value": forward_pe,
+                    "mean": forward_pe,
+                })
+        return result
+
     def _safe_detailed_forecast_records(self, symbol: str) -> list[dict[str, Any]]:
         """Read THS's detailed annual estimates (actual and forecast columns)."""
         cls = type(self)
@@ -3432,6 +3558,8 @@ class AkshareAdapter(MarketDataAdapter):
                 year = match.group(2)
                 result.append({
                     "预测年度": year,
+                    "\u80a1\u7968\u4ee3\u7801": cls._normalize_security_code(symbol),
+                    "symbol": cls._normalize_security_code(symbol),
                     "forecast_year": year,
                     "预测指标": metric_name,
                     "metric": metric_name,

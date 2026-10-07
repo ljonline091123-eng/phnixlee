@@ -4672,6 +4672,7 @@ textarea:focus {
 .research-forecast-heading { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 16px; margin-bottom: 14px; }
 .research-forecast-heading > div:first-child { display: flex; align-items: center; gap: 10px; }
 .research-forecast-heading h3 { margin: 0; font-size: 18px; }
+.research-forecast-coverage { color: #a06d37; font-size: 11px; font-weight: 500; white-space: nowrap; }
 .research-forecast-tabs { display: inline-flex; align-items: center; gap: 22px; }
 .research-forecast-tabs button { padding: 3px 0 8px; border: 0; border-bottom: 3px solid transparent; color: var(--text-muted, #718078); background: transparent; font-size: 16px; cursor: pointer; }
 .research-forecast-tabs button.active { border-bottom-color: #dd3e4d; color: #1f3029; font-weight: 700; }

@@ -666,18 +666,23 @@ function institutionForecastMetricValue(row: JsonRecord, period: string, metric:
 
 function ResearchInstitutionForecastPanel({ section }: { section: JsonRecord }) {
   const rows = useMemo(() => sortedResearchRows(sectionRows(section)), [section]);
-  const [mode, setMode] = useState<"forecast" | "rating">("forecast");
+  // When a provider has no institution-level forecast rows, the persisted
+  // report ratings are still useful. Start on that view so the section is not
+  // rendered as an empty panel; users can switch to the forecast tab once
+  // detailed rows become available after a refresh.
+  const [mode, setMode] = useState<"forecast" | "rating">(rows.length ? "forecast" : "rating");
   const ratingProjection = useMemo(() => projectedRatingStatistics(section, rows), [section, rows]);
   const periods = useMemo(() => institutionForecastPeriods(section, rows), [section, rows]);
+  const displayMode = rows.length ? mode : "rating";
   return <section className="research-source-section research-forecast-panel">
     <div className="research-forecast-heading">
       <div><span className="financial-section-mark" aria-hidden="true" /><h3>机构预测</h3></div>
       <div className="research-forecast-tabs" role="tablist" aria-label="机构预测视图">
-        <button type="button" role="tab" aria-selected={mode === "forecast"} className={mode === "forecast" ? "active" : ""} onClick={() => setMode("forecast")}>机构预测</button>
-        <button type="button" role="tab" aria-selected={mode === "rating"} className={mode === "rating" ? "active" : ""} onClick={() => setMode("rating")}>评级统计</button>
+        <button type="button" role="tab" aria-selected={displayMode === "forecast"} className={displayMode === "forecast" ? "active" : ""} onClick={() => setMode("forecast")}>机构预测</button>
+        <button type="button" role="tab" aria-selected={displayMode === "rating"} className={displayMode === "rating" ? "active" : ""} onClick={() => setMode("rating")}>评级统计</button>
       </div>
     </div>
-    {mode === "forecast" ? rows.length ? <div className="research-forecast-table-wrap" role="tabpanel" aria-label="机构预测">
+    {displayMode === "forecast" ? rows.length ? <div className="research-forecast-table-wrap" role="tabpanel" aria-label="机构预测">
       <table className="research-forecast-table">
         <thead><tr><th scope="col">报告日期</th><th scope="col">机构 / 分析师</th><th scope="col">评级</th>{periods.length ? periods.flatMap((period) => [<th scope="col" key={`${period}-eps`}>{period} EPS</th>, <th scope="col" key={`${period}-profit`}>{period} 净利润</th>]) : <th scope="col">研报数</th>}</tr></thead>
         <tbody>{rows.slice(0, 100).map((row, index) => {
@@ -698,7 +703,7 @@ function ResearchInstitutionForecastPanel({ section }: { section: JsonRecord }) 
         {!ratingProjection.buckets.some((row) => row.total > 0) ? <p className="research-table-note">当前时间窗内暂无可统计的机构评级。</p> : null}
       </div>
     )}
-    {mode === "rating" && ratingProjection.referenceDate ? <p className="research-table-note">统计基准：{formatDate(ratingProjection.referenceDate)}（{ratingProjection.basis}）</p> : null}
+    {displayMode === "rating" && ratingProjection.referenceDate ? <p className="research-table-note">统计基准：{formatDate(ratingProjection.referenceDate)}（{ratingProjection.basis}）</p> : null}
     <ResearchSectionSource section={section} />
   </section>;
 }
@@ -823,14 +828,21 @@ function isReportWithinLastYear(row: JsonRecord): boolean {
 }
 
 function ResearchLatestReportsPanel({ section, onOpen }: { section: JsonRecord; onOpen: (section: JsonRecord) => void }) {
-  const rows = useMemo(() => sortedResearchRows(sectionRows(section)).filter(isReportWithinLastYear), [section]);
+  const allRows = useMemo(() => sortedResearchRows(sectionRows(section)), [section]);
+  const recentRows = useMemo(() => allRows.filter(isReportWithinLastYear), [allRows]);
+  // The backend marks a bounded historical preview explicitly when the
+  // rolling one-year window is empty.  Do not filter that audited fallback
+  // out a second time in the browser.
+  const historicalFallback = String(section.date_status || section.window_status || "") === "HISTORICAL_FALLBACK";
+  const rows = historicalFallback ? allRows : recentRows;
   return <section className="research-source-section research-latest-reports">
-    <ResearchSectionHeading title="最新研报" note={rows.length ? `${rows.length} 篇` : undefined} />
+    <ResearchSectionHeading title="最新研报" note={rows.length ? (historicalFallback ? "近一年暂无，展示历史最新" : `${rows.length} 篇`) : undefined} />
     {rows.length ? <div className="research-latest-list">{rows.map((row, index) => <button type="button" className="research-latest-item" key={`${String(row.report_id || reportTitle(row))}-${index}`} onClick={() => openResearchReport(section, row, onOpen)}>
       <span className="research-latest-icon"><FileText size={18} aria-hidden="true" /></span>
       <span className="research-latest-content"><strong>{reportTitle(row)}</strong>{reportSummary(row) ? <span>{reportSummary(row)}</span> : null}<ReportTagList row={row} /></span>
       <time>{formatDate(researchDateText(row))}</time>
     </button>)}</div> : <p className="research-true-empty">{String(section.message || "当前数据源未返回最新研报")}</p>}
+    {historicalFallback ? <p className="research-table-note">{String(section.message || "近一年暂无公开研报，以上为历史最新研报")}</p> : null}
     <ResearchSectionSource section={section} />
   </section>;
 }
@@ -3118,7 +3130,48 @@ export function StockDetailDrawer({
   const researchSectionsByKey = new Map(researchSections.map((section) => [String(section.key || ""), section]));
   const researchSection = (key: string, title: string, message = "暂无该分区数据"): JsonRecord => {
     const direct = rawResearchSections[key];
-    if (researchSectionsByKey.has(key)) return researchSectionsByKey.get(key) as JsonRecord;
+    const normalizedSection = researchSectionsByKey.get(key);
+    if (normalizedSection) {
+      // `sections` is the display-normalized view. The direct section may
+      // contain provider metadata not repeated there, notably rolling rating
+      // statistics when institution forecast rows are unavailable.
+      // Some direct sections are arrays (notably latest_reports/reports).
+      // Treat those arrays as rows before merging; converting them through
+      // asRecord would silently discard the persisted report list whenever
+      // the normalized projection is empty or stale.
+      const directRecord = Array.isArray(direct)
+        ? { rows: asArray(direct) }
+        : asRecord(direct);
+      const normalizedRecord = asRecord(normalizedSection);
+      const hasMeaningfulValue = (value: unknown): boolean => {
+        if (Array.isArray(value)) return value.length > 0;
+        if (value && typeof value === "object") return Object.keys(value as object).length > 0;
+        return value !== undefined && value !== null && value !== "";
+      };
+      const mergedSection: JsonRecord = { ...directRecord, ...normalizedRecord };
+      // A normalized read model can legitimately contain empty arrays or an
+      // unavailable status while the raw/provider section still has data.
+      // Preserve non-empty source values so the UI does not hide valid rows,
+      // rating statistics, metrics, or provenance metadata.
+      Object.entries(directRecord).forEach(([field, value]) => {
+        const normalizedValue = normalizedRecord[field];
+        if (
+          hasMeaningfulValue(value)
+          && (!hasMeaningfulValue(normalizedValue)
+            || (field === "status" && normalizedValue === "UNAVAILABLE" && value !== "UNAVAILABLE"))
+        ) {
+          mergedSection[field] = value;
+        }
+      });
+      const normalizedRows = sectionRows(normalizedSection);
+      const directRows = sectionRows(directRecord);
+      return {
+        ...mergedSection,
+        key,
+        title: String(normalizedRecord.title || directRecord.title || title),
+        rows: normalizedRows.length ? normalizedRows : directRows,
+      };
+    }
     if (Array.isArray(direct)) return { key, title, status: direct.length ? "AVAILABLE" : "UNAVAILABLE", rows: direct, source: rawResearchSections.source, message };
     if (direct && typeof direct === "object") {
       const record = asRecord(direct);

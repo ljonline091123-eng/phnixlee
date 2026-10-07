@@ -18,6 +18,7 @@ from app.services.research_store import (
     get_or_fetch_report_detail,
     load_research_sections,
     persist_research_sections,
+    repair_legacy_earnings_metrics,
 )
 
 
@@ -132,6 +133,41 @@ def test_research_persistence_deduplicates_rows_without_collapsing_distinct_metr
         assert {tuple(row.analysts_json) for row in institutions} == {("分析师甲",), ("分析师乙",)}
         assert len(qa) == 1
         assert qa[0].answer == "以公告披露为准。"
+    engine.dispose()
+
+
+def test_legacy_ths_worth_pe_values_are_repaired_without_touching_other_sources() -> None:
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    with Session(engine) as db:
+        legacy = StockEarningsConsensus(
+            market="CN_A", symbol="000008", source_code="TONGHUASHUN",
+            forecast_year="2024", metric_code="NET_PROFIT", metric_name="\u5f52\u6bcd\u51c0\u5229\u6da6",
+            unit="\u4ebf\u5143", mean_value="5.45",
+            source_url="https://basic.10jqka.com.cn/new/000008/worth.html",
+            raw_payload={"metric_code": "NET_PROFIT", "value": 5.45},
+        )
+        unrelated = StockEarningsConsensus(
+            market="CN_A", symbol="000008", source_code="EASTMONEY",
+            forecast_year="2024", metric_code="NET_PROFIT", metric_name="\u5f52\u6bcd\u51c0\u5229\u6da6",
+            unit="\u4ebf\u5143", mean_value="12.3",
+            source_url="https://data.eastmoney.com/report/000008.html",
+            raw_payload={},
+        )
+        db.add_all([legacy, unrelated])
+        db.commit()
+
+        assert repair_legacy_earnings_metrics(db, "CN_A", "000008") == 1
+        db.commit()
+
+        rows = db.scalars(select(StockEarningsConsensus).order_by(StockEarningsConsensus.source_code)).all()
+        repaired = next(row for row in rows if row.source_code == "TONGHUASHUN")
+        assert repaired.metric_code == "FORWARD_PE"
+        assert repaired.metric_name == "\u9884\u6d4b\u5e02\u76c8\u7387"
+        assert repaired.mean_value == "5.45"
+        assert repaired.raw_payload["legacy_metric_repair"]["legacy_value"] == "5.45"
+        assert next(row for row in rows if row.source_code == "EASTMONEY").metric_code == "NET_PROFIT"
+        assert repair_legacy_earnings_metrics(db, "CN_A", "000008") == 0
     engine.dispose()
 
 
