@@ -107,6 +107,44 @@ CORE_SKILLS = (
             },
         },
     },
+    {
+        "skill_code": "PREDICTION_LEDGER_WRITER",
+        "skill_name": "预测账本受控写入",
+        "description": "仅将已校验的候选预测写入预测账本，限定服务、表、操作和幂等键，并保留完整执行审计。",
+        "task_type": "prediction_persistence",
+        "skill_type": "EXECUTABLE_TOOL",
+        "side_effect_level": "CONTROLLED_WRITE",
+        "idempotency_policy": "REQUIRED",
+        "retry_policy_json": {"max_attempts": 1, "retry_on": []},
+        "permission_policy_json": {
+            "arbitrary_sql": False,
+            "database_write": True,
+            "unrestricted_database_write": False,
+            "allowed_operations": ["CREATE_PREDICTION_LEDGER"],
+            "allowed_services": ["prediction_ledger_service"],
+            "write_scope": {
+                "tables": ["prediction_ledger"],
+                "operations": ["INSERT"],
+            },
+        },
+        "function_spec": {
+            "name": "record_agent_predictions",
+            "description": "Persist validated prediction candidates through the governed prediction-ledger service.",
+            "internal_service_only": True,
+            "parameters": {
+                "type": "object",
+                "required": ["candidates", "idempotency_key"],
+                "properties": {
+                    "candidates": {"type": "array", "minItems": 1, "maxItems": 50},
+                    "idempotency_key": {"type": "string", "minLength": 1, "maxLength": 192},
+                    "evidence_ids": {"type": "array", "maxItems": 500, "items": {"type": "string"}},
+                    "model_instance_code": {"type": ["string", "null"]},
+                    "model_call_log_id": {"type": ["integer", "null"]},
+                },
+                "additionalProperties": False,
+            },
+        },
+    },
 )
 
 
@@ -118,5 +156,21 @@ def core_skill_rows() -> tuple[dict, ...]:
         "instructions": (DOC_ROOT / f"{item['skill_code']}.SKILL.md").read_text(encoding="utf-8"),
         "skill_type": item.get("skill_type", "PROMPT_SOP"),
         "enabled": True,
+        "lifecycle_status": "ENABLED",
+        "input_contract_json": item["function_spec"].get("parameters") or {},
+        "output_contract_json": {"type": "object"},
+        "permission_policy_json": item.get("permission_policy_json") or {
+            "arbitrary_sql": False,
+            "database_write": False,
+            "unrestricted_database_write": False,
+            "allowed_operations": ["READ_GOVERNED_DATA", "RETURN_BOUNDED_RESULT"],
+            "allowed_services": [item["function_spec"]["name"]],
+        },
+        "side_effect_level": item.get("side_effect_level", "READ_ONLY"),
+        "idempotency_policy": item.get("idempotency_policy", "OPTIONAL"),
+        "retry_policy_json": item.get("retry_policy_json") or {
+            "max_attempts": 2, "retry_on": ["TimeoutError", "RuntimeError"]
+        },
+        "error_policy_json": {"on_error": "FAIL_CLOSED", "retain_audit": True},
         "config_json": {"task_type": item["task_type"], "function_spec": item["function_spec"]},
     } for item in CORE_SKILLS)

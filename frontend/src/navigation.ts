@@ -8,7 +8,7 @@ export type AppRoute = {
 export const moduleSections: Record<ModuleView, readonly string[]> = {
   overview: ["status"],
   data: ["access", "master", "business", "lakehouse", "knowledge", "graphs", "pipeline"],
-  ai: ["models", "agents", "skills", "evaluation"],
+  ai: ["models", "agents", "skills", "evaluation", "governance"],
   research: ["objects", "selection", "research"],
   operations: ["tasks", "quality", "audit"],
 };

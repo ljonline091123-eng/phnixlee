@@ -139,6 +139,14 @@ class ModelSkillCreate(BaseModel):
     config_json: dict[str, Any] = Field(default_factory=dict)
     version: str = Field(default="1.0.0", max_length=32, pattern=r"^\d+\.\d+\.\d+$")
     is_builtin: bool = False
+    lifecycle_status: Literal["DRAFT", "TESTING", "ENABLED", "DISABLED", "DEPRECATED"] = "DRAFT"
+    input_contract_json: dict[str, Any] = Field(default_factory=dict)
+    output_contract_json: dict[str, Any] = Field(default_factory=dict)
+    permission_policy_json: dict[str, Any] = Field(default_factory=dict)
+    side_effect_level: Literal["READ_ONLY", "CONTROLLED_WRITE", "EXTERNAL_WRITE"] = "READ_ONLY"
+    idempotency_policy: Literal["NONE", "OPTIONAL", "REQUIRED"] = "NONE"
+    retry_policy_json: dict[str, Any] = Field(default_factory=dict)
+    error_policy_json: dict[str, Any] = Field(default_factory=dict)
 
 
 class ModelSkillUpdate(BaseModel):
@@ -151,6 +159,14 @@ class ModelSkillUpdate(BaseModel):
     config_json: dict[str, Any] | None = None
     version: str | None = Field(default=None, max_length=32)
     expected_content_hash: str | None = None
+    lifecycle_status: Literal["DRAFT", "TESTING", "ENABLED", "DISABLED", "DEPRECATED"] | None = None
+    input_contract_json: dict[str, Any] | None = None
+    output_contract_json: dict[str, Any] | None = None
+    permission_policy_json: dict[str, Any] | None = None
+    side_effect_level: Literal["READ_ONLY", "CONTROLLED_WRITE", "EXTERNAL_WRITE"] | None = None
+    idempotency_policy: Literal["NONE", "OPTIONAL", "REQUIRED"] | None = None
+    retry_policy_json: dict[str, Any] | None = None
+    error_policy_json: dict[str, Any] | None = None
 
 
 class ModelSkillRead(ModelSkillCreate):
@@ -173,6 +189,7 @@ class ModelSkillRevisionRead(BaseModel):
     instructions: str
     content_hash: str
     source: str
+    governance_json: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime
 
 

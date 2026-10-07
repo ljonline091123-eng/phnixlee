@@ -45,6 +45,7 @@ import { KnowledgePipelinePanel } from "./KnowledgePipelinePanel";
 import { BatchStockGovernanceDialog } from "./BatchStockGovernanceDialog";
 import { StockPipelineStatusDialog, type StockPipelineStatusKey } from "./StockPipelineStatusDialog";
 import { OperationsCenter } from "./OperationsCenter";
+import { GovernanceCenter } from "./GovernanceCenter";
 import { PlatformOverview, type PlatformNavigationTarget } from "./PlatformOverview";
 import {
   defaultSections,
@@ -54,7 +55,7 @@ import {
   type ModuleView,
 } from "./navigation";
 
-type ModelHubTab = "models" | "agents" | "skills" | "evaluation";
+type ModelHubTab = "models" | "agents" | "skills" | "evaluation" | "governance";
 type DataView = "access" | "master" | "business" | "lakehouse" | "knowledge" | "graphs" | "pipeline";
 type AccessView = "sources" | "interfaces" | "sync";
 type MasterView = "securities" | "entities";
@@ -203,10 +204,31 @@ export default function App() {
         {route.module === "data" && <DataConsolePage tab={route.section as DataView} setTab={(section) => navigate("data", section)} />}
         {route.module === "ai" && <ModelLabPage tab={route.section as ModelHubTab} setTab={(section) => navigate("ai", section)} />}
         {route.module === "research" && <InvestmentWorkbench tab={route.section as ResearchView} setTab={(section) => navigate("research", section)} />}
-        {route.module === "operations" && <OperationsCenter onNavigate={navigateTarget} />}
+        {route.module === "operations" && <OperationsGovernancePage tab={route.section as "tasks" | "quality" | "audit"} setTab={(section) => navigate("operations", section)} onNavigate={navigateTarget} />}
       </section>
     </main>
   );
+}
+
+function OperationsGovernancePage({
+  tab,
+  setTab,
+  onNavigate,
+}: {
+  tab: "tasks" | "quality" | "audit";
+  setTab: (tab: "tasks" | "quality" | "audit") => void;
+  onNavigate: (target: PlatformNavigationTarget) => void;
+}) {
+  return <>
+    <div className="resource-tabs">
+      <button type="button" className={tab === "tasks" ? "active" : ""} onClick={() => setTab("tasks")}>任务中心</button>
+      <button type="button" className={tab === "quality" ? "active" : ""} onClick={() => setTab("quality")}>数据质量</button>
+      <button type="button" className={tab === "audit" ? "active" : ""} onClick={() => setTab("audit")}>执行审计</button>
+    </div>
+    {tab === "tasks" && <OperationsCenter onNavigate={onNavigate} />}
+    {tab === "quality" && <GovernanceCenter view="quality" />}
+    {tab === "audit" && <GovernanceCenter view="executions" />}
+  </>;
 }
 function PageHeader({
   eyebrow,
@@ -755,7 +777,7 @@ function LakehousePanel() {
     <div className="lakehouse-catalog-tabs" role="tablist" aria-label="湖仓目录类型">{([['datasets', '数据集'], ['objects', '对象'], ['chunks', '文档切片'], ['lineage', '数据血缘']] as const).map(([key, label]) => <button type="button" role="tab" aria-selected={catalogView === key} className={catalogView === key ? "active" : ""} key={key} onClick={() => setCatalogView(key)}>{label}</button>)}</div>
     {catalogView === "datasets" && <div className="table-wrap"><table><thead><tr><th>数据集</th><th>分层</th><th>格式</th><th>当前版本</th><th>操作</th></tr></thead><tbody>{datasets.map(item => <tr key={item.id}><td><strong>{item.dataset_name}</strong><br /><code>{item.dataset_code}</code></td><td>{layerName(item.layer)}</td><td>{item.format}</td><td><code title={item.current_version}>{compact(item.current_version, 30)}</code></td><td><button type="button" onClick={() => void showPreview(item)} disabled={!item.current_version || Boolean(busy)}>{busy === `preview-${item.id}` ? "读取中..." : "查看数据与质量"}</button></td></tr>)}{!datasets.length && <tr><td colSpan={5} className="empty-state">尚未发布数据集，请从上方选择来源表创建标准化快照。</td></tr>}</tbody></table></div>}
     {catalogView === "objects" && <div className="table-wrap"><table><thead><tr><th>对象与位置</th><th>分层</th><th>来源</th><th>大小</th><th>内容哈希</th><th>创建时间</th></tr></thead><tbody>{objects.map(item => <tr key={item.id}><td><strong>{item.bucket || "本地湖仓"}</strong><br /><code title={item.object_uri}>{compact(item.object_key || item.object_uri, 58)}</code></td><td>{layerName(item.layer)}</td><td>{sourceNames[item.source_table || ""] || item.source_table || "--"}<br /><small>{item.source_record_id || "--"}</small></td><td>{item.byte_size.toLocaleString()} 字节</td><td><code title={item.content_hash}>{compact(item.content_hash, 16)}</code></td><td>{formatDate(item.created_at)}</td></tr>)}{!objects.length && <tr><td colSpan={6} className="empty-state">当前没有湖仓对象。</td></tr>}</tbody></table></div>}
-    {catalogView === "chunks" && <div className="table-wrap"><table><thead><tr><th>文档</th><th>切片与章节</th><th>正文预览</th><th>解析方式</th><th>状态</th><th>创建时间</th></tr></thead><tbody>{chunks.map(item => <tr key={item.id}><td><code title={item.document_key}>{compact(item.document_key, 34)}</code><br /><small>文档 ID：{item.document_id || "--"}</small></td><td>第 {item.chunk_index + 1} 段<br /><small>{item.section_title || "未识别章节"} · {item.boundary_type || "固定边界"}</small><br /><small>{item.start_offset}–{item.end_offset}</small></td><td className="lakehouse-preview-cell" title={item.text_preview}>{compact(item.text_preview.replace(/\s+/g, " "), 96)}</td><td>{item.parser_version}<br /><small>{item.chunk_method || "固定长度"}</small><br /><small>{item.embedding_model || "尚未生成向量"}</small></td><td>{item.status === "READY" ? "可用" : item.status}</td><td>{formatDate(item.created_at)}</td></tr>)}{!chunks.length && <tr><td colSpan={6} className="empty-state">当前没有文档切片。</td></tr>}</tbody></table></div>}
+    {catalogView === "chunks" && <div className="table-wrap"><table><thead><tr><th>文档</th><th>切片与章节</th><th>正文预览</th><th>解析方式</th><th>向量状态</th><th>切片状态</th><th>创建时间</th></tr></thead><tbody>{chunks.map(item => <tr key={item.id}><td><code title={item.document_key}>{compact(item.document_key, 34)}</code><br /><small>文档 ID：{item.document_id || "--"}</small></td><td>第 {item.chunk_index + 1} 段<br /><small>{item.section_title || "未识别章节"} · {item.boundary_type || "固定边界"}</small><br /><small>{item.start_offset}–{item.end_offset}</small></td><td className="lakehouse-preview-cell" title={item.text_preview}>{compact(item.text_preview.replace(/\s+/g, " "), 96)}</td><td>{item.parser_version}<br /><small>{item.chunk_method || "固定长度"}</small><br /><small>{item.embedding_model || "未配置向量模型"}</small></td><td>{item.embedding_kind === "HASH" ? "哈希指纹（非语义向量）" : item.embedding_kind === "SEMANTIC" ? "语义向量" : "无向量"}<br /><small>{item.embedding_status === "HASH_ONLY" ? "仅哈希检索" : item.embedding_status === "READY" ? "已生成" : item.embedding_status === "PENDING" ? "待生成" : "缺失"}</small></td><td>{item.status === "READY" ? "切片可用" : item.status}<br /><small>{item.section_status === "IDENTIFIED" ? "章节已识别" : "章节待识别"}</small></td><td>{formatDate(item.created_at)}</td></tr>)}{!chunks.length && <tr><td colSpan={7} className="empty-state">当前没有文档切片。</td></tr>}</tbody></table></div>}
     {catalogView === "lineage" && <div className="table-wrap"><table><thead><tr><th>上游</th><th>转换</th><th>下游</th><th>数据集版本</th><th>批次</th><th>创建时间</th></tr></thead><tbody>{lineage.map(item => <tr key={item.id}><td><strong>{typeName[item.upstream_type] || item.upstream_type}</strong><br /><code title={item.upstream_id}>{compact(item.upstream_id, 34)}</code></td><td>{transformationName[item.transformation] || item.transformation}<br /><small>{item.parser_version || "--"}</small></td><td><strong>{typeName[item.downstream_type] || item.downstream_type}</strong><br /><code title={item.downstream_id}>{compact(item.downstream_id, 34)}</code></td><td><code title={item.dataset_version}>{compact(item.dataset_version, 24)}</code></td><td><code title={item.batch_id}>{compact(item.batch_id, 12)}</code></td><td>{formatDate(item.created_at)}</td></tr>)}{!lineage.length && <tr><td colSpan={6} className="empty-state">当前没有数据血缘记录。</td></tr>}</tbody></table></div>}
     {preview && <ResourceDialog eyebrow="数据集版本" title={`${preview.dataset} · ${preview.version}`} onClose={() => setPreview(null)}><dl className="resource-detail-list"><dt>总行数</dt><dd>{preview.row_count}</dd><dt>质量门禁</dt><dd>{preview.quality.passed ? "通过" : "未通过"}</dd><dt>字段结构</dt><dd><pre>{JSON.stringify(preview.schema, null, 2)}</pre></dd><dt>质量结果</dt><dd><pre>{JSON.stringify(preview.quality, null, 2)}</pre></dd><dt>样例数据</dt><dd><pre>{JSON.stringify(preview.rows, null, 2)}</pre></dd></dl></ResourceDialog>}
   </section>;
@@ -1183,7 +1205,7 @@ function message(text: string) {
         detail={notice || "模型提供推理，技能沉淀方法，智能体负责组合与执行"}
       />
       <div className="resource-tabs">
-        {(["models", "agents", "skills", "evaluation"] as ModelHubTab[]).map((item) => (
+        {(["models", "agents", "skills", "evaluation", "governance"] as ModelHubTab[]).map((item) => (
           <button
             type="button"
             key={item}
@@ -1196,7 +1218,9 @@ function message(text: string) {
                 ? "智能体"
                 : item === "skills"
                   ? "技能库"
-                  : "运行与评测"}
+                  : item === "evaluation"
+                    ? "运行与评测"
+                    : "治理契约"}
           </button>
         ))}
       </div>
@@ -1403,6 +1427,7 @@ function message(text: string) {
           onSend={sendChat}
         />
       </div>}
+      {tab === "governance" && <GovernanceCenter view="contracts" />}
       {testDialog && (
         <ResourceDialog
           eyebrow="MODEL TEST"
