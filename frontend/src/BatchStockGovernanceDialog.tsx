@@ -221,6 +221,12 @@ function progressValue(job: BatchGovernanceJob | null) {
   return Math.max(0, Math.min(100, raw > 0 && raw <= 1 ? raw * 100 : raw));
 }
 
+function isRetryableJob(job: BatchGovernanceJob) {
+  const lifecycle = normalizeStatus(job.job_status || job.status);
+  if (["PENDING", "QUEUED", "WAITING", "RUNNING", "RETRY"].includes(lifecycle)) return false;
+  return lifecycle === "FAILED" || ["PARTIAL", "FAILED"].includes(normalizeStatus(job.result_status || job.status));
+}
+
 function stageLabel(stage?: string | null) {
   const normalized = String(stage || "").toUpperCase();
   return stageDefinitions.find((item) => item.aliases.some((alias) => normalized.includes(alias)))?.title || stage || "等待调度";
@@ -589,6 +595,7 @@ export function BatchStockGovernanceDialog({
   const [klineDays, setKlineDays] = useState(365);
   const [disclosureDays, setDisclosureDays] = useState(730);
   const [submitting, setSubmitting] = useState(false);
+  const [retryingJobId, setRetryingJobId] = useState<number | null>(null);
   const [job, setJob] = useState<BatchGovernanceJob | null>(null);
   const [recentJobs, setRecentJobs] = useState<BatchGovernanceJob[]>([]);
   const [recentLoading, setRecentLoading] = useState(false);
@@ -763,6 +770,30 @@ export function BatchStockGovernanceDialog({
     }
   }
 
+  async function retryJob(item: BatchGovernanceJob) {
+    if (!isRetryableJob(item) || activeJob || retryingJobId !== null) return;
+    setRetryingJobId(item.job_id);
+    setError("");
+    try {
+      const created = await batchGovernanceApi.retry(item.job_id);
+      completionNotified.current = null;
+      setJob(created);
+      setRecentJobs((current) => [created, ...current.filter((row) => row.job_id !== created.job_id)].slice(0, 8));
+      onNotify?.(`已提交重试任务 #${created.job_id}。系统将按原任务请求重新执行，可能包含此前已完成的环节。`);
+      try {
+        const result = await batchGovernanceApi.list(8);
+        const latest = Array.isArray(result) ? result : result.items;
+        setRecentJobs([created, ...latest.filter((row) => row.job_id !== created.job_id)].slice(0, 8));
+      } catch {
+        // Keep the new task visible if refreshing the recent-job list fails.
+      }
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "重试任务提交失败");
+    } finally {
+      setRetryingJobId(null);
+    }
+  }
+
   if (!open) return null;
 
   const selectedKnowledgeBase = knowledgeBases.find((item) => item.id === knowledgeBaseId);
@@ -903,6 +934,12 @@ export function BatchStockGovernanceDialog({
           <header>
             <div><p className="eyebrow">TASK PROGRESS</p><h4>任务 #{job.job_id}</h4><span>{job.stock_count} 只股票 · {job.pipeline_run_ids?.length || (job.pipeline_run_id ? 1 : 0)} 个知识管道运行</span></div>
             <strong className={`batch-job-status ${statusClass(job.result_status || job.status)}`}>{statusLabel(job.result_status || job.status)}</strong>
+            {isRetryableJob(job) && <div className="batch-retry-control">
+              <button type="button" disabled={retryingJobId !== null || activeJob} onClick={() => void retryJob(job)}>
+                {retryingJobId === job.job_id ? "正在提交..." : "重试未完成项"}
+              </button>
+              <small>将按原任务请求重新执行，可能包含已完成环节。</small>
+            </div>}
           </header>
           <div className="batch-progress-track" aria-label={`完成进度 ${Math.round(progress)}%`}><span style={{ width: `${progress}%` }} /></div>
           <div className="batch-progress-meta"><span>当前阶段：{stageLabel(job.current_stage)}</span><b>{Math.round(progress)}%</b></div>
@@ -943,7 +980,7 @@ export function BatchStockGovernanceDialog({
         <section className="batch-recent-jobs" aria-label="最近批量任务">
           <header><div><h4>最近批量任务</h4><p>页面刷新或关闭弹窗后，可从这里重新打开任务并继续查看进度。</p></div><span>{recentLoading ? "正在读取…" : `${recentJobs.length} 条`}</span></header>
           <div className="table-wrap"><table><thead><tr><th>任务</th><th>股票数</th><th>进度</th><th>状态</th><th>提交时间</th><th>操作</th></tr></thead><tbody>
-            {recentJobs.map((item) => <tr key={item.job_id}><td><strong>#{item.job_id}</strong><br /><small>{stageLabel(item.current_stage)}</small></td><td>{item.stock_count}</td><td>{Math.round(progressValue(item))}%</td><td><span className={`batch-job-status ${statusClass(item.result_status || item.status)}`}>{statusLabel(item.result_status || item.status)}</span></td><td>{item.created_at ? new Date(item.created_at).toLocaleString("zh-CN") : "--"}</td><td><button type="button" onClick={() => void openRecentJob(item)}>查看</button></td></tr>)}
+            {recentJobs.map((item) => <tr key={item.job_id}><td><strong>#{item.job_id}</strong><br /><small>{stageLabel(item.current_stage)}</small></td><td>{item.stock_count}</td><td>{Math.round(progressValue(item))}%</td><td><span className={`batch-job-status ${statusClass(item.result_status || item.status)}`}>{statusLabel(item.result_status || item.status)}</span></td><td>{item.created_at ? new Date(item.created_at).toLocaleString("zh-CN") : "--"}</td><td className="batch-recent-job-actions"><button type="button" onClick={() => void openRecentJob(item)}>查看</button>{isRetryableJob(item) && <button type="button" disabled={retryingJobId !== null || activeJob} onClick={() => void retryJob(item)}>{retryingJobId === item.job_id ? "正在提交..." : "重试未完成项"}</button>}</td></tr>)}
             {!recentLoading && !recentJobs.length && <tr><td colSpan={6} className="empty-state">暂无批量任务记录</td></tr>}
           </tbody></table></div>
         </section>
