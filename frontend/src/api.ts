@@ -42,7 +42,7 @@ export type LakeQualityReport = { passed: boolean; level: "PASS" | "WARNING" | "
 export type LakeDatasetPreview = { dataset: string; version: string; row_count: number; schema: Record<string, string>; quality: LakeQualityReport; rows: Record<string, unknown>[] };
 export type LakeExportResult = { dataset_id: number; dataset_code: string; version: string; batch_id: string; row_count: number; quality: { passed: boolean } };
 export type LakeObject = { id: string; object_uri: string; layer: string; bucket?: string; object_key?: string; content_hash: string; content_type: string; byte_size: number; source_table?: string; source_record_id?: string; dataset_version?: string; created_at: string };
-export type LakeDocumentChunk = { id: string; document_key: string; document_id?: string; chunk_index: number; chunk_version: string; content_hash: string; text_preview: string; start_offset: number; end_offset: number; parser_version: string; embedding_model?: string; status: string; section_title?: string; boundary_type?: string; chunk_method?: string; created_at: string };
+export type LakeDocumentChunk = { id: string; document_key: string; document_id?: string; chunk_index: number; chunk_version: string; content_hash: string; text_preview: string; start_offset: number; end_offset: number; parser_version: string; embedding_model?: string; embedding_kind?: "NONE" | "HASH" | "SEMANTIC" | string; embedding_status?: "MISSING" | "PENDING" | "HASH_ONLY" | "READY" | string; status: string; section_title?: string; section_status?: string; source_object_id?: string; lineage_batch_id?: string; boundary_type?: string; chunk_method?: string; created_at: string };
 export type LakeLineage = { id: number; batch_id: string; upstream_type: string; upstream_id: string; downstream_type: string; downstream_id: string; transformation: string; parser_version?: string; dataset_version?: string; created_at: string };
 
 export type StockSymbol = {
@@ -502,6 +502,116 @@ export type ModelSkill = {
   file_path?: string | null;
   content_hash?: string | null;
   format?: string;
+  lifecycle_status?: "DRAFT" | "TESTING" | "ENABLED" | "DISABLED" | "DEPRECATED" | string;
+  input_contract_json?: Record<string, unknown>;
+  output_contract_json?: Record<string, unknown>;
+  permission_policy_json?: Record<string, unknown>;
+  side_effect_level?: string;
+  idempotency_policy?: string;
+  retry_policy_json?: Record<string, unknown>;
+  error_policy_json?: Record<string, unknown>;
+};
+
+export type DataQualityRule = {
+  id: number;
+  rule_code: string;
+  rule_name: string;
+  asset_scope?: string;
+  target_code?: string | null;
+  rule_type?: string;
+  target_type?: string;
+  target_name?: string;
+  dimension?: string;
+  severity?: string;
+  version?: string;
+  lifecycle_status?: string;
+  enabled: boolean;
+  config_json?: Record<string, unknown>;
+  created_at?: string;
+  updated_at?: string;
+};
+
+export type DataQualityRun = {
+  id: string;
+  rule_id?: number | null;
+  run_code?: string;
+  run_key?: string;
+  target_type?: string;
+  target_id?: string;
+  target_name?: string;
+  status: string;
+  passed?: boolean | null;
+  score?: number | null;
+  total_rules?: number;
+  passed_rules?: number;
+  failed_rules?: number;
+  warning_rules?: number;
+  issue_count?: number;
+  checked_count?: number;
+  summary_json?: Record<string, unknown>;
+  started_at?: string;
+  completed_at?: string | null;
+};
+
+export type DataQualityIssue = {
+  id: string;
+  run_id?: string | number | null;
+  quality_run_id?: string;
+  rule_id?: number | null;
+  issue_code?: string;
+  severity?: string;
+  status: string;
+  target_type?: string;
+  target_id?: string;
+  field_name?: string;
+  rule_code?: string;
+  message: string;
+  evidence_json?: Record<string, unknown>;
+  detected_at?: string;
+  first_detected_at?: string;
+  resolved_at?: string | null;
+};
+
+export type AgentExecutionRun = {
+  id: string;
+  run_id?: string;
+  run_key?: string;
+  agent_id?: number | null;
+  agent_code?: string;
+  agent_version?: string;
+  status: string;
+  model_instance_code?: string | null;
+  model_version?: string | null;
+  input_hash?: string | null;
+  output_hash?: string | null;
+  skill_versions_json?: Record<string, unknown> | unknown[];
+  evidence_ids_json?: unknown[];
+  error_message?: string | null;
+  started_at?: string;
+  completed_at?: string | null;
+};
+
+export type SkillExecutionRun = {
+  id: string;
+  run_id?: string;
+  agent_execution_id?: string | number | null;
+  agent_execution_run_id?: string | null;
+  skill_id?: number | null;
+  skill_code?: string;
+  skill_version?: string;
+  status: string;
+  idempotency_key?: string | null;
+  input_hash?: string | null;
+  output_hash?: string | null;
+  evidence_ids_json?: unknown[];
+  side_effects_json?: Record<string, unknown>;
+  side_effect_level?: string;
+  attempt?: number;
+  max_attempts?: number;
+  retry_count?: number;
+  error_message?: string | null;
+  started_at?: string;
+  completed_at?: string | null;
 };
 
 export type SkillOptimizationDraft = {
@@ -539,6 +649,9 @@ export type AgentDefinition = {
   enabled: boolean;
   description?: string | null;
   version: string;
+  lifecycle_status?: string;
+  policy_json?: Record<string, unknown>;
+  knowledge_version_policy_json?: Record<string, unknown>;
   child_agent_ids: number[];
   skill_ids: number[];
   knowledge_base_ids: number[];
@@ -1031,6 +1144,16 @@ export const api = {
   updateAgent: (id: number, payload: Partial<AgentPayload>) =>
     request<AgentDefinition>(`/resources/agents/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
   deleteAgent: (id: number) => request<void>(`/resources/agents/${id}`, { method: "DELETE" }),
+  listDataQualityRules: () => request<DataQualityRule[] | { items: DataQualityRule[] }>("/governance/quality/rules"),
+  listDataQualityRuns: () => request<DataQualityRun[] | { items: DataQualityRun[] }>("/governance/quality/runs"),
+  listDataQualityIssues: () => request<DataQualityIssue[] | { items: DataQualityIssue[] }>("/governance/quality/issues"),
+  listAgentExecutions: () => request<AgentExecutionRun[] | { items: AgentExecutionRun[] }>("/governance/agent-executions"),
+  listSkillExecutions: () => request<SkillExecutionRun[] | { items: SkillExecutionRun[] }>("/governance/skill-executions"),
+  updateSkillLifecycle: (id: number, lifecycle_status: string, reason?: string) =>
+    request<ModelSkill>(`/model-hub/skills/${id}/lifecycle`, {
+      method: "POST",
+      body: JSON.stringify({ lifecycle_status, reason }),
+    }),
   listDataAssets: () => request<DataAsset[]>("/resources/data-assets"),
   listAssetSourceTables: () => request<string[]>("/resources/data-assets/source-tables"),
   createDataAsset: (payload: DataAssetPayload) => request<DataAsset>("/resources/data-assets", { method: "POST", body: JSON.stringify(payload) }),

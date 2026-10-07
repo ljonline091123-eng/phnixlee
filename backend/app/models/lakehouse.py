@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
 
-from sqlalchemy import DateTime, Integer, JSON, String, Text, UniqueConstraint
+from sqlalchemy import DateTime, Index, Integer, JSON, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -70,6 +70,14 @@ class LakeDatasetVersion(Base):
 
 class LakeLineageEvent(Base):
     __tablename__ = "lake_lineage_event"
+    __table_args__ = (
+        Index(
+            "ix_lake_lineage_event_downstream_lookup",
+            "downstream_type",
+            "downstream_id",
+            "id",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     batch_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
@@ -99,6 +107,13 @@ class DocumentChunkVersion(Base):
     end_offset: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     parser_version: Mapped[str] = mapped_column(String(64), nullable=False)
     embedding_model: Mapped[str | None] = mapped_column(String(128))
+    section_title: Mapped[str | None] = mapped_column(String(512))
+    section_path_json: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    section_status: Mapped[str] = mapped_column(String(24), nullable=False, default="UNRESOLVED")
+    embedding_status: Mapped[str] = mapped_column(String(24), nullable=False, default="MISSING")
+    embedding_kind: Mapped[str] = mapped_column(String(24), nullable=False, default="NONE")
+    source_object_id: Mapped[str | None] = mapped_column(String(36), index=True)
+    lineage_batch_id: Mapped[str | None] = mapped_column(String(64), index=True)
     status: Mapped[str] = mapped_column(String(24), nullable=False, default="READY")
     metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)

@@ -97,6 +97,14 @@ class ModelSkill(TimestampMixin, Base):
     is_builtin: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     format: Mapped[str] = mapped_column(String(16), nullable=False, default="MD")
     skill_type: Mapped[str] = mapped_column(String(32), nullable=False, default="PROMPT_SOP")
+    lifecycle_status: Mapped[str] = mapped_column(String(24), nullable=False, default="DRAFT")
+    input_contract_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    output_contract_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    permission_policy_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    side_effect_level: Mapped[str] = mapped_column(String(24), nullable=False, default="READ_ONLY")
+    idempotency_policy: Mapped[str] = mapped_column(String(32), nullable=False, default="NONE")
+    retry_policy_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    error_policy_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
 
 
 class ModelSkillRevision(Base):
@@ -109,6 +117,7 @@ class ModelSkillRevision(Base):
     instructions: Mapped[str] = mapped_column(Text, nullable=False)
     content_hash: Mapped[str] = mapped_column(String(128), nullable=False)
     source: Mapped[str] = mapped_column(String(16), nullable=False, default="EDITOR")
+    governance_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
 
 
@@ -126,6 +135,9 @@ class AgentDefinition(TimestampMixin, Base):
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     description: Mapped[str | None] = mapped_column(Text)
     version: Mapped[str] = mapped_column(String(32), nullable=False, default="1.0.0")
+    lifecycle_status: Mapped[str] = mapped_column(String(24), nullable=False, default="DRAFT")
+    policy_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    knowledge_version_policy_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
 
     child_links: Mapped[list["AgentChildLink"]] = relationship(
         foreign_keys="AgentChildLink.agent_id",
@@ -229,6 +241,9 @@ class AgentDataAsset(TimestampMixin, Base):
     row_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     last_inspected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    asset_type: Mapped[str] = mapped_column(String(32), nullable=False, default="DATABASE_TABLE")
+    canonical_identity: Mapped[str | None] = mapped_column(String(256), index=True)
+    metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
 
 
 class KnowledgeBase(TimestampMixin, Base):

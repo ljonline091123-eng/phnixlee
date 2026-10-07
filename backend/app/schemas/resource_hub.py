@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 from app.schemas.model_hub import ModelMessage
@@ -23,6 +23,9 @@ class AgentCreate(BaseModel):
     knowledge_base_ids: list[int] = Field(default_factory=list)
     data_asset_ids: list[int] = Field(default_factory=list)
     data_source_ids: list[int] = Field(default_factory=list)
+    lifecycle_status: Literal["DRAFT", "TESTING", "ENABLED", "DISABLED", "DEPRECATED"] = "ENABLED"
+    policy_json: dict[str, Any] = Field(default_factory=dict)
+    knowledge_version_policy_json: dict[str, Any] = Field(default_factory=dict)
 
 
 class AgentUpdate(BaseModel):
@@ -41,6 +44,9 @@ class AgentUpdate(BaseModel):
     knowledge_base_ids: list[int] | None = None
     data_asset_ids: list[int] | None = None
     data_source_ids: list[int] | None = None
+    lifecycle_status: Literal["DRAFT", "TESTING", "ENABLED", "DISABLED", "DEPRECATED"] | None = None
+    policy_json: dict[str, Any] | None = None
+    knowledge_version_policy_json: dict[str, Any] | None = None
 
 
 class AgentRead(BaseModel):
@@ -62,6 +68,9 @@ class AgentRead(BaseModel):
     knowledge_base_ids: list[int] = Field(default_factory=list)
     data_asset_ids: list[int] = Field(default_factory=list)
     data_source_ids: list[int] = Field(default_factory=list)
+    lifecycle_status: str = "DRAFT"
+    policy_json: dict[str, Any] = Field(default_factory=dict)
+    knowledge_version_policy_json: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime
     updated_at: datetime
 
@@ -77,6 +86,10 @@ class AgentSummary(BaseModel):
 class AgentRunRequest(BaseModel):
     task_type: str = Field(default="general_chat", min_length=1, max_length=64)
     messages: list[ModelMessage] = Field(min_length=1, max_length=200)
+    evidence_ids: list[str] = Field(default_factory=list, max_length=500)
+    correlation_id: str | None = Field(default=None, max_length=128)
+    idempotency_key: str | None = Field(default=None, max_length=192)
+    request_source: str = Field(default="API", min_length=1, max_length=128)
 
 
 class DataAssetCreate(BaseModel):
@@ -86,6 +99,9 @@ class DataAssetCreate(BaseModel):
     description: str | None = None
     allowed_columns: list[str] = Field(default_factory=list)
     enabled: bool = True
+    asset_type: str = Field(default="DATABASE_TABLE", max_length=32)
+    canonical_identity: str | None = Field(default=None, max_length=256)
+    metadata_json: dict[str, Any] = Field(default_factory=dict)
 
 
 class DataAssetUpdate(BaseModel):
@@ -93,6 +109,9 @@ class DataAssetUpdate(BaseModel):
     description: str | None = None
     allowed_columns: list[str] | None = None
     enabled: bool | None = None
+    asset_type: str | None = Field(default=None, max_length=32)
+    canonical_identity: str | None = Field(default=None, max_length=256)
+    metadata_json: dict[str, Any] | None = None
 
 
 class DataAssetRead(BaseModel):
@@ -112,6 +131,9 @@ class DataAssetRead(BaseModel):
     row_count: int
     enabled: bool
     last_inspected_at: datetime | None
+    asset_type: str = "DATABASE_TABLE"
+    canonical_identity: str | None = None
+    metadata_json: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime
     updated_at: datetime
 

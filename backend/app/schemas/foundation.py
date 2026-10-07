@@ -6,7 +6,12 @@ from typing import Annotated, Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, StringConstraints, field_validator, model_validator
 
 EntityType = Literal["COMPANY", "PERSON", "ORGANIZATION", "HOLDER_ACCOUNT", "PROJECT", "INDUSTRY", "THEME", "CLASSIFICATION", "PRODUCT", "MATERIAL"]
-FactType = Literal["HOLDS_EQUITY", "CONTROLS", "SUPPLIES_TO", "PARTNERS_WITH", "GUARANTEES", "LENDS_TO", "COMPETES_WITH", "IN_INDUSTRY", "MEMBER_OF_THEME", "HAS_CLASSIFICATION", "CONTRACT", "LEGAL_CASE"]
+FactType = Literal[
+    "HOLDS_EQUITY", "CONTROLS", "SUPPLIES_TO", "PARTNERS_WITH", "GUARANTEES",
+    "LENDS_TO", "COMPETES_WITH", "IN_INDUSTRY", "MEMBER_OF_THEME",
+    "HAS_CLASSIFICATION", "CONTRACT", "LEGAL_CASE",
+    "NEWS_EVENT", "NOTICE_EVENT", "MARKET_EVENT", "RISK_EVENT", "SHAREHOLDER_EVENT",
+]
 FactStatus = Literal["PENDING", "ACCEPTED", "REJECTED"]
 
 
@@ -82,9 +87,13 @@ class FactCreate(StrictInput):
 
     @model_validator(mode="after")
     def endpoints_and_dates(self):
-        if self.fact_type == "LEGAL_CASE":
+        event_fact_types = {
+            "LEGAL_CASE", "NEWS_EVENT", "NOTICE_EVENT", "MARKET_EVENT",
+            "RISK_EVENT", "SHAREHOLDER_EVENT",
+        }
+        if self.fact_type in event_fact_types:
             if self.object_entity_id:
-                raise ValueError("LEGAL_CASE uses subject participation and has no object entity")
+                raise ValueError(f"{self.fact_type} uses subject participation and has no object entity")
         elif not self.object_entity_id:
             raise ValueError("object_entity_id is required for this relation")
         if self.object_entity_id == self.subject_entity_id:
