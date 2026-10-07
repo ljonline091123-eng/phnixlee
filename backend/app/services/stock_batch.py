@@ -127,6 +127,13 @@ def _collect_stock(
         try:
             operations["F10"] = _run_f10_refresh(db, stock.market, stock.symbol)
         except Exception as exc:
+            # An adapter or F10 normalizer can fail after SQLAlchemy has
+            # entered a failed transaction state (for example, a provider
+            # payload violating a uniqueness constraint).  The remaining
+            # business types must still be attempted for this stock; clear
+            # only the uncommitted transaction state and preserve committed
+            # rows from earlier stages.
+            db.rollback()
             message = f"{type(exc).__name__}: {str(exc)[:400]}"
             operations["F10"] = {"status": "FAILED", "error": message}
             errors.append({"data_type": "F10", "message": message})
@@ -135,11 +142,32 @@ def _collect_stock(
         if data_type == "F10":
             continue
         try:
-            operations[data_type] = _fetch_one(
+            operation = _fetch_one(
                 db, market=stock.market, symbol=stock.symbol, data_type=data_type,
                 kline_days=kline_days, disclosure_days=disclosure_days,
             )
+            operations[data_type] = operation
+            operation_status = str(operation.get("status") or "UNKNOWN").upper()
+            if operation_status != "SUCCESS":
+                message = (
+                    operation.get("error")
+                    or operation.get("message")
+                    or f"{data_type} 采集状态为 {operation_status}"
+                )
+                errors.append({
+                    "data_type": data_type,
+                    "status": operation_status,
+                    "message": str(message),
+                    "fetch_log_id": operation.get("fetch_log_id"),
+                })
         except Exception as exc:
+            # Keep one remote/provider failure isolated to this data type.
+            # StockOnDemandService normally commits its fetch log, but an
+            # adapter or custom source may raise before its failure handler;
+            # without rollback the next type would fail with
+            # PendingRollbackError and the batch would report a cascade of
+            # misleading errors.
+            db.rollback()
             message = f"{type(exc).__name__}: {str(exc)[:400]}"
             fetch_log_id = getattr(exc, "fetch_log_id", None)
             operations[data_type] = {
@@ -796,6 +824,10 @@ def execute_stock_batch_governance(payload: dict[str, Any]) -> dict[str, Any]:
                         ),
                     })
                 except Exception as exc:
+                    # A market pipeline is intentionally best-effort.  Clear
+                    # any failed child transaction before recording the
+                    # market-level diagnostic so the next market can run.
+                    db.rollback()
                     message = f"{type(exc).__name__}: {str(exc)[:500]}"
                     child_statuses.append("FAILED")
                     market_results.append({

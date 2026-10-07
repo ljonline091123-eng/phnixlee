@@ -369,6 +369,39 @@
   font-size: 18px;
 }
 
+.batch-retry-control {
+  display: grid;
+  justify-items: end;
+  gap: 4px;
+}
+
+.batch-retry-control button,
+.batch-recent-job-actions button {
+  min-height: 30px;
+  border: 1px solid #b9cdbd;
+  border-radius: 5px;
+  padding: 5px 9px;
+  color: #315c40;
+  background: #f2f8f3;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.batch-retry-control button:disabled,
+.batch-recent-job-actions button:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
+.batch-retry-control small {
+  max-width: 270px;
+  color: var(--text-muted);
+  font-size: 10px;
+  text-align: right;
+}
+
 .batch-governance-progress > header span {
   display: block;
   margin-top: 5px;
@@ -758,6 +791,14 @@
 
 .batch-recent-jobs td small {
   color: var(--text-muted);
+}
+
+.batch-recent-job-actions {
+  white-space: nowrap;
+}
+
+.batch-recent-job-actions button + button {
+  margin-left: 6px;
 }
 
 @media (max-width: 1000px) {
