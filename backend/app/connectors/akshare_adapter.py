@@ -4610,7 +4610,15 @@ class AkshareAdapter(MarketDataAdapter):
             amount=self._parse_tencent_amount(parts, market),
             change_amount=self._to_float(parts[31] if len(parts) > 31 else None),
             change_pct=self._to_float(parts[32] if len(parts) > 32 else None),
-            turnover_rate=self._to_float(parts[38] if market == "CN_A" and len(parts) > 38 else (parts[39] if len(parts) > 39 else None)),
+            # Tencent's HK payload keeps PE at index 39 and the turnover-rate
+            # field at index 43; index 39 is the A-share turnover position.
+            # Reading HK index 39 used to persist negative PE values as a
+            # turnover rate and fail the normalized quality gate.
+            turnover_rate=self._to_float(
+                parts[38] if market == "CN_A" and len(parts) > 38
+                else (parts[43] if market == "HK" and len(parts) > 43
+                      else (parts[39] if len(parts) > 39 else None))
+            ),
             raw_payload={"raw": raw, "parts": parts, "derived": derived},
         )
 

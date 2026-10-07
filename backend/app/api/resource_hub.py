@@ -85,6 +85,9 @@ def _agent_read(agent: AgentDefinition) -> AgentRead:
         knowledge_base_ids=[link.knowledge_base_id for link in agent.knowledge_links],
         data_asset_ids=[link.data_asset_id for link in agent.data_asset_links],
         data_source_ids=[link.data_source_id for link in agent.data_source_links],
+        lifecycle_status=agent.lifecycle_status,
+        policy_json=agent.policy_json or {},
+        knowledge_version_policy_json=agent.knowledge_version_policy_json or {},
         created_at=agent.created_at,
         updated_at=agent.updated_at,
     )
@@ -106,6 +109,9 @@ def _asset_read(asset: AgentDataAsset, db: Session) -> DataAssetRead:
         row_count=asset.row_count,
         enabled=asset.enabled,
         last_inspected_at=asset.last_inspected_at,
+        asset_type=asset.asset_type,
+        canonical_identity=asset.canonical_identity,
+        metadata_json=asset.metadata_json or {},
         created_at=asset.created_at,
         updated_at=asset.updated_at,
     )
@@ -173,6 +179,9 @@ def create_agent(payload: AgentCreate, db: Session = Depends(get_db)) -> AgentRe
         enabled=payload.enabled,
         description=payload.description,
         version=payload.version,
+        lifecycle_status=payload.lifecycle_status,
+        policy_json=payload.policy_json,
+        knowledge_version_policy_json=payload.knowledge_version_policy_json,
     )
     db.add(agent)
     try:
@@ -207,7 +216,7 @@ def update_agent(agent_id: int, payload: AgentUpdate, db: Session = Depends(get_
     values = payload.model_dump(exclude_unset=True)
     _validate_agent_model(db, values.get("model_instance_code", agent.model_instance_code))
     _validate_output_schema(values.get("json_schema_output", agent.json_schema_output or {}))
-    for field in ("agent_code", "display_name", "system_prompt", "model_instance_code", "max_iterations", "context_window_limit", "json_schema_output", "enabled", "description", "version"):
+    for field in ("agent_code", "display_name", "system_prompt", "model_instance_code", "max_iterations", "context_window_limit", "json_schema_output", "enabled", "description", "version", "lifecycle_status", "policy_json", "knowledge_version_policy_json"):
         if field in values:
             setattr(agent, field, values[field])
     try:

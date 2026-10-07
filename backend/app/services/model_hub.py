@@ -588,6 +588,27 @@ def seed_default_skills(db: Session) -> None:
             skill.config_json = _repair_default_text(
                 dict(skill.config_json or {}), dict(skill_config.get("config_json") or {})
             )
+            for field_name, default_value in (
+                ("input_contract_json", skill_config.get("input_contract_json") or {}),
+                ("output_contract_json", skill_config.get("output_contract_json") or {
+                    "type": ["object", "string"],
+                }),
+                ("permission_policy_json", skill_config.get("permission_policy_json") or {
+                    "arbitrary_sql": False, "database_write": False,
+                }),
+                ("retry_policy_json", skill_config.get("retry_policy_json") or {"max_attempts": 1}),
+                ("error_policy_json", skill_config.get("error_policy_json") or {
+                    "on_error": "FAIL_CLOSED", "retain_audit": True,
+                }),
+            ):
+                if not getattr(skill, field_name, None):
+                    setattr(skill, field_name, default_value)
+            if getattr(skill, "lifecycle_status", "DRAFT") == "DRAFT" and skill.enabled:
+                skill.lifecycle_status = "ENABLED"
+            if not getattr(skill, "side_effect_level", None):
+                skill.side_effect_level = skill_config.get("side_effect_level", "READ_ONLY")
+            if not getattr(skill, "idempotency_policy", None):
+                skill.idempotency_policy = skill_config.get("idempotency_policy", "OPTIONAL")
         sync_skill_from_file(db, skill)
         skill.version = skill.version or "1.0.0"
         skill.format = "MD"

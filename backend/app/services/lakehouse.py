@@ -741,25 +741,53 @@ def create_chunks(db: Session, *, document_key: str, text: str, document_id: str
         chunk = text[start:end]
         digest = _sha256(chunk.encode("utf-8"))
         chunk_version = f"{parser_version}:{source_hash[:12]}"
+        section_title = _section_title(text, start, end)
+        normalized_embedding_model = str(embedding_model or "").strip()
+        is_hash_embedding = normalized_embedding_model.upper().startswith("HASH")
+        embedding_kind = "HASH" if is_hash_embedding else ("SEMANTIC" if normalized_embedding_model else "NONE")
+        embedding_status = "HASH_ONLY" if is_hash_embedding else ("PENDING" if normalized_embedding_model else "MISSING")
         existing = db.scalar(select(DocumentChunkVersion).where(
             DocumentChunkVersion.document_key == document_key,
             DocumentChunkVersion.content_hash == digest,
             DocumentChunkVersion.chunk_index == index,
             DocumentChunkVersion.chunk_version == chunk_version))
         if existing is not None:
+            existing.section_title = existing.section_title or section_title
+            existing.section_path_json = existing.section_path_json or ([section_title] if section_title else [])
+            existing.section_status = "IDENTIFIED" if existing.section_title else "UNRESOLVED"
+            existing.embedding_kind = embedding_kind
+            existing.embedding_status = embedding_status
+            existing.source_object_id = existing.source_object_id or (source_obj or {}).get("object_id")
+            existing.lineage_batch_id = existing.lineage_batch_id or batch_id
             reused += 1
             continue
-        embedding = _hash_embedding(chunk) if embedding_model else None
+        # The lightweight local fallback only creates deterministic hash
+        # fingerprints. A configured semantic model remains PENDING until a
+        # real embedding provider writes the vector and changes the status.
+        embedding = _hash_embedding(chunk) if is_hash_embedding else None
         item = DocumentChunkVersion(document_key=document_key, document_id=document_id, chunk_index=index,
             chunk_version=chunk_version, content_hash=digest, chunk_text=chunk,
             start_offset=start, end_offset=end, parser_version=parser_version,
-            embedding_model=embedding_model, metadata_json={"overlap": overlap,
+            embedding_model=embedding_model, section_title=section_title,
+            section_path_json=[section_title] if section_title else [],
+            section_status="IDENTIFIED" if section_title else "UNRESOLVED",
+            embedding_status=embedding_status, embedding_kind=embedding_kind,
+            source_object_id=(source_obj or {}).get("object_id"), lineage_batch_id=batch_id,
+            metadata_json={"overlap": overlap,
                 "source_object_id": (source_obj or {}).get("object_id"),
                 "chunk_method": "STRUCTURE_AWARE_V1", "boundary_type": boundary_type,
-                "section_title": _section_title(text, start, end), "document_quality": document_quality,
-                "embedding": {"model": embedding_model, "dimension": len(embedding), "vector": embedding,
-                               "model_quality": "DETERMINISTIC_HASH"}
-                if embedding is not None else None})
+                "section_title": section_title,
+                "section_path": [section_title] if section_title else [],
+                "section_status": "IDENTIFIED" if section_title else "UNRESOLVED",
+                "document_quality": document_quality,
+                "embedding": {
+                    "model": embedding_model,
+                    "kind": embedding_kind,
+                    "status": embedding_status,
+                    "dimension": len(embedding) if embedding is not None else None,
+                    "vector": embedding,
+                    "model_quality": "DETERMINISTIC_HASH" if is_hash_embedding else "NOT_GENERATED",
+                } if embedding_model else None})
         db.add(item)
         db.flush()
         db.add(LakeLineageEvent(batch_id=batch_id, upstream_type="LAKE_OBJECT",

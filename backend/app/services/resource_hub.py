@@ -67,8 +67,17 @@ DEFAULT_DATA_ASSETS = (
     ("CLASSIFICATION_DEFINITION", "classification_definition", "分类主数据：行业与类型释义", "行业、主题、类型和规模标签的真实释义、纳入标准、来源和定义版本。"),
     ("LAKE_OBJECT", "lake_object", "湖仓：原始与标准化对象", "Raw、Normalized、Serving 对象的 URI、内容哈希、来源记录和数据集版本。"),
     ("LAKE_DATASET", "lake_dataset", "湖仓：数据集目录", "Parquet 数据集、分层、分区规范和当前版本。"),
+    ("LAKE_DATASET_VERSION", "lake_dataset_version", "湖仓：数据集版本", "数据集每次发布的对象、行数、结构、质量结果和发布状态。"),
     ("LAKE_LINEAGE", "lake_lineage_event", "湖仓：数据血缘", "来源表到数据集、文档、切片和服务层结果的转换批次与版本链路。"),
+    ("KNOWLEDGE_DOCUMENT", "knowledge_document", "知识库：证据文档", "业务记录转换后的证据文档，保留来源表、来源记录、股票身份、标题和原文。"),
     ("DOCUMENT_CHUNKS", "document_chunk_version", "知识库：文档切片版本", "切片文本、原文偏移、内容哈希、解析器版本和 Embedding 模型版本。"),
+    ("KNOWLEDGE_ENTITY", "knowledge_entity", "知识图谱：实体", "股票、公司、文档、财务观测、市场观测和事件等图谱实体。"),
+    ("KNOWLEDGE_RELATION", "knowledge_relation", "知识图谱：关系", "实体间关系及其证据文档引用，保留所属知识库和图谱投影。"),
+    ("DATA_QUALITY_RULE", "data_quality_rule", "质量治理：质量规则", "版本化数据质量规则、适用范围、严重性、阈值和生命周期。"),
+    ("DATA_QUALITY_RUN", "data_quality_run", "质量治理：质量运行", "针对数据资产或数据集版本执行的质量门禁结果和分数。"),
+    ("DATA_QUALITY_ISSUE", "data_quality_issue", "质量治理：质量问题", "质量运行发现的问题、证据、状态和解决记录。"),
+    ("AGENT_EXECUTION_RUN", "agent_execution_run", "AI治理：Agent执行记录", "Agent、模型、知识版本、Skill版本、输入输出哈希和审计记录。"),
+    ("SKILL_EXECUTION_RUN", "skill_execution_run", "AI治理：Skill执行记录", "Skill契约执行、幂等、重试、副作用范围、证据和错误记录。"),
 )
 
 DEFAULT_KNOWLEDGE_BASES = (
@@ -120,11 +129,20 @@ def seed_default_data_assets(db: Session) -> None:
                 description=description,
                 governance_status="PENDING",
                 enabled=True,
+                asset_type="DATABASE_TABLE",
+                canonical_identity=f"table:{table_name}",
+                metadata_json={"catalog_version": "TASK1_GOVERNANCE_V1"},
             )
             db.add(asset)
         else:
             asset.display_name = asset.display_name or display_name
             asset.description = asset.description or description
+            asset.asset_type = asset.asset_type or "DATABASE_TABLE"
+            asset.canonical_identity = asset.canonical_identity or f"table:{table_name}"
+            asset.metadata_json = {
+                **(asset.metadata_json or {}),
+                "catalog_version": "TASK1_GOVERNANCE_V1",
+            }
             if asset.governance_status in {"READY", "MISSING"}:
                 asset.governance_status = "PENDING"
     db.commit()
@@ -288,6 +306,7 @@ def seed_default_agents(db: Session) -> None:
                 context_window_limit=int(agent_config.get("context_window_limit", 12)),
                 json_schema_output=dict(agent_config.get("json_schema_output") or {}),
                 enabled=bool(agent_config.get("enabled", True)),
+                lifecycle_status="ENABLED" if bool(agent_config.get("enabled", True)) else "DISABLED",
                 description=str(agent_config["description"]),
                 version="1.0.1" if agent_config["agent_code"] in {"DATA_GOVERNANCE_AGENT", "QA_QUERY_AGENT"} else "1.0.0",
             )
