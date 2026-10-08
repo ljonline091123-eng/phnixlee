@@ -40,6 +40,7 @@ from app.services.f10 import (
 )
 from app.services.catalog import select_data_source
 from app.services.research_store import get_or_fetch_report_detail
+from app.services.investor_qa import ensure_qa_sync, qa_sync_status, read_qa_section
 from app.models.market_data import (
     DataFetchLog,
     DataSource,
@@ -2091,6 +2092,11 @@ def _refresh_stock_f10_background(
                     "status": "SUCCESS" if available_sections else "PARTIAL",
                 }
                 log.status = "SUCCESS" if available_sections and core_error is None else "PARTIAL"
+                if market == "CN_A":
+                    qa_status = qa_sync_status(db, market, symbol)
+                    stage_results["INVESTOR_QA"] = qa_status
+                    if qa_status.get("status") not in {"COMPLETE", "EMPTY"}:
+                        log.status = "PARTIAL"
                 log.total_count = len(returned_sections)
                 log.persisted_count = int(persistence_stats.get("updated_cache_sections") or 0)
                 log.request_json = {
@@ -2172,11 +2178,20 @@ def get_stock_f10(
         local_only=local_only,
     )
     try:
+        qa_status = None
+        normalized_market = command.market.upper()
+        normalized_symbol = _normalize_symbol(normalized_market, command.symbol)
+        if not local_only and normalized_market == "CN_A" and db.scalar(select(StockSymbol.id).where(
+            StockSymbol.market == normalized_market, StockSymbol.symbol == normalized_symbol,
+        )):
+            qa_status = ensure_qa_sync(db, normalized_market, normalized_symbol, force=refresh)
         snapshot = F10Workflow(
             db,
             fetch_extended_data=_fetch_and_cache_f10_extended_data,
             symbol_reader=_stock_symbol_read,
         ).execute(command)
+        if qa_status is not None:
+            snapshot.refresh_status["investor_qa_sync"] = qa_status
         if refresh and not local_only and background_tasks is not None:
             f10_source = select_data_source(db, command.market.upper(), "F10", fallback_code="AKSHARE")
             if f10_source is None or not f10_source.enabled:
@@ -2202,6 +2217,30 @@ def get_stock_f10(
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except StockNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.get("/{market}/{symbol}/research/qa/sync")
+def get_investor_qa_sync_status(market: str, symbol: str, db: Session = Depends(get_db)) -> dict[str, Any]:
+    normalized_market = normalize_market(market)
+    return qa_sync_status(db, normalized_market, _normalize_symbol(normalized_market, symbol))
+
+
+@router.get("/{market}/{symbol}/research/qa")
+def get_investor_qa(market: str, symbol: str, db: Session = Depends(get_db)) -> dict[str, Any]:
+    normalized_market = normalize_market(market)
+    return read_qa_section(db, normalized_market, _normalize_symbol(normalized_market, symbol))
+
+
+@router.post("/{market}/{symbol}/research/qa/sync")
+def submit_investor_qa_sync(market: str, symbol: str, db: Session = Depends(get_db)) -> dict[str, Any]:
+    normalized_market = normalize_market(market)
+    normalized_symbol = _normalize_symbol(normalized_market, symbol)
+    if normalized_market != "CN_A":
+        raise HTTPException(status_code=422, detail="当前官方问答接口覆盖沪深 A 股")
+    stock = db.scalar(select(StockSymbol.id).where(StockSymbol.market == normalized_market, StockSymbol.symbol == normalized_symbol))
+    if not stock:
+        raise HTTPException(status_code=404, detail="股票主数据不存在")
+    return ensure_qa_sync(db, normalized_market, normalized_symbol, force=True)
 
 
 @router.get("/{market}/{symbol}/research/reports/{source_code}/{external_id}")

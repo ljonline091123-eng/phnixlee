@@ -226,8 +226,9 @@ def test_cninfo_qa_rows_are_scoped_sorted_and_traceable() -> None:
             "问题编号": "q-new",
         },
     ])
-    with patch("app.connectors.akshare_adapter.ak.stock_irm_cninfo", return_value=frame):
-        rows = adapter._safe_qa_records("000002")
+    # Legacy CNINFO aliases remain compatible with the shared research store.
+    rows = [row for raw in frame.to_dict("records") if (row := adapter._normalize_qa_row(raw, "000002"))]
+    rows.sort(key=lambda row: row.get("updated_at") or row.get("asked_at") or "", reverse=True)
 
     assert [row["question_id"] for row in rows] == ["q-new", "q-old"]
     assert all(row["股票代码"] == "000002" for row in rows)

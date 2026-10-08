@@ -31,6 +31,7 @@ from app.connectors.base import (
     SymbolRecord,
 )
 from app.connectors.sina_research import fetch_sina_research_reports
+from app.connectors.investor_qa import OfficialQAClient, qa_source
 
 
 class AkshareAdapter(MarketDataAdapter):
@@ -512,7 +513,7 @@ class AkshareAdapter(MarketDataAdapter):
         research_reports = self._merge_research_report_sources(
             eastmoney_reports, sina_reports, limit=500
         )
-        qa_rows = self._safe_qa_records(symbol, limit=100)
+        qa_rows, qa_fetch = self._safe_qa_snapshot(symbol, limit=100)
         earnings_rows = self._safe_profit_forecast_records(symbol)
         detailed_earnings_rows = self._safe_detailed_forecast_records(symbol)
         if detailed_earnings_rows:
@@ -536,10 +537,11 @@ class AkshareAdapter(MarketDataAdapter):
         if not earnings_rows:
             earnings_rows = self._derive_research_earnings_forecast(research_reports, symbol)
         research = {
-            "source": "多来源：巨潮资讯互动易 / 同花顺盈利预测 / 东方财富研究报告",
-            "qa_source": "巨潮资讯互动易",
+            "source": "多来源：上证 e 互动 / 巨潮资讯互动易 / 同花顺盈利预测 / 东方财富研究报告",
+            "qa_source": qa_fetch["source_name"],
             "qa": qa_rows,
-            "qa_message": "" if qa_rows else "巨潮资讯互动易暂无可用问答数据。",
+            "qa_fetch": qa_fetch,
+            "qa_message": qa_fetch["message"],
             "earnings_forecast_source": "同花顺盈利预测" if earnings_rows else "东方财富研究报告接口",
             "earnings_forecast": earnings_rows,
             "institution_forecast_source": (
@@ -3209,45 +3211,22 @@ class AkshareAdapter(MarketDataAdapter):
         return item
 
     def _safe_qa_records(self, symbol: str, *, limit: int = 100) -> list[dict[str, Any]]:
-        """Fetch and sort CNINFO investor-relations questions for one stock."""
-        cls = type(self)
-        method = getattr(ak, "stock_irm_cninfo", None)
-        if not method:
-            return []
-        # Use the common optional wrapper so callers/tests can disable this
-        # network panel without affecting the core F10 refresh.
-        rows = self._safe_optional_records(method, {"symbol": symbol}, limit=limit)
-        result: list[dict[str, Any]] = []
-        for raw in rows:
-            item = cls._normalize_qa_row(raw, symbol)
-            if item is None:
-                continue
-            # A few CNINFO responses omit the inline answer although an answer
-            # id is present. Resolve only those rows and retain the original
-            # question payload if the detail endpoint is unavailable.
-            if not item.get("answer") and item.get("answer_id"):
-                detail_method = getattr(ak, "stock_irm_ans_cninfo", None)
-                detail_rows = self._safe_optional_records(
-                    detail_method,
-                    {"symbol": item["question_id"]},
-                    limit=1,
-                )
-                if detail_rows:
-                    detail = cls._normalize_qa_row({**raw, **detail_rows[0]}, symbol)
-                    if detail:
-                        item.update({
-                            key: detail[key]
-                            for key in ("answer", "answerer", "answered_at", "回答内容")
-                            if detail.get(key) not in (None, "")
-                        })
-            result.append(item)
-        result.sort(
-            key=lambda row: str(
-                row.get("updated_at") or row.get("asked_at") or row.get("提问时间") or ""
-            ),
-            reverse=True,
-        )
-        return result[:limit]
+        return self._safe_qa_snapshot(symbol, limit=limit)[0]
+
+    def _safe_qa_snapshot(self, symbol: str, *, limit: int = 100) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+        """Bounded first-page preview; the durable queue collects full history."""
+        code, name = qa_source(symbol)
+        status: dict[str, Any] = {"source_code": code, "source_name": name}
+        try:
+            with OfficialQAClient() as client:
+                page = client.fetch_page(symbol)
+            rows = sorted(page.rows, key=lambda row: str(row.get("answered_at") or row.get("updated_at") or row.get("asked_at") or ""), reverse=True)
+            status.update(status="COMPLETE" if page.complete and rows else "EMPTY" if page.complete else "PARTIAL",
+                          message="" if page.complete and rows else "官方来源暂无问答记录" if page.complete else "已获取最新问答，完整历史由后台分页同步")
+            return rows[:limit], status
+        except Exception as exc:
+            status.update(status="RETRY", error=str(exc)[:1000], message="官方问答请求失败，保留本地数据，等待后台重试")
+            return [], status
 
     @staticmethod
     def _safe_sina_research_report_records(

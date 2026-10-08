@@ -1041,6 +1041,12 @@ export const api = {
     `/stocks/${encodeURIComponent(market)}/${encodeURIComponent(symbol)}/research/reports/${encodeURIComponent(sourceCode)}/${encodeURIComponent(externalId)}`,
     { signal },
   ),
+  getInvestorQaSyncStatus: (market: string, symbol: string, signal?: AbortSignal) => request<Record<string, unknown>>(
+    `/stocks/${encodeURIComponent(market)}/${encodeURIComponent(symbol)}/research/qa/sync`, { signal },
+  ),
+  getInvestorQa: (market: string, symbol: string, signal?: AbortSignal) => request<Record<string, unknown>>(
+    `/stocks/${encodeURIComponent(market)}/${encodeURIComponent(symbol)}/research/qa`, { signal },
+  ),
   listStockFetchLogs: (market: string, symbol: string, limit = 20, signal?: AbortSignal) => request<StockFetchLog[]>(
     `/stocks/fetch-logs/list?market=${encodeURIComponent(market)}&symbol=${encodeURIComponent(symbol)}&limit=${limit}`,
     { signal },

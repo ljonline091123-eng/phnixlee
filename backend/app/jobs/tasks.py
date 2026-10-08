@@ -10,6 +10,7 @@ from app.orchestration.foundation import LegacyEvidenceArchiveWorkflow
 from app.orchestration.company_governance import CompanyGovernanceWorkflow
 from app.services.selection import refresh_tracking
 from app.services.stock_batch import TASK_TYPE as STOCK_BATCH_TASK, execute_stock_batch_governance
+from app.services.investor_qa import TASK_TYPE as QA_TASK, execute_qa_sync
 from app.db.session import SessionLocal
 
 
@@ -23,6 +24,7 @@ TASK_HANDLERS: dict[str, TaskHandler] = {
     "daily_prediction_review": PredictionReviewWorkflow().execute,
     "daily_selection_tracking_refresh": lambda payload: _refresh_selection_tracking(payload),
     STOCK_BATCH_TASK: execute_stock_batch_governance,
+    QA_TASK: execute_qa_sync,
 }
 
 

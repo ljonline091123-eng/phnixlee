@@ -20,7 +20,7 @@ DEFAULT_SOURCES = (
                 "RESEARCH", "QA", "FORECAST", "RATING",
             ],
             "official_sources": [
-                "AkShare", "Eastmoney", "CNINFO 互动易", "同花顺盈利预测",
+                "AkShare", "Eastmoney", "CNINFO 互动易", "上证 e 互动", "同花顺盈利预测",
             ],
         },
         "description": "Market-data adapter using AkShare, official CNINFO A-share disclosures, and Eastmoney NEEQ master data.",
@@ -217,9 +217,18 @@ AKSHARE_INTERFACES = (
         "interface_name": "A股互动易问董秘",
         "data_category": "QA",
         "request_mode": "ON_DEMAND",
-        "adapter_method": "stock_irm_cninfo / stock_irm_ans_cninfo",
+        "adapter_method": "OfficialQAClient (cninfo question / questionDetail)",
         "supported_markets": ["CN_A"],
         "description": "巨潮资讯互动易提问、回答及问题详情；保留问题编号和官方详情链接。",
+    },
+    {
+        "interface_code": "CN_A_SSE_QA_ON_DEMAND",
+        "interface_name": "沪市上证 e 互动问董秘",
+        "data_category": "QA",
+        "request_mode": "ON_DEMAND",
+        "adapter_method": "OfficialQAClient (sseinfo company / userfeeds)",
+        "supported_markets": ["CN_A"],
+        "description": "上证 e 互动官方公司回复；动态解析公司身份、分页断点续采，保留问答原文、时间、来源链接及哈希。",
     },
     {
         "interface_code": "CN_A_RESEARCH_REPORT_ON_DEMAND",
@@ -412,7 +421,7 @@ def seed_default_catalog(db: Session) -> None:
                 existing.adapter_method = item["adapter_method"]
                 existing.supported_markets = item["supported_markets"]
                 existing.description = item["description"]
-                existing.enabled = True
+                # Preserve the operator's interface enable/disable choice.
                 continue
             if item["interface_code"] not in existing_interfaces:
                 db.add(
