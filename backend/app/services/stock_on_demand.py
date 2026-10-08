@@ -686,7 +686,12 @@ class StockOnDemandService:
                 end_date=end_date,
                 adjust=adjust,
             )
-            persisted_count = self._upsert_klines(source.id, records) if persist else 0
+            actual_source = self._actual_record_source(source, records)
+            if actual_source.id != log.source_id:
+                log.source_id = actual_source.id
+                log.interface_code = "THS_NEEQ_KLINE_FALLBACK"
+                log.request_json = {**(log.request_json or {}), "routed_from_source_code": source.source_code}
+            persisted_count = self._upsert_klines(actual_source.id, records) if persist else 0
             result = self._finish_success(log, records, persisted_count)
             if persist:
                 self._touch_stock_last_synced(market, symbol)
@@ -884,7 +889,12 @@ class StockOnDemandService:
             records = [replace(item, content_json={**item.content_json,
                 "identity_check": check_news_identity(market, symbol, stock_name, item.title,
                                                       item.content, stock_ext)}) for item in records]
-            persisted_count = self._upsert_news(source.id, records) if persist else 0
+            actual_source = self._actual_record_source(source, records)
+            if actual_source.id != log.source_id:
+                log.source_id = actual_source.id
+                log.interface_code = "THS_NEEQ_NEWS_FALLBACK"
+                log.request_json = {**(log.request_json or {}), "routed_from_source_code": source.source_code}
+            persisted_count = self._upsert_news(actual_source.id, records) if persist else 0
             result = self._finish_success(log, records, persisted_count)
             if persist:
                 self._touch_stock_last_synced(market, symbol)
@@ -1024,6 +1034,34 @@ class StockOnDemandService:
         self.db.commit()
         self.db.refresh(log)
         return log
+
+    def _actual_record_source(
+        self,
+        selected_source: DataSource,
+        records: list[KlineRecord] | list[NewsRecord],
+    ) -> DataSource:
+        """Resolve a validated internal fallback to its catalog identity.
+
+        The AkShare adapter owns the fallback sequence, but persisted rows and
+        lakehouse lineage must identify the provider that returned the record.
+        Mixed-provider batches intentionally retain the selected aggregate
+        source because a single source_id cannot represent them truthfully.
+        """
+        methods = set()
+        for record in records:
+            payload = record.raw_payload if isinstance(record, KlineRecord) else record.content_json
+            method = payload.get("source_method") if isinstance(payload, dict) else None
+            if method:
+                methods.add(str(method))
+        mapping = {
+            "THS_PUBLIC_NEEQ_KLINE": "THS_NEEQ_PUBLIC",
+            "THS_PUBLIC_STOCK_PAGE": "THS_NEEQ_PUBLIC",
+        }
+        source_codes = {mapping[method] for method in methods if method in mapping}
+        if len(source_codes) != 1 or len(methods) != 1:
+            return selected_source
+        actual = self.db.scalar(select(DataSource).where(DataSource.source_code == source_codes.pop()))
+        return actual if actual and actual.enabled else selected_source
 
     def _finish_success(
         self,

@@ -82,3 +82,32 @@ def test_unregistered_ir_issuer_can_fetch_disclosures_but_not_question_pages():
         assert len(rows) == 1 and rows[0].content_json["company_identity"]["original_identity_response"] == profile
         with pytest.raises(ValueError, match="身份"):
             client.fetch_page("874004")
+
+
+def test_official_http_and_trading_prefix_preserve_evidence_but_not_guessed_aliases():
+    row = {"s1": 1, "s3": "ST原子高科:公告", "s4": "2026-09-01",
+           "s2": "http://www.neeq.com.cn/disclosure/2026/2026-09-01/file.pdf"}
+    records = parse_notices({"code": 1, "rows": [row]}, COMPANY, "NEEQ", PROOF)
+    assert records[0].url == row["s2"]
+    assert records[0].content_json["link_status"] == "OFFICIAL_HTTP_SOURCE"
+    assert records[0].content_json["issuer_name_status"] == "TRADING_PREFIX_NORMALIZED"
+    unknown = {**row, "s1": 2, "s3": "XD原子高:公告"}
+    records = parse_notices({"code": 1, "rows": [row, unknown]}, COMPANY, "NEEQ", PROOF, quarantine=True)
+    assert len(records) == 1 and records[0].content_json["collection_status"] == "PARTIAL"
+    assert records[0].content_json["rejected_source_records"][0]["source_record"] == unknown
+
+
+def test_quarantined_page_does_not_end_pagination_or_discard_verified_notices():
+    row = {"s1": 1, "s3": "旧简称:公告", "s4": "2026-09-01", "s2": None}
+    def handler(request):
+        if request.url.path.endswith("430005.html"):
+            return httpx.Response(200, text="<title>原子高科（430005）投资者关系互动平台</title>")
+        page = request.url.params.get("page")
+        rows = [row] if page == "1" else [{**row, "s1": 2, "s3": "原子高科:公告"}] if page == "2" else []
+        return httpx.Response(200, json={"code": 1, "rows": rows})
+    with P5WClient() as client:
+        client.client.close()
+        client.client = httpx.Client(transport=httpx.MockTransport(handler))
+        rows = client.fetch_notices("NEEQ", "430005", "2026-01-01", "2026-10-08")
+        assert len(rows) == 1 and rows[0].content_json["external_id"] == "2"
+        assert rows[0].content_json["rejected_source_records"][0]["source_record"]["s1"] == 1
