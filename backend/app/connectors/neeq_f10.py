@@ -205,7 +205,10 @@ def fetch_neeq_f10(symbol: str, fetch_json: Callable) -> dict:
     }
     output["financial_statements"] = {"source": "东方财富新三板财务报表（元）"}
     for key, path in (("balance_sheet", "zcfzb"), ("income_statement", "lrb"), ("cash_flow", "xjllb")):
-        payload = request("/api/F10/Finance/" + path, {"MSECUCODE": symbol, "dateType": 0, "rank": 10})
+        # Match the actual finance page's request. Its statement endpoints do
+        # not send rank; adding that unsupported parameter can return 403 for
+        # recently listed issuers even while the public report is available.
+        payload = request("/api/F10/Finance/" + path, {"MSECUCODE": symbol, "dateType": 0})
         output["financial_statements"][key] = financial_table(payload, BASE + "/api/F10/Finance/" + path)
     summary = request("/api/F10/Finance/Cwzy", {"MSECUCODE": symbol, "dateType": 0, "rank": 10})
     output["financial_summary"] = financial_table(summary, "东方财富新三板财务摘要（元）")

@@ -27,7 +27,7 @@ def repair(sample, section="holders"):
         elif sample["market"] in {"NEEQ", "NEEQ_INNOVATION"}:
             payload = {"source": "东方财富新三板财务报表（元）", "original_source_responses": []}
             for key, endpoint in (("income_statement", "lrb"), ("balance_sheet", "zcfzb"), ("cash_flow", "xjllb")):
-                params = {"MSECUCODE": sample["symbol"], "dateType": 0, "rank": 10}
+                params = {"MSECUCODE": sample["symbol"], "dateType": 0}
                 original = adapter._fetch_neeq_json("/api/F10/Finance/" + endpoint, params)
                 if not isinstance(original, dict) or original.get("IsSuccess") not in (True, 1):
                     raise ValueError("新三板财报响应失败，不能标记完成")
@@ -41,8 +41,13 @@ def repair(sample, section="holders"):
                     "fetched_at": datetime.now(timezone.utc).isoformat()})
         else:
             raise ValueError("本次财报补采只支持港股和新三板")
-        count = sum(len((payload.get(key) or {}).get("rows") or []) for key in ("income_statement", "balance_sheet", "cash_flow"))
-        status = "SOURCE_DATA_COLLECTED" if count else "MISSING_REQUIRES_SOURCE_REVIEW"
+        statement_counts = {key: len((payload.get(key) or {}).get("rows") or [])
+                            for key in ("income_statement", "balance_sheet", "cash_flow")}
+        count = sum(statement_counts.values())
+        status = "SOURCE_DATA_COLLECTED" if all(statement_counts.values()) else "PARTIAL" if count else "MISSING_REQUIRES_SOURCE_REVIEW"
+        payload["collection_status"] = status
+        payload["statement_counts"] = statement_counts
+        payload["missing_statements"] = [key for key, value in statement_counts.items() if not value]
         if not count:
             raise ValueError("报表源未返回有效报表，不写入空完成状态")
     elif sample["market"] == "CN_A":
@@ -70,9 +75,12 @@ def main():
     parser.add_argument("--boards", required=True)
     parser.add_argument("--workers", type=int, default=4)
     parser.add_argument("--section", choices=("holders", "financial_statements"), default="holders")
+    parser.add_argument("--symbols", default="", help="仅复验指定代码，逗号分隔")
     args = parser.parse_args()
     samples = json.loads((OUT / "samples.json").read_text(encoding="utf-8"))
     samples = [s for s in samples if s["board"] in args.boards.split(",")]
+    if args.symbols:
+        samples = [s for s in samples if s["symbol"] in args.symbols.split(",")]
     results = []
     with ThreadPoolExecutor(max_workers=args.workers) as pool:
         jobs = {pool.submit(repair, s, args.section): s for s in samples}
@@ -83,7 +91,8 @@ def main():
                 result = {**jobs[future], "status": "FAILED", "error": str(exc)}
             results.append(result)
             print(json.dumps(result, ensure_ascii=False), flush=True)
-    path = OUT / ("disclosure-repair-" + args.boards.replace(",", "-") + "-" + args.section + ".json")
+    path = OUT / ("disclosure-repair-" + args.boards.replace(",", "-") + "-" + args.section +
+                  "-" + datetime.now().strftime("%Y%m%d-%H%M%S") + ".json")
     path.write_text(json.dumps(results, ensure_ascii=False, indent=2), encoding="utf-8")
 
 

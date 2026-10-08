@@ -329,6 +329,16 @@ class BoardDataAcceptanceTest(unittest.TestCase):
         original = [r for r in result["profile"]["original_source_responses"] if r["url"].endswith("/fhpx")]
         self.assertEqual([r["params"]["page"] for r in original], [1, 2])
 
+    def test_neeq_statements_match_actual_public_page_parameters(self):
+        requests = []
+        def fetch(path, params):
+            requests.append((path, params))
+            return {"IsSuccess": True, "result": []}
+        self._neeq_fixture(fetch)
+        statements = [(path, params) for path, params in requests if path.endswith(("/zcfzb", "/lrb", "/xjllb"))]
+        self.assertEqual(len(statements), 3)
+        self.assertTrue(all(params == {"MSECUCODE": "430005", "dateType": 0} for path, params in statements))
+
     def test_neeq_repeated_dividend_page_is_partial_not_complete(self):
         def fetch(path, params):
             return {"IsSuccess": True, "result": [{"ASSIGNDSCRPT": f"方案{i}"} for i in range(100)]

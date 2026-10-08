@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timezone
+from dataclasses import replace
 from hashlib import sha256
 import json
 import re
@@ -90,22 +91,30 @@ def parse_qa(data: dict, company: dict, cursor: dict, proof: dict):
                   "offset": int(cursor.get("offset", 0)) + len(items), "company": company}, proof["sha256"], proof)
 
 
-def parse_notices(data: dict, company: dict, market: str, proof: dict) -> list[NoticeRecord]:
+def parse_notices(data: dict, company: dict, market: str, proof: dict, *, quarantine=False) -> list[NoticeRecord]:
     if data.get("code") != 1 or not isinstance(data.get("rows"), list):
         raise ValueError("全景公告格式异常，不能标记无公告")
-    result = []
+    result, rejected = [], []
     for raw in data["rows"]:
         title = text(raw.get("s3"))
-        if company["name"] not in title or not raw.get("s1"):
-            raise ValueError("全景公告缺少匹配的公司名称或唯一标识")
+        issuer = re.split(r"[:：]", title, maxsplit=1)[0]
+        normalize = lambda name: re.sub(r"^(?:\*?ST|XD|XR|DR)", "", name, flags=re.I)
+        if normalize(issuer) != normalize(company["name"]) or not raw.get("s1"):
+            if not quarantine:
+                raise ValueError("全景公告缺少匹配的公司名称或唯一标识")
+            rejected.append({"source_record": raw, "reason": "公告发行人简称与已验证身份不匹配，需历史名称证据", "status": "QUARANTINED"})
+            continue
         listed = str(raw.get("s4") or "")
         date.fromisoformat(listed)
         url = raw.get("s2")
         attached = None
         if url:
             parsed = urlparse(url)
-            if parsed.scheme != "https" or parsed.netloc not in {"www.bse.cn", "www.neeq.com.cn", "www.neeq.cc"}:
-                raise ValueError("公告原文未指向预期交易所，需人工核验")
+            if parsed.scheme not in {"https", "http"} or parsed.netloc not in {"www.bse.cn", "www.neeq.com.cn", "www.neeq.cc"}:
+                if not quarantine:
+                    raise ValueError("公告原文未指向预期交易所，需人工核验")
+                rejected.append({"source_record": raw, "reason": "附件未匹配官方来源白名单", "status": "QUARANTINED"})
+                continue
             match = re.search(r"/disclosure/\d{4}/(\d{4}-\d{2}-\d{2})/", parsed.path)
             if match:
                 attached = match[1]
@@ -116,7 +125,12 @@ def parse_notices(data: dict, company: dict, market: str, proof: dict) -> list[N
              "source_list_date": listed, "attachment_path_date": attached,
              "date_status": "ATTACHMENT_PATH_MATCH" if attached == listed else "LIST_DATE_CONFLICT_ATTACHMENT_PATH" if attached else "SOURCE_LIST_DATE",
              "content_status": "LINK_AVAILABLE" if url else "MISSING_ORIGINAL",
+             "link_status": "OFFICIAL_HTTP_SOURCE" if url and urlparse(url).scheme == "http" else "OFFICIAL_HTTPS_SOURCE" if url else "MISSING",
+             "issuer_name_status": "EXACT_MATCH" if issuer == company["name"] else "TRADING_PREFIX_NORMALIZED",
              "verification_status": "PENDING", "coverage_scope": "PUBLIC_PROVIDER_LIST"}))
+    if rejected:
+        result = [replace(record, content_json={**record.content_json,
+            "collection_status": "PARTIAL", "rejected_source_records": rejected}) for record in result]
     return result
 
 
@@ -184,27 +198,40 @@ class P5WClient:
         return parse_qa(response.json(), company, cursor, evidence(response))
 
     def fetch_notices(self, market, symbol, start_date, end_date, *, max_pages=100):
-        company, result, seen = self.disclosure_company(market, symbol), [], set()
+        company, result, seen, rejected = self.disclosure_company(market, symbol), [], set(), []
         begin, end = date.fromisoformat(start_date), date.fromisoformat(end_date)
+        def finish():
+            rows = sorted(result, key=lambda r: r.notice_date, reverse=True)
+            if rejected and not rows:
+                raise ValueError("公告记录未通过发行人身份或附件来源验证，不能标记为无公告")
+            if rejected:
+                rows = [replace(r, content_json={**r.content_json, "collection_status": "PARTIAL",
+                    "rejected_source_records": rejected}) for r in rows]
+            return rows
         for page in range(1, max_pages + 1):
             response = self.request("GET", f"{BASE}/api/data/getinterimannouncementlist.html",
                 params={"code": symbol, "page": page, "pagesize": 10, "type": "ggzy"})
-            records = parse_notices(response.json(), company, market, evidence(response))
-            if not records:
+            original = response.json()
+            records = parse_notices(original, company, market, evidence(response), quarantine=True)
+            accepted = {r.content_json["external_id"] for r in records}
+            rejected.extend({"source_record": raw, "source_url": str(response.url), "status": "QUARANTINED",
+                             "reason": "发行人简称或附件来源未通过验证"} for raw in original["rows"] if str(raw.get("s1")) not in accepted)
+            if not original["rows"]:
                 if page == 1:
                     raise ValueError("全景首屏无公告，公开源覆盖不足，不能证明公司未披露")
-                return sorted(result, key=lambda r: r.notice_date, reverse=True)
-            ids = [r.content_json["external_id"] for r in records]
+                return finish()
+            ids = [str(raw.get("s1")) for raw in original["rows"]]
             if all(key in seen for key in ids):
                 raise ValueError("全景公告重复分页，未证明完整范围")
-            for record, key in zip(records, ids):
+            for record in records:
+                key = record.content_json["external_id"]
                 if key not in seen and begin <= date.fromisoformat(record.notice_date) <= end:
                     result.append(record)
-                seen.add(key)
+            seen.update(ids)
             # The provider mislabels some report periods as publication dates;
             # do not stop on a single old row or rely on its inaccurate total.
-            if all(date.fromisoformat(r.notice_date) < begin for r in records):
-                return sorted(result, key=lambda r: r.notice_date, reverse=True)
+            if records and len(records) == len(original["rows"]) and all(date.fromisoformat(r.notice_date) < begin for r in records):
+                return finish()
         raise ValueError("全景公告达到分页上限，不能标记范围完整")
 
     def fetch_news(self, market, symbol, *, max_pages=100):

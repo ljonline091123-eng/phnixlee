@@ -979,50 +979,23 @@ class AkshareAdapter(MarketDataAdapter):
         end_date: str,
         adjust: str,
     ) -> list[KlineRecord]:
-        period_code = {
-            "daily": "101",
-            "day": "101",
-            "weekly": "102",
-            "week": "102",
-            "monthly": "103",
-            "month": "103",
-        }.get(str(period or "").lower(), "101")
+        from app.connectors.eastmoney_browser import kline_params, fetch_neeq_browser_kline, parse_kline_response, ENDPOINT
+
         begin = re.sub(r"[^0-9]", "", str(start_date or "")) or "19900101"
         finish = re.sub(r"[^0-9]", "", str(end_date or "")) or "20991231"
-        fqt = {"qfq": "1", "hfq": "2"}.get(str(adjust or "").lower(), "0")
-        params = {
-            "secid": f"0.{symbol}",
-            "klt": period_code,
-            "beg": begin,
-            "end": finish,
-            "fqt": fqt,
-            "fields1": "f1,f2,f3,f4,f5,f6",
-            "fields2": "f51,f52,f53,f54,f55,f56,f57,f58,f59,f60",
-            "ut": "fa5fd1943c7b386f172d6893dbfba10b",
-            "cb": "jQuery123",
-        }
-        payload: dict[str, Any] | None = None
-        last_error: Exception | None = None
-        for secid in (f"0.{symbol}", f"1.{symbol}", f"2.{symbol}"):
-            params["secid"] = secid
-            for host in ("push2his.eastmoney.com", "82.push2his.eastmoney.com", "push2.eastmoney.com"):
-                try:
-                    candidate = self._request_eastmoney_json(
-                        f"https://{host}/api/qt/stock/kline/get", params,
-                        {"User-Agent": "Mozilla/5.0", "Accept": "application/json,text/plain,*/*",
-                         "Referer": "https://xinsanban.eastmoney.com/"})
-                    data = (candidate or {}).get("data") or {}
-                    if isinstance(data.get("klines"), list) and data.get("klines"):
-                        payload = candidate
-                        break
-                except Exception as exc:
-                    last_error = exc
-            if payload is not None:
-                break
-        if payload is None:
-            if last_error:
-                raise last_error
-            return []
+        params = kline_params(symbol, str(period or "daily").lower(), begin, finish, str(adjust or "").lower())
+        try:
+            payload = self._request_eastmoney_json(ENDPOINT, params,
+                {"User-Agent": "Mozilla/5.0", "Accept": "application/json,text/plain,*/*",
+                 "Referer": f"https://xinsanban.eastmoney.com/QuoteCenter/{symbol}.html"})
+            original = json.dumps(payload, ensure_ascii=False)
+            parse_kline_response(original, symbol, params)
+            proof = {"source_url": ENDPOINT, "params": params, "source_method": "PUBLIC_HTTP_JSONP",
+                     "observed_at": datetime.utcnow().isoformat(),
+                     "response_sha256": hashlib.sha256(original.encode()).hexdigest(), "original_source_response": original}
+        except Exception as exc:
+            payload, proof = fetch_neeq_browser_kline(symbol, params)
+            proof["primary_source_error"] = str(exc)[:300]
 
         lines = ((payload.get("data") or {}).get("klines") or []) if isinstance(payload, dict) else []
         returned_code = (payload.get("data") or {}).get("code")
@@ -1052,8 +1025,10 @@ class AkshareAdapter(MarketDataAdapter):
                     # NEEQ's kline payload uses field 8 for daily change pct,
                     # not turnover rate. Keep it in raw_payload rather than
                     # exposing it under the wrong column.
-                    turnover_rate=None,
+                    turnover_rate=self._to_float(values[10]) if len(values) > 10 else None,
                     raw_payload=self._json_safe({"line": line, "fields": values,
+                        "source_evidence": proof if not records else {k: v for k, v in proof.items() if k != "original_source_response"},
+                        "adjustment": params["fqt"],
                         "units": {"volume": "股", "source_volume": "手（100股）", "amount": "元"}}),
                 )
             )
