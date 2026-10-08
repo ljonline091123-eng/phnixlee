@@ -831,19 +831,17 @@ function isReportWithinLastYear(row: JsonRecord): boolean {
 function ResearchLatestReportsPanel({ section, onOpen }: { section: JsonRecord; onOpen: (section: JsonRecord) => void }) {
   const allRows = useMemo(() => sortedResearchRows(sectionRows(section)), [section]);
   const recentRows = useMemo(() => allRows.filter(isReportWithinLastYear), [allRows]);
-  // The backend marks a bounded historical preview explicitly when the
-  // rolling one-year window is empty.  Do not filter that audited fallback
-  // out a second time in the browser.
-  const historicalFallback = String(section.date_status || section.window_status || "") === "HISTORICAL_FALLBACK";
-  const rows = historicalFallback ? allRows : recentRows;
+  // Keep this panel strictly scoped to the rolling one-year window.  Older
+  // reports belong to the archive panel and must never be presented as
+  // "latest" research when the current window is empty.
+  const rows = recentRows;
   return <section className="research-source-section research-latest-reports">
-    <ResearchSectionHeading title="最新研报" note={rows.length ? (historicalFallback ? "近一年暂无，展示历史最新" : `${rows.length} 篇`) : undefined} />
+    <ResearchSectionHeading title="最新研报" note={rows.length ? `${rows.length} 篇` : undefined} />
     {rows.length ? <div className="research-latest-list">{rows.map((row, index) => <button type="button" className="research-latest-item" key={`${String(row.report_id || reportTitle(row))}-${index}`} onClick={() => openResearchReport(section, row, onOpen)}>
       <span className="research-latest-icon"><FileText size={18} aria-hidden="true" /></span>
       <span className="research-latest-content"><strong>{reportTitle(row)}</strong>{reportSummary(row) ? <span>{reportSummary(row)}</span> : null}<ReportTagList row={row} /></span>
       <time>{formatDate(researchDateText(row))}</time>
     </button>)}</div> : <p className="research-true-empty">{String(section.message || "当前数据源未返回最新研报")}</p>}
-    {historicalFallback ? <p className="research-table-note">{String(section.message || "近一年暂无公开研报，以上为历史最新研报")}</p> : null}
     <ResearchSectionSource section={section} />
   </section>;
 }

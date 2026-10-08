@@ -1035,18 +1035,15 @@ def build_research_contract(research: dict[str, Any]) -> dict[str, Any]:
     latest_date_status = None
     latest_message = ""
     if not latest and report_rows:
-        # Do not leave a valid historical dataset looking empty merely because
-        # the requested one-year window has no rows.  Promote a bounded,
-        # newest-first preview to the latest panel and mark it explicitly as a
-        # historical fallback; the archive keeps the remaining rows and the
-        # two lists stay mutually exclusive.
-        latest = archive[:10]
-        archive = archive[10:]
-        latest_date_status = "HISTORICAL_FALLBACK"
-        latest_message = "近一年暂无公开研报，以下展示最近可用历史研报。"
-        for row in latest:
-            row.setdefault("date_status", latest_date_status)
+        # The latest-research panel is a strict rolling one-year window.  Do
+        # not promote an old report into that panel: an historical report is
+        # evidence for the archive and rating statistics, not a current
+        # research update.  The empty latest list is intentional and the UI
+        # renders this message as the explicit no-report state.
+        latest_date_status = "NO_REPORT_IN_LAST_YEAR"
+        latest_message = "近一年没有研报。"
     elif not latest and not report_rows:
+        latest_date_status = "NO_REPORTS"
         latest_message = "当前数据源未返回研报。"
     result["latest_reports"] = latest
     result["reports"] = archive

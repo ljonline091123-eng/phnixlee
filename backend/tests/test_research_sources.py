@@ -83,7 +83,7 @@ def test_historical_only_earnings_are_visible_as_actuals_and_partial() -> None:
     assert all(year != str(current_year) for year in contract["actual_years"])
 
 
-def test_historical_reports_fallback_keeps_rating_statistics_and_exclusive_lists() -> None:
+def test_latest_reports_strictly_stays_within_one_year_and_keeps_archive() -> None:
     current_year = date.today().year
     payload = normalize_f10_sections({
         "profile": {"fields": {}, "concepts": []},
@@ -113,8 +113,10 @@ def test_historical_reports_fallback_keeps_rating_statistics_and_exclusive_lists
     })
     research = payload["research_sections"]
     assert research["latest_reports_window_status"] == "NO_REPORT_IN_LAST_YEAR"
-    assert {row["external_id"] for row in research["latest_reports"]} == {"old-1", "old-2"}
-    assert research["reports"] == []
+    assert research["latest_reports"] == []
+    assert {row["external_id"] for row in research["reports"]} == {"old-1", "old-2"}
+    assert research["latest_reports_date_status"] == "NO_REPORT_IN_LAST_YEAR"
+    assert research["latest_reports_message"] == "近一年没有研报。"
     institution = next(row for row in research["sections"] if row["key"] == "institution_forecast")
     assert institution["rows"] == []
     assert any(row["total"] > 0 for row in institution["rating_statistics"])
