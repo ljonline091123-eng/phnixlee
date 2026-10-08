@@ -40,6 +40,10 @@ from app.services.f10 import (
 )
 from app.services.catalog import select_data_source
 from app.services.research_store import get_or_fetch_report_detail
+from app.services.investor_qa import ensure_qa_sync, qa_sync_status, read_qa_section
+from app.services.hk_research import hk_research_sync_status, queue_hk_research_sync
+from app.services.security_master import BOARDS, BOARD_DEFINITIONS, SECURITY_TYPES, EXCHANGES, listing_metadata, board_expression, type_expression
+from app.services.source_coverage import source_coverage
 from app.models.market_data import (
     DataFetchLog,
     DataSource,
@@ -98,7 +102,7 @@ from app.api.stock_batch import (
 from app.services.ipo_calendar import IpoCalendarService
 from app.services.lakehouse import current_knowledge_document_chunk_counts
 from app.services.stock_on_demand import OnDemandFetchError, StockOnDemandService
-from app.services.notice_read_model import CanonicalNotice, deduplicate_notice_rows
+from app.services.notice_read_model import CanonicalNotice, deduplicate_notice_rows, notice_source_name
 
 router = APIRouter(prefix="/stocks", tags=["Stock Master Data"])
 
@@ -131,6 +135,7 @@ def _notice_read_payload(
         "url": row.url,
         "content_json": row.content_json,
         "source_id": row.source_id,
+        "source_name": notice_source_name(row),
         "source_ids": provenance["source_ids"],
         "source_urls": provenance["source_urls"],
         "source_count": provenance["source_count"],
@@ -1455,6 +1460,7 @@ def _stock_symbol_read(stock: StockSymbol, quote: Any | None = None, db: Session
         "ext_json": stock.ext_json or {},
         "raw_payload": stock.raw_payload or {},
         "last_synced_at": stock.last_synced_at,
+        **listing_metadata(stock.market, stock.symbol, stock.ext_json, stock.raw_payload),
     }
     if db is not None:
         summary = _stock_pipeline_status(db, stock)
@@ -1577,6 +1583,8 @@ def sync_stock_symbols(payload: StockSyncRequest, db: Session = Depends(get_db))
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except SyncSourceDisabledError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.get("", response_model=StockSymbolPage)
@@ -1587,6 +1595,8 @@ def list_stock_symbols(
     page: int = 1,
     page_size: int = 50,
     db: Session = Depends(get_db),
+    listing_board: str | None = None,
+    security_type: str | None = None,
 ) -> StockSymbolPage:
     if page < 1 or page_size < 1 or page_size > 500:
         raise HTTPException(status_code=422, detail="page must be >= 1 and page_size must be between 1 and 500")
@@ -1603,6 +1613,21 @@ def list_stock_symbols(
                 detail=f"market must be one of: ALL, {', '.join(MASTER_MARKETS)}",
             )
         filters.append(StockSymbol.market == normalized_market)
+    board = str(listing_board or "ALL").strip().upper()
+    if board != "ALL":
+        if board not in {*BOARDS, "UNCLASSIFIED"}:
+            raise HTTPException(status_code=422, detail="未知上市板块")
+        if board in BOARDS and normalized_market not in {"", "ALL", BOARDS[board]["market"]}:
+            raise HTTPException(status_code=422, detail="上市板块与市场不匹配")
+        filters.append(func.coalesce(board_expression(), "UNCLASSIFIED") == board)
+    kind = str(security_type or "ALL").strip().upper()
+    if kind != "ALL":
+        if kind == "EQUITY":
+            filters.append(type_expression().in_(["STOCK", "DEPOSITARY_RECEIPT"]))
+        elif kind in SECURITY_TYPES:
+            filters.append(func.coalesce(type_expression(), "UNKNOWN") == kind)
+        else:
+            raise HTTPException(status_code=422, detail="未知证券类型")
     if status:
         filters.append(StockSymbol.status == status)
     if keyword:
@@ -1630,6 +1655,16 @@ def list_stock_symbols(
         page=page,
         page_size=page_size,
     )
+
+
+@router.get("/master-taxonomy")
+def get_master_taxonomy():
+    return {"version": "LISTING_TAXONOMY_V1", "boards": BOARD_DEFINITIONS, "security_types": SECURITY_TYPES, "exchanges": EXCHANGES}
+
+
+@router.get("/source-coverage")
+def get_source_coverage(db: Session = Depends(get_db)):
+    return source_coverage(db)
 
 
 @router.get("/search", response_model=list[StockSymbolRead])
@@ -1970,6 +2005,21 @@ def list_notices_page(
     )
 
 
+@router.get("/{market}/{symbol}/notices/{notice_id}", response_model=StockNoticeRead)
+def get_stock_notice(
+    market: str,
+    symbol: str,
+    notice_id: int,
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    normalized_market = normalize_market(market)
+    normalized_symbol = _normalize_symbol(normalized_market, symbol)
+    row = db.get(StockNotice, notice_id)
+    if row is None or row.market != normalized_market or row.symbol != normalized_symbol:
+        raise HTTPException(status_code=404, detail="未找到该股票的公告记录")
+    return _notice_read_payload(row)
+
+
 @router.get("/{market}/{symbol}/news/page", response_model=StockNewsPage)
 def list_news_page(
     market: str,
@@ -2091,6 +2141,11 @@ def _refresh_stock_f10_background(
                     "status": "SUCCESS" if available_sections else "PARTIAL",
                 }
                 log.status = "SUCCESS" if available_sections and core_error is None else "PARTIAL"
+                if market == "CN_A":
+                    qa_status = qa_sync_status(db, market, symbol)
+                    stage_results["INVESTOR_QA"] = qa_status
+                    if qa_status.get("status") not in {"COMPLETE", "EMPTY"}:
+                        log.status = "PARTIAL"
                 log.total_count = len(returned_sections)
                 log.persisted_count = int(persistence_stats.get("updated_cache_sections") or 0)
                 log.request_json = {
@@ -2172,11 +2227,24 @@ def get_stock_f10(
         local_only=local_only,
     )
     try:
+        qa_status = None
+        normalized_market = command.market.upper()
+        normalized_symbol = _normalize_symbol(normalized_market, command.symbol)
+        if not local_only and normalized_market == "CN_A" and db.scalar(select(StockSymbol.id).where(
+            StockSymbol.market == normalized_market, StockSymbol.symbol == normalized_symbol,
+        )):
+            qa_status = ensure_qa_sync(db, normalized_market, normalized_symbol, force=refresh)
         snapshot = F10Workflow(
             db,
             fetch_extended_data=_fetch_and_cache_f10_extended_data,
             symbol_reader=_stock_symbol_read,
         ).execute(command)
+        if qa_status is not None:
+            snapshot.refresh_status["investor_qa_sync"] = qa_status
+        if not local_only and normalized_market == "HK" and background_tasks is not None:
+            snapshot.refresh_status["hk_research_sync"] = queue_hk_research_sync(
+                db, normalized_symbol, background_tasks, force=refresh,
+            )
         if refresh and not local_only and background_tasks is not None:
             f10_source = select_data_source(db, command.market.upper(), "F10", fallback_code="AKSHARE")
             if f10_source is None or not f10_source.enabled:
@@ -2202,6 +2270,48 @@ def get_stock_f10(
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except StockNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.get("/{market}/{symbol}/research/sync")
+def get_hk_research_sync_status(market: str, symbol: str, db: Session = Depends(get_db)) -> dict[str, Any]:
+    if normalize_market(market) != "HK":
+        raise HTTPException(status_code=422, detail="此研究同步接口用于港股")
+    normalized_symbol = _normalize_symbol("HK", symbol)
+    if not db.scalar(select(StockSymbol.id).where(StockSymbol.market == "HK", StockSymbol.symbol == normalized_symbol)):
+        raise HTTPException(status_code=404, detail="股票主数据不存在")
+    return hk_research_sync_status(db, normalized_symbol)
+
+
+@router.post("/{market}/{symbol}/research/sync")
+def submit_hk_research_sync(market: str, symbol: str, background_tasks: BackgroundTasks,
+                            force: bool = False, db: Session = Depends(get_db)) -> dict[str, Any]:
+    # Validate against the same identity as the local F10/read and detail APIs.
+    get_hk_research_sync_status(market, symbol, db)
+    return queue_hk_research_sync(db, _normalize_symbol("HK", symbol), background_tasks, force=force)
+
+
+@router.get("/{market}/{symbol}/research/qa/sync")
+def get_investor_qa_sync_status(market: str, symbol: str, db: Session = Depends(get_db)) -> dict[str, Any]:
+    normalized_market = normalize_market(market)
+    return qa_sync_status(db, normalized_market, _normalize_symbol(normalized_market, symbol))
+
+
+@router.get("/{market}/{symbol}/research/qa")
+def get_investor_qa(market: str, symbol: str, db: Session = Depends(get_db)) -> dict[str, Any]:
+    normalized_market = normalize_market(market)
+    return read_qa_section(db, normalized_market, _normalize_symbol(normalized_market, symbol))
+
+
+@router.post("/{market}/{symbol}/research/qa/sync")
+def submit_investor_qa_sync(market: str, symbol: str, db: Session = Depends(get_db)) -> dict[str, Any]:
+    normalized_market = normalize_market(market)
+    normalized_symbol = _normalize_symbol(normalized_market, symbol)
+    if normalized_market != "CN_A":
+        raise HTTPException(status_code=422, detail="当前官方问答接口覆盖沪深 A 股")
+    stock = db.scalar(select(StockSymbol.id).where(StockSymbol.market == normalized_market, StockSymbol.symbol == normalized_symbol))
+    if not stock:
+        raise HTTPException(status_code=404, detail="股票主数据不存在")
+    return ensure_qa_sync(db, normalized_market, normalized_symbol, force=True)
 
 
 @router.get("/{market}/{symbol}/research/reports/{source_code}/{external_id}")

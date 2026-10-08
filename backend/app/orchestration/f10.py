@@ -36,7 +36,7 @@ from app.services.f10 import (
     NOTICE_CATEGORIES,
 )
 from app.services.stock_on_demand import StockOnDemandService
-from app.services.notice_read_model import CanonicalNotice, deduplicate_notice_rows
+from app.services.notice_read_model import CanonicalNotice, deduplicate_notice_rows, notice_source_name
 from app.services.stock_classification import (
     build_classification_groups,
     enrich_classification_groups_with_members,
@@ -95,6 +95,7 @@ def _notice_view(row: StockNotice, latest_date: str | None = None,
         "url": row.url,
         "content_json": row.content_json,
         "source_id": row.source_id,
+        "source_name": notice_source_name(row),
         "source_ids": provenance["source_ids"],
         "source_urls": provenance["source_urls"],
         "source_count": provenance["source_count"],
@@ -160,6 +161,7 @@ class F10Workflow:
                 extended_data = _merge_f10_extended_data(
                     _load_f10_extended_data(self.db, market, symbol), fresh
                 )
+                snapshot = self._load(command, market, symbol)
             else:
                 self._set_fallback_message(
                     extended_data,
@@ -167,6 +169,15 @@ class F10Workflow:
                 )
         elif command.local_only:
             self.refresh_status.update({"status": "LOCAL_ONLY", "requested": False})
+
+        if not command.local_only and source:
+            # Repair legacy F10-only documents incrementally. A document
+            # collected by F10 must also be visible in the announcement list.
+            imported = StockOnDemandService(self.db).persist_report_notices(
+                source, market, symbol, extended_data.get("published_reports")
+            )
+            if imported:
+                snapshot = self._load(command, market, symbol)
 
         merged_reports = _merge_local_report_notices(
             extended_data.get("published_reports"),

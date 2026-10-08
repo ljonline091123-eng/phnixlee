@@ -45,20 +45,39 @@ def normalize_notice_url(value: Any) -> str:
     """
 
     text = str(value or "").strip()
-    if not text:
+    if text.lower() in {"", "none", "null", "nan"}:
         return ""
     try:
         parts = urlsplit(text)
         if not parts.scheme or not parts.netloc:
             return text.rstrip("/")
-        query = [
+        query = sorted(
             (key, val)
             for key, val in parse_qsl(parts.query, keep_blank_values=True)
             if key.lower() not in {"utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content"}
-        ]
+        )
         return urlunsplit((parts.scheme.lower(), parts.netloc.lower(), parts.path.rstrip("/"), urlencode(query), ""))
     except ValueError:
         return text.rstrip("/")
+
+
+def notice_source_name(row: Any) -> str:
+    """Name the actual disclosure provider, not a numeric source count."""
+    host = urlsplit(normalize_notice_url(_value(row, "url", ""))).hostname or ""
+    for domain, label in (
+        ("hkexnews.hk", "港交所披露易"), ("cninfo.com.cn", "巨潮资讯"),
+        ("sse.com.cn", "上海证券交易所"), ("szse.cn", "深圳证券交易所"),
+        ("bse.cn", "北京证券交易所"), ("neeq.com.cn", "全国股转系统"),
+        ("eastmoney.com", "东方财富"),
+    ):
+        if host == domain or host.endswith("." + domain):
+            return label
+    content = _value(row, "content_json", {})
+    if isinstance(content, dict):
+        label = content.get("source_name") or content.get("来源")
+        if isinstance(label, str) and label.strip():
+            return label.strip()
+    return "公告披露源"
 
 
 def canonical_notice_key(row: Any) -> tuple[str, str, str, str]:
