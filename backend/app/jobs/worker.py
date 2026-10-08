@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 from app.db.bootstrap import initialize_database
 from app.db.session import SessionLocal
 from app.jobs.tasks import TASK_HANDLERS, execute_task
+from app.jobs.errors import DurableRetryError
 from app.models.pipeline import PipelineRun, PipelineStageRun, ScheduledJob
 
 
@@ -194,9 +195,9 @@ class JobWorker:
             job = db.get(ScheduledJob, job_id)
             if job is None:
                 return
-            retry = job.attempts < job.max_attempts
+            retry = isinstance(exc, DurableRetryError) or job.attempts < job.max_attempts
             job.status = "RETRY" if retry else "FAILED"
-            job.run_after = now + timedelta(seconds=min(300, 2 ** job.attempts * 5))
+            job.run_after = now + timedelta(seconds=min(300, 2 ** min(job.attempts, 6) * 5))
             job.lease_until = None
             job.error_message = str(exc)[:4000]
             if not retry:

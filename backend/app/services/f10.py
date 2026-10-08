@@ -21,6 +21,7 @@ from app.core.markets import MARKET_NEEQ, MARKET_NEEQ_INNOVATION
 from app.models.market_data import (
     DataSource,
     StockFinancialReport,
+    StockF10Cache,
     StockNotice,
     StockRealtimeQuote,
     StockSymbol,
@@ -38,6 +39,8 @@ from app.services.stock_classification import _looks_like_index
 from app.services.taxonomy import LABEL_DEFINITION_OVERRIDES, label_definition
 from app.services.research_store import load_research_sections, persist_research_sections
 from app.services.research_quality import audit_research_quality
+from app.services.investor_qa import ensure_qa_sync
+from app.services.notice_read_model import deduplicate_notice_rows, notice_source_name, normalize_notice_url
 
 
 F10_EXTENDED_SECTIONS = (
@@ -408,25 +411,55 @@ def classify_notice(title: str | None, notice_type: str | None = None) -> str:
     intentionally conservative: a keyword match creates a display category,
     not a business fact or an investment signal.
     """
-    text = "".join(str(value or "") for value in (title, notice_type)).replace(" ", "")
+    # Normalize only the matching copy. HKEX titles and source categories are
+    # traditional Chinese; the stored text must remain the original evidence.
+    simplified = str.maketrans({
+        "報": "报", "財": "财", "務": "务", "績": "绩", "業": "业", "審": "审",
+        "計": "计", "潤": "润", "擔": "担", "質": "质", "購": "购", "變": "变",
+        "動": "动", "對": "对", "資": "资", "設": "设", "併": "并", "風": "风",
+        "險": "险", "罰": "罚", "訴": "诉", "訟": "讼", "無": "无", "見": "见",
+        "項": "项", "組": "组", "聯": "联", "轉": "转", "讓": "让", "複": "复",
+        "標": "标", "訂": "订", "單": "单", "會": "会", "東": "东", "減": "减",
+        "證": "证", "獲": "获", "償": "偿", "債": "债", "權": "权", "股": "股",
+        "認": "认", "協": "协", "議": "议", "週": "周", "別": "别", "辭": "辞",
+        "調": "调", "須": "须", "尋": "寻", "價": "价", "員": "员", "職": "职",
+        "關": "关", "連": "连", "內": "内",
+    })
+    title_text = re.sub(r"\s+", "", str(title or "").translate(simplified)).lower()
+    source_text = re.sub(r"\s+", "", str(notice_type or "").translate(simplified)).lower()
+    # HKEX's umbrella label also contains ESG reports. Only use its specific
+    # subcategory, otherwise an ESG-only filing becomes a financial report.
+    if "[" in source_text and "]" in source_text:
+        source_text = "".join(re.findall(r"\[([^]]+)\]", source_text))
+    if any(token in title_text for token in ("环境", "環境", "管治", "esg")) and not any(token in title_text for token in ("年报", "年度报告", "中期报告", "财务报表")):
+        source_text = ""
+    text = title_text + source_text
+    if any(word in text for word in (
+        "风险", "退市", "警示", "立案", "处罚", "诉讼", "仲裁", "无法表示意见", "延期披露",
+        "盈利警告", "清盘", "违约", "债务重组", "不寻常价格", "不寻常成交量", "异常波动", "profitwarning", "windingup",
+    )):
+        return "风险提示"
     if any(word in text for word in (
         "年度报告", "年报", "半年度报告", "半年报", "中期报告", "季度报告", "一季报", "三季报",
         "业绩预告", "业绩快报", "财务报表", "财务报告", "审计报告", "利润分配",
+        "中期/半年度报告", "业绩公告", "年度业绩", "全年业绩", "中期业绩", "季度业绩", "末期业绩",
+        "股息", "分红", "annualreport", "interimreport", "annualresults", "interimresults",
+        "quarterlyresults", "financialstatements", "dividend",
     )):
         return "财务业绩"
     if any(word in text for word in ("担保", "抵押", "质押", "借款", "授信", "保证")):
         return "抵押担保"
-    if any(word in text for word in ("增持", "减持", "回购", "股份变动", "持股变动")):
+    if any(word in text for word in ("增持", "减持", "回购", "股份购回", "股份变动", "持股变动", "sharerepurchase", "sharebuyback")):
         return "增持回购"
-    if any(word in text for word in ("对外投资", "投资设立", "投资项目", "设立子公司", "收购", "并购")):
+    if any(word in text for word in ("对外投资", "投资设立", "投资项目", "设立子公司", "收购", "并购", "acquisition")):
         return "对外投资"
-    if any(word in text for word in (
-        "风险", "退市", "警示", "立案", "处罚", "诉讼", "仲裁", "无法表示意见", "延期披露",
-    )):
-        return "风险提示"
     if any(word in text for word in (
         "重大事项", "重大合同", "重大资产", "重组", "关联交易", "股权转让", "停牌", "复牌",
         "中标", "合同", "订单", "董事会", "股东大会", "人事任免",
+        "关连交易", "主要交易", "须予披露", "配售", "认购", "供股", "购股权", "股权激励",
+        "股东周年大会", "股东特别大会", "董事变更", "董事委任", "辞任", "公司秘书",
+        "董事调任", "股份计划", "合作协议", "内幕消息",
+        "boardmeeting", "connectedtransaction", "placing", "generalmeeting",
     )):
         return "重大事项"
     return "其他公告"
@@ -548,7 +581,9 @@ def _is_dedicated_institution_forecast(row: dict[str, Any]) -> bool:
     source_code = str(row.get("source_code") or "").upper()
     source_name = str(row.get("source_name") or row.get("source") or "")
     if source_code:
-        return source_code == "TONGHUASHUN"
+        return source_code == "TONGHUASHUN" or (
+            source_code == "ETNET_HK" and str(row.get("record_type") or "").upper() == "INSTITUTION_FORECAST"
+        )
     if "同花顺" in source_name and ("预测" in source_name or "机构" in source_name):
         return True
     if any(token in source_name.upper() for token in ("EASTMONEY", "东方财富", "研究报告", "研报")):
@@ -699,6 +734,10 @@ def _report_level_forecast_observations(report_rows: list[dict[str, Any]]) -> li
 def _provider_rating_bucket(provider: Any) -> dict[str, Any] | None:
     if not isinstance(provider, dict):
         return None
+    if provider.get("reference_period") == "CURRENT_SNAPSHOT":
+        # ETNet publishes a current snapshot, without a six-month window.
+        # Keep it separate from the dated local report aggregates.
+        return None
     count_keys = ("buy", "add", "neutral", "hold", "reduce", "sell")
     if not any(key in provider and provider.get(key) not in (None, "") for key in (*count_keys, "total")):
         return None
@@ -782,6 +821,7 @@ def build_research_contract(research: dict[str, Any]) -> dict[str, Any]:
             "metric_code": metric_code,
             "metric_name": definition["metric_name"],
             "unit": definition["unit"],
+            "currency": row.get("currency"),
             "value_scope": "CONSENSUS",
             "values": {},
             "actual_values": {},
@@ -1375,6 +1415,7 @@ def normalize_f10_sections(extended_data: dict[str, dict[str, Any]]) -> dict[str
     )
     institution_contract = research.get("institution_forecast") or {}
     institution_section["forecast_years"] = institution_contract.get("forecast_years") or []
+    institution_section["forecast_units"] = next((row.get("forecast_units") for row in institution_section["rows"] if row.get("forecast_units")), {})
     institution_section["rating_statistics"] = institution_contract.get("rating_statistics") or []
     institution_section["rating_statistics_reference_date"] = institution_contract.get("rating_reference_date")
     institution_section["rating_statistics_basis"] = institution_contract.get("rating_reference_basis")
@@ -1448,6 +1489,23 @@ def normalize_f10_sections(extended_data: dict[str, dict[str, Any]]) -> dict[str
         ),
     ])
     latest_section = research_sections[-2]
+    qa_section = research_sections[1]
+    qa_sync = research.get("qa_sync") or research.get("qa_fetch") or {}
+    qa_section["sync"] = qa_sync
+    is_hk_qa = research.get("market") == "HK" or qa_sync.get("market") == "HK"
+    if is_hk_qa:
+        qa_section["title"] = "投资者问答"
+    if qa_sync:
+        qa_section["source"] = qa_sync.get("source_name") or qa_section["source"]
+        qa_section["message"] = qa_sync.get("message") or ""
+        qa_section["status"] = (
+            "AVAILABLE" if qa_sync.get("status") == "COMPLETE" and qa_section["rows"]
+            else ("MISSING" if is_hk_qa else "UNAVAILABLE") if qa_sync.get("status") in {"EMPTY", "MISSING"} and not qa_section["rows"]
+            else "PARTIAL" if qa_section["rows"] else "DISABLED" if qa_sync.get("status") == "DISABLED" else "PENDING"
+        )
+        qa_section["source_urls"] = qa_sync.get("source_urls") or []
+    elif not qa_section["rows"] and (research.get("qa_status") == "UNAVAILABLE" or research.get("market") == "HK"):
+        qa_section["status"] = "MISSING" if is_hk_qa else "UNAVAILABLE"
     latest_section["window_status"] = research.get("latest_reports_window_status") or (
         "HAS_REPORT_IN_LAST_YEAR" if latest_section.get("rows") else "NO_REPORTS"
     )
@@ -1704,12 +1762,10 @@ def _notice_to_hk_report_entry(notice: StockNotice, symbol: str) -> dict[str, An
         return None
     report_type = AkshareAdapter._normalize_hk_report_type(AkshareAdapter._guess_hk_report_type(combined_text))
     report_date = AkshareAdapter._guess_hk_report_date(combined_text, report_type, notice.notice_date)
-    if not report_date:
-        return None
     entry = AkshareAdapter._normalize_hk_financial_report_entry(
         symbol=symbol,
         report_type=report_type,
-        report_date=report_date[:10],
+        report_date=report_date[:10] if report_date else None,
         notice_date=notice.notice_date,
         url=notice.url,
         source_name="HKEXnews",
@@ -1719,39 +1775,7 @@ def _notice_to_hk_report_entry(notice: StockNotice, symbol: str) -> dict[str, An
     return entry
 
 def _merge_local_hk_report_notices(payload: dict | None, notices: list[StockNotice], symbol: str) -> dict[str, Any]:
-    merged_payload = dict(payload or {})
-    reports = merged_payload.get("reports")
-    reports_by_key: dict[tuple[str, str], dict[str, Any]] = {}
-    if isinstance(reports, list):
-        for item in reports:
-            if not isinstance(item, dict):
-                continue
-            report_date = str(item.get("report_date") or item.get("notice_date") or "").strip()[:10]
-            report_type = AkshareAdapter._normalize_hk_report_type(item.get("report_type"))
-            if report_date:
-                reports_by_key[(report_date, report_type)] = dict(item)
-
-    for notice in notices:
-        entry = _notice_to_hk_report_entry(notice, symbol)
-        if not entry:
-            continue
-        key = (str(entry.get("report_date") or "")[:10], AkshareAdapter._normalize_hk_report_type(entry.get("report_type")))
-        current = reports_by_key.get(key)
-        if not _prefer_hk_report_notice(entry, current):
-            continue
-        merged = entry if current is None else AkshareAdapter._merge_hk_financial_report_entry(current, entry)
-        merged["_priority"] = entry.get("_priority")
-        reports_by_key[key] = merged
-
-    merged_reports = list(reports_by_key.values())
-    for item in merged_reports:
-        item.pop("_priority", None)
-    merged_reports.sort(key=lambda row: (row.get("report_date") or "", row.get("notice_date") or ""), reverse=True)
-    merged_payload["reports"] = merged_reports
-    if merged_reports:
-        merged_payload["source"] = "东方财富港股财报 / HKEXnews"
-        merged_payload["message"] = ""
-    return merged_payload
+    return _project_report_notices(payload, notices, "HK", symbol)
 
 def _is_cn_report_notice(notice: StockNotice) -> bool:
     text = f"{notice.title or ''} {notice.notice_type or ''}".replace(" ", "")
@@ -1763,7 +1787,6 @@ def _is_cn_report_notice(notice: StockNotice) -> bool:
         "回复函",
         "回复公告",
         "更正公告",
-        "更正后",
         "取消公告",
         "延期披露",
         "提示性公告",
@@ -1820,10 +1843,15 @@ def _notice_to_financial_report_entry(notice: StockNotice) -> dict[str, Any] | N
     title = str(notice.title or "").strip()
     if not title:
         return None
+    year = re.search(r"(20\d{2})年?", title)
+    report_period = (
+        AkshareAdapter._report_period_end_date(year.group(1), AkshareAdapter._guess_report_type(title))
+        if year else None
+    )
     return {
         "report_name": title,
         "report_type": _cn_report_type(title),
-        "report_date": notice.notice_date,
+        "report_date": report_period,
         "notice_date": notice.notice_date,
         "url": notice.url,
         "source_name": "Eastmoney NEEQ announcements"
@@ -1838,72 +1866,93 @@ def _merge_local_report_notices(
     market: str,
     symbol: str,
 ) -> dict[str, Any]:
-    if market == "HK":
-        return _merge_local_hk_report_notices(payload, notices, symbol)
+    return _project_report_notices(payload, notices, market, symbol)
 
+
+def _project_report_notices(
+    payload: dict | None,
+    notices: list[StockNotice],
+    market: str,
+    symbol: str,
+) -> dict[str, Any]:
+    """F10 is a projection of stored disclosures, not another document store.
+
+    Preserve unlinked legacy entries as explicit gaps. Financial metric periods
+    without a document must never be counted as published financial reports.
+    """
     merged_payload = dict(payload or {})
-    reports_by_key: dict[tuple[str, str, str], dict[str, Any]] = {}
-    existing_reports = merged_payload.get("reports")
-    if isinstance(existing_reports, list):
-        for item in existing_reports:
-            if not isinstance(item, dict):
-                continue
-            report_date = str(item.get("report_date") or item.get("notice_date") or "").strip()[:10]
-            title = str(item.get("title") or item.get("report_name") or "").strip()
-            report_type = str(item.get("report_type") or "financial_report").strip()
-            # Drop pseudo indicator rows from the formal report tab.
-            if not title or report_type == "financial_indicators":
-                continue
-            reports_by_key[(report_date, report_type, title)] = dict(item)
-
-    for notice in notices:
+    reports: list[dict[str, Any]] = []
+    scoped = [row for row in notices if row.market == market and row.symbol == symbol]
+    for canonical in deduplicate_notice_rows(scoped):
+        notice = canonical.row
         entry = _notice_to_financial_report_entry(notice)
         if not entry:
             continue
-        entry_title = str(entry.get("title") or entry.get("report_name") or "").strip()
-        title_match = next(
-            (
-                key
-                for key, value in reports_by_key.items()
-                if entry_title
-                and entry_title
-                == str(value.get("title") or value.get("report_name") or "").strip()
-            ),
-            None,
-        )
-        if title_match:
-            current = reports_by_key[title_match]
-            if entry.get("url") and not current.get("url"):
-                reports_by_key[title_match] = {**current, **entry}
-            elif entry.get("url") and str(current.get("url") or "").find("cninfo.com.cn") < 0:
-                reports_by_key[title_match] = {**current, "url": entry["url"], "notice_date": entry.get("notice_date")}
-            continue
-        key = (
-            str(entry.get("report_date") or entry.get("notice_date") or "")[:10],
-            str(entry.get("report_type") or "financial_report"),
-            str(entry.get("title") or entry.get("report_name") or ""),
-        )
-        existing = reports_by_key.get(key)
-        if not existing or (entry.get("url") and not existing.get("url")):
-            reports_by_key[key] = entry if not existing else {**existing, **entry}
+        entry.pop("_priority", None)
+        entry.update(canonical.metadata())
+        entry.update({
+            "notice_id": notice.id,
+            "market": market, "symbol": symbol,
+            "source_id": notice.source_id,
+            "source_name": notice_source_name(notice),
+            "raw_notice_type": notice.notice_type,
+            "category": classify_notice(notice.title, notice.notice_type),
+            "announcement_status": "LINKED",
+        })
+        reports.append(entry)
 
-    reports = list(reports_by_key.values())
-    reports.sort(
-        key=lambda row: (
-            str(row.get("report_date") or ""),
-            str(row.get("notice_date") or ""),
-        ),
-        reverse=True,
-    )
-    merged_payload["reports"] = reports[:200]
-    if reports:
-        if market in (MARKET_NEEQ, MARKET_NEEQ_INNOVATION):
-            merged_payload["source"] = "Eastmoney NEEQ announcements"
-        else:
-            merged_payload["source"] = "CNINFO official disclosures"
-        merged_payload["message"] = ""
-    else:
-        merged_payload["message"] = merged_payload.get("message") or "暂无正式财报披露文件。财务指标请查看“财务”页签。"
+    linked_urls = {normalize_notice_url(row.get("url")) for row in reports if normalize_notice_url(row.get("url"))}
+    linked_titles = {(str(row.get("title") or "").strip(), str(row.get("notice_date") or "")[:10]) for row in reports}
+    linked_periods = {str(row.get("report_date") or "")[:10] for row in reports}
+    unlinked_periods: dict[tuple[str, str], dict[str, Any]] = {}
+    unlinked_documents: dict[tuple[str, str], dict[str, Any]] = {}
+    other_disclosures: dict[tuple[str, str], dict[str, Any]] = {}
+    notice_by_url = {normalize_notice_url(row.url): row for row in scoped if normalize_notice_url(row.url)}
+    for item in [*(merged_payload.get("reports") or []), *(merged_payload.get("unlinked_periods") or []), *(merged_payload.get("unlinked_documents") or []), *(merged_payload.get("other_disclosures") or [])]:
+        if not isinstance(item, dict):
+            continue
+        period = str(item.get("report_date") or "")[:10]
+        title = str(item.get("title") or item.get("report_name") or "").strip()
+        url = normalize_notice_url(item.get("url"))
+        if url:
+            if market == "HK" and not AkshareAdapter._is_hk_financial_report_title(
+                f"{title} {item.get('raw_notice_type') or item.get('report_type') or ''}"
+            ):
+                # Legacy caches mixed ESG reports, shareholder letters and
+                # subsidiary updates into the financial-report inventory.
+                # They remain announcements, but are not missing F10 filings.
+                stored = notice_by_url.get(url)
+                other_disclosures[(url, title)] = {
+                    **item, "notice_id": stored.id if stored else item.get("notice_id"),
+                    "announcement_status": "LINKED" if stored else "MISSING",
+                    "status": "NOT_FINANCIAL_REPORT",
+                    "message": "历史披露已保留；该文件不属于正式财报，详情请查看个股公告。",
+                }
+                continue
+            if url in linked_urls or (title, str(item.get("notice_date") or "")[:10]) in linked_titles:
+                continue
+            unlinked_documents[(url, title)] = {
+                **item, "status": "MISSING", "announcement_status": "MISSING",
+                "message": "已有披露链接，尚未关联个股公告记录；更新数据后继续校验。",
+            }
+        elif period and period not in linked_periods:
+            unlinked_periods[(period, str(item.get("report_type") or ""))] = {
+                **item, "status": "MISSING",
+                "message": "已有财务指标，尚未找到对应正式披露公告。",
+            }
+
+    reports.sort(key=lambda row: (str(row.get("report_date") or ""), str(row.get("notice_date") or ""), row.get("notice_id") or 0), reverse=True)
+    gaps = bool(unlinked_periods or unlinked_documents)
+    merged_payload.update({
+        "projection_basis": "STOCK_NOTICE",
+        "reports": reports,
+        "unlinked_periods": sorted(unlinked_periods.values(), key=lambda row: str(row.get("report_date") or ""), reverse=True),
+        "unlinked_documents": list(unlinked_documents.values()),
+        "other_disclosures": list(other_disclosures.values()),
+        "status": "PARTIAL" if reports and gaps else "AVAILABLE" if reports else "MISSING",
+        "source": "港交所披露易公告" if market == "HK" else "个股公告披露记录",
+        "message": "部分财务期间尚未关联正式披露公告。" if gaps else "" if reports else "暂无正式财报披露文件。财务指标请查看“财务”页签。",
+    })
     return merged_payload
 
 LIST_DATE_KEYS = (
@@ -2001,7 +2050,24 @@ def _fetch_and_cache_f10_extended_data(
     symbol: str,
     persistence_stats: dict[str, Any] | None = None,
 ) -> dict[str, dict]:
-    extended_data = get_adapter(source.adapter_type).fetch_extended_data(market, symbol)
+    if market in {"CN_A", "HK"}:
+        # Submit before slow optional sections; an exception elsewhere cannot
+        # prevent Q&A from being collected by its independent durable worker.
+        ensure_qa_sync(db, market, symbol)
+    adapter = get_adapter(source.adapter_type)
+    if market == "HK" and isinstance(adapter, AkshareAdapter):
+        # Persist research independently before the slower optional financial
+        # providers: a timeout later in F10 cannot discard these observations.
+        from app.services.hk_research import hk_research_needs_refresh, sync_hk_research
+        cached_research = db.scalar(select(StockF10Cache).where(
+            StockF10Cache.market == market, StockF10Cache.symbol == symbol,
+            StockF10Cache.section == "research_sections",
+        ))
+        hk_research = (sync_hk_research(db, symbol, source) if hk_research_needs_refresh(db, symbol)
+                       else dict(cached_research.payload_json))
+        extended_data = adapter._fetch_hk_extended_data(symbol, research_sections=hk_research)
+    else:
+        extended_data = adapter.fetch_extended_data(market, symbol)
     research = extended_data.get("research_sections")
     if isinstance(research, dict):
         research_counts = persist_research_sections(db, market, symbol, research)
@@ -2012,6 +2078,14 @@ def _fetch_and_cache_f10_extended_data(
         research.update({key: rows for key, rows in persisted.items() if rows})
     service = StockOnDemandService(db)
     updated_cache_sections = 0
+    report_payload = extended_data.get("published_reports")
+    previous_reports = service.load_f10_cache(market, symbol).get("published_reports")
+    report_payload = _merge_f10_payload("published_reports", previous_reports, report_payload or {})
+    service.persist_report_notices(source, market, symbol, report_payload)
+    stored_notices = list(db.scalars(select(StockNotice).where(
+        StockNotice.market == market, StockNotice.symbol == symbol,
+    )).all())
+    extended_data["published_reports"] = _merge_local_report_notices(report_payload, stored_notices, market, symbol)
     for section in F10_CACHE_SECTIONS:
         payload = extended_data.get(section)
         if isinstance(payload, dict):
