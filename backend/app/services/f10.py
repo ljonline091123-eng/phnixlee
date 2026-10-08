@@ -38,6 +38,7 @@ from app.services.stock_classification import _looks_like_index
 from app.services.taxonomy import LABEL_DEFINITION_OVERRIDES, label_definition
 from app.services.research_store import load_research_sections, persist_research_sections
 from app.services.research_quality import audit_research_quality
+from app.services.investor_qa import ensure_qa_sync
 
 
 F10_EXTENDED_SECTIONS = (
@@ -1448,6 +1449,17 @@ def normalize_f10_sections(extended_data: dict[str, dict[str, Any]]) -> dict[str
         ),
     ])
     latest_section = research_sections[-2]
+    qa_section = research_sections[1]
+    qa_sync = research.get("qa_sync") or research.get("qa_fetch") or {}
+    qa_section["sync"] = qa_sync
+    if qa_sync:
+        qa_section["source"] = qa_sync.get("source_name") or qa_section["source"]
+        qa_section["message"] = qa_sync.get("message") or ""
+        qa_section["status"] = (
+            "AVAILABLE" if qa_sync.get("status") == "COMPLETE" and qa_section["rows"]
+            else "UNAVAILABLE" if qa_sync.get("status") == "EMPTY" and not qa_section["rows"]
+            else "PARTIAL" if qa_section["rows"] else "PENDING"
+        )
     latest_section["window_status"] = research.get("latest_reports_window_status") or (
         "HAS_REPORT_IN_LAST_YEAR" if latest_section.get("rows") else "NO_REPORTS"
     )
@@ -2001,6 +2013,10 @@ def _fetch_and_cache_f10_extended_data(
     symbol: str,
     persistence_stats: dict[str, Any] | None = None,
 ) -> dict[str, dict]:
+    if market == "CN_A":
+        # Submit before slow optional sections; an exception elsewhere cannot
+        # prevent Q&A from being collected by its independent durable worker.
+        ensure_qa_sync(db, market, symbol)
     extended_data = get_adapter(source.adapter_type).fetch_extended_data(market, symbol)
     research = extended_data.get("research_sections")
     if isinstance(research, dict):

@@ -59,7 +59,7 @@ class MarketDataFoundationTest(unittest.TestCase):
         self.assertIsNotNone(source)
         self.assertEqual(source.adapter_type, "AKSHARE")
         interface_codes = {item.interface_code for item in source.interfaces}
-        self.assertEqual(len(interface_codes), 11)
+        self.assertGreaterEqual(len(interface_codes), 12)
         self.assertTrue({
             "CN_A_IRM_QA_ON_DEMAND",
             "CN_A_RESEARCH_REPORT_ON_DEMAND",

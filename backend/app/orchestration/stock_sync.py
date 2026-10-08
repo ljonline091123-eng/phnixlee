@@ -67,10 +67,12 @@ class StockMasterSyncWorkflow:
             for trace_item in ((log.detail_json or {}).get("route_trace") or [])
         )
         has_success = any(item.status == "SUCCESS" for item in logs)
+        has_partial = any((item.detail_json or {}).get("coverage_status") == "PARTIAL" for item in logs)
         return StockSyncResponse(
             sync_log_ids=[item.id for item in logs],
             attempted_source_codes=attempted_source_codes,
             status=(
+                "PARTIAL" if has_success and has_partial else
                 "SUCCESS_WITH_FALLBACK"
                 if has_success and (has_failure or has_fallback_failure)
                 else "FAILED"
@@ -78,6 +80,7 @@ class StockMasterSyncWorkflow:
                 else "SUCCESS"
             ),
             message=(
+                "名单已保存，部分板块来源或湖仓归档未完成，请查看同步详情。" if has_partial else
                 "Synchronization finished. Check data-sync logs for provider failures "
                 "and fallback attempts."
             ),

@@ -285,6 +285,11 @@ def _merge_f10_payload(
 
     merged = dict(existing)
     merged.update({key: value for key, value in incoming.items() if value not in (None, "", [], {})})
+    if section == "research_sections" and existing.get("qa_sync") and not incoming.get("qa_sync"):
+        # A slow full-F10 preview must not replace the durable Q&A checkpoint
+        # or resurrect its old "no data" message after the QA worker succeeds.
+        merged["qa_source"] = existing.get("qa_source")
+        merged["qa_message"] = existing.get("qa_message") or ""
     if "message" in incoming and incoming.get("message") is not None:
         # A successful refresh may intentionally clear an older transient
         # provider-error message while retaining the existing data rows.
