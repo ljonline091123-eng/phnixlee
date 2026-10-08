@@ -703,6 +703,7 @@ function ResearchInstitutionForecastPanel({ section }: { section: JsonRecord }) 
         {!ratingProjection.buckets.some((row) => row.total > 0) ? <p className="research-table-note">当前时间窗内暂无可统计的机构评级。</p> : null}
       </div>
     )}
+    {displayMode === "forecast" && rows.length && section.message ? <p className="research-table-note">{String(section.message)}</p> : null}
     {displayMode === "rating" && ratingProjection.referenceDate ? <p className="research-table-note">统计基准：{formatDate(ratingProjection.referenceDate)}（{ratingProjection.basis}）</p> : null}
     <ResearchSectionSource section={section} />
   </section>;

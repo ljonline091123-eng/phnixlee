@@ -80,15 +80,15 @@ class ResearchProjectionTest(unittest.TestCase):
                 "2026-盈利预测-收益": 0.2,
                 "2026-盈利预测-市盈率": 12,
             }
-        ]):
+        ]), patch.object(adapter, "_safe_sina_research_report_records", return_value=[]):
             with patch.object(adapter, "_safe_dataframe_first_row", return_value={"source": "测试", "fields": {}}):
                 with patch.object(adapter, "_safe_holder_rows", return_value=[]), patch.object(adapter, "_safe_optional_records", return_value=[]), patch.object(adapter, "_safe_holder_count", return_value=[]), patch.object(adapter, "_safe_cn_margin_history", return_value=[]):
                     payload = adapter._fetch_cn_a_extended_sections("000002", {"fields": {}})
 
         self.assertEqual(payload["research_sections"]["earnings_forecast"][0]["股票代码"], "000002")
-        # Ordinary research reports are no longer promoted into institution
-        # forecast rows. Only the dedicated THS institution forecast endpoint
-        # may populate this panel.
+        # A list row without evidence text is not promoted into an institution
+        # forecast. Dedicated provider rows or deterministic, evidence-bound
+        # report-text extraction may populate this panel.
         self.assertEqual(payload["research_sections"]["institution_forecast"], [])
         self.assertFalse(any("000001" in str(row) for row in payload["research_sections"]["earnings_forecast"]))
 

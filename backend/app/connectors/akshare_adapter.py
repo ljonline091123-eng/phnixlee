@@ -528,6 +528,10 @@ class AkshareAdapter(MarketDataAdapter):
         institution_rows = self._safe_institution_forecast_records(
             symbol, research_reports
         )
+        if not institution_rows:
+            institution_rows = self._derive_report_text_institution_forecasts(
+                research_reports, symbol
+            )
         rating_projection = self._safe_provider_rating_projection(symbol)
         if not earnings_rows:
             earnings_rows = self._derive_research_earnings_forecast(research_reports, symbol)
@@ -538,7 +542,16 @@ class AkshareAdapter(MarketDataAdapter):
             "qa_message": "" if qa_rows else "巨潮资讯互动易暂无可用问答数据。",
             "earnings_forecast_source": "同花顺盈利预测" if earnings_rows else "东方财富研究报告接口",
             "earnings_forecast": earnings_rows,
-            "institution_forecast_source": "同花顺业绩预测详表-机构" if institution_rows else "暂无可用机构预测明细",
+            "institution_forecast_source": (
+                "同花顺业绩预测详表-机构"
+                if institution_rows and any(
+                    str(row.get("extraction_method") or "") != "DETERMINISTIC_REPORT_TEXT"
+                    for row in institution_rows
+                )
+                else "券商研报正文中的可核验预测（确定性抽取）"
+                if institution_rows
+                else "暂无可用机构预测明细"
+            ),
             "institution_forecast": institution_rows,
             "provider_rating_statistics": rating_projection,
             "report_source": "新浪财经机构研报 / 东方财富研究报告",
@@ -3648,6 +3661,140 @@ class AkshareAdapter(MarketDataAdapter):
         result = list(deduped.values())
         result.sort(key=lambda row: str(row.get("报告日期") or row.get("report_date") or ""), reverse=True)
         return result
+
+    @classmethod
+    def _derive_report_text_institution_forecasts(
+        cls, reports: list[dict[str, Any]], symbol: str
+    ) -> list[dict[str, Any]]:
+        """Extract only explicitly enumerated institution forecasts from reports.
+
+        Some securities have no provider-level institution forecast table even
+        though the brokerage report text states a year range followed by EPS or
+        parent-company net-profit values.  This deterministic parser accepts a
+        row only when the report contains an explicit contiguous year range and
+        exactly enough numeric observations for that range.  The extracted row
+        remains a dated report snapshot; it is never promoted to current market
+        consensus and retains its report id, source URL and evidence excerpt.
+        """
+
+        def expand_years(start_text: str, end_text: str, report_date: str) -> list[str]:
+            report_year_match = re.search(r"20\d{2}", report_date or "")
+            century = int(report_year_match.group(0)) // 100 if report_year_match else 20
+
+            def normalize(value: str) -> int:
+                number = int(value)
+                return number if len(value) == 4 else century * 100 + number
+
+            start = normalize(start_text)
+            end = normalize(end_text)
+            if end < start or end - start > 5:
+                return []
+            return [str(year) for year in range(start, end + 1)]
+
+        def values_after_metric(context: str, metric_pattern: str, count: int) -> list[float]:
+            match = re.search(
+                rf"(?:{metric_pattern})[^。；\n]{{0,48}}?(?:分别)?(?:为|达到|：|:)\s*([^。；\n]{{1,180}})",
+                context,
+                flags=re.IGNORECASE,
+            )
+            if not match:
+                return []
+            numbers = re.findall(r"(?<![\d.])[-+]?\d+(?:\.\d+)?", match.group(1))
+            if len(numbers) < count:
+                return []
+            try:
+                return [float(value) for value in numbers[:count]]
+            except ValueError:
+                return []
+
+        target = cls._normalize_security_code(symbol)
+        result: list[dict[str, Any]] = []
+        for report in reports or []:
+            if not isinstance(report, dict):
+                continue
+            content = html.unescape(str(report.get("content") or report.get("content_text") or ""))
+            content = re.sub(r"(?:\r?\n|###)+", "\n", content)
+            if not content:
+                continue
+            report_date = str(report.get("report_date") or report.get("日期") or "")[:10]
+            institution = str(report.get("institution") or report.get("机构") or "").strip()
+            if not institution or not report_date:
+                continue
+            forecast: dict[str, dict[str, float]] = {"eps": {}, "net_profit": {}}
+            evidence: list[str] = []
+            for paragraph in (item.strip() for item in content.splitlines() if item.strip()):
+                for year_match in re.finditer(
+                    r"(?<!\d)((?:20)?\d{2})\s*(?:-|—|–|至|~|～)\s*((?:20)?\d{2})\s*年",
+                    paragraph,
+                ):
+                    years = expand_years(year_match.group(1), year_match.group(2), report_date)
+                    if not years:
+                        continue
+                    # Stay inside the same source paragraph.  Crossing a
+                    # paragraph boundary can pair a historical range with an
+                    # unrelated forecast sentence later in the report.
+                    context = paragraph[year_match.start():]
+                    eps_values = values_after_metric(context, r"EPS|每股收益", len(years))
+                    profit_values = values_after_metric(
+                        context,
+                        r"归母净利润|归属(?:于上市公司股东)?净利润",
+                        len(years),
+                    )
+                    if not eps_values and not profit_values:
+                        continue
+                    for year, value in zip(years, eps_values):
+                        forecast["eps"][year] = value
+                    for year, value in zip(years, profit_values):
+                        forecast["net_profit"][year] = value
+                    excerpt = context[:500].strip()
+                    if excerpt and excerpt not in evidence:
+                        evidence.append(excerpt)
+            forecast = {key: values for key, values in forecast.items() if values}
+            if not forecast:
+                continue
+            row: dict[str, Any] = {
+                "股票代码": target,
+                "institution": institution,
+                "机构": institution,
+                "analysts": report.get("analysts") or [],
+                "researcher": report.get("研究员"),
+                "report_date": report_date,
+                "报告日期": report_date,
+                "rating": report.get("rating") or report.get("东财评级"),
+                "title": report.get("title") or report.get("报告名称"),
+                "forecast": forecast,
+                "forecast_units": {"eps": "元/股", "net_profit": "亿元"},
+                "record_type": "INSTITUTION_FORECAST",
+                "value_scope": "REPORT_LEVEL_HISTORICAL_SNAPSHOT",
+                "extraction_method": "DETERMINISTIC_REPORT_TEXT",
+                "verification_status": "SOURCE_EXTRACTED",
+                "source_code": report.get("source_code") or "UNKNOWN",
+                "source_name": report.get("source_name") or "券商研报正文",
+                "source_url": report.get("source_url"),
+                "detail_url": report.get("detail_url") or report.get("url"),
+                "external_id": report.get("external_id") or report.get("report_id"),
+                "report_id": report.get("report_id") or report.get("external_id"),
+                "source_updated_at": report.get("source_updated_at") or report_date,
+                "evidence_excerpt": "\n".join(evidence[:3]),
+            }
+            for year, value in forecast.get("eps", {}).items():
+                row[f"{year} EPS"] = value
+            for year, value in forecast.get("net_profit", {}).items():
+                row[f"{year} 归母净利润"] = value
+            result.append({key: value for key, value in row.items() if value not in (None, "", [])})
+        deduped: dict[tuple[str, str, str], dict[str, Any]] = {}
+        for row in result:
+            key = (
+                str(row.get("source_code") or ""),
+                str(row.get("external_id") or ""),
+                str(row.get("institution") or ""),
+            )
+            deduped[key] = row
+        return sorted(
+            deduped.values(),
+            key=lambda row: str(row.get("report_date") or ""),
+            reverse=True,
+        )[:100]
 
     @classmethod
     def _match_report_rating(

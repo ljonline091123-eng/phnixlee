@@ -522,6 +522,11 @@ def load_research_sections(db: Session, market: str, symbol: str) -> dict[str, A
     qa_rows = list(db.scalars(select(StockInvestorQA).where(
         StockInvestorQA.market == market, StockInvestorQA.symbol == symbol,
     ).order_by(StockInvestorQA.updated_time.desc(), StockInvestorQA.id.desc())).all())
+    institution_sources = sorted({
+        str((row.raw_payload or {}).get("source_name") or row.source_code).strip()
+        for row in institutions
+        if str((row.raw_payload or {}).get("source_name") or row.source_code).strip()
+    })
     return {
         "reports": [_report_dict(row) for row in reports],
         "earnings_forecast": [{
@@ -541,6 +546,7 @@ def load_research_sections(db: Session, market: str, symbol: str) -> dict[str, A
             "forecast": row.forecast_json, "source_code": row.source_code,
             "source_url": row.source_url, "detail_url": row.detail_url,
         } for row in institutions],
+        "institution_forecast_source": " / ".join(institution_sources),
         "qa": [{
             **(row.raw_payload or {}), "question_id": row.external_id,
             "question": row.question, "问题": row.question, "answer": row.answer,

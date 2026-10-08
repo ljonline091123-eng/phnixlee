@@ -503,7 +503,9 @@ def _research_rows(value: Any) -> list[dict[str, Any]]:
     return [row for row in value if isinstance(row, dict)] if isinstance(value, list) else []
 
 
-def _forecast_years(*row_sets: list[dict[str, Any]]) -> list[str]:
+def _forecast_years(
+    *row_sets: list[dict[str, Any]], include_historical: bool = False
+) -> list[str]:
     years: set[int] = set()
     for rows in row_sets:
         for row in rows:
@@ -521,6 +523,8 @@ def _forecast_years(*row_sets: list[dict[str, Any]]) -> list[str]:
                 for values in forecast.values():
                     if isinstance(values, dict):
                         years.update(int(year) for year in values if re.fullmatch(r"20\d{2}", str(year)))
+    if include_historical and years:
+        return [str(year) for year in sorted(years)[-3:]]
     future = sorted(year for year in years if year >= date.today().year)
     start = future[0] if future else date.today().year
     return [str(year) for year in range(start, start + 3)]
@@ -535,6 +539,12 @@ def _is_dedicated_institution_forecast(row: dict[str, Any]) -> bool:
     explicitly sourced from the institution-forecast feed (currently THS), and
     retain title-less legacy forecast rows as a compatibility fallback.
     """
+    if (
+        str(row.get("record_type") or "").upper() == "INSTITUTION_FORECAST"
+        and str(row.get("extraction_method") or "").upper() == "DETERMINISTIC_REPORT_TEXT"
+        and isinstance(row.get("forecast"), dict)
+    ):
+        return True
     source_code = str(row.get("source_code") or "").upper()
     source_name = str(row.get("source_name") or row.get("source") or "")
     if source_code:
@@ -731,7 +741,10 @@ def build_research_contract(research: dict[str, Any]) -> dict[str, Any]:
         reverse=True,
     )
     report_observations = _report_level_forecast_observations(report_rows)
-    years = _forecast_years(earnings_rows, institution_rows, report_observations)
+    years = _forecast_years(earnings_rows, report_observations)
+    institution_years = _forecast_years(
+        institution_rows, include_historical=True
+    ) or years
     metric_map: dict[str, dict[str, Any]] = {}
     source_metadata: dict[tuple[str, str, str], dict[str, Any]] = {}
 
@@ -963,8 +976,8 @@ def build_research_contract(research: dict[str, Any]) -> dict[str, Any]:
             "institution": row.get("institution") or row.get("机构") or row.get("机构名称"),
             "report_date": row.get("report_date") or row.get("报告日期"),
             "rating": row.get("rating") or row.get("评级") or row.get("东财评级"),
-            "eps": {year: eps.get(year) for year in years if year in eps},
-            "net_profit": {year: net_profit.get(year) for year in years if year in net_profit},
+            "eps": {year: eps.get(year) for year in institution_years if year in eps},
+            "net_profit": {year: net_profit.get(year) for year in institution_years if year in net_profit},
         })
         normalized_institutions.append(row)
     rating = build_rating_statistics(report_rows)
@@ -978,7 +991,7 @@ def build_research_contract(research: dict[str, Any]) -> dict[str, Any]:
         ]
         rating_basis = "供应商原生近六个月评级快照优先；其他窗口按最新研报日期滚动统计"
     result["institution_forecast"] = {
-        "forecast_years": years,
+        "forecast_years": institution_years,
         "rows": normalized_institutions,
         "rating_statistics": rating_buckets,
         "rating_reference_date": rating["reference_date"],
@@ -1373,6 +1386,19 @@ def normalize_f10_sections(extended_data: dict[str, dict[str, Any]]) -> dict[str
     provider_rating = institution_contract.get("provider_rating_statistics") or research.get("provider_rating_statistics")
     if isinstance(provider_rating, dict) and provider_rating:
         institution_section["provider_rating_statistics"] = provider_rating
+    institution_rows = institution_section.get("rows") or []
+    historical_snapshot_only = bool(institution_rows) and all(
+        str(row.get("value_scope") or "").upper()
+        == "REPORT_LEVEL_HISTORICAL_SNAPSHOT"
+        for row in institution_rows
+        if isinstance(row, dict)
+    )
+    if historical_snapshot_only:
+        institution_section["status"] = "PARTIAL"
+        institution_section["message"] = (
+            "当前公开源未返回最新机构预测，以下为券商研报发布时的历史预测快照，"
+            "不代表当前一致预期。"
+        )
     # A security may have no provider-level forecast rows while its persisted
     # research reports still contain usable rating observations.  Keep the
     # distinction explicit: this section is PARTIAL, not empty, and the UI can

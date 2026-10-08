@@ -120,6 +120,84 @@ def test_historical_reports_fallback_keeps_rating_statistics_and_exclusive_lists
     assert any(row["total"] > 0 for row in institution["rating_statistics"])
 
 
+def test_report_text_forecast_extraction_is_evidence_bound_and_historical() -> None:
+    reports = [{
+        "source_code": "SINA_FINANCE",
+        "external_id": "report-1",
+        "report_id": "SINA-report-1",
+        "title": "中国宝安：业绩符合预期",
+        "institution": "中泰证券",
+        "report_date": "2021-10-29",
+        "rating": "增持",
+        "content": (
+            "投资建议：预计2021-2023年公司营收分别为146亿、204亿、277亿，"
+            "归母净利润分别为10.13亿、15.6亿、23.8亿，"
+            "EPS分别为0.39元、0.60元、0.92元。"
+        ),
+        "source_url": "https://example.test/report-list",
+        "detail_url": "https://example.test/report-1",
+    }]
+
+    extracted = AkshareAdapter._derive_report_text_institution_forecasts(
+        reports, "000009"
+    )
+    assert len(extracted) == 1
+    row = extracted[0]
+    assert row["forecast"]["eps"] == {
+        "2021": 0.39, "2022": 0.6, "2023": 0.92,
+    }
+    assert row["forecast"]["net_profit"] == {
+        "2021": 10.13, "2022": 15.6, "2023": 23.8,
+    }
+    assert row["extraction_method"] == "DETERMINISTIC_REPORT_TEXT"
+    assert row["value_scope"] == "REPORT_LEVEL_HISTORICAL_SNAPSHOT"
+    assert "归母净利润" in row["evidence_excerpt"]
+
+    payload = normalize_f10_sections({
+        "profile": {"fields": {}, "concepts": []},
+        "holders": {},
+        "financial_summary": {},
+        "financial_statements": {},
+        "business_composition": {},
+        "research_sections": {
+            "reports": reports,
+            "institution_forecast": extracted,
+            "institution_forecast_source": "券商研报正文中的可核验预测（确定性抽取）",
+        },
+    })
+    contract = payload["research_sections"]["institution_forecast"]
+    assert contract["forecast_years"] == ["2021", "2022", "2023"]
+    assert contract["rows"][0]["eps"]["2023"] == 0.92
+    section = next(
+        row for row in payload["research_sections"]["sections"]
+        if row["key"] == "institution_forecast"
+    )
+    assert section["status"] == "PARTIAL"
+    assert "历史预测快照" in section["message"]
+
+
+def test_report_text_forecast_does_not_cross_paragraph_boundaries() -> None:
+    reports = [{
+        "source_code": "SINA_FINANCE",
+        "external_id": "report-2",
+        "title": "边界验证",
+        "institution": "测试证券",
+        "report_date": "2021-07-08",
+        "content": (
+            "2017-2020年营业收入保持增长。\n"
+            "投资建议：预计2021-2023年归母净利润分别为6.3亿、12.56亿、21.6亿，"
+            "EPS分别为0.24元、0.49元、0.84元。"
+        ),
+    }]
+    extracted = AkshareAdapter._derive_report_text_institution_forecasts(
+        reports, "000009"
+    )
+    assert extracted[0]["forecast"]["eps"] == {
+        "2021": 0.24, "2022": 0.49, "2023": 0.84,
+    }
+    assert "2017" not in extracted[0]["forecast"]["eps"]
+
+
 def test_cninfo_qa_rows_are_scoped_sorted_and_traceable() -> None:
     adapter = AkshareAdapter()
     frame = pd.DataFrame([
