@@ -80,7 +80,7 @@ class ResearchProjectionTest(unittest.TestCase):
                 "2026-盈利预测-收益": 0.2,
                 "2026-盈利预测-市盈率": 12,
             }
-        ]), patch.object(adapter, "_safe_sina_research_report_records", return_value=[]):
+        ]), patch.object(adapter, "_safe_sina_research_report_records", return_value=[]), patch.object(adapter, "_safe_qa_snapshot", return_value=([], {"source_name": "测试问答源", "message": ""})):
             with patch.object(adapter, "_safe_dataframe_first_row", return_value={"source": "测试", "fields": {}}):
                 with patch.object(adapter, "_safe_holder_rows", return_value=[]), patch.object(adapter, "_safe_optional_records", return_value=[]), patch.object(adapter, "_safe_holder_count", return_value=[]), patch.object(adapter, "_safe_cn_margin_history", return_value=[]):
                     payload = adapter._fetch_cn_a_extended_sections("000002", {"fields": {}})

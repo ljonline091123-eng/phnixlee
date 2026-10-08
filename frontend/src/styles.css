@@ -4595,9 +4595,22 @@ textarea:focus {
 }
 .notice-category-tabs { display: flex; gap: 8px; overflow-x: auto; padding: 4px 0 12px; border-bottom: 1px solid var(--line, #dfe6df); }
 .notice-category-tabs button { flex: 0 0 auto; padding: 7px 12px; border: 1px solid transparent; border-radius: 5px; color: var(--text-muted, #718078); background: #f5f7f5; cursor: pointer; }
-.notice-category-tabs button.active { border-color: #d99595; color: #b43d47; background: #fff8f8; font-weight: 700; }
+.notice-category-tabs button.active { border-color: var(--notice-color, #536373); color: var(--notice-color, #536373); background: var(--notice-bg, #edf1f5); font-weight: 700; }
 .notice-category-badge, .notice-latest-badge { display: inline-block; margin-right: 6px; padding: 2px 5px; border-radius: 3px; font-size: 10px; font-style: normal; font-weight: 600; vertical-align: 2px; }
-.notice-category-badge { color: #9b4d28; background: #fff2e7; }
+.notice-category-badge, .notice-category-tabs button[data-category] { --notice-color: #536373; --notice-bg: #edf1f5; }
+.notice-category-badge[data-category="财务业绩"], .notice-category-tabs button[data-category="财务业绩"] { --notice-color: #245caa; --notice-bg: #eaf2ff; }
+.notice-category-badge[data-category="重大事项"], .notice-category-tabs button[data-category="重大事项"] { --notice-color: #7543a6; --notice-bg: #f2ebfa; }
+.notice-category-badge[data-category="风险提示"], .notice-category-tabs button[data-category="风险提示"] { --notice-color: #b52c3a; --notice-bg: #fff0f2; }
+.notice-category-badge[data-category="抵押担保"], .notice-category-tabs button[data-category="抵押担保"] { --notice-color: #8a5a13; --notice-bg: #fff5dd; }
+.notice-category-badge[data-category="增持回购"], .notice-category-tabs button[data-category="增持回购"] { --notice-color: #18734f; --notice-bg: #e7f6ef; }
+.notice-category-badge[data-category="对外投资"], .notice-category-tabs button[data-category="对外投资"] { --notice-color: #126e80; --notice-bg: #e6f5f8; }
+.notice-category-badge { color: var(--notice-color); background: var(--notice-bg); }
+.notice-category-tabs button[data-category]:not([data-category="全部"]) { color: var(--notice-color); }
+.financial-report-actions { display: flex; flex: 0 0 auto; align-items: center; gap: 10px; flex-wrap: wrap; }
+.financial-report-gaps { margin-top: 14px; padding: 12px; border: 1px solid #e0e6ec; border-radius: 6px; color: #536373; font-size: 12px; }
+.financial-report-gaps summary { cursor: pointer; font-weight: 600; }
+.notice-reference-dialog .f10-detail-row { align-items: flex-start; gap: 20px; }
+.notice-reference-dialog .f10-detail-row span { overflow-wrap: anywhere; text-align: right; }
 .notice-latest-badge { color: #fff; background: #e4393c; }
 .research-section-grid { display: grid; gap: 12px; margin-bottom: 14px; }
 .research-industry-panel { min-width: 0; padding: 16px 18px; border: 1px solid var(--line, #dfe6df); border-radius: 8px; background: #fff; }

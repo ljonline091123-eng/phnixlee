@@ -451,7 +451,7 @@ class StockToolsService:
         for section in F10_EXTENDED_SECTIONS:
             payload = extended_data.get(section)
             if isinstance(payload, dict):
-                service.upsert_f10_cache(source, market, symbol, section, payload)
+                service.upsert_f10_cache(source, market, symbol, section, payload, archive_payload=payload)
 
     def _mark_f10_refresh_failed(self, extended_data: dict[str, dict[str, Any]], detail: str) -> None:
         message = f"Remote refresh failed; local cache was used. {detail}"

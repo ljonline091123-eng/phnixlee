@@ -37,6 +37,7 @@ from app.models.market_data import (
 from app.services.graph_identity import canonical_company_id, canonical_security_id, resolve_many
 from app.services.foundation import facts_query
 from app.services.lakehouse import current_knowledge_document_chunks, knowledge_document_source_hash
+from app.services.news_identity import check_news_identity
 
 
 CONTEXT_VERSION = "GRAPH_RAG_CONTEXT_V3"
@@ -690,6 +691,14 @@ def build_selection_context(
     kb_ids = sorted(set(int(item) for item in (knowledge_base_ids or []) if item))
     graph_ids = sorted(set(int(item) for item in (graph_ids or []) if item))
     identity = _identity(db, market, symbol, cutoff)
+    master = db.scalar(select(StockSymbol).where(StockSymbol.market == market, StockSymbol.symbol == symbol))
+
+    def usable_document(row):
+        if row.source_table != "stock_news":
+            return True
+        return master is not None and check_news_identity(
+            market, symbol, master.name, row.title, row.content, master.ext_json,
+        )["status"] == "MENTION_MATCHED"
 
     doc_query = select(KnowledgeDocument).where(
         KnowledgeDocument.market == market,
@@ -707,6 +716,8 @@ def build_selection_context(
     ).all())
     by_source: dict[str, list[KnowledgeDocument]] = {}
     for row in doc_candidates:
+        if not usable_document(row):
+            continue
         by_source.setdefault(row.source_table, []).append(row)
     source_keys = sorted(
         by_source,
@@ -798,12 +809,13 @@ def build_selection_context(
         )
     relation_docs = {
         row.id: row for row in db.scalars(relation_doc_query).all()
-        if _known(row.created_at, cutoff) and _known(row.updated_at, cutoff)
+        if _known(row.created_at, cutoff) and _known(row.updated_at, cutoff) and usable_document(row)
     } if relation_doc_ids else {}
     relations = [
         row for row in relations
         if row.subject_entity_id in relation_entities
         and row.object_entity_id in relation_entities
+        and row.predicate != "HAS_NEWS_CANDIDATE"
         and (row.evidence_document_id is None or row.evidence_document_id in relation_docs)
     ]
     graph_paths = []

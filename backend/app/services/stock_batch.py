@@ -28,6 +28,7 @@ from app.services import lakehouse
 from app.services.lakehouse import current_knowledge_document_chunk_counts
 from app.services.catalog import select_data_source
 from app.services.f10 import _fetch_and_cache_f10_extended_data, _section_has_payload
+from app.services.investor_qa import qa_sync_status
 from app.services.knowledge_pipeline import run_stock_pipeline
 from app.services.stock_on_demand import StockOnDemandService
 
@@ -103,8 +104,11 @@ def _run_f10_refresh(db: Session, market: str, symbol: str) -> dict[str, Any]:
         if _section_has_payload(name, value, market)
     ]
     non_empty = len(available_sections)
+    qa_status = qa_sync_status(db, market, symbol) if market in {"CN_A", "HK", "NEEQ", "NEEQ_INNOVATION"} else {}
+    qa_complete = not qa_status or qa_status.get("status") in {"COMPLETE", "EMPTY"}
     return {
-        "status": "SUCCESS" if non_empty else "PARTIAL",
+        "status": "SUCCESS" if non_empty and qa_complete else "PARTIAL",
+        "investor_qa_sync": qa_status,
         "source_code": source.source_code,
         "section_count": non_empty,
         "sections": available_sections,
