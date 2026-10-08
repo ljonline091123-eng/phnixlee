@@ -38,6 +38,7 @@ from app.services.stock_classification import _looks_like_index
 from app.services.taxonomy import LABEL_DEFINITION_OVERRIDES, label_definition
 from app.services.research_store import load_research_sections, persist_research_sections
 from app.services.research_quality import audit_research_quality
+from app.services.investor_qa import ensure_qa_sync
 
 
 F10_EXTENDED_SECTIONS = (
@@ -548,7 +549,9 @@ def _is_dedicated_institution_forecast(row: dict[str, Any]) -> bool:
     source_code = str(row.get("source_code") or "").upper()
     source_name = str(row.get("source_name") or row.get("source") or "")
     if source_code:
-        return source_code == "TONGHUASHUN"
+        return source_code == "TONGHUASHUN" or (
+            source_code == "ETNET_HK" and str(row.get("record_type") or "").upper() == "INSTITUTION_FORECAST"
+        )
     if "同花顺" in source_name and ("预测" in source_name or "机构" in source_name):
         return True
     if any(token in source_name.upper() for token in ("EASTMONEY", "东方财富", "研究报告", "研报")):
@@ -699,6 +702,10 @@ def _report_level_forecast_observations(report_rows: list[dict[str, Any]]) -> li
 def _provider_rating_bucket(provider: Any) -> dict[str, Any] | None:
     if not isinstance(provider, dict):
         return None
+    if provider.get("reference_period") == "CURRENT_SNAPSHOT":
+        # ETNet publishes a current snapshot, without a six-month window.
+        # Keep it separate from the dated local report aggregates.
+        return None
     count_keys = ("buy", "add", "neutral", "hold", "reduce", "sell")
     if not any(key in provider and provider.get(key) not in (None, "") for key in (*count_keys, "total")):
         return None
@@ -782,6 +789,7 @@ def build_research_contract(research: dict[str, Any]) -> dict[str, Any]:
             "metric_code": metric_code,
             "metric_name": definition["metric_name"],
             "unit": definition["unit"],
+            "currency": row.get("currency"),
             "value_scope": "CONSENSUS",
             "values": {},
             "actual_values": {},
@@ -1375,6 +1383,7 @@ def normalize_f10_sections(extended_data: dict[str, dict[str, Any]]) -> dict[str
     )
     institution_contract = research.get("institution_forecast") or {}
     institution_section["forecast_years"] = institution_contract.get("forecast_years") or []
+    institution_section["forecast_units"] = next((row.get("forecast_units") for row in institution_section["rows"] if row.get("forecast_units")), {})
     institution_section["rating_statistics"] = institution_contract.get("rating_statistics") or []
     institution_section["rating_statistics_reference_date"] = institution_contract.get("rating_reference_date")
     institution_section["rating_statistics_basis"] = institution_contract.get("rating_reference_basis")
@@ -1448,6 +1457,19 @@ def normalize_f10_sections(extended_data: dict[str, dict[str, Any]]) -> dict[str
         ),
     ])
     latest_section = research_sections[-2]
+    qa_section = research_sections[1]
+    qa_sync = research.get("qa_sync") or research.get("qa_fetch") or {}
+    qa_section["sync"] = qa_sync
+    if not qa_section["rows"] and (research.get("qa_status") == "UNAVAILABLE" or research.get("market") == "HK"):
+        qa_section["status"] = "UNAVAILABLE"
+    elif qa_sync:
+        qa_section["source"] = qa_sync.get("source_name") or qa_section["source"]
+        qa_section["message"] = qa_sync.get("message") or ""
+        qa_section["status"] = (
+            "AVAILABLE" if qa_sync.get("status") == "COMPLETE" and qa_section["rows"]
+            else "UNAVAILABLE" if qa_sync.get("status") == "EMPTY" and not qa_section["rows"]
+            else "PARTIAL" if qa_section["rows"] else "PENDING"
+        )
     latest_section["window_status"] = research.get("latest_reports_window_status") or (
         "HAS_REPORT_IN_LAST_YEAR" if latest_section.get("rows") else "NO_REPORTS"
     )
@@ -2001,7 +2023,24 @@ def _fetch_and_cache_f10_extended_data(
     symbol: str,
     persistence_stats: dict[str, Any] | None = None,
 ) -> dict[str, dict]:
-    extended_data = get_adapter(source.adapter_type).fetch_extended_data(market, symbol)
+    if market == "CN_A":
+        # Submit before slow optional sections; an exception elsewhere cannot
+        # prevent Q&A from being collected by its independent durable worker.
+        ensure_qa_sync(db, market, symbol)
+    adapter = get_adapter(source.adapter_type)
+    if market == "HK" and isinstance(adapter, AkshareAdapter):
+        # Persist research independently before the slower optional financial
+        # providers: a timeout later in F10 cannot discard these observations.
+        from app.services.hk_research import hk_research_needs_refresh, sync_hk_research
+        cached_research = db.scalar(select(StockF10Cache).where(
+            StockF10Cache.market == market, StockF10Cache.symbol == symbol,
+            StockF10Cache.section == "research_sections",
+        ))
+        hk_research = (sync_hk_research(db, symbol, source) if hk_research_needs_refresh(db, symbol)
+                       else dict(cached_research.payload_json))
+        extended_data = adapter._fetch_hk_extended_data(symbol, research_sections=hk_research)
+    else:
+        extended_data = adapter.fetch_extended_data(market, symbol)
     research = extended_data.get("research_sections")
     if isinstance(research, dict):
         research_counts = persist_research_sections(db, market, symbol, research)

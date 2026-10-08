@@ -31,6 +31,8 @@ from app.connectors.base import (
     SymbolRecord,
 )
 from app.connectors.sina_research import fetch_sina_research_reports
+from app.connectors.investor_qa import OfficialQAClient, qa_source
+from app.connectors.hk_research import fetch_hk_research_sections
 
 
 class AkshareAdapter(MarketDataAdapter):
@@ -184,6 +186,8 @@ class AkshareAdapter(MarketDataAdapter):
         )
 
     def fetch_symbol_master(self, market: str) -> list[SymbolRecord]:
+        self.symbol_master_issues = []
+        self.symbol_master_complete = True
         if market == MARKET_CN_A:
             return self._fetch_cn_a_symbols()
         if market == MARKET_HK:
@@ -289,7 +293,7 @@ class AkshareAdapter(MarketDataAdapter):
     ) -> list[FinancialRecord]:
         if market == "CN_A":
             dataframe = ak.stock_financial_analysis_indicator_em(
-                symbol=f"{symbol}.SZ" if symbol.startswith(("0", "3")) else f"{symbol}.SH",
+                symbol=self._financial_security_code(symbol),
                 indicator=indicator,
             )
             return self._normalize_financial_dataframe(dataframe, market, symbol, indicator)
@@ -512,7 +516,7 @@ class AkshareAdapter(MarketDataAdapter):
         research_reports = self._merge_research_report_sources(
             eastmoney_reports, sina_reports, limit=500
         )
-        qa_rows = self._safe_qa_records(symbol, limit=100)
+        qa_rows, qa_fetch = self._safe_qa_snapshot(symbol, limit=100)
         earnings_rows = self._safe_profit_forecast_records(symbol)
         detailed_earnings_rows = self._safe_detailed_forecast_records(symbol)
         if detailed_earnings_rows:
@@ -536,10 +540,11 @@ class AkshareAdapter(MarketDataAdapter):
         if not earnings_rows:
             earnings_rows = self._derive_research_earnings_forecast(research_reports, symbol)
         research = {
-            "source": "多来源：巨潮资讯互动易 / 同花顺盈利预测 / 东方财富研究报告",
-            "qa_source": "巨潮资讯互动易",
+            "source": "多来源：上证 e 互动 / 巨潮资讯互动易 / 同花顺盈利预测 / 东方财富研究报告",
+            "qa_source": qa_fetch["source_name"],
             "qa": qa_rows,
-            "qa_message": "" if qa_rows else "巨潮资讯互动易暂无可用问答数据。",
+            "qa_fetch": qa_fetch,
+            "qa_message": qa_fetch["message"],
             "earnings_forecast_source": "同花顺盈利预测" if earnings_rows else "东方财富研究报告接口",
             "earnings_forecast": earnings_rows,
             "institution_forecast_source": (
@@ -560,7 +565,8 @@ class AkshareAdapter(MarketDataAdapter):
         }
         return {"holders": holders, "profile": profile_result, "research_sections": research}
 
-    def _fetch_hk_extended_data(self, symbol: str) -> dict[str, Any]:
+    def _fetch_hk_extended_data(self, symbol: str, research_sections: dict[str, Any] | None = None) -> dict[str, Any]:
+        research = research_sections if research_sections is not None else fetch_hk_research_sections(symbol)
         company = self._safe_dataframe_first_row(
             getattr(ak, "stock_hk_company_profile_em", None),
             {"symbol": symbol},
@@ -620,11 +626,7 @@ class AkshareAdapter(MarketDataAdapter):
             "financial_statements": financial_statements,
             "business_composition": business_composition,
             "published_reports": published_reports,
-            "research_sections": {
-                "source": "暂无港股公开研究聚合接口",
-                "sections": [],
-                "message": "港股研究、问董秘和评级数据需授权数据源。",
-            },
+            "research_sections": research,
         }
 
     def _fetch_neeq_json(self, path: str, params: dict[str, Any] | None = None) -> Any:
@@ -1341,7 +1343,7 @@ class AkshareAdapter(MarketDataAdapter):
         method = getattr(ak, "stock_financial_analysis_indicator_em", None)
         if method:
             try:
-                exchange_symbol = f"{symbol}.SZ" if symbol.startswith(("0", "3")) else f"{symbol}.SH"
+                exchange_symbol = self._financial_security_code(symbol)
                 dataframe = method(symbol=exchange_symbol, indicator="按报告期")
                 summary = self._build_financial_summary(
                     dataframe,
@@ -2270,7 +2272,7 @@ class AkshareAdapter(MarketDataAdapter):
             "income_statement": self._empty_statement_section("利润表"),
             "cash_flow": self._empty_statement_section("现金流量表"),
         }
-        stock_code = f"SH{symbol}" if symbol.startswith("6") else f"SZ{symbol}"
+        stock_code = self._financial_security_code(symbol).split(".")[1] + symbol
         statement_map = (
             (
                 "income_statement",
@@ -2474,7 +2476,7 @@ class AkshareAdapter(MarketDataAdapter):
                 "message": "主营构成接口不可用。",
             }
         try:
-            exchange_symbol = f"SH{symbol}" if symbol.startswith("6") else f"SZ{symbol}"
+            exchange_symbol = self._financial_security_code(symbol).split(".")[1] + symbol
             dataframe = method(symbol=exchange_symbol)
             if dataframe is None or dataframe.empty:
                 return {
@@ -2536,7 +2538,7 @@ class AkshareAdapter(MarketDataAdapter):
         method = getattr(ak, "stock_individual_fund_flow", None)
         if not method:
             return self._fetch_cn_fund_flow_http(symbol)
-        market = "sh" if symbol.startswith("6") else ("bj" if symbol.startswith(("4", "8")) else "sz")
+        market = "sh" if symbol.startswith("6") else ("bj" if symbol.startswith(("4", "8", "92")) else "sz")
         try:
             dataframe = method(stock=symbol, market=market)
             rows = self._safe_dataframe_records(dataframe, limit=30)
@@ -3209,45 +3211,22 @@ class AkshareAdapter(MarketDataAdapter):
         return item
 
     def _safe_qa_records(self, symbol: str, *, limit: int = 100) -> list[dict[str, Any]]:
-        """Fetch and sort CNINFO investor-relations questions for one stock."""
-        cls = type(self)
-        method = getattr(ak, "stock_irm_cninfo", None)
-        if not method:
-            return []
-        # Use the common optional wrapper so callers/tests can disable this
-        # network panel without affecting the core F10 refresh.
-        rows = self._safe_optional_records(method, {"symbol": symbol}, limit=limit)
-        result: list[dict[str, Any]] = []
-        for raw in rows:
-            item = cls._normalize_qa_row(raw, symbol)
-            if item is None:
-                continue
-            # A few CNINFO responses omit the inline answer although an answer
-            # id is present. Resolve only those rows and retain the original
-            # question payload if the detail endpoint is unavailable.
-            if not item.get("answer") and item.get("answer_id"):
-                detail_method = getattr(ak, "stock_irm_ans_cninfo", None)
-                detail_rows = self._safe_optional_records(
-                    detail_method,
-                    {"symbol": item["question_id"]},
-                    limit=1,
-                )
-                if detail_rows:
-                    detail = cls._normalize_qa_row({**raw, **detail_rows[0]}, symbol)
-                    if detail:
-                        item.update({
-                            key: detail[key]
-                            for key in ("answer", "answerer", "answered_at", "回答内容")
-                            if detail.get(key) not in (None, "")
-                        })
-            result.append(item)
-        result.sort(
-            key=lambda row: str(
-                row.get("updated_at") or row.get("asked_at") or row.get("提问时间") or ""
-            ),
-            reverse=True,
-        )
-        return result[:limit]
+        return self._safe_qa_snapshot(symbol, limit=limit)[0]
+
+    def _safe_qa_snapshot(self, symbol: str, *, limit: int = 100) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+        """Bounded first-page preview; the durable queue collects full history."""
+        code, name = qa_source(symbol)
+        status: dict[str, Any] = {"source_code": code, "source_name": name}
+        try:
+            with OfficialQAClient() as client:
+                page = client.fetch_page(symbol)
+            rows = sorted(page.rows, key=lambda row: str(row.get("answered_at") or row.get("updated_at") or row.get("asked_at") or ""), reverse=True)
+            status.update(status="COMPLETE" if page.complete and rows else "EMPTY" if page.complete else "PARTIAL",
+                          message="" if page.complete and rows else "官方来源暂无问答记录" if page.complete else "已获取最新问答，完整历史由后台分页同步")
+            return rows[:limit], status
+        except Exception as exc:
+            status.update(status="RETRY", error=str(exc)[:1000], message="官方问答请求失败，保留本地数据，等待后台重试")
+            return [], status
 
     @staticmethod
     def _safe_sina_research_report_records(
@@ -4164,19 +4143,23 @@ class AkshareAdapter(MarketDataAdapter):
 
     def _fetch_cn_a_symbols_from_exchange_tables(self) -> list[SymbolRecord]:
         records_by_symbol: dict[str, SymbolRecord] = {}
-        for method_name in ("stock_info_sh_name_code", "stock_info_sz_name_code", "stock_info_bj_name_code"):
-            method = getattr(ak, method_name, None)
-            if not method:
-                continue
+        # The SSE method defaults to main-board A shares. STAR needs its own
+        # request; a non-empty main-board response never proves full coverage.
+        from app.connectors.listing_master import EXCHANGE_TABLES, fetch_exchange_table, with_exchange_proof
+        self.symbol_master_issues = []
+        for method_name, kwargs in [item for tasks in EXCHANGE_TABLES.values() for item in tasks]:
             try:
-                dataframe = method()
-            except Exception:
+                dataframe = fetch_exchange_table(method_name, kwargs)
+                if dataframe is None or (dataframe.empty and kwargs.get("symbol") != "CDR列表"):
+                    raise ValueError("交易所名单为空")
+            except Exception as exc:
+                self.symbol_master_issues.append({"method": method_name, "scope": kwargs, "error": str(exc)[:240]})
                 continue
             if dataframe is not None and not dataframe.empty:
                 dataframe = dataframe.copy()
                 dataframe["_source_method"] = method_name
                 for record in self._normalize_dataframe(dataframe, MARKET_CN_A):
-                    records_by_symbol[record.symbol] = record
+                    records_by_symbol[record.symbol] = with_exchange_proof(record)
         return list(records_by_symbol.values())
 
     def _fetch_cn_a_symbols_from_eastmoney(self) -> list[SymbolRecord]:
@@ -4298,6 +4281,10 @@ class AkshareAdapter(MarketDataAdapter):
         return records
 
     def _fetch_neeq_rows(self) -> list[dict[str, Any]]:
+        # A complete universe is only proven by a provider total and a page
+        # count reaching that total.  Start pessimistically so an empty/malformed
+        # response cannot be interpreted as a complete snapshot.
+        self.symbol_master_complete = False
         url = "https://push2.eastmoney.com/api/qt/clist/get"
         headers = {
             "User-Agent": "Mozilla/5.0",
@@ -4329,6 +4316,7 @@ class AkshareAdapter(MarketDataAdapter):
                 if page == 1:
                     total = self._safe_int(data.get("total"))
                 if not diff or (total and len(rows) >= total):
+                    self.symbol_master_complete = bool(total and len(rows) >= total)
                     break
                 page += 1
                 if page > 100:
@@ -4337,6 +4325,10 @@ class AkshareAdapter(MarketDataAdapter):
                 return rows
         except Exception:
             pass
+        # The code-table fallback is useful for recovery, but its prefix
+        # probing cannot prove that the returned universe is complete.
+        self.symbol_master_complete = False
+        self.symbol_master_issues.append({"method": "NEEQ_CODE_TABLE_FALLBACK", "error": "备用码表未提供完整总数证明"})
         return self._fetch_neeq_code_table_rows()
 
     def _fetch_neeq_code_table_rows(self) -> list[dict[str, Any]]:
@@ -5054,7 +5046,7 @@ class AkshareAdapter(MarketDataAdapter):
             return f"gssh{normalized_symbol.zfill(7)}"
         if normalized_symbol.startswith(("0", "3")):
             return f"gssz{normalized_symbol.zfill(7)}"
-        if normalized_symbol.startswith(("4", "8")):
+        if normalized_symbol.startswith(("4", "8", "92")):
             return f"gfbj{normalized_symbol}"
         return None
 
@@ -5063,7 +5055,7 @@ class AkshareAdapter(MarketDataAdapter):
         normalized_symbol = AkshareAdapter._normalize_symbol(symbol, "CN_A")
         if normalized_symbol.startswith("6"):
             return "sse", "sh"
-        if normalized_symbol.startswith(("4", "8")):
+        if normalized_symbol.startswith(("4", "8", "92")):
             return "bjse", "bj"
         return "szse", "sz"
 
@@ -5117,6 +5109,8 @@ class AkshareAdapter(MarketDataAdapter):
             return f"sh{symbol}"
         if symbol.startswith(("0", "3")):
             return f"sz{symbol}"
+        if symbol.startswith(("4", "8", "92")):
+            return f"bj{symbol}"
         return f"sz{symbol}"
 
     @staticmethod
@@ -5132,7 +5126,9 @@ class AkshareAdapter(MarketDataAdapter):
             return clean_symbol.lower()
         if clean_symbol.startswith("6"):
             return f"sh{clean_symbol}"
-        if clean_symbol.startswith(("0", "3", "4", "8")):
+        if clean_symbol.startswith(("4", "8", "92")):
+            return f"bj{clean_symbol}"
+        if clean_symbol.startswith(("0", "3")):
             return f"sz{clean_symbol}"
         return f"sz{clean_symbol}"
 
@@ -5206,15 +5202,13 @@ class AkshareAdapter(MarketDataAdapter):
 
     @staticmethod
     def _infer_exchange(symbol: str, market: str) -> str:
-        if market == "HK":
-            return "HKEX"
-        if symbol.startswith("6"):
-            return "SSE"
-        if symbol.startswith(("0", "3")):
-            return "SZSE"
-        if symbol.startswith(("4", "8")):
-            return "BSE"
-        return "CN_A"
+        from app.services.security_master import infer_exchange
+        return infer_exchange(market, symbol)
+
+    @staticmethod
+    def _financial_security_code(symbol: str) -> str:
+        exchange = AkshareAdapter._infer_exchange(symbol, "CN_A")
+        return f"{symbol}.{ {'SSE': 'SH', 'SZSE': 'SZ', 'BSE': 'BJ'}.get(exchange, 'SZ')}"
 
     @staticmethod
     def _is_empty(value: Any) -> bool:

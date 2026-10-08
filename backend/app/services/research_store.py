@@ -12,6 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.connectors.sina_research import fetch_sina_report_detail
+from app.connectors.hk_research import fetch_aastocks_report_detail
 from app.models.research_data import (
     StockBrokerResearchReport,
     StockEarningsConsensus,
@@ -109,7 +110,11 @@ def repair_legacy_earnings_metrics(
 
 
 def _text(value: Any) -> str:
-    return str(value or "").strip()
+    return "" if value is None else str(value).strip()
+
+
+def _value(row: dict[str, Any], *keys: str) -> Any:
+    return next((row[key] for key in keys if row.get(key) not in (None, "")), None)
 
 
 def _list(value: Any) -> list[Any]:
@@ -118,6 +123,12 @@ def _list(value: Any) -> list[Any]:
 
 def _source_code(row: dict[str, Any], fallback: str) -> str:
     name = _text(row.get("source_code") or row.get("source_name")).upper()
+    if "ETNET" in name or "经济通" in name:
+        return "ETNET_HK"
+    if "AASTOCKS" in name:
+        return "AASTOCKS_HK"
+    if "SSE_EINTERACTION" in name or "上证" in name:
+        return "SSE_EINTERACTION"
     if "SINA" in name or "新浪" in name:
         return "SINA_FINANCE"
     if "THS" in name or "同花顺" in name:
@@ -148,6 +159,12 @@ def _report_external_id(row: dict[str, Any]) -> str:
 
 def _forecast_values(row: dict[str, Any]) -> dict[str, dict[str, Any]]:
     result: dict[str, dict[str, Any]] = {"eps": {}, "net_profit": {}}
+    nested = row.get("forecast")
+    if isinstance(nested, dict):
+        for code in result:
+            if isinstance(nested.get(code), dict):
+                result[code].update({str(year): value for year, value in nested[code].items()
+                                     if re.fullmatch(r"20\d{2}", str(year)) and value not in (None, "")})
     for key, value in row.items():
         text = str(key)
         year_match = re.search(r"(20\d{2})", text)
@@ -371,18 +388,18 @@ def persist_research_sections(
                 forecast_year=year, metric_code=metric_code, metric_name=metric_name,
             )
             db.add(record)
-        count = row.get("prediction_count") or row.get("预测机构数")
+        count = _value(row, "prediction_count", "预测机构数")
         try:
             count_value = int(float(count)) if count not in (None, "") else None
         except (TypeError, ValueError):
             count_value = None
         _nonempty_update(record, {
             "metric_name": metric_name,
-            "unit": "元/股" if metric_code == "EPS" else "亿元" if metric_code in {"NET_PROFIT", "TOTAL_REVENUE"} else "%" if metric_code.endswith("_YOY") else None,
+            "unit": _text(row.get("unit")) or ("元/股" if metric_code == "EPS" else "亿元" if metric_code in {"NET_PROFIT", "TOTAL_REVENUE"} else "%" if metric_code.endswith("_YOY") else None),
             "prediction_count": count_value,
-            "minimum_value": _text(row.get("minimum") or row.get("最小值")) or None,
-            "mean_value": _text(row.get("mean") or row.get("均值")) or None,
-            "maximum_value": _text(row.get("maximum") or row.get("最大值")) or None,
+            "minimum_value": _text(_value(row, "minimum", "最小值")) or None,
+            "mean_value": _text(_value(row, "mean", "均值")) or None,
+            "maximum_value": _text(_value(row, "maximum", "最大值")) or None,
             "industry_average": _text(row.get("industry_average") or row.get("行业平均数")) or None,
             "source_url": _text(row.get("source_url") or row.get("detail_url")) or None,
             "source_updated_at": _text(row.get("source_updated_at")) or now.isoformat(),
@@ -538,6 +555,7 @@ def load_research_sections(db: Session, market: str, symbol: str) -> dict[str, A
             "maximum": row.maximum_value, "最大值": row.maximum_value,
             "industry_average": row.industry_average, "行业平均数": row.industry_average,
             "source_code": row.source_code, "source_url": row.source_url,
+            "unit": row.unit,
         } for row in consensus],
         "institution_forecast": [{
             **(row.raw_payload or {}), "institution": row.institution, "机构": row.institution,
@@ -578,7 +596,14 @@ def get_or_fetch_report_detail(
     if row.content_text:
         return _report_dict(row)
     try:
-        if row.source_code == "SINA_FINANCE":
+        if row.source_code == "AASTOCKS_HK":
+            detail = fetch_aastocks_report_detail(row.external_id, row.detail_url or "", symbol)
+            row.content_text = detail["content"]
+            row.content_hash = detail["content_hash"]
+            row.content_status = "READY"
+            row.fetch_error = None
+            row.raw_payload = {**(row.raw_payload or {}), **detail}
+        elif row.source_code == "SINA_FINANCE":
             detail = fetch_sina_report_detail(row.external_id, detail_url=row.detail_url)
             content = _text(detail.get("content"))
             _nonempty_update(row, {

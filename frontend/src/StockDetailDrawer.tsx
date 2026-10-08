@@ -216,7 +216,7 @@ function sourceUrls(section: JsonRecord): Array<{ url: string; label: string }> 
 }
 
 function SourceLinks({ section }: { section: JsonRecord }) {
-  const links = [...sourceUrls(section), ...sectionRows(section).flatMap((row) => sourceUrls(row))];
+  const links = [...new Map([...sourceUrls(section), ...sectionRows(section).flatMap((row) => sourceUrls(row))].map((link) => [link.url, link])).values()];
   if (!links.length) return null;
   return (
     <span className="f10-source-links">
@@ -352,7 +352,7 @@ function projectedRatingStatistics(section: JsonRecord, rows: JsonRecord[]): { b
   const providerProjection = asRecord(section.provider_rating_statistics);
   const providerHasCounts = ["buy", "add", "neutral", "reduce", "sell", "total"]
     .some((key) => providerProjection[key] !== undefined && providerProjection[key] !== null && providerProjection[key] !== "");
-  if (providerHasCounts && !serverBuckets.some((item) => /6个?月|六月|半年/.test(item.period))) {
+  if (providerHasCounts && providerProjection.reference_period !== "CURRENT_SNAPSHOT" && !serverBuckets.some((item) => /6个?月|六月|半年/.test(item.period))) {
     const providerCounts = {
       buy: toNumber(providerProjection.buy) ?? 0,
       add: toNumber(providerProjection.add) ?? 0,
@@ -673,6 +673,10 @@ function ResearchInstitutionForecastPanel({ section }: { section: JsonRecord }) 
   const [mode, setMode] = useState<"forecast" | "rating">(rows.length ? "forecast" : "rating");
   const ratingProjection = useMemo(() => projectedRatingStatistics(section, rows), [section, rows]);
   const periods = useMemo(() => institutionForecastPeriods(section, rows), [section, rows]);
+  const units = asRecord(section.forecast_units);
+  const providerSnapshot = asRecord(section.provider_rating_statistics);
+  const currentSnapshot = providerSnapshot.reference_period === "CURRENT_SNAPSHOT";
+  const hasTargetPrice = rows.some((row) => row.target_price !== undefined && row.target_price !== null);
   const displayMode = rows.length ? mode : "rating";
   return <section className="research-source-section research-forecast-panel">
     <div className="research-forecast-heading">
@@ -684,7 +688,7 @@ function ResearchInstitutionForecastPanel({ section }: { section: JsonRecord }) 
     </div>
     {displayMode === "forecast" ? rows.length ? <div className="research-forecast-table-wrap" role="tabpanel" aria-label="机构预测">
       <table className="research-forecast-table">
-        <thead><tr><th scope="col">报告日期</th><th scope="col">机构 / 分析师</th><th scope="col">评级</th>{periods.length ? periods.flatMap((period) => [<th scope="col" key={`${period}-eps`}>{period} EPS</th>, <th scope="col" key={`${period}-profit`}>{period} 净利润</th>]) : <th scope="col">研报数</th>}</tr></thead>
+        <thead><tr><th scope="col">报告日期</th><th scope="col">机构 / 分析师</th><th scope="col">评级</th>{hasTargetPrice ? <th scope="col">目标价（港元）</th> : null}{periods.length ? periods.flatMap((period) => [<th scope="col" key={`${period}-eps`}>{period} EPS{units.eps ? `（${String(units.eps)}）` : ""}</th>, <th scope="col" key={`${period}-profit`}>{period} 净利润{units.net_profit ? `（${String(units.net_profit)}）` : ""}</th>]) : <th scope="col">研报数</th>}</tr></thead>
         <tbody>{rows.slice(0, 100).map((row, index) => {
           const institution = String(pickValue(row, ["机构", "institution", "机构名称"]) || "未披露机构");
           const analysts = stringList(pickValue(row, ["analysts", "分析师", "研究员"])).join("、");
@@ -693,6 +697,7 @@ function ResearchInstitutionForecastPanel({ section }: { section: JsonRecord }) 
             <td>{formatDate(researchDateText(row))}</td>
             <td className="research-forecast-institution"><strong>{institution}</strong>{analysts ? <small>{analysts}</small> : null}</td>
             <td><span className={`research-rating ${ratingClass(rating)}`}>{rating}</span></td>
+            {hasTargetPrice ? <td>{valueText(row.target_price)}</td> : null}
             {periods.length ? periods.flatMap((period) => [<td key={`${period}-eps`}>{forecastCellText("每股收益", institutionForecastMetricValue(row, period, "eps") ?? institutionForecastValue(row, period))}</td>, <td key={`${period}-profit`}>{valueText(institutionForecastMetricValue(row, period, "net_profit"))}</td>]) : <td>{valueText(pickValue(row, ["评级数量", "研报数量", "report_count"]))}</td>}
           </tr>;
         })}</tbody>
@@ -701,6 +706,10 @@ function ResearchInstitutionForecastPanel({ section }: { section: JsonRecord }) 
       <div className="rating-stat-table-wrap" role="tabpanel" aria-label="评级统计">
         <table className="rating-stat-table"><thead><tr><th scope="col">时间段</th><th scope="col">买入</th><th scope="col">增持</th><th scope="col">中性</th><th scope="col">减持</th><th scope="col">卖出</th><th scope="col">总家数</th></tr></thead><tbody>{ratingProjection.buckets.map((row) => <tr key={row.period}><th scope="row">{row.period}</th><td className="rating-buy">{row.buy}</td><td>{row.add}</td><td>{row.neutral}</td><td>{row.reduce}</td><td>{row.sell}</td><td>{row.total}</td></tr>)}</tbody></table>
         {!ratingProjection.buckets.some((row) => row.total > 0) ? <p className="research-table-note">当前时间窗内暂无可统计的机构评级。</p> : null}
+        {currentSnapshot ? <>
+          <p className="research-table-note">经济通当前评级快照（采集日期：{formatDate(String(providerSnapshot.as_of || ""))}；来源未提供滚动时间窗，与上方本地研报统计分开显示）</p>
+          <table className="rating-stat-table" aria-label="经济通当前评级快照"><thead><tr><th>强烈买入</th><th>买入</th><th>持有</th><th>沽出</th><th>立即沽出</th><th>平均评级</th></tr></thead><tbody><tr>{["strong_buy", "buy", "hold", "sell", "strong_sell"].map((key) => <td key={key}>{valueText(asRecord(providerSnapshot.raw_counts)[key])}</td>)}<td>{valueText(providerSnapshot.average_rating)}</td></tr></tbody></table>
+        </> : null}
       </div>
     )}
     {displayMode === "forecast" && rows.length && section.message ? <p className="research-table-note">{String(section.message)}</p> : null}
@@ -781,12 +790,13 @@ function ResearchQaPanel({ section, onOpen }: { section: JsonRecord; onOpen: (se
       const question = String(pickValue(row, ["question", "提问", "问题", "提问内容"]) || "问题内容未披露");
       const answer = String(pickValue(row, ["answer", "回复", "回答", "回复内容"]) || "公司尚未回复");
       const answered = Boolean(pickValue(row, ["answer", "回复", "回答", "回复内容"]));
-      return <button type="button" className="research-qa-item" key={`${String(row.question_id || row.answer_id || index)}`} onClick={() => onOpen({ ...section, ...row, rows: [row], detail_title: "问董秘详情", _research_detail_kind: "qa" })}>
+      return <button type="button" className="research-qa-item" key={`${String(row.source_code || "")}-${String(row.question_id || row.answer_id || index)}`} onClick={() => onOpen({ ...section, ...row, rows: [row], detail_title: "问董秘详情", _research_detail_kind: "qa" })}>
         <span className="research-qa-question"><b>问</b><strong>{question}</strong></span>
         <span className="research-qa-answer"><b>答</b><span>{answer}</span></span>
         <small><CalendarDays size={12} aria-hidden="true" /> {formatDate(researchDateText(row))}<em className={answered ? "answered" : "pending"}>{answered ? "已回复" : "待回复"}</em></small>
       </button>;
     })}</div> : <p className="research-true-empty">{String(section.message || "当前数据源未返回该公司的互动问答")}</p>}
+    {rows.length > 0 && section.message ? <p className="research-true-empty" role="status">{String(section.message)}</p> : null}
     <ResearchSectionSource section={section} />
   </section>;
 }
@@ -937,7 +947,8 @@ function ResearchDetailDialog({
         {kind === "report" ? <article className="research-report-detail">
           <div className="research-report-detail-meta"><span>{formatDate(researchDateText(displayRow))}</span><ReportTagList row={displayRow} /></div>
           {reportSummary(displayRow) ? <blockquote>{reportSummary(displayRow)}</blockquote> : null}
-          {reportLoading ? <p className="research-report-loading">正在从本地缓存或远程来源加载研报正文…</p> : null}
+          {displayRow.content_notice ? <p className="research-table-note">{String(displayRow.content_notice)}</p> : null}
+          {reportLoading ? <p className="research-report-loading">正在从本地缓存或远程来源加载研报内容…</p> : null}
           {!reportLoading && pickValue(displayRow, ["content", "report_content", "report_markdown", "正文", "研报正文", "body"]) ? <div className="research-markdown">{renderMarkdown(String(pickValue(displayRow, ["content", "report_content", "report_markdown", "正文", "研报正文", "body"])))}</div> : null}
           {!reportLoading && reportError ? <p className="research-true-empty research-report-error">正文自动获取失败：{reportError}</p> : null}
           {!reportLoading && !reportError && !pickValue(displayRow, ["content", "report_content", "report_markdown", "正文", "研报正文", "body"]) ? <p className="research-true-empty">数据源暂未提供可展示的研报正文。</p> : null}
@@ -2854,6 +2865,9 @@ export function StockDetailDrawer({
   const [researchRunning, setResearchRunning] = useState(false);
   const [researchStage, setResearchStage] = useState("");
   const [researchDetail, setResearchDetail] = useState<JsonRecord | null>(null);
+  const [qaLiveSection, setQaLiveSection] = useState<JsonRecord | null>(null);
+  const [hkResearchSync, setHkResearchSync] = useState<JsonRecord | null>(null);
+  const [hkSyncRequest, setHkSyncRequest] = useState(0);
   const [classificationDetail, setClassificationDetail] = useState<{ group: string; item: SectorGroupValue } | null>(null);
   const [agentSnapshots, setAgentSnapshots] = useState<Array<ResearchFundamentalAgent | ResearchTechnicalAgent>>([]);
 
@@ -2864,6 +2878,60 @@ export function StockDetailDrawer({
   };
 
   const pageSize = 8;
+
+  useEffect(() => {
+    if (tab !== "研究" || stock.market !== "CN_A") return;
+    const controller = new AbortController();
+    let timer: number | undefined;
+    let lastSignature = "";
+    async function pollQa() {
+      try {
+        const status = await api.getInvestorQaSyncStatus(stock.market, stock.symbol, controller.signal);
+        const signature = JSON.stringify([status.stored_count, status.status, status.error]);
+        if (signature !== lastSignature) {
+          const section = await api.getInvestorQa(stock.market, stock.symbol, controller.signal);
+          if (!controller.signal.aborted) setQaLiveSection(section);
+          lastSignature = signature;
+        }
+        if (!refreshing && (status.status === "COMPLETE" || status.status === "EMPTY" || status.status === "DISABLED")) return;
+      } catch {
+        // A transient UI request failure must not cancel the durable sync.
+      }
+      if (!controller.signal.aborted) timer = window.setTimeout(pollQa, 5000);
+    }
+    void pollQa();
+    return () => { controller.abort(); if (timer !== undefined) window.clearTimeout(timer); };
+  }, [tab, stock.market, stock.symbol, noticeCategory, refreshing]);
+
+  useEffect(() => {
+    if (tab !== "研究" || stock.market !== "HK") return;
+    const controller = new AbortController();
+    let timer: number | undefined;
+    let lastFetched = "";
+    async function pollResearch(first = false) {
+      try {
+        let status = await api.getHkResearchSyncStatus(stock.symbol, controller.signal);
+        if (first && status.refresh_needed && status.status !== "DISABLED") {
+          status = await api.syncHkResearch(stock.symbol, false, controller.signal);
+        }
+        if (controller.signal.aborted) return;
+        setHkResearchSync(status);
+        const fetched = String(status.fetched_at || "");
+        if (fetched && fetched !== lastFetched) {
+          const local = await api.getStockF10(stock.market, stock.symbol, { localOnly: true, signal: controller.signal });
+          if (!controller.signal.aborted) setDetail((previous) => previous ? { ...previous, research_sections: local.research_sections } : local);
+          lastFetched = fetched;
+        }
+        if (status.status !== "RUNNING") return;
+      } catch (reason) {
+        if (controller.signal.aborted) return;
+        setHkResearchSync({ status: "FAILED", error: reason instanceof Error ? reason.message : "港股研究状态读取失败，可重试" });
+      }
+      if (!controller.signal.aborted) timer = window.setTimeout(() => void pollResearch(), 3000);
+    }
+    void pollResearch(true);
+    return () => { controller.abort(); if (timer !== undefined) window.clearTimeout(timer); };
+  }, [tab, stock.market, stock.symbol, refreshing, hkSyncRequest]);
 
   useEffect(() => {
     if (!remoteError) return;
@@ -2882,6 +2950,8 @@ export function StockDetailDrawer({
     setRefreshProgress(0);
     setRefreshStage("");
     setDetail(null);
+    setQaLiveSection(null);
+    setHkResearchSync(null);
     setError("");
     setRemoteError("");
     setNewsRows(null);
@@ -3185,7 +3255,7 @@ export function StockDetailDrawer({
     };
   };
   const industryConceptSection = researchSection("industry_concepts", "行业概念", "当前数据源未返回行业与概念标签");
-  const qaSection = researchSection("qa", "问董秘", "当前未接入问董秘公开接口");
+  const qaSection = qaLiveSection || researchSection("qa", "问董秘", "当前未接入问董秘公开接口");
   const earningsForecastSection = researchSection("earnings_forecast", "盈利预测", "当前数据源未返回可核验的盈利预测");
   const institutionForecastSection = researchSection("institution_forecast", "机构预测（评级统计）", "当前数据源未返回机构预测");
   const latestReportsSection = researchSection("latest_reports", "最新研报", "当前数据源未返回最新研报");
@@ -3358,6 +3428,14 @@ export function StockDetailDrawer({
               {tab === "F10" && <F10Panel detail={detail} activeTab={f10Tab} setActiveTab={setF10Tab} />}
               {tab === "研究" && (
                   <>
+                    {stock.market === "HK" ? <section className="research-source-section" aria-label="港股研究同步状态">
+                      <div className="f10-section-head"><h3>港股公开研究数据</h3><button type="button" disabled={hkResearchSync?.status === "RUNNING"} onClick={() => {
+                        void api.syncHkResearch(stock.symbol, true).then((status) => { setHkResearchSync(status); setHkSyncRequest((value) => value + 1); }).catch((reason) => setHkResearchSync({ status: "FAILED", error: reason instanceof Error ? reason.message : "研究同步提交失败" }));
+                      }}>{hkResearchSync?.status === "RUNNING" ? "研究数据同步中…" : "更新研究数据"}</button></div>
+                      <p className="research-table-note">{hkResearchSync?.status === "RUNNING" ? "已提交独立后台采集，完成后自动显示；当前优先展示本地数据。" : String(hkResearchSync?.message || "经济通盈利与机构预测、AASTOCKS 大行报告摘要；公开来源覆盖有限。")}</p>
+                      {asArray(hkResearchSync?.sources).map((source) => <p className="research-table-note" key={String(source.source_code)}>{source.source_code === "ETNET_HK" ? "经济通" : source.source_code === "AASTOCKS_HK" ? "AASTOCKS" : String(source.source_code)}：{({ AVAILABLE: "有数据", MISSING: "暂无数据", FAILED: "采集失败", DISABLED: "已停用" } as Record<string, string>)[String(source.status)] || "待采集"}{source.fetched_at ? ` · 采集时间 ${String(source.fetched_at).slice(0, 19).replace("T", " ")} UTC` : ""}{source.error ? ` · ${String(source.error)}` : ""}</p>)}
+                      {hkResearchSync?.error ? <p className="research-true-empty">{String(hkResearchSync.error)}</p> : null}
+                    </section> : null}
                     <section className="research-section-grid">
                       <ResearchTopicPanel section={industryConceptSection} fallbackRows={profileConcepts} onOpen={(item) => setResearchDetail(item)} />
                       <ResearchQaPanel section={qaSection} onOpen={(item) => setResearchDetail(item)} />

@@ -58,6 +58,14 @@ export type StockSymbol = {
   ext_json: Record<string, unknown>;
   raw_payload: Record<string, unknown>;
   last_synced_at: string;
+  listing_board?: string;
+  listing_board_name?: string;
+  market_family_name?: string;
+  exchange_name?: string;
+  security_type?: string;
+  security_type_name?: string;
+  classification_status?: string;
+  classification_evidence?: Record<string, unknown>;
   /** Per-stock pipeline coverage, populated by the master-data endpoint. */
   status_summary?: StockPipelineStatusSummary;
   data_collection_status?: string | null;
@@ -138,6 +146,13 @@ export type SymbolPage = {
   total: number;
   page: number;
   page_size: number;
+};
+
+export type ListingBoard = { code: string; market: string; name: string; definition: string; exchanges: string[] };
+export type SourceCoverage = {
+  boards: (ListingBoard & { record_count: number; capabilities: { category: string; label: string; status: string; status_name: string; note: string; sources: { source_code: string; source_name: string; interface_code: string; enabled: boolean; source_url?: string; limitation: string }[] }[] })[];
+  unclassified_count: number;
+  notes: string[];
 };
 
 export type SyncLog = {
@@ -987,6 +1002,8 @@ export const api = {
     request<LakeExportResult>("/lakehouse/datasets/export", { method: "POST", body: JSON.stringify(payload) }),
   archiveLakeDocuments: (limit = 100) => request<{ document_count: number; created_chunk_count: number; reused_chunk_count: number }>("/lakehouse/documents/archive", { method: "POST", body: JSON.stringify({ limit }) }),
   listSymbols: (params: URLSearchParams) => request<SymbolPage>(`/stocks?${params.toString()}`),
+  masterTaxonomy: () => request<{ boards: ListingBoard[]; security_types: Record<string, string>; exchanges: Record<string, string> }>("/stocks/master-taxonomy"),
+  sourceCoverage: () => request<SourceCoverage>("/stocks/source-coverage"),
   getStockPipelineStatusDetail: (market: string, symbol: string, sampleLimit = 5, signal?: AbortSignal) =>
     request<StockPipelineStatusDetail>(
       `/stocks/${encodeURIComponent(market)}/${encodeURIComponent(symbol)}/pipeline-status-detail?sample_limit=${sampleLimit}`,
@@ -1040,6 +1057,18 @@ export const api = {
   ) => request<ExternalResearchReportDetail>(
     `/stocks/${encodeURIComponent(market)}/${encodeURIComponent(symbol)}/research/reports/${encodeURIComponent(sourceCode)}/${encodeURIComponent(externalId)}`,
     { signal },
+  ),
+  getInvestorQaSyncStatus: (market: string, symbol: string, signal?: AbortSignal) => request<Record<string, unknown>>(
+    `/stocks/${encodeURIComponent(market)}/${encodeURIComponent(symbol)}/research/qa/sync`, { signal },
+  ),
+  getHkResearchSyncStatus: (symbol: string, signal?: AbortSignal) => request<Record<string, unknown>>(
+    `/stocks/HK/${encodeURIComponent(symbol)}/research/sync`, { signal },
+  ),
+  syncHkResearch: (symbol: string, force = false, signal?: AbortSignal) => request<Record<string, unknown>>(
+    `/stocks/HK/${encodeURIComponent(symbol)}/research/sync?force=${force}`, { method: "POST", signal },
+  ),
+  getInvestorQa: (market: string, symbol: string, signal?: AbortSignal) => request<Record<string, unknown>>(
+    `/stocks/${encodeURIComponent(market)}/${encodeURIComponent(symbol)}/research/qa`, { signal },
   ),
   listStockFetchLogs: (market: string, symbol: string, limit = 20, signal?: AbortSignal) => request<StockFetchLog[]>(
     `/stocks/fetch-logs/list?market=${encodeURIComponent(market)}&symbol=${encodeURIComponent(symbol)}&limit=${limit}`,
