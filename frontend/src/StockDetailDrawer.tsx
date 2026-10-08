@@ -781,12 +781,13 @@ function ResearchQaPanel({ section, onOpen }: { section: JsonRecord; onOpen: (se
       const question = String(pickValue(row, ["question", "提问", "问题", "提问内容"]) || "问题内容未披露");
       const answer = String(pickValue(row, ["answer", "回复", "回答", "回复内容"]) || "公司尚未回复");
       const answered = Boolean(pickValue(row, ["answer", "回复", "回答", "回复内容"]));
-      return <button type="button" className="research-qa-item" key={`${String(row.question_id || row.answer_id || index)}`} onClick={() => onOpen({ ...section, ...row, rows: [row], detail_title: "问董秘详情", _research_detail_kind: "qa" })}>
+      return <button type="button" className="research-qa-item" key={`${String(row.source_code || "")}-${String(row.question_id || row.answer_id || index)}`} onClick={() => onOpen({ ...section, ...row, rows: [row], detail_title: "问董秘详情", _research_detail_kind: "qa" })}>
         <span className="research-qa-question"><b>问</b><strong>{question}</strong></span>
         <span className="research-qa-answer"><b>答</b><span>{answer}</span></span>
         <small><CalendarDays size={12} aria-hidden="true" /> {formatDate(researchDateText(row))}<em className={answered ? "answered" : "pending"}>{answered ? "已回复" : "待回复"}</em></small>
       </button>;
     })}</div> : <p className="research-true-empty">{String(section.message || "当前数据源未返回该公司的互动问答")}</p>}
+    {rows.length > 0 && section.message ? <p className="research-true-empty" role="status">{String(section.message)}</p> : null}
     <ResearchSectionSource section={section} />
   </section>;
 }
@@ -2854,6 +2855,7 @@ export function StockDetailDrawer({
   const [researchRunning, setResearchRunning] = useState(false);
   const [researchStage, setResearchStage] = useState("");
   const [researchDetail, setResearchDetail] = useState<JsonRecord | null>(null);
+  const [qaLiveSection, setQaLiveSection] = useState<JsonRecord | null>(null);
   const [classificationDetail, setClassificationDetail] = useState<{ group: string; item: SectorGroupValue } | null>(null);
   const [agentSnapshots, setAgentSnapshots] = useState<Array<ResearchFundamentalAgent | ResearchTechnicalAgent>>([]);
 
@@ -2864,6 +2866,30 @@ export function StockDetailDrawer({
   };
 
   const pageSize = 8;
+
+  useEffect(() => {
+    if (tab !== "研究" || stock.market !== "CN_A") return;
+    const controller = new AbortController();
+    let timer: number | undefined;
+    let lastSignature = "";
+    async function pollQa() {
+      try {
+        const status = await api.getInvestorQaSyncStatus(stock.market, stock.symbol, controller.signal);
+        const signature = JSON.stringify([status.stored_count, status.status, status.error]);
+        if (signature !== lastSignature) {
+          const section = await api.getInvestorQa(stock.market, stock.symbol, controller.signal);
+          if (!controller.signal.aborted) setQaLiveSection(section);
+          lastSignature = signature;
+        }
+        if (!refreshing && (status.status === "COMPLETE" || status.status === "EMPTY" || status.status === "DISABLED")) return;
+      } catch {
+        // A transient UI request failure must not cancel the durable sync.
+      }
+      if (!controller.signal.aborted) timer = window.setTimeout(pollQa, 5000);
+    }
+    void pollQa();
+    return () => { controller.abort(); if (timer !== undefined) window.clearTimeout(timer); };
+  }, [tab, stock.market, stock.symbol, noticeCategory, refreshing]);
 
   useEffect(() => {
     if (!remoteError) return;
@@ -2882,6 +2908,7 @@ export function StockDetailDrawer({
     setRefreshProgress(0);
     setRefreshStage("");
     setDetail(null);
+    setQaLiveSection(null);
     setError("");
     setRemoteError("");
     setNewsRows(null);
@@ -3185,7 +3212,7 @@ export function StockDetailDrawer({
     };
   };
   const industryConceptSection = researchSection("industry_concepts", "行业概念", "当前数据源未返回行业与概念标签");
-  const qaSection = researchSection("qa", "问董秘", "当前未接入问董秘公开接口");
+  const qaSection = qaLiveSection || researchSection("qa", "问董秘", "当前未接入问董秘公开接口");
   const earningsForecastSection = researchSection("earnings_forecast", "盈利预测", "当前数据源未返回可核验的盈利预测");
   const institutionForecastSection = researchSection("institution_forecast", "机构预测（评级统计）", "当前数据源未返回机构预测");
   const latestReportsSection = researchSection("latest_reports", "最新研报", "当前数据源未返回最新研报");

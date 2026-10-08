@@ -4,12 +4,17 @@ from app.connectors.base import MarketDataAdapter
 from app.connectors.hkex_sdw_adapter import HkexSdwAdapter
 from app.connectors.official_reference_adapter import OfficialReferenceAdapter
 from app.connectors.pytdx_adapter import PytdxAdapter
+from app.connectors.listing_master import SseMasterAdapter, SzseMasterAdapter, BseMasterAdapter, HkexSecuritiesAdapter
 from app.connectors.company_registry_adapter import CompanyPublicAdapter, CompanyDisclosureAdapter, CompanyMarketCapAdapter
 
 _ADAPTERS: dict[str, type[MarketDataAdapter]] = {
     "AKSHARE": AkshareAdapter,
     "AKSHARE_HK_SINA": AkshareHkSinaAdapter,
     "HKEX_SDW": HkexSdwAdapter,
+    "SSE_MASTER": SseMasterAdapter,
+    "SZSE_MASTER": SzseMasterAdapter,
+    "BSE_MASTER": BseMasterAdapter,
+    "HKEX_SECURITIES": HkexSecuritiesAdapter,
     "OFFICIAL_REFERENCE": OfficialReferenceAdapter,
     "PYTDX": PytdxAdapter,
     "COMPANY_PUBLIC": CompanyPublicAdapter,

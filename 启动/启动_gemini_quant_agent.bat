@@ -53,6 +53,9 @@ echo Starting batch data governance worker ...
 start "Gemini Quant Agent - Batch Worker" powershell.exe -NoLogo -NoExit -ExecutionPolicy Bypass -Command "Set-Location -LiteralPath '%BACKEND%'; python -m app.jobs.worker --task-type stock_batch_governance --lease-seconds 7200 --reload"
 
 echo Starting frontend on http://127.0.0.1:5173 ...
+echo Starting official investor Q and A sync worker ...
+start "Gemini Quant Agent - QA Worker" /min powershell.exe -NoLogo -NoExit -ExecutionPolicy Bypass -Command "Set-Location -LiteralPath '%BACKEND%'; python -m app.jobs.worker --task-type investor_qa_sync --lease-seconds 600 --reload"
+
 start "Gemini Quant Agent - Frontend" powershell.exe -NoLogo -NoExit -ExecutionPolicy Bypass -Command "Set-Location -LiteralPath '%FRONTEND%'; npm run dev -- --host 127.0.0.1 --port 5173"
 
 echo.

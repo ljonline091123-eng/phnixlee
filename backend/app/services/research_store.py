@@ -118,6 +118,8 @@ def _list(value: Any) -> list[Any]:
 
 def _source_code(row: dict[str, Any], fallback: str) -> str:
     name = _text(row.get("source_code") or row.get("source_name")).upper()
+    if "SSE_EINTERACTION" in name or "上证" in name:
+        return "SSE_EINTERACTION"
     if "SINA" in name or "新浪" in name:
         return "SINA_FINANCE"
     if "THS" in name or "同花顺" in name:
