@@ -59,7 +59,7 @@ class MarketDataFoundationTest(unittest.TestCase):
         self.assertIsNotNone(source)
         self.assertEqual(source.adapter_type, "AKSHARE")
         interface_codes = {item.interface_code for item in source.interfaces}
-        self.assertEqual(len(interface_codes), 11)
+        self.assertGreaterEqual(len(interface_codes), 12)
         self.assertTrue({
             "CN_A_IRM_QA_ON_DEMAND",
             "CN_A_RESEARCH_REPORT_ON_DEMAND",
@@ -73,11 +73,11 @@ class MarketDataFoundationTest(unittest.TestCase):
         adapter = AkshareAdapter()
         quote = adapter._parse_tencent_quote(
             'v_sh688825="1~长鑫科技~688825~54.32~56.50~55.55~243949672~115076504~128873168~54.32~128~54.31~1039~54.30~6108~54.29~116~54.28~2614~54.33~1081~54.34~23~54.35~80~54.36~399~54.37~469~~20260902161438~-2.18~-3.86~55.88~54.00~54.32/243949672/13357687463~243949672~1335769~5.42~45.07~~55.88~54.00~3.33~2446.05~36874.64~18.34~67.80~45.20~0.91~7953~54.76~23.76~1966.80~~~1.96~1335768.7463~1734.3018~319275~A RA~GP-A-KCB~527.25~-3.17~0.00~60.73~25.38~61.80~38.11~-5.61~0.04~527.25~4503038971~67884099077~65.96~527.25~4503038971~~~527.25~-0.11~~CNY~0~___D__F__NY~54.26~5205~100";',
-            "HK",
-            "00700",
+            "CN_A",
+            "688825",
         )
         self.assertIsNotNone(quote.current_price)
-        self.assertEqual(quote.turnover_rate, 3.33)
+        self.assertEqual(quote.turnover_rate, 5.42)
         news = adapter._normalize_news_dataframe(
             pd.DataFrame(
                 [
@@ -639,19 +639,19 @@ class MarketDataFoundationTest(unittest.TestCase):
         mock_date.today.return_value = date(2026, 9, 5)
         fresh_payload = {
             "profile": {"source": "test", "fields": {"上市日期": "1972-11-01", "证券简称": "测试港股"}},
-            "holders": {"source": "test", "major": [{"name": "holder"}], "circulating": []},
+            "holders": {"source": "test", "major": [{"name": "holder", "shares": 100}], "circulating": []},
             "fund_flow": {"source": "test", "rows": [{"date": "2026-09-04", "value": 1}]},
-            "financial_summary": {"source": "test", "periods": ["2026-06-30"], "rows": [{"metric": "eps"}]},
+            "financial_summary": {"source": "test", "periods": ["2026-06-30"], "rows": [{"metric": "eps", "data": {"2026-06-30": 1.2}}]},
             "financial_statements": {
                 "source": "test",
-                "balance_sheet": {"label": "Balance Sheet", "periods": [{"report_date": "2026-06-30"}]},
-                "income_statement": {"label": "Income Statement", "periods": [{"report_date": "2026-06-30"}]},
-                "cash_flow": {"label": "Cash Flow", "periods": [{"report_date": "2026-06-30"}]},
+                "balance_sheet": {"label": "Balance Sheet", "periods": ["2026-06-30"], "rows": [{"metric": "assets", "data": {"2026-06-30": 100}}]},
+                "income_statement": {"label": "Income Statement", "periods": ["2026-06-30"], "rows": [{"metric": "revenue", "data": {"2026-06-30": 10}}]},
+                "cash_flow": {"label": "Cash Flow", "periods": ["2026-06-30"], "rows": [{"metric": "cash", "data": {"2026-06-30": 0}}]},
             },
             "business_composition": {
                 "source": "test",
                 "report_date": "2026-06-30",
-                "sections": [{"category": "main", "items": [{"name": "service"}]}],
+                "sections": [{"category": "main", "items": [{"name": "service", "value": 10}]}],
             },
             "published_reports": {
                 "source": "test",

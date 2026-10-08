@@ -20,7 +20,7 @@ from app.models.ai_hub import KnowledgeDocument, ResearchReportRecord
 from app.models.context_event import StockContextEvent
 from app.models.market_data import (
     DataSource, StockF10Cache, StockFinancialReport, StockKline, StockNews,
-    StockNotice, StockRealtimeQuote,
+    StockNotice, StockRealtimeQuote, StockSymbol,
 )
 from app.services.graph_identity import canonical_company_id, canonical_security_id
 
@@ -294,6 +294,7 @@ def build_dynamic_projection(db: Session, market: str, symbol: str, *, company_i
     result = _Projection(db, market, symbol, include_evidence, company_id, graph_id)
     coverage: dict[str, Any] = {}
     warnings: list[str] = []
+    security = db.scalar(select(StockSymbol).where(StockSymbol.market == market, StockSymbol.symbol == symbol))
 
     def recent(model, order, category, count=limit):
         where = (model.market == market, model.symbol == symbol)
@@ -368,6 +369,12 @@ def build_dynamic_projection(db: Session, market: str, symbol: str, *, company_i
         (ResearchReportRecord, ResearchReportRecord.created_at, "research", "RESEARCH_REPORT", "HAS_RESEARCH_REPORT", "研究报告"),
     ):
         for row in recent(model, order, category):
+            if isinstance(row, StockNews):
+                from app.services.news_identity import check_news_identity
+                check = check_news_identity(market, symbol, getattr(security, "name", ""), row.title, row.content,
+                                            getattr(security, "ext_json", {}))
+                if check["status"] != "MENTION_MATCHED":
+                    continue
             content = row.content if isinstance(row, StockNews) else row.content_json if isinstance(row, StockNotice) else row.report_markdown
             evidence_id = result.document(row, row.title, content or "", kind)
             if include_evidence:

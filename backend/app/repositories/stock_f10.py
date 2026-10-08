@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, or_
 from sqlalchemy.orm import Session
 
 from app.models.market_data import (
@@ -17,6 +17,7 @@ from app.models.market_data import (
     StockSymbol,
 )
 from app.services.notice_read_model import deduplicate_notice_rows
+from app.services.news_identity import partition_news
 
 
 @dataclass(slots=True)
@@ -31,6 +32,7 @@ class StockF10Snapshot:
     quote: StockRealtimeQuote | None
     news: list[StockNews]
     news_total: int
+    news_candidate_total: int = 0
 
 
 class StockF10Repository:
@@ -73,6 +75,10 @@ class StockF10Repository:
                 .where(
                     StockFinancialReport.market == market,
                     StockFinancialReport.symbol == symbol,
+                    # Historical quote snapshots remain in storage for
+                    # audit, but must never appear as filed financial data.
+                    or_(StockFinancialReport.data_json["source"].as_string().is_(None),
+                        StockFinancialReport.data_json["source"].as_string() != "Eastmoney push2 quote indicators"),
                 )
                 .order_by(StockFinancialReport.report_period.desc())
                 .limit(financial_limit)
@@ -102,23 +108,16 @@ class StockF10Repository:
             )
             .order_by(StockRealtimeQuote.fetched_at.desc())
         )
-        news = list(
+        all_news = list(
             self.db.scalars(
                 select(StockNews)
                 .where(StockNews.market == market, StockNews.symbol == symbol)
                 .order_by(StockNews.news_time.desc(), StockNews.id.desc())
-                .offset((news_page - 1) * news_limit)
-                .limit(news_limit)
             ).all()
         )
-        news_total = int(
-            self.db.scalar(
-                select(func.count())
-                .select_from(StockNews)
-                .where(StockNews.market == market, StockNews.symbol == symbol)
-            )
-            or 0
-        )
+        matched_news, candidate_news = partition_news(all_news, stock)
+        news_total = len(matched_news)
+        news = matched_news[(news_page - 1) * news_limit : news_page * news_limit]
         return StockF10Snapshot(
             stock=stock,
             klines=klines,
@@ -130,4 +129,5 @@ class StockF10Repository:
             quote=quote,
             news=news,
             news_total=news_total,
+            news_candidate_total=len(candidate_news),
         )
