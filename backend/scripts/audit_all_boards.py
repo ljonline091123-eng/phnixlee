@@ -176,7 +176,7 @@ def worker(sample, stages):
     end = date.today().strftime("%Y%m%d")
     start = (date.today()-timedelta(days=400)).strftime("%Y%m%d")
     for stage in stages:
-        clock[0] = time.monotonic() + (130 if stage == "extended" else 90 if stage == "research" else 42)
+        clock[0] = time.monotonic() + (130 if stage == "extended" else 90 if stage in {"research", "news"} else 42)
         started, trace_start = time.monotonic(), len(trace)
         outcome = {"at": datetime.now(timezone.utc).isoformat()}
         capability = {"quote": "QUOTE", "kline": "KLINE", "financials": "FINANCIAL", "notices": "NOTICE", "news": "NEWS", "extended": "F10", "research": "F10"}[stage]
@@ -289,6 +289,7 @@ def main():
     parser.add_argument("--limit-per-board", type=int, default=20)
     parser.add_argument("--offset", type=int, default=0)
     parser.add_argument("--boards", default="")
+    parser.add_argument("--symbols", default="", help="仅复验指定代码，逗号分隔")
     parser.add_argument("--stages", default=",".join(STAGES))
     parser.add_argument("--retry", action="store_true")
     parser.add_argument("--force", action="store_true")
@@ -305,6 +306,8 @@ def main():
         if args.boards and board not in args.boards.split(","):
             continue
         selected.extend([s for s in samples if s["board"] == board][args.offset:args.limit_per_board])
+    if args.symbols:
+        selected = [s for s in selected if s["symbol"] in args.symbols.split(",")]
 
     def run(sample):
         path = sample_path(sample)

@@ -83,8 +83,13 @@ def main():
                 api = os.environ.get("QUANT_AUDIT_API_URL")
                 if api:
                     path = route.request.url.split("/api/v1/", 1)[1]
-                    response = route.fetch(url=api.rstrip("/") + "/api/v1/" + path)
-                    route.fulfill(response=response)
+                    try:
+                        response = route.fetch(url=api.rstrip("/") + "/api/v1/" + path,
+                                               timeout=75000, max_retries=2)
+                        route.fulfill(response=response)
+                    except Exception as exc:
+                        route.fulfill(status=503, content_type="application/json", body=json.dumps({
+                            "detail": "只读验收接口请求失败，需复验：" + str(exc)[:300]}, ensure_ascii=False))
                 else:
                     route.continue_()
         page.route("**/api/v1/**", read_only)
@@ -141,7 +146,10 @@ def main():
                 seen_boards.add(sample["board"])
             except Exception as exc:
                 item["issues"].append({"kind": "BROWSER_FAILURE", "error": str(exc)[:1200]})
-                page.screenshot(path=str(OUT / "screenshots" / f"FAILED-{sample['board']}-{sample['symbol']}.png"))
+                try:
+                    page.screenshot(path=str(OUT / "screenshots" / f"FAILED-{sample['board']}-{sample['symbol']}.png"), timeout=15000)
+                except Exception as screenshot_exc:
+                    item["screenshot_error"] = str(screenshot_exc)[:300]
             finally:
                 item["page_errors"] = errors[first_error:]
                 item["status"] = "RENDER_PASS" if not item["issues"] and not item["page_errors"] else "FAILED"
