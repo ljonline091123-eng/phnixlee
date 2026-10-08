@@ -512,6 +512,8 @@ def build_knowledge_graph(db: Session, graph: KnowledgeGraph, max_documents: int
             for row in rows
         )
     if "stock_news" in allowed_tables:
+        from app.services.news_identity import check_news_identity
+        news_stocks = {(s.market, s.symbol): s for s in db.scalars(select(StockSymbol)).all()}
         query = scoped(select(StockNews), StockNews)
         rows = list(db.scalars(query.order_by(StockNews.news_time.desc()).limit(max_documents)).all())
         documents.extend(
@@ -524,6 +526,9 @@ def build_knowledge_graph(db: Session, graph: KnowledgeGraph, max_documents: int
                 title=row.title,
                 content=row.content or (json.dumps(row.content_json, ensure_ascii=False, default=str) if row.content_json else row.title),
                 metadata_json={"news_time": row.news_time, "source_name": row.source_name, "url": row.url,
+                               "identity_check": check_news_identity(row.market, row.symbol,
+                                   getattr(news_stocks.get((row.market, row.symbol)), "name", ""), row.title, row.content,
+                                   getattr(news_stocks.get((row.market, row.symbol)), "ext_json", {})),
                                "content_scope": "SOURCE_CONTENT_OR_PAYLOAD" if row.content else "SOURCE_PAYLOAD_OR_TITLE"},
             )
             for row in rows
@@ -918,7 +923,8 @@ def build_knowledge_graph(db: Session, graph: KnowledgeGraph, max_documents: int
                 graph_id=graph.id,
                 subject_entity_id=entity.id,
                 predicate={
-                    "stock_news": "HAS_NEWS",
+                    "stock_news": ("HAS_NEWS" if (document.metadata_json or {}).get("identity_check", {}).get("status") == "MENTION_MATCHED"
+                                   else "HAS_NEWS_CANDIDATE"),
                     "stock_notice": "HAS_NOTICE",
                     "stock_financial_report": "HAS_FINANCIAL_REPORT",
                     "stock_kline": "HAS_PRICE_AND_VOLUME_SERIES",
@@ -1041,6 +1047,8 @@ def build_knowledge_graph(db: Session, graph: KnowledgeGraph, max_documents: int
                          "CONTRACT": "HAS_CONTRACT_EVENT"}.get(event_type, "HAS_EXTERNAL_EVENT")
             semantic.append((predicate, ("EXTERNAL_EVENT", f"{document.symbol}:{document.id}:{event_type}")))
         elif document.source_table in {"stock_news", "stock_notice"}:
+            if document.source_table == "stock_news" and metadata.get("identity_check", {}).get("status") != "MENTION_MATCHED":
+                continue
             text_blob = f"{document.title}\n{document.content}"
             mentions = []
             if re.search(r"政策|监管|法规|国务院|财政|货币", text_blob, re.IGNORECASE):

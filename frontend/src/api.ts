@@ -58,6 +58,14 @@ export type StockSymbol = {
   ext_json: Record<string, unknown>;
   raw_payload: Record<string, unknown>;
   last_synced_at: string;
+  listing_board?: string;
+  listing_board_name?: string;
+  market_family_name?: string;
+  exchange_name?: string;
+  security_type?: string;
+  security_type_name?: string;
+  classification_status?: string;
+  classification_evidence?: Record<string, unknown>;
   /** Per-stock pipeline coverage, populated by the master-data endpoint. */
   status_summary?: StockPipelineStatusSummary;
   data_collection_status?: string | null;
@@ -140,6 +148,13 @@ export type SymbolPage = {
   page_size: number;
 };
 
+export type ListingBoard = { code: string; market: string; name: string; definition: string; exchanges: string[] };
+export type SourceCoverage = {
+  boards: (ListingBoard & { record_count: number; capabilities: { category: string; label: string; status: string; status_name: string; note: string; sources: { source_code: string; source_name: string; interface_code: string; enabled: boolean; source_url?: string; limitation: string }[] }[] })[];
+  unclassified_count: number;
+  notes: string[];
+};
+
 export type SyncLog = {
   id: number;
   source_id: number;
@@ -199,6 +214,7 @@ export type StockNotice = {
   url?: string;
   content_json: Record<string, unknown>;
   source_id: number;
+  source_name?: string;
   /** Canonical notice provenance when records from multiple feeds collapse. */
   source_ids?: number[];
   source_urls?: string[];
@@ -251,6 +267,16 @@ export type PublishedReport = {
   url?: string | null;
   source_name?: string;
   title?: string;
+  notice_id?: number;
+  market?: string;
+  symbol?: string;
+  canonical_key?: string;
+  source_id?: number;
+  raw_notice_type?: string | null;
+  category?: string;
+  announcement_status?: string;
+  status?: string;
+  message?: string;
 };
 
 export type StockF10 = {
@@ -263,10 +289,16 @@ export type StockF10 = {
   notice_total?: number;
   notice_page?: number;
   news_total?: number;
+  news_candidate_total?: number;
   news_page?: number;
   published_reports?: {
     source?: string;
     reports?: PublishedReport[];
+    unlinked_periods?: PublishedReport[];
+    unlinked_documents?: PublishedReport[];
+    other_disclosures?: PublishedReport[];
+    projection_basis?: string;
+    status?: string;
     message?: string;
   };
   profile: F10DataSection;
@@ -987,6 +1019,8 @@ export const api = {
     request<LakeExportResult>("/lakehouse/datasets/export", { method: "POST", body: JSON.stringify(payload) }),
   archiveLakeDocuments: (limit = 100) => request<{ document_count: number; created_chunk_count: number; reused_chunk_count: number }>("/lakehouse/documents/archive", { method: "POST", body: JSON.stringify({ limit }) }),
   listSymbols: (params: URLSearchParams) => request<SymbolPage>(`/stocks?${params.toString()}`),
+  masterTaxonomy: () => request<{ boards: ListingBoard[]; security_types: Record<string, string>; exchanges: Record<string, string> }>("/stocks/master-taxonomy"),
+  sourceCoverage: () => request<SourceCoverage>("/stocks/source-coverage"),
   getStockPipelineStatusDetail: (market: string, symbol: string, sampleLimit = 5, signal?: AbortSignal) =>
     request<StockPipelineStatusDetail>(
       `/stocks/${encodeURIComponent(market)}/${encodeURIComponent(symbol)}/pipeline-status-detail?sample_limit=${sampleLimit}`,
@@ -1041,12 +1075,29 @@ export const api = {
     `/stocks/${encodeURIComponent(market)}/${encodeURIComponent(symbol)}/research/reports/${encodeURIComponent(sourceCode)}/${encodeURIComponent(externalId)}`,
     { signal },
   ),
+  getInvestorQaSyncStatus: (market: string, symbol: string, signal?: AbortSignal) => request<Record<string, unknown>>(
+    `/stocks/${encodeURIComponent(market)}/${encodeURIComponent(symbol)}/research/qa/sync`, { signal },
+  ),
+  syncInvestorQa: (market: string, symbol: string, signal?: AbortSignal) => request<Record<string, unknown>>(
+    `/stocks/${encodeURIComponent(market)}/${encodeURIComponent(symbol)}/research/qa/sync`, { method: "POST", signal },
+  ),
+  getHkResearchSyncStatus: (symbol: string, signal?: AbortSignal) => request<Record<string, unknown>>(
+    `/stocks/HK/${encodeURIComponent(symbol)}/research/sync`, { signal },
+  ),
+  syncHkResearch: (symbol: string, force = false, signal?: AbortSignal) => request<Record<string, unknown>>(
+    `/stocks/HK/${encodeURIComponent(symbol)}/research/sync?force=${force}`, { method: "POST", signal },
+  ),
+  getInvestorQa: (market: string, symbol: string, signal?: AbortSignal) => request<Record<string, unknown>>(
+    `/stocks/${encodeURIComponent(market)}/${encodeURIComponent(symbol)}/research/qa`, { signal },
+  ),
   listStockFetchLogs: (market: string, symbol: string, limit = 20, signal?: AbortSignal) => request<StockFetchLog[]>(
     `/stocks/fetch-logs/list?market=${encodeURIComponent(market)}&symbol=${encodeURIComponent(symbol)}&limit=${limit}`,
     { signal },
   ),
   listStockNoticesPage: (market: string, symbol: string, page = 1, pageSize = 8, category?: string) =>
     request<StockNoticePage>(`/stocks/${market}/${symbol}/notices/page?page=${page}&page_size=${pageSize}${category && category !== "全部" ? `&category=${encodeURIComponent(category)}` : ""}`),
+  getStockNotice: (market: string, symbol: string, noticeId: number, signal?: AbortSignal) =>
+    request<StockNotice>(`/stocks/${encodeURIComponent(market)}/${encodeURIComponent(symbol)}/notices/${noticeId}`, { signal }),
   listStockNewsPage: (market: string, symbol: string, page = 1, pageSize = 8) =>
     request<StockNewsPage>(`/stocks/${market}/${symbol}/news/page?page=${page}&page_size=${pageSize}`),
   getStockKlines: (market: string, symbol: string, limit = 5000) =>

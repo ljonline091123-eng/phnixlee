@@ -1,0 +1,10 @@
+.coverage-board-tabs { display: flex; gap: 8px; flex-wrap: wrap; margin: 16px 0; }
+.coverage-board-tabs .active { background: #225bda; color: white; }
+.security-source-coverage table { min-width: 760px; }
+.security-source-coverage td { vertical-align: top; white-space: normal; max-width: 330px; line-height: 1.6; }
+.coverage-status { display: inline-block; border-radius: 4px; padding: 2px 7px; white-space: nowrap; }
+.coverage-status.available { background: #e7f7ec; color: #24713d; }
+.coverage-status.partial { background: #fff4d6; color: #926000; }
+.coverage-status.missing, .coverage-status.disabled { background: #f1f2f5; color: #686c76; }
+.master-list-pagination { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin-top: 16px; }
+.master-classification-tag { display: inline-block; background: #edf3ff; color: #315da8; border-radius: 4px; padding: 3px 7px; white-space: nowrap; }

@@ -4,17 +4,27 @@ from app.connectors.base import MarketDataAdapter
 from app.connectors.hkex_sdw_adapter import HkexSdwAdapter
 from app.connectors.official_reference_adapter import OfficialReferenceAdapter
 from app.connectors.pytdx_adapter import PytdxAdapter
+from app.connectors.listing_master import SseMasterAdapter, SzseMasterAdapter, BseMasterAdapter, HkexSecuritiesAdapter
 from app.connectors.company_registry_adapter import CompanyPublicAdapter, CompanyDisclosureAdapter, CompanyMarketCapAdapter
+from app.connectors.hk_research import EtNetResearchAdapter, AastocksResearchAdapter
+from app.connectors.hk_investor_qa import HongKongQAAdapter
 
 _ADAPTERS: dict[str, type[MarketDataAdapter]] = {
     "AKSHARE": AkshareAdapter,
     "AKSHARE_HK_SINA": AkshareHkSinaAdapter,
     "HKEX_SDW": HkexSdwAdapter,
+    "SSE_MASTER": SseMasterAdapter,
+    "SZSE_MASTER": SzseMasterAdapter,
+    "BSE_MASTER": BseMasterAdapter,
+    "HKEX_SECURITIES": HkexSecuritiesAdapter,
     "OFFICIAL_REFERENCE": OfficialReferenceAdapter,
     "PYTDX": PytdxAdapter,
     "COMPANY_PUBLIC": CompanyPublicAdapter,
     "COMPANY_DISCLOSURE": CompanyDisclosureAdapter,
     "COMPANY_MARKET_CAP": CompanyMarketCapAdapter,
+    "ETNET_HK": EtNetResearchAdapter,
+    "AASTOCKS_HK": AastocksResearchAdapter,
+    "HK_ISSUER_IR": HongKongQAAdapter,
 }
 
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import time
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
@@ -259,32 +259,28 @@ def _merge_f10_payload(
     existing: dict[str, Any] | None,
     incoming: dict[str, Any],
 ) -> dict[str, Any]:
+    if section == "published_reports" and incoming.get("projection_basis") == "STOCK_NOTICE":
+        # This read model is rebuilt from all persisted notices and explicitly
+        # carries unlinked legacy documents/periods. Re-merging by title would
+        # resurrect synthetic report rows and lose the notice references.
+        return dict(incoming)
     if not existing:
         return incoming
     if not incoming:
         return existing
-    if _incoming_f10_payload_is_stale(section, existing, incoming):
-        if section != "published_reports":
-            return existing
-        existing_reports = existing.get("reports") if isinstance(existing, dict) else []
-        incoming_reports = incoming.get("reports") if isinstance(incoming, dict) else []
-        existing_has_formal = any(
-            isinstance(row, dict)
-            and str(row.get("report_type") or "").lower()
-            not in {"financial_indicators", "announcement"}
-            for row in (existing_reports or [])
-        )
-        incoming_has_formal = any(
-            isinstance(row, dict)
-            and str(row.get("report_type") or "").lower()
-            not in {"financial_indicators", "announcement"}
-            for row in (incoming_reports or [])
-        )
-        if not (incoming_has_formal and not existing_has_formal):
-            return existing
+    # Disclosures are an appendable document inventory. An older filing can
+    # repair a historical gap without making the latest disclosure stale.
+    if section != "published_reports" and _incoming_f10_payload_is_stale(section, existing, incoming):
+        return existing
 
     merged = dict(existing)
     merged.update({key: value for key, value in incoming.items() if value not in (None, "", [], {})})
+    if section == "research_sections" and existing.get("qa_sync") and not incoming.get("qa_sync"):
+        # A slow full-F10 preview must not replace the durable Q&A checkpoint
+        # or resurrect its old "no data" message after the QA worker succeeds.
+        merged["qa_source"] = existing.get("qa_source")
+        merged["qa_message"] = existing.get("qa_message") or ""
+        merged["qa_status"] = existing.get("qa_status")
     if "message" in incoming and incoming.get("message") is not None:
         # A successful refresh may intentionally clear an older transient
         # provider-error message while retaining the existing data rows.
@@ -297,6 +293,8 @@ def _merge_f10_payload(
         return merged
 
     if section == "published_reports":
+        for gap_key, keys in (("unlinked_periods", ("report_date",)), ("unlinked_documents", ("url", "title")), ("other_disclosures", ("url", "title"))):
+            merged[gap_key] = _merge_rows(existing.get(gap_key), incoming.get(gap_key), keys)
         # Formal-report cache must never contain the synthetic financial
         # indicator snapshot (or the old announcement fallback).  Those rows
         # belong to the financial/notice sections respectively.
@@ -357,19 +355,42 @@ def _merge_f10_payload(
             },
             reverse=True,
         )
-        existing_rows = {str(row.get("指标") or row.get("metric") or ""): row for row in existing.get("rows") or [] if isinstance(row, dict)}
+        aliases = {"INCOME": "TOTALOPERATEREVE", "revenue": "TOTALOPERATEREVE",
+                   "PROFIT": "PARENTNETPROFIT", "net_profit": "PARENTNETPROFIT", "eps": "EPSJB"}
+
+        def metric_key(row):
+            code = str(row.get("metric_code") or row.get("指标") or row.get("metric") or "")
+            return aliases.get(code, code)
+
+        existing_rows = {metric_key(row): row for row in existing.get("rows") or [] if isinstance(row, dict)}
         for row in incoming.get("rows") or []:
             if not isinstance(row, dict):
                 continue
-            key = str(row.get("指标") or row.get("metric") or "")
+            key = metric_key(row)
             if not key:
                 continue
             current = dict(existing_rows.get(key) or {})
             values = dict(current.get("数据") or current.get("data") or {})
-            values.update(row.get("数据") or row.get("data") or {})
-            current.update(row)
+            observations = dict(current.get("period_provenance") or {})
+            accepted = False
+            for period, value in (row.get("数据") or row.get("data") or {}).items():
+                if value is None:
+                    continue
+                old_precision = (observations.get(period) or {}).get("precision", current.get("precision"))
+                precision = row.get("precision") or incoming.get("precision")
+                if values.get(period) is not None and precision == "SOURCE_ROUNDED" and old_precision != "SOURCE_ROUNDED":
+                    current.setdefault("rounded_fallback_observations", {})[period] = dict(row)
+                    continue
+                values[period] = value
+                observations[period] = {"source": row.get("source") or incoming.get("source"),
+                                        "precision": precision, "rounding_step": row.get("rounding_step")}
+                accepted = True
+            if accepted:
+                current.update(row)
             if values:
                 current["数据"] = values
+                current["data"] = values
+            current["period_provenance"] = observations
             existing_rows[key] = current
         merged["rows"] = list(existing_rows.values())
         return merged
@@ -730,6 +751,76 @@ class StockOnDemandService:
         except Exception as exc:
             raise self._finish_failure(log, exc) from exc
 
+    def persist_report_notices(
+        self,
+        source: DataSource,
+        market: str,
+        symbol: str,
+        payload: dict[str, Any] | None,
+    ) -> int:
+        """Import disclosed F10 documents through the normal notice pipeline.
+
+        Metric periods are excluded. Preserve existing notice evidence; an
+        unchanged repeated read does not rewrite rows or add an ingestion log.
+        """
+        from app.services.notice_read_model import normalize_notice_url
+
+        if not isinstance(payload, dict):
+            return 0
+        stored = list(self.db.scalars(select(StockNotice).where(
+            StockNotice.market == market, StockNotice.symbol == symbol,
+            StockNotice.source_id == source.id,
+        )).all())
+        by_key = {(row.notice_date, row.title): row for row in stored}
+        by_url = {normalize_notice_url(row.url): row for row in stored if normalize_notice_url(row.url)}
+        records: list[NoticeRecord] = []
+        seen: set[tuple[str, str]] = set()
+        for item in [*(payload.get("reports") or []), *(payload.get("unlinked_documents") or []), *(payload.get("other_disclosures") or [])]:
+            if not isinstance(item, dict) or str(item.get("report_type") or "").lower() in {"financial_indicators", "announcement"}:
+                continue
+            title = str(item.get("title") or item.get("report_name") or "").strip()
+            notice_date = str(item.get("notice_date") or "")[:10]
+            url = normalize_notice_url(item.get("url"))
+            if not title or not url.startswith(("https://", "http://")):
+                continue
+            try:
+                date.fromisoformat(notice_date)
+            except ValueError:
+                continue
+            key = (notice_date, title)
+            if key in seen:
+                continue
+            seen.add(key)
+            current = by_key.get(key) or by_url.get(url)
+            if current and current.url and current.notice_type:
+                continue
+            raw = item.get("content_json")
+            content = dict(raw) if isinstance(raw, dict) and raw else {
+                "source_name": item.get("source_name"),
+                "disclosure_entry": {key: value for key, value in item.items() if key != "content_json"},
+            }
+            if current:
+                content.update(current.content_json or {})
+            records.append(NoticeRecord(
+                market=market, symbol=symbol,
+                notice_date=current.notice_date if current else notice_date,
+                title=current.title if current else title,
+                notice_type=(current.notice_type if current else None) or item.get("raw_notice_type") or item.get("report_type"),
+                url=(current.url if current else None) or url,
+                content_json=content,
+            ))
+        if not records:
+            return 0
+        log = self._start_log(source, "NOTICE_FROM_F10", market, symbol, {
+            "section": "published_reports", "persist": True, "origin": "F10_DISCLOSURE_SOURCE",
+        })
+        try:
+            count = self._upsert_notices(source.id, records)
+            self._finish_success(log, records, count)
+            return count
+        except Exception as exc:
+            raise self._finish_failure(log, exc) from exc
+
     def fetch_quote(
         self,
         source: DataSource,
@@ -773,7 +864,15 @@ class StockOnDemandService:
             request_json={"persist": persist},
         )
         try:
-            records = get_adapter(source.adapter_type).fetch_news(market=market, symbol=symbol)
+            from app.services.news_identity import check_news_identity, issuer_names
+            stock = self.db.scalar(select(StockSymbol).where(StockSymbol.market == market, StockSymbol.symbol == symbol))
+            adapter = get_adapter(source.adapter_type)
+            names = issuer_names(stock.name, stock.ext_json) if stock else []
+            fetch_issuer = getattr(adapter, "fetch_news_for_issuer", None)
+            records = fetch_issuer(market, symbol, names[-1]) if fetch_issuer and names else adapter.fetch_news(market=market, symbol=symbol)
+            records = [replace(item, content_json={**item.content_json,
+                "identity_check": check_news_identity(market, symbol, stock.name if stock else "", item.title,
+                                                      item.content, stock.ext_json if stock else {})}) for item in records]
             persisted_count = self._upsert_news(source.id, records) if persist else 0
             result = self._finish_success(log, records, persisted_count)
             if persist:
@@ -800,33 +899,9 @@ class StockOnDemandService:
         fetch_time = datetime.now(timezone.utc)
         changed = False
         if existing:
-            existing_reports = (
-                existing.payload_json.get("reports")
-                if section == "published_reports"
-                and isinstance(existing.payload_json, dict)
-                else None
-            )
-            incoming_reports = (
-                payload_json.get("reports")
-                if section == "published_reports"
-                and isinstance(payload_json, dict)
-                else None
-            )
-            existing_has_formal_report = any(
-                isinstance(row, dict)
-                and str(row.get("report_type") or "").lower()
-                not in {"financial_indicators", "announcement"}
-                for row in (existing_reports or [])
-            )
-            incoming_has_formal_report = any(
-                isinstance(row, dict)
-                and str(row.get("report_type") or "").lower()
-                not in {"financial_indicators", "announcement"}
-                for row in (incoming_reports or [])
-            )
             if (
-                _incoming_f10_payload_is_stale(section, existing.payload_json, payload_json)
-                and not (section == "published_reports" and incoming_has_formal_report and not existing_has_formal_report)
+                section != "published_reports"
+                and _incoming_f10_payload_is_stale(section, existing.payload_json, payload_json)
             ):
                 existing.fetched_at = fetch_time
                 self.db.flush()
@@ -1024,6 +1099,14 @@ class StockOnDemandService:
                 or ""
             ).strip() or None
             if row:
+                if (item.data_json.get("source_precision") == "SOURCE_ROUNDED" and row.data_json
+                        and not row.data_json.get("source_precision")
+                        and row.data_json.get("source") != "Eastmoney push2 quote indicators"
+                        and any(row.data_json.get(key) is not None for key in ("INCOME", "PROFIT", "TOTALOPERATEREVE", "PARENTNETPROFIT", "EPSJB"))):
+                    # Keep exact financial facts when a weaker fallback is
+                    # observed; its provenance remains available separately.
+                    row.data_json = {**row.data_json, "rounded_fallback_observation": item.data_json}
+                    continue
                 changed = any(
                     (
                         row.currency != item.currency,

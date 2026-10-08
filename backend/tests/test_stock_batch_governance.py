@@ -732,6 +732,7 @@ def test_chunk_only_run_is_reported_as_existing_documents_only(monkeypatch) -> N
 
 
 def test_f10_refresh_does_not_implicitly_fetch_core_business_types(monkeypatch) -> None:
+    monkeypatch.setattr(stock_batch, "qa_sync_status", lambda *_args: {"status": "COMPLETE", "stored_count": 3})
     temporary, engine, sessions = _database()
     try:
         with sessions() as db:

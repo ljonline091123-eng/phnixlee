@@ -669,6 +669,7 @@ def _fetch_tencent_quotes(
                         response = None
                 if response is None:
                     continue
+                response.encoding = "gb18030"
                 any_response = True
                 for line in response.text.split(";"):
                     match = re.search(r"v_([a-z]{2})(\d+)=\"([^\"]*)\"", line)
