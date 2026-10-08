@@ -53,6 +53,7 @@ const labels: Record<string, string> = {
   HAS_RECORD: "包含记录",
   HAS_DOCUMENT: "关联文档",
   HAS_NEWS: "相关新闻",
+  HAS_NEWS_CANDIDATE: "新闻候选关联（待核实）",
   HAS_NOTICE: "相关公告",
   HAS_FINANCIAL_REPORT: "相关财报",
   HAS_FINANCIAL_METRIC: "财务指标",

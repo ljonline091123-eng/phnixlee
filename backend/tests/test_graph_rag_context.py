@@ -50,7 +50,7 @@ def test_context_contains_structured_observations_and_precise_lakehouse_lineage(
         db.flush()
         document = KnowledgeDocument(
             knowledge_base_id=kb.id, source_table="stock_news", source_record_id=1,
-            market="CN_A", symbol="000001", title="测试新闻", content="测试新闻正文，包含可追溯证据。",
+            market="CN_A", symbol="000001", title="测试银行新闻", content="测试新闻正文，包含可追溯证据。",
             created_at=now, updated_at=now,
         )
         db.add(document)
@@ -209,7 +209,7 @@ def test_context_excludes_future_graph_relations_and_reports_prompt_chunk_budget
         for index in range(2):
             content = f"第 {index + 1} 篇可追溯文档"
             document = KnowledgeDocument(
-                knowledge_base_id=kb.id, graph_id=graph.id, source_table="stock_news",
+                knowledge_base_id=kb.id, graph_id=graph.id, source_table="stock_notice",
                 source_record_id=index + 1, market="CN_A", symbol="000001",
                 title=f"测试新闻 {index + 1}", content=content,
             )

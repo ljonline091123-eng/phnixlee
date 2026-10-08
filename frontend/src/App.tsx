@@ -13,6 +13,7 @@ import {
   type LakeObject,
   type LakeQualityReport,
   type LakehouseStatus,
+  type ListingBoard,
   type IpoCalendarResponse,
   type KnowledgeBase,
   type KnowledgeGraph,
@@ -44,6 +45,7 @@ import { EnvironmentBanner } from "./EnvironmentBanner";
 import { KnowledgePipelinePanel } from "./KnowledgePipelinePanel";
 import { BatchStockGovernanceDialog } from "./BatchStockGovernanceDialog";
 import { StockPipelineStatusDialog, type StockPipelineStatusKey } from "./StockPipelineStatusDialog";
+import { SecuritySourceCoverage } from "./SecuritySourceCoverage";
 import { OperationsCenter } from "./OperationsCenter";
 import { GovernanceCenter } from "./GovernanceCenter";
 import { PlatformOverview, type PlatformNavigationTarget } from "./PlatformOverview";
@@ -265,6 +267,16 @@ function DataConsolePage({ tab, setTab }: { tab: DataView; setTab: (tab: DataVie
   const [knowledge, setKnowledge] = useState<KnowledgeBase[]>([]);
   const [graphs, setGraphs] = useState<KnowledgeGraph[]>([]);
   const [market, setMarket] = useState("ALL");
+  const [listingBoard, setListingBoard] = useState("ALL");
+  const [securityType, setSecurityType] = useState("EQUITY");
+  const [listingBoards, setListingBoards] = useState<ListingBoard[]>([]);
+  const [securityTypes, setSecurityTypes] = useState<Record<string, string>>({});
+  const [symbolPage, setSymbolPage] = useState(1);
+  const [symbolTotal, setSymbolTotal] = useState(0);
+  const [symbolsLoading, setSymbolsLoading] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [sourceCoverageOpen, setSourceCoverageOpen] = useState(false);
+  const symbolRequestRef = useRef(0);
   const [keyword, setKeyword] = useState("");
   const [notice, setNotice] = useState("");
   const [loading, setLoading] = useState(false);
@@ -277,7 +289,7 @@ function DataConsolePage({ tab, setTab }: { tab: DataView; setTab: (tab: DataVie
   const [interfaceDetail, setInterfaceDetail] = useState<DataInterface | null>(null);
   const categoryNames: Record<string, string> = { SYMBOL_MASTER: "股票主数据", KLINE: "历史量价", NEWS: "新闻", NOTICE: "公告", QUOTE: "实时行情", FINANCIAL: "财务数据", F10: "F10资料", COMPANY_DATA: "公司数据", MARKET_DATA: "市场数据", JUDICIAL_DISCLOSURE: "司法披露", BUSINESS_DISCLOSURE: "经营披露", SUPPLY_CHAIN_DISCLOSURE: "供应链披露" };
   const modeNames: Record<string, string> = { SYNC: "定时同步", ON_DEMAND: "按需查询" };
-  const marketNames: Record<string, string> = { CN_A: "A股", HK: "港股", NEEQ: "新三板", NEEQ_INNOVATION: "创新层" };
+  const marketNames: Record<string, string> = { CN_A: "A股", HK: "港股", NEEQ: "新三板基础层", NEEQ_INNOVATION: "新三板创新层" };
   const interfaceNames: Record<string, string> = { A_KLINE_ON_DEMAND: "A股历史K线", CN_A_SYMBOLS: "A股股票主数据", FINANCIAL_ON_DEMAND: "财务报告查询", HK_KLINE_ON_DEMAND: "港股历史K线", HK_SYMBOLS: "港股股票主数据", NEEQ_INNOVATION_SYMBOLS: "新三板创新层股票主数据", NEEQ_KLINE_ON_DEMAND: "新三板历史K线", NEEQ_SYMBOLS: "新三板基础层股票主数据", NEWS_ON_DEMAND: "股票新闻查询", NOTICE_ON_DEMAND: "公告查询", QUOTE_ON_DEMAND: "实时行情查询", HKEX_CCASS_REFERENCE: "港股CCASS股东披露入口", F10_PROFILE_HOLDERS: "F10公司简况与股东", F10_REPORTS: "正式财报与披露文件", PYTDX_KLINE_ON_DEMAND: "PyTDX A股日K线", PYTDX_QUOTE_ON_DEMAND: "PyTDX A股实时行情", NEEQ_CAPITAL_RAISE: "新三板定增信息", NEEQ_LAYER_CHANGE: "新三板层级变动", NEEQ_MARKET_MAKER: "新三板做市商明细", MARKET_CAP: "A股市值快照", COMPANY_PROFILE: "公司资料", DISCLOSED_HOLDERS: "披露股东", LEGAL_DISCLOSURE: "司法披露及原文", BUSINESS_DISCLOSURE: "经营披露及原文", SUPPLY_CHAIN_DISCLOSURE: "供应链及年报原文" };
   const adapterNames: Record<string, string> = { AKSHARE: "AkShare数据适配器", AKSHARE_HK_SINA: "新浪港股适配器", PYTDX: "通达信行情适配器", OFFICIAL_REFERENCE: "官方参考数据适配器", COMPANY_REGISTRY: "公司资料适配器" };
   const interfaceName = (item: DataInterface) => interfaceNames[item.interface_code] || item.interface_name;
@@ -317,31 +329,46 @@ function DataConsolePage({ tab, setTab }: { tab: DataView; setTab: (tab: DataVie
   }
   async function loadSymbols(event?: FormEvent) {
     event?.preventDefault();
+    if (event && symbolPage !== 1) { setSymbolPage(1); return; }
+    const requestId = ++symbolRequestRef.current;
+    setSymbolsLoading(true);
     try {
       const result = await api.listSymbols(
-        new URLSearchParams({ market, keyword, page: "1", page_size: "30" }),
+        new URLSearchParams({ market, keyword, listing_board: listingBoard, security_type: securityType, page: String(symbolPage), page_size: "30" }),
       );
+      if (requestId !== symbolRequestRef.current) return;
       setSymbols(result.items);
+      setSymbolTotal(result.total);
     } catch (e) {
+      if (requestId !== symbolRequestRef.current) return;
       setNotice(e instanceof Error ? e.message : "主数据查询失败");
+    } finally {
+      if (requestId === symbolRequestRef.current) setSymbolsLoading(false);
     }
   }
   useEffect(() => {
-    // Open the universe with the first page of all markets already visible.
     void loadSymbols();
+  }, [market, listingBoard, securityType, symbolPage]);
+  useEffect(() => {
+    void api.masterTaxonomy().then(data => { setListingBoards(data.boards); setSecurityTypes(data.security_types); }).catch(e => setNotice(e instanceof Error ? e.message : "上市分类读取失败"));
   }, []);
   async function sync() {
+    setSyncing(true);
     try {
-      const source = sources.find((item) => item.enabled);
-      if (!source) throw new Error("没有启用的数据源");
-      await api.synchronize(market, source.source_code);
+      const source = sources.find(item => item.enabled && item.source_code === (market.startsWith("NEEQ") ? "NEEQ_EASTMONEY" : "AKSHARE"))
+        || sources.find(item => item.enabled && (item.config_json.capabilities as string[] | undefined)?.includes("SYMBOL_MASTER")
+          && (market === "ALL" ? (item.config_json.market_scope as string[] | undefined)?.length === 4 : (item.config_json.market_scope as string[] | undefined)?.includes(market)));
+      if (!source) throw new Error("当前市场没有启用的股票名单数据源，请在数据接入中检查。");
+      const result = await api.synchronize(market, source.source_code);
       setNotice(
-        `${market === "ALL" ? "全部市场" : marketLabel[market] || market} 主数据同步已提交`,
+        `${market === "ALL" ? "全部市场" : marketNames[market] || market} 主数据${result.status === "FAILED" ? "同步失败，请查看运行记录" : result.status === "PARTIAL" ? "部分同步完成，请查看缺口" : "同步完成"}`,
       );
       await loadSymbols();
       await load();
     } catch (e) {
       setNotice(e instanceof Error ? e.message : "同步失败");
+    } finally {
+      setSyncing(false);
     }
   }
   const stockSelectionKey = (stock: Pick<StockSymbol, "market" | "symbol">) => `${stock.market}:${stock.symbol}`;
@@ -544,31 +571,42 @@ function DataConsolePage({ tab, setTab }: { tab: DataView; setTab: (tab: DataVie
             <div>
               <p className="eyebrow">SECURITY UNIVERSE</p>
               <h2>股票主数据</h2>
-              <p>勾选股票后，可批量采集业务数据并执行湖仓、知识库和知识图谱治理。</p>
+              <p>按市场、上市板块和证券类型管理。默认显示股票及存托凭证；同步主数据会更新所选市场的全部板块。</p>
             </div>
             <div className="master-heading-actions">
+              <button type="button" onClick={() => setSourceCoverageOpen(true)}>板块数据源覆盖</button>
               <button type="button" onClick={() => setBatchGovernanceOpen(true)}>最近批量任务</button>
               <button type="button" disabled={!selectedStockList.length} onClick={() => setBatchGovernanceOpen(true)}>
                 批量采集与治理{selectedStockList.length ? `（${selectedStockList.length}）` : ""}
               </button>
-              <button className="primary-button" type="button" onClick={() => void sync()}>
-                同步主数据
+              <button className="primary-button" type="button" disabled={syncing} onClick={() => void sync()}>
+                {syncing ? "正在同步主数据…" : "同步主数据"}
               </button>
             </div>
           </div>
           <form className="inline-form" onSubmit={loadSymbols}>
             <select
               className={inputClass}
+              aria-label="股票市场"
               value={market}
-              onChange={(e) => setMarket(e.target.value)}
+              onChange={(e) => { setMarket(e.target.value); setListingBoard("ALL"); setSymbolPage(1); }}
             >
               <option value="ALL">全部</option>
               <option value="CN_A">A股</option>
               <option value="HK">港股</option>
-              <option value="NEEQ">新三板</option>
-              <option value="NEEQ_INNOVATION">创新层</option>
+              <option value="NEEQ">新三板基础层</option>
+              <option value="NEEQ_INNOVATION">新三板创新层</option>
             </select>
-<input
+            <select className={inputClass} aria-label="上市板块" value={listingBoard} onChange={e => { setListingBoard(e.target.value); setSymbolPage(1); }} title={listingBoards.find(item => item.code === listingBoard)?.definition || "上市板块与行业、主题及风格标签分开管理"}>
+              <option value="ALL">全部上市板块</option>
+              {listingBoards.filter(item => market === "ALL" || item.market === market).map(item => <option key={item.code} value={item.code}>{item.name}</option>)}
+              <option value="UNCLASSIFIED">未分类</option>
+            </select>
+            <select className={inputClass} aria-label="证券类型" value={securityType} onChange={e => { setSecurityType(e.target.value); setSymbolPage(1); }}>
+              <option value="EQUITY">股票及存托凭证</option><option value="ALL">全部证券（含历史产品）</option>
+              {Object.entries(securityTypes).map(([code, name]) => <option key={code} value={code}>{name}</option>)}
+            </select>
+            <input
               className={inputClass}
               value={keyword}
               onChange={(e) => setKeyword(e.target.value)}
@@ -603,6 +641,8 @@ function DataConsolePage({ tab, setTab }: { tab: DataView; setTab: (tab: DataVie
                   <th>代码</th>
                   <th>名称</th>
                   <th>交易所</th>
+                  <th>上市板块</th>
+                  <th>证券类型</th>
                   <th>上市日期</th>
                   <th>状态</th>
                   <th>数据采集</th>
@@ -614,7 +654,7 @@ function DataConsolePage({ tab, setTab }: { tab: DataView; setTab: (tab: DataVie
                 {symbols.map((stock) => (
                   <tr key={`${stock.market}-${stock.symbol}`} className={selectedStocks[stockSelectionKey(stock)] ? "selected-row" : ""}>
                     <td className="selection-cell"><input type="checkbox" checked={!!selectedStocks[stockSelectionKey(stock)]} aria-label={`选择${stock.name}`} onChange={() => toggleStockSelection(stock)} /></td>
-                    <td>{marketLabel[stock.market] || stock.market}</td>
+                    <td>{marketNames[stock.market] || stock.market}</td>
                     <td>
                       <button
                         type="button"
@@ -634,9 +674,11 @@ function DataConsolePage({ tab, setTab }: { tab: DataView; setTab: (tab: DataVie
                         {stock.name}
                       </button>
                     </td>
-                    <td>{stock.exchange}</td>
+                    <td title={stock.exchange}>{stock.exchange_name || stock.exchange}</td>
+                    <td><span className="master-classification-tag" title={listingBoards.find(item => item.code === stock.listing_board)?.definition || "需要对应市场的官方分类证据"}>{stock.listing_board_name || "未分类"}</span></td>
+                    <td>{stock.security_type_name || "待核实"}</td>
                     <td>{stock.list_date || "--"}</td>
-                    <td>{stock.status}</td>
+                    <td>{{ LISTED: "在市", IPO: "待上市", DELISTED: "已退市" }[stock.status] || stock.status}</td>
                     <td><StockPipelineStatusTag stock={stock} kind="data_collection" onClick={() => setPipelineStatusDetail({ stock, kind: "data_collection" })} /></td>
                     <td><StockPipelineStatusTag stock={stock} kind="knowledge_base" onClick={() => setPipelineStatusDetail({ stock, kind: "knowledge_base" })} /></td>
                     <td><StockPipelineStatusTag stock={stock} kind="knowledge_graph" onClick={() => setPipelineStatusDetail({ stock, kind: "knowledge_graph" })} /></td>
@@ -644,16 +686,22 @@ function DataConsolePage({ tab, setTab }: { tab: DataView; setTab: (tab: DataVie
                 ))}
                 {!symbols.length && (
                   <tr>
-                    <td colSpan={10} className="empty-state">
-                      请输入条件查询股票主数据
+                    <td colSpan={12} className="empty-state">
+                      {symbolsLoading ? "正在加载股票主数据…" : "当前条件下没有股票，请调整市场、板块或证券类型。"}
                     </td>
                   </tr>
                 )}
               </tbody>
             </table>
           </div>
+          <div className="master-list-pagination" aria-label="股票主数据分页">
+            <span role="status">{symbolsLoading ? "加载中 · " : ""}共 {symbolTotal.toLocaleString()} 条 · 第 {symbolPage} / {Math.max(1, Math.ceil(symbolTotal / 30))} 页</span>
+            <button type="button" disabled={symbolsLoading || symbolPage <= 1} onClick={() => setSymbolPage(page => page - 1)}>上一页</button>
+            <button type="button" disabled={symbolsLoading || symbolPage * 30 >= symbolTotal} onClick={() => setSymbolPage(page => page + 1)}>下一页</button>
+          </div>
         </section>
       )}
+      {sourceCoverageOpen && <ResourceDialog eyebrow="证券数据源" title="上市板块与数据源覆盖" onClose={() => setSourceCoverageOpen(false)}><SecuritySourceCoverage /></ResourceDialog>}
       {tab === "master" && masterView === "entities" && <DataFoundation />}
       {tab === "business" && <div className="resource-stack"><BusinessDataGuide assets={assets} /><GovernedAssetTab assets={assets} agents={agents} reload={load} notify={message} /></div>}
       {tab === "lakehouse" && <LakehousePanel />}

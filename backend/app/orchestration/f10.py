@@ -36,7 +36,7 @@ from app.services.f10 import (
     NOTICE_CATEGORIES,
 )
 from app.services.stock_on_demand import StockOnDemandService
-from app.services.notice_read_model import CanonicalNotice, deduplicate_notice_rows
+from app.services.notice_read_model import CanonicalNotice, deduplicate_notice_rows, notice_source_name
 from app.services.stock_classification import (
     build_classification_groups,
     enrich_classification_groups_with_members,
@@ -68,6 +68,7 @@ class GetStockF10Command:
     notice_category: str | None = None
     refresh: bool = False
     local_only: bool = False
+    include_classification_members: bool = True
 
 
 def _normalize_symbol(market: str, symbol: str) -> str:
@@ -95,6 +96,7 @@ def _notice_view(row: StockNotice, latest_date: str | None = None,
         "url": row.url,
         "content_json": row.content_json,
         "source_id": row.source_id,
+        "source_name": notice_source_name(row),
         "source_ids": provenance["source_ids"],
         "source_urls": provenance["source_urls"],
         "source_count": provenance["source_count"],
@@ -140,7 +142,7 @@ class F10Workflow:
             )
         )
 
-        if command.refresh and core_source and market in LIVE_REFRESH_MARKETS:
+        if command.refresh and not command.local_only and core_source and market in LIVE_REFRESH_MARKETS:
             extended_data = self._explicit_refresh(
                 command, snapshot, market, symbol, source, core_source, extended_data
             )
@@ -160,6 +162,7 @@ class F10Workflow:
                 extended_data = _merge_f10_extended_data(
                     _load_f10_extended_data(self.db, market, symbol), fresh
                 )
+                snapshot = self._load(command, market, symbol)
             else:
                 self._set_fallback_message(
                     extended_data,
@@ -167,6 +170,15 @@ class F10Workflow:
                 )
         elif command.local_only:
             self.refresh_status.update({"status": "LOCAL_ONLY", "requested": False})
+
+        if not command.local_only and source:
+            # Repair legacy F10-only documents incrementally. A document
+            # collected by F10 must also be visible in the announcement list.
+            imported = StockOnDemandService(self.db).persist_report_notices(
+                source, market, symbol, extended_data.get("published_reports")
+            )
+            if imported:
+                snapshot = self._load(command, market, symbol)
 
         merged_reports = _merge_local_report_notices(
             extended_data.get("published_reports"),
@@ -192,7 +204,7 @@ class F10Workflow:
 
         extended_data = _ensure_neeq_f10_from_core(
             db=self.db,
-            source=source,
+            source=None if command.local_only else source,
             market=market,
             symbol=symbol,
             quote=snapshot.quote,
@@ -214,6 +226,7 @@ class F10Workflow:
                 # attach one bounded realtime batch for trend statistics.
                 fetch_remote=not command.local_only,
                 refresh_quotes=command.refresh,
+                include_members=command.include_classification_members,
             )
         # The optional provider control endpoint is not reliable across
         # markets.  Reuse explicit, evidence-backed company-graph CONTROLS
@@ -230,7 +243,7 @@ class F10Workflow:
         # legacy caches can derive the industry/theme concept panel from the
         # same source without treating index membership as a concept.
         extended_data = normalize_f10_sections(extended_data)
-        if _hydrate_symbol_from_f10(snapshot.stock, extended_data):
+        if not command.local_only and _hydrate_symbol_from_f10(snapshot.stock, extended_data):
             self.db.commit()
 
         canonical_notices = deduplicate_notice_rows(snapshot.report_notices)
@@ -257,6 +270,7 @@ class F10Workflow:
             notice_total=snapshot.notice_total,
             notice_page=command.notice_page,
             news_total=snapshot.news_total,
+            news_candidate_total=snapshot.news_candidate_total,
             news_page=command.news_page,
             published_reports=extended_data.get("published_reports") or {},
             profile=extended_data.get("profile") or {},

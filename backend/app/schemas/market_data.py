@@ -178,6 +178,17 @@ class StockSymbolRead(BaseModel):
     ext_json: dict[str, Any]
     raw_payload: dict[str, Any]
     last_synced_at: datetime
+    listing_board: str | None = None
+    listing_board_name: str | None = None
+    market_family: str | None = None
+    market_family_name: str | None = None
+    exchange_name: str | None = None
+    security_type: str | None = None
+    security_type_name: str | None = None
+    classification_status: str | None = None
+    classification_method: str | None = None
+    classification_version: str | None = None
+    classification_evidence: dict[str, Any] = Field(default_factory=dict)
     status_summary: StockPipelineStatusSummary | None = None
     # Flat aliases make the fields easy to consume in simple table clients.
     data_collection_status: str | None = None
@@ -364,6 +375,7 @@ class StockNoticeRead(BaseModel):
     url: str | None
     content_json: dict[str, Any]
     source_id: int
+    source_name: str = "公告披露源"
     source_ids: list[int] = Field(default_factory=list)
     source_urls: list[str] = Field(default_factory=list)
     source_count: int = 1
@@ -421,6 +433,7 @@ class StockNewsPage(BaseModel):
     total: int
     page: int
     page_size: int
+    candidate_total: int = 0
 
 
 class StockF10CacheRead(BaseModel):
@@ -462,6 +475,7 @@ class StockF10Read(BaseModel):
     notice_total: int = 0
     notice_page: int = 1
     news_total: int = 0
+    news_candidate_total: int = 0
     news_page: int = 1
     published_reports: dict[str, Any] = Field(default_factory=dict)
     profile: dict[str, Any] = Field(default_factory=dict)
