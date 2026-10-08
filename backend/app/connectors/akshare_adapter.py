@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from functools import lru_cache
 import hashlib
 import html
@@ -31,6 +31,8 @@ from app.connectors.base import (
     SymbolRecord,
 )
 from app.connectors.sina_research import fetch_sina_research_reports
+from app.connectors.investor_qa import OfficialQAClient, qa_source
+from app.connectors.hk_research import fetch_hk_research_sections
 
 
 class AkshareAdapter(MarketDataAdapter):
@@ -184,6 +186,8 @@ class AkshareAdapter(MarketDataAdapter):
         )
 
     def fetch_symbol_master(self, market: str) -> list[SymbolRecord]:
+        self.symbol_master_issues = []
+        self.symbol_master_complete = True
         if market == MARKET_CN_A:
             return self._fetch_cn_a_symbols()
         if market == MARKET_HK:
@@ -289,7 +293,7 @@ class AkshareAdapter(MarketDataAdapter):
     ) -> list[FinancialRecord]:
         if market == "CN_A":
             dataframe = ak.stock_financial_analysis_indicator_em(
-                symbol=f"{symbol}.SZ" if symbol.startswith(("0", "3")) else f"{symbol}.SH",
+                symbol=self._financial_security_code(symbol),
                 indicator=indicator,
             )
             return self._normalize_financial_dataframe(dataframe, market, symbol, indicator)
@@ -302,13 +306,18 @@ class AkshareAdapter(MarketDataAdapter):
 
     def fetch_notices(self, market: str, symbol: str, start_date: str, end_date: str) -> list[NoticeRecord]:
         if market == "CN_A":
+            # Failed disclosure requests must remain retryable failures, not
+            # successful empty datasets in DataFetchLog.
             try:
-                records = self._fetch_cn_a_notices(symbol=symbol, start_date=start_date, end_date=end_date)
-                if records:
-                    return records
-            except Exception:
-                pass
-            return []
+                return self._fetch_cn_a_notices(symbol=symbol, start_date=start_date, end_date=end_date)
+            except Exception as primary_error:
+                try:
+                    records = self._fetch_cn_a_notices_eastmoney(symbol, start_date, end_date)
+                except Exception as fallback_error:
+                    raise RuntimeError(f"巨潮公告失败：{primary_error}; 东方财富备用失败：{fallback_error}") from fallback_error
+                for record in records:
+                    record.content_json["primary_source_error"] = str(primary_error)[:350]
+                return records
         if market == "HK":
             return self._fetch_hkex_notices(symbol=symbol, start_date=start_date, end_date=end_date)
         if market in (MARKET_NEEQ, MARKET_NEEQ_INNOVATION):
@@ -343,10 +352,48 @@ class AkshareAdapter(MarketDataAdapter):
             return self._fetch_eastmoney_search_news(market, symbol)
         raise ValueError(f"Unsupported market: {market}")
 
-    def _fetch_eastmoney_search_news(self, market: str, symbol: str) -> list[NewsRecord]:
+    def fetch_news_for_issuer(self, market: str, symbol: str, issuer_name: str) -> list[NewsRecord]:
+        if market == MARKET_HK:
+            errors = []
+            try:
+                primary = self._fetch_eastmoney_search_news(market, symbol, issuer_name)
+            except Exception as exc:
+                primary = []
+                errors.append(str(exc)[:300])
+            if primary:
+                return primary
+            from app.connectors.hk_public_news import fetch_aastocks_news
+            try:
+                rows = fetch_aastocks_news(symbol)
+            except Exception as exc:
+                raise RuntimeError("港股新闻主来源未取得数据，备用来源失败：" + "; ".join([*errors, str(exc)])) from exc
+            if not rows:
+                raise ValueError("东方财富与AASTOCKS均未取得带日期的主体新闻，尚不能判定确无新闻")
+            return [NewsRecord(market=market, symbol=symbol, news_time=row["news_time"], title=row["title"],
+                content=row.get("content"), source_name=row["source_name"], url=row["url"],
+                content_json={**row, "primary_source_status": "FAILED" if errors else "EMPTY_UNVERIFIED", "source_errors": errors}) for row in rows]
+        if market in (MARKET_NEEQ, MARKET_NEEQ_INNOVATION):
+            records, errors = [], []
+            for fetch in (lambda: self._fetch_neeq_news(market, symbol),
+                          lambda: self._fetch_eastmoney_search_news(market, symbol, issuer_name)):
+                try:
+                    records.extend(fetch())
+                except Exception as exc:
+                    errors.append(str(exc)[:300])
+            if not records and errors:
+                raise ValueError("新三板新闻来源调用失败：" + "; ".join(errors))
+            if errors:
+                from dataclasses import replace
+                records = [replace(r, content_json={**(r.content_json or {}), "source_errors": errors,
+                                                     "collection_status": "PARTIAL"}) for r in records]
+            return records
+        return self._fetch_eastmoney_search_news(market, symbol, issuer_name)
+
+    def _fetch_eastmoney_search_news(self, market: str, symbol: str, keyword: str | None = None) -> list[NewsRecord]:
         """Call Eastmoney search directly; avoids the upstream AkShare regex bug."""
         callback = "quantNewsCallback"
-        inner = {"uid": "", "keyword": symbol, "type": ["cmsArticleWebOld"],
+        keyword = keyword or symbol
+        inner = {"uid": "", "keyword": keyword, "type": ["cmsArticleWebOld"],
                  "client": "web", "clientType": "web", "clientVersion": "curr",
                  "param": {"cmsArticleWebOld": {"searchScope": "default", "sort": "default",
                      "pageIndex": 1, "pageSize": 30, "preTag": "<em>", "postTag": "</em>"}}}
@@ -367,7 +414,8 @@ class AkshareAdapter(MarketDataAdapter):
             if title and news_time:
                 records.append(NewsRecord(market=market, symbol=symbol, news_time=news_time, title=title,
                     content=content or None, source_name=str(item.get("mediaName") or "东方财富新闻搜索"),
-                    url=str(item.get("url") or "") or None, content_json=self._json_safe(item)))
+                    url=str(item.get("url") or "") or None,
+                    content_json={**self._json_safe(item), "search_keyword": keyword, "source_method": "EASTMONEY_NEWS_SEARCH"}))
         return records
 
     def fetch_extended_data(self, market: str, symbol: str) -> dict[str, Any]:
@@ -500,6 +548,11 @@ class AkshareAdapter(MarketDataAdapter):
             "margin_history": self._safe_cn_margin_history(symbol),
             "margin_source": "东方财富/交易所融资融券明细",
         }
+        return {"holders": holders, "profile": profile_result,
+                "research_sections": self._fetch_cn_a_research_sections(symbol)}
+
+    def _fetch_cn_a_research_sections(self, symbol: str) -> dict[str, Any]:
+        """Allow research retries without repeating all optional F10 calls."""
         # ``stock_research_report_em`` is occasionally returned as a full
         # market feed by the upstream provider even when a symbol argument is
         # supplied.  Keep a strict, code-aware projection here.  The report
@@ -512,7 +565,7 @@ class AkshareAdapter(MarketDataAdapter):
         research_reports = self._merge_research_report_sources(
             eastmoney_reports, sina_reports, limit=500
         )
-        qa_rows = self._safe_qa_records(symbol, limit=100)
+        qa_rows, qa_fetch = self._safe_qa_snapshot(symbol, limit=100)
         earnings_rows = self._safe_profit_forecast_records(symbol)
         detailed_earnings_rows = self._safe_detailed_forecast_records(symbol)
         if detailed_earnings_rows:
@@ -536,10 +589,11 @@ class AkshareAdapter(MarketDataAdapter):
         if not earnings_rows:
             earnings_rows = self._derive_research_earnings_forecast(research_reports, symbol)
         research = {
-            "source": "多来源：巨潮资讯互动易 / 同花顺盈利预测 / 东方财富研究报告",
-            "qa_source": "巨潮资讯互动易",
+            "source": "多来源：上证 e 互动 / 巨潮资讯互动易 / 同花顺盈利预测 / 东方财富研究报告",
+            "qa_source": qa_fetch["source_name"],
             "qa": qa_rows,
-            "qa_message": "" if qa_rows else "巨潮资讯互动易暂无可用问答数据。",
+            "qa_fetch": qa_fetch,
+            "qa_message": qa_fetch["message"],
             "earnings_forecast_source": "同花顺盈利预测" if earnings_rows else "东方财富研究报告接口",
             "earnings_forecast": earnings_rows,
             "institution_forecast_source": (
@@ -558,9 +612,10 @@ class AkshareAdapter(MarketDataAdapter):
             "latest_reports": research_reports,
             "reports": research_reports,
         }
-        return {"holders": holders, "profile": profile_result, "research_sections": research}
+        return research
 
-    def _fetch_hk_extended_data(self, symbol: str) -> dict[str, Any]:
+    def _fetch_hk_extended_data(self, symbol: str, research_sections: dict[str, Any] | None = None) -> dict[str, Any]:
+        research = research_sections if research_sections is not None else fetch_hk_research_sections(symbol)
         company = self._safe_dataframe_first_row(
             getattr(ak, "stock_hk_company_profile_em", None),
             {"symbol": symbol},
@@ -620,11 +675,7 @@ class AkshareAdapter(MarketDataAdapter):
             "financial_statements": financial_statements,
             "business_composition": business_composition,
             "published_reports": published_reports,
-            "research_sections": {
-                "source": "暂无港股公开研究聚合接口",
-                "sections": [],
-                "message": "港股研究、问董秘和评级数据需授权数据源。",
-            },
+            "research_sections": research,
         }
 
     def _fetch_neeq_json(self, path: str, params: dict[str, Any] | None = None) -> Any:
@@ -640,15 +691,27 @@ class AkshareAdapter(MarketDataAdapter):
             "Accept": "application/json,text/plain,*/*",
             "Referer": "https://xinsanban.eastmoney.com/",
         }
-        with httpx.Client(
-            trust_env=False,
-            timeout=20.0,
-            headers=headers,
-            follow_redirects=True,
-        ) as client:
-            response = client.get(url, params=params or {})
-            response.raise_for_status()
-            return response.json()
+        try:
+            with httpx.Client(
+                trust_env=False, timeout=20.0, headers=headers, follow_redirects=True,
+            ) as client:
+                response = client.get(url, params=params or {})
+                response.raise_for_status()
+                return response.json()
+        except (httpx.RequestError, httpx.HTTPStatusError) as exc:
+            # The public site rejects the Python TLS fingerprint with an empty
+            # 403 while its browser request returns the actual JSON. Keep a
+            # bounded browser-compatible fallback, without converting errors
+            # or an HTML challenge into successful empty data.
+            if isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code != 403:
+                raise
+            if curl_requests is None:
+                raise
+            with curl_requests.Session(trust_env=False) as session:
+                response = session.get(url, params=params or {}, headers=headers,
+                                       timeout=15, impersonate="chrome")
+                response.raise_for_status()
+                return response.json()
 
     @staticmethod
     def _neeq_result(payload: Any) -> list[dict[str, Any]]:
@@ -705,12 +768,14 @@ class AkshareAdapter(MarketDataAdapter):
         if not quote_rows:
             raise ValueError(f"No NEEQ quote returned for {symbol}")
         quote = quote_rows[0]
+        if str(quote.get("Code") or "").split(".")[0] != symbol:
+            raise ValueError("新三板行情证券身份与请求不符")
 
         company_payload: dict[str, Any] = {}
         try:
             company_payload = self._fetch_neeq_json(
                 "/api/QuoteCenter/stock/GetZyzb",
-                {"code": symbol},
+                {"code": symbol, "TBMMType": quote.get("TBMMType", 0)},
             ) or {}
         except Exception:
             company_payload = {}
@@ -719,7 +784,8 @@ class AkshareAdapter(MarketDataAdapter):
 
         previous_close = self._neeq_number(quote.get("PreviousClose"))
         current_price = self._neeq_number(quote.get("Close"))
-        if current_price is None:
+        no_trade = current_price in (None, 0) and self._neeq_number(quote.get("Volume")) in (None, 0)
+        if no_trade:
             # NEEQ stocks can have no transaction on the current day. In that
             # case Eastmoney returns "-" for Close and the last close is the
             # most useful current snapshot.
@@ -740,8 +806,9 @@ class AkshareAdapter(MarketDataAdapter):
             {
                 "quote": quote,
                 "company_indicators": company,
-                "latest_price_source": "Close" if self._neeq_number(quote.get("Close")) is not None else "PreviousClose",
-                "no_trade_today": self._neeq_number(quote.get("Close")) is None,
+                "latest_price_source": "PreviousClose" if no_trade else "Close",
+                "no_trade_today": no_trade,
+                "units": {"volume": "股", "source_volume": "手（100股）", "amount": "元"},
                 "total_market_cap": self._neeq_number(quote.get("MarketValue")),
                 "float_market_cap": self._neeq_number(quote.get("FlowCapitalValue")),
                 "pe_ratio": self._neeq_number(quote.get("PERation")),
@@ -757,7 +824,7 @@ class AkshareAdapter(MarketDataAdapter):
             open_price=self._neeq_number(quote.get("Open")),
             high_price=self._neeq_number(quote.get("High")),
             low_price=self._neeq_number(quote.get("Low")),
-            volume=self._neeq_number(quote.get("Volume")),
+            volume=self._neeq_number(quote.get("Volume")) * 100 if self._neeq_number(quote.get("Volume")) is not None else None,
             amount=self._neeq_number(quote.get("Amount")),
             change_amount=change_amount,
             change_pct=change_pct,
@@ -894,6 +961,9 @@ class AkshareAdapter(MarketDataAdapter):
             return []
 
         lines = ((payload.get("data") or {}).get("klines") or []) if isinstance(payload, dict) else []
+        returned_code = (payload.get("data") or {}).get("code")
+        if returned_code and str(returned_code) != symbol:
+            raise ValueError("新三板K线证券身份与请求不符")
         records: list[KlineRecord] = []
         for line in lines:
             values = str(line).split(",")
@@ -913,13 +983,14 @@ class AkshareAdapter(MarketDataAdapter):
                     close_price=self._to_float(values[2]),
                     high_price=self._to_float(values[3]),
                     low_price=self._to_float(values[4]),
-                    volume=self._to_float(values[5]),
+                    volume=self._to_float(values[5]) * 100 if self._to_float(values[5]) is not None else None,
                     amount=self._to_float(values[6]),
                     # NEEQ's kline payload uses field 8 for daily change pct,
                     # not turnover rate. Keep it in raw_payload rather than
                     # exposing it under the wrong column.
                     turnover_rate=None,
-                    raw_payload=self._json_safe({"line": line, "fields": values}),
+                    raw_payload=self._json_safe({"line": line, "fields": values,
+                        "units": {"volume": "股", "source_volume": "手（100股）", "amount": "元"}}),
                 )
             )
         return records
@@ -930,53 +1001,24 @@ class AkshareAdapter(MarketDataAdapter):
         symbol: str,
         indicator: str,
     ) -> list[FinancialRecord]:
+        # Quote timestamps/valuation ratios are not financial report periods.
+        # Keep quote fallback in the quote/profile pipeline only.
         try:
             payload = self._fetch_neeq_json(
-                "/api/QuoteCenter/stock/GetCwzb",
-                {"code": symbol},
+                "/api/QuoteCenter/stock/GetCwzb", {"code": symbol},
             )
-        except Exception:
-            # The xinsanban F10 host is occasionally rate-limited. Keep a
-            # useful quote-indicator snapshot available through the public
-            # push2 endpoint instead of failing the entire detail refresh.
-            push_payload = self._fetch_neeq_quote_push2(symbol)
-            push_data = push_payload.get("data") if isinstance(push_payload, dict) else {}
-            if not isinstance(push_data, dict):
-                return []
-            report_period = None
-            timestamp = self._to_float(push_data.get("f86"))
-            if timestamp:
-                try:
-                    report_period = datetime.fromtimestamp(timestamp).date().isoformat()
-                except (OverflowError, OSError, ValueError):
-                    report_period = None
-            row = {
-                "SECURITY_CODE": symbol,
-                "REPORTDATE": report_period or datetime.now().date().isoformat(),
-                "TOTALMVALUE": push_data.get("f116"),
-                "CMVALUE": push_data.get("f117"),
-                "PELYR": (
-                    self._to_float(push_data.get("f162")) / 100
-                    if self._to_float(push_data.get("f162")) is not None
-                    else None
-                ),
-                "PBMRQ": (
-                    self._to_float(push_data.get("f167")) / 100
-                    if self._to_float(push_data.get("f167")) is not None
-                    else None
-                ),
-                "source": "Eastmoney push2 quote indicators",
-            }
-            return [
-                FinancialRecord(
-                    market=market,
-                    symbol=symbol,
-                    indicator=indicator or "NEEQ_FINANCIAL_INDICATORS",
-                    report_period=row["REPORTDATE"],
-                    currency=None,
-                    data_json=self._normalize_financial_payload(self._json_safe(row)),
-                )
-            ]
+            if not isinstance(payload, dict) or not isinstance(payload.get("result"), list):
+                raise ValueError("新三板财务响应格式异常，不能标记无数据")
+            if not any(self._normalize_neeq_date(row.get("REPORTDATE")) for row in payload["result"] if isinstance(row, dict)):
+                raise ValueError("财务接口未返回有报告期的财务记录，尝试公开页面摘要")
+        except Exception as exc:
+            from app.connectors.neeq_f10 import fetch_home_summary
+            fallback = fetch_home_summary(symbol)
+            data = {**fallback["raw_values"], "source_method": "PUBLIC_F10_HTML",
+                    "source_precision": "SOURCE_ROUNDED", "source_errors": [str(exc)[:300]],
+                    "source_evidence": fallback["source_evidence"], "source_rows": fallback["rows"]}
+            return [FinancialRecord(market=market, symbol=symbol, indicator=indicator or "NEEQ_FINANCIAL_INDICATORS",
+                report_period=fallback["report_date"], currency="CNY", data_json=self._normalize_financial_payload(data))]
         rows = self._neeq_result(payload)
         records: list[FinancialRecord] = []
         for row in rows:
@@ -991,7 +1033,7 @@ class AkshareAdapter(MarketDataAdapter):
                     symbol=symbol,
                     indicator=indicator or "NEEQ_FINANCIAL_INDICATORS",
                     report_period=report_period,
-                    currency=None,
+                    currency="CNY",
                     data_json=self._normalize_financial_payload(self._json_safe(row)),
                 )
             )
@@ -1032,6 +1074,7 @@ class AkshareAdapter(MarketDataAdapter):
                     break
                 rows = payload.get("result") if isinstance(payload, dict) else []
                 if not isinstance(rows, list):
+                    last_error = ValueError("新三板公告响应格式异常，不能标记无公告")
                     break
                 for row in rows:
                     if not isinstance(row, dict):
@@ -1067,16 +1110,31 @@ class AkshareAdapter(MarketDataAdapter):
                 page_size = len(rows)
                 if not rows or (total and page * page_size >= total) or page_size < 20:
                     break
-        if not records and last_error:
+                if page == 100:
+                    last_error = ValueError("新三板公告达到分页上限，尚未取得完整范围")
+        if last_error:
             raise last_error
         records.sort(key=lambda item: (item.notice_date, item.title), reverse=True)
         return records
 
     def _fetch_neeq_news(self, market: str, symbol: str) -> list[NewsRecord]:
-        payload = self._fetch_neeq_json(
-            "/api/QuoteCenter/stock/GetGsxw",
-            {"Code": symbol},
-        )
+        try:
+            payload = self._fetch_neeq_json(
+                "/api/QuoteCenter/stock/GetGsxw",
+                {"Code": symbol},
+            )
+            if not isinstance(payload, dict) or not isinstance(payload.get("result"), list):
+                raise ValueError("新三板新闻响应格式异常")
+            if not payload["result"]:
+                raise ValueError("新闻接口为空，尝试公开公司行情页")
+        except Exception as exc:
+            from app.connectors.neeq_f10 import fetch_quote_page_news
+            rows = fetch_quote_page_news(symbol)
+            if not rows:
+                raise ValueError(f"新闻接口和公开公司页均未取得有日期的新闻；接口原因：{str(exc)[:200]}") from exc
+            return [NewsRecord(market=market, symbol=symbol, news_time=row["news_time"], title=row["title"],
+                content=None, source_name="东方财富新三板公开公司新闻", url=row["url"],
+                content_json={**row, "source_errors": [str(exc)[:300]]}) for row in rows]
         rows = self._neeq_result(payload)
         records: list[NewsRecord] = []
         seen: set[tuple[str, str]] = set()
@@ -1165,7 +1223,7 @@ class AkshareAdapter(MarketDataAdapter):
         try:
             company_payload = self._fetch_neeq_json(
                 "/api/QuoteCenter/stock/GetZyzb",
-                {"code": symbol},
+                {"code": symbol, "TBMMType": (quote.raw_payload.get("quote") or {}).get("TBMMType", 0) if quote else 0},
             )
             company_rows = self._neeq_result(company_payload)
             company = company_rows[0] if company_rows else {}
@@ -1270,7 +1328,7 @@ class AkshareAdapter(MarketDataAdapter):
                 {
                     "report_name": title,
                     "report_type": report_type,
-                    "report_date": notice.notice_date,
+                    "report_date": self._neeq_report_period(title),
                     "notice_date": notice.notice_date,
                     "url": notice.url,
                     "source_name": "Eastmoney NEEQ announcements",
@@ -1283,7 +1341,7 @@ class AkshareAdapter(MarketDataAdapter):
         )
 
         message_suffix = f" Remote warnings: {'; '.join(errors)}" if errors else ""
-        return {
+        result = {
             "profile": {
                 "source": "Eastmoney NEEQ",
                 "fields": profile_fields,
@@ -1291,7 +1349,8 @@ class AkshareAdapter(MarketDataAdapter):
             },
             "holders": {
                 "source": "Eastmoney NEEQ company indicators",
-                "major": [
+                "major": [],
+                "holder_count": [
                     {
                         key: value
                         for key, value in {
@@ -1302,7 +1361,7 @@ class AkshareAdapter(MarketDataAdapter):
                         }.items()
                         if value not in (None, "")
                     }
-                ],
+                ] if self._neeq_number(company.get("TOTALSH")) is not None else [],
                 "circulating": [],
                 "message": "NEEQ publishes aggregate shareholder indicators rather than a complete shareholder list.",
             },
@@ -1331,17 +1390,46 @@ class AkshareAdapter(MarketDataAdapter):
                 "message": "" if report_entries else "No NEEQ financial reports returned.",
             },
             "research_sections": {
-                "source": "暂无新三板公开研究聚合接口",
+                "source": "新三板公开研究来源待验证",
                 "sections": [],
                 "message": "当前未接入新三板问董秘、盈利预测和机构评级聚合接口。",
+                "qa_status": "MISSING",
+                "qa_message": "新三板不在沪深交易所互动问答覆盖范围内，未接入发行人专属问答来源。",
             },
         }
+        from app.connectors.neeq_f10 import fetch_neeq_f10
+        enrichment = fetch_neeq_f10(symbol, self._fetch_neeq_json)
+        for section, payload in enrichment.items():
+            previous = result.get(section) or {}
+            if section == "profile":
+                payload["fields"] = {**previous.get("fields", {}), **payload.get("fields", {})}
+            if section == "holders" and not payload.get("holder_count"):
+                payload["holder_count"] = previous.get("holder_count") or []
+            merged = {**previous, **payload}
+            if section == "financial_summary" and not payload.get("rows") and previous.get("rows"):
+                merged.update({key: previous[key] for key in ("rows", "periods", "latest", "source") if key in previous})
+            if any(merged.get(key) for key in ("rows", "sections", "major")):
+                merged["message"] = payload.get("message", "")
+            result[section] = merged
+        return result
+
+    @staticmethod
+    def _neeq_report_period(title: str) -> str | None:
+        """Use an explicitly named period; publication date is a different fact."""
+        year = re.search(r"(?<!\d)((?:19|20)\d{2})\s*年?", title)
+        if not year:
+            return None
+        suffix = ("06-30" if re.search(r"半年|半年度|中期|中报", title)
+                  else "03-31" if re.search(r"一季|第一季", title)
+                  else "09-30" if re.search(r"三季|第三季", title)
+                  else "12-31" if re.search(r"年报|年度报告", title) else None)
+        return f"{year.group(1)}-{suffix}" if suffix else None
 
     def _safe_cn_financial_summary(self, symbol: str) -> dict[str, Any]:
         method = getattr(ak, "stock_financial_analysis_indicator_em", None)
         if method:
             try:
-                exchange_symbol = f"{symbol}.SZ" if symbol.startswith(("0", "3")) else f"{symbol}.SH"
+                exchange_symbol = self._financial_security_code(symbol)
                 dataframe = method(symbol=exchange_symbol, indicator="按报告期")
                 summary = self._build_financial_summary(
                     dataframe,
@@ -1473,6 +1561,8 @@ class AkshareAdapter(MarketDataAdapter):
                             "url": detail_url,
                             "source_name": "巨潮资讯",
                             "title": title,
+                            "raw_notice_type": category,
+                            "content_json": self._json_safe(item),
                         }
                         key = (report_date or year, report_type)
                         current = reports_by_period.get(key)
@@ -1672,10 +1762,13 @@ class AkshareAdapter(MarketDataAdapter):
                     "report_name": title,
                     "report_type": report_type,
                     "report_date": period,
-                    "notice_date": period,
+                    # A metric period is not the publication date of a filing.
+                    "notice_date": None,
                     "url": None,
                     "source_name": "东方财富港股财报",
                     "title": title,
+                    "status": "MISSING",
+                    "message": "已有财务指标，尚未关联正式披露公告。",
                 }
             official_reports = self._fetch_hkex_financial_report_notices(symbol)
             for item in official_reports:
@@ -1693,19 +1786,40 @@ class AkshareAdapter(MarketDataAdapter):
                     source_name="HKEXnews",
                     title=item.get("title") or item.get("report_name"),
                 )
+                official_entry.update({key: item[key] for key in ("raw_notice_type", "content_json") if key in item})
                 current = reports_by_period.get(key)
                 reports_by_period[key] = (
                     official_entry if current is None else self._merge_hk_financial_report_entry(current, official_entry)
                 )
-            reports = list(reports_by_period.values())
+            # Keep every actual document (results and full reports are distinct
+            # announcements). Period inventory never counts as a formal file.
+            reports = []
+            for item in official_reports:
+                period = str(item.get("report_date") or "")[:10]
+                key = (period, self._normalize_hk_report_type(item.get("report_type")))
+                normalized = dict(item)
+                if key in reports_by_period and reports_by_period[key].get("source_name") == "东方财富港股财报 / HKEXnews":
+                    normalized["source_name"] = "东方财富港股财报 / HKEXnews"
+                reports.append(normalized)
+            linked_periods = {(str(row.get("report_date") or "")[:10], self._normalize_hk_report_type(row.get("report_type"))) for row in reports}
+            unlinked_periods = [row for key, row in reports_by_period.items() if key not in linked_periods]
             reports.sort(key=lambda row: row.get("report_date") or "", reverse=True)
             return {
                 "source": "东方财富港股财报 / HKEXnews",
                 "reports": reports,
+                "unlinked_periods": unlinked_periods,
                 "message": "" if reports else "暂无已发布财报。",
             }
         except Exception as exc:
-            official_reports = self._fetch_hkex_financial_report_notices(symbol)
+            try:
+                official_reports = self._fetch_hkex_financial_report_notices(symbol)
+            except Exception as official_exc:
+                return {
+                    "source": "东方财富港股财报 / HKEXnews",
+                    "reports": [], "status": "PARTIAL",
+                    "message": f"正式财报采集未完成：{official_exc}"[:500],
+                    "source_errors": [str(exc)[:250], str(official_exc)[:250]],
+                }
             if official_reports:
                 return {
                     "source": "HKEXnews",
@@ -1950,17 +2064,17 @@ class AkshareAdapter(MarketDataAdapter):
                 continue
             report_type = self._normalize_hk_report_type(self._guess_hk_report_type(combined_text))
             report_date = self._guess_hk_report_date(combined_text, report_type, notice.notice_date)
-            key = (report_date or notice.notice_date, report_type)
-            if not key[0]:
-                continue
+            key = (notice.notice_date, title)
             candidate = {
-                "report_name": f"{notice.symbol}：{self._format_report_name(report_type, key[0])}",
+                "report_name": f"{notice.symbol}：{self._format_report_name(report_type, report_date)}" if report_date else title,
                 "report_type": report_type,
-                "report_date": report_date or notice.notice_date,
+                "report_date": report_date,
                 "notice_date": notice.notice_date,
                 "url": notice.url,
                 "source_name": "HKEXnews",
                 "title": title or notice_type,
+                "raw_notice_type": notice.notice_type,
+                "content_json": notice.content_json,
                 "_priority": priority,
             }
             current = reports.get(key)
@@ -1977,19 +2091,19 @@ class AkshareAdapter(MarketDataAdapter):
         cls,
         symbol: str,
         report_type: str,
-        report_date: str,
+        report_date: str | None,
         notice_date: str,
         url: Any,
         source_name: str,
         title: str | None,
     ) -> dict[str, Any]:
-        report_name = f"{symbol}：{cls._format_report_name(report_type, report_date)}"
+        report_name = f"{symbol}：{cls._format_report_name(report_type, report_date)}" if report_date else str(title or "财报披露")
         return {
             "report_name": report_name,
             "report_type": report_type,
             "report_date": report_date,
             "notice_date": notice_date,
-            "url": str(url).strip() or None,
+            "url": str(url or "").strip() or None,
             "source_name": source_name,
             "title": str(title or "").strip() or report_name,
         }
@@ -2006,6 +2120,9 @@ class AkshareAdapter(MarketDataAdapter):
             merged["url"] = official["url"]
         if official.get("title") not in (None, ""):
             merged["title"] = official["title"]
+        for key in ("raw_notice_type", "content_json", "notice_id", "source_id", "canonical_key"):
+            if key in official:
+                merged[key] = official[key]
         merged["source_name"] = "东方财富港股财报 / HKEXnews"
         return merged
 
@@ -2042,6 +2159,23 @@ class AkshareAdapter(MarketDataAdapter):
         normalized = re.sub(r"\s+", "", html.unescape(title or ""))
         if "月报" in normalized or "月報" in normalized:
             return False
+        if any(keyword in normalized for keyword in (
+            "董事会会议", "董事會會議", "董事会召开", "董事會召開", "盈利警告",
+            "延期刊发", "延期刊發", "延迟刊发", "延遲刊發", "延迟公布", "延遲公布",
+            "补充公告", "補充公告", "澄清公告", "更正公告", "更正公佈",
+            "通知信函", "申請表格", "申请表格", "更改回條", "更改回条",
+            "致現有登記股東", "致现有登记股东", "致非登記股東", "致非登记股东",
+        )):
+            return False
+        if ("通函-[" in normalized or "通函-【" in normalized) and not any(
+            keyword in normalized for keyword in ("業績公告", "业绩公告", "財務報表", "财务报表")
+        ):
+            return False
+        # The HKEX umbrella category combines financial and ESG documents.
+        # Its specific bracketed label, not the umbrella, identifies a report.
+        if "[" in normalized:
+            normalized = re.sub(r"財務報表/環境、社會及管治資料|财务报表/环境、社会及管治资料", "", normalized)
+            normalized = re.sub(r"\[[^]]*(?:環境|环境|ESG)[^]]*\]", "", normalized)
         keywords = (
             "业绩公告",
             "業績公告",
@@ -2051,6 +2185,8 @@ class AkshareAdapter(MarketDataAdapter):
             "中期業績",
             "年度业绩",
             "年度業績",
+            "全年业绩",
+            "全年業績",
             "中期报告",
             "中期報告",
             "年度报告",
@@ -2096,8 +2232,8 @@ class AkshareAdapter(MarketDataAdapter):
             "market": "SEHK",
             "stockId": stock_id,
             "documentType": "",
-            "fromDate": start_date,
-            "toDate": end_date,
+            "fromDate": self._hkex_query_date(start_date),
+            "toDate": self._hkex_query_date(end_date),
             "title": title,
             "searchType": "1",
             "t1code": "",
@@ -2151,8 +2287,9 @@ class AkshareAdapter(MarketDataAdapter):
     ) -> str | None:
         year_match = re.search(r"(20\d{2})", title)
         year = year_match.group(1) if year_match else cls._extract_chinese_year(title)
-        if not year and fallback_notice_date and re.fullmatch(r"\d{4}-\d{2}-\d{2}", fallback_notice_date):
-            year = fallback_notice_date[:4]
+        # A publication date does not identify a financial reporting period.
+        # Keep yearless disclosures linked with an unresolved period instead
+        # of inventing a year or assuming a calendar-year fiscal period.
         if not year:
             return None
         suffix_map = {
@@ -2270,7 +2407,7 @@ class AkshareAdapter(MarketDataAdapter):
             "income_statement": self._empty_statement_section("利润表"),
             "cash_flow": self._empty_statement_section("现金流量表"),
         }
-        stock_code = f"SH{symbol}" if symbol.startswith("6") else f"SZ{symbol}"
+        stock_code = self._financial_security_code(symbol).split(".")[1] + symbol
         statement_map = (
             (
                 "income_statement",
@@ -2474,7 +2611,7 @@ class AkshareAdapter(MarketDataAdapter):
                 "message": "主营构成接口不可用。",
             }
         try:
-            exchange_symbol = f"SH{symbol}" if symbol.startswith("6") else f"SZ{symbol}"
+            exchange_symbol = self._financial_security_code(symbol).split(".")[1] + symbol
             dataframe = method(symbol=exchange_symbol)
             if dataframe is None or dataframe.empty:
                 return {
@@ -2536,7 +2673,7 @@ class AkshareAdapter(MarketDataAdapter):
         method = getattr(ak, "stock_individual_fund_flow", None)
         if not method:
             return self._fetch_cn_fund_flow_http(symbol)
-        market = "sh" if symbol.startswith("6") else ("bj" if symbol.startswith(("4", "8")) else "sz")
+        market = "sh" if symbol.startswith("6") else ("bj" if symbol.startswith(("4", "8", "92")) else "sz")
         try:
             dataframe = method(stock=symbol, market=market)
             rows = self._safe_dataframe_records(dataframe, limit=30)
@@ -3209,45 +3346,22 @@ class AkshareAdapter(MarketDataAdapter):
         return item
 
     def _safe_qa_records(self, symbol: str, *, limit: int = 100) -> list[dict[str, Any]]:
-        """Fetch and sort CNINFO investor-relations questions for one stock."""
-        cls = type(self)
-        method = getattr(ak, "stock_irm_cninfo", None)
-        if not method:
-            return []
-        # Use the common optional wrapper so callers/tests can disable this
-        # network panel without affecting the core F10 refresh.
-        rows = self._safe_optional_records(method, {"symbol": symbol}, limit=limit)
-        result: list[dict[str, Any]] = []
-        for raw in rows:
-            item = cls._normalize_qa_row(raw, symbol)
-            if item is None:
-                continue
-            # A few CNINFO responses omit the inline answer although an answer
-            # id is present. Resolve only those rows and retain the original
-            # question payload if the detail endpoint is unavailable.
-            if not item.get("answer") and item.get("answer_id"):
-                detail_method = getattr(ak, "stock_irm_ans_cninfo", None)
-                detail_rows = self._safe_optional_records(
-                    detail_method,
-                    {"symbol": item["question_id"]},
-                    limit=1,
-                )
-                if detail_rows:
-                    detail = cls._normalize_qa_row({**raw, **detail_rows[0]}, symbol)
-                    if detail:
-                        item.update({
-                            key: detail[key]
-                            for key in ("answer", "answerer", "answered_at", "回答内容")
-                            if detail.get(key) not in (None, "")
-                        })
-            result.append(item)
-        result.sort(
-            key=lambda row: str(
-                row.get("updated_at") or row.get("asked_at") or row.get("提问时间") or ""
-            ),
-            reverse=True,
-        )
-        return result[:limit]
+        return self._safe_qa_snapshot(symbol, limit=limit)[0]
+
+    def _safe_qa_snapshot(self, symbol: str, *, limit: int = 100) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+        """Bounded first-page preview; the durable queue collects full history."""
+        code, name = qa_source(symbol)
+        status: dict[str, Any] = {"source_code": code, "source_name": name}
+        try:
+            with OfficialQAClient() as client:
+                page = client.fetch_page(symbol)
+            rows = sorted(page.rows, key=lambda row: str(row.get("answered_at") or row.get("updated_at") or row.get("asked_at") or ""), reverse=True)
+            status.update(status="COMPLETE" if page.complete and rows else "EMPTY" if page.complete else "PARTIAL",
+                          message="" if page.complete and rows else "官方来源暂无问答记录" if page.complete else "已获取最新问答，完整历史由后台分页同步")
+            return rows[:limit], status
+        except Exception as exc:
+            status.update(status="RETRY", error=str(exc)[:1000], message="官方问答请求失败，保留本地数据，等待后台重试")
+            return [], status
 
     @staticmethod
     def _safe_sina_research_report_records(
@@ -4164,19 +4278,23 @@ class AkshareAdapter(MarketDataAdapter):
 
     def _fetch_cn_a_symbols_from_exchange_tables(self) -> list[SymbolRecord]:
         records_by_symbol: dict[str, SymbolRecord] = {}
-        for method_name in ("stock_info_sh_name_code", "stock_info_sz_name_code", "stock_info_bj_name_code"):
-            method = getattr(ak, method_name, None)
-            if not method:
-                continue
+        # The SSE method defaults to main-board A shares. STAR needs its own
+        # request; a non-empty main-board response never proves full coverage.
+        from app.connectors.listing_master import EXCHANGE_TABLES, fetch_exchange_table, with_exchange_proof
+        self.symbol_master_issues = []
+        for method_name, kwargs in [item for tasks in EXCHANGE_TABLES.values() for item in tasks]:
             try:
-                dataframe = method()
-            except Exception:
+                dataframe = fetch_exchange_table(method_name, kwargs)
+                if dataframe is None or (dataframe.empty and kwargs.get("symbol") != "CDR列表"):
+                    raise ValueError("交易所名单为空")
+            except Exception as exc:
+                self.symbol_master_issues.append({"method": method_name, "scope": kwargs, "error": str(exc)[:240]})
                 continue
             if dataframe is not None and not dataframe.empty:
                 dataframe = dataframe.copy()
                 dataframe["_source_method"] = method_name
                 for record in self._normalize_dataframe(dataframe, MARKET_CN_A):
-                    records_by_symbol[record.symbol] = record
+                    records_by_symbol[record.symbol] = with_exchange_proof(record)
         return list(records_by_symbol.values())
 
     def _fetch_cn_a_symbols_from_eastmoney(self) -> list[SymbolRecord]:
@@ -4298,6 +4416,10 @@ class AkshareAdapter(MarketDataAdapter):
         return records
 
     def _fetch_neeq_rows(self) -> list[dict[str, Any]]:
+        # A complete universe is only proven by a provider total and a page
+        # count reaching that total.  Start pessimistically so an empty/malformed
+        # response cannot be interpreted as a complete snapshot.
+        self.symbol_master_complete = False
         url = "https://push2.eastmoney.com/api/qt/clist/get"
         headers = {
             "User-Agent": "Mozilla/5.0",
@@ -4329,6 +4451,7 @@ class AkshareAdapter(MarketDataAdapter):
                 if page == 1:
                     total = self._safe_int(data.get("total"))
                 if not diff or (total and len(rows) >= total):
+                    self.symbol_master_complete = bool(total and len(rows) >= total)
                     break
                 page += 1
                 if page > 100:
@@ -4337,6 +4460,10 @@ class AkshareAdapter(MarketDataAdapter):
                 return rows
         except Exception:
             pass
+        # The code-table fallback is useful for recovery, but its prefix
+        # probing cannot prove that the returned universe is complete.
+        self.symbol_master_complete = False
+        self.symbol_master_issues.append({"method": "NEEQ_CODE_TABLE_FALLBACK", "error": "备用码表未提供完整总数证明"})
         return self._fetch_neeq_code_table_rows()
 
     def _fetch_neeq_code_table_rows(self) -> list[dict[str, Any]]:
@@ -4500,6 +4627,13 @@ class AkshareAdapter(MarketDataAdapter):
                 rename_map[source] = target
         if rename_map:
             frame = frame.rename(columns=rename_map)
+        # AkShare's Eastmoney A-share history is in lots. Tencent's installed
+        # adapter and Sina daily history already return shares; never infer a
+        # multiplier from the size of a value or apply it twice.
+        if method_name == "stock_zh_a_hist" and "成交量" in frame:
+            frame["成交量"] = pd.to_numeric(frame["成交量"], errors="coerce") * 100
+        frame["source_method"] = method_name
+        frame["volume_unit"] = "股"
         return frame
 
     def _fetch_hk_kline(
@@ -4653,8 +4787,8 @@ class AkshareAdapter(MarketDataAdapter):
             "market": "SEHK",
             "stockId": stock_id,
             "documentType": "",
-            "fromDate": start_date,
-            "toDate": end_date,
+            "fromDate": self._hkex_query_date(start_date),
+            "toDate": self._hkex_query_date(end_date),
             "title": "",
             "searchType": "0",
             "t1code": "",
@@ -4667,40 +4801,43 @@ class AkshareAdapter(MarketDataAdapter):
             "User-Agent": "Mozilla/5.0",
             "Referer": "https://www1.hkexnews.hk/search/titlesearch.xhtml?lang=zh",
         }
-        rows: list[dict[str, Any]] = []
-        row_range = 100
         max_row_range = 1000
+        windows = [(datetime.strptime(self._hkex_query_date(start_date), "%Y%m%d").date(),
+                    datetime.strptime(self._hkex_query_date(end_date), "%Y%m%d").date())]
+        if windows[0][0] > windows[0][1]:
+            raise ValueError("港交所查询开始日期晚于结束日期")
+        collected: list[dict[str, Any]] = []
         with httpx.Client(timeout=20.0, headers=headers, trust_env=False) as client:
-            while True:
-                params["rowRange"] = str(row_range)
-                response = client.get(url, params=params)
-                response.raise_for_status()
-                payload = response.json()
-
-                result = (payload or {}).get("result")
-                if isinstance(result, str):
-                    try:
-                        rows = json.loads(result or "[]")
-                    except Exception:
-                        return []
-                else:
-                    rows = result or []
-                if not isinstance(rows, list):
-                    return []
-
-                record_cnt = self._safe_int(payload.get("recordCnt"))
-                loaded_record = self._safe_int(payload.get("loadedRecord"))
-                has_next_row = bool(payload.get("hasNextRow"))
-                if not has_next_row or (record_cnt and loaded_record >= record_cnt) or row_range >= max_row_range:
-                    break
-
-                next_row_range = row_range + 100
-                if record_cnt:
-                    next_row_range = min(next_row_range, record_cnt)
-                if next_row_range <= row_range:
-                    break
-                row_range = next_row_range
-        return self._normalize_hkex_notice_rows(rows, symbol=symbol)
+            while windows:
+                begin, finish = windows.pop()
+                params["fromDate"], params["toDate"] = begin.strftime("%Y%m%d"), finish.strftime("%Y%m%d")
+                row_range = 100
+                while True:
+                    params["rowRange"] = str(row_range)
+                    response = client.get(url, params=dict(params))
+                    response.raise_for_status()
+                    payload = response.json()
+                    if not isinstance(payload, dict) or "result" not in payload:
+                        raise ValueError("港交所公告响应缺少结果，不能标记无数据")
+                    result = payload["result"]
+                    rows = json.loads(result) if isinstance(result, str) else result
+                    if not isinstance(rows, list):
+                        raise ValueError("港交所公告结果格式异常")
+                    record_cnt = self._safe_int(payload.get("recordCnt"))
+                    loaded_record = self._safe_int(payload.get("loadedRecord"))
+                    has_next_row = payload.get("hasNextRow") in (True, 1, "true", "True")
+                    complete = not has_next_row and (not record_cnt or loaded_record >= record_cnt)
+                    if complete:
+                        collected.extend(rows)
+                        break
+                    if record_cnt > max_row_range or row_range >= max_row_range:
+                        if begin == finish:
+                            raise ValueError("港交所单日公告超过采集上限，保留缺口，不标记完整同步")
+                        middle = begin + timedelta(days=(finish-begin).days // 2)
+                        windows.extend([(begin, middle), (middle + timedelta(days=1), finish)])
+                        break
+                    row_range = min(max_row_range, record_cnt if record_cnt > row_range else row_range + 100)
+        return self._normalize_hkex_notice_rows(collected, symbol=symbol)
 
     def _normalize_hkex_notice_rows(self, rows: list[dict[str, Any]], symbol: str) -> list[NoticeRecord]:
         records: list[NoticeRecord] = []
@@ -4774,6 +4911,17 @@ class AkshareAdapter(MarketDataAdapter):
         return None
 
     @staticmethod
+    def _hkex_query_date(value: str) -> str:
+        # HKEX silently accepts ISO dates but returns a different date range.
+        # Validate and convert at the provider boundary for every caller.
+        for pattern in ("%Y-%m-%d", "%Y%m%d"):
+            try:
+                return datetime.strptime(value, pattern).strftime("%Y%m%d")
+            except ValueError:
+                continue
+        raise ValueError(f"无效的港交所公告查询日期：{value}")
+
+    @staticmethod
     def _parse_hkex_notice_date(value: str) -> str | None:
         cleaned = value.strip()
         if not cleaned:
@@ -4797,7 +4945,7 @@ class AkshareAdapter(MarketDataAdapter):
             secid = f"116.{symbol}"
         url = (
             "https://push2.eastmoney.com/api/qt/stock/get"
-            f"?secid={secid}&fields=f43,f44,f45,f46,f47,f48,f57,f58,f60,f86,f116,f117,f162,f167,f168,f169,f170,f171,f292"
+            f"?secid={secid}&fields=f1,f43,f44,f45,f46,f47,f48,f57,f58,f60,f86,f116,f117,f162,f167,f168,f169,f170,f171,f292"
         )
         with httpx.Client(
             trust_env=False,
@@ -4810,6 +4958,12 @@ class AkshareAdapter(MarketDataAdapter):
         quote = (data or {}).get("data") or {}
         if not quote:
             raise ValueError(f"No realtime quote returned for {market}:{symbol}")
+        if str(quote.get("f57") or "") != symbol:
+            raise ValueError("东方财富行情证券身份与请求不符")
+        source_volume = self._to_float(quote.get("f47"))
+        volume = source_volume * 100 if source_volume is not None and market == "CN_A" else source_volume
+        timestamp = self._to_float(quote.get("f86"))
+        quote_time = datetime.fromtimestamp(timestamp).isoformat() if timestamp else None
         total_market_cap = self._to_float(quote.get("f116"))
         float_market_cap = self._to_float(quote.get("f117"))
         # Eastmoney Push2 encodes PE/PB/turnover ratios in hundredths.
@@ -4821,13 +4975,13 @@ class AkshareAdapter(MarketDataAdapter):
         return QuoteRecord(
             market=market,
             symbol=symbol,
-            quote_time=None,
+            quote_time=quote_time,
             current_price=self._eastmoney_price(quote.get("f43"), market),
             previous_close_price=self._eastmoney_price(quote.get("f60"), market),
             open_price=self._eastmoney_price(quote.get("f46"), market),
             high_price=self._eastmoney_price(quote.get("f44"), market),
             low_price=self._eastmoney_price(quote.get("f45"), market),
-            volume=self._to_float(quote.get("f47")),
+            volume=volume,
             amount=self._to_float(quote.get("f48")),
             change_amount=self._eastmoney_price(quote.get("f169"), market),
             change_pct=self._to_float(quote.get("f170")) / 100 if quote.get("f170") is not None else None,
@@ -4835,6 +4989,7 @@ class AkshareAdapter(MarketDataAdapter):
             raw_payload=self._json_safe(
                 {
                     **quote,
+                    "units": {"volume": "股", "source_volume": "手（100股）" if market == "CN_A" else "股", "amount": "本币"},
                     "derived": {
                         "total_market_cap_yi": self._market_cap_to_yi(total_market_cap),
                         "float_market_cap_yi": self._market_cap_to_yi(float_market_cap),
@@ -4852,6 +5007,7 @@ class AkshareAdapter(MarketDataAdapter):
         with httpx.Client(trust_env=False, timeout=20.0, headers={"User-Agent": "Mozilla/5.0"}) as client:
             response = client.get(url)
             response.raise_for_status()
+            response.encoding = "gb18030"
             text = response.text
         quote = self._parse_tencent_quote(text, market, symbol)
         if quote.current_price is None:
@@ -4862,26 +5018,38 @@ class AkshareAdapter(MarketDataAdapter):
         raw = text.split("=", 1)[-1].strip().strip(";").strip('"')
         parts = raw.split("~") if raw else []
         current_price = self._to_float(parts[3] if len(parts) > 3 else None)
-        shares = self._to_float(parts[72] if len(parts) > 72 else None)
-        total_market_cap = current_price * shares if current_price is not None and shares is not None else None
-        float_market_cap = self._to_float(parts[44] if len(parts) > 44 else None)
+        if len(parts) <= 34 or parts[2] != symbol:
+            raise ValueError(f"腾讯行情证券身份或格式与 {market}:{symbol} 不符")
+        # Tencent fields 44/45 are already in 100 million currency units.
+        # HK index 72 is a dividend field, not a share count.  HK shares are
+        # at 69/70. STAR and HK index 6 are shares; other A/BSE quotes
+        # use lots of 100 shares. This is a provider-specific distinction.
         derived = {
-            "total_market_cap_yi": self._market_cap_to_yi(total_market_cap),
-            "float_market_cap_yi": self._market_cap_to_yi(float_market_cap),
+            "total_market_cap_yi": self._to_float(parts[45] if len(parts) > 45 else None),
+            "float_market_cap_yi": self._to_float(parts[44] if len(parts) > 44 else None),
             "pe_ratio": self._to_float(parts[39] if len(parts) > 39 else None),
-            "pb_ratio": self._to_float(parts[46] if len(parts) > 46 else None),
-            "volume_ratio": self._to_float(parts[49] if len(parts) > 49 else None),
+            "pb_ratio": self._to_float(parts[46] if market == "CN_A" and len(parts) > 46 else None),
+            "volume_ratio": self._to_float(parts[49] if market == "CN_A" and len(parts) > 49 else None),
         }
+        source_volume = self._to_float(parts[6] if len(parts) > 6 else None)
+        volume_is_lots = market == "CN_A" and not symbol.startswith(("688", "689"))
+        volume = source_volume * 100 if source_volume is not None and volume_is_lots else source_volume
+        previous_close = self._to_float(parts[4])
+        no_trade_snapshot = (
+            market == "HK" and volume == 0 and current_price is not None
+            and current_price == previous_close
+            and all(self._to_float(parts[index]) == 0 for index in (5, 33, 34))
+        )
         return QuoteRecord(
             market=market,
             symbol=symbol,
             quote_time=self._normalize_quote_time(parts[30] if len(parts) > 30 and parts[30] else None),
             current_price=current_price,
-            previous_close_price=self._to_float(parts[4] if len(parts) > 4 else None),
+            previous_close_price=previous_close,
             open_price=self._to_float(parts[5] if len(parts) > 5 else None),
             high_price=self._to_float(parts[33] if len(parts) > 33 else None),
             low_price=self._to_float(parts[34] if len(parts) > 34 else None),
-            volume=self._to_float(parts[6] if len(parts) > 6 else None),
+            volume=volume,
             amount=self._parse_tencent_amount(parts, market),
             change_amount=self._to_float(parts[31] if len(parts) > 31 else None),
             change_pct=self._to_float(parts[32] if len(parts) > 32 else None),
@@ -4894,7 +5062,13 @@ class AkshareAdapter(MarketDataAdapter):
                 else (parts[43] if market == "HK" and len(parts) > 43
                       else (parts[39] if len(parts) > 39 else None))
             ),
-            raw_payload={"raw": raw, "parts": parts, "derived": derived},
+            raw_payload={"raw": raw, "parts": parts, "derived": derived,
+                         "source_method": "TENCENT_QUOTE",
+                         "no_trade_today": no_trade_snapshot,
+                         "latest_price_source": "PREVIOUS_CLOSE_REFERENCE" if no_trade_snapshot else "SOURCE_QUOTE",
+                         "observation_scope": "SOURCE_SNAPSHOT",
+                         "units": {"volume": "股", "source_volume": "手（100股）" if volume_is_lots else "股",
+                                   "market_cap": "亿本币"}},
         )
 
     def _normalize_news_dataframe(self, dataframe: pd.DataFrame, market: str, symbol: str) -> list[NewsRecord]:
@@ -4930,7 +5104,7 @@ class AkshareAdapter(MarketDataAdapter):
         security = self._lookup_cninfo_security(symbol)
         org_id = str((security or {}).get("orgId") or "").strip() or (self._fallback_cninfo_org_id(symbol) or "")
         if not org_id:
-            return []
+            raise ValueError(f"无法确认巨潮证券身份：{symbol}，不能将身份查询失败标记为无公告")
         column, plate = self._cninfo_market_params(symbol)
         url = "https://www.cninfo.com.cn/new/hisAnnouncement/query"
         base_params = {
@@ -4961,6 +5135,50 @@ class AkshareAdapter(MarketDataAdapter):
                 rows = page_rows if page == 1 else self._fetch_notice_page(client, url, base_params, page)
                 records.extend(self._normalize_notice_rows(rows, market="CN_A", symbol=symbol))
         return records
+
+    def _fetch_cn_a_notices_eastmoney(self, symbol: str, start_date: str, end_date: str) -> list[NoticeRecord]:
+        """Public disclosure mirror, paginated and checked against issuer code."""
+        begin, end = self._notice_date(start_date), self._notice_date(end_date)
+        result: list[NoticeRecord] = []
+        seen: set[str] = set()
+        with httpx.Client(timeout=15, trust_env=False, headers={"User-Agent": "Mozilla/5.0"}) as client:
+            for page in range(1, 101):
+                response = client.get("https://np-anotice-stock.eastmoney.com/api/security/ann", params={
+                    "page_size": 100, "page_index": page, "ann_type": "A", "client_source": "web",
+                    "stock_list": symbol, "begin_time": begin, "end_time": end,
+                })
+                response.raise_for_status()
+                payload = response.json()
+                # This endpoint uses integer 1 as well as JSON true.  Both
+                # indicate success; missing/false flags must remain failures.
+                if payload.get("success") not in (True, 1) or not isinstance(payload.get("data"), dict):
+                    raise ValueError("东方财富公告响应格式异常，不能标记为空记录")
+                data = payload["data"]
+                rows = data.get("list")
+                if not isinstance(rows, list):
+                    raise ValueError("东方财富公告响应缺少记录列表")
+                for row in rows:
+                    identities = row.get("codes") or []
+                    if not any(str(item.get("stock_code")) == symbol for item in identities if isinstance(item, dict)):
+                        raise ValueError(f"公告证券身份与 {symbol} 不符")
+                    notice_date = str(row.get("notice_date") or "")[:10]
+                    title = str(row.get("title_ch") or row.get("title") or "").strip()
+                    art_code = str(row.get("art_code") or "")
+                    if not title or not art_code or not notice_date:
+                        raise ValueError("公告缺少标题、日期或原文编号")
+                    if not begin <= notice_date <= end or art_code in seen:
+                        continue
+                    seen.add(art_code)
+                    columns = row.get("columns") or []
+                    kind = ";".join(str(item.get("column_name") or "") for item in columns if isinstance(item, dict))
+                    raw = {**self._json_safe(row), "source_name": "东方财富公告转录", "source_url": str(response.url),
+                           "source_method": "EASTMONEY_DISCLOSURE_MIRROR", "original_pdf_url": f"https://pdf.dfcfw.com/pdf/H2_{art_code}_1.pdf"}
+                    result.append(NoticeRecord(market="CN_A", symbol=symbol, notice_date=notice_date, title=title,
+                        notice_type=kind or "公告", url=raw["original_pdf_url"], content_json=raw))
+                total = int(data.get("total_hits") or 0)
+                if len(rows) < 100 or (total and page * 100 >= total):
+                    return sorted(result, key=lambda r: (r.notice_date, r.title), reverse=True)
+        raise ValueError("公告超过分页预算，不能将截断结果标记完整")
 
     @staticmethod
     def _fetch_notice_page(
@@ -5054,7 +5272,7 @@ class AkshareAdapter(MarketDataAdapter):
             return f"gssh{normalized_symbol.zfill(7)}"
         if normalized_symbol.startswith(("0", "3")):
             return f"gssz{normalized_symbol.zfill(7)}"
-        if normalized_symbol.startswith(("4", "8")):
+        if normalized_symbol.startswith(("4", "8", "92")):
             return f"gfbj{normalized_symbol}"
         return None
 
@@ -5063,7 +5281,7 @@ class AkshareAdapter(MarketDataAdapter):
         normalized_symbol = AkshareAdapter._normalize_symbol(symbol, "CN_A")
         if normalized_symbol.startswith("6"):
             return "sse", "sh"
-        if normalized_symbol.startswith(("4", "8")):
+        if normalized_symbol.startswith(("4", "8", "92")):
             return "bjse", "bj"
         return "szse", "sz"
 
@@ -5117,6 +5335,8 @@ class AkshareAdapter(MarketDataAdapter):
             return f"sh{symbol}"
         if symbol.startswith(("0", "3")):
             return f"sz{symbol}"
+        if symbol.startswith(("4", "8", "92")):
+            return f"bj{symbol}"
         return f"sz{symbol}"
 
     @staticmethod
@@ -5132,7 +5352,9 @@ class AkshareAdapter(MarketDataAdapter):
             return clean_symbol.lower()
         if clean_symbol.startswith("6"):
             return f"sh{clean_symbol}"
-        if clean_symbol.startswith(("0", "3", "4", "8")):
+        if clean_symbol.startswith(("4", "8", "92")):
+            return f"bj{clean_symbol}"
+        if clean_symbol.startswith(("0", "3")):
             return f"sz{clean_symbol}"
         return f"sz{clean_symbol}"
 
@@ -5206,15 +5428,13 @@ class AkshareAdapter(MarketDataAdapter):
 
     @staticmethod
     def _infer_exchange(symbol: str, market: str) -> str:
-        if market == "HK":
-            return "HKEX"
-        if symbol.startswith("6"):
-            return "SSE"
-        if symbol.startswith(("0", "3")):
-            return "SZSE"
-        if symbol.startswith(("4", "8")):
-            return "BSE"
-        return "CN_A"
+        from app.services.security_master import infer_exchange
+        return infer_exchange(market, symbol)
+
+    @staticmethod
+    def _financial_security_code(symbol: str) -> str:
+        exchange = AkshareAdapter._infer_exchange(symbol, "CN_A")
+        return f"{symbol}.{ {'SSE': 'SH', 'SZSE': 'SZ', 'BSE': 'BJ'}.get(exchange, 'SZ')}"
 
     @staticmethod
     def _is_empty(value: Any) -> bool:

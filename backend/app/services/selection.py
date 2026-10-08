@@ -36,6 +36,7 @@ from app.models.market_data import (
     StockRealtimeQuote,
     StockSymbol,
 )
+from app.services.news_identity import check_news_identity, partition_news
 from app.models.selection import SelectionCandidate, SelectionRun, SelectionSnapshot, SelectionTracking
 from app.schemas.selection import SelectionModelOutput, SelectionReviewRequest, SelectionRunCreate
 
@@ -207,6 +208,16 @@ def _evidence(
     docs = list(db.scalars(select(KnowledgeDocument).join(ranked, ranked.c.id == KnowledgeDocument.id).where(
         ranked.c.position <= 2
     ).order_by(ranked.c.position, KnowledgeDocument.source_table)).all())[:16]
+    master = db.scalar(select(StockSymbol).where(StockSymbol.market == market, StockSymbol.symbol == symbol))
+
+    def usable_document(doc):
+        if doc.source_table != "stock_news":
+            return True
+        if master is None:
+            return False
+        return check_news_identity(market, symbol, master.name, doc.title, doc.content, master.ext_json)["status"] == "MENTION_MATCHED"
+
+    docs = [doc for doc in docs if usable_document(doc)]
     # Graph entities are namespaced as ``{graph_id}:{market}:{symbol}`` (and
     # document entities end with the same market/symbol suffix).  Never query
     # the un-namespaced symbol: that would miss the stock node entirely.
@@ -233,9 +244,10 @@ def _evidence(
     relations = list(db.scalars(rel_query.order_by(case(
         (KnowledgeRelation.predicate.in_(["HAS_RECORD", "HAS_NEWS", "HAS_NOTICE", "HAS_PRICE_AND_VOLUME_SERIES"]), 1), else_=0
     ), KnowledgeRelation.id.desc()).limit(30)).all()) if entities else []
-    news_count = int(db.scalar(select(func.count(StockNews.id)).where(
+    news_rows = list(db.scalars(select(StockNews).where(
         StockNews.market == market, StockNews.symbol == symbol, StockNews.fetched_at <= cutoff,
-    )) or 0)
+    )).all())
+    news_count = len(partition_news(news_rows, master)[0]) if master is not None else 0
     notice_count = int(db.scalar(select(func.count(StockNotice.id)).where(
         StockNotice.market == market, StockNotice.symbol == symbol, StockNotice.fetched_at <= cutoff,
     )) or 0)
@@ -253,6 +265,10 @@ def _evidence(
         KnowledgeDocument.graph_id.in_(graph_ids),
         KnowledgeDocument.created_at <= cutoff, KnowledgeDocument.updated_at <= cutoff,
     )).all()}
+    rejected_doc_ids = {key for key, doc in relation_docs.items() if not usable_document(doc)}
+    relations = [row for row in relations if row.predicate != "HAS_NEWS_CANDIDATE"
+                 and row.evidence_document_id not in rejected_doc_ids]
+    relation_docs = {key: doc for key, doc in relation_docs.items() if key not in rejected_doc_ids}
     relation_rows = [
         {"id": item.id, "predicate": item.predicate, "subject_entity_id": item.subject_entity_id,
          "head": related[item.subject_entity_id].entity_name if item.subject_entity_id in related else "",

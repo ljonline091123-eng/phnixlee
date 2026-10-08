@@ -669,6 +669,7 @@ def _fetch_tencent_quotes(
                         response = None
                 if response is None:
                     continue
+                response.encoding = "gb18030"
                 any_response = True
                 for line in response.text.split(";"):
                     match = re.search(r"v_([a-z]{2})(\d+)=\"([^\"]*)\"", line)
@@ -752,6 +753,7 @@ def enrich_classification_groups_with_members(
     limit_per_group: int | None = None,
     fetch_remote: bool = False,
     refresh_quotes: bool = False,
+    include_members: bool = True,
 ) -> list[dict[str, Any]]:
     """Attach source-backed member stocks, counts and observed group trends.
 
@@ -880,10 +882,13 @@ def enrich_classification_groups_with_members(
                     -(float(member.get("current_price")) if member.get("current_price") is not None else 0.0),
                     str(member.get("symbol") or ""),
                 ))
-            item["related_stocks"] = bucket
+            preview = bucket if include_members else bucket[:5]
+            item["related_stocks"] = preview
+            item["members_deferred"] = len(preview) < len(bucket)
+            item["group_key"] = group_key
             item["member_count"] = len(bucket_map)
-            item["returned_count"] = len(bucket)
-            item["member_truncated"] = len(bucket) < len(bucket_map)
+            item["returned_count"] = len(preview)
+            item["member_truncated"] = len(preview) < len(bucket_map)
             provider_total = provider_counts.get(code)
             if provider_total is not None:
                 item["provider_member_count"] = provider_total

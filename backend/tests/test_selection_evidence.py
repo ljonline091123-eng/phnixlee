@@ -7,6 +7,8 @@ import json
 
 from app.db.base import Base
 from app.models.ai_hub import KnowledgeBase, KnowledgeDocument, KnowledgeEntity, KnowledgeGraph, KnowledgeRelation
+from app.models.market_data import StockSymbol, DataSource
+from app.services.graph_rag import build_selection_context
 from app.services.selection import _apply_model_analysis, _evidence
 
 
@@ -20,6 +22,10 @@ def test_evidence_balances_sources_and_honors_explicit_knowledge_scope():
         graph = KnowledgeGraph(knowledge_base_id=base.id, graph_code="DEMO_GRAPH", graph_name="Demo")
         other = KnowledgeGraph(knowledge_base_id=base.id, graph_code="DEMO_OTHER", graph_name="Other")
         db.add_all([graph, other])
+        source = DataSource(source_code="DEMO", source_name="Demo", adapter_type="MOCK")
+        db.add(source)
+        db.flush()
+        db.add(StockSymbol(market="CN_A", symbol="DEMO001", name="Demo", exchange="SZSE", source_id=source.id, status="LISTED"))
         db.flush()
 
         def document(source, title, graph_id):
@@ -69,6 +75,47 @@ def test_evidence_balances_sources_and_honors_explicit_knowledge_scope():
         assert no_scope["documents"] == [] and no_scope["relations"] == []
         kb_only = _evidence(db, "CN_A", "DEMO001", [base.id], [])
         assert kb_only["documents"] and kb_only["relations"] == []
+    engine.dispose()
+
+
+def test_unmatched_news_is_excluded_from_selection_and_graph_rag_without_deleting_it():
+    engine = create_engine("sqlite://")
+    Base.metadata.create_all(engine)
+    with Session(engine) as db:
+        base = KnowledgeBase(kb_code="IDENTITY_KB", kb_name="主体核验")
+        db.add(base)
+        db.flush()
+        graph = KnowledgeGraph(knowledge_base_id=base.id, graph_code="IDENTITY_GRAPH", graph_name="主体核验")
+        db.add(graph)
+        source = DataSource(source_code="DEMO", source_name="Demo", adapter_type="MOCK")
+        db.add(source)
+        db.flush()
+        db.add(StockSymbol(market="CN_A", symbol="000001", name="平安银行", exchange="SZSE", source_id=source.id, status="LISTED"))
+        db.flush()
+        matched = KnowledgeDocument(knowledge_base_id=base.id, graph_id=graph.id, source_table="stock_news",
+            market="CN_A", symbol="000001", title="平安银行公布中报", content="主体已匹配的原文")
+        candidate = KnowledgeDocument(knowledge_base_id=base.id, graph_id=graph.id, source_table="stock_news",
+            market="CN_A", symbol="000001", title="000001上证指数ETF上涨", content="未提及发行主体")
+        head = KnowledgeEntity(knowledge_base_id=base.id, graph_id=graph.id, entity_type="STOCK",
+            entity_key=f"{graph.id}:CN_A:000001", entity_name="平安银行")
+        tail = KnowledgeEntity(knowledge_base_id=base.id, graph_id=graph.id, entity_type="NEWS",
+            entity_key=f"{graph.id}:NEWS:1", entity_name="新闻")
+        db.add_all([matched, candidate, head, tail])
+        db.flush()
+        db.add(KnowledgeRelation(knowledge_base_id=base.id, graph_id=graph.id, subject_entity_id=head.id,
+            object_entity_id=tail.id, predicate="HAS_NEWS", evidence_document_id=candidate.id))
+        db.commit()
+        evidence = _evidence(db, "CN_A", "000001", [base.id], [graph.id])
+        context = build_selection_context(db, "CN_A", "000001", knowledge_base_ids=[base.id], graph_ids=[graph.id])
+        assert matched.id in evidence["document_ids"]
+        assert candidate.id not in evidence["document_ids"]
+        assert not evidence["relations"]
+        assert candidate.id not in context["evidence_document_ids"]
+        assert not context["graph_paths"]
+        assert db.get(KnowledgeDocument, candidate.id) is not None
+        db.delete(db.query(StockSymbol).filter_by(market="CN_A", symbol="000001").one())
+        db.commit()
+        assert not _evidence(db, "CN_A", "000001", [base.id], [graph.id])["documents"]
     engine.dispose()
 
 
