@@ -129,7 +129,12 @@ def prepare() -> list[dict]:
     return samples
 
 
-def worker(sample: dict | list[dict], types: list[str]) -> dict:
+def worker(
+    sample: dict | list[dict],
+    types: list[str],
+    *,
+    knowledge_only: bool = False,
+) -> dict:
     from scripts.audit_all_boards import install_bounded_http
     from app.api.stock_batch import submit_stock_batch_governance
     from app.db.session import SessionLocal
@@ -166,10 +171,13 @@ def worker(sample: dict | list[dict], types: list[str]) -> dict:
         stocks=[{"market": selected["market"], "symbol": selected["symbol"]} for selected in targets],
         governance_mode="AI_AGENT_SKILL_GOVERNANCE",
         governance_batch_id=BATCH,
-        business_types=types,
+        collect_business_data=not knowledge_only,
+        business_types=[] if knowledge_only else types,
         kline_days=3650 if first["market"].startswith("NEEQ") else 400,
         disclosure_days=730,
-        export_lakehouse=False, archive_chunks=False, run_graph=False,
+        export_lakehouse=knowledge_only,
+        archive_chunks=knowledge_only,
+        run_graph=knowledge_only,
     )
     with SessionLocal() as db:
         job_view = submit_stock_batch_governance(request, db)
@@ -249,6 +257,11 @@ def main() -> None:
     parser.add_argument("--retry", action="store_true")
     parser.add_argument("--child", default="")
     parser.add_argument("--board-batches", action="store_true")
+    parser.add_argument(
+        "--knowledge-only",
+        action="store_true",
+        help="仅按固定板块运行湖仓、文档切片和知识图谱发布，不重复采集业务数据",
+    )
     args = parser.parse_args()
     if args.prepare:
         samples = prepare()
@@ -261,7 +274,11 @@ def main() -> None:
             if args.child.endswith(":ALL")
             else next(s for s in samples if f"{s['board']}:{s['symbol']}" == args.child)
         )
-        result = worker(sample, args.types.split(","))
+        result = worker(
+            sample,
+            args.types.split(","),
+            knowledge_only=args.knowledge_only,
+        )
         print(json.dumps(result["agent_output"], ensure_ascii=False))
         return
     selected = [s for s in samples if not args.boards or s["board"] in args.boards.split(",")][:args.limit]
@@ -285,6 +302,8 @@ def main() -> None:
             sys.executable, "-u", str(Path(__file__).resolve()),
             "--child", f"{sample['board']}:{sample['symbol']}", "--types", args.types,
         ]
+        if args.knowledge_only:
+            command.append("--knowledge-only")
         try:
             process = subprocess.run(
                 command, cwd=ROOT, capture_output=True, text=True,
