@@ -380,6 +380,12 @@ class AkshareAdapter(MarketDataAdapter):
                     records.extend(fetch())
                 except Exception as exc:
                     errors.append(str(exc)[:300])
+            if not records:
+                from app.connectors.ths_public_news import fetch_public_stock_news
+                try:
+                    records.extend(fetch_public_stock_news(market, symbol))
+                except Exception as exc:
+                    errors.append(str(exc)[:300])
             if not records and errors:
                 raise ValueError("新三板新闻来源调用失败：" + "; ".join(errors))
             if errors:
@@ -848,7 +854,27 @@ class AkshareAdapter(MarketDataAdapter):
 
         previous_close = self._neeq_number(quote.get("PreviousClose"))
         current_price = self._neeq_number(quote.get("Close"))
-        no_trade = current_price in (None, 0) and self._neeq_number(quote.get("Volume")) in (None, 0)
+        volume_lots = self._neeq_number(quote.get("Volume"))
+        quote_time = self._normalize_neeq_date(company.get("LATESTTRADEDAY"))
+        daily_close = None
+        if current_price in (None, 0) and volume_lots not in (None, 0) and quote_time:
+            try:
+                payload = self._fetch_neeq_json(
+                    "/api/F10/MarketQuotation/GetTransactionDetail",
+                    {"code": symbol, "page": 1, "pagesize": 100,
+                     "sortRule": -1, "sortType": "TRADEDATE"},
+                )
+                matches = [row for row in self._neeq_result(payload)
+                           if str(row.get("MSECUCODE") or "") == f"{symbol}.NQ"
+                           and self._normalize_neeq_date(row.get("TRADEDATE")) == quote_time]
+                if len(matches) == 1 and self._neeq_number(matches[0].get("CLOSE")) not in (None, 0):
+                    daily_close = matches[0]
+                    current_price = self._neeq_number(daily_close["CLOSE"])
+            except Exception:
+                # The realtime row remains usable for volume/amount even when
+                # the optional close-value reconciliation source is offline.
+                daily_close = None
+        no_trade = current_price in (None, 0) and volume_lots in (None, 0)
         if no_trade:
             # NEEQ stocks can have no transaction on the current day. In that
             # case Eastmoney returns "-" for Close and the last close is the
@@ -856,9 +882,11 @@ class AkshareAdapter(MarketDataAdapter):
             current_price = previous_close
         change_amount = self._neeq_number(quote.get("Change"))
         change_pct = self._neeq_number(quote.get("ChangePercent"))
+        if daily_close is not None:
+            change_amount = self._neeq_number(daily_close.get("CHANGE"))
+            change_pct = self._neeq_number(daily_close.get("PCTCHANGE"))
         if change_pct is None:
             change_pct = self._neeq_number(company.get("CHANGEPCT1DAY"))
-        quote_time = self._normalize_neeq_date(company.get("LATESTTRADEDAY"))
         if not quote_time:
             timestamp = self._to_float(quote.get("_push2_timestamp"))
             if timestamp:
@@ -870,7 +898,9 @@ class AkshareAdapter(MarketDataAdapter):
             {
                 "quote": quote,
                 "company_indicators": company,
-                "latest_price_source": "PreviousClose" if no_trade else "Close",
+                "latest_price_source": "PreviousClose" if no_trade else
+                                       "PUBLIC_DAILY_TRANSACTION_TABLE" if daily_close is not None else "Close",
+                "daily_close_reconciliation": daily_close,
                 "no_trade_today": no_trade,
                 "units": {"volume": "股", "source_volume": "手（100股）", "amount": "元"},
                 "total_market_cap": self._neeq_number(quote.get("MarketValue")),
@@ -888,7 +918,7 @@ class AkshareAdapter(MarketDataAdapter):
             open_price=self._neeq_number(quote.get("Open")),
             high_price=self._neeq_number(quote.get("High")),
             low_price=self._neeq_number(quote.get("Low")),
-            volume=self._neeq_number(quote.get("Volume")) * 100 if self._neeq_number(quote.get("Volume")) is not None else None,
+            volume=volume_lots * 100 if volume_lots is not None else None,
             amount=self._neeq_number(quote.get("Amount")),
             change_amount=change_amount,
             change_pct=change_pct,
@@ -979,50 +1009,49 @@ class AkshareAdapter(MarketDataAdapter):
         end_date: str,
         adjust: str,
     ) -> list[KlineRecord]:
-        period_code = {
-            "daily": "101",
-            "day": "101",
-            "weekly": "102",
-            "week": "102",
-            "monthly": "103",
-            "month": "103",
-        }.get(str(period or "").lower(), "101")
+        from app.connectors.eastmoney_browser import kline_params, fetch_neeq_browser_kline, parse_kline_response, ENDPOINT
+
         begin = re.sub(r"[^0-9]", "", str(start_date or "")) or "19900101"
         finish = re.sub(r"[^0-9]", "", str(end_date or "")) or "20991231"
-        fqt = {"qfq": "1", "hfq": "2"}.get(str(adjust or "").lower(), "0")
-        params = {
-            "secid": f"0.{symbol}",
-            "klt": period_code,
-            "beg": begin,
-            "end": finish,
-            "fqt": fqt,
-            "fields1": "f1,f2,f3,f4,f5,f6",
-            "fields2": "f51,f52,f53,f54,f55,f56,f57,f58,f59,f60",
-            "ut": "fa5fd1943c7b386f172d6893dbfba10b",
-            "cb": "jQuery123",
-        }
-        payload: dict[str, Any] | None = None
-        last_error: Exception | None = None
-        for secid in (f"0.{symbol}", f"1.{symbol}", f"2.{symbol}"):
-            params["secid"] = secid
-            for host in ("push2his.eastmoney.com", "82.push2his.eastmoney.com", "push2.eastmoney.com"):
+        params = kline_params(symbol, str(period or "daily").lower(), begin, finish, str(adjust or "").lower())
+        try:
+            payload = self._request_eastmoney_json(ENDPOINT, params,
+                {"User-Agent": "Mozilla/5.0", "Accept": "application/json,text/plain,*/*",
+                 "Referer": f"https://xinsanban.eastmoney.com/QuoteCenter/{symbol}.html"})
+            original = json.dumps(payload, ensure_ascii=False)
+            parse_kline_response(original, symbol, params)
+            proof = {"source_url": ENDPOINT, "params": params, "source_method": "PUBLIC_HTTP_JSONP",
+                     "observed_at": datetime.utcnow().isoformat(),
+                     "response_sha256": hashlib.sha256(original.encode()).hexdigest(), "original_source_response": original}
+        except Exception as exc:
+            primary_error = str(exc)[:300]
+            table_error = None
+            if params["klt"] == "101" and params["fqt"] == "0":
                 try:
-                    candidate = self._request_eastmoney_json(
-                        f"https://{host}/api/qt/stock/kline/get", params,
-                        {"User-Agent": "Mozilla/5.0", "Accept": "application/json,text/plain,*/*",
-                         "Referer": "https://xinsanban.eastmoney.com/"})
-                    data = (candidate or {}).get("data") or {}
-                    if isinstance(data.get("klines"), list) and data.get("klines"):
-                        payload = candidate
-                        break
-                except Exception as exc:
-                    last_error = exc
-            if payload is not None:
-                break
-        if payload is None:
-            if last_error:
-                raise last_error
-            return []
+                    from app.connectors.neeq_market import fetch_daily_transactions
+                    records = fetch_daily_transactions(market, symbol, begin, finish, self._fetch_neeq_json)
+                    records[0].raw_payload["primary_source_error"] = primary_error
+                    return records
+                except Exception as table_exc:
+                    table_error = str(table_exc)[:300]
+            ths_error = None
+            if params["klt"] == "101" and params["fqt"] in {"0", "1"}:
+                try:
+                    from app.connectors.ths_neeq_kline import fetch_ths_neeq_kline
+                    records = fetch_ths_neeq_kline(market, symbol, begin, finish)
+                    records[0].raw_payload["primary_source_error"] = primary_error
+                    if table_error:
+                        records[0].raw_payload["transaction_table_error"] = table_error
+                    return records
+                except Exception as ths_exc:
+                    ths_error = str(ths_exc)[:300]
+            try:
+                payload, proof = fetch_neeq_browser_kline(symbol, params)
+            except Exception as browser_exc:
+                raise ValueError(f"新三板日线来源暂未通过：行情接口={primary_error}；每日交易表={table_error}；同花顺={ths_error}；公开浏览器={browser_exc}") from browser_exc
+            proof["primary_source_error"] = primary_error
+            if table_error:
+                proof["transaction_table_error"] = table_error
 
         lines = ((payload.get("data") or {}).get("klines") or []) if isinstance(payload, dict) else []
         returned_code = (payload.get("data") or {}).get("code")
@@ -1052,8 +1081,10 @@ class AkshareAdapter(MarketDataAdapter):
                     # NEEQ's kline payload uses field 8 for daily change pct,
                     # not turnover rate. Keep it in raw_payload rather than
                     # exposing it under the wrong column.
-                    turnover_rate=None,
+                    turnover_rate=self._to_float(values[10]) if len(values) > 10 else None,
                     raw_payload=self._json_safe({"line": line, "fields": values,
+                        "source_evidence": proof if not records else {k: v for k, v in proof.items() if k != "original_source_response"},
+                        "adjustment": params["fqt"],
                         "units": {"volume": "股", "source_volume": "手（100股）", "amount": "元"}}),
                 )
             )

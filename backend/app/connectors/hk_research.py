@@ -199,8 +199,14 @@ def parse_aastocks_reports(html: str, symbol: str) -> list[dict[str, Any]]:
     url = f"{AASTOCKS}/sc/stocks/analysis/stock-aafn/{symbol}/0/research-report/1"
     common = _provenance("AASTOCKS_HK", "AASTOCKS 港股大行报告摘要", url, html)
     title = _text(soup.title)
-    if title and not re.search(rf"(?<!\d){symbol}(?:\.HK)?(?!\d)", title):
+    empty_message = _text(soup.select_one("#cp_ucAAFNSearch_pMsg"))
+    explicit_empty = any(word in empty_message for word in ("暂时没有相关新闻", "暫時沒有相關新聞", "No related"))
+    linked_symbols = set(re.findall(r"/stock-aafn-con/(\d{5})/", html))
+    title_symbols = set(re.findall(r"(?<!\d)(\d{5})(?:\.HK)?(?!\d)", title))
+    if linked_symbols - {symbol} or title_symbols - {symbol}:
         raise ValueError("AASTOCKS 返回了其他证券页面")
+    if title and not re.search(rf"(?<!\d){symbol}(?:\.HK)?(?!\d)", title) and not explicit_empty:
+        raise ValueError("AASTOCKS 页面缺少请求证券身份或明确空状态")
     reports = {}
     for anchor in soup.find_all("a", href=True):
         path = urlparse(urljoin(AASTOCKS, anchor["href"])).path
@@ -224,9 +230,7 @@ def parse_aastocks_reports(html: str, symbol: str) -> list[dict[str, Any]]:
         # The side bar has .newshead4 video recommendations even on empty
         # issuer pages. Only the provider's issuer-specific message proves
         # this source has no records; disclaimers and side bars do not.
-        message = _text(soup.select_one("#cp_ucAAFNSearch_pMsg"))
-        empty = title and any(word in message for word in ("暂时没有相关新闻", "暫時沒有相關新聞", "No related"))
-        if not empty:
+        if not explicit_empty:
             raise ValueError("AASTOCKS 返回了其他证券内容或页面结构已变更，未见本股明确空状态")
     return sorted(reports.values(), key=lambda row: row["report_time"], reverse=True)
 
