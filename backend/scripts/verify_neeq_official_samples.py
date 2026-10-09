@@ -1,6 +1,7 @@
 """Verify and enrich the fixed NEEQ samples from the official directory."""
 from datetime import datetime, timezone
 import json
+import os
 from pathlib import Path
 import re
 import sys
@@ -15,7 +16,10 @@ from app.db.session import SessionLocal
 from app.models.market_data import StockSymbol
 from app.services.security_master import normalized_ext
 
-OUT = ROOT / "validation" / "all-boards-20261008"
+OUT = Path(os.environ.get(
+    "QUANT_AUDIT_OUT",
+    ROOT / "validation" / "all-boards-20261008",
+))
 
 
 def normalized_name(value):
