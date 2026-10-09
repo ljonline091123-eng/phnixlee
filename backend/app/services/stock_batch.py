@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
+from uuid import uuid4
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -19,6 +20,7 @@ from app.models.ai_hub import KnowledgeDocument
 from app.models.market_data import DataFetchLog, DataSource, StockSymbol
 from app.models.pipeline import PipelineRun
 from app.schemas.stock_batch import (
+    AI_AGENT_SKILL_GOVERNANCE,
     DOCUMENT_CHUNKS_CONTINUATION,
     MASTER_BUSINESS_TYPES,
     SCOPED_GRAPH_CONTINUATION,
@@ -31,6 +33,16 @@ from app.services.f10 import _fetch_and_cache_f10_extended_data, _section_has_pa
 from app.services.investor_qa import qa_sync_status
 from app.services.knowledge_pipeline import run_stock_pipeline
 from app.services.stock_on_demand import StockOnDemandService
+from app.services.stock_governance_agent import (
+    SKILL_ACCEPTANCE,
+    SKILL_COLLECTION,
+    SKILL_IDENTITY,
+    SKILL_KNOWLEDGE,
+    SKILL_QUALITY,
+    StockGovernanceAgentSession,
+    ensure_stock_governance_details,
+    finalize_stock_governance_details,
+)
 
 
 TASK_TYPE = "stock_batch_governance"
@@ -50,7 +62,10 @@ def _source_for(db: Session, market: str, capability: str) -> DataSource:
 
 def _fetch_log_result(log: DataFetchLog, source_code: str | None = None) -> dict[str, Any]:
     return {
-        "status": "SUCCESS" if log.status == "SUCCESS" else "FAILED",
+        "status": (
+            "SUCCESS" if log.status == "SUCCESS" and int(log.total_count or 0) > 0
+            else "MISSING" if log.status == "SUCCESS" else "FAILED"
+        ),
         "source_code": source_code,
         "fetch_log_id": log.id,
         "total_count": int(log.total_count or 0),
@@ -67,6 +82,7 @@ def _fetch_one(
     data_type: str,
     kline_days: int,
     disclosure_days: int,
+    governance_context: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     source = _source_for(db, market, data_type)
     service = StockOnDemandService(db)
@@ -92,6 +108,16 @@ def _fetch_one(
         )
     else:
         raise ValueError(f"Unsupported business data type: {data_type}")
+    if governance_context:
+        log.governance_mode = governance_context["governance_mode"]
+        log.governance_batch_id = governance_context["governance_batch_id"]
+        log.agent_execution_run_id = governance_context.get("agent_execution_run_id")
+        log.skill_execution_run_id = governance_context.get("skill_execution_run_id")
+        log.request_json = {
+            **dict(log.request_json or {}),
+            "governance": dict(governance_context),
+        }
+        db.commit()
     return _fetch_log_result(log, source.source_code)
 
 
@@ -123,6 +149,7 @@ def _collect_stock(
     business_types: list[str],
     kline_days: int,
     disclosure_days: int,
+    governance_context: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     requested = list(dict.fromkeys(item for item in business_types if item in MASTER_BUSINESS_TYPES))
     operations: dict[str, Any] = {}
@@ -149,6 +176,7 @@ def _collect_stock(
             operation = _fetch_one(
                 db, market=stock.market, symbol=stock.symbol, data_type=data_type,
                 kline_days=kline_days, disclosure_days=disclosure_days,
+                governance_context=governance_context,
             )
             operations[data_type] = operation
             operation_status = str(operation.get("status") or "UNKNOWN").upper()
@@ -180,7 +208,7 @@ def _collect_stock(
             errors.append({"data_type": data_type, "message": message, "fetch_log_id": fetch_log_id})
 
     failed = sum(result.get("status") == "FAILED" for result in operations.values())
-    partial = sum(result.get("status") == "PARTIAL" for result in operations.values())
+    partial = sum(result.get("status") not in {"SUCCESS", "FAILED"} for result in operations.values())
     return {
         "market": stock.market,
         "symbol": stock.symbol,
@@ -492,6 +520,9 @@ def execute_stock_batch_governance(payload: dict[str, Any]) -> dict[str, Any]:
     request = StockBatchGovernanceRequest.model_validate(payload.get("request") or payload)
     outer_run_id = payload.get("orchestration_pipeline_run_id")
     outer_job_id = payload.get("orchestration_job_id")
+    governance_batch_id = request.governance_batch_id or (
+        f"{request.governance_mode.lower()}:{outer_job_id or outer_run_id or uuid4()}"
+    )
     effective_options = {
         "collect_business_data": request.collect_business_data,
         "export_lakehouse": request.export_lakehouse,
@@ -503,6 +534,8 @@ def execute_stock_batch_governance(payload: dict[str, Any]) -> dict[str, Any]:
             "GLOBAL_BOUNDED_SOURCE_AUDIT" if request.run_agent_governance else "NOT_REQUESTED"
         ),
         "business_types": request.business_types,
+        "governance_mode": request.governance_mode,
+        "governance_batch_id": governance_batch_id,
     }
     output: dict[str, Any] = {
         "result_status": "RUNNING",
@@ -514,9 +547,22 @@ def execute_stock_batch_governance(payload: dict[str, Any]) -> dict[str, Any]:
         "errors": [],
         "pipeline_run_ids": [],
         "graph_ids": [],
+        "governance_mode": request.governance_mode,
+        "governance_batch_id": governance_batch_id,
+        "agent_execution_run_id": None,
+        "target_stocks": [
+            {"market": target.market, "symbol": _normalize_symbol(target.market, target.symbol)}
+            for target in request.stocks
+        ],
     }
 
     with SessionLocal() as db:
+        if outer_run_id:
+            pipeline = db.get(PipelineRun, outer_run_id)
+            if pipeline is not None:
+                pipeline.governance_mode = request.governance_mode
+                pipeline.governance_batch_id = governance_batch_id
+                db.commit()
         targets: list[StockSymbol] = []
         missing: list[dict[str, str]] = []
         for target in request.stocks:
@@ -531,6 +577,50 @@ def execute_stock_batch_governance(payload: dict[str, Any]) -> dict[str, Any]:
                 targets.append(stock)
         if missing:
             raise ValueError(f"以下股票不在主数据中: {missing}")
+
+        agent_session: StockGovernanceAgentSession | None = None
+        if request.governance_mode == AI_AGENT_SKILL_GOVERNANCE:
+            agent_session = StockGovernanceAgentSession(
+                db,
+                governance_batch_id=governance_batch_id,
+                pipeline_run_id=outer_run_id,
+                request_json=request.model_dump(mode="json"),
+            )
+            output["agent_execution_run_id"] = agent_session.execution.id
+            identity_input = {
+                "governance_batch_id": governance_batch_id,
+                "stocks": [
+                    {"market": stock.market, "symbol": stock.symbol}
+                    for stock in targets
+                ],
+            }
+            identity_result = agent_session.run_skill(
+                SKILL_IDENTITY,
+                input_json=identity_input,
+                idempotency_scope="targets",
+                operation=lambda _execution: {
+                    "status": "SUCCESS",
+                    "stock_count": len(targets),
+                    "stocks": identity_input["stocks"],
+                    "identity_source": "stock_symbol+listing_taxonomy_v1",
+                },
+            )
+            output["agent_skill_governance"] = {
+                "agent_code": agent_session.agent.agent_code,
+                "agent_version": agent_session.agent.version,
+                "identity": identity_result,
+                "skill_versions": {
+                    code: skill.version for code, skill in agent_session.skills.items()
+                },
+            }
+        ensure_stock_governance_details(
+            db,
+            governance_batch_id=governance_batch_id,
+            governance_mode=request.governance_mode,
+            stocks=targets,
+            pipeline_run_id=outer_run_id,
+            agent_execution_run_id=(agent_session.execution.id if agent_session else None),
+        )
 
         output["stage_results"]["VALIDATION"] = {
             "status": "SUCCESS", "stock_count": len(targets), "message": "股票主数据校验通过",
@@ -587,6 +677,25 @@ def execute_stock_batch_governance(payload: dict[str, Any]) -> dict[str, Any]:
                 "message": "文档切片续作任务已结束",
             }
             _save_progress(db, outer_run_id, output, stage="COMPLETE", progress=100)
+            finalize_stock_governance_details(
+                db, governance_batch_id=governance_batch_id, output=output,
+            )
+            if agent_session:
+                agent_session.run_skill(
+                    SKILL_ACCEPTANCE,
+                    input_json={
+                        "governance_batch_id": governance_batch_id,
+                        "result_status": result_status,
+                        "stage_results": output["stage_results"],
+                    },
+                    idempotency_scope="acceptance",
+                    operation=lambda _execution: {
+                        "status": "SUCCESS" if result_status == "COMPLETED" else result_status,
+                        "result_status": result_status,
+                        "stock_count": len(targets),
+                    },
+                )
+                agent_session.finish(output)
             return output
 
         _save_progress(db, outer_run_id, output, stage="BUSINESS_DATA", progress=5)
@@ -596,10 +705,37 @@ def execute_stock_batch_governance(payload: dict[str, Any]) -> dict[str, Any]:
         if request.collect_business_data:
             total = max(1, len(targets))
             for index, stock in enumerate(targets, start=1):
-                result = _collect_stock(
-                    db, stock, business_types=request.business_types,
-                    kline_days=request.kline_days, disclosure_days=request.disclosure_days,
-                )
+                if agent_session:
+                    collection_input = {
+                        "governance_batch_id": governance_batch_id,
+                        "market": stock.market,
+                        "symbol": stock.symbol,
+                        "business_types": request.business_types,
+                    }
+                    result = agent_session.run_skill(
+                        SKILL_COLLECTION,
+                        input_json=collection_input,
+                        idempotency_scope=f"{stock.market}:{stock.symbol}",
+                        operation=lambda execution, selected=stock: _collect_stock(
+                            db, selected,
+                            business_types=request.business_types,
+                            kline_days=request.kline_days,
+                            disclosure_days=request.disclosure_days,
+                            governance_context={
+                                "governance_mode": request.governance_mode,
+                                "governance_batch_id": governance_batch_id,
+                                "agent_execution_run_id": agent_session.execution.id,
+                                "skill_execution_run_id": execution.id,
+                                "skill_code": SKILL_COLLECTION,
+                                "skill_version": agent_session.skills[SKILL_COLLECTION].version,
+                            },
+                        ),
+                    )
+                else:
+                    result = _collect_stock(
+                        db, stock, business_types=request.business_types,
+                        kline_days=request.kline_days, disclosure_days=request.disclosure_days,
+                    )
                 output["stock_results"].append(result)
                 if result["status"] != "SUCCESS":
                     business_issues += 1
@@ -626,6 +762,49 @@ def execute_stock_batch_governance(payload: dict[str, Any]) -> dict[str, Any]:
                 "failed_count": business_failed,
                 "message": "业务数据采集完成；仅包含行情、K线、财务、新闻、公告和F10",
             }
+            if agent_session:
+                quality_input = {
+                    "governance_batch_id": governance_batch_id,
+                    "stock_results": output["stock_results"],
+                }
+                quality_result = agent_session.run_skill(
+                    SKILL_QUALITY,
+                    input_json=quality_input,
+                    idempotency_scope="business-quality",
+                    operation=lambda _execution: {
+                        "status": output["stage_results"]["BUSINESS_DATA"]["status"],
+                        "stock_count": len(targets),
+                        "passed_count": len(targets) - business_issues,
+                        "partial_or_failed_count": business_issues,
+                        "failed_count": business_failed,
+                        "no_false_completion": True,
+                        "stocks": [{
+                            "market": item["market"],
+                            "symbol": item["symbol"],
+                            "status": item["status"],
+                            "operations": {
+                                code: {
+                                    "status": operation.get("status"),
+                                    "count": operation.get("total_count", operation.get("section_count")),
+                                    "source_code": operation.get("source_code"),
+                                    "error": operation.get("error"),
+                                    "investor_qa_status": (operation.get("investor_qa_sync") or {}).get("status"),
+                                }
+                                for code, operation in (item.get("operations") or {}).items()
+                            },
+                        } for item in output["stock_results"]],
+                    },
+                )
+                output["stage_results"]["AI_QUALITY_GATE"] = quality_result
+                model_review = agent_session.review_quality_with_model(quality_result)
+                output["agent_skill_governance"]["model_quality_review"] = model_review
+                if model_review.get("status") != "SUCCESS":
+                    output["errors"].append({
+                        "stage": "AI_MODEL_REVIEW",
+                        "status": model_review.get("status"),
+                        "message": model_review.get("error") or "未完成真实模型质量审阅",
+                        "call_log_id": model_review.get("call_log_id"),
+                    })
         else:
             output["stage_results"]["BUSINESS_DATA"] = {
                 "status": "SKIPPED", "message": "本次未选择业务数据采集",
@@ -653,20 +832,38 @@ def execute_stock_batch_governance(payload: dict[str, Any]) -> dict[str, Any]:
                 run_global_agent_audit = bool(request.run_agent_governance and index == 1)
                 try:
                     child_key = f"stock-batch:{outer_job_id or outer_run_id or 'manual'}:{market}"
-                    result = run_stock_pipeline(
-                        db,
-                        market=market,
-                        symbols=symbols,
-                        knowledge_base_id=request.knowledge_base_id,
-                        graph_id=request.graph_id,
-                        export_lakehouse=request.export_lakehouse,
-                        archive_chunks=request.archive_chunks,
-                        run_graph=request.run_graph,
-                        run_agent_governance=run_global_agent_audit,
-                        include_company_tables=True,
-                        idempotency_key=child_key,
-                        resume_incomplete=True,
-                    )
+                    def publish_knowledge() -> dict[str, Any]:
+                        return run_stock_pipeline(
+                            db,
+                            market=market,
+                            symbols=symbols,
+                            knowledge_base_id=request.knowledge_base_id,
+                            graph_id=request.graph_id,
+                            export_lakehouse=request.export_lakehouse,
+                            archive_chunks=request.archive_chunks,
+                            run_graph=request.run_graph,
+                            run_agent_governance=run_global_agent_audit,
+                            include_company_tables=True,
+                            idempotency_key=child_key,
+                            resume_incomplete=True,
+                        )
+
+                    if agent_session:
+                        result = agent_session.run_skill(
+                            SKILL_KNOWLEDGE,
+                            input_json={
+                                "governance_batch_id": governance_batch_id,
+                                "market": market,
+                                "symbols": symbols,
+                                "export_lakehouse": request.export_lakehouse,
+                                "archive_chunks": request.archive_chunks,
+                                "run_graph": request.run_graph,
+                            },
+                            idempotency_scope=f"knowledge:{market}",
+                            operation=lambda _execution: publish_knowledge(),
+                        )
+                    else:
+                        result = publish_knowledge()
                     child_status = str(result.get("status") or "UNKNOWN")
                     child_run_id = result.get("pipeline_run_id")
                     graph_payload = result.get("graph") or {}
@@ -942,6 +1139,21 @@ def execute_stock_batch_governance(payload: dict[str, Any]) -> dict[str, Any]:
                 "status": "SKIPPED", "message": "本次未选择湖仓或知识加工阶段",
             }
 
+        if agent_session and "model_quality_review" not in output["agent_skill_governance"]:
+            review = agent_session.review_quality_with_model({
+                "stock_count": len(targets),
+                "stages": {
+                    code: {"status": stage.get("status"), "message": stage.get("message")}
+                    for code, stage in output["stage_results"].items()
+                },
+            })
+            output["agent_skill_governance"]["model_quality_review"] = review
+            if review.get("status") != "SUCCESS":
+                output["errors"].append({
+                    "stage": "AI_MODEL_REVIEW",
+                    "message": review.get("error") or "未完成真实模型质量审阅",
+                    "call_log_id": review.get("call_log_id"),
+                })
         # Persist the explainable stage contract for newly completed runs.
         # The API additionally derives it for historical runs written before
         # this field existed.
@@ -974,4 +1186,27 @@ def execute_stock_batch_governance(payload: dict[str, Any]) -> dict[str, Any]:
             "message": "批量采集与治理任务已结束",
         }
         _save_progress(db, outer_run_id, output, stage="COMPLETE", progress=100)
+        finalize_stock_governance_details(
+            db, governance_batch_id=governance_batch_id, output=output,
+        )
+        if agent_session:
+            acceptance_result = agent_session.run_skill(
+                SKILL_ACCEPTANCE,
+                input_json={
+                    "governance_batch_id": governance_batch_id,
+                    "result_status": result_status,
+                    "stage_results": output["stage_results"],
+                },
+                idempotency_scope="acceptance",
+                operation=lambda _execution: {
+                    "status": "SUCCESS" if result_status == "COMPLETED" else result_status,
+                    "result_status": result_status,
+                    "stock_count": len(targets),
+                    "detail_batch_id": governance_batch_id,
+                    "baseline_batch_id": "all-boards-20261008",
+                    "no_false_completion": True,
+                },
+            )
+            output["agent_skill_governance"]["acceptance"] = acceptance_result
+            agent_session.finish(output)
         return output

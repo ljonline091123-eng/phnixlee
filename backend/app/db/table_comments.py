@@ -21,6 +21,7 @@ TABLE_DESCRIPTIONS: dict[str, TableDescription] = {
     "data_quality_issue": TableDescription("数据质量问题", "数据治理", "保存质量规则发现的缺失、错误或风险问题、证据、处置状态与解决说明。"),
     "agent_execution_run": TableDescription("Agent 执行记录", "智能体", "记录 Agent 实际执行时使用的版本、模型、Skill、资产、知识版本、输入输出哈希和证据。"),
     "skill_execution_run": TableDescription("Skill 执行记录", "智能体", "记录受控 Skill 的版本、幂等键、重试、输入输出、写入范围、副作用和证据。"),
+    "stock_governance_detail": TableDescription("股票治理明细", "数据治理", "逐股票记录治理批次、治理方式、板块、阶段结果、来源、证据和质量结论，不复制业务事实。"),
     "classification_definition": TableDescription("\u5206\u7c7b\u4e3b\u6570\u636e\u5b9a\u4e49", "\u6570\u636e\u5e95\u5ea7", "\u884c\u4e1a\u3001\u4e3b\u9898\u3001\u7c7b\u578b\u548c\u89c4\u6a21\u6807\u7b7e\u7684\u7248\u672c\u5316\u4e3b\u6570\u636e\u53ca\u5176\u771f\u5b9e\u91ca\u4e49\uff0c\u7528\u4e8e\u524d\u7aef\u89e3\u91ca\u548c\u5206\u7c7b\u6cbb\u7406\u3002"),
     "foundation_source_identity": TableDescription("来源主体标识", "数据底座", "将来源命名空间及稳定发行人标识映射到主体，支持有依据的跨市场同公司关联，不按名称合并。"),
     "foundation_company_mapping_state": TableDescription("股票公司映射覆盖", "数据底座", "保存各股票发行公司映射的结果、依据及未覆盖原因，不改变既有股票主数据。"),
@@ -93,6 +94,15 @@ TABLE_DESCRIPTIONS: dict[str, TableDescription] = {
 
 
 COMMON_COLUMN_DESCRIPTIONS: dict[str, str] = {
+    "governance_mode": "治理方式：SYSTEM_GOVERNANCE 表示系统直接治理，AI_AGENT_SKILL_GOVERNANCE 表示 Agent 编排受控 Skill 治理。",
+    "governance_batch_id": "同一批股票治理任务的稳定批次标识。",
+    "board_code": "证券所属上市板块的标准编码。",
+    "baseline_batch_id": "用于质量对比的系统治理基线批次标识。",
+    "stage_status_json": "该股票各采集、湖仓、知识库和图谱阶段的状态明细。",
+    "source_ids_json": "本次治理实际使用的数据源或采集日志标识列表。",
+    "quality_summary_json": "逐股票质量门禁、覆盖率和未完成原因摘要。",
+    "stock_name": "治理明细对应的股票名称。",
+    "skill_execution_run_id": "产生该采集明细的受控 Skill 执行记录 ID。",
     "attempt": "当前工作流阶段已经执行的次数。",
     "attempts": "后台任务已经执行的次数。",
     "correlation_id": "用于关联同一业务请求或跨系统调用链的标识。",

@@ -612,13 +612,14 @@ def archive_ingestion_payload(db: Session, *, source_code: str, log_type: str, l
                               records: list[dict[str, Any]]) -> dict[str, Any]:
     """Archive a connector response without changing its online-table representation."""
     batch_id = str(uuid4())
+    governance = dict(db.info.get("stock_governance") or {})
     payload = json.dumps(records, ensure_ascii=False, sort_keys=True, default=str).encode("utf-8")
     obj = put_object(payload, layer="RAW", content_type="application/json", source_code=source_code,
         source_table=log_type, source_record_id=str(log_id), db=db,
-        metadata={"batch_id": batch_id, "record_count": len(records)})
+        metadata={"batch_id": batch_id, "record_count": len(records), **governance})
     db.add(LakeLineageEvent(batch_id=batch_id, upstream_type=log_type.upper(), upstream_id=str(log_id),
         downstream_type="LAKE_OBJECT", downstream_id=str(obj["object_id"]), transformation="RAW_ARCHIVE",
-        metadata_json={"source_code": source_code, "record_count": len(records)}))
+        metadata_json={"source_code": source_code, "record_count": len(records), **governance}))
     db.commit()
     return {"batch_id": batch_id, "record_count": len(records), **obj}
 

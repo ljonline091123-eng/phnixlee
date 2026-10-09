@@ -252,6 +252,8 @@ def _enqueue_page(db: Session, market: str, symbol: str, source_id: int, state: 
 
 def execute_qa_sync(payload: dict[str, Any]) -> dict[str, Any]:
     with SessionLocal() as db:
+        if isinstance(payload.get("governance"), dict):
+            db.info["stock_governance"] = dict(payload["governance"])
         return sync_qa_pages(db, payload)
 
 
@@ -268,8 +270,16 @@ def sync_qa_pages(db: Session, payload: dict[str, Any], *, page_budget: int = 5)
         _save_state(db, market, symbol, source_id, state)
         db.commit()
         return state
-    log = DataFetchLog(source_id=source_id, market=market, symbol=symbol,
-                       interface_code=interface_code, request_json={"run_id": state["run_id"], "cursor": state["cursor"]})
+    governance = dict(db.info.get("stock_governance") or {})
+    log = DataFetchLog(
+        source_id=source_id, market=market, symbol=symbol,
+        interface_code=interface_code,
+        request_json={"run_id": state["run_id"], "cursor": state["cursor"], **({"governance": governance} if governance else {})},
+        governance_mode=governance.get("governance_mode", "SYSTEM_GOVERNANCE"),
+        governance_batch_id=governance.get("governance_batch_id"),
+        agent_execution_run_id=governance.get("agent_execution_run_id"),
+        skill_execution_run_id=governance.get("skill_execution_run_id"),
+    )
     db.add(log)
     db.commit()
     log_id = log.id

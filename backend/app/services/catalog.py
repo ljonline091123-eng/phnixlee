@@ -88,26 +88,41 @@ DEFAULT_SOURCES = (
     },
     {
         "source_code": "NEEQ_OFFICIAL",
-        "source_name": "全国股转系统官方公开数据",
+        "source_name": "全国股转系统官方挂牌公司名录与公开数据",
         "source_type": "OFFICIAL_REFERENCE",
         "adapter_type": "OFFICIAL_REFERENCE",
         "priority": 320,
-        "enabled": False,
+        "enabled": True,
         "config_json": {
             "market_scope": [MARKET_NEEQ, MARKET_NEEQ_INNOVATION],
             "capabilities": [
                 "REFERENCE",
-                "CAPITAL_RAISE",
-                "MARKET_MAKER",
-                "LAYER_CHANGE",
-                "NOTICE",
-                "REPORT",
+                "SYMBOL_MASTER",
+                "SECURITY_CLASSIFICATION",
             ],
             "official_url": "https://www.neeq.com.cn/",
-            "provider_kind": "OFFICIAL_PENDING",
-            "notes": "官方入口已登记；定增、做市商、层级变动等结构化抓取待按公开页面/API逐项接入。",
+            "provider_kind": "OFFICIAL_REFERENCE",
+            "catalog_version": 2,
+            "notes": "挂牌公司代码、简称和基础层/创新层已接入官方名录核验；定增、做市商、层级变动等结构化抓取仍待逐项接入。",
         },
-        "description": "全国股转系统官方公开信息入口，当前作为待结构化接入的权威参考源。",
+        "description": "全国股转系统官方挂牌公司名录用于代码、简称和市场层级核验；其他官方公开能力按接口状态单独标明。",
+    },
+    {
+        "source_code": "THS_NEEQ_PUBLIC",
+        "source_name": "同花顺新三板公开行情与公司新闻（备源）",
+        "source_type": "PUBLIC_MARKET_DATA",
+        "adapter_type": "INTERNAL_FALLBACK",
+        "priority": 330,
+        "enabled": True,
+        "config_json": {
+            "market_scope": [MARKET_NEEQ, MARKET_NEEQ_INNOVATION],
+            "capabilities": ["KLINE", "NEWS"],
+            "official_url": "https://stockpage.10jqka.com.cn/",
+            "provider_kind": "PUBLIC_FALLBACK",
+            "selection_mode": "INTERNAL_FALLBACK_ONLY",
+            "notes": "仅在新三板主来源失败或无可验证记录时使用；日线为前复权，新闻为公开个股页有限列表，均不代表全量覆盖。",
+        },
+        "description": "新三板历史日线及公司新闻公开备源；严格核验市场、证券代码、主体和日期，失败或空响应不标记为无数据。",
     },
     {
         "source_code": "AKSHARE_HK_SINA",
@@ -405,6 +420,15 @@ def seed_default_catalog(db: Session) -> None:
                 ]))
                 if values:
                     merged_config[list_key] = values
+            if (
+                source.source_code == "NEEQ_OFFICIAL"
+                and int(existing_config.get("catalog_version") or 0) < int(default_config.get("catalog_version") or 0)
+            ):
+                # This source used to be a disabled placeholder. Only the
+                # implemented official directory capability is activated;
+                # future/pending endpoints remain disabled below.
+                merged_config.update(default_config)
+                source.enabled = True
             source.config_json = merged_config
             source.source_name = item["source_name"]
             source.source_type = item["source_type"]
@@ -457,6 +481,15 @@ def seed_default_catalog(db: Session) -> None:
         ),
         "NEEQ_OFFICIAL": (
             {
+                "interface_code": "NEEQ_OFFICIAL_COMPANY_DIRECTORY",
+                "interface_name": "全国股转官方挂牌公司名录核验",
+                "data_category": "SYMBOL_MASTER",
+                "request_mode": "ON_DEMAND",
+                "adapter_method": "neeq_official.fetch_company",
+                "supported_markets": [MARKET_NEEQ, MARKET_NEEQ_INNOVATION],
+                "description": "按六位证券代码核验挂牌简称及基础层/创新层；要求官方名录唯一匹配并保留原始响应哈希。",
+            },
+            {
                 "interface_code": "NEEQ_CAPITAL_RAISE",
                 "interface_name": "新三板定增信息（官方）",
                 "data_category": "CAPITAL_RAISE",
@@ -464,6 +497,7 @@ def seed_default_catalog(db: Session) -> None:
                 "adapter_method": "待接入官方公开页面/API",
                 "supported_markets": [MARKET_NEEQ, MARKET_NEEQ_INNOVATION],
                 "description": "全国股转系统官方定增信息结构化接口，当前为待接入状态。",
+                "enabled": False,
             },
             {
                 "interface_code": "NEEQ_MARKET_MAKER",
@@ -473,6 +507,7 @@ def seed_default_catalog(db: Session) -> None:
                 "adapter_method": "待接入官方公开页面/API",
                 "supported_markets": [MARKET_NEEQ, MARKET_NEEQ_INNOVATION],
                 "description": "全国股转系统官方做市商明细结构化接口，当前为待接入状态。",
+                "enabled": False,
             },
             {
                 "interface_code": "NEEQ_LAYER_CHANGE",
@@ -482,6 +517,27 @@ def seed_default_catalog(db: Session) -> None:
                 "adapter_method": "待接入官方公开页面/API",
                 "supported_markets": [MARKET_NEEQ, MARKET_NEEQ_INNOVATION],
                 "description": "全国股转系统官方基础层/创新层/精选层变动接口，当前为待接入状态。",
+                "enabled": False,
+            },
+        ),
+        "THS_NEEQ_PUBLIC": (
+            {
+                "interface_code": "THS_NEEQ_KLINE_FALLBACK",
+                "interface_name": "同花顺新三板前复权日线备源",
+                "data_category": "KLINE",
+                "request_mode": "ON_DEMAND",
+                "adapter_method": "ths_neeq_kline.fetch_ths_neeq_kline",
+                "supported_markets": [MARKET_NEEQ, MARKET_NEEQ_INNOVATION],
+                "description": "仅作主来源失败后的备源；保存为前复权(qfq)，不伪装成原始价；参数拒绝、空响应和来源失败均不认定为无历史行情。",
+            },
+            {
+                "interface_code": "THS_NEEQ_NEWS_FALLBACK",
+                "interface_name": "同花顺新三板公开公司新闻备源",
+                "data_category": "NEWS",
+                "request_mode": "ON_DEMAND",
+                "adapter_method": "ths_public_news.fetch_public_stock_news",
+                "supported_markets": [MARKET_NEEQ, MARKET_NEEQ_INNOVATION],
+                "description": "公开个股页有限新闻列表；逐条校验主体、证券代码、日期和链接域名，不把公告混入新闻，也不宣称全量覆盖。",
             },
         ),
     }.items():
@@ -498,6 +554,8 @@ def seed_default_catalog(db: Session) -> None:
         }
         for item in interfaces:
             existing = existing_interfaces.get(item["interface_code"])
+            configured_enabled = item.get("enabled")
+            interface_values = {key: value for key, value in item.items() if key != "enabled"}
             if existing:
                 existing.interface_name = item["interface_name"]
                 existing.data_category = item["data_category"]
@@ -505,6 +563,12 @@ def seed_default_catalog(db: Session) -> None:
                 existing.adapter_method = item["adapter_method"]
                 existing.supported_markets = item["supported_markets"]
                 existing.description = item["description"]
+                if (
+                    source_code == "NEEQ_OFFICIAL"
+                    and configured_enabled is False
+                    and str(existing.adapter_method).startswith("待接入")
+                ):
+                    existing.enabled = False
                 # Preserve the operator's interface enable/disable choice.
                 continue
             if item["interface_code"] not in existing_interfaces:
@@ -513,8 +577,8 @@ def seed_default_catalog(db: Session) -> None:
                         source_id=source.id,
                         input_schema={},
                         output_schema={},
-                        enabled=True,
-                        **item,
+                        enabled=True if configured_enabled is None else configured_enabled,
+                        **interface_values,
                     )
                 )
     db.commit()
@@ -554,6 +618,8 @@ def select_data_source(
     # Prefer a source whose declared route explicitly matches the market.
     for source in candidates:
         config = source.config_json or {}
+        if config.get("selection_mode") == "INTERNAL_FALLBACK_ONLY":
+            continue
         markets = {str(item).upper() for item in (config.get("market_scope") or [])}
         capabilities = {str(item).upper() for item in (config.get("capabilities") or [])}
         route = str(config.get("route") or "").upper()
@@ -567,6 +633,8 @@ def select_data_source(
                 return source
     for source in candidates:
         config = source.config_json or {}
+        if config.get("selection_mode") == "INTERNAL_FALLBACK_ONLY":
+            continue
         markets = {str(item).upper() for item in (config.get("market_scope") or [])}
         capabilities = {str(item).upper() for item in (config.get("capabilities") or [])}
         if normalized_market in markets and normalized_capability in capabilities:
@@ -579,6 +647,8 @@ def select_data_source(
     fallback = db.scalar(select(DataSource).where(DataSource.source_code == fallback_code, DataSource.enabled.is_(True)))
     if fallback:
         config = fallback.config_json or {}
+        if config.get("selection_mode") == "INTERNAL_FALLBACK_ONLY":
+            return None
         markets = {str(item).upper() for item in (config.get("market_scope") or [])}
         capabilities = {str(item).upper() for item in (config.get("capabilities") or [])}
         if normalized_market in markets and normalized_capability in capabilities and has_market_interface(fallback):

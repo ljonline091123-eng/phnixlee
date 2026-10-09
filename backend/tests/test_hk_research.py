@@ -105,6 +105,8 @@ def test_empty_issuer_reports_ignore_sidebar_videos_but_require_scoped_identity_
         parse_aastocks_reports(page, "08031")
     with pytest.raises(ValueError, match="空状态"):
         parse_aastocks_reports(page.replace('id="cp_ucAAFNSearch_pMsg"', 'id="sidebar"'), "08003")
+    generic = '<title>AASTOCKS 财经新闻</title><div id="cp_ucAAFNSearch_pMsg">暂时没有相关新闻。</div>'
+    assert parse_aastocks_reports(generic, "08059") == []
     empty = '<title>08003 盈利预测</title><p>暂无预测</p>'
     assert parse_etnet_forecast(empty, "08003")["source_metadata"]["raw_html"] == empty
 

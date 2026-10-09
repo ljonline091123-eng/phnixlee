@@ -369,14 +369,37 @@ def build_dynamic_projection(db: Session, market: str, symbol: str, *, company_i
         (ResearchReportRecord, ResearchReportRecord.created_at, "research", "RESEARCH_REPORT", "HAS_RESEARCH_REPORT", "研究报告"),
     ):
         for row in recent(model, order, category):
+            identity_check = None
             if isinstance(row, StockNews):
                 from app.services.news_identity import check_news_identity
-                check = check_news_identity(market, symbol, getattr(security, "name", ""), row.title, row.content,
-                                            getattr(security, "ext_json", {}))
-                if check["status"] != "MENTION_MATCHED":
+
+                payload = row.content_json if isinstance(row.content_json, dict) else {}
+                persisted_check = payload.get("identity_check")
+                if isinstance(persisted_check, dict) and persisted_check.get("status"):
+                    identity_check = persisted_check
+                elif security is not None:
+                    computed = check_news_identity(market, symbol, security.name, row.title, row.content,
+                                                   security.ext_json)
+                    identity_check = {
+                        "status": "UNASSESSED",
+                        "runtime_candidate": computed,
+                        "message": "历史记录未保存采集时主体核验结论，保留原始证据但不据此确认事件。",
+                    }
+                else:
+                    identity_check = {
+                        "status": "UNASSESSED",
+                        "message": "历史记录未保存主体核验结论，且当前缺少证券主数据。",
+                    }
+                # A persisted collection-time decision is auditable. Search-only
+                # hits that were explicitly rejected must not enter the graph.
+                if persisted_check is not None and identity_check["status"] != "MENTION_MATCHED":
                     continue
             content = row.content if isinstance(row, StockNews) else row.content_json if isinstance(row, StockNotice) else row.report_markdown
             evidence_id = result.document(row, row.title, content or "", kind)
+            if identity_check is not None:
+                result.evidence[evidence_id]["identity_check"] = identity_check
+                if include_evidence:
+                    result.nodes[evidence_id]["properties"]["identity_check"] = identity_check
             if include_evidence:
                 result.edge(result.security_id, evidence_id, predicate, edge_label, evidence_id, layer="EVIDENCE")
             if isinstance(row, ResearchReportRecord):

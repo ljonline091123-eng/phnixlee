@@ -5,6 +5,7 @@ import hashlib
 import json
 from pathlib import Path
 import sqlite3
+import os
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -13,8 +14,14 @@ from app.db.session import SessionLocal
 from app.models.lakehouse import LakeObject
 from app.services.lakehouse import read_object
 
-OUT = ROOT / "validation" / "all-boards-20261008"
-BACKUP = ROOT / "backups" / "quant-20261008-200837-pre-all-board-data-audit.db"
+OUT = Path(os.environ.get(
+    "QUANT_AUDIT_OUT",
+    ROOT / "validation" / "all-boards-20261008",
+))
+BACKUP = Path(os.environ.get(
+    "QUANT_AUDIT_BACKUP",
+    ROOT / "backups" / "quant-20261008-200837-pre-all-board-data-audit.db",
+))
 
 
 def quote_identifier(value):

@@ -20,7 +20,10 @@ sys.path.insert(0, str(ROOT))
 from app.services.f10 import _section_has_payload, _has_observation_rows
 from app.services.news_identity import check_news_identity
 
-OUT = ROOT / "validation" / "all-boards-20261008"
+OUT = Path(os.environ.get(
+    "QUANT_AUDIT_OUT",
+    ROOT / "validation" / "all-boards-20261008",
+))
 API_BASE = os.environ.get("QUANT_AUDIT_API_URL", "http://127.0.0.1:8000").rstrip("/")
 
 
@@ -162,7 +165,22 @@ def validate(sample, independent):
     result["independent_quote"] = ext
     quote = result.get("quote") or {}
     quote_date = str(quote.get("quote_time") or "")[:10]
-    if result.get("quote_provenance", {}).get("no_trade_today"):
+    provenance = result.get("quote_provenance", {})
+    if (
+        sample["market"] in {"NEEQ", "NEEQ_INNOVATION"}
+        and provenance.get("latest_price_source") == "PUBLIC_DAILY_TRANSACTION_TABLE"
+        and quote_date == ext.get("date")
+        and n(quote.get("current_price")) is not None
+        and n(ext.get("previous_close")) is not None
+        and abs(float(quote["current_price"]) - float(ext["previous_close"])) <= 0.001
+        and n(quote.get("volume")) is not None and n(ext.get("volume")) is not None
+        and abs(float(quote["volume"]) - float(ext["volume"])) <= 100
+        and n(quote.get("amount")) is not None and n(ext.get("amount")) is not None
+        and abs(float(quote["amount"]) - float(ext["amount"])) <= max(0.01, abs(float(ext["amount"])) * 0.0001)
+    ):
+        result["price_check"] = "MATCH_SOURCE_RECONCILIATION"
+        result["source_reconciliation_note"] = "实时源缺少收盘价；同代码同日交易表补价，独立源昨收、成交量和成交额一致"
+    elif provenance.get("no_trade_today"):
         result["price_check"] = "NO_TRADE_REFERENCE_ONLY"
         result["reference_date_note"] = "来源快照尚无成交，显示前收盘参考价，不作为当日成交价通过验证"
     elif ext.get("close") is not None and ext.get("close") > 0 and n(quote.get("current_price")) is not None:

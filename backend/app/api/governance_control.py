@@ -130,6 +130,7 @@ def _issue_read(row: DataQualityIssue) -> dict[str, Any]:
 def _agent_execution_read(row: AgentExecutionRun) -> dict[str, Any]:
     return {
         "id": row.id, "run_key": row.run_key, "parent_run_id": row.parent_run_id,
+        "governance_mode": row.governance_mode, "governance_batch_id": row.governance_batch_id,
         "pipeline_run_id": row.pipeline_run_id, "pipeline_stage_run_id": row.pipeline_stage_run_id,
         "agent_id": row.agent_id, "agent_code": row.agent_code, "agent_version": row.agent_version,
         "model_instance_code": row.model_instance_code, "model_version": row.model_version,
@@ -149,6 +150,7 @@ def _agent_execution_read(row: AgentExecutionRun) -> dict[str, Any]:
 def _skill_execution_read(row: SkillExecutionRun) -> dict[str, Any]:
     return {
         "id": row.id, "agent_execution_run_id": row.agent_execution_run_id,
+        "governance_mode": row.governance_mode, "governance_batch_id": row.governance_batch_id,
         "pipeline_stage_run_id": row.pipeline_stage_run_id, "skill_id": row.skill_id,
         "skill_code": row.skill_code, "skill_version": row.skill_version,
         "status": row.status, "attempt": row.attempt, "max_attempts": row.max_attempts,

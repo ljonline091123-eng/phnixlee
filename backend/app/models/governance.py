@@ -124,6 +124,10 @@ class AgentExecutionRun(Base):
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    governance_mode: Mapped[str] = mapped_column(
+        String(40), nullable=False, default="AI_AGENT_SKILL_GOVERNANCE", index=True
+    )
+    governance_batch_id: Mapped[str | None] = mapped_column(String(128), index=True)
     run_key: Mapped[str] = mapped_column(String(192), unique=True, nullable=False, index=True)
     parent_run_id: Mapped[str | None] = mapped_column(
         ForeignKey("agent_execution_run.id", ondelete="SET NULL"), index=True
@@ -174,6 +178,10 @@ class SkillExecutionRun(Base):
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    governance_mode: Mapped[str] = mapped_column(
+        String(40), nullable=False, default="AI_AGENT_SKILL_GOVERNANCE", index=True
+    )
+    governance_batch_id: Mapped[str | None] = mapped_column(String(128), index=True)
     agent_execution_run_id: Mapped[str | None] = mapped_column(
         ForeignKey("agent_execution_run.id", ondelete="SET NULL"), index=True
     )
@@ -201,6 +209,45 @@ class SkillExecutionRun(Base):
     )
     error_code: Mapped[str | None] = mapped_column(String(64))
     error_message: Mapped[str | None] = mapped_column(Text)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+
+
+class StockGovernanceDetail(Base):
+    """Per-stock governance outcome without duplicating governed business facts."""
+
+    __tablename__ = "stock_governance_detail"
+    __table_args__ = (
+        UniqueConstraint(
+            "governance_batch_id", "market", "symbol",
+            name="uq_stock_governance_detail_batch_stock",
+        ),
+        Index("ix_stock_governance_detail_mode_board", "governance_mode", "board_code"),
+        Index("ix_stock_governance_detail_status_time", "status", "completed_at"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    governance_batch_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    governance_mode: Mapped[str] = mapped_column(
+        String(40), nullable=False, default="SYSTEM_GOVERNANCE", index=True
+    )
+    board_code: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    market: Mapped[str] = mapped_column(String(16), nullable=False, index=True)
+    symbol: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    stock_name: Mapped[str | None] = mapped_column(String(128))
+    pipeline_run_id: Mapped[int | None] = mapped_column(
+        ForeignKey("pipeline_run.id", ondelete="SET NULL"), index=True
+    )
+    agent_execution_run_id: Mapped[str | None] = mapped_column(
+        ForeignKey("agent_execution_run.id", ondelete="SET NULL"), index=True
+    )
+    baseline_batch_id: Mapped[str | None] = mapped_column(String(128), index=True)
+    status: Mapped[str] = mapped_column(String(24), nullable=False, default="PENDING", index=True)
+    stage_status_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    source_ids_json: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    evidence_ids_json: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    quality_summary_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)

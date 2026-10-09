@@ -9,6 +9,8 @@ from pydantic import BaseModel, Field, model_validator
 
 
 MASTER_BUSINESS_TYPES = ("QUOTE", "KLINE", "FINANCIAL", "NEWS", "NOTICE", "F10")
+SYSTEM_GOVERNANCE = "SYSTEM_GOVERNANCE"
+AI_AGENT_SKILL_GOVERNANCE = "AI_AGENT_SKILL_GOVERNANCE"
 BUSINESS_DATA_CONTINUATION = "RETRY_BUSINESS_DATA"
 DOCUMENT_CHUNKS_CONTINUATION = "COMPLETE_DOCUMENT_CHUNKS"
 SCOPED_GRAPH_CONTINUATION = "BUILD_SCOPED_GRAPH"
@@ -28,6 +30,8 @@ class StockBatchGovernanceRequest(BaseModel):
     """
 
     stocks: list[StockBatchTarget] = Field(min_length=1, max_length=30)
+    governance_mode: Literal["SYSTEM_GOVERNANCE", "AI_AGENT_SKILL_GOVERNANCE"] = SYSTEM_GOVERNANCE
+    governance_batch_id: str | None = Field(default=None, min_length=1, max_length=128)
     collect_business_data: bool = True
     export_lakehouse: bool = True
     archive_chunks: bool = True
@@ -134,6 +138,9 @@ class StockBatchGovernanceResponse(BaseModel):
     job_status: str
     result_status: str | None = None
     stock_count: int
+    governance_mode: str = SYSTEM_GOVERNANCE
+    governance_batch_id: str | None = None
+    agent_execution_run_id: str | None = None
     current_stage: str | None = None
     progress: int = 0
     effective_options: dict[str, Any] = Field(default_factory=dict)

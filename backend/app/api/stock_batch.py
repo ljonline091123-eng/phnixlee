@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from hashlib import sha256
+import json
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -14,6 +15,7 @@ from app.db.session import get_db
 from app.jobs.dispatcher import DatabaseJobDispatcher
 from app.models.ai_hub import KnowledgeBase, KnowledgeGraph
 from app.models.market_data import StockSymbol
+from app.models.governance import StockGovernanceDetail
 from app.models.pipeline import PipelineRun, ScheduledJob
 from app.schemas.stock_batch import (
     DOCUMENT_CHUNKS_CONTINUATION,
@@ -470,6 +472,13 @@ def _job_view(db: Session, job: ScheduledJob, *, details: bool = True) -> dict:
         "progress": int(output.get("progress") or (100 if job.status == "COMPLETED" else 0)),
         "current_stage": output.get("current_stage") or (run.current_stage if run else None) or "QUEUED",
         "stock_count": stock_count,
+        "governance_mode": output.get("governance_mode") or (
+            getattr(run, "governance_mode", None) if run else None
+        ) or ((job.payload_json or {}).get("request") or {}).get("governance_mode") or "SYSTEM_GOVERNANCE",
+        "governance_batch_id": output.get("governance_batch_id") or (
+            getattr(run, "governance_batch_id", None) if run else None
+        ) or ((job.payload_json or {}).get("request") or {}).get("governance_batch_id"),
+        "agent_execution_run_id": output.get("agent_execution_run_id"),
         "effective_options": output.get("effective_options") or (
             (job.payload_json or {}).get("request") or {}
         ),
@@ -504,6 +513,15 @@ def submit_stock_batch_governance(
     db: Session = Depends(get_db),
 ) -> dict:
     payload = _normalize_request(payload)
+    if not payload.governance_batch_id:
+        seed_payload = payload.model_dump(
+            mode="json",
+            exclude={"idempotency_key", "governance_batch_id"},
+        )
+        seed = json.dumps(seed_payload, ensure_ascii=False, sort_keys=True)
+        payload.governance_batch_id = (
+            f"{payload.governance_mode.lower()}:{sha256(seed.encode('utf-8')).hexdigest()[:20]}"
+        )
     _validate_targets(db, payload)
     canonical = _canonical_request(payload)
     idempotency_key = _job_key(payload)
@@ -550,6 +568,8 @@ def submit_stock_batch_governance(
     if run is not None:
         run.input_json = dict(job.payload_json)
         run.current_stage = "QUEUED"
+        run.governance_mode = payload.governance_mode
+        run.governance_batch_id = payload.governance_batch_id
     db.commit()
     db.refresh(job)
     return _job_view(db, job, details=False)
@@ -570,6 +590,67 @@ def list_stock_batch_governance_jobs(
         .limit(limit)
     ).all())
     return {"items": [_job_view(db, job, details=False) for job in jobs], "total": total}
+
+
+@router.get("/details")
+def list_stock_governance_details(
+    governance_batch_id: str | None = None,
+    governance_mode: str | None = Query(default=None, pattern="^(SYSTEM_GOVERNANCE|AI_AGENT_SKILL_GOVERNANCE)$"),
+    board_code: str | None = None,
+    market: str | None = None,
+    symbol: str | None = None,
+    limit: int = Query(default=200, ge=1, le=1000),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+) -> dict:
+    statement = select(StockGovernanceDetail)
+    count_statement = select(func.count()).select_from(StockGovernanceDetail)
+    predicates = []
+    if governance_batch_id:
+        predicates.append(StockGovernanceDetail.governance_batch_id == governance_batch_id)
+    if governance_mode:
+        predicates.append(StockGovernanceDetail.governance_mode == governance_mode)
+    if board_code:
+        predicates.append(StockGovernanceDetail.board_code == board_code.strip().upper())
+    if market:
+        predicates.append(StockGovernanceDetail.market == market.strip().upper())
+    if symbol:
+        predicates.append(StockGovernanceDetail.symbol == symbol.strip().upper())
+    if predicates:
+        statement = statement.where(*predicates)
+        count_statement = count_statement.where(*predicates)
+    rows = list(db.scalars(
+        statement.order_by(StockGovernanceDetail.created_at.desc()).offset(offset).limit(limit)
+    ).all())
+    return {
+        "items": [{
+            "id": row.id,
+            "governance_batch_id": row.governance_batch_id,
+            "governance_mode": row.governance_mode,
+            "governance_mode_name": (
+                "AI+智能体+Skill治理"
+                if row.governance_mode == "AI_AGENT_SKILL_GOVERNANCE"
+                else "系统直接治理"
+            ),
+            "board_code": row.board_code,
+            "market": row.market,
+            "symbol": row.symbol,
+            "stock_name": row.stock_name,
+            "pipeline_run_id": row.pipeline_run_id,
+            "agent_execution_run_id": row.agent_execution_run_id,
+            "baseline_batch_id": row.baseline_batch_id,
+            "status": row.status,
+            "stage_status": row.stage_status_json,
+            "source_ids": row.source_ids_json,
+            "evidence_ids": row.evidence_ids_json,
+            "quality_summary": row.quality_summary_json,
+            "started_at": row.started_at,
+            "completed_at": row.completed_at,
+        } for row in rows],
+        "total": int(db.scalar(count_statement) or 0),
+        "limit": limit,
+        "offset": offset,
+    }
 
 
 @router.get("/{job_id}")

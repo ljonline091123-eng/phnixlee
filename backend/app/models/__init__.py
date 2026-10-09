@@ -67,6 +67,7 @@ from app.models.governance import (
     DataQualityRule,
     DataQualityRun,
     SkillExecutionRun,
+    StockGovernanceDetail,
 )
 from app.db.table_comments import apply_table_comments
 
@@ -130,4 +131,5 @@ __all__ = [
     "DataQualityIssue",
     "AgentExecutionRun",
     "SkillExecutionRun",
+    "StockGovernanceDetail",
 ]

@@ -87,6 +87,13 @@ def listing_metadata(market: str, symbol: str, ext: dict | None = None, raw: dic
                 board, method = official_board, "SOURCE"
     elif market in {"NEEQ", "NEEQ_INNOVATION"}:
         board, kind, method = "NEEQ_BASE" if market == "NEEQ" else "NEEQ_INNOVATION", "STOCK", "SOURCE_LAYER"
+        official = ext.get("neeq_official_verification") or {}
+        source_record = official.get("source_record") or {}
+        expected = {"0": "NEEQ_BASE", "1": "NEEQ_INNOVATION"}.get(str(source_record.get("xxfcbj")))
+        if (official.get("source_code") == "NEEQ_OFFICIAL"
+                and str(source_record.get("xxzqdm") or "") == symbol and expected == board):
+            method = "SOURCE"
+            proof = official
     elif market == "HK":
         # Accept exact official code matches only. Never classify an 08xxx
         # code as GEM or an unmatched legacy warrant as an ordinary stock.

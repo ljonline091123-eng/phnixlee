@@ -731,6 +731,13 @@ class ModelHubService:
                     *messages,
                 ]
         candidates = self.list_route_options(task_type=task_type, requested_instance_code=instance_code)
+        if metadata.get("require_real_model"):
+            candidates = [
+                candidate for candidate in candidates
+                if candidate.provider.provider_type != "MOCK"
+            ]
+            if not candidates:
+                raise ValueError("AI治理要求真实模型；请检查模型启用状态和 MODEL_CREDENTIAL_KEY，不能使用 Mock 替代。")
         last_log: ModelCallLog | None = None
         for routed in candidates:
             # Materialize provider values before _start_log commits. The model

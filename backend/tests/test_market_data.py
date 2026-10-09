@@ -68,6 +68,29 @@ class MarketDataFoundationTest(unittest.TestCase):
         fallback = self.db.scalar(select(DataSource).where(DataSource.source_code == "AKSHARE_HK_SINA"))
         self.assertIsNotNone(fallback)
         self.assertEqual(source.config_json["fallback_source_code"], fallback.source_code)
+        ths = self.db.scalar(select(DataSource).where(DataSource.source_code == "THS_NEEQ_PUBLIC"))
+        self.assertIsNotNone(ths)
+        self.assertEqual(ths.source_name, "同花顺新三板公开行情与公司新闻（备源）")
+        self.assertEqual(
+            {item.interface_code for item in ths.interfaces},
+            {"THS_NEEQ_KLINE_FALLBACK", "THS_NEEQ_NEWS_FALLBACK"},
+        )
+        official = self.db.scalar(select(DataSource).where(DataSource.source_code == "NEEQ_OFFICIAL"))
+        self.assertIn("NEEQ_OFFICIAL_COMPANY_DIRECTORY", {item.interface_code for item in official.interfaces})
+
+    def test_internal_neeq_fallback_uses_actual_catalog_source(self) -> None:
+        selected = self.db.scalar(select(DataSource).where(DataSource.source_code == "NEEQ_EASTMONEY"))
+        actual = self.db.scalar(select(DataSource).where(DataSource.source_code == "THS_NEEQ_PUBLIC"))
+        record = KlineRecord(
+            market="NEEQ", symbol="430019", period="daily", adjust="qfq",
+            trade_date="2026-10-08", open_price=1, high_price=1, low_price=1,
+            close_price=1, volume=1, amount=1, turnover_rate=None,
+            raw_payload={"source_method": "THS_PUBLIC_NEEQ_KLINE"},
+        )
+        resolved = StockOnDemandService(self.db)._actual_record_source(selected, [record])
+        self.assertEqual(resolved.id, actual.id)
+        record.raw_payload["source_method"] = "PUBLIC_DAILY_TRANSACTION_TABLE"
+        self.assertEqual(StockOnDemandService(self.db)._actual_record_source(selected, [record]).id, selected.id)
 
     def test_realtime_quote_and_news_helpers_exist(self) -> None:
         adapter = AkshareAdapter()
@@ -95,6 +118,23 @@ class MarketDataFoundationTest(unittest.TestCase):
             "000001",
         )
         self.assertEqual(news[0].title, "测试标题")
+
+    def test_neeq_quote_reconciles_missing_close_from_same_day_transaction(self) -> None:
+        adapter = AkshareAdapter()
+        responses = [
+            {"result": [{"Code": "430558", "Close": "-", "PreviousClose": "0.25",
+                          "Volume": 1630, "Amount": 40750, "Change": "-", "ChangePercent": "-"}]},
+            {"result": [{"LATESTTRADEDAY": "2026/10/8 0:00:00", "CHANGEPCT1DAY": "-5.9259"}]},
+            {"IsSuccess": True, "TotalPage": 1, "result": [{"MSECUCODE": "430558.NQ",
+                "TRADEDATE": "2026-10-08", "CLOSE": "0.25", "CHANGE": "0", "PCTCHANGE": "0"}]},
+        ]
+        with patch.object(adapter, "_fetch_neeq_json", side_effect=responses):
+            quote = adapter._fetch_neeq_quote("NEEQ", "430558")
+        self.assertEqual(quote.current_price, 0.25)
+        self.assertEqual(quote.change_amount, 0)
+        self.assertEqual(quote.change_pct, 0)
+        self.assertEqual(quote.raw_payload["latest_price_source"], "PUBLIC_DAILY_TRANSACTION_TABLE")
+        self.assertFalse(quote.raw_payload["no_trade_today"])
 
     def test_hkex_notice_rows_are_normalized(self) -> None:
         adapter = AkshareAdapter()

@@ -453,6 +453,10 @@ class DataFetchLogRead(BaseModel):
 
     id: int
     source_id: int
+    governance_mode: str = "SYSTEM_GOVERNANCE"
+    governance_batch_id: str | None = None
+    agent_execution_run_id: str | None = None
+    skill_execution_run_id: str | None = None
     interface_code: str
     market: str
     symbol: str
