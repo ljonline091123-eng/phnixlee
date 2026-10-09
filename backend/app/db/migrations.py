@@ -24,6 +24,24 @@ def ensure_compat_columns(engine: Engine) -> None:
         for table_name, additions in (
             ("model_provider", (("api_base_url", "VARCHAR(512)"), ("api_key_encrypted", "TEXT"))),
             ("model_instance", (("usage_type", "VARCHAR(16) NOT NULL DEFAULT 'EXACT'"),)),
+            ("pipeline_run", (
+                ("governance_mode", "VARCHAR(40) NOT NULL DEFAULT 'SYSTEM_GOVERNANCE'"),
+                ("governance_batch_id", "VARCHAR(128)"),
+            )),
+            ("data_fetch_log", (
+                ("governance_mode", "VARCHAR(40) NOT NULL DEFAULT 'SYSTEM_GOVERNANCE'"),
+                ("governance_batch_id", "VARCHAR(128)"),
+                ("agent_execution_run_id", "VARCHAR(36)"),
+                ("skill_execution_run_id", "VARCHAR(36)"),
+            )),
+            ("agent_execution_run", (
+                ("governance_mode", "VARCHAR(40) NOT NULL DEFAULT 'AI_AGENT_SKILL_GOVERNANCE'"),
+                ("governance_batch_id", "VARCHAR(128)"),
+            )),
+            ("skill_execution_run", (
+                ("governance_mode", "VARCHAR(40) NOT NULL DEFAULT 'AI_AGENT_SKILL_GOVERNANCE'"),
+                ("governance_batch_id", "VARCHAR(128)"),
+            )),
             ("agent_definition", (
                 ("context_window_limit", "INTEGER NOT NULL DEFAULT 12"),
                 ("json_schema_output", "JSON NOT NULL DEFAULT '{}'"),
@@ -37,6 +55,21 @@ def ensure_compat_columns(engine: Engine) -> None:
                 for name, definition in additions:
                     if name not in existing:
                         connection.execute(text(f'ALTER TABLE "{table_name}" ADD COLUMN "{name}" {definition}'))
+        for statement in (
+            "CREATE INDEX IF NOT EXISTS ix_pipeline_run_governance_mode ON pipeline_run (governance_mode)",
+            "CREATE INDEX IF NOT EXISTS ix_pipeline_run_governance_batch_id ON pipeline_run (governance_batch_id)",
+            "CREATE INDEX IF NOT EXISTS ix_data_fetch_log_governance_mode ON data_fetch_log (governance_mode)",
+            "CREATE INDEX IF NOT EXISTS ix_data_fetch_log_governance_batch_id ON data_fetch_log (governance_batch_id)",
+            "CREATE INDEX IF NOT EXISTS ix_data_fetch_log_agent_execution_run_id ON data_fetch_log (agent_execution_run_id)",
+            "CREATE INDEX IF NOT EXISTS ix_data_fetch_log_skill_execution_run_id ON data_fetch_log (skill_execution_run_id)",
+            "CREATE INDEX IF NOT EXISTS ix_agent_execution_run_governance_mode ON agent_execution_run (governance_mode)",
+            "CREATE INDEX IF NOT EXISTS ix_agent_execution_run_governance_batch_id ON agent_execution_run (governance_batch_id)",
+            "CREATE INDEX IF NOT EXISTS ix_skill_execution_run_governance_mode ON skill_execution_run (governance_mode)",
+            "CREATE INDEX IF NOT EXISTS ix_skill_execution_run_governance_batch_id ON skill_execution_run (governance_batch_id)",
+        ):
+            table_name = statement.split(" ON ", 1)[1].split(" ", 1)[0]
+            if table_name in tables:
+                connection.execute(text(statement))
         if "model_skill" in tables:
             existing = {column["name"] for column in inspector.get_columns("model_skill")}
             lifecycle_added = "lifecycle_status" not in existing

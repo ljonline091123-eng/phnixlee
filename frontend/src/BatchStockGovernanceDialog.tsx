@@ -7,6 +7,7 @@ import {
   type BatchGovernanceRequest,
   type BatchGovernanceStageResult,
   type BatchGovernanceStockResult,
+  type GovernanceMode,
 } from "./batchGovernanceApi";
 import { knowledgePipelineApi } from "./knowledgePipelineApi";
 import "./BatchStockGovernanceDialog.css";
@@ -601,6 +602,7 @@ export function BatchStockGovernanceDialog({
     runGraph: true,
   });
   const [businessTypes, setBusinessTypes] = useState<BatchGovernanceBusinessType[]>(allBusinessTypes);
+  const [governanceMode, setGovernanceMode] = useState<GovernanceMode>("AI_AGENT_SKILL_GOVERNANCE");
   const [runAgentGovernance, setRunAgentGovernance] = useState(false);
   const [klineDays, setKlineDays] = useState(365);
   const [disclosureDays, setDisclosureDays] = useState(730);
@@ -742,6 +744,7 @@ export function BatchStockGovernanceDialog({
     }
     const payload: BatchGovernanceRequest = {
       stocks: stocks.map((stock) => ({ market: stock.market, symbol: stock.symbol })),
+      governance_mode: governanceMode,
       collect_business_data: flags.collectBusinessData,
       export_lakehouse: flags.exportLakehouse,
       archive_chunks: flags.archiveChunks,
@@ -895,6 +898,13 @@ export function BatchStockGovernanceDialog({
           </section>
 
           <div className="batch-governance-settings">
+            <label>治理执行方式
+              <select value={governanceMode} disabled={submitting || activeJob} onChange={(event) => setGovernanceMode(event.target.value as GovernanceMode)}>
+                <option value="AI_AGENT_SKILL_GOVERNANCE">AI + 智能体 + Skill治理</option>
+                <option value="SYSTEM_GOVERNANCE">系统直接治理</option>
+              </select>
+              <small>{governanceMode === "AI_AGENT_SKILL_GOVERNANCE" ? "Agent按白名单编排受控Skill，保留逐步审计" : "兼容原有系统流水线，作为治理效果基线"}</small>
+            </label>
             <label>目标知识库
               <select value={knowledgeBaseId ?? ""} disabled={catalogLoading || submitting || activeJob} onChange={(event) => setKnowledgeBaseId(event.target.value ? Number(event.target.value) : null)}>
                 <option value="">由系统自动选择</option>
@@ -921,7 +931,7 @@ export function BatchStockGovernanceDialog({
 
           <label className="batch-governance-agent-option">
             <input type="checkbox" checked={runAgentGovernance} disabled={submitting || activeJob} onChange={(event) => setRunAgentGovernance(event.target.checked)} />
-            <span><strong>执行智能体 + Skill治理（可选）</strong><small>当前能力是全局有界来源审查，不等同于只审核本次所选股票；模型抽取结果仍保持候选状态。</small></span>
+            <span><strong>额外执行全局来源审计（可选）</strong><small>这是知识图谱的全局有界来源审查，与上方“本批治理执行方式”相互独立；模型抽取结果仍保持候选状态。</small></span>
           </label>
 
           {flags.archiveChunks && !flags.runGraph && <div className="batch-governance-message warning">
@@ -942,7 +952,7 @@ export function BatchStockGovernanceDialog({
 
         {job && <section className="batch-governance-progress" aria-live="polite">
           <header>
-            <div><p className="eyebrow">TASK PROGRESS</p><h4>任务 #{job.job_id}</h4><span>{job.stock_count} 只股票 · {job.pipeline_run_ids?.length || (job.pipeline_run_id ? 1 : 0)} 个知识管道运行</span></div>
+            <div><p className="eyebrow">TASK PROGRESS</p><h4>任务 #{job.job_id}</h4><span>{job.stock_count} 只股票 · {job.pipeline_run_ids?.length || (job.pipeline_run_id ? 1 : 0)} 个知识管道运行 · {job.governance_mode === "AI_AGENT_SKILL_GOVERNANCE" ? "AI+智能体+Skill治理" : "系统直接治理"}</span></div>
             <strong className={`batch-job-status ${statusClass(jobDisplayStatus(job))}`}>{statusLabel(jobDisplayStatus(job))}</strong>
             {isRetryableJob(job) && <div className="batch-retry-control">
               <button type="button" disabled={retryingJobId !== null || activeJob} onClick={() => void retryJob(job)}>
@@ -982,8 +992,8 @@ export function BatchStockGovernanceDialog({
           {!!jobErrors.length && <div className="batch-governance-errors"><strong>任务错误</strong><ul>{jobErrors.map((item, index) => <li key={index}>{errorMessage(item)}</li>)}</ul></div>}
           {!!job.stock_results?.length && <details className="batch-stock-results" open={terminalStatuses.has(normalizeStatus(job.status))}>
             <summary>查看逐股处理结果（{job.stock_results.length}）</summary>
-            <div className="table-wrap"><table><thead><tr><th>市场</th><th>股票</th><th>状态</th><th>说明</th></tr></thead><tbody>
-              {job.stock_results.map((item) => <tr key={`${item.market}:${item.symbol}`}><td>{item.market}</td><td><code>{item.symbol}</code></td><td>{statusLabel(item.status)}</td><td>{item.message || stockErrorMessage(item.errors) || "已记录"}</td></tr>)}
+            <div className="table-wrap"><table><thead><tr><th>市场</th><th>股票</th><th>治理方式</th><th>状态</th><th>说明</th></tr></thead><tbody>
+              {job.stock_results.map((item) => <tr key={`${item.market}:${item.symbol}`}><td>{item.market}</td><td><code>{item.symbol}</code></td><td>{job.governance_mode === "AI_AGENT_SKILL_GOVERNANCE" ? "AI+智能体+Skill治理" : "系统直接治理"}</td><td>{statusLabel(item.status)}</td><td>{item.message || stockErrorMessage(item.errors) || "已记录"}</td></tr>)}
             </tbody></table></div>
           </details>}
           <details className="batch-raw-result"><summary>查看完整任务诊断信息</summary><pre>{JSON.stringify(job, null, 2)}</pre></details>

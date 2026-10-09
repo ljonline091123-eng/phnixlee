@@ -274,6 +274,16 @@ class DataFetchLog(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     source_id: Mapped[int] = mapped_column(ForeignKey("data_source.id", ondelete="RESTRICT"), nullable=False)
+    governance_mode: Mapped[str] = mapped_column(
+        String(40), nullable=False, default="SYSTEM_GOVERNANCE", index=True
+    )
+    governance_batch_id: Mapped[str | None] = mapped_column(String(128), index=True)
+    agent_execution_run_id: Mapped[str | None] = mapped_column(
+        ForeignKey("agent_execution_run.id", ondelete="SET NULL"), index=True
+    )
+    skill_execution_run_id: Mapped[str | None] = mapped_column(
+        ForeignKey("skill_execution_run.id", ondelete="SET NULL"), index=True
+    )
     interface_code: Mapped[str] = mapped_column(String(64), nullable=False)
     market: Mapped[str] = mapped_column(String(16), nullable=False)
     symbol: Mapped[str] = mapped_column(String(32), nullable=False)

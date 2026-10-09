@@ -23,6 +23,10 @@ class PipelineRun(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     pipeline_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    governance_mode: Mapped[str] = mapped_column(
+        String(40), nullable=False, default="SYSTEM_GOVERNANCE", index=True
+    )
+    governance_batch_id: Mapped[str | None] = mapped_column(String(128), index=True)
     trigger_type: Mapped[str] = mapped_column(String(32), nullable=False, default="API")
     status: Mapped[str] = mapped_column(String(24), nullable=False, default="PENDING", index=True)
     correlation_id: Mapped[str | None] = mapped_column(String(128), index=True)

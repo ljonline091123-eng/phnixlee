@@ -78,6 +78,7 @@ DEFAULT_DATA_ASSETS = (
     ("DATA_QUALITY_ISSUE", "data_quality_issue", "质量治理：质量问题", "质量运行发现的问题、证据、状态和解决记录。"),
     ("AGENT_EXECUTION_RUN", "agent_execution_run", "AI治理：Agent执行记录", "Agent、模型、知识版本、Skill版本、输入输出哈希和审计记录。"),
     ("SKILL_EXECUTION_RUN", "skill_execution_run", "AI治理：Skill执行记录", "Skill契约执行、幂等、重试、副作用范围、证据和错误记录。"),
+    ("STOCK_GOVERNANCE_DETAIL", "stock_governance_detail", "AI治理：逐股票治理明细", "区分系统直接治理与AI+智能体+Skill治理，展示板块、阶段状态、来源、证据和质量结论。"),
     ("MODEL_SKILL", "model_skill", "AI治理：Skill定义与契约", "Skill输入输出、权限、副作用、幂等、重试、错误策略、版本和生命周期。"),
 )
 
@@ -234,6 +235,29 @@ DEFAULT_AGENTS = (
         "asset_codes": ["STOCK_SYMBOL", "STOCK_QUOTE", "STOCK_KLINE", "STOCK_FINANCIAL", "STOCK_NOTICE", "STOCK_NEWS", "STOCK_F10", "STOCK_CONTEXT_EVENT", "RESEARCH_REPORT"],
     },
     {
+        "agent_code": "STOCK_DATA_GOVERNANCE_AGENT",
+        "display_name": "股票数据采集治理智能体",
+        "system_prompt": (
+            "你是股票数据采集治理编排智能体。你只可按白名单顺序调用证券身份核验、来源采集、"
+            "质量门禁、湖仓知识发布和结果验收 Skill。所有业务写入由受控 Skill 通过现有服务完成，"
+            "不得执行任意 SQL，不得直接改写业务表，不得把空响应、网络失败或无公开来源伪装为完成。"
+            "每一步必须保留批次、来源、Agent/Skill版本、证据和错误状态。"
+        ),
+        "model_instance_code": "DEEPSEEK_V4_FLASH",
+        "max_iterations": 8,
+        "context_window_limit": 4,
+        "description": "对股票主数据、业务数据、湖仓、知识库和知识图谱进行受控增量治理的生产编排智能体。",
+        "skill_codes": [
+            "SECURITY_BOARD_IDENTITY_GOVERNOR",
+            "STOCK_SOURCE_COLLECTION",
+            "STOCK_DATA_QUALITY_GATE",
+            "LAKEHOUSE_KNOWLEDGE_PUBLISHER",
+            "STOCK_GOVERNANCE_ACCEPTANCE",
+        ],
+        "kb_codes": ["STOCK_FULL_KG"],
+        "asset_codes": ["STOCK_SYMBOL", "STOCK_QUOTE", "STOCK_KLINE", "STOCK_FINANCIAL", "STOCK_NOTICE", "STOCK_NEWS", "STOCK_F10", "STOCK_CONTEXT_EVENT", "RESEARCH_REPORT"],
+    },
+    {
         "agent_code": "KNOWLEDGE_GRAPH_AGENT",
         "display_name": "知识图谱智能体",
         "system_prompt": "以单只股票为对象建立全覆盖知识图谱，抽取公司、股东、业务、财报、公告、新闻、价格、交易量和研报之间的可追溯关系。",
@@ -309,7 +333,9 @@ def seed_default_agents(db: Session) -> None:
                 enabled=bool(agent_config.get("enabled", True)),
                 lifecycle_status="ENABLED" if bool(agent_config.get("enabled", True)) else "DISABLED",
                 description=str(agent_config["description"]),
-                version="1.0.1" if agent_config["agent_code"] in {"DATA_GOVERNANCE_AGENT", "QA_QUERY_AGENT"} else "1.0.0",
+                version="1.0.1" if agent_config["agent_code"] in {
+                    "DATA_GOVERNANCE_AGENT", "QA_QUERY_AGENT"
+                } else "1.0.0",
             )
             db.add(agent)
         elif agent_config["agent_code"] in {"DATA_GOVERNANCE_AGENT", "QA_QUERY_AGENT"} and agent.version == "1.0.0":
@@ -317,6 +343,13 @@ def seed_default_agents(db: Session) -> None:
                 agent.model_instance_code = "DEEPSEEK_V4_FLASH"
             if agent.model_instance_code == "DEEPSEEK_V4_FLASH":
                 agent.version = "1.0.1"
+        elif agent_config["agent_code"] == "STOCK_DATA_GOVERNANCE_AGENT" and agent.version == "1.0.0":
+            agent.model_instance_code = "DEEPSEEK_V4_FLASH"
+            agent.version = "1.0.2"
+        elif agent_config["agent_code"] == "STOCK_DATA_GOVERNANCE_AGENT" and agent.version == "1.0.1":
+            if agent.model_instance_code == "QWEN_PLUS":
+                agent.model_instance_code = "DEEPSEEK_V4_FLASH"
+                agent.version = "1.0.2"
         db.flush()
 
     skill_by_code = {

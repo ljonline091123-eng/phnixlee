@@ -43,8 +43,15 @@ class Task1GovernanceModelTests(unittest.TestCase):
         names = set(inspect(self.engine).get_table_names())
         self.assertTrue({
             "data_quality_rule", "data_quality_run", "data_quality_issue",
-            "agent_execution_run", "skill_execution_run",
+            "agent_execution_run", "skill_execution_run", "stock_governance_detail",
         }.issubset(names))
+        self.assertTrue({"governance_mode", "governance_batch_id"}.issubset(
+            {column["name"] for column in inspect(self.engine).get_columns("pipeline_run")}
+        ))
+        self.assertTrue({
+            "governance_mode", "governance_batch_id", "agent_execution_run_id",
+            "skill_execution_run_id",
+        }.issubset({column["name"] for column in inspect(self.engine).get_columns("data_fetch_log")}))
         self.assertTrue({
             "lifecycle_status", "input_contract_json", "output_contract_json",
             "permission_policy_json", "side_effect_level", "idempotency_policy",

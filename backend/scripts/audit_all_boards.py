@@ -94,14 +94,17 @@ def install_bounded_http(trace, clock):
         parsed = urlsplit(str(url))
         return parsed.scheme + "://" + parsed.netloc + parsed.path
 
-    def remaining():
+    def remaining(url=""):
         seconds = clock[0] - time.monotonic()
         if seconds <= 0:
             raise TimeoutError("本阶段采集预算耗尽；保留断点，不能标记无数据")
-        return max(0.2, min(8.0, seconds))
+        model_request = any(marker in str(url) for marker in (
+            "/chat/completions", ":generateContent", "/messages",
+        ))
+        return max(0.2, min(60.0 if model_request else 8.0, seconds))
 
     def request(self, method, url, **kwargs):
-        deadline = remaining()
+        deadline = remaining(url)
         timeout = kwargs.get("timeout")
         kwargs["timeout"] = min(timeout, deadline) if isinstance(timeout, (int, float)) else deadline
         self.trust_env = False
@@ -119,7 +122,7 @@ def install_bounded_http(trace, clock):
             trace.append(entry)
 
     def send(self, request, **kwargs):
-        deadline = remaining()
+        deadline = remaining(request.url)
         request.extensions["timeout"] = {k: min(v, deadline) if isinstance(v, (int, float)) else deadline
                                          for k, v in request.extensions.get("timeout", {"connect": None, "read": None, "write": None, "pool": None}).items()}
         started = time.monotonic()
@@ -145,7 +148,7 @@ def install_bounded_http(trace, clock):
     original_curl_request = CurlSession.request
 
     def curl_request(self, method, url, **kwargs):
-        deadline = remaining()
+        deadline = remaining(url)
         timeout = kwargs.get("timeout")
         kwargs["timeout"] = min(timeout, deadline) if isinstance(timeout, (int, float)) else deadline
         started = time.monotonic()
@@ -175,8 +178,13 @@ def worker(sample, stages):
     install_bounded_http(trace, clock)
     end = date.today().strftime("%Y%m%d")
     start = (date.today()-timedelta(days=400)).strftime("%Y%m%d")
+    if sample["market"] in {"NEEQ", "NEEQ_INNOVATION"}:
+        # Low-liquidity NEEQ securities may have no prints for more than a
+        # year. Validate available history rather than mistaking a recent
+        # no-trade window for absence of historical market data.
+        start = "20000101"
     for stage in stages:
-        clock[0] = time.monotonic() + (130 if stage == "extended" else 90 if stage == "research" else 42)
+        clock[0] = time.monotonic() + (130 if stage == "extended" else 90 if stage in {"research", "news"} else 42)
         started, trace_start = time.monotonic(), len(trace)
         outcome = {"at": datetime.now(timezone.utc).isoformat()}
         capability = {"quote": "QUOTE", "kline": "KLINE", "financials": "FINANCIAL", "notices": "NOTICE", "news": "NEWS", "extended": "F10", "research": "F10"}[stage]
@@ -289,6 +297,7 @@ def main():
     parser.add_argument("--limit-per-board", type=int, default=20)
     parser.add_argument("--offset", type=int, default=0)
     parser.add_argument("--boards", default="")
+    parser.add_argument("--symbols", default="", help="仅复验指定代码，逗号分隔")
     parser.add_argument("--stages", default=",".join(STAGES))
     parser.add_argument("--retry", action="store_true")
     parser.add_argument("--force", action="store_true")
@@ -305,6 +314,8 @@ def main():
         if args.boards and board not in args.boards.split(","):
             continue
         selected.extend([s for s in samples if s["board"] == board][args.offset:args.limit_per_board])
+    if args.symbols:
+        selected = [s for s in selected if s["symbol"] in args.symbols.split(",")]
 
     def run(sample):
         path = sample_path(sample)

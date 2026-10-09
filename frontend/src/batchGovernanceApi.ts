@@ -8,6 +8,8 @@ export type BatchGovernanceBusinessType =
   | "NOTICE"
   | "F10";
 
+export type GovernanceMode = "SYSTEM_GOVERNANCE" | "AI_AGENT_SKILL_GOVERNANCE";
+
 export type BatchGovernanceStock = {
   market: string;
   symbol: string;
@@ -15,6 +17,8 @@ export type BatchGovernanceStock = {
 
 export type BatchGovernanceRequest = {
   stocks: BatchGovernanceStock[];
+  governance_mode: GovernanceMode;
+  governance_batch_id?: string | null;
   collect_business_data: boolean;
   export_lakehouse: boolean;
   archive_chunks: boolean;
@@ -62,6 +66,9 @@ export type BatchGovernanceJob = {
   job_status?: string | null;
   result_status?: string | null;
   stock_count: number;
+  governance_mode?: GovernanceMode;
+  governance_batch_id?: string | null;
+  agent_execution_run_id?: string | null;
   progress?: number;
   current_stage?: string | null;
   stages?: Record<string, boolean> | string[];

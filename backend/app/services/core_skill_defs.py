@@ -145,6 +145,119 @@ CORE_SKILLS = (
             },
         },
     },
+    {
+        "skill_code": "SECURITY_BOARD_IDENTITY_GOVERNOR",
+        "skill_name": "证券与板块身份核验",
+        "description": "按主数据和上市板块契约核验市场、证券代码、证券类型及板块，不按名称猜测或跨市场合并。",
+        "task_type": "stock_data_governance",
+        "skill_type": "EXECUTABLE_TOOL",
+        "function_spec": {
+            "name": "validate_stock_governance_targets",
+            "description": "Validate a bounded stock list against governed security master and board taxonomy.",
+            "internal_service_only": True,
+            "parameters": {
+                "type": "object", "required": ["governance_batch_id", "stocks"],
+                "properties": {
+                    "governance_batch_id": {"type": "string", "minLength": 1, "maxLength": 128},
+                    "stocks": {"type": "array", "minItems": 1, "maxItems": 30},
+                }, "additionalProperties": False,
+            },
+        },
+    },
+    {
+        "skill_code": "STOCK_SOURCE_COLLECTION",
+        "skill_name": "股票来源数据受控采集",
+        "description": "按已配置市场路由调用白名单采集服务，保存原始响应、来源、时间、哈希和采集日志。",
+        "task_type": "stock_data_governance",
+        "skill_type": "EXECUTABLE_TOOL",
+        "side_effect_level": "CONTROLLED_WRITE",
+        "idempotency_policy": "REQUIRED",
+        "permission_policy_json": {
+            "arbitrary_sql": False, "database_write": True, "unrestricted_database_write": False,
+            "allowed_operations": ["FETCH_AND_UPSERT_STOCK_DATA", "WRITE_FETCH_AUDIT"],
+            "allowed_services": ["StockOnDemandService", "f10_governance_service"],
+            "write_scope": {"tables": ["data_fetch_log", "stock_realtime_quote", "stock_kline", "stock_financial_report", "stock_news", "stock_notice", "stock_f10_cache", "stock_investor_qa", "stock_earnings_consensus", "stock_institution_forecast", "stock_broker_research_report"], "operations": ["INSERT", "UPDATE"]},
+        },
+        "function_spec": {
+            "name": "collect_stock_source_data",
+            "description": "Collect one stock through configured source routes and existing idempotent services.",
+            "internal_service_only": True,
+            "parameters": {
+                "type": "object", "required": ["governance_batch_id", "market", "symbol", "business_types"],
+                "properties": {
+                    "governance_batch_id": {"type": "string", "minLength": 1, "maxLength": 128},
+                    "market": {"type": "string"}, "symbol": {"type": "string"},
+                    "business_types": {"type": "array", "minItems": 1, "maxItems": 6},
+                }, "additionalProperties": False,
+            },
+        },
+    },
+    {
+        "skill_code": "STOCK_DATA_QUALITY_GATE",
+        "skill_name": "股票数据质量门禁",
+        "description": "以确定性规则区分通过、部分、缺失、来源失败和公开来源不可得，不允许用空响应冒充完成。",
+        "task_type": "stock_data_governance",
+        "skill_type": "EXECUTABLE_TOOL",
+        "function_spec": {
+            "name": "evaluate_stock_governance_quality",
+            "description": "Evaluate collection and persistence evidence with deterministic quality states.",
+            "internal_service_only": True,
+            "parameters": {
+                "type": "object", "required": ["governance_batch_id", "stock_results"],
+                "properties": {
+                    "governance_batch_id": {"type": "string", "minLength": 1, "maxLength": 128},
+                    "stock_results": {"type": "array", "minItems": 1, "maxItems": 30},
+                }, "additionalProperties": False,
+            },
+        },
+    },
+    {
+        "skill_code": "LAKEHOUSE_KNOWLEDGE_PUBLISHER",
+        "skill_name": "湖仓与知识链受控发布",
+        "description": "复用现有湖仓、切片、知识库和图谱服务发布版本并保留完整血缘；不直接执行 SQL。",
+        "task_type": "stock_data_governance",
+        "skill_type": "EXECUTABLE_TOOL",
+        "side_effect_level": "CONTROLLED_WRITE",
+        "idempotency_policy": "REQUIRED",
+        "permission_policy_json": {
+            "arbitrary_sql": False, "database_write": True, "unrestricted_database_write": False,
+            "allowed_operations": ["PUBLISH_LAKE_DATASET", "CREATE_DOCUMENT_CHUNKS", "BUILD_SCOPED_GRAPH"],
+            "allowed_services": ["run_stock_pipeline", "lakehouse", "knowledge_pipeline"],
+            "write_scope": {"tables": ["lake_object", "lake_dataset", "lake_dataset_version", "lake_lineage_event", "document_chunk_version", "knowledge_document", "knowledge_entity", "knowledge_relation"], "operations": ["INSERT", "UPDATE"]},
+        },
+        "function_spec": {
+            "name": "publish_stock_knowledge_chain",
+            "description": "Publish bounded stock data into lakehouse, chunks and evidence-linked graph.",
+            "internal_service_only": True,
+            "parameters": {
+                "type": "object", "required": ["governance_batch_id", "market", "symbols"],
+                "properties": {
+                    "governance_batch_id": {"type": "string", "minLength": 1, "maxLength": 128},
+                    "market": {"type": "string"},
+                    "symbols": {"type": "array", "minItems": 1, "maxItems": 30},
+                }, "additionalProperties": True,
+            },
+        },
+    },
+    {
+        "skill_code": "STOCK_GOVERNANCE_ACCEPTANCE",
+        "skill_name": "股票治理结果验收",
+        "description": "按同一验收口径汇总逐股数据、来源、湖仓、切片、知识图谱和血缘状态，并与系统治理基线比较。",
+        "task_type": "stock_data_governance",
+        "skill_type": "EXECUTABLE_TOOL",
+        "function_spec": {
+            "name": "accept_stock_governance_run",
+            "description": "Produce evidence-linked per-stock acceptance without changing business facts.",
+            "internal_service_only": True,
+            "parameters": {
+                "type": "object", "required": ["governance_batch_id", "result_status", "stage_results"],
+                "properties": {
+                    "governance_batch_id": {"type": "string", "minLength": 1, "maxLength": 128},
+                    "result_status": {"type": "string"}, "stage_results": {"type": "object"},
+                }, "additionalProperties": True,
+            },
+        },
+    },
 )
 
 

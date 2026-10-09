@@ -4,6 +4,7 @@ import hashlib
 from datetime import datetime, timezone
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from types import SimpleNamespace
 
 import pytest
 from fastapi import FastAPI, HTTPException
@@ -25,11 +26,18 @@ from app.db.session import get_db
 from app.jobs.dispatcher import DatabaseJobDispatcher
 from app.jobs.tasks import TASK_HANDLERS
 from app.models.ai_hub import KnowledgeBase, KnowledgeDocument, KnowledgeGraph
+from app.models.governance import AgentExecutionRun, SkillExecutionRun, StockGovernanceDetail
 from app.models.lakehouse import DocumentChunkVersion
 from app.models.market_data import DataFetchLog, DataSource, StockSymbol
 from app.models.pipeline import PipelineRun, ScheduledJob
 from app.schemas.stock_batch import StockBatchGovernanceRequest
 from app.services import stock_batch
+from app.services.model_hub import seed_default_skills
+from app.services.resource_hub import (
+    seed_default_agents,
+    seed_default_data_assets,
+    seed_default_knowledge_bases,
+)
 
 
 def _database():
@@ -76,6 +84,7 @@ def test_schema_deduplicates_targets_and_expands_graph_dependencies() -> None:
     assert [(item.market, item.symbol) for item in request.stocks] == [("CN_A", "000001")]
     assert request.export_lakehouse is True
     assert request.archive_chunks is True
+    assert request.governance_mode == "SYSTEM_GOVERNANCE"
 
     with pytest.raises(ValueError):
         StockBatchGovernanceRequest.model_validate({
@@ -86,6 +95,93 @@ def test_schema_deduplicates_targets_and_expands_graph_dependencies() -> None:
             "run_graph": False,
             "run_agent_governance": False,
         })
+
+
+def test_ai_governance_mode_records_agent_skill_and_stock_detail(monkeypatch) -> None:
+    temporary, engine, sessions = _database()
+    try:
+        with sessions() as db:
+            seed_default_skills(db)
+            seed_default_data_assets(db)
+            seed_default_knowledge_bases(db)
+            seed_default_agents(db)
+            db.add(StockGovernanceDetail(
+                governance_batch_id="test-ai-governance-1",
+                governance_mode="AI_AGENT_SKILL_GOVERNANCE",
+                board_code="HK_MAIN", market="HK", symbol="00700",
+                status="PENDING",
+            ))
+            db.commit()
+
+        monkeypatch.setattr(stock_batch, "SessionLocal", sessions)
+        monkeypatch.setattr(
+            "app.services.stock_governance_agent.ModelHubService.chat",
+            lambda *_args, **_kwargs: SimpleNamespace(
+                id=None, provider_code="DEEPSEEK", instance_code="DEEPSEEK_V4_FLASH",
+                model_code="deepseek-v4-flash", status="SUCCESS", response_text="质量摘要已审阅",
+            ),
+        )
+        monkeypatch.setattr(stock_batch, "_collect_stock", lambda _db, stock, **_kwargs: {
+            "market": stock.market,
+            "symbol": stock.symbol,
+            "name": stock.name,
+            "status": "SUCCESS",
+            "operations": {
+                "NEWS": {
+                    "status": "SUCCESS", "source_code": "AKSHARE",
+                    "fetch_log_id": 7, "total_count": 2, "persisted_count": 2,
+                },
+            },
+            "errors": [],
+        })
+
+        result = stock_batch.execute_stock_batch_governance({
+            "request": {
+                "stocks": [{"market": "CN_A", "symbol": "000001"}],
+                "governance_mode": "AI_AGENT_SKILL_GOVERNANCE",
+                "governance_batch_id": "test-ai-governance-1",
+                "collect_business_data": True,
+                "business_types": ["NEWS"],
+                "export_lakehouse": False,
+                "archive_chunks": False,
+                "run_graph": False,
+                "run_agent_governance": False,
+            },
+        })
+
+        assert result["result_status"] == "COMPLETED"
+        assert result["governance_mode"] == "AI_AGENT_SKILL_GOVERNANCE"
+        assert result["agent_execution_run_id"]
+        with sessions() as db:
+            agent_run = db.get(AgentExecutionRun, result["agent_execution_run_id"])
+            assert agent_run.status == "SUCCEEDED"
+            assert agent_run.governance_batch_id == "test-ai-governance-1"
+            skills = list(db.scalars(select(SkillExecutionRun).where(
+                SkillExecutionRun.agent_execution_run_id == agent_run.id,
+            )).all())
+            assert {row.skill_code for row in skills} == {
+                "SECURITY_BOARD_IDENTITY_GOVERNOR",
+                "STOCK_SOURCE_COLLECTION",
+                "STOCK_DATA_QUALITY_GATE",
+                "STOCK_GOVERNANCE_ACCEPTANCE",
+            }
+            assert all(row.status == "SUCCEEDED" for row in skills)
+            detail = db.scalar(select(StockGovernanceDetail).where(
+                StockGovernanceDetail.governance_batch_id == "test-ai-governance-1",
+                StockGovernanceDetail.market == "CN_A",
+            ))
+            assert detail is not None
+            assert detail.governance_mode == "AI_AGENT_SKILL_GOVERNANCE"
+            assert detail.status == "PASS"
+            assert detail.stage_status_json["operations"]["NEWS"] == "SUCCESS"
+            other = db.scalar(select(StockGovernanceDetail).where(
+                StockGovernanceDetail.governance_batch_id == "test-ai-governance-1",
+                StockGovernanceDetail.market == "HK",
+            ))
+            assert other.status == "PENDING"
+    finally:
+        engine.dispose()
+        temporary.cleanup()
 
 
 def test_submit_is_idempotent_and_exposes_worker_contract() -> None:
