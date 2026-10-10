@@ -21,7 +21,12 @@ BASE = "https://mir.p5w.net"
 
 
 def uses_p5w(market: str, symbol: str) -> bool:
-    return market in {"NEEQ", "NEEQ_INNOVATION"} or (market == "CN_A" and symbol.startswith("920"))
+    # Legacy BSE listings may retain their historical 4/8-prefixed codes
+    # under the CN_A identity. Route them to the same public interaction
+    # provider as 920 new-code BSE listings, never to CNINFO/SSE QA.
+    return market in {"NEEQ", "NEEQ_INNOVATION"} or (
+        market == "CN_A" and symbol.startswith(("920", "4", "8"))
+    )
 
 
 def identity(html: str, symbol: str) -> dict[str, Any]:

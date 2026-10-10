@@ -146,6 +146,9 @@ class SecurityMasterBoardsTest(unittest.TestCase):
         self.assertEqual({item["source_code"] for item in hk_routes}, {"ETNET_HK", "AASTOCKS_HK"})
         self.assertEqual(category("NEEQ_BASE", "KLINE")["status"], "PARTIAL")
         self.assertEqual(category("MAIN", "NOTICE")["status"], "AVAILABLE")
+        self.assertEqual(category("STAR", "CLASSIFICATION")["status"], "AVAILABLE")
+        self.assertIn("SSE_MASTER", {row["source_code"] for row in category("STAR", "CLASSIFICATION")["sources"]})
+        self.assertEqual(category("BSE", "FINANCIAL")["sources"][0]["source_code"], "CNINFO_OFFICIAL")
         interface = self.db.scalar(select(DataInterface).where(DataInterface.source_id == self.source.id, DataInterface.interface_code == "CN_A_FUND_FLOW_ON_DEMAND"))
         interface.enabled = False
         self.db.flush()

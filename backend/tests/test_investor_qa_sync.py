@@ -8,7 +8,7 @@ from sqlalchemy.orm import sessionmaker
 
 import app.models  # noqa: F401
 from app.db.base import Base
-from app.connectors.investor_qa import OfficialQAClient, QACollectionError, QAPage, _source_time, parse_sse_page
+from app.connectors.investor_qa import OfficialQAClient, QACollectionError, QAPage, _source_time, parse_sse_page, qa_source
 from app.jobs.worker import JobWorker
 from app.models.market_data import DataInterface, DataSource, StockF10Cache
 from app.models.pipeline import ScheduledJob
@@ -161,6 +161,30 @@ def test_p5w_route_archives_raw_checkpoints_pages_and_preserves_existing_cache(s
 def test_p5w_missing_interface_cannot_execute_with_an_a_share_source(sessions):
     with sessions() as db:
         assert enqueue_qa_sync(db, "CN_A", "920000", 1)["status"] == "MISSING"
+        assert qa_source("840001")[0] == "P5W_PUBLIC"
+
+
+def test_qa_job_preserves_agent_skill_governance_context(sessions):
+    with sessions() as db:
+        result = enqueue_qa_sync(
+            db,
+            "CN_A",
+            "688256",
+            1,
+            force=True,
+            governance_context={
+                "governance_mode": "AI_AGENT_SKILL_GOVERNANCE",
+                "governance_batch_id": "batch-qa-context",
+                "agent_execution_run_id": 101,
+                "skill_execution_run_id": 202,
+                "skill_code": "STOCK_SOURCE_COLLECTION",
+                "skill_version": "2.0.0",
+            },
+        )
+        payload = db.get(ScheduledJob, result["job_id"]).payload_json
+        assert payload["governance"]["governance_batch_id"] == "batch-qa-context"
+        assert payload["governance"]["agent_execution_run_id"] == 101
+        assert payload["governance"]["skill_execution_run_id"] == 202
 
 
 def test_durable_retry_resumes_committed_page_without_losing_rows(sessions):
@@ -208,15 +232,39 @@ def test_batch_f10_reports_partial_until_qa_sync_finishes(sessions):
         assert result["investor_qa_sync"]["status"] == "PENDING"
 
 
+def test_batch_f10_enqueues_qa_when_no_active_job_exists(sessions):
+    from app.services.stock_batch import _run_f10_refresh
+    with sessions() as db, patch(
+        "app.services.stock_batch._source_for",
+        return_value=db.get(DataSource, 1),
+    ), patch(
+        "app.services.stock_batch._fetch_and_cache_f10_extended_data",
+        return_value={"profile": {"fields": {"name": "issuer"}}},
+    ):
+        db.get(DataSource, 1).config_json = {"market_scope": ["CN_A"], "capabilities": ["QA", "F10"]}
+        db.commit()
+        result = _run_f10_refresh(db, "CN_A", "688256")
+        job = db.scalar(select(ScheduledJob).where(ScheduledJob.task_type == TASK_TYPE))
+        assert job is not None
+        assert result["investor_qa_sync"]["status"] == "PENDING"
+        assert result["investor_qa_sync"]["job_id"] == job.id
+
+
 def test_full_history_continues_as_durable_job_and_repeated_refresh_is_idempotent(sessions):
     with sessions() as db:
-        enqueue_qa_sync(db, "CN_A", "688256", 1)
+        enqueue_qa_sync(db, "CN_A", "688256", 1, governance_context={
+            "governance_mode": "AI_AGENT_SKILL_GOVERNANCE",
+            "governance_batch_id": "batch-continuation",
+            "agent_execution_run_id": 11,
+            "skill_execution_run_id": 12,
+        })
         payload = db.scalar(select(ScheduledJob)).payload_json
         with patch.object(OfficialQAClient, "fetch_page", return_value=_page("q1")):
             sync_qa_pages(db, payload, page_budget=1)
         jobs = db.scalars(select(ScheduledJob).order_by(ScheduledJob.id)).all()
         assert len(jobs) == 2
         assert jobs[1].idempotency_key.endswith(":2")
+        assert jobs[1].payload_json["governance"]["skill_execution_run_id"] == 12
         with patch.object(OfficialQAClient, "fetch_page", return_value=_page(None, complete=True, page=3)):
             sync_qa_pages(db, jobs[1].payload_json)
         assert qa_sync_status(db, "CN_A", "688256")["stored_count"] == 1

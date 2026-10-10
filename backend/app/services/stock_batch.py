@@ -30,7 +30,7 @@ from app.services import lakehouse
 from app.services.lakehouse import current_knowledge_document_chunk_counts
 from app.services.catalog import select_data_source
 from app.services.f10 import _fetch_and_cache_f10_extended_data, _section_has_payload
-from app.services.investor_qa import qa_sync_status
+from app.services.investor_qa import ensure_qa_sync, qa_sync_status
 from app.services.knowledge_pipeline import run_stock_pipeline
 from app.services.stock_on_demand import StockOnDemandService
 from app.services.stock_governance_agent import (
@@ -121,8 +121,24 @@ def _fetch_one(
     return _fetch_log_result(log, source.source_code)
 
 
-def _run_f10_refresh(db: Session, market: str, symbol: str) -> dict[str, Any]:
+def _run_f10_refresh(
+    db: Session,
+    market: str,
+    symbol: str,
+    *,
+    governance_context: dict[str, str] | None = None,
+) -> dict[str, Any]:
     """Refresh only F10 extensions, without silently fetching ten years of core data."""
+    # F10 includes the investor-Q&A section. Queue its durable, source-routed
+    # sync here so a batch cannot report a pending Q&A section without an
+    # actual worker job. The worker remains responsible for network I/O and
+    # page checkpoints; queueing is deliberately not treated as success.
+    qa_status = {}
+    if market in {"CN_A", "HK", "NEEQ", "NEEQ_INNOVATION"}:
+        qa_status = ensure_qa_sync(
+            db, market, symbol,
+            governance_context=governance_context,
+        )
     source = _source_for(db, market, "F10")
     sections = _fetch_and_cache_f10_extended_data(db, source, market, symbol)
     available_sections = [
@@ -130,7 +146,11 @@ def _run_f10_refresh(db: Session, market: str, symbol: str) -> dict[str, Any]:
         if _section_has_payload(name, value, market)
     ]
     non_empty = len(available_sections)
-    qa_status = qa_sync_status(db, market, symbol) if market in {"CN_A", "HK", "NEEQ", "NEEQ_INNOVATION"} else {}
+    # Read the persisted state after the F10 request. This preserves the
+    # status returned by ensure_qa_sync while exposing any existing active job
+    # or checkpoint details to callers.
+    if market in {"CN_A", "HK", "NEEQ", "NEEQ_INNOVATION"}:
+        qa_status = qa_sync_status(db, market, symbol)
     qa_complete = not qa_status or qa_status.get("status") in {"COMPLETE", "EMPTY"}
     return {
         "status": "SUCCESS" if non_empty and qa_complete else "PARTIAL",
@@ -156,7 +176,10 @@ def _collect_stock(
     errors: list[dict[str, Any]] = []
     if "F10" in requested:
         try:
-            operations["F10"] = _run_f10_refresh(db, stock.market, stock.symbol)
+            operations["F10"] = _run_f10_refresh(
+                db, stock.market, stock.symbol,
+                governance_context=governance_context,
+            )
         except Exception as exc:
             # An adapter or F10 normalizer can fail after SQLAlchemy has
             # entered a failed transaction state (for example, a provider

@@ -33,7 +33,14 @@ SYNC_VERSION = 2
 ACTIVE_STATUSES = ("PENDING", "RETRY", "RUNNING")
 
 
-def ensure_qa_sync(db: Session, market: str, symbol: str, *, force: bool = False) -> dict[str, Any]:
+def ensure_qa_sync(
+    db: Session,
+    market: str,
+    symbol: str,
+    *,
+    force: bool = False,
+    governance_context: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     if market not in {"CN_A", "HK", "NEEQ", "NEEQ_INNOVATION"}:
         return {"status": "UNSUPPORTED"}
     if uses_p5w(market, symbol):
@@ -44,7 +51,10 @@ def ensure_qa_sync(db: Session, market: str, symbol: str, *, force: bool = False
         source = select_data_source(db, market, "QA", fallback_code="AKSHARE")
     if source is None:
         return {"status": "MISSING", "message": "未配置问答数据源"}
-    return enqueue_qa_sync(db, market, symbol, source.id, force=force)
+    return enqueue_qa_sync(
+        db, market, symbol, source.id, force=force,
+        governance_context=governance_context,
+    )
 
 
 def _interface_code(market: str, symbol: str) -> str:
@@ -157,7 +167,15 @@ def read_qa_section(db: Session, market: str, symbol: str) -> dict[str, Any]:
     }
 
 
-def enqueue_qa_sync(db: Session, market: str, symbol: str, source_id: int, *, force: bool = False) -> dict[str, Any]:
+def enqueue_qa_sync(
+    db: Session,
+    market: str,
+    symbol: str,
+    source_id: int,
+    *,
+    force: bool = False,
+    governance_context: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     if market not in {"CN_A", "HK", "NEEQ", "NEEQ_INNOVATION"}:
         return {"status": "UNSUPPORTED", "message": "当前问答接口尚未覆盖该市场"}
     source = db.get(DataSource, source_id)
@@ -170,6 +188,16 @@ def enqueue_qa_sync(db: Session, market: str, symbol: str, source_id: int, *, fo
     active = _active_job(db, market, symbol)
     if active:
         if int((active.payload_json or {}).get("source_id", 0)) == source_id:
+            if governance_context:
+                # A system-triggered job may already exist when an AI
+                # governance batch reaches this stock. Reuse the idempotent
+                # job, but attach the current audit context so the eventual
+                # Worker execution is still attributable to the Agent/Skill.
+                active.payload_json = {
+                    **dict(active.payload_json or {}),
+                    "governance": dict(governance_context),
+                }
+                db.commit()
             return qa_sync_status(db, market, symbol)
         if active.status == "RUNNING":
             return {**qa_sync_status(db, market, symbol), "message": "旧来源任务仍在运行，完成后再迁移来源；保留断点"}
@@ -230,11 +258,22 @@ def enqueue_qa_sync(db: Session, market: str, symbol: str, source_id: int, *, fo
         state.update(run_id=uuid4().hex, status="PENDING", message="问答接口已恢复，后台将从已保存断点继续采集")
     _save_state(db, market, symbol, source_id, state)
     db.commit()
-    _enqueue_page(db, market, symbol, source_id, state)
+    _enqueue_page(
+        db, market, symbol, source_id, state,
+        governance_context=governance_context,
+    )
     return qa_sync_status(db, market, symbol)
 
 
-def _enqueue_page(db: Session, market: str, symbol: str, source_id: int, state: dict[str, Any]) -> ScheduledJob:
+def _enqueue_page(
+    db: Session,
+    market: str,
+    symbol: str,
+    source_id: int,
+    state: dict[str, Any],
+    *,
+    governance_context: dict[str, Any] | None = None,
+) -> ScheduledJob:
     key = f"{_job_prefix(market, symbol)}{state['run_id']}:{state['cursor'].get('feed_type', 11)}:{state['cursor'].get('page', 1)}"
     existing = db.scalar(select(ScheduledJob).where(ScheduledJob.idempotency_key == key))
     if existing and existing.status in {"FAILED", "COMPLETED"}:
@@ -245,7 +284,13 @@ def _enqueue_page(db: Session, market: str, symbol: str, source_id: int, state: 
     return DatabaseJobDispatcher(db).enqueue(
         task_type=TASK_TYPE,
         idempotency_key=key,
-        payload={"market": market, "symbol": symbol, "source_id": source_id, "run_id": state["run_id"]},
+        payload={
+            "market": market,
+            "symbol": symbol,
+            "source_id": source_id,
+            "run_id": state["run_id"],
+            **({"governance": dict(governance_context)} if governance_context else {}),
+        },
         max_attempts=3, trigger_type="ON_DEMAND", pipeline_type="INVESTOR_QA_SYNC",
     )
 
@@ -341,7 +386,10 @@ def sync_qa_pages(db: Session, payload: dict[str, Any], *, page_budget: int = 5)
                 if page.complete:
                     break
         if state["status"] == "PARTIAL":
-            _enqueue_page(db, market, symbol, source_id, state)
+            _enqueue_page(
+                db, market, symbol, source_id, state,
+                governance_context=(payload.get("governance") if isinstance(payload.get("governance"), dict) else None),
+            )
         log = db.get(DataFetchLog, log_id)
         log.status = "SUCCESS" if state["status"] in {"COMPLETE", "EMPTY"} else "PARTIAL"
         log.completed_at = datetime.now(timezone.utc)

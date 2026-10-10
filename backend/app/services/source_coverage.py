@@ -22,7 +22,7 @@ def _routes(board: str):
         masters = {"MAIN": ["SSE_MASTER", "SZSE_MASTER"], "STAR": ["SSE_MASTER"], "CHINEXT": ["SZSE_MASTER"], "BSE": ["BSE_MASTER"]}[board]
         routes = {
             "SYMBOL_MASTER": [(code, "CN_A_SYMBOLS", "") for code in masters] + [("AKSHARE", "CN_A_SYMBOLS", "综合码表补齐，独立交易所名单用于核对")],
-            "CLASSIFICATION": [("AKSHARE", "CN_A_SYMBOLS", "代码规则规范分类；不是主题概念标签，也不是历史转板证据")],
+            "CLASSIFICATION": [(code, "CN_A_SYMBOLS", "") for code in masters] + [("AKSHARE", "CN_A_SYMBOLS", "代码规则仅作补充；官方交易所名单为分类核验依据")],
             "PROFILE": [("CNINFO_OFFICIAL", "F10_PROFILE_HOLDERS", "部分公司字段未披露")],
             "QUOTE": [("AKSHARE", "QUOTE_ON_DEMAND", "")],
             "KLINE": [("AKSHARE", "A_KLINE_ON_DEMAND", "")],
@@ -36,6 +36,13 @@ def _routes(board: str):
         routes["QA"] = [("P5W_PUBLIC", "P5W_INVESTOR_QA", "公开公司互动（含待回复）；非完整交易所问答全集，个股须核验") ] if board == "BSE" else [("AKSHARE", "CN_A_SSE_QA_ON_DEMAND" if board == "STAR" else "CN_A_IRM_QA_ON_DEMAND", "")]
         if board == "MAIN":
             routes["QA"].append(("AKSHARE", "CN_A_SSE_QA_ON_DEMAND", ""))
+        if board == "BSE":
+            routes["NOTICE"].append(("P5W_PUBLIC", "P5W_PUBLIC_NOTICES", "公开公告备源；仅在证券身份核验通过时使用"))
+            routes["NEWS"].append(("P5W_PUBLIC", "P5W_PUBLIC_NEWS", "公开新闻备源；不保证全量覆盖"))
+        # The batch collector resolves A-share financials through the
+        # official CNINFO route. Keep this matrix aligned with the runtime
+        # selector, including the BSE .BJ adapter normalization.
+        routes["FINANCIAL"] = [("CNINFO_OFFICIAL", "FINANCIAL_ON_DEMAND", "")]
         return routes
     if hk:
         return {
