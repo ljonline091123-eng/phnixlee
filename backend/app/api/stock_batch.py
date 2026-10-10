@@ -7,7 +7,7 @@ import json
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import func, select
+from sqlalchemy import String, func, select
 from sqlalchemy.orm import Session
 
 from app.core.markets import MASTER_MARKETS, digit_length_for_market
@@ -15,7 +15,7 @@ from app.db.session import get_db
 from app.jobs.dispatcher import DatabaseJobDispatcher
 from app.models.ai_hub import KnowledgeBase, KnowledgeGraph
 from app.models.market_data import StockSymbol
-from app.models.governance import StockGovernanceDetail
+from app.models.governance import AgentExecutionRun, SkillExecutionRun, StockGovernanceDetail
 from app.models.pipeline import PipelineRun, ScheduledJob
 from app.schemas.stock_batch import (
     DOCUMENT_CHUNKS_CONTINUATION,
@@ -497,12 +497,111 @@ def _job_view(db: Session, job: ScheduledJob, *, details: bool = True) -> dict:
         ),
     }
     if details:
+        batch_id = status.get("governance_batch_id")
+        stock_statement = select(StockGovernanceDetail).where(
+            StockGovernanceDetail.pipeline_run_id == job.pipeline_run_id
+        )
+        if batch_id:
+            stock_statement = stock_statement.where(
+                StockGovernanceDetail.governance_batch_id == batch_id
+            )
+        stock_details = list(db.scalars(
+            stock_statement.order_by(StockGovernanceDetail.created_at, StockGovernanceDetail.symbol)
+        ).all())
+        agent_run_id = status.get("agent_execution_run_id") or next(
+            (row.agent_execution_run_id for row in stock_details if row.agent_execution_run_id),
+            None,
+        )
+        agent_run = db.get(AgentExecutionRun, agent_run_id) if agent_run_id else None
+        skill_predicates = []
+        if agent_run_id:
+            skill_predicates.append(SkillExecutionRun.agent_execution_run_id == agent_run_id)
+        if batch_id:
+            skill_predicates.append(SkillExecutionRun.governance_batch_id == batch_id)
+        skill_query = select(SkillExecutionRun).order_by(SkillExecutionRun.started_at)
+        if skill_predicates:
+            from sqlalchemy import or_
+            skill_query = skill_query.where(or_(*skill_predicates))
+        skill_runs = list(db.scalars(skill_query).all()) if skill_predicates else []
+        stock_report = [{
+            "id": row.id,
+            "market": row.market,
+            "symbol": row.symbol,
+            "stock_name": row.stock_name,
+            "board_code": row.board_code,
+            "status": row.status,
+            "stage_status": row.stage_status_json or {},
+            "source_ids": row.source_ids_json or [],
+            "evidence_ids": row.evidence_ids_json or [],
+            "quality_summary": row.quality_summary_json or {},
+            "started_at": row.started_at,
+            "completed_at": row.completed_at,
+        } for row in stock_details]
+        if not stock_report:
+            # Older jobs may predate StockGovernanceDetail materialization. Do
+            # not show a false empty report when their durable pipeline output
+            # already contains the per-stock result and evidence information.
+            stock_report = [
+                item for item in (output.get("stock_results") or [])
+                if isinstance(item, dict)
+            ]
+        report = {
+            "job": {
+                "job_id": job.id,
+                "pipeline_run_id": job.pipeline_run_id,
+                "governance_mode": status.get("governance_mode"),
+                "governance_batch_id": batch_id,
+                "status": status.get("status"),
+                "job_status": status.get("job_status"),
+                "result_status": status.get("result_status"),
+                "current_stage": status.get("current_stage"),
+                "progress": status.get("progress"),
+                "created_at": status.get("created_at"),
+                "started_at": status.get("started_at"),
+                "completed_at": status.get("completed_at"),
+            },
+            "stock_results": stock_report,
+            "stage_results": _enrich_stage_results(output),
+            "errors": output.get("errors") or [],
+            "agent": ({
+                "id": agent_run.id,
+                "agent_code": agent_run.agent_code,
+                "agent_version": agent_run.agent_version,
+                "model_instance_code": agent_run.model_instance_code,
+                "model_version": agent_run.model_version,
+                "status": agent_run.status,
+                "input_hash": agent_run.input_hash,
+                "output_hash": agent_run.output_hash,
+                "evidence_ids": agent_run.evidence_ids_json or [],
+                "audit": agent_run.audit_json or {},
+                "error_message": agent_run.error_message,
+                "started_at": agent_run.started_at,
+                "completed_at": agent_run.completed_at,
+            } if agent_run else None),
+            "skills": [{
+                "id": item.id,
+                "skill_code": item.skill_code,
+                "skill_version": item.skill_version,
+                "status": item.status,
+                "attempt": item.attempt,
+                "max_attempts": item.max_attempts,
+                "side_effect_level": item.side_effect_level,
+                "write_scope": item.write_scope_json or {},
+                "input_hash": item.input_hash,
+                "output_hash": item.output_hash,
+                "evidence_ids": item.evidence_ids_json or [],
+                "error_message": item.error_message,
+                "started_at": item.started_at,
+                "completed_at": item.completed_at,
+            } for item in skill_runs],
+        }
         status.update({
             "stage_results": _enrich_stage_results(output),
             "stock_results": output.get("stock_results") or [],
             "errors": output.get("errors") or [],
             "pipeline_run_ids": output.get("pipeline_run_ids") or [],
             "graph_ids": output.get("graph_ids") or [],
+            "governance_report": report,
         })
     return status
 
@@ -578,18 +677,78 @@ def submit_stock_batch_governance(
 @router.get("")
 def list_stock_batch_governance_jobs(
     limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    status_filter: str | None = Query(default=None),
+    governance_mode: str | None = Query(default=None, pattern="^(SYSTEM_GOVERNANCE|AI_AGENT_SKILL_GOVERNANCE)$"),
+    keyword: str | None = Query(default=None),
     db: Session = Depends(get_db),
 ) -> dict:
-    total = db.scalar(select(func.count()).select_from(ScheduledJob).where(
-        ScheduledJob.task_type == TASK_TYPE,
-    )) or 0
-    jobs = list(db.scalars(
-        select(ScheduledJob)
-        .where(ScheduledJob.task_type == TASK_TYPE)
-        .order_by(ScheduledJob.id.desc())
-        .limit(limit)
-    ).all())
-    return {"items": [_job_view(db, job, details=False) for job in jobs], "total": total}
+    # The function is also called directly by the service tests. FastAPI's
+    # Query objects are only resolved by dependency injection, so normalize
+    # those defaults when the adapter is invoked as a plain Python function.
+    if not isinstance(limit, int):
+        limit = 20
+    if not isinstance(offset, int):
+        offset = 0
+    if not isinstance(status_filter, str):
+        status_filter = None
+    if not isinstance(governance_mode, str):
+        governance_mode = None
+    if not isinstance(keyword, str):
+        keyword = None
+    predicates = [ScheduledJob.task_type == TASK_TYPE]
+    if status_filter:
+        requested_status = status_filter.strip().upper()
+        # Job status is the durable lifecycle status. Result status is kept in
+        # PipelineRun.output_json, so filter both without changing old records.
+        if requested_status in {"PENDING", "RUNNING", "RETRY", "FAILED"}:
+            predicates.append(ScheduledJob.status == requested_status)
+        else:
+            predicates.append(ScheduledJob.status == "COMPLETED")
+    if keyword:
+        needle = f"%{keyword.strip()}%"
+        matching_batch_ids = select(StockGovernanceDetail.governance_batch_id).where(
+            StockGovernanceDetail.stock_name.ilike(needle)
+            | StockGovernanceDetail.symbol.ilike(needle)
+            | StockGovernanceDetail.market.ilike(needle)
+        )
+        predicates.append(
+            (ScheduledJob.payload_json.cast(String).ilike(needle))
+            | (PipelineRun.governance_batch_id.in_(matching_batch_ids))
+        )
+    statement = select(ScheduledJob).join(
+        PipelineRun, PipelineRun.id == ScheduledJob.pipeline_run_id
+    ).where(*predicates)
+    if governance_mode:
+        statement = statement.where(PipelineRun.governance_mode == governance_mode)
+    result_status_filter = status_filter and status_filter.strip().upper() not in {
+        "PENDING", "RUNNING", "RETRY", "FAILED"
+    }
+    if result_status_filter:
+        # SQLite JSON operators differ from PostgreSQL and historical rows may
+        # have no result_status. Filter the small, bounded history in Python so
+        # pagination and the total count remain correct on both databases.
+        all_jobs = list(db.scalars(statement.order_by(ScheduledJob.id.desc())).all())
+        all_items = [_job_view(db, job, details=False) for job in all_jobs]
+        requested_status = status_filter.strip().upper()
+        filtered_items = [
+            item for item in all_items
+            if (
+                str(item.get("result_status") or "").upper() in {"COMPLETED", "SUCCESS"}
+                if requested_status in {"COMPLETED", "SUCCESS"}
+                else str(item.get("result_status") or "").upper() == requested_status
+            )
+        ]
+        total = len(filtered_items)
+        items = filtered_items[offset:offset + limit]
+    else:
+        count_statement = select(func.count()).select_from(statement.subquery())
+        total = int(db.scalar(count_statement) or 0)
+        jobs = list(db.scalars(
+            statement.order_by(ScheduledJob.id.desc()).offset(offset).limit(limit)
+        ).all())
+        items = [_job_view(db, job, details=False) for job in jobs]
+    return {"items": items, "total": total, "limit": limit, "offset": offset}
 
 
 @router.get("/details")

@@ -10,7 +10,7 @@ export const moduleSections: Record<ModuleView, readonly string[]> = {
   data: ["access", "master", "business", "lakehouse", "knowledge", "graphs", "pipeline"],
   ai: ["models", "agents", "skills", "evaluation", "governance"],
   research: ["objects", "selection", "research"],
-  operations: ["tasks", "quality", "audit"],
+  operations: ["tasks", "records", "quality", "audit"],
 };
 
 export const defaultSections: Record<ModuleView, string> = {

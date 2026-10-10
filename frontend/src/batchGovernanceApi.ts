@@ -89,6 +89,34 @@ export type BatchGovernanceJob = {
   [key: string]: unknown;
 };
 
+export type GovernanceRecord = BatchGovernanceJob & {
+  stock_symbols?: string[];
+  stock_names?: string[];
+  stock_status_counts?: Record<string, number>;
+};
+
+export type GovernanceReport = {
+  job: {
+    job_id: number;
+    pipeline_run_id?: number | null;
+    governance_mode?: string | null;
+    governance_batch_id?: string | null;
+    status?: string | null;
+    job_status?: string | null;
+    result_status?: string | null;
+    current_stage?: string | null;
+    progress?: number;
+    created_at?: string | null;
+    started_at?: string | null;
+    completed_at?: string | null;
+  };
+  stock_results: Array<Record<string, unknown>>;
+  stage_results: Record<string, BatchGovernanceStageResult>;
+  errors: Array<string | Record<string, unknown>>;
+  agent: Record<string, unknown> | null;
+  skills: Array<Record<string, unknown>>;
+};
+
 export const batchGovernanceApi = {
   create(payload: BatchGovernanceRequest) {
     return request<BatchGovernanceJob>("/stocks/batch-governance/jobs", {
@@ -109,6 +137,30 @@ export const batchGovernanceApi = {
 
   list(limit = 20, signal?: AbortSignal) {
     return request<BatchGovernanceJob[] | { items: BatchGovernanceJob[]; total?: number }>(`/stocks/batch-governance/jobs?limit=${limit}`, { signal });
+  },
+
+  listRecords(params: {
+    limit?: number;
+    offset?: number;
+    status?: string;
+    governanceMode?: GovernanceMode | "";
+    keyword?: string;
+  } = {}, signal?: AbortSignal) {
+    const query = new URLSearchParams();
+    query.set("limit", String(params.limit ?? 50));
+    query.set("offset", String(params.offset ?? 0));
+    if (params.status) query.set("status_filter", params.status);
+    if (params.governanceMode) query.set("governance_mode", params.governanceMode);
+    if (params.keyword?.trim()) query.set("keyword", params.keyword.trim());
+    return request<{ items: GovernanceRecord[]; total: number; limit: number; offset: number }>(
+      `/stocks/batch-governance/jobs?${query.toString()}`, { signal },
+    );
+  },
+
+  report(jobId: number, signal?: AbortSignal) {
+    return request<BatchGovernanceJob & { governance_report?: GovernanceReport }>(
+      `/stocks/batch-governance/jobs/${jobId}`, { signal },
+    );
   },
 
   continueStockPipeline(
