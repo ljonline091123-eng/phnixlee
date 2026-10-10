@@ -106,6 +106,20 @@ def _incremental_date(value: Any, fallback: str, *, overlap_days: int) -> str:
     return (parsed.date() - timedelta(days=max(overlap_days, 0))).strftime("%Y%m%d")
 
 
+def _preserve_document_governance(previous: dict, incoming: dict, *, preserve_pdf: bool = False, preserve_news: bool = False) -> dict:
+    """Remote refresh updates source fields while retaining local audit history."""
+    result = dict(incoming)
+    local_keys = ("event_governance", "event_governance_history", "governance_full_text", "governance_pdf_extraction", "governance_news_extraction")
+    for key in local_keys:
+        result.pop(key, None)
+        preserve_body = preserve_pdf or preserve_news
+        if key in previous and (key.startswith("event_") or (key == "governance_full_text" and preserve_body)
+                                or (key == "governance_pdf_extraction" and preserve_pdf)
+                                or (key == "governance_news_extraction" and preserve_news)):
+            result[key] = previous[key]
+    return result
+
+
 F10_DATE_KEYS = (
     "date",
     "日期",
@@ -1275,17 +1289,21 @@ class StockOnDemandService:
         for item in records:
             row = existing_keys.get((item.notice_date, item.title))
             if row:
+                previous, incoming = row.content_json or {}, item.content_json or {}
+                same_pdf = bool(previous.get("adjunctUrl") and previous.get("adjunctUrl") == incoming.get("adjunctUrl")) or bool(
+                    not previous.get("adjunctUrl") and not incoming.get("adjunctUrl") and row.url and row.url == item.url)
+                merged = _preserve_document_governance(previous, incoming, preserve_pdf=same_pdf)
                 changed = any(
                     (
                         row.notice_type != item.notice_type,
                         row.url != item.url,
-                        row.content_json != item.content_json,
+                        row.content_json != merged,
                     )
                 )
                 if changed:
                     row.notice_type = item.notice_type
                     row.url = item.url
-                    row.content_json = item.content_json
+                    row.content_json = merged
                     changed_count += 1
                 row.fetched_at = fetch_time
             else:
@@ -1410,13 +1428,15 @@ class StockOnDemandService:
         for item in records:
             row = existing_keys.get((item.news_time, item.title))
             if row:
+                merged = _preserve_document_governance(row.content_json or {}, item.content_json or {},
+                                                       preserve_news=bool(row.url and row.url == item.url and row.content == item.content))
                 changed = any(
                     (
                         row.source_id != source_id,
                         row.content != item.content,
                         row.source_name != item.source_name,
                         row.url != item.url,
-                        row.content_json != item.content_json,
+                        row.content_json != merged,
                     )
                 )
                 if changed:
@@ -1424,7 +1444,7 @@ class StockOnDemandService:
                     row.content = item.content
                     row.source_name = item.source_name
                     row.url = item.url
-                    row.content_json = item.content_json
+                    row.content_json = merged
                     changed_count += 1
                 row.fetched_at = fetch_time
             else:

@@ -37,6 +37,10 @@ class StockBatchGovernanceRequest(BaseModel):
     archive_chunks: bool = True
     run_graph: bool = True
     run_agent_governance: bool = False
+    structure_documents: bool = False
+    structured_document_limit: int = Field(default=20, ge=1, le=100)
+    parent_job_id: int | None = Field(default=None, gt=0)
+    root_job_id: int | None = Field(default=None, gt=0)
     business_types: list[Literal["QUOTE", "KLINE", "FINANCIAL", "NEWS", "NOTICE", "F10"]] = Field(
         default_factory=lambda: list(MASTER_BUSINESS_TYPES)
     )
@@ -106,6 +110,7 @@ class StockBatchGovernanceRequest(BaseModel):
             self.run_graph,
             self.run_agent_governance,
             self.continuation_action is not None,
+            self.structure_documents,
         )):
             raise ValueError("至少选择一个采集或治理阶段")
         return self

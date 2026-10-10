@@ -24,6 +24,8 @@ export type BatchGovernanceRequest = {
   archive_chunks: boolean;
   run_graph: boolean;
   run_agent_governance: boolean;
+  structure_documents?: boolean;
+  structured_document_limit?: number;
   business_types: BatchGovernanceBusinessType[];
   knowledge_base_id?: number | null;
   graph_id?: number | null;
@@ -96,6 +98,7 @@ export type GovernanceRecord = BatchGovernanceJob & {
 };
 
 export type GovernanceReport = {
+  actions?: GovernanceActions;
   job: {
     job_id: number;
     pipeline_run_id?: number | null;
@@ -123,10 +126,11 @@ export type GovernanceReport = {
     failed_stocks?: number;
     pending_stocks?: number;
     skill_execution_count?: number;
+    skill_execution_scope?: "TASK" | "BATCH_HISTORY";
     evidence_count?: number;
     error_count?: number;
     progress?: number;
-    stage_stats?: Record<string, { label?: string; completed?: number; incomplete?: number; total?: number; completion_rate?: number }>;
+    stage_stats?: Record<string, { label?: string; status?: string; completed?: number; incomplete?: number; total?: number; completion_rate?: number | null; message?: string | null }>;
     [key: string]: unknown;
   };
   analysis?: {
@@ -137,7 +141,40 @@ export type GovernanceReport = {
   };
 };
 
+export type GovernanceActions = {
+  history: Array<{ job_id: number; parent_job_id?: number; created_at?: string; status: string; result_status?: string }>;
+  drafts: Array<{ id: number; skill_code: string; skill_name: string; base_skill_version: string; current_version: string;
+    status: string; rationale: string; proposed_instructions: string; current_instructions: string;
+    validation?: { status: string; scope: string; checks: Array<{ name: string; passed: boolean; reason?: string }> } }>;
+  continuations: Array<{ job_id: number; created_at?: string }>;
+};
+
+export type GovernanceStagePreview = { title: string; status: string; reason: string; note: string;
+  report_snapshot: Record<string, unknown>; items: Array<Record<string, unknown>>; total: number; limit: number; offset: number };
+
+export type GovernanceContinuationPlan = { can_continue: boolean; notes: string[];
+  reasons: Array<{ stage: string; code?: string; reason?: string }>; request: Partial<BatchGovernanceRequest> };
+
 export const batchGovernanceApi = {
+  continuationPlan(jobId: number) {
+    return request<GovernanceContinuationPlan>(`/stocks/batch-governance/jobs/${jobId}/continuation-plan`);
+  },
+  continueJob(jobId: number, key: string) {
+    return request<BatchGovernanceJob>(`/stocks/batch-governance/jobs/${jobId}/continue`, { method: "POST", body: JSON.stringify({ idempotency_key: key }) });
+  },
+  stagePreview(jobId: number, stage: string, itemCode: string, offset = 0) {
+    const query = new URLSearchParams({ stage, item_code: itemCode, offset: String(offset), limit: "20" });
+    return request<GovernanceStagePreview>(`/stocks/batch-governance/jobs/${jobId}/stage-preview?${query}`);
+  },
+  optimize(jobId: number) {
+    return request<GovernanceActions>(`/stocks/batch-governance/jobs/${jobId}/skill-optimization`, { method: "POST" });
+  },
+  testDraft(jobId: number, draftId: number) {
+    return request(`/stocks/batch-governance/jobs/${jobId}/skill-optimization/${draftId}/test`, { method: "POST" });
+  },
+  reviewDraft(jobId: number, draftId: number, decision: "APPROVE" | "REJECT") {
+    return request<GovernanceActions>(`/stocks/batch-governance/jobs/${jobId}/skill-optimization/${draftId}/review`, { method: "POST", body: JSON.stringify({ decision }) });
+  },
   create(payload: BatchGovernanceRequest) {
     return request<BatchGovernanceJob>("/stocks/batch-governance/jobs", {
       method: "POST",

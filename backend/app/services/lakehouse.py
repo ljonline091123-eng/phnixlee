@@ -687,7 +687,7 @@ def export_dataset(db: Session, *, dataset_code: str, dataset_name: str, layer: 
             "batch_id": batch_id, "row_count": len(records), "quality": quality, **obj}
 
 
-def preview_dataset(db: Session, dataset_id: int, version: str | None = None, limit: int = 50) -> dict[str, Any]:
+def preview_dataset(db: Session, dataset_id: int, version: str | None = None, limit: int = 50, offset: int = 0) -> dict[str, Any]:
     dataset = db.get(LakeDataset, dataset_id)
     if dataset is None:
         raise ValueError("数据集不存在")
@@ -701,10 +701,10 @@ def preview_dataset(db: Session, dataset_id: int, version: str | None = None, li
         raise ValueError("数据集对象目录记录不存在")
     data = read_object(obj)
     if dataset.format == "JSONL":
-        rows = [json.loads(line) for line in data.decode("utf-8").splitlines()[:min(limit, 200)]]
+        rows = [json.loads(line) for line in data.decode("utf-8").splitlines()[offset:offset + min(limit, 200)]]
     else:
         import pyarrow.parquet as pq
-        table = pq.read_table(io.BytesIO(data)).slice(0, min(limit, 200))
+        table = pq.read_table(io.BytesIO(data)).slice(offset, min(limit, 200))
         rows = [{key: _json_value(value) for key, value in row.items()} for row in table.to_pylist()]
     return {"dataset": dataset.dataset_code, "version": version_row.version, "row_count": version_row.row_count,
             "schema": version_row.schema_json, "quality": version_row.quality_json, "rows": rows}

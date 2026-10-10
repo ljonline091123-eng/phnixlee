@@ -9,6 +9,27 @@ DOC_ROOT = Path(__file__).resolve().parents[2] / "skill_docs"
 
 CORE_SKILLS = (
     {
+        "skill_code": "NEWS_NOTICE_EVENT_GOVERNOR",
+        "skill_name": "新闻公告结构化事件治理",
+        "description": "有界读取原文、补取官方公告正文、调用真实模型抽取事件并精确核验证据，写入既有事实与证据体系。",
+        "task_type": "stock_data_governance",
+        "skill_type": "EXECUTABLE_TOOL",
+        "side_effect_level": "CONTROLLED_WRITE",
+        "idempotency_policy": "REQUIRED",
+        "permission_policy_json": {
+            "arbitrary_sql": False, "database_write": True, "unrestricted_database_write": False,
+            "allowed_operations": ["EXTRACT_EVIDENCED_EVENTS"],
+            "allowed_services": ["govern_stock_documents", "create_fact", "create_evidence", "review_fact"],
+            "write_scope": {"tables": ["stock_news", "stock_notice", "foundation_fact", "foundation_evidence", "foundation_fact_evidence", "foundation_fact_review"], "operations": ["INSERT", "UPDATE"]},
+        },
+        "function_spec": {
+            "name": "govern_stock_documents", "internal_service_only": True,
+            "parameters": {"type": "object", "required": ["market", "symbol", "governance_batch_id"],
+                "properties": {"market": {"type": "string"}, "symbol": {"type": "string"}, "governance_batch_id": {"type": "string"}},
+                "additionalProperties": True},
+        },
+    },
+    {
         "skill_code": "ONDEMAND_DATA_DISTILLER",
         "skill_name": "按需数据双轨蒸馏 SOP",
         "description": "单文档有界提取问答块与有证据的图谱三元组。",

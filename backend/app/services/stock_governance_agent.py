@@ -40,6 +40,7 @@ SKILL_COLLECTION = "STOCK_SOURCE_COLLECTION"
 SKILL_QUALITY = "STOCK_DATA_QUALITY_GATE"
 SKILL_KNOWLEDGE = "LAKEHOUSE_KNOWLEDGE_PUBLISHER"
 SKILL_ACCEPTANCE = "STOCK_GOVERNANCE_ACCEPTANCE"
+SKILL_EVENTS = "NEWS_NOTICE_EVENT_GOVERNOR"
 
 
 def utc_now() -> datetime:
@@ -89,6 +90,7 @@ class StockGovernanceAgentSession:
         self.db = db
         self.governance_batch_id = governance_batch_id
         self.pipeline_run_id = pipeline_run_id
+        self.structure_documents = bool(request_json.get("structure_documents"))
         self.agent = self._agent()
         self.skills = self._skills()
         self.execution = self._start(request_json)
@@ -108,6 +110,8 @@ class StockGovernanceAgentSession:
             SKILL_IDENTITY, SKILL_COLLECTION, SKILL_QUALITY,
             SKILL_KNOWLEDGE, SKILL_ACCEPTANCE,
         }
+        if self.structure_documents:
+            required.add(SKILL_EVENTS)
         rows = list(self.db.scalars(
             select(ModelSkill)
             .join(AgentSkillLink, AgentSkillLink.skill_id == ModelSkill.id)
@@ -436,12 +440,19 @@ def finalize_stock_governance_details(
         else:
             status = "MISSING"
         review = ((output.get("agent_skill_governance") or {}).get("model_quality_review") or {})
+        event_run = next((item for item in (output.get("stage_results", {}).get("STRUCTURED_EVENTS") or {}).get("stock_runs") or []
+                          if item.get("market") == row.market and item.get("symbol") == row.symbol), None)
+        if event_run:
+            evidence.extend(f"fact_id:{value}" for value in event_run.get("fact_ids") or [])
+            if event_run.get("status") != "SUCCESS" and status == "PASS":
+                status = "PARTIAL"
         if row.governance_mode == AI_AGENT_SKILL_GOVERNANCE and review.get("status") != "SUCCESS":
             status = "PARTIAL" if status == "PASS" else status
         row.status = status
         row.stage_status_json = {
             "BUSINESS_DATA": business_status,
             "KNOWLEDGE_PIPELINE": knowledge_status,
+            "STRUCTURED_EVENTS": event_run.get("status") if event_run else "SKIPPED",
             "operations": {
                 **((row.stage_status_json or {}).get("operations") or {}),
                 **{key: value.get("status") for key, value in operations.items()},
@@ -454,6 +465,7 @@ def finalize_stock_governance_details(
             "errors": stock_result.get("errors") or [],
             "completion": market_result.get("completion") or {},
             "no_false_completion": True,
+            "structured_events": {key: event_run.get(key) for key in ("total", "completed", "remaining", "processed_this_run")} if event_run else {},
             "model_review": {
                 key: review.get(key) for key in ("status", "call_log_id", "real_model", "model_code")
             },
