@@ -39,6 +39,7 @@ from app.services.stock_governance_agent import (
     SKILL_IDENTITY,
     SKILL_KNOWLEDGE,
     SKILL_QUALITY,
+    SKILL_EVENTS,
     StockGovernanceAgentSession,
     ensure_stock_governance_details,
     finalize_stock_governance_details,
@@ -552,6 +553,7 @@ def execute_stock_batch_governance(payload: dict[str, Any]) -> dict[str, Any]:
         "archive_chunks": request.archive_chunks,
         "run_graph": request.run_graph,
         "run_agent_governance": request.run_agent_governance,
+        "structure_documents": request.structure_documents,
         "continuation_action": request.continuation_action,
         "agent_governance_scope": (
             "GLOBAL_BOUNDED_SOURCE_AUDIT" if request.run_agent_governance else "NOT_REQUESTED"
@@ -833,6 +835,46 @@ def execute_stock_batch_governance(payload: dict[str, Any]) -> dict[str, Any]:
                 "status": "SKIPPED", "message": "本次未选择业务数据采集",
             }
 
+        if request.structure_documents:
+            from app.services.document_event_governance import govern_stock_documents
+            _save_progress(db, outer_run_id, output, stage="STRUCTURED_EVENTS", progress=55)
+            event_runs = []
+            for stock in targets:
+                context = {"governance_batch_id": governance_batch_id, "pipeline_run_id": outer_run_id,
+                           "agent_execution_run_id": agent_session.execution.id if agent_session else None,
+                           "skill_version": agent_session.skills[SKILL_EVENTS].version if agent_session else "1.0.0"}
+                def extract_events(execution=None, selected=stock, base=context):
+                    return govern_stock_documents(db, selected,
+                        context={**base, "skill_execution_run_id": execution.id if execution else None},
+                        limit=request.structured_document_limit, days=request.disclosure_days,
+                        model_instance=agent_session.agent.model_instance_code if agent_session else None,
+                        instructions=agent_session.skills[SKILL_EVENTS].instructions if agent_session else "")
+                event_run = agent_session.run_skill(SKILL_EVENTS,
+                    input_json={**context, "market": stock.market, "symbol": stock.symbol},
+                    idempotency_scope=f"events:{stock.market}:{stock.symbol}", operation=extract_events,
+                ) if agent_session else extract_events()
+                event_runs.append(event_run)
+                output["errors"].extend({"stage": "STRUCTURED_EVENTS", "market": stock.market, "symbol": stock.symbol, **error}
+                                        for error in event_run.get("errors") or [])
+            event_status = "SUCCESS" if event_runs and all(row["status"] == "SUCCESS" for row in event_runs) else "PARTIAL"
+            completed_items, incomplete_items = [], []
+            for result in event_runs:
+                for document in result.get("documents") or []:
+                    item = {"code": f"{result['market']}:{result['symbol']}:{document['source_table']}:{document['source_record_id']}",
+                            "label": document["title"], "status": "SUCCESS" if document.get("current_version_complete") else "PARTIAL",
+                            "reason": document.get("error") or ("正文已分析，候选事件待审核" if document.get("current_version_complete") and document["status"] == "ANALYZED" else "正文未发现可抽取事件" if document.get("current_version_complete") and document["status"] == "NO_EVENT" else "尚未完成当前正文及Skill版本的结构化"),
+                            "record_count": len(document.get("fact_ids") or []), "details": document}
+                    (completed_items if item["status"] == "SUCCESS" else incomplete_items).append(item)
+                if not result.get("documents"):
+                    incomplete_items.append({"code": f"{result['market']}:{result['symbol']}:EVENT_SCOPE", "label": "新闻公告结构化范围",
+                        "status": "MISSING", "reason": (result.get("errors") or [{}])[0].get("message") or "范围内没有可分析新闻公告", "details": result})
+            output["stage_results"]["STRUCTURED_EVENTS"] = {"status": event_status, "stock_runs": event_runs,
+                "completed_items": completed_items, "incomplete_items": incomplete_items,
+                "message": "新闻公告正文结构化；候选事实与证据入库，全文缺口保持PARTIAL"}
+            _save_progress(db, outer_run_id, output, stage="STRUCTURED_EVENTS", progress=57)
+        else:
+            output["stage_results"]["STRUCTURED_EVENTS"] = {"status": "SKIPPED", "message": "历史请求未要求新闻公告事件结构化"}
+
         knowledge_requested = any((
             request.export_lakehouse,
             request.archive_chunks,
@@ -1073,7 +1115,7 @@ def execute_stock_batch_governance(payload: dict[str, Any]) -> dict[str, Any]:
                     })
                 _save_progress(
                     db, outer_run_id, output, stage="KNOWLEDGE_PIPELINE",
-                    progress=55 + round(index / market_total * 40),
+                    progress=57 + round(index / market_total * 38),
                 )
             def aggregate_stage(runs: list[dict[str, Any]], requested: bool) -> str:
                 if not requested:
@@ -1198,7 +1240,9 @@ def execute_stock_batch_governance(payload: dict[str, Any]) -> dict[str, Any]:
         failed_unit_count = business_failed + sum(status == "FAILED" for status in child_statuses)
         if requested_unit_count and failed_unit_count == requested_unit_count:
             result_status = "FAILED"
-        elif business_issues or has_failed_child or has_partial_child or output["errors"]:
+        elif business_issues or has_failed_child or has_partial_child or output["errors"] or (
+            request.structure_documents and output["stage_results"]["STRUCTURED_EVENTS"]["status"] != "SUCCESS"
+        ):
             result_status = "PARTIAL"
         else:
             result_status = "COMPLETED"

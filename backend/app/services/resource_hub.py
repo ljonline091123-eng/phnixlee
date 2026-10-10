@@ -253,6 +253,7 @@ DEFAULT_AGENTS = (
             "STOCK_DATA_QUALITY_GATE",
             "LAKEHOUSE_KNOWLEDGE_PUBLISHER",
             "STOCK_GOVERNANCE_ACCEPTANCE",
+            "NEWS_NOTICE_EVENT_GOVERNOR",
         ],
         "kb_codes": ["STOCK_FULL_KG"],
         "asset_codes": ["STOCK_SYMBOL", "STOCK_QUOTE", "STOCK_KLINE", "STOCK_FINANCIAL", "STOCK_NOTICE", "STOCK_NEWS", "STOCK_F10", "STOCK_CONTEXT_EVENT", "RESEARCH_REPORT"],
@@ -368,6 +369,12 @@ def seed_default_agents(db: Session) -> None:
             continue
         skill_ids = [skill_by_code[code] for code in agent_config["skill_codes"] if code in skill_by_code]
         if agent_config["agent_code"] not in created_codes:
+            if agent.agent_code == "STOCK_DATA_GOVERNANCE_AGENT":
+                event_id = skill_by_code.get("NEWS_NOTICE_EVENT_GOVERNOR")
+                if event_id and not db.scalar(select(AgentSkillLink.id).where(
+                    AgentSkillLink.agent_id == agent.id, AgentSkillLink.skill_id == event_id,
+                )):
+                    db.add(AgentSkillLink(agent_id=agent.id, skill_id=event_id))
             # Preserve all user-maintained bindings on existing Agents.  The
             # governed prediction writer is a security boundary, so append
             # only that built-in binding when the Agent is configured to use it.

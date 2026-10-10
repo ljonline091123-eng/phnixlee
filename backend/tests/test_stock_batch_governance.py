@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import hashlib
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
@@ -14,9 +14,11 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.api.stock_batch import (
     _enrich_stage_results,
+    _report_stage_stats,
     get_stock_batch_governance_job,
     list_stock_batch_governance_jobs,
     retry_stock_batch_governance_job,
+    start_stock_batch_governance_job,
     router as stock_batch_router,
     submit_stock_batch_governance,
 )
@@ -25,7 +27,8 @@ from app.db.base import Base
 from app.db.session import get_db
 from app.jobs.dispatcher import DatabaseJobDispatcher
 from app.jobs.tasks import TASK_HANDLERS
-from app.models.ai_hub import KnowledgeBase, KnowledgeDocument, KnowledgeGraph
+from app.jobs.worker import JobWorker
+from app.models.ai_hub import AgentDefinition, KnowledgeBase, KnowledgeDocument, KnowledgeGraph, ModelSkill
 from app.models.governance import AgentExecutionRun, SkillExecutionRun, StockGovernanceDetail
 from app.models.lakehouse import DocumentChunkVersion
 from app.models.market_data import DataFetchLog, DataSource, StockSymbol
@@ -306,6 +309,177 @@ def test_retry_lifecycle_hides_stale_running_result_and_exposes_retry_time() -> 
     finally:
         engine.dispose()
         temporary.cleanup()
+
+
+@pytest.mark.parametrize("lifecycle", ["PENDING", "RETRY", "FAILED"])
+def test_start_releases_delayed_job_and_worker_completes_it_once(lifecycle) -> None:
+    temporary, engine, sessions = _database()
+    try:
+        with sessions() as db:
+            submitted = submit_stock_batch_governance(StockBatchGovernanceRequest.model_validate({
+                "stocks": [{"market": "CN_A", "symbol": "000001"}],
+                "business_types": ["NEWS"], "export_lakehouse": False,
+                "archive_chunks": False, "run_graph": False,
+            }), db)
+            job = db.get(ScheduledJob, submitted["job_id"])
+            job.status = lifecycle
+            job.run_after = datetime.now(timezone.utc) + timedelta(days=1)
+            job.error_message = "旧接口错误"
+            run = db.get(PipelineRun, job.pipeline_run_id)
+            run.status = lifecycle
+            run.current_stage = "BUSINESS_DATA"
+            run.output_json = {"progress": 63, "current_stage": "BUSINESS_DATA"}
+            db.commit()
+            job_id = job.id
+
+        executed = []
+
+        def execute(task_type, payload):
+            executed.append((task_type, payload))
+            with sessions() as db:
+                assert db.get(ScheduledJob, job_id).status == "RUNNING"
+                with pytest.raises(HTTPException) as duplicate:
+                    start_stock_batch_governance_job(job_id, db)
+                assert duplicate.value.status_code == 409
+            return {"result_status": "PARTIAL", "progress": 100, "current_stage": "COMPLETE"}
+
+        worker = JobWorker(task_types=(stock_batch.TASK_TYPE,), session_factory=sessions, task_executor=execute)
+        assert worker.run_once() is False
+        app = FastAPI()
+        app.include_router(stock_batch_router)
+
+        def override_db():
+            with sessions() as db:
+                yield db
+
+        app.dependency_overrides[get_db] = override_db
+        with TestClient(app) as client:
+            response = client.post(f"/stocks/batch-governance/jobs/{job_id}/start")
+            assert response.status_code == 202
+            assert response.json()["status"] == "PENDING"
+            assert response.json()["current_stage"] == "QUEUED"
+            assert response.json()["worker_required"] is True
+            assert response.json()["error_message"] is None
+            with sessions() as db:
+                assert db.get(PipelineRun, submitted["pipeline_run_id"]).output_json["progress"] == 63
+            assert worker.run_once() is True
+            assert worker.run_once() is False
+            detail = client.get(f"/stocks/batch-governance/jobs/{job_id}").json()
+            assert detail["job_status"] == "COMPLETED"
+            assert detail["status"] == "PARTIAL"
+            assert detail["progress"] == 100
+            assert client.post(f"/stocks/batch-governance/jobs/{job_id}/start").status_code == 409
+        assert len(executed) == 1
+    finally:
+        engine.dispose()
+        temporary.cleanup()
+
+
+@pytest.mark.parametrize("code,stage,expected", [
+    ("BUSINESS_DATA", {"status": "SKIPPED", "completed_items": [1], "incomplete_items": [2]}, (0, 0, 0, None)),
+    ("LAKEHOUSE_EXPORT", {"status": "PARTIAL", "completed_items": [1, 2], "incomplete_items": [3]}, (2, 1, 3, 66.67)),
+    ("AI_QUALITY_GATE", {"status": "PARTIAL", "stock_count": 3, "passed_count": 2}, (2, 1, 3, 66.67)),
+    ("VALIDATION", {"status": "SUCCESS"}, (1, 0, 1, 100)),
+    ("AGENT_SKILL_GOVERNANCE", {"status": "PARTIAL", "runs": [{"status": "SUCCEEDED"}, {"status": "PENDING_REVIEW"}]}, (1, 1, 2, 50)),
+])
+def test_report_stage_denominators_follow_actual_checks(code, stage, expected) -> None:
+    stats = _report_stage_stats(code, stage)
+    assert (stats["completed"], stats["incomplete"], stats["total"], stats["completion_rate"]) == expected
+    assert stats["total"] == stats["completed"] + stats["incomplete"]
+
+
+@pytest.mark.parametrize("linkage", ["explicit_agent", "pipeline_agent", "batch_history"])
+def test_report_skill_counts_do_not_mix_unrelated_tasks_in_same_batch(linkage) -> None:
+    temporary, engine, sessions = _database()
+    try:
+        with sessions() as db:
+            seed_default_skills(db)
+            seed_default_agents(db)
+            agent = db.scalar(select(AgentDefinition))
+            skill = db.scalar(select(ModelSkill))
+            submitted = submit_stock_batch_governance(StockBatchGovernanceRequest.model_validate({
+                "stocks": [{"market": "CN_A", "symbol": "000001"}],
+                "governance_batch_id": "shared-report-batch", "business_types": ["NEWS"],
+                "export_lakehouse": False, "archive_chunks": False, "run_graph": False,
+            }), db)
+            job = db.get(ScheduledJob, submitted["job_id"])
+            run = db.get(PipelineRun, job.pipeline_run_id)
+            current = AgentExecutionRun(
+                run_key="current-agent", agent_id=agent.id, agent_code=agent.agent_code,
+                agent_version="1.0.0", governance_batch_id="shared-report-batch",
+                pipeline_run_id=job.pipeline_run_id if linkage != "batch_history" else None,
+            )
+            other = AgentExecutionRun(
+                run_key="other-agent", agent_id=agent.id, agent_code=agent.agent_code,
+                agent_version="1.0.0", governance_batch_id="shared-report-batch",
+            )
+            db.add_all([current, other])
+            db.flush()
+            db.add_all([
+                SkillExecutionRun(
+                    agent_execution_run_id=owner.id, governance_batch_id="shared-report-batch",
+                    skill_id=skill.id, skill_code=skill.skill_code, skill_version="1.0.0", status="SUCCEEDED",
+                ) for owner in (current, other)
+            ])
+            run.output_json = {"agent_execution_run_id": current.id} if linkage == "explicit_agent" else {}
+            db.commit()
+            report = get_stock_batch_governance_job(job.id, db)["governance_report"]
+            if linkage == "batch_history":
+                assert report["summary"]["skill_execution_count"] == 2
+                assert report["summary"]["skill_execution_scope"] == "BATCH_HISTORY"
+            else:
+                assert report["summary"]["skill_execution_count"] == 1
+                assert report["summary"]["skill_execution_scope"] == "TASK"
+                assert report["skills"][0]["agent_execution_run_id"] == current.id
+                assert report["agent"]["id"] == current.id
+            assert "COMPLETE" not in report["summary"]["stage_stats"]
+            assert "KNOWLEDGE_PIPELINE" not in report["summary"]["stage_stats"]
+    finally:
+        engine.dispose()
+        temporary.cleanup()
+
+
+@pytest.mark.parametrize("outcome", ["PASS", "SUCCESS", "COMPLETED"])
+def test_report_completed_stock_count_accepts_historical_pass_status(outcome) -> None:
+    temporary, engine, sessions = _database()
+    try:
+        with sessions() as db:
+            submitted = submit_stock_batch_governance(StockBatchGovernanceRequest.model_validate({
+                "stocks": [{"market": "CN_A", "symbol": "000001"}],
+                "governance_batch_id": "pass-report-batch", "business_types": ["NEWS"],
+                "export_lakehouse": False, "archive_chunks": False, "run_graph": False,
+            }), db)
+            db.add(StockGovernanceDetail(
+                governance_batch_id="pass-report-batch", board_code="CN_A_MAIN",
+                market="CN_A", symbol="000001", pipeline_run_id=submitted["pipeline_run_id"],
+                status=outcome,
+            ))
+            db.commit()
+            report = get_stock_batch_governance_job(submitted["job_id"], db)["governance_report"]
+            assert report["summary"]["stock_count"] == 1
+            assert report["summary"]["completed_stocks"] == 1
+            assert report["stock_results"][0]["status"] == outcome
+    finally:
+        engine.dispose()
+        temporary.cleanup()
+
+
+def test_f10_report_identifies_pending_qa_instead_of_generic_collection_note() -> None:
+    output = {
+        "stage_results": {"BUSINESS_DATA": {"status": "PARTIAL"}},
+        "effective_options": {"business_types": ["F10"]},
+        "stock_results": [{"market": "CN_A", "symbol": "000001", "operations": {"F10": {
+            "status": "PARTIAL", "section_count": 8, "message": "仅刷新F10扩展资料",
+            "investor_qa_sync": {"job_id": 527, "job_status": "PENDING", "stored_count": 9},
+        }}}],
+    }
+    business = _enrich_stage_results(output)["BUSINESS_DATA"]
+    assert not business["completed_items"]
+    assert len(business["incomplete_items"]) == 1
+    item = business["incomplete_items"][0]
+    assert "8 个F10资料分区" in item["reason"]
+    assert "问董秘等待后台采集（任务 #527）" in item["reason"]
+    assert item["details"]["investor_qa_sync"]["stored_count"] == 9
 
 
 def test_failed_fetch_log_is_reported_in_per_stock_errors(monkeypatch) -> None:
