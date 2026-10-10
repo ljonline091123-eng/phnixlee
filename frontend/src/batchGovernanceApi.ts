@@ -123,10 +123,11 @@ export type GovernanceReport = {
     failed_stocks?: number;
     pending_stocks?: number;
     skill_execution_count?: number;
+    skill_execution_scope?: "TASK" | "BATCH_HISTORY";
     evidence_count?: number;
     error_count?: number;
     progress?: number;
-    stage_stats?: Record<string, { label?: string; completed?: number; incomplete?: number; total?: number; completion_rate?: number }>;
+    stage_stats?: Record<string, { label?: string; status?: string; completed?: number; incomplete?: number; total?: number; completion_rate?: number | null; message?: string | null }>;
     [key: string]: unknown;
   };
   analysis?: {

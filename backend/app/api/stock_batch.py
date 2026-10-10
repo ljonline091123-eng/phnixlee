@@ -150,6 +150,52 @@ _BUSINESS_VERIFY_SUFFIX = {
     "F10": "f10?local_only=true",
 }
 
+_STAGE_LABELS = {
+    "VALIDATION": "主数据校验",
+    "BUSINESS_DATA": "业务数据采集",
+    "AI_QUALITY_GATE": "AI治理质量门禁",
+    "QUALITY_GATE": "数据质量门禁",
+    "LAKEHOUSE_EXPORT": "湖仓发布",
+    "DOCUMENT_CHUNKS": "文档切片",
+    "KNOWLEDGE_GRAPH": "知识图谱",
+    "AGENT_SKILL_GOVERNANCE": "Agent + Skill 治理",
+    "KNOWLEDGE_PIPELINE": "知识流水线",
+    "COMPLETE": "任务收尾",
+}
+
+
+def _report_stage_stats(code: str, stage: dict) -> dict:
+    """Count verified criteria, keeping an unrequested stage outside the denominator."""
+    status = str(stage.get("status") or "UNKNOWN").upper()
+    completed = len(stage.get("completed_items") or [])
+    incomplete = len(stage.get("incomplete_items") or [])
+    if status == "SKIPPED":
+        completed, incomplete = 0, 0
+    elif not completed and not incomplete:
+        if code == "AI_QUALITY_GATE" and "stock_count" in stage:
+            total = int(stage.get("stock_count") or 0)
+            completed = min(total, int(stage.get("passed_count") or 0))
+            incomplete = total - completed
+        elif isinstance(stage.get("runs"), list) and stage["runs"]:
+            completed = sum(str(run.get("status") or "").upper() in {
+                "SUCCESS", "SUCCEEDED", "PASSED", "COMPLETED",
+            } for run in stage["runs"] if isinstance(run, dict))
+            incomplete = len(stage["runs"]) - completed
+        elif status in {"SUCCESS", "SUCCEEDED", "PASSED", "COMPLETED", "BUILT", "GOVERNED", "LOCKED", "PUBLISHED"}:
+            completed = 1
+        elif status != "UNKNOWN":
+            incomplete = 1
+    total = completed + incomplete
+    return {
+        "label": _STAGE_LABELS.get(code, code),
+        "status": status,
+        "completed": completed,
+        "incomplete": incomplete,
+        "total": total,
+        "completion_rate": round(completed / total * 100, 2) if total else None,
+        "message": stage.get("message"),
+    }
+
 
 def _stage_item(
     code: str,
@@ -237,13 +283,32 @@ def _enrich_stage_results(output: dict) -> dict:
                 "total_count": operation.get("total_count"),
                 "persisted_count": operation.get("persisted_count"),
                 "sections": operation.get("sections"),
+                "section_count": operation.get("section_count"),
+                "investor_qa_sync": operation.get("investor_qa_sync"),
                 "error": operation.get("error"),
             }
+            qa_sync = operation.get("investor_qa_sync") or {}
+            qa_status = str(qa_sync.get("job_status") or qa_sync.get("status") or "").upper()
+            qa_reason = None
+            if code == "F10" and not has_persisted_result and qa_status:
+                qa_label = {
+                    "PENDING": "等待后台采集", "RETRY": "等待重试",
+                    "RUNNING": "正在采集", "FAILED": "采集失败",
+                    "PARTIAL": "部分完成", "COMPLETED": "已结束",
+                    "SUCCESS": "已完成",
+                }.get(qa_status, qa_status)
+                qa_job = f"（任务 #{qa_sync['job_id']}）" if qa_sync.get("job_id") else ""
+                qa_reason = (
+                    f"{market}:{symbol} 已返回 {operation.get('section_count') or 0} 个F10资料分区；"
+                    f"问董秘{qa_label}{qa_job}，本次F10尚未完整通过验收。"
+                )
+                if qa_sync.get("error"):
+                    qa_reason += f"原因：{qa_sync['error']}"
             reason = (
                 f"{market}:{symbol} 已返回 {effective_count or 0} 条{_BUSINESS_LABELS[code]}记录，"
                 f"持久化 {count or 0} 条（幂等更新也视为已完成）。"
                 if has_persisted_result
-                else operation.get("error") or operation.get("message") or (
+                else operation.get("error") or qa_reason or operation.get("message") or (
                     f"{market}:{symbol} 的{_BUSINESS_LABELS[code]}接口调用成功，"
                     "但未返回或未持久化有效记录。"
                     if status == "SUCCESS"
@@ -471,7 +536,10 @@ def _job_view(db: Session, job: ScheduledJob, *, details: bool = True) -> dict:
         "job_status": job.status,
         "result_status": result_status,
         "progress": int(output.get("progress") or (100 if job.status == "COMPLETED" else 0)),
-        "current_stage": output.get("current_stage") or (run.current_stage if run else None) or "QUEUED",
+        "current_stage": (
+            run.current_stage if run and job.status == "PENDING" and run.current_stage == "QUEUED"
+            else output.get("current_stage") or (run.current_stage if run else None) or "QUEUED"
+        ),
         "stock_count": stock_count,
         "governance_mode": output.get("governance_mode") or (
             getattr(run, "governance_mode", None) if run else None
@@ -515,10 +583,21 @@ def _job_view(db: Session, job: ScheduledJob, *, details: bool = True) -> dict:
         )
         agent_run = db.get(AgentExecutionRun, agent_run_id) if agent_run_id else None
         skill_predicates = []
+        skill_scope = "TASK"
         if agent_run_id:
             skill_predicates.append(SkillExecutionRun.agent_execution_run_id == agent_run_id)
-        if batch_id:
+        else:
+            task_agent_ids = list(db.scalars(select(AgentExecutionRun.id).where(
+                AgentExecutionRun.pipeline_run_id == job.pipeline_run_id
+            )).all()) if job.pipeline_run_id is not None else []
+            if task_agent_ids:
+                skill_predicates.append(SkillExecutionRun.agent_execution_run_id.in_(task_agent_ids))
+                if len(task_agent_ids) == 1:
+                    agent_run = db.get(AgentExecutionRun, task_agent_ids[0])
+                    status["agent_execution_run_id"] = task_agent_ids[0]
+        if not skill_predicates and batch_id:
             skill_predicates.append(SkillExecutionRun.governance_batch_id == batch_id)
+            skill_scope = "BATCH_HISTORY"
         skill_query = select(SkillExecutionRun).order_by(SkillExecutionRun.started_at)
         if skill_predicates:
             from sqlalchemy import or_
@@ -609,15 +688,14 @@ def _job_view(db: Session, job: ScheduledJob, *, details: bool = True) -> dict:
         stage_report = _enrich_stage_results(output)
         stage_stats = {}
         for code, stage in stage_report.items():
-            completed_count = len(stage.get("completed_items") or []) if isinstance(stage, dict) else 0
-            incomplete_items = stage.get("incomplete_items") or [] if isinstance(stage, dict) else []
-            stage_stats[code] = {
-                "label": {"BUSINESS_DATA": "业务数据", "LAKEHOUSE_EXPORT": "湖仓发布", "DOCUMENT_CHUNKS": "文档切片", "KNOWLEDGE_GRAPH": "知识图谱"}.get(code, code),
-                "completed": completed_count,
-                "incomplete": len(incomplete_items),
-                "total": completed_count + len(incomplete_items),
-                "completion_rate": round(completed_count / (completed_count + len(incomplete_items)) * 100, 2) if completed_count + len(incomplete_items) else 0,
-            }
+            if not isinstance(stage, dict):
+                continue
+            # Only expose meaningful business stages. COMPLETE and the
+            # orchestration wrapper are kept in raw audit data, not shown as
+            # zero-value quality stages in the operator report.
+            if code in {"KNOWLEDGE_PIPELINE", "COMPLETE"}:
+                continue
+            stage_stats[code] = _report_stage_stats(code, stage)
         status_counts: dict[str, int] = {}
         for item in stock_report:
             key = str(item.get("status") or "PENDING").upper()
@@ -627,22 +705,24 @@ def _job_view(db: Session, job: ScheduledJob, *, details: bool = True) -> dict:
             for reason in (stage.get("reasons") or []) if isinstance(stage, dict) else []:
                 if reason not in error_items:
                     error_items.append(reason)
-        reason_counts: dict[str, int] = {}
+        reason_counts: dict[str, dict[str, object]] = {}
         for error in error_items:
             if isinstance(error, dict):
                 code = str(error.get("code") or error.get("error_code") or "UNKNOWN")
                 reason = str(error.get("reason") or error.get("detail") or error.get("message") or code)
             else:
                 code, reason = "PIPELINE_ERROR", str(error)
-            reason_counts[code] = reason_counts.get(code, 0) + 1
+            existing_reason = reason_counts.setdefault(code, {"count": 0, "reason": reason})
+            existing_reason["count"] = int(existing_reason["count"]) + 1
         summary = {
             "stock_count": len(stock_report),
             "status_counts": status_counts,
-            "completed_stocks": sum(value for key, value in status_counts.items() if key in {"COMPLETED", "SUCCESS"}),
+            "completed_stocks": sum(value for key, value in status_counts.items() if key in {"COMPLETED", "SUCCESS", "PASS", "PASSED", "SUCCEEDED"}),
             "partial_stocks": status_counts.get("PARTIAL", 0),
             "failed_stocks": status_counts.get("FAILED", 0),
             "pending_stocks": sum(value for key, value in status_counts.items() if key in {"PENDING", "RUNNING", "RETRY", "EMPTY"}),
             "skill_execution_count": len(skill_runs),
+            "skill_execution_scope": skill_scope,
             "evidence_count": sum(len(item.get("evidence_ids") or []) for item in stock_report if isinstance(item, dict)),
             "error_count": len(error_items),
             "stage_stats": stage_stats,
@@ -656,7 +736,10 @@ def _job_view(db: Session, job: ScheduledJob, *, details: bool = True) -> dict:
         if any(item.get("incomplete") for item in stage_stats.values()):
             recommendations.append("对未完成阶段执行定向继续任务，核验数据行数、文档切片覆盖率和图谱治理状态。")
         analysis = {
-            "failure_reasons": [{"code": code, "count": count} for code, count in sorted(reason_counts.items(), key=lambda value: (-value[1], value[0]))],
+            "failure_reasons": [
+                {"code": code, **details}
+                for code, details in sorted(reason_counts.items(), key=lambda value: (-int(value[1]["count"]), value[0]))
+            ],
             "recommendations": recommendations or ["当前没有发现未处理缺口，可进入成果详情核验证据和质量结果。"],
             "stage_stats": stage_stats,
         }
@@ -697,6 +780,7 @@ def _job_view(db: Session, job: ScheduledJob, *, details: bool = True) -> dict:
             } if agent_run else None),
             "skills": [{
                 "id": item.id,
+                "agent_execution_run_id": item.agent_execution_run_id,
                 "skill_code": item.skill_code,
                 "skill_version": item.skill_version,
                 "status": item.status,
