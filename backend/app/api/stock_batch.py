@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from hashlib import sha256
 import json
 from uuid import uuid4
@@ -545,6 +546,120 @@ def _job_view(db: Session, job: ScheduledJob, *, details: bool = True) -> dict:
                 item for item in (output.get("stock_results") or [])
                 if isinstance(item, dict)
             ]
+        # Older jobs may have no durable per-stock rows. Reconstruct the
+        # requested scope from the immutable request and master data so the
+        # report is useful before the worker starts as well as after failure.
+        request_stocks = ((job.payload_json or {}).get("request") or {}).get("stocks") or []
+        known_symbols = {
+            (str(item.market).upper(), str(item.symbol).upper()): item
+            for item in db.scalars(select(StockSymbol)).all()
+        }
+        existing_keys = {
+            (str(item.get("market") or "").upper(), str(item.get("symbol") or "").upper())
+            for item in stock_report
+            if isinstance(item, dict)
+        }
+        for target in request_stocks:
+            market = str(target.get("market") or "").upper()
+            symbol = str(target.get("symbol") or "").upper()
+            key = (market, symbol)
+            if key in existing_keys:
+                continue
+            master = known_symbols.get(key)
+            stock_report.append({
+                "market": market,
+                "symbol": symbol,
+                "stock_name": getattr(master, "name", None),
+                "exchange": getattr(master, "exchange", None),
+                "listing_board": getattr(master, "listing_board_name", None) or getattr(master, "listing_board", None),
+                "status": "PENDING",
+                "current_stage": status.get("current_stage"),
+                "stage_status": {},
+                "source_ids": [getattr(master, "source_id", None)] if master and getattr(master, "source_id", None) else [],
+                "evidence_ids": [],
+                "quality_summary": {},
+            })
+            existing_keys.add(key)
+        # Add stable master-data fields to rows produced by both old and new
+        # workers. This avoids forcing a destructive historical migration.
+        for item in stock_report:
+            key = (str(item.get("market") or "").upper(), str(item.get("symbol") or "").upper())
+            raw_item = next(
+                (candidate for candidate in (output.get("stock_results") or [])
+                 if isinstance(candidate, dict)
+                 and str(candidate.get("market") or "").upper() == key[0]
+                 and str(candidate.get("symbol") or "").upper() == key[1]),
+                None,
+            )
+            if raw_item:
+                # Preserve worker-level operation details in the read model;
+                # these are the evidence needed to explain missing sources.
+                for field in ("operations", "errors", "message", "status"):
+                    if field in raw_item:
+                        item[field] = raw_item[field]
+            master = known_symbols.get(key)
+            if master:
+                item.setdefault("stock_name", master.name)
+                item.setdefault("exchange", master.exchange)
+                item.setdefault("listing_board", getattr(master, "listing_board_name", None) or getattr(master, "listing_board", None))
+                item.setdefault("security_status", master.status)
+                item.setdefault("asset_type", master.asset_type)
+                item.setdefault("source_ids", [master.source_id] if master.source_id else [])
+
+        stage_report = _enrich_stage_results(output)
+        stage_stats = {}
+        for code, stage in stage_report.items():
+            completed_count = len(stage.get("completed_items") or []) if isinstance(stage, dict) else 0
+            incomplete_items = stage.get("incomplete_items") or [] if isinstance(stage, dict) else []
+            stage_stats[code] = {
+                "label": {"BUSINESS_DATA": "业务数据", "LAKEHOUSE_EXPORT": "湖仓发布", "DOCUMENT_CHUNKS": "文档切片", "KNOWLEDGE_GRAPH": "知识图谱"}.get(code, code),
+                "completed": completed_count,
+                "incomplete": len(incomplete_items),
+                "total": completed_count + len(incomplete_items),
+                "completion_rate": round(completed_count / (completed_count + len(incomplete_items)) * 100, 2) if completed_count + len(incomplete_items) else 0,
+            }
+        status_counts: dict[str, int] = {}
+        for item in stock_report:
+            key = str(item.get("status") or "PENDING").upper()
+            status_counts[key] = status_counts.get(key, 0) + 1
+        error_items = list(output.get("errors") or [])
+        for stage in stage_report.values():
+            for reason in (stage.get("reasons") or []) if isinstance(stage, dict) else []:
+                if reason not in error_items:
+                    error_items.append(reason)
+        reason_counts: dict[str, int] = {}
+        for error in error_items:
+            if isinstance(error, dict):
+                code = str(error.get("code") or error.get("error_code") or "UNKNOWN")
+                reason = str(error.get("reason") or error.get("detail") or error.get("message") or code)
+            else:
+                code, reason = "PIPELINE_ERROR", str(error)
+            reason_counts[code] = reason_counts.get(code, 0) + 1
+        summary = {
+            "stock_count": len(stock_report),
+            "status_counts": status_counts,
+            "completed_stocks": sum(value for key, value in status_counts.items() if key in {"COMPLETED", "SUCCESS"}),
+            "partial_stocks": status_counts.get("PARTIAL", 0),
+            "failed_stocks": status_counts.get("FAILED", 0),
+            "pending_stocks": sum(value for key, value in status_counts.items() if key in {"PENDING", "RUNNING", "RETRY", "EMPTY"}),
+            "skill_execution_count": len(skill_runs),
+            "evidence_count": sum(len(item.get("evidence_ids") or []) for item in stock_report if isinstance(item, dict)),
+            "error_count": len(error_items),
+            "stage_stats": stage_stats,
+            "progress": status.get("progress", 0),
+        }
+        recommendations = []
+        if summary["pending_stocks"]:
+            recommendations.append("启动或继续执行任务，完成待处理股票的业务数据采集。")
+        if summary["failed_stocks"] or reason_counts:
+            recommendations.append("先查看失败原因和来源接口，再通过重试或 Skill 优化审核修复，不要直接标记为完成。")
+        if any(item.get("incomplete") for item in stage_stats.values()):
+            recommendations.append("对未完成阶段执行定向继续任务，核验数据行数、文档切片覆盖率和图谱治理状态。")
+        analysis = {
+            "failure_reasons": [{"code": code, "count": count} for code, count in sorted(reason_counts.items(), key=lambda value: (-value[1], value[0]))],
+            "recommendations": recommendations or ["当前没有发现未处理缺口，可进入成果详情核验证据和质量结果。"],
+            "stage_stats": stage_stats,
+        }
         report = {
             "job": {
                 "job_id": job.id,
@@ -561,8 +676,10 @@ def _job_view(db: Session, job: ScheduledJob, *, details: bool = True) -> dict:
                 "completed_at": status.get("completed_at"),
             },
             "stock_results": stock_report,
-            "stage_results": _enrich_stage_results(output),
-            "errors": output.get("errors") or [],
+            "stage_results": stage_report,
+            "errors": error_items,
+            "summary": summary,
+            "analysis": analysis,
             "agent": ({
                 "id": agent_run.id,
                 "agent_code": agent_run.agent_code,
@@ -596,9 +713,11 @@ def _job_view(db: Session, job: ScheduledJob, *, details: bool = True) -> dict:
             } for item in skill_runs],
         }
         status.update({
-            "stage_results": _enrich_stage_results(output),
-            "stock_results": output.get("stock_results") or [],
-            "errors": output.get("errors") or [],
+            "stage_results": stage_report,
+            "stock_results": stock_report,
+            "errors": error_items,
+            "summary": summary,
+            "analysis": analysis,
             "pipeline_run_ids": output.get("pipeline_run_ids") or [],
             "graph_ids": output.get("graph_ids") or [],
             "governance_report": report,
@@ -818,6 +937,40 @@ def get_stock_batch_governance_job(job_id: int, db: Session = Depends(get_db)) -
     if job is None or job.task_type != TASK_TYPE:
         raise HTTPException(status_code=404, detail="批量采集治理任务不存在")
     return _job_view(db, job, details=True)
+
+
+@router.post("/{job_id}/start", status_code=202)
+def start_stock_batch_governance_job(job_id: int, db: Session = Depends(get_db)) -> dict:
+    """Release a queued job for the durable worker.
+
+    The endpoint never performs collection in the request thread. It only
+    makes a pending/retry job immediately claimable and records the operator
+    action in the existing pipeline audit fields.
+    """
+    job = db.get(ScheduledJob, job_id)
+    if job is None or job.task_type != TASK_TYPE:
+        raise HTTPException(status_code=404, detail="批量采集治理任务不存在")
+    lifecycle = str(job.status or "").upper()
+    if lifecycle == "RUNNING":
+        raise HTTPException(status_code=409, detail="任务正在执行中，无需重复启动")
+    if lifecycle in {"COMPLETED"}:
+        raise HTTPException(status_code=409, detail="任务已经结束，请查看治理报告或发起重试")
+    if lifecycle not in {"PENDING", "RETRY", "FAILED"}:
+        raise HTTPException(status_code=409, detail=f"当前任务状态不支持启动：{lifecycle or 'UNKNOWN'}")
+    now = datetime.now(timezone.utc)
+    job.status = "PENDING"
+    job.run_after = now
+    job.lease_until = None
+    job.worker_id = None
+    job.error_message = None
+    run = db.get(PipelineRun, job.pipeline_run_id)
+    if run is not None:
+        run.status = "PENDING"
+        run.current_stage = "QUEUED"
+        run.error_message = None
+    db.commit()
+    db.refresh(job)
+    return _job_view(db, job, details=False)
 
 
 @router.post("/{job_id}/retry", status_code=202, response_model=StockBatchGovernanceResponse)

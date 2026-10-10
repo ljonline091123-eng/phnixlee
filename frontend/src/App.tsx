@@ -158,6 +158,7 @@ export default function App() {
       agents: ["ai", "agents"],
       skills: ["ai", "skills"],
       operations: ["operations", "tasks"],
+      "governance-records": ["operations", "records"],
       "investment-workbench": ["research", "objects"],
     };
     const [module, section] = targets[target];
@@ -230,7 +231,7 @@ function OperationsGovernancePage({
       <button type="button" className={tab === "audit" ? "active" : ""} onClick={() => setTab("audit")}>执行审计</button>
     </div>
     {tab === "tasks" && <OperationsCenter onNavigate={onNavigate} />}
-    {tab === "records" && <GovernanceRecords />}
+    {tab === "records" && <GovernanceRecords onStartTask={() => onNavigate("master-data")} onOptimizeSkill={() => onNavigate("skills")} />}
     {tab === "quality" && <GovernanceCenter view="quality" />}
     {tab === "audit" && <GovernanceCenter view="executions" />}
   </>;

@@ -115,6 +115,26 @@ export type GovernanceReport = {
   errors: Array<string | Record<string, unknown>>;
   agent: Record<string, unknown> | null;
   skills: Array<Record<string, unknown>>;
+  summary?: {
+    stock_count?: number;
+    status_counts?: Record<string, number>;
+    completed_stocks?: number;
+    partial_stocks?: number;
+    failed_stocks?: number;
+    pending_stocks?: number;
+    skill_execution_count?: number;
+    evidence_count?: number;
+    error_count?: number;
+    progress?: number;
+    stage_stats?: Record<string, { label?: string; completed?: number; incomplete?: number; total?: number; completion_rate?: number }>;
+    [key: string]: unknown;
+  };
+  analysis?: {
+    failure_reasons?: Array<{ code?: string; count?: number; reason?: string }>;
+    recommendations?: string[];
+    stage_stats?: Record<string, unknown>;
+    [key: string]: unknown;
+  };
 };
 
 export const batchGovernanceApi = {
@@ -131,6 +151,12 @@ export const batchGovernanceApi = {
 
   retry(jobId: number) {
     return request<BatchGovernanceJob>(`/stocks/batch-governance/jobs/${jobId}/retry`, {
+      method: "POST",
+    });
+  },
+
+  start(jobId: number) {
+    return request<BatchGovernanceJob>(`/stocks/batch-governance/jobs/${jobId}/start`, {
       method: "POST",
     });
   },

@@ -46,6 +46,7 @@ export type PlatformNavigationTarget =
   | "agents"
   | "skills"
   | "operations"
+  | "governance-records"
   | "investment-workbench";
 
 export type PlatformOverviewProps = {

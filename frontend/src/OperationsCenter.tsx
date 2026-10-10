@@ -29,7 +29,9 @@ import {
   type SkillOptimizationDraft,
   type SyncLog,
 } from "./api";
+import { batchGovernanceApi, type GovernanceRecord } from "./batchGovernanceApi";
 import type { PlatformNavigationTarget } from "./PlatformOverview";
+import "./OperationsCenterExtra.css";
 
 export type OperationTaskStatus = "pending" | "running" | "success" | "warning" | "failed";
 
@@ -62,6 +64,7 @@ type OperationsSnapshot = {
   modelLogs: ModelCallLog[];
   skillDrafts: SkillOptimizationDraft[];
   lakehouse: LakehouseStatus | null;
+  batchJobs: GovernanceRecord[];
   failedModules: string[];
   loadedAt: Date | null;
 };
@@ -75,6 +78,7 @@ const emptySnapshot: OperationsSnapshot = {
   modelLogs: [],
   skillDrafts: [],
   lakehouse: null,
+  batchJobs: [],
   failedModules: [],
   loadedAt: null,
 };
@@ -221,6 +225,9 @@ export function OperationsCenter({
   const [keyword, setKeyword] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | OperationTaskStatus>("all");
   const [categoryFilter, setCategoryFilter] = useState<"all" | OperationTask["category"]>("all");
+  const [selectedTask, setSelectedTask] = useState<OperationTask | null>(null);
+  const [taskPage, setTaskPage] = useState(0);
+  const taskPageSize = 20;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -233,6 +240,7 @@ export function OperationsCenter({
       api.listModelCallLogs(40),
       api.listSkillDrafts(),
       api.lakehouseStatus(),
+      batchGovernanceApi.listRecords({ limit: 100, offset: 0 }),
     ] as const);
     const failures: string[] = [];
     setSnapshot({
@@ -244,6 +252,7 @@ export function OperationsCenter({
       modelLogs: settledValue(results[5], [], "模型调用日志", failures),
       skillDrafts: settledValue(results[6], [], "技能审核", failures),
       lakehouse: settledValue(results[7], null, "湖仓状态", failures),
+      batchJobs: results[8].status === "fulfilled" ? results[8].value.items || [] : (failures.push("股票批量治理任务"), []),
       failedModules: failures,
       loadedAt: new Date(),
     });
@@ -327,6 +336,21 @@ export function OperationsCenter({
       target: "skills",
       metadata: { draftId: draft.id, skillId: draft.skill_id, baseVersion: draft.base_skill_version },
     }));
+    const batchTasks: OperationTask[] = snapshot.batchJobs.map((job) => {
+      const status = normalizeStatus(job.result_status || job.status);
+      const stockNames = job.stock_names?.filter(Boolean).slice(0, 3).join("、") || `${job.stock_count} 只股票`;
+      return {
+        id: `batch-governance-${job.job_id}`,
+        category: "数据治理",
+        title: `股票批量治理任务 #${job.job_id}`,
+        detail: `${stockNames} · ${job.current_stage || "待执行"} · ${job.governance_mode === "AI_AGENT_SKILL_GOVERNANCE" ? "AI + Agent + Skill" : "系统治理"}`,
+        status,
+        statusLabel: statusLabel[status],
+        time: job.completed_at || job.started_at || job.created_at,
+        target: "governance-records",
+        metadata: { jobId: job.job_id, pipelineRunId: job.pipeline_run_id || undefined, stage: job.current_stage || undefined, progress: job.progress ?? 0 },
+      };
+    });
     const infrastructureTasks: OperationTask[] = snapshot.lakehouse ? [{
       id: "lakehouse-health",
       category: "基础设施",
@@ -337,12 +361,12 @@ export function OperationsCenter({
       target: "lakehouse",
       metadata: { backend: snapshot.lakehouse.storage_backend },
     }] : [];
-    return [...syncTasks, ...assetTasks, ...graphTasks, ...modelTasks, ...skillTasks, ...infrastructureTasks].sort((a, b) => {
+    return [...syncTasks, ...assetTasks, ...graphTasks, ...modelTasks, ...skillTasks, ...batchTasks, ...infrastructureTasks].sort((a, b) => {
       const left = a.time ? new Date(a.time).getTime() : 0;
       const right = b.time ? new Date(b.time).getTime() : 0;
       return right - left;
     });
-  }, [interfaceNames, snapshot.assets, snapshot.graphs, snapshot.lakehouse, snapshot.modelLogs, snapshot.skillDrafts, snapshot.syncLogs, sourceNames]);
+  }, [interfaceNames, snapshot.assets, snapshot.batchJobs, snapshot.graphs, snapshot.lakehouse, snapshot.modelLogs, snapshot.skillDrafts, snapshot.syncLogs, sourceNames]);
 
   const filteredTasks = useMemo(() => {
     const normalizedKeyword = keyword.trim().toLocaleLowerCase("zh-CN");
@@ -354,6 +378,8 @@ export function OperationsCenter({
     });
   }, [categoryFilter, keyword, statusFilter, tasks]);
 
+  useEffect(() => { setTaskPage(0); }, [categoryFilter, keyword, statusFilter]);
+
   const counts = useMemo(() => ({
     pending: tasks.filter((item) => item.status === "pending").length,
     running: tasks.filter((item) => item.status === "running").length,
@@ -364,9 +390,14 @@ export function OperationsCenter({
 
   const governanceQueue = useMemo(() => tasks.filter((item) => ["pending", "warning", "failed"].includes(item.status) && item.category !== "模型调用").slice(0, 7), [tasks]);
   const recentSuccessRate = tasks.length ? Math.round(counts.success / tasks.length * 100) : 0;
+  const totalTaskPages = Math.max(1, Math.ceil(filteredTasks.length / taskPageSize));
+  const visibleTasks = filteredTasks.slice(taskPage * taskPageSize, (taskPage + 1) * taskPageSize);
 
   function openTask(task: OperationTask) {
-    if (onOpenTask) onOpenTask(task);
+    if (onOpenTask) { onOpenTask(task); return; }
+    // Governance and infrastructure rows need context before navigation;
+    // show the durable task details instead of sending every action to lakehouse.
+    if (["数据治理", "图谱治理", "技能审核", "基础设施"].includes(task.category)) setSelectedTask(task);
     else onNavigate?.(task.target);
   }
 
@@ -401,7 +432,7 @@ export function OperationsCenter({
         <section className="qoc-panel">
           <header className="qoc-panel-head">
             <div><h2>统一任务流水</h2><p className="qoc-subtle">同步、治理、模型调用与人工审核记录</p></div>
-            <span className="qoc-subtle">显示 {Math.min(filteredTasks.length, 60)} / {filteredTasks.length}</span>
+            <span className="qoc-subtle">显示 {visibleTasks.length} / {filteredTasks.length}</span>
           </header>
           <div className="qoc-filters">
             <label className="qoc-field"><Search size={14} /><input value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="搜索任务、数据表或错误信息" /></label>
@@ -413,7 +444,7 @@ export function OperationsCenter({
               <table className="qoc-table">
                 <thead><tr><th>任务</th><th>类型</th><th>状态</th><th>时间</th><th>操作</th></tr></thead>
                 <tbody>
-                  {filteredTasks.slice(0, 60).map((task) => (
+                  {visibleTasks.map((task) => (
                     <tr key={task.id}>
                       <td><div className="qoc-task-name"><span className="qoc-task-icon">{taskIcon(task.category)}</span><span><strong title={task.title}>{task.title}</strong><small title={task.detail}>{task.detail}</small></span></div></td>
                       <td>{task.category}</td>
@@ -434,7 +465,7 @@ export function OperationsCenter({
           ) : (
             <div className="qoc-empty"><Filter size={23} />没有符合当前筛选条件的任务</div>
           )}
-          <footer className="qoc-footer-note"><span>{snapshot.loadedAt ? `最近刷新：${snapshot.loadedAt.toLocaleString("zh-CN")}` : "正在读取任务"}</span><span>列表最多展示最近 60 条</span></footer>
+          <footer className="qoc-footer-note"><span>{snapshot.loadedAt ? `最近刷新：${snapshot.loadedAt.toLocaleString("zh-CN")}` : "正在读取任务"}</span><span className="qoc-pagination"><button type="button" disabled={taskPage === 0} onClick={() => setTaskPage((value) => Math.max(0, value - 1))}>上一页</button><span>第 {taskPage + 1} / {totalTaskPages} 页</span><button type="button" disabled={taskPage + 1 >= totalTaskPages} onClick={() => setTaskPage((value) => value + 1)}>下一页</button></span></footer>
         </section>
 
         <aside className="qoc-side">
@@ -465,6 +496,7 @@ export function OperationsCenter({
           </section>
         </aside>
       </div>
+      {selectedTask && <div className="qoc-modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setSelectedTask(null); }}><section className="qoc-modal" role="dialog" aria-modal="true"><header><div><h2>{selectedTask.title}</h2><p>{selectedTask.category} · {selectedTask.statusLabel}</p></div><button type="button" onClick={() => setSelectedTask(null)}>关闭</button></header><div className="qoc-modal-body"><div className={`qoc-badge ${selectedTask.status}`}>{statusIcon(selectedTask.status)}{selectedTask.statusLabel}</div><p>{selectedTask.detail}</p><dl>{Object.entries(selectedTask.metadata).map(([key, value]) => <div key={key}><dt>{key}</dt><dd>{value == null ? "--" : String(value)}</dd></div>)}</dl><div className="qoc-modal-actions"><button type="button" className="qoc-button primary" onClick={() => { setSelectedTask(null); onNavigate?.(selectedTask.target); }}>进入对应模块</button>{["数据治理", "图谱治理"].includes(selectedTask.category) && <button type="button" className="qoc-button" onClick={() => { setSelectedTask(null); onNavigate?.("governance-records"); }}>查看治理记录</button>}</div></div></section></div>}
     </section>
   );
 }

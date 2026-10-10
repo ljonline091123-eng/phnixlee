@@ -7,7 +7,7 @@ from typing import Any
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -673,16 +673,20 @@ def run_quality(payload: DataQualityRunRequest, db: Session = Depends(get_db)) -
 
 @router.get("/quality/runs")
 def list_quality_runs(target_type: str | None = None, target_id: str | None = None,
-                      status_filter: str | None = None, limit: int = 100,
-                      db: Session = Depends(get_db)) -> list[dict[str, Any]]:
-    query = select(DataQualityRun).order_by(DataQualityRun.created_at.desc()).limit(_limit(limit))
+                      status_filter: str | None = None, limit: int = 20, offset: int = 0,
+                      db: Session = Depends(get_db)) -> dict[str, Any]:
+    limit = _limit(limit)
+    offset = max(0, offset)
+    predicates = []
     if target_type:
-        query = query.where(DataQualityRun.target_type == target_type)
+        predicates.append(DataQualityRun.target_type == target_type)
     if target_id:
-        query = query.where(DataQualityRun.target_id == target_id)
+        predicates.append(DataQualityRun.target_id == target_id)
     if status_filter:
-        query = query.where(DataQualityRun.status == status_filter.upper())
-    return [_quality_run_read(row) for row in db.scalars(query).all()]
+        predicates.append(DataQualityRun.status == status_filter.upper())
+    query = select(DataQualityRun).where(*predicates).order_by(DataQualityRun.created_at.desc())
+    total = int(db.scalar(select(func.count()).select_from(DataQualityRun).where(*predicates)) or 0)
+    return {"items": [_quality_run_read(row) for row in db.scalars(query.offset(offset).limit(limit)).all()], "total": total, "limit": limit, "offset": offset}
 
 
 @router.get("/quality/runs/{run_id}")
@@ -698,15 +702,27 @@ def quality_run_detail(run_id: str, db: Session = Depends(get_db)) -> dict[str, 
     return payload
 
 
+@router.get("/quality/issues/{issue_id}")
+def quality_issue_detail(issue_id: str, db: Session = Depends(get_db)) -> dict[str, Any]:
+    row = db.get(DataQualityIssue, issue_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Quality issue not found")
+    return _issue_read(row)
+
+
 @router.get("/quality/issues")
 def list_quality_issues(status_filter: str | None = None, severity: str | None = None,
-                        limit: int = 100, db: Session = Depends(get_db)) -> list[dict[str, Any]]:
-    query = select(DataQualityIssue).order_by(DataQualityIssue.first_detected_at.desc()).limit(_limit(limit))
+                        limit: int = 20, offset: int = 0, db: Session = Depends(get_db)) -> dict[str, Any]:
+    limit = _limit(limit)
+    offset = max(0, offset)
+    predicates = []
     if status_filter:
-        query = query.where(DataQualityIssue.status == status_filter.upper())
+        predicates.append(DataQualityIssue.status == status_filter.upper())
     if severity:
-        query = query.where(DataQualityIssue.severity == severity.upper())
-    return [_issue_read(row) for row in db.scalars(query).all()]
+        predicates.append(DataQualityIssue.severity == severity.upper())
+    query = select(DataQualityIssue).where(*predicates).order_by(DataQualityIssue.first_detected_at.desc())
+    total = int(db.scalar(select(func.count()).select_from(DataQualityIssue).where(*predicates)) or 0)
+    return {"items": [_issue_read(row) for row in db.scalars(query.offset(offset).limit(limit)).all()], "total": total, "limit": limit, "offset": offset}
 
 
 @router.put("/quality/issues/{issue_id}")
@@ -725,13 +741,17 @@ def resolve_quality_issue(issue_id: str, payload: DataQualityIssueResolve,
 
 @router.get("/agent-executions")
 def list_agent_executions(agent_id: int | None = None, status_filter: str | None = None,
-                          limit: int = 100, db: Session = Depends(get_db)) -> list[dict[str, Any]]:
-    query = select(AgentExecutionRun).order_by(AgentExecutionRun.started_at.desc()).limit(_limit(limit))
+                          limit: int = 20, offset: int = 0, db: Session = Depends(get_db)) -> dict[str, Any]:
+    limit = _limit(limit)
+    offset = max(0, offset)
+    predicates = []
     if agent_id is not None:
-        query = query.where(AgentExecutionRun.agent_id == agent_id)
+        predicates.append(AgentExecutionRun.agent_id == agent_id)
     if status_filter:
-        query = query.where(AgentExecutionRun.status == status_filter.upper())
-    return [_agent_execution_read(row) for row in db.scalars(query).all()]
+        predicates.append(AgentExecutionRun.status == status_filter.upper())
+    query = select(AgentExecutionRun).where(*predicates).order_by(AgentExecutionRun.started_at.desc())
+    total = int(db.scalar(select(func.count()).select_from(AgentExecutionRun).where(*predicates)) or 0)
+    return {"items": [_agent_execution_read(row) for row in db.scalars(query.offset(offset).limit(limit)).all()], "total": total, "limit": limit, "offset": offset}
 
 
 @router.get("/agent-executions/{run_id}")
@@ -749,13 +769,17 @@ def agent_execution_detail(run_id: str, db: Session = Depends(get_db)) -> dict[s
 
 @router.get("/skill-executions")
 def list_skill_executions(skill_id: int | None = None, status_filter: str | None = None,
-                          limit: int = 100, db: Session = Depends(get_db)) -> list[dict[str, Any]]:
-    query = select(SkillExecutionRun).order_by(SkillExecutionRun.started_at.desc()).limit(_limit(limit))
+                          limit: int = 20, offset: int = 0, db: Session = Depends(get_db)) -> dict[str, Any]:
+    limit = _limit(limit)
+    offset = max(0, offset)
+    predicates = []
     if skill_id is not None:
-        query = query.where(SkillExecutionRun.skill_id == skill_id)
+        predicates.append(SkillExecutionRun.skill_id == skill_id)
     if status_filter:
-        query = query.where(SkillExecutionRun.status == status_filter.upper())
-    return [_skill_execution_read(row) for row in db.scalars(query).all()]
+        predicates.append(SkillExecutionRun.status == status_filter.upper())
+    query = select(SkillExecutionRun).where(*predicates).order_by(SkillExecutionRun.started_at.desc())
+    total = int(db.scalar(select(func.count()).select_from(SkillExecutionRun).where(*predicates)) or 0)
+    return {"items": [_skill_execution_read(row) for row in db.scalars(query.offset(offset).limit(limit)).all()], "total": total, "limit": limit, "offset": offset}
 
 
 @router.get("/agents/{agent_id}/manifest")

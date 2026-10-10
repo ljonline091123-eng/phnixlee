@@ -582,6 +582,9 @@ export type DataQualityRun = {
   issue_count?: number;
   checked_count?: number;
   summary_json?: Record<string, unknown>;
+  summary?: Record<string, unknown>;
+  target_version?: string;
+  created_at?: string;
   started_at?: string;
   completed_at?: string | null;
 };
@@ -603,6 +606,11 @@ export type DataQualityIssue = {
   detected_at?: string;
   first_detected_at?: string;
   resolved_at?: string | null;
+  observed_value?: unknown;
+  expected_value?: unknown;
+  evidence_ids?: unknown[];
+  details?: Record<string, unknown>;
+  resolution?: string | null;
 };
 
 export type AgentExecutionRun = {
@@ -622,6 +630,12 @@ export type AgentExecutionRun = {
   error_message?: string | null;
   started_at?: string;
   completed_at?: string | null;
+  input?: Record<string, unknown>;
+  output?: Record<string, unknown>;
+  accessible_assets?: unknown[];
+  knowledge_versions?: Record<string, unknown>;
+  audit?: Record<string, unknown>;
+  error_code?: string | null;
 };
 
 export type SkillExecutionRun = {
@@ -645,6 +659,10 @@ export type SkillExecutionRun = {
   error_message?: string | null;
   started_at?: string;
   completed_at?: string | null;
+  input?: Record<string, unknown>;
+  output?: Record<string, unknown>;
+  write_scope?: Record<string, unknown>;
+  error_code?: string | null;
 };
 
 export type SkillOptimizationDraft = {
@@ -1201,10 +1219,35 @@ export const api = {
     request<AgentDefinition>(`/resources/agents/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
   deleteAgent: (id: number) => request<void>(`/resources/agents/${id}`, { method: "DELETE" }),
   listDataQualityRules: () => request<DataQualityRule[] | { items: DataQualityRule[] }>("/governance/quality/rules"),
-  listDataQualityRuns: () => request<DataQualityRun[] | { items: DataQualityRun[] }>("/governance/quality/runs"),
-  listDataQualityIssues: () => request<DataQualityIssue[] | { items: DataQualityIssue[] }>("/governance/quality/issues"),
-  listAgentExecutions: () => request<AgentExecutionRun[] | { items: AgentExecutionRun[] }>("/governance/agent-executions"),
-  listSkillExecutions: () => request<SkillExecutionRun[] | { items: SkillExecutionRun[] }>("/governance/skill-executions"),
+  listDataQualityRuns: (params: { limit?: number; offset?: number; status?: string; targetType?: string; targetId?: string } = {}) => {
+    const query = new URLSearchParams({ limit: String(params.limit ?? 20), offset: String(params.offset ?? 0) });
+    if (params.status) query.set("status_filter", params.status);
+    if (params.targetType) query.set("target_type", params.targetType);
+    if (params.targetId) query.set("target_id", params.targetId);
+    return request<{ items: DataQualityRun[]; total: number; limit: number; offset: number }>(`/governance/quality/runs?${query}`);
+  },
+  getDataQualityRun: (id: string) => request<DataQualityRun & { issues?: DataQualityIssue[] }>(`/governance/quality/runs/${encodeURIComponent(id)}`),
+  runDataQuality: (payload: { target_type: string; target_id: string; target_version?: string; layer?: string; limit?: number; idempotency_key?: string }) => request<DataQualityRun>("/governance/quality/runs", { method: "POST", body: JSON.stringify(payload) }),
+  listDataQualityIssues: (params: { limit?: number; offset?: number; status?: string; severity?: string } = {}) => {
+    const query = new URLSearchParams({ limit: String(params.limit ?? 20), offset: String(params.offset ?? 0) });
+    if (params.status) query.set("status_filter", params.status);
+    if (params.severity) query.set("severity", params.severity);
+    return request<{ items: DataQualityIssue[]; total: number; limit: number; offset: number }>(`/governance/quality/issues?${query}`);
+  },
+  getDataQualityIssue: (id: string) => request<DataQualityIssue>(`/governance/quality/issues/${encodeURIComponent(id)}`),
+  resolveDataQualityIssue: (id: string, payload: { status: "OPEN" | "ACKNOWLEDGED" | "RESOLVED" | "IGNORED"; resolution?: string }) => request<DataQualityIssue>(`/governance/quality/issues/${encodeURIComponent(id)}`, { method: "PUT", body: JSON.stringify(payload) }),
+  listAgentExecutions: (params: { limit?: number; offset?: number; status?: string } = {}) => {
+    const query = new URLSearchParams({ limit: String(params.limit ?? 20), offset: String(params.offset ?? 0) });
+    if (params.status) query.set("status_filter", params.status);
+    return request<{ items: AgentExecutionRun[]; total: number; limit: number; offset: number }>(`/governance/agent-executions?${query}`);
+  },
+  getAgentExecution: (id: string) => request<AgentExecutionRun & { skill_executions?: SkillExecutionRun[] }>(`/governance/agent-executions/${encodeURIComponent(id)}`),
+  listSkillExecutions: (params: { limit?: number; offset?: number; status?: string } = {}) => {
+    const query = new URLSearchParams({ limit: String(params.limit ?? 20), offset: String(params.offset ?? 0) });
+    if (params.status) query.set("status_filter", params.status);
+    return request<{ items: SkillExecutionRun[]; total: number; limit: number; offset: number }>(`/governance/skill-executions?${query}`);
+  },
+  getSkillExecution: (id: string) => request<SkillExecutionRun>(`/governance/skill-executions/${encodeURIComponent(id)}`),
   updateSkillLifecycle: (id: number, lifecycle_status: string, reason?: string) =>
     request<ModelSkill>(`/model-hub/skills/${id}/lifecycle`, {
       method: "POST",
