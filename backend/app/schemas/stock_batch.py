@@ -45,7 +45,10 @@ class StockBatchGovernanceRequest(BaseModel):
     structure_documents: bool = False
     structured_document_limit: int = Field(default=20, ge=1, le=100)
     semantic_analysis: bool = True
-    document_targets: list[DocumentTarget] = Field(default_factory=list, max_length=20)
+    document_targets: list[DocumentTarget] = Field(default_factory=list, max_length=50)
+    structured_document_types: list[Literal["NEWS", "NOTICE"]] = Field(
+        default_factory=lambda: ["NEWS", "NOTICE"], min_length=1, max_length=2
+    )
     semantic_feedback: str | None = Field(default=None, max_length=4000)
     semantic_review_id: str | None = Field(default=None, min_length=36, max_length=36)
     parent_job_id: int | None = Field(default=None, gt=0)
@@ -78,6 +81,7 @@ class StockBatchGovernanceRequest(BaseModel):
             raise ValueError("单批最多处理30只股票")
         self.stocks = unique
         self.business_types = list(dict.fromkeys(self.business_types))
+        self.structured_document_types = list(dict.fromkeys(self.structured_document_types))
         if bool(self.semantic_feedback) != bool(self.semantic_review_id):
             raise ValueError("人工语义反馈和审核记录编号必须同时提供")
         self.continuation_item_codes = list(dict.fromkeys(

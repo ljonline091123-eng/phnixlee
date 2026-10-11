@@ -1,10 +1,12 @@
 import json
 from datetime import datetime, timedelta, timezone
+from functools import lru_cache
 from threading import Lock
 from types import SimpleNamespace
 from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response
+from pypinyin import Style, lazy_pinyin
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
@@ -145,6 +147,53 @@ def _notice_read_payload(
     }
 
 
+def _compact_search_text(value: Any) -> str:
+    return "".join(character for character in str(value or "").casefold() if character.isalnum())
+
+
+_STOCK_SEARCH_ALIAS_KEYS = frozenset(_compact_search_text(key) for key in (
+    "pinyin", "pinyinabbr", "pinyininitials", "englishname", "englishshortname", "enname",
+    "COMPANY_ABBR_EN", "FULL_NAME_IN_ENGLISH", "FULL_NAME_EN", "ORG_NAME_EN", "SEC_NAME_EN", "NAME_EN",
+    "拼音", "拼音缩写", "拼音首字母", "英文名称", "公司英文名称", "英文简称",
+))
+
+
+@lru_cache(maxsize=50000)
+def _stock_name_spellings(name: str) -> tuple[str, str]:
+    """Return compact full pinyin and first letters for local fuzzy search."""
+    full = _compact_search_text("".join(lazy_pinyin(name, errors="ignore")))
+    initials = _compact_search_text("".join(lazy_pinyin(name, style=Style.FIRST_LETTER, errors="ignore")))
+    return full, initials
+
+
+def _stock_aliases(item: StockSymbol) -> list[str]:
+    aliases: list[str] = []
+
+    def visit(value: Any, depth: int = 0) -> None:
+        if depth > 4 or not isinstance(value, dict):
+            return
+        for key, child in value.items():
+            compact_key = _compact_search_text(key)
+            if compact_key in _STOCK_SEARCH_ALIAS_KEYS and isinstance(child, (str, int)):
+                text = str(child).strip()
+                if text:
+                    aliases.append(text)
+            elif isinstance(child, dict):
+                visit(child, depth + 1)
+    visit(item.ext_json or {})
+    visit(item.raw_payload or {})
+    return list(dict.fromkeys(aliases))
+
+
+def _matches_stock_text(item: StockSymbol, query: str) -> bool:
+    compact_query = _compact_search_text(query)
+    if not compact_query:
+        return False
+    full_pinyin, initials = _stock_name_spellings(item.name or "")
+    terms = [item.symbol, item.name, full_pinyin, initials, *_stock_aliases(item)]
+    return any(compact_query in _compact_search_text(term) for term in terms)
+
+
 def _rank_stock_candidate(item: StockSymbol, query: str, market: str) -> tuple[int, int, str]:
     symbol = (item.symbol or "").upper()
     name = item.name or ""
@@ -160,8 +209,22 @@ def _rank_stock_candidate(item: StockSymbol, query: str, market: str) -> tuple[i
         match_rank = 3
     elif upper_query in symbol:
         match_rank = 4
-    else:
+    elif _compact_search_text(name).startswith(_compact_search_text(query)):
         match_rank = 5
+    else:
+        compact_query = _compact_search_text(query)
+        full_pinyin, initials = _stock_name_spellings(name)
+        aliases = [_compact_search_text(value) for value in _stock_aliases(item)]
+        if compact_query in {full_pinyin, initials, *aliases}:
+            match_rank = 6
+        elif initials.startswith(compact_query):
+            match_rank = 7
+        elif full_pinyin.startswith(compact_query):
+            match_rank = 8
+        elif compact_query in _compact_search_text(name):
+            match_rank = 9
+        else:
+            match_rank = 10
     status_rank = 0 if item.status == "LISTED" else 1
     return (match_rank, status_rank, symbol)
 
@@ -1705,6 +1768,17 @@ def search_stock_symbols(
             )
         ).all()
     )
+    # Codes and Chinese names use the SQL path above. Alphabetic input
+    # additionally searches local pinyin/initials and registered English aliases.
+    # The active security master is bounded (one row per listed/IPO security),
+    # and transliterations are cached by name for subsequent keystrokes.
+    if any(character.isalpha() and ord(character) < 128 for character in query):
+        seen = {item.id for item in candidates}
+        pool = db.scalars(select(StockSymbol).where(
+            StockSymbol.market.in_(search_markets),
+            StockSymbol.status.in_(["LISTED", "IPO"]),
+        )).all()
+        candidates.extend(item for item in pool if item.id not in seen and _matches_stock_text(item, query))
     ranked = sorted(
         candidates,
         key=lambda item: _rank_stock_candidate(
