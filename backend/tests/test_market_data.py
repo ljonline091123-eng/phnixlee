@@ -870,6 +870,22 @@ class MarketDataFoundationTest(unittest.TestCase):
         self.assertEqual(added["symbol"], "002415")
         self.assertEqual(added["name"], "海康威视")
 
+    def test_stock_search_accepts_code_chinese_pinyin_and_initials(self) -> None:
+        source = self.db.scalar(select(DataSource).where(DataSource.source_code == "AKSHARE"))
+        self.db.add(
+            StockSymbol(
+                market="CN_A", symbol="688627", exchange="SSE", name="精智达",
+                status="LISTED", source_id=source.id,
+                ext_json={"english_name": "Shenzhen Jingzhida Technology Co Ltd"},
+            )
+        )
+        self.db.commit()
+
+        for keyword in ("6886", "精智", "jingzhida", "jzd", "Jingzhida Technology"):
+            candidates = search_stock_symbols("CN_A", keyword, db=self.db)
+            self.assertTrue(candidates, keyword)
+            self.assertEqual(candidates[0].symbol, "688627", keyword)
+
 
 if __name__ == "__main__":
     unittest.main()

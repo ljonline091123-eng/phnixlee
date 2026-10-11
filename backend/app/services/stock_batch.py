@@ -556,6 +556,7 @@ def execute_stock_batch_governance(payload: dict[str, Any]) -> dict[str, Any]:
         "structure_documents": request.structure_documents,
         "semantic_analysis": request.semantic_analysis,
         "document_targets": [item.model_dump() for item in request.document_targets],
+        "structured_document_types": request.structured_document_types,
         "semantic_feedback": request.semantic_feedback,
         "semantic_review_id": request.semantic_review_id,
         "continuation_action": request.continuation_action,
@@ -854,13 +855,15 @@ def execute_stock_batch_governance(payload: dict[str, Any]) -> dict[str, Any]:
                         limit=request.structured_document_limit, days=request.disclosure_days,
                         semantic=request.semantic_analysis,
                         document_targets=[item.model_dump() for item in request.document_targets],
+                        document_types=request.structured_document_types,
                         semantic_feedback=request.semantic_feedback,
                         model_instance=agent_session.agent.model_instance_code if agent_session else None,
                         instructions=agent_session.skills[SKILL_EVENTS].instructions if agent_session else "")
                 event_run = agent_session.run_skill(SKILL_EVENTS,
                     input_json={**context, "market": stock.market, "symbol": stock.symbol,
                                 "semantic_feedback": request.semantic_feedback,
-                                "document_targets": [item.model_dump() for item in request.document_targets]},
+                                "document_targets": [item.model_dump() for item in request.document_targets],
+                                "structured_document_types": request.structured_document_types},
                     idempotency_scope=f"events:{stock.market}:{stock.symbol}", operation=extract_events,
                 ) if agent_session else extract_events()
                 event_runs.append(event_run)
@@ -878,8 +881,20 @@ def execute_stock_batch_governance(payload: dict[str, Any]) -> dict[str, Any]:
                 if not result.get("documents"):
                     incomplete_items.append({"code": f"{result['market']}:{result['symbol']}:EVENT_SCOPE", "label": "新闻公告结构化范围",
                         "status": "MISSING", "reason": (result.get("errors") or [{}])[0].get("message") or "范围内没有可分析新闻公告", "details": result})
+            selection_mode = "EXPLICIT_DOCUMENTS" if request.document_targets else "STOCK_SCOPE"
+            scope_description = (
+                f"本次人工指定 {len(request.document_targets)} 篇文档，并非所选股票的全部新闻公告"
+                if request.document_targets else
+                f"本次按 {len(targets)} 只股票规划，每股最多处理 {request.structured_document_limit} 篇当前版本未完成文档"
+            )
             output["stage_results"]["STRUCTURED_EVENTS"] = {"status": event_status, "stock_runs": event_runs,
                 "completed_items": completed_items, "incomplete_items": incomplete_items,
+                "selection_mode": selection_mode,
+                "requested_document_count": len(request.document_targets),
+                "per_stock_limit": request.structured_document_limit,
+                "document_types": request.structured_document_types,
+                "scope_days": request.disclosure_days,
+                "scope_description": scope_description,
                 "message": "新闻公告正文结构化；候选事实与证据入库，全文缺口保持PARTIAL"}
             _save_progress(db, outer_run_id, output, stage="STRUCTURED_EVENTS", progress=57)
         else:

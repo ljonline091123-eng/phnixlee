@@ -118,14 +118,16 @@ def _company_id(db: Session, stock: StockSymbol) -> str | None:
     ).where(FoundationListing.stock_symbol_id == stock.id))
 
 
-def scope_rows(db: Session, stock: StockSymbol, days: int) -> list:
+def scope_rows(db: Session, stock: StockSymbol, days: int,
+               document_types: list[str] | None = None) -> list:
+    selected_types = set(document_types or ["NEWS", "NOTICE"])
     cutoff = (datetime.now(ZoneInfo("Asia/Shanghai")) - timedelta(days=days)).date().isoformat()
     news = list(db.scalars(select(StockNews).where(
         StockNews.market == stock.market, StockNews.symbol == stock.symbol, StockNews.news_time >= cutoff,
-    ).order_by(StockNews.news_time.desc(), StockNews.id.desc())).all())
+    ).order_by(StockNews.news_time.desc(), StockNews.id.desc())).all()) if "NEWS" in selected_types else []
     notices = list(db.scalars(select(StockNotice).where(
         StockNotice.market == stock.market, StockNotice.symbol == stock.symbol, StockNotice.notice_date >= cutoff,
-    ).order_by(StockNotice.notice_date.desc(), StockNotice.id.desc())).all())
+    ).order_by(StockNotice.notice_date.desc(), StockNotice.id.desc())).all()) if "NOTICE" in selected_types else []
     # Interleave types so a large news list cannot starve announcements.
     return [rows[i] for i in range(max(len(news), len(notices), 0)) for rows in (news, notices) if i < len(rows)]
 
@@ -193,9 +195,28 @@ def _select_pending(pending: list, limit: int) -> list:
     chosen_retry = retry[:retry_count]
     chosen_fresh = fresh[:limit - retry_count]
     chosen_retry += retry[retry_count:retry_count + limit - len(chosen_retry) - len(chosen_fresh)]
-    # Preserve news/notice interleaving from the source scope inside each quota.
-    return [items[i] for i in range(max(len(chosen_retry), len(chosen_fresh), 0))
-            for items in (chosen_retry, chosen_fresh) if i < len(items)]
+    # Preserve retry/fresh interleaving from the source scope inside each quota.
+    selected = [items[i] for i in range(max(len(chosen_retry), len(chosen_fresh), 0))
+                for items in (chosen_retry, chosen_fresh) if i < len(items)]
+    # When both news and notices are requested, old failures from one source
+    # must not consume the complete batch. Keep at least one slot per type when
+    # the configured limit permits it.
+    document_types = list(dict.fromkeys(
+        getattr(row, "__tablename__", None) for row in pending
+        if getattr(row, "__tablename__", None) in {"stock_news", "stock_notice"}
+    ))
+    if len(document_types) > 1 and limit >= len(document_types):
+        for document_type in document_types:
+            if any(getattr(row, "__tablename__", None) == document_type for row in selected):
+                continue
+            candidate = next(row for row in pending if getattr(row, "__tablename__", None) == document_type)
+            counts = {value: sum(getattr(row, "__tablename__", None) == value for row in selected)
+                      for value in document_types}
+            replacement = next((index for index in range(len(selected) - 1, -1, -1)
+                                if counts.get(getattr(selected[index], "__tablename__", None), 0) > 1), None)
+            if replacement is not None:
+                selected[replacement] = candidate
+    return selected
 
 
 def _original_quote(quote: str, body: str) -> str:
@@ -252,13 +273,14 @@ def _parse_events(response: str, documents: list[dict]) -> dict[str, list[dict]]
 def govern_stock_documents(db: Session, stock: StockSymbol, *, context: dict, limit: int = 20,
                           days: int = 730, model_instance: str | None = None, instructions: str = "",
                           semantic: bool = False, document_targets: list[dict] | None = None,
-                          semantic_feedback: str | None = None) -> dict:
+                          semantic_feedback: str | None = None,
+                          document_types: list[str] | None = None) -> dict:
     company_id = _company_id(db, stock)
     if not company_id:
         return {"market": stock.market, "symbol": stock.symbol, "status": "MISSING", "total": 0,
                 "completed": 0, "fact_ids": [], "errors": [{"code": "COMPANY_MAPPING_MISSING", "message": "缺少已核验的证券—公司映射"}]}
     version = str(context.get("skill_version") or "1.0.0")
-    rows = scope_rows(db, stock, days)
+    rows = scope_rows(db, stock, days, document_types)
     if document_targets:
         rows = []
         for target in document_targets:
@@ -382,15 +404,20 @@ def govern_stock_documents(db: Session, stock: StockSymbol, *, context: dict, li
                 errors.append({"code": "EVENT_EXTRACTION_FAILED", "source_table": doc["row"].__tablename__, "source_record_id": doc["row"].id, "message": str(exc)[:1000]})
             db.commit()
     completed = sum(_done(row, version, semantic) for row in rows)
+    scope_counts = {"NEWS": sum(isinstance(row, StockNews) for row in rows),
+                    "NOTICE": sum(isinstance(row, StockNotice) for row in rows)}
+    selected_counts = {"NEWS": sum(isinstance(row, StockNews) for row in selected),
+                       "NOTICE": sum(isinstance(row, StockNotice) for row in selected)}
     return {"status": "SUCCESS" if rows and completed == len(rows) else "PARTIAL" if rows else "MISSING",
             "market": stock.market, "symbol": stock.symbol, "company_id": company_id,
             "total": len(rows), "completed": completed, "remaining": len(rows) - completed,
             "processed_this_run": len(selected), "fact_ids": fact_ids, "errors": errors,
+            "scope_counts": scope_counts, "selected_counts": selected_counts,
             "retired_excerpt_fact_ids": retired_fact_ids,
             "scope_days": days, "limit": limit, "verification_status": "CANDIDATE",
             "documents": [{"source_table": row.__tablename__, "source_record_id": row.id, "title": row.title,
                 **((row.content_json or {}).get("event_governance") or {"status": "NOT_PROCESSED"}),
-                "current_version_complete": _done(row, version, semantic)} for row in rows]}
+                "current_version_complete": _done(row, version, semantic)} for row in selected]}
 
 
 def _govern_semantic_documents(db, stock, company_id, documents, *, context, version,
