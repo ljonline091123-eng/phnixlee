@@ -130,10 +130,11 @@ def scope_rows(db: Session, stock: StockSymbol, days: int) -> list:
     return [rows[i] for i in range(max(len(news), len(notices), 0)) for rows in (news, notices) if i < len(rows)]
 
 
-def _done(row, skill_version: str) -> bool:
+def _done(row, skill_version: str, semantic: bool = False) -> bool:
     state = (row.content_json or {}).get("event_governance") or {}
     body = document_body(row)
-    return bool(body and not _search_excerpt(row) and state.get("status") in COMPLETE and state.get("skill_version") == skill_version
+    return bool((not semantic or state.get("semantic_schema_version") == "SEMANTIC_V2")
+                and body and not _search_excerpt(row) and state.get("status") in COMPLETE and state.get("skill_version") == skill_version
                 and state.get("content_hash") == sha256(body.encode()).hexdigest())
 
 
@@ -154,6 +155,24 @@ def _retire_excerpt_candidates(db: Session, rows: list, context: dict) -> list[s
                     reviewer=SKILL_CODE, reason="质量纠正：旧候选来源为新闻检索摘要，不能标为全文分析。保留旧事实和证据，补取原文后重新抽取；"
                     + f"执行批次={context.get('governance_batch_id', '未提供')}，Skill版本={context.get('skill_version', '未提供')}"))
                 retired.append(identity)
+    return retired
+
+
+def _retire_superseded_candidates(db: Session, row, keep_ids: set[str], context: dict) -> list[str]:
+    """Append review decisions for prior candidates after semantic v2 succeeds."""
+    payload = row.content_json or {}
+    states = [payload.get("event_governance") or {}, *(payload.get("event_governance_history") or [])]
+    retired = []
+    for identity in dict.fromkeys(str(value) for state in states for value in state.get("fact_ids") or []):
+        if identity in keep_ids:
+            continue
+        fact = db.get(FoundationFact, identity)
+        props = fact.properties_json or {} if fact else {}
+        if fact and fact.status == "PENDING" and props.get("skill_code") == SKILL_CODE:
+            review_fact(db, identity, FactReviewCreate(expected_status="PENDING", decision="REJECTED", reviewer=SKILL_CODE,
+                reason="被同一来源正文的SEMANTIC_V2全文语义候选替代；旧候选、证据和历史报告完整保留。"
+                + f"治理批次={context.get('governance_batch_id', '未提供')}，Skill版本={context.get('skill_version', '未提供')}"))
+            retired.append(identity)
     return retired
 
 
@@ -231,15 +250,23 @@ def _parse_events(response: str, documents: list[dict]) -> dict[str, list[dict]]
 
 
 def govern_stock_documents(db: Session, stock: StockSymbol, *, context: dict, limit: int = 20,
-                          days: int = 730, model_instance: str | None = None, instructions: str = "") -> dict:
+                          days: int = 730, model_instance: str | None = None, instructions: str = "",
+                          semantic: bool = False, document_targets: list[dict] | None = None) -> dict:
     company_id = _company_id(db, stock)
     if not company_id:
         return {"market": stock.market, "symbol": stock.symbol, "status": "MISSING", "total": 0,
                 "completed": 0, "fact_ids": [], "errors": [{"code": "COMPANY_MAPPING_MISSING", "message": "缺少已核验的证券—公司映射"}]}
     version = str(context.get("skill_version") or "1.0.0")
     rows = scope_rows(db, stock, days)
+    if document_targets:
+        rows = []
+        for target in document_targets:
+            model = {"stock_news": StockNews, "stock_notice": StockNotice}.get(target["source_table"])
+            row = db.get(model, target["record_id"]) if model else None
+            if row and (row.market, row.symbol) == (stock.market, stock.symbol):
+                rows.append(row)
     retired_fact_ids = _retire_excerpt_candidates(db, rows, context)
-    pending = [row for row in rows if not _done(row, version)]
+    pending = [row for row in rows if not _done(row, version, semantic)]
     selected = _select_pending(pending, limit)
     fact_ids, errors, documents = [], [], []
     attempted_downloads, news_downloads = 0, 0
@@ -280,16 +307,21 @@ def govern_stock_documents(db: Session, stock: StockSymbol, *, context: dict, li
                 published_at=timestamp,
             ), metadata={**state, "market": stock.market, "symbol": stock.symbol, "source_id": row.source_id})
             state["evidence_id"] = evidence.id
-            documents.append({"key": f"{table}:{row.id}", "title": row.title, "body": body[:7000],
+            body_limit = 40000 if semantic else 7000
+            documents.append({"key": f"{table}:{row.id}", "title": row.title, "body": body[:body_limit],
                               "market": stock.market, "symbol": stock.symbol, "stock_name": stock.name,
                               "row": row, "state": state, "published_at": timestamp.isoformat(),
-                              "truncated": len(body) > 7000 or bool((row.content_json or {}).get("governance_pdf_extraction", {}).get("text_truncated"))})
+                              "truncated": len(body) > body_limit or bool((row.content_json or {}).get("governance_pdf_extraction", {}).get("text_truncated"))})
         except Exception as exc:
             state["error"] = str(exc)[:1000]
             _stamp(row, state)
             errors.append({"code": "DOCUMENT_BODY_MISSING", "source_table": table, "source_record_id": row.id, "message": str(exc)[:1000]})
     db.commit()
-    for start in range(0, len(documents), 5):
+    if semantic:
+        _govern_semantic_documents(db, stock, company_id, documents, context=context, version=version,
+                                    model_instance=model_instance, instructions=instructions,
+                                    fact_ids=fact_ids, errors=errors)
+    for start in range(0, len(documents), 5) if not semantic else []:
         batch = documents[start:start + 5]
         log = None
         try:
@@ -340,7 +372,7 @@ def govern_stock_documents(db: Session, stock: StockSymbol, *, context: dict, li
                 _stamp(doc["row"], state)
                 errors.append({"code": "EVENT_EXTRACTION_FAILED", "source_table": doc["row"].__tablename__, "source_record_id": doc["row"].id, "message": str(exc)[:1000]})
             db.commit()
-    completed = sum(_done(row, version) for row in rows)
+    completed = sum(_done(row, version, semantic) for row in rows)
     return {"status": "SUCCESS" if rows and completed == len(rows) else "PARTIAL" if rows else "MISSING",
             "market": stock.market, "symbol": stock.symbol, "company_id": company_id,
             "total": len(rows), "completed": completed, "remaining": len(rows) - completed,
@@ -349,4 +381,65 @@ def govern_stock_documents(db: Session, stock: StockSymbol, *, context: dict, li
             "scope_days": days, "limit": limit, "verification_status": "CANDIDATE",
             "documents": [{"source_table": row.__tablename__, "source_record_id": row.id, "title": row.title,
                 **((row.content_json or {}).get("event_governance") or {"status": "NOT_PROCESSED"}),
-                "current_version_complete": _done(row, version)} for row in rows]}
+                "current_version_complete": _done(row, version, semantic)} for row in rows]}
+
+
+def _govern_semantic_documents(db, stock, company_id, documents, *, context, version,
+                               model_instance, instructions, fact_ids, errors):
+    from app.services.document_semantics import SCHEMA_VERSION, semantic_analysis, resolve_participants
+    for doc in documents:
+        row, state = doc["row"], doc["state"]
+        state["semantic_schema_version"] = SCHEMA_VERSION
+        try:
+            analysis = semantic_analysis(db, doc, context={**state, **context},
+                model_instance=model_instance, instructions=instructions)
+            resolve_participants(db, analysis, company_id, stock.name)
+            final_call = analysis["model_calls"][-1]
+            provenance = {**state, "published_at": doc["published_at"], "market": stock.market, "symbol": stock.symbol,
+                "extraction_method": "LLM", "verification_status": "CANDIDATE",
+                "content_scope": "BODY_EXCERPT" if doc["truncated"] else "FULL_BODY",
+                "model_call_log_id": final_call["id"], "model_instance_code": final_call["model_instance_code"],
+                "model_version": final_call["model_version"], "model_calls": analysis["model_calls"],
+                "semantic_schema_version": SCHEMA_VERSION}
+            provenance.pop("status", None)
+            ids, event_ids, relation_ids = [], [], []
+            for event in analysis["events"]:
+                identity = str(uuid5(NAMESPACE_URL, f"{doc['key']}:{state['content_hash']}:{version}:{SCHEMA_VERSION}:event:{event['key']}"))
+                event["fact_id"] = identity
+                if not db.get(FoundationFact, identity):
+                    props = {**provenance, **event, "entry_kind": "EVENT",
+                        "participants": [p for p in analysis["participants"] if p["key"] in event["participant_keys"]]}
+                    create_fact(db, FactCreate(fact_type="NEWS_EVENT" if isinstance(row, StockNews) else "NOTICE_EVENT",
+                        title=event["event_type"] + " · " + row.title, subject_entity_id=company_id,
+                        evidence_ids=[state["evidence_id"]], properties_json=props), fact_id=identity)
+                ids.append(identity); event_ids.append(identity)
+            for index, link in enumerate(analysis["relations"]):
+                identity = str(uuid5(NAMESPACE_URL, f"{doc['key']}:{state['content_hash']}:{version}:{SCHEMA_VERSION}:relation:{index}"))
+                link["fact_id"] = identity
+                if not db.get(FoundationFact, identity):
+                    props = {**provenance, **link, "entry_kind": "RELATION", "event_type": link["predicate"],
+                        "summary": link["explanation"], "direction": "UNKNOWN",
+                        "endpoints": [p for p in [*analysis["participants"], *analysis["events"]] if p["key"] in {link["source_key"], link["target_key"]}]}
+                    create_fact(db, FactCreate(fact_type="NEWS_EVENT" if isinstance(row, StockNews) else "NOTICE_EVENT",
+                        title=link["explanation"][:500], subject_entity_id=company_id,
+                        evidence_ids=[state["evidence_id"]], properties_json=props), fact_id=identity)
+                ids.append(identity); relation_ids.append(identity)
+            retired_ids = _retire_superseded_candidates(db, row, set(ids), context)
+            state.update(status="PARTIAL_BODY" if doc["truncated"] else "ANALYZED" if analysis["events"] else "NO_EVENT",
+                fact_ids=ids, event_fact_ids=event_ids, relation_fact_ids=relation_ids, semantic_analysis=analysis,
+                retired_superseded_fact_ids=retired_ids,
+                model_call_log_id=final_call["id"], model_version=final_call["model_version"],
+                model_instance_code=final_call["model_instance_code"], model_calls=analysis["model_calls"],
+                content_scope=provenance["content_scope"])
+            if doc["truncated"]:
+                state["error"] = "正文超出40000字或来源提取截断，语义成果仅覆盖正文摘录"
+            _stamp(row, state)
+            db.commit()
+            fact_ids.extend(ids)
+        except Exception as exc:
+            db.rollback()
+            state.update(status="EXTRACTION_FAILED", error=str(exc)[:1600], model_calls=getattr(exc, "semantic_calls", []))
+            _stamp(row, state)
+            db.commit()
+            errors.append({"code": "SEMANTIC_EXTRACTION_FAILED", "source_table": row.__tablename__, "source_record_id": row.id,
+                           "message": str(exc)[:1600]})

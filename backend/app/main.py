@@ -10,6 +10,7 @@ from app.api import company_graph, company_governance, taxonomy
 from app.api import knowledge_network, lakehouse
 from app.api import knowledge_governance, governance_control
 from app.api import skill_evaluation, knowledge_pipeline, stock_batch
+from app.api import document_governance
 from app.core.config import get_settings
 from app.db.bootstrap import initialize_database
 from app.db.session import engine
@@ -44,6 +45,7 @@ app.add_middleware(
 app.include_router(data_sources.router, prefix=settings.api_v1_prefix)
 app.include_router(data_interfaces.router, prefix=settings.api_v1_prefix)
 app.include_router(stock_batch.router, prefix=settings.api_v1_prefix)
+app.include_router(document_governance.router, prefix=settings.api_v1_prefix)
 app.include_router(stocks.router, prefix=settings.api_v1_prefix)
 app.include_router(stock_tools.router, prefix=settings.api_v1_prefix)
 app.include_router(model_hub.router, prefix=settings.api_v1_prefix)

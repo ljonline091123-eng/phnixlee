@@ -554,6 +554,8 @@ def execute_stock_batch_governance(payload: dict[str, Any]) -> dict[str, Any]:
         "run_graph": request.run_graph,
         "run_agent_governance": request.run_agent_governance,
         "structure_documents": request.structure_documents,
+        "semantic_analysis": request.semantic_analysis,
+        "document_targets": [item.model_dump() for item in request.document_targets],
         "continuation_action": request.continuation_action,
         "agent_governance_scope": (
             "GLOBAL_BOUNDED_SOURCE_AUDIT" if request.run_agent_governance else "NOT_REQUESTED"
@@ -847,6 +849,8 @@ def execute_stock_batch_governance(payload: dict[str, Any]) -> dict[str, Any]:
                     return govern_stock_documents(db, selected,
                         context={**base, "skill_execution_run_id": execution.id if execution else None},
                         limit=request.structured_document_limit, days=request.disclosure_days,
+                        semantic=request.semantic_analysis,
+                        document_targets=[item.model_dump() for item in request.document_targets],
                         model_instance=agent_session.agent.model_instance_code if agent_session else None,
                         instructions=agent_session.skills[SKILL_EVENTS].instructions if agent_session else "")
                 event_run = agent_session.run_skill(SKILL_EVENTS,

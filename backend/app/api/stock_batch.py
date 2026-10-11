@@ -55,6 +55,14 @@ def _normalize_request(payload: StockBatchGovernanceRequest) -> StockBatchGovern
 
 
 def _validate_targets(db: Session, payload: StockBatchGovernanceRequest) -> None:
+    if payload.document_targets:
+        from app.models.market_data import StockNews, StockNotice
+        scope = {(target.market, target.symbol) for target in payload.stocks}
+        for target in payload.document_targets:
+            model = {"stock_news": StockNews, "stock_notice": StockNotice}[target.source_table]
+            row = db.get(model, target.record_id)
+            if not row or (row.market, row.symbol) not in scope or not payload.structure_documents:
+                raise HTTPException(status_code=422, detail="指定新闻公告不在股票范围内，或未启用正文结构化")
     missing: list[dict[str, str]] = []
     for target in payload.stocks:
         exists = db.scalar(select(StockSymbol.id).where(
