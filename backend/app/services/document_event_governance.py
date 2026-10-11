@@ -118,14 +118,16 @@ def _company_id(db: Session, stock: StockSymbol) -> str | None:
     ).where(FoundationListing.stock_symbol_id == stock.id))
 
 
-def scope_rows(db: Session, stock: StockSymbol, days: int) -> list:
+def scope_rows(db: Session, stock: StockSymbol, days: int,
+               document_types: list[str] | None = None) -> list:
+    selected_types = set(document_types or ["NEWS", "NOTICE"])
     cutoff = (datetime.now(ZoneInfo("Asia/Shanghai")) - timedelta(days=days)).date().isoformat()
     news = list(db.scalars(select(StockNews).where(
         StockNews.market == stock.market, StockNews.symbol == stock.symbol, StockNews.news_time >= cutoff,
-    ).order_by(StockNews.news_time.desc(), StockNews.id.desc())).all())
+    ).order_by(StockNews.news_time.desc(), StockNews.id.desc())).all()) if "NEWS" in selected_types else []
     notices = list(db.scalars(select(StockNotice).where(
         StockNotice.market == stock.market, StockNotice.symbol == stock.symbol, StockNotice.notice_date >= cutoff,
-    ).order_by(StockNotice.notice_date.desc(), StockNotice.id.desc())).all())
+    ).order_by(StockNotice.notice_date.desc(), StockNotice.id.desc())).all()) if "NOTICE" in selected_types else []
     # Interleave types so a large news list cannot starve announcements.
     return [rows[i] for i in range(max(len(news), len(notices), 0)) for rows in (news, notices) if i < len(rows)]
 
@@ -252,13 +254,14 @@ def _parse_events(response: str, documents: list[dict]) -> dict[str, list[dict]]
 def govern_stock_documents(db: Session, stock: StockSymbol, *, context: dict, limit: int = 20,
                           days: int = 730, model_instance: str | None = None, instructions: str = "",
                           semantic: bool = False, document_targets: list[dict] | None = None,
-                          semantic_feedback: str | None = None) -> dict:
+                          semantic_feedback: str | None = None,
+                          document_types: list[str] | None = None) -> dict:
     company_id = _company_id(db, stock)
     if not company_id:
         return {"market": stock.market, "symbol": stock.symbol, "status": "MISSING", "total": 0,
                 "completed": 0, "fact_ids": [], "errors": [{"code": "COMPANY_MAPPING_MISSING", "message": "缺少已核验的证券—公司映射"}]}
     version = str(context.get("skill_version") or "1.0.0")
-    rows = scope_rows(db, stock, days)
+    rows = scope_rows(db, stock, days, document_types)
     if document_targets:
         rows = []
         for target in document_targets:

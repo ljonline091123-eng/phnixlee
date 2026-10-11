@@ -556,6 +556,7 @@ def execute_stock_batch_governance(payload: dict[str, Any]) -> dict[str, Any]:
         "structure_documents": request.structure_documents,
         "semantic_analysis": request.semantic_analysis,
         "document_targets": [item.model_dump() for item in request.document_targets],
+        "structured_document_types": request.structured_document_types,
         "semantic_feedback": request.semantic_feedback,
         "semantic_review_id": request.semantic_review_id,
         "continuation_action": request.continuation_action,
@@ -854,13 +855,15 @@ def execute_stock_batch_governance(payload: dict[str, Any]) -> dict[str, Any]:
                         limit=request.structured_document_limit, days=request.disclosure_days,
                         semantic=request.semantic_analysis,
                         document_targets=[item.model_dump() for item in request.document_targets],
+                        document_types=request.structured_document_types,
                         semantic_feedback=request.semantic_feedback,
                         model_instance=agent_session.agent.model_instance_code if agent_session else None,
                         instructions=agent_session.skills[SKILL_EVENTS].instructions if agent_session else "")
                 event_run = agent_session.run_skill(SKILL_EVENTS,
                     input_json={**context, "market": stock.market, "symbol": stock.symbol,
                                 "semantic_feedback": request.semantic_feedback,
-                                "document_targets": [item.model_dump() for item in request.document_targets]},
+                                "document_targets": [item.model_dump() for item in request.document_targets],
+                                "structured_document_types": request.structured_document_types},
                     idempotency_scope=f"events:{stock.market}:{stock.symbol}", operation=extract_events,
                 ) if agent_session else extract_events()
                 event_runs.append(event_run)
