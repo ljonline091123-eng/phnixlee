@@ -26,6 +26,8 @@ export type BatchGovernanceRequest = {
   run_agent_governance: boolean;
   structure_documents?: boolean;
   structured_document_limit?: number;
+  semantic_analysis?: boolean;
+  document_targets?: Array<{ source_table: "stock_news" | "stock_notice"; record_id: number }>;
   business_types: BatchGovernanceBusinessType[];
   knowledge_base_id?: number | null;
   graph_id?: number | null;

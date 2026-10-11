@@ -1,0 +1,174 @@
+"""Dedicated news/notice semantic workbench over existing audited job/fact stores."""
+from __future__ import annotations
+
+from typing import Literal
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.db.session import get_db
+from app.models.ai_hub import ModelSkill
+from app.models.foundation import FoundationFact
+from app.models.market_data import StockNews, StockNotice, StockSymbol
+from app.schemas.document_governance import DocumentReviewRequest
+from app.schemas.stock_batch import DocumentTarget, StockBatchGovernanceRequest
+from app.services.document_event_governance import SKILL_CODE, document_body, _done, _search_excerpt
+from app.services.document_semantic_review import apply_review, compare_versions, review_status, version_key, versions_for
+from app.services.foundation import fact_read
+
+router = APIRouter(prefix="/document-governance", tags=["新闻公告语义治理"])
+MODELS = {"stock_news": StockNews, "stock_notice": StockNotice}
+
+
+def current_version(db):
+    skill = db.scalar(select(ModelSkill).where(ModelSkill.skill_code == SKILL_CODE))
+    return skill.version if skill else "未登记"
+
+
+def required_document(db, table, identity):
+    row = db.get(MODELS[table], identity)
+    if not row:
+        raise HTTPException(404, "新闻公告不存在")
+    return row
+
+
+def summary(row, version, db: Session | None = None):
+    state = (row.content_json or {}).get("event_governance") or {}
+    analysis = state.get("semantic_analysis") or {}
+    versions = versions_for(row)
+    selected_key = version_key(versions[-1], len(versions) - 1) if versions else None
+    result = {"source_table": row.__tablename__, "record_id": row.id, "market": row.market, "symbol": row.symbol,
+        "title": row.title, "published_at": getattr(row, "news_time", None) or row.notice_date,
+        "source_name": getattr(row, "source_name", None) or f"数据源#{row.source_id}",
+        "status": state.get("status", "NOT_PROCESSED"), "error": state.get("error"),
+        "body_characters": len(document_body(row)), "body_available": bool(document_body(row)) and not _search_excerpt(row),
+        "semantic_complete": _done(row, version, True), "skill_version": state.get("skill_version"),
+        "current_skill_version": version, "schema_version": state.get("semantic_schema_version"),
+        "event_count": len(analysis.get("events") or []), "relation_count": len(analysis.get("relations") or []),
+        "version_count": len(versions)}
+    if db is not None:
+        result["human_review"] = review_status(db, row.__tablename__, row.id, selected_key)
+    return result
+
+
+@router.get("/documents")
+def documents(market: str = "CN_A", symbol: str = "000159", kind: Literal["ALL", "NEWS", "NOTICE"] = "ALL",
+              q: str = Query("", max_length=256), limit: int = Query(20, ge=1, le=50), offset: int = Query(0, ge=0),
+              db: Session = Depends(get_db)):
+    # Read only metadata pages, not 76k full JSON bodies on every navigation.
+    choices = {"NEWS": [StockNews], "NOTICE": [StockNotice], "ALL": [StockNews, StockNotice]}[kind]
+    rows = []
+    from sqlalchemy import func
+    total = 0
+    for model in choices:
+        time_column = model.news_time if model is StockNews else model.notice_date
+        query = select(model).where(model.market == market, model.symbol == symbol)
+        if q:
+            query = query.where(model.title.contains(q, autoescape=True))
+        total += db.scalar(select(func.count()).select_from(query.subquery())) or 0
+        rows += list(db.scalars(query.order_by(time_column.desc(), model.id.desc()).limit(offset + limit)).all())
+    rows.sort(key=lambda row: (str(getattr(row, "news_time", None) or row.notice_date), row.id), reverse=True)
+    stock = db.scalar(select(StockSymbol).where(StockSymbol.market == market, StockSymbol.symbol == symbol))
+    version = current_version(db)
+    return {"items": [summary(row, version, db) for row in rows[offset:offset + limit]], "total": total,
+            "offset": offset, "limit": limit, "stock_name": stock.name if stock else None,
+            "current_skill_version": version}
+
+
+@router.get("/documents/{source_table}/{record_id}")
+def detail(source_table: Literal["stock_news", "stock_notice"], record_id: int, version_index: int | None = Query(None, ge=0),
+           db: Session = Depends(get_db)):
+    row = required_document(db, source_table, record_id)
+    payload = row.content_json or {}
+    versions = versions_for(row)
+    if version_index is not None and version_index >= len(versions):
+        raise HTTPException(404, "治理版本不存在")
+    index = len(versions) - 1 if version_index is None else version_index
+    state = versions[index] if versions else {}
+    ids = state.get("fact_ids") or []
+    facts = [db.get(FoundationFact, identity) for identity in ids]
+    # The original evidence associated with the selected version takes precedence
+    # over the current body to avoid misleading historical comparisons.
+    from app.models.foundation import FoundationEvidence
+    evidence = db.get(FoundationEvidence, state.get("evidence_id")) if state.get("evidence_id") else None
+    selected_key = version_key(state, index) if versions else None
+    return {**summary(row, current_version(db), db), "body": evidence.content if evidence else document_body(row),
+        "url": row.url, "selected_version": index, "state": state,
+        "versions": [{"index": i, **{k: st.get(k) for k in ("skill_version", "semantic_schema_version", "observed_at", "status", "content_scope", "error")}} for i, st in enumerate(versions)],
+        "facts": [fact_read(db, fact, full=False) for fact in facts if fact],
+        "analysis": state.get("semantic_analysis"), "human_review": review_status(db, source_table, record_id, selected_key),
+        "review_history": review_status(db, source_table, record_id).get("history", []),
+        "note": "新闻转述、作者观点及模型推断均为待审核候选；人工确认只确认抽取结构，不代表官方交叉核验。"}
+
+
+class AnalyzeRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    documents: list[DocumentTarget] = Field(min_length=1, max_length=10)
+    idempotency_key: str = Field(min_length=1, max_length=128)
+
+
+@router.post("/analyze", status_code=202)
+def analyze(payload: AnalyzeRequest, db: Session = Depends(get_db)):
+    from app.api.stock_batch import submit_stock_batch_governance
+    rows = [required_document(db, item.source_table, item.record_id) for item in payload.documents]
+    stocks = list(dict.fromkeys((row.market, row.symbol) for row in rows))
+    request = StockBatchGovernanceRequest(stocks=[{"market": market, "symbol": symbol} for market, symbol in stocks],
+        governance_mode="AI_AGENT_SKILL_GOVERNANCE", structure_documents=True, semantic_analysis=True,
+        document_targets=payload.documents, structured_document_limit=len(rows), collect_business_data=False,
+        export_lakehouse=False, archive_chunks=False, run_graph=False, business_types=[],
+        semantic_feedback=None,
+        idempotency_key="semantic:" + payload.idempotency_key)
+    return submit_stock_batch_governance(request, db)
+
+
+@router.get("/documents/{source_table}/{record_id}/reviews")
+def reviews(source_table: Literal["stock_news", "stock_notice"], record_id: int,
+            version_index: int | None = Query(None, ge=0), db: Session = Depends(get_db)):
+    row = required_document(db, source_table, record_id)
+    versions = versions_for(row)
+    if version_index is not None and version_index >= len(versions):
+        raise HTTPException(404, "治理版本不存在")
+    key = version_key(versions[version_index], version_index) if version_index is not None else None
+    return review_status(db, source_table, record_id, key)
+
+
+@router.get("/documents/{source_table}/{record_id}/compare")
+def compare_document_versions(source_table: Literal["stock_news", "stock_notice"], record_id: int,
+                              from_index: int | None = Query(None, ge=0),
+                              to_index: int | None = Query(None, ge=0),
+                              db: Session = Depends(get_db)):
+    """Compare two immutable semantic snapshots at field level."""
+    row = required_document(db, source_table, record_id)
+    try:
+        return compare_versions(row, from_index, to_index)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+
+
+@router.post("/documents/{source_table}/{record_id}/reviews")
+def review_document(source_table: Literal["stock_news", "stock_notice"], record_id: int,
+                    payload: DocumentReviewRequest, db: Session = Depends(get_db)):
+    row = required_document(db, source_table, record_id)
+    versions = versions_for(row)
+    if payload.version_index >= len(versions):
+        raise HTTPException(404, "治理版本不存在")
+    state = versions[payload.version_index]
+    from app.models.foundation import FoundationEvidence
+    evidence = db.get(FoundationEvidence, state.get("evidence_id")) if state.get("evidence_id") else None
+    try:
+        result = apply_review(db, row, payload, evidence.content if evidence else document_body(row))
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(422, str(exc)) from exc
+    if payload.action == "REANALYZE":
+        from app.api.stock_batch import submit_stock_batch_governance
+        request = StockBatchGovernanceRequest(stocks=[{"market": row.market, "symbol": row.symbol}],
+            governance_mode="AI_AGENT_SKILL_GOVERNANCE", structure_documents=True, semantic_analysis=True,
+            document_targets=[DocumentTarget(source_table=source_table, record_id=record_id)], structured_document_limit=1,
+            collect_business_data=False, export_lakehouse=False, archive_chunks=False, run_graph=False,
+            business_types=[], semantic_feedback=payload.reason, semantic_review_id=result["review_id"],
+            idempotency_key=f"semantic-review:{result['review_id']}")
+        result["job"] = submit_stock_batch_governance(request, db)
+    return result

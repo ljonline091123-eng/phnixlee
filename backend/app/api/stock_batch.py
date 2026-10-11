@@ -55,6 +55,14 @@ def _normalize_request(payload: StockBatchGovernanceRequest) -> StockBatchGovern
 
 
 def _validate_targets(db: Session, payload: StockBatchGovernanceRequest) -> None:
+    if payload.document_targets:
+        from app.models.market_data import StockNews, StockNotice
+        scope = {(target.market, target.symbol) for target in payload.stocks}
+        for target in payload.document_targets:
+            model = {"stock_news": StockNews, "stock_notice": StockNotice}[target.source_table]
+            row = db.get(model, target.record_id)
+            if not row or (row.market, row.symbol) not in scope or not payload.structure_documents:
+                raise HTTPException(status_code=422, detail="指定新闻公告不在股票范围内，或未启用正文结构化")
     missing: list[dict[str, str]] = []
     for target in payload.stocks:
         exists = db.scalar(select(StockSymbol.id).where(
@@ -829,6 +837,14 @@ def submit_stock_batch_governance(
     db: Session = Depends(get_db),
 ) -> dict:
     payload = _normalize_request(payload)
+    if payload.semantic_feedback:
+        from app.models.governance import DocumentSemanticReview
+        semantic_review = db.get(DocumentSemanticReview, payload.semantic_review_id)
+        target_pairs = {(item.source_table, item.record_id) for item in payload.document_targets}
+        if (not semantic_review or semantic_review.action != "REANALYZE"
+                or semantic_review.reason != payload.semantic_feedback
+                or (semantic_review.source_table, semantic_review.source_record_id) not in target_pairs):
+            raise HTTPException(422, "人工反馈必须关联匹配的定向重分析审核记录和文档")
     if not payload.governance_batch_id:
         seed_payload = payload.model_dump(
             mode="json",

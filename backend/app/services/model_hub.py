@@ -16,7 +16,7 @@ from app.connectors.model_registry import get_model_adapter
 from app.core.config import get_settings
 from app.models.ai_hub import ModelCallLog, ModelInstance, ModelProvider, ModelRouteRule, ModelSkill
 from app.services.core_skill_defs import core_skill_rows
-from app.services.skill_registry import sync_skill_from_file
+from app.services.skill_registry import save_skill_content, sync_skill_from_file
 from app.services.model_credentials import decrypt_api_key, encrypt_api_key
 from app.services.model_errors import describe_model_error
 
@@ -622,6 +622,7 @@ GENERIC_ERROR_POLICY: dict[str, Any] = {
 def seed_default_skills(db: Session) -> None:
     """Seed built-in skills without overwriting user-maintained content."""
     for skill_config in (*DEFAULT_MODEL_SKILLS_V2, *core_skill_rows()):
+        managed_contract_changed = False
         skill = db.scalar(select(ModelSkill).where(ModelSkill.skill_code == skill_config["skill_code"]))
         if skill is None:
             skill = ModelSkill(**skill_config, is_builtin=True)
@@ -651,7 +652,22 @@ def seed_default_skills(db: Session) -> None:
                 skill.side_effect_level = skill_config.get("side_effect_level", "READ_ONLY")
             if not getattr(skill, "idempotency_policy", None):
                 skill.idempotency_policy = skill_config.get("idempotency_policy", "OPTIONAL")
-        sync_skill_from_file(db, skill)
+            # A versioned built-in contract is migrated once and then tracked in
+            # the Skill revision.  Unversioned/user-maintained contracts retain
+            # the existing non-overwrite behaviour above.
+            desired_contract = (skill_config.get("config_json") or {}).get("managed_contract_version")
+            current_contract = (skill.config_json or {}).get("managed_contract_version")
+            if desired_contract and desired_contract != current_contract:
+                managed_contract_changed = True
+                for field_name in (
+                    "input_contract_json", "output_contract_json", "permission_policy_json",
+                    "retry_policy_json", "error_policy_json", "side_effect_level", "idempotency_policy",
+                ):
+                    setattr(skill, field_name, skill_config[field_name])
+                skill.config_json = {**dict(skill.config_json or {}), **dict(skill_config.get("config_json") or {})}
+        file_changed = sync_skill_from_file(db, skill)
+        if managed_contract_changed and not file_changed:
+            save_skill_content(db, skill, skill.instructions, source="CONTRACT", force_revision=True)
         skill.version = skill.version or "1.0.0"
         skill.format = "MD"
 

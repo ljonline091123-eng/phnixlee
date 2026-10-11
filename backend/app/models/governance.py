@@ -251,3 +251,39 @@ class StockGovernanceDetail(Base):
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+
+
+class DocumentSemanticReview(Base):
+    """Append-only human review decisions for one semantic document version.
+
+    This is a review/audit record, not a second fact store.  Candidate facts
+    continue to live in ``foundation_fact`` and their evidence remains linked
+    through the existing Foundation contract.
+    """
+
+    __tablename__ = "document_semantic_review"
+    __table_args__ = (
+        Index("ix_document_semantic_review_document_time", "source_table", "source_record_id", "created_at"),
+        Index("ix_document_semantic_review_version", "version_key", "created_at"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    source_table: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    source_record_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    version_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    version_key: Mapped[str] = mapped_column(String(192), nullable=False, index=True)
+    review_round: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    action: Mapped[str] = mapped_column(String(32), nullable=False)
+    target_type: Mapped[str] = mapped_column(String(32), nullable=False, default="DOCUMENT")
+    target_key: Mapped[str | None] = mapped_column(String(128))
+    event_key: Mapped[str | None] = mapped_column(String(128))
+    item_index: Mapped[int | None] = mapped_column(Integer)
+    field_name: Mapped[str | None] = mapped_column(String(64))
+    old_value_json: Mapped[Any | None] = mapped_column(JSON)
+    new_value_json: Mapped[Any | None] = mapped_column(JSON)
+    reason: Mapped[str] = mapped_column(String(4000), nullable=False)
+    reviewer: Mapped[str] = mapped_column(String(128), nullable=False)
+    resulting_status: Mapped[str] = mapped_column(String(32), nullable=False)
+    fact_ids_json: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    corrected_fact_ids_json: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)

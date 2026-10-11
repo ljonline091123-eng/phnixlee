@@ -68,6 +68,7 @@ from app.models.governance import (
     DataQualityRun,
     SkillExecutionRun,
     StockGovernanceDetail,
+    DocumentSemanticReview,
 )
 from app.db.table_comments import apply_table_comments
 
@@ -132,4 +133,5 @@ __all__ = [
     "AgentExecutionRun",
     "SkillExecutionRun",
     "StockGovernanceDetail",
+    "DocumentSemanticReview",
 ]

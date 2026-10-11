@@ -554,6 +554,10 @@ def execute_stock_batch_governance(payload: dict[str, Any]) -> dict[str, Any]:
         "run_graph": request.run_graph,
         "run_agent_governance": request.run_agent_governance,
         "structure_documents": request.structure_documents,
+        "semantic_analysis": request.semantic_analysis,
+        "document_targets": [item.model_dump() for item in request.document_targets],
+        "semantic_feedback": request.semantic_feedback,
+        "semantic_review_id": request.semantic_review_id,
         "continuation_action": request.continuation_action,
         "agent_governance_scope": (
             "GLOBAL_BOUNDED_SOURCE_AUDIT" if request.run_agent_governance else "NOT_REQUESTED"
@@ -842,15 +846,21 @@ def execute_stock_batch_governance(payload: dict[str, Any]) -> dict[str, Any]:
             for stock in targets:
                 context = {"governance_batch_id": governance_batch_id, "pipeline_run_id": outer_run_id,
                            "agent_execution_run_id": agent_session.execution.id if agent_session else None,
-                           "skill_version": agent_session.skills[SKILL_EVENTS].version if agent_session else "1.0.0"}
+                           "skill_version": agent_session.skills[SKILL_EVENTS].version if agent_session else "1.0.0",
+                           "semantic_review_id": request.semantic_review_id}
                 def extract_events(execution=None, selected=stock, base=context):
                     return govern_stock_documents(db, selected,
                         context={**base, "skill_execution_run_id": execution.id if execution else None},
                         limit=request.structured_document_limit, days=request.disclosure_days,
+                        semantic=request.semantic_analysis,
+                        document_targets=[item.model_dump() for item in request.document_targets],
+                        semantic_feedback=request.semantic_feedback,
                         model_instance=agent_session.agent.model_instance_code if agent_session else None,
                         instructions=agent_session.skills[SKILL_EVENTS].instructions if agent_session else "")
                 event_run = agent_session.run_skill(SKILL_EVENTS,
-                    input_json={**context, "market": stock.market, "symbol": stock.symbol},
+                    input_json={**context, "market": stock.market, "symbol": stock.symbol,
+                                "semantic_feedback": request.semantic_feedback,
+                                "document_targets": [item.model_dump() for item in request.document_targets]},
                     idempotency_scope=f"events:{stock.market}:{stock.symbol}", operation=extract_events,
                 ) if agent_session else extract_events()
                 event_runs.append(event_run)
