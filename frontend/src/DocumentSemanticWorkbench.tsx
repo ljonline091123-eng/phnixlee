@@ -34,6 +34,9 @@ type CollectionDiff = { added: { key: string; value: Record<string, unknown> }[]
 type VersionComparison = { from: { index: number; skill_version?: string; observed_at?: string }; to: { index: number; skill_version?: string; observed_at?: string };
   changed: boolean; summary: Record<string, unknown>; reading: { fields: FieldChange[]; sections: CollectionDiff };
   events: CollectionDiff; participants: CollectionDiff; relations: CollectionDiff; metrics: CollectionDiff; impacts: CollectionDiff };
+type ScopePreview = { stocks: Array<{ market: string; symbol: string; stock_name?: string | null; status: string; total: number; completed: number; pending: number; planned: number; failed: number; missing_body: number }>;
+  planned_documents: Doc[]; stock_count: number; planned_count: number; pending_count: number; completed_count: number; missing_stocks: unknown[];
+  kind: string; disclosure_days: number; per_stock_limit: number; note: string };
 const labels: Record<string, string> = {
   REPORTED_FACT: "文中转述事实 · 待核验", AUTHOR_OPINION: "作者／专家观点", MODEL_INFERENCE: "模型推断",
   POSITIVE: "正向", NEGATIVE: "负向", NEUTRAL: "中性", MIXED: "正负并存", UNKNOWN: "证据不足",
@@ -116,6 +119,11 @@ export function DocumentSemanticWorkbench() {
   const [editField, setEditField] = useState(""), [editValue, setEditValue] = useState("");
   const [compareFrom, setCompareFrom] = useState(0), [compareTo, setCompareTo] = useState(0);
   const [comparison, setComparison] = useState<VersionComparison | null>(null);
+  const [scopeMode, setScopeMode] = useState<"DOCUMENTS" | "STOCKS">("DOCUMENTS");
+  const [scopeInput, setScopeInput] = useState("CN_A:000159");
+  const [scopeKind, setScopeKind] = useState<"ALL" | "NEWS" | "NOTICE">("ALL");
+  const [scopeDays, setScopeDays] = useState(730), [scopeLimit, setScopeLimit] = useState(10);
+  const [scopePreview, setScopePreview] = useState<ScopePreview | null>(null);
   const active = !!job && ["PENDING", "RUNNING", "RETRY"].includes(String(job.job_status || job.status));
   async function load(nextOffset = offset) {
     setLoading(true);
@@ -163,6 +171,34 @@ export function DocumentSemanticWorkbench() {
       }) });
       setJob(result); setSelected([]);
     } catch (e) { setError(e instanceof Error ? e.message : "创建语义治理任务失败"); } finally { setBusy(false); }
+  }
+  function parseScopeStocks() {
+    const parsed = scopeInput.split(/[\n,;，；\s]+/).map(value => value.trim()).filter(Boolean).map(value => {
+      const [maybeMarket, maybeSymbol] = value.includes(":") ? value.split(":", 2) : [market, value];
+      return { market: maybeMarket.trim().toUpperCase(), symbol: maybeSymbol.trim().toUpperCase() };
+    }).filter(item => item.market && item.symbol);
+    return [...new Map(parsed.map(item => [`${item.market}:${item.symbol}`, item])).values()];
+  }
+  async function previewScope() {
+    const stocks = parseScopeStocks();
+    if (!stocks.length) { setError("请输入至少一只股票，例如 CN_A:000159 或 000159"); return; }
+    setBusy(true); setError("");
+    try {
+      setScopePreview(await request<ScopePreview>(`${prefix}/scope-preview`, { method: "POST", body: JSON.stringify({
+        stocks, kind: scopeKind, disclosure_days: scopeDays, per_stock_limit: scopeLimit,
+      }) }));
+    } catch (e) { setError(e instanceof Error ? e.message : "范围预览失败"); } finally { setBusy(false); }
+  }
+  async function analyzeScope() {
+    const stocks = parseScopeStocks();
+    if (!stocks.length) { setError("请输入至少一只股票"); return; }
+    setBusy(true); setError("");
+    try {
+      const result = await request<BatchGovernanceJob>(`${prefix}/analyze-scope`, { method: "POST", body: JSON.stringify({
+        stocks, kind: scopeKind, disclosure_days: scopeDays, per_stock_limit: scopeLimit, idempotency_key: crypto.randomUUID(),
+      }) });
+      setJob(result); setScopePreview(null);
+    } catch (e) { setError(e instanceof Error ? e.message : "创建批量语义治理任务失败"); } finally { setBusy(false); }
   }
   function chooseReview(target: ReviewTarget) {
     setReviewTarget(target); setReviewReason("");
@@ -214,18 +250,21 @@ export function DocumentSemanticWorkbench() {
     <p className="ds-note">区分文中转述事实、作者观点与模型推断；业务影响按维度解释。原文引文核验通过仍需事实审核，不能视为已确认的股价判断。</p>
     {error && <p role="alert" className="ds-error">{error}</p>}
     <section className="ds-panel">
+      <div className="ds-scope-tabs" role="tablist" aria-label="语义治理范围"><button type="button" className={scopeMode === "DOCUMENTS" ? "active" : ""} onClick={() => setScopeMode("DOCUMENTS")}>按文档勾选</button><button type="button" className={scopeMode === "STOCKS" ? "active" : ""} onClick={() => setScopeMode("STOCKS")}>按股票批量</button></div>
+      {job && <div className="ds-job" role="status"><strong>专项任务 #{job.job_id} · {name(String(job.job_status || job.status))}</strong><progress max={100} value={job.progress || 0} /><span>流程进度 {job.progress || 0}% · {job.current_stage || "等待执行"}</span><a href="#/operations/records">查看阶段报告</a>{!active && <span>本轮结果：{name(job.result_status || "UNKNOWN")}；请检查成果与缺口。</span>}</div>}
+      {scopeMode === "STOCKS" && <section className="ds-batch-scope"><div><h3>批量结构化新闻与公告</h3><p className="ds-muted">可输入多只股票；每只股票按当前Skill版本只处理未完成文档，已完成文档自动跳过。格式：<code>CN_A:000159</code>，也可每行只填代码并使用当前市场。</p></div><div className="ds-scope-form"><label>股票范围<textarea rows={3} value={scopeInput} onChange={event => { setScopeInput(event.target.value); setScopePreview(null); }} placeholder="CN_A:000159&#10;CN_A:000001&#10;HK:00700" /></label><label>文档类型<select value={scopeKind} onChange={event => { setScopeKind(event.target.value as typeof scopeKind); setScopePreview(null); }}><option value="ALL">新闻 + 公告</option><option value="NEWS">仅新闻</option><option value="NOTICE">仅公告</option></select></label><label>时间范围（天）<input type="number" min={1} max={3650} value={scopeDays} onChange={event => { setScopeDays(Number(event.target.value)); setScopePreview(null); }} /></label><label>每股最多处理<input type="number" min={1} max={20} value={scopeLimit} onChange={event => { setScopeLimit(Number(event.target.value)); setScopePreview(null); }} /></label><button type="button" disabled={busy} onClick={() => void previewScope()}>预览范围</button><button type="button" className="ds-primary" disabled={busy || !scopePreview?.planned_count} onClick={() => void analyzeScope()}>创建批量治理任务</button></div>{scopePreview && <div className="ds-scope-preview"><p><strong>范围预览：</strong>{scopePreview.stock_count} 只股票，待处理 {scopePreview.pending_count} 篇，本次计划 {scopePreview.planned_count} 篇，已完成 {scopePreview.completed_count} 篇。</p><small>{scopePreview.note}</small><div className="ds-table-wrap"><table><thead><tr><th>股票</th><th>范围文档</th><th>已完成</th><th>待处理</th><th>本次计划</th><th>失败／正文缺失</th></tr></thead><tbody>{scopePreview.stocks.map(item => <tr key={`${item.market}:${item.symbol}`}><td>{item.stock_name || "股票未找到"} · {item.market}:{item.symbol}</td><td>{item.total}</td><td>{item.completed}</td><td>{item.pending}</td><td>{item.planned}</td><td>{item.failed} ／ {item.missing_body}</td></tr>)}</tbody></table></div></div>}</section>}
+      {scopeMode === "DOCUMENTS" && <>
       <form className="ds-toolbar" onSubmit={e => { e.preventDefault(); setOffset(0); setSelected([]); void load(0); }}>
         <label>市场<select value={market} onChange={e => setMarket(e.target.value)}><option value="CN_A">A股</option><option value="HK">港股</option><option value="NEEQ">新三板</option><option value="NEEQ_INNOVATION">创新层</option></select></label>
         <label>股票代码<input aria-label="股票代码" value={symbol} onChange={e => setSymbol(e.target.value)} /></label>
         <label>标题关键词<input value={keyword} onChange={e => setKeyword(e.target.value)} placeholder="例如：计提、定增" /></label>
         <label>文档类型<select value={kind} onChange={e => { setKind(e.target.value); setOffset(0); setSelected([]); }}><option value="NEWS">新闻</option><option value="NOTICE">公告</option><option value="ALL">新闻与公告</option></select></label>
         <button disabled={loading} type="submit">查询</button>
-        <button disabled={busy || active || !selected.length} type="button" onClick={() => void analyze(selected)}>分析选中文档（{selected.length} / 10）</button>
+        <button disabled={busy || active || !selected.length} type="button" onClick={() => void analyze(selected)}>分析选中文档（{selected.length} / 50）</button>
       </form>
-      <p>{stockName} · {market} / {symbol} · 共 {total} 份文档。逐篇分析保存独立证据与历史版本。</p>
-      {job && <div className="ds-job" role="status"><strong>专项任务 #{job.job_id} · {name(String(job.job_status || job.status))}</strong><progress max={100} value={job.progress || 0} /><span>流程进度 {job.progress || 0}% · {job.current_stage || "等待执行"}</span><a href="#/operations/records">查看阶段报告</a>{!active && <span>本轮结果：{name(job.result_status || "UNKNOWN")}；请检查成果与缺口。</span>}</div>}
+      <p>{stockName} · {market} / {symbol} · 共 {total} 份文档。逐篇分析保存独立证据与历史版本；可翻页后继续勾选，当前已选 {selected.length} 篇。</p>
       <div className="ds-table-wrap"><table><thead><tr><th>选择</th><th>新闻／公告</th><th>来源与时间</th><th>正文与治理状态</th><th>语义成果</th><th>操作</th></tr></thead><tbody>
-        {rows.map(doc => <tr key={docKey(doc)}><td><input type="checkbox" aria-label={`选择${doc.title}`} checked={selected.some(x => docKey(x) === docKey(doc))} onChange={e => { if (e.target.checked && selected.length < 10) setSelected([...selected, doc]); else setSelected(selected.filter(x => docKey(x) !== docKey(doc))); }} disabled={active || (selected.length >= 10 && !selected.some(x => docKey(x) === docKey(doc)))} /></td>
+        {rows.map(doc => <tr key={docKey(doc)}><td><input type="checkbox" aria-label={`选择${doc.title}`} checked={selected.some(x => docKey(x) === docKey(doc))} onChange={e => { if (e.target.checked && selected.length < 50) setSelected([...selected, doc]); else setSelected(selected.filter(x => docKey(x) !== docKey(doc))); }} disabled={active || (selected.length >= 50 && !selected.some(x => docKey(x) === docKey(doc)))} /></td>
           <td><button className="ds-link" onClick={() => void open(doc)}>{doc.title}</button><small>{doc.source_table === "stock_news" ? "新闻" : "公告"} · 记录 #{doc.record_id}</small></td>
           <td>{doc.source_name}<small>{doc.published_at}</small></td>
           <td><Badge type={doc.status} /><small>{doc.body_available ? `${doc.body_characters} 字正文` : "正文需补取"} · {doc.semantic_complete ? "当前版本已分析" : "待语义分析/重试"}</small>{doc.error && <small className="ds-error">{doc.error}</small>}</td>
@@ -234,6 +273,7 @@ export function DocumentSemanticWorkbench() {
         {!rows.length && <tr><td colSpan={6}>{loading ? "读取中…" : "当前范围没有新闻公告，请先采集业务数据。"}</td></tr>}
       </tbody></table></div>
       <div className="ds-toolbar"><span>共 {total} 条 · 第 {Math.floor(offset / 20) + 1} / {Math.max(1, Math.ceil(total / 20))} 页</span><button disabled={loading || offset === 0} onClick={() => setOffset(Math.max(0, offset - 20))}>上一页</button><button disabled={loading || offset + 20 >= total} onClick={() => setOffset(offset + 20)}>下一页</button></div>
+      </>}
     </section>
     {detail && <section className="ds-panel ds-result" aria-label="文档语义成果">
       <header className="ds-heading"><div><h2>{detail.title}</h2><p>{detail.source_name} · {detail.published_at} · Skill {detail.state.skill_version || "未执行"}</p></div><button onClick={() => setDetail(null)}>关闭成果</button></header>
