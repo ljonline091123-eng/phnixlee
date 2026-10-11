@@ -13,8 +13,10 @@ from app.models.ai_hub import ModelSkill
 from app.models.foundation import FoundationFact
 from app.models.market_data import StockNews, StockNotice, StockSymbol
 from app.schemas.document_governance import DocumentReviewRequest
-from app.schemas.stock_batch import DocumentTarget, StockBatchGovernanceRequest
-from app.services.document_event_governance import SKILL_CODE, document_body, _done, _search_excerpt
+from app.schemas.stock_batch import DocumentTarget, StockBatchGovernanceRequest, StockBatchTarget
+from app.services.document_event_governance import (
+    SKILL_CODE, _done, _search_excerpt, _select_pending, document_body, scope_rows,
+)
 from app.services.document_semantic_review import apply_review, compare_versions, review_status, version_key, versions_for
 from app.services.foundation import fact_read
 
@@ -105,8 +107,89 @@ def detail(source_table: Literal["stock_news", "stock_notice"], record_id: int, 
 
 class AnalyzeRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    documents: list[DocumentTarget] = Field(min_length=1, max_length=10)
+    documents: list[DocumentTarget] = Field(min_length=1, max_length=50)
     idempotency_key: str = Field(min_length=1, max_length=128)
+
+
+class ScopeRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    stocks: list[StockBatchTarget] = Field(min_length=1, max_length=20)
+    kind: Literal["ALL", "NEWS", "NOTICE"] = "ALL"
+    disclosure_days: int = Field(default=730, ge=1, le=3650)
+    per_stock_limit: int = Field(default=10, ge=1, le=20)
+
+
+class ScopeAnalyzeRequest(ScopeRequest):
+    idempotency_key: str = Field(min_length=1, max_length=128)
+
+
+def _scope_types(kind: str) -> list[str]:
+    return ["NEWS", "NOTICE"] if kind == "ALL" else [kind]
+
+
+def _normalized_scope(payload: ScopeRequest) -> list[tuple[str, str]]:
+    stocks = list(dict.fromkeys(
+        (item.market.strip().upper(), item.symbol.strip().upper()) for item in payload.stocks
+    ))
+    if len(stocks) * payload.per_stock_limit > 100:
+        raise HTTPException(422, "单个任务最多规划100篇文档，请减少股票数或每股处理上限")
+    return stocks
+
+
+@router.post("/scope-preview")
+def preview_scope(payload: ScopeRequest, db: Session = Depends(get_db)):
+    """Preview the exact bounded stock/document scope before an AI task is queued."""
+    version = current_version(db)
+    document_types = _scope_types(payload.kind)
+    stock_results, planned_documents = [], []
+    for market, symbol in _normalized_scope(payload):
+        stock = db.scalar(select(StockSymbol).where(
+            StockSymbol.market == market, StockSymbol.symbol == symbol,
+        ))
+        if not stock:
+            stock_results.append({"market": market, "symbol": symbol, "stock_name": None,
+                                  "status": "MISSING", "total": 0, "completed": 0,
+                                  "pending": 0, "planned": 0, "failed": 0, "missing_body": 0})
+            continue
+        rows = scope_rows(db, stock, payload.disclosure_days, document_types)
+        pending = [row for row in rows if not _done(row, version, True)]
+        planned = _select_pending(pending, payload.per_stock_limit)
+        states = [((row.content_json or {}).get("event_governance") or {}) for row in rows]
+        stock_results.append({
+            "market": market, "symbol": symbol, "stock_name": stock.name, "status": "READY",
+            "total": len(rows), "completed": sum(_done(row, version, True) for row in rows),
+            "pending": len(pending), "planned": len(planned),
+            "failed": sum(state.get("status") == "EXTRACTION_FAILED" for state in states),
+            "missing_body": sum(not document_body(row) or _search_excerpt(row) for row in rows),
+        })
+        planned_documents.extend({**summary(row, version), "planned": True} for row in planned)
+    missing = [item for item in stock_results if item["status"] == "MISSING"]
+    return {
+        "stocks": stock_results, "planned_documents": planned_documents,
+        "stock_count": len(stock_results), "planned_count": len(planned_documents),
+        "pending_count": sum(item["pending"] for item in stock_results),
+        "completed_count": sum(item["completed"] for item in stock_results),
+        "missing_stocks": missing, "kind": payload.kind,
+        "disclosure_days": payload.disclosure_days, "per_stock_limit": payload.per_stock_limit,
+        "note": "仅规划当前Skill版本未完成的文档；已完成文档保持幂等，不重复消耗模型调用。",
+    }
+
+
+@router.post("/analyze-scope", status_code=202)
+def analyze_scope(payload: ScopeAnalyzeRequest, db: Session = Depends(get_db)):
+    """Queue semantic governance for multiple stocks without collecting unrelated stages."""
+    from app.api.stock_batch import submit_stock_batch_governance
+    stocks = _normalized_scope(payload)
+    request = StockBatchGovernanceRequest(
+        stocks=[{"market": market, "symbol": symbol} for market, symbol in stocks],
+        governance_mode="AI_AGENT_SKILL_GOVERNANCE", structure_documents=True,
+        semantic_analysis=True, structured_document_types=_scope_types(payload.kind),
+        structured_document_limit=payload.per_stock_limit, disclosure_days=payload.disclosure_days,
+        collect_business_data=False, export_lakehouse=False, archive_chunks=False,
+        run_graph=False, business_types=[], document_targets=[],
+        idempotency_key="semantic-scope:" + payload.idempotency_key,
+    )
+    return submit_stock_batch_governance(request, db)
 
 
 @router.post("/analyze", status_code=202)
