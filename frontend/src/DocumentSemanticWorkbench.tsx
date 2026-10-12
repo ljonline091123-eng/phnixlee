@@ -1,13 +1,15 @@
 import { useEffect, useState } from "react";
-import { request } from "./api";
+import { api, request, type StockSymbol } from "./api";
 import { batchGovernanceApi, type BatchGovernanceJob } from "./batchGovernanceApi";
 import "./documentSemantics.css";
 import "./documentSemanticReview.css";
+import { GovernanceProgress } from "./GovernanceProgress";
+import { InteractiveSemanticFlow, type SemanticPlan, type SemanticReport } from "./InteractiveSemanticFlow";
 
 type Doc = { source_table: string; record_id: number; market: string; symbol: string; title: string; published_at: string;
   source_name: string; status: string; error?: string; semantic_complete: boolean; body_characters: number;
   body_available: boolean; skill_version?: string; current_skill_version: string; event_count: number; relation_count: number; version_count: number;
-  human_review?: ReviewStatus };
+  human_review?: ReviewStatus; workflow_status?: string; governance_plan?: { status: string; primary_type: string } };
 type Impact = { dimension: string; direction: string; rationale: string; assertion_type: string; attribution: string; evidence_quote: string; uncertainty: string };
 type Metric = { name: string; raw_value: string; unit: string; qualifier: string; period: string; normalized_value: string; normalized_unit: string; evidence_quote: string };
 type Event = { key: string; event_type: string; summary: string; assertion_type: string; attribution: string; event_time_raw?: string;
@@ -21,7 +23,7 @@ type Detail = Doc & { body: string; url?: string; analysis?: Analysis; note: str
   state: { content_scope?: string; skill_version?: string; observed_at?: string; error?: string; pipeline_run_id?: number;
     agent_execution_run_id?: string; skill_execution_run_id?: string; evidence_id?: string; content_hash?: string };
   versions: { index: number; skill_version: string; semantic_schema_version?: string; observed_at: string; status: string }[];
-  human_review: ReviewStatus; review_history: ReviewHistory[] };
+  human_review: ReviewStatus; review_history: ReviewHistory[]; governance_plan?: SemanticPlan; governance_plan_history?: SemanticPlan[]; result_report?: SemanticReport };
 type ReviewHistory = { id: string; version_index?: number; review_round: number; action: string; target_type: string; target_key?: string; event_key?: string;
   item_index?: number; field?: string; old_value?: unknown; new_value?: unknown; reason: string; reviewer: string; resulting_status: string; created_at: string };
 type ReviewStatus = { overall: string; review_count: number; latest: Record<string, { action: string; status: string; reviewer: string; reason: string; created_at: string }>;
@@ -34,6 +36,9 @@ type CollectionDiff = { added: { key: string; value: Record<string, unknown> }[]
 type VersionComparison = { from: { index: number; skill_version?: string; observed_at?: string }; to: { index: number; skill_version?: string; observed_at?: string };
   changed: boolean; summary: Record<string, unknown>; reading: { fields: FieldChange[]; sections: CollectionDiff };
   events: CollectionDiff; participants: CollectionDiff; relations: CollectionDiff; metrics: CollectionDiff; impacts: CollectionDiff };
+type ScopePreview = { stocks: Array<{ market: string; symbol: string; stock_name?: string | null; status: string; total: number; completed: number; pending: number; planned: number; failed: number; missing_body: number }>;
+  planned_documents: Doc[]; stock_count: number; planned_count: number; pending_count: number; completed_count: number; missing_stocks: unknown[];
+  kind: string; disclosure_days: number; per_stock_limit: number | null; note: string };
 const labels: Record<string, string> = {
   REPORTED_FACT: "文中转述事实 · 待核验", AUTHOR_OPINION: "作者／专家观点", MODEL_INFERENCE: "模型推断",
   POSITIVE: "正向", NEGATIVE: "负向", NEUTRAL: "中性", MIXED: "正负并存", UNKNOWN: "证据不足",
@@ -49,6 +54,13 @@ const labels: Record<string, string> = {
   HUMAN_REVIEWED: "人工审核完成", REJECTED: "已驳回", CORRECTED_CANDIDATE: "人工修正候选", REANALYSIS_REQUESTED: "已请求重分析",
   COMMENT: "审核批注", CONFIRM: "确认结构", REQUEST_CORRECTION: "要求修正", MODIFY: "人工修改", REANALYZE: "模型定向重分析",
   DOCUMENT: "整篇文档", EVENT: "事件", METRIC: "指标", IMPACT: "影响", PARTICIPANT: "主体", RELATION: "关系",
+  NEEDS_PLAN: "待制定方案", NEEDS_PLAN_CONFIRMATION: "待确认方案", READY_TO_EXECUTE: "方案已确认", NEEDS_RESULT_CONFIRMATION: "待确认知识点",
+  NEEDS_REANALYSIS: "等待定向重分析", PUBLISHED: "已发布最终成果", SKIPPED: "用户选择不治理",
+  FINANCIAL_DISCLOSURE: "财务披露与业绩", CAPITAL_OPERATION: "资本运作", SHAREHOLDER_PERSONNEL: "股东与人事",
+  JUDICIAL_RISK: "司法与风险", CORPORATE_OPERATION: "公司经营事项", SUPPLY_CHAIN: "供应链与经营往来",
+  POLICY_INDUSTRY: "政策与产业事件", SECURITY_MARKET: "证券市场观测", SECTOR_MARKET: "板块市场观测",
+  MARKET_STATISTICS: "榜单与市场统计", RESEARCH_OPINION: "研究观点", GENERAL_EVIDENCE: "通用证据事实",
+  NO_RELEVANT_FACT: "无直接相关事实", PROPOSED: "待确认方案", CONFIRMED: "方案已确认",
 };
 const name = (value: string) => labels[value] || value;
 const prefix = "/document-governance";
@@ -107,8 +119,11 @@ function DiffBlock({ title, diff }: { title: string; diff: CollectionDiff }) {
 
 export function DocumentSemanticWorkbench() {
   const [market, setMarket] = useState("CN_A"), [symbol, setSymbol] = useState("000159"), [keyword, setKeyword] = useState("");
+  const [stockQuery, setStockQuery] = useState("000159"), [stockMatches, setStockMatches] = useState<StockSymbol[]>([]);
+  const [resolvedStock, setResolvedStock] = useState<StockSymbol | null>(null), [stockSearchFocused, setStockSearchFocused] = useState(false);
   const [kind, setKind] = useState("NEWS"), [offset, setOffset] = useState(0), [rows, setRows] = useState<Doc[]>([]), [total, setTotal] = useState(0);
-  const [stockName, setStockName] = useState(""), [selected, setSelected] = useState<Doc[]>([]), [detail, setDetail] = useState<Detail | null>(null);
+  const [stockName, setStockName] = useState(""), [selected, setSelected] = useState<Pick<Doc, "source_table" | "record_id">[]>([]), [detail, setDetail] = useState<Detail | null>(null);
+  const [loadedFilter, setLoadedFilter] = useState({ market, symbol, kind, q: keyword });
   const [tab, setTab] = useState("reading"), [error, setError] = useState(""), [busy, setBusy] = useState(false), [loading, setLoading] = useState(false);
   const [job, setJob] = useState<BatchGovernanceJob | null>(null);
   const [reviewTarget, setReviewTarget] = useState<ReviewTarget | null>(null), [reviewReason, setReviewReason] = useState("");
@@ -116,14 +131,42 @@ export function DocumentSemanticWorkbench() {
   const [editField, setEditField] = useState(""), [editValue, setEditValue] = useState("");
   const [compareFrom, setCompareFrom] = useState(0), [compareTo, setCompareTo] = useState(0);
   const [comparison, setComparison] = useState<VersionComparison | null>(null);
+  const [scopeMode, setScopeMode] = useState<"DOCUMENTS" | "STOCKS">("DOCUMENTS");
+  const [scopeInput, setScopeInput] = useState("CN_A:000159");
+  const [scopeKind, setScopeKind] = useState<"ALL" | "NEWS" | "NOTICE">("ALL");
+  const [scopeDays, setScopeDays] = useState(730), [scopeLimit, setScopeLimit] = useState(10);
+  const [scopeAll, setScopeAll] = useState(true);
+  const [scopePreview, setScopePreview] = useState<ScopePreview | null>(null);
   const active = !!job && ["PENDING", "RUNNING", "RETRY"].includes(String(job.job_status || job.status));
-  async function load(nextOffset = offset) {
+  async function load(nextOffset = offset, targetMarket = market, targetSymbol = symbol) {
+    if (!targetSymbol || targetMarket === "ALL") return;
     setLoading(true);
     try {
-      const params = new URLSearchParams({ market, symbol: symbol.trim(), kind, q: keyword, offset: String(nextOffset), limit: "20" });
+      const params = new URLSearchParams({ market: targetMarket, symbol: targetSymbol.trim(), kind, q: keyword, offset: String(nextOffset), limit: "20" });
       const result = await request<{ items: Doc[]; total: number; stock_name?: string }>(`${prefix}/documents?${params}`);
-      setRows(result.items); setTotal(result.total); setStockName(result.stock_name || "未找到股票");
+      setRows(result.items); setTotal(result.total); setStockName(result.stock_name || "未找到股票"); setError("");
+      setLoadedFilter({ market: targetMarket, symbol: targetSymbol.trim(), kind, q: keyword });
     } catch (e) { setError(e instanceof Error ? e.message : "文档读取失败"); } finally { setLoading(false); }
+  }
+  async function selectStock(item: StockSymbol) {
+    setResolvedStock(item); setMarket(item.market); setSymbol(item.symbol); setStockQuery(`${item.name} ${item.symbol}`);
+    setStockMatches([]); setStockSearchFocused(false); setOffset(0); setSelected([]); setDetail(null);
+    await load(0, item.market, item.symbol);
+  }
+  async function resolveStockAndLoad() {
+    const query = stockQuery.trim();
+    if (!query) { setError("请输入股票代码、中文名称、英文名称、拼音或拼音首字母"); return; }
+    if (resolvedStock) { setOffset(0); setSelected([]); await load(0, resolvedStock.market, resolvedStock.symbol); return; }
+    setLoading(true); setError("");
+    try {
+      const matches = await api.searchStocks(market, query, 12);
+      const compact = query.replace(/\s+/g, "").toLowerCase();
+      const exact = matches.find(item => item.symbol.toLowerCase() === compact || item.name.replace(/\s+/g, "").toLowerCase() === compact);
+      const selected = exact || (matches.length === 1 ? matches[0] : null);
+      if (selected) await selectStock(selected);
+      else if (matches.length) { setStockMatches(matches); setStockSearchFocused(true); setError(`匹配到 ${matches.length} 只股票，请从候选列表中选择。`); }
+      else setError("未找到匹配股票，请检查市场范围或先同步股票主数据。");
+    } catch (e) { setError(e instanceof Error ? e.message : "股票搜索失败"); } finally { setLoading(false); }
   }
   async function open(doc: Pick<Doc, "source_table" | "record_id">, version?: number) {
     try {
@@ -133,6 +176,15 @@ export function DocumentSemanticWorkbench() {
     } catch (e) { setError(e instanceof Error ? e.message : "成果读取失败"); }
   }
   useEffect(() => { void load(); }, [kind, offset]);
+  useEffect(() => {
+    const query = stockQuery.trim();
+    if (scopeMode !== "DOCUMENTS" || !query || resolvedStock) { setStockMatches([]); return; }
+    let valid = true;
+    const timer = window.setTimeout(() => {
+      void api.searchStocks(market, query, 12).then(items => { if (valid) setStockMatches(items); }).catch(() => { if (valid) setStockMatches([]); });
+    }, 250);
+    return () => { valid = false; window.clearTimeout(timer); };
+  }, [market, stockQuery, resolvedStock, scopeMode]);
   useEffect(() => {
     const params = new URLSearchParams(window.location.hash.split("?")[1] || "");
     if (params.get("id") && ["stock_news", "stock_notice"].includes(params.get("table") || "")) {
@@ -154,15 +206,60 @@ export function DocumentSemanticWorkbench() {
     void tick();
     return () => { cancelled = true; window.clearInterval(timer); };
   }, [active, job?.job_id]);
-  async function analyze(docs: Doc[]) {
+  async function selectAllDocuments() {
+    setBusy(true); setError("");
+    try {
+      const result = await request<{ documents: Pick<Doc, "source_table" | "record_id">[]; total: number }>(
+        `${prefix}/documents/selection?${new URLSearchParams(loadedFilter)}`);
+      setSelected(result.documents);
+    } catch (e) { setError(e instanceof Error ? e.message : "全选文档失败"); } finally { setBusy(false); }
+  }
+  async function analyze(docs: Pick<Doc, "source_table" | "record_id">[]) {
     if (!docs.length) return;
     setBusy(true); setError("");
     try {
       const result = await request<BatchGovernanceJob>(`${prefix}/analyze`, { method: "POST", body: JSON.stringify({
         documents: docs.map(d => ({ source_table: d.source_table, record_id: d.record_id })), idempotency_key: crypto.randomUUID(),
       }) });
-      setJob(result); setSelected([]);
+      setJob(result);
     } catch (e) { setError(e instanceof Error ? e.message : "创建语义治理任务失败"); } finally { setBusy(false); }
+  }
+  async function planSelected() {
+    if (!selected.length) return;
+    setBusy(true); setError("");
+    try {
+      const result = await request<BatchGovernanceJob>(`${prefix}/plan-batch`, { method: "POST", body: JSON.stringify({ documents: selected,
+        idempotency_key: crypto.randomUUID() }) });
+      setJob(result); await open(selected[0]);
+    } catch (e) { setError(e instanceof Error ? e.message : "批量方案生成失败"); } finally { setBusy(false); }
+  }
+  function parseScopeStocks() {
+    const parsed = scopeInput.split(/[\n,;，；\s]+/).map(value => value.trim()).filter(Boolean).map(value => {
+      const [maybeMarket, maybeSymbol] = value.includes(":") ? value.split(":", 2) : [market, value];
+      return { market: maybeMarket.trim().toUpperCase(), symbol: maybeSymbol.trim().toUpperCase() };
+    }).filter(item => item.market && item.symbol);
+    return [...new Map(parsed.map(item => [`${item.market}:${item.symbol}`, item])).values()];
+  }
+  async function previewScope() {
+    const stocks = parseScopeStocks();
+    if (!stocks.length) { setError("请输入至少一只股票，例如 CN_A:000159 或 000159"); return; }
+    setBusy(true); setError("");
+    try {
+      setScopePreview(await request<ScopePreview>(`${prefix}/scope-preview`, { method: "POST", body: JSON.stringify({
+        stocks, kind: scopeKind, disclosure_days: scopeDays, per_stock_limit: scopeAll ? null : scopeLimit,
+      }) }));
+    } catch (e) { setError(e instanceof Error ? e.message : "范围预览失败"); } finally { setBusy(false); }
+  }
+  async function analyzeScope(planOnly = true) {
+    const stocks = parseScopeStocks();
+    if (!stocks.length) { setError("请输入至少一只股票"); return; }
+    setBusy(true); setError("");
+    try {
+      const result = await request<BatchGovernanceJob>(`${prefix}/${planOnly ? "plan-scope" : "analyze-scope"}`, { method: "POST", body: JSON.stringify({
+        stocks, kind: scopeKind, disclosure_days: scopeDays, per_stock_limit: scopeAll ? null : scopeLimit, idempotency_key: crypto.randomUUID(),
+      }) });
+      setJob(result); setScopePreview(null);
+    } catch (e) { setError(e instanceof Error ? e.message : "创建批量语义治理任务失败"); } finally { setBusy(false); }
   }
   function chooseReview(target: ReviewTarget) {
     setReviewTarget(target); setReviewReason("");
@@ -214,30 +311,57 @@ export function DocumentSemanticWorkbench() {
     <p className="ds-note">区分文中转述事实、作者观点与模型推断；业务影响按维度解释。原文引文核验通过仍需事实审核，不能视为已确认的股价判断。</p>
     {error && <p role="alert" className="ds-error">{error}</p>}
     <section className="ds-panel">
-      <form className="ds-toolbar" onSubmit={e => { e.preventDefault(); setOffset(0); setSelected([]); void load(0); }}>
-        <label>市场<select value={market} onChange={e => setMarket(e.target.value)}><option value="CN_A">A股</option><option value="HK">港股</option><option value="NEEQ">新三板</option><option value="NEEQ_INNOVATION">创新层</option></select></label>
-        <label>股票代码<input aria-label="股票代码" value={symbol} onChange={e => setSymbol(e.target.value)} /></label>
+      <div className="ds-scope-tabs" role="tablist" aria-label="语义治理范围"><button type="button" className={scopeMode === "DOCUMENTS" ? "active" : ""} onClick={() => setScopeMode("DOCUMENTS")}>按文档勾选</button><button type="button" className={scopeMode === "STOCKS" ? "active" : ""} onClick={() => setScopeMode("STOCKS")}>按股票批量</button></div>
+      {job && <div className="ds-job" role="status"><strong>专项任务 #{job.job_id} · {name(String(job.job_status || job.status))}</strong><GovernanceProgress job={job} /><a href="#/operations/records">查看阶段报告</a>{["PENDING", "RETRY"].includes(String(job.job_status)) && <button type="button" disabled={busy} onClick={() => { setBusy(true); void batchGovernanceApi.start(job.job_id).then(setJob).catch(e => setError(e instanceof Error ? e.message : "启动失败")).finally(() => setBusy(false)); }}>立即执行</button>}{job.error_message && <span className="ds-error">{job.error_message}</span>}{!active && <span>本轮结果：{name(job.result_status || "UNKNOWN")}；请检查成果与缺口。</span>}</div>}
+      {scopeMode === "STOCKS" && <section className="ds-batch-scope">
+        <div><h3>批量结构化新闻与公告</h3><p className="ds-muted">股票数量不限，默认处理时间范围内全部未完成文档；后台分批执行，已完成文档自动跳过。格式：<code>CN_A:000159</code>，也可每行只填代码并使用当前市场。</p></div>
+        <div className="ds-scope-form">
+          <label>股票范围<textarea rows={3} value={scopeInput} onChange={event => { setScopeInput(event.target.value); setScopePreview(null); }} placeholder="CN_A:000159&#10;CN_A:000001&#10;HK:00700" /></label>
+          <label>文档类型<select value={scopeKind} onChange={event => { setScopeKind(event.target.value as typeof scopeKind); setScopePreview(null); }}><option value="ALL">新闻 + 公告</option><option value="NEWS">仅新闻</option><option value="NOTICE">仅公告</option></select></label>
+          <label>时间范围（天）<input type="number" min={1} max={3650} value={scopeDays} onChange={event => { setScopeDays(Number(event.target.value)); setScopePreview(null); }} /></label>
+          <label><span>处理范围</span><span><input type="checkbox" checked={scopeAll} onChange={event => { setScopeAll(event.target.checked); setScopePreview(null); }} />全部未完成文档（不限篇数）</span></label>
+          {!scopeAll && <label>每股处理篇数<input type="number" min={1} value={scopeLimit} onChange={event => { setScopeLimit(Number(event.target.value)); setScopePreview(null); }} /></label>}
+          <button type="button" disabled={busy || active} onClick={() => void previewScope()}>{busy ? "处理中…" : "预览范围"}</button>
+          <button type="button" className="ds-primary" disabled={busy || active || !scopePreview?.planned_count} onClick={() => void analyzeScope()}>{busy ? "正在提交…" : "批量阅读全文并制定方案"}</button>
+          <button type="button" disabled={busy || active} onClick={() => void analyzeScope(false)}>执行范围内已确认方案</button>
+        </div>
+        {scopePreview && <div className="ds-scope-preview"><p><strong>范围预览：</strong>{scopePreview.stock_count} 只股票，待处理 {scopePreview.pending_count} 篇，本次计划 {scopePreview.planned_count} 篇，已完成 {scopePreview.completed_count} 篇。</p><small>{scopePreview.note}</small><div className="ds-table-wrap"><table><thead><tr><th>股票</th><th>范围文档</th><th>已完成</th><th>待处理</th><th>本次计划</th><th>失败／正文缺失</th></tr></thead><tbody>{scopePreview.stocks.map(item => <tr key={`${item.market}:${item.symbol}`}><td>{item.stock_name || "股票未找到"} · {item.market}:{item.symbol}</td><td>{item.total}</td><td>{item.completed}</td><td>{item.pending}</td><td>{item.planned}</td><td>{item.failed} ／ {item.missing_body}</td></tr>)}</tbody></table></div></div>}
+      </section>}
+      {scopeMode === "DOCUMENTS" && <>
+      <form className="ds-toolbar" onSubmit={e => { e.preventDefault(); void resolveStockAndLoad(); }}>
+        <label>市场<select value={market} onChange={e => { setMarket(e.target.value); setResolvedStock(null); setSymbol(""); setStockQuery(""); setRows([]); setTotal(0); }}><option value="ALL">全部市场</option><option value="CN_A">A股</option><option value="HK">港股</option><option value="NEEQ">新三板</option><option value="NEEQ_INNOVATION">创新层</option></select></label>
+        <label className="ds-stock-search">股票搜索<input role="combobox" aria-label="股票搜索" aria-autocomplete="list" aria-expanded={stockSearchFocused && !!stockMatches.length} value={stockQuery} placeholder="代码、中文/英文名、拼音或首字母" onFocus={() => setStockSearchFocused(true)} onBlur={() => window.setTimeout(() => setStockSearchFocused(false), 120)} onChange={e => { setStockQuery(e.target.value); setResolvedStock(null); setSymbol(""); setStockSearchFocused(true); }} />{stockSearchFocused && stockMatches.length > 0 && <div className="ds-stock-matches" role="listbox">{stockMatches.map(item => <button type="button" role="option" key={`${item.market}:${item.symbol}`} onMouseDown={event => event.preventDefault()} onClick={() => void selectStock(item)}><strong>{item.name}</strong><span>{item.market} · {item.symbol} · {item.exchange_name || item.exchange}</span></button>)}</div>}</label>
         <label>标题关键词<input value={keyword} onChange={e => setKeyword(e.target.value)} placeholder="例如：计提、定增" /></label>
         <label>文档类型<select value={kind} onChange={e => { setKind(e.target.value); setOffset(0); setSelected([]); }}><option value="NEWS">新闻</option><option value="NOTICE">公告</option><option value="ALL">新闻与公告</option></select></label>
         <button disabled={loading} type="submit">查询</button>
-        <button disabled={busy || active || !selected.length} type="button" onClick={() => void analyze(selected)}>分析选中文档（{selected.length} / 10）</button>
+        <button disabled={busy || active || !selected.length} type="button" onClick={() => void planSelected()}>{`批量制定治理方案（已选${selected.length}篇）`}</button>
+        <button disabled={busy || active || !selected.length} type="button" onClick={() => void open(selected[0])}>逐篇确认方案与结果</button>
+        <button disabled={busy || active || !selected.length} type="button" onClick={() => void analyze(selected)}>执行所选已确认方案</button>
       </form>
-      <p>{stockName} · {market} / {symbol} · 共 {total} 份文档。逐篇分析保存独立证据与历史版本。</p>
-      {job && <div className="ds-job" role="status"><strong>专项任务 #{job.job_id} · {name(String(job.job_status || job.status))}</strong><progress max={100} value={job.progress || 0} /><span>流程进度 {job.progress || 0}% · {job.current_stage || "等待执行"}</span><a href="#/operations/records">查看阶段报告</a>{!active && <span>本轮结果：{name(job.result_status || "UNKNOWN")}；请检查成果与缺口。</span>}</div>}
+      <p>{stockName} · {market} / {symbol} · 共 {total} 份文档。逐篇分析保存独立证据与历史版本；可翻页后继续勾选，当前已选 {selected.length} 篇。</p>
+      <div className="ds-toolbar"><button type="button" disabled={busy || active || loading || !rows.length} onClick={() => setSelected(current => [...new Map([...current, ...rows].map(doc => [docKey(doc), doc])).values()])}>全选本页</button><button type="button" disabled={busy || active || loading || !total} onClick={() => void selectAllDocuments()}>{busy ? "处理中…" : `全选当前筛选范围（${total} 篇）`}</button><button type="button" disabled={busy || active || !selected.length} onClick={() => setSelected([])}>清空选择</button><small>全选筛选范围包含所有分页；按当前已查询的股票、文档类型及标题关键词选择。</small></div>
       <div className="ds-table-wrap"><table><thead><tr><th>选择</th><th>新闻／公告</th><th>来源与时间</th><th>正文与治理状态</th><th>语义成果</th><th>操作</th></tr></thead><tbody>
-        {rows.map(doc => <tr key={docKey(doc)}><td><input type="checkbox" aria-label={`选择${doc.title}`} checked={selected.some(x => docKey(x) === docKey(doc))} onChange={e => { if (e.target.checked && selected.length < 10) setSelected([...selected, doc]); else setSelected(selected.filter(x => docKey(x) !== docKey(doc))); }} disabled={active || (selected.length >= 10 && !selected.some(x => docKey(x) === docKey(doc)))} /></td>
+        {rows.map(doc => <tr key={docKey(doc)}><td><input type="checkbox" aria-label={`选择${doc.title}`} checked={selected.some(x => docKey(x) === docKey(doc))} onChange={e => { if (e.target.checked) setSelected(current => [...current, doc]); else setSelected(current => current.filter(x => docKey(x) !== docKey(doc))); }} disabled={busy || active} /></td>
           <td><button className="ds-link" onClick={() => void open(doc)}>{doc.title}</button><small>{doc.source_table === "stock_news" ? "新闻" : "公告"} · 记录 #{doc.record_id}</small></td>
           <td>{doc.source_name}<small>{doc.published_at}</small></td>
           <td><Badge type={doc.status} /><small>{doc.body_available ? `${doc.body_characters} 字正文` : "正文需补取"} · {doc.semantic_complete ? "当前版本已分析" : "待语义分析/重试"}</small>{doc.error && <small className="ds-error">{doc.error}</small>}</td>
-          <td>{doc.event_count} 条事件 · {doc.relation_count} 条关系<small>{doc.version_count} 轮治理 · Skill {doc.skill_version || "未执行"}</small><Badge type={doc.human_review?.overall || "NOT_REVIEWED"} /></td>
-          <td><button onClick={() => void open(doc)}>查看成果</button><button disabled={busy || active} onClick={() => void analyze([doc])}>{doc.semantic_complete ? "复核（幂等）" : "语义分析"}</button></td></tr>)}
+          <td>{doc.event_count} 条事件 · {doc.relation_count} 条关系<small>{doc.version_count} 轮治理 · {doc.governance_plan ? `类型：${name(doc.governance_plan.primary_type)}` : "尚未制定方案"}</small><Badge type={doc.workflow_status || "NEEDS_PLAN"} /></td>
+          <td><button onClick={() => void open(doc)}>{doc.workflow_status === "NEEDS_PLAN" ? "制定方案" : "进入治理"}</button></td></tr>)}
         {!rows.length && <tr><td colSpan={6}>{loading ? "读取中…" : "当前范围没有新闻公告，请先采集业务数据。"}</td></tr>}
       </tbody></table></div>
       <div className="ds-toolbar"><span>共 {total} 条 · 第 {Math.floor(offset / 20) + 1} / {Math.max(1, Math.ceil(total / 20))} 页</span><button disabled={loading || offset === 0} onClick={() => setOffset(Math.max(0, offset - 20))}>上一页</button><button disabled={loading || offset + 20 >= total} onClick={() => setOffset(offset + 20)}>下一页</button></div>
+      </>}
     </section>
     {detail && <section className="ds-panel ds-result" aria-label="文档语义成果">
-      <header className="ds-heading"><div><h2>{detail.title}</h2><p>{detail.source_name} · {detail.published_at} · Skill {detail.state.skill_version || "未执行"}</p></div><button onClick={() => setDetail(null)}>关闭成果</button></header>
-      <div className="ds-toolbar"><label>治理版本<select aria-label="治理版本" value={detail.selected_version} onChange={e => void open(detail, Number(e.target.value))}>{detail.versions.map(v => <option value={v.index} key={v.index}>第 {v.index + 1} 轮 · {v.semantic_schema_version || "旧事件摘要"} · {name(v.status)} · v{v.skill_version}</option>)}</select></label><button disabled={busy || active} onClick={() => void analyze([detail])}>执行当前版本语义治理</button><Badge type={detail.human_review?.overall || "NOT_REVIEWED"} /><span>{detail.state.content_scope === "BODY_EXCERPT" ? "仅正文摘录，全文未完成" : "所选版本正文与证据可核验"}</span></div>
+      <header className="ds-heading"><div><h2>{detail.title}</h2><p>{detail.source_name} · {detail.published_at}</p></div><button onClick={() => setDetail(null)}>关闭成果</button></header>
+      {selected.some(doc => docKey(doc) === docKey(detail)) && <nav className="ds-review-actions" aria-label="所选文档导航"><span>已选 {selected.length} 篇 · 当前第 {selected.findIndex(doc => docKey(doc) === docKey(detail)) + 1} 篇</span>
+        <button disabled={busy || selected.findIndex(doc => docKey(doc) === docKey(detail)) <= 0} onClick={() => void open(selected[selected.findIndex(doc => docKey(doc) === docKey(detail)) - 1])}>上一篇</button>
+        <button disabled={busy || selected.findIndex(doc => docKey(doc) === docKey(detail)) >= selected.length - 1} onClick={() => void open(selected[selected.findIndex(doc => docKey(doc) === docKey(detail)) + 1])}>下一篇</button></nav>}
+      <InteractiveSemanticFlow detail={detail} isLatest={isLatest} reviewer={reviewer} onReviewer={value => { setReviewer(value); window.localStorage.setItem("semantic-reviewer", value); }} busy={busy || active} setBusy={setBusy} setError={setError}
+        onReload={async () => { await open(detail); await load(); }} onExecute={() => analyze([detail])} onJob={setJob} />
+      <details className="ds-advanced-review"><summary>展开专业核验、原文与历史版本</summary>
+      {!!detail.governance_plan_history?.length && <details className="ds-plan-history"><summary>治理方案历程（{detail.governance_plan_history.length} 次）</summary>{detail.governance_plan_history.map((plan, index) => <article className="ds-card" key={`${plan.plan_id}:${plan.revision}:${index}`}><h4>第 {index + 1} 次方案 · {name(plan.status)}</h4><p>{name(plan.primary_type)} · {plan.overview}</p><p>判断依据：{plan.rationale}</p>{plan.confirmed_by && <p>确认人：{plan.confirmed_by} · {plan.confirmed_at}</p>}</article>)}</details>}
+      <div className="ds-toolbar"><label>治理版本<select aria-label="治理版本" value={detail.selected_version} onChange={e => void open(detail, Number(e.target.value))}>{detail.versions.map(v => <option value={v.index} key={v.index}>第 {v.index + 1} 轮 · {v.semantic_schema_version || "旧事件摘要"} · {name(v.status)} · v{v.skill_version}</option>)}</select></label><Badge type={detail.human_review?.overall || "NOT_REVIEWED"} /><span>{detail.state.content_scope === "BODY_EXCERPT" ? "仅正文摘录，全文未完成" : "所选版本正文与证据可核验"}</span></div>
       <div className="ds-review-summary"><div><strong>人机审核门禁</strong><p>人工确认只确认当前抽取结构；候选事实仍需公告、监管文件等独立来源交叉核验后才能发布为已验证事实。</p></div><div className="ds-toolbar"><button disabled={busy || !analysis} onClick={() => chooseReview(documentTarget)}>审核整篇</button><button disabled={busy || !analysis} onClick={() => { chooseReview(documentTarget); setTab("review"); }}>查看审核历程（{detail.human_review?.review_count || 0}）</button></div></div>
       {detail.state.error && <p className="ds-error">{detail.state.error}</p>}
       <p className="ds-note">{detail.note}</p>
@@ -248,7 +372,7 @@ export function DocumentSemanticWorkbench() {
         <label className="ds-review-label">审核人<input value={reviewer} onChange={event => setReviewer(event.target.value)} /></label>
         {reviewTarget.type !== "DOCUMENT" && isLatest && <div className="ds-review-edit"><label>修改字段<select value={editField} onChange={event => changeField(event.target.value)}>{reviewFields[reviewTarget.type].map(field => <option key={field} value={field}>{fieldNames[field] || field}</option>)}</select></label><EditControl field={editField} value={editValue} onChange={setEditValue} /></div>}
         <label className="ds-review-label">审核意见<textarea rows={3} value={reviewReason} onChange={event => setReviewReason(event.target.value)} placeholder="请说明核验依据、错误原因或需要模型补充的内容" /></label>
-        <div className="ds-review-actions"><button disabled={busy || !reviewReason.trim()} onClick={() => void review("COMMENT")}>保存批注</button><button disabled={busy || !reviewReason.trim()} onClick={() => void review("CONFIRM")}>确认当前结构</button><button disabled={busy || !reviewReason.trim()} onClick={() => void review("REQUEST_CORRECTION")}>标记需要修正</button><button disabled={busy || !reviewReason.trim()} onClick={() => void review("REJECT")}>驳回目标</button>{reviewTarget.type !== "DOCUMENT" && isLatest && <button className="ds-primary" disabled={busy || !reviewReason.trim() || !editField} onClick={() => void review("MODIFY")}>保存人工修改</button>}{reviewTarget.type === "DOCUMENT" && <button className="ds-primary" disabled={busy || !reviewReason.trim() || !isLatest} onClick={() => void review("REANALYZE")}>按意见重新分析（最多2轮）</button>}</div>
+        <div className="ds-review-actions"><button disabled={busy || !reviewReason.trim()} onClick={() => void review("COMMENT")}>保存批注</button><button disabled={busy || !reviewReason.trim()} onClick={() => void review("CONFIRM")}>确认当前结构</button><button disabled={busy || !reviewReason.trim()} onClick={() => void review("REQUEST_CORRECTION")}>标记需要修正</button><button disabled={busy || !reviewReason.trim()} onClick={() => void review("REJECT")}>驳回目标</button>{reviewTarget.type !== "DOCUMENT" && isLatest && <button className="ds-primary" disabled={busy || !reviewReason.trim() || !editField} onClick={() => void review("MODIFY")}>保存人工修改</button>}{reviewTarget.type === "DOCUMENT" && <button className="ds-primary" disabled={busy || !reviewReason.trim() || !isLatest} onClick={() => void review("REANALYZE")}>按意见重新分析（可持续修正）</button>}</div>
       </section>}
       {!analysis && tab !== "source" && tab !== "audit" && <p>所选版本尚无完整语义成果。旧事件摘要与报告仍保留；点击“执行当前版本语义治理”补充分析，失败可查看原因并重试。</p>}
       {analysis && tab === "reading" && <>
@@ -258,7 +382,7 @@ export function DocumentSemanticWorkbench() {
         <h3>不确定性与待核验事项</h3><ul>{[...new Set([...analysis.reading.uncertainties, ...analysis.uncertainties])].map((item, i) => <li key={i}>{item}</li>)}</ul>
       </>}
       {analysis && tab === "events" && <div className="ds-event-list">{analysis.events.map(event => <article className="ds-card" key={event.key}><header><h3>{event.event_type}</h3><div><Badge type={event.assertion_type} /> <ReviewButton onOpen={chooseReview} target={{ type: "EVENT", label: event.event_type, key: event.key, evidence: event.evidence_quotes[0], values: { ...event, evidence_quote: event.evidence_quotes[0] } }} /></div></header><p>{event.summary}</p><p className="ds-muted">归属：{event.attribution} · 原文时间：{event.event_time_raw || "未明确"} · {event.fact_id ? "已存入候选事实" : "待存储"}</p>
-        {event.metrics.length > 0 && <div className="ds-table-wrap"><table><thead><tr><th>指标</th><th>原文值</th><th>性质／期间</th><th>标准值</th><th>证据与审核</th></tr></thead><tbody>{event.metrics.map((metric, i) => <tr key={i}><td>{metric.name}</td><td>{metric.raw_value} {metric.unit}</td><td>{name(metric.qualifier)}<small>{metric.period}</small></td><td>{metric.normalized_value} {metric.normalized_unit}</td><td><Quote text={metric.evidence_quote} /><ReviewButton onOpen={chooseReview} target={{ type: "METRIC", label: `${event.event_type} / ${metric.name}`, eventKey: event.key, itemIndex: i, evidence: metric.evidence_quote, values: metric as unknown as Record<string, unknown> }} /></td></tr>)}</tbody></table></div>}
+        {event.metrics.length > 0 && <div className="ds-table-wrap"><table><thead><tr><th>指标</th><th>原文值</th><th>性质／期间</th><th>标准值</th><th>证据与审核</th></tr></thead><tbody>{event.metrics.map((metric, i) => <tr key={i}><td>{metric.name}</td><td>{metric.raw_value} {metric.unit === "%" && metric.raw_value.includes("分之") ? "" : metric.unit}</td><td>{name(metric.qualifier)}<small>{metric.period}</small></td><td>{metric.normalized_value} {metric.normalized_unit}</td><td><Quote text={metric.evidence_quote} /><ReviewButton onOpen={chooseReview} target={{ type: "METRIC", label: `${event.event_type} / ${metric.name}`, eventKey: event.key, itemIndex: i, evidence: metric.evidence_quote, values: metric as unknown as Record<string, unknown> }} /></td></tr>)}</tbody></table></div>}
         {event.impacts.map((impact, i) => <div className="ds-inline-review" key={i}><p>{name(impact.dimension)}：<Badge type={impact.direction} /> {impact.rationale}</p><ReviewButton onOpen={chooseReview} target={{ type: "IMPACT", label: `${event.event_type} / ${name(impact.dimension)}`, eventKey: event.key, itemIndex: i, evidence: impact.evidence_quote, values: impact as unknown as Record<string, unknown> }} /></div>)}
         {event.evidence_quotes.map((quote, i) => <Quote key={i} text={quote} />)}
       </article>)}</div>}
@@ -270,6 +394,7 @@ export function DocumentSemanticWorkbench() {
         <h3>全部版本审核历程</h3><div className="ds-table-wrap"><table><thead><tr><th>时间</th><th>版本／轮次</th><th>对象</th><th>动作</th><th>审核人</th><th>前值 → 新值</th><th>意见</th></tr></thead><tbody>{(detail.review_history || detail.human_review?.history || []).map(item => <tr key={item.id}><td>{item.created_at}</td><td>第 {(item.version_index ?? 0) + 1} 版／第 {item.review_round} 次</td><td>{name(item.target_type)} {item.target_key || item.event_key || "整篇"}</td><td><Badge type={item.action} /> · {name(item.resulting_status)}</td><td>{item.reviewer}</td><td>{item.field ? `${fieldNames[item.field] || item.field}：${displayValue(item.old_value)} → ${displayValue(item.new_value)}` : "—"}</td><td>{item.reason}</td></tr>)}</tbody></table></div></section>}
       {tab === "source" && <><h3>所选版本原文</h3><p>{detail.body.length} 字 · 证据编号：{detail.state.evidence_id || "未生成"}</p>{detail.url && <a href={detail.url} target="_blank" rel="noreferrer">打开原始来源</a>}<div className="ds-source">{detail.body || "正文未获取，分析时将尝试补取已登记来源。"}</div></>}
       {tab === "audit" && <><h3>执行与来源追溯</h3><dl className="ds-audit"><dt>治理时间</dt><dd>{detail.state.observed_at || "未执行"}</dd><dt>流水线编号</dt><dd>{detail.state.pipeline_run_id || "未执行"}</dd><dt>智能体执行编号</dt><dd>{detail.state.agent_execution_run_id || "未执行"}</dd><dt>Skill执行编号</dt><dd>{detail.state.skill_execution_run_id || "未执行"}</dd><dt>正文哈希</dt><dd>{detail.state.content_hash || "未生成"}</dd></dl>{analysis?.model_calls.map(call => <p key={call.id}>{call.phase === "SEMANTIC_READING" ? "全文语义理解" : "结构化抽取"} · 真实模型调用 #{call.id} · {call.model_version}</p>)}<details><summary>查看完整治理契约与原始审计</summary><pre>{JSON.stringify(detail.state, null, 2)}</pre></details></>}
+      </details>
     </section>}
   </div>;
 }

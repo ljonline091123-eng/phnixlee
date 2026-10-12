@@ -10,6 +10,50 @@
   background: #f7faf4;
 }
 
+.ds .ds-interactive-flow {
+  margin: 18px 0;
+  padding: 18px;
+  border: 1px solid #cdddc5;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #fbfdf9, #f2f8ef);
+}
+.ds .ds-interactive-flow > header { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; }
+.ds .ds-interactive-flow h3, .ds .ds-interactive-flow h4, .ds .ds-interactive-flow h5 { margin: 0 0 7px; }
+.ds .ds-flow-state { padding: 6px 10px; border-radius: 999px; background: #e3f1e1; color: #286344; font-size: 12px; white-space: nowrap; }
+.ds .ds-flow-steps { display: flex; gap: 7px; padding: 0; margin: 18px 0; list-style: none; overflow-x: auto; }
+.ds .ds-flow-steps li { display: flex; align-items: center; gap: 7px; min-width: 126px; color: #8a9584; font-size: 12px; }
+.ds .ds-flow-steps li b { display: grid; place-items: center; width: 24px; height: 24px; border: 1px solid #c5d0bf; border-radius: 50%; font-size: 12px; }
+.ds .ds-flow-steps li.complete { color: #2f6848; }
+.ds .ds-flow-steps li.complete b { color: #fff; border-color: #3d7654; background: #3d7654; }
+.ds .ds-flow-action, .ds .ds-plan-editor, .ds .ds-result-review, .ds .ds-final-report { padding: 15px; border: 1px solid #dce8d7; border-radius: 9px; background: #fff; }
+.ds .ds-flow-action p, .ds .ds-plan-editor p, .ds .ds-result-review p, .ds .ds-final-report p { color: #5f6f5a; }
+.ds .ds-plan-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 14px 0; }
+.ds .ds-plan-grid label, .ds .ds-plan-grid fieldset, .ds .ds-plan-editor > label { display: grid; gap: 6px; color: #52644f; font-size: 13px; }
+.ds .ds-plan-grid fieldset { min-width: 0; margin: 0; padding: 10px; border: 1px solid #e0e9dc; border-radius: 7px; }
+.ds .ds-plan-grid fieldset label { display: flex; align-items: center; gap: 6px; margin: 5px 0; }
+.ds .ds-plan-grid fieldset label small { margin-left: auto; color: #899486; }
+.ds .ds-plan-grid .disabled { color: #a1aaa0; }
+.ds .ds-plan-editor textarea, .ds .ds-result-review > label textarea { box-sizing: border-box; width: 100%; padding: 9px; border: 1px solid #ccd9c7; border-radius: 7px; font: inherit; }
+.ds .ds-confirm-warning { margin: 10px 0; padding: 10px 12px; border-left: 3px solid #c18b2f; background: #fff8e5; color: #765719 !important; }
+.ds .ds-confirm-warning ul { margin: 6px 0 0; padding-left: 20px; }
+.ds .ds-knowledge-points { display: grid; gap: 10px; margin: 12px 0; }
+.ds .ds-knowledge-points article { padding: 13px; border: 1px solid #dce6d8; border-radius: 8px; background: #fff; }
+.ds .ds-knowledge-points article.nonconforming { border-color: #cf806c; background: #fff8f5; }
+.ds .ds-knowledge-points article.required-confirmation { border-left: 4px solid #c18b2f; }
+.ds .ds-knowledge-points article header { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
+.ds .ds-knowledge-points article header strong { color: #95651b; font-size: 12px; }
+.ds .ds-knowledge-points article blockquote { margin: 8px 0; padding: 8px 10px; border-left: 3px solid #b5c9ae; background: #f5f9f3; color: #4c6149; font-size: 13px; }
+.ds .ds-knowledge-points article a { color: #2f6b4b; font-size: 12px; }
+.ds .ds-nonconforming { display: flex !important; align-items: center; gap: 6px; margin-top: 10px; color: #9a4d3b !important; }
+.ds .ds-knowledge-points article > textarea { box-sizing: border-box; width: 100%; margin-top: 8px; padding: 8px; border: 1px solid #d7b2a7; border-radius: 6px; font: inherit; }
+.ds .ds-direction { display: inline-block; margin-top: 4px; padding: 3px 7px; border-radius: 999px; font-size: 11px; }
+.ds .ds-positive { color: #2d7043; background: #e5f4e7; }
+.ds .ds-negative { color: #a64c38; background: #ffebe5; }
+.ds .ds-neutral, .ds .ds-unknown, .ds .ds-mixed { color: #765f28; background: #fff5d8; }
+.ds .ds-advanced-review { margin-top: 15px; border-top: 1px dashed #cbd8c4; }
+.ds .ds-advanced-review > summary { padding: 12px 0; color: #557053; cursor: pointer; font-size: 13px; }
+@media (max-width: 850px) { .ds .ds-plan-grid { grid-template-columns: 1fr; } .ds .ds-flow-steps { flex-wrap: wrap; row-gap: 12px; } .ds .ds-flow-steps li { min-width: 110px; } }
+
 .ds .ds-review-summary p {
   margin: 2px 0;
   color: #64715f;

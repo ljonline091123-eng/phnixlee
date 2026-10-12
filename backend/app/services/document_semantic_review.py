@@ -328,10 +328,12 @@ def _clone_corrected_facts(db: Session, impacted_ids: list[str], analysis: dict[
     return new_ids
 
 
-def apply_review(db: Session, row, payload: DocumentReviewRequest, body: str) -> dict[str, Any]:
+def apply_review(db: Session, row, payload: DocumentReviewRequest, body: str, *, commit: bool = True) -> dict[str, Any]:
     if payload.action not in REVIEW_ACTIONS:
         raise ValueError("不支持的审核动作")
     state, version_key_value, is_latest = require_version(row, payload.version_index)
+    if state.get("publication_status") == "PUBLISHED" and payload.action != "COMMENT":
+        raise ValueError("已发布成果不可原位修改，请重新制定治理方案并保留历史版本")
     analysis = deepcopy(state.get("semantic_analysis") or {})
     if not analysis and payload.action not in {"COMMENT", "REANALYZE"}:
         raise ValueError("当前版本没有可审核的语义成果")
@@ -406,12 +408,9 @@ def apply_review(db: Session, row, payload: DocumentReviewRequest, body: str) ->
             fact = db.get(FoundationFact, fact_id)
             if fact and fact.status == "PENDING":
                 review_fact(db, fact_id, FactReviewCreate(expected_status="PENDING", decision="REJECTED", reviewer=payload.reviewer, reason=payload.reason))
-    if payload.action == "REANALYZE":
-        content_hash = str(state.get("content_hash") or "")
-        attempts = sum(item.action == "REANALYZE" and item.version_key.startswith(content_hash + ":")
-                       for item in _review_rows(db, row.__tablename__, row.id))
-        if attempts >= 2:
-            raise ValueError("同一正文最多执行两轮人工反馈重分析，请先审核现有版本或更新原文")
+    # Reanalysis is explicitly user-driven and versioned.  It may repeat until
+    # all knowledge points conform or the user chooses not to govern; every
+    # round remains append-only in this review table and source version history.
     review = DocumentSemanticReview(
         id=review_id, source_table=row.__tablename__, source_record_id=row.id, version_index=payload.version_index,
         version_key=version_key_value, review_round=max([int(item.get("review_round") or 0) for item in review_status(db, row.__tablename__, row.id, version_key_value)["history"]] + [0]) + 1,
@@ -421,7 +420,10 @@ def apply_review(db: Session, row, payload: DocumentReviewRequest, body: str) ->
         resulting_status=STATUS_BY_ACTION[payload.action], fact_ids_json=fact_ids, corrected_fact_ids_json=corrected_ids,
     )
     db.add(review)
-    db.commit()
+    if commit:
+        db.commit()
+    else:
+        db.flush()
     return {"review_id": review_id, "action": payload.action, "resulting_status": STATUS_BY_ACTION[payload.action],
             "version_index": payload.version_index, "version_key": version_key_value, "fact_ids": fact_ids,
             "corrected_fact_ids": corrected_ids, "review_status": review_status(db, row.__tablename__, row.id, version_key_value)}

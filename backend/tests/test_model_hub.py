@@ -2,7 +2,7 @@ import unittest
 import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
@@ -10,6 +10,7 @@ from sqlalchemy.orm import sessionmaker
 from app.db.base import Base
 from app.db.session import get_db
 from app.core.config import get_settings
+from app.connectors.model_adapters import ModelExecutionResult
 from app.models.ai_hub import ModelCallLog, ModelInstance, ModelProvider, ModelRouteRule
 from app.services.model_hub import ModelHubService, seed_default_models
 
@@ -140,6 +141,29 @@ class ModelHubFoundationTest(unittest.TestCase):
         )
         self.assertIsNotNone(failed_attempt)
         self.assertEqual(failed_attempt.status, "FAILED")
+
+    def test_empty_real_response_is_failed_and_uses_real_fallback(self) -> None:
+        service = ModelHubService(self.db)
+        codes = ["DEEPSEEK_CHAT", "DEEPSEEK_V4_FLASH"]
+        routed = [service._to_routed_model(self.db.scalar(select(ModelInstance).where(
+            ModelInstance.instance_code == code))) for code in codes]
+        adapter = Mock()
+        adapter.chat.side_effect = [
+            ModelExecutionResult(response_text=" ", response_json={}),
+            ModelExecutionResult(response_text='{"overview":"有效方案"}', response_json={}),
+        ]
+        with patch.object(service, "list_route_options", return_value=routed), patch(
+                "app.services.model_hub.get_model_adapter", return_value=adapter):
+            result = service.chat(task_type="empty_real_document_test",
+                messages=[{"role": "user", "content": "读取原文并返回方案"}],
+                metadata_json={"require_real_model": True, "purpose": "DOCUMENT_GOVERNANCE_PLANNING"})
+        self.assertEqual(result.status, "SUCCESS")
+        self.assertEqual(result.instance_code, "DEEPSEEK_V4_FLASH")
+        failed = self.db.scalar(select(ModelCallLog).where(
+            ModelCallLog.task_type == "empty_real_document_test", ModelCallLog.instance_code == "DEEPSEEK_CHAT"))
+        self.assertEqual(failed.status, "FAILED")
+        self.assertIn("空响应", failed.error_message)
+        self.assertEqual(adapter.chat.call_count, 2)
 
     def test_route_crud_api(self) -> None:
         from fastapi.testclient import TestClient

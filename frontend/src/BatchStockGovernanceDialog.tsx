@@ -730,10 +730,6 @@ export function BatchStockGovernanceDialog({
       setError("请先在股票主数据列表中勾选股票。");
       return;
     }
-    if (stocks.length > 30) {
-      setError("单次最多处理30只股票，请缩小选择范围。");
-      return;
-    }
     if (!enabledStageCount) {
       setError("请至少选择一个采集或治理环节。");
       return;
@@ -844,7 +840,7 @@ export function BatchStockGovernanceDialog({
 
       <div className="resource-dialog-body batch-governance-body">
         <section className="batch-governance-scope" aria-label="已选择股票">
-          <div><strong>处理范围</strong><span>{stocks.length} / 30 只</span></div>
+          <div><strong>处理范围</strong><span>{stocks.length} 只</span></div>
           <div className="batch-governance-stock-list">
             {stocks.slice(0, 18).map((stock) => <span key={`${stock.market}:${stock.symbol}`}>
               <b>{stock.name}</b><code>{stock.market}:{stock.symbol}</code>

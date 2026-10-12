@@ -492,6 +492,16 @@ def update_skill(skill_id: int, payload: ModelSkillUpdate, db: Session = Depends
         db.rollback()
         raise HTTPException(status_code=422, detail="Skill required fields cannot be null")
     instructions = values.pop("instructions", skill.instructions)
+    if (skill.config_json or {}).get("semantic_generated_draft"):
+        from app.services.document_semantic_skills import require_test
+        try:
+            if ("config_json" in values and values["config_json"] != skill.config_json):
+                raise ValueError("生成Skill的测试记录由评估服务管理，不能手工更改配置")
+            if values.get("enabled", skill.enabled) or values.get("lifecycle_status", skill.lifecycle_status) == "ENABLED":
+                require_test(skill, instructions=instructions, config=values.get("config_json"))
+        except ValueError as exc:
+            db.rollback()
+            raise HTTPException(409, str(exc)) from exc
     if "lifecycle_status" in values:
         values["enabled"] = values["lifecycle_status"] == "ENABLED"
     elif "enabled" in values:
@@ -511,6 +521,9 @@ def update_skill(skill_id: int, payload: ModelSkillUpdate, db: Session = Depends
     })
     for field_name, value in values.items():
         setattr(skill, field_name, value)
+    if skill.enabled and skill.lifecycle_status == "ENABLED":
+        from app.services.document_semantic_skills import link_draft_agents
+        link_draft_agents(db, skill)
     try:
         db.flush()
         save_skill_content(
@@ -568,6 +581,11 @@ def update_skill_lifecycle(skill_id: int, payload: SkillLifecycleUpdate,
             detail=f"Unsupported Skill lifecycle transition: {current} -> {payload.lifecycle_status}",
         )
     if payload.lifecycle_status == "ENABLED":
+        from app.services.document_semantic_skills import require_test
+        try:
+            require_test(skill)
+        except ValueError as exc:
+            raise HTTPException(409, str(exc)) from exc
         if not skill.input_contract_json or not skill.output_contract_json:
             raise HTTPException(status_code=409, detail="Skill contracts are required before enabling")
         _validate_skill_governance({
@@ -582,6 +600,9 @@ def update_skill_lifecycle(skill_id: int, payload: SkillLifecycleUpdate,
         })
     skill.lifecycle_status = payload.lifecycle_status
     skill.enabled = payload.lifecycle_status == "ENABLED"
+    if skill.enabled:
+        from app.services.document_semantic_skills import link_draft_agents
+        link_draft_agents(db, skill)
     config = dict(skill.config_json or {})
     history = list(config.get("lifecycle_history") or [])
     history.append({

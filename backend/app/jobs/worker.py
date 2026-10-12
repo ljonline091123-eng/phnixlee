@@ -7,12 +7,15 @@ import os
 import socket
 import sys
 import time
+import logging
+import threading
+from uuid import uuid4
 from datetime import datetime, timedelta, timezone
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import or_, select
+from sqlalchemy import or_, select, update
 from sqlalchemy.orm import Session
 
 from app.db.bootstrap import initialize_database
@@ -76,7 +79,7 @@ class JobWorker:
             unknown = set(task_types) - TASK_HANDLERS.keys()
             if unknown:
                 raise ValueError(f"Unknown worker task types: {', '.join(sorted(unknown))}")
-        self.worker_id = worker_id or f"{socket.gethostname()}:{os.getpid()}"
+        self.worker_id = worker_id or f"{socket.gethostname()}:{os.getpid()}:{uuid4().hex[:8]}"
         self.lease_seconds = lease_seconds
         self.task_types = task_types
         self.session_factory = session_factory
@@ -94,16 +97,45 @@ class JobWorker:
         # The claim transaction is committed before any network, market-data,
         # or model work starts. This avoids holding row/database locks while a
         # slow provider is running.
+        heartbeat_stop = threading.Event()
+        heartbeat = threading.Thread(target=self._heartbeat, args=(job_id, heartbeat_stop), daemon=True)
+        heartbeat.start()
         try:
-            output = self.task_executor(task_type, payload)
-        except Exception as exc:
-            self._finish_failure(job_id, exc)
-        else:
-            self._finish_success(job_id, output)
+            try:
+                output = self.task_executor(task_type, payload)
+            except Exception as exc:
+                self._finish_failure(job_id, exc)
+            else:
+                self._finish_success(job_id, output)
+        finally:
+            heartbeat_stop.set()
+            heartbeat.join(timeout=5)
         return True
+
+    def _heartbeat(self, job_id: int, stop: threading.Event) -> None:
+        while not stop.wait(max(0.1, min(30, self.lease_seconds / 3))):
+            try:
+                with self.session_factory() as db:
+                    renewed = db.execute(update(ScheduledJob).where(
+                        ScheduledJob.id == job_id, ScheduledJob.status == "RUNNING",
+                        ScheduledJob.worker_id == self.worker_id,
+                    ).values(lease_until=utc_now() + timedelta(seconds=self.lease_seconds)))
+                    db.commit()
+                    if not renewed.rowcount:
+                        return
+            except Exception:
+                logging.getLogger(__name__).exception("治理任务 %s 续租失败，下一周期重试", job_id)
 
     def _claim(self, db: Session) -> ScheduledJob | None:
         now = utc_now()
+        eligible = (
+            (ScheduledJob.run_after <= now) & or_(
+                (ScheduledJob.status.in_(("PENDING", "RETRY"))
+                 & or_(ScheduledJob.lease_until.is_(None), ScheduledJob.lease_until < now)),
+                ((ScheduledJob.status == "RUNNING") & ScheduledJob.lease_until.is_not(None)
+                 & (ScheduledJob.lease_until < now)),
+            )
+        )
         statement = (
             select(ScheduledJob)
             .where(
@@ -130,13 +162,18 @@ class JobWorker:
         job = db.scalar(statement)
         if job is None:
             return None
-        job.status = "RUNNING"
-        job.worker_id = self.worker_id
-        job.attempts += 1
-        job.started_at = job.started_at or now
-        job.lease_until = now + timedelta(seconds=self.lease_seconds)
-        job.completed_at = None
-        job.error_message = None
+        # SQLite has no SKIP LOCKED: recheck eligibility in the write itself.
+        # API-managed and standalone workers must never execute the same claim.
+        claimed = db.execute(update(ScheduledJob).where(
+            ScheduledJob.id == job.id, eligible,
+        ).values(status="RUNNING", worker_id=self.worker_id,
+                 attempts=ScheduledJob.attempts + 1, started_at=job.started_at or now,
+                 lease_until=now + timedelta(seconds=self.lease_seconds),
+                 completed_at=None, error_message=None), execution_options={"synchronize_session": False})
+        if not claimed.rowcount:
+            db.rollback()
+            return None
+        db.refresh(job)
         pipeline = db.get(PipelineRun, job.pipeline_run_id)
         stage = db.scalar(
             select(PipelineStageRun).where(
@@ -167,7 +204,7 @@ class JobWorker:
         now = utc_now()
         with self.session_factory() as db:
             job = db.get(ScheduledJob, job_id)
-            if job is None:
+            if job is None or job.worker_id != self.worker_id or job.status != "RUNNING":
                 return
             job.status = "COMPLETED"
             job.lease_until = None
@@ -193,7 +230,7 @@ class JobWorker:
         now = utc_now()
         with self.session_factory() as db:
             job = db.get(ScheduledJob, job_id)
-            if job is None:
+            if job is None or job.worker_id != self.worker_id or job.status != "RUNNING":
                 return
             retry = isinstance(exc, DurableRetryError) or job.attempts < job.max_attempts
             job.status = "RETRY" if retry else "FAILED"

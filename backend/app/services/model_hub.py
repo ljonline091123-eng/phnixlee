@@ -782,6 +782,8 @@ class ModelHubService:
                     max_tokens=max_tokens,
                     metadata_json=metadata,
                 )
+                if metadata.get("require_real_model") and not str(result.response_text or "").strip():
+                    raise ValueError("模型未返回可用正文，不能将空响应视为治理成功")
                 output_schema = metadata.get("json_schema_output")
                 if output_schema and not metadata.get("defer_schema_validation"):
                     Draft202012Validator(output_schema).validate(json.loads(result.response_text))

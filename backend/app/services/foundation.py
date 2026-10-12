@@ -288,7 +288,7 @@ def _validate_endpoints(payload: FactCreate, subject: FoundationEntity, obj: Fou
     if payload.fact_type == "HOLDS_EQUITY":
         subject_types = subject_types | {"HOLDER_ACCOUNT"}
     if payload.fact_type in observation_types:
-        subject_types = {"COMPANY", "ORGANIZATION"}
+        subject_types = {"COMPANY", "ORGANIZATION", "INDUSTRY", "THEME", "PERSON"}
     if subject.entity_type not in subject_types:
         raise FoundationError("subject entity type is invalid for this fact")
     if obj and obj.entity_type not in expected_objects.get(payload.fact_type, actor_types | {"PROJECT"}):

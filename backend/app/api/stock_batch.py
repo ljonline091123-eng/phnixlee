@@ -556,6 +556,7 @@ def _job_view(db: Session, job: ScheduledJob, *, details: bool = True) -> dict:
         "job_status": job.status,
         "result_status": result_status,
         "progress": int(output.get("progress") or (100 if job.status == "COMPLETED" else 0)),
+        "document_progress": output.get("document_progress") or {},
         "current_stage": (
             run.current_stage if run and job.status == "PENDING" and run.current_stage == "QUEUED"
             else output.get("current_stage") or (run.current_stage if run else None) or "QUEUED"
@@ -585,6 +586,8 @@ def _job_view(db: Session, job: ScheduledJob, *, details: bool = True) -> dict:
             "--lease-seconds 7200 --reload"
         ),
     }
+    from app.jobs.governance_runner import governance_runner_status
+    status["executor"] = governance_runner_status()
     if details:
         batch_id = status.get("governance_batch_id")
         stock_statement = select(StockGovernanceDetail).where(
@@ -774,6 +777,7 @@ def _job_view(db: Session, job: ScheduledJob, *, details: bool = True) -> dict:
                 "result_status": status.get("result_status"),
                 "current_stage": status.get("current_stage"),
                 "progress": status.get("progress"),
+                "document_progress": status.get("document_progress"),
                 "created_at": status.get("created_at"),
                 "started_at": status.get("started_at"),
                 "completed_at": status.get("completed_at"),
@@ -904,6 +908,8 @@ def submit_stock_batch_governance(
         run.governance_batch_id = payload.governance_batch_id
     db.commit()
     db.refresh(job)
+    from app.jobs.governance_runner import wake_governance_runner
+    wake_governance_runner()
     return _job_view(db, job, details=False)
 
 
@@ -1084,6 +1090,8 @@ def start_stock_batch_governance_job(job_id: int, db: Session = Depends(get_db))
         run.error_message = None
     db.commit()
     db.refresh(job)
+    from app.jobs.governance_runner import wake_governance_runner
+    wake_governance_runner()
     return _job_view(db, job, details=False)
 
 

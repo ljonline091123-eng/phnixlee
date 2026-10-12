@@ -34,7 +34,7 @@ class StockBatchGovernanceRequest(BaseModel):
     chain is not publishable.
     """
 
-    stocks: list[StockBatchTarget] = Field(min_length=1, max_length=30)
+    stocks: list[StockBatchTarget] = Field(min_length=1)
     governance_mode: Literal["SYSTEM_GOVERNANCE", "AI_AGENT_SKILL_GOVERNANCE"] = SYSTEM_GOVERNANCE
     governance_batch_id: str | None = Field(default=None, min_length=1, max_length=128)
     collect_business_data: bool = True
@@ -43,9 +43,16 @@ class StockBatchGovernanceRequest(BaseModel):
     run_graph: bool = True
     run_agent_governance: bool = False
     structure_documents: bool = False
-    structured_document_limit: int = Field(default=20, ge=1, le=100)
+    structured_document_limit: int | None = Field(default=None, ge=1)
     semantic_analysis: bool = True
-    document_targets: list[DocumentTarget] = Field(default_factory=list, max_length=20)
+    document_targets: list[DocumentTarget] = Field(default_factory=list)
+    document_skill_codes: list[str] = Field(default_factory=list, max_length=12)
+    interactive_plan_required: bool = False
+    semantic_plan_only: bool = False
+    semantic_plan_force: bool = False
+    structured_document_types: list[Literal["NEWS", "NOTICE"]] = Field(
+        default_factory=lambda: ["NEWS", "NOTICE"], min_length=1, max_length=2
+    )
     semantic_feedback: str | None = Field(default=None, max_length=4000)
     semantic_review_id: str | None = Field(default=None, min_length=36, max_length=36)
     parent_job_id: int | None = Field(default=None, gt=0)
@@ -74,10 +81,11 @@ class StockBatchGovernanceRequest(BaseModel):
             unique.append(StockBatchTarget(market=pair[0], symbol=pair[1]))
         if not unique:
             raise ValueError("至少选择一只股票")
-        if len(unique) > 30:
-            raise ValueError("单批最多处理30只股票")
         self.stocks = unique
+        self.document_targets = list({(item.source_table, item.record_id): item for item in self.document_targets}.values())
+        self.document_skill_codes = list(dict.fromkeys(code.strip().upper() for code in self.document_skill_codes if code.strip()))
         self.business_types = list(dict.fromkeys(self.business_types))
+        self.structured_document_types = list(dict.fromkeys(self.structured_document_types))
         if bool(self.semantic_feedback) != bool(self.semantic_review_id):
             raise ValueError("人工语义反馈和审核记录编号必须同时提供")
         self.continuation_item_codes = list(dict.fromkeys(
@@ -159,6 +167,8 @@ class StockBatchGovernanceResponse(BaseModel):
     agent_execution_run_id: str | None = None
     current_stage: str | None = None
     progress: int = 0
+    document_progress: dict[str, Any] = Field(default_factory=dict)
+    executor: dict[str, Any] = Field(default_factory=dict)
     effective_options: dict[str, Any] = Field(default_factory=dict)
     worker_required: bool
     worker_task_type: str
